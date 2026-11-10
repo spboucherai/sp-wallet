@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>ai.spboucher.sp-wallet-signer-relay</string>
+  <key>ProgramArguments</key><array><string>/opt/homebrew/bin/node</string><string>/usr/local/libexec/sp-wallet/signer-relay.mjs</string></array>
+  <key>EnvironmentVariables</key><dict><key>SPW_RELAY_TARGET</key><string>m6ma.local:8651</string><key>SPW_RELAY_PORT</key><string>8652</string></dict>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/simon-pierreboucher/Library/Logs/sp-wallet-signer-relay.log</string>
+  <key>StandardErrorPath</key><string>/Users/simon-pierreboucher/Library/Logs/sp-wallet-signer-relay.log</string>
+</dict></plist>

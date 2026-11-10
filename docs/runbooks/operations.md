@@ -32,3 +32,11 @@ Halt, then sweep funds to a new wallet from a clean device using the recovery ph
 
 ## Health
 `https://wallet.spboucher.ai/api/v1/health/live` (public, no detail). Detail (authenticated): Settings → RPC status, Security.
+
+## Signer relay (API node)
+macOS denies local-network access to PM2 / LaunchAgent background processes (EHOSTUNREACH), so the API talks to
+`127.0.0.1:8652`, a byte relay run as a root LaunchDaemon (`ai.spboucher.sp-wallet-signer-relay`, script copied to
+`/usr/local/libexec/sp-wallet/signer-relay.mjs`, root-owned) that forwards to `m6ma.local:8651` (mDNS, survives DHCP changes).
+Reinstall on a new API node: copy `scripts/signer-relay.mjs` there as root, install `infra/launchd/*.plist` in
+`/Library/LaunchDaemons`, `sudo launchctl bootstrap system <plist>`. Log: `~/Library/Logs/sp-wallet-signer-relay.log`.
+The signer allowlist must contain the API node LAN IP (`SPW_SIGNER_ALLOW_IPS`, rendered at deploy).
