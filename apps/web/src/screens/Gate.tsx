@@ -25,9 +25,9 @@ export function Gate({ setup, onDone }: { setup: boolean; onDone: () => void }) 
   return (
     <main className="safe-t safe-b mx-auto flex min-h-full max-w-sm flex-col justify-center px-6">
       <div className="rise">
-        <img src="/icon.svg" alt="" className="mb-6 h-16 w-16 rounded-2xl" />
-        <h1 className="text-3xl font-semibold tracking-tight">SP Wallet</h1>
-        <p className="mt-1 text-mute">{t('tagline')}</p>
+        <img src="/icon.svg" alt="" className="mb-7 h-[72px] w-[72px] rounded-[22px] shadow-[0_18px_36px_-16px_rgba(11,16,32,0.6)]" />
+        <h1 className="text-[38px] font-semibold leading-none tracking-[-0.03em]">SP Wallet</h1>
+        <p className="mt-2.5 text-[16px] text-mute">{t('tagline')}</p>
         <div className="mt-8 space-y-4">
           {!supported && <Notice tone="danger">{t('noWebauthn')}</Notice>}
           {setup ? (<>

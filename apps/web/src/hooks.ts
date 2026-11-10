@@ -6,7 +6,7 @@ export interface Proposal { id: string; state: string; network: string; networkN
   feeDisplay: string | null; maxFeeDisplay: string | null; feeSymbol: string; warnings: string[]; intentHash: string | null; txid: string | null; explorer: string | null; confirmations: number; error: string | null; createdAt: string; expiresAt: string | null }
 export interface Portfolio { asOf: string; prices: Record<string, { usd: number; cad: number }> | null; balances: Bal[]; pending: Proposal[]; halted: boolean }
 export interface Net { id: string; name: string; family: string; native: { id: string; symbol: string; decimals: number }; tokens: { id: string; symbol: string; decimals: number }[]; minConf: number; explorerAddr: string;
-  health: { ok: boolean; identityVerified: boolean; height: number | null; endpoints: { url: string; ok: boolean; ms: number | null }[]; checkedAt: string } | null }
+  health: { ok: boolean; readable: boolean; identityVerified: boolean; height: number | null; endpoints: { url: string; ok: boolean; ms: number | null }[]; checkedAt: string } | null }
 export interface SettingsT { locale: 'fr' | 'en'; currency: 'USD' | 'CAD'; hideBalances: boolean; prices: boolean }
 
 export const usePortfolio = () => useQuery({ queryKey: ['portfolio'], queryFn: () => get<Portfolio>('/portfolio'), refetchInterval: 20_000 });

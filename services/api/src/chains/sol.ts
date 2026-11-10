@@ -25,7 +25,7 @@ export function solAdapter(n: NetworkDef): Adapter {
       }));
       const ok = endpoints.every((e) => e.ok);
       if (ok) identity = true;
-      return { network: n.id, ok: ok && identity, identityVerified: identity, height: Math.max(0, ...endpoints.map((e) => e.h ?? 0)) || null,
+      return { network: n.id, ok: ok && identity, readable: endpoints.some((e) => e.ok), identityVerified: identity, height: Math.max(0, ...endpoints.map((e) => e.h ?? 0)) || null,
         endpoints: endpoints.map(({ h: _h, ...e }) => e), checkedAt: new Date().toISOString() };
     },
     async balances(addr) {

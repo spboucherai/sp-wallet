@@ -14,42 +14,42 @@ export function Icon({ n, className = 'h-5 w-5' }: { n: keyof typeof P | string;
 }
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-2xl border border-line bg-surface p-4 ${className}`}>{children}</section>;
+  return <section className={`card p-5 ${className}`}>{children}</section>;
 }
 export function H({ children, right }: { children: ReactNode; right?: ReactNode }) {
-  return <div className="mb-3 flex items-center justify-between"><h2 className="text-[13px] font-semibold uppercase tracking-wider text-mute">{children}</h2>{right}</div>;
+  return <div className="mb-3 flex items-center justify-between"><h2 className="text-[17px] font-semibold tracking-tight">{children}</h2>{right}</div>;
 }
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { kind?: 'primary' | 'ghost' | 'danger' | 'soft'; busy?: boolean; full?: boolean };
 export function Btn({ kind = 'primary', busy, full, className = '', children, disabled, ...rest }: BtnProps) {
-  const k = { primary: 'bg-emerald text-[#04130d] font-semibold', ghost: 'border border-line text-ink', danger: 'bg-danger text-[#1c0508] font-semibold', soft: 'bg-elev text-ink' }[kind];
-  return <button {...rest} disabled={disabled || busy} className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 text-[15px] transition active:scale-[0.98] disabled:opacity-45 ${k} ${full ? 'w-full' : ''} ${className}`}>
+  const k = { primary: 'bg-primary text-onprimary font-semibold', ghost: 'border border-line text-ink', danger: 'bg-danger text-white font-semibold', soft: 'bg-elev text-ink font-medium' }[kind];
+  return <button {...rest} disabled={disabled || busy} className={`inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl px-5 text-[15.5px] transition active:scale-[0.98] disabled:opacity-45 ${k} ${full ? 'w-full' : ''} ${className}`}>
     {busy && <Icon n="spin" className="h-4 w-4" />}{children}</button>;
 }
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
   return <label className="block"><span className="mb-1.5 block text-[13px] text-mute">{label}</span>{children}{hint && <span className="mt-1.5 block text-xs text-mute">{hint}</span>}</label>;
 }
-export const inputCls = 'w-full rounded-xl border border-line bg-bg px-3.5 py-3 outline-none focus:border-blue';
+export const inputCls = 'w-full rounded-2xl border border-line bg-elev/60 px-4 py-3.5 outline-none transition focus:border-blue focus:bg-surface';
 
 export function Notice({ tone = 'info', children }: { tone?: 'info' | 'warn' | 'danger' | 'ok'; children: ReactNode }) {
-  const c = { info: 'border-blue/40 bg-blue/10', warn: 'border-warn/50 bg-warn/10', danger: 'border-danger/60 bg-danger/10', ok: 'border-emerald/40 bg-emerald/10' }[tone];
+  const c = { info: 'border-blue/25 bg-blue/8', warn: 'border-warn/30 bg-warn/10', danger: 'border-danger/40 bg-danger/10', ok: 'border-emerald/30 bg-emerald/8' }[tone];
   const ic = { info: 'shield', warn: 'warn', danger: 'warn', ok: 'check' }[tone];
-  return <div role={tone === 'danger' ? 'alert' : 'note'} className={`flex gap-2.5 rounded-xl border p-3 text-[13.5px] leading-snug ${c}`}><Icon n={ic} className="mt-0.5 h-4 w-4 shrink-0" /><div className="min-w-0">{children}</div></div>;
+  return <div role={tone === 'danger' ? 'alert' : 'note'} className={`flex gap-3 rounded-2xl border p-3.5 text-[13.5px] leading-snug ${c}`}><Icon n={ic} className={`mt-0.5 h-4 w-4 shrink-0 ${ {info:'text-blue',warn:'text-warn',danger:'text-danger',ok:'text-emerald'}[tone] }`} /><div className="min-w-0">{children}</div></div>;
 }
 
 const TONE: Record<string, [string, string]> = {
-  finalized: ['text-emerald border-emerald/40', 'check'], confirming: ['text-blue border-blue/40', 'clock'], broadcast: ['text-blue border-blue/40', 'up'],
-  signed: ['text-blue border-blue/40', 'key'], approved: ['text-blue border-blue/40', 'key'], pending_approval: ['text-warn border-warn/50', 'clock'], draft: ['text-mute border-line', 'list'],
-  failed: ['text-danger border-danger/50', 'x'], rejected: ['text-danger border-danger/50', 'x'], expired: ['text-mute border-line', 'clock'], replaced: ['text-warn border-warn/50', 'warn'], reorged: ['text-warn border-warn/50', 'warn'],
+  finalized: ['text-emerald bg-emerald/10', 'check'], confirming: ['text-blue bg-blue/10', 'clock'], broadcast: ['text-blue bg-blue/10', 'up'],
+  signed: ['text-blue bg-blue/10', 'key'], approved: ['text-blue bg-blue/10', 'key'], pending_approval: ['text-warn bg-warn/12', 'clock'], draft: ['text-mute bg-elev', 'list'],
+  failed: ['text-danger bg-danger/10', 'x'], rejected: ['text-danger bg-danger/10', 'x'], expired: ['text-mute bg-elev', 'clock'], replaced: ['text-warn bg-warn/12', 'warn'], reorged: ['text-warn bg-warn/12', 'warn'],
 };
 /** Status is always icon + text, never colour alone. */
 export function StatePill({ state }: { state: string }) {
   const t = useT(); const [cls, ic] = TONE[state] ?? TONE.draft!;
-  return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11.5px] font-medium ${cls}`}><Icon n={ic} className="h-3 w-3" />{t(stateKey(state))}</span>;
+  return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${cls}`}><Icon n={ic} className="h-3 w-3" />{t(stateKey(state))}</span>;
 }
 
 export function Addr({ value }: { value: string }) {
   const a = value.slice(0, 6), z = value.slice(-6), m = value.slice(6, -6);
-  return <span className="break-all font-mono text-[13.5px] leading-relaxed"><b className="text-emerald">{a}</b><span className="text-ink/80">{m}</span><b className="text-emerald">{z}</b></span>;
+  return <span className="break-all font-mono text-[13.5px] leading-relaxed"><b className="text-blue">{a}</b><span className="text-ink/75">{m}</span><b className="text-blue">{z}</b></span>;
 }
 export const short = (a: string) => (a.length > 16 ? `${a.slice(0, 8)}…${a.slice(-6)}` : a);
 
@@ -59,9 +59,30 @@ export function CopyBtn({ text, full }: { text: string; full?: boolean }) {
   return <Btn kind="soft" full={full} onClick={() => { void navigator.clipboard.writeText(text).then(() => setOk(true)); }}><Icon n={ok ? 'check' : 'copy'} className="h-4 w-4" />{ok ? t('copied') : t('copy')}</Btn>;
 }
 
-const COIN: Record<string, string> = { USDC: '#2775CA', ETH: '#627EEA', BTC: '#F7931A', SOL: '#9945FF', POL: '#8247E5' };
-export function Coin({ sym }: { sym: string }) {
-  return <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[11px] font-bold text-white" style={{ background: COIN[sym] ?? '#445' }} aria-hidden="true">{sym.slice(0, 4)}</span>;
+const COIN: Record<string, [string, string]> = {
+  USDC: ['#2775CA', 'M12 6.2v1.5m0 8.6v1.5M14.6 9.6c-.3-1-1.3-1.6-2.6-1.6-1.5 0-2.6.8-2.6 2s1 1.7 2.6 2 2.7.8 2.7 2-1.2 2-2.7 2c-1.4 0-2.4-.7-2.7-1.7'],
+  ETH: ['#627EEA', 'M12 4.5l4.6 7.6L12 14.8l-4.6-2.7zM7.4 13.4L12 19.5l4.6-6.1L12 16.1z'],
+  BTC: ['#F7931A', 'M9.5 7h3.7a2.2 2.2 0 010 4.5H9.5zm0 4.5h4.2a2.3 2.3 0 010 4.7H9.5zM9.5 7v9.2M11 5.5V7m2-1.5V7m-2 9.2v1.5m2-1.5v1.5'],
+  SOL: ['#9945FF', 'M7.6 8h9.6l-1.7 1.9H5.9zM7.6 16h9.6l-1.7-1.9H5.9zM16.4 11.05H6.8l1.7 1.9h9.6z'],
+  POL: ['#8247E5', 'M9 9.2l-2.5 1.4v2.8L9 14.8l2.5-1.4V9.2L15 7.8l2.5 1.4V12L15 13.4l-1-.6'],
+};
+const NETC: Record<string, string> = { ethereum: '#627EEA', base: '#0052FF', arbitrum: '#28A0F0', polygon: '#8247E5', bitcoin: '#F7931A', solana: '#14F195' };
+/** Token mark with an optional network badge. Original simplified glyphs, not vendor logos. */
+export function Coin({ sym, net, size = 44 }: { sym: string; net?: string; size?: number }) {
+  const [bg, d] = COIN[sym] ?? ['#667085', ''];
+  return <span className="relative inline-block shrink-0" style={{ width: size, height: size }} aria-hidden="true">
+    <span className="grid h-full w-full place-items-center rounded-full" style={{ background: bg }}>
+      <svg viewBox="0 0 24 24" className="h-[62%] w-[62%]" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg></span>
+    {net && <span className="absolute -bottom-0.5 -right-0.5 h-[15px] w-[15px] rounded-full border-2 border-surface" style={{ background: NETC[net] ?? '#667085' }} />}
+  </span>;
+}
+export function NetDot({ net }: { net: string }) { return <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: NETC[net] ?? '#667085' }} aria-hidden="true" />; }
+/** Horizontal chip selector (scrolls on small screens). */
+export function Chips<T extends string>({ value, options, onChange, label }: { value: T; options: { id: T; label: string; net?: string }[]; onChange: (v: T) => void; label: string }) {
+  return <div role="radiogroup" aria-label={label} className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-0.5">{options.map((o) =>
+    <button key={o.id} role="radio" aria-checked={value === o.id} onClick={() => onChange(o.id)}
+      className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-[14px] font-medium transition ${value === o.id ? 'border-primary bg-primary text-onprimary' : 'border-line bg-surface text-ink'}`}>
+      {o.net && <NetDot net={o.net} />}{o.label}</button>)}</div>;
 }
 export function Money({ children, hidden }: { children: ReactNode; hidden?: boolean }) {
   return <span className={hidden ? 'mask' : ''} aria-hidden={hidden || undefined}>{children}</span>;
@@ -69,4 +90,4 @@ export function Money({ children, hidden }: { children: ReactNode; hidden?: bool
 export const trimAmt = (s: string, max = 6) => { const [i, f = ''] = s.split('.'); const ff = f.slice(0, max).replace(/0+$/, ''); return ff ? `${i}.${ff}` : i!; };
 export const fiat = (n: number, cur: string, locale: string) => new Intl.NumberFormat(locale === 'fr' ? 'fr-CA' : 'en-CA', { style: 'currency', currency: cur }).format(n);
 export const when = (d: string | Date, locale: string) => new Date(d).toLocaleString(locale === 'fr' ? 'fr-CA' : 'en-CA', { dateStyle: 'medium', timeStyle: 'short' });
-export function Skeleton({ h = 'h-16' }: { h?: string }) { return <div className={`animate-pulse rounded-2xl bg-surface ${h}`} />; }
+export function Skeleton({ h = 'h-16' }: { h?: string }) { return <div className={`animate-pulse rounded-[22px] bg-elev ${h}`} />; }

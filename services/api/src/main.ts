@@ -1,7 +1,13 @@
+import dns from 'node:dns';
+import net from 'node:net';
 import { config } from './config.ts';
 import { migrate } from './db.ts';
 import { buildServer } from './server.ts';
 import { startWorkers } from './worker.ts';
+
+// Node's default happy-eyeballs gives each address only 250 ms: on this network that makes public RPC connections fail at random.
+dns.setDefaultResultOrder('ipv4first');
+net.setDefaultAutoSelectFamilyAttemptTimeout(2500);
 
 await migrate();
 const app = await buildServer();

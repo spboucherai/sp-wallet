@@ -43,36 +43,41 @@ function Offline({ retry }: { retry: () => void }) {
 
 function Shell({ tab, go, lock }: { tab: Tab; go: (t: Tab) => void; lock: () => void }) {
   const t = useT();
-  const item = (id: Tab, icon: string, mobile: boolean) => {
-    const on = tab === id;
-    return mobile
-      ? <button key={id} onClick={() => go(id)} aria-current={on ? 'page' : undefined} className={`flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 text-[10.5px] ${on ? 'text-emerald' : 'text-mute'}`}><Icon n={icon} className="h-[22px] w-[22px]" /><span>{t(id as Key)}</span></button>
-      : <button key={id} onClick={() => go(id)} aria-current={on ? 'page' : undefined} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] ${on ? 'bg-elev text-ink' : 'text-mute hover:text-ink'}`}><Icon n={icon} />{t(id as Key)}</button>;
-  };
+  const MOBILE: [Tab, string][] = [['home', 'home'], ['receive', 'down'], ['send', 'up'], ['activity', 'list'], ['settings', 'gear']];
+  const side = (id: Tab, icon: string) => { const on = tab === id; return (
+    <button key={id} onClick={() => go(id)} aria-current={on ? 'page' : undefined} className={`flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-[15px] font-medium transition ${on ? 'bg-primary text-onprimary' : 'text-mute hover:bg-elev hover:text-ink'}`}><Icon n={icon} />{t(id as Key)}</button>); };
   return (
     <div className="mx-auto flex min-h-full max-w-6xl">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line p-4 lg:flex">
-        <div className="mb-6 flex items-center gap-2.5 px-2"><img src="/icon.svg" alt="" className="h-8 w-8 rounded-lg" /><span className="text-lg font-semibold tracking-tight">SP Wallet</span></div>
-        <nav className="space-y-1" aria-label="Navigation">{TABS.map(([id, , icon]) => item(id, icon, false))}</nav>
-        <button onClick={lock} className="mt-auto flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] text-mute hover:text-ink"><Icon n="lock" />{t('logout')}</button>
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col p-5 lg:flex">
+        <div className="mb-8 flex items-center gap-3 px-2 pt-2"><img src="/icon.svg" alt="" className="h-9 w-9 rounded-xl" /><span className="text-[19px] font-semibold tracking-tight">SP Wallet</span></div>
+        <nav className="space-y-1.5" aria-label="Navigation">{TABS.map(([id, , icon]) => side(id, icon))}</nav>
+        <button onClick={lock} className="mt-auto flex items-center gap-3 rounded-2xl px-3.5 py-3 text-[15px] font-medium text-mute hover:bg-elev hover:text-ink"><Icon n="lock" />{t('logout')}</button>
       </aside>
       <div className="min-w-0 flex-1">
-        <header className="safe-t sticky top-0 z-10 border-b border-line bg-bg/85 backdrop-blur lg:hidden">
-          <div className="flex h-13 items-center justify-between px-4 py-2.5">
-            <div className="flex items-center gap-2"><img src="/icon.svg" alt="" className="h-7 w-7 rounded-lg" /><span className="font-semibold tracking-tight">SP Wallet</span></div>
-            <button onClick={lock} aria-label={t('logout')} className="grid h-10 w-10 place-items-center rounded-full text-mute"><Icon n="lock" /></button>
+        <header className="safe-t nav-glass sticky top-0 z-10 lg:hidden">
+          <div className="flex items-center justify-between px-5 py-3">
+            <div className="flex items-center gap-2.5"><img src="/icon.svg" alt="" className="h-8 w-8 rounded-[10px]" /><span className="text-[17px] font-semibold tracking-tight">SP Wallet</span></div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => go('security')} aria-label={t('security')} aria-current={tab === 'security' ? 'page' : undefined} className={`grid h-10 w-10 place-items-center rounded-full ${tab === 'security' ? 'bg-elev text-ink' : 'text-mute'}`}><Icon n="shield" /></button>
+              <button onClick={lock} aria-label={t('logout')} className="grid h-10 w-10 place-items-center rounded-full text-mute"><Icon n="lock" /></button>
+            </div>
           </div>
         </header>
-        <main key={tab} className="rise mx-auto w-full max-w-xl px-4 pb-28 pt-4 lg:max-w-2xl lg:pb-10 lg:pt-8">
+        <main key={tab} className="rise mx-auto w-full max-w-xl px-5 pb-32 pt-3 lg:max-w-2xl lg:pb-12 lg:pt-10">
           {tab === 'home' && <Home go={go} />}
           {tab === 'receive' && <Receive />}
           {tab === 'send' && <Send go={go} />}
           {tab === 'activity' && <Activity />}
           {tab === 'security' && <Security />}
-          {tab === 'settings' && <Settings lock={lock} />}
+          {tab === 'settings' && <Settings lock={lock} go={go} />}
         </main>
-        <nav aria-label="Navigation" className="safe-b fixed inset-x-0 bottom-0 z-10 border-t border-line bg-bg/90 backdrop-blur lg:hidden">
-          <div className="mx-auto flex max-w-xl px-1 pt-1.5">{TABS.map(([id, , icon]) => item(id, icon, true))}</div>
+        <nav aria-label="Navigation" className="safe-b nav-glass fixed inset-x-0 bottom-0 z-10 border-t border-line lg:hidden">
+          <div className="mx-auto flex max-w-xl items-end px-2 pt-2">{MOBILE.map(([id, icon]) => { const on = tab === id;
+            return id === 'send'
+              ? <button key={id} onClick={() => go(id)} aria-current={on ? 'page' : undefined} aria-label={t('send')} className="flex flex-1 flex-col items-center gap-1 text-[11px] font-medium text-ink">
+                  <span className="-mt-5 grid h-[52px] w-[52px] place-items-center rounded-full bg-primary text-onprimary shadow-[0_10px_24px_-8px_rgba(11,16,32,0.55)]"><Icon n="up" className="h-6 w-6" /></span><span>{t('send')}</span></button>
+              : <button key={id} onClick={() => go(id)} aria-current={on ? 'page' : undefined} className={`flex min-h-[50px] flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium ${on ? 'text-ink' : 'text-mute'}`}>
+                  <Icon n={icon} className="h-6 w-6" /><span>{t(id as Key)}</span></button>; })}</div>
         </nav>
       </div>
     </div>

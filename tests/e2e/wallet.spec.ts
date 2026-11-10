@@ -20,7 +20,8 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await page.getByRole('textbox').fill(readFileSync('/tmp/spw-dev/setup-token', 'utf8').trim());
   await page.getByRole('button', { name: /Créer ma clé/ }).click();
   await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('Actifs')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Actifs' })).toBeVisible();
+  await expect(page.getByText(/6\/6 réseaux opérationnels/)).toBeVisible({ timeout: 60_000 });
   await page.waitForTimeout(1500);
   await page.screenshot({ path: `${SHOTS}/02-home.png`, fullPage: true });
 
@@ -39,9 +40,9 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await expect(page.locator('img[alt^="QR 0x"]')).toBeVisible();
   await expect(page.getByText(/Envoyez uniquement ETH \/ USDC sur le réseau Base/)).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/04-receive.png`, fullPage: true });
-  await page.locator('select').selectOption('solana');
+  await page.getByRole('radio', { name: 'Solana' }).click();
   await expect(page.getByText(/Envoyez uniquement SOL \/ USDC sur le réseau Solana/)).toBeVisible();
-  await page.locator('select').selectOption('bitcoin');
+  await page.getByRole('radio', { name: 'Bitcoin' }).click();
   await expect(page.locator('img[alt^="QR bc1q"]')).toBeVisible();
 
   // send: invalid address is refused, then an empty wallet cannot draft a transfer (live mainnet balance check)
@@ -57,7 +58,7 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
 
   await page.getByRole('navigation').getByRole('button', { name: 'Activité' }).click();
   await expect(page.getByText('Aucune activité')).toBeVisible();
-  await page.getByRole('navigation').getByRole('button', { name: 'Sécurité' }).click();
+  await page.getByRole('banner').getByRole('button', { name: 'Sécurité' }).click();
   await expect(page.getByText('Signature active')).toBeVisible();
   await expect(page.getByText('Chaîne d’empreintes intacte')).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/06-security.png`, fullPage: true });
@@ -66,20 +67,24 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await page.getByRole('navigation').getByRole('button', { name: 'Réglages' }).click();
   await page.getByRole('radio', { name: 'English' }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
-  await page.getByRole('radio', { name: 'Light' }).click();
-  await page.screenshot({ path: `${SHOTS}/07-settings-en-light.png`, fullPage: true });
   await page.getByRole('radio', { name: 'Dark' }).click();
+  await page.screenshot({ path: `${SHOTS}/07-settings-en-dark.png`, fullPage: true });
+  await page.getByRole('navigation').getByRole('button', { name: 'Home' }).click();
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${SHOTS}/08-home-dark.png`, fullPage: true });
+  await page.getByRole('navigation').getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('radio', { name: 'Light' }).click();
   await page.getByRole('radio', { name: 'Français' }).click();
 
   // emergency halt from the phone
-  await page.getByRole('navigation').getByRole('button', { name: 'Sécurité' }).click();
+  await page.getByRole('banner').getByRole('button', { name: 'Sécurité' }).click();
   await page.getByRole('button', { name: 'Arrêt d’urgence' }).click();
   await page.getByLabel('STOP').fill('stop');
   await page.getByRole('button', { name: 'Arrêt d’urgence' }).click();
   await expect(page.getByText('Signature arrêtée')).toBeVisible();
   await page.getByRole('navigation').getByRole('button', { name: 'Accueil' }).click();
   await expect(page.getByText(/Arrêt d’urgence actif/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Envoyer' }).first()).toBeDisabled();
+  await expect(page.getByRole('main').getByRole('button', { name: 'Envoyer' })).toBeDisabled();
 
   expect(errors.filter((e) => !/status of 4\d\d/.test(e))).toEqual([]);
 });

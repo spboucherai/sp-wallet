@@ -5,7 +5,7 @@ import { get, post } from '../api';
 import type { Tab } from '../App';
 import { useNetworks, usePortfolio, type Proposal } from '../hooks';
 import { errText, useT, type Key } from '../i18n';
-import { Addr, Btn, Card, Field, H, Icon, inputCls, Notice, short, StatePill, trimAmt } from '../ui';
+import { Addr, Btn, Card, Chips, Field, H, Icon, inputCls, Notice, short, StatePill, trimAmt } from '../ui';
 
 type Step = 'form' | 'review' | 'track';
 const FLOW = ['pending_approval', 'signed', 'broadcast', 'confirming', 'finalized'];
@@ -55,13 +55,13 @@ export function Send({ go }: { go: (t: Tab) => void }) {
 
   if (step === 'form') return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">{t('sendTitle')}</h1>
+      <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('sendTitle')}</h1>
       {pf.data?.halted && <Notice tone="danger">{t('haltedBanner')}</Notice>}
       <Card className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={t('network')}><select className={inputCls} value={net} onChange={(e) => { setNet(e.target.value); setTo(''); }}>{(nets.data ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
-          <Field label={t('asset')}><select className={inputCls} value={asset} onChange={(e) => setAsset(e.target.value)}>{assets.map((x) => <option key={x.id} value={x.id}>{x.symbol}</option>)}</select></Field>
-        </div>
+        <div><div className="mb-2 text-[13px] text-mute">{t('network')}</div>
+          <Chips label={t('network')} value={net} onChange={(v) => { setNet(v); setTo(''); }} options={(nets.data ?? []).map((x) => ({ id: x.id, label: x.name, net: x.id }))} /></div>
+        <div><div className="mb-2 text-[13px] text-mute">{t('asset')}</div>
+          <Chips label={t('asset')} value={asset} onChange={setAsset} options={assets.map((x) => ({ id: x.id, label: x.symbol }))} /></div>
         <Field label={t('destination')}>
           <textarea className={`${inputCls} min-h-[84px] resize-none break-all font-mono text-[14px]`} value={to} onChange={(e) => setTo(e.target.value.replace(/\s/g, ''))} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="off" />
         </Field>
@@ -84,10 +84,10 @@ export function Send({ go }: { go: (t: Tab) => void }) {
   const needCheck = cur.warnings.includes('new_destination') || cur.warnings.includes('address_poisoning_suspected');
   if (step === 'review') return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">{t('reviewTitle')}</h1>
+      <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('reviewTitle')}</h1>
       <Card className="space-y-4">
         <div><div className="text-[13px] text-mute">{t('youSend')}</div>
-          <div className="text-3xl font-semibold tracking-tight">{cur.amountDisplay} {cur.symbol}</div>
+          <div className="font-[family-name:var(--font-display)] text-[38px] font-semibold leading-tight tracking-[-0.03em]">{cur.amountDisplay} <span className="text-mute">{cur.symbol}</span></div>
           <div className="font-mono text-xs text-mute">{cur.amount} {t('baseUnits')} · {cur.networkName}</div></div>
         <Row k={t('to')}><Addr value={cur.to} /></Row>
         <Row k={t('from')}><span className="font-mono text-[13px] text-mute">{short(cur.from)}</span></Row>
@@ -99,7 +99,7 @@ export function Send({ go }: { go: (t: Tab) => void }) {
       <Notice tone="ok">{t('simulated')}</Notice>
       {cur.warnings.map((w) => <Notice key={w} tone={w === 'address_poisoning_suspected' ? 'danger' : 'warn'}>{t(`w_${w}` as Key)}</Notice>)}
       <Notice tone="info">{t('boundNote')} {t('irreversible')}</Notice>
-      {needCheck && <label className="flex items-start gap-3 rounded-xl border border-line p-3 text-[14px]"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[#35e7ac]" checked={checked} onChange={(e) => setChecked(e.target.checked)} />{t('iChecked')}</label>}
+      {needCheck && <label className="flex items-start gap-3 rounded-xl border border-line p-3 text-[14px]"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[var(--primary)]" checked={checked} onChange={(e) => setChecked(e.target.checked)} />{t('iChecked')}</label>}
       {err && <Notice tone="danger">{err}</Notice>}
       <Btn full busy={!!busy} disabled={needCheck && !checked} onClick={approve}><Icon n="key" />{busy === 'passkey' ? t('approving') : busy === 'prepare' ? t('preparing') : t('approve')}</Btn>
       <Btn full kind="ghost" disabled={!!busy} onClick={cancel}>{t('cancel')}</Btn>
@@ -109,7 +109,7 @@ export function Send({ go }: { go: (t: Tab) => void }) {
   const idx = FLOW.indexOf(cur.state), bad = idx < 0;
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">{t('tracking')}</h1>
+      <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('tracking')}</h1>
       <Card className="space-y-4">
         <div className="flex items-start justify-between gap-3"><div><div className="text-2xl font-semibold">{cur.amountDisplay} {cur.symbol}</div><div className="text-xs text-mute">{cur.networkName} → {short(cur.to)}</div></div><StatePill state={cur.state} /></div>
         {!bad && <ol className="space-y-2.5" aria-label={t('status')}>{FLOW.slice(1).map((s, k) => { const done = idx > k + 1 || cur.state === 'finalized', now = idx === k + 1 && cur.state !== 'finalized';

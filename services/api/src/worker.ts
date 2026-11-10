@@ -64,7 +64,7 @@ async function scanDeposits(): Promise<void> {
 async function refreshHealth(): Promise<void> {
   await Promise.all(Object.values(NETWORKS).map(async (n) => {
     try { healthCache.set(n.id, await adapters[n.id].health()); }
-    catch { healthCache.set(n.id, { network: n.id, ok: false, identityVerified: false, height: null, endpoints: [], checkedAt: new Date().toISOString() }); }
+    catch { healthCache.set(n.id, { network: n.id, ok: false, readable: false, identityVerified: false, height: null, endpoints: [], checkedAt: new Date().toISOString() }); }
   }));
 }
 
@@ -76,7 +76,7 @@ function loop(name: string, fn: () => Promise<void>, everyMs: number): void {
 }
 
 export function startWorkers(): void {
-  loop('health', refreshHealth, 60_000);
+  loop('health', refreshHealth, 45_000);
   loop('expire', expireStale, 15_000);
   loop('reconcile', reconcile, 8_000);
   loop('deposits', scanDeposits, 75_000);

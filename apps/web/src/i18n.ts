@@ -106,6 +106,12 @@ const D = {
   e_offline: ['Hors ligne ou serveur injoignable.', 'Offline or server unreachable.'],
   e_login_failed: ['Clé d’accès non reconnue.', 'Passkey not recognized.'],
   e_signer_forbidden: ['Jeton de configuration invalide.', 'Invalid setup token.'],
+  checking: ['Vérification des réseaux…', 'Checking networks…'],
+  netsUp: ['{up}/{n} réseaux opérationnels', '{up}/{n} networks operational'],
+  sendPaused: ['consultation seule pour l’instant', 'read-only for now'],
+  partialNote: ['Une source de données ne répond pas. Les soldes restent visibles ; les envois sur ce réseau reprennent dès son retour.', 'One data source is not answering. Balances stay visible; sends on this network resume when it is back.'],
+  more: ['Plus', 'More'], securityLink: ['Sécurité, limites et clés d’accès', 'Security, limits and passkeys'], seeAudit: ['Afficher le journal', 'Show log'], hideAudit: ['Masquer le journal', 'Hide log'],
+  remaining: ['restant aujourd’hui', 'left today'], perTxShort: ['max. par transfert', 'max per transfer'],
   mainnet: ['Réseaux principaux — fonds réels', 'Mainnet — real funds'],
 } as const;
 export type Key = keyof typeof D;

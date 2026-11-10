@@ -2,7 +2,7 @@ import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { useAccounts, useNetworks } from '../hooks';
 import { useT } from '../i18n';
-import { Addr, Card, CopyBtn, H, Icon, inputCls, Notice, Skeleton } from '../ui';
+import { Addr, Card, Chips, CopyBtn, H, Icon, Notice, Skeleton } from '../ui';
 
 export function Receive() {
   const t = useT(); const acc = useAccounts(), nets = useNetworks();
@@ -13,14 +13,14 @@ export function Receive() {
   const assets = [n.native.symbol, ...n.tokens.map((x) => x.symbol)];
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">{t('receiveTitle')}</h1>
+      <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('receiveTitle')}</h1>
       <Card>
-        <label className="block"><span className="mb-1.5 block text-[13px] text-mute">{t('network')}</span>
-          <select className={inputCls} value={net} onChange={(e) => setNet(e.target.value)}>{nets.data!.map((x) => <option key={x.id} value={x.id}>{x.name} — {[x.native.symbol, ...x.tokens.map((k) => k.symbol)].join(', ')}</option>)}</select></label>
-        <div className="mt-4 grid place-items-center">{qr ? <img src={qr} alt={`QR ${a.address}`} className="h-auto w-full max-w-[280px] rounded-2xl bg-white p-2" /> : <div className="h-[280px] w-[280px] animate-pulse rounded-2xl bg-elev" />}</div>
-        <div className="mt-4 rounded-xl bg-bg p-3 text-center"><div className="mb-1 text-xs text-mute">{t('yourAddress')} · {n.name}</div><Addr value={a.address} /></div>
+        <Chips label={t('network')} value={net} onChange={setNet} options={nets.data!.map((x) => ({ id: x.id, label: x.name, net: x.id }))} />
+        <p className="mt-3 text-center text-[13px] text-mute">{assets.join(' · ')}</p>
+        <div className="mt-4 grid place-items-center">{qr ? <img src={qr} alt={`QR ${a.address}`} className="h-auto w-full max-w-[240px] rounded-3xl border border-line bg-white p-3" /> : <div className="h-[280px] w-[280px] animate-pulse rounded-2xl bg-elev" />}</div>
+        <div className="mt-5 rounded-2xl bg-elev/70 p-4 text-center"><div className="mb-1 text-xs text-mute">{t('yourAddress')} · {n.name}</div><Addr value={a.address} /></div>
         <div className="mt-3 grid grid-cols-2 gap-3"><CopyBtn text={a.address} full />
-          <a href={a.explorer} target="_blank" rel="noreferrer noopener" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line px-4 text-[15px]"><Icon n="ext" className="h-4 w-4" />{t('explorer')}</a></div>
+          <a href={a.explorer} target="_blank" rel="noreferrer noopener" className="inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl border border-line px-4 text-[15.5px]"><Icon n="ext" className="h-4 w-4" />{t('explorer')}</a></div>
       </Card>
       <Notice tone="warn">{t('onlySend', { assets: assets.join(' / '), network: n.name })}</Notice>
       {n.family === 'evm' && <Notice tone="info">{t('evmSame')}</Notice>}

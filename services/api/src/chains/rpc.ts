@@ -1,8 +1,10 @@
 import { UserError } from '../config.ts';
 
 const TIMEOUT = 9000;
+/** One retry on connection-level failures (never on an HTTP answer). Safe for reads; re-sending signed bytes is idempotent on-chain. */
 export async function http(url: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT), redirect: 'error' });
+  try { return await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT), redirect: 'error' }); }
+  catch { await new Promise((r) => setTimeout(r, 300)); return fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT), redirect: 'error' }); }
 }
 
 let idc = 0;
@@ -31,7 +33,7 @@ export async function rpcQuorum<T>(urls: string[], method: string, params: unkno
   return ok[0]!;
 }
 
-export interface Health { network: string; ok: boolean; identityVerified: boolean; height: number | null; endpoints: { url: string; ok: boolean; ms: number | null }[]; checkedAt: string }
+export interface Health { network: string; /** every source up and identity verified: transfers possible */ ok: boolean; /** at least one source up: balances readable */ readable: boolean; identityVerified: boolean; height: number | null; endpoints: { url: string; ok: boolean; ms: number | null }[]; checkedAt: string }
 export interface Prepared {
   section: Record<string, unknown>; maxFee: bigint; feeEstimate: bigint; warnings: string[]; ttlSec: number;
 }
