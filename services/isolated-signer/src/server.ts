@@ -35,7 +35,7 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
   };
   let queue: Promise<unknown> = Promise.resolve(); // strictly serialize state-changing work
   return createServer((req, res) => {
-    const send = (code: number, obj: unknown) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(obj)); };
+    const send = (code: number, obj: unknown) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store', connection: 'close' }); res.end(JSON.stringify(obj)); };
     if (req.method === 'GET' && req.url === '/healthz') return send(200, { ok: true }); // liveness only, no information
     const run = async () => {
       const ip = (req.socket.remoteAddress ?? '').replace(/^::ffff:/, '');

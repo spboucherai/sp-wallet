@@ -13,8 +13,13 @@ async function call<T>(method: 'GET' | 'POST', path: string, payload?: unknown):
   const mac = createHmac('sha256', config.signerSecret).update([method, path, ts, nonce, createHash('sha256').update(body).digest('hex')].join('\n')).digest('hex');
   let r: Response;
   try {
-    r = await fetch(config.signerUrl + path, { method, headers: { 'x-spw-auth': `t=${ts},n=${nonce},s=${mac}`, 'content-type': 'application/json' }, body: body || undefined, signal: AbortSignal.timeout(15000) });
-  } catch { throw new UserError('signer_unreachable', 'the signer is unreachable; nothing was signed', 503); }
+    // one connection per request: never reuse an idle keep-alive socket the signer may have closed
+    r = await fetch(config.signerUrl + path, { method, headers: { 'x-spw-auth': `t=${ts},n=${nonce},s=${mac}`, 'content-type': 'application/json', connection: 'close' }, body: body || undefined, signal: AbortSignal.timeout(15000) });
+  } catch (e) {
+    const err = e as Error & { cause?: { code?: string; message?: string } };
+    console.error(`[signer-client] ${method} ${path} failed: ${err.name} ${err.message} ${err.cause?.code ?? ''} ${err.cause?.message ?? ''}`);
+    throw new UserError('signer_unreachable', 'the signer is unreachable; nothing was signed', 503);
+  }
   const j = (await r.json().catch(() => ({}))) as { error?: string; message?: string };
   if (!r.ok) throw new UserError(`signer_${j.error ?? 'error'}`, j.message ?? 'signer refused', r.status === 401 ? 502 : 422);
   return j as T;
