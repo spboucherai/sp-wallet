@@ -1,5 +1,7 @@
-import { NETWORKS, isTerminal, type NetworkId } from '@spw/core';
-import { adapters, type Health } from './chains/index.ts';
+import { NETWORKS, isTerminal, type NetworkDef } from '@spw/core';
+import { adapterFor, type Health } from './chains/index.ts';
+
+const NETS = Object.values(NETWORKS) as NetworkDef[];
 import { config } from './config.ts';
 import { audit, sql } from './db.ts';
 import { signer } from './signer-client.ts';
@@ -27,7 +29,7 @@ async function reconcile(): Promise<void> {
         if (p.state === 'signed') continue;
       }
       if (!config.broadcast || !p.txid || !p.intent) continue;
-      const a = adapters[p.network as NetworkId];
+      const a = adapterFor(p.network);
       const t = await a.track({ txid: p.txid, intent: p.intent, blockRef: p.block_ref, broadcastAt: (p.broadcast_at?.getTime() ?? Date.now()) / 1000 });
       if (t.rebroadcast && p.raw && Date.now() - (p.last_broadcast_at?.getTime() ?? 0) > 45_000) {
         await a.broadcast(p.raw).catch(() => {});
@@ -45,10 +47,12 @@ async function reconcile(): Promise<void> {
 async function scanDeposits(): Promise<void> {
   const st = await signer.status().catch(() => null);
   if (!st) return;
-  for (const n of Object.values(NETWORKS)) {
+  for (const n of NETS) {
+    const address = st.addresses[n.id];
+    if (!address) continue;
     try {
       const [c] = await sql<{ cursor: string }[]>`select cursor from scan_cursor where network = ${n.id}`;
-      const r = await adapters[n.id].deposits(st.addresses[n.family], c ? Number(c.cursor) : null);
+      const r = await adapterFor(n.id).deposits(address, c ? Number(c.cursor) : null);
       for (const d of r.items) {
         const ins = await sql`insert into deposits (network, txid, idx, asset, amount, from_addr, block, block_time)
           values (${n.id}, ${d.txid}, ${d.idx}, ${d.asset}, ${d.amount.toString()}, ${d.from}, ${d.block}, ${d.time ? new Date(d.time * 1000) : null})
@@ -62,8 +66,8 @@ async function scanDeposits(): Promise<void> {
 }
 
 async function refreshHealth(): Promise<void> {
-  await Promise.all(Object.values(NETWORKS).map(async (n) => {
-    try { healthCache.set(n.id, await adapters[n.id].health()); }
+  await Promise.all(NETS.map(async (n) => {
+    try { healthCache.set(n.id, await adapterFor(n.id).health()); }
     catch { healthCache.set(n.id, { network: n.id, ok: false, readable: false, identityVerified: false, height: null, endpoints: [], checkedAt: new Date().toISOString() }); }
   }));
 }

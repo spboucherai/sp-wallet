@@ -5,19 +5,20 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import { z, ZodError } from 'zod';
-import { formatUnits, getNetwork, NETWORKS, normalizeAddress, type NetworkId } from '@spw/core';
+import { formatUnits, getNetwork, NETWORKS, normalizeAddress, type NetworkDef, type NetworkId } from '@spw/core';
 import { authRoutes, deviceRoutes, isAuthed, listCreds } from './auth.ts';
-import { adapters } from './chains/index.ts';
+import { adapterFor } from './chains/index.ts';
 import { http } from './chains/rpc.ts';
 import { config, secureCookies, UserError } from './config.ts';
 import { audit, auditList, getSetting, setSetting, sql } from './db.ts';
-import { signer } from './signer-client.ts';
+import { addressFor, signer } from './signer-client.ts';
 import { transferRoutes, view, type ProposalRow } from './transfers.ts';
 import { healthCache } from './worker.ts';
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
+const NETS = Object.values(NETWORKS) as NetworkDef[];
 const cache = new Map<string, { at: number; v: unknown }>();
 async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
   const c = cache.get(key);
@@ -109,28 +110,28 @@ export async function buildServer(): Promise<FastifyInstance> {
     return { db, signer: s, networks: [...healthCache.values()] };
   });
 
-  const liveTokens = (n: (typeof NETWORKS)[NetworkId]) => { const off = new Set(adapters[n.id].disabledAssets?.() ?? []); return n.tokens.filter((t) => !off.has(t.id)); };
-  app.get('/api/v1/networks', async () => Object.values(NETWORKS).map((n) => ({
-    id: n.id, name: n.name, family: n.family, chainRef: n.chainRef, native: n.native, tokens: liveTokens(n), explorerAddr: n.explorerAddr, minConf: n.minConf,
+  const liveTokens = (n: NetworkDef) => { const off = new Set(adapterFor(n.id).disabledAssets?.() ?? []); return n.tokens.filter((t) => !off.has(t.id)); };
+  app.get('/api/v1/networks', async () => NETS.map((n) => ({
+    id: n.id, name: n.name, family: n.family, chainRef: n.chainRef, native: n.native, tokens: liveTokens(n), memo: n.memo ?? null, activation: n.activation ?? null, explorerAddr: n.explorerAddr, minConf: n.minConf,
     health: healthCache.get(n.id) ?? null })));
   app.get('/api/v1/assets', async (req) => {
     const q = z.object({ network: z.string().optional() }).parse(req.query);
-    return Object.values(NETWORKS).filter((n) => !q.network || n.id === q.network).flatMap((n) => [n.native, ...liveTokens(n)].map((a) => ({ network: n.id, ...a })));
+    return NETS.filter((n) => !q.network || n.id === q.network).flatMap((n) => [n.native, ...liveTokens(n)].map((a) => ({ network: n.id, ...a })));
   });
 
   // One vault, one signer-derived address per chain family. Addresses come from the signer, never from the client.
   app.get('/api/v1/accounts', async () => {
     const st = await signer.status();
-    return { keyId: st.keyId, accounts: Object.values(NETWORKS).map((n) => ({ network: n.id, name: n.name, family: n.family, address: st.addresses[n.family], explorer: n.explorerAddr + st.addresses[n.family] })) };
+    return { keyId: st.keyId, accounts: NETS.filter((n) => st.addresses[n.id]).map((n) => ({ network: n.id, name: n.name, family: n.family, address: st.addresses[n.id]!, explorer: n.explorerAddr + st.addresses[n.id] })) };
   });
 
   app.get('/api/v1/portfolio', async () => {
     const st = await signer.status();
     const px = await prices();
-    const rows = await Promise.all(Object.values(NETWORKS).map(async (n) => {
-      const address = st.addresses[n.family];
+    const rows = await Promise.all(NETS.filter((n) => st.addresses[n.id]).map(async (n) => {
+      const address = addressFor(st, n.id);
       try {
-        const b = await cached(`bal:${n.id}`, 12_000, () => adapters[n.id].balances(address));
+        const b = await cached(`bal:${n.id}`, 12_000, () => adapterFor(n.id).balances(address));
         return [n.native, ...liveTokens(n)].map((a) => (b[a.id] === undefined
           ? { network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals, amount: null, display: null, error: 'unavailable' as string | null }
           : { network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals,

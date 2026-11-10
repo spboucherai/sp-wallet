@@ -2,8 +2,9 @@
 // USDC addresses: Circle official page https://developers.circle.com/stablecoins/usdc-contract-addresses
 // (read 2026-11-10). Token addresses live in tokens.ts with their sources; all are re-verified on-chain at API start
 // (symbol/decimals/chainId/genesis) and a token whose on-chain metadata differs is disabled.
-export type Family = 'evm' | 'btc' | 'sol';
-export type NetworkId = 'ethereum' | 'base' | 'arbitrum' | 'polygon' | 'optimism' | 'bsc' | 'avalanche' | 'hyperevm' | 'bitcoin' | 'solana';
+/** 'evm', 'btc' (all Bitcoin-style UTXO chains) and 'sol' are built in; any other value names a plugin in families.ts */
+export type Family = string;
+export type NetworkId = string;
 
 export interface AssetDef {
   /** 'native' or the token contract / mint address */
@@ -26,6 +27,14 @@ export interface NetworkDef {
   rpc: string[];
   explorerTx: string;
   explorerAddr: string;
+  /** BIP-44 coin type used for key derivation (plugin and UTXO families) */
+  coinType?: number;
+  /** Bitcoin-style chains: address encoding and script kind */
+  utxo?: { bech32?: string; pubKeyHash: number; scriptHash: number; kind: 'wpkh' | 'pkh'; dust: number };
+  /** destination memo / tag support: free text or an unsigned 32-bit number */
+  memo?: 'text' | 'uint32';
+  /** minimum the account must hold to exist on-chain (shown on the receive screen), in whole units of the native coin */
+  activation?: string;
   /** confirmations displayed as "enough" for small amounts (finality is checked per chain) */
   minConf: number;
 }
@@ -39,7 +48,7 @@ const tokensOf = (network: string): AssetDef[] => TOKENS.flatMap((t) => {
 });
 const eth: AssetDef = { id: 'native', symbol: 'ETH', name: 'Ether', decimals: 18 };
 
-export const NETWORKS: Record<NetworkId, NetworkDef> = {
+const DEFS = {
   ethereum: {
     id: 'ethereum', family: 'evm', name: 'Ethereum', chainRef: '1', native: eth,
     tokens: [],
@@ -91,9 +100,18 @@ export const NETWORKS: Record<NetworkId, NetworkDef> = {
   bitcoin: {
     id: 'bitcoin', family: 'btc', name: 'Bitcoin',
     chainRef: '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f',
-    native: { id: 'native', symbol: 'BTC', name: 'Bitcoin', decimals: 8 }, tokens: [],
+    native: { id: 'native', symbol: 'BTC', name: 'Bitcoin', decimals: 8 }, tokens: [], coinType: 0,
+    utxo: { bech32: 'bc', pubKeyHash: 0x00, scriptHash: 0x05, kind: 'wpkh', dust: 546 },
     rpc: ['https://mempool.space/api', 'https://blockstream.info/api'],
     explorerTx: 'https://mempool.space/tx/', explorerAddr: 'https://mempool.space/address/', minConf: 6,
+  },
+  litecoin: {
+    id: 'litecoin', family: 'btc', name: 'Litecoin',
+    chainRef: '12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2',
+    native: { id: 'native', symbol: 'LTC', name: 'Litecoin', decimals: 8 }, tokens: [], coinType: 2,
+    utxo: { bech32: 'ltc', pubKeyHash: 0x30, scriptHash: 0x32, kind: 'wpkh', dust: 5460 },
+    rpc: ['https://litecoinspace.org/api', 'blockbook:https://litecoin.atomicwallet.io/api/v2'],
+    explorerTx: 'https://litecoinspace.org/tx/', explorerAddr: 'https://litecoinspace.org/address/', minConf: 6,
   },
   solana: {
     id: 'solana', family: 'sol', name: 'Solana',
@@ -103,9 +121,13 @@ export const NETWORKS: Record<NetworkId, NetworkDef> = {
     rpc: ['https://api.mainnet-beta.solana.com', 'https://solana-rpc.publicnode.com'],
     explorerTx: 'https://solscan.io/tx/', explorerAddr: 'https://solscan.io/account/', minConf: 1,
   },
-};
+} satisfies Record<string, NetworkDef>;
 
-for (const n of Object.values(NETWORKS)) n.tokens = tokensOf(n.id);
+/** Known ids are typed; any other string may be absent. */
+export const NETWORKS = DEFS as { [K in keyof typeof DEFS]: NetworkDef } & Record<string, NetworkDef>;
+
+
+for (const n of Object.values(NETWORKS) as NetworkDef[]) n.tokens = tokensOf(n.id);
 
 export const NETWORK_IDS = Object.keys(NETWORKS) as NetworkId[];
 

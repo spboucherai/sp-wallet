@@ -35,7 +35,10 @@ export async function rpcQuorum<T>(urls: string[], method: string, params: unkno
 
 export interface Health { network: string; /** every source up and identity verified: transfers possible */ ok: boolean; /** at least one source up: balances readable */ readable: boolean; identityVerified: boolean; height: number | null; endpoints: { url: string; ok: boolean; ms: number | null }[]; checkedAt: string }
 export interface Prepared {
+  /** chain section merged into the intent (hashed and approved) */
   section: Record<string, unknown>; maxFee: bigint; feeEstimate: bigint; warnings: string[]; ttlSec: number;
+  /** unauthenticated helper data for the signer (it re-verifies everything in it against the intent) */
+  aux?: Record<string, unknown>;
 }
 export interface Tracked { state: 'broadcast' | 'confirming' | 'finalized' | 'failed' | 'replaced' | 'reorged'; confirmations: number; blockRef?: string; error?: string; rebroadcast?: boolean }
 export interface Deposit { txid: string; idx: number; asset: string; amount: bigint; from: string; block: number; time: number | null }
@@ -44,9 +47,9 @@ export interface Adapter {
   balances(addr: string): Promise<Record<string, bigint>>;
   /** asset ids hidden because their on-chain identity check failed */
   disabledAssets?(): string[];
-  prepare(d: { asset: string; from: string; to: string; amount: bigint }): Promise<Prepared>;
+  prepare(d: { asset: string; from: string; to: string; amount: bigint; memo?: string }): Promise<Prepared>;
   broadcast(raw: string): Promise<void>;
   track(p: { txid: string; intent: any; blockRef: string | null; broadcastAt: number }): Promise<Tracked>;
   deposits(addr: string, cursor: number | null): Promise<{ items: Deposit[]; cursor: number; finalizedHeight: number }>;
 }
-export const hostOf = (u: string) => new URL(u).host;
+export const hostOf = (u: string) => new URL(u.replace(/^[a-z]+:(?=https?:)/, '')).host;

@@ -46,6 +46,30 @@ describe('key derivation (public test vectors)', () => {
   });
 });
 
+describe('per-network keys', () => {
+  it('Litecoin uses BIP-84 coin type 2 (public vector) and every network has an address', () => {
+    expect(keys.addresses.litecoin).toBe('ltc1qjmxnz78nmc8nq77wuxh25n2es7rzm5c2rkk4wh');
+    for (const n of Object.values(NETWORKS)) expect(keys.addresses[n.id], n.id).toBeTruthy();
+    for (const id of ['base', 'optimism', 'bsc', 'avalanche', 'hyperevm']) expect(keys.addresses[id]).toBe(keys.addresses.evm);
+  });
+  it('signs a Litecoin intent with Litecoin parameters and refuses a Bitcoin address as destination', async () => {
+    const { signer, pk, nowRef } = setup();
+    await signer.enroll({ credential: pk.credential(), setupToken: 'setup-token' });
+    const t = nowRef.t;
+    const ltc: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-cccccccccccc', keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 2, network: 'litecoin', chainRef: NETWORKS.litecoin.chainRef,
+      asset: 'native', symbol: 'LTC', decimals: 8, amount: '2000000', from: keys.addresses.litecoin!, to: 'ltc1qg42tkwuuxefutzxezdkdel39gfstuap288mfea', maxFee: '100000',
+      btc: { inputs: [{ txid: 'cd'.repeat(32), vout: 0, value: '5000000' }], change: '2990000', fee: '10000' } };
+    const r = await signer.sign(ltc, pk.assert(intentHash(ltc)));
+    const tx = Transaction.fromRaw(hex.decode(r.raw));
+    expect(tx.id).toBe(r.txid);
+    expect(tx.getOutput(0).amount).toBe(2_000_000n);
+    const bad = { ...ltc, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-dddddddddddd', to: 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq' };
+    await expect(signer.sign(bad, pk.assert(intentHash(bad)))).rejects.toThrow();
+    const wrongChain = { ...ltc, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-eeeeeeeeeeee', chainRef: NETWORKS.bitcoin.chainRef };
+    await expect(signer.sign(wrongChain, pk.assert(intentHash(wrongChain)))).rejects.toThrow(/chain/);
+  });
+});
+
 describe('keystore', () => {
   it('encrypts at rest, 0600, never overwrites, round-trips', () => {
     const dir = mkdtempSync(join(tmpdir(), 'spw-ks-'));

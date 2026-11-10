@@ -24,6 +24,7 @@ export function Receive({ initial }: { initial?: string }) {
       </Card>
       <Notice tone="warn">{t('onlySend', { assets: assets.length > 4 ? `${assets.slice(0, 3).join(' / ')}… (${assets.length})` : assets.join(' / '), network: n.name })}</Notice>
       {n.family === 'evm' && <Notice tone="info">{t('evmSame')}</Notice>}
+      {n.activation && <Notice tone="info">{t('activationNote', { network: n.name, amount: n.activation, sym: n.native.symbol })}</Notice>}
       <Card><H>{t('addressFromSigner')}</H><ul className="space-y-2 text-[13.5px] text-mute">
         <li>{t('depositShown', { n: n.minConf })}</li>
         {n.tokens.length > 0 && <li>{t('gasNote', { sym: n.native.symbol })}</li>}

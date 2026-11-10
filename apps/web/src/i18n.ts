@@ -27,8 +27,8 @@ const D = {
   copy: ['Copier', 'Copy'], copied: ['Copié', 'Copied'],
   onlySend: ['Envoyez uniquement {assets} sur le réseau {network}. Un dépôt sur un autre réseau ou d’un autre jeton peut être perdu définitivement.',
     'Only send {assets} on the {network} network. Deposits on another network or of another token may be lost permanently.'],
-  evmSame: ['Cette adresse est identique sur Ethereum, Base, Arbitrum et Polygon, mais les fonds ne passent pas d’un réseau à l’autre : vérifiez le réseau choisi par l’expéditeur.',
-    'This address is the same on Ethereum, Base, Arbitrum and Polygon, but funds do not move between networks: check the network the sender uses.'],
+  evmSame: ['Cette adresse est la même sur tous vos réseaux compatibles Ethereum (Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain, Avalanche, HyperEVM), mais les fonds ne passent pas d’un réseau à l’autre : vérifiez le réseau choisi par l’expéditeur.',
+    'This address is the same on all your Ethereum-compatible networks (Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain, Avalanche, HyperEVM), but funds do not move between networks: check the network the sender uses.'],
   depositShown: ['Un dépôt apparaît ici une fois confirmé sur la chaîne ({n} confirmations pour la finalité).', 'A deposit shows here once confirmed on-chain ({n} confirmations for finality).'],
   gasNote: ['Pour envoyer des USDC plus tard, il faut aussi un peu de {sym} sur ce réseau pour payer les frais.', 'To send USDC later you also need a little {sym} on this network to pay fees.'],
   addressFromSigner: ['Adresse dérivée par le signataire', 'Address derived by the signer'], explorer: ['Explorateur', 'Explorer'],
@@ -121,6 +121,11 @@ const D = {
   allAssets: ['Tous les actifs', 'All assets'], yourAssets: ['Vos actifs', 'Your assets'], search: ['Rechercher un actif ou un réseau', 'Search an asset or network'], today: ['aujourd’hui', 'today'],
   noMatch: ['Aucun actif ne correspond.', 'No matching asset.'], popular: ['Populaires', 'Popular'], tokensCount: ['{n} actifs pris en charge', '{n} supported assets'],
   showAll: ['Tout afficher', 'Show all'], showLess: ['Réduire', 'Show less'],
+  memoText: ['Mémo (si le destinataire l’exige)', 'Memo (if the recipient requires one)'], memoTag: ['Étiquette de destination (si le destinataire l’exige)', 'Destination tag (if the recipient requires one)'],
+  memoWarn: ['Les plateformes d’échange exigent souvent un mémo ou une étiquette : sans lui, le dépôt peut être perdu.', 'Exchanges often require a memo or tag: without it the deposit can be lost.'],
+  memo: ['Mémo / étiquette', 'Memo / tag'],
+  activationNote: ['Sur {network}, un compte doit détenir au moins {amount} {sym} pour exister : le premier dépôt doit dépasser ce montant, qui reste ensuite immobilisé.', 'On {network}, an account must hold at least {amount} {sym} to exist: the first deposit must exceed it, and that amount then stays locked.'],
+  e_bad_memo: ['Mémo ou étiquette invalide.', 'Invalid memo or tag.'], e_unsupported_network: ['Réseau pas encore activé sur le signataire.', 'Network not yet enabled on the signer.'], e_unsupported_asset: ['Actif non pris en charge.', 'Unsupported asset.'],
   mainnet: ['Réseaux principaux — fonds réels', 'Mainnet — real funds'],
 } as const;
 export type Key = keyof typeof D;

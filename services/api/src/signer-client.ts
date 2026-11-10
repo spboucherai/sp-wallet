@@ -3,7 +3,7 @@ import type { Policy } from '@spw/core';
 import { config, UserError } from './config.ts';
 
 export interface SignerStatus {
-  keyId: string; addresses: { evm: string; btc: string; sol: string }; halted: boolean; enrollmentOpen: boolean;
+  keyId: string; addresses: Record<string, string>; halted: boolean; enrollmentOpen: boolean;
   credentials: { id: string; addedAt: string }[]; policy: Policy; spentToday: Record<string, string>; journalHead: string | null; journalLength: number;
 }
 
@@ -34,8 +34,13 @@ export const signer = {
     return v;
   },
   enroll: (p: unknown) => { cached = null; return call<{ ok: true }>('POST', '/enroll', p); },
-  sign: (intent: unknown, assertion: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string }>('POST', '/sign', { intent, assertion }); },
+  sign: (intent: unknown, assertion: unknown, aux?: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string }>('POST', '/sign', { intent, assertion, ...(aux ? { aux } : {}) }); },
   halt: () => { cached = null; return call<{ ok: true }>('POST', '/halt', {}); },
 };
 
-export function addressFor(st: SignerStatus, family: 'evm' | 'btc' | 'sol'): string { return st.addresses[family]; }
+/** The wallet's address on a network; fails closed when the signer has no key for it. */
+export function addressFor(st: SignerStatus, network: string): string {
+  const a = st.addresses[network];
+  if (!a) throw new UserError('unsupported_network', 'the signer has no key for this network yet', 503);
+  return a;
+}

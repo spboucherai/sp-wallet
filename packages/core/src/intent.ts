@@ -20,6 +20,10 @@ export const IntentSchema = z.strictObject({
   createdAt: z.number().int().positive(),
   expiresAt: z.number().int().positive(),
   policyVersion: z.number().int().nonnegative(),
+  /** destination memo / tag, when the network has one */
+  memo: z.string().max(120).optional(),
+  /** chain parameters for plugin families: flat string map, serialized in key order */
+  x: z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9_.]{0,39}$/), z.string().max(20000)).optional(),
   evm: z.strictObject({
     nonce: z.number().int().nonnegative(), gasLimit: U, maxFeePerGas: U, maxPriorityFeePerGas: U,
   }).optional(),
@@ -55,6 +59,8 @@ function fields(i: Intent): [string, string][] {
   if (i.sol) f.push(['sol.recentBlockhash', i.sol.recentBlockhash], ['sol.lastValidBlockHeight', String(i.sol.lastValidBlockHeight)],
     ['sol.createAta', i.sol.createAta ? '1' : '0'], ['sol.computeUnitLimit', String(i.sol.computeUnitLimit)],
     ['sol.computeUnitPrice', i.sol.computeUnitPrice]);
+  if (i.memo !== undefined) f.push(['memo', i.memo]);
+  if (i.x) for (const k of Object.keys(i.x).sort()) f.push([`x.${k}`, i.x[k]!]);
   return f;
 }
 
@@ -62,7 +68,8 @@ function fields(i: Intent): [string, string][] {
 export function canonicalBytes(intent: Intent): Uint8Array {
   const i = IntentSchema.parse(intent);
   const fam = getNetwork(i.network).family; // throws on unknown network
-  if ((fam === 'evm') !== !!i.evm || (fam === 'btc') !== !!i.btc || (fam === 'sol') !== !!i.sol)
+  const plugin = fam !== 'evm' && fam !== 'btc' && fam !== 'sol';
+  if ((fam === 'evm') !== !!i.evm || (fam === 'btc') !== !!i.btc || (fam === 'sol') !== !!i.sol || plugin !== !!i.x)
     throw new Error('intent chain section does not match network');
   baseUnits(i.amount);
   const parts: Uint8Array[] = [enc.encode(DOMAIN), new Uint8Array([0])];

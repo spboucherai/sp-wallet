@@ -2,10 +2,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, get } from './api';
 
 export interface Bal { network: string; networkName: string; asset: string; symbol: string; name: string; decimals: number; amount: string | null; display: string | null; error: string | null }
-export interface Proposal { id: string; state: string; network: string; networkName: string; asset: string; symbol: string; decimals: number; amount: string; amountDisplay: string; from: string; to: string; note: string;
+export interface Proposal { id: string; state: string; network: string; networkName: string; asset: string; symbol: string; decimals: number; amount: string; amountDisplay: string; from: string; to: string; note: string; memo: string | null;
   feeDisplay: string | null; maxFeeDisplay: string | null; feeSymbol: string; warnings: string[]; intentHash: string | null; txid: string | null; explorer: string | null; confirmations: number; error: string | null; createdAt: string; expiresAt: string | null }
 export interface Portfolio { asOf: string; prices: Record<string, { usd: number; cad: number; change24h: number | null; change7d: number | null; marketCap: number | null; volume24h: number | null; high24h: number | null; low24h: number | null; ath: number | null; rank: number | null; spark: number[] }> | null; balances: Bal[]; pending: Proposal[]; halted: boolean }
-export interface Net { id: string; name: string; family: string; native: { id: string; symbol: string; decimals: number }; tokens: { id: string; symbol: string; decimals: number }[]; minConf: number; explorerAddr: string;
+export interface Net { id: string; name: string; family: string; native: { id: string; symbol: string; decimals: number }; tokens: { id: string; symbol: string; decimals: number }[]; minConf: number; explorerAddr: string; memo: 'text' | 'uint32' | null; activation: string | null;
   health: { ok: boolean; readable: boolean; identityVerified: boolean; height: number | null; endpoints: { url: string; ok: boolean; ms: number | null }[]; checkedAt: string } | null }
 export interface SettingsT { locale: 'fr' | 'en'; currency: 'USD' | 'CAD'; hideBalances: boolean; prices: boolean }
 

@@ -15,7 +15,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
   const nets = useNetworks(), pf = usePortfolio();
   const book = useQuery({ queryKey: ['book'], queryFn: () => get<{ id: string; network: string; address: string; label: string }[]>('/addressbook') });
   const [step, setStep] = useState<Step>('form');
-  const [net, setNet] = useState(initial?.network ?? 'base'), [asset, setAsset] = useState(initial?.asset ?? ''), [to, setTo] = useState(''), [amount, setAmount] = useState(''), [note, setNote] = useState('');
+  const [net, setNet] = useState(initial?.network ?? 'base'), [asset, setAsset] = useState(initial?.asset ?? ''), [to, setTo] = useState(''), [amount, setAmount] = useState(''), [note, setNote] = useState(''), [memo, setMemo] = useState('');
   const [p, setP] = useState<Proposal | null>(null), [busy, setBusy] = useState(''), [err, setErr] = useState(''), [checked, setChecked] = useState(false);
   const [idem, setIdem] = useState(() => crypto.randomUUID());
   const n = nets.data?.find((x) => x.id === net);
@@ -35,7 +35,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
 
   const review = async () => {
     setBusy('review'); setErr('');
-    try { setP(await post<Proposal>('/transfers/proposals', { network: net, asset, to: to.trim(), amount: amount.trim(), note }, { 'idempotency-key': idem })); setChecked(false); setStep('review'); }
+    try { setP(await post<Proposal>('/transfers/proposals', { network: net, asset, to: to.trim(), amount: amount.trim(), note, ...(n?.memo && memo.trim() ? { memo: memo.trim() } : {}) }, { 'idempotency-key': idem })); setChecked(false); setStep('review'); }
     catch (e) { fail(e); setIdem(crypto.randomUUID()); } finally { setBusy(''); }
   };
   const approve = async () => {
@@ -54,7 +54,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
       if (fresh) { setP(fresh); if (!['draft', 'pending_approval'].includes(fresh.state)) setStep('track'); }
     } finally { setBusy(''); }
   };
-  const reset = () => { setStep('form'); setP(null); setTo(''); setAmount(''); setNote(''); setErr(''); setIdem(crypto.randomUUID()); };
+  const reset = () => { setStep('form'); setP(null); setTo(''); setAmount(''); setNote(''); setMemo(''); setErr(''); setIdem(crypto.randomUUID()); };
   const cancel = async () => { if (p) await post(`/transfers/proposals/${p.id}/reject`).catch(() => {}); reset(); };
 
   if (step === 'form') return (
@@ -63,7 +63,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
       {pf.data?.halted && <Notice tone="danger">{t('haltedBanner')}</Notice>}
       <Card className="space-y-4">
         <div><div className="mb-2 text-[13px] text-mute">{t('network')}</div>
-          <Chips label={t('network')} value={net} onChange={(v) => { setNet(v); setTo(''); }} options={(nets.data ?? []).map((x) => ({ id: x.id, label: x.name, net: x.id }))} /></div>
+          <Chips label={t('network')} value={net} onChange={(v) => { setNet(v); setTo(''); setMemo(''); }} options={(nets.data ?? []).map((x) => ({ id: x.id, label: x.name, net: x.id }))} /></div>
         <div><div className="mb-2 text-[13px] text-mute">{t('asset')}</div>
           <Chips label={t('asset')} value={asset} onChange={setAsset} options={assets.map((x) => ({ id: x.id, label: x.symbol }))} /></div>
         <Field label={t('destination')}>
@@ -77,6 +77,8 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
             {asset !== 'native' && bal?.display != null && <Btn kind="soft" onClick={() => setAmount(bal.display!)}>{t('max')}</Btn>}
           </div>
         </Field>
+        {n?.memo && <Field label={t(n.memo === 'uint32' ? 'memoTag' : 'memoText')} hint={t('memoWarn')}>
+          <input className={inputCls} value={memo} maxLength={n.memo === 'uint32' ? 10 : 28} inputMode={n.memo === 'uint32' ? 'numeric' : 'text'} onChange={(e) => setMemo(n.memo === 'uint32' ? e.target.value.replace(/\D/g, '') : e.target.value)} autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} /></Field>}
         <Field label={t('note')}><input className={inputCls} value={note} maxLength={80} onChange={(e) => setNote(e.target.value)} /></Field>
         {err && <Notice tone="danger">{err}</Notice>}
         <Btn full busy={busy === 'review'} disabled={!to || !amount || pf.data?.halted} onClick={review}>{busy === 'review' ? t('preparing') : t('review')}</Btn>
@@ -94,6 +96,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
           <div className="font-[family-name:var(--font-display)] text-[38px] font-semibold leading-tight tracking-[-0.03em]">{cur.amountDisplay} <span className="text-mute">{cur.symbol}</span></div>
           <div className="font-mono text-xs text-mute">{cur.amount} {t('baseUnits')} · {cur.networkName}</div></div>
         <Row k={t('to')}><Addr value={cur.to} /></Row>
+        {cur.memo && <Row k={t('memo')}><span className="break-all font-mono text-[14px]">{cur.memo}</span></Row>}
         <Row k={t('from')}><span className="font-mono text-[13px] text-mute">{short(cur.from)}</span></Row>
         <Row k={t('network')}>{cur.networkName}</Row>
         <Row k={t('fee')}>{cur.feeDisplay ? `≈ ${trimAmt(cur.feeDisplay, 9)} ${cur.feeSymbol}` : '—'}</Row>

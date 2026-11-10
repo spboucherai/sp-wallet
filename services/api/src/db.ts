@@ -25,6 +25,8 @@ create table if not exists proposals (
   intent jsonb, intent_hash text, raw text, txid text, block_ref text, confirmations int not null default 0, error text,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   expires_at timestamptz, broadcast_at timestamptz, last_broadcast_at timestamptz, finalized_at timestamptz);
+alter table proposals add column if not exists memo text;
+alter table proposals add column if not exists aux jsonb;
 create unique index if not exists proposals_txid on proposals (network, txid) where txid is not null;
 create table if not exists deposits (
   network text not null, txid text not null, idx int not null, asset text not null, amount numeric(78,0) not null,

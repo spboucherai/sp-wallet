@@ -2,7 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { Signer, SignerError } from './signer.ts';
 
-const MAX_BODY = 64 * 1024;
+const MAX_BODY = 1024 * 1024; // legacy UTXO chains attach previous transactions
 
 export function authHeader(secret: string, method: string, path: string, body: string, ts = Math.floor(Date.now() / 1000), nonce: string = crypto.randomUUID()): string {
   const mac = createHmac('sha256', secret).update([method, path, ts, nonce, createHash('sha256').update(body).digest('hex')].join('\n')).digest('hex');
@@ -46,7 +46,7 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
       const route = `${req.method} ${req.url}`;
       if (route === 'GET /status') return signer.status();
       if (route === 'POST /enroll') { await signer.enroll(json); return { ok: true }; }
-      if (route === 'POST /sign') return await signer.sign(json.intent, json.assertion);
+      if (route === 'POST /sign') return await signer.sign(json.intent, json.assertion, json.aux && typeof json.aux === 'object' ? json.aux : undefined);
       if (route === 'POST /halt') { signer.halt(); return { ok: true, halted: true }; }
       throw new SignerError('not_found', 'no such route');
     };

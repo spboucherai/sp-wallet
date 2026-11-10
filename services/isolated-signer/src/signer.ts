@@ -5,7 +5,7 @@ import { base58 } from '@scure/base';
 import { keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
-  baseUnits, buildBtcTx, buildEvmTx, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash,
+  baseUnits, buildBtcTx, buildEvmTx, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash, pluginFor,
   solWireTransaction, toB64u, type Intent,
 } from '@spw/core';
 import type { Keys } from './keys.ts';
@@ -71,7 +71,7 @@ export class Signer {
     this.store.save();
   }
 
-  async sign(rawIntent: unknown, assertion: AuthenticationResponseJSON): Promise<SignResult> {
+  async sign(rawIntent: unknown, assertion: AuthenticationResponseJSON, aux?: Record<string, unknown>): Promise<SignResult> {
     const st = this.store, now = this.now();
     const parsed = IntentSchema.safeParse(rawIntent);
     if (!parsed.success) throw new SignerError('bad_request', 'malformed intent');
@@ -83,9 +83,11 @@ export class Signer {
       throw new SignerError(code, msg);
     };
     if (i.keyId !== this.keys.keyId) deny('wrong_key', 'intent targets another key');
-    const net = getNetwork(i.network);
+    let net;
+    try { net = getNetwork(i.network); } catch { return deny('wrong_chain', 'unknown network'); }
     if (i.chainRef !== net.chainRef) deny('wrong_chain', 'chain identity mismatch');
-    const own = net.family === 'evm' ? this.keys.addresses.evm : net.family === 'btc' ? this.keys.addresses.btc : this.keys.addresses.sol;
+    const own = this.keys.addresses[net.id];
+    if (!own) deny('wrong_chain', 'no key for this network');
     if (i.from !== own) deny('wrong_source', 'source address is not controlled by this signer');
     if (i.to === own) deny('self_send', 'destination equals source');
     if (st.state.used[i.proposalId] !== undefined) deny('replay', 'proposal already signed');
@@ -104,14 +106,18 @@ export class Signer {
           return { raw, txid: keccak256(raw) };
         };
       } else if (net.family === 'btc') {
-        const tx = buildBtcTx(i);
-        build = async () => { tx.sign(this.keys.btcPriv); tx.finalize(); return { raw: tx.hex, txid: tx.id }; };
-      } else {
+        const tx = buildBtcTx(i, aux);
+        build = async () => { tx.sign(this.keys.utxoPriv(net)); tx.finalize(); return { raw: tx.hex, txid: tx.id }; };
+      } else if (net.family === 'sol') {
         const msg = buildSolMessage(i);
         build = async () => {
           const sig = ed25519.sign(msg, this.keys.solSeed);
           return { raw: Buffer.from(solWireTransaction(sig, msg)).toString('base64'), txid: base58.encode(sig) };
         };
+      } else {
+        const plugin = pluginFor(net);
+        plugin.build(i, net, aux); // must throw on anything unsupported, before the approval is even looked at
+        build = async () => plugin.sign(i, net, this.keys.handle(net), aux);
       }
     } catch (e) { return deny('unsupported', (e as Error).message); }
 
