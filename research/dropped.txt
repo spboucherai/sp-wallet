@@ -1,0 +1,21 @@
+LINK@polygon: second source differs: 0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39
+LINK@bsc: second source differs: 0xf8a0bf9cf54bb92f17374d9e9a321e6a111a51bd
+LINK@avalanche: on-chain symbol is "LINK.e"
+UNI@polygon: second source differs: 0xb33eaad8d922b1083446dc23f610c2567fb5180f
+UNI@base: no second source (CoinGecko) for this network
+UNI@bsc: second source differs: 0xbf5140a22578168fd562dccf235e5d43a02ce9b1
+WBTC@base: second source differs: 0x0555e30da8f98308edb960aa94c0db47230d2b9c
+WBTC@bsc: second source differs: 0x0555e30da8f98308edb960aa94c0db47230d2b9c
+WBTC@optimism: second source differs: 0x68f180fcce6836688e9084f035309e29bf0a2095
+WETH@arbitrum: no second source (CoinGecko) for this network
+WETH@optimism: no second source (CoinGecko) for this network
+WETH@base: no second source (CoinGecko) for this network
+WETH@polygon: no second source (CoinGecko) for this network
+PAXG@base: no second source (CoinGecko) for this network
+PAXG@solana: no second source (CoinGecko) for this network
+SHIB@bsc: no second source (CoinGecko) for this network
+SHIB@arbitrum: no second source (CoinGecko) for this network
+SHIB@optimism: no second source (CoinGecko) for this network
+SHIB@base: no second source (CoinGecko) for this network
+SHIB@polygon: no second source (CoinGecko) for this network
+SHIB@avalanche: no second source (CoinGecko) for this network

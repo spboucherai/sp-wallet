@@ -1,4 +1,4 @@
-import { associatedTokenAddress, buildSolMessage, getAsset, solFeeLamports, solWireTransaction, SYSTEM_PROGRAM, type Intent, type NetworkDef } from '@spw/core';
+import { associatedTokenAddress, buildSolMessage, getAsset, solFeeLamports, solWireTransaction, SYSTEM_PROGRAM, TOKEN_2022_PROGRAM, TOKEN_PROGRAM, tokenProgramOf, type Intent, type NetworkDef } from '@spw/core';
 import { UserError } from '../config.ts';
 import { hostOf, rpcAny, rpcOne, rpcQuorum, type Adapter, type Deposit, type Health, type Prepared, type Tracked } from './rpc.ts';
 
@@ -9,10 +9,25 @@ export function solAdapter(n: NetworkDef): Adapter {
   const call = <T>(m: string, p: unknown[]) => rpcAny<T>(n.rpc, m, p);
   let identity = false;
   const acct = (a: string) => call<{ value: { owner: string; lamports: number; data: unknown } | null }>('getAccountInfo', [a, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
-  const tokenBalance = async (owner: string, mint: string): Promise<bigint> => {
-    const r = await call<{ value: { account: { data: { parsed: { info: { tokenAmount: { amount: string } } } } } }[] }>('getTokenAccountsByOwner', [owner, { mint }, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
-    return r.value.reduce((s, a) => s + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
+  type Parsed = { pubkey: string; account: { data: { parsed: { info: { mint: string; tokenAmount: { amount: string; decimals: number } } } } } };
+  /** All token accounts of the owner, both token programs: two calls regardless of how many mints are allowlisted. */
+  const tokenAccounts = async (owner: string): Promise<Parsed[]> => {
+    const rs = await Promise.all([TOKEN_PROGRAM, TOKEN_2022_PROGRAM].map((programId) =>
+      call<{ value: Parsed[] }>('getTokenAccountsByOwner', [owner, { programId }, { encoding: 'jsonParsed', commitment: 'confirmed' }])));
+    return rs.flatMap((r) => r.value);
   };
+  const disabled = new Set<string>();
+  let tokensChecked = false;
+  async function verifyTokens(): Promise<void> { // mint must exist, be owned by the expected token program and have the pinned decimals
+    for (let k = 0; k < n.tokens.length; k += 50) {
+      const chunk = n.tokens.slice(k, k + 50);
+      const r = await call<{ value: ({ owner: string; data: { parsed?: { type: string; info: { decimals: number } } } } | null)[] }>('getMultipleAccounts', [chunk.map((t) => t.id), { encoding: 'jsonParsed', commitment: 'finalized' }]);
+      chunk.forEach((t, j) => { const a = r.value[j];
+        const good = !!a && a.owner === tokenProgramOf(t) && a.data.parsed?.type === 'mint' && a.data.parsed.info.decimals === t.decimals;
+        if (good) disabled.delete(t.id); else { disabled.add(t.id); console.error(`[sol] token ${t.symbol} ${t.id} failed on-chain mint check — disabled`); } });
+    }
+    tokensChecked = true;
+  }
   return {
     async health(): Promise<Health> {
       const endpoints = await Promise.all(n.rpc.map(async (url) => {
@@ -25,21 +40,27 @@ export function solAdapter(n: NetworkDef): Adapter {
       }));
       const ok = endpoints.every((e) => e.ok);
       if (ok) identity = true;
+      if (identity && !tokensChecked) await verifyTokens().catch(() => {});
       return { network: n.id, ok: ok && identity, readable: endpoints.some((e) => e.ok), identityVerified: identity, height: Math.max(0, ...endpoints.map((e) => e.h ?? 0)) || null,
         endpoints: endpoints.map(({ h: _h, ...e }) => e), checkedAt: new Date().toISOString() };
     },
     async balances(addr) {
       const out: Record<string, bigint> = { native: BigInt((await call<{ value: number }>('getBalance', [addr, { commitment: 'confirmed' }])).value) };
-      for (const t of n.tokens) out[t.id] = await tokenBalance(addr, t.id);
+      const accts = await tokenAccounts(addr);
+      for (const t of n.tokens) if (!disabled.has(t.id)) out[t.id] = accts.filter((a) => a.account.data.parsed.info.mint === t.id).reduce((s, a) => s + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
       return out;
     },
+    disabledAssets: () => [...disabled],
     async prepare(d): Promise<Prepared> {
       if ((await rpcQuorum<string>(n.rpc, 'getGenesisHash', [])) !== n.chainRef) throw new UserError('rpc_degraded', 'cluster identity mismatch; transfer refused', 503);
       const asset = getAsset(n.id, d.asset), warnings: string[] = [];
+      if (!tokensChecked) await verifyTokens();
+      if (disabled.has(asset.id)) throw new UserError('unsupported_asset', 'this token failed its on-chain identity check and is disabled');
+      const tp = tokenProgramOf(asset);
       const dest = (await acct(d.to)).value;
       if (dest && dest.owner !== SYSTEM_PROGRAM) throw new UserError('bad_destination', 'destination is not a regular wallet address (it is a program-owned or token account)');
       const bal = await this.balances(d.from);
-      const computeUnitLimit = asset.id === 'native' ? 5_000 : 80_000;
+      const computeUnitLimit = asset.id === 'native' ? 5_000 : asset.program === 'token2022' ? 120_000 : 80_000;
       let price = 5_000n;
       try {
         const fees = await call<{ prioritizationFee: number }[]>('getRecentPrioritizationFees', [[d.from]]);
@@ -55,9 +76,13 @@ export function solAdapter(n: NetworkDef): Adapter {
         if ((bal.native ?? 0n) - needLamports < RENT_SYSTEM && (bal.native ?? 0n) !== needLamports) throw new UserError('insufficient_funds', 'insufficient SOL (0.00089088 SOL must remain in the wallet)');
       } else {
         if ((bal[asset.id] ?? 0n) < d.amount) throw new UserError('insufficient_funds', `insufficient ${asset.symbol} balance`);
-        const srcAta = (await acct(associatedTokenAddress(d.from, asset.id))).value;
+        const srcAtaAddr = associatedTokenAddress(d.from, asset.id, tp);
+        const srcAta = (await acct(srcAtaAddr)).value;
+        // the builder spends from the associated token account only: its own balance must cover the amount
+        const inAta = (await tokenAccounts(d.from)).find((a) => a.pubkey === srcAtaAddr);
+        if (srcAta && BigInt(inAta?.account.data.parsed.info.tokenAmount.amount ?? '0') < d.amount) throw new UserError('insufficient_funds', `insufficient ${asset.symbol} in the associated token account`);
         if (!srcAta) throw new UserError('insufficient_funds', `no ${asset.symbol} token account in this wallet`);
-        createAta = !(await acct(associatedTokenAddress(d.to, asset.id))).value;
+        createAta = !(await acct(associatedTokenAddress(d.to, asset.id, tp))).value;
         if (createAta) { needLamports += RENT_ATA; warnings.push('creates_token_account'); }
         if ((bal.native ?? 0n) < needLamports) throw new UserError('insufficient_gas', 'not enough SOL to pay the network fee' + (createAta ? ' and the recipient token account rent (≈0.00204 SOL)' : ''));
       }
@@ -86,7 +111,9 @@ export function solAdapter(n: NetworkDef): Adapter {
     },
     async deposits(addr, cursor) {
       const items: Deposit[] = [];
-      const targets = [addr, ...n.tokens.map((t) => associatedTokenAddress(addr, t.id))];
+      // owner account + only the token accounts that actually exist
+      const mine = new Set(n.tokens.filter((t) => !disabled.has(t.id)).map((t) => t.id));
+      const targets = [addr, ...(await tokenAccounts(addr)).filter((a) => mine.has(a.account.data.parsed.info.mint)).map((a) => a.pubkey)].slice(0, 12);
       const sigs = new Map<string, number>();
       for (const t of targets) {
         const r = await call<{ signature: string; slot: number; err: unknown }[]>('getSignaturesForAddress', [t, { limit: 15, commitment: 'finalized' }]);
@@ -104,9 +131,10 @@ export function solAdapter(n: NetworkDef): Adapter {
           if (delta > 0n) items.push({ txid: sig, idx: 0, asset: 'native', amount: delta, from: signer, block: slot, time: tx.blockTime ?? null });
         }
         for (const t of n.tokens) {
+          if (disabled.has(t.id)) continue;
           const f = (arr: any[]) => BigInt(arr?.find((b: any) => b.owner === addr && b.mint === t.id)?.uiTokenAmount.amount ?? '0');
           const delta = f(tx.meta.postTokenBalances) - f(tx.meta.preTokenBalances);
-          if (delta > 0n) items.push({ txid: sig, idx: 1, asset: t.id, amount: delta, from: signer === addr ? '' : signer, block: slot, time: tx.blockTime ?? null });
+          if (delta > 0n) items.push({ txid: sig, idx: 1 + n.tokens.indexOf(t), asset: t.id, amount: delta, from: signer === addr ? '' : signer, block: slot, time: tx.blockTime ?? null });
         }
         maxSlot = Math.max(maxSlot, slot);
       }

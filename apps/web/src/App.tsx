@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { get, post, setUnauthHandler } from './api';
 import { I18n, useT, type Key, type Locale } from './i18n';
 import { Activity } from './screens/Activity';
+import { Asset } from './screens/Asset';
+import { Assets } from './screens/Assets';
 import { Gate } from './screens/Gate';
 import { Home } from './screens/Home';
 import { Receive } from './screens/Receive';
@@ -12,17 +14,29 @@ import { Settings } from './screens/Settings';
 import { Btn, Icon, Notice } from './ui';
 
 const TABS = [['home', '/', 'home'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
-export type Tab = (typeof TABS)[number][0];
-const tabOf = (p: string): Tab => TABS.find((t) => t[1] === p)?.[0] ?? 'home';
+export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets';
+/** Where to go, with optional pre-selection (asset page, or send/receive pre-filled). */
+export interface Route { tab: Tab; network?: string; asset?: string }
+export type Nav = (r: Route) => void;
+const pathOf = (r: Route) => (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
+function routeOf(): Route {
+  const m = /^\/asset\/([a-z0-9-]+)\/(.+)$/.exec(location.pathname);
+  if (m) return { tab: 'asset', network: m[1], asset: decodeURIComponent(m[2]!) };
+  if (location.pathname === '/assets') return { tab: 'assets' };
+  const q = new URLSearchParams(location.search);
+  return { tab: TABS.find((t) => t[1] === location.pathname)?.[0] ?? 'home', network: q.get('n') ?? undefined, asset: q.get('a') ?? undefined };
+}
 
 export function App() {
   const qc = useQueryClient();
   const [locale, setLocaleState] = useState<Locale>(() => (localStorage.getItem('spw-locale') === 'en' ? 'en' : 'fr'));
-  const [tab, setTabState] = useState<Tab>(() => tabOf(location.pathname));
+  const [route, setRoute] = useState<Route>(routeOf);
+  const tab = route.tab;
   const state = useQuery({ queryKey: ['auth'], queryFn: () => get<{ setupRequired: boolean; authenticated: boolean }>('/auth/state'), staleTime: 0 });
   const setLocale = useCallback((l: Locale) => { localStorage.setItem('spw-locale', l); document.documentElement.lang = l; setLocaleState(l); }, []);
-  const go = useCallback((t: Tab) => { history.pushState(null, '', TABS.find((x) => x[0] === t)![1]); setTabState(t); window.scrollTo(0, 0); }, []);
-  useEffect(() => { const f = () => setTabState(tabOf(location.pathname)); addEventListener('popstate', f); return () => removeEventListener('popstate', f); }, []);
+  const nav = useCallback<Nav>((r) => { history.pushState(null, '', pathOf(r)); setRoute(r); window.scrollTo(0, 0); }, []);
+  const go = useCallback((t: Tab) => nav({ tab: t }), [nav]);
+  useEffect(() => { const f = () => setRoute(routeOf()); addEventListener('popstate', f); return () => removeEventListener('popstate', f); }, []);
   useEffect(() => { setUnauthHandler(() => { qc.clear(); void qc.invalidateQueries({ queryKey: ['auth'] }); }); }, [qc]);
   useEffect(() => { document.documentElement.lang = locale; }, [locale]);
   // lock when the app has been in the background for a while (server also enforces a 30-minute idle timeout)
@@ -32,7 +46,7 @@ export function App() {
   if (state.isLoading) body = <div className="grid h-full place-items-center text-mute"><Icon n="spin" className="h-6 w-6" /></div>;
   else if (state.isError || !state.data) body = <Offline retry={() => void state.refetch()} />;
   else if (!state.data.authenticated) body = <Gate setup={state.data.setupRequired} onDone={() => void state.refetch()} />;
-  else body = <Shell tab={tab} go={go} lock={async () => { await post('/auth/logout').catch(() => {}); qc.clear(); void state.refetch(); }} />;
+  else body = <Shell tab={tab} route={route} nav={nav} go={go} lock={async () => { await post('/auth/logout').catch(() => {}); qc.clear(); void state.refetch(); }} />;
   return <I18n.Provider value={{ locale, setLocale }}>{body}</I18n.Provider>;
 }
 
@@ -41,7 +55,7 @@ function Offline({ retry }: { retry: () => void }) {
   return <div className="mx-auto grid h-full max-w-sm place-items-center px-6"><div className="w-full space-y-4"><Notice tone="warn">{t('offline')}</Notice><Btn full kind="soft" onClick={retry}>{t('retry')}</Btn></div></div>;
 }
 
-function Shell({ tab, go, lock }: { tab: Tab; go: (t: Tab) => void; lock: () => void }) {
+function Shell({ tab, route, nav, go, lock }: { tab: Tab; route: Route; nav: Nav; go: (t: Tab) => void; lock: () => void }) {
   const t = useT();
   const MOBILE: [Tab, string][] = [['home', 'home'], ['receive', 'down'], ['send', 'up'], ['activity', 'list'], ['settings', 'gear']];
   const side = (id: Tab, icon: string) => { const on = tab === id; return (
@@ -63,16 +77,18 @@ function Shell({ tab, go, lock }: { tab: Tab; go: (t: Tab) => void; lock: () => 
             </div>
           </div>
         </header>
-        <main key={tab} className="rise mx-auto w-full max-w-xl px-5 pb-32 pt-3 lg:max-w-2xl lg:pb-12 lg:pt-10">
-          {tab === 'home' && <Home go={go} />}
-          {tab === 'receive' && <Receive />}
-          {tab === 'send' && <Send go={go} />}
+        <main key={tab + (route.network ?? '') + (route.asset ?? '')} className="rise mx-auto w-full max-w-xl px-5 pb-32 pt-3 lg:max-w-2xl lg:pb-12 lg:pt-10">
+          {tab === 'home' && <Home go={go} nav={nav} />}
+          {tab === 'assets' && <Assets nav={nav} />}
+          {tab === 'asset' && <Asset network={route.network ?? ''} asset={route.asset ?? 'native'} nav={nav} />}
+          {tab === 'receive' && <Receive initial={route.network} />}
+          {tab === 'send' && <Send go={go} initial={route} />}
           {tab === 'activity' && <Activity />}
           {tab === 'security' && <Security />}
           {tab === 'settings' && <Settings lock={lock} go={go} />}
         </main>
         <nav aria-label="Navigation" className="safe-b nav-glass fixed inset-x-0 bottom-0 z-10 border-t border-line lg:hidden">
-          <div className="mx-auto flex max-w-xl items-end px-2 pt-2">{MOBILE.map(([id, icon]) => { const on = tab === id;
+          <div className="mx-auto flex max-w-xl items-end px-2 pt-2">{MOBILE.map(([id, icon]) => { const on = tab === id || (id === 'home' && (tab === 'asset' || tab === 'assets'));
             return id === 'send'
               ? <button key={id} onClick={() => go(id)} aria-current={on ? 'page' : undefined} aria-label={t('send')} className="flex flex-1 flex-col items-center gap-1 text-[11px] font-medium text-ink">
                   <span className="-mt-5 grid h-[52px] w-[52px] place-items-center rounded-full bg-primary text-onprimary shadow-[0_10px_24px_-8px_rgba(11,16,32,0.55)]"><Icon n="up" className="h-6 w-6" /></span><span>{t('send')}</span></button>

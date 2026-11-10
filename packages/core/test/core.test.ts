@@ -11,7 +11,7 @@ import {
 } from '../src/index.ts';
 
 const now = 1_800_000_000;
-const base = { v: 1 as const, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 1 };
+const base = { v: 1 as const, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 2 };
 const USDC_BASE = NETWORKS.base.tokens[0]!.id, USDC_SOL = NETWORKS.solana.tokens[0]!.id;
 const evmIntent: Intent = { ...base, network: 'base', chainRef: '8453', asset: USDC_BASE, symbol: 'USDC', decimals: 6, amount: '12500000',
   from: '0x9858EfFD232B4033E47d90003D41EC34EcaEda94', to: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', maxFee: '100000000000000',
@@ -71,7 +71,7 @@ describe('canonical intent hash', () => {
       { ...evmIntent, network: 'arbitrum', chainRef: '42161' }, { ...evmIntent, asset: 'native' }, { ...evmIntent, maxFee: '100000000000001' },
       { ...evmIntent, expiresAt: now + 121 }, { ...evmIntent, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { ...evmIntent, keyId: 'spw-0123456789abcdee' },
       { ...evmIntent, evm: { ...evmIntent.evm!, nonce: 4 } }, { ...evmIntent, evm: { ...evmIntent.evm!, gasLimit: '90001' } },
-      { ...evmIntent, evm: { ...evmIntent.evm!, maxFeePerGas: '1000000001' } }, { ...evmIntent, policyVersion: 2 }, { ...evmIntent, decimals: 18 },
+      { ...evmIntent, evm: { ...evmIntent.evm!, maxFeePerGas: '1000000001' } }, { ...evmIntent, policyVersion: 3 }, { ...evmIntent, decimals: 18 },
     ];
     const hs = new Set(muts.map((m) => toHex(intentHash(m))));
     expect(hs.size).toBe(muts.length);
@@ -139,9 +139,46 @@ describe('Solana builder (cross-checked against @solana/kit)', () => {
     expect(Buffer.from(m.instructions[2].data).readBigUInt64LE(4)).toBe(1_000_000n);
     expect(() => buildSolMessage({ ...solIntent, to: solIntent.from })).toThrow();
     expect(() => buildSolMessage({ ...solIntent, to: USDC_SOL })).toThrow();
-    expect(() => buildSolMessage({ ...solIntent, asset: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB' })).toThrow(/allowlisted/);
+    expect(() => buildSolMessage({ ...solIntent, asset: 'So11111111111111111111111111111111111111112' })).toThrow(/allowlisted/);
     expect(() => buildSolMessage({ ...solIntent, maxFee: '5000' })).toThrow(/fee/);
     expect(base58.decode(solIntent.to).length).toBe(32);
+  });
+});
+
+describe('registry (wave 1: more networks and tokens)', () => {
+  it('every listed asset has a signer limit and every network a fee ceiling; nothing is sendable by default otherwise', () => {
+    for (const n of Object.values(NETWORKS)) {
+      expect(DEFAULT_POLICY.maxFee[n.id], n.id).toBeDefined();
+      for (const a of [n.native, ...n.tokens]) expect(BigInt(DEFAULT_POLICY.perTx[`${n.id}:${a.symbol}`] ?? '0') > 0n, `${n.id}:${a.symbol}`).toBe(true);
+      expect(new Set(n.tokens.map((t) => t.id.toLowerCase())).size).toBe(n.tokens.length); // no duplicate contracts
+      expect(new Set(n.tokens.map((t) => t.symbol)).size).toBe(n.tokens.length); // one contract per ticker per network
+    }
+    expect(Object.keys(NETWORKS).length).toBeGreaterThanOrEqual(10);
+  });
+  it('EVM token addresses are checksummed and chain ids are distinct', () => {
+    const ids = Object.values(NETWORKS).filter((n) => n.family === 'evm').map((n) => n.chainRef);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const n of Object.values(NETWORKS)) if (n.family === 'evm') for (const t of n.tokens) expect(normalizeAddress(n.id, t.id)).toBe(t.id);
+  });
+  it('builds transfers on the new EVM networks with their own chain id', () => {
+    for (const [net, chain] of [['optimism', 10], ['bsc', 56], ['avalanche', 43114], ['hyperevm', 999]] as const) {
+      const n = NETWORKS[net];
+      const tx = parseTransaction(serializeEvmUnsigned({ ...evmIntent, network: net, chainRef: n.chainRef, asset: 'native', symbol: n.native.symbol, decimals: 18, amount: '1000', evm: { ...evmIntent.evm!, gasLimit: '21000' } }));
+      expect(tx.chainId).toBe(chain);
+      expect(() => buildEvmTx({ ...evmIntent, network: net, chainRef: '1' })).toThrow();
+    }
+  });
+  it('Token-2022 mints use the Token-2022 program for the instruction and the token-account derivation', async () => {
+    const py = NETWORKS.solana.tokens.find((t) => t.symbol === 'PYUSD')!;
+    expect(py.program).toBe('token2022');
+    const T22 = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+    const [pda] = await findAssociatedTokenPda({ owner: kitAddress(solIntent.from), mint: kitAddress(py.id), tokenProgram: kitAddress(T22) });
+    expect(associatedTokenAddress(solIntent.from, py.id, T22)).toBe(pda);
+    const m = getCompiledTransactionMessageDecoder().decode(buildSolMessage({ ...solIntent, asset: py.id, symbol: 'PYUSD', decimals: py.decimals })) as any;
+    const progs = m.instructions.map((ix: any) => m.staticAccounts[ix.programAddressIndex]);
+    expect(progs.slice(2)).toEqual(['ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL', T22]);
+    expect(m.staticAccounts).not.toContain('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    expect(m.instructions[3].accountIndices.map((k: number) => m.staticAccounts[k])[0]).toBe(pda);
   });
 });
 
@@ -171,7 +208,7 @@ describe('policy', () => {
     expect(checkPolicy(DEFAULT_POLICY, evmIntent, 0n, now + 121, false).ok).toBe(false);
     expect(checkPolicy(DEFAULT_POLICY, { ...evmIntent, expiresAt: now + 3600 }, 0n, now, false).ok).toBe(false);
     expect(checkPolicy(DEFAULT_POLICY, { ...evmIntent, symbol: 'DAI' }, 0n, now, false).ok).toBe(false);
-    expect(checkPolicy(DEFAULT_POLICY, { ...evmIntent, policyVersion: 0 }, 0n, now, false).ok).toBe(false);
+    expect(checkPolicy(DEFAULT_POLICY, { ...evmIntent, policyVersion: 1 }, 0n, now, false).ok).toBe(false);
     expect(checkPolicy(DEFAULT_POLICY, { ...evmIntent, maxFee: '900000000000000000' }, 0n, now, false).ok).toBe(false);
     expect(checkPolicy({ ...DEFAULT_POLICY, allowlist: ['base:0x0000000000000000000000000000000000000001'] }, evmIntent, 0n, now, false).ok).toBe(false);
   });

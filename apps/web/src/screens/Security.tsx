@@ -2,17 +2,18 @@ import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useState } from 'react';
 import { get, post } from '../api';
+import { useNetworks } from '../hooks';
 import { errText, I18n, useT } from '../i18n';
 import { Btn, Card, Coin, H, Icon, inputCls, Notice, Skeleton, when } from '../ui';
 
-const DEC: Record<string, number> = { USDC: 6, ETH: 18, POL: 18, BTC: 8, SOL: 9 };
-const fmt = (v: string, sym: string) => { const d = DEC[sym] ?? 0, s = v.padStart(d + 1, '0'); const i = s.slice(0, s.length - d), f = s.slice(s.length - d).replace(/0+$/, ''); return f ? `${i}.${f}` : i; };
+const fmt = (v: string, d: number) => { const s = v.padStart(d + 1, '0'); const i = s.slice(0, s.length - d), f = s.slice(s.length - d).replace(/0+$/, ''); return f ? `${i}.${f}` : i; };
 
 export function Security() {
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient();
+  const nets = useNetworks();
   const ov = useQuery({ queryKey: ['security'], queryFn: () => get<any>('/security/overview'), refetchInterval: 30_000 });
   const au = useQuery({ queryKey: ['audit'], queryFn: () => get<any>('/security/audit?limit=60'), refetchInterval: 30_000 });
-  const [showAudit, setShowAudit] = useState(false);
+  const [showAudit, setShowAudit] = useState(false), [allLimits, setAllLimits] = useState(false);
   const [halt, setHalt] = useState(''), [haltOpen, setHaltOpen] = useState(false), [busy, setBusy] = useState(''), [err, setErr] = useState('');
   if (ov.isLoading || !ov.data) return <div className="space-y-4"><Skeleton h="h-40" /><Skeleton h="h-40" /></div>;
   const s = ov.data.signer;
@@ -24,7 +25,8 @@ export function Security() {
     const assertion = await startAuthentication({ optionsJSON: v.options }); // an existing passkey authorizes the new one
     await post('/security/devices/confirm', { pendingId: v.pendingId, assertion });
   });
-  const keys = s.reachable ? Object.keys(s.policy.perTx).sort() : [];
+  const keys: string[] = s.reachable ? Object.keys(s.policy.perTx).sort() : [];
+  const decOf = (net: string, sym: string) => { const n = nets.data?.find((x) => x.id === net); return (n?.native.symbol === sym ? n.native : n?.tokens.find((x) => x.symbol === sym))?.decimals ?? 0; };
   return (
     <div className="space-y-4">
       <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('security')}</h1>
@@ -44,15 +46,17 @@ export function Security() {
       </Card>
 
       {s.reachable && <Card><H>{t('limits')}</H>
-        <ul className="space-y-4">{keys.sort((x, y) => Number(y.endsWith(':USDC')) - Number(x.endsWith(':USDC')) || x.localeCompare(y)).map((k) => { const [net, sym] = k.split(':') as [string, string];
+        <ul className="space-y-4">{keys.sort((x, y) => Number(BigInt(s.spentToday[y] ?? '0') > 0n) - Number(BigInt(s.spentToday[x] ?? '0') > 0n) || Number(y.endsWith(':USDC')) - Number(x.endsWith(':USDC')) || x.localeCompare(y)).slice(0, allLimits ? 999 : 6).map((k) => { const [net, sym] = k.split(':') as [string, string];
+          const dec = decOf(net, sym);
           const day = BigInt(s.policy.daily[k] ?? '0'), used = BigInt(s.spentToday[k] ?? '0'), pct = day > 0n ? Number((used * 100n) / day) : 0;
           return <li key={k}>
             <div className="flex items-center gap-3"><Coin sym={sym} net={net} size={36} />
               <div className="min-w-0 flex-1"><div className="text-[14.5px] font-semibold leading-tight">{sym} <span className="font-normal capitalize text-mute">· {net}</span></div>
-                <div className="text-[12.5px] text-mute">{fmt(s.policy.perTx[k], sym)} {t('perTxShort')}</div></div>
-              <div className="text-right"><div className="text-[14.5px] font-semibold leading-tight">{fmt((day - used > 0n ? day - used : 0n).toString(), sym)}</div><div className="text-[12.5px] text-mute">{t('remaining')}</div></div></div>
+                <div className="text-[12.5px] text-mute">{fmt(s.policy.perTx[k], dec)} {t('perTxShort')}</div></div>
+              <div className="text-right"><div className="text-[14.5px] font-semibold leading-tight">{fmt((day - used > 0n ? day - used : 0n).toString(), dec)}</div><div className="text-[12.5px] text-mute">{t('remaining')}</div></div></div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-elev" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${sym} ${net}`}><div className="h-full rounded-full bg-blue" style={{ width: `${Math.min(100, pct)}%` }} /></div>
           </li>; })}</ul>
+        {keys.length > 6 && <button className="mt-4 text-[14px] font-medium text-blue" aria-expanded={allLimits} onClick={() => setAllLimits(!allLimits)}>{allLimits ? t('showLess') : `${t('showAll')} (${keys.length})`}</button>}
         <p className="mt-4 text-[12.5px] text-mute">{t('limitsNote')}</p></Card>}
 
       <Card><H>{t('devices')}</H>

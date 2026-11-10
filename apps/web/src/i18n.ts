@@ -112,6 +112,15 @@ const D = {
   partialNote: ['Une source de données ne répond pas. Les soldes restent visibles ; les envois sur ce réseau reprennent dès son retour.', 'One data source is not answering. Balances stay visible; sends on this network resume when it is back.'],
   more: ['Plus', 'More'], securityLink: ['Sécurité, limites et clés d’accès', 'Security, limits and passkeys'], seeAudit: ['Afficher le journal', 'Show log'], hideAudit: ['Masquer le journal', 'Hide log'],
   remaining: ['restant aujourd’hui', 'left today'], perTxShort: ['max. par transfert', 'max per transfer'],
+  price: ['Prix', 'Price'], range: ['Période', 'Range'], r_1: ['sur 24 h', 'past 24 h'], r_7: ['sur 7 jours', 'past 7 days'], r_30: ['sur 30 jours', 'past 30 days'], r_365: ['sur 1 an', 'past year'],
+  yourBalance: ['Votre solde', 'Your balance'], otherNetworks: ['{sym} sur vos autres réseaux', '{sym} on your other networks'], marketData: ['Marché', 'Market'],
+  change24h: ['Variation 24 h', '24 h change'], change7d: ['Variation 7 j', '7 d change'], marketCap: ['Capitalisation', 'Market cap'], volume24h: ['Volume 24 h', '24 h volume'],
+  range24h: ['Bas – haut 24 h', '24 h low – high'], rank: ['Rang', 'Rank'], marketSource: ['Données de marché : CoinGecko, en USD. Indicatif.', 'Market data: CoinGecko, in USD. Indicative.'],
+  assetDetails: ['Détails', 'Details'], decimals: ['Décimales', 'Decimals'], contract: ['Contrat du jeton', 'Token contract'], nativeCoin: ['Monnaie native du réseau', 'Native coin of the network'],
+  verifiedToken: ['Adresse épinglée dans le portefeuille et revérifiée sur la chaîne (symbole et décimales) à chaque démarrage.', 'Address pinned in the wallet and re-verified on-chain (symbol and decimals) at every start.'],
+  allAssets: ['Tous les actifs', 'All assets'], yourAssets: ['Vos actifs', 'Your assets'], search: ['Rechercher un actif ou un réseau', 'Search an asset or network'], today: ['aujourd’hui', 'today'],
+  noMatch: ['Aucun actif ne correspond.', 'No matching asset.'], popular: ['Populaires', 'Popular'], tokensCount: ['{n} actifs pris en charge', '{n} supported assets'],
+  showAll: ['Tout afficher', 'Show all'], showLess: ['Réduire', 'Show less'],
   mainnet: ['Réseaux principaux — fonds réels', 'Mainnet — real funds'],
 } as const;
 export type Key = keyof typeof D;

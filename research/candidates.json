@@ -1,0 +1,258 @@
+{
+ "_rule": "A deployment is listed only when (1) the issuer's own documentation states the address and (2) CoinGecko's contract list agrees. scripts/gen-tokens.mts then checks symbol/decimals (EVM) or mint owner program/decimals (Solana) on-chain and writes packages/core/src/tokens.ts.",
+ "_read": "2026-11-10",
+ "tokens": [
+  {
+   "symbol": "USDC",
+   "name": "USD Coin",
+   "source": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+   "d": {
+    "ethereum": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "base": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "arbitrum": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    "polygon": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+    "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+    "avalanche": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+    "hyperevm": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+    "solana": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+   }
+  },
+  {
+   "symbol": "USDT",
+   "name": "Tether USD",
+   "source": "https://tether.to/en/supported-protocols/",
+   "d": {
+    "ethereum": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    "avalanche": "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7",
+    "solana": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
+   }
+  },
+  {
+   "symbol": "PYUSD",
+   "name": "PayPal USD",
+   "source": "https://docs.paxos.com/guides/stablecoin/pyusd/mainnet",
+   "d": {
+    "ethereum": "0x6c3ea9036406852006290770BEdFcAbA0e23A0e8",
+    "arbitrum": "0x46850aD61C2B7d64d08c9C754F45254596696984",
+    "polygon": "0x99aF3EeA856556646C98c8B9b2548Fe815240750",
+    "solana": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo"
+   }
+  },
+  {
+   "symbol": "DAI",
+   "name": "Dai",
+   "source": "https://chainlog.sky.money/api/mainnet/active.json",
+   "d": {
+    "ethereum": "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+   }
+  },
+  {
+   "symbol": "USDS",
+   "name": "USDS",
+   "source": "https://chainlog.sky.money/api/mainnet/active.json ; https://developers.skyeco.com/guides/skylink/",
+   "d": {
+    "ethereum": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+    "base": "0x820C137fa70C8691f0e44Dc420a5e53c168921Dc",
+    "solana": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA"
+   }
+  },
+  {
+   "symbol": "USDe",
+   "name": "Ethena USDe",
+   "source": "https://docs.ethena.fi/solution-design/key-addresses",
+   "d": {
+    "ethereum": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3",
+    "base": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+    "arbitrum": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+    "optimism": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+    "bsc": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+    "solana": "DEkqHyPN7GMRJ5cArtQFAWefqbZb33Hyf6s5iCwjEonT"
+   }
+  },
+  {
+   "symbol": "FDUSD",
+   "name": "First Digital USD",
+   "source": "https://www.firstdigitallabs.com/fdusd (archived copy 2026-04-17)",
+   "d": {
+    "ethereum": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+    "bsc": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+    "arbitrum": "0x93C9932E4afa59201F0B5E63f7d816516F1669fE",
+    "solana": "9zNQRsGLjNKwCUU5Gq5LR8beUCPzQMVMqKAi3SSZh54u"
+   }
+  },
+  {
+   "symbol": "EURC",
+   "name": "EURC",
+   "source": "https://developers.circle.com/stablecoins/eurc-contract-addresses",
+   "d": {
+    "ethereum": "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c",
+    "base": "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
+    "avalanche": "0xC891EB4cbdEFf6e073e859e987815Ed1505c2ACD",
+    "solana": "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr"
+   }
+  },
+  {
+   "symbol": "RLUSD",
+   "name": "Ripple USD",
+   "source": "https://docs.ripple.com/products/stablecoin/overview/token-addresses",
+   "d": {
+    "ethereum": "0x8292bb45bf1ee4d140127049757c2e0ff06317ed"
+   }
+  },
+  {
+   "symbol": "USDG",
+   "name": "Global Dollar",
+   "source": "https://docs.paxos.com/guides/stablecoin/usdg/mainnet",
+   "d": {
+    "ethereum": "0xe343167631d89B6Ffc58B88d6b7fB0228795491D",
+    "arbitrum": "0x004B506865409877C9fA29bfb1ebA929984B9bbC",
+    "solana": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH"
+   }
+  },
+  {
+   "symbol": "LINK",
+   "name": "Chainlink",
+   "source": "https://docs.chain.link/resources/link-token-contracts",
+   "d": {
+    "ethereum": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+    "base": "0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196",
+    "arbitrum": "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
+    "polygon": "0xb0897686c545045aFc77CF20eC7A532E3120E0F1",
+    "optimism": "0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6",
+    "bsc": "0x404460C6A5EdE2D891e8297795264fDe62ADBB75",
+    "avalanche": "0x5947BB275c521040051D82396192181b413227A3",
+    "solana": "LinkhB3afbBKb2EQQu7s7umdZceV3wcvAUJhQAfQ23L"
+   }
+  },
+  {
+   "symbol": "UNI",
+   "name": "Uniswap",
+   "source": "https://developers.uniswap.org/docs/ecosystem/governance/uni.md",
+   "d": {
+    "ethereum": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+    "arbitrum": "0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0",
+    "optimism": "0x6fd9d7AD17242c41f7131d257212c54A0e816691",
+    "polygon": "0x06e8bdE95BE4ce5cB1134BD47aD18a79fFB35822",
+    "base": "0xc3De830EA07524a0761646a6a4e4be0e114a3C83",
+    "bsc": "0x06e8bdE95BE4ce5cB1134BD47aD18a79fFB35822"
+   }
+  },
+  {
+   "symbol": "AAVE",
+   "name": "Aave",
+   "source": "https://aave.com/docs/ecosystem/aave.md",
+   "d": {
+    "ethereum": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+    "arbitrum": "0xba5DdD1f9d7F570dc94a51479a000E3BCE967196",
+    "base": "0x63706e401c06ac8513145b7687a14804d17f814b",
+    "optimism": "0x76FB31fb4af56892A25e32cFC43De717950c9278",
+    "polygon": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B"
+   }
+  },
+  {
+   "symbol": "LDO",
+   "name": "Lido DAO",
+   "source": "https://docs.lido.fi/deployed-contracts/",
+   "d": {
+    "ethereum": "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32"
+   }
+  },
+  {
+   "symbol": "WBTC",
+   "name": "Wrapped Bitcoin",
+   "source": "https://wbtc.network/ecosystem",
+   "d": {
+    "ethereum": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+    "base": "0x1ceA84203673764244E05693e42E6Ace62bE9BA5",
+    "bsc": "0x39665e85a68a4d7328b8799135E2ff301a0Ca86f",
+    "optimism": "0xc3f854b2970f8727d28527ece33176fac67fef48",
+    "avalanche": "0x0555e30da8f98308edb960aa94c0db47230d2b9c",
+    "solana": "5XZw2LKTyrfvfiskJ78AMpackRjPcyCif1WhUsPDuVqQ"
+   }
+  },
+  {
+   "symbol": "WETH",
+   "name": "Wrapped Ether",
+   "source": "https://docs.arbitrum.io/build-decentralized-apps/reference/contract-addresses ; https://specs.optimism.io/protocol/predeploys.html ; https://docs.base.org/base-chain/network-information/base-contracts ; https://static.polygon.technology/network/mainnet/v1/index.json",
+   "d": {
+    "ethereum": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "arbitrum": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+    "optimism": "0x4200000000000000000000000000000000000006",
+    "base": "0x4200000000000000000000000000000000000006",
+    "polygon": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
+   }
+  },
+  {
+   "symbol": "PAXG",
+   "name": "PAX Gold",
+   "source": "https://docs.paxos.com/guides/stablecoin/paxg/mainnet",
+   "d": {
+    "ethereum": "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+    "base": "0xe904AEA5E1b110c9174728fA2efFc8aeD19E98Ef",
+    "solana": "5GgRAEmv8ZxF2PR5hY72Qs5x1bnQ6UK2RbTPoqJ3wSwW"
+   }
+  },
+  {
+   "symbol": "ONDO",
+   "name": "Ondo",
+   "source": "https://docs.ondo.foundation/ondo-token",
+   "d": {
+    "ethereum": "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3"
+   }
+  },
+  {
+   "symbol": "RENDER",
+   "name": "Render",
+   "source": "https://know.rendernetwork.com/general-render-network/rndr-to-render-what-you-need-to-know/render-network-upgrade-portal-faq",
+   "d": {
+    "solana": "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof"
+   }
+  },
+  {
+   "symbol": "JUP",
+   "name": "Jupiter",
+   "source": "https://docs.jup.ag/user-docs/more/jup-token/faq.md",
+   "d": {
+    "solana": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"
+   }
+  },
+  {
+   "symbol": "RAY",
+   "name": "Raydium",
+   "source": "https://docs.raydium.io/ray/index",
+   "d": {
+    "solana": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"
+   }
+  },
+  {
+   "symbol": "BONK",
+   "name": "Bonk",
+   "source": "bonkcoin.com (mint appears only as the target of the site's exchange links; not stated as text) + CoinGecko",
+   "d": {
+    "solana": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+   }
+  },
+  {
+   "symbol": "PEPE",
+   "name": "Pepe",
+   "source": "https://www.pepe.vip",
+   "d": {
+    "ethereum": "0x6982508145454Ce325dDbE47a25d4ec3d2311933"
+   }
+  },
+  {
+   "symbol": "SHIB",
+   "name": "Shiba Inu",
+   "source": "https://shib.io/tokens/shib",
+   "d": {
+    "ethereum": "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
+    "bsc": "0xEc59dE82FFf1959E92b91daB975e4564FC3447cC",
+    "arbitrum": "0xB359155378FF5E2837f12ed0bee5168123c88ACC",
+    "optimism": "0x72cc27124EA2d36AC13D502C7EBdF28cEF90c31c",
+    "base": "0x9Ded28d9EC69F97efd718CE768dc39D78fd014F8",
+    "polygon": "0x7627D9C9b045A26672D57741C896B2A48844168D",
+    "avalanche": "0x2f643d728926C20269f0A04931dd7b4b6B650204"
+   }
+  }
+ ]
+}

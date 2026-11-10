@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { baseUnits } from './amounts.ts';
+import { baseUnits, parseUnits } from './amounts.ts';
+import { NETWORKS } from './networks.ts';
 import type { Intent } from './intent.ts';
 
 const U = z.string().regex(/^(0|[1-9]\d{0,77})$/);
@@ -15,27 +16,34 @@ export const PolicySchema = z.strictObject({
 });
 export type Policy = z.infer<typeof PolicySchema>;
 
-const usdc = (n: string) => [`${n}:USDC`, '50000000'] as const; // 50 USDC
-/** Conservative defaults sized for a wallet holding a few tens of USDC. */
-export const DEFAULT_POLICY: Policy = {
-  version: 1,
-  perTx: Object.fromEntries([
-    ...['ethereum', 'base', 'arbitrum', 'polygon', 'solana'].map(usdc),
-    ['ethereum:ETH', '20000000000000000'], ['base:ETH', '20000000000000000'], ['arbitrum:ETH', '20000000000000000'],
-    ['polygon:POL', '50000000000000000000'], ['bitcoin:BTC', '50000'], ['solana:SOL', '250000000'],
-  ]),
-  daily: Object.fromEntries([
-    ...['ethereum', 'base', 'arbitrum', 'polygon', 'solana'].map((n) => [`${n}:USDC`, '100000000']),
-    ['ethereum:ETH', '40000000000000000'], ['base:ETH', '40000000000000000'], ['arbitrum:ETH', '40000000000000000'],
-    ['polygon:POL', '100000000000000000000'], ['bitcoin:BTC', '100000'], ['solana:SOL', '500000000'],
-  ]),
-  maxFee: {
-    ethereum: '5000000000000000', base: '300000000000000', arbitrum: '300000000000000',
-    polygon: '500000000000000000', bitcoin: '5000', solana: '3000000',
-  },
-  maxApprovalTtlSec: 300,
-  allowlist: [],
+/**
+ * Per-transfer caps in whole units, sized to roughly 50 USD at the prices of 2026-11-10 (the daily cap is twice that).
+ * A symbol missing here cannot be sent at all (default deny). Edit policy.json on the signer machine to change a limit.
+ */
+export const CAPS: Record<string, string> = {
+  USDC: '50', USDT: '50', PYUSD: '50', DAI: '50', USDS: '50', USDe: '50', FDUSD: '50', RLUSD: '50', USDG: '50', EURC: '45',
+  ETH: '0.025', WETH: '0.025', BTC: '0.0007', WBTC: '0.0007', SOL: '0.6', BNB: '0.075', AVAX: '6', HYPE: '0.7', POL: '550',
+  LINK: '5', UNI: '7.5', AAVE: '0.4', LDO: '150', PAXG: '0.0125', ONDO: '135', RENDER: '30', JUP: '200', RAY: '30',
+  BONK: '18000000', PEPE: '9000000', SHIB: '11000000',
 };
+const STABLE_FEE: Record<string, string> = {
+  ethereum: '5000000000000000', base: '300000000000000', arbitrum: '300000000000000', optimism: '300000000000000',
+  polygon: '500000000000000000', bsc: '1000000000000000', avalanche: '20000000000000000', hyperevm: '20000000000000000',
+  bitcoin: '5000', solana: '3000000',
+};
+function buildDefaultPolicy(): Policy {
+  const perTx: Record<string, string> = {}, daily: Record<string, string> = {};
+  for (const n of Object.values(NETWORKS)) for (const a of [n.native, ...n.tokens]) {
+    const cap = CAPS[a.symbol];
+    if (!cap) continue;
+    const v = parseUnits(cap, a.decimals);
+    perTx[`${n.id}:${a.symbol}`] = v.toString();
+    daily[`${n.id}:${a.symbol}`] = (v * 2n).toString();
+  }
+  return { version: 2, perTx, daily, maxFee: STABLE_FEE, maxApprovalTtlSec: 300, allowlist: [] };
+}
+/** Conservative defaults sized for a wallet holding a few tens of dollars per asset. */
+export const DEFAULT_POLICY: Policy = buildDefaultPolicy();
 
 export type PolicyVerdict = { ok: true } | { ok: false; reason: string };
 

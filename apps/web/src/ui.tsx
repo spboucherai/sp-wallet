@@ -64,15 +64,26 @@ const COIN: Record<string, [string, string]> = {
   ETH: ['#627EEA', 'M12 4.5l4.6 7.6L12 14.8l-4.6-2.7zM7.4 13.4L12 19.5l4.6-6.1L12 16.1z'],
   BTC: ['#F7931A', 'M9.5 7h3.7a2.2 2.2 0 010 4.5H9.5zm0 4.5h4.2a2.3 2.3 0 010 4.7H9.5zM9.5 7v9.2M11 5.5V7m2-1.5V7m-2 9.2v1.5m2-1.5v1.5'],
   SOL: ['#9945FF', 'M7.6 8h9.6l-1.7 1.9H5.9zM7.6 16h9.6l-1.7-1.9H5.9zM16.4 11.05H6.8l1.7 1.9h9.6z'],
+  BNB: ['#F0B90B', 'M12 5.5l2.2 2.2L12 9.9 9.8 7.7zM7.2 10.3l2.2 2.2-2.2 2.2L5 12.5zM16.8 10.3l2.2 2.2-2.2 2.2-2.2-2.2zM12 15.1l2.2 2.2L12 19.5l-2.2-2.2zM12 10.3l2.2 2.2L12 14.7l-2.2-2.2z'],
+  AVAX: ['#E84142', 'M12 5.5L5.5 17h4l2.5-4.5L14.5 17h4z'],
+  USDT: ['#26A17B', 'M7.5 7.5h9M12 7.5V18M7 11.5c0 .8 2.2 1.5 5 1.5s5-.7 5-1.5'],
+  DAI: ['#F5AC37', 'M8 6.5h4.5a5.5 5.5 0 010 11H8zM6 10.5h12M6 13.5h12'],
+  LINK: ['#2A5ADA', 'M12 5l6 3.5v7L12 19l-6-3.5v-7z'],
+  WBTC: ['#201A2D', 'M9.5 7h3.7a2.2 2.2 0 010 4.5H9.5zm0 4.5h4.2a2.3 2.3 0 010 4.7H9.5zM9.5 7v9.2M11 5.5V7m2-1.5V7m-2 9.2v1.5m2-1.5v1.5'],
+  WETH: ['#3C3C3D', 'M12 4.5l4.6 7.6L12 14.8l-4.6-2.7zM7.4 13.4L12 19.5l4.6-6.1L12 16.1z'],
   POL: ['#8247E5', 'M9 9.2l-2.5 1.4v2.8L9 14.8l2.5-1.4V9.2L15 7.8l2.5 1.4V12L15 13.4l-1-.6'],
 };
-const NETC: Record<string, string> = { ethereum: '#627EEA', base: '#0052FF', arbitrum: '#28A0F0', polygon: '#8247E5', bitcoin: '#F7931A', solana: '#14F195' };
+const NETC: Record<string, string> = { ethereum: '#627EEA', base: '#0052FF', arbitrum: '#28A0F0', polygon: '#8247E5', optimism: '#FF0420', bsc: '#F0B90B', avalanche: '#E84142', hyperevm: '#50D2C1', bitcoin: '#F7931A', solana: '#14F195',
+  litecoin: '#345D9D', dogecoin: '#C2A633', bitcoincash: '#0AC18E', tron: '#EB0029', xrpl: '#23292F', stellar: '#7D00FF', sui: '#4DA2FF', aptos: '#06B6A6', ton: '#0098EA', near: '#00C08B', cosmos: '#2E3148', cardano: '#0033AD', polkadot: '#E6007A' };
 /** Token mark with an optional network badge. Original simplified glyphs, not vendor logos. */
 export function Coin({ sym, net, size = 44 }: { sym: string; net?: string; size?: number }) {
-  const [bg, d] = COIN[sym] ?? ['#667085', ''];
+  const known = COIN[sym];
+  let hue = 0; for (const ch of sym) hue = (hue * 31 + ch.charCodeAt(0)) % 360;
+  const [bg, d] = known ?? [`hsl(${hue} 55% 42%)`, ''];
   return <span className="relative inline-block shrink-0" style={{ width: size, height: size }} aria-hidden="true">
     <span className="grid h-full w-full place-items-center rounded-full" style={{ background: bg }}>
-      <svg viewBox="0 0 24 24" className="h-[62%] w-[62%]" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg></span>
+      {known ? <svg viewBox="0 0 24 24" className="h-[62%] w-[62%]" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+        : <span className="font-bold leading-none text-white" style={{ fontSize: Math.max(9, size * (sym.length > 4 ? 0.22 : sym.length > 3 ? 0.26 : 0.3)) }}>{sym.slice(0, 5)}</span>}</span>
     {net && <span className="absolute -bottom-0.5 -right-0.5 h-[15px] w-[15px] rounded-full border-2 border-surface" style={{ background: NETC[net] ?? '#667085' }} />}
   </span>;
 }
@@ -83,6 +94,13 @@ export function Chips<T extends string>({ value, options, onChange, label }: { v
     <button key={o.id} role="radio" aria-checked={value === o.id} onClick={() => onChange(o.id)}
       className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-[14px] font-medium transition ${value === o.id ? 'border-primary bg-primary text-onprimary' : 'border-line bg-surface text-ink'}`}>
       {o.net && <NetDot net={o.net} />}{o.label}</button>)}</div>;
+}
+/** Signed percentage with an arrow icon: direction is never carried by colour alone. */
+export function Change({ pct, suffix }: { pct: number; suffix?: string }) {
+  const up = pct >= 0;
+  return <span className={`inline-flex items-center gap-1 text-[13.5px] font-semibold ${up ? 'text-emerald' : 'text-danger'}`}>
+    <svg viewBox="0 0 12 12" className="h-3 w-3" aria-hidden="true"><path d={up ? 'M6 2l4.5 7h-9z' : 'M6 10L1.5 3h9z'} fill="currentColor" /></svg>
+    {up ? '+' : '−'}{Math.abs(pct).toFixed(2)} %{suffix && <span className="font-normal text-mute">{suffix}</span>}</span>;
 }
 export function Money({ children, hidden }: { children: ReactNode; hidden?: boolean }) {
   return <span className={hidden ? 'mask' : ''} aria-hidden={hidden || undefined}>{children}</span>;

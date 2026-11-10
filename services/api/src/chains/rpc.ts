@@ -42,6 +42,8 @@ export interface Deposit { txid: string; idx: number; asset: string; amount: big
 export interface Adapter {
   health(): Promise<Health>;
   balances(addr: string): Promise<Record<string, bigint>>;
+  /** asset ids hidden because their on-chain identity check failed */
+  disabledAssets?(): string[];
   prepare(d: { asset: string; from: string; to: string; amount: bigint }): Promise<Prepared>;
   broadcast(raw: string): Promise<void>;
   track(p: { txid: string; intent: any; blockRef: string | null; broadcastAt: number }): Promise<Tracked>;

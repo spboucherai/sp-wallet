@@ -21,9 +21,22 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await page.getByRole('button', { name: /Créer ma clé/ }).click();
   await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('heading', { name: 'Actifs' })).toBeVisible();
-  await expect(page.getByText(/6\/6 réseaux opérationnels/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/10\/10 réseaux opérationnels/)).toBeVisible({ timeout: 90_000 });
   await page.waitForTimeout(1500);
   await page.screenshot({ path: `${SHOTS}/02-home.png`, fullPage: true });
+
+  // dedicated asset page: price, chart, balance, details
+  await page.getByRole('button', { name: /USD Coin/ }).first().click();
+  await expect(page.getByText('Votre solde')).toBeVisible();
+  await expect(page.getByText('Contrat du jeton')).toBeVisible();
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: `${SHOTS}/02b-asset.png`, fullPage: true });
+  await page.getByRole('button', { name: 'Retour' }).click();
+  await page.getByRole('button', { name: /Tous les actifs/ }).click();
+  await page.getByRole('searchbox').fill('pepe');
+  await expect(page.getByRole('button', { name: /Pepe/ })).toHaveCount(1);
+  await page.screenshot({ path: `${SHOTS}/02c-assets.png` });
+  await page.getByRole('button', { name: 'Retour' }).click();
 
   // no horizontal overflow on a phone
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -38,16 +51,17 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   // receive: signer-derived address + QR
   await page.getByRole('navigation').getByRole('button', { name: 'Recevoir' }).click();
   await expect(page.locator('img[alt^="QR 0x"]')).toBeVisible();
-  await expect(page.getByText(/Envoyez uniquement ETH \/ USDC sur le réseau Base/)).toBeVisible();
+  await expect(page.getByText(/Envoyez uniquement ETH \/ USDC \/ .*sur le réseau Base/)).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/04-receive.png`, fullPage: true });
   await page.getByRole('radio', { name: 'Solana' }).click();
-  await expect(page.getByText(/Envoyez uniquement SOL \/ USDC sur le réseau Solana/)).toBeVisible();
+  await expect(page.getByText(/Envoyez uniquement SOL \/ USDC \/ .*sur le réseau Solana/)).toBeVisible();
   await page.getByRole('radio', { name: 'Bitcoin' }).click();
   await expect(page.locator('img[alt^="QR bc1q"]')).toBeVisible();
 
   // send: invalid address is refused, then an empty wallet cannot draft a transfer (live mainnet balance check)
   await page.getByRole('navigation').getByRole('button', { name: 'Envoyer' }).click();
   await page.locator('textarea').fill('0x1234');
+  await page.getByRole('radio', { name: 'USDC', exact: true }).click();
   await page.getByPlaceholder('0.00').fill('5');
   await page.getByRole('button', { name: 'Vérifier' }).click();
   await expect(page.getByRole('alert')).toContainText(/Adresse invalide/);

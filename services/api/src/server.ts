@@ -27,18 +27,45 @@ async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Prom
   return v;
 }
 
-const COINGECKO: Record<string, string> = { ETH: 'ethereum', BTC: 'bitcoin', SOL: 'solana', USDC: 'usd-coin', POL: 'polygon-ecosystem-token' };
-async function prices(): Promise<Record<string, { usd: number; cad: number }> | null> {
-  if (!(await getSetting('prices', true))) return null;
-  return cached('prices', 5 * 60_000, async () => {
-    try { // only asset ids are sent; never addresses or balances
-      const r = await http(`https://api.coingecko.com/api/v3/simple/price?ids=${Object.values(COINGECKO).join(',')}&vs_currencies=usd,cad`);
-      if (!r.ok) return null;
-      const j = (await r.json()) as Record<string, { usd: number; cad: number }>;
-      return Object.fromEntries(Object.entries(COINGECKO).flatMap(([sym, id]) => (j[id] ? [[sym, j[id]]] : [])));
-    } catch { return null; }
+const COINGECKO: Record<string, string> = {
+  ETH: 'ethereum', BTC: 'bitcoin', SOL: 'solana', POL: 'polygon-ecosystem-token', BNB: 'binancecoin', AVAX: 'avalanche-2', HYPE: 'hyperliquid',
+  USDC: 'usd-coin', USDT: 'tether', PYUSD: 'paypal-usd', DAI: 'dai', USDS: 'usds', USDe: 'ethena-usde', FDUSD: 'first-digital-usd', EURC: 'euro-coin', RLUSD: 'ripple-usd', USDG: 'global-dollar',
+  LINK: 'chainlink', UNI: 'uniswap', AAVE: 'aave', LDO: 'lido-dao', WBTC: 'wrapped-bitcoin', WETH: 'weth', PAXG: 'pax-gold', ONDO: 'ondo-finance', RENDER: 'render-token',
+  JUP: 'jupiter-exchange-solana', RAY: 'raydium', BONK: 'bonk', PEPE: 'pepe', SHIB: 'shiba-inu',
+};
+interface Market { usd: number; cad: number; change24h: number | null; change7d: number | null; marketCap: number | null; volume24h: number | null; high24h: number | null; low24h: number | null; ath: number | null; rank: number | null; spark: number[] }
+const stale = new Map<string, unknown>();
+/** CoinGecko GET with stale-on-error: a rate limit never blanks the screen. Only public coin ids are sent — never addresses or balances. */
+async function gecko<T>(key: string, ttlMs: number, path: string): Promise<T | null> {
+  return cached(key, ttlMs, async () => {
+    try {
+      const r = await http('https://api.coingecko.com/api/v3' + path, { headers: { accept: 'application/json' } });
+      if (!r.ok) throw new Error(String(r.status));
+      const j = (await r.json()) as T;
+      stale.set(key, j);
+      return j;
+    } catch { return (stale.get(key) as T | undefined) ?? null; }
   });
 }
+type GeckoRow = { id: string; current_price: number; price_change_percentage_24h_in_currency?: number; price_change_percentage_7d_in_currency?: number; market_cap?: number; total_volume?: number; high_24h?: number; low_24h?: number; ath?: number; market_cap_rank?: number; sparkline_in_7d?: { price: number[] } };
+const thin = (a: number[], max: number) => (a.length <= max ? a : Array.from({ length: max }, (_, k) => a[Math.round((k * (a.length - 1)) / (max - 1))]!));
+async function markets(): Promise<Record<string, Market> | null> {
+  if (!(await getSetting('prices', true))) return null;
+  const ids = [...new Set(Object.values(COINGECKO))].join(',');
+  const q = (cur: string) => gecko<GeckoRow[]>(`markets:${cur}`, 4 * 60_000, `/coins/markets?vs_currency=${cur}&ids=${ids}&per_page=250&sparkline=${cur === 'usd'}&price_change_percentage=24h,7d`);
+  const [usd, cad] = await Promise.all([q('usd'), q('cad')]);
+  if (!usd || !cad) return null;
+  const out: Record<string, Market> = {};
+  for (const [sym, id] of Object.entries(COINGECKO)) {
+    const u = usd.find((r) => r.id === id), c = cad.find((r) => r.id === id);
+    if (!u || !c) continue;
+    out[sym] = { usd: u.current_price, cad: c.current_price, change24h: u.price_change_percentage_24h_in_currency ?? null, change7d: u.price_change_percentage_7d_in_currency ?? null,
+      marketCap: u.market_cap ?? null, volume24h: u.total_volume ?? null, high24h: u.high_24h ?? null, low24h: u.low_24h ?? null, ath: u.ath ?? null, rank: u.market_cap_rank ?? null,
+      spark: thin(u.sparkline_in_7d?.price ?? [], 42) };
+  }
+  return out;
+}
+async function prices(): Promise<Record<string, Market> | null> { return markets(); }
 
 export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: 'warn', redact: ['req.headers.cookie', 'req.headers.authorization'] }, bodyLimit: 64 * 1024, trustProxy: config.trustProxy });
@@ -82,12 +109,13 @@ export async function buildServer(): Promise<FastifyInstance> {
     return { db, signer: s, networks: [...healthCache.values()] };
   });
 
+  const liveTokens = (n: (typeof NETWORKS)[NetworkId]) => { const off = new Set(adapters[n.id].disabledAssets?.() ?? []); return n.tokens.filter((t) => !off.has(t.id)); };
   app.get('/api/v1/networks', async () => Object.values(NETWORKS).map((n) => ({
-    id: n.id, name: n.name, family: n.family, chainRef: n.chainRef, native: n.native, tokens: n.tokens, explorerAddr: n.explorerAddr, minConf: n.minConf,
+    id: n.id, name: n.name, family: n.family, chainRef: n.chainRef, native: n.native, tokens: liveTokens(n), explorerAddr: n.explorerAddr, minConf: n.minConf,
     health: healthCache.get(n.id) ?? null })));
   app.get('/api/v1/assets', async (req) => {
     const q = z.object({ network: z.string().optional() }).parse(req.query);
-    return Object.values(NETWORKS).filter((n) => !q.network || n.id === q.network).flatMap((n) => [n.native, ...n.tokens].map((a) => ({ network: n.id, ...a })));
+    return Object.values(NETWORKS).filter((n) => !q.network || n.id === q.network).flatMap((n) => [n.native, ...liveTokens(n)].map((a) => ({ network: n.id, ...a })));
   });
 
   // One vault, one signer-derived address per chain family. Addresses come from the signer, never from the client.
@@ -103,14 +131,30 @@ export async function buildServer(): Promise<FastifyInstance> {
       const address = st.addresses[n.family];
       try {
         const b = await cached(`bal:${n.id}`, 12_000, () => adapters[n.id].balances(address));
-        return [n.native, ...n.tokens].map((a) => ({ network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals,
-          amount: (b[a.id] ?? 0n).toString(), display: formatUnits(b[a.id] ?? 0n, a.decimals), error: null as string | null }));
+        return [n.native, ...liveTokens(n)].map((a) => (b[a.id] === undefined
+          ? { network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals, amount: null, display: null, error: 'unavailable' as string | null }
+          : { network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals,
+              amount: b[a.id]!.toString(), display: formatUnits(b[a.id]!, a.decimals), error: null as string | null }));
       } catch {
         return [n.native, ...n.tokens].map((a) => ({ network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals, amount: null, display: null, error: 'unavailable' }));
       }
     }));
     const pending = await sql<ProposalRow[]>`select * from proposals where state in ('pending_approval','approved','signed','broadcast','confirming','reorged') order by created_at desc`;
     return { asOf: new Date().toISOString(), prices: px, balances: rows.flat(), pending: pending.map(view), halted: st.halted };
+  });
+
+  // price history for one asset (chart). `symbol` must be in the pinned map; nothing about the wallet is sent upstream.
+  app.get('/api/v1/market/:symbol', async (req) => {
+    const symbol = (req.params as { symbol: string }).symbol;
+    const q = z.object({ days: z.enum(['1', '7', '30', '365']).default('7'), currency: z.enum(['usd', 'cad']).default('cad') }).parse(req.query);
+    const id = COINGECKO[symbol];
+    if (!id || !(await getSetting('prices', true))) return { symbol, points: [], market: null };
+    const ttl = q.days === '1' ? 5 * 60_000 : q.days === '7' ? 20 * 60_000 : 60 * 60_000;
+    const j = await gecko<{ prices: [number, number][] }>(`chart:${id}:${q.currency}:${q.days}`, ttl, `/coins/${id}/market_chart?vs_currency=${q.currency}&days=${q.days}`);
+    const pts = j?.prices ?? [];
+    const step = Math.max(1, Math.ceil(pts.length / 240));
+    const points = pts.filter((_, k) => k % step === 0 || k === pts.length - 1).map(([t, p]) => ({ t, p }));
+    return { symbol, currency: q.currency, days: q.days, points, market: (await markets())?.[symbol] ?? null };
   });
 
   app.get('/api/v1/activity', async (req) => {
@@ -187,10 +231,12 @@ export async function buildServer(): Promise<FastifyInstance> {
   app.get('/api/v1/security/audit', async (req) => auditList(z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) }).parse(req.query).limit));
 
   if (config.webDir && existsSync(join(config.webDir, 'index.html'))) {
-    await app.register(fastifyStatic, { root: config.webDir, wildcard: false, cacheControl: false,
+    // wildcard serving: files are resolved per request, so a rebuilt bundle is served without restarting the API
+    await app.register(fastifyStatic, { root: config.webDir, cacheControl: false,
       setHeaders: (res, path) => { res.header('cache-control', path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'); } });
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api/') || req.method !== 'GET') return reply.status(404).send({ error: 'not_found', message: 'not found' });
+      // never answer a missing script/style with the HTML shell (that is what produced a blank page)
+      if (req.url.startsWith('/api/') || req.url.startsWith('/assets/') || /\.[a-z0-9]{2,5}(\?|$)/i.test(req.url) || req.method !== 'GET') return reply.status(404).send({ error: 'not_found', message: 'not found' });
       return reply.header('cache-control', 'no-cache').sendFile('index.html');
     });
   }

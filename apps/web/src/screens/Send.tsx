@@ -10,16 +10,20 @@ import { Addr, Btn, Card, Chips, Field, H, Icon, inputCls, Notice, short, StateP
 type Step = 'form' | 'review' | 'track';
 const FLOW = ['pending_approval', 'signed', 'broadcast', 'confirming', 'finalized'];
 
-export function Send({ go }: { go: (t: Tab) => void }) {
+export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { network?: string; asset?: string } }) {
   const t = useT(); const qc = useQueryClient();
   const nets = useNetworks(), pf = usePortfolio();
   const book = useQuery({ queryKey: ['book'], queryFn: () => get<{ id: string; network: string; address: string; label: string }[]>('/addressbook') });
   const [step, setStep] = useState<Step>('form');
-  const [net, setNet] = useState('base'), [asset, setAsset] = useState(''), [to, setTo] = useState(''), [amount, setAmount] = useState(''), [note, setNote] = useState('');
+  const [net, setNet] = useState(initial?.network ?? 'base'), [asset, setAsset] = useState(initial?.asset ?? ''), [to, setTo] = useState(''), [amount, setAmount] = useState(''), [note, setNote] = useState('');
   const [p, setP] = useState<Proposal | null>(null), [busy, setBusy] = useState(''), [err, setErr] = useState(''), [checked, setChecked] = useState(false);
   const [idem, setIdem] = useState(() => crypto.randomUUID());
   const n = nets.data?.find((x) => x.id === net);
-  const assets = useMemo(() => (n ? [...n.tokens, n.native] : []), [n]);
+  const assets = useMemo(() => {
+    if (!n) return [];
+    const held = (id: string) => Number((pf.data?.balances.find((b) => b.network === n.id && b.asset === id)?.amount ?? '0') !== '0');
+    return [n.native, ...n.tokens].sort((a, b) => held(b.id) - held(a.id) || Number(b.symbol === 'USDC') - Number(a.symbol === 'USDC'));
+  }, [n, pf.data]);
   useEffect(() => { if (assets.length && !assets.some((a) => a.id === asset)) setAsset(assets[0]!.id); }, [assets, asset]);
   const bal = pf.data?.balances.find((b) => b.network === net && b.asset === asset);
   const a = assets.find((x) => x.id === asset);

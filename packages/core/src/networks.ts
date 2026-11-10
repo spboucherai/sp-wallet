@@ -1,8 +1,9 @@
 // Network + asset registry. Every identifier here is pinned and cross-checked.
 // USDC addresses: Circle official page https://developers.circle.com/stablecoins/usdc-contract-addresses
-// (read 2026-11-10) and re-verified on-chain at API start (symbol/decimals/chainId/genesis).
+// (read 2026-11-10). Token addresses live in tokens.ts with their sources; all are re-verified on-chain at API start
+// (symbol/decimals/chainId/genesis) and a token whose on-chain metadata differs is disabled.
 export type Family = 'evm' | 'btc' | 'sol';
-export type NetworkId = 'ethereum' | 'base' | 'arbitrum' | 'polygon' | 'bitcoin' | 'solana';
+export type NetworkId = 'ethereum' | 'base' | 'arbitrum' | 'polygon' | 'optimism' | 'bsc' | 'avalanche' | 'hyperevm' | 'bitcoin' | 'solana';
 
 export interface AssetDef {
   /** 'native' or the token contract / mint address */
@@ -10,6 +11,8 @@ export interface AssetDef {
   symbol: string;
   name: string;
   decimals: number;
+  /** Solana only: which token program owns the mint (classic SPL Token unless stated) */
+  program?: 'token' | 'token2022';
 }
 
 export interface NetworkDef {
@@ -27,34 +30,63 @@ export interface NetworkDef {
   minConf: number;
 }
 
-const usdc = (id: string): AssetDef => ({ id, symbol: 'USDC', name: 'USD Coin', decimals: 6 });
+import { TOKENS } from './tokens.ts';
+
+/** Allowlisted tokens of one network, from the verified table in tokens.ts. */
+const tokensOf = (network: string): AssetDef[] => TOKENS.flatMap((t) => {
+  const d = t.deployments[network];
+  return d ? [{ id: d.address, symbol: t.symbol, name: t.name, decimals: d.decimals ?? t.decimals, ...(d.program ? { program: d.program } : {}) }] : [];
+});
 const eth: AssetDef = { id: 'native', symbol: 'ETH', name: 'Ether', decimals: 18 };
 
 export const NETWORKS: Record<NetworkId, NetworkDef> = {
   ethereum: {
     id: 'ethereum', family: 'evm', name: 'Ethereum', chainRef: '1', native: eth,
-    tokens: [usdc('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')],
+    tokens: [],
     rpc: ['https://ethereum-rpc.publicnode.com', 'https://eth.drpc.org'],
     explorerTx: 'https://etherscan.io/tx/', explorerAddr: 'https://etherscan.io/address/', minConf: 12,
   },
   base: {
     id: 'base', family: 'evm', name: 'Base', chainRef: '8453', native: eth,
-    tokens: [usdc('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')],
+    tokens: [],
     rpc: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'],
     explorerTx: 'https://basescan.org/tx/', explorerAddr: 'https://basescan.org/address/', minConf: 12,
   },
   arbitrum: {
     id: 'arbitrum', family: 'evm', name: 'Arbitrum One', chainRef: '42161', native: eth,
-    tokens: [usdc('0xaf88d065e77c8cC2239327C5EDb3A432268e5831')],
+    tokens: [],
     rpc: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum-one-rpc.publicnode.com'],
     explorerTx: 'https://arbiscan.io/tx/', explorerAddr: 'https://arbiscan.io/address/', minConf: 12,
   },
   polygon: {
     id: 'polygon', family: 'evm', name: 'Polygon PoS', chainRef: '137',
     native: { id: 'native', symbol: 'POL', name: 'POL', decimals: 18 },
-    tokens: [usdc('0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359')],
+    tokens: [],
     rpc: ['https://polygon-bor-rpc.publicnode.com', 'https://polygon.drpc.org'],
     explorerTx: 'https://polygonscan.com/tx/', explorerAddr: 'https://polygonscan.com/address/', minConf: 64,
+  },
+  optimism: {
+    id: 'optimism', family: 'evm', name: 'Optimism', chainRef: '10', native: eth, tokens: [],
+    rpc: ['https://mainnet.optimism.io', 'https://optimism-rpc.publicnode.com'],
+    explorerTx: 'https://optimistic.etherscan.io/tx/', explorerAddr: 'https://optimistic.etherscan.io/address/', minConf: 12,
+  },
+  bsc: {
+    id: 'bsc', family: 'evm', name: 'BNB Smart Chain', chainRef: '56',
+    native: { id: 'native', symbol: 'BNB', name: 'BNB', decimals: 18 }, tokens: [],
+    rpc: ['https://bsc-dataseed.bnbchain.org', 'https://bsc-rpc.publicnode.com'],
+    explorerTx: 'https://bscscan.com/tx/', explorerAddr: 'https://bscscan.com/address/', minConf: 15,
+  },
+  avalanche: {
+    id: 'avalanche', family: 'evm', name: 'Avalanche C-Chain', chainRef: '43114',
+    native: { id: 'native', symbol: 'AVAX', name: 'Avalanche', decimals: 18 }, tokens: [],
+    rpc: ['https://api.avax.network/ext/bc/C/rpc', 'https://avalanche-c-chain-rpc.publicnode.com'],
+    explorerTx: 'https://snowtrace.io/tx/', explorerAddr: 'https://snowtrace.io/address/', minConf: 2,
+  },
+  hyperevm: {
+    id: 'hyperevm', family: 'evm', name: 'HyperEVM', chainRef: '999',
+    native: { id: 'native', symbol: 'HYPE', name: 'Hyperliquid', decimals: 18 }, tokens: [],
+    rpc: ['https://rpc.hyperliquid.xyz/evm', 'https://hyperliquid.drpc.org'],
+    explorerTx: 'https://hyperevmscan.io/tx/', explorerAddr: 'https://hyperevmscan.io/address/', minConf: 2,
   },
   bitcoin: {
     id: 'bitcoin', family: 'btc', name: 'Bitcoin',
@@ -67,11 +99,13 @@ export const NETWORKS: Record<NetworkId, NetworkDef> = {
     id: 'solana', family: 'sol', name: 'Solana',
     chainRef: '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d',
     native: { id: 'native', symbol: 'SOL', name: 'Solana', decimals: 9 },
-    tokens: [usdc('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')],
+    tokens: [],
     rpc: ['https://api.mainnet-beta.solana.com', 'https://solana-rpc.publicnode.com'],
     explorerTx: 'https://solscan.io/tx/', explorerAddr: 'https://solscan.io/account/', minConf: 1,
   },
 };
+
+for (const n of Object.values(NETWORKS)) n.tokens = tokensOf(n.id);
 
 export const NETWORK_IDS = Object.keys(NETWORKS) as NetworkId[];
 

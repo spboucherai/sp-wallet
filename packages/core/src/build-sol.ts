@@ -8,6 +8,7 @@ import type { Intent } from './intent.ts';
 
 export const SYSTEM_PROGRAM = '11111111111111111111111111111111';
 export const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+export const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 export const ATA_PROGRAM = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
 export const COMPUTE_BUDGET_PROGRAM = 'ComputeBudget111111111111111111111111111111';
 const enc = new TextEncoder();
@@ -28,9 +29,10 @@ export function findProgramAddress(seeds: Uint8Array[], programId: string): stri
   throw new Error('no PDA found');
 }
 
-export function associatedTokenAddress(owner: string, mint: string): string {
-  return findProgramAddress([base58.decode(owner), base58.decode(TOKEN_PROGRAM), base58.decode(mint)], ATA_PROGRAM);
+export function associatedTokenAddress(owner: string, mint: string, tokenProgram: string = TOKEN_PROGRAM): string {
+  return findProgramAddress([base58.decode(owner), base58.decode(tokenProgram), base58.decode(mint)], ATA_PROGRAM);
 }
+export const tokenProgramOf = (a: { program?: 'token' | 'token2022' }) => (a.program === 'token2022' ? TOKEN_2022_PROGRAM : TOKEN_PROGRAM);
 
 function compactU16(n: number): number[] {
   const out: number[] = [];
@@ -49,7 +51,8 @@ export function buildSolMessage(i: Intent): Uint8Array {
   if (asset.decimals !== i.decimals || asset.symbol !== i.symbol) throw new Error('asset metadata mismatch');
   const from = normalizeAddress('solana', i.from), to = normalizeAddress('solana', i.to);
   if (from === to) throw new Error('source equals destination');
-  const reserved = [SYSTEM_PROGRAM, TOKEN_PROGRAM, ATA_PROGRAM, COMPUTE_BUDGET_PROGRAM, asset.id];
+  const tp = tokenProgramOf(asset);
+  const reserved = [SYSTEM_PROGRAM, TOKEN_PROGRAM, TOKEN_2022_PROGRAM, ATA_PROGRAM, COMPUTE_BUDGET_PROGRAM, asset.id];
   if (reserved.includes(to)) throw new Error('destination is a program or mint');
   const amount = baseUnits(i.amount);
   if (amount <= 0n) throw new Error('amount must be positive');
@@ -70,13 +73,13 @@ export function buildSolMessage(i: Intent): Uint8Array {
     ixs.push({ program: SYSTEM_PROGRAM, accounts: [from, to], data: cat(u32le(2), u64le(amount)) });
     writable = [to]; readonly = [SYSTEM_PROGRAM, COMPUTE_BUDGET_PROGRAM];
   } else {
-    const src = associatedTokenAddress(from, asset.id), dst = associatedTokenAddress(to, asset.id);
-    if (i.sol.createAta) ixs.push({ program: ATA_PROGRAM, accounts: [from, dst, to, asset.id, SYSTEM_PROGRAM, TOKEN_PROGRAM], data: Uint8Array.of(1) });
-    ixs.push({ program: TOKEN_PROGRAM, accounts: [src, asset.id, dst, from], data: cat([12], u64le(amount), [i.decimals]) });
+    const src = associatedTokenAddress(from, asset.id, tp), dst = associatedTokenAddress(to, asset.id, tp);
+    if (i.sol.createAta) ixs.push({ program: ATA_PROGRAM, accounts: [from, dst, to, asset.id, SYSTEM_PROGRAM, tp], data: Uint8Array.of(1) });
+    ixs.push({ program: tp, accounts: [src, asset.id, dst, from], data: cat([12], u64le(amount), [i.decimals]) }); // TransferChecked (same layout in Token-2022)
     writable = [src, dst];
     readonly = i.sol.createAta
-      ? [to, asset.id, SYSTEM_PROGRAM, TOKEN_PROGRAM, ATA_PROGRAM, COMPUTE_BUDGET_PROGRAM]
-      : [asset.id, TOKEN_PROGRAM, COMPUTE_BUDGET_PROGRAM];
+      ? [to, asset.id, SYSTEM_PROGRAM, tp, ATA_PROGRAM, COMPUTE_BUDGET_PROGRAM]
+      : [asset.id, tp, COMPUTE_BUDGET_PROGRAM];
   }
   const keys = [from, ...writable, ...readonly];
   if (new Set(keys).size !== keys.length) throw new Error('duplicate account keys');

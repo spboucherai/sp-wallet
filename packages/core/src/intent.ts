@@ -1,16 +1,17 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { z } from 'zod';
 import { baseUnits } from './amounts.ts';
+import { getNetwork } from './networks.ts';
 
 const U = z.string().regex(/^(0|[1-9]\d{0,77})$/);
 export const IntentSchema = z.strictObject({
   v: z.literal(1),
   proposalId: z.uuid(),
   keyId: z.string().min(8).max(80),
-  network: z.enum(['ethereum', 'base', 'arbitrum', 'polygon', 'bitcoin', 'solana']),
+  network: z.string().min(2).max(24).regex(/^[a-z0-9-]+$/),
   chainRef: z.string().min(1).max(80),
   asset: z.string().min(1).max(80),
-  symbol: z.string().min(1).max(12),
+  symbol: z.string().min(1).max(16),
   decimals: z.number().int().min(0).max(36),
   amount: U,
   from: z.string().min(20).max(100),
@@ -60,7 +61,7 @@ function fields(i: Intent): [string, string][] {
 /** Deterministic, length-prefixed, domain-separated serialization. */
 export function canonicalBytes(intent: Intent): Uint8Array {
   const i = IntentSchema.parse(intent);
-  const fam = i.network === 'bitcoin' ? 'btc' : i.network === 'solana' ? 'sol' : 'evm';
+  const fam = getNetwork(i.network).family; // throws on unknown network
   if ((fam === 'evm') !== !!i.evm || (fam === 'btc') !== !!i.btc || (fam === 'sol') !== !!i.sol)
     throw new Error('intent chain section does not match network');
   baseUnits(i.amount);

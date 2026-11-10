@@ -34,7 +34,7 @@ function evm(now: number, over: Partial<Intent> = {}): Intent {
   seq += 1;
   return { v: 1, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(seq).padStart(12, '0')}`, keyId: keys.keyId, network: 'base', chainRef: '8453',
     asset: NETWORKS.base.tokens[0]!.id, symbol: 'USDC', decimals: 6, amount: '10000000', from: keys.addresses.evm,
-    to: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', maxFee: '100000000000000', createdAt: now, expiresAt: now + 120, policyVersion: 1,
+    to: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', maxFee: '100000000000000', createdAt: now, expiresAt: now + 120, policyVersion: 2,
     evm: { nonce: 0, gasLimit: '90000', maxFeePerGas: '1000000000', maxPriorityFeePerGas: '1000000' }, ...over };
 }
 
@@ -140,7 +140,7 @@ describe('signing', () => {
   it('signs Solana and Bitcoin intents verifiably', async () => {
     const { signer, pk, nowRef } = setup();
     await signer.enroll({ credential: pk.credential(), setupToken: 'setup-token' });
-    const t = nowRef.t, common = { v: 1 as const, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 1 };
+    const t = nowRef.t, common = { v: 1 as const, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 2 };
     const sol: Intent = { ...common, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-aaaaaaaaaaaa', network: 'solana', chainRef: NETWORKS.solana.chainRef,
       asset: NETWORKS.solana.tokens[0]!.id, symbol: 'USDC', decimals: 6, amount: '5000000', from: keys.addresses.sol,
       to: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM', maxFee: '100000',
