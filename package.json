@@ -10,7 +10,7 @@
   "scripts": {
     "typecheck": "tsc -p packages/core && tsc -p services/isolated-signer && tsc -p services/api && tsc -p apps/web",
     "test": "vitest run",
-    "build": "node scripts/build.mjs && pnpm --filter @spw/web build",
+    "build": "node scripts/build.mjs && (cd apps/web && node_modules/.bin/vite build)",
     "e2e": "playwright test -c tests/e2e/playwright.config.ts"
   },
   "devDependencies": {
