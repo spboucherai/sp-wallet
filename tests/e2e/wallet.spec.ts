@@ -1,0 +1,100 @@
+import { readFileSync } from 'node:fs';
+import { expect, test } from '@playwright/test';
+
+// Requires scripts/dev-stack.sh (throwaway signer keystore, broadcast off). Uses a virtual passkey via CDP.
+const SHOTS = 'test-results/shots';
+test('owner setup, lock/unlock, every screen on a phone viewport, send guarded by real chain checks', async ({ page, context }) => {
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('WebAuthn.enable');
+  await cdp.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
+  const errors: string[] = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', (e) => errors.push(String(e)));
+
+  await page.goto('/');
+  await expect(page.getByText('Configuration initiale')).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/01-setup.png` });
+  await page.getByRole('textbox').fill('definitely-wrong-token');
+  await page.getByRole('button', { name: /Créer ma clé/ }).click();
+  await expect(page.getByRole('alert')).toContainText(/Jeton de configuration invalide/);
+  await page.getByRole('textbox').fill(readFileSync('/tmp/spw-dev/setup-token', 'utf8').trim());
+  await page.getByRole('button', { name: /Créer ma clé/ }).click();
+  await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Actifs')).toBeVisible();
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${SHOTS}/02-home.png`, fullPage: true });
+
+  // no horizontal overflow on a phone
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  // lock, then unlock with the passkey
+  await page.getByRole('button', { name: 'Verrouiller' }).first().click();
+  await expect(page.getByRole('button', { name: /Déverrouiller/ })).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/03-lock.png` });
+  await page.getByRole('button', { name: /Déverrouiller/ }).click();
+  await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 30_000 });
+
+  // receive: signer-derived address + QR
+  await page.getByRole('navigation').getByRole('button', { name: 'Recevoir' }).click();
+  await expect(page.locator('img[alt^="QR 0x"]')).toBeVisible();
+  await expect(page.getByText(/Envoyez uniquement ETH \/ USDC sur le réseau Base/)).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/04-receive.png`, fullPage: true });
+  await page.locator('select').selectOption('solana');
+  await expect(page.getByText(/Envoyez uniquement SOL \/ USDC sur le réseau Solana/)).toBeVisible();
+  await page.locator('select').selectOption('bitcoin');
+  await expect(page.locator('img[alt^="QR bc1q"]')).toBeVisible();
+
+  // send: invalid address is refused, then an empty wallet cannot draft a transfer (live mainnet balance check)
+  await page.getByRole('navigation').getByRole('button', { name: 'Envoyer' }).click();
+  await page.locator('textarea').fill('0x1234');
+  await page.getByPlaceholder('0.00').fill('5');
+  await page.getByRole('button', { name: 'Vérifier' }).click();
+  await expect(page.getByRole('alert')).toContainText(/Adresse invalide/);
+  await page.locator('textarea').fill('0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
+  await page.getByRole('button', { name: 'Vérifier' }).click();
+  await expect(page.getByRole('alert')).toContainText(/Solde insuffisant/, { timeout: 30_000 });
+  await page.screenshot({ path: `${SHOTS}/05-send.png`, fullPage: true });
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Activité' }).click();
+  await expect(page.getByText('Aucune activité')).toBeVisible();
+  await page.getByRole('navigation').getByRole('button', { name: 'Sécurité' }).click();
+  await expect(page.getByText('Signature active')).toBeVisible();
+  await expect(page.getByText('Chaîne d’empreintes intacte')).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/06-security.png`, fullPage: true });
+
+  // English + light theme
+  await page.getByRole('navigation').getByRole('button', { name: 'Réglages' }).click();
+  await page.getByRole('radio', { name: 'English' }).click();
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await page.getByRole('radio', { name: 'Light' }).click();
+  await page.screenshot({ path: `${SHOTS}/07-settings-en-light.png`, fullPage: true });
+  await page.getByRole('radio', { name: 'Dark' }).click();
+  await page.getByRole('radio', { name: 'Français' }).click();
+
+  // emergency halt from the phone
+  await page.getByRole('navigation').getByRole('button', { name: 'Sécurité' }).click();
+  await page.getByRole('button', { name: 'Arrêt d’urgence' }).click();
+  await page.getByLabel('STOP').fill('stop');
+  await page.getByRole('button', { name: 'Arrêt d’urgence' }).click();
+  await expect(page.getByText('Signature arrêtée')).toBeVisible();
+  await page.getByRole('navigation').getByRole('button', { name: 'Accueil' }).click();
+  await expect(page.getByText(/Arrêt d’urgence actif/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Envoyer' }).first()).toBeDisabled();
+
+  expect(errors.filter((e) => !/status of 4\d\d/.test(e))).toEqual([]);
+});
+
+test('a second browser without the passkey cannot get in', async ({ browser }) => {
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('WebAuthn.enable');
+  await cdp.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: /Déverrouiller/ })).toBeVisible();
+  await expect(page.getByText('Configuration initiale')).toHaveCount(0); // setup is closed for good
+  for (const p of ['/api/v1/portfolio', '/api/v1/accounts', '/api/v1/security/audit', '/api/v1/export/activity.csv'])
+    expect((await page.request.get(p)).status()).toBe(401);
+  expect((await page.request.post('/api/v1/auth/setup/options', { headers: { 'x-spw-csrf': '1', origin: 'http://localhost:8650' }, data: {} })).status()).toBe(403);
+  await ctx.close();
+});

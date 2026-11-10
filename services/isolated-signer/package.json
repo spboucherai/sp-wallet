@@ -1,0 +1,19 @@
+{
+  "name": "@spw/isolated-signer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "@scure/base": "2.4.0",
+    "@scure/bip32": "2.4.0",
+    "@scure/bip39": "2.4.0",
+    "@scure/btc-signer": "2.4.1",
+    "@simplewebauthn/server": "14.1.0",
+    "@spw/core": "workspace:*",
+    "micro-key-producer": "0.10.2",
+    "viem": "2.57.17",
+    "zod": "4.6.7"
+  }
+}

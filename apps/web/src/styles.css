@@ -1,0 +1,44 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-elev: var(--elev);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-mute: var(--mute);
+  --color-emerald: #35e7ac;
+  --color-blue: #4d83ff;
+  --color-warn: #f4b65b;
+  --color-danger: #f26d79;
+  --font-sans: ui-sans-serif, -apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+:root, [data-theme='dark'] {
+  --bg: #080b12; --surface: #121826; --elev: #1b2840; --line: rgba(247, 249, 252, 0.09); --ink: #f7f9fc; --mute: #94a0b8;
+  color-scheme: dark;
+}
+[data-theme='light'] {
+  --bg: #f3f5f9; --surface: #ffffff; --elev: #e9eef7; --line: rgba(8, 11, 18, 0.1); --ink: #0b1020; --mute: #556079;
+  color-scheme: light;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none;
+  font-variant-numeric: tabular-nums;
+}
+button, input, select { font: inherit; color: inherit; }
+input, select { font-size: 16px; } /* prevents iOS zoom on focus */
+:focus-visible { outline: 2px solid #4d83ff; outline-offset: 2px; border-radius: 6px; }
+.safe-b { padding-bottom: max(env(safe-area-inset-bottom), 10px); }
+.safe-t { padding-top: max(env(safe-area-inset-top), 0px); }
+.glow { background: radial-gradient(120% 90% at 0% 0%, rgba(53, 231, 172, 0.16), transparent 55%), radial-gradient(120% 90% at 100% 0%, rgba(77, 131, 255, 0.2), transparent 60%), var(--surface); }
+.mask { filter: blur(9px); user-select: none; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise 0.22s ease-out both; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .rise, .spin { animation: none; } * { transition: none !important; } }

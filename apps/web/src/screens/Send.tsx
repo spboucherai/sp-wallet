@@ -1,0 +1,137 @@
+import { startAuthentication } from '@simplewebauthn/browser';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { get, post } from '../api';
+import type { Tab } from '../App';
+import { useNetworks, usePortfolio, type Proposal } from '../hooks';
+import { errText, useT, type Key } from '../i18n';
+import { Addr, Btn, Card, Field, H, Icon, inputCls, Notice, short, StatePill, trimAmt } from '../ui';
+
+type Step = 'form' | 'review' | 'track';
+const FLOW = ['pending_approval', 'signed', 'broadcast', 'confirming', 'finalized'];
+
+export function Send({ go }: { go: (t: Tab) => void }) {
+  const t = useT(); const qc = useQueryClient();
+  const nets = useNetworks(), pf = usePortfolio();
+  const book = useQuery({ queryKey: ['book'], queryFn: () => get<{ id: string; network: string; address: string; label: string }[]>('/addressbook') });
+  const [step, setStep] = useState<Step>('form');
+  const [net, setNet] = useState('base'), [asset, setAsset] = useState(''), [to, setTo] = useState(''), [amount, setAmount] = useState(''), [note, setNote] = useState('');
+  const [p, setP] = useState<Proposal | null>(null), [busy, setBusy] = useState(''), [err, setErr] = useState(''), [checked, setChecked] = useState(false);
+  const [idem, setIdem] = useState(() => crypto.randomUUID());
+  const n = nets.data?.find((x) => x.id === net);
+  const assets = useMemo(() => (n ? [...n.tokens, n.native] : []), [n]);
+  useEffect(() => { if (assets.length && !assets.some((a) => a.id === asset)) setAsset(assets[0]!.id); }, [assets, asset]);
+  const bal = pf.data?.balances.find((b) => b.network === net && b.asset === asset);
+  const a = assets.find((x) => x.id === asset);
+  const fail = (e: unknown) => setErr(errText(t, e));
+
+  // live status while tracking
+  const live = useQuery({ queryKey: ['proposal', p?.id], enabled: step === 'track' && !!p, refetchInterval: 4000, queryFn: () => get<Proposal>(`/transfers/proposals/${p!.id}`) });
+  const cur = step === 'track' ? live.data ?? p : p;
+
+  const review = async () => {
+    setBusy('review'); setErr('');
+    try { setP(await post<Proposal>('/transfers/proposals', { network: net, asset, to: to.trim(), amount: amount.trim(), note }, { 'idempotency-key': idem })); setChecked(false); setStep('review'); }
+    catch (e) { fail(e); setIdem(crypto.randomUUID()); } finally { setBusy(''); }
+  };
+  const approve = async () => {
+    if (!p) return;
+    setBusy('prepare'); setErr('');
+    try {
+      const ra = await post<{ proposal: Proposal; options: any }>(`/transfers/proposals/${p.id}/request-approval`);
+      setP(ra.proposal); setBusy('passkey');
+      const assertion = await startAuthentication({ optionsJSON: ra.options }); // challenge = fingerprint of this exact transfer
+      setBusy('submit');
+      setP(await post<Proposal>(`/transfers/proposals/${p.id}/approve`, { assertion }));
+      setStep('track'); void qc.invalidateQueries({ queryKey: ['portfolio'] });
+    } catch (e) {
+      fail(e);
+      const fresh = await get<Proposal>(`/transfers/proposals/${p.id}`).catch(() => null);
+      if (fresh) { setP(fresh); if (!['draft', 'pending_approval'].includes(fresh.state)) setStep('track'); }
+    } finally { setBusy(''); }
+  };
+  const reset = () => { setStep('form'); setP(null); setTo(''); setAmount(''); setNote(''); setErr(''); setIdem(crypto.randomUUID()); };
+  const cancel = async () => { if (p) await post(`/transfers/proposals/${p.id}/reject`).catch(() => {}); reset(); };
+
+  if (step === 'form') return (
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold tracking-tight">{t('sendTitle')}</h1>
+      {pf.data?.halted && <Notice tone="danger">{t('haltedBanner')}</Notice>}
+      <Card className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={t('network')}><select className={inputCls} value={net} onChange={(e) => { setNet(e.target.value); setTo(''); }}>{(nets.data ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
+          <Field label={t('asset')}><select className={inputCls} value={asset} onChange={(e) => setAsset(e.target.value)}>{assets.map((x) => <option key={x.id} value={x.id}>{x.symbol}</option>)}</select></Field>
+        </div>
+        <Field label={t('destination')}>
+          <textarea className={`${inputCls} min-h-[84px] resize-none break-all font-mono text-[14px]`} value={to} onChange={(e) => setTo(e.target.value.replace(/\s/g, ''))} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="off" />
+        </Field>
+        {(book.data ?? []).filter((b) => b.network === net).length > 0 && <div><div className="mb-1.5 text-[13px] text-mute">{t('addressBook')}</div>
+          <div className="flex flex-wrap gap-2">{book.data!.filter((b) => b.network === net).map((b) => <button key={b.id} onClick={() => setTo(b.address)} className={`rounded-full border px-3 py-1.5 text-[13px] ${to === b.address ? 'border-emerald text-emerald' : 'border-line'}`}><Icon n="book" className="mr-1 inline h-3.5 w-3.5" />{b.label} · {short(b.address)}</button>)}</div></div>}
+        <Field label={`${t('amount')} (${a?.symbol ?? ''})`} hint={bal?.display != null ? <>{t('available')}: {trimAmt(bal.display, 8)} {bal.symbol}</> : undefined}>
+          <div className="flex gap-2">
+            <input className={`${inputCls} text-lg`} inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))} autoComplete="off" />
+            {asset !== 'native' && bal?.display != null && <Btn kind="soft" onClick={() => setAmount(bal.display!)}>{t('max')}</Btn>}
+          </div>
+        </Field>
+        <Field label={t('note')}><input className={inputCls} value={note} maxLength={80} onChange={(e) => setNote(e.target.value)} /></Field>
+        {err && <Notice tone="danger">{err}</Notice>}
+        <Btn full busy={busy === 'review'} disabled={!to || !amount || pf.data?.halted} onClick={review}>{busy === 'review' ? t('preparing') : t('review')}</Btn>
+      </Card>
+    </div>
+  );
+
+  if (!cur) return null;
+  const needCheck = cur.warnings.includes('new_destination') || cur.warnings.includes('address_poisoning_suspected');
+  if (step === 'review') return (
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold tracking-tight">{t('reviewTitle')}</h1>
+      <Card className="space-y-4">
+        <div><div className="text-[13px] text-mute">{t('youSend')}</div>
+          <div className="text-3xl font-semibold tracking-tight">{cur.amountDisplay} {cur.symbol}</div>
+          <div className="font-mono text-xs text-mute">{cur.amount} {t('baseUnits')} · {cur.networkName}</div></div>
+        <Row k={t('to')}><Addr value={cur.to} /></Row>
+        <Row k={t('from')}><span className="font-mono text-[13px] text-mute">{short(cur.from)}</span></Row>
+        <Row k={t('network')}>{cur.networkName}</Row>
+        <Row k={t('fee')}>{cur.feeDisplay ? `≈ ${trimAmt(cur.feeDisplay, 9)} ${cur.feeSymbol}` : '—'}</Row>
+        <Row k={t('feeMax')}>{cur.maxFeeDisplay ? `${trimAmt(cur.maxFeeDisplay, 9)} ${cur.feeSymbol}` : '—'}</Row>
+        {cur.intentHash && <Row k={t('fingerprint')}><span className="break-all font-mono text-[11px] text-mute">{cur.intentHash}</span></Row>}
+      </Card>
+      <Notice tone="ok">{t('simulated')}</Notice>
+      {cur.warnings.map((w) => <Notice key={w} tone={w === 'address_poisoning_suspected' ? 'danger' : 'warn'}>{t(`w_${w}` as Key)}</Notice>)}
+      <Notice tone="info">{t('boundNote')} {t('irreversible')}</Notice>
+      {needCheck && <label className="flex items-start gap-3 rounded-xl border border-line p-3 text-[14px]"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[#35e7ac]" checked={checked} onChange={(e) => setChecked(e.target.checked)} />{t('iChecked')}</label>}
+      {err && <Notice tone="danger">{err}</Notice>}
+      <Btn full busy={!!busy} disabled={needCheck && !checked} onClick={approve}><Icon n="key" />{busy === 'passkey' ? t('approving') : busy === 'prepare' ? t('preparing') : t('approve')}</Btn>
+      <Btn full kind="ghost" disabled={!!busy} onClick={cancel}>{t('cancel')}</Btn>
+    </div>
+  );
+
+  const idx = FLOW.indexOf(cur.state), bad = idx < 0;
+  return (
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold tracking-tight">{t('tracking')}</h1>
+      <Card className="space-y-4">
+        <div className="flex items-start justify-between gap-3"><div><div className="text-2xl font-semibold">{cur.amountDisplay} {cur.symbol}</div><div className="text-xs text-mute">{cur.networkName} → {short(cur.to)}</div></div><StatePill state={cur.state} /></div>
+        {!bad && <ol className="space-y-2.5" aria-label={t('status')}>{FLOW.slice(1).map((s, k) => { const done = idx > k + 1 || cur.state === 'finalized', now = idx === k + 1 && cur.state !== 'finalized';
+          return <li key={s} className={`flex items-center gap-3 text-[14.5px] ${done ? 'text-emerald' : now ? 'text-ink' : 'text-mute'}`}>
+            <span className={`grid h-6 w-6 place-items-center rounded-full border ${done ? 'border-emerald' : now ? 'border-blue text-blue' : 'border-line'}`}><Icon n={done ? 'check' : now ? 'spin' : 'clock'} className="h-3.5 w-3.5" /></span>
+            {t(`s_${s}` as Key)}{s === 'confirming' && cur.confirmations > 0 ? ` · ${cur.confirmations} ${t('confirmations')}` : ''}</li>; })}</ol>}
+        {cur.error && bad && <Notice tone="danger">{cur.error}</Notice>}
+        {!bad && cur.state !== 'finalized' && <p className="text-xs text-mute">{t('broadcastNote')}</p>}
+        {cur.txid && <Row k={t('txid')}><span className="break-all font-mono text-[11.5px]">{cur.txid}</span></Row>}
+        {cur.explorer && <a className="inline-flex items-center gap-1.5 text-sm text-blue" href={cur.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
+      </Card>
+      {cur.state === 'finalized' && !(book.data ?? []).some((b) => b.network === cur.network && b.address === cur.to) && <SaveAddr network={cur.network} address={cur.to} onSaved={() => void book.refetch()} />}
+      <div className="grid grid-cols-2 gap-3"><Btn kind="soft" onClick={reset}>{t('newTransfer')}</Btn><Btn kind="ghost" onClick={() => go('activity')}>{t('activity')}</Btn></div>
+    </div>
+  );
+}
+
+function Row({ k, children }: { k: string; children: React.ReactNode }) {
+  return <div className="border-t border-line pt-3"><div className="mb-0.5 text-[12.5px] text-mute">{k}</div><div>{children}</div></div>;
+}
+function SaveAddr({ network, address, onSaved }: { network: string; address: string; onSaved: () => void }) {
+  const t = useT(); const [label, setLabel] = useState('');
+  return <Card><H>{t('saveAddress')}</H><div className="flex gap-2"><input className={inputCls} placeholder={t('label')} value={label} maxLength={40} onChange={(e) => setLabel(e.target.value)} />
+    <Btn kind="soft" disabled={!label.trim()} onClick={() => void post('/addressbook', { network, address, label: label.trim() }).then(onSaved)}>{t('save')}</Btn></div></Card>;
+}
