@@ -73,6 +73,8 @@ export interface SwapQuote {
   executability: Executability;
   /** can funds come back to the sender if the destination leg fails */
   refundable: boolean | null;
+  /** not refundable, but never lost either: if the destination leg stalls, the funds stay claimable there (e.g. a CCTP burn awaiting its mint) */
+  recoverable?: boolean;
   /** single transaction that either fully succeeds or fully reverts */
   atomic: boolean;
   /** opaque provider payload needed to build the transaction later; never shown, never trusted */

@@ -25,7 +25,7 @@ export function assessRisk(q: SwapQuote, v: Valuation, peers: SwapQuote[] = []):
   if (q.executability.class === 'quote_only') add('not_executable', 'medium', q.executability.reason);
   if (q.executability.class === 'opaque') add('opaque_transaction', 'medium', q.executability.reason);
   if (q.priceImpactBps !== null) { if (q.priceImpactBps >= 300) add('high_price_impact', 'high', `${q.priceImpactBps} bps`); else if (q.priceImpactBps >= 100) add('price_impact', 'medium', `${q.priceImpactBps} bps`); }
-  if (q.steps.some((s) => s.kind === 'bridge' || s.kind === 'native_swap')) { add('cross_chain', 'medium'); if (q.refundable === false) add('no_refund_path', 'high'); if (q.refundable === null) add('refund_unknown', 'medium'); }
+  if (q.steps.some((s) => s.kind === 'bridge' || s.kind === 'native_swap')) { add('cross_chain', 'medium'); if (q.refundable === false) { if (q.recoverable) add('recoverable_not_refundable', 'medium'); else add('no_refund_path', 'high'); } if (q.refundable === null) add('refund_unknown', 'medium'); }
   if (!q.atomic && q.steps.length > 1) add('multi_step', 'medium', `${q.steps.length} steps`);
   if (q.estimatedSeconds === null) add('no_time_estimate', 'low');
   if (v.unpricedFees > 0) add('fee_unpriced', 'low', `${v.unpricedFees} fee item(s) without a price`);
