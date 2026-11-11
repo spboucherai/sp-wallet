@@ -170,6 +170,15 @@ async function fromAudit(e: AlertEvent, c: RuleCtx): Promise<Draft[]> {
     case 'device.added': return [{ kind: 'security.passkey_added', params: { label: str(d.label, 40) }, subject: { type: 'none' } }];
     case 'login.failed': return [{ kind: 'security.login_failed', params: { ip: str(d.ip, 60), count: 1 }, dedupe: `login_failed:${bucket(e.ts, 15)}`, bump: true }];
     case 'login.ok': return newDevice(e, c);
+    // v7 any-to-any plans: the plan saga records these itself (services/api/src/plan-exec.ts); every parameter comes from the event
+    case 'plan.step_ready': return [{ kind: 'plan.step_ready', params: { what: str(d.what, 60), step: Number(d.step) || 0, steps: Number(d.steps) || 0, network: netName(d.network) }, subject: { type: 'plan', id: str(d.id, 40) }, dedupe: `plan_ready:${str(d.id, 40)}:${Number(d.step) || 0}:${e.id}` }];
+    case 'plan.paused': return [{ kind: 'plan.paused', params: { what: str(d.what, 60), step: Number(d.step) || 0, steps: Number(d.steps) || 0, network: netName(d.network), reason: str(d.reason, 200) }, subject: { type: 'plan', id: str(d.id, 40) } }];
+    case 'plan.done': {
+      const [pl] = /^[0-9a-f-]{36}$/.test(str(d.id, 40)) ? await c.q<{ meta: { to?: { network: string; asset: string } } }[]>`select meta from plans where id = ${str(d.id, 40)}` : [];
+      let symbol = '', amount = '';
+      try { const to = pl?.meta.to; if (to) { const n = getNetwork(to.network), a = to.asset === 'native' ? n.native : n.tokens.find((x) => x.id.toLowerCase() === to.asset.toLowerCase()); if (a) { symbol = a.symbol; amount = units(d.received, a.decimals); } } } catch { /* no detail */ }
+      return [{ kind: 'plan.done', params: { what: str(d.what, 60), steps: Number(d.steps) || 0, amount, symbol }, subject: { type: 'plan', id: str(d.id, 40) } }];
+    }
     default:
   }
   if (t.startsWith('deriv.live.order_') && d.final === true) {

@@ -17,6 +17,7 @@ import { Swap } from './screens/Swap';
 import { Btn, Icon, Notice, Skeleton } from './ui';
 import { useAlertsRuntime, useUnread } from './alerts'; // v6-alerts
 import { Research } from './screens/Research'; // v7 research runtime
+import { PlanScreen } from './plan'; // v7 any-to-any plans
 
 // the Futures terminal is its own chunk: the wallet's first load does not pay for it
 const Futures = lazy(() => import('./screens/Futures').then((m) => ({ default: m.Futures })));
@@ -25,17 +26,19 @@ const Alerts = lazy(() => import('./screens/Alerts').then((m) => ({ default: m.A
 const Monitor = lazy(() => import('./screens/Monitor').then((m) => ({ default: m.Monitor })));
 
 const TABS = [['home', '/', 'home'], ['swap', '/swap', 'swap'], ['agents', '/agents', 'key'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
-export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent' | 'futures' | 'alerts' | 'monitor' | 'research';
+export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent' | 'futures' | 'alerts' | 'monitor' | 'research' | 'plan';
 /** Where to go, with optional pre-selection (asset page, or send/receive pre-filled). */
 export interface Route { tab: Tab; network?: string; asset?: string; /** sub-view of a screen (Futures: compare, accounts) */ view?: string }
 export type Nav = (r: Route) => void;
-const pathOf = (r: Route) => r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
+const pathOf = (r: Route) => r.tab === 'plan' ? `/plan/${r.asset}` : r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
 function routeOf(): Route {
   const m = /^\/asset\/([a-z0-9-]+)\/(.+)$/.exec(location.pathname);
   if (m) return { tab: 'asset', network: m[1], asset: decodeURIComponent(m[2]!) };
   if (location.pathname === '/assets') return { tab: 'assets' };
   const ag = /^\/agents\/([0-9a-f-]{36})$/.exec(location.pathname);
   if (ag) return { tab: 'agent', asset: ag[1] };
+  const pl = /^\/plan\/([0-9a-f-]{36})$/.exec(location.pathname);   // v7: a plan's progress view
+  if (pl) return { tab: 'plan', asset: pl[1] };
   const q = new URLSearchParams(location.search);
   if (location.pathname === '/alerts') return { tab: 'alerts', view: q.get('v') ?? undefined };   // v6-alerts
   if (location.pathname === '/monitor') return { tab: 'monitor' };
@@ -119,6 +122,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
           {tab === 'agents' && <Agents nav={nav} />}
           {tab === 'agent' && <Agent id={route.asset ?? ''} nav={nav} />}
           {tab === 'activity' && <Activity />}
+          {tab === 'plan' && <PlanScreen id={route.asset ?? ''} />}
           {tab === 'security' && <Security />}
           {tab === 'settings' && <Settings lock={lock} go={go} />}
           {tab === 'alerts' && <Suspense fallback={<Skeleton h="h-72" />}><Alerts view={route.view === 'settings' ? 'settings' : 'list'} open={openPath} setView={(v) => nav({ tab: 'alerts', view: v === 'settings' ? 'settings' : undefined })} /></Suspense>}

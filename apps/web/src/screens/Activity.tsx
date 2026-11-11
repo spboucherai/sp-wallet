@@ -6,6 +6,7 @@ import { I18n, useT } from '../i18n';
 import { BridgeFacts, BridgePill, BridgeProgress, type BridgeV } from '../bridge';
 import { XswapFacts, XswapPill, XswapProgress, type XswapV } from '../xswap';
 import { useQueryClient } from '@tanstack/react-query';
+import { PlanList } from '../plan'; // v7 any-to-any plans
 import { Addr, Card, Coin, Icon, inputCls, Money, short, Skeleton, StatePill, testNotSent, trimAmt, when } from '../ui';
 
 interface Item { swap?: { toSymbol: string; receivedDisplay: string | null; minOutDisplay: string } | null; bridge?: BridgeV | null; xswap?: XswapV | null; kind: 'send' | 'receive' | 'swap' | 'bridge'; at: string; id: string; network: string; networkName: string; symbol: string; amount: string; amountDisplay: string; state: string; txid: string | null; explorer: string | null;
@@ -25,6 +26,7 @@ export function Activity() {
           <button key={k} role="tab" aria-selected={kind === k} onClick={() => setKind(k)} className={`min-h-11 flex-1 rounded-xl text-[13.5px] ${kind === k ? 'bg-surface font-semibold shadow-sm' : 'text-mute'}`}>{t(k === 'all' ? 'all' : k === 'send' ? 'sent' : 'received')}</button>)}</div>
         <select aria-label={t('network')} className={`${inputCls} w-auto max-w-[42%] py-2`} value={net} onChange={(e) => setNet(e.target.value)}><option value="">{t('allNetworks')}</option>{(nets.data ?? []).map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}</select>
       </div>
+      <PlanList />
       {q.isLoading ? <Skeleton h="h-48" /> : items.length === 0 ? <Card><p className="py-6 text-center text-sm text-mute">{t('noActivity')}</p></Card> :
         <Card className="!p-0"><ul className="divide-y divide-line">{items.map((i) => { const isOpen = open === i.id; return (
           <li key={i.id}>

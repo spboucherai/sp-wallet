@@ -54,7 +54,7 @@ describe('alert catalogue', () => {
   });
 
   it('the rules only produce catalogued kinds, and every catalogued kind is produced', () => {
-    const produced = new Set([...source.matchAll(/'((?:transfer|swap|bridge|deposit|agent|mandate|deriv|security|system|conn)\.[a-z_.]+)'/g)].map((m) => m[1]!));
+    const produced = new Set([...source.matchAll(/'((?:transfer|swap|bridge|deposit|agent|mandate|deriv|security|system|conn|plan)\.[a-z_.]+)'/g)].map((m) => m[1]!));
     const eventTypes = /^(transfer\.(finalized|failed)|bridge\.(done|mint_reverted)|deposit\.seen|agent\.(order_refused|fill)|mandate\.revoked|deriv\.(paper|live)\.(fill|reset|halt|order_filled|order_rejected|policy_replaced|order_)|deriv\.rejected|agent\.fill|signer\.(down|up|halt|policy)|conn\.(down|up)|device\.added)$/;
     for (const k of ALERT_KINDS) expect(produced, `${k} is never produced`).toContain(k);
     for (const k of produced) if (!alertDef(k)) expect(k, `${k} is produced by a rule but is not in the catalogue`).toMatch(eventTypes);

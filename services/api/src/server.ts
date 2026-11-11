@@ -31,6 +31,7 @@ import { alertRoutes } from './alerts/routes.ts';     // v6-alerts
 import { monitorRoutes } from './monitor/routes.ts'; // v6-alerts
 import { researchRoutes, RUNNER_PREFIX, runnerGate } from './research/routes.ts'; // v7 research runtime
 import { perpRuntime } from './agents/perp-live.ts'; // v7 research runtime (perp data for research jobs)
+import { planRoutes, type PlanDeps } from './plan-exec.ts'; // v7 any-to-any plans
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
@@ -103,7 +104,7 @@ async function markets(): Promise<Record<string, Market> | null> {
 }
 async function prices(): Promise<Record<string, Market> | null> { return markets(); }
 
-export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService; collateral?: import('./derivatives/collateral.ts').CollateralService } = {}): Promise<FastifyInstance> {
+export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService; collateral?: import('./derivatives/collateral.ts').CollateralService; plan?: Partial<PlanDeps> } = {}): Promise<FastifyInstance> {
   const swapProviders = opts.swapProviders;
   const app = Fastify({ logger: { level: 'warn', redact: ['req.headers.cookie', 'req.headers.authorization'] }, bodyLimit: 64 * 1024, trustProxy: config.trustProxy });
   await app.register(cookie);
@@ -146,6 +147,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   swapExecRoutes(app);
   bridgeRoutes(app);
   xswapRoutes(app);
+  planRoutes(app, { prices: markets, ...opts.plan }); // v7 any-to-any plans: a saga over the routes above; signs nothing itself
   agentRoutes(app, { prices: markets });
   strategyRoutes(app);
   perpAgentRoutes(app, opts.derivatives, opts.live); // v6 perp agents on paper accounts; v7: LIVE on a venue account under a signer-enforced mandate

@@ -192,6 +192,12 @@ create table if not exists deriv_collateral (
   created_at timestamptz not null default now(), updated_at timestamptz not null default now());
 create index if not exists deriv_collateral_open on deriv_collateral (account_id) where not final;
 create index if not exists deriv_collateral_recent on deriv_collateral (account_id, created_at desc);
+-- >>> v7 any-to-any plans: a plan is a list of legs; each leg is an ordinary proposal created when the previous one has settled
+create table if not exists plans (
+  id uuid primary key, state text not null, current int not null default 0, legs jsonb not null, meta jsonb not null,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create index if not exists plans_open on plans (state) where state in ('active', 'paused');
+-- <<< v7 any-to-any plans
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }
