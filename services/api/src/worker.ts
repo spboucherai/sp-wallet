@@ -10,6 +10,7 @@ import { advanceBridgeBurn, advanceBridges } from './bridge.ts';
 import { broadcastNow, move, type ProposalRow } from './transfers.ts';
 import { advanceXswapSend, advanceXswaps, xswapMayBroadcast } from './xswap.ts';
 import { advancePlans } from './plan-exec.ts'; // v7 any-to-any plans
+import { advanceWithdrawals } from './agents/withdrawals.ts'; // v8
 
 export const healthCache = new Map<string, Health>();
 const log = (m: string) => console.log(`[worker] ${m}`);
@@ -103,5 +104,6 @@ export function startWorkers(): void {
   loop('xswaps', advanceXswaps, 10_000);
   loop('plans', advancePlans, 6_000); // v7: reads the proposals of open plans and moves the plans; never signs
   loop('deposits', scanDeposits, 75_000);
+  loop('withdrawals', () => advanceWithdrawals(), 8_000); // v8: agent-vault withdrawals — receipt and arrival at the owner's address; never signs
 }
 export { refreshHealth, reconcile, expireStale, isTerminal, advanceBridges };

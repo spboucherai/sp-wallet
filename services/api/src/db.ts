@@ -198,6 +198,15 @@ create table if not exists plans (
   created_at timestamptz not null default now(), updated_at timestamptz not null default now());
 create index if not exists plans_open on plans (state) where state in ('active', 'paused');
 -- <<< v7 any-to-any plans
+-- v8 hardening: tracked agent-vault withdrawals (agents/withdrawals.ts)
+create table if not exists agent_withdrawals (
+  id uuid primary key, agent_id uuid not null references agents(id), network text not null, asset text not null, symbol text not null, decimals int not null,
+  amount numeric(78,0) not null, from_addr text not null, to_addr text not null, nonce int not null, state text not null, raw text, txid text, error text,
+  idempotency_key text, arrival jsonb, created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  broadcast_at timestamptz, last_broadcast_at timestamptz, confirmed_at timestamptz);
+create unique index if not exists agent_withdrawals_one_open on agent_withdrawals (agent_id, network, asset) where state in ('requested', 'signed', 'broadcast');
+create unique index if not exists agent_withdrawals_idem on agent_withdrawals (agent_id, idempotency_key) where idempotency_key is not null;
+create index if not exists agent_withdrawals_agent on agent_withdrawals (agent_id, created_at desc);
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }
