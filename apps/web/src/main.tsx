@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { loadLocale } from './i18n-load';
 import { applyTheme } from './theme';
 import './styles.css';
 
@@ -15,6 +16,8 @@ if (import.meta.env.DEV) {
   if (sessionStorage.getItem('spw-mock') !== null) (await import('./derivatives/mock')).installMock();
 }
 applyTheme(localStorage.getItem('spw-theme') === 'dark' ? 'dark' : 'light'); // light by default
+// v10: the texts of the owner's language (one chunk per language) are there before anything is drawn
+await loadLocale(localStorage.getItem('spw-locale') === 'en' ? 'en' : 'fr');
 // Development only: /__icons shows every logo of the set on one page (src/IconWall.tsx); removed from the production bundle.
 if (import.meta.env.DEV && location.pathname === '/__icons') {
   const { IconWall } = await import('./IconWall');

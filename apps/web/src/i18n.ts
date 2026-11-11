@@ -2028,14 +2028,103 @@ const D = {
   hdCap_broadcast: ['Diffusion des transactions', 'Transaction broadcast'], hdCap_workers: ['Tâches de fond et moteurs des agents', 'Background tasks and agent engines'],
   hdCap_strategy_sandbox_enforced: ['Confinement obligatoire du code de stratégie', 'Mandatory confinement of strategy code'], hdCap_web_app: ['Application web servie par ce processus', 'Web app served by this process'],
   // --- end hd ---
+  // >>> v10 design pass — ONE contiguous block, every key prefixed `dz`: keep additions inside it (sub-sections by area)
+  // dz · shared
+  dzRetry: ['Réessayer', 'Retry'],
+  dzPricesAway: ['Prix indisponibles pour l’instant', 'Prices unavailable for now'],   // the price feed did not answer: not the same as prices turned off in the settings
+  // dz · swap, bridge, plan
+  dzSwEnterAmount: ['Saisissez un montant', 'Enter an amount'],
+  dzSwNoRouteBtn: ['Aucune route pour ce montant', 'No route for this amount'],
+  dzSwEmptyTitle: ['Saisissez un montant pour comparer les routes', 'Enter an amount to compare routes'],
+  dzSwEmptyBody: ['Les devis arrivent en direct. Rien n’est préparé ni signé avant votre vérification.', 'Quotes arrive live. Nothing is prepared or signed before your review.'],
+  dzSwErrorBody: ['Aucun devis n’a pu être obtenu. Rien n’a été préparé ni signé.', 'No quote could be obtained. Nothing was prepared or signed.'],
+  dzSwRoutes: ['Routes', 'Routes'], dzSwCompare: ['Comparaison', 'Comparison'], dzSwTime: ['Durée', 'Time'],
+  dzSwFoldTitle: ['Autres routes — comparaison seulement, non exécutables ici', 'Other routes — comparison only, not executable here'],
+  dzBrStepDone: ['fait', 'done'], dzBrStepNow: ['en cours', 'in progress'], dzBrStepNext: ['à venir', 'to come'],
+  dzPnActual: ['réel', 'actual'],
+  dzPnSignPrepare: ['Prochaine signature par clé d’accès : {kind}, {from} sur {fromNet} → {to} sur {toNet}, sur les {amt} {sym} que le plan détient. Le montant exact, les frais et le minimum garanti de l’étape s’affichent avant que vous signiez.', 'Next passkey signature: {kind}, {from} on {fromNet} → {to} on {toNet}, on the {amt} {sym} the plan holds. The exact amount, the fees and the guaranteed minimum of the step are shown before you sign.'],
+  dzPnSignNow: ['En approuvant, votre clé d’accès signe cette étape : vous donnez {give}, minimum garanti {min}. Le détail complet est juste dessous.', 'By approving, your passkey signs this step: you give {give}, guaranteed minimum {min}. The full detail is just below.'],
+  dzPnSignNowPlain: ['En approuvant, votre clé d’accès signe cette étape : vous donnez {give}. Le détail complet est juste dessous.', 'By approving, your passkey signs this step: you give {give}. The full detail is just below.'],
+  dzPnLoadFailed: ['Ce plan n’a pas pu être chargé', 'This plan could not be loaded'],
+  dzPnLoadFailedBody: ['Rien n’a été modifié. Le plan reste où il en était.', 'Nothing was changed. The plan stays where it was.'],
+  // dz · agents
+  dzAgSecIdentity: ['Identité', 'Identity'], dzAgSecNetwork: ['Réseau et trésorerie', 'Network and cash leg'], dzAgSecUniverse: ['Univers', 'Universe'], dzAgSecCapital: ['Capital et fréquence', 'Capital and frequency'], dzAgSecRisk: ['Limites de risque', 'Risk limits'],
+  dzAgEmpty: ['Un agent se crée sans fonds : vous le financez ensuite, quand vous le décidez.', 'An agent is created without funds: you fund it afterwards, when you decide to.'],
+  dzAgCapital: ['Capital prévu', 'Planned capital'],
+  dzAgModeLabel: ['Mode de l’agent', 'Agent mode'],
+  dzAgModeLive: ['Réel — argent réel', 'Real — real money'], dzAgModePaper: ['Simulation — aucun ordre réel', 'Simulation — no real order'], dzAgModeOff: ['À l’arrêt', 'Not running'], dzAgModeFailed: ['En échec — à l’arrêt', 'Failed — not running'],
+  dzAgModeLiveText: ['L’agent place de vrais ordres avec les fonds de son portefeuille, sans votre approbation à chaque ordre, dans les limites du mandat que le signataire applique.', 'The agent places real orders with the funds of its wallet, without your approval for each order, within the limits of the mandate the signer enforces.'],
+  dzAgModePaperText: ['L’agent suit sa stratégie sur un registre fictif. Les fonds réels de son portefeuille ne bougent pas.', 'The agent follows its strategy on a fictional book. The real funds of its wallet do not move.'],
+  dzAgModeOffText: ['L’agent ne négocie pas : aucun ordre, ni réel ni simulé.', 'The agent is not trading: no order, real or simulated.'],
+  dzAgNow: ['En ce moment', 'Right now'], dzAgStatStrategy: ['Stratégie en service', 'Strategy in service'], dzAgStatNone: ['aucune approuvée', 'none approved'],
+  dzAgStatLastBar: ['Dernière barre traitée', 'Last bar processed'], dzAgStatNotRunning: ['agent à l’arrêt', 'agent not running'], dzAgStatLastDecision: ['Dernière décision', 'Last decision'],
+  dzAgEqNow: ['Dernière valeur relevée', 'Latest recorded value'], dzAgEqSince: ['depuis le {date}', 'since {date}'],
+  dzAgEqEmptyTitle: ['Pas encore de courbe', 'No curve yet'], dzAgEqEmpty: ['Elle se trace dès que deux valeurs ont été relevées, une par barre.', 'It is drawn once two values have been recorded, one per bar.'],
+  dzAgChkProgress: ['{done} étapes sur {total}', '{done} of {total} steps'], dzAgChkAllDone: ['Tout est en place.', 'Everything is in place.'], dzAgChkPart: ['en partie', 'partly'],
+  // dz · futures
+  dzFxNoAccountTitle: ['Aucun compte de simulation', 'No paper account'],
+  dzFxNoAccountBody: ['Créez-en un pour suivre ici vos positions, vos ordres et vos exécutions simulés.', 'Create one to follow your simulated positions, orders and fills here.'],
+  dzFxReconnect: ['Reconnexion au flux de marché… Les derniers prix reçus restent affichés.', 'Reconnecting to the market stream… The last prices received stay on screen.'],
+  dzFxStaleTitle: ['Flux interrompu', 'Stream interrupted'],
+  dzFxVenueCut: ['Plateforme injoignable', 'Venue unreachable'],
+  dzFxLimitsShort: ['Limites', 'Limits'],
+  dzFxNoMatch: ['Rien à afficher', 'Nothing to show'],
+  dzFxChartTools: ['Outils du graphique', 'Chart tools'],
+  // dz · futures live, GMX
+  dzLvStepDone: ['fait', 'done'], dzLvStepNow: ['en cours', 'in progress'], dzLvStepNext: ['à venir', 'to come'], dzLvStepWait: ['en attente', 'waiting'],
+  // dz · alerts, monitor, research
+  dzAlEmptyTitle: ['Rien de nouveau', 'Nothing new'],
+  dzAlEmptyBody: ['Les alertes de vos transferts, de vos agents et du système apparaîtront ici.', 'Alerts about your transfers, your agents and the system will appear here.'],
+  dzAlEmptyFiltered: ['Aucune alerte ne correspond à ces filtres.', 'No alert matches these filters.'],
+  dzAlLoadFailed: ['Chargement impossible', 'Could not load'],
+  dzAlLoadFailedBody: ['Le serveur n’a pas répondu. Rien n’a été modifié.', 'The server did not answer. Nothing was changed.'],
+  dzAlSubjPlan: ['Plan', 'Plan'],
+  dzAlFixed: ['toujours active', 'always on'],
+  dzAlDevices: ['Appareils abonnés', 'Subscribed devices'],
+  dzAlPushStUnsupported: ['Non disponible dans ce navigateur', 'Not available in this browser'],
+  dzAlPushStDenied: ['Notifications bloquées', 'Notifications blocked'],
+  dzAlPushStOff: ['Désactivées sur cet appareil', 'Off on this device'],
+  dzAlPushRecheck: ['Vérifier de nouveau', 'Check again'],
+  dzAlPushOnHint: ['Les alertes arrivent ici même quand l’application est fermée.', 'Alerts arrive here even when the app is closed.'],
+  dzMoAllWell: ['Tout fonctionne', 'Everything works'],
+  dzMoAttention: ['À vérifier', 'Needs attention'],
+  dzMoLoopsBad: ['{n} tâche(s) de fond en échec ou en retard :', '{n} background task(s) failing or late:'],
+  dzMoBackupOld: ['La dernière sauvegarde date de plus de 36 h.', 'The last backup is more than 36 h old.'],
+  dzMoAsOf: ['Relevé du {when}', 'Measured {when}'],
+  dzMoGuards: ['Signataire, bac à sable et sauvegardes', 'Signer, sandbox and backups'],
+  dzMoCapabilities: ['Capacités du serveur', 'Server capabilities'],
+  dzMoVersions: ['Versions', 'Versions'],
+  dzMoNetDetail: ['Détail des mesures', 'Measurement details'],
+  dzMoLoadFailed: ['État indisponible', 'Status unavailable'],
+  dzMoLoadFailedBody: ['Le serveur n’a pas répondu : son état n’a pas pu être lu.', 'The server did not answer: its status could not be read.'],
+  dzRjLive: ['en direct', 'live'],
+  dzRjLines: ['{n} ligne(s)', '{n} line(s)'],
+  dzRjDecision: ['Votre décision', 'Your decision'],
+  dzRjNoneBody: ['Décrivez une mission : un agent de code IA la réalise dans un bac à sable, puis le serveur refait le backtest.', 'Describe a mission: an AI coding agent carries it out in a sandbox, then the server redoes the backtest.'],
+  dzRjNoneNoRunner: ['Sans nœud de recherche, une tâche créée reste en file d’attente.', 'Without a research node, a job you create stays queued.'],
+  dzRjLoadFailed: ['Chargement impossible', 'Could not load'],
+  dzRjLoadFailedBody: ['Le serveur n’a pas répondu. Les tâches en cours ne sont pas touchées.', 'The server did not answer. Running jobs are not affected.'],
+  // <<< end of the `dz` block
 } as const;
 export type Key = keyof typeof D;
+// v10 performance pass — ONE language at a time in the browser. `D` above (both languages side by side, the form every
+// engineer edits and the tests read) weighs 370 kB, more than a third of the first chunk. The web build and the dev server
+// (vite.config.ts, plugin `spw-i18n-split`) empty `D` in the app's chunk and make one table per language, loaded before
+// the first render and when the owner changes language (i18n-load.ts). Without a table — unit tests, the service worker
+// bundle — the texts come from `D` as before: same keys, same strings, one code path for the lookup.
+const TABLES: Partial<Record<Locale, Record<string, string>>> = {};
+export function setLocaleTable(l: Locale, table: Record<string, string>): void { TABLES[l] = table; }
+export const hasLocaleTable = (l: Locale): boolean => TABLES[l] !== undefined;
+const textOf = (k: string, locale: Locale): string | undefined => {
+  const tb = TABLES[locale]; if (tb) return tb[k];
+  const row = (D as Record<string, readonly [string, string]>)[k]; return row ? row[locale === 'fr' ? 0 : 1] : undefined;
+};
+const hasKey = (k: string): boolean => { const tb = TABLES.fr ?? TABLES.en; return tb ? k in tb : k in D; };
 export const I18n = createContext<{ locale: Locale; setLocale: (l: Locale) => void }>({ locale: 'fr', setLocale: () => {} });
 export function useT() {
   const { locale } = useContext(I18n);
   return (k: Key, vars?: Record<string, string | number>) => {
-    const row = (D as Record<string, readonly [string, string]>)[k];
-    let s: string = row ? row[locale === 'fr' ? 0 : 1] : String(k).replace(/^[a-z]_/, '').replace(/_/g, ' '); // unknown key: readable fallback, never a crash
+    let s: string = textOf(k, locale) ?? String(k).replace(/^[a-z]_/, '').replace(/_/g, ' '); // unknown key: readable fallback, never a crash
     if (vars) for (const [a, b] of Object.entries(vars)) s = s.split(`{${a}}`).join(String(b)); // every occurrence, not only the first
     return s;
   };
@@ -2048,6 +2137,6 @@ export function errText(t: (k: Key) => string, e: unknown): string {
   const detail = x?.message && x.message !== 'error' && x.message !== x.code ? x.message : '';
   // a translated code speaks for itself; the server's English sentence is appended only when it carries a figure (an amount, a limit)
   if (/account is not activated yet/.test(detail)) return t('qaErrNotActivated');
-  return k in D ? (detail && /\d/.test(detail) && x?.code !== 'bad_address' ? `${t(k as Key)} (${detail})` : t(k as Key)) : detail || String(x?.code ?? 'error');
+  return hasKey(k) ? (detail && /\d/.test(detail) && x?.code !== 'bad_address' ? `${t(k as Key)} (${detail})` : t(k as Key)) : detail || String(x?.code ?? 'error');
 }
-export const stateKey = (s: string) => (`s_${s}` in D ? (`s_${s}` as Key) : 's_draft');
+export const stateKey = (s: string) => (hasKey(`s_${s}`) ? (`s_${s}` as Key) : 's_draft');

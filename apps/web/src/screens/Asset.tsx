@@ -53,7 +53,7 @@ export function Asset({ network, asset, nav }: { network: string; asset: string;
         <div className="mt-2 h-5">{delta !== null && <Change pct={delta} suffix={t(`r_${days}` as never)} />}</div>
         <div className="mt-3">{mk.isLoading ? <div className="skel h-[210px] !rounded-2xl" /> : <PriceChart points={pts} format={priceFmt} formatTime={timeFmt} onHover={setHover} />}</div>
         <div className="mt-4"><Seg label={t('range')} value={days} onChange={(d) => { setDays(d); setHover(null); }} options={RANGES.map(([d, fr, en]) => [d, locale === 'fr' ? fr : en] as const)} /></div>
-        {!pf.data.prices && <p className="mt-3 text-[12.5px] text-mute">{t('noPrices')}</p>}
+        {!pf.data.prices && <p className="mt-3 text-[12.5px] text-mute">{t(settings.prices ? 'dzPricesAway' : 'noPrices')}</p>}
       </Card>
 
       <Card>

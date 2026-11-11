@@ -97,6 +97,12 @@ button.card:active, a.card:active { transform: scale(0.985); background: color-m
 .app-header[data-scrolled] .app-header-row { padding-top: 4px; padding-bottom: 4px; }
 .app-header[data-scrolled] .app-brand { transform: scale(0.9); }
 .app-header:not([data-scrolled]) { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* v10 large-title collapse: the page title takes the brand's place once it has scrolled under the header */
+.app-header .app-header-row { position: relative; }
+.app-header .app-brand-name { transition: opacity 0.18s; }
+.app-mini-title { position: absolute; left: 62px; right: 152px; top: 50%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: var(--font-display); font-size: 17px; font-weight: 650; letter-spacing: -0.02em; line-height: 24px; margin-top: -12px; opacity: 0; transform: translateY(6px); transition: opacity 0.18s, transform 0.22s var(--ease-spring); pointer-events: none; }
+.app-header[data-titled] .app-brand-name { opacity: 0; }
+.app-header[data-titled] .app-mini-title { opacity: 1; transform: none; }
 .tabbar { box-shadow: 0 -1px 0 var(--line); }
 .tab-fab { box-shadow: var(--e2); transition: transform 0.16s var(--ease-spring); }
 .tab-fab:active, button:active > .tab-fab { transform: scale(0.92); }
@@ -133,7 +139,8 @@ button.card:active, a.card:active { transform: scale(0.985); background: color-m
 .hero-edge { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; border: 1px solid rgba(255, 255, 255, 0.1); }
 @keyframes aurora-a { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(-9%, 7%, 0) scale(1.12); } }
 @keyframes aurora-b { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(11%, -6%, 0) scale(1.08); } }
-.hero-btn { background: rgba(255, 255, 255, 0.11); border: 1px solid rgba(255, 255, 255, 0.14); color: #fff; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+/* v10: no backdrop blur here — the aurora drifts under these buttons, so the blur was recomputed on every frame of its animation */
+.hero-btn { background: rgba(255, 255, 255, 0.13); border: 1px solid rgba(255, 255, 255, 0.14); color: #fff; }
 .hero-btn-main { background: #ffffff; color: #0a0d14; }
 .hero-chip { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.08); }
 
@@ -145,6 +152,7 @@ button.card:active, a.card:active { transform: scale(0.985); background: color-m
 .logo-plate.skel { position: absolute; border-radius: 50%; }
 .logo-plate img { display: block; opacity: 0; transition: opacity 0.18s; }
 .logo-plate img[data-ok] { opacity: 1; }
+.logo-plate[data-bleed][data-loaded] { box-shadow: none; } /* a full-bleed disc covers its plate: no inner ring once it is there */
 .logo-letters { font-weight: 700; line-height: 1; color: #fff; letter-spacing: -0.02em; }
 .logo-badge { position: absolute; right: -2px; bottom: -2px; border-radius: 50%; box-shadow: 0 0 0 2px var(--ring, var(--surface)); }
 
@@ -175,6 +183,54 @@ button.card:active, a.card:active { transform: scale(0.985); background: color-m
 @keyframes sheet-in { from { transform: translateY(28px); opacity: 0; } }
 .sheet-dragging { transition: none !important; animation: none !important; }
 
+/* ── v10: shared pieces of the second design pass (ui.tsx: Tag, Stat, Fact, Timeline, ProgressRing, Fold, Sheet footer) ─── */
+/* generous numerals: a figure that is the subject of its card (equity, vault value, price) */
+.t-num { font-family: var(--font-display); font-weight: 650; letter-spacing: -0.03em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.tag { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 11.5px; font-weight: 600; line-height: 1.35; white-space: nowrap; }
+.tag[data-tone='mute'] { color: var(--mute); background: var(--elev); }
+.tag[data-tone='ok'] { color: var(--emerald); background: color-mix(in srgb, var(--emerald) 10%, transparent); }
+.tag[data-tone='info'] { color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
+.tag[data-tone='warn'] { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.tag[data-tone='danger'] { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.stat { min-width: 0; border-radius: 16px; background: color-mix(in srgb, var(--elev) 70%, transparent); padding: 12px 14px; }
+.stat-label { display: block; font-size: 12px; color: var(--mute); line-height: 1.3; }
+.stat-value { display: block; margin-top: 2px; font-size: 18px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.2; overflow-wrap: anywhere; }
+.stat-sub { display: block; margin-top: 1px; font-size: 12px; color: var(--mute); }
+/* a fact of a receipt or a detail list: label on the left, the WHOLE value on the right (it wraps, it is never cut) */
+.fact { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 9px 0; font-size: 14px; }
+.fact + .fact { border-top: 1px solid var(--line); }
+.receipt .fact + .fact { border-top-style: dashed; }
+.fact > dt { flex: none; max-width: 46%; color: var(--mute); }
+.fact > dd { margin: 0; min-width: 0; text-align: right; font-weight: 550; overflow-wrap: anywhere; }
+/* timeline: legs of a plan, steps of a flow — done / current / next / failed carry an icon AND a word, the rail is decoration */
+.tl { list-style: none; margin: 0; padding: 0; }
+.tl-item { position: relative; display: flex; gap: 14px; padding-bottom: 18px; }
+.tl-item:last-child { padding-bottom: 0; }
+.tl-item::before { content: ''; position: absolute; left: 17px; top: 38px; bottom: 2px; width: 2px; border-radius: 1px; background: var(--line); }
+.tl-item:last-child::before { display: none; }
+.tl-item[data-state='done']::before { background: color-mix(in srgb, var(--emerald) 55%, transparent); }
+.tl-node { position: relative; z-index: 1; display: grid; flex: none; height: 36px; width: 36px; place-items: center; border-radius: 50%; background: var(--elev); color: var(--mute); }
+.tl-item[data-state='done'] .tl-node { background: color-mix(in srgb, var(--emerald) 12%, var(--surface)); color: var(--emerald); }
+.tl-item[data-state='current'] .tl-node { background: var(--primary); color: var(--onprimary); box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 14%, transparent); }
+.tl-item[data-state='failed'] .tl-node { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
+/* a « next » step is NOT dimmed: it carries planned amounts and fees, and mute text under 78 % opacity fell below AA */
+.tl-body { min-width: 0; flex: 1; padding-top: 6px; }
+/* progress ring (a checklist's "3 of 4"): the count is written inside, the ring only repeats it */
+.pring { position: relative; display: inline-grid; flex: none; place-items: center; }
+.pring svg { transform: rotate(-90deg); }
+.pring circle { fill: none; stroke-width: 4; }
+.pring .pring-track { stroke: var(--elev); }
+.pring .pring-bar { stroke: var(--emerald); stroke-linecap: round; transition: stroke-dashoffset 0.5s var(--ease-spring); }
+.pring-text { position: absolute; font-size: 12.5px; font-weight: 700; letter-spacing: -0.01em; }
+/* disclosure (comparison-only routes, technical details): a 44 px summary with a chevron that turns */
+.fold > summary { display: flex; min-height: 44px; cursor: pointer; list-style: none; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; font-weight: 600; color: var(--mute); }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::after { content: ''; flex: none; width: 8px; height: 8px; margin-right: 4px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.2s var(--ease-spring); }
+.fold[open] > summary::after { transform: rotate(-135deg); }
+/* sheet: the sub-title, and a footer whose action stays in reach above the keyboard and the home indicator */
+.sheet-foot { flex: none; border-top: 1px solid var(--line); background: var(--surface); padding: 12px 20px 4px; }
+.sheet-sub { margin-top: 2px; font-size: 13px; color: var(--mute); }
+
 /* ── motion ───────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 /* `backwards`, not `both`: a filled transform keeps a stacking context on <main>, which trapped every sheet (position: fixed, z-30) under the bottom navigation */
@@ -192,6 +248,101 @@ button.card:active, a.card:active { transform: scale(0.985); background: color-m
 @media (prefers-reduced-motion: reduce) {
   .rise, .spin, .pulse-dot, .tick, .pop, .skel::after, .hero::before, .hero::after, [role='dialog'][aria-modal='true'].fixed, [role='dialog'][aria-modal='true'].fixed > *:first-child, .fixed > [role='dialog'][aria-modal='true'] { animation: none; }
   * { transition: none !important; }
+  .app-mini-title { transform: none; }
 }
 /* forced colours (Windows high contrast): plates and separators stay visible */
 @media (forced-colors: active) { .card, .logo-plate { border: 1px solid CanvasText; } }
+
+/* ── v10 futures ── */
+/* the terminal's dense receipts (order preview, account tile): the shared `Fact` row, tighter; the label may take more of the line */
+.fx-facts > .fact { padding: 6px 0; font-size: 13.5px; gap: 12px; }
+.fx-facts > .fact > dt, .fx-receipt > .fact > dt { max-width: 64%; }
+/* blotter tables: the row under the pointer is tinted (pointer devices only; nothing moves) */
+@media (hover: hover) { .fx-tr:hover > td { background: color-mix(in srgb, var(--elev) 45%, transparent); } }
+/* ── v10 agents ── */
+/* (ProgressRing's class was renamed `.pring` at integration: `.ring` is a Tailwind utility) */
+/* ── v10 futures-live ── */
+/* THE MODE BANDS (derivatives/LiveBits.tsx: ModeBand, ModeTag). Which money an account moves is said in words, with the tone's
+   own icon and its own pattern; there is no close control. TESTNET and RÉEL use FIXED colours (not theme variables): the band
+   reads the same in the light and the dark theme, white text ≥ 4.5 : 1 on every stripe (scripts/contrast.mjs).
+   SIMULATION — dashed blue outline over a dotted ground · TESTNET — crisp violet stripes · RÉEL — solid deep red, hazard edge. */
+.mode-band { position: relative; overflow: hidden; border-radius: 16px; padding: 9px 14px; line-height: 1.25; }
+.mode-band-icon { display: grid; flex: none; height: 24px; width: 24px; place-items: center; border-radius: 8px; background: rgba(255, 255, 255, 0.2); }
+.mode-band[data-tone='paper'] { color: var(--blue); border: 1.5px dashed color-mix(in srgb, var(--blue) 62%, transparent); padding: 7.5px 12.5px;
+  background: radial-gradient(circle at 1.5px 1.5px, color-mix(in srgb, var(--blue) 11%, transparent) 1px, transparent 1.6px) 0 0 / 9px 9px, color-mix(in srgb, var(--blue) 8%, var(--surface)); }
+.mode-band[data-tone='paper'] .mode-band-icon { background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.mode-band[data-tone='testnet'] { color: #fff; background: repeating-linear-gradient(135deg, #5b34c9 0 9px, #6f49dc 9px 18px);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.24), 0 8px 18px -10px rgba(91, 52, 201, 0.8); }
+.mode-band[data-tone='mainnet'] { color: #fff; background: #b3122b; padding-left: 26px;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.18), 0 8px 18px -10px rgba(179, 18, 43, 0.85); }
+.mode-band[data-tone='mainnet']::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 12px; background: repeating-linear-gradient(135deg, #ffd23f 0 6px, #1c0408 6px 12px); box-shadow: 1px 0 0 rgba(0, 0, 0, 0.25); }
+.mode-tag { position: relative; display: inline-flex; flex: none; align-items: center; gap: 4px; overflow: hidden; border-radius: 7px; padding: 2.5px 7px; font-size: 11px; font-weight: 800; line-height: 1.35; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.mode-tag[data-tone='paper'] { color: var(--blue); border: 1px dashed color-mix(in srgb, var(--blue) 62%, transparent); padding: 1.5px 6px; background: color-mix(in srgb, var(--blue) 8%, var(--surface)); }
+.mode-tag[data-tone='testnet'] { color: #fff; background: repeating-linear-gradient(135deg, #5b34c9 0 5px, #6f49dc 5px 10px); }
+.mode-tag[data-tone='mainnet'] { color: #fff; background: #b3122b; padding-left: 12px; }
+.mode-tag[data-tone='mainnet']::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: repeating-linear-gradient(135deg, #ffd23f 0 3px, #1c0408 3px 6px); }
+@media (forced-colors: active) { .mode-band, .mode-tag { border: 2px solid CanvasText; } }
+/* where a figure comes from (venue / wallet / estimate): a quiet outlined word with its icon */
+.src-tag { display: inline-flex; flex: none; align-items: center; gap: 3px; border-radius: 6px; border: 1px solid var(--line); padding: 1px 5px; font-size: 10px; font-weight: 650; line-height: 1.4; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; color: var(--mute); vertical-align: middle; }
+.src-tag[data-source='estimate'] { border-style: dashed; border-color: color-mix(in srgb, var(--mute) 45%, transparent); }
+/* compact stepper of an operation in a list: icon + name per step, the rail only repeats the state */
+.stepbar { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.stepbar > li { min-width: 0; color: var(--mute); }
+.stepbar-rail { display: block; height: 4px; border-radius: 2px; background: var(--elev); }
+.stepbar-name { display: flex; gap: 3px; margin-top: 5px; font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
+.stepbar > li[data-state='done'] { color: var(--ink); } .stepbar > li[data-state='done'] .stepbar-rail { background: var(--emerald); } .stepbar > li[data-state='done'] svg { color: var(--emerald); }
+.stepbar > li[data-state='current'] { color: var(--ink); font-weight: 650; } .stepbar > li[data-state='current'] .stepbar-rail { background: var(--blue); } .stepbar > li[data-state='current'] svg { color: var(--blue); }
+.stepbar > li[data-state='failed'] { color: var(--danger); } .stepbar > li[data-state='failed'] .stepbar-rail { background: var(--danger); }
+/* the big amount of a deposit / withdrawal / GMX collateral: logo, generous numerals, unit */
+.amount-box { display: flex; align-items: center; gap: 12px; border-radius: 22px; border: 1px solid var(--line); background: color-mix(in srgb, var(--elev) 60%, transparent); padding: 12px 16px; transition: border-color 0.14s, box-shadow 0.14s, background-color 0.14s; }
+.amount-box:focus-within { border-color: var(--blue); background: var(--surface); box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 16%, transparent); }
+.amount-box > input { min-width: 0; flex: 1; border: 0; background: transparent; padding: 0; outline: none; font-family: var(--font-display); font-size: 32px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.amount-box > input::placeholder { color: color-mix(in srgb, var(--mute) 60%, transparent); }
+.amount-box.amount-box-sm > input { font-size: 24px; }
+/* a range input with a 44 px thumb area and a visible track (leverage) */
+.lev-range { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 44px; margin: 0; background: transparent; cursor: pointer; }
+.lev-range:disabled { opacity: 0.45; cursor: default; }
+.lev-range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(var(--blue), var(--blue)) 0 / var(--fill, 0%) 100% no-repeat, var(--elev); }
+.lev-range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--elev); }
+.lev-range::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--blue); }
+.lev-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; height: 28px; width: 28px; margin-top: -11px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 0 0 8px transparent, var(--e2); }
+.lev-range::-moz-range-thumb { height: 28px; width: 28px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--e2); }
+[data-theme='dark'] .lev-range::-webkit-slider-thumb { background: #e8ecf4; } [data-theme='dark'] .lev-range::-moz-range-thumb { background: #e8ecf4; }
+.lev-range:focus-visible { outline: none; } .lev-range:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--blue); outline-offset: 2px; } .lev-range:focus-visible::-moz-range-thumb { outline: 2px solid var(--blue); outline-offset: 2px; }
+/* the acknowledgement a passkey approval depends on: a large, plain checkbox row */
+.ack-row { display: flex; min-height: 52px; cursor: pointer; align-items: center; gap: 12px; border-radius: 16px; border: 1.5px solid var(--line); padding: 10px 14px; font-size: 14.5px; font-weight: 600; line-height: 1.3; }
+.ack-row:has(input:checked) { border-color: color-mix(in srgb, var(--emerald) 55%, transparent); background: color-mix(in srgb, var(--emerald) 7%, transparent); }
+.ack-row > input { height: 22px; width: 22px; flex: none; accent-color: var(--blue); }
+/* LiveSheet: the shared Sheet's title row holds its close button with a negative margin; the row is widened to contain it, so
+   that nothing in a live sheet is wider than its box (futures-collateral.spec.ts measures every element of the dialog) */
+.live-sheet { display: contents; }
+.live-sheet .flex.items-start.justify-between:has(> .min-w-0 > h2) { margin-right: -8px; padding-right: 8px; }
+/* ── v10 swap ── (Swap, CCTP bridge, THORChain sheet, plans) ─────────────────────────────────────────────────────────── */
+/* a long technical value of a receipt (fingerprint, transaction id, vault, memo): label above, the WHOLE value below */
+.fact.sw-longfact { display: block; }
+.fact.sw-longfact > dt { max-width: none; }
+.fact.sw-longfact > dd { margin-top: 3px; text-align: left; font-weight: 400; }
+.fact.sw-longfact > dd.sw-longfact-sub { font-size: 12.5px; color: var(--mute); }
+/* timelines of this area: a step "to come" carries planned amounts and fees — it stays fully legible, its state is said by the pill */
+.sw-tl .tl-item[data-state='next'] .tl-body > * { opacity: 1; }
+/* planned vs actual of a finished leg */
+.sw-pva { display: grid; gap: 2px; margin: 0; }
+.sw-pva > div { display: flex; align-items: baseline; gap: 8px; }
+.sw-pva dt { flex: none; min-width: 3.6em; font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); }
+.sw-pva dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+/* what the next passkey approval signs, on the current leg */
+.sw-sign { display: flex; gap: 8px; border: 1px solid color-mix(in srgb, var(--blue) 22%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--blue) 7%, transparent); padding: 10px 12px; font-size: 13px; line-height: 1.4; color: var(--ink); }
+/* the chosen / best route or plan; a comparison-only quote sits flatter */
+.sw-chosen { border-color: transparent; box-shadow: 0 0 0 1.5px var(--primary), var(--card-shadow); }
+.sw-cmp { box-shadow: none; background: color-mix(in srgb, var(--surface) 55%, transparent); }
+.sw-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.sw-stats > div { border-radius: 12px; background: color-mix(in srgb, var(--elev) 60%, transparent); padding: 7px 10px; }
+.sw-stats dt { font-size: 11.5px; color: var(--mute); }
+.sw-stats dd { margin: 0; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.sw-slip button { white-space: nowrap; }
+.sw-pay { transition: box-shadow 0.16s; }
+.sw-pay:focus-within { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--blue) 50%, transparent); }
+.sw-opt-on { box-shadow: inset 0 0 0 1px var(--primary); }
+/* ProgressRing's class is `ring`, which Tailwind also emits as a utility (a 1 px box-shadow): cancelled where this area shows a ring */
+.sw-ring { display: inline-grid; flex: none; }
+.sw-ring > .ring { box-shadow: none; }

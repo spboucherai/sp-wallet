@@ -10,13 +10,27 @@
 // A symbol the registry does not know (a perpetual's base asset, say) keeps a generic letter disc: no logo is ever invented.
 import { useState, useSyncExternalStore } from 'react';
 import { ASSET_ICONS, NETWORK_ICONS, PROVIDER_ICONS, VENUE_ICONS, type IconDef } from './icons.gen';
+import { criticalUrl } from './icons-critical';
 
-// the files arrive once, in their own chunk, requested when the first logo mounts (the lock screen never asks for it);
-// until then a logo shows its skeleton (never the generic fallback)
+// The files arrive in two parts (v10 performance pass):
+//  · the few logos the first screen always shows are in the app's own chunk (icons-critical.ts): painted at once;
+//  · the whole set is ONE lazily loaded chunk (icons-data.ts), asked for when the first logo outside the critical few
+//    mounts — but only once the current paint is done (two frames, then idle), so it never competes with the first
+//    content — or by `prefetchIcons()` when the shell is idle. Until it is there such a logo shows its skeleton (never
+//    the generic fallback). The lock screen asks for nothing.
 let dataUrl: ((file: string) => string | null) | null = null, started = false; const waiting = new Set<() => void>();
-const start = () => { if (started) return; started = true; void import('./icons-data').then((m) => { dataUrl = m.dataUrl; for (const f of waiting) f(); }, () => { dataUrl = () => null; for (const f of waiting) f(); }); };
+const load = () => { void import('./icons-data').then((m) => { dataUrl = m.dataUrl; for (const f of waiting) f(); }, () => { dataUrl = () => null; for (const f of waiting) f(); }); };
+const start = () => {
+  if (started) return; started = true;
+  if (typeof requestAnimationFrame === 'undefined') { load(); return; }
+  const idle: (f: () => void) => void = typeof requestIdleCallback === 'function' ? (f) => { requestIdleCallback(f, { timeout: 1200 }); } : (f) => { setTimeout(f, 120); };
+  requestAnimationFrame(() => requestAnimationFrame(() => idle(load)));
+};
+/** ask for the whole set now if nothing did yet (the shell calls it when idle, so the next screen has its logos) */
+export const prefetchIcons = (): void => { if (!started) { started = true; load(); } };
 const subscribe = (f: () => void) => { start(); waiting.add(f); return () => { waiting.delete(f); }; };
-const useIconsReady = () => useSyncExternalStore(subscribe, () => dataUrl !== null, () => false);
+const subscribeQuiet = (f: () => void) => { waiting.add(f); return () => { waiting.delete(f); }; };   // a critical logo does not need the set
+const useIconsReady = (needed: boolean) => useSyncExternalStore(needed ? subscribe : subscribeQuiet, () => dataUrl !== null, () => false);
 
 /** Does this asset on this network need the network badge? (exported for tests) */
 export function needsBadge(sym: string, net: string | undefined): boolean {
@@ -25,21 +39,25 @@ export function needsBadge(sym: string, net: string | undefined): boolean {
   return !d || !!d.of || d.home !== net;
 }
 
+// the image tells its plate that it is there through attributes, not through React state: a list of 251 assets mounts
+// some 500 logos, and a state update per loaded image re-rendered every one of them a second time
+const shown = (img: HTMLImageElement) => { if (img.dataset.ok !== undefined) return; img.dataset.ok = ''; const plate = img.parentElement; if (plate) { plate.classList.remove('skel'); plate.dataset.loaded = ''; } };
 function Plate({ def, size, letters, title }: { def: IconDef | undefined; size: number; letters: string; title?: string }) {
-  const ready = useIconsReady(); const [state, setState] = useState<'wait' | 'ok' | 'bad'>('wait');
+  const crit = def ? criticalUrl(def.file) : null;
+  const ready = useIconsReady(!!def && !crit); const [bad, setBad] = useState(false);
   const scale = def?.scale ?? 1, px = Math.round(size * scale);
-  if (def && !ready) return <span className="logo-plate skel" title={title} />;
-  const url = def ? dataUrl!(def.file) : null;
-  if (!url || state === 'bad') {
+  if (def && !crit && !ready) return <span className="logo-plate skel" title={title} />;
+  const url = def ? crit ?? dataUrl!(def.file) : null;
+  if (!url || bad) {
     // generic fallback: a neutral disc with the ticker, clearly not a logo
     let hue = 0; for (const ch of letters) hue = (hue * 31 + ch.charCodeAt(0)) % 360;
     return <span className="logo-plate" style={{ background: `hsl(${hue} 22% 46%)`, boxShadow: 'none' }} title={title} data-fallback="">
       <span className="logo-letters" style={{ fontSize: Math.max(8, size * (letters.length > 4 ? 0.21 : letters.length > 3 ? 0.25 : 0.3)) }}>{letters.slice(0, 5)}</span></span>;
   }
   const plate = def!.plate && def!.plate !== 'auto' ? def!.plate : undefined;
-  return <span className={`logo-plate ${state === 'wait' ? 'skel' : ''}`} style={plate ? { background: plate } : scale === 1 && state === 'ok' ? { boxShadow: 'none' } : undefined} title={title}>
-    <img src={url} alt="" width={px} height={px} style={{ width: `${scale * 100}%`, height: `${scale * 100}%` }} decoding="async" draggable={false} data-ok={state === 'ok' ? '' : undefined}
-      ref={(el) => { if (el?.complete && el.naturalWidth > 0 && state === 'wait') setState('ok'); }} onLoad={() => setState('ok')} onError={() => setState('bad')} /></span>;
+  return <span className="logo-plate skel" data-bleed={!plate && scale === 1 ? '' : undefined} style={plate ? { background: plate } : undefined} title={title}>
+    <img src={url} alt="" width={px} height={px} style={{ width: `${scale * 100}%`, height: `${scale * 100}%` }} decoding="async" draggable={false}
+      ref={(el) => { if (el?.complete && el.naturalWidth > 0) shown(el); }} onLoad={(e) => shown(e.currentTarget)} onError={() => setBad(true)} /></span>;
 }
 
 /** A network's real logo. Decorative by default (the name is written next to it); pass `label` where it stands alone. */

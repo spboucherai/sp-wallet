@@ -73,7 +73,7 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
           <button onClick={() => void update({ hideBalances: !hidden })} aria-label={hidden ? t('show') : t('hide')} aria-pressed={hidden} className="press -mr-2.5 grid h-11 w-11 place-items-center rounded-full text-white/75"><Icon n={hidden ? 'eyeOff' : 'eye'} /></button>
         </div>
         <div className="t-display mt-1 text-[clamp(40px,12.6vw,54px)]">
-          {d.prices ? <Money hidden={hidden}><AnimatedNumber value={total} format={(v) => fiat(v, cur, locale)} /></Money> : <span className="text-2xl tracking-normal text-white/60">{t('noPrices')}</span>}
+          {d.prices ? <Money hidden={hidden}><AnimatedNumber value={total} format={(v) => fiat(v, cur, locale)} /></Money> : <span className="text-2xl tracking-normal text-white/60">{t(settings.prices ? 'dzPricesAway' : 'noPrices')}</span>}
         </div>
         <div className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-white/70">
           {dayPct !== null && !hidden && <span className="hero-chip inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold text-white">

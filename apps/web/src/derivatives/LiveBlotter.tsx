@@ -7,9 +7,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useContext, useState } from 'react';
 import { PriceChart } from '../chart';
 import { I18n, useT, type Key } from '../i18n';
-import { Notice } from '../ui';
+import { Icon, Notice, Stat as Tile, StatGrid, Tag } from '../ui';
 import { RISK_CODES } from './api';
-import { DataTable, Pnl, Seg, SideTag, Stat, timeOf, type Col } from './bits';
+import { DataTable, Pnl, Seg, SideTag, timeOf, type Col } from './bits';
 import { D, dec, dpOf, fmt, pct, priceDp, usd } from './dec';
 import { ApprovalSheet } from './LiveApproval';
 import { LiveErrNotice, LiveStatePill, ModeTag, SourceTag } from './LiveBits';
@@ -19,7 +19,7 @@ import type { BlotterTab } from './Blotter';
 import type { Fill, Instrument, Order, Position } from './types';
 
 const sym = (id: string) => id.slice(id.indexOf(':') + 1);
-const mini = 'inline-flex min-h-11 min-w-11 shrink-0 whitespace-nowrap items-center justify-center rounded-xl border border-line px-2.5 text-[12.5px] font-semibold text-ink transition hover:bg-elev disabled:opacity-45';
+const mini = 'press inline-flex min-h-11 min-w-11 shrink-0 whitespace-nowrap items-center justify-center rounded-xl border border-line px-3 text-[13px] font-semibold text-ink hover:bg-elev disabled:opacity-45';
 /** a resting order as the venue lists it, with the wallet's own record of it when the wallet placed it */
 interface Resting { o: Order; ours: LiveOrder | null }
 
@@ -66,7 +66,7 @@ export function LiveBlotter({ account, detail, instruments, ttlMs, onSelect }: {
     { id: 'filled', label: t('fxFilled'), num: true, cell: ({ o }) => sz(o.instrument, o.filled) },
     { id: 'price', label: t('fxPrice'), num: true, cell: ({ o }) => px(o.instrument, o.price) },
     { id: 'trig', label: t('fxTriggerPrice'), num: true, cell: ({ o }) => px(o.instrument, o.triggerPrice) },
-    { id: 'st', label: t('fxStatus'), cell: ({ ours }) => (ours ? <LiveStatePill state={ours.state} /> : <span className="inline-flex rounded-full bg-danger/10 px-2 py-0.5 text-[11.5px] font-semibold text-danger">{t('flForeign')}</span>) },
+    { id: 'st', label: t('fxStatus'), cell: ({ ours }) => (ours ? <LiveStatePill state={ours.state} /> : <Tag tone="danger" icon="warn">{t('flForeign')}</Tag>) },
     { id: 'at', label: t('fxTime'), cell: ({ o }) => <span className="text-mute">{timeOf(o.createdAt, locale, true)}</span> },
     { id: 'x', label: '', cell: ({ o, ours }) => (ours ? <button type="button" disabled={!!busy || !canAct} className={mini} onClick={() => void cancel(ours)} aria-label={t('fxCancelAria', { symbol: sym(o.instrument) })}>{t('fxCancelOrder')}</button>
       : <span className="block max-w-[260px] whitespace-normal text-[11.5px] leading-snug text-mute">{t('flForeignHint')}</span>) },
@@ -85,7 +85,7 @@ export function LiveBlotter({ account, detail, instruments, ttlMs, onSelect }: {
   ];
   const fillCols: Col<Fill>[] = [
     { id: 'm', label: t('fxMarket'), head: true, cell: (f) => market(f.instrument) },
-    { id: 'side', label: t('fxSideCol'), head: true, cell: (f) => <><SideTag side={f.side} />{f.liquidation && <span className="ml-2 rounded-full bg-danger/10 px-2 py-0.5 text-[11.5px] font-semibold text-danger">{t('fxLiquidation')}</span>}</> },
+    { id: 'side', label: t('fxSideCol'), head: true, cell: (f) => <><SideTag side={f.side} />{f.liquidation && <span className="ml-2"><Tag tone="danger" icon="warn">{t('fxLiquidation')}</Tag></span>}</> },
     { id: 'price', label: t('fxPrice'), num: true, cell: (f) => px(f.instrument, f.price) },
     { id: 'size', label: t('fxSize'), num: true, cell: (f) => sz(f.instrument, f.size) },
     { id: 'fee', label: t('fxFee'), num: true, cell: (f) => `${fmt(f.fee, { dp: 4, locale })} ${f.feeAsset}` },
@@ -115,12 +115,12 @@ export function LiveBlotter({ account, detail, instruments, ttlMs, onSelect }: {
           { id: 'fills', label: t('fxFills') }, { id: 'funding', label: t('fxFunding') }, { id: 'pnl', label: t('fxPnl') }, { id: 'risk', label: `${t('fxRiskEvents')}${n(detail?.riskEvents.length ?? 0)}` }]} />
         <ModeTag tone={tone} className="hidden sm:inline-flex" />
       </div>
-      {st?.error && <div className="mb-3"><Notice tone="danger">{t('flUnreadable')} <span className="break-words font-mono text-[11.5px] text-mute">{st.error}</span></Notice></div>}
+      {st?.error && <div className="mb-3"><Notice tone="danger">{t('flUnreadable')} <span className="mt-1 block break-words font-mono text-[11.5px] text-mute">{st.error}</span></Notice></div>}
       {flying.length > 0 && <div className="mb-3"><Notice tone="warn"><div data-testid="in-flight">{t('flInFlight', { n: flying.length })}</div></Notice></div>}
       {err && <div className="mb-3"><LiveErrNotice err={err} /></div>}
       {note && <div className="mb-3"><Notice tone="warn">{note}</Notice></div>}
       <div role="tabpanel" aria-label={t('fxBlotter')}>
-        {(tab === 'positions' || tab === 'orders') && !st?.error && <p className="mb-2 flex items-center gap-1.5 text-[11.5px] text-mute"><SourceTag />{st ? t('flReadAt', { time: timeOf(st.ts, locale) }) : t('fxLoading')}</p>}
+        {(tab === 'positions' || tab === 'orders') && !st?.error && <p className="mb-2.5 flex flex-wrap items-center gap-1.5 text-[12px] text-mute"><SourceTag />{st ? t('flReadAt', { time: timeOf(st.ts, locale) }) : t('fxLoading')}</p>}
         {tab === 'positions' && !st?.error && <DataTable label={t('fxPositions')} cols={posCols} rows={positions} rowKey={(p) => p.instrument} empty={t('fxNoPositions')} />}
         {tab === 'orders' && !st?.error && <DataTable label={t('fxOpenOrders')} cols={restCols} rows={resting} rowKey={({ o }) => o.venueOrderId ?? o.clientId} empty={t('fxNoOpenOrders')} />}
         {tab === 'history' && <DataTable label={t('fxOrderHistory')} cols={histCols} rows={orders} rowKey={(o) => o.clientId} empty={t('fxNoHistory')} />}
@@ -128,12 +128,12 @@ export function LiveBlotter({ account, detail, instruments, ttlMs, onSelect }: {
         {tab === 'funding' && <DataTable label={t('fxFunding')} cols={fundCols} rows={detail?.funding ?? []} rowKey={(f) => `${f.instrument}${f.ts}`} empty={t('fxNoFunding')} />}
         {tab === 'risk' && <DataTable label={t('fxRiskEvents')} cols={evCols} rows={detail?.riskEvents ?? []} rowKey={(e) => e.id} empty={t('fxNoRiskEvents')} />}
         {tab === 'pnl' && <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label={t('fxEquity')}>{usd(state?.equity, locale)}</Stat><Stat label={t('fxCollateral')}>{usd(state?.collateral, locale)}</Stat>
-            <Stat label={t('fxUnrealized')}><Pnl value={D.str(unreal)} locale={locale} /></Stat><Stat label={t('fxWithdrawable')}>{usd(state?.withdrawable, locale)}</Stat></div>
+          <StatGrid cols={4}>
+            <Tile label={t('fxEquity')} value={usd(state?.equity, locale)} /><Tile label={t('fxCollateral')} value={usd(state?.collateral, locale)} />
+            <Tile label={t('fxUnrealized')} value={<Pnl value={D.str(unreal)} locale={locale} />} /><Tile label={t('fxWithdrawable')} value={usd(state?.withdrawable, locale)} /></StatGrid>
           {eq.length >= 2 ? <PriceChart points={eq.map((p) => ({ t: p.ts, p: Number(p.equity) }))} format={(v) => usd(v.toFixed(2), locale)} formatTime={(ts) => timeOf(ts, locale, true)} />
-            : <p className="py-8 text-center text-[13.5px] text-mute">{t('fxNoEquity')}</p>}
-          <p className="flex items-center gap-1.5 text-[12px] leading-snug text-mute"><SourceTag />{t('flPnlNote')}</p>
+            : <div className="flex items-center gap-3 rounded-[18px] bg-elev/50 px-4 py-4 text-[13.5px] text-mute"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface"><Icon n="chart" className="h-[18px] w-[18px]" /></span><span className="min-w-0">{t('fxNoEquity')}</span></div>}
+          <p className="flex items-start gap-1.5 text-[12px] leading-snug text-mute"><SourceTag /><span className="min-w-0">{t('flPnlNote')}</span></p>
         </div>}
       </div>
       {closing && <ApprovalSheet account={a} instrument={instruments.get(closing.position.instrument)} request={{ kind: 'close', position: closing.position, fraction: closing.fraction }} orders={orders} ttlMs={ttlMs} onClose={() => setClosing(null)} />}

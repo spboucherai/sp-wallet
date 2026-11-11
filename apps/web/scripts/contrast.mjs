@@ -16,3 +16,16 @@ for (const [name, t] of Object.entries(T)) {
   rows.push(['hero text (white 70 %) on hero base #0a0e19', ratio(mix([255, 255, 255], hex('#0a0e19'), 0.7), hex('#0a0e19'))]);
   console.log(name); for (const [k, v] of rows) console.log(`  ${v < 4.5 ? (v < 3 ? 'FAIL' : 'AA-large only') : 'AA'}  ${v.toFixed(2)}  ${k}`);
 }
+// v10 futures-live — the mode bands (styles.css `.mode-band`, `.mode-tag`). TESTNET and RÉEL use FIXED colours, the same in
+// both themes: white text on each stripe of the testnet pattern and on the real-money red. SIMULATION is the theme's blue on
+// its own 8 % wash (dotted ground: the dots are 11 % blue over that wash — the worst case under a letter).
+{
+  const white = [255, 255, 255], rows = [
+    ['band TESTNET: white on stripe #5b34c9', ratio(white, hex('#5b34c9'))], ['band TESTNET: white on stripe #6f49dc', ratio(white, hex('#6f49dc'))],
+    ['band RÉEL: white on #b3122b', ratio(white, hex('#b3122b'))],
+  ];
+  for (const [name, t] of Object.entries(T)) { const wash = mix(hex(t.blue), hex(t.surface), 0.08);
+    rows.push([`band SIMULATION (${name}): blue on its 8 % wash`, ratio(hex(t.blue), wash)], [`band SIMULATION (${name}): blue on a dot of the ground`, ratio(hex(t.blue), mix(hex(t.blue), wash, 0.11))]); }
+  console.log('mode bands (fixed colours)'); for (const [k, v] of rows) console.log(`  ${v < 4.5 ? (v < 3 ? 'FAIL' : 'AA-large only') : 'AA'}  ${v.toFixed(2)}  ${k}`);
+  if (rows.some(([k, v]) => v < 4.5)) { console.error('a mode band is below 4.5 : 1'); process.exitCode = 1; }
+}

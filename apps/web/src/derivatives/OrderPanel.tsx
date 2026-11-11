@@ -3,13 +3,15 @@
  * server's preview (risk verdict + estimates) and, after a confirmation sheet, sends the order to the paper engine. There is no
  * live path in this file: a venue account gets `LiveOrderPanel` instead. The panel reads the mark from the store when it needs
  * it; it does not re-render on every tick.
+ * v10: the preview and the confirmation are receipts (`Fact` rows, every value whole); the confirmation is the shared sheet as an
+ * APPROVAL sheet — it closes only through its two buttons, and the figures on it are never animated.
  */
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { errText, I18n, useT, type Key } from '../i18n';
-import { Btn, Field, inputCls, Notice } from '../ui';
+import { Btn, Fact, Field, Icon, inputCls, Notice, Sheet, VenueIcon } from '../ui';
 import { dapi, paperAllowed, riskRefusal } from './api';
-import { PaperTag, Row, Seg, ServerSays, Sheet, SideTag, VENUE_NAME } from './bits';
+import { Empty, PaperTag, Seg, ServerSays, SideTag, VENUE_NAME } from './bits';
 import { D, dec, dpOf, fmt, onTick, parseInput, priceDp, usd, usdToSize, worstPrice, type Dec } from './dec';
 import { clearPaperPrefill, peekPaperPrefill } from './routerApi';
 import { amountInputText, amountLocale } from '../amount';
@@ -52,7 +54,7 @@ const num = (s: string) => s.replace(/[^0-9.,\s ]/g, '');
 export function RiskVerdict({ code, reason }: { code: string; reason: string }) {
   const t = useT();
   const known = t(`rk_${code}` as Key), text = known === `${code}`.replace(/_/g, ' ') || known.startsWith('rk ') ? t('rk_unknown') : known;
-  return <Notice tone="danger"><div data-testid="risk-refusal"><b className="font-semibold">{t('fxRefused')}</b> {text}{reason && <span className="mt-1 block break-words font-mono text-[11.5px] text-mute">{code} — {reason}</span>}</div></Notice>;
+  return <Notice tone="danger"><div data-testid="risk-refusal"><b className="block font-semibold">{t('fxRefused')}</b> {text}{reason && <span className="mt-1.5 block break-words font-mono text-[11.5px] leading-snug text-mute">{code} — {reason}</span>}</div></Notice>;
 }
 
 export function OrderPanel({ store, instrument, account, accounts, venue, onAccount, goAccounts, switcher }: { store: MarketStore; instrument: Instrument; account: DerivAccount | null; accounts: DerivAccount[]; venue: VenueInfo | undefined; onAccount: (id: string) => void; goAccounts: () => void;
@@ -108,17 +110,18 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
   };
 
   // ---- cases where nothing can be simulated: say why, offer nothing that pretends
+  const title = <div className="flex items-center justify-between gap-2"><h3 className="text-[17px] font-semibold tracking-[-0.015em]">{t('fxOrder')}</h3><PaperTag /></div>;
   if (!paperAllowed(venue)) return (
     <div className="space-y-3" data-testid="order-panel">
-      <h3 className="text-[15px] font-semibold">{t('fxOrder')}</h3>
+      {title}
+      <div className="flex items-center gap-2.5 text-[13.5px] font-semibold"><VenueIcon venue={instrument.venue} size={28} />{VENUE_NAME[instrument.venue] ?? instrument.venue}</div>
       <Notice tone="warn">{t(instrument.venue === 'dydx' ? 'fxNoPaper_dydx' : instrument.venue === 'gmx' ? 'fxNoPaper_gmx' : 'fxNoPaper_other', { venue: VENUE_NAME[instrument.venue] ?? instrument.venue })}
         {venue?.restriction && <ServerSays text={venue.restriction} className="mt-1.5 text-[12px] text-mute" />}</Notice>
     </div>);
   if (!account) return (
-    <div className="space-y-3" data-testid="order-panel">
-      <h3 className="text-[15px] font-semibold">{t('fxOrder')}</h3>
-      <Notice tone="info">{t('fxNoAccount', { venue: VENUE_NAME[instrument.venue] })}</Notice>
-      <Btn full kind="soft" onClick={goAccounts}>{t('fxCreateAccount')}</Btn>
+    <div data-testid="order-panel">
+      {title}
+      <Empty icon="chart" title={t('dzFxNoAccountTitle')} action={<Btn kind="soft" onClick={goAccounts}><Icon n="plus" className="h-4 w-4" />{t('fxCreateAccount')}</Btn>}>{t('fxNoAccount', { venue: VENUE_NAME[instrument.venue] })}</Empty>
     </div>);
 
   const est = preview?.estimate ?? null, refused = preview && preview.risk && preview.risk.ok === false ? preview.risk : null;
@@ -129,37 +132,41 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
   const long = f.side === 'buy';
   const sizeNote = built.body ? `${fmt(built.body.size, { dp: sdp, locale, trim: true })} ${instrument.base}${built.ref ? ` ≈ ${usd(D.mul(D.from(built.body.size), built.ref), locale)}` : ''}` : null;
   const sideLabel = (s: 'buy' | 'sell') => <span className="inline-flex items-center gap-1.5"><svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden="true"><path d={s === 'buy' ? 'M6 2l4.5 7h-9z' : 'M6 10L1.5 3h9z'} fill="currentColor" /></svg>{t(s === 'buy' ? 'fxLong' : 'fxShort')}</span>;
-  const check = (on: boolean, onChange: (v: boolean) => void, label: string, hint?: string) => <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[13.5px]"><input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} className="h-5 w-5 shrink-0 accent-[var(--blue)]" /><span>{label}{hint && <span className="block text-[11.5px] text-mute">{hint}</span>}</span></label>;
+  // the two directions as filled colours whose text is the token's own "on" colour: AA in the light and in the dark theme
+  const sideFill = (s: 'buy' | 'sell') => (s === 'buy' ? 'border-emerald bg-emerald text-onprimary' : 'border-danger bg-danger text-[var(--ondanger)]');
+  const check = (on: boolean, onChange: (v: boolean) => void, label: string, hint?: string) => <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[14px]"><input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} className="h-5 w-5 shrink-0 accent-[var(--blue)]" /><span className="min-w-0 leading-snug">{label}{hint && <span className="block text-[12px] text-mute">{hint}</span>}</span></label>;
   const summary = built.body && <>
-    <Row label={t('fxDirection')}><SideTag side={long ? 'long' : 'short'} /></Row>
-    <Row label={t('fxOrderType')}>{t(`fxKind_${f.kind}` as Key)}{f.reduceOnly ? ` · ${t('fxReduceOnly')}` : ''}{built.body.tif === 'alo' ? ` · ${t('fxPostOnly')}` : ''}</Row>
-    <Row label={t('fxSize')}>{sizeNote}</Row>
-    {f.kind === 'limit' && <Row label={t('fxLimitPrice')}>{fmt(built.body.price, { dp: pdp, locale })}</Row>}
-    {built.body.triggerPrice && <Row label={t('fxTriggerPrice')}>{fmt(built.body.triggerPrice, { dp: pdp, locale })}</Row>}
-    {marketLike && <Row label={t('fxWorstPrice')}>{fmt(built.body.price ?? est?.price ?? preview?.request?.price ?? null, { dp: pdp, locale })}</Row>}
-    <Row label={t('fxLeverage')}>{lev}×</Row>
-    {built.sl && <Row label={t('fxStopLoss')}>{fmt(D.str(built.sl), { dp: pdp, locale })}</Row>}
-    {built.tp && <Row label={t('fxTakeProfit')}>{fmt(D.str(built.tp), { dp: pdp, locale })}</Row>}
+    <Fact k={t('fxDirection')}><SideTag side={long ? 'long' : 'short'} /></Fact>
+    <Fact k={t('fxOrderType')}>{t(`fxKind_${f.kind}` as Key)}{f.reduceOnly ? ` · ${t('fxReduceOnly')}` : ''}{built.body.tif === 'alo' ? ` · ${t('fxPostOnly')}` : ''}</Fact>
+    <Fact k={t('fxSize')}>{sizeNote}</Fact>
+    {f.kind === 'limit' && <Fact k={t('fxLimitPrice')}>{fmt(built.body.price, { dp: pdp, locale })}</Fact>}
+    {built.body.triggerPrice && <Fact k={t('fxTriggerPrice')}>{fmt(built.body.triggerPrice, { dp: pdp, locale })}</Fact>}
+    {marketLike && <Fact k={t('fxWorstPrice')}>{fmt(built.body.price ?? est?.price ?? preview?.request?.price ?? null, { dp: pdp, locale })}</Fact>}
+    <Fact k={t('fxLeverage')}>{lev}×</Fact>
+    {built.sl && <Fact k={t('fxStopLoss')}>{fmt(D.str(built.sl), { dp: pdp, locale })}</Fact>}
+    {built.tp && <Fact k={t('fxTakeProfit')}>{fmt(D.str(built.tp), { dp: pdp, locale })}</Fact>}
   </>;
   const estimates = est && <>
-    <Row label={t('fxNotional')}>{usd(est.notional, locale)}</Row>
-    <Row label={t('fxInitialMargin')}>{usd(est.initialMargin, locale)}</Row>
-    <Row label={t('fxFee')}>{usd(est.fee, locale)}</Row>
-    <Row label={t('fxAvgPrice')}>{est.avgFillPrice ? fmt(est.avgFillPrice, { dp: pdp, locale }) : '—'}</Row>
-    <Row label={t('fxSlippage')}>{est.slippageBps ? `${fmt(est.slippageBps, { dp: 1, locale, sign: true })} ${t('fxBps')}` : '—'}</Row>
-    <Row label={<>{t('fxLiqPrice')} <em className="not-italic text-warn">({t('estimate')})</em></>}>{est.liquidationPrice?.value ? fmt(est.liquidationPrice.value, { dp: pdp, locale }) : '—'}</Row>
-    <Row label={t('fxFreeAfter')}>{usd(est.freeCollateralAfter, locale)}</Row>
+    <Fact k={t('fxNotional')}>{usd(est.notional, locale)}</Fact>
+    <Fact k={t('fxInitialMargin')}>{usd(est.initialMargin, locale)}</Fact>
+    <Fact k={t('fxFee')}>{usd(est.fee, locale)}</Fact>
+    <Fact k={t('fxAvgPrice')}>{est.avgFillPrice ? fmt(est.avgFillPrice, { dp: pdp, locale }) : '—'}</Fact>
+    <Fact k={t('fxSlippage')}>{est.slippageBps ? `${fmt(est.slippageBps, { dp: 1, locale, sign: true })} ${t('fxBps')}` : '—'}</Fact>
+    <Fact k={<>{t('fxLiqPrice')} <em className="not-italic text-warn">({t('estimate')})</em></>}>{est.liquidationPrice?.value ? fmt(est.liquidationPrice.value, { dp: pdp, locale }) : '—'}</Fact>
+    <Fact k={t('fxFreeAfter')}>{usd(est.freeCollateralAfter, locale)}</Fact>
   </>;
 
   return (
-    <div className="space-y-3.5" data-testid="order-panel">
-      <div className="flex items-center justify-between gap-2"><h3 className="text-[15px] font-semibold">{t('fxOrder')}</h3><PaperTag /></div>
-      <div className="rounded-2xl bg-elev/70 p-3">
+    <div className="space-y-4" data-testid="order-panel">
+      {title}
+      <div className="rounded-2xl bg-elev/70 px-3.5 py-3">
         {switcher ?? (accounts.length > 1
           ? <label className="block text-[12px] text-mute">{t('fxAccount')}<select aria-label={t('fxAccount')} value={account.id} onChange={(e) => onAccount(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-line bg-surface px-3 text-[14px] text-ink">{accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}</select></label>
-          : <div className="truncate text-[13px] font-semibold">{account.label}</div>)}
-        <div className="mt-1.5 flex items-baseline justify-between text-[12.5px]"><span className="text-mute">{t('fxFreeCollateral')}</span><span className="font-semibold" data-testid="free-collateral">{usd(account.state.freeCollateral, locale)}</span></div>
-        <div className="flex items-baseline justify-between text-[12.5px]"><span className="text-mute">{t('fxEquity')}</span><span className="font-medium">{usd(account.state.equity, locale)}</span></div>
+          : <div className="flex items-center gap-2 text-[13.5px] font-semibold"><VenueIcon venue={instrument.venue} size={20} /><span className="truncate">{account.label}</span></div>)}
+        <dl className="fx-facts mt-1.5">
+          <Fact k={t('fxFreeCollateral')} testid="free-collateral">{usd(account.state.freeCollateral, locale)}</Fact>
+          <Fact k={t('fxEquity')}>{usd(account.state.equity, locale)}</Fact>
+        </dl>
       </div>
       {account.policy.halt && <Notice tone="danger">{t('fxHalted')} <span className="font-mono text-[12px]">{account.policy.halt}</span></Notice>}
       {instrument.status !== 'active' && <Notice tone="warn">{t(instrument.status === 'halted' ? 'fxInstHalted' : 'fxInstReduceOnly')}</Notice>}
@@ -168,7 +175,7 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
 
       <div role="radiogroup" aria-label={t('fxDirection')} className="grid grid-cols-2 gap-2">
         {(['buy', 'sell'] as const).map((s) => <button key={s} type="button" role="radio" aria-checked={f.side === s} onClick={() => set({ side: s })}
-          className={`min-h-12 rounded-2xl border text-[15px] font-semibold transition ${f.side === s ? (s === 'buy' ? 'border-emerald bg-emerald text-white' : 'border-danger bg-danger text-white') : 'border-line text-mute hover:text-ink'}`}>{sideLabel(s)}</button>)}
+          className={`press min-h-[50px] rounded-2xl border text-[15.5px] font-semibold ${f.side === s ? sideFill(s) : 'border-line bg-surface text-mute hover:text-ink'}`}>{sideLabel(s)}</button>)}
       </div>
       <Seg size="sm" label={t('fxOrderType')} value={f.kind} onChange={(kind) => set({ kind })} options={(['market', 'limit', 'stop', 'tp'] as const).map((k) => ({ id: k, label: t(`fxKindShort_${k}` as Key), aria: t(`fxKind_${k}` as Key) }))} />
 
@@ -176,31 +183,32 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
       {(f.kind === 'stop' || f.kind === 'tp') && <Field label={`${t('fxTriggerPrice')} (${instrument.quote})`} hint={t(f.kind === 'stop' ? 'fxStopHint' : 'fxTpHint')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.trigger} onChange={(e) => set({ trigger: num(e.target.value) })} /><AmountProblem ambiguousOnly text={f.trigger} /></Field>}
       <Field label={t('fxSize')} hint={sizeNote ?? (built.problem ? <span className="text-danger">{t(built.problem)}</span> : t('fxSizeHint', { lot: fmt(instrument.lotSize, { locale, trim: true }), base: instrument.base }))}>
         <div className="flex gap-2">
-          <input className={`${inputCls} min-w-0 flex-1`} inputMode="decimal" autoComplete="off" aria-label={t('fxSize')} value={f.size} placeholder="0" onChange={(e) => set({ size: num(e.target.value) })} />
+          <input className={`${inputCls} min-w-0 flex-1 text-[17px] font-semibold`} inputMode="decimal" autoComplete="off" aria-label={t('fxSize')} value={f.size} placeholder="0" onChange={(e) => set({ size: num(e.target.value) })} />
           <Seg size="sm" label={t('fxSizeUnit')} value={f.unit} onChange={(unit) => set({ unit, size: '' })} options={[{ id: 'usd', label: 'USD' }, { id: 'base', label: instrument.base.slice(0, 6) }]} className="shrink-0" />
         </div>
         <AmountProblem ambiguousOnly text={f.size} />
       </Field>
       <div>
-        <div className="mb-1 flex items-baseline justify-between text-[13px]"><label htmlFor="fx-lev" className="text-mute">{t('fxLeverage')}</label><span className="font-semibold">{lev}×</span></div>
+        <div className="flex items-baseline justify-between"><label htmlFor="fx-lev" className="text-[13px] font-medium text-mute">{t('fxLeverage')}</label><span className="t-num text-[19px]">{lev}×</span></div>
         <input id="fx-lev" type="range" min={1} max={maxLev} step={1} value={lev} disabled={maxLev <= 1} onChange={(e) => set({ lev: Number(e.target.value) })} className="h-11 w-full accent-[var(--blue)]" aria-valuetext={`${lev}×`} />
-        <p className="text-[11.5px] leading-snug text-mute">{t('fxLeverageBounds', { policy: fmt(account.policy.maxLeverage, { locale, trim: true }), venue: fmt(instrument.maxLeverage, { locale, trim: true }) })}</p>
+        <p className="text-[12px] leading-snug text-mute">{t('fxLeverageBounds', { policy: fmt(account.policy.maxLeverage, { locale, trim: true }), venue: fmt(instrument.maxLeverage, { locale, trim: true }) })}</p>
       </div>
       <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2 xl:grid-cols-1">
         {check(f.reduceOnly, (reduceOnly) => set({ reduceOnly }), t('fxReduceOnly'), t('fxReduceOnlyHint'))}
         {f.kind === 'limit' && check(f.postOnly, (postOnly) => set({ postOnly }), t('fxPostOnly'), t('fxPostOnlyHint'))}
       </div>
-      {f.kind === 'market' && !f.reduceOnly && <fieldset className="rounded-2xl border border-line p-3"><legend className="px-1 text-[12.5px] text-mute">{t('fxAttached')}</legend>
+      {f.kind === 'market' && !f.reduceOnly && <div role="group" aria-label={t('fxAttached')} className="border-t border-line pt-3.5"><div className="t-eyebrow mb-2">{t('fxAttached')}</div>
         <div className="grid grid-cols-2 gap-2">
           <Field label={t('fxStopLoss')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.sl} onChange={(e) => set({ sl: num(e.target.value) })} /><AmountProblem ambiguousOnly text={f.sl} /></Field>
           <Field label={t('fxTakeProfit')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.tp} onChange={(e) => set({ tp: num(e.target.value) })} /><AmountProblem ambiguousOnly text={f.tp} /></Field>
-        </div><p className="mt-1.5 text-[11.5px] leading-snug text-mute">{t('fxAttachedHint')}</p></fieldset>}
-      {marketLike && <p className="text-[11.5px] leading-snug text-mute">{t('fxSlippageNote', { pct: fmt(String(SLIPPAGE_BPS / 100), { locale, trim: true }) })}</p>}
+        </div><p className="mt-1.5 text-[12px] leading-snug text-mute">{t('fxAttachedHint')}</p></div>}
+      {marketLike && <p className="text-[12px] leading-snug text-mute">{t('fxSlippageNote', { pct: fmt(String(SLIPPAGE_BPS / 100), { locale, trim: true }) })}</p>}
 
-      {built.body && <div className="rounded-2xl border border-line p-3" aria-live="polite" data-testid="preview">
-        <div className="mb-1 flex items-center justify-between"><span className="text-[12.5px] font-semibold">{t('fxPreview')}</span><PaperTag /></div>
-        {est ? estimates : <p className="py-2 text-[12.5px] text-mute">{pv.isError ? t('fxPreviewError') : t('fxLoading')}</p>}
-        {est && <p className="mt-1 text-[11.5px] leading-snug text-mute">{t('fxEstimateNote')}{est.liquidationPrice?.method ? <span className="block">{t('fxMethod')} {est.liquidationPrice.method}</span> : null}</p>}
+      {built.body && <div className="rounded-2xl border border-line px-3.5 pb-3 pt-2.5" aria-live="polite" data-testid="preview">
+        <div className="flex min-h-7 items-center justify-between gap-2"><span className="t-eyebrow">{t('fxPreview')}</span><PaperTag /></div>
+        {est ? <dl className="fx-facts">{estimates}</dl> : pv.isError ? <p className="py-2 text-[13px] text-mute">{t('fxPreviewError')}</p>
+          : <div className="space-y-3 py-2.5" role="status" aria-label={t('fxLoading')}>{[62, 48, 40, 56].map((w) => <div key={w} className="flex justify-between gap-6" aria-hidden="true"><div className="skel h-3.5 !rounded-md" style={{ width: `${w}%` }} /><div className="skel h-3.5 w-16 !rounded-md" /></div>)}</div>}
+        {est && <p className="mt-1.5 text-[12px] leading-snug text-mute">{t('fxEstimateNote')}{est.liquidationPrice?.method ? <span className="block">{t('fxMethod')} {est.liquidationPrice.method}</span> : null}</p>}
       </div>}
       {refused && (allowed || refused.code !== 'instrument_not_allowed') && <RiskVerdict code={refused.code} reason={refused.reason} />}
       {wouldReject !== null && <Notice tone="warn"><div data-testid="would-reject">{t('fxWouldReject')}{wouldReject && <span className="mt-1 block break-words font-mono text-[11.5px] text-mute">{wouldReject}</span>}</div></Notice>}
@@ -211,18 +219,17 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
         {done.extra.map((x) => <span key={x} className="mt-1 block text-warn">{x}</span>)}</div></Notice>}
 
       <button type="button" disabled={!built.body || !!refused || wouldReject !== null || !preview || instrument.status === 'halted'} onClick={() => setConfirm(true)}
-        className={`inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl px-5 text-[15.5px] font-semibold text-white transition active:scale-[0.98] disabled:opacity-45 ${long ? 'bg-emerald' : 'bg-danger'}`}>
+        className={`press inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl border px-5 text-[15.5px] font-semibold disabled:opacity-45 ${sideFill(f.side)}`}>
         {sideLabel(f.side)}<span>· {t('fxReview', { base: instrument.base })}</span></button>
-      <p className="text-center text-[11.5px] text-mute">{t('fxPaperOnly')}</p>
+      <p className="text-center text-[12px] text-mute">{t('fxPaperOnly')}</p>
 
-      {confirm && built.body && <Sheet title={t('fxConfirmTitle')} onClose={() => !busy && setConfirm(false)}>
-        <div className="space-y-3">
-          <div className="flex items-center gap-2"><PaperTag /><span className="text-[13px] text-mute">{account.label} · {VENUE_NAME[instrument.venue]} · {instrument.symbol}</span></div>
-          <div className="rounded-2xl bg-elev/70 p-3">{summary}</div>
-          {est && <div className="rounded-2xl border border-line p-3">{estimates}</div>}
+      {confirm && built.body && <Sheet dismissable={false} busy={busy} title={t('fxConfirmTitle')} onClose={() => setConfirm(false)}
+        sub={<span className="flex flex-wrap items-center gap-2"><PaperTag /><span>{account.label} · {VENUE_NAME[instrument.venue]} · {instrument.symbol}</span></span>}
+        footer={<div className="space-y-2 pb-2"><Btn full busy={busy} onClick={() => void submit()}>{t('fxConfirm')}</Btn><Btn full kind="ghost" disabled={busy} onClick={() => setConfirm(false)}>{t('cancel')}</Btn></div>}>
+        <div className="space-y-3 pt-1">
+          <dl className="receipt fx-receipt rounded-2xl bg-elev/70 px-4 py-1">{summary}</dl>
+          {est && <dl className="fx-receipt rounded-2xl border border-line px-4 py-1">{estimates}</dl>}
           <Notice tone="info">{t('fxConfirmNote')}</Notice>
-          <Btn full busy={busy} onClick={() => void submit()}>{t('fxConfirm')}</Btn>
-          <Btn full kind="ghost" disabled={busy} onClick={() => setConfirm(false)}>{t('cancel')}</Btn>
         </div>
       </Sheet>}
     </div>

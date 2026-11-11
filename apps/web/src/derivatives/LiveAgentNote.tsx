@@ -15,9 +15,9 @@ export function AgentOnAccount({ account }: { account: Pick<LiveSummary, 'mandat
   if (!m || !on) return null;
   const name = agents.data?.agents.find((a) => a.id === m.agentId)?.name ?? m.agentId;
   return <Notice tone="warn"><div data-testid="agent-on-account" data-phase={m.phase}>
-    <b className="flex items-center gap-1.5 font-semibold"><Icon n="key" className="h-4 w-4 shrink-0" />{t('plUsedBy', { name })}</b>
-    <span className="mt-0.5 block text-[12.5px]">{t(m.phase === 'active' ? 'plMandateOn' : 'plMandateWinding')}</span>
-    {m.phase === 'active' && <span className="mt-1 block text-[12.5px] leading-snug">{t('plManualWarn')}</span>}
-    <a href={`/agents/${encodeURIComponent(m.agentId)}`} className="mt-1 inline-flex min-h-9 items-center gap-1 text-[13px] font-semibold underline">{t('plUsedByOpen')}<Icon n="chev" className="h-3.5 w-3.5" /></a>
+    <b className="flex items-start gap-1.5 font-semibold"><Icon n="robot" className="mt-0.5 h-4 w-4 shrink-0" />{t('plUsedBy', { name })}</b>
+    <span className="mt-0.5 block text-[13px]">{t(m.phase === 'active' ? 'plMandateOn' : 'plMandateWinding')}</span>
+    {m.phase === 'active' && <span className="mt-1 block text-[13px] leading-snug">{t('plManualWarn')}</span>}
+    <a href={`/agents/${encodeURIComponent(m.agentId)}`} className="mt-1 inline-flex min-h-11 items-center gap-1 text-[13.5px] font-semibold underline underline-offset-2">{t('plUsedByOpen')}<Icon n="chev" className="h-3.5 w-3.5" /></a>
   </div></Notice>;
 }

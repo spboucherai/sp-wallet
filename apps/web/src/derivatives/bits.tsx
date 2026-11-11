@@ -22,8 +22,8 @@ export function PaperTag({ className = '' }: { className?: string }) {
 export const VENUE_NAME: Record<VenueId, string> = { hyperliquid: 'Hyperliquid', dydx: 'dYdX v4', gmx: 'GMX v2' };
 const VENUE_DOT: Record<VenueId, string> = { hyperliquid: '#1f9e8f', dydx: '#6966ff', gmx: '#2d6be0' };
 export function VenueBadge({ venue, className = '' }: { venue: VenueId; className?: string }) {
-  return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface py-0.5 pl-1 pr-2 text-[11.5px] font-semibold text-ink ${className}`}>
-    <VenueIcon venue={venue} size={16} />{VENUE_NAME[venue] ?? venue}</span>;
+  return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full bg-elev py-[3px] pl-[3px] pr-2.5 text-[12px] font-semibold leading-none text-ink ${className}`}>
+    <VenueIcon venue={venue} size={18} />{VENUE_NAME[venue] ?? venue}</span>;
 }
 
 /** Long / short: a word and an arrow, the colour only repeats them */
@@ -42,18 +42,25 @@ export function Pnl({ value, locale, unit = 'usd', dp = 2 }: { value: string | n
 
 /** segmented control; `tabs` makes it a tablist */
 export function Seg<T extends string>({ value, options, onChange, label, tabs, size = 'md', className = '' }: { value: T; options: { id: T; label: ReactNode; aria?: string }[]; onChange: (v: T) => void; label: string; tabs?: boolean; size?: 'sm' | 'md'; className?: string }) {
-  return <div role={tabs ? 'tablist' : 'radiogroup'} aria-label={label} className={`no-scrollbar flex gap-1 overflow-x-auto rounded-2xl bg-elev p-1 ${className}`}>{options.map((o) => { const on = value === o.id; return (
+  // a selected option that lies outside a scrolling track is brought into it (the track's own scroll only — the page never moves)
+  const track = useRef<HTMLDivElement>(null);
+  useEffect(() => { const el = track.current, on = el?.querySelector<HTMLElement>('[aria-selected="true"], [aria-checked="true"]'); if (!el || !on || el.scrollWidth <= el.clientWidth) return;
+    const l = on.offsetLeft - el.offsetLeft, r = l + on.offsetWidth; if (l < el.scrollLeft) el.scrollLeft = Math.max(0, l - 4); else if (r > el.scrollLeft + el.clientWidth) el.scrollLeft = r - el.clientWidth + 4; }, [value]);
+  return <div ref={track} role={tabs ? 'tablist' : 'radiogroup'} aria-label={label} className={`no-scrollbar flex gap-1 overflow-x-auto rounded-2xl bg-elev p-1 ${className}`}>{options.map((o) => { const on = value === o.id; return (
     <button key={o.id} type="button" role={tabs ? 'tab' : 'radio'} aria-selected={tabs ? on : undefined} aria-checked={tabs ? undefined : on} aria-label={o.aria} onClick={() => onChange(o.id)}
-      className={`min-h-11 flex-[1_0_auto] whitespace-nowrap rounded-xl px-3 font-semibold transition ${size === 'sm' ? 'min-w-11 text-[13px]' : 'text-[14px]'} ${on ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-mute hover:text-ink'}`}>{o.label}</button>); })}</div>;
+      className={`min-h-11 flex-[1_0_auto] whitespace-nowrap rounded-xl px-3 transition-colors ${size === 'sm' ? 'min-w-11 text-[13px]' : 'text-[14px]'} ${on ? 'bg-surface font-semibold text-ink shadow-[0_1px_2px_rgba(13,18,32,0.14)]' : 'font-medium text-mute hover:text-ink'}`}>{o.label}</button>); })}</div>;
 }
 export function Stat({ label, children, className = '', wrap }: { label: ReactNode; children: ReactNode; className?: string; wrap?: boolean }) {
-  return <div className={`min-w-0 ${className}`}><div className="truncate text-[11.5px] text-mute">{label}</div><div className={`text-[13.5px] font-medium ${wrap ? 'whitespace-nowrap' : 'truncate'}`}>{children}</div></div>;
+  return <div className={`min-w-0 ${className}`}><div className="truncate text-[11.5px] leading-tight text-mute">{label}</div><div className={`mt-0.5 text-[13.5px] font-semibold tracking-[-0.01em] ${wrap ? 'whitespace-nowrap' : 'truncate'}`}>{children}</div></div>;
 }
 export function Row({ label, children, strong }: { label: ReactNode; children: ReactNode; strong?: boolean }) {
-  return <div className="flex items-baseline justify-between gap-3 py-1 text-[13.5px]"><span className="text-mute">{label}</span><span className={`text-right ${strong ? 'font-semibold' : 'font-medium'}`}>{children}</span></div>;
+  return <div className="flex items-baseline justify-between gap-4 py-[5px] text-[13.5px] leading-snug"><span className="text-mute">{label}</span><span className={`min-w-0 text-right ${strong ? 'font-semibold' : 'font-medium'}`}>{children}</span></div>;
 }
 
-/** bottom sheet on a phone, centred dialog on a desktop; Escape closes, focus stays inside */
+/**
+ * LEGACY sheet (portal under <body>, focus trap, a « Fermer » button) — kept, unchanged, for the files that still import it
+ * (derivatives/Live*, Gmx*, screens/PerpAgentLive). The paper terminal's own sheets use the shared `Sheet` of ui.tsx since v10.
+ */
 export function Sheet({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   const t = useT(); const box = useRef<HTMLDivElement>(null);
   // the second click of a double click on the button that opened the sheet lands on the backdrop: it must not close it
@@ -84,16 +91,22 @@ export function Sheet({ title, onClose, children, wide }: { title: string; onClo
 }
 
 export interface Col<T> { id: string; label: ReactNode; cell: (row: T) => ReactNode; num?: boolean; /** on a phone: shown in the card's title line instead of the grid */ head?: boolean; /** on a phone: takes the whole width of the card */ full?: boolean }
-/** a real table on wide screens, one card per row on a phone (never both in the DOM) */
-export function DataTable<T>({ cols, rows, rowKey, empty, label }: { cols: Col<T>[]; rows: T[]; rowKey: (r: T) => string; empty: string; label: string }) {
+/** designed empty state INSIDE a card or a pane (the shared `EmptyState` is a card of its own): icon, one sentence, optional action */
+export function Empty({ icon = 'list', title, children, action, testid }: { icon?: string; title: ReactNode; children?: ReactNode; action?: ReactNode; testid?: string }) {
+  return <div className="flex flex-col items-center px-4 py-8 text-center" data-testid={testid}>
+    <span className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-elev text-mute"><Icon n={icon} className="h-5 w-5" /></span>
+    <p className="text-[14.5px] font-semibold">{title}</p>{children && <p className="mt-1 max-w-[36ch] text-[13px] leading-snug text-mute">{children}</p>}{action && <div className="mt-4">{action}</div>}</div>;
+}
+/** a real table on wide screens, stacked rows on a phone (never both in the DOM) */
+export function DataTable<T>({ cols, rows, rowKey, empty, label, emptyIcon }: { cols: Col<T>[]; rows: T[]; rowKey: (r: T) => string; empty: string; label: string; emptyIcon?: string }) {
   const wide = useMedia('(min-width: 768px)');
-  if (!rows.length) return <p className="py-8 text-center text-[13.5px] text-mute">{empty}</p>;
+  if (!rows.length) return <Empty icon={emptyIcon} title={empty} />;
   if (wide) return <div className="overflow-x-auto"><table className="w-full min-w-max border-separate border-spacing-0 text-[13px]" aria-label={label}>
-    <thead><tr>{cols.map((c) => <th key={c.id} scope="col" className={`whitespace-nowrap border-b border-line px-2.5 py-2 text-[11.5px] font-medium text-mute ${c.num ? 'text-right' : 'text-left'}`}>{c.label}</th>)}</tr></thead>
-    <tbody>{rows.map((r) => <tr key={rowKey(r)}>{cols.map((c) => <td key={c.id} className={`whitespace-nowrap border-b border-line/70 px-2.5 py-2 align-middle ${c.num ? 'text-right' : 'text-left'}`}>{c.cell(r)}</td>)}</tr>)}</tbody></table></div>;
-  return <ul className="space-y-2.5" aria-label={label}>{rows.map((r) => <li key={rowKey(r)} className="rounded-2xl border border-line p-3.5">
-    <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">{cols.filter((c) => c.head).map((c) => <span key={c.id} className="text-[14px] font-semibold">{c.cell(r)}</span>)}</div>
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]">{cols.filter((c) => !c.head).map((c) => <div key={c.id} className={c.label === '' || c.full ? 'col-span-2' : 'min-w-0'}>{c.label !== '' && <dt className="text-[11.5px] text-mute">{c.label}</dt>}<dd className="min-w-0 break-words font-medium">{c.cell(r)}</dd></div>)}</dl></li>)}</ul>;
+    <thead><tr>{cols.map((c) => <th key={c.id} scope="col" className={`whitespace-nowrap border-b border-line px-2.5 pb-2 pt-1 text-[11.5px] font-medium text-mute first:pl-1 last:pr-1 ${c.num ? 'text-right' : 'text-left'}`}>{c.label}</th>)}</tr></thead>
+    <tbody>{rows.map((r) => <tr key={rowKey(r)} className="fx-tr">{cols.map((c) => <td key={c.id} className={`whitespace-nowrap border-b border-line/70 px-2.5 py-2 align-middle first:pl-1 last:pr-1 ${c.num ? 'text-right' : 'text-left'}`}>{c.cell(r)}</td>)}</tr>)}</tbody></table></div>;
+  return <ul className="divide-y divide-line" aria-label={label}>{rows.map((r) => <li key={rowKey(r)} className="py-3.5 first:pt-1 last:pb-1">
+    <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">{cols.filter((c) => c.head).map((c) => <span key={c.id} className="text-[15px] font-semibold">{c.cell(r)}</span>)}</div>
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13.5px]">{cols.filter((c) => !c.head).map((c) => <div key={c.id} className={c.label === '' || c.full ? 'col-span-2' : 'min-w-0'}>{c.label !== '' && <dt className="text-[11.5px] leading-tight text-mute">{c.label}</dt>}<dd className="mt-0.5 min-w-0 break-words font-medium">{c.cell(r)}</dd></div>)}</dl></li>)}</ul>;
 }
 const p2 = (n: number) => String(n).padStart(2, '0');
 /** 24-hour clock « 14:05:09 »; with the date: « 10 nov. 14:05 » */

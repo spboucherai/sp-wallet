@@ -7,17 +7,19 @@
  * approvable and equal to what was asked (and while the receivers the signer fixes are the wallet itself); « retirer »,
  * closing the sheet, an expiry or a failed passkey prompt WITHDRAWS the proposal on the server (no passkey needed); after the
  * approval the sheet says « en attente d'exécution par le réseau GMX » until the server reports the keeper's transaction.
+ *
+ * v10: the signed fields and the fixed fields are two receipts under their eyebrow titles — every row the server sent, in
+ * its order, whole. The estimate is no longer behind a disclosure: it is always open. Nothing is animated.
  */
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useT, type Key } from '../i18n';
-import { Btn, Icon, Notice, Skeleton } from '../ui';
-import { Row, Sheet } from './bits';
+import { Btn, Fact, Icon, Notice, SkeletonCard } from '../ui';
 import { D, dec, type DecStr } from './dec';
 import { gapi, GMX_STATUS_KEY, gmxError, type GmxErr, type GmxOperation, type GmxOrderBody, type GmxPosition, type GmxPrepared, type GmxStatus } from './gmx';
-import { EstimateRows, GmxErrNotice, GmxOpCard, TwoStep } from './GmxBits';
-import { Countdown, ModeBand } from './LiveBits';
+import { EstimateRows, GMX_LABEL, GmxErrNotice, GmxOpCard, TwoStep } from './GmxBits';
+import { Countdown, Fingerprint, Group, LiveSheet, ModeBand, TICKET, Waiting, WORDS } from './LiveBits';
 import { newKey } from './live';
 
 export type GmxRequest = { kind: 'order'; body: GmxOrderBody } | { kind: 'close'; position: GmxPosition; fraction: DecStr; slippageBps?: number } | { kind: 'cancel'; op: GmxOperation };
@@ -44,10 +46,11 @@ export function gmxIntegrity(r: GmxRequest, p: GmxPrepared, account: string | nu
   return null;
 }
 
+/** every row the server sent, in its order: the label in the screen's language (or as sent), the value whole */
 function Fields({ rows, testid }: { rows: { label: string; value: string }[]; testid: string }) {
   const t = useT();
-  return <div data-testid={testid}>{rows.map((f) => { const k = `gxF_${f.label}`, name = t(k as Key); const long = f.value.length > 22;
-    return <Row key={f.label} label={<span data-label={f.label}>{name.startsWith('gxF') ? f.label : name}</span>}><span className={long ? 'break-all font-mono text-[11px]' : ''}>{f.value}</span></Row>; })}</div>;
+  return <dl className="receipt" data-testid={testid}>{rows.map((f) => { const k = `gxF_${f.label}`, name = t(k as Key); const long = f.value.length > 22;
+    return <Fact key={f.label} k={<span data-label={f.label}>{name.startsWith('gxF') ? f.label : name}</span>}><span className={long ? 'break-all font-mono text-[11.5px] font-normal' : ''}>{f.value}</span></Fact>; })}</dl>;
 }
 
 export function GmxConfirm({ status, request, onClose }: { status: GmxStatus; request: GmxRequest; onClose: () => void }) {
@@ -101,38 +104,40 @@ export function GmxConfirm({ status, request, onClose }: { status: GmxStatus; re
 
   const o = p?.operation, action = o?.kind === 'decrease' ? 'decrease' : 'increase';
   const title = t(request.kind === 'cancel' ? 'gxConfirmCancelTitle' : request.kind === 'close' ? 'gxConfirmCloseTitle' : 'gxConfirmTitle');
-  return <Sheet title={title} onClose={close}>
-    <div className="min-w-0 space-y-3" data-testid="gmx-confirm" data-phase={phase} data-kind={request.kind}>
-      <ModeBand tone="mainnet" label="GMX v2 · Arbitrum" compact />
-      {phase === 'proposing' && <p className="flex items-center gap-2 py-6 text-[13.5px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('gxProposing')}</p>}
+  return <LiveSheet title={title} tone="mainnet" label={GMX_LABEL} busy={phase === 'sending' || phase === 'passkey'} onClose={close}>
+    <div className="min-w-0 space-y-4" data-testid="gmx-confirm" data-phase={phase} data-kind={request.kind}>
+      <ModeBand tone="mainnet" label={GMX_LABEL} compact />
+      {phase === 'proposing' && <Waiting className="py-6">{t('gxProposing')}</Waiting>}
 
-      {p && o && phase !== 'proposing' && phase !== 'progress' && <div className={`space-y-3 ${phase === 'void' ? 'opacity-50' : ''}`}>
-        <p className="text-[13px] leading-snug">{t(request.kind === 'cancel' ? 'gxConfirmIntroCancel' : request.kind === 'close' ? 'gxConfirmIntroClose' : 'gxConfirmIntro')}</p>
-        <div><h3 className="mb-1 text-[13px] font-semibold">{t('gxSignedExactly')}</h3>
-          <div className="rounded-2xl bg-elev/70 p-3"><Fields rows={p.fields} testid="gmx-fields" /></div></div>
-        <div><h3 className="mb-1 text-[13px] font-semibold">{t('gxFixedBySigner')}</h3>
-          <div className="rounded-2xl border border-line p-3"><Fields rows={p.fixed} testid="gmx-fixed" /><p className="mt-1 text-[11.5px] leading-snug text-mute">{t('gxFixedNote')}</p></div></div>
-        {p.estimate && request.kind !== 'cancel' && <details className="rounded-2xl border border-line p-3" open={request.kind === 'close'}><summary className="cursor-pointer text-[12.5px] font-semibold">{t('gxEstSummary')}</summary><div className="mt-2"><EstimateRows e={p.estimate} action={action} /></div></details>}
+      {p && o && phase !== 'proposing' && phase !== 'progress' && <div className={`space-y-4 ${phase === 'void' ? 'opacity-50' : ''}`}>
+        <p className="text-[13.5px] leading-snug">{t(request.kind === 'cancel' ? 'gxConfirmIntroCancel' : request.kind === 'close' ? 'gxConfirmIntroClose' : 'gxConfirmIntro')}</p>
+        <Group title={t('gxSignedExactly')}><div className={TICKET}><Fields rows={p.fields} testid="gmx-fields" /></div></Group>
+        <Group title={t('gxFixedBySigner')}>
+          <div className="rounded-[18px] border border-line px-4 py-1.5"><Fields rows={p.fixed} testid="gmx-fixed" /></div><p className="mt-1.5 text-[12px] leading-snug text-mute">{t('gxFixedNote')}</p></Group>
+        {p.estimate && request.kind !== 'cancel' && <Group title={t('gxEstSummary')}><div className="rounded-[18px] border border-line px-4 py-3"><EstimateRows e={p.estimate} action={action} /></div></Group>}
         {o.needsApproval && <Notice tone="info"><div data-testid="gmx-needs-approval">{t('gxNeedsApproval')}</div></Notice>}
-        <Row label={t('gxMaxFee')}>{`${o.maxFeeEth} ETH`}</Row>
-        {o.hash && <p className="break-all font-mono text-[10.5px] leading-snug text-mute" data-testid="gmx-hash">{t('gxIntentHash')} {o.hash}</p>}
+        <dl className="rounded-[18px] border border-line px-4 py-1"><Fact k={t('gxMaxFee')}><span className="font-semibold">{`${o.maxFeeEth} ETH`}</span></Fact></dl>
+        {o.hash && <Fingerprint testid="gmx-hash">{t('gxIntentHash')} {o.hash}</Fingerprint>}
       </div>}
 
       {phase === 'ready' && o?.expiresAt && <Countdown expiresAt={o.expiresAt} skewMs={0} ttlMs={Math.max(1, o.expiresAt - o.createdAt)} onExpire={() => { if (phaseRef.current === 'ready') { setBad('expired'); setPhase('void'); withdraw(o.id); } }} />}
       {phase === 'passkey' && <Notice tone="info">{t('flPasskeyWaiting')}</Notice>}
-      {phase === 'sending' && <p className="flex items-center gap-2 text-[13.5px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('gxSending')}</p>}
-      {bad && <Notice tone="danger"><div data-testid="gmx-integrity" data-why={bad}>{t(bad === 'expired' ? 'gxExpired' : 'gxIntegrity')}{bad !== 'expired' && <span className="mt-1 block font-mono text-[11.5px] text-mute">{bad}</span>}</div></Notice>}
+      {phase === 'sending' && <Waiting>{t('gxSending')}</Waiting>}
+      {bad && <Notice tone="danger"><div data-testid="gmx-integrity" data-why={bad}>{t(bad === 'expired' ? 'gxExpired' : 'gxIntegrity')}{bad !== 'expired' && <span className={`mt-1.5 ${WORDS}`}>{bad}</span>}</div></Notice>}
       {err && !(bad === 'expired') && !(phase === 'progress' && op.data?.final && op.data.state !== 'failed') && <GmxErrNotice err={err.e} raw={err.raw}>{phase === 'void' && <span className="mt-1 block">{t('gxVoidNote')}</span>}</GmxErrNotice>}
 
       {phase === 'progress' && <div className="space-y-3" data-testid="gmx-progress">
-        {op.data ? <GmxOpCard op={op.data} /> : op.isError ? <Notice tone="warn">{t('gxOpUnread')}</Notice> : <Skeleton h="h-32" />}
+        {op.data ? <GmxOpCard op={op.data} timeline /> : op.isError ? <Notice tone="warn">{t('gxOpUnread')}</Notice> : <SkeletonCard lines={4} />}
         {op.data && !op.data.final && request.kind !== 'cancel' && <TwoStep expirationSec={status.facts.requestExpirationSec} />}
-        <p className="text-[12px] leading-snug text-mute">{t('gxCloseSafe')}</p></div>}
+        <p className="text-[12.5px] leading-snug text-mute">{t('gxCloseSafe')}</p></div>}
 
-      {phase === 'ready' && <Btn full kind="danger" onClick={() => void approve()} data-testid="gmx-approve"><Icon n="key" className="h-4 w-4" />{t('flApproveReal')}</Btn>}
-      {phase === 'ready' && <Btn full kind="soft" onClick={close} data-testid="gmx-withdraw">{t('gxWithdraw')}</Btn>}
-      {phase === 'void' && <Btn full kind="soft" onClick={() => setKey(newKey(`gmx-${request.kind}`))} data-testid="gmx-prepare-again">{t('gxPrepareAgain')}</Btn>}
-      {phase !== 'ready' && <Btn full kind="ghost" disabled={phase === 'sending' || phase === 'passkey'} onClick={close} data-testid="gmx-confirm-close">{t(phase === 'progress' ? 'fxClose' : 'cancel')}</Btn>}
-      {phase === 'ready' && <p className="text-center text-[11.5px] leading-snug text-mute">{t('gxWithdrawNote')}</p>}    </div>
-  </Sheet>;
+      <div className="space-y-2.5">
+        {phase === 'ready' && <Btn full className="!min-h-[56px] !text-[16px]" kind="danger" onClick={() => void approve()} data-testid="gmx-approve"><Icon n="key" className="h-[18px] w-[18px]" />{t('flApproveReal')}</Btn>}
+        {phase === 'ready' && <Btn full kind="soft" onClick={close} data-testid="gmx-withdraw">{t('gxWithdraw')}</Btn>}
+        {phase === 'void' && <Btn full kind="soft" onClick={() => setKey(newKey(`gmx-${request.kind}`))} data-testid="gmx-prepare-again"><Icon n="refresh" className="h-4 w-4" />{t('gxPrepareAgain')}</Btn>}
+        {phase !== 'ready' && <Btn full kind="ghost" disabled={phase === 'sending' || phase === 'passkey'} onClick={close} data-testid="gmx-confirm-close">{t(phase === 'progress' ? 'fxClose' : 'cancel')}</Btn>}
+        {phase === 'ready' && <p className="text-center text-[12px] leading-snug text-mute">{t('gxWithdrawNote')}</p>}
+      </div>
+    </div>
+  </LiveSheet>;
 }

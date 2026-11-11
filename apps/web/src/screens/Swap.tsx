@@ -4,12 +4,12 @@ import { startAuthentication } from '@simplewebauthn/browser';
 import { get, post } from '../api';
 import { usePortfolio, useSettings } from '../hooks';
 import { errText, I18n, useT, type Key } from '../i18n';
-import { Btn, Card, Coin, exactAmt, fiat, Icon, inputCls, NetDot, Notice, numFmt, ProviderIcon, StatePill, testNotSent, trimAmt } from '../ui';
+import { Btn, Card, Coin, EmptyState, ErrorState, exactAmt, Fact, fiat, Fold, Icon, inputCls, NetDot, Notice, numFmt, PageTitle, ProviderIcon, Section, Seg, Sheet, StatePill, Tag, testNotSent, trimAmt } from '../ui';
 import { amountInputText, amountOf, sanitizeAmountText } from '../amount'; // v8 hardening
 import { AmountProblem } from '../amountUi';
 import { issuerOf } from '../issuer';
 import { useQueryClient } from '@tanstack/react-query';
-import { BridgeFacts, BridgePill, BridgeProgress, bridgeDur, scErrText } from '../bridge';
+import { BridgeFacts, BridgePill, BridgeProgress, bridgeDur, ExplorerLink, LongFact, ReviewAmount, ReviewArrow, scErrText } from '../bridge';
 import { XswapPill, XswapSheet } from '../xswap';
 import { PlanCards } from '../plan'; // v7 any-to-any plans
 
@@ -27,27 +27,34 @@ type Mode = 'best_price' | 'fastest' | 'balanced';
 
 const dur = (s: number | null, t: (k: Key, v?: Record<string, string | number>) => string) => (s === null ? t('swUnknownTime') : s < 90 ? `${Math.max(1, Math.round(s))} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`);
 
+/** the hero numeral keeps its size as long as it fits; a long amount steps down rather than being cut */
+const heroSize = (len: number) => (len <= 9 ? 'text-[40px]' : len <= 12 ? 'text-[33px]' : len <= 16 ? 'text-[26px]' : 'text-[21px]');
+
+/** Asset picker: a sheet above the tab bar — search, then the assets (held first), each with its real logo, its network and, for a pegged or bridged token, its issuer. */
 function Picker({ open, onClose, onPick, assets, balances, exclude }: { open: boolean; onClose: () => void; onPick: (a: SAsset) => void; assets: SAsset[]; balances: Map<string, string>; exclude?: string }) {
-  const t = useT(); const [q, setQ] = useState('');
+  const t = useT(); const [q, setQ] = useState(''); const input = useRef<HTMLInputElement>(null);
   const rows = useMemo(() => { const s = q.trim().toLowerCase();
     return assets.filter((a) => a.key !== exclude && (!s || a.symbol.toLowerCase().includes(s) || a.name.toLowerCase().includes(s) || a.networkName.toLowerCase().includes(s)))
       .sort((a, b) => Number(!['0', '?'].includes(balances.get(b.key) ?? '0')) - Number(!['0', '?'].includes(balances.get(a.key) ?? '0')) || Number(!!b.native) - Number(!!a.native) || a.symbol.localeCompare(b.symbol)).slice(0, 80); }, [q, assets, balances, exclude]);
-  useEffect(() => { if (open) setQ(''); }, [open]);
+  useEffect(() => { if (open) { setQ(''); input.current?.focus(); } }, [open]);   // after the sheet took the focus: the search field is where typing goes
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={t('swChoose')} onClick={onClose}>
-      <div className="rise flex max-h-[85vh] w-full max-w-xl flex-col rounded-t-3xl bg-surface p-5 lg:rounded-3xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between"><h2 className="text-[18px] font-semibold">{t('swChoose')}</h2>
-          <button onClick={onClose} aria-label={t('cancel')} className="grid h-11 w-11 place-items-center rounded-full text-mute"><Icon n="x" /></button></div>
-        <input autoFocus className={inputCls} type="search" placeholder={t('search')} aria-label={t('search')} value={q} onChange={(e) => setQ(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} />
-        <ul className="mt-3 min-h-[50vh] flex-1 overflow-y-auto lg:min-h-[320px]">{rows.map((a) => { const b = balances.get(a.key), iss = issuerOf(t, a.symbol, a.name); return (
-          <li key={a.key}><button onClick={() => { onPick(a); onClose(); }} className="flex min-h-[56px] w-full items-center gap-3 rounded-2xl px-2 py-2.5 text-left active:bg-elev">
-            <Coin sym={a.symbol} net={a.network} size={40} />
-            <span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-semibold">{a.symbol} <span className="font-normal text-mute">{a.name}</span></span><span className="block text-[12.5px] text-mute">{a.networkName}{iss ? <> · <span className="text-warn">{t(`qaTag_${iss.kind}` as Key)}</span> — {iss.text}</> : null}</span></span>
-            {b && b !== '0' && b !== '?' && <span className="text-[13.5px] font-medium">{trimAmt(b)}</span>}</button></li>); })}
-          {rows.length === 0 && <li className="py-6 text-center text-[14px] text-mute">{t('noMatch')}</li>}</ul>
-      </div>
-    </div>);
+    <Sheet title={t('swChoose')} onClose={onClose} wide>
+      <div className="sticky top-0 z-[1] -mx-1 bg-surface px-1 pb-3 pt-1"><div className="relative"><Icon n="search" className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-mute" />
+        <input ref={input} className={`${inputCls} !pl-11`} type="search" placeholder={t('search')} aria-label={t('search')} value={q} onChange={(e) => setQ(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} /></div></div>
+      <ul className="-mx-2 min-h-[52dvh] lg:min-h-[340px]">{rows.map((a) => { const b = balances.get(a.key), iss = issuerOf(t, a.symbol, a.name); return (
+        <li key={a.key}><button onClick={() => { onPick(a); onClose(); }} className="row-press flex min-h-[64px] w-full items-center gap-3.5 rounded-2xl px-2 py-2.5 text-left">
+          <Coin sym={a.symbol} net={a.network} size={42} />
+          <span className="min-w-0 flex-1"><span className="block truncate text-[15.5px] font-semibold">{a.symbol} <span className="font-normal text-mute">{a.name}</span></span><span className="mt-0.5 block text-[13px] leading-snug text-mute">{a.networkName}{iss ? <> · <span className="text-warn">{t(`qaTag_${iss.kind}` as Key)}</span> — {iss.text}</> : null}</span></span>
+          {b && b !== '0' && b !== '?' && <span className="shrink-0 text-[14.5px] font-semibold">{trimAmt(b)}</span>}</button></li>); })}
+        {rows.length === 0 && <li className="flex flex-col items-center px-6 py-12 text-center"><span className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-elev text-mute"><Icon n="search" className="h-5 w-5" /></span><span className="text-[14.5px] text-mute">{t('noMatch')}</span></li>}</ul>
+    </Sheet>);
+}
+/** Skeleton of a route card: provider logo and name, the figure, the minimum line, the three facts. */
+function RouteSkeleton() {
+  return <div className="card p-4" aria-hidden="true"><div className="flex items-center gap-3"><div className="skel h-9 w-9 !rounded-full" /><div className="flex-1 space-y-2"><div className="skel h-3.5 w-28 !rounded-md" /><div className="skel h-3 w-24 !rounded-md" /></div></div>
+    <div className="skel mt-4 h-7 w-48 max-w-full !rounded-lg" /><div className="skel mt-2.5 h-3 w-56 max-w-full !rounded-md" />
+    <div className="mt-4 grid grid-cols-3 gap-2">{[0, 1, 2].map((k) => <div key={k} className="skel h-10 !rounded-xl" />)}</div></div>;
 }
 
 export function Swap() {
@@ -58,7 +65,7 @@ export function Swap() {
   const [fromKey, setFromKey] = useState(''), [toKey, setToKey] = useState(''), [amountText, setAmount] = useState(''), [slip, setSlip] = useState(50), [mode, setMode] = useState<Mode>('best_price');
   // v8 hardening: the field keeps what was typed (comma or point); `amount` is its canonical reading (amount.ts) — '' while it is empty, invalid or ambiguous
   const amount = amountOf(amountText, locale) ?? '';
-  const [pick, setPick] = useState<'from' | 'to' | null>(null), [open, setOpen] = useState(''), [allRoutes, setAllRoutes] = useState(false);
+  const [pick, setPick] = useState<'from' | 'to' | null>(null), [open, setOpen] = useState(''), [again, setAgain] = useState(0);   // v10: `again` restarts the quote stream (« Réessayer » of the error state)
   const [routes, setRoutes] = useState<RouteV[]>([]), [best, setBest] = useState<Partial<Record<Mode, string>>>({}), [provs, setProvs] = useState<Prov[]>([]);
   const [phase, setPhase] = useState<'idle' | 'loading' | 'done' | 'error'>('idle'), [reachable, setReachable] = useState(true), [took, setTook] = useState<number | null>(null), [first, setFirst] = useState<number | null>(null);
   const es = useRef<EventSource | null>(null);
@@ -124,7 +131,7 @@ export function Swap() {
       s.addEventListener('error', () => { setPhase((p) => (p === 'done' ? p : 'error')); s.close(); });
     }, 450);
     return () => { clearTimeout(h); es.current?.close(); };
-  }, [from?.key, to?.key, amount, slip]);
+  }, [from?.key, to?.key, amount, slip, again]);
 
   const prepare = async () => {
     if (!from || !to) return;
@@ -154,206 +161,230 @@ export function Swap() {
   const chosen = sorted[0];
   const flip = () => { setFromKey(toKey); setToKey(fromKey); setAmount(''); };
   const bal = from ? balances.get(from.key) : undefined;
-  const riskCls = { low: 'text-emerald bg-emerald/10', medium: 'text-warn bg-warn/12', high: 'text-danger bg-danger/10' } as const;
   const noProviders = (provQ.data?.providers.length ?? 0) === 0;
   // display name of a provider id; Jupiter's licence requires its "Metis" label wherever a route of theirs is shown
   const pname = (id: string) => provQ.data?.providers.find((p) => p.id === id)?.name ?? (id === 'jupiter' ? 'Jupiter (Metis)' : id);
 
+  // ── v10 presentation ────────────────────────────────────────────────────────────────────────────────────────────────────
+  const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+  const ex = sorted.find((r) => r.executable);
+  // what stays in view: every route the wallet can execute here, and the top-ranked one whatever it is; the other
+  // comparison-only quotes (never a fee or a warning of what is executed) are folded under their own title
+  const shown = isBridge ? [] : sorted.filter((r, k) => r.executable || k === 0), folded = sorted.filter((r) => !shown.includes(r));
+  const sep = locale === 'fr' ? ' : ' : ': ';
+
   const side = (label: string, a: SAsset | undefined, which: 'from' | 'to', body: React.ReactNode) => (
-    <div className="rounded-3xl bg-elev/70 p-4">
-      <div className="mb-2 flex items-center justify-between text-[13px] text-mute"><span>{label}</span>{which === 'from' && bal !== undefined && (bal === '?' ? <span className="text-warn">{t('qaBalUnknown')}</span> : <button className="-my-3 min-h-11 font-medium text-blue" onClick={() => setAmount(amountInputText(bal, locale))}>{t('available')}{locale === 'fr' ? ' : ' : ': '}{trimAmt(bal, 6)}</button>)}</div>
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">{body}</div>
-        <button onClick={() => setPick(which)} className="flex shrink-0 items-center gap-2 rounded-full bg-surface py-1.5 pl-1.5 pr-3 shadow-sm" aria-label={`${label}: ${a ? `${a.symbol} ${a.networkName}` : t('swChoose')}`}>
-          {a ? <><Coin sym={a.symbol} net={a.network} size={32} /><span className="text-left leading-tight"><span className="block text-[15px] font-semibold">{a.symbol}</span><span className="block text-[11px] text-mute">{a.networkName}</span></span></> : <span className="px-2 text-[14px]">{t('swChoose')}</span>}
-          <Icon n="chev" className="h-4 w-4 rotate-90 text-mute" /></button>
-      </div>
+    <div className={`rounded-[20px] bg-elev/60 px-4 pb-3.5 pt-3 ${which === 'from' ? 'sw-pay' : ''}`}>
+      <button onClick={() => setPick(which)} className="press -ml-1 flex min-h-[52px] max-w-full items-center gap-3 rounded-2xl py-1 pl-1 pr-2 text-left" aria-label={`${label}: ${a ? `${a.symbol} ${a.networkName}` : t('swChoose')}`}>
+        {a ? <Coin sym={a.symbol} net={a.network} size={44} /> : <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-surface text-mute"><Icon n="plus" className="h-5 w-5" /></span>}
+        <span className="min-w-0"><span className="t-eyebrow block">{label}</span>
+          <span className="mt-0.5 flex items-center gap-1 text-[17px] font-semibold leading-tight tracking-[-0.015em]"><span className="min-w-0">{a ? <>{a.symbol} <span className="font-normal text-mute">· {a.networkName}</span></> : t('swChoose')}</span><Icon n="chev" className="h-4 w-4 shrink-0 rotate-90 text-mute" /></span></span>
+      </button>
+      {body}
     </div>);
+
+  const routeCard = (r: RouteV) => { const isOpen = open === r.id, here = r.executable && !isBridge, top = !isBridge && r.id === sorted[0]?.id, last = r.path[r.path.length - 1]!;
+    const foreign = crossNet && !r.executable && !r.providers.every((x) => ['cctp', 'kyberswap', 'jupiter', 'thorchain'].includes(x));
+    const fees = r.fees.length > 0 && <div><div className="t-eyebrow mb-0.5">{t('swFees')}</div>
+      <dl>{r.fees.map((f, i) => <Fact key={i} k={<>{t(`swFee_${f.kind}` as Key)}{f.estimated ? ` (${t('estimate')})` : ''}{f.includedInOutput ? ` · ${t('swIncluded')}` : ''}</>}>{trimAmt(f.display, 8)} {f.symbol}{f.usd != null ? ` · ${money(f.usd)}` : ''}</Fact>)}</dl></div>;
+    const risks = <div><div className="t-eyebrow mb-1.5">{t('swRisk')}</div>
+      {r.risk.flags.length === 0 ? <span className="text-mute">—</span> : <ul className="space-y-1.5">{r.risk.flags.map((f, i) => <li key={i} className="flex gap-2"><Icon n={f.level === 'low' ? 'check' : 'warn'} className={`mt-0.5 h-4 w-4 shrink-0 ${f.level === 'high' ? 'text-danger' : f.level === 'medium' ? 'text-warn' : 'text-mute'}`} /><span className="min-w-0">{t(`swFlag_${f.code}` as Key)}{f.detail ? <span className="text-mute"> — {f.detail}</span> : null}</span></li>)}</ul>}</div>;
+    return (
+      <section key={r.id} className={`card overflow-hidden ${top ? 'sw-chosen' : ''} ${here ? '' : 'sw-cmp'}`} data-testid="route-card" data-executable={here}>
+        <button className="row-press w-full p-4 text-left" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '' : r.id)}>
+          <div className="flex items-center gap-3">
+            <span className="flex shrink-0 items-center">{r.providers.map((x, k) => <ProviderIcon key={x + k} provider={x} size={here ? 36 : 30} className={k ? '-ml-2.5 ring-2 ring-surface' : ''} />)}</span>
+            <div className="min-w-0 flex-1"><div className="text-[16px] font-semibold leading-tight tracking-[-0.01em]">{r.providers.map(pname).join(' → ')}</div>
+              <div className="mt-1 flex">{here ? <Tag tone="ok" icon="check">{t('qaSwExecHere')}</Tag> : foreign ? <Tag tone="mute" icon="lock" testid="compare-only">{t('pnCompareOnly')}</Tag> : <Tag tone="mute" icon="lock">{t('qaSwCompareOnly')}</Tag>}</div></div>
+            <Icon n="chev" className={`h-4 w-4 shrink-0 text-mute transition-transform ${isOpen ? '-rotate-90' : 'rotate-90'}`} />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {r.tags.map((tag) => <span key={tag} className="tag bg-primary text-onprimary"><Icon n="star" className="h-3 w-3" />{t(`sw_${tag}` as Key)}</span>)}
+            <Tag tone={r.risk.level === 'low' ? 'ok' : r.risk.level === 'medium' ? 'warn' : 'danger'} icon={r.risk.level === 'low' ? 'check' : 'warn'}>{t(`swRisk_${r.risk.level}` as Key)}</Tag>
+          </div>
+          <div className={`t-num mt-3.5 break-words ${here ? 'text-[28px]' : 'text-[22px]'}`}>{trimAmt(r.amountOutDisplay, 8)} <span className="text-mute">{last.symbol}</span></div>
+          <div className="mt-1 text-[13px] leading-snug text-mute">{t('swMin')} <span className="font-semibold text-ink">{trimAmt(r.minAmountOutDisplay, 8)}</span>{r.valuation.netUsd != null ? ` · ${t('swNet')} ${money(r.valuation.netUsd)}` : ''}</div>
+          <dl className="sw-stats mt-3.5">
+            <div><dt>{t('dzSwTime')}</dt><dd>{r.estimatedSeconds === null ? <span title={t('swUnknownTime')} aria-label={t('swUnknownTime')}>—</span> : dur(r.estimatedSeconds, t)}</dd></div>
+            <div><dt>{t('swFees')}</dt><dd>{r.valuation.extraFeesUsd > 0 ? money(r.valuation.extraFeesUsd) : '—'}</dd></div>
+            {r.priceImpactBps !== null && <div><dt>{t('swImpact')}</dt><dd>{numFmt(r.priceImpactBps / 100, locale, 2, 2)} %</dd></div>}
+          </dl>
+          <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px]">{r.path.map((p, i) => <span key={i} className="inline-flex items-center gap-1.5">{i > 0 && <Icon n="chev" className="h-3 w-3 text-mute" />}<span className="inline-flex items-center gap-1.5 rounded-full bg-elev py-0.5 pl-0.5 pr-2.5 font-medium"><Coin sym={p.symbol} net={p.network} size={22} />{p.symbol}</span></span>)}</div>
+        </button>
+        {/* the route the wallet executes keeps its fees and its risks in view; a comparison quote shows them when opened */}
+        {here && <div className="space-y-3.5 border-t border-line px-4 py-3.5 text-[13.5px]">{fees}{risks}</div>}
+        {isOpen && <div className="space-y-3.5 border-t border-line px-4 py-3.5 text-[13.5px]">
+          <div><div className="t-eyebrow mb-2">{t('swSteps')}</div>
+            <ol className="space-y-2.5">{r.steps.map((s, i) => <li key={i} className="flex gap-3"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-elev text-[12px] font-semibold">{i + 1}</span>
+              <span className="min-w-0"><span className="font-semibold">{t(`swKind_${s.kind}` as Key)}</span> {s.from.symbol} ({s.from.networkName}) → {s.to.symbol} ({s.to.networkName})
+                <span className="mt-0.5 flex items-center gap-1.5 text-mute"><ProviderIcon provider={s.provider} size={16} /><span className="min-w-0">{pname(s.provider)}{s.via.length ? ` · ${s.via.slice(0, 4).join(', ')}` : ''}</span></span></span></li>)}</ol></div>
+          {!here && fees}{!here && risks}
+          <div className="text-mute">{t(`swExec_${r.executability.class}` as Key)}{r.executability.reason ? ` — ${r.executability.reason}` : ''}</div>
+        </div>}
+      </section>); };
+
+  // the ONE primary action of the screen, under the pair. A CCTP transfer and a plan carry their own (they depend on a choice made in their card).
+  const locked = <><Btn full disabled><Icon n="lock" className="h-4 w-4" />{t('swExecuteDisabled')}</Btn>
+    <p className="px-1 text-[13px] leading-snug text-mute">{t('swExecWhere')} {t('swSolIntro')}</p></>;
+  const action = isBridge ? null
+    : phase === 'idle' ? <Btn full disabled>{t('dzSwEnterAmount')}</Btn>
+    : ex ? <><Btn full busy={busy === 'prepare'} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('swExecute', { via: pname(ex.providers[0]!) })}</Btn>
+        {ex.id !== sorted[0]!.id && <p className="flex gap-2 px-1 text-[13px] leading-snug text-mute"><Icon n="warn" className="mt-0.5 h-4 w-4 shrink-0 text-warn" /><span className="min-w-0">{t('swExecNotBest')}</span></p>}</>
+    : crossNet ? (planCount > 0 || sorted.length === 0 ? null /* a startable plan is offered below */ : locked)
+    : sorted.length === 0 ? (phase === 'loading' ? <Btn full busy>{t('swSearching')}</Btn> : phase === 'done' ? <Btn full disabled>{t('dzSwNoRouteBtn')}</Btn> : null)
+    : locked;
+
+  const review = exec && prop;
+  const reviewPill = (pill: React.ReactNode) => <span className="mt-1.5 inline-flex">{pill}</span>;
+  const reviewActions = prop && <div className="mt-4 space-y-2.5">
+    {prop.state === 'pending_approval' && <Btn full busy={!!busy} disabled={left === 0} onClick={() => void approve()}><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>}
+    <Btn full kind="ghost" disabled={!!busy} onClick={() => void closeExec()}>{prop.state === 'pending_approval' ? t('cancel') : t('swClose')}</Btn>
+  </div>;
 
   return (
     <div className="space-y-4">
-      <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('swap')}</h1>
-      <Notice tone="info">{t('swIntro')}</Notice>
-      <Card className="!p-3">
+      <PageTitle>{t('swap')}</PageTitle>
+
+      {/* the centrepiece: what leaves, what arrives, one action */}
+      <Card className="!p-2">
         {side(t('swYouPay'), from, 'from', <>
-          <input className="w-full bg-transparent text-[30px] font-semibold tracking-tight outline-none placeholder:text-mute/50" inputMode="decimal" placeholder="0" aria-label={t('amount')} value={amountText} onChange={(e) => setAmount(sanitizeAmountText(e.target.value))} autoComplete="off" />
+          <input className={`t-display mt-1 block min-h-12 w-full bg-transparent py-0.5 outline-none placeholder:text-mute/45 ${heroSize(amountText.length)}`} inputMode="decimal" placeholder="0" aria-label={t('amount')} value={amountText} onChange={(e) => setAmount(sanitizeAmountText(e.target.value))} autoComplete="off" />
           <AmountProblem text={amountText} />
-          <div className="h-5 text-[13px] text-mute">{chosen?.valuation.inUsd != null ? `≈ ${money(chosen.valuation.inUsd)}` : ' '}</div></>)}
-        <div className="relative z-[1] -my-3 flex justify-center"><button onClick={flip} aria-label={t('swFlip')} className="grid h-11 w-11 place-items-center rounded-full border-4 border-surface bg-primary text-onprimary"><Icon n="swap" className="h-5 w-5 rotate-90" /></button></div>
+          <div className="mt-0.5 flex min-h-6 items-center justify-between gap-3 text-[13px] text-mute"><span className="min-w-0">{chosen?.valuation.inUsd != null ? `≈ ${money(chosen.valuation.inUsd)}` : ' '}</span>
+            {bal !== undefined && (bal === '?' ? <span className="shrink-0 text-warn">{t('qaBalUnknown')}</span> : <button className="-my-2.5 min-h-11 shrink-0 font-medium text-blue" onClick={() => setAmount(amountInputText(bal, locale))}>{t('available')}{sep}{trimAmt(bal, 6)}</button>)}</div></>)}
+        <div className="relative z-[1] -my-[19px] flex justify-center"><button onClick={flip} aria-label={t('swFlip')} className="press grid h-11 w-11 place-items-center rounded-full border border-line bg-surface text-ink shadow-e2"><Icon n="swap" className="h-[18px] w-[18px] rotate-90" /></button></div>
         {side(t('swYouReceive'), to, 'to', <>
-          <div className={`text-[30px] font-semibold tracking-tight ${chosen ? '' : 'text-mute/50'}`} aria-live="polite">{chosen ? trimAmt(chosen.amountOutDisplay, 8) : phase === 'loading' ? '…' : '0'}</div>
-          <div className="h-5 text-[13px] text-mute">{chosen ? <>{t('swMin')} {trimAmt(chosen.minAmountOutDisplay, 8)}{chosen.valuation.outUsd != null ? ` · ≈ ${money(chosen.valuation.outUsd)}` : ''}</> : ' '}</div></>)}
-        <div className="mt-3 flex items-center justify-between px-1 text-[13px]">
-          <span className="min-w-0 text-mute">{t('swSlippage')}</span>
-          <div className="flex shrink-0 rounded-full bg-elev p-0.5" role="radiogroup" aria-label={t('swSlippage')}>{[30, 50, 100].map((b) => <button key={b} role="radio" aria-checked={slip === b} onClick={() => setSlip(b)} className={`min-h-11 whitespace-nowrap rounded-full px-3 ${slip === b ? 'bg-surface font-semibold shadow-sm' : 'text-mute'}`}>{numFmt(b / 100, locale, 1)} %</button>)}</div>
+          <div className={`t-display mt-1 flex min-h-12 items-center break-all py-0.5 ${chosen ? heroSize(trimAmt(chosen.amountOutDisplay, 8).length) : 'text-[40px] text-mute/45'}`} aria-live="polite">{chosen ? trimAmt(chosen.amountOutDisplay, 8) : phase === 'loading' ? <span className="skel block h-9 w-40 !rounded-xl" style={{ background: 'color-mix(in srgb, var(--mute) 14%, transparent)' }} role="img" aria-label={t('swSearching')} /> : '0'}</div>
+          <div className="mt-0.5 min-h-6 text-[13px] leading-6 text-mute">{chosen ? <>{t('swMin')} <span className="font-semibold text-ink">{trimAmt(chosen.minAmountOutDisplay, 8)}</span>{chosen.valuation.outUsd != null ? ` · ≈ ${money(chosen.valuation.outUsd)}` : ''}</> : ' '}</div></>)}
+        <div className="flex items-center justify-between gap-3 px-3 pb-1 pt-2.5 text-[13px]">
+          <span className="min-w-0 leading-snug text-mute">{t('swSlippage')}</span>
+          <div className="sw-slip w-[186px] shrink-0"><Seg label={t('swSlippage')} value={String(slip)} onChange={(v) => setSlip(Number(v))} options={[30, 50, 100].map((b) => [String(b), `${numFmt(b / 100, locale, 1)} %`] as const)} /></div>
         </div>
+        {(action || (execErr && !exec && !isBridge)) && <div className="space-y-2.5 px-1 pb-1 pt-2.5">
+          {execErr && !exec && !isBridge && <Notice tone="danger">{execErr}</Notice>}
+          {action}
+        </div>}
       </Card>
 
-      <div className="flex rounded-2xl bg-elev p-1" role="radiogroup" aria-label={t('swMode')}>{(['best_price', 'fastest', 'balanced'] as Mode[]).map((m) =>
-        <button key={m} role="radio" aria-checked={mode === m} onClick={() => setMode(m)} className={`min-h-11 flex-1 rounded-xl text-[13.5px] ${mode === m ? 'bg-surface font-semibold shadow-sm' : 'text-mute'}`}>{t(`sw_${m}` as Key)}</button>)}</div>
-
-      {crossNet && from && to && <PlanCards from={from} to={to} amount={amount} slip={slip} routes={routes} money={money} pname={pname} onCount={setPlanCount} />}
-
-      {noProviders && <Notice tone="warn">{t('swNoProviders')}</Notice>}
-      {phase === 'loading' && routes.length === 0 && <Card><div className="flex items-center gap-3 text-[14px] text-mute"><Icon n="spin" className="h-5 w-5" />{t('swSearching')}</div></Card>}
-      {phase === 'error' && <Notice tone="danger">{t('swError')}</Notice>}
-      {phase === 'done' && routes.length === 0 && <Notice tone="warn">{reachable ? t('swNoLiquidity') : t('swNoRoute')}</Notice>}
-
-      {sorted.length > 0 && <div className="space-y-3">
-        {isBridge && <div className="px-1 text-[12.5px] font-medium text-mute">{t('qaSwOtherRoutes')}</div>}
-        {(isBridge && !allRoutes ? sorted.slice(0, 2) : sorted).map((r, k) => { const isOpen = open === r.id, sel = k === 0 && !isBridge; return (
-          <section key={r.id} className={`card overflow-hidden ${sel ? 'ring-2 ring-primary' : ''}`}>
-            <button className="w-full p-4 text-left" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '' : r.id)}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><div className="text-[13px] text-mute"><span className="mr-1.5 inline-flex items-center align-[-4px]">{r.providers.map((x, k) => <ProviderIcon key={x + k} provider={x} size={18} className={k ? '-ml-1 ring-2 ring-surface' : ''} />)}</span>{r.providers.map(pname).join(' → ')} · <span className={r.executable && !isBridge ? 'font-semibold text-emerald' : ''}>{r.executable && !isBridge ? t('qaSwExecHere') : t('qaSwCompareOnly')}</span></div>
-                  <div className="mt-0.5 text-[22px] font-semibold leading-tight tracking-tight">{trimAmt(r.amountOutDisplay, 8)} <span className="text-mute">{r.path[r.path.length - 1]!.symbol}</span></div>
-                  <div className="text-[12.5px] text-mute">{t('swMin')} {trimAmt(r.minAmountOutDisplay, 8)}{r.valuation.netUsd != null ? ` · ${t('swNet')} ${money(r.valuation.netUsd)}` : ''}</div></div>
-                <div className="flex shrink-0 flex-col items-end gap-1.5">
-                  {crossNet && !r.executable && !r.providers.every((x) => ['cctp', 'kyberswap', 'jupiter', 'thorchain'].includes(x)) && <span data-testid="compare-only" className="rounded-full bg-elev px-2 py-0.5 text-[11px] font-semibold text-mute">{t('pnCompareOnly')}</span>}
-                  {r.tags.map((tag) => <span key={tag} className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-onprimary">{t(`sw_${tag}` as Key)}</span>)}
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${riskCls[r.risk.level]}`}><Icon n={r.risk.level === 'low' ? 'check' : 'warn'} className="h-3 w-3" />{t(`swRisk_${r.risk.level}` as Key)}</span>
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px]">{r.path.map((p, i) => <span key={i} className="inline-flex items-center gap-1.5">{i > 0 && <Icon n="chev" className="h-3 w-3 text-mute" />}<span className="inline-flex items-center gap-1 rounded-full bg-elev px-2 py-0.5"><NetDot net={p.network} />{p.symbol}</span></span>)}</div>
-              <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-mute">
-                <span><Icon n="clock" className="mr-1 inline h-3.5 w-3.5" />{dur(r.estimatedSeconds, t)}</span>
-                <span>{t('swFees')} {r.valuation.extraFeesUsd > 0 ? money(r.valuation.extraFeesUsd) : '—'}</span>
-                {r.priceImpactBps !== null && <span>{t('swImpact')} {numFmt(r.priceImpactBps / 100, locale, 2, 2)} %</span>}
-              </div>
-            </button>
-            {isOpen && <div className="space-y-3 border-t border-line bg-elev/40 p-4 text-[13px]">
-              <div><div className="mb-1.5 text-[11.5px] uppercase tracking-wide text-mute">{t('swSteps')}</div>
-                <ol className="space-y-2">{r.steps.map((s, i) => <li key={i} className="flex gap-2.5"><span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-semibold text-onprimary">{i + 1}</span>
-                  <span className="min-w-0"><span className="font-medium">{t(`swKind_${s.kind}` as Key)}</span> {s.from.symbol} ({s.from.networkName}) → {s.to.symbol} ({s.to.networkName})
-                    <span className="flex items-center gap-1.5 text-mute"><ProviderIcon provider={s.provider} size={14} />{pname(s.provider)}{s.via.length ? ` · ${s.via.slice(0, 4).join(', ')}` : ''}</span></span></li>)}</ol></div>
-              {r.fees.length > 0 && <div><div className="mb-1.5 text-[11.5px] uppercase tracking-wide text-mute">{t('swFees')}</div>
-                <ul className="space-y-1">{r.fees.map((f, i) => <li key={i} className="flex justify-between gap-3"><span>{t(`swFee_${f.kind}` as Key)}{f.estimated ? ` (${t('estimate')})` : ''}{f.includedInOutput ? ` · ${t('swIncluded')}` : ''}</span><span className="shrink-0">{trimAmt(f.display, 8)} {f.symbol}{f.usd != null ? ` · ${money(f.usd)}` : ''}</span></li>)}</ul></div>}
-              <div><div className="mb-1.5 text-[11.5px] uppercase tracking-wide text-mute">{t('swRisk')}</div>
-                {r.risk.flags.length === 0 ? <span className="text-mute">—</span> : <ul className="space-y-1">{r.risk.flags.map((f, i) => <li key={i} className="flex gap-2"><Icon n={f.level === 'low' ? 'check' : 'warn'} className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${f.level === 'high' ? 'text-danger' : f.level === 'medium' ? 'text-warn' : 'text-mute'}`} /><span>{t(`swFlag_${f.code}` as Key)}{f.detail ? <span className="text-mute"> — {f.detail}</span> : null}</span></li>)}</ul>}</div>
-              <div className="text-mute">{t(`swExec_${r.executability.class}` as Key)}{r.executability.reason ? ` — ${r.executability.reason}` : ''}</div>
-            </div>}
-          </section>); })}
-        {isBridge && sorted.length > 2 && <button className="min-h-11 px-1 text-[13.5px] font-medium text-blue" aria-expanded={allRoutes} onClick={() => setAllRoutes(!allRoutes)}>{allRoutes ? t('qaSwLessRoutes') : t('qaSwMoreRoutes', { n: sorted.length - 2 })}</button>}
-        {execErr && !isBridge && <Notice tone="danger">{execErr}</Notice>}
-        {isBridge ? null : (() => { const ex = sorted.find((r) => r.executable); return ex
-          ? <><Btn full busy={busy === 'prepare'} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('swExecute', { via: pname(ex.providers[0]!) })}</Btn>
-              {ex.id !== sorted[0]!.id && <p className="px-1 text-[12.5px] text-mute">{t('swExecNotBest')}</p>}</>
-          : crossNet && planCount > 0 ? null /* a startable plan is offered above */ : <><button disabled className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-[15.5px] font-semibold text-onprimary opacity-40"><Icon n="lock" className="h-4 w-4" />{t('swExecuteDisabled')}</button>
-              <p className="px-1 text-[12.5px] text-mute">{t('swExecWhere')} {t('swSolIntro')}</p></>; })()}
-      </div>}
-
       {isBridge && amountOk && <Card>
-        <h2 className="text-[16px] font-semibold">{t('brTitle')}</h2>
-        {brQ.isLoading && <p className="mt-2 flex items-center gap-2 text-[13.5px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('swSearching')}</p>}
-        {brQ.error ? <div className="mt-2"><Notice tone="danger">{errText(t, brQ.error)}</Notice></div> : null}
-        {brQ.data && <div className="mt-2 space-y-3 text-[13.5px]">
-          <p className="text-mute">{t('brIntro', { from: brQ.data.fromName, to: brQ.data.toName, gas: brQ.data.destinationGas.symbol })}</p>
-          <div className="space-y-2" role="radiogroup" aria-label={t('brSpeed')}>{brQ.data.options.map((o) =>
-            <button key={o.speed} role="radio" aria-checked={brSpeed === o.speed} disabled={!o.available} onClick={() => setSpeed(o.speed)} className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left ${brSpeed === o.speed ? 'border-primary bg-elev/70' : 'border-line'} ${o.available ? '' : 'opacity-50'}`}>
-              <span><span className="block font-medium">{o.speed === 'fast' ? t('brOptFast', { fee: trimAmt(o.feeDisplay, 6) }) : t('brOptStandard')}</span>
-                <span className="block text-[12.5px] text-mute">{o.available ? t('brOptTime', { time: bridgeDur(o.seconds) }) : t('brFastUnavailable')}</span></span>
-              <span className="shrink-0 text-right font-semibold">{trimAmt(o.minReceiveDisplay, 6)} <span className="text-mute">USDC</span></span></button>)}</div>
+        <div className="mb-3 flex items-center gap-3"><ProviderIcon provider="cctp" size={40} />
+          <div className="min-w-0"><h2 className="text-[17px] font-semibold leading-snug tracking-[-0.015em]">{t('brTitle')}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[13px] text-mute"><NetDot net={from!.network} size={18} />{from!.networkName}<Icon n="chev" className="h-3 w-3" /><NetDot net={to!.network} size={18} />{to!.networkName}</div></div></div>
+        {brQ.isLoading && <div className="space-y-2" role="status" aria-label={t('swSearching')}><div className="skel h-3.5 w-4/5 !rounded-md" /><div className="skel h-[66px] !rounded-2xl" /><div className="skel h-[66px] !rounded-2xl" /><div className="skel h-[50px] !rounded-2xl" /></div>}
+        {brQ.error ? <Notice tone="danger">{errText(t, brQ.error)}</Notice> : null}
+        {brQ.data && <div className="space-y-3 text-[13.5px]">
+          <p className="leading-snug text-mute">{t('brIntro', { from: brQ.data.fromName, to: brQ.data.toName, gas: brQ.data.destinationGas.symbol })}</p>
+          <div className="space-y-2" role="radiogroup" aria-label={t('brSpeed')}>{brQ.data.options.map((o) => { const on = brSpeed === o.speed; return (
+            <button key={o.speed} role="radio" aria-checked={on} disabled={!o.available} onClick={() => setSpeed(o.speed)} className={`press flex min-h-[66px] w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-left ${on ? 'sw-opt-on border-primary bg-elev/60' : 'border-line'} ${o.available ? '' : 'opacity-50'}`}>
+              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border ${on ? 'border-primary bg-primary text-onprimary' : 'border-line'}`} aria-hidden="true">{on && <Icon n="check" className="h-3.5 w-3.5" />}</span>
+              <span className="min-w-0 flex-1"><span className="block font-semibold leading-snug">{o.speed === 'fast' ? t('brOptFast', { fee: trimAmt(o.feeDisplay, 6) }) : t('brOptStandard')}</span>
+                <span className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5"><span className="text-[13px] text-mute">{o.available ? t('brOptTime', { time: bridgeDur(o.seconds) }) : t('brFastUnavailable')}</span>
+                  <span className="t-num text-[17px]">{trimAmt(o.minReceiveDisplay, 6)} <span className="text-mute">USDC</span></span></span></span></button>); })}</div>
           {brQ.data.destinationGas.enough
-            ? <p className="text-mute">{t('brDestGasLine', { net: brQ.data.toName, need: trimAmt(brQ.data.destinationGas.needDisplay, 8), have: trimAmt(brQ.data.destinationGas.balanceDisplay, 8), sym: brQ.data.destinationGas.symbol })}</p>
+            ? <p className="flex gap-2 leading-snug text-mute"><Icon n="check" className="mt-0.5 h-4 w-4 shrink-0 text-emerald" /><span className="min-w-0">{t('brDestGasLine', { net: brQ.data.toName, need: trimAmt(brQ.data.destinationGas.needDisplay, 8), have: trimAmt(brQ.data.destinationGas.balanceDisplay, 8), sym: brQ.data.destinationGas.symbol })}</span></p>
             : <Notice tone="warn">{t('brDestGasMissing', { sym: brQ.data.destinationGas.symbol, net: brQ.data.toName })} {t('brDestGasLine', { net: brQ.data.toName, need: trimAmt(brQ.data.destinationGas.needDisplay, 8), have: trimAmt(brQ.data.destinationGas.balanceDisplay, 8), sym: brQ.data.destinationGas.symbol })}</Notice>}
-          {brSol?.role === 'source' && <p className="text-mute" data-testid="sc-source">{t('scSrcIntro', { dep: trimAmt(brSol.depositDisplay, 9) })} {t('scSrcFee', { fee: trimAmt(brSol.networkFeeDisplay, 9) })}</p>}
-          {brSol?.role === 'destination' && !ataMissing && <p className="text-mute" data-testid="sc-destination">{t('scDstIntro', { acct: `${brSol.tokenAccount.slice(0, 6)}…${brSol.tokenAccount.slice(-6)}`, rent: trimAmt(brSol.nonceRentDisplay, 9) })}</p>}
+          {brSol?.role === 'source' && <p className="leading-snug text-mute" data-testid="sc-source">{t('scSrcIntro', { dep: trimAmt(brSol.depositDisplay, 9) })} {t('scSrcFee', { fee: trimAmt(brSol.networkFeeDisplay, 9) })}</p>}
+          {brSol?.role === 'destination' && !ataMissing && <p className="leading-snug text-mute" data-testid="sc-destination">{t('scDstIntro', { acct: `${brSol.tokenAccount.slice(0, 6)}…${brSol.tokenAccount.slice(-6)}`, rent: trimAmt(brSol.nonceRentDisplay, 9) })}</p>}
           {brSol?.role === 'destination' && ataMissing && <Notice tone="warn"><span data-testid="sc-ata-missing"><b>{t('scAtaMissingTitle')}</b> {t('scAtaMissing', { rent: trimAmt(brSol.tokenAccountRentDisplay, 9) })}</span>
             <span className="mt-1 block break-all font-mono text-[11px] text-mute">{brSol.tokenAccount}</span>
             {ataMsg && <span className="mt-1 block">{ataMsg}</span>}{ataErr && <span className="mt-1 block text-danger">{ataErr}</span>}
             <div className="mt-2"><Btn full kind="soft" busy={ataBusy} onClick={() => void createAta()}><Icon n="key" className="h-4 w-4" />{t('scAtaCreate')}</Btn></div></Notice>}
-          {execErr && <Notice tone="danger">{execErr}</Notice>}
+          {execErr && !exec && <Notice tone="danger">{execErr}</Notice>}
           <Btn full busy={busy === 'prepare'} disabled={!brQ.data.destinationGas.enough || ataMissing} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('brExecute', { net: brQ.data.toName })}</Btn>
         </div>}
       </Card>}
 
-      {(phase === 'done' || provs.length > 0) && <p className="px-1 text-[12px] text-mute">
+      {crossNet && from && to && <PlanCards from={from} to={to} amount={amount} slip={slip} routes={routes} money={money} pname={pname} onCount={setPlanCount} />}
+
+      {noProviders && <Notice tone="warn">{t('swNoProviders')}</Notice>}
+
+      {phase === 'idle' ? <EmptyState icon="swap" title={t('dzSwEmptyTitle')}>{t('dzSwEmptyBody')}</EmptyState>
+        : <Section title={isBridge ? t('dzSwCompare') : t('dzSwRoutes')}>
+          <div className="space-y-3">
+            <Seg label={t('swMode')} value={mode} onChange={setMode} options={(['best_price', 'fastest', 'balanced'] as const).map((m) => [m, t(`sw_${m}` as Key)] as const)} />
+            {phase === 'loading' && routes.length === 0 && <div className="space-y-3" role="status" aria-label={t('swSearching')}><RouteSkeleton /><RouteSkeleton /></div>}
+            {phase === 'error' && (offline
+              ? <ErrorState offline title={t('offline')} onRetry={() => setAgain((n) => n + 1)}>{t('dsOfflineBody')}</ErrorState>
+              : <ErrorState title={t('swError')} onRetry={() => setAgain((n) => n + 1)}>{t('dzSwErrorBody')}</ErrorState>)}
+            {phase === 'done' && routes.length === 0 && <Notice tone="warn">{reachable ? t('swNoLiquidity') : t('swNoRoute')}</Notice>}
+            {shown.map(routeCard)}
+            {folded.length > 0 && <Fold testid="routes-compare" className="px-1" summary={<span className="min-w-0 leading-snug">{isBridge ? t('qaSwOtherRoutes') : t('dzSwFoldTitle')} <span className="tag ml-1 align-[1px]" data-tone="mute">{folded.length}</span></span>}>
+              <div className="-mx-1 space-y-3">{folded.map(routeCard)}</div></Fold>}
+          </div>
+        </Section>}
+
+      {(phase === 'done' || provs.length > 0) && <p className="px-1 text-[12.5px] leading-snug text-mute">
         {took !== null && <>{(() => { const n = provs.length + new Set(routes.flatMap((r) => r.providers)).size; return n === 1 ? t('qaSwProviders1', { ms: took }) : t('swTook', { n, ms: took }); })()}{first !== null ? ` · ${t('swFirst', { ms: first })}` : ''}. </>}
-        {provs.filter((p) => p.status !== 'no_route').map((p) => `${pname(p.provider)}${locale === 'fr' ? ' : ' : ': '}${p.status === 'skipped' ? t('swSkipped') : ['unavailable', 'timeout', 'error', 'unsupported'].includes(p.status) ? t(`qaSwSt_${p.status}` as Key) : p.code ?? p.status}`).join(' · ')}</p>}
+        {provs.filter((p) => p.status !== 'no_route').map((p) => `${pname(p.provider)}${sep}${p.status === 'skipped' ? t('swSkipped') : ['unavailable', 'timeout', 'error', 'unsupported'].includes(p.status) ? t(`qaSwSt_${p.status}` as Key) : p.code ?? p.status}`).join(' · ')}</p>}
 
-      {exec && prop && !prop.bridge && !prop.xswap && <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={t('swReview')}>
-        <div className="rise max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-surface p-5 lg:rounded-3xl">
-          <div className="mb-3 flex items-center justify-between"><h2 className="text-[20px] font-semibold tracking-tight">{prop.state === 'pending_approval' ? t('swReview') : t('swTracking')}</h2>{testNotSent(prop) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : <StatePill state={prop.state} />}</div>
-          <div className="rounded-2xl bg-elev/70 p-4">
-            <div className="text-[13px] text-mute">{t('swYouPay')}</div>
-            <div className="text-[24px] font-semibold tracking-tight">{exactAmt(prop.amountDisplay)} <span className="text-mute">{prop.symbol}</span></div>
-            <div className="mt-3 text-[13px] text-mute">{prop.swap.received ? t('swReceived') : t('swMinGuaranteed')}</div>
-            <div className="text-[24px] font-semibold tracking-tight">{trimAmt(prop.swap.receivedDisplay ?? prop.swap.minOutDisplay, 10)} <span className="text-mute">{prop.swap.toSymbol}</span></div>
-            {!prop.swap.received && <div className="text-[13px] text-mute">{t('swExpected')} {trimAmt(prop.swap.expectedOutDisplay, 10)} {prop.swap.toSymbol}</div>}
-          </div>
-          <dl className="mt-3 space-y-2 text-[13.5px]">
-            <div className="flex justify-between gap-3"><dt className="text-mute">{t('network')}</dt><dd>{prop.networkName} · {prop.swap.detail?.label ?? 'KyberSwap'}</dd></div>
-            {prop.swap.detail && <>
-              <div className="flex justify-between gap-3"><dt className="text-mute">{t('swSolRoute')}</dt><dd className="text-right">{(prop.swap.detail.venues as string[]).join(' + ')}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="text-mute">{t('swSolNetworkFee')}</dt><dd className="text-right">{trimAmt(prop.swap.detail.networkFeeDisplay, 9)} {prop.feeSymbol} <span className="text-mute">({t('swSolPriority')} {trimAmt(prop.swap.detail.priorityFeeDisplay, 9)})</span></dd></div>
-              {prop.swap.detail.createsAccount && <div className="flex justify-between gap-3"><dt className="text-mute">{t('swSolRent')}</dt><dd>{trimAmt(prop.swap.detail.rentDisplay, 9)} {prop.feeSymbol}</dd></div>}
-              {prop.state === 'pending_approval' && <div className="flex justify-between gap-3"><dt className="text-mute">{t('swSolSimulated')}</dt><dd>{trimAmt(prop.swap.detail.simulatedOutDisplay, 10)} {prop.swap.toSymbol}</dd></div>}
-            </>}
-            <div className="flex justify-between gap-3"><dt className="text-mute">{t('feeMax')}</dt><dd>{prop.maxFeeDisplay ? `${trimAmt(prop.maxFeeDisplay, 9)} ${prop.feeSymbol}` : '—'}</dd></div>
-            {prop.swap.approvalState && <div className="flex justify-between gap-3"><dt className="text-mute">{t('swApproval')}</dt><dd>{t(`swAppr_${prop.swap.approvalState}` as Key)}</dd></div>}
-            {prop.intentHash && <div><dt className="text-mute">{t('fingerprint')}</dt><dd className="break-all font-mono text-[11px] text-mute">{prop.intentHash}</dd></div>}
-            {prop.txid && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <div><dt className="text-mute">{t('txid')}</dt><dd className="break-all font-mono text-[11px]">{prop.txid}</dd></div>}
-          </dl>
-          {prop.state === 'pending_approval' && <div className="mt-3 space-y-3">
-            <Notice tone="ok">{prop.swap.detail ? t('swSolGuarantee') : t('swGuarantee')}</Notice>
-            {prop.swap.detail?.createsAccount && <Notice tone="info">{t('swSolRentNote', { sym: prop.swap.toSymbol })}</Notice>}
-            {prop.swap.detail && <Notice tone="info">{t('swSolExpiry')}</Notice>}
-            {prop.swap.needsApproval && <Notice tone="info">{t('swNeedsApproval', { sym: prop.symbol })}</Notice>}
-            <Notice tone="info">{t('irreversible')} {t('expiresIn')} {left} s.</Notice>
-          </div>}
-          {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{prop.error}</Notice></div>}
-          {testNotSent(prop) ? <div className="mt-3"><Notice tone="warn">{t('qaTestNotSent')}</Notice></div> : ['signed', 'broadcast', 'confirming'].includes(prop.state) && <p className="mt-3 flex items-center gap-2 text-[13px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('broadcastNote')}</p>}
-          {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
-          {prop.explorer && !testNotSent(prop) && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <a className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue" href={prop.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
-          <div className="mt-4 space-y-2.5">
-            {prop.state === 'pending_approval' && <Btn full busy={!!busy} disabled={left === 0} onClick={() => void approve()}><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>}
-            <Btn full kind="ghost" disabled={!!busy} onClick={() => void closeExec()}>{prop.state === 'pending_approval' ? t('cancel') : t('swClose')}</Btn>
-          </div>
-        </div>
-      </div>}
+      {/* what this screen does and does not execute — the same text as before, after the pair instead of above it */}
+      <div className="flex gap-2.5 px-1 text-[12.5px] leading-snug text-mute" role="note"><Icon n="shield" className="mt-0.5 h-4 w-4 shrink-0" /><p className="min-w-0">{t('swIntro')}</p></div>
 
-      {exec && prop?.bridge && <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={t('brReview')}>
-        <div className="rise max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-surface p-5 lg:rounded-3xl">
-          <div className="mb-3 flex items-center justify-between"><h2 className="text-[20px] font-semibold tracking-tight">{prop.state === 'pending_approval' ? t('brReview') : t('brTracking')}</h2><BridgePill b={prop.bridge} /></div>
-          <div className="rounded-2xl bg-elev/70 p-4">
-            <div className="text-[13px] text-mute">{prop.networkName} → {prop.bridge.toNetworkName}</div>
-            <div className="text-[24px] font-semibold tracking-tight">{exactAmt(prop.amountDisplay)} <span className="text-mute">{prop.symbol}</span></div>
-          </div>
-          <dl className="mt-3 space-y-2 text-[13.5px]">
-            <BridgeFacts b={prop.bridge} symbol={prop.symbol} />
-            <div className="flex justify-between gap-3"><dt className="text-mute">{t('feeMax')} · {prop.networkName}</dt><dd>{prop.maxFeeDisplay ? `${trimAmt(prop.maxFeeDisplay, 9)} ${prop.feeSymbol}` : '—'}</dd></div>
-            {prop.intentHash && <div><dt className="text-mute">{t('fingerprint')}</dt><dd className="break-all font-mono text-[11px] text-mute">{prop.intentHash}</dd></div>}
-            {prop.txid && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <div><dt className="text-mute">{t('txid')}</dt><dd className="break-all font-mono text-[11px]">{prop.txid}</dd></div>}
-          </dl>
-          {prop.state === 'pending_approval' && <div className="mt-3 space-y-3">
-            <Notice tone="ok">{t('brGuarantee', { from: prop.networkName, to: prop.bridge.toNetworkName })}{prop.bridge.sol ? ` ${prop.bridge.sol.role === 'source' ? t('scReviewSrc', { to: prop.bridge.toNetworkName }) : t('scReviewDst')}` : ''}</Notice>
-            {prop.bridge.needsApproval && <Notice tone="info">{t('qaBrNeedsApproval', { sym: prop.symbol })}</Notice>}
-            <Notice tone="info">{t('brIrreversible', { from: prop.networkName, to: prop.bridge.toNetworkName })} {t('expiresIn')} {left} s.</Notice>
-          </div>}
-          {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{prop.error}</Notice></div>}
-          {testNotSent(prop) && <div className="mt-3"><Notice tone="warn">{t('qaTestNotSent')}</Notice></div>}
-          {prop.state !== 'pending_approval' && !testNotSent(prop) && <div className="mt-4"><BridgeProgress id={prop.id} b={prop.bridge} onUpdate={(p) => { setExec({ ...exec, proposal: p }); void qc.invalidateQueries({ queryKey: ['proposal', p.id] }); }} /></div>}
-          {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
-          {prop.explorer && !testNotSent(prop) && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <a className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue" href={prop.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
-          <div className="mt-4 space-y-2.5">
-            {prop.state === 'pending_approval' && <Btn full busy={!!busy} disabled={left === 0} onClick={() => void approve()}><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>}
-            <Btn full kind="ghost" disabled={!!busy} onClick={() => void closeExec()}>{prop.state === 'pending_approval' ? t('cancel') : t('swClose')}</Btn>
-          </div>
+      {/* ── review sheets: the receipt the passkey signs. Same fields and values as ever, in full; nothing animated; they close only through their own buttons ── */}
+      {review && !prop.bridge && !prop.xswap && <Sheet title={prop.state === 'pending_approval' ? t('swReview') : t('swTracking')} onClose={() => void closeExec()} dismissable={false} busy={!!busy} wide
+        sub={reviewPill(testNotSent(prop) ? <Tag tone="warn" icon="warn">{t('qaSignedNotSent')}</Tag> : <StatePill state={prop.state} />)}>
+        <div className="rounded-[20px] bg-elev/60 p-4">
+          <ReviewAmount label={t('swYouPay')} sym={prop.symbol} net={prop.network}>{exactAmt(prop.amountDisplay)} <span className="text-mute">{prop.symbol}</span></ReviewAmount>
+          <ReviewArrow />
+          <ReviewAmount label={prop.swap.received ? t('swReceived') : t('swMinGuaranteed')} sym={prop.swap.toSymbol} net={prop.network}
+            sub={!prop.swap.received && <>{t('swExpected')} {trimAmt(prop.swap.expectedOutDisplay, 10)} {prop.swap.toSymbol}</>}>{trimAmt(prop.swap.receivedDisplay ?? prop.swap.minOutDisplay, 10)} <span className="text-mute">{prop.swap.toSymbol}</span></ReviewAmount>
         </div>
-      </div>}
+        <dl className="receipt mt-2">
+          <Fact k={t('network')}><span className="inline-flex items-center gap-1.5 align-middle"><NetDot net={prop.network} size={16} />{prop.networkName}</span> · {prop.swap.detail?.label ?? 'KyberSwap'}</Fact>
+          {prop.swap.detail && <>
+            <Fact k={t('swSolRoute')}>{(prop.swap.detail.venues as string[]).join(' + ')}</Fact>
+            <Fact k={t('swSolNetworkFee')}>{trimAmt(prop.swap.detail.networkFeeDisplay, 9)} {prop.feeSymbol} <span className="font-normal text-mute">({t('swSolPriority')} {trimAmt(prop.swap.detail.priorityFeeDisplay, 9)})</span></Fact>
+            {prop.swap.detail.createsAccount && <Fact k={t('swSolRent')}>{trimAmt(prop.swap.detail.rentDisplay, 9)} {prop.feeSymbol}</Fact>}
+            {prop.state === 'pending_approval' && <Fact k={t('swSolSimulated')}>{trimAmt(prop.swap.detail.simulatedOutDisplay, 10)} {prop.swap.toSymbol}</Fact>}
+          </>}
+          <Fact k={t('feeMax')}>{prop.maxFeeDisplay ? `${trimAmt(prop.maxFeeDisplay, 9)} ${prop.feeSymbol}` : '—'}</Fact>
+          {prop.swap.approvalState && <Fact k={t('swApproval')}>{t(`swAppr_${prop.swap.approvalState}` as Key)}</Fact>}
+          {prop.intentHash && <LongFact k={t('fingerprint')} mute>{prop.intentHash}</LongFact>}
+          {prop.txid && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <LongFact k={t('txid')}>{prop.txid}</LongFact>}
+        </dl>
+        {prop.state === 'pending_approval' && <div className="mt-3 space-y-3">
+          <Notice tone="ok">{prop.swap.detail ? t('swSolGuarantee') : t('swGuarantee')}</Notice>
+          {prop.swap.detail?.createsAccount && <Notice tone="info">{t('swSolRentNote', { sym: prop.swap.toSymbol })}</Notice>}
+          {prop.swap.detail && <Notice tone="info">{t('swSolExpiry')}</Notice>}
+          {prop.swap.needsApproval && <Notice tone="info">{t('swNeedsApproval', { sym: prop.symbol })}</Notice>}
+          <Notice tone="info">{t('irreversible')} {t('expiresIn')} {left} s.</Notice>
+        </div>}
+        {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{prop.error}</Notice></div>}
+        {testNotSent(prop) ? <div className="mt-3"><Notice tone="warn">{t('qaTestNotSent')}</Notice></div> : ['signed', 'broadcast', 'confirming'].includes(prop.state) && <p className="mt-3 flex items-center gap-2 text-[13px] text-mute"><Icon n="spin" className="h-4 w-4 shrink-0" />{t('broadcastNote')}</p>}
+        {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
+        {prop.explorer && !testNotSent(prop) && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <div className="mt-2"><ExplorerLink href={prop.explorer}>{t('viewExplorer')}</ExplorerLink></div>}
+        {reviewActions}
+      </Sheet>}
 
-      {exec && prop?.xswap && <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={t('xsReview')}>
-        <div className="rise max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-surface p-5 lg:rounded-3xl">
-          <div className="mb-3 flex items-center justify-between"><h2 className="text-[20px] font-semibold tracking-tight">{prop.state === 'pending_approval' ? t('xsReview') : t('xsTracking')}</h2><XswapPill x={prop.xswap} /></div>
-          <XswapSheet prop={prop} left={left} onUpdate={(p) => { setExec({ ...exec, proposal: p }); void qc.invalidateQueries({ queryKey: ['proposal', p.id] }); }} />
-          {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
-          {prop.explorer && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <a className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue" href={prop.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
-          <div className="mt-4 space-y-2.5">
-            {prop.state === 'pending_approval' && <Btn full busy={!!busy} disabled={left === 0} onClick={() => void approve()}><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>}
-            <Btn full kind="ghost" disabled={!!busy} onClick={() => void closeExec()}>{prop.state === 'pending_approval' ? t('cancel') : t('swClose')}</Btn>
-          </div>
+      {review && prop.bridge && <Sheet title={prop.state === 'pending_approval' ? t('brReview') : t('brTracking')} onClose={() => void closeExec()} dismissable={false} busy={!!busy} wide sub={reviewPill(<BridgePill b={prop.bridge} />)}>
+        <div className="rounded-[20px] bg-elev/60 p-4">
+          <ReviewAmount sym={prop.symbol} net={prop.network} label={<span className="inline-flex flex-wrap items-center gap-1.5"><NetDot net={prop.network} size={16} />{prop.networkName} → <NetDot net={prop.bridge.toNetwork} size={16} />{prop.bridge.toNetworkName}</span>}>{exactAmt(prop.amountDisplay)} <span className="text-mute">{prop.symbol}</span></ReviewAmount>
         </div>
-      </div>}
+        <dl className="receipt mt-2">
+          <BridgeFacts b={prop.bridge} symbol={prop.symbol} />
+          <Fact k={`${t('feeMax')} · ${prop.networkName}`}>{prop.maxFeeDisplay ? `${trimAmt(prop.maxFeeDisplay, 9)} ${prop.feeSymbol}` : '—'}</Fact>
+          {prop.intentHash && <LongFact k={t('fingerprint')} mute>{prop.intentHash}</LongFact>}
+          {prop.txid && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <LongFact k={t('txid')}>{prop.txid}</LongFact>}
+        </dl>
+        {prop.state === 'pending_approval' && <div className="mt-3 space-y-3">
+          <Notice tone="ok">{t('brGuarantee', { from: prop.networkName, to: prop.bridge.toNetworkName })}{prop.bridge.sol ? ` ${prop.bridge.sol.role === 'source' ? t('scReviewSrc', { to: prop.bridge.toNetworkName }) : t('scReviewDst')}` : ''}</Notice>
+          {prop.bridge.needsApproval && <Notice tone="info">{t('qaBrNeedsApproval', { sym: prop.symbol })}</Notice>}
+          <Notice tone="info">{t('brIrreversible', { from: prop.networkName, to: prop.bridge.toNetworkName })} {t('expiresIn')} {left} s.</Notice>
+        </div>}
+        {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{prop.error}</Notice></div>}
+        {testNotSent(prop) && <div className="mt-3"><Notice tone="warn">{t('qaTestNotSent')}</Notice></div>}
+        {prop.state !== 'pending_approval' && !testNotSent(prop) && <div className="mt-4"><BridgeProgress id={prop.id} b={prop.bridge} fromNetwork={prop.network} onUpdate={(p) => { setExec({ ...exec, proposal: p }); void qc.invalidateQueries({ queryKey: ['proposal', p.id] }); }} /></div>}
+        {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
+        {prop.explorer && !testNotSent(prop) && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <div className="mt-2"><ExplorerLink href={prop.explorer}>{t('viewExplorer')}</ExplorerLink></div>}
+        {reviewActions}
+      </Sheet>}
+
+      {review && prop.xswap && <Sheet title={prop.state === 'pending_approval' ? t('xsReview') : t('xsTracking')} onClose={() => void closeExec()} dismissable={false} busy={!!busy} wide sub={reviewPill(<XswapPill x={prop.xswap} />)}>
+        <XswapSheet prop={prop} left={left} onUpdate={(p) => { setExec({ ...exec, proposal: p }); void qc.invalidateQueries({ queryKey: ['proposal', p.id] }); }} />
+        {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
+        {prop.explorer && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <div className="mt-2"><ExplorerLink href={prop.explorer}>{t('viewExplorer')}</ExplorerLink></div>}
+        {reviewActions}
+      </Sheet>}
 
       <Picker open={pick !== null} onClose={() => setPick(null)} assets={assets} balances={balances} exclude={pick === 'from' ? toKey : fromKey} onPick={(a) => { if (pick === 'from') setFromKey(a.key); else setToKey(a.key); }} />
     </div>

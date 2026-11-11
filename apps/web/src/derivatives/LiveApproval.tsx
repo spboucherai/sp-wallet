@@ -10,15 +10,18 @@
  *  - a cancelled or failed passkey prompt, an expiry, or closing the sheet WITHDRAWS the proposal on the server (no passkey
  *    needed), so nothing approvable is left behind; the only thing ever re-sent as is, is an approval whose answer was lost;
  *  - `unknown` is shown as being checked on the venue, with no button that could send the order again.
+ *
+ * v10: the rows are a receipt (`<dl className="receipt">` + `Fact`) under eyebrow titles; same fields, same values, same order,
+ * nothing folded before the approval, nothing animated. The sheet is `LiveSheet` (the shared `Sheet`): the mode tag sits in
+ * its title area, the mode band stays the first thing in it.
  */
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useQueryClient } from '@tanstack/react-query';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { I18n, useT, type Key } from '../i18n';
-import { Btn, Icon, Notice } from '../ui';
-import { Row, Sheet } from './bits';
+import { Btn, Fact, Fold, Icon, Notice } from '../ui';
 import { fmt, usd } from './dec';
-import { CanonicalRows, Countdown, LiveErrNotice, ModeBand, OrderOutcome, SourceTag } from './LiveBits';
+import { CanonicalRows, Countdown, Fingerprint, Group, LiveErrNotice, LiveSheet, ModeBand, OrderOutcome, SourceTag, TICKET, Waiting, WORDS } from './LiveBits';
 import { canonicalProblem, closeProblem, inFlight, lapi, liveError, newKey, remainingMs, toneOf, type LeverageProposal, type LeverageResult, type LiveErr, type LiveOrder, type LiveOrderBody, type LiveSummary, type Proposal } from './live';
 import { refreshLive } from './liveStore';
 import type { Instrument, Position } from './types';
@@ -26,6 +29,8 @@ import type { Instrument, Position } from './types';
 export type ApprovalRequest = { kind: 'order'; body: LiveOrderBody } | { kind: 'close'; position: Position; fraction: string };
 type Phase = 'proposing' | 'ready' | 'passkey' | 'sending' | 'resend' | 'done' | 'void';
 const local = (key: string, detail = ''): LiveErr => ({ key, code: key, status: 0, detail, consumed: true, retry: false });
+/** THE approval button: large, alone, the key on it */
+const APPROVE = '!min-h-[56px] !text-[16px]';
 
 export function ApprovalSheet({ account, instrument, request, orders, ttlMs, onClose }: { account: LiveSummary; instrument: Instrument | undefined; request: ApprovalRequest; /** the account's orders, kept current by the stream */ orders: LiveOrder[];
   ttlMs: number; onClose: (clientId: string | null) => void }) {
@@ -96,41 +101,43 @@ export function ApprovalSheet({ account, instrument, request, orders, ttlMs, onC
   const c = p?.canonical ?? null, est = p?.estimate ?? null;
   const title = t(request.kind === 'close' ? 'flCloseTitle' : 'flApproveTitle');
   const passkeyLabel = t(tone === 'mainnet' ? 'flApproveReal' : 'flApproveTestnet');
-  return <Sheet title={title} onClose={close}>
-    <div className="space-y-3" data-testid="approval-sheet" data-phase={phase}>
+  const dim = phase === 'void' ? 'opacity-50' : '';
+  return <LiveSheet title={title} tone={tone} label={account.label} busy={phase === 'sending' || phase === 'passkey'} onClose={close}>
+    <div className="min-w-0 space-y-4" data-testid="approval-sheet" data-phase={phase}>
       <ModeBand tone={tone} label={account.label} />
-      {phase === 'proposing' && <p className="flex items-center gap-2 py-6 text-[13.5px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('flProposing')}</p>}
+      {phase === 'proposing' && <Waiting className="py-6">{t('flProposing')}</Waiting>}
 
       {c && phase !== 'proposing' && phase !== 'done' && <>
-        <h3 className="text-[13px] font-semibold">{t('flSignedExactly')}</h3>
-        <div className={`rounded-2xl bg-elev/70 p-3 ${phase === 'void' ? 'opacity-50' : ''}`}><CanonicalRows c={c} instrument={instrument} /></div>
-        {request.kind === 'close' && p?.slippageBoundBps ? <p className="text-[12px] leading-snug text-mute">{t('flCloseBound', { bps: p.slippageBoundBps, pct: fmt(String(p.slippageBoundBps / 100), { locale, trim: true }) })}</p> : null}
-        {est && <div className={`rounded-2xl border border-line p-3 ${phase === 'void' ? 'opacity-50' : ''}`}>
-          <div className="mb-1 flex items-center justify-between"><span className="text-[12.5px] font-semibold">{t('flEstimate')}</span><SourceTag source="estimate" /></div>
-          <Row label={t('fxNotional')}>{usd(est.notional, locale)}</Row><Row label={t('fxInitialMargin')}>{usd(est.initialMargin, locale)}</Row>
-          <Row label={t('flFeeMax')}>{usd(est.fee, locale)}</Row><Row label={t('fxFreeAfter')}>{usd(est.freeCollateralAfter, locale)}</Row>
-          <Row label={t('flVenueLeverage')}>{fmt(est.leverage, { locale, trim: true })}× · {t(est.marginMode === 'cross' ? 'fxCross' : 'fxIsolated')}</Row>
-          <p className="mt-1 text-[11.5px] leading-snug text-mute">{t('flLiqNote')}</p></div>}
-        {p?.hash && <p className="break-all font-mono text-[10.5px] leading-snug text-mute">{t('fingerprint')} SHA-256 {p.hash}</p>}
+        <Group title={t('flSignedExactly')}><div className={`${TICKET} ${dim}`}><CanonicalRows c={c} instrument={instrument} /></div></Group>
+        {request.kind === 'close' && p?.slippageBoundBps ? <p className="text-[12.5px] leading-snug text-mute">{t('flCloseBound', { bps: p.slippageBoundBps, pct: fmt(String(p.slippageBoundBps / 100), { locale, trim: true }) })}</p> : null}
+        {est && <Group title={t('flEstimate')} right={<SourceTag source="estimate" />} className={dim}>
+          <div className="rounded-[18px] border border-line px-4 py-1.5"><dl className="receipt">
+            <Fact k={t('fxNotional')}>{usd(est.notional, locale)}</Fact><Fact k={t('fxInitialMargin')}>{usd(est.initialMargin, locale)}</Fact>
+            <Fact k={t('flFeeMax')}>{usd(est.fee, locale)}</Fact><Fact k={t('fxFreeAfter')}>{usd(est.freeCollateralAfter, locale)}</Fact>
+            <Fact k={t('flVenueLeverage')}>{fmt(est.leverage, { locale, trim: true })}× · {t(est.marginMode === 'cross' ? 'fxCross' : 'fxIsolated')}</Fact></dl></div>
+          <p className="mt-1.5 text-[12px] leading-snug text-mute">{t('flLiqNote')}</p></Group>}
+        {p?.hash && <Fingerprint>{t('fingerprint')} SHA-256 {p.hash}</Fingerprint>}
       </>}
 
       {phase === 'ready' && p?.expiresAt && <Countdown expiresAt={p.expiresAt} skewMs={skew} ttlMs={ttlMs} onExpire={() => { if (phaseRef.current === 'ready') fail(local('proposal_expired')); }} />}
       {phase === 'passkey' && <Notice tone="info">{t('flPasskeyWaiting')}</Notice>}
-      {phase === 'sending' && <p className="flex items-center gap-2 text-[13.5px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('flSending')}</p>}
+      {phase === 'sending' && <Waiting>{t('flSending')}</Waiting>}
       {err && <LiveErrNotice err={err} tone={err.key === 'passkey_cancelled' ? 'warn' : 'danger'}>{phase === 'void' && <span className="mt-1 block">{t('flVoidNote')}</span>}</LiveErrNotice>}
       {phase === 'done' && order && <><OrderOutcome order={order} instrument={instrument} />
         {inFlight(order.state) && <Notice tone="warn">{t('flUnknownNote')}</Notice>}
-        {order.canonical && <details className="rounded-2xl border border-line p-3 text-[13px]"><summary className="cursor-pointer text-[12.5px] font-semibold">{t('flWhatWasSigned')}</summary><div className="mt-2"><CanonicalRows c={order.canonical} instrument={instrument} /></div></details>}</>}
+        {order.canonical && <Fold className="rounded-[18px] border border-line px-4" summary={t('flWhatWasSigned')}><CanonicalRows c={order.canonical} instrument={instrument} /></Fold>}</>}
 
-      {phase === 'ready' && <Btn full kind={tone === 'mainnet' ? 'danger' : 'primary'} onClick={() => void approve()}><Icon n="key" className="h-4 w-4" />{passkeyLabel}</Btn>}
-      {phase === 'resend' && (assertion.current
-        ? <Btn full onClick={() => void send()}>{t('flResendApproval')}</Btn>
-        : <Btn full onClick={() => void propose(key)}>{t('retry')}</Btn>)}
-      {phase === 'void' && <Btn full kind="soft" onClick={again} data-testid="prepare-again">{t('flPrepareAgain')}</Btn>}
-      <Btn full kind="ghost" disabled={phase === 'sending' || phase === 'passkey'} onClick={close}>{t(phase === 'done' ? 'fxClose' : 'cancel')}</Btn>
-      {(phase === 'ready' || phase === 'proposing') && <p className="text-center text-[11.5px] leading-snug text-mute">{t('flCancelWithdraws')}</p>}
+      <div className="space-y-2.5">
+        {phase === 'ready' && <Btn full className={APPROVE} kind={tone === 'mainnet' ? 'danger' : 'primary'} onClick={() => void approve()}><Icon n="key" className="h-[18px] w-[18px]" />{passkeyLabel}</Btn>}
+        {phase === 'resend' && (assertion.current
+          ? <Btn full onClick={() => void send()}>{t('flResendApproval')}</Btn>
+          : <Btn full onClick={() => void propose(key)}>{t('retry')}</Btn>)}
+        {phase === 'void' && <Btn full kind="soft" onClick={again} data-testid="prepare-again"><Icon n="refresh" className="h-4 w-4" />{t('flPrepareAgain')}</Btn>}
+        <Btn full kind="ghost" disabled={phase === 'sending' || phase === 'passkey'} onClick={close}>{t(phase === 'done' ? 'fxClose' : 'cancel')}</Btn>
+        {(phase === 'ready' || phase === 'proposing') && <p className="text-center text-[12px] leading-snug text-mute">{t('flCancelWithdraws')}</p>}
+      </div>
     </div>
-  </Sheet>;
+  </LiveSheet>;
 }
 
 /** leverage is a setting of the VENUE, per instrument: changing it is a signed action, approved with the passkey */
@@ -166,35 +173,36 @@ export function LeverageSheet({ account, instrument, max, current, onRead, onClo
     finally { void refreshLive(qc, account.id); void qc.invalidateQueries({ queryKey: ['deriv', 'live', 'preview'] }); }
   });
   const state = res?.action.state;
-  return <Sheet title={t('flLevTitle', { symbol: instrument.symbol })} onClose={() => { if (!busy) onClose(); }}>
-    <div className="space-y-3" data-testid="leverage-sheet" data-phase={phase}>
+  return <LiveSheet title={t('flLevTitle', { symbol: instrument.symbol })} tone={tone} label={account.label} busy={busy} onClose={onClose}>
+    <div className="min-w-0 space-y-4" data-testid="leverage-sheet" data-phase={phase}>
       <ModeBand tone={tone} label={account.label} />
-      <p className="text-[13px] leading-snug text-mute">{t('flLevIntro')}</p>
+      <p className="text-[13.5px] leading-snug text-mute">{t('flLevIntro')}</p>
       {(phase === 'form' || phase === 'proposing' || phase === 'void') && <>
-        <div><div className="mb-1 flex items-baseline justify-between text-[13px]"><label htmlFor="fl-lev" className="text-mute">{t('flLevNew')}</label><span className="font-semibold">{lev}×</span></div>
-          <input id="fl-lev" type="range" min={1} max={max} step={1} value={lev} disabled={busy || max <= 1} onChange={(e) => { setLev(Number(e.target.value)); setPhase('form'); setErr(null); }} className="h-11 w-full accent-[var(--blue)]" aria-valuetext={`${lev}×`} />
-          <p className="text-[11.5px] leading-snug text-mute">{t('flLevBounds', { max })}{current ? ` ${t('flLevCurrent', { lev: fmt(current.leverage, { locale, trim: true }), mode: t(current.marginMode === 'isolated' ? 'fxIsolated' : 'fxCross') })}` : ''}</p></div>
+        <div><div className="flex items-end justify-between gap-3"><label htmlFor="fl-lev" className="text-[13px] font-medium text-mute">{t('flLevNew')}</label><span className="t-num text-[34px]">{lev}×</span></div>
+          <input id="fl-lev" type="range" min={1} max={max} step={1} value={lev} disabled={busy || max <= 1} onChange={(e) => { setLev(Number(e.target.value)); setPhase('form'); setErr(null); }} className="lev-range" style={{ '--fill': `${max > 1 ? ((lev - 1) / (max - 1)) * 100 : 0}%` } as CSSProperties} aria-valuetext={`${lev}×`} />
+          <p className="text-[12px] leading-snug text-mute">{t('flLevBounds', { max })}{current ? ` ${t('flLevCurrent', { lev: fmt(current.leverage, { locale, trim: true }), mode: t(current.marginMode === 'isolated' ? 'fxIsolated' : 'fxCross') })}` : ''}</p></div>
         <div role="radiogroup" aria-label={t('flLevMode')} className="grid grid-cols-2 gap-2">{(['cross', 'isolated'] as const).filter((m) => instrument.marginModes.includes(m)).map((m) =>
-          <button key={m} type="button" role="radio" aria-checked={mode === m} disabled={busy} onClick={() => { setMode(m); setPhase('form'); setErr(null); }} className={`min-h-11 rounded-2xl border text-[14px] font-semibold ${mode === m ? 'border-ink text-ink' : 'border-line text-mute'}`}>{t(m === 'cross' ? 'flLevCross' : 'flLevIsolated')}</button>)}</div>
+          <button key={m} type="button" role="radio" aria-checked={mode === m} disabled={busy} onClick={() => { setMode(m); setPhase('form'); setErr(null); }} className={`press inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border px-3 text-[14.5px] font-semibold ${mode === m ? 'border-ink bg-elev/60 text-ink' : 'border-line text-mute'}`}>{mode === m && <Icon n="check" className="h-4 w-4" />}{t(m === 'cross' ? 'flLevCross' : 'flLevIsolated')}</button>)}</div>
       </>}
       {p && (phase === 'ready' || phase === 'passkey' || phase === 'sending') && <>
-        <h3 className="text-[13px] font-semibold">{t('flSignedExactly')}</h3>
-        <div className="rounded-2xl bg-elev/70 p-3" data-testid="canonical">
-          <Row label={t('flCInstrument')} strong>{p.canonical.instrument}</Row><Row label={t('flLevNew')} strong>{p.canonical.leverage}×</Row>
-          <Row label={t('flLevMode')} strong>{t(p.canonical.marginMode === 'cross' ? 'flLevCross' : 'flLevIsolated')}</Row>
-          <Row label={t('flLevNow')}>{p.current ? `${fmt(p.current.leverage, { locale, trim: true })}× · ${t(p.current.marginMode === 'isolated' ? 'fxIsolated' : 'fxCross')}` : '—'} <SourceTag /></Row>
-          <Row label={t('flCNetwork')}>{p.canonical.network}</Row></div>
-        <p className="break-all font-mono text-[10.5px] leading-snug text-mute">{t('fingerprint')} SHA-256 {p.hash}</p>
+        <Group title={t('flSignedExactly')}><div className={TICKET}><dl className="receipt" data-testid="canonical">
+          <Fact k={t('flCInstrument')}><span className="font-semibold">{p.canonical.instrument}</span></Fact><Fact k={t('flLevNew')}><span className="font-semibold">{p.canonical.leverage}×</span></Fact>
+          <Fact k={t('flLevMode')}><span className="font-semibold">{t(p.canonical.marginMode === 'cross' ? 'flLevCross' : 'flLevIsolated')}</span></Fact>
+          <Fact k={t('flLevNow')}>{p.current ? `${fmt(p.current.leverage, { locale, trim: true })}× · ${t(p.current.marginMode === 'isolated' ? 'fxIsolated' : 'fxCross')}` : '—'} <SourceTag /></Fact>
+          <Fact k={t('flCNetwork')}>{p.canonical.network}</Fact></dl></div></Group>
+        <Fingerprint>{t('fingerprint')} SHA-256 {p.hash}</Fingerprint>
         {phase === 'ready' && <Countdown expiresAt={p.expiresAt} skewMs={skew} onExpire={() => { if (phaseRef.current === 'ready') { setErr(local('proposal_expired')); setPhase('void'); } }} />}
       </>}
       {phase === 'passkey' && <Notice tone="info">{t('flPasskeyWaiting')}</Notice>}
       {err && <LiveErrNotice err={err} tone={err.key === 'passkey_cancelled' ? 'warn' : 'danger'} />}
       {phase === 'done' && res && <Notice tone={state === 'confirmed' ? 'ok' : state === 'rejected' ? 'danger' : 'warn'}><div data-testid="leverage-result" data-state={state}>
         {t(`flLev_${state === 'confirmed' || state === 'rejected' ? state : 'unknown'}` as Key, { lev: res.venue?.leverage ? fmt(res.venue.leverage.leverage, { locale, trim: true }) : '—' })}
-        {res.action.error && <span className="mt-1 block break-words font-mono text-[11.5px] text-mute">{t('flVenueSays')} {res.action.error}</span>}</div></Notice>}
-      {(phase === 'form' || phase === 'void' || phase === 'proposing') && <Btn full busy={phase === 'proposing'} onClick={() => void propose()}>{t(phase === 'void' ? 'flPrepareAgain' : 'flLevPrepare')}</Btn>}
-      {(phase === 'ready' || phase === 'passkey' || phase === 'sending') && <Btn full busy={phase !== 'ready'} kind={tone === 'mainnet' ? 'danger' : 'primary'} onClick={() => void approve()}><Icon n="key" className="h-4 w-4" />{t(tone === 'mainnet' ? 'flApproveReal' : 'flApproveTestnet')}</Btn>}
-      <Btn full kind="ghost" disabled={busy} onClick={onClose}>{t(phase === 'done' ? 'fxClose' : 'cancel')}</Btn>
+        {res.action.error && <span className={`mt-1.5 ${WORDS}`}>{t('flVenueSays')} {res.action.error}</span>}</div></Notice>}
+      <div className="space-y-2.5">
+        {(phase === 'form' || phase === 'void' || phase === 'proposing') && <Btn full busy={phase === 'proposing'} onClick={() => void propose()}>{t(phase === 'void' ? 'flPrepareAgain' : 'flLevPrepare')}</Btn>}
+        {(phase === 'ready' || phase === 'passkey' || phase === 'sending') && <Btn full className={APPROVE} busy={phase !== 'ready'} kind={tone === 'mainnet' ? 'danger' : 'primary'} onClick={() => void approve()}><Icon n="key" className="h-[18px] w-[18px]" />{t(tone === 'mainnet' ? 'flApproveReal' : 'flApproveTestnet')}</Btn>}
+        <Btn full kind="ghost" disabled={busy} onClick={onClose}>{t(phase === 'done' ? 'fxClose' : 'cancel')}</Btn>
+      </div>
     </div>
-  </Sheet>;
+  </LiveSheet>;
 }

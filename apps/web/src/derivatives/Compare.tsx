@@ -6,7 +6,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useContext, useMemo } from 'react';
 import { errText, I18n, useT, type Key } from '../i18n';
-import { Card, H, Notice, Skeleton } from '../ui';
+import { Card, Coin, H, Notice, VenueIcon } from '../ui';
 import { dapi } from './api';
 import { DataTable, Seg, VENUE_NAME, VenueBadge, type Col } from './bits';
 import { compactUsd, fmt, pct, priceDp } from './dec';
@@ -32,37 +32,39 @@ export function CompareView({ instruments, base, onBase, onOpen }: { instruments
   const cols: Col<CompareRow>[] = [
     { id: 'v', label: t('fxVenue'), head: true, cell: (r) => <><VenueBadge venue={r.venue} />{r.restriction ? <span className="mt-1 block text-[11.5px] font-normal text-warn">{t('fxDataOnly')}</span> : null}</> },
     { id: 'i', label: t('fxInstrument'), head: true, cell: (r) => <button type="button" onClick={() => onOpen(r.instrument)} className={COMPARE_OPEN_CLS} data-testid="compare-open" aria-label={t('fxOpenMarket', { symbol: r.instrument })}>{r.instrument.slice(r.instrument.indexOf(':') + 1)}</button> },
-    { id: 'mark', label: t('fxMark'), num: true, cell: (r) => fmt(r.mark, { dp: priceDp('0.01', r.mark), locale }) },
+    { id: 'mark', label: t('fxMark'), num: true, cell: (r) => <span className="font-semibold">{fmt(r.mark, { dp: priceDp('0.01', r.mark), locale })}</span> },
     { id: 'index', label: t('fxIndex'), num: true, cell: (r) => (r.index ? fmt(r.index, { dp: priceDp('0.01', r.index), locale }) : '—') },
-    { id: 'fund', label: t('fxFundingPerHour'), num: true, cell: (r) => (r.funding ? <>{pct(r.funding, 5, locale, true)}<span className="block text-[11.5px] text-mute">{r.venue === 'gmx' ? t('fxContinuousShort') : t('fxEveryShort', { interval: intervalText(r.fundingVenue.intervalSec) })}</span></> : '—') },
-    { id: 'spread', label: t('fxSpreadBps'), num: true, cell: (r) => (r.spreadBps ? fmt(r.spreadBps, { dp: 2, locale }) : <span className="text-mute">{r.venue === 'gmx' ? t('fxNoBookShort') : '—'}</span>) },
-    { id: 'depth', label: t('fxDepth1pct'), num: true, cell: (r) => (r.depthUsd1pct ? compactUsd(r.depthUsd1pct, locale) : <span className="text-mute">{r.venue === 'gmx' ? t('fxNoBookShort') : '—'}</span>) },
+    { id: 'fund', label: t('fxFundingPerHour'), num: true, cell: (r) => (r.funding ? <>{pct(r.funding, 5, locale, true)}<span className="block text-[11.5px] font-normal text-mute">{r.venue === 'gmx' ? t('fxContinuousShort') : t('fxEveryShort', { interval: intervalText(r.fundingVenue.intervalSec) })}</span></> : '—') },
+    { id: 'spread', label: t('fxSpreadBps'), num: true, cell: (r) => (r.spreadBps ? fmt(r.spreadBps, { dp: 2, locale }) : <span className="font-normal text-mute">{r.venue === 'gmx' ? t('fxNoBookShort') : '—'}</span>) },
+    { id: 'depth', label: t('fxDepth1pct'), num: true, cell: (r) => (r.depthUsd1pct ? compactUsd(r.depthUsd1pct, locale) : <span className="font-normal text-mute">{r.venue === 'gmx' ? t('fxNoBookShort') : '—'}</span>) },
     { id: 'fee', label: t('fxTakerFeeBps'), num: true, cell: (r) => (r.takerFeeBps ? fmt(r.takerFeeBps, { dp: 2, locale, trim: true }) : '—') },
     { id: 'lev', label: t('fxMaxLeverage'), num: true, cell: (r) => `${fmt(r.maxLeverage, { dp: 1, locale, trim: true })}×` },
     { id: 'coll', label: t('fxCollateral'), cell: (r) => r.collateral || '—' },
-    { id: 'settle', label: t('fxSettlement'), cell: (r) => <span className="block max-w-[320px] whitespace-normal text-[12.5px] leading-snug text-mute md:w-[280px]">{r.settlement || '—'}</span> },
-    { id: 'notes', label: t('fxNotes'), cell: (r) => (r.notes.length ? <details className="max-w-[360px] whitespace-normal md:w-[320px]"><summary className="flex min-h-11 cursor-pointer items-center text-[12.5px] font-medium text-blue">{t('fxNotesCount', { n: r.notes.length })}</summary>
-      <ul className="list-disc space-y-1 pb-1 pl-4 text-[12.5px] leading-snug text-mute">{r.restriction ? <li>{r.restriction}</li> : null}{r.notes.map((n) => <li key={n}>{n}</li>)}</ul></details> : '—') },
+    { id: 'settle', label: t('fxSettlement'), full: true, cell: (r) => <span className="block max-w-[320px] whitespace-normal text-[12.5px] font-normal leading-snug text-mute md:w-[280px]">{r.settlement || '—'}</span> },
+    { id: 'notes', label: t('fxNotes'), full: true, cell: (r) => (r.notes.length ? <details className="max-w-[360px] whitespace-normal md:w-[320px]"><summary className="flex min-h-11 cursor-pointer items-center text-[13px] font-medium text-blue">{t('fxNotesCount', { n: r.notes.length })}</summary>
+      <ul className="list-disc space-y-1 pb-1 pl-4 text-[12.5px] font-normal leading-snug text-mute">{r.restriction ? <li>{r.restriction}</li> : null}{r.notes.map((n) => <li key={n}>{n}</li>)}</ul></details> : '—') },
   ];
   const present = ORDER.filter((v) => rows.some((r) => r.venue === v));
+  const shown = bases.includes(base) ? bases : [base, ...bases];
   return (
     <div className="space-y-4" data-testid="compare-view">
       <Card>
         <H>{t('fxCompareTitle', { base })}</H>
-        {bases.length > 0 && <Seg size="sm" label={t('fxBaseAsset')} value={base} onChange={onBase} options={(bases.includes(base) ? bases : [base, ...bases]).map((b) => ({ id: b, label: b }))} className="mb-3 max-w-xl" />}
+        {bases.length > 0 && <Seg size="sm" label={t('fxBaseAsset')} value={base} onChange={onBase} options={shown.map((b) => ({ id: b, label: <span className="inline-flex items-center gap-1.5"><Coin sym={b} size={18} />{b}</span>, aria: b }))} className="mb-3 max-w-2xl" />}
         <div className="mb-3"><Notice tone="warn"><b className="font-semibold">{t('fxNotInterchangeable')}</b> {t('fxNotInterchangeableBody')}</Notice></div>
         {(q.data?.errors.length ?? 0) > 0 && <div className="mb-3"><Notice tone="warn">{t('fxVenueErrors', { venues: q.data!.errors.map((e) => VENUE_NAME[e.venue as VenueId] ?? e.venue).join(', ') })}</Notice></div>}
-        {q.isLoading ? <Skeleton h="h-40" /> : q.isError ? <Notice tone="danger">{errText(t, q.error) || t('fxErrGeneric')}</Notice>
-          : <DataTable label={t('fxCompareTitle', { base })} cols={cols} rows={rows} rowKey={(r) => r.instrument} empty={t('fxCompareEmpty', { base })} />}
+        {q.isLoading ? <div className="space-y-3 py-1" aria-hidden="true">{[0, 1, 2].map((k) => <div key={k} className="flex items-center gap-3"><div className="skel h-6 w-28 !rounded-full" /><div className="skel h-4 w-14 !rounded-md" /><div className="skel h-4 flex-1 !rounded-md" /></div>)}</div>
+          : q.isError ? <Notice tone="danger">{errText(t, q.error) || t('fxErrGeneric')}</Notice>
+          : <DataTable label={t('fxCompareTitle', { base })} cols={cols} rows={rows} rowKey={(r) => r.instrument} empty={t('fxCompareEmpty', { base })} emptyIcon="bars" />}
         <p className="mt-3 text-[12px] leading-snug text-mute">{t('fxCompareNote')}</p>
       </Card>
       <Card>
         <H>{t('fxDiffTitle')}</H>
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">{(present.length ? present : ORDER).map((v) => <section key={v} className="rounded-2xl border border-line p-4" aria-label={VENUE_NAME[v]}>
-          <VenueBadge venue={v} />
-          <dl className="mt-3 space-y-2.5">{FIELDS.map((k) => <div key={k}><dt className="text-[11.5px] font-semibold uppercase tracking-wide text-mute">{t(`fxDiffField_${k}` as Key)}</dt><dd className="text-[13px] leading-snug">{t(`fxDiff_${v}_${k}` as Key)}</dd></div>)}</dl>
+        <div className="grid grid-cols-1 gap-x-8 gap-y-6 xl:grid-cols-3">{(present.length ? present : ORDER).map((v) => <section key={v} className="min-w-0 border-line max-xl:border-t max-xl:pt-5 max-xl:first:border-t-0 max-xl:first:pt-0 xl:border-l xl:pl-8 xl:first:border-l-0 xl:first:pl-0" aria-label={VENUE_NAME[v]}>
+          <div className="flex items-center gap-2.5"><VenueIcon venue={v} size={32} /><h3 className="text-[16px] font-semibold tracking-[-0.01em]">{VENUE_NAME[v]}</h3></div>
+          <dl className="mt-3 space-y-3">{FIELDS.map((k) => <div key={k}><dt className="t-eyebrow">{t(`fxDiffField_${k}` as Key)}</dt><dd className="mt-0.5 text-[13.5px] leading-snug">{t(`fxDiff_${v}_${k}` as Key)}</dd></div>)}</dl>
         </section>)}</div>
-        <ul className="mt-4 list-disc space-y-1.5 pl-5 text-[13px] leading-snug">{(['fxNever1', 'fxNever2', 'fxNever3', 'fxNever4'] as const).map((k) => <li key={k}>{t(k)}</li>)}</ul>
+        <ul className="mt-5 list-disc space-y-1.5 border-t border-line pl-5 pt-4 text-[13.5px] leading-snug">{(['fxNever1', 'fxNever2', 'fxNever3', 'fxNever4'] as const).map((k) => <li key={k}>{t(k)}</li>)}</ul>
         <p className="mt-3 text-[12px] leading-snug text-mute">{t('fxDiffSource')}</p>
       </Card>
     </div>

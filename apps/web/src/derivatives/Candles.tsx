@@ -17,6 +17,15 @@ import { INTERVAL_MS, INTERVALS, type Interval } from './types';
 export interface Overlay { price: number; label: string; kind: 'entry' | 'liq' | 'order' | 'stop' | 'tp' }
 const AXIS_W = 62, AXIS_H = 20, PAD_T = 10;
 const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+/** the chart's colours, read from the theme's tokens ONCE per theme (not on every frame: the canvas redraws up to 60 times a second) */
+type Palette = { up: string; down: string; line: string; mute: string; ink: string; surface: string; blue: string; warn: string; onp: string; primary: string };
+let palette: { key: string; c: Palette } | null = null;
+const DARK = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
+function colours(): Palette {
+  const key = `${document.documentElement.getAttribute('data-theme') ?? ''}|${DARK?.matches ? 'd' : 'l'}`;
+  if (palette?.key !== key) palette = { key, c: { up: cssVar('--emerald'), down: cssVar('--danger'), line: cssVar('--line'), mute: cssVar('--mute'), ink: cssVar('--ink'), surface: cssVar('--surface'), blue: cssVar('--blue'), warn: cssVar('--warn'), onp: cssVar('--onprimary'), primary: cssVar('--primary') } };
+  return palette.c;
+}
 
 export function Candles({ store, interval, onInterval, overlays, priceDp, locale, stale, height }: { store: MarketStore; interval: Interval; onInterval: (i: Interval) => void; overlays: Overlay[]; priceDp: number; locale: string; stale: boolean; height: number }) {
   const t = useT();
@@ -37,10 +46,10 @@ export function Candles({ store, interval, onInterval, overlays, priceDp, locale
     if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = `${W}px`; cv.style.height = `${H}px`; }
     const g = cv.getContext('2d'); if (!g) return;
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
-    const C = { up: cssVar('--emerald'), down: cssVar('--danger'), line: cssVar('--line'), mute: cssVar('--mute'), ink: cssVar('--ink'), surface: cssVar('--surface'), blue: cssVar('--blue'), warn: cssVar('--warn'), onp: cssVar('--onprimary'), primary: cssVar('--primary') };
+    const C = colours();
     const all = bars.current, plotW = W - AXIS_W, plotH = H - AXIS_H - PAD_T, volH = Math.round(plotH * 0.2), priceH = plotH - volH - 8;
     g.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif'; g.textBaseline = 'middle';
-    if (all.length < 2) { geom.current = null; g.fillStyle = C.mute; g.textAlign = 'center'; g.fillText(q.isError ? t('fxChartError') : t('fxLoading'), W / 2, H / 2); return; }
+    if (all.length < 2) { geom.current = null; g.fillStyle = C.mute; g.textAlign = 'center'; if (q.isError) g.fillText(t('fxChartError'), W / 2, H / 2); return; }
     const cw = zoom, n = Math.max(10, Math.min(all.length, Math.floor((plotW - 6) / cw))), first = all.length - n, vis = all.slice(first);
     geom.current = { first, n, cw, plotW };
     const ma1 = ma.a ? sma(all, 20).slice(first) : null, ma2 = ma.b ? sma(all, 50).slice(first) : null;
@@ -79,11 +88,11 @@ export function Candles({ store, interval, onInterval, overlays, priceDp, locale
     for (const o of overlays) {
       if (!Number.isFinite(o.price) || o.price <= 0) continue;
       const col = colOf[o.kind], text = `${o.label} ${nf.format(o.price)}`;
-      if (o.price > hi) { chip(`▲ ${text}`, 4, edgeTop, col, '#fff', 'left'); edgeTop += 20; continue; }
-      if (o.price < lo) { chip(`▼ ${text}`, 4, edgeBottom, col, '#fff', 'left'); edgeBottom -= 20; continue; }
+      if (o.price > hi) { chip(`▲ ${text}`, 4, edgeTop, col, C.surface, 'left'); edgeTop += 20; continue; }
+      if (o.price < lo) { chip(`▼ ${text}`, 4, edgeBottom, col, C.surface, 'left'); edgeBottom -= 20; continue; }
       const yy = Math.round(y(o.price)) + 0.5;
       g.strokeStyle = col; g.lineWidth = 1; g.setLineDash(o.kind === 'entry' ? [] : [4, 3]); g.beginPath(); g.moveTo(0, yy); g.lineTo(plotW, yy); g.stroke(); g.setLineDash([]);
-      chip(text, 4, yy, col, '#fff', 'left');
+      chip(text, 4, yy, col, C.surface, 'left');
     }
     // last price
     const last = vis[n - 1]!, ly = Math.round(y(last.c)) + 0.5;
@@ -91,12 +100,14 @@ export function Candles({ store, interval, onInterval, overlays, priceDp, locale
     chip(nf.format(last.c), plotW + 2, ly, C.primary, C.onp, 'left');
     // crosshair
     const h = hover.current, cur = h !== null && h >= 0 && h < n ? vis[h]! : null;
-    if (cur && h !== null) { const xx = Math.round(x(h)) + 0.5; g.strokeStyle = C.mute; g.lineWidth = 1; g.beginPath(); g.moveTo(xx, PAD_T); g.lineTo(xx, PAD_T + plotH); g.stroke();
+    if (cur && h !== null) { const xx = Math.round(x(h)) + 0.5; g.strokeStyle = C.mute; g.lineWidth = 1; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(xx, PAD_T); g.lineTo(xx, PAD_T + plotH); const cy = Math.round(y(cur.c)) + 0.5; g.moveTo(0, cy); g.lineTo(plotW, cy); g.stroke(); g.setLineDash([]);
+      chip(nf.format(cur.c), plotW + 2, cy, C.ink, C.surface, 'left');
       const lbl = tf(cur.ts, true), w = g.measureText(lbl).width + 10; chip(lbl, Math.max(0, Math.min(plotW - w, xx - w / 2)), H - AXIS_H / 2, C.primary, C.onp, 'left'); }
     // read-out (DOM text, so it is selectable and read by assistive tech on demand)
     const b = cur ?? last, prev = vis[(cur && h !== null ? h : n - 1) - 1], ch = prev ? ((b.c - prev.c) / prev.c) * 100 : 0;
     if (readout.current) readout.current.textContent = `${cur ? tf(b.ts, true) + ' · ' : ''}${t('fxO')} ${nf.format(b.o)}  ${t('fxH')} ${nf.format(b.h)}  ${t('fxL')} ${nf.format(b.l)}  ${t('fxC')} ${nf.format(b.c)}  ${ch >= 0 ? '+' : '−'}${Math.abs(ch).toFixed(2).replace('.', locale === 'en' ? '.' : ',')} %${b.v > 0 ? `  ${t('fxVol')} ${vf.format(b.v)}` : ''}`;
   }, [height, zoom, ma, overlays, nf, vf, tf, t, q.isError, locale]);
+  const loading = q.isLoading;
   const redraw = useCallback(() => { if (!raf.current) raf.current = requestAnimationFrame(draw); }, [draw]);
 
   // a new market or interval starts from an empty series (declared before the history effect: it must run first)
@@ -128,24 +139,28 @@ export function Candles({ store, interval, onInterval, overlays, priceDp, locale
   const key = (e: React.KeyboardEvent) => { const gm = geom.current; if (!gm) return;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); const cur = hover.current ?? gm.n - 1; hover.current = Math.max(0, Math.min(gm.n - 1, cur + (e.key === 'ArrowLeft' ? -1 : 1))); redraw(); }
     else if (e.key === 'Escape') leave(); };
-  const tog = 'inline-flex min-h-11 items-center rounded-xl px-2.5 text-[12.5px] font-semibold';
+  const tog = 'press inline-flex min-h-11 items-center rounded-xl px-2.5 text-[12.5px] font-semibold';
+  const zoomBtn = 'press grid h-11 w-11 place-items-center rounded-xl text-mute hover:bg-elev disabled:opacity-40';
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <Seg size="sm" label={t('fxInterval')} value={interval} onChange={onInterval} options={INTERVALS.map((i) => ({ id: i, label: i, aria: t(`fxInt_${i}` as Key) }))} className="w-full sm:w-[330px]" />
-        <div className="ml-auto flex items-center gap-1">
-          <button type="button" aria-pressed={ma.a} onClick={() => setMa({ ...ma, a: !ma.a })} title={t('fxMaA')} aria-label={t('fxMaA')} className={`${tog} ${ma.a ? 'bg-blue/10 text-blue' : 'text-mute hover:bg-elev'}`}><span className="mr-1.5 inline-block h-0.5 w-3.5 bg-current" aria-hidden="true" />{t('fxMaShortA')}</button>
+        <div className="ml-auto flex items-center gap-1" role="group" aria-label={t('dzFxChartTools')}>
+          <button type="button" aria-pressed={ma.a} onClick={() => setMa({ ...ma, a: !ma.a })} title={t('fxMaA')} aria-label={t('fxMaA')} className={`${tog} ${ma.a ? 'bg-blue/10 text-blue' : 'text-mute hover:bg-elev'}`}><span className="mr-1.5 inline-block h-0.5 w-3.5 rounded-full bg-current" aria-hidden="true" />{t('fxMaShortA')}</button>
           <button type="button" aria-pressed={ma.b} onClick={() => setMa({ ...ma, b: !ma.b })} title={t('fxMaB')} aria-label={t('fxMaB')} className={`${tog} ${ma.b ? 'bg-warn/12 text-warn' : 'text-mute hover:bg-elev'}`}><span className="mr-1.5 inline-block h-0 w-3.5 border-t-2 border-dashed border-current" aria-hidden="true" />{t('fxMaShortB')}</button>
-          <button type="button" onClick={() => setZoom(Math.max(3, zoom - 2))} disabled={zoom <= 3} aria-label={t('fxZoomOut')} className="grid h-11 w-11 place-items-center rounded-xl text-mute hover:bg-elev disabled:opacity-40"><Icon n="minus" className="h-4 w-4" /></button>
-          <button type="button" onClick={() => setZoom(Math.min(19, zoom + 2))} disabled={zoom >= 19} aria-label={t('fxZoomIn')} className="grid h-11 w-11 place-items-center rounded-xl text-mute hover:bg-elev disabled:opacity-40"><Icon n="plus" className="h-4 w-4" /></button>
+          <span className="mx-0.5 h-5 w-px bg-line" aria-hidden="true" />
+          <button type="button" onClick={() => setZoom(Math.max(3, zoom - 2))} disabled={zoom <= 3} aria-label={t('fxZoomOut')} className={zoomBtn}><Icon n="minus" className="h-4 w-4" /></button>
+          <button type="button" onClick={() => setZoom(Math.min(19, zoom + 2))} disabled={zoom >= 19} aria-label={t('fxZoomIn')} className={zoomBtn}><Icon n="plus" className="h-4 w-4" /></button>
         </div>
       </div>
-      <div ref={readout} className="mt-2 min-h-[18px] overflow-hidden whitespace-pre text-[11.5px] text-mute" data-testid="ohlc" />
+      {/* the read-out wraps on a narrow screen (two lines are reserved): no figure is ever cut */}
+      <div ref={readout} className="mt-2 min-h-[34px] whitespace-pre-wrap text-[11.5px] leading-[17px] text-mute sm:min-h-[17px]" data-testid="ohlc" />
       <div ref={box} tabIndex={0} role="img" aria-label={summary || t('fxChart')} onKeyDown={key} onBlur={leave}
         className={`relative mt-1 touch-pan-y select-none rounded-xl outline-offset-2 ${stale ? 'opacity-50 grayscale' : ''}`} style={{ height }}
         onPointerDown={(e) => at(e.clientX)} onPointerMove={(e) => { if (e.pointerType === 'mouse' || e.buttons || e.pressure > 0) at(e.clientX); }}
         onPointerUp={(e) => { if (e.pointerType !== 'mouse') leave(); }} onPointerLeave={leave} onPointerCancel={leave}>
         <canvas ref={canvas} className="block" data-testid="candles" />
+        {loading && <div className="pointer-events-none absolute inset-0 flex items-end gap-[3%] pb-6 pr-16" aria-hidden="true" data-testid="candles-skeleton">{[38, 52, 44, 63, 58, 71, 49, 66, 78, 61, 84, 73].map((h, k) => <div key={k} className="skel flex-1 !rounded-md" style={{ height: `${h}%` }} />)}</div>}
       </div>
       {overlays.length > 0 && <ul className="sr-only">{overlays.map((o, i) => <li key={i}>{o.label} {nf.format(o.price)}</li>)}</ul>}
     </div>

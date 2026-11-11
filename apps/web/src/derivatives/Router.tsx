@@ -8,8 +8,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useContext, useMemo, useState, type ReactNode } from 'react';
 import { errText, I18n, useT, type Key } from '../i18n';
-import { Btn, Card, Field, H, inputCls, Notice, Skeleton } from '../ui';
-import { ageText, DataTable, PaperTag, Row, Seg, VENUE_NAME, VenueBadge, type Col } from './bits';
+import { Btn, Card, Coin, Field, H, Icon, inputCls, Notice, VenueIcon } from '../ui';
+import { ageText, DataTable, Empty, PaperTag, Row, Seg, VENUE_NAME, VenueBadge, type Col } from './bits';
 import { D, dec, fmt, parseInput } from './dec';
 import { AmountProblem } from '../amountUi';   // v8 hardening: says when a typed number is ambiguous (never guessed)
 import { rapi, type CostComponent, type PaperPrefill, type Reason, type RouteAnswer, type RouteBody, type RoutedCandidate, type RouterSource, type TermKey } from './routerApi';
@@ -50,14 +50,14 @@ export function RouterView({ accounts, onOpenPaper, gmx, onOpenGmx }: { accounts
   return (
     <div className="space-y-4" data-testid="router-view">
       <Card>
-        <H>{t('rxTitle')}</H>
+        <H right={<Coin sym={f.base} size={32} />}>{t('rxTitle')}</H>
         <div className="mb-3"><Notice tone="info"><b className="font-semibold">{t('rxSimOnly')}</b> {t('rxSimOnlyBody')}</Notice></div>
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); run(); }} data-testid="router-form">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Field label={t('rxAsset')} hint={asset ? asset.venues.map((v) => `${VENUE_NAME[v.venue] ?? v.name}${v.restriction ? ` (${t('rxUnavailableShort')})` : ''}`).join(' · ') : undefined}>
               <select className={inputCls} value={f.base} onChange={(e) => set({ base: e.target.value })} aria-label={t('rxAsset')}>
                 {(bases.some((b) => b.base === f.base) ? bases : [{ base: f.base }, ...bases]).map((b) => <option key={b.base} value={b.base}>{b.base}</option>)}</select></Field>
-            <div><span className="mb-1.5 block text-[13px] text-mute">{t('fxDirection')}</span>
+            <div><span className="mb-1.5 block text-[13px] font-medium text-mute">{t('fxDirection')}</span>
               <Seg label={t('fxDirection')} value={f.side} onChange={(v) => set({ side: v })} options={[{ id: 'long', label: t('fxLong') }, { id: 'short', label: t('fxShort') }]} /></div>
             <Field label={t('fxSize')} hint={f.unit === 'usd' ? t('rxSizeUsdHint') : t('rxSizeBaseHint', { base: f.base })}>
               <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.size} onChange={(e) => set({ size: num(e.target.value) })} aria-label={t('fxSize')} />
@@ -66,11 +66,11 @@ export function RouterView({ accounts, onOpenPaper, gmx, onOpenGmx }: { accounts
               <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.lev} onChange={(e) => set({ lev: num(e.target.value) })} aria-label={t('fxLeverage')} /><span className="text-mute">×</span></div></Field>
           </div>
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            <div><span className="mb-1.5 block text-[13px] text-mute">{t('rxHorizon')}</span>
+            <div><span className="mb-1.5 block text-[13px] font-medium text-mute">{t('rxHorizon')}</span>
               <Seg size="sm" label={t('rxHorizon')} value={f.horizon} onChange={(v) => set({ horizon: v })} options={HORIZONS.map((h) => ({ id: h, label: horizonLabel(h) }))} />
               <span className="mt-1.5 block text-xs text-mute">{t('rxHorizonHint')}</span></div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div><span className="mb-1.5 block text-[13px] text-mute">{t('fxOrderType')}</span>
+              <div><span className="mb-1.5 block text-[13px] font-medium text-mute">{t('fxOrderType')}</span>
                 <Seg size="sm" label={t('fxOrderType')} value={f.type} onChange={(v) => set({ type: v })} options={[{ id: 'market', label: t('fxKind_market') }, { id: 'limit', label: t('fxKind_limit') }]} /></div>
               {f.type === 'limit' && <Field label={t('fxPrice')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.price} onChange={(e) => set({ price: num(e.target.value) })} aria-label={t('fxPrice')} /><AmountProblem ambiguousOnly text={f.price} /></Field>}
             </div>
@@ -82,14 +82,21 @@ export function RouterView({ accounts, onOpenPaper, gmx, onOpenGmx }: { accounts
         </form>
       </Card>
 
-      {!sent ? <Card><p className="py-6 text-center text-[13.5px] text-mute">{t('rxEmpty')}</p></Card>
-        : q.isLoading ? <Skeleton h="h-64" />
+      {!sent ? <Card className="!py-2"><Empty icon="swap" title={t('rxEmpty')} /></Card>
+        : q.isLoading ? <RouterSkeleton />
         : q.isError ? <Notice tone="danger">{errText(t, q.error) || t('fxErrGeneric')}</Notice>
         : q.data ? <Results data={q.data} stale={stale} locale={locale} accounts={accounts} onOpenPaper={onOpenPaper} gmx={gmx} onOpenGmx={onOpenGmx} /> : null}
     </div>
   );
 }
 
+/** the results while the estimate runs: the ranking card, then two candidate cards */
+function RouterSkeleton() {
+  const card = (k: number) => <div key={k} className="card space-y-4 p-5"><div className="flex items-center gap-3"><div className="skel h-10 w-10 !rounded-full" /><div className="flex-1 space-y-2"><div className="skel h-4 w-32 !rounded-md" /><div className="skel h-3 w-20 !rounded-md" /></div><div className="skel h-6 w-24 !rounded-full" /></div>
+    {[88, 72, 80, 64, 76].map((w) => <div key={w} className="flex justify-between gap-6"><div className="skel h-3.5 !rounded-md" style={{ width: `${w / 2}%` }} /><div className="skel h-3.5 w-20 !rounded-md" /></div>)}<div className="skel h-16 !rounded-2xl" /></div>;
+  return <div className="space-y-4" aria-hidden="true"><div className="card space-y-3 p-5"><div className="skel h-5 w-48 !rounded-md" /><div className="skel h-4 w-[80%] !rounded-md" /><div className="skel h-14 !rounded-2xl" /><div className="skel h-24 !rounded-2xl" /></div>
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">{[0, 1].map(card)}</div></div>;
+}
 function usdT(x: string | null | undefined, locale: string, sign = false): string {
   const d = dec(x);
   if (!d) return '—';
@@ -128,7 +135,7 @@ function Results({ data, stale, locale, accounts, onOpenPaper, gmx, onOpenGmx }:
       <Card>
         <H right={<span className="text-[12px] text-mute">{t('rxAsOf', { age: ageText(Date.now() - data.ts) })}</span>}>{t('rxRankingTitle')}</H>
         <div className="mb-3 space-y-2">
-          {first ? <p className="text-[14.5px] leading-snug" data-testid="router-least"><b className="font-semibold">{t('rxLeast')}</b> {name(first.instrument)} — {usdT(first.allInUsd, locale)} ({fix(bpsT(first.allInBps, locale))}).{' '}
+          {first ? <p className="rounded-2xl bg-elev/70 px-4 py-3 text-[14.5px] leading-snug" data-testid="router-least"><b className="font-semibold">{t('rxLeast')}</b> {name(first.instrument)} — {usdT(first.allInUsd, locale)} ({fix(bpsT(first.allInBps, locale))}).{' '}
             {first.tiedWith.length ? t('rxLeastTied', { n: first.tiedWith.length }) : first.nearTieWith.length ? t('rxLeastNear', { n: first.nearTieWith.length }) : ''}</p>
             : <Notice tone="warn">{t('rxNoEligible')}</Notice>}
           <Notice tone="warn"><b className="font-semibold">{t('rxNotBest')}</b> {t('rxNotBestBody')}</Notice>
@@ -160,9 +167,9 @@ function Results({ data, stale, locale, accounts, onOpenPaper, gmx, onOpenGmx }:
 function Status({ c }: { c: RoutedCandidate }) {
   const t = useT();
   const restricted = c.eligibility.reasons.some((r) => r.code === 'venue_restricted');
-  const [key, cls]: [Key, string] = restricted ? ['rxStRestricted', 'border-warn/40 bg-warn/10 text-warn'] : !c.eligibility.eligible ? ['rxStNotEligible', 'border-danger/40 bg-danger/10 text-danger']
-    : c.eligibility.executableNow ? ['rxStPaper', 'border-emerald/35 bg-emerald/8 text-emerald'] : ['rxStSetup', 'border-line bg-elev text-ink'];
-  return <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[12px] font-semibold ${cls}`} data-testid="router-status" data-status={restricted ? 'restricted' : !c.eligibility.eligible ? 'not_eligible' : c.eligibility.executableNow ? 'paper' : 'setup'}>{t(key)}</span>;
+  const [key, tone, icon]: [Key, string, string] = restricted ? ['rxStRestricted', 'warn', 'warn'] : !c.eligibility.eligible ? ['rxStNotEligible', 'danger', 'x']
+    : c.eligibility.executableNow ? ['rxStPaper', 'ok', 'check'] : ['rxStSetup', 'mute', 'gear'];
+  return <span className="tag !whitespace-normal !px-2.5 !py-1 !text-[12px]" data-tone={tone} data-testid="router-status" data-status={restricted ? 'restricted' : !c.eligibility.eligible ? 'not_eligible' : c.eligibility.executableNow ? 'paper' : 'setup'}><Icon n={icon} className="h-3 w-3 shrink-0" />{t(key)}</span>;
 }
 function ReasonLine({ r }: { r: Reason }) {
   const t = useT();
@@ -172,7 +179,7 @@ function ReasonLine({ r }: { r: Reason }) {
     {text !== r.message && r.kind !== 'note' && <span className="mt-0.5 block break-words font-mono text-[11px] text-mute">{r.code} — {r.message}</span>}</li>;
 }
 function Sub({ title, children }: { title: string; children: ReactNode }) {
-  return <section className="border-t border-line pt-3"><h3 className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-mute">{title}</h3>{children}</section>;
+  return <section className="border-t border-line pt-3.5"><h3 className="t-eyebrow mb-1.5">{title}</h3>{children}</section>;
 }
 function CostRow({ k, locale }: { k: CostComponent; locale: string }) {
   const t = useT(); const fix = (s: string) => s;
@@ -203,7 +210,9 @@ function Candidate({ c, locale, account, onOpenPaper, gmx, onOpenGmx }: { c: Rou
   return (
     <Card className={restricted ? '!border-warn/40' : ''}>
       <div data-testid="router-card" data-venue={c.venue} data-instrument={c.instrument} className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2"><VenueBadge venue={c.venue} /><h3 className="text-[16px] font-semibold">{c.symbol}</h3><Status c={c} /></div>
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5"><div className="flex min-w-[min(100%,15rem)] flex-1 items-center gap-3.5"><VenueIcon venue={c.venue} size={44} />
+          <div className="min-w-0 flex-1"><h3 className="text-[17px] font-semibold leading-tight tracking-[-0.015em]">{c.symbol}</h3><p className="mt-0.5 text-[13px] text-mute">{VENUE_NAME[c.venue]}</p></div></div>
+          <Status c={c} /></div>
         {restricted && <Notice tone="warn"><b className="font-semibold">{t('rxRestrictedTitle', { venue: VENUE_NAME[c.venue] })}</b> {t('rxRestrictedBody')}</Notice>}
         <ul className="space-y-1.5" data-testid="router-reasons">{c.eligibility.reasons.filter((r) => !(restricted && r.code !== 'venue_restricted' && r.kind !== 'blocker')).map((r) => <ReasonLine key={r.code + r.message.slice(0, 20)} r={r} />)}</ul>
 
@@ -231,9 +240,9 @@ function Candidate({ c, locale, account, onOpenPaper, gmx, onOpenGmx }: { c: Rou
 
         {c.costs.length > 0 && <Sub title={t('rxCostsTitle')}>
           <ul className="divide-y divide-line/70" data-testid="router-costs">{c.costs.map((k) => <CostRow key={k.id} k={k} locale={locale} />)}</ul>
-          {c.allIn && <div className="mt-2 rounded-2xl bg-elev p-3" data-testid="router-allin">
+          {c.allIn && <div className="mt-2 rounded-2xl bg-elev px-4 py-3.5" data-testid="router-allin">
             <div className="flex items-baseline justify-between gap-3"><span className="text-[13.5px] font-semibold">{t('rxAllInOver', { h: t(`rxH_${c.allIn.horizonHours}` as Key) })}</span>
-              <span className="text-right text-[15px] font-semibold tabular-nums">{usdT(c.allIn.usd, locale, true)}<SrcTag source="estimate" /></span></div>
+              <span className="text-right"><span className="t-num text-[19px]">{usdT(c.allIn.usd, locale, true)}</span><SrcTag source="estimate" /></span></div>
             <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[12px] text-mute"><span>{c.allIn.complete ? t('rxComplete') : c.allIn.unknown.length ? t('rxIncomplete', { list: c.allIn.unknown.map((u) => t(`rxCost_${u}` as Key)).join(', ') }) : t('rxPartial')}</span>
               <span className="shrink-0 tabular-nums">{fix(bpsT(c.allIn.bps, locale, true))} · ± {usdT(c.allIn.uncertaintyUsd, locale)}</span></div>
             {c.exit && <p className="mt-2 border-t border-line pt-2 text-[12px] leading-snug text-mute">{t('rxExit', { exit: usdT(c.exit.usd, locale, true), trip: usdT(c.exit.roundTripUsd, locale), bps: fix(bpsT(c.exit.roundTripBps, locale)) })}</p>}
@@ -249,16 +258,16 @@ function Candidate({ c, locale, account, onOpenPaper, gmx, onOpenGmx }: { c: Rou
         </Sub>}
 
         <Sub title={t('rxRiskTitle')}>
-          <Row label={t('rxVenueLimits')}>{c.risk.venue.accepted ? <span className="text-emerald">{t('rxAccepted')}</span> : <span className="text-danger">{t('rxRefused')} — <span className="font-mono text-[12px]">{c.risk.venue.codes.join(', ')}</span></span>}</Row>
+          <Row label={t('rxVenueLimits')}>{c.risk.venue.accepted ? <span className="inline-flex items-center gap-1 text-emerald"><Icon n="check" className="h-3.5 w-3.5" />{t('rxAccepted')}</span> : <span className="text-danger"><Icon n="x" className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />{t('rxRefused')} — <span className="font-mono text-[12px]">{c.risk.venue.codes.join(', ')}</span></span>}</Row>
           {c.risk.accounts.length === 0 ? <p className="text-[12px] leading-snug text-mute">{t('rxNoAccountAsked')}</p>
             : c.risk.accounts.map((a) => <div key={a.accountId} data-testid="router-policy" data-accepted={String(a.accepted)}>
-              <Row label={<span className="inline-flex items-center gap-1.5">{a.label}{a.kind === 'paper' && <PaperTag />}</span>}>{a.accepted === true ? <span className="text-emerald">{t('rxAccepted')}</span> : a.accepted === false ? <span className="text-danger">{t('rxRefused')} — <span className="font-mono text-[12px]">{a.code}</span></span> : <span className="text-mute">{t('rxNotAsked')}</span>}</Row>
+              <Row label={<span className="inline-flex items-center gap-1.5">{a.label}{a.kind === 'paper' && <PaperTag />}</span>}>{a.accepted === true ? <span className="inline-flex items-center gap-1 text-emerald"><Icon n="check" className="h-3.5 w-3.5" />{t('rxAccepted')}</span> : a.accepted === false ? <span className="text-danger"><Icon n="x" className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />{t('rxRefused')} — <span className="font-mono text-[12px]">{a.code}</span></span> : <span className="text-mute">{t('rxNotAsked')}</span>}</Row>
               {a.accepted === false && a.code && <p className="text-[12px] leading-snug text-mute">{(() => { const s = t(`rk_${a.code}` as Key); return s.startsWith('rk ') || s === a.code!.replace(/_/g, ' ') ? a.reason : s; })()}</p>}
               {a.accepted === null && a.reason && <p className="text-[12px] leading-snug text-mute">{a.reason}</p>}</div>)}
         </Sub>
 
-        <details data-testid="router-terms"><summary className="flex min-h-11 cursor-pointer items-center text-[13px] font-semibold">{t('rxTermsTitle')}</summary>
-          <dl className="space-y-2 pb-1">{TERMS.map((k) => <div key={k}><dt className="text-[11.5px] font-semibold uppercase tracking-wide text-mute">{t(`rxTerm_${k}` as Key)}</dt><dd className="text-[12.5px] leading-snug">{c.terms[k].value}<SrcTag source={c.terms[k].source} /></dd></div>)}</dl></details>
+        <details className="fold border-t border-line" data-testid="router-terms"><summary>{t('rxTermsTitle')}</summary>
+          <dl className="space-y-2.5 pb-1">{TERMS.map((k) => <div key={k}><dt className="t-eyebrow">{t(`rxTerm_${k}` as Key)}</dt><dd className="mt-0.5 text-[13px] leading-snug">{c.terms[k].value}<SrcTag source={c.terms[k].source} /></dd></div>)}</dl></details>
 
         {c.venue === 'hyperliquid' && <div className="space-y-1.5 border-t border-line pt-3">
           <Btn full kind="soft" disabled={!canOpen} onClick={open} data-testid="router-open-paper">{t('rxOpenPaper')}</Btn>

@@ -150,20 +150,32 @@ export function AnimatedNumber({ value, format }: { value: number; format: (v: n
 /**
  * Bottom sheet: scrim, spring, grabber, drag down to dismiss (touch), Escape, keyboard-safe height.
  * `dismissable={false}` for approval sheets: they close only through their own buttons.
+ * v10: `sub` (one line under the title), `footer` (the sheet's action, kept in reach under the scrolling body), `testid`
+ * (on the dialog), `busy` (nothing dismisses a sheet while its request is in flight). Keyboard-safe: when the on-screen
+ * keyboard covers the bottom of the layout viewport (iOS does not resize it), the panel is lifted by exactly that much,
+ * so the focused field and the footer stay visible. The sheet is `position: fixed` at z-30, above the tab bar (z-10).
  */
-export function Sheet({ title, onClose, children, dismissable = true, wide }: { title: string; onClose: () => void; children: ReactNode; dismissable?: boolean; wide?: boolean }) {
-  const t = useT(); const panel = useRef<HTMLDivElement>(null); const drag = useRef<{ y: number; dy: number } | null>(null);
-  useEffect(() => { panel.current?.focus(); const key = (e: KeyboardEvent) => { if (e.key === 'Escape' && dismissable) onClose(); }; addEventListener('keydown', key); return () => removeEventListener('keydown', key); }, [onClose, dismissable]);
+export function Sheet({ title, onClose, children, dismissable = true, wide, sub, footer, testid, busy }: { title: string; onClose: () => void; children: ReactNode; dismissable?: boolean; wide?: boolean; sub?: ReactNode; footer?: ReactNode; testid?: string; busy?: boolean }) {
+  const t = useT(); const root = useRef<HTMLDivElement>(null), panel = useRef<HTMLDivElement>(null); const drag = useRef<{ y: number; dy: number } | null>(null);
+  const can = dismissable && !busy, close = useRef(onClose); close.current = onClose; const canRef = useRef(can); canRef.current = can;
+  useEffect(() => { panel.current?.focus(); const key = (e: KeyboardEvent) => { if (e.key === 'Escape' && canRef.current) close.current(); }; addEventListener('keydown', key); return () => removeEventListener('keydown', key); }, []);
+  useEffect(() => {
+    const vv = window.visualViewport; if (!vv) return;
+    const f = () => { const kb = Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop)); if (root.current) root.current.style.paddingBottom = kb > 40 ? `${kb}px` : ''; };
+    f(); vv.addEventListener('resize', f); vv.addEventListener('scroll', f);
+    return () => { vv.removeEventListener('resize', f); vv.removeEventListener('scroll', f); };
+  }, []);
   const end = () => { const el = panel.current, d = drag.current; drag.current = null; if (!el || !d) return; el.classList.remove('sheet-dragging'); if (d.dy > 110) { haptic(); onClose(); } else el.style.transform = ''; };
-  return <div className="fixed inset-0 z-30 flex items-end justify-center lg:items-center" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => { if (dismissable && e.target === e.currentTarget) onClose(); }}>
+  return <div ref={root} className="fixed inset-0 z-30 flex items-end justify-center lg:items-center" role="dialog" aria-modal="true" aria-label={title} data-testid={testid} onClick={(e) => { if (can && e.target === e.currentTarget) onClose(); }}>
     <div ref={panel} tabIndex={-1} className={`safe-b flex w-full flex-col overflow-hidden rounded-t-[28px] bg-surface outline-none transition-transform duration-300 lg:rounded-[28px] ${wide ? 'lg:max-w-2xl' : 'lg:max-w-md'}`}>
       <div className="shrink-0 touch-none px-5 pb-2 pt-6 lg:pt-5"
-        onPointerDown={(e) => { if (!dismissable || e.pointerType === 'mouse' || (e.target as Element).closest('button')) return; drag.current = { y: e.clientY, dy: 0 }; panel.current?.classList.add('sheet-dragging'); e.currentTarget.setPointerCapture?.(e.pointerId); }}
+        onPointerDown={(e) => { if (!can || e.pointerType === 'mouse' || (e.target as Element).closest('button')) return; drag.current = { y: e.clientY, dy: 0 }; panel.current?.classList.add('sheet-dragging'); e.currentTarget.setPointerCapture?.(e.pointerId); }}
         onPointerMove={(e) => { const d = drag.current; if (!d || !panel.current) return; d.dy = Math.max(0, e.clientY - d.y); panel.current.style.transform = `translateY(${d.dy}px)`; }}
         onPointerUp={end} onPointerCancel={end}>
-        <div className="flex items-center justify-between gap-3"><h2 className="text-[19px] font-semibold tracking-[-0.02em]">{title}</h2>
-          {dismissable && <button onClick={onClose} aria-label={t('cancel')} className="press -mr-2 grid h-11 w-11 place-items-center rounded-full text-mute"><Icon n="x" /></button>}</div></div>
+        <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="text-[19px] font-semibold tracking-[-0.02em]">{title}</h2>{sub && <div className="sheet-sub">{sub}</div>}</div>
+          {dismissable && <button onClick={() => { if (can) onClose(); }} disabled={busy} aria-label={t('cancel')} className="press -mt-1.5 grid h-11 w-11 shrink-0 place-items-center rounded-full text-mute disabled:opacity-40"><Icon n="x" /></button>}</div></div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5">{children}</div>
+      {footer && <div className="sheet-foot">{footer}</div>}
     </div></div>;
 }
 /** Pull down at the top of the page to refresh (touch). Returns the indicator to render; listeners are passive (scrolling is never blocked). */
@@ -181,4 +193,63 @@ export function usePullToRefresh(enabled: boolean, refresh: () => Promise<unknow
   if (!enabled || (!busy && pull <= 0)) return null;
   return <div className="ptr" role="status" data-testid="ptr" style={{ transform: `translateY(${busy ? 28 : pull - 20}px)`, opacity: busy ? 1 : Math.min(1, pull / 64) }}>
     <span style={busy ? undefined : { transform: `rotate(${pull * 4}deg)`, display: 'grid' }}><Icon n={busy ? 'spin' : 'refresh'} className="h-[18px] w-[18px]" /></span></div>;
+}
+
+// ── v10 design pass: pieces shared by Swap, plans, agents, Futures, Alerts, Monitor, Research ────────────────────────────
+export type Tone = 'mute' | 'ok' | 'info' | 'warn' | 'danger';
+/** A small state pill: icon + word (never colour alone). */
+export function Tag({ tone = 'mute', icon, children, testid }: { tone?: Tone; icon?: string; children: ReactNode; testid?: string }) {
+  return <span className="tag" data-tone={tone} data-testid={testid}>{icon && <Icon n={icon} className="h-3 w-3" />}{children}</span>;
+}
+/** A figure with its label, in a quiet tile. `value` is shown whole (it wraps); tone colours the value only with its sign/word present. */
+export function Stat({ label, value, sub, tone, testid }: { label: ReactNode; value: ReactNode; sub?: ReactNode; tone?: 'ok' | 'danger' | 'warn'; testid?: string }) {
+  return <div className="stat" data-testid={testid}><span className="stat-label">{label}</span><span className={`stat-value ${tone === 'ok' ? 'text-emerald' : tone === 'danger' ? 'text-danger' : tone === 'warn' ? 'text-warn' : ''}`}>{value}</span>{sub != null && sub !== false && <span className="stat-sub">{sub}</span>}</div>;
+}
+export function StatGrid({ children, cols = 2, className = '' }: { children: ReactNode; cols?: 2 | 3 | 4; className?: string }) {
+  return <div className={`grid gap-2.5 ${cols === 4 ? 'grid-cols-2 lg:grid-cols-4' : cols === 3 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'} ${className}`}>{children}</div>;
+}
+/** One line of a receipt or of a detail list — wrap several in <dl className="receipt"> (dashed) or a plain <dl>. The value is never truncated. */
+export function Fact({ k, children, mono, testid }: { k: ReactNode; children: ReactNode; mono?: boolean; testid?: string }) {
+  return <div className="fact" data-testid={testid}><dt>{k}</dt><dd className={mono ? 'font-mono text-[13px]' : ''}>{children}</dd></div>;
+}
+/** A titled group inside a page: eyebrow label, optional trailing control. */
+export function Section({ title, right, children, className = '' }: { title: ReactNode; right?: ReactNode; children: ReactNode; className?: string }) {
+  return <section className={className}><div className="mb-2 flex min-h-6 items-center justify-between gap-3 px-1"><h2 className="t-eyebrow">{title}</h2>{right}</div>{children}</section>;
+}
+export type StepState = 'done' | 'current' | 'next' | 'failed';
+const STEP_ICON: Record<StepState, string> = { done: 'check', current: 'clock', next: 'minus', failed: 'x' };
+/**
+ * Timeline (legs of a plan, steps of a flow). Each item says its state with an icon and — through `stateLabel` — a word; the
+ * rail and the colours only repeat it. `node` replaces the state icon (a network logo, a step number).
+ */
+export function Timeline({ items, label }: { items: { key: string; state: StepState; title: ReactNode; stateLabel?: ReactNode; node?: ReactNode; children?: ReactNode; testid?: string }[]; label?: string }) {
+  return <ol className="tl" aria-label={label}>{items.map((it) => <li key={it.key} className="tl-item" data-state={it.state} data-testid={it.testid} aria-current={it.state === 'current' ? 'step' : undefined}>
+    <span className="tl-node" aria-hidden="true">{it.node ?? <Icon n={STEP_ICON[it.state]} className="h-[18px] w-[18px]" />}</span>
+    <div className="tl-body"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="text-[15px] font-semibold leading-snug">{it.title}</span>
+      {it.stateLabel && <Tag tone={it.state === 'done' ? 'ok' : it.state === 'current' ? 'info' : it.state === 'failed' ? 'danger' : 'mute'} icon={STEP_ICON[it.state]}>{it.stateLabel}</Tag>}</div>
+      {it.children && <div className="mt-1.5 space-y-1.5 text-[13.5px] leading-snug text-mute">{it.children}</div>}</div></li>)}</ol>;
+}
+/** "3 / 4" as a ring: the count is written in it; `label` is the accessible sentence. */
+export function ProgressRing({ done, total, size = 52, label }: { done: number; total: number; size?: number; label?: string }) {
+  const r = (size - 6) / 2, c = 2 * Math.PI * r, k = total > 0 ? Math.max(0, Math.min(1, done / total)) : 0;
+  return <span className="pring" style={{ width: size, height: size }} role="img" aria-label={label ?? `${done} / ${total}`} data-done={done} data-total={total}>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true"><circle className="pring-track" cx={size / 2} cy={size / 2} r={r} /><circle className="pring-bar" cx={size / 2} cy={size / 2} r={r} strokeDasharray={c} strokeDashoffset={c * (1 - k)} /></svg>
+    <span className="pring-text" aria-hidden="true">{done}/{total}</span></span>;
+}
+/** Disclosure for what is secondary but must stay reachable (comparison-only routes, technical details). Never use it for a fee, a minimum or a warning. */
+export function Fold({ summary, children, open, testid, className = '' }: { summary: ReactNode; children: ReactNode; open?: boolean; testid?: string; className?: string }) {
+  return <details className={`fold ${className}`} open={open} data-testid={testid}><summary>{summary}</summary><div className="pb-1 pt-1">{children}</div></details>;
+}
+/** A request failed or the device is offline: say it, say that nothing was sent when that is true, offer to retry. */
+export function ErrorState({ title, children, onRetry, offline }: { title: string; children?: ReactNode; onRetry?: () => void; offline?: boolean }) {
+  const t = useT();
+  return <EmptyState icon={offline ? 'cloudOff' : 'warn'} title={title} action={onRetry && <Btn kind="soft" onClick={onRetry}><Icon n="refresh" className="h-4 w-4" />{t('retry')}</Btn>}>{children}</EmptyState>;
+}
+/** Skeleton of a card with a title line and `lines` text lines — for cards that are not lists. */
+export function SkeletonCard({ lines = 3, className = '' }: { lines?: number; className?: string }) {
+  return <div className={`card space-y-3 p-5 ${className}`} aria-hidden="true"><div className="skel h-4 w-32 !rounded-md" />{Array.from({ length: lines }, (_, k) => <div key={k} className="skel h-3.5 !rounded-md" style={{ width: `${[92, 78, 64, 85][k % 4]}%` }} />)}</div>;
+}
+/** Skeleton of a row of stat tiles. */
+export function SkeletonStats({ n = 4 }: { n?: number }) {
+  return <div className="grid grid-cols-2 gap-2.5" aria-hidden="true">{Array.from({ length: n }, (_, k) => <div key={k} className="skel h-[62px] !rounded-2xl" />)}</div>;
 }

@@ -2,29 +2,51 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { get, post, setUnauthHandler } from './api';
 import { I18n, useT, type Key, type Locale } from './i18n';
-import { Activity } from './screens/Activity';
-import { Agent, Agents } from './screens/Agents';
 import { Asset } from './screens/Asset';
 import { Assets } from './screens/Assets';
 import type { FuturesView } from './screens/Futures';
 import { Gate } from './screens/Gate';
 import { Home } from './screens/Home';
-import { Receive } from './screens/Receive';
-import { Security } from './screens/Security';
-import { Send } from './screens/Send';
-import { Settings } from './screens/Settings';
-import { Swap } from './screens/Swap';
-import { Btn, EmptyState, haptic, Icon, Skeleton, usePullToRefresh } from './ui';
+import { Btn, EmptyState, haptic, Icon, Skeleton, SkeletonRows, usePullToRefresh } from './ui';
+import { prefetchIcons } from './icons';
+import { loadLocale } from './i18n-load';
 import { useAlertsRuntime, useUnread } from './alerts'; // v6-alerts
-import { Research } from './screens/Research'; // v7 research runtime
-import { PlanScreen } from './plan'; // v7 any-to-any plans
 import { setAmountLocale } from './amount'; // v8 hardening: amounts follow the screen's language
 
-// the Futures terminal is its own chunk: the wallet's first load does not pay for it
-const Futures = lazy(() => import('./screens/Futures').then((m) => ({ default: m.Futures })));
-// v6-alerts: the Alerts and System status screens are their own chunks too
-const Alerts = lazy(() => import('./screens/Alerts').then((m) => ({ default: m.Alerts })));
-const Monitor = lazy(() => import('./screens/Monitor').then((m) => ({ default: m.Monitor })));
+// v10 performance pass — what the first screen needs (the shell, Home, the asset list and page, the lock screen) is the
+// first chunk; every other screen is a chunk of its own, fetched when it is opened or — so that a tap never waits — by
+// `preloadScreens()` once the first screen is drawn and the browser is idle. Before: one 1 000 kB chunk.
+const screens = {
+  futures: () => import('./screens/Futures'),      // the Futures terminal: by far the largest; never preloaded
+  alerts: () => import('./screens/Alerts'), monitor: () => import('./screens/Monitor'),
+  swap: () => import('./screens/Swap'), send: () => import('./screens/Send'), receive: () => import('./screens/Receive'), activity: () => import('./screens/Activity'),
+  agents: () => import('./screens/Agents'), research: () => import('./screens/Research'), plan: () => import('./plan'),
+  security: () => import('./screens/Security'), settings: () => import('./screens/Settings'),
+};
+const Futures = lazy(() => screens.futures().then((m) => ({ default: m.Futures })));
+const Alerts = lazy(() => screens.alerts().then((m) => ({ default: m.Alerts })));
+const Monitor = lazy(() => screens.monitor().then((m) => ({ default: m.Monitor })));
+const Swap = lazy(() => screens.swap().then((m) => ({ default: m.Swap })));
+const Send = lazy(() => screens.send().then((m) => ({ default: m.Send })));
+const Receive = lazy(() => screens.receive().then((m) => ({ default: m.Receive })));
+const Activity = lazy(() => screens.activity().then((m) => ({ default: m.Activity })));
+const Agents = lazy(() => screens.agents().then((m) => ({ default: m.Agents })));
+const Agent = lazy(() => screens.agents().then((m) => ({ default: m.Agent })));
+const Research = lazy(() => screens.research().then((m) => ({ default: m.Research })));
+const PlanScreen = lazy(() => screens.plan().then((m) => ({ default: m.PlanScreen })));
+const Security = lazy(() => screens.security().then((m) => ({ default: m.Security })));
+const Settings = lazy(() => screens.settings().then((m) => ({ default: m.Settings })));
+/** After the first screen is drawn: the logo set, then the tab-bar screens, one at a time, each when the browser is idle. A failure is silent (the screen asks again when opened). */
+let preloaded = false;
+function preloadScreens(): void {
+  if (preloaded) return; preloaded = true;
+  const idle = (f: () => void) => { if (typeof requestIdleCallback === 'function') requestIdleCallback(f, { timeout: 4000 }); else setTimeout(f, 1500); };
+  const queue = [async () => { prefetchIcons(); }, screens.swap, screens.send, screens.activity, screens.settings, screens.receive, screens.security, screens.agents, screens.alerts];
+  const next = () => { const f = queue.shift(); if (f) idle(() => { void f().catch(() => {}).then(next); }); };
+  setTimeout(next, 1200);
+}
+/** the place of a screen while its chunk arrives: a title and rows, like most screens */
+const ScreenSkeleton = () => <div className="space-y-4" aria-busy="true"><Skeleton h="h-9" className="!mt-2 !w-44 !rounded-xl" /><SkeletonRows n={5} /></div>;
 
 const TABS = [['home', '/', 'home'], ['swap', '/swap', 'swap'], ['agents', '/agents', 'key'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
 export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent' | 'futures' | 'alerts' | 'monitor' | 'research' | 'plan';
@@ -56,7 +78,8 @@ export function App() {
   const [route, setRoute] = useState<Route>(routeOf);
   const tab = route.tab;
   const state = useQuery({ queryKey: ['auth'], queryFn: () => get<{ setupRequired: boolean; authenticated: boolean }>('/auth/state'), staleTime: 0 });
-  const setLocale = useCallback((l: Locale) => { localStorage.setItem('spw-locale', l); document.documentElement.lang = l; setLocaleState(l); }, []);
+  // v10: the other language's texts are a chunk of their own — the change takes effect once they are there (if they cannot be fetched, the screen stays in the current language)
+  const setLocale = useCallback((l: Locale) => { void loadLocale(l).then(() => { localStorage.setItem('spw-locale', l); document.documentElement.lang = l; setLocaleState(l); }, () => {}); }, []);
   const nav = useCallback<Nav>((r) => { history.pushState(null, '', pathOf(r)); setRoute(r); window.scrollTo(0, 0); }, []);
   const go = useCallback((t: Tab) => nav({ tab: t }), [nav]);
   // v6-alerts: open an in-app path (a tapped alert or notification)
@@ -85,7 +108,14 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
   const unread = useUnread(); useAlertsRuntime(locale, openPath); // v6-alerts
   // v9: the phone header condenses once the page scrolls (an attribute, not a re-render); pull down on Home/Activity refreshes
   const header = useRef<HTMLElement>(null);
-  useEffect(() => { let raf = 0; const f = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => header.current?.toggleAttribute('data-scrolled', scrollY > 6)); }; f(); addEventListener('scroll', f, { passive: true }); return () => { removeEventListener('scroll', f); cancelAnimationFrame(raf); }; }, [tab]);
+  // v10: large-title collapse — once the page's large title (PageTitle's <h1>) has scrolled under the header, the header carries it
+  // in small (iOS style). Read in the same rAF as the scroll flag; one attribute and one text node, no re-render.
+  const mini = useRef<HTMLSpanElement>(null);
+  useEffect(() => { let raf = 0; const f = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { const h = header.current; if (!h) return; h.toggleAttribute('data-scrolled', scrollY > 6);
+    const h1 = scrollY > 6 ? document.querySelector<HTMLElement>('main h1.t-title') : null, gone = !!h1 && h1.getBoundingClientRect().bottom < h.getBoundingClientRect().bottom + 2;
+    if (gone && mini.current && mini.current.textContent !== h1!.textContent) mini.current.textContent = h1!.textContent;
+    h.toggleAttribute('data-titled', gone); }); }; f(); addEventListener('scroll', f, { passive: true }); return () => { removeEventListener('scroll', f); cancelAnimationFrame(raf); }; }, [tab]);
+  useEffect(() => { preloadScreens(); }, []);   // v10: the other screens' chunks, once this one is drawn and the browser is idle
   const ptr = usePullToRefresh(tab === 'home' || tab === 'activity', () => qc.invalidateQueries());
   const bell = (cls: string) => <button onClick={() => go('alerts')} data-testid="alerts-bell" aria-label={`${t('alBell')}${unread.unread ? ` (${unread.unread})` : ''}`} aria-current={tab === 'alerts' ? 'page' : undefined} className={cls}>
     <span className="relative"><Icon n="bell" />{unread.unread > 0 && <span data-testid="alerts-badge" className={`absolute -right-2 -top-2 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[10.5px] font-bold leading-none text-white ${unread.critical ? 'bg-danger' : 'bg-blue'}`}>{unread.unread > 99 ? '99+' : unread.unread}</span>}</span>{cls.includes('w-full') && t('alTitle')}</button>;
@@ -107,7 +137,8 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
       <div className="min-w-0 flex-1">
         <header ref={header} className="app-header safe-t nav-glass sticky top-0 z-10 lg:hidden">
           <div className="app-header-row flex items-center justify-between px-5 py-2.5">
-            <div className="app-brand flex items-center gap-2.5"><img src="/icon.svg" alt="" width={32} height={32} className="h-8 w-8 rounded-[10px]" /><span className="text-[17px] font-semibold tracking-[-0.02em]">SP Wallet</span></div>
+            <div className="app-brand flex items-center gap-2.5"><img src="/icon.svg" alt="" width={32} height={32} className="h-8 w-8 rounded-[10px]" /><span className="app-brand-name text-[17px] font-semibold tracking-[-0.02em]">SP Wallet</span></div>
+            <span ref={mini} className="app-mini-title" aria-hidden="true" data-testid="mini-title" />
             <div className="flex items-center gap-1">
               {bell(`grid h-11 w-11 place-items-center rounded-full ${tab === 'alerts' ? 'bg-elev text-ink' : 'text-mute'}`)}
               <button onClick={() => go('security')} aria-label={t('security')} aria-current={tab === 'security' ? 'page' : undefined} className={`grid h-11 w-11 place-items-center rounded-full ${tab === 'security' ? 'bg-elev text-ink' : 'text-mute'}`}><Icon n="shield" /></button>
@@ -121,6 +152,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
           {tab === 'home' && <Home go={go} nav={nav} />}
           {tab === 'assets' && <Assets nav={nav} />}
           {tab === 'asset' && <Asset network={route.network ?? ''} asset={route.asset ?? 'native'} nav={nav} />}
+          <Suspense fallback={<ScreenSkeleton />}>
           {tab === 'receive' && <Receive initial={route.network} />}
           {tab === 'send' && <Send go={go} initial={route} />}
           {tab === 'swap' && <Swap />}
@@ -131,9 +163,10 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
           {tab === 'plan' && <PlanScreen id={route.asset ?? ''} />}
           {tab === 'security' && <Security />}
           {tab === 'settings' && <Settings lock={lock} go={go} />}
+          {tab === 'research' && <Research nav={nav} job={route.asset} />}{/* v7 research runtime */}
+          </Suspense>
           {tab === 'alerts' && <Suspense fallback={<Skeleton h="h-72" />}><Alerts view={route.view === 'settings' ? 'settings' : 'list'} open={openPath} setView={(v) => nav({ tab: 'alerts', view: v === 'settings' ? 'settings' : undefined })} /></Suspense>}
           {tab === 'monitor' && <Suspense fallback={<Skeleton h="h-72" />}><Monitor open={openPath} /></Suspense>}
-          {tab === 'research' && <Research nav={nav} job={route.asset} />}{/* v7 research runtime */}
         </main>
         <nav aria-label="Navigation" className="tabbar safe-b nav-glass fixed inset-x-0 bottom-0 z-10 lg:hidden">
           <div className="mx-auto flex max-w-xl items-end px-2 pt-1.5">{MOBILE.map(([id, icon]) => { const on = tab === id || (id === 'home' && (tab === 'asset' || tab === 'assets')) || (id === 'swap' && tab === 'futures');

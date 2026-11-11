@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useContext, useEffect, useMemo, useState } from 'react';
 import type { Nav } from '../App';
 import { errText, I18n, useT } from '../i18n';
-import { Btn, Card, Notice, Skeleton } from '../ui';
+import { Btn, Card, Fold, Notice, PageTitle, VenueIcon } from '../ui';
 import { AccountsView, VenueStrip } from '../derivatives/Accounts';
 import { dapi } from '../derivatives/api';
 import { Seg, useLocalState, useMedia, VENUE_NAME } from '../derivatives/bits';
@@ -76,13 +76,14 @@ export function Futures({ instrument: routeId, view = 'terminal', nav }: { instr
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-1">
-        <div className="hidden items-center gap-2.5 sm:flex"><h1 className="text-[24px] font-semibold tracking-[-0.02em] lg:text-[28px]">{t('fxTitle')}</h1><ModeTag tone={/* v8 GMX trading */ gxReal ? 'mainnet' : tone} /></div>
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        {/* the large title (the shell collapses it into the header on scroll) with the mode of the selected account beside it, on every screen size */}
+        <div className="w-full min-w-0 sm:w-auto"><PageTitle right={<ModeTag tone={/* v8 GMX trading */ gxReal ? 'mainnet' : tone} className="ml-2 shrink-0" />}>{t('fxTitle')}</PageTitle></div>
         <Seg tabs size="sm" label={t('fxViews')} value={view} onChange={(v) => go(v)} className="w-full sm:w-auto sm:min-w-[330px]" options={[{ id: 'terminal', label: t('fxViewTerminal') }, { id: 'compare', label: t('fxViewCompare') }, { id: 'router', label: t('rxTab') }, { id: 'accounts', label: t('fxViewAccounts') }]} />
       </div>
-      <p className="text-[12.5px] leading-snug text-mute" data-testid="paper-banner">{t(/* v8 GMX trading */ gxReal ? 'gxBannerReal' : tone === 'paper' ? (anyLive ? 'flBannerSimLive' : 'flBannerOff') : tone === 'testnet' ? 'flBannerTestnet' : 'flBannerReal')}</p>
-      {venues.isError ? <Notice tone="danger">{t('fxApiDown')} {errText(t, venues.error)}</Notice> : venues.data && !(phone && view === 'terminal') ? <VenueStrip venues={venues.data} compact /> : null}
-      {unread.length > 0 && <Notice tone="warn">{t('fxVenueErrors', { venues: unread.map((e) => VENUE_NAME[e.venue as keyof typeof VENUE_NAME] ?? e.venue).join(', ') })}</Notice>}
+      <p className="px-0.5 text-[12.5px] leading-snug text-mute" data-testid="paper-banner">{t(/* v8 GMX trading */ gxReal ? 'gxBannerReal' : tone === 'paper' ? (anyLive ? 'flBannerSimLive' : 'flBannerOff') : tone === 'testnet' ? 'flBannerTestnet' : 'flBannerReal')}</p>
+      {venues.isError ? <Notice tone="danger"><b className="block font-semibold">{t('dzFxVenueCut')}</b>{t('fxApiDown')} {errText(t, venues.error)}</Notice> : venues.data && !(phone && view === 'terminal') ? <VenueStrip venues={venues.data} compact /> : null}
+      {unread.length > 0 && <Notice tone="warn"><b className="block font-semibold">{t('dzFxVenueCut')}</b>{t('fxVenueErrors', { venues: unread.map((e) => VENUE_NAME[e.venue as keyof typeof VENUE_NAME] ?? e.venue).join(', ') })}</Notice>}
       {view === 'terminal' && <Terminal id={id} instruments={list} instrumentsLoading={instruments.isLoading} venues={venues.data ?? []} accounts={paper} liveAccounts={live} accountId={accountId} onAccount={setAccountId}
         onMarket={(m) => go('terminal', m)} goAccounts={() => go('accounts')} />}
       {view === 'compare' && <CompareView instruments={list} base={base} onBase={setBase} onOpen={(m) => go('terminal', m)} />}
@@ -143,14 +144,14 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
   if (unknown) return <Card><div className="space-y-3"><Notice tone="warn">{t('fxUnknownMarket', { id })}</Notice><Btn kind="soft" onClick={() => onMarket(instruments[0]!.id)}>{t('fxOpenDefault', { symbol: instruments[0]!.symbol })}</Btn></div></Card>;
   const pdp = priceDp(instrument?.tickSize, store.ticker?.mark);
   const hasBook = instrument ? instrument.venue !== 'gmx' : true;
-  const chart = <Veil store={store}><Candles store={store} interval={interval} onInterval={setIntervalV} overlays={overlays} priceDp={pdp} locale={locale} stale={false} height={phone ? 300 : wide ? 430 : 380} /></Veil>;
-  const book = instrument ? (hasBook ? <Veil store={store}><BookPanel store={store} instrument={instrument} rows={phone ? 9 : 10} /></Veil> : <LiquidityPanel store={store} />) : <Skeleton h="h-64" />;
+  const chart = <Veil store={store}><Candles store={store} interval={interval} onInterval={setIntervalV} overlays={overlays} priceDp={pdp} locale={locale} stale={false} height={phone ? 300 : wide ? 480 : 380} /></Veil>;
+  const book = instrument ? (hasBook ? <Veil store={store}><BookPanel store={store} instrument={instrument} rows={phone ? 9 : 10} /></Veil> : <LiquidityPanel store={store} />) : <BookSkeleton rows={phone ? 9 : 10} />;
   const trades = instrument && hasBook ? <Veil store={store}><TradesPanel store={store} instrument={instrument} rows={phone ? 14 : wide ? 9 : 14} /></Veil> : null;
-  let order = !instrument ? <Skeleton h="h-64" />   // `let`: v8 GMX trading (below)
+  let order = !instrument ? <OrderSkeleton />   // `let`: v8 GMX trading (below)
     : venueAccount ? <LiveOrderPanel instrument={instrument} account={venueAccount} detail={lv.detail} conn={lv.conn} workerError={lv.workerError} config={liveCfg.data} switcher={switcher} goAccounts={goAccounts} />
     : <OrderPanel store={store} instrument={instrument} account={account} accounts={mine} venue={venue} onAccount={onAccount} goAccounts={goAccounts} switcher={picked.live.length > 0 && account ? switcher : undefined} />;
   let blotter = venueAccount ? <LiveBlotter account={venueAccount} detail={lv.detail} instruments={byId} ttlMs={liveCfg.data?.bounds.orderApprovalTtlMs ?? 90_000} onSelect={onMarket} />
-    : <Blotter account={account} detail={d} instruments={byId} onSelect={onMarket} />;
+    : <Blotter account={account} detail={d} instruments={byId} onSelect={onMarket} goAccounts={goAccounts} />;
   let nPos = held?.positions.length ?? 0;
   // >>> v8 GMX trading: on a market GMX lists for this wallet, the blotter is the wallet's own GMX activity (read from the chain) and, when
   // trading is open, the order panel is GMX's — with the real-money band. Closed: the existing panel stays, followed by why it is closed.
@@ -163,7 +164,7 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
     nPos = gxStatus.positions.filter((p) => p.market.toLowerCase() === gxMarket.market.toLowerCase()).length;
   }
   // <<< v8 GMX trading
-  const head = (s: string) => <h3 className="mb-2 text-[13px] font-semibold text-mute">{s}</h3>;
+  const head = (s: string) => <h3 className="t-eyebrow mb-2.5">{s}</h3>;
   const picker = pick && <MarketPicker instruments={instruments} current={id} onClose={() => setPick(false)} onPick={(m) => { setPick(false); onMarket(m); }} />;
   const error = meta.error && !store.ticker ? <Notice tone="danger">{t('fxMarketError')}</Notice> : null;
   const facts = instrument && <VenueFacts instrument={instrument} store={store} />;
@@ -188,7 +189,8 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
   );
   return (
     <div className="space-y-3" data-testid="terminal" data-layout={wide ? 'desktop' : 'tablet'} data-tone={tone}>
-      <div className="sticky top-[calc(env(safe-area-inset-top)+64px)] z-[5] lg:top-2">{band}</div>
+      {/* the band stays on screen while the terminal scrolls; the page colour behind it keeps what scrolls underneath from showing through its wash */}
+      <div className="sticky top-[calc(env(safe-area-inset-top)+64px)] z-[5] rounded-xl bg-bg lg:top-2">{band}</div>
       <Card className="!p-4"><MarketHeader store={store} instrument={instrument} onPick={() => setPick(true)} compact={false} /></Card>
       <StaleBanner store={store} />{error}
       {wide ? <div className="grid grid-cols-[minmax(0,1fr)_292px_324px] items-start gap-3">
@@ -210,16 +212,27 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
 function VenueFacts({ instrument: i }: { instrument: Instrument; store: MarketStore }) {
   const t = useT(); const { locale } = useContext(I18n);
   const nf = (s: string | null) => (s === null ? '—' : s.length > 12 ? Number(s).toExponential(0) : s.replace('.', locale === 'en' ? '.' : ','));
-  return <Card className="!p-4"><details data-testid="contract-facts">
-    <summary className="flex min-h-11 cursor-pointer items-center text-[13.5px] font-semibold">{t('fxContract', { venue: VENUE_NAME[i.venue], symbol: i.symbol })}</summary>
-    <dl className="mt-1 grid grid-cols-1 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
-      <div><dt className="text-[11.5px] text-mute">{t('fxCollateral')}</dt><dd>{i.collateral}</dd></div>
-      <div><dt className="text-[11.5px] text-mute">{t('fxMaxLeverage')} · {t('fxMarginModes')}</dt><dd>{nf(i.maxLeverage)}× · {i.marginModes.map((m) => t(m === 'cross' ? 'fxCross' : 'fxIsolated')).join(', ')}</dd></div>
-      <div><dt className="text-[11.5px] text-mute">{t('fxTickLot')}</dt><dd>{nf(i.tickSize)} · {nf(i.lotSize)} {i.base}</dd></div>
-      <div><dt className="text-[11.5px] text-mute">{t('fxMinOrder')}</dt><dd>{i.minNotional ? `${nf(i.minNotional)} USD` : i.minOrderSize ? `${nf(i.minOrderSize)} ${i.base}` : '—'}</dd></div>
-      <div className="sm:col-span-2"><dt className="text-[11.5px] text-mute">{t('fxSettlement')}</dt><dd className="leading-snug">{i.settlement}</dd></div>
-      <div className="sm:col-span-2"><dt className="text-[11.5px] text-mute">{t('fxMarkMethod')}</dt><dd className="leading-snug">{i.markPriceMethod}</dd></div>
+  const dt = 'text-[11.5px] leading-tight text-mute', dd = 'mt-0.5 font-medium leading-snug';
+  return <Card className="!px-4 !py-1.5"><Fold testid="contract-facts" summary={<span className="flex min-w-0 items-center gap-2.5 text-ink"><VenueIcon venue={i.venue} size={24} /><span className="min-w-0">{t('fxContract', { venue: VENUE_NAME[i.venue], symbol: i.symbol })}</span></span>}>
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-[13.5px] sm:grid-cols-2">
+      <div><dt className={dt}>{t('fxCollateral')}</dt><dd className={dd}>{i.collateral}</dd></div>
+      <div><dt className={dt}>{t('fxMaxLeverage')} · {t('fxMarginModes')}</dt><dd className={dd}>{nf(i.maxLeverage)}× · {i.marginModes.map((m) => t(m === 'cross' ? 'fxCross' : 'fxIsolated')).join(', ')}</dd></div>
+      <div><dt className={dt}>{t('fxTickLot')}</dt><dd className={dd}>{nf(i.tickSize)} · {nf(i.lotSize)} {i.base}</dd></div>
+      <div><dt className={dt}>{t('fxMinOrder')}</dt><dd className={dd}>{i.minNotional ? `${nf(i.minNotional)} USD` : i.minOrderSize ? `${nf(i.minOrderSize)} ${i.base}` : '—'}</dd></div>
+      <div className="sm:col-span-2"><dt className={dt}>{t('fxSettlement')}</dt><dd className={dd}>{i.settlement}</dd></div>
+      <div className="sm:col-span-2"><dt className={dt}>{t('fxMarkMethod')}</dt><dd className={dd}>{i.markPriceMethod}</dd></div>
     </dl>
-    <p className="mt-2 text-[12px] leading-snug text-mute">{t('fxVenueText')}</p>
-  </details></Card>;
+    <p className="mb-2 mt-3 text-[12px] leading-snug text-mute">{t('fxVenueText')}</p>
+  </Fold></Card>;
+}
+/** the book before the instrument is known: rows of the final height */
+function BookSkeleton({ rows }: { rows: number }) {
+  const bar = (k: number) => <div key={k} className="flex h-[23px] items-center"><div className="skel h-3 !rounded-md" style={{ width: `${38 + ((k * 37) % 55)}%` }} /></div>;
+  return <div aria-hidden="true">{Array.from({ length: rows }, (_, k) => bar(k))}<div className="skel my-1.5 h-8 !rounded-lg" />{Array.from({ length: rows }, (_, k) => bar(k + 3))}</div>;
+}
+/** the order panel before the instrument is known: title, account tile, the two directions, the fields, the action */
+function OrderSkeleton() {
+  return <div className="space-y-4" aria-hidden="true"><div className="flex items-center justify-between"><div className="skel h-5 w-32 !rounded-md" /><div className="skel h-5 w-20 !rounded-md" /></div>
+    <div className="skel h-[92px] !rounded-2xl" /><div className="grid grid-cols-2 gap-2"><div className="skel h-[50px] !rounded-2xl" /><div className="skel h-[50px] !rounded-2xl" /></div>
+    <div className="skel h-[52px] !rounded-2xl" /><div className="skel h-[52px] !rounded-2xl" /><div className="skel h-11 !rounded-2xl" /><div className="skel h-[52px] !rounded-2xl" /></div>;
 }

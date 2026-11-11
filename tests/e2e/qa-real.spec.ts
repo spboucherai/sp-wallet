@@ -85,9 +85,11 @@ test('agent creation: BNB Chain cash leg and representations, warnings kept on t
   const { pk, w } = await start(page, context);
   await page.goto('/agents');
   await page.getByRole('button', { name: 'Nouvel agent' }).click();
-  const net = page.locator('select').first();
-  await expect(net.locator('option')).toHaveCount(8, { timeout: 60_000 });
-  await net.selectOption('bsc');
+  // v10: the network is a group of chips with the networks' logos (it was a <select>): same eight networks, one tap
+  const net = page.getByRole('radiogroup', { name: 'Réseau' });
+  await expect(net.getByRole('radio')).toHaveCount(8, { timeout: 60_000 });
+  await net.getByRole('radio', { name: 'BNB Smart Chain', exact: true }).click();
+  await expect(net.getByRole('radio', { name: 'BNB Smart Chain', exact: true })).toHaveAttribute('aria-checked', 'true');
   // the 18-decimal Binance-Peg cash leg is named, with its issuer
   await expect(page.getByTestId('cash-issuer')).toContainText('USDC est « Binance-Peg USD Coin »');
   await expect(page.getByTestId('cash-issuer')).toContainText('18 décimales');

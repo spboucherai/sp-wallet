@@ -63,10 +63,12 @@ test('lock screen', async ({ page }) => {
 });
 
 test('logos: real files from this origin, the network badge where two deployments could be confused', async ({ page }) => {
-  await open(page, '/assets'); await settled(page);
+  // v10: the app now draws after its language table arrived (the page's load event comes first), and the logo set is asked
+  // for once the first paint is done — so wait for the list itself, then for every logo plate to have its image
+  await open(page, '/assets'); await expect(page.getByRole('searchbox')).toBeVisible(); await settled(page);
   await page.getByRole('searchbox').fill('usdc');
   const rows = page.getByRole('main').locator('li');
-  await expect(rows.first()).toBeVisible();
+  await expect(rows.first()).toBeVisible(); await settled(page);
   const info = await page.evaluate(() => Array.from(document.querySelectorAll('main li [data-asset]')).map((e) => ({ sym: e.getAttribute('data-asset'), net: e.getAttribute('data-net'), imgs: Array.from(e.querySelectorAll('img')).map((i) => ({ ok: i.complete && i.naturalWidth > 0, data: i.src.startsWith('data:image/') })) })));
   expect(info.length).toBeGreaterThan(8);
   for (const r of info) { expect(r.imgs.length, `${r.sym} on ${r.net}: logo + badge`).toBe(2); for (const i of r.imgs) expect(i, `${r.sym} on ${r.net}`).toEqual({ ok: true, data: true }); }
