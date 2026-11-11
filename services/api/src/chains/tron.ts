@@ -130,7 +130,7 @@ export function tronAdapter(n: NetworkDef): Adapter {
         if (!d.ok || !y.ok || !/^[0-9a-f]{64}$/.test(d.result) || y.result.length < 192) return false;
         const len = Number(BigInt('0x' + y.result.slice(64, 128)));
         const sym = Buffer.from(y.result.slice(128, 128 + len * 2), 'hex').toString('utf8');
-        return BigInt('0x' + d.result) === BigInt(t.decimals) && sym === t.symbol;
+        return BigInt('0x' + d.result) === BigInt(t.decimals) && sym === (t.onchainSymbol ?? t.symbol);
       }));
       const answers = checks.flatMap((c) => (c.status === 'fulfilled' ? [c.value] : []));
       if (answers.length === 0) throw new Error('token check unavailable');

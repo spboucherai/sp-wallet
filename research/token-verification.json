@@ -1,0 +1,5056 @@
+{
+ "at": "2026-11-11T04:58:12.441Z",
+ "onchain": [
+  {
+   "network": "solana",
+   "symbol": "USDC",
+   "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "USDC",
+   "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDC",
+   "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "USDC",
+   "address": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDC",
+   "address": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "USDC",
+   "address": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "USDC",
+   "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "tron",
+   "symbol": "USDT",
+   "address": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+   "endpoint": "api.trongrid.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "USDC",
+   "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDC",
+   "address": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "USDC",
+   "address": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "USDC",
+   "address": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "USDC",
+   "address": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDC",
+   "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "USDT",
+   "address": "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "USDC",
+   "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "USDT",
+   "address": "0x55d398326f99059fF775485246999027B3197955",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "USDC",
+   "address": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+   "endpoint": "rpc.hyperliquid.xyz",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "PYUSD",
+   "address": "0x46850aD61C2B7d64d08c9C754F45254596696984",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "USDT",
+   "address": "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "USDC",
+   "address": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDT",
+   "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "USDC",
+   "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "USDT",
+   "address": "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "PYUSD",
+   "address": "0x99aF3EeA856556646C98c8B9b2548Fe815240750",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "USDT",
+   "address": "0x55d398326f99059fF775485246999027B3197955",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "PYUSD",
+   "address": "0x46850aD61C2B7d64d08c9C754F45254596696984",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "USDT",
+   "address": "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDT",
+   "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "DAI",
+   "address": "0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "DAI",
+   "address": "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "DAI",
+   "address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "tron",
+   "symbol": "USDT",
+   "address": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+   "endpoint": "tron-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "PYUSD",
+   "address": "0x6c3ea9036406852006290770BEdFcAbA0e23A0e8",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "PYUSD",
+   "address": "0x99aF3EeA856556646C98c8B9b2548Fe815240750",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "DAI",
+   "address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "DAI",
+   "address": "0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "DAI",
+   "address": "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "DAI",
+   "address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "USDS",
+   "address": "0x820C137fa70C8691f0e44Dc420a5e53c168921Dc",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "DAI",
+   "address": "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "DAI",
+   "address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "USDT",
+   "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "PYUSD",
+   "address": "0x6c3ea9036406852006290770BEdFcAbA0e23A0e8",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "USDC",
+   "address": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+   "endpoint": "hyperliquid.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDS",
+   "address": "0x6491c05A82219b8D1479057361ff1654749b876b",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "EURC",
+   "address": "0xC891EB4cbdEFf6e073e859e987815Ed1505c2ACD",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "USDS",
+   "address": "0x820C137fa70C8691f0e44Dc420a5e53c168921Dc",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "DAI",
+   "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "FDUSD",
+   "address": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDS",
+   "address": "0x6491c05A82219b8D1479057361ff1654749b876b",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "DAI",
+   "address": "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "EURC",
+   "address": "0xC891EB4cbdEFf6e073e859e987815Ed1505c2ACD",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "DAI",
+   "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "FDUSD",
+   "address": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "tron",
+   "symbol": "USDD",
+   "address": "TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz",
+   "endpoint": "api.trongrid.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "LINK",
+   "address": "0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "WBTC",
+   "address": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "LINK",
+   "address": "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "USDT",
+   "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDS",
+   "address": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "endpoint": "rpc.hyperliquid.xyz",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "WBTC",
+   "address": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "LINK",
+   "address": "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "LINK",
+   "address": "0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDS",
+   "address": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "FDUSD",
+   "address": "0x93C9932E4afa59201F0B5E63f7d816516F1669fE",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "UNI",
+   "address": "0xBf5140A22578168FD562DCcF235E5D43A02ce9B1",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "USDC.e",
+   "address": "0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "UNI",
+   "address": "0xb33EaAd8d922B1083446DC23f610c2567fB5180f",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDe",
+   "address": "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "FDUSD",
+   "address": "0x93C9932E4afa59201F0B5E63f7d816516F1669fE",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "UNI",
+   "address": "0xBf5140A22578168FD562DCcF235E5D43A02ce9B1",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "LINK",
+   "address": "0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "tron",
+   "symbol": "USDD",
+   "address": "TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz",
+   "endpoint": "tron-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "PYUSD",
+   "address": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "USDC.e",
+   "address": "0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "AAVE",
+   "address": "0xfb6115445Bff7b52FeB98650C87f44907E58f802",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDG",
+   "address": "0x004B506865409877C9fA29bfb1ebA929984B9bbC",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "LINK",
+   "address": "0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "UNI",
+   "address": "0xb33EaAd8d922B1083446DC23f610c2567fB5180f",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDe",
+   "address": "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "GHO",
+   "address": "0xfc421aD3C883Bf9E7C4f42dE845C4e4405799e73",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "AAVE",
+   "address": "0xfb6115445Bff7b52FeB98650C87f44907E58f802",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "endpoint": "hyperliquid.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDG",
+   "address": "0x004B506865409877C9fA29bfb1ebA929984B9bbC",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "AAVE",
+   "address": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "FDUSD",
+   "address": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "WBTC",
+   "address": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "GHO",
+   "address": "0xfc421aD3C883Bf9E7C4f42dE845C4e4405799e73",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "LINK",
+   "address": "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "UNI",
+   "address": "0x6fd9d7AD17242c41f7131d257212c54A0e816691",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "FDUSD",
+   "address": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "PYUSD",
+   "address": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "WBTC",
+   "address": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "LINK",
+   "address": "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "AAVE",
+   "address": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "crvUSD",
+   "address": "0xe2fb3F127f5450DeE44afe054385d74C392BdeF4",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "UNI",
+   "address": "0x6fd9d7AD17242c41f7131d257212c54A0e816691",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "EURC",
+   "address": "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "USDT0",
+   "address": "0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb",
+   "endpoint": "rpc.hyperliquid.xyz",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "UNI",
+   "address": "0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "WBTC",
+   "address": "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "crvUSD",
+   "address": "0xe2fb3F127f5450DeE44afe054385d74C392BdeF4",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "EURC",
+   "address": "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "BTC.b",
+   "address": "0x152b9d0FdC40C096757F570A51E494bd4b943E50",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "UNI",
+   "address": "0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "RLUSD",
+   "address": "0x8292Bb45bf1Ee4d140127049757C2E0fF06317eD",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "AAVE",
+   "address": "0x76FB31fb4af56892A25e32cFC43De717950c9278",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "USDS",
+   "address": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "EURC",
+   "address": "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "BTC.b",
+   "address": "0x152b9d0FdC40C096757F570A51E494bd4b943E50",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "WBTC",
+   "address": "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "AAVE",
+   "address": "0xba5DdD1f9d7F570dc94a51479a000E3BCE967196",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "AAVE",
+   "address": "0x76FB31fb4af56892A25e32cFC43De717950c9278",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "USDD",
+   "address": "0x45E51bc23D592EB2DBA86da3985299f7895d66Ba",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "EURC",
+   "address": "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "RLUSD",
+   "address": "0x8292Bb45bf1Ee4d140127049757C2E0fF06317eD",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "WETH",
+   "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "AAVE",
+   "address": "0xba5DdD1f9d7F570dc94a51479a000E3BCE967196",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "WETH.e",
+   "address": "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "USDT0",
+   "address": "0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb",
+   "endpoint": "hyperliquid.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "LINK",
+   "address": "0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "USDD",
+   "address": "0x45E51bc23D592EB2DBA86da3985299f7895d66Ba",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDG",
+   "address": "0xe343167631d89B6Ffc58B88d6b7fB0228795491D",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "WBTC",
+   "address": "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "WETH.e",
+   "address": "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "BTCB",
+   "address": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "WETH",
+   "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "LINK",
+   "address": "0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "USDS",
+   "address": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "WBTC",
+   "address": "0x68f180fcCe6836688e9084f035309E29Bf0A2095",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDG",
+   "address": "0xe343167631d89B6Ffc58B88d6b7fB0228795491D",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "LINK.e",
+   "address": "0x5947BB275c521040051D82396192181b413227A3",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "WBTC",
+   "address": "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "BTCB",
+   "address": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "USDT0",
+   "address": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "UNI",
+   "address": "0xc3De830EA07524a0761646a6a4e4be0e114a3C83",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "WBTC",
+   "address": "0x68f180fcCe6836688e9084f035309E29Bf0A2095",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "LINK",
+   "address": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "WETH",
+   "address": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "LINK.e",
+   "address": "0x5947BB275c521040051D82396192181b413227A3",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "wstETH",
+   "address": "0x26c5e01524d2E6280A48F2c50fF6De7e52E9611C",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "weETH",
+   "address": "0xA3D68b74bF0528fdD07263c60d6488749044914b",
+   "endpoint": "rpc.hyperliquid.xyz",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "UNI",
+   "address": "0xc3De830EA07524a0761646a6a4e4be0e114a3C83",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "WETH",
+   "address": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "USDT0",
+   "address": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "weETH",
+   "address": "0xA3D68b74bF0528fdD07263c60d6488749044914b",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "wstETH",
+   "address": "0x26c5e01524d2E6280A48F2c50fF6De7e52E9611C",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "LINK",
+   "address": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "AAVE",
+   "address": "0x63706e401c06ac8513145b7687A14804d17f814b",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "weETH",
+   "address": "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "USDe",
+   "address": "DEkqHyPN7GMRJ5cArtQFAWefqbZb33Hyf6s5iCwjEonT",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "weETH",
+   "address": "0xA3D68b74bF0528fdD07263c60d6488749044914b",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "USDC.e",
+   "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDT0",
+   "address": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "WETH",
+   "address": "0x4200000000000000000000000000000000000006",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "UNI",
+   "address": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "AAVE",
+   "address": "0x63706e401c06ac8513145b7687A14804d17f814b",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "weETH",
+   "address": "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "WAVAX",
+   "address": "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDT0",
+   "address": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "WETH",
+   "address": "0x4200000000000000000000000000000000000006",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "UNI",
+   "address": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "WBNB",
+   "address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "USDC.e",
+   "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "WBTC",
+   "address": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "WAVAX",
+   "address": "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDC.e",
+   "address": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "AAVE",
+   "address": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "weETH",
+   "address": "0xA3D68b74bF0528fdD07263c60d6488749044914b",
+   "endpoint": "hyperliquid.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "WBNB",
+   "address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "WBTC",
+   "address": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "crvUSD",
+   "address": "0xc4Ce1D6F5D98D65eE25Cf85e9F2E9DcFEe6Cb5d6",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "USDe",
+   "address": "DEkqHyPN7GMRJ5cArtQFAWefqbZb33Hyf6s5iCwjEonT",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDC.e",
+   "address": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "PENDLE",
+   "address": "0xb3Ed0A426155B79B898849803E3B36552f7ED507",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "ENA",
+   "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "USDT0",
+   "address": "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "WETH",
+   "address": "0x4200000000000000000000000000000000000006",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "AAVE",
+   "address": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "GHO",
+   "address": "0x7dfF72693f6A4149b17e7C6314655f6A9F7c8B33",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "PENDLE",
+   "address": "0xb3Ed0A426155B79B898849803E3B36552f7ED507",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "ENA",
+   "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "USDT0",
+   "address": "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "crvUSD",
+   "address": "0xc4Ce1D6F5D98D65eE25Cf85e9F2E9DcFEe6Cb5d6",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "WETH",
+   "address": "0x4200000000000000000000000000000000000006",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "LDO",
+   "address": "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "CAKE",
+   "address": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "GHO",
+   "address": "0x7dfF72693f6A4149b17e7C6314655f6A9F7c8B33",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "WHYPE",
+   "address": "0x5555555555555555555555555555555555555555",
+   "endpoint": "rpc.hyperliquid.xyz",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "GMX",
+   "address": "0x62edc0692BD897D2295872a9FFCac5425011c661",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "GHO",
+   "address": "0x6Bb7a212910682DCFdbd5BCBb3e28FB4E8da10Ee",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "LDO",
+   "address": "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "CAKE",
+   "address": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "FDUSD",
+   "address": "9zNQRsGLjNKwCUU5Gq5LR8beUCPzQMVMqKAi3SSZh54u",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "crvUSD",
+   "address": "0x498Bf2B1e120FeD3ad3D42EA2165E9b73f99C1e5",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "GMX",
+   "address": "0x62edc0692BD897D2295872a9FFCac5425011c661",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "GHO",
+   "address": "0x6Bb7a212910682DCFdbd5BCBb3e28FB4E8da10Ee",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "JOE",
+   "address": "0x371c7ec6D8039ff7933a2AA28EB827Ffe1F52f07",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "USDC.e",
+   "address": "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "WBTC",
+   "address": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "crvUSD",
+   "address": "0x498Bf2B1e120FeD3ad3D42EA2165E9b73f99C1e5",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "crvUSD",
+   "address": "0x417Ac0e078398C154EdFadD9Ef675d30Be60Af93",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "JOE",
+   "address": "0x6e84a6216eA6dACC71eE8E6b0a5B7322EEbC0fDd",
+   "endpoint": "api.avax.network",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "JOE",
+   "address": "0x371c7ec6D8039ff7933a2AA28EB827Ffe1F52f07",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "USDC.e",
+   "address": "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "WBTC",
+   "address": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "tBTC",
+   "address": "0x236aa50979D5f3De3Bd1Eeb40E81137F22ab794b",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "ETH",
+   "address": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "crvUSD",
+   "address": "0x417Ac0e078398C154EdFadD9Ef675d30Be60Af93",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "avalanche",
+   "symbol": "JOE",
+   "address": "0x6e84a6216eA6dACC71eE8E6b0a5B7322EEbC0fDd",
+   "endpoint": "avalanche-c-chain-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "WETH",
+   "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "FDUSD",
+   "address": "9zNQRsGLjNKwCUU5Gq5LR8beUCPzQMVMqKAi3SSZh54u",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "WHYPE",
+   "address": "0x5555555555555555555555555555555555555555",
+   "endpoint": "hyperliquid.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "ETH",
+   "address": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "frxUSD",
+   "address": "0xe5020A6d073a794B6E7f05678707dE47986Fb0b6",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "tBTC",
+   "address": "0x236aa50979D5f3De3Bd1Eeb40E81137F22ab794b",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "crvUSD",
+   "address": "0xC52D7F23a2e460248Db6eE192Cb23dD12bDDCbf6",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "XRP",
+   "address": "0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "cbBTC",
+   "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "WETH",
+   "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "frxUSD",
+   "address": "0xe5020A6d073a794B6E7f05678707dE47986Fb0b6",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "wstETH",
+   "address": "0x03b54A6e9a984069379fae1a4fC4dBAE93B3bCCD",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "crvUSD",
+   "address": "0xC52D7F23a2e460248Db6eE192Cb23dD12bDDCbf6",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "cbBTC",
+   "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "XRP",
+   "address": "0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "PAXG",
+   "address": "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "cbBTC",
+   "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "DOGE",
+   "address": "0xbA2aE424d960c26247Dd6c32edC70B295c744C43",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "tBTC",
+   "address": "0x6c84a8f1c29108F47a79964b5Fe888D4f4D0dE40",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "wstETH",
+   "address": "0x03b54A6e9a984069379fae1a4fC4dBAE93B3bCCD",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "cbBTC",
+   "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "EURC",
+   "address": "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "PAXG",
+   "address": "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "DOGE",
+   "address": "0xbA2aE424d960c26247Dd6c32edC70B295c744C43",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "PENDLE",
+   "address": "0xD6Eb81136884713E843936843E286FD2a85A205A",
+   "endpoint": "rpc.hyperliquid.xyz",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "tBTC",
+   "address": "0x6c84a8f1c29108F47a79964b5Fe888D4f4D0dE40",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "rETH",
+   "address": "0x0266F4F08D82372CF0FcbCCc0Ff74309089c74d1",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "tBTC",
+   "address": "0x236aa50979D5f3De3Bd1Eeb40E81137F22ab794b",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "ONDO",
+   "address": "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "ADA",
+   "address": "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "wstETH",
+   "address": "0x5979D7b546E38E414F7E9822514be443A4800529",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "tBTC",
+   "address": "0x236aa50979D5f3De3Bd1Eeb40E81137F22ab794b",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "ADA",
+   "address": "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "ONDO",
+   "address": "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "rETH",
+   "address": "0x0266F4F08D82372CF0FcbCCc0Ff74309089c74d1",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "wstETH",
+   "address": "0x5979D7b546E38E414F7E9822514be443A4800529",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "wstETH",
+   "address": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "SOL",
+   "address": "0x570A5D26f7765Ecb712C0924E4De545B89fD43dF",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "EURC",
+   "address": "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "PEPE",
+   "address": "0x6982508145454Ce325dDbE47a25d4ec3d2311933",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "WPOL",
+   "address": "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "rETH",
+   "address": "0xEC70Dcb4A1EFa46b8F2D97C310C9c4790ba5ffA8",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "wstETH",
+   "address": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "SOL",
+   "address": "0x570A5D26f7765Ecb712C0924E4De545B89fD43dF",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "tBTC",
+   "address": "0x6c84a8f1c29108F47a79964b5Fe888D4f4D0dE40",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "PENDLE",
+   "address": "0xD6Eb81136884713E843936843E286FD2a85A205A",
+   "endpoint": "hyperliquid.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "PEPE",
+   "address": "0x6982508145454Ce325dDbE47a25d4ec3d2311933",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "LTC",
+   "address": "0x4338665CBB7B2485A8855A139b75D5e34AB0DB94",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "rETH",
+   "address": "0xEC70Dcb4A1EFa46b8F2D97C310C9c4790ba5ffA8",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "rETH",
+   "address": "0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "tBTC",
+   "address": "0x6c84a8f1c29108F47a79964b5Fe888D4f4D0dE40",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "SHIB",
+   "address": "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "WPOL",
+   "address": "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "LTC",
+   "address": "0x4338665CBB7B2485A8855A139b75D5e34AB0DB94",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "rETH",
+   "address": "0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "cbETH",
+   "address": "0x1DEBd73E752bEaF79865Fd6446b0c970EaE7732f",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "DOT",
+   "address": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "USDG",
+   "address": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "CRV",
+   "address": "0x172370d5Cd63279eFa6d502DAB29171933a610AF",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "cbETH",
+   "address": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "cbETH",
+   "address": "0x1DEBd73E752bEaF79865Fd6446b0c970EaE7732f",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "SHIB",
+   "address": "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "DOT",
+   "address": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "wstETH",
+   "address": "0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "cbETH",
+   "address": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "GHO",
+   "address": "0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "weETH",
+   "address": "0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "AVAX",
+   "address": "0x1CE0c2827e2eF14D5C4f29a091d735A204794041",
+   "endpoint": "bsc-dataseed.bnbchain.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "CRV",
+   "address": "0x172370d5Cd63279eFa6d502DAB29171933a610AF",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "wstETH",
+   "address": "0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "weETH",
+   "address": "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "weETH",
+   "address": "0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "GHO",
+   "address": "0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "bsc",
+   "symbol": "AVAX",
+   "address": "0x1CE0c2827e2eF14D5C4f29a091d735A204794041",
+   "endpoint": "bsc-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "COMP",
+   "address": "0x8505b9d2254A7Ae468c0E9dd10Ccea3A837aef5c",
+   "endpoint": "polygon-bor-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "weETH",
+   "address": "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "USDG",
+   "address": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "ARB",
+   "address": "0x912CE59144191C1204E64559FE8253a0e49E6548",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "crvUSD",
+   "address": "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "cbXRP",
+   "address": "0xcb585250f852C6c6bf90434AB21A00f02833a4af",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "rETH",
+   "address": "0x9Bcef72be871e61ED4fBbc7630889beE758eb81D",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "ARB",
+   "address": "0x912CE59144191C1204E64559FE8253a0e49E6548",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "crvUSD",
+   "address": "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "cbXRP",
+   "address": "0xcb585250f852C6c6bf90434AB21A00f02833a4af",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "rETH",
+   "address": "0x9Bcef72be871e61ED4fBbc7630889beE758eb81D",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "polygon",
+   "symbol": "COMP",
+   "address": "0x8505b9d2254A7Ae468c0E9dd10Ccea3A837aef5c",
+   "endpoint": "polygon.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "CRV",
+   "address": "0x11cDb42B0EB46D95f990BeDD4695A6e3fA034978",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "frxUSD",
+   "address": "0xCAcd6fd266aF91b8AeD52aCCc382b4e165586E29",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "cbDOGE",
+   "address": "0xcbD06E5A2B0C65597161de254AA074E489dEb510",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "LINK",
+   "address": "LinkhB3afbBKb2EQQu7s7umdZceV3wcvAUJhQAfQ23L",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "CRV",
+   "address": "0x11cDb42B0EB46D95f990BeDD4695A6e3fA034978",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "frxUSD",
+   "address": "0xCAcd6fd266aF91b8AeD52aCCc382b4e165586E29",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "cbDOGE",
+   "address": "0xcbD06E5A2B0C65597161de254AA074E489dEb510",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "cbETH",
+   "address": "0xadDb6A0412DE1BA0F936DCaeb8Aaa24578dcF3B2",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "COMP",
+   "address": "0x354A6dA3fcde098F8389cad84b0182725c6C91dE",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDD",
+   "address": "0x4f8e5DE400DE08B164E7421B3EE387f461beCD1A",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "cbLTC",
+   "address": "0xcb17C9Db87B595717C857a08468793f5bAb6445F",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "cbLTC",
+   "address": "0xcb17C9Db87B595717C857a08468793f5bAb6445F",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDD",
+   "address": "0x4f8e5DE400DE08B164E7421B3EE387f461beCD1A",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "LINK",
+   "address": "LinkhB3afbBKb2EQQu7s7umdZceV3wcvAUJhQAfQ23L",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "cbADA",
+   "address": "0xcbADA732173e39521CDBE8bf59a6Dc85A9fc7b8c",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "COMP",
+   "address": "0x354A6dA3fcde098F8389cad84b0182725c6C91dE",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "cbETH",
+   "address": "0xadDb6A0412DE1BA0F936DCaeb8Aaa24578dcF3B2",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "cbBTC",
+   "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "cbADA",
+   "address": "0xcbADA732173e39521CDBE8bf59a6Dc85A9fc7b8c",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "PENDLE",
+   "address": "0x0c880f6761F1af8d9Aa9C466984b80DAb9a8c9e8",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "cbBTC",
+   "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "CRV",
+   "address": "0x8Ee73c484A26e0A5df2Ee2a4960B789967dd0415",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "PENDLE",
+   "address": "0x0c880f6761F1af8d9Aa9C466984b80DAb9a8c9e8",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "weETH",
+   "address": "0x5A7fACB970D094B6C7FF1df0eA68D99E6e73CBFF",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "WBTC",
+   "address": "5XZw2LKTyrfvfiskJ78AMpackRjPcyCif1WhUsPDuVqQ",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "tBTC",
+   "address": "0x18084fbA666a33d37592fA2633fD49a74DD93a88",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "CRV",
+   "address": "0x8Ee73c484A26e0A5df2Ee2a4960B789967dd0415",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "ENA",
+   "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "weETH",
+   "address": "0x5A7fACB970D094B6C7FF1df0eA68D99E6e73CBFF",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "COMP",
+   "address": "0x9e1028F5F1D5eDE59748FFceE5532509976840E0",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "ENA",
+   "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "tBTC",
+   "address": "0x18084fbA666a33d37592fA2633fD49a74DD93a88",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "COMP",
+   "address": "0x9e1028F5F1D5eDE59748FFceE5532509976840E0",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "wstETH",
+   "address": "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "GMX",
+   "address": "0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "SNX",
+   "address": "0x22e6966B799c4D5B13BE962E1D117b56327FDa66",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "WBTC",
+   "address": "5XZw2LKTyrfvfiskJ78AMpackRjPcyCif1WhUsPDuVqQ",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "OP",
+   "address": "0x4200000000000000000000000000000000000042",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "GMX",
+   "address": "0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "wstETH",
+   "address": "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "SNX",
+   "address": "0x22e6966B799c4D5B13BE962E1D117b56327FDa66",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "OP",
+   "address": "0x4200000000000000000000000000000000000042",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "CAKE",
+   "address": "0x1b896893dfc86bb67Cf57767298b9073D2c1bA2c",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "rETH",
+   "address": "0xae78736Cd615f374D3085123A210448E74Fc6393",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "PENDLE",
+   "address": "0xA99F6e6785Da0F5d6fB42495Fe424BCE029Eeb3E",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "CAKE",
+   "address": "0x1b896893dfc86bb67Cf57767298b9073D2c1bA2c",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "rETH",
+   "address": "0xae78736Cd615f374D3085123A210448E74Fc6393",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "PENDLE",
+   "address": "0xA99F6e6785Da0F5d6fB42495Fe424BCE029Eeb3E",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "RENDER",
+   "address": "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "CRV",
+   "address": "0x0994206dfE8De6Ec6920FF4D779B0d950605Fb53",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "JOE",
+   "address": "0x371c7ec6D8039ff7933a2AA28EB827Ffe1F52f07",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "cbETH",
+   "address": "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "ENA",
+   "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "CRV",
+   "address": "0x0994206dfE8De6Ec6920FF4D779B0d950605Fb53",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "JOE",
+   "address": "0x371c7ec6D8039ff7933a2AA28EB827Ffe1F52f07",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "ENA",
+   "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "cbETH",
+   "address": "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "MORPHO",
+   "address": "0x40BD670A58238e6E230c430BBb5cE6ec0d40df48",
+   "endpoint": "arb1.arbitrum.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "AERO",
+   "address": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "weETH",
+   "address": "0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "RENDER",
+   "address": "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "MORPHO",
+   "address": "0x40BD670A58238e6E230c430BBb5cE6ec0d40df48",
+   "endpoint": "arbitrum-one-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "SNX",
+   "address": "0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "AERO",
+   "address": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "weETH",
+   "address": "0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "SNX",
+   "address": "0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "CAKE",
+   "address": "0x3055913c90Fcc1A6CE9a358911721eEb942013A1",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "ARB",
+   "address": "0xB50721BCf8d664c30412Cfbc6cf7a15145234ad1",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "CAKE",
+   "address": "0x3055913c90Fcc1A6CE9a358911721eEb942013A1",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "ARB",
+   "address": "0xB50721BCf8d664c30412Cfbc6cf7a15145234ad1",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "JUP",
+   "address": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "PENDLE",
+   "address": "0xBC7B1Ff1c6989f006a1185318eD4E7b5796e66E1",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "POL",
+   "address": "0x455e53CBB86018Ac2B8092FdCd39d8444aFFC3F6",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "PENDLE",
+   "address": "0xBC7B1Ff1c6989f006a1185318eD4E7b5796e66E1",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "POL",
+   "address": "0x455e53CBB86018Ac2B8092FdCd39d8444aFFC3F6",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "JUP",
+   "address": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "MNT",
+   "address": "0x3c3a81e81dc49A522A592e7622A7E711c06bf354",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "ENA",
+   "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "MNT",
+   "address": "0x3c3a81e81dc49A522A592e7622A7E711c06bf354",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "ENA",
+   "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "MORPHO",
+   "address": "0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "MKR",
+   "address": "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "MORPHO",
+   "address": "0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "RAY",
+   "address": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "MKR",
+   "address": "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "BRETT",
+   "address": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "VELO",
+   "address": "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db",
+   "endpoint": "mainnet.optimism.io",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "SKY",
+   "address": "0x56072C95FAA701256059aa122697B133aDEd9279",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "BRETT",
+   "address": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "optimism",
+   "symbol": "VELO",
+   "address": "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db",
+   "endpoint": "optimism-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "SKY",
+   "address": "0x56072C95FAA701256059aa122697B133aDEd9279",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "RAY",
+   "address": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "CRV",
+   "address": "0xD533a949740bb3306d119CC777fa900bA034cd52",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "CRV",
+   "address": "0xD533a949740bb3306d119CC777fa900bA034cd52",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "COMP",
+   "address": "0xc00e94Cb662C3520282E6f5717214004A7f26888",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "BONK",
+   "address": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "TOSHI",
+   "address": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "COMP",
+   "address": "0xc00e94Cb662C3520282E6f5717214004A7f26888",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "TOSHI",
+   "address": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "SNX",
+   "address": "0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "DEGEN",
+   "address": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+   "endpoint": "mainnet.base.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "SNX",
+   "address": "0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "BONK",
+   "address": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "base",
+   "symbol": "DEGEN",
+   "address": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+   "endpoint": "base-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "PENDLE",
+   "address": "0x808507121B80c02388fAd14726482e061B8da827",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "PENDLE",
+   "address": "0x808507121B80c02388fAd14726482e061B8da827",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "ENA",
+   "address": "0x57e114B691Db790C35207b2e685D4A43181e6061",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "frxUSD",
+   "address": "GzX1ireZDU865FiMaKrdVB1H6AE8LAqWYCg6chrMrfBw",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "ENA",
+   "address": "0x57e114B691Db790C35207b2e685D4A43181e6061",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "CAKE",
+   "address": "0x152649eA73beAb28c5b49B26eb48f7EAD6d4c898",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "frxUSD",
+   "address": "GzX1ireZDU865FiMaKrdVB1H6AE8LAqWYCg6chrMrfBw",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "CAKE",
+   "address": "0x152649eA73beAb28c5b49B26eb48f7EAD6d4c898",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "MORPHO",
+   "address": "0x58D97B57BB95320F9a05dC918Aef65434969c2B2",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "MORPHO",
+   "address": "0x58D97B57BB95320F9a05dC918Aef65434969c2B2",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "cbBTC",
+   "address": "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "EIGEN",
+   "address": "0xec53bF9167f50cDEB3Ae105f56099aaaB9061F83",
+   "endpoint": "ethereum-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "ethereum",
+   "symbol": "EIGEN",
+   "address": "0xec53bF9167f50cDEB3Ae105f56099aaaB9061F83",
+   "endpoint": "eth.drpc.org",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "cbBTC",
+   "address": "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "tBTC",
+   "address": "6DNSN2BJsaPFdFFc1zP37kkeNe4Usc1Sqkzr9C9vPWcU",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "tBTC",
+   "address": "6DNSN2BJsaPFdFFc1zP37kkeNe4Usc1Sqkzr9C9vPWcU",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "ENA",
+   "address": "72QvBVwpxqmheEPfaCwWSWqEFsUy3rhWt6JhQBMNTwD1",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "ENA",
+   "address": "72QvBVwpxqmheEPfaCwWSWqEFsUy3rhWt6JhQBMNTwD1",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "CAKE",
+   "address": "4qQeZ5LwSz6HuupUu8jCtgXyW1mYQcNbFAW1sWZp89HL",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "CAKE",
+   "address": "4qQeZ5LwSz6HuupUu8jCtgXyW1mYQcNbFAW1sWZp89HL",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "JTO",
+   "address": "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "JTO",
+   "address": "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "PYTH",
+   "address": "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "PYTH",
+   "address": "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "HNT",
+   "address": "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "HNT",
+   "address": "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "ORCA",
+   "address": "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "ORCA",
+   "address": "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "mSOL",
+   "address": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "mSOL",
+   "address": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "jitoSOL",
+   "address": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "jitoSOL",
+   "address": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "bSOL",
+   "address": "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1",
+   "endpoint": "api.mainnet-beta.solana.com",
+   "ok": true,
+   "problem": null
+  },
+  {
+   "network": "solana",
+   "symbol": "bSOL",
+   "address": "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1",
+   "endpoint": "solana-rpc.publicnode.com",
+   "ok": true,
+   "problem": null
+  }
+ ],
+ "kyberAt": "2026-11-11T04:50:02.853Z",
+ "kyber": [
+  {
+   "network": "ethereum",
+   "symbol": "USDC",
+   "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+   "buy": "8.267156",
+   "sell": "0.004002068754507673"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDT",
+   "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   "buy": "8.272287",
+   "sell": "0.004000559932619095"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "PYUSD",
+   "address": "0x6c3ea9036406852006290770BEdFcAbA0e23A0e8",
+   "buy": "8.266083",
+   "sell": "0.00400586754122614"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "DAI",
+   "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+   "buy": "8.264293949620092035",
+   "sell": "0.004000942425619583"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDS",
+   "address": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+   "buy": "8.267156",
+   "sell": "0.004002068754507673"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDe",
+   "address": "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
+   "buy": "8.267475287528606157",
+   "sell": "0.004001995369318455"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "FDUSD",
+   "address": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+   "buy": "8.294820728668686445",
+   "sell": "0.003999754675826147"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "EURC",
+   "address": "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c",
+   "buy": "7.40246",
+   "sell": "0.003997154377206408"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "RLUSD",
+   "address": "0x8292Bb45bf1Ee4d140127049757C2E0fF06317eD",
+   "buy": "8.264813598173827743",
+   "sell": "0.004001268519829528"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDG",
+   "address": "0xe343167631d89B6Ffc58B88d6b7fB0228795491D",
+   "buy": "8.265825",
+   "sell": "0.003999894319897606"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "LINK",
+   "address": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+   "buy": "0.795962408816242563",
+   "sell": "0.003997347925518007"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "UNI",
+   "address": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+   "buy": "1.235194229588179133",
+   "sell": "0.004001634623284806"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "AAVE",
+   "address": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+   "buy": "0.066531819612041805",
+   "sell": "0.004000736714545497"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "LDO",
+   "address": "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32",
+   "buy": "25.06307937825458628",
+   "sell": "0.003995571238914055"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "WBTC",
+   "address": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+   "buy": "0.00011226",
+   "sell": "0.004000919612801515"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "WETH",
+   "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+   "buy": "0.004",
+   "sell": "0.004"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "PAXG",
+   "address": "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+   "buy": "0.002048438550690822",
+   "sell": "0.003993574646536065"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "ONDO",
+   "address": "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3",
+   "buy": "22.379813068856072523",
+   "sell": "0.003997388033059612"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "PEPE",
+   "address": "0x6982508145454Ce325dDbE47a25d4ec3d2311933",
+   "buy": "1533823.162254778283534847",
+   "sell": "0.00399644817586902"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "SHIB",
+   "address": "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
+   "buy": "1846389.623941929182678948",
+   "sell": "0.003993420593106884"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "GHO",
+   "address": "0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f",
+   "buy": "8.274847581229347067",
+   "sell": "0.003999861870405365"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "crvUSD",
+   "address": "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+   "buy": "8.287709205298687487",
+   "sell": "0.003999610507912113"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "frxUSD",
+   "address": "0xCAcd6fd266aF91b8AeD52aCCc382b4e165586E29",
+   "buy": "8.267156",
+   "sell": "0.004002068754507673"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "USDD",
+   "address": "0x4f8e5DE400DE08B164E7421B3EE387f461beCD1A",
+   "buy": "8.275131135288884705",
+   "sell": "0.003997788976943575"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "cbBTC",
+   "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+   "buy": "0.00011212",
+   "sell": "0.004000691491346316"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "tBTC",
+   "address": "0x18084fbA666a33d37592fA2633fD49a74DD93a88",
+   "buy": "0.000112330031696619",
+   "sell": "0.00400047349168238"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "wstETH",
+   "address": "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+   "buy": "0.003203039397531194",
+   "sell": "0.003999575633225691"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "rETH",
+   "address": "0xae78736Cd615f374D3085123A210448E74Fc6393",
+   "buy": "0.003401605089819998",
+   "sell": "0.003999200008857887"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "cbETH",
+   "address": "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704",
+   "buy": "0.00349861594437001",
+   "sell": "0.003996000454834776"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "weETH",
+   "address": "0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee",
+   "buy": "0.003610551846699129",
+   "sell": "0.003999564604569719"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "ARB",
+   "address": "0xB50721BCf8d664c30412Cfbc6cf7a15145234ad1",
+   "buy": "50.295740995795753751",
+   "sell": "0.003975512893664201"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "POL",
+   "address": "0x455e53CBB86018Ac2B8092FdCd39d8444aFFC3F6",
+   "buy": "93.162800692160137207",
+   "sell": "0.003997602315186667"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "MNT",
+   "address": "0x3c3a81e81dc49A522A592e7622A7E711c06bf354",
+   "buy": "19.400350256554174792",
+   "sell": "0.003980357310577988"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "MKR",
+   "address": "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
+   "buy": "0.005992647951404905",
+   "sell": "0.003987598595966378"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "SKY",
+   "address": "0x56072C95FAA701256059aa122697B133aDEd9279",
+   "buy": "137.820110009581795911",
+   "sell": "0.003991758956750348"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "CRV",
+   "address": "0xD533a949740bb3306d119CC777fa900bA034cd52",
+   "buy": "32.992041869712901008",
+   "sell": "0.003996148018514828"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "COMP",
+   "address": "0xc00e94Cb662C3520282E6f5717214004A7f26888",
+   "buy": "0.413014269630371939",
+   "sell": "0.003981405668800644"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "SNX",
+   "address": "0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F",
+   "buy": "50.145548410371119204",
+   "sell": "0.003993665423601452"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "PENDLE",
+   "address": "0x808507121B80c02388fAd14726482e061B8da827",
+   "buy": "5.211835589666294713",
+   "sell": "0.003982470113007829"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "ENA",
+   "address": "0x57e114B691Db790C35207b2e685D4A43181e6061",
+   "buy": "53.815544370493153035",
+   "sell": "0.003996824391360676"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "CAKE",
+   "address": "0x152649eA73beAb28c5b49B26eb48f7EAD6d4c898",
+   "buy": "4.517565263075723003",
+   "sell": "0.004005670832938512"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "MORPHO",
+   "address": "0x58D97B57BB95320F9a05dC918Aef65434969c2B2",
+   "buy": "4.093655686280779463",
+   "sell": "0.003989368537444058"
+  },
+  {
+   "network": "ethereum",
+   "symbol": "EIGEN",
+   "address": "0xec53bF9167f50cDEB3Ae105f56099aaaB9061F83",
+   "buy": "51.022455616561519232",
+   "sell": "0.003974545840205827"
+  },
+  {
+   "network": "base",
+   "symbol": "USDC",
+   "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+   "buy": "8.268957",
+   "sell": "0.004000110604348819"
+  },
+  {
+   "network": "base",
+   "symbol": "USDT",
+   "address": "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+   "buy": "8.278266",
+   "sell": "0.0040007825715919"
+  },
+  {
+   "network": "base",
+   "symbol": "DAI",
+   "address": "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
+   "buy": "8.28905376352790528",
+   "sell": "0.004000848533084909"
+  },
+  {
+   "network": "base",
+   "symbol": "USDS",
+   "address": "0x820C137fa70C8691f0e44Dc420a5e53c168921Dc",
+   "buy": "8.270525073822144512",
+   "sell": "0.004000930775666204"
+  },
+  {
+   "network": "base",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "buy": "8.27352678354006528",
+   "sell": "0.004000560200268529"
+  },
+  {
+   "network": "base",
+   "symbol": "EURC",
+   "address": "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
+   "buy": "7.407569",
+   "sell": "0.004000586362559706"
+  },
+  {
+   "network": "base",
+   "symbol": "LINK",
+   "address": "0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196",
+   "buy": "0.796153953855454208",
+   "sell": "0.003998325522776045"
+  },
+  {
+   "network": "base",
+   "symbol": "UNI",
+   "address": "0xc3De830EA07524a0761646a6a4e4be0e114a3C83",
+   "buy": "1.232509298741838592",
+   "sell": "0.003998669092009234"
+  },
+  {
+   "network": "base",
+   "symbol": "AAVE",
+   "address": "0x63706e401c06ac8513145b7687A14804d17f814b",
+   "buy": "0.066497429849629728",
+   "sell": "0.003995805825100629"
+  },
+  {
+   "network": "base",
+   "symbol": "WBTC",
+   "address": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+   "buy": "0.0001123",
+   "sell": "0.003998487925007451"
+  },
+  {
+   "network": "base",
+   "symbol": "WETH",
+   "address": "0x4200000000000000000000000000000000000006",
+   "buy": "0.004",
+   "sell": "0.004"
+  },
+  {
+   "network": "base",
+   "symbol": "GHO",
+   "address": "0x6Bb7a212910682DCFdbd5BCBb3e28FB4E8da10Ee",
+   "buy": "8.282166143667483648",
+   "sell": "0.003996844879380452"
+  },
+  {
+   "network": "base",
+   "symbol": "crvUSD",
+   "address": "0x417Ac0e078398C154EdFadD9Ef675d30Be60Af93",
+   "buy": "8.288298515276843008",
+   "sell": "0.003997531072063385"
+  },
+  {
+   "network": "base",
+   "symbol": "frxUSD",
+   "address": "0xe5020A6d073a794B6E7f05678707dE47986Fb0b6",
+   "buy": "8.278710480781906944",
+   "sell": "0.004001158425248242"
+  },
+  {
+   "network": "base",
+   "symbol": "cbBTC",
+   "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+   "buy": "0.00011214",
+   "sell": "0.00399961648937884"
+  },
+  {
+   "network": "base",
+   "symbol": "tBTC",
+   "address": "0x236aa50979D5f3De3Bd1Eeb40E81137F22ab794b",
+   "buy": "0.000112351696536524",
+   "sell": "0.003999840261224218"
+  },
+  {
+   "network": "base",
+   "symbol": "wstETH",
+   "address": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+   "buy": "0.003202819528187937",
+   "sell": "0.00400014605572884"
+  },
+  {
+   "network": "base",
+   "symbol": "rETH",
+   "address": "0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c",
+   "buy": "0.003402440033437727",
+   "sell": "0.003999961012699715"
+  },
+  {
+   "network": "base",
+   "symbol": "cbETH",
+   "address": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+   "buy": "0.003497419622435948",
+   "sell": "0.003999723220317415"
+  },
+  {
+   "network": "base",
+   "symbol": "weETH",
+   "address": "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",
+   "buy": "0.003611188279491597",
+   "sell": "0.003999538829282946"
+  },
+  {
+   "network": "base",
+   "symbol": "cbXRP",
+   "address": "0xcb585250f852C6c6bf90434AB21A00f02833a4af",
+   "buy": "7.828771",
+   "sell": "0.003998091551664132"
+  },
+  {
+   "network": "base",
+   "symbol": "cbDOGE",
+   "address": "0xcbD06E5A2B0C65597161de254AA074E489dEb510",
+   "buy": "120.73273781",
+   "sell": "0.00399735595362643"
+  },
+  {
+   "network": "base",
+   "symbol": "cbLTC",
+   "address": "0xcb17C9Db87B595717C857a08468793f5bAb6445F",
+   "buy": "0.16162198",
+   "sell": "0.00399047911394827"
+  },
+  {
+   "network": "base",
+   "symbol": "cbADA",
+   "address": "0xcbADA732173e39521CDBE8bf59a6Dc85A9fc7b8c",
+   "buy": "46.989262",
+   "sell": "0.003985316449718172"
+  },
+  {
+   "network": "base",
+   "symbol": "CRV",
+   "address": "0x8Ee73c484A26e0A5df2Ee2a4960B789967dd0415",
+   "buy": "32.996355510669582336",
+   "sell": "0.003972063137606566"
+  },
+  {
+   "network": "base",
+   "symbol": "COMP",
+   "address": "0x9e1028F5F1D5eDE59748FFceE5532509976840E0",
+   "buy": "0.413118741151850176",
+   "sell": "0.003963058518374529"
+  },
+  {
+   "network": "base",
+   "symbol": "SNX",
+   "address": "0x22e6966B799c4D5B13BE962E1D117b56327FDa66",
+   "buy": "51.1282230939420672",
+   "sell": "0.00393730729528592"
+  },
+  {
+   "network": "base",
+   "symbol": "PENDLE",
+   "address": "0xA99F6e6785Da0F5d6fB42495Fe424BCE029Eeb3E",
+   "buy": "5.22257298232602112",
+   "sell": "0.003991996262483237"
+  },
+  {
+   "network": "base",
+   "symbol": "ENA",
+   "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+   "buy": "53.754089969027801088",
+   "sell": "0.003984159507630805"
+  },
+  {
+   "network": "base",
+   "symbol": "AERO",
+   "address": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+   "buy": "15.124321669409462272",
+   "sell": "0.003999840783513858"
+  },
+  {
+   "network": "base",
+   "symbol": "CAKE",
+   "address": "0x3055913c90Fcc1A6CE9a358911721eEb942013A1",
+   "buy": "4.504093659148375552",
+   "sell": "0.003992561071720232"
+  },
+  {
+   "network": "base",
+   "symbol": "MORPHO",
+   "address": "0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842",
+   "buy": "4.098363090646728192",
+   "sell": "0.003992772135871368"
+  },
+  {
+   "network": "base",
+   "symbol": "BRETT",
+   "address": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+   "buy": "2214.328832369960419328",
+   "sell": "0.003983183538890857"
+  },
+  {
+   "network": "base",
+   "symbol": "TOSHI",
+   "address": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+   "buy": "91330.955076642176761856",
+   "sell": "0.003989747480690582"
+  },
+  {
+   "network": "base",
+   "symbol": "DEGEN",
+   "address": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+   "buy": "9877.355080746042130432",
+   "sell": "0.003994945771645583"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDC",
+   "address": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+   "buy": "8.267884",
+   "sell": "0.004000300540749207"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "PYUSD",
+   "address": "0x46850aD61C2B7d64d08c9C754F45254596696984",
+   "buy": "8.266",
+   "sell": "0.003996178892110054"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "DAI",
+   "address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+   "buy": "8.271287321698893207",
+   "sell": "0.004001764797700909"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDS",
+   "address": "0x6491c05A82219b8D1479057361ff1654749b876b",
+   "buy": "8.267884",
+   "sell": "0.004000300540749207"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "buy": "8.276395511988876123",
+   "sell": "0.004002034290423536"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "FDUSD",
+   "address": "0x93C9932E4afa59201F0B5E63f7d816516F1669fE",
+   "buy": "8.529011238633956848",
+   "sell": "0.00024453477247359"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDG",
+   "address": "0x004B506865409877C9fA29bfb1ebA929984B9bbC",
+   "buy": "8.270247",
+   "sell": "0.003999202982473137"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "LINK",
+   "address": "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
+   "buy": "0.797043594141878289",
+   "sell": "0.00399826691178397"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "UNI",
+   "address": "0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0",
+   "buy": "1.23216553923414041",
+   "sell": "0.003988880592694535"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "AAVE",
+   "address": "0xba5DdD1f9d7F570dc94a51479a000E3BCE967196",
+   "buy": "0.066279760470461962",
+   "sell": "0.003998610063005022"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "WBTC",
+   "address": "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
+   "buy": "0.00011228",
+   "sell": "0.004002328994414884"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "WETH",
+   "address": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+   "buy": "0.004",
+   "sell": "0.004"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDT0",
+   "address": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+   "buy": "8.279263",
+   "sell": "0.003999494612737569"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "USDC.e",
+   "address": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
+   "buy": "8.265175",
+   "sell": "0.003999007010918501"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "GHO",
+   "address": "0x7dfF72693f6A4149b17e7C6314655f6A9F7c8B33",
+   "buy": "8.274649221142112323",
+   "sell": "0.00399935195777297"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "crvUSD",
+   "address": "0x498Bf2B1e120FeD3ad3D42EA2165E9b73f99C1e5",
+   "buy": "8.291494274083277856",
+   "sell": "0.003999481307897407"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "buy": "0.944940041257068094",
+   "sell": "0.000458834396517344"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "cbBTC",
+   "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+   "buy": "0.00011212",
+   "sell": "0.004000340617408055"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "tBTC",
+   "address": "0x6c84a8f1c29108F47a79964b5Fe888D4f4D0dE40",
+   "buy": "0.000112373175139666",
+   "sell": "0.004000512266521411"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "wstETH",
+   "address": "0x5979D7b546E38E414F7E9822514be443A4800529",
+   "buy": "0.003202154138482416",
+   "sell": "0.003999523498671912"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "rETH",
+   "address": "0xEC70Dcb4A1EFa46b8F2D97C310C9c4790ba5ffA8",
+   "buy": "0.0034036333946383",
+   "sell": "0.003996095461764596"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "cbETH",
+   "address": "0x1DEBd73E752bEaF79865Fd6446b0c970EaE7732f",
+   "buy": "0.003488751613558538",
+   "sell": "0.003993430745567287"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "weETH",
+   "address": "0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe",
+   "buy": "0.003609998397",
+   "sell": "0.004000183611843998"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "ARB",
+   "address": "0x912CE59144191C1204E64559FE8253a0e49E6548",
+   "buy": "50.40449852045995263",
+   "sell": "0.00400104326860709"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "CRV",
+   "address": "0x11cDb42B0EB46D95f990BeDD4695A6e3fA034978",
+   "buy": "32.979544759818377678",
+   "sell": "0.003991280481012616"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "COMP",
+   "address": "0x354A6dA3fcde098F8389cad84b0182725c6C91dE",
+   "buy": "0.420761573506888788",
+   "sell": "0.003973612344524643"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "PENDLE",
+   "address": "0x0c880f6761F1af8d9Aa9C466984b80DAb9a8c9e8",
+   "buy": "5.216520433418088489",
+   "sell": "0.003996085724585909"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "ENA",
+   "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+   "buy": "16.950493948653157716",
+   "sell": "0.001225738381243347"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "GMX",
+   "address": "0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a",
+   "buy": "1.077441855523116654",
+   "sell": "0.003988024139769953"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "CAKE",
+   "address": "0x1b896893dfc86bb67Cf57767298b9073D2c1bA2c",
+   "buy": "4.494611489326897948",
+   "sell": "0.003979678958609946"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "JOE",
+   "address": "0x371c7ec6D8039ff7933a2AA28EB827Ffe1F52f07",
+   "buy": "303.167362756847697281",
+   "sell": "0.003900047303588125"
+  },
+  {
+   "network": "arbitrum",
+   "symbol": "MORPHO",
+   "address": "0x40BD670A58238e6E230c430BBb5cE6ec0d40df48",
+   "buy": "3.604689904763043755",
+   "sell": "0.003588617182467653"
+  },
+  {
+   "network": "polygon",
+   "symbol": "USDC",
+   "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+   "buy": "5.35815",
+   "sell": "60.035369743633743872"
+  },
+  {
+   "network": "polygon",
+   "symbol": "PYUSD",
+   "address": "0x99aF3EeA856556646C98c8B9b2548Fe815240750",
+   "buy": "0.206547",
+   "sell": "0.010152868763255778"
+  },
+  {
+   "network": "polygon",
+   "symbol": "DAI",
+   "address": "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
+   "buy": "5.357510946888450048",
+   "sell": "60.024173879400005632"
+  },
+  {
+   "network": "polygon",
+   "symbol": "LINK",
+   "address": "0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39",
+   "buy": "0.515918600881676032",
+   "sell": "60.00761449400090624"
+  },
+  {
+   "network": "polygon",
+   "symbol": "UNI",
+   "address": "0xb33EaAd8d922B1083446DC23f610c2567fB5180f",
+   "buy": "0.797430161361168768",
+   "sell": "59.813290318770855936"
+  },
+  {
+   "network": "polygon",
+   "symbol": "AAVE",
+   "address": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B",
+   "buy": "0.04310178001942232",
+   "sell": "59.953764903447339008"
+  },
+  {
+   "network": "polygon",
+   "symbol": "WBTC",
+   "address": "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6",
+   "buy": "0.00007281",
+   "sell": "59.976941121505091584"
+  },
+  {
+   "network": "polygon",
+   "symbol": "WETH",
+   "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+   "buy": "0.002593100017564741",
+   "sell": "60.023449768049188864"
+  },
+  {
+   "network": "polygon",
+   "symbol": "USDT0",
+   "address": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+   "buy": "5.363643",
+   "sell": "59.968545632914456576"
+  },
+  {
+   "network": "polygon",
+   "symbol": "USDC.e",
+   "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+   "buy": "5.357411",
+   "sell": "59.95349842631696384"
+  },
+  {
+   "network": "polygon",
+   "symbol": "crvUSD",
+   "address": "0xc4Ce1D6F5D98D65eE25Cf85e9F2E9DcFEe6Cb5d6",
+   "buy": "5.377182844445534208",
+   "sell": "59.965376806437552128"
+  },
+  {
+   "network": "polygon",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "buy": "5.359819135165282304",
+   "sell": "59.956428349763100672"
+  },
+  {
+   "network": "polygon",
+   "symbol": "tBTC",
+   "address": "0x236aa50979D5f3De3Bd1Eeb40E81137F22ab794b",
+   "buy": "0.00007291863277631",
+   "sell": "59.952295275107057664"
+  },
+  {
+   "network": "polygon",
+   "symbol": "wstETH",
+   "address": "0x03b54A6e9a984069379fae1a4fC4dBAE93B3bCCD",
+   "buy": "0.002082148224626706",
+   "sell": "60.011849485968818176"
+  },
+  {
+   "network": "polygon",
+   "symbol": "rETH",
+   "address": "0x0266F4F08D82372CF0FcbCCc0Ff74309089c74d1",
+   "buy": "0.002220397924091309",
+   "sell": "57.057096151401644032"
+  },
+  {
+   "network": "polygon",
+   "symbol": "WPOL",
+   "address": "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+   "buy": "60",
+   "sell": "60"
+  },
+  {
+   "network": "polygon",
+   "symbol": "CRV",
+   "address": "0x172370d5Cd63279eFa6d502DAB29171933a610AF",
+   "buy": "21.353657537319735296",
+   "sell": "59.915498349653221376"
+  },
+  {
+   "network": "polygon",
+   "symbol": "COMP",
+   "address": "0x8505b9d2254A7Ae468c0E9dd10Ccea3A837aef5c",
+   "buy": "0.270371790013449184",
+   "sell": "58.812028319849988096"
+  },
+  {
+   "network": "optimism",
+   "symbol": "USDC",
+   "address": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+   "buy": "8.263733",
+   "sell": "0.004000053245107822"
+  },
+  {
+   "network": "optimism",
+   "symbol": "DAI",
+   "address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+   "buy": "8.269109799867303936",
+   "sell": "0.003999929055516863"
+  },
+  {
+   "network": "optimism",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "buy": "3.550433645732537344",
+   "sell": "0.001187903506126198"
+  },
+  {
+   "network": "optimism",
+   "symbol": "LINK",
+   "address": "0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6",
+   "buy": "0.797849184119533056",
+   "sell": "0.003993042087408028"
+  },
+  {
+   "network": "optimism",
+   "symbol": "UNI",
+   "address": "0x6fd9d7AD17242c41f7131d257212c54A0e816691",
+   "buy": "1.230637531168915712",
+   "sell": "0.003976237681629323"
+  },
+  {
+   "network": "optimism",
+   "symbol": "AAVE",
+   "address": "0x76FB31fb4af56892A25e32cFC43De717950c9278",
+   "buy": "0.066629181611763032",
+   "sell": "0.003982768809674356"
+  },
+  {
+   "network": "optimism",
+   "symbol": "WBTC",
+   "address": "0x68f180fcCe6836688e9084f035309E29Bf0A2095",
+   "buy": "0.00011244",
+   "sell": "0.00399785236077215"
+  },
+  {
+   "network": "optimism",
+   "symbol": "WETH",
+   "address": "0x4200000000000000000000000000000000000006",
+   "buy": "0.004",
+   "sell": "0.004"
+  },
+  {
+   "network": "optimism",
+   "symbol": "USDT0",
+   "address": "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",
+   "buy": "8.272205",
+   "sell": "0.003998650417935355"
+  },
+  {
+   "network": "optimism",
+   "symbol": "USDC.e",
+   "address": "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
+   "buy": "8.264154",
+   "sell": "0.003998678488173047"
+  },
+  {
+   "network": "optimism",
+   "symbol": "crvUSD",
+   "address": "0xC52D7F23a2e460248Db6eE192Cb23dD12bDDCbf6",
+   "buy": "8.284314785033966592",
+   "sell": "0.003997243561965104"
+  },
+  {
+   "network": "optimism",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "buy": "0.791703105674672384",
+   "sell": "0.000054685701958733"
+  },
+  {
+   "network": "optimism",
+   "symbol": "tBTC",
+   "address": "0x6c84a8f1c29108F47a79964b5Fe888D4f4D0dE40",
+   "buy": "0.000112479914140485",
+   "sell": "0.00399746394388305"
+  },
+  {
+   "network": "optimism",
+   "symbol": "wstETH",
+   "address": "0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb",
+   "buy": "0.003206768010668893",
+   "sell": "0.003998853740076591"
+  },
+  {
+   "network": "optimism",
+   "symbol": "rETH",
+   "address": "0x9Bcef72be871e61ED4fBbc7630889beE758eb81D",
+   "buy": "0.003403722755872092",
+   "sell": "0.003999161928292535"
+  },
+  {
+   "network": "optimism",
+   "symbol": "cbETH",
+   "address": "0xadDb6A0412DE1BA0F936DCaeb8Aaa24578dcF3B2",
+   "buy": "0.003497076126477554",
+   "sell": "0.003998019399510505"
+  },
+  {
+   "network": "optimism",
+   "symbol": "weETH",
+   "address": "0x5A7fACB970D094B6C7FF1df0eA68D99E6e73CBFF",
+   "buy": "0.003612921102883242",
+   "sell": "0.003997923039989837"
+  },
+  {
+   "network": "optimism",
+   "symbol": "OP",
+   "address": "0x4200000000000000000000000000000000000042",
+   "buy": "82.670407196256043008",
+   "sell": "0.003997259338123666"
+  },
+  {
+   "network": "optimism",
+   "symbol": "CRV",
+   "address": "0x0994206dfE8De6Ec6920FF4D779B0d950605Fb53",
+   "buy": "33.013240334988136448",
+   "sell": "0.003994213490976659"
+  },
+  {
+   "network": "optimism",
+   "symbol": "SNX",
+   "address": "0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4",
+   "buy": "50.051039952610615296",
+   "sell": "0.003982769751238637"
+  },
+  {
+   "network": "optimism",
+   "symbol": "PENDLE",
+   "address": "0xBC7B1Ff1c6989f006a1185318eD4E7b5796e66E1",
+   "buy": "6.401594177087992832",
+   "sell": "0.003301032065971784"
+  },
+  {
+   "network": "optimism",
+   "symbol": "ENA",
+   "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+   "buy": "18.462429140537622528",
+   "sell": "0.000993955961270669"
+  },
+  {
+   "network": "optimism",
+   "symbol": "VELO",
+   "address": "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db",
+   "buy": "344.947945698795978752",
+   "sell": "0.003989760074416159"
+  },
+  {
+   "network": "bsc",
+   "symbol": "USDC",
+   "address": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+   "buy": "10.217230138212219268",
+   "sell": "0.014999642489767961"
+  },
+  {
+   "network": "bsc",
+   "symbol": "USDT",
+   "address": "0x55d398326f99059fF775485246999027B3197955",
+   "buy": "10.227697170223272154",
+   "sell": "0.015001967374613856"
+  },
+  {
+   "network": "bsc",
+   "symbol": "DAI",
+   "address": "0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3",
+   "buy": "10.189020898119377667",
+   "sell": "0.014998913029835242"
+  },
+  {
+   "network": "bsc",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "buy": "10.201434988530770748",
+   "sell": "0.01499878055877624"
+  },
+  {
+   "network": "bsc",
+   "symbol": "FDUSD",
+   "address": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+   "buy": "10.255628188019666296",
+   "sell": "0.015002492551374587"
+  },
+  {
+   "network": "bsc",
+   "symbol": "LINK",
+   "address": "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD",
+   "buy": "0.984453564634905053",
+   "sell": "0.014980939237061826"
+  },
+  {
+   "network": "bsc",
+   "symbol": "UNI",
+   "address": "0xBf5140A22578168FD562DCcF235E5D43A02ce9B1",
+   "buy": "1.528153020751436514",
+   "sell": "0.014998758760510479"
+  },
+  {
+   "network": "bsc",
+   "symbol": "AAVE",
+   "address": "0xfb6115445Bff7b52FeB98650C87f44907E58f802",
+   "buy": "0.082270341466115709",
+   "sell": "0.014984005938761157"
+  },
+  {
+   "network": "bsc",
+   "symbol": "WBTC",
+   "address": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+   "buy": "0.00013875",
+   "sell": "0.014995291265066325"
+  },
+  {
+   "network": "bsc",
+   "symbol": "crvUSD",
+   "address": "0xe2fb3F127f5450DeE44afe054385d74C392BdeF4",
+   "buy": "10.26650729246035263",
+   "sell": "0.014982033593251694"
+  },
+  {
+   "network": "bsc",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "buy": "10.226179767560954773",
+   "sell": "0.01499580422566517"
+  },
+  {
+   "network": "bsc",
+   "symbol": "USDD",
+   "address": "0x45E51bc23D592EB2DBA86da3985299f7895d66Ba",
+   "buy": "10.226828668530811307",
+   "sell": "0.0149956765531799"
+  },
+  {
+   "network": "bsc",
+   "symbol": "BTCB",
+   "address": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+   "buy": "0.000138614830863324",
+   "sell": "0.014998427327060882"
+  },
+  {
+   "network": "bsc",
+   "symbol": "wstETH",
+   "address": "0x26c5e01524d2E6280A48F2c50fF6De7e52E9611C",
+   "buy": "0.003973098552473666",
+   "sell": "0.014998261575232848"
+  },
+  {
+   "network": "bsc",
+   "symbol": "weETH",
+   "address": "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",
+   "buy": "0.004497396465710774",
+   "sell": "0.014925782064921765"
+  },
+  {
+   "network": "bsc",
+   "symbol": "WBNB",
+   "address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+   "buy": "0.015",
+   "sell": "0.015"
+  },
+  {
+   "network": "bsc",
+   "symbol": "PENDLE",
+   "address": "0xb3Ed0A426155B79B898849803E3B36552f7ED507",
+   "buy": "6.427508422746571976",
+   "sell": "0.014758465219575801"
+  },
+  {
+   "network": "bsc",
+   "symbol": "CAKE",
+   "address": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+   "buy": "5.566867625123535737",
+   "sell": "0.014997385736940896"
+  },
+  {
+   "network": "bsc",
+   "symbol": "JOE",
+   "address": "0x371c7ec6D8039ff7933a2AA28EB827Ffe1F52f07",
+   "buy": "343.966871422897195538",
+   "sell": "0.010484717166166949"
+  },
+  {
+   "network": "bsc",
+   "symbol": "ETH",
+   "address": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
+   "buy": "0.004945461042448347",
+   "sell": "0.014997460935022223"
+  },
+  {
+   "network": "bsc",
+   "symbol": "XRP",
+   "address": "0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE",
+   "buy": "9.681157503156298449",
+   "sell": "0.014989416274907874"
+  },
+  {
+   "network": "bsc",
+   "symbol": "DOGE",
+   "address": "0xbA2aE424d960c26247Dd6c32edC70B295c744C43",
+   "buy": "149.59615519",
+   "sell": "0.014990776773609595"
+  },
+  {
+   "network": "bsc",
+   "symbol": "ADA",
+   "address": "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47",
+   "buy": "58.2531644819524257",
+   "sell": "0.014958280725505531"
+  },
+  {
+   "network": "bsc",
+   "symbol": "SOL",
+   "address": "0x570A5D26f7765Ecb712C0924E4De545B89fD43dF",
+   "buy": "0.123103356281283219",
+   "sell": "0.014997905358963519"
+  },
+  {
+   "network": "bsc",
+   "symbol": "LTC",
+   "address": "0x4338665CBB7B2485A8855A139b75D5e34AB0DB94",
+   "buy": "0.200284115900667556",
+   "sell": "0.015004893051338203"
+  },
+  {
+   "network": "bsc",
+   "symbol": "DOT",
+   "address": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",
+   "buy": "12.057326711274831682",
+   "sell": "0.0149921252965733"
+  },
+  {
+   "network": "bsc",
+   "symbol": "AVAX",
+   "address": "0x1CE0c2827e2eF14D5C4f29a091d735A204794041",
+   "buy": "1.210060348116110932",
+   "sell": "0.014976279308670851"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "USDC",
+   "address": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+   "buy": "5.080029",
+   "sell": "0.599791821082145251"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "USDT",
+   "address": "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7",
+   "buy": "5.085491",
+   "sell": "0.600007016045000519"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "buy": "5.081334508650387917",
+   "sell": "0.599192029969896408"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "EURC",
+   "address": "0xC891EB4cbdEFf6e073e859e987815Ed1505c2ACD",
+   "buy": "4.554298",
+   "sell": "0.599656345442569113"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "WBTC",
+   "address": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+   "buy": "0.00006888",
+   "sell": "0.598507265545036446"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "USDC.e",
+   "address": "0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664",
+   "buy": "5.082338",
+   "sell": "0.599641999052837015"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "GHO",
+   "address": "0xfc421aD3C883Bf9E7C4f42dE845C4e4405799e73",
+   "buy": "1.013763976957126495",
+   "sell": "0.119571672022493081"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "frxUSD",
+   "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+   "buy": "0.582590242333105597",
+   "sell": "0.008391398974543114"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "BTC.b",
+   "address": "0x152b9d0FdC40C096757F570A51E494bd4b943E50",
+   "buy": "0.00006885",
+   "sell": "0.599290592637532319"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "WETH.e",
+   "address": "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB",
+   "buy": "0.002457364140756097",
+   "sell": "0.599395254806787484"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "LINK.e",
+   "address": "0x5947BB275c521040051D82396192181b413227A3",
+   "buy": "0.487799458603970683",
+   "sell": "0.596700582793075078"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "weETH",
+   "address": "0xA3D68b74bF0528fdD07263c60d6488749044914b",
+   "buy": "0.002173450682365021",
+   "sell": "0.575903067128404856"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "WAVAX",
+   "address": "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+   "buy": "0.6",
+   "sell": "0.6"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "ENA",
+   "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+   "buy": "2.599489734845888524",
+   "sell": "0.026671920240710252"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "GMX",
+   "address": "0x62edc0692BD897D2295872a9FFCac5425011c661",
+   "buy": "0.652542665912935257",
+   "sell": "0.594123616377979372"
+  },
+  {
+   "network": "avalanche",
+   "symbol": "JOE",
+   "address": "0x6e84a6216eA6dACC71eE8E6b0a5B7322EEbC0fDd",
+   "buy": "187.167754079759466846",
+   "sell": "0.599261204777798349"
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "USDC",
+   "address": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+   "buy": "18.035697",
+   "sell": "0.249868231689764"
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "USDe",
+   "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+   "buy": "18.0447963237633536",
+   "sell": "0.249867308125286944"
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "USDT0",
+   "address": "0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb",
+   "buy": "18.053603",
+   "sell": "0.249995188093419872"
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "weETH",
+   "address": "0xA3D68b74bF0528fdD07263c60d6488749044914b",
+   "buy": null,
+   "sell": null
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "WHYPE",
+   "address": "0x5555555555555555555555555555555555555555",
+   "buy": "0.25",
+   "sell": "0.25"
+  },
+  {
+   "network": "hyperevm",
+   "symbol": "PENDLE",
+   "address": "0xD6Eb81136884713E843936843E286FD2a85A205A",
+   "buy": "11.031540449584807936",
+   "sell": "0.244510925090976288"
+  }
+ ]
+}

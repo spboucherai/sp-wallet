@@ -1,0 +1,2282 @@
+[
+ {
+  "symbol": "USDC",
+  "network": "ethereum",
+  "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  "decimals": 6,
+  "onchainSymbol": "USDC",
+  "first": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:usd-coin"
+ },
+ {
+  "symbol": "USDC",
+  "network": "base",
+  "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "decimals": 6,
+  "onchainSymbol": "USDC",
+  "first": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:usd-coin"
+ },
+ {
+  "symbol": "USDC",
+  "network": "arbitrum",
+  "address": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "decimals": 6,
+  "onchainSymbol": "USDC",
+  "first": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:usd-coin"
+ },
+ {
+  "symbol": "USDC",
+  "network": "polygon",
+  "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+  "decimals": 6,
+  "onchainSymbol": "USDC",
+  "first": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:usd-coin"
+ },
+ {
+  "symbol": "USDC",
+  "network": "optimism",
+  "address": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+  "decimals": 6,
+  "onchainSymbol": "USDC",
+  "first": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:usd-coin"
+ },
+ {
+  "symbol": "USDC",
+  "network": "avalanche",
+  "address": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+  "decimals": 6,
+  "onchainSymbol": "USDC",
+  "first": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:usd-coin"
+ },
+ {
+  "symbol": "USDC",
+  "network": "hyperevm",
+  "address": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+  "decimals": 6,
+  "onchainSymbol": "USDC",
+  "first": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:usd-coin"
+ },
+ {
+  "symbol": "USDC",
+  "network": "solana",
+  "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "decimals": 6,
+  "onchainSymbol": null,
+  "first": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:usd-coin"
+ },
+ {
+  "symbol": "USDC",
+  "network": "bsc",
+  "address": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+  "decimals": 18,
+  "onchainSymbol": "USDC",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:binance-bridged-usdc-bnb-smart-chain"
+ },
+ {
+  "symbol": "USDT",
+  "network": "ethereum",
+  "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+  "decimals": 6,
+  "onchainSymbol": "USDT",
+  "first": "https://tether.to/en/supported-protocols/",
+  "firstVia": "document",
+  "second": "coingecko:tether"
+ },
+ {
+  "symbol": "USDT",
+  "network": "avalanche",
+  "address": "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7",
+  "decimals": 6,
+  "onchainSymbol": "USDt",
+  "first": "https://tether.to/en/supported-protocols/",
+  "firstVia": "document",
+  "second": "coingecko:tether"
+ },
+ {
+  "symbol": "USDT",
+  "network": "solana",
+  "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+  "decimals": 6,
+  "onchainSymbol": null,
+  "first": "https://tether.to/en/supported-protocols/",
+  "firstVia": "document",
+  "second": "coingecko:tether"
+ },
+ {
+  "symbol": "USDT",
+  "network": "tron",
+  "address": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+  "decimals": 6,
+  "onchainSymbol": "USDT",
+  "first": "https://tether.to/en/supported-protocols/",
+  "firstVia": "document",
+  "second": "coingecko:tether"
+ },
+ {
+  "symbol": "USDT",
+  "network": "bsc",
+  "address": "0x55d398326f99059fF775485246999027B3197955",
+  "decimals": 18,
+  "onchainSymbol": "USDT",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:binance-bridged-usdt-bnb-smart-chain"
+ },
+ {
+  "symbol": "USDT",
+  "network": "base",
+  "address": "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+  "decimals": 6,
+  "onchainSymbol": "USDT",
+  "first": "https://static.optimism.io/optimism.tokenlist.json",
+  "firstVia": "tokenlist",
+  "second": "coingecko:l2-standard-bridged-usdt-base"
+ },
+ {
+  "symbol": "PYUSD",
+  "network": "ethereum",
+  "address": "0x6c3ea9036406852006290770BEdFcAbA0e23A0e8",
+  "decimals": 6,
+  "onchainSymbol": "PYUSD",
+  "first": "https://docs.paxos.com/guides/stablecoin/pyusd/mainnet",
+  "firstVia": "document",
+  "second": "coingecko:paypal-usd"
+ },
+ {
+  "symbol": "PYUSD",
+  "network": "arbitrum",
+  "address": "0x46850aD61C2B7d64d08c9C754F45254596696984",
+  "decimals": 6,
+  "onchainSymbol": "PYUSD",
+  "first": "https://docs.paxos.com/guides/stablecoin/pyusd/mainnet",
+  "firstVia": "document",
+  "second": "coingecko:paypal-usd"
+ },
+ {
+  "symbol": "PYUSD",
+  "network": "polygon",
+  "address": "0x99aF3EeA856556646C98c8B9b2548Fe815240750",
+  "decimals": 6,
+  "onchainSymbol": "PYUSD",
+  "first": "https://docs.paxos.com/guides/stablecoin/pyusd/mainnet",
+  "firstVia": "document",
+  "second": "coingecko:paypal-usd"
+ },
+ {
+  "symbol": "PYUSD",
+  "network": "solana",
+  "address": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+  "decimals": 6,
+  "onchainSymbol": null,
+  "first": "https://docs.paxos.com/guides/stablecoin/pyusd/mainnet",
+  "firstVia": "document",
+  "second": "coingecko:paypal-usd"
+ },
+ {
+  "symbol": "DAI",
+  "network": "ethereum",
+  "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+  "decimals": 18,
+  "onchainSymbol": "DAI",
+  "first": "https://chainlog.sky.money/api/mainnet/active.json",
+  "firstVia": "document",
+  "second": "coingecko:dai"
+ },
+ {
+  "symbol": "DAI",
+  "network": "arbitrum",
+  "address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+  "decimals": 18,
+  "onchainSymbol": "DAI",
+  "first": "https://tokenlist.arbitrum.io/ArbTokenLists/arbed_arb_whitelist_era.json",
+  "firstVia": "tokenlist",
+  "second": "coingecko:makerdao-arbitrum-bridged-dai-arbitrum-one"
+ },
+ {
+  "symbol": "DAI",
+  "network": "optimism",
+  "address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+  "decimals": 18,
+  "onchainSymbol": "DAI",
+  "first": "https://static.optimism.io/optimism.tokenlist.json",
+  "firstVia": "tokenlist",
+  "second": "coingecko:makerdao-optimism-bridged-dai-optimism"
+ },
+ {
+  "symbol": "DAI",
+  "network": "base",
+  "address": "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
+  "decimals": 18,
+  "onchainSymbol": "DAI",
+  "first": "https://static.optimism.io/optimism.tokenlist.json",
+  "firstVia": "tokenlist",
+  "second": "coingecko:l2-standard-bridged-dai-base"
+ },
+ {
+  "symbol": "DAI",
+  "network": "polygon",
+  "address": "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
+  "decimals": 18,
+  "onchainSymbol": "DAI",
+  "first": "https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json",
+  "firstVia": "document",
+  "second": "coingecko:polygon-pos-bridged-dai-polygon-pos"
+ },
+ {
+  "symbol": "DAI",
+  "network": "bsc",
+  "address": "0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3",
+  "decimals": 18,
+  "onchainSymbol": "DAI",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:binance-peg-dai"
+ },
+ {
+  "symbol": "USDS",
+  "network": "ethereum",
+  "address": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+  "decimals": 18,
+  "onchainSymbol": "USDS",
+  "first": "https://chainlog.sky.money/api/mainnet/active.json",
+  "firstVia": "document",
+  "second": "coingecko:usds"
+ },
+ {
+  "symbol": "USDS",
+  "network": "base",
+  "address": "0x820C137fa70C8691f0e44Dc420a5e53c168921Dc",
+  "decimals": 18,
+  "onchainSymbol": "USDS",
+  "first": "https://docs.spark.fi/dev/savings/cross-chain-tokens",
+  "firstVia": "document",
+  "second": "coingecko:usds"
+ },
+ {
+  "symbol": "USDS",
+  "network": "solana",
+  "address": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA",
+  "decimals": 6,
+  "onchainSymbol": null,
+  "first": "https://developers.sky.money/guides/skylink/usds-ethereum-solana-bridge",
+  "firstVia": "document",
+  "second": "coingecko:usds"
+ },
+ {
+  "symbol": "USDS",
+  "network": "arbitrum",
+  "address": "0x6491c05A82219b8D1479057361ff1654749b876b",
+  "decimals": 18,
+  "onchainSymbol": "USDS",
+  "first": "https://docs.spark.fi/dev/savings/cross-chain-tokens",
+  "firstVia": "document",
+  "second": "coingecko:usds"
+ },
+ {
+  "symbol": "USDe",
+  "network": "ethereum",
+  "address": "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
+  "decimals": 18,
+  "onchainSymbol": "USDe",
+  "first": "https://docs.ethena.fi/solution-design/key-addresses",
+  "firstVia": "document",
+  "second": "coingecko:ethena-usde"
+ },
+ {
+  "symbol": "USDe",
+  "network": "base",
+  "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+  "decimals": 18,
+  "onchainSymbol": "USDe",
+  "first": "https://docs.ethena.fi/solution-design/key-addresses",
+  "firstVia": "document",
+  "second": "coingecko:ethena-usde"
+ },
+ {
+  "symbol": "USDe",
+  "network": "arbitrum",
+  "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+  "decimals": 18,
+  "onchainSymbol": "USDe",
+  "first": "https://docs.ethena.fi/solution-design/key-addresses",
+  "firstVia": "document",
+  "second": "coingecko:ethena-usde"
+ },
+ {
+  "symbol": "USDe",
+  "network": "optimism",
+  "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+  "decimals": 18,
+  "onchainSymbol": "USDe",
+  "first": "https://docs.ethena.fi/solution-design/key-addresses",
+  "firstVia": "document",
+  "second": "coingecko:ethena-usde"
+ },
+ {
+  "symbol": "USDe",
+  "network": "bsc",
+  "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+  "decimals": 18,
+  "onchainSymbol": "USDe",
+  "first": "https://docs.ethena.fi/solution-design/key-addresses",
+  "firstVia": "document",
+  "second": "coingecko:ethena-usde"
+ },
+ {
+  "symbol": "USDe",
+  "network": "solana",
+  "address": "DEkqHyPN7GMRJ5cArtQFAWefqbZb33Hyf6s5iCwjEonT",
+  "decimals": 9,
+  "onchainSymbol": null,
+  "first": "https://docs.ethena.fi/solution-design/key-addresses",
+  "firstVia": "document",
+  "second": "coingecko:ethena-usde"
+ },
+ {
+  "symbol": "USDe",
+  "network": "avalanche",
+  "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+  "decimals": 18,
+  "onchainSymbol": "USDe",
+  "first": "https://docs.ethena.fi/solution-design/key-addresses",
+  "firstVia": "document",
+  "second": "coingecko:ethena-usde"
+ },
+ {
+  "symbol": "USDe",
+  "network": "hyperevm",
+  "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+  "decimals": 18,
+  "onchainSymbol": "USDe",
+  "first": "https://docs.ethena.fi/solution-design/key-addresses",
+  "firstVia": "document",
+  "second": "coingecko:ethena-usde"
+ },
+ {
+  "symbol": "FDUSD",
+  "network": "ethereum",
+  "address": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+  "decimals": 18,
+  "onchainSymbol": "FDUSD",
+  "first": "https://www.firstdigitallabs.com/fdusd (archived copy 2026-04-17)",
+  "firstVia": "manual",
+  "second": "coingecko:first-digital-usd"
+ },
+ {
+  "symbol": "FDUSD",
+  "network": "bsc",
+  "address": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+  "decimals": 18,
+  "onchainSymbol": "FDUSD",
+  "first": "https://www.firstdigitallabs.com/fdusd (archived copy 2026-04-17)",
+  "firstVia": "manual",
+  "second": "coingecko:first-digital-usd"
+ },
+ {
+  "symbol": "FDUSD",
+  "network": "arbitrum",
+  "address": "0x93C9932E4afa59201F0B5E63f7d816516F1669fE",
+  "decimals": 18,
+  "onchainSymbol": "FDUSD",
+  "first": "https://www.firstdigitallabs.com/fdusd (archived copy 2026-04-17)",
+  "firstVia": "manual",
+  "second": "coingecko:first-digital-usd"
+ },
+ {
+  "symbol": "FDUSD",
+  "network": "solana",
+  "address": "9zNQRsGLjNKwCUU5Gq5LR8beUCPzQMVMqKAi3SSZh54u",
+  "decimals": 6,
+  "onchainSymbol": null,
+  "first": "https://www.firstdigitallabs.com/fdusd (archived copy 2026-04-17)",
+  "firstVia": "manual",
+  "second": "coingecko:first-digital-usd"
+ },
+ {
+  "symbol": "EURC",
+  "network": "ethereum",
+  "address": "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c",
+  "decimals": 6,
+  "onchainSymbol": "EURC",
+  "first": "https://developers.circle.com/stablecoins/eurc-contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:euro-coin"
+ },
+ {
+  "symbol": "EURC",
+  "network": "base",
+  "address": "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
+  "decimals": 6,
+  "onchainSymbol": "EURC",
+  "first": "https://developers.circle.com/stablecoins/eurc-contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:euro-coin"
+ },
+ {
+  "symbol": "EURC",
+  "network": "avalanche",
+  "address": "0xC891EB4cbdEFf6e073e859e987815Ed1505c2ACD",
+  "decimals": 6,
+  "onchainSymbol": "EURC",
+  "first": "https://developers.circle.com/stablecoins/eurc-contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:euro-coin"
+ },
+ {
+  "symbol": "EURC",
+  "network": "solana",
+  "address": "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr",
+  "decimals": 6,
+  "onchainSymbol": null,
+  "first": "https://developers.circle.com/stablecoins/eurc-contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:euro-coin"
+ },
+ {
+  "symbol": "RLUSD",
+  "network": "ethereum",
+  "address": "0x8292Bb45bf1Ee4d140127049757C2E0fF06317eD",
+  "decimals": 18,
+  "onchainSymbol": "RLUSD",
+  "first": "https://docs.ripple.com/products/stablecoin/overview/token-addresses",
+  "firstVia": "document",
+  "second": "coingecko:ripple-usd"
+ },
+ {
+  "symbol": "USDG",
+  "network": "ethereum",
+  "address": "0xe343167631d89B6Ffc58B88d6b7fB0228795491D",
+  "decimals": 6,
+  "onchainSymbol": "USDG",
+  "first": "https://docs.paxos.com/guides/stablecoin/usdg/mainnet",
+  "firstVia": "document",
+  "second": "coingecko:global-dollar"
+ },
+ {
+  "symbol": "USDG",
+  "network": "arbitrum",
+  "address": "0x004B506865409877C9fA29bfb1ebA929984B9bbC",
+  "decimals": 6,
+  "onchainSymbol": "USDG",
+  "first": "https://docs.paxos.com/guides/stablecoin/usdg/mainnet",
+  "firstVia": "document",
+  "second": "coingecko:global-dollar"
+ },
+ {
+  "symbol": "USDG",
+  "network": "solana",
+  "address": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH",
+  "decimals": 6,
+  "onchainSymbol": null,
+  "first": "https://docs.paxos.com/guides/stablecoin/usdg/mainnet",
+  "firstVia": "document",
+  "second": "coingecko:global-dollar"
+ },
+ {
+  "symbol": "LINK",
+  "network": "ethereum",
+  "address": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+  "decimals": 18,
+  "onchainSymbol": "LINK",
+  "first": "https://docs.chain.link/resources/link-token-contracts",
+  "firstVia": "document",
+  "second": "coingecko:chainlink"
+ },
+ {
+  "symbol": "LINK",
+  "network": "base",
+  "address": "0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196",
+  "decimals": 18,
+  "onchainSymbol": "LINK",
+  "first": "https://docs.chain.link/resources/link-token-contracts",
+  "firstVia": "document",
+  "second": "coingecko:chainlink"
+ },
+ {
+  "symbol": "LINK",
+  "network": "arbitrum",
+  "address": "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
+  "decimals": 18,
+  "onchainSymbol": "LINK",
+  "first": "https://docs.chain.link/resources/link-token-contracts",
+  "firstVia": "document",
+  "second": "coingecko:chainlink"
+ },
+ {
+  "symbol": "LINK",
+  "network": "polygon",
+  "address": "0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39",
+  "decimals": 18,
+  "onchainSymbol": "LINK",
+  "first": "https://static.polygon.technology/network/mainnet/v1/index.json",
+  "firstVia": "document",
+  "second": "coingecko:chainlink"
+ },
+ {
+  "symbol": "LINK",
+  "network": "optimism",
+  "address": "0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6",
+  "decimals": 18,
+  "onchainSymbol": "LINK",
+  "first": "https://docs.chain.link/resources/link-token-contracts",
+  "firstVia": "document",
+  "second": "coingecko:chainlink"
+ },
+ {
+  "symbol": "LINK",
+  "network": "bsc",
+  "address": "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD",
+  "decimals": 18,
+  "onchainSymbol": "LINK",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:chainlink"
+ },
+ {
+  "symbol": "LINK",
+  "network": "solana",
+  "address": "LinkhB3afbBKb2EQQu7s7umdZceV3wcvAUJhQAfQ23L",
+  "decimals": 9,
+  "onchainSymbol": null,
+  "first": "https://docs.chain.link/resources/link-token-contracts",
+  "firstVia": "document",
+  "second": "coingecko:chainlink"
+ },
+ {
+  "symbol": "UNI",
+  "network": "ethereum",
+  "address": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+  "decimals": 18,
+  "onchainSymbol": "UNI",
+  "first": "https://developers.uniswap.org/docs/ecosystem/governance/uni.md",
+  "firstVia": "document",
+  "second": "coingecko:uniswap"
+ },
+ {
+  "symbol": "UNI",
+  "network": "arbitrum",
+  "address": "0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0",
+  "decimals": 18,
+  "onchainSymbol": "UNI",
+  "first": "https://developers.uniswap.org/docs/ecosystem/governance/uni.md",
+  "firstVia": "document",
+  "second": "coingecko:uniswap"
+ },
+ {
+  "symbol": "UNI",
+  "network": "optimism",
+  "address": "0x6fd9d7AD17242c41f7131d257212c54A0e816691",
+  "decimals": 18,
+  "onchainSymbol": "UNI",
+  "first": "https://developers.uniswap.org/docs/ecosystem/governance/uni.md",
+  "firstVia": "document",
+  "second": "coingecko:uniswap"
+ },
+ {
+  "symbol": "UNI",
+  "network": "polygon",
+  "address": "0xb33EaAd8d922B1083446DC23f610c2567fB5180f",
+  "decimals": 18,
+  "onchainSymbol": "UNI",
+  "first": "https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json",
+  "firstVia": "document",
+  "second": "coingecko:uniswap"
+ },
+ {
+  "symbol": "UNI",
+  "network": "base",
+  "address": "0xc3De830EA07524a0761646a6a4e4be0e114a3C83",
+  "decimals": 18,
+  "onchainSymbol": "UNI",
+  "first": "https://static.optimism.io/optimism.tokenlist.json",
+  "firstVia": "tokenlist",
+  "second": "op-bridge"
+ },
+ {
+  "symbol": "UNI",
+  "network": "bsc",
+  "address": "0xBf5140A22578168FD562DCcF235E5D43A02ce9B1",
+  "decimals": 18,
+  "onchainSymbol": "UNI",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:uniswap"
+ },
+ {
+  "symbol": "AAVE",
+  "network": "ethereum",
+  "address": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+  "decimals": 18,
+  "onchainSymbol": "AAVE",
+  "first": "https://aave.com/docs/ecosystem/aave.md",
+  "firstVia": "document",
+  "second": "coingecko:aave"
+ },
+ {
+  "symbol": "AAVE",
+  "network": "arbitrum",
+  "address": "0xba5DdD1f9d7F570dc94a51479a000E3BCE967196",
+  "decimals": 18,
+  "onchainSymbol": "AAVE",
+  "first": "https://aave.com/docs/ecosystem/aave.md",
+  "firstVia": "document",
+  "second": "coingecko:aave"
+ },
+ {
+  "symbol": "AAVE",
+  "network": "base",
+  "address": "0x63706e401c06ac8513145b7687A14804d17f814b",
+  "decimals": 18,
+  "onchainSymbol": "AAVE",
+  "first": "https://aave.com/docs/ecosystem/aave.md",
+  "firstVia": "document",
+  "second": "coingecko:aave"
+ },
+ {
+  "symbol": "AAVE",
+  "network": "optimism",
+  "address": "0x76FB31fb4af56892A25e32cFC43De717950c9278",
+  "decimals": 18,
+  "onchainSymbol": "AAVE",
+  "first": "https://aave.com/docs/ecosystem/aave.md",
+  "firstVia": "document",
+  "second": "coingecko:aave"
+ },
+ {
+  "symbol": "AAVE",
+  "network": "polygon",
+  "address": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B",
+  "decimals": 18,
+  "onchainSymbol": "AAVE",
+  "first": "https://aave.com/docs/ecosystem/aave.md",
+  "firstVia": "document",
+  "second": "coingecko:aave"
+ },
+ {
+  "symbol": "AAVE",
+  "network": "bsc",
+  "address": "0xfb6115445Bff7b52FeB98650C87f44907E58f802",
+  "decimals": 18,
+  "onchainSymbol": "AAVE",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:aave"
+ },
+ {
+  "symbol": "LDO",
+  "network": "ethereum",
+  "address": "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32",
+  "decimals": 18,
+  "onchainSymbol": "LDO",
+  "first": "https://docs.lido.fi/deployed-contracts/",
+  "firstVia": "document",
+  "second": "coingecko:lido-dao"
+ },
+ {
+  "symbol": "WBTC",
+  "network": "ethereum",
+  "address": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+  "decimals": 8,
+  "onchainSymbol": "WBTC",
+  "first": "https://wbtc.network/ecosystem",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-bitcoin"
+ },
+ {
+  "symbol": "WBTC",
+  "network": "base",
+  "address": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+  "decimals": 8,
+  "onchainSymbol": "WBTC",
+  "first": "https://wbtc.network/ecosystem",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-bitcoin"
+ },
+ {
+  "symbol": "WBTC",
+  "network": "bsc",
+  "address": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+  "decimals": 8,
+  "onchainSymbol": "WBTC",
+  "first": "https://wbtc.network/ecosystem",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-bitcoin"
+ },
+ {
+  "symbol": "WBTC",
+  "network": "optimism",
+  "address": "0x68f180fcCe6836688e9084f035309E29Bf0A2095",
+  "decimals": 8,
+  "onchainSymbol": "WBTC",
+  "first": "https://static.optimism.io/optimism.tokenlist.json",
+  "firstVia": "tokenlist",
+  "second": "coingecko:wrapped-bitcoin"
+ },
+ {
+  "symbol": "WBTC",
+  "network": "avalanche",
+  "address": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+  "decimals": 8,
+  "onchainSymbol": "WBTC",
+  "first": "https://wbtc.network/ecosystem",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-bitcoin"
+ },
+ {
+  "symbol": "WBTC",
+  "network": "solana",
+  "address": "5XZw2LKTyrfvfiskJ78AMpackRjPcyCif1WhUsPDuVqQ",
+  "decimals": 8,
+  "onchainSymbol": null,
+  "first": "https://wbtc.network/ecosystem",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-bitcoin"
+ },
+ {
+  "symbol": "WBTC",
+  "network": "arbitrum",
+  "address": "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
+  "decimals": 8,
+  "onchainSymbol": "WBTC",
+  "first": "https://tokenlist.arbitrum.io/ArbTokenLists/arbed_arb_whitelist_era.json",
+  "firstVia": "tokenlist",
+  "second": "coingecko:arbitrum-bridged-wbtc-arbitrum-one"
+ },
+ {
+  "symbol": "WBTC",
+  "network": "polygon",
+  "address": "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6",
+  "decimals": 8,
+  "onchainSymbol": "WBTC",
+  "first": "https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json",
+  "firstVia": "document",
+  "second": "coingecko:polygon-bridged-wbtc-polygon-pos"
+ },
+ {
+  "symbol": "WETH",
+  "network": "ethereum",
+  "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+  "decimals": 18,
+  "onchainSymbol": "WETH",
+  "first": "https://docs.arbitrum.io/build-decentralized-apps/reference/contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:weth"
+ },
+ {
+  "symbol": "WETH",
+  "network": "arbitrum",
+  "address": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+  "decimals": 18,
+  "onchainSymbol": "WETH",
+  "first": "https://docs.arbitrum.io/build-decentralized-apps/reference/contract-addresses",
+  "firstVia": "document",
+  "second": "coingecko:arbitrum-bridged-weth-arbitrum-one"
+ },
+ {
+  "symbol": "WETH",
+  "network": "optimism",
+  "address": "0x4200000000000000000000000000000000000006",
+  "decimals": 18,
+  "onchainSymbol": "WETH",
+  "first": "https://specs.optimism.io/protocol/predeploys.html",
+  "firstVia": "document",
+  "second": "coingecko:l2-standard-bridged-weth-optimism"
+ },
+ {
+  "symbol": "WETH",
+  "network": "base",
+  "address": "0x4200000000000000000000000000000000000006",
+  "decimals": 18,
+  "onchainSymbol": "WETH",
+  "first": "https://specs.optimism.io/protocol/predeploys.html",
+  "firstVia": "document",
+  "second": "coingecko:l2-standard-bridged-weth-base"
+ },
+ {
+  "symbol": "WETH",
+  "network": "polygon",
+  "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+  "decimals": 18,
+  "onchainSymbol": "WETH",
+  "first": "https://static.polygon.technology/network/mainnet/v1/index.json",
+  "firstVia": "document",
+  "second": "coingecko:polygon-pos-bridged-weth-polygon-pos"
+ },
+ {
+  "symbol": "PAXG",
+  "network": "ethereum",
+  "address": "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+  "decimals": 18,
+  "onchainSymbol": "PAXG",
+  "first": "https://docs.paxos.com/guides/stablecoin/paxg/mainnet",
+  "firstVia": "document",
+  "second": "coingecko:pax-gold"
+ },
+ {
+  "symbol": "ONDO",
+  "network": "ethereum",
+  "address": "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3",
+  "decimals": 18,
+  "onchainSymbol": "ONDO",
+  "first": "https://docs.ondo.foundation/ondo-token",
+  "firstVia": "document",
+  "second": "coingecko:ondo-finance"
+ },
+ {
+  "symbol": "RENDER",
+  "network": "solana",
+  "address": "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof",
+  "decimals": 8,
+  "onchainSymbol": null,
+  "first": "https://know.rendernetwork.com/general-render-network/rndr-to-render-what-you-need-to-know/render-network-upgrade-portal-faq",
+  "firstVia": "document",
+  "second": "coingecko:render-token"
+ },
+ {
+  "symbol": "JUP",
+  "network": "solana",
+  "address": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+  "decimals": 6,
+  "onchainSymbol": null,
+  "first": "https://docs.jup.ag/user-docs/more/jup-token/faq.md",
+  "firstVia": "document",
+  "second": "coingecko:jupiter-exchange-solana"
+ },
+ {
+  "symbol": "RAY",
+  "network": "solana",
+  "address": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+  "decimals": 6,
+  "onchainSymbol": null,
+  "first": "https://docs.raydium.io/ray/index",
+  "firstVia": "document",
+  "second": "coingecko:raydium"
+ },
+ {
+  "symbol": "BONK",
+  "network": "solana",
+  "address": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+  "decimals": 5,
+  "onchainSymbol": null,
+  "first": "bonkcoin.com (mint appears only as the target of the site's exchange links; not stated as text) + CoinGecko",
+  "firstVia": "manual",
+  "second": "coingecko:bonk"
+ },
+ {
+  "symbol": "PEPE",
+  "network": "ethereum",
+  "address": "0x6982508145454Ce325dDbE47a25d4ec3d2311933",
+  "decimals": 18,
+  "onchainSymbol": "PEPE",
+  "first": "https://www.pepe.vip",
+  "firstVia": "document",
+  "second": "coingecko:pepe"
+ },
+ {
+  "symbol": "SHIB",
+  "network": "ethereum",
+  "address": "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
+  "decimals": 18,
+  "onchainSymbol": "SHIB",
+  "first": "https://shib.io/tokens/shib",
+  "firstVia": "manual",
+  "second": "coingecko:shiba-inu"
+ },
+ {
+  "symbol": "USDT0",
+  "network": "polygon",
+  "address": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+  "decimals": 6,
+  "onchainSymbol": "USDT0",
+  "first": "https://docs.usdt0.to/technical-documentation/deployments.md",
+  "firstVia": "document",
+  "second": "coingecko:usdt0"
+ },
+ {
+  "symbol": "USDT0",
+  "network": "hyperevm",
+  "address": "0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb",
+  "decimals": 6,
+  "onchainSymbol": "USD₮0",
+  "first": "https://docs.usdt0.to/technical-documentation/deployments.md",
+  "firstVia": "document",
+  "second": "coingecko:usdt0"
+ },
+ {
+  "symbol": "USDT0",
+  "network": "optimism",
+  "address": "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",
+  "decimals": 6,
+  "onchainSymbol": "USD₮0",
+  "first": "https://docs.usdt0.to/technical-documentation/deployments.md",
+  "firstVia": "document",
+  "second": "coingecko:usdt0"
+ },
+ {
+  "symbol": "USDT0",
+  "network": "arbitrum",
+  "address": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+  "decimals": 6,
+  "onchainSymbol": "USD₮0",
+  "first": "https://docs.usdt0.to/technical-documentation/deployments.md",
+  "firstVia": "document",
+  "second": "coingecko:usdt0"
+ },
+ {
+  "symbol": "USDC.e",
+  "network": "polygon",
+  "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+  "decimals": 6,
+  "onchainSymbol": "USDC",
+  "first": "https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json",
+  "firstVia": "document",
+  "second": "coingecko:bridged-usdc-polygon-pos-bridge"
+ },
+ {
+  "symbol": "USDC.e",
+  "network": "arbitrum",
+  "address": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
+  "decimals": 6,
+  "onchainSymbol": "USDC",
+  "first": "https://tokenlist.arbitrum.io/ArbTokenLists/arbed_arb_whitelist_era.json",
+  "firstVia": "tokenlist",
+  "second": "coingecko:usd-coin-ethereum-bridged"
+ },
+ {
+  "symbol": "USDC.e",
+  "network": "optimism",
+  "address": "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
+  "decimals": 6,
+  "onchainSymbol": "USDC",
+  "first": "https://static.optimism.io/optimism.tokenlist.json",
+  "firstVia": "tokenlist",
+  "second": "coingecko:bridged-usd-coin-optimism"
+ },
+ {
+  "symbol": "USDC.e",
+  "network": "avalanche",
+  "address": "0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664",
+  "decimals": 6,
+  "onchainSymbol": "USDC.e",
+  "first": "https://raw.githubusercontent.com/ava-labs/avalanche-bridge-resources/main/avalanche_contract_address.json",
+  "firstVia": "document",
+  "second": "coingecko:usd-coin-avalanche-bridged-usdc-e"
+ },
+ {
+  "symbol": "GHO",
+  "network": "ethereum",
+  "address": "0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f",
+  "decimals": 18,
+  "onchainSymbol": "GHO",
+  "first": "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/src/GhoEthereum.sol",
+  "firstVia": "document",
+  "second": "coingecko:gho"
+ },
+ {
+  "symbol": "GHO",
+  "network": "base",
+  "address": "0x6Bb7a212910682DCFdbd5BCBb3e28FB4E8da10Ee",
+  "decimals": 18,
+  "onchainSymbol": "GHO",
+  "first": "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/src/GhoBase.sol",
+  "firstVia": "document",
+  "second": "coingecko:gho"
+ },
+ {
+  "symbol": "GHO",
+  "network": "arbitrum",
+  "address": "0x7dfF72693f6A4149b17e7C6314655f6A9F7c8B33",
+  "decimals": 18,
+  "onchainSymbol": "GHO",
+  "first": "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/src/GhoArbitrum.sol",
+  "firstVia": "document",
+  "second": "coingecko:gho"
+ },
+ {
+  "symbol": "GHO",
+  "network": "avalanche",
+  "address": "0xfc421aD3C883Bf9E7C4f42dE845C4e4405799e73",
+  "decimals": 18,
+  "onchainSymbol": "GHO",
+  "first": "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/src/GhoAvalanche.sol",
+  "firstVia": "document",
+  "second": "coingecko:gho"
+ },
+ {
+  "symbol": "crvUSD",
+  "network": "ethereum",
+  "address": "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+  "decimals": 18,
+  "onchainSymbol": "crvUSD",
+  "first": "https://docs.curve.finance/deployments.json",
+  "firstVia": "document",
+  "second": "coingecko:crvusd"
+ },
+ {
+  "symbol": "crvUSD",
+  "network": "optimism",
+  "address": "0xC52D7F23a2e460248Db6eE192Cb23dD12bDDCbf6",
+  "decimals": 18,
+  "onchainSymbol": "crvUSD",
+  "first": "https://docs.curve.finance/deployments.json",
+  "firstVia": "document",
+  "second": "coingecko:crvusd"
+ },
+ {
+  "symbol": "crvUSD",
+  "network": "polygon",
+  "address": "0xc4Ce1D6F5D98D65eE25Cf85e9F2E9DcFEe6Cb5d6",
+  "decimals": 18,
+  "onchainSymbol": "crvUSD",
+  "first": "https://docs.curve.finance/deployments.json",
+  "firstVia": "document",
+  "second": "coingecko:crvusd"
+ },
+ {
+  "symbol": "crvUSD",
+  "network": "bsc",
+  "address": "0xe2fb3F127f5450DeE44afe054385d74C392BdeF4",
+  "decimals": 18,
+  "onchainSymbol": "crvUSD",
+  "first": "https://docs.curve.finance/deployments.json",
+  "firstVia": "document",
+  "second": "coingecko:crvusd"
+ },
+ {
+  "symbol": "crvUSD",
+  "network": "arbitrum",
+  "address": "0x498Bf2B1e120FeD3ad3D42EA2165E9b73f99C1e5",
+  "decimals": 18,
+  "onchainSymbol": "crvUSD",
+  "first": "https://docs.curve.finance/deployments.json",
+  "firstVia": "document",
+  "second": "coingecko:crvusd"
+ },
+ {
+  "symbol": "crvUSD",
+  "network": "base",
+  "address": "0x417Ac0e078398C154EdFadD9Ef675d30Be60Af93",
+  "decimals": 18,
+  "onchainSymbol": "crvUSD",
+  "first": "https://docs.curve.finance/deployments.json",
+  "firstVia": "document",
+  "second": "coingecko:crvusd"
+ },
+ {
+  "symbol": "frxUSD",
+  "network": "ethereum",
+  "address": "0xCAcd6fd266aF91b8AeD52aCCc382b4e165586E29",
+  "decimals": 18,
+  "onchainSymbol": "frxUSD",
+  "first": "https://docs.frax.com/protocol/assets/frxusd/addresses",
+  "firstVia": "document",
+  "second": "coingecko:frax-usd"
+ },
+ {
+  "symbol": "frxUSD",
+  "network": "solana",
+  "address": "GzX1ireZDU865FiMaKrdVB1H6AE8LAqWYCg6chrMrfBw",
+  "decimals": 9,
+  "onchainSymbol": null,
+  "first": "https://docs.frax.com/protocol/crosschain/addresses",
+  "firstVia": "document",
+  "second": "coingecko:frax-usd"
+ },
+ {
+  "symbol": "frxUSD",
+  "network": "bsc",
+  "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+  "decimals": 18,
+  "onchainSymbol": "frxUSD",
+  "first": "https://docs.frax.com/protocol/crosschain/addresses",
+  "firstVia": "document",
+  "second": "coingecko:frax-usd"
+ },
+ {
+  "symbol": "frxUSD",
+  "network": "polygon",
+  "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+  "decimals": 18,
+  "onchainSymbol": "frxUSD",
+  "first": "https://docs.frax.com/protocol/crosschain/addresses",
+  "firstVia": "document",
+  "second": "coingecko:frax-usd"
+ },
+ {
+  "symbol": "frxUSD",
+  "network": "base",
+  "address": "0xe5020A6d073a794B6E7f05678707dE47986Fb0b6",
+  "decimals": 18,
+  "onchainSymbol": "frxUSD",
+  "first": "https://docs.frax.com/protocol/crosschain/addresses",
+  "firstVia": "document",
+  "second": "coingecko:frax-usd"
+ },
+ {
+  "symbol": "frxUSD",
+  "network": "avalanche",
+  "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+  "decimals": 18,
+  "onchainSymbol": "frxUSD",
+  "first": "https://docs.frax.com/protocol/crosschain/addresses",
+  "firstVia": "document",
+  "second": "coingecko:frax-usd"
+ },
+ {
+  "symbol": "frxUSD",
+  "network": "arbitrum",
+  "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+  "decimals": 18,
+  "onchainSymbol": "frxUSD",
+  "first": "https://docs.frax.com/protocol/crosschain/addresses",
+  "firstVia": "document",
+  "second": "coingecko:frax-usd"
+ },
+ {
+  "symbol": "frxUSD",
+  "network": "optimism",
+  "address": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+  "decimals": 18,
+  "onchainSymbol": "frxUSD",
+  "first": "https://docs.frax.com/protocol/crosschain/addresses",
+  "firstVia": "document",
+  "second": "coingecko:frax-usd"
+ },
+ {
+  "symbol": "USDD",
+  "network": "tron",
+  "address": "TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz",
+  "decimals": 18,
+  "onchainSymbol": "USDD",
+  "first": "https://docs.usdd.io/developers/deployment-addresses.md",
+  "firstVia": "document",
+  "second": "coingecko:usdd"
+ },
+ {
+  "symbol": "USDD",
+  "network": "ethereum",
+  "address": "0x4f8e5DE400DE08B164E7421B3EE387f461beCD1A",
+  "decimals": 18,
+  "onchainSymbol": "USDD",
+  "first": "https://docs.usdd.io/developers/deployment-addresses.md",
+  "firstVia": "document",
+  "second": "coingecko:usdd"
+ },
+ {
+  "symbol": "USDD",
+  "network": "bsc",
+  "address": "0x45E51bc23D592EB2DBA86da3985299f7895d66Ba",
+  "decimals": 18,
+  "onchainSymbol": "USDD",
+  "first": "https://docs.usdd.io/developers/deployment-addresses.md",
+  "firstVia": "document",
+  "second": "coingecko:usdd"
+ },
+ {
+  "symbol": "cbBTC",
+  "network": "ethereum",
+  "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+  "decimals": 8,
+  "onchainSymbol": "cbBTC",
+  "first": "https://www.coinbase.com/cbbtc",
+  "firstVia": "document",
+  "second": "coingecko:coinbase-wrapped-btc"
+ },
+ {
+  "symbol": "cbBTC",
+  "network": "solana",
+  "address": "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+  "decimals": 8,
+  "onchainSymbol": null,
+  "first": "https://www.coinbase.com/cbbtc",
+  "firstVia": "document",
+  "second": "coingecko:coinbase-wrapped-btc"
+ },
+ {
+  "symbol": "cbBTC",
+  "network": "base",
+  "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+  "decimals": 8,
+  "onchainSymbol": "cbBTC",
+  "first": "https://www.coinbase.com/cbbtc",
+  "firstVia": "document",
+  "second": "coingecko:coinbase-wrapped-btc"
+ },
+ {
+  "symbol": "cbBTC",
+  "network": "arbitrum",
+  "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+  "decimals": 8,
+  "onchainSymbol": "cbBTC",
+  "first": "https://www.coinbase.com/cbbtc",
+  "firstVia": "document",
+  "second": "coingecko:coinbase-wrapped-btc"
+ },
+ {
+  "symbol": "tBTC",
+  "network": "ethereum",
+  "address": "0x18084fbA666a33d37592fA2633fD49a74DD93a88",
+  "decimals": 18,
+  "onchainSymbol": "tBTC",
+  "first": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+  "firstVia": "document",
+  "second": "coingecko:tbtc"
+ },
+ {
+  "symbol": "tBTC",
+  "network": "polygon",
+  "address": "0x236aa50979D5f3De3Bd1Eeb40E81137F22ab794b",
+  "decimals": 18,
+  "onchainSymbol": "tBTC",
+  "first": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+  "firstVia": "document",
+  "second": "coingecko:tbtc"
+ },
+ {
+  "symbol": "tBTC",
+  "network": "optimism",
+  "address": "0x6c84a8f1c29108F47a79964b5Fe888D4f4D0dE40",
+  "decimals": 18,
+  "onchainSymbol": "tBTC",
+  "first": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+  "firstVia": "document",
+  "second": "coingecko:tbtc"
+ },
+ {
+  "symbol": "tBTC",
+  "network": "base",
+  "address": "0x236aa50979D5f3De3Bd1Eeb40E81137F22ab794b",
+  "decimals": 18,
+  "onchainSymbol": "tBTC",
+  "first": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+  "firstVia": "document",
+  "second": "coingecko:tbtc"
+ },
+ {
+  "symbol": "tBTC",
+  "network": "arbitrum",
+  "address": "0x6c84a8f1c29108F47a79964b5Fe888D4f4D0dE40",
+  "decimals": 18,
+  "onchainSymbol": "tBTC",
+  "first": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+  "firstVia": "document",
+  "second": "coingecko:tbtc"
+ },
+ {
+  "symbol": "tBTC",
+  "network": "solana",
+  "address": "6DNSN2BJsaPFdFFc1zP37kkeNe4Usc1Sqkzr9C9vPWcU",
+  "decimals": 8,
+  "onchainSymbol": null,
+  "first": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+  "firstVia": "document",
+  "second": "coingecko:tbtc"
+ },
+ {
+  "symbol": "BTCB",
+  "network": "bsc",
+  "address": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+  "decimals": 18,
+  "onchainSymbol": "BTCB",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:binance-bitcoin"
+ },
+ {
+  "symbol": "BTC.b",
+  "network": "avalanche",
+  "address": "0x152b9d0FdC40C096757F570A51E494bd4b943E50",
+  "decimals": 8,
+  "onchainSymbol": "BTC.b",
+  "first": "https://docs.lombard.finance/learn/transparency/smart-contracts",
+  "firstVia": "document",
+  "second": "coingecko:bitcoin-avalanche-bridged-btc-b"
+ },
+ {
+  "symbol": "WETH.e",
+  "network": "avalanche",
+  "address": "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB",
+  "decimals": 18,
+  "onchainSymbol": "WETH.e",
+  "first": "https://raw.githubusercontent.com/ava-labs/avalanche-bridge-resources/main/avalanche_contract_address.json",
+  "firstVia": "document",
+  "second": "coingecko:avalanche-bridged-weth-avalanche"
+ },
+ {
+  "symbol": "LINK.e",
+  "network": "avalanche",
+  "address": "0x5947BB275c521040051D82396192181b413227A3",
+  "decimals": 18,
+  "onchainSymbol": "LINK.e",
+  "first": "https://docs.chain.link/resources/link-token-contracts",
+  "firstVia": "document",
+  "second": "coingecko:chainlink"
+ },
+ {
+  "symbol": "wstETH",
+  "network": "ethereum",
+  "address": "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+  "decimals": 18,
+  "onchainSymbol": "wstETH",
+  "first": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-steth"
+ },
+ {
+  "symbol": "wstETH",
+  "network": "arbitrum",
+  "address": "0x5979D7b546E38E414F7E9822514be443A4800529",
+  "decimals": 18,
+  "onchainSymbol": "wstETH",
+  "first": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+  "firstVia": "document",
+  "second": "coingecko:arbitrum-bridged-wsteth-arbitrum"
+ },
+ {
+  "symbol": "wstETH",
+  "network": "optimism",
+  "address": "0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb",
+  "decimals": 18,
+  "onchainSymbol": "wstETH",
+  "first": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+  "firstVia": "document",
+  "second": "coingecko:superbridge-bridged-wsteth-optimism"
+ },
+ {
+  "symbol": "wstETH",
+  "network": "base",
+  "address": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+  "decimals": 18,
+  "onchainSymbol": "wstETH",
+  "first": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+  "firstVia": "document",
+  "second": "coingecko:superbridge-bridged-wsteth-base"
+ },
+ {
+  "symbol": "wstETH",
+  "network": "polygon",
+  "address": "0x03b54A6e9a984069379fae1a4fC4dBAE93B3bCCD",
+  "decimals": 18,
+  "onchainSymbol": "wstETH",
+  "first": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+  "firstVia": "document",
+  "second": "coingecko:polygon-bridged-wsteth-polygon"
+ },
+ {
+  "symbol": "wstETH",
+  "network": "bsc",
+  "address": "0x26c5e01524d2E6280A48F2c50fF6De7e52E9611C",
+  "decimals": 18,
+  "onchainSymbol": "wstETH",
+  "first": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+  "firstVia": "document",
+  "second": "coingecko:wormhole-bridged-wsteth-bsc"
+ },
+ {
+  "symbol": "rETH",
+  "network": "ethereum",
+  "address": "0xae78736Cd615f374D3085123A210448E74Fc6393",
+  "decimals": 18,
+  "onchainSymbol": "rETH",
+  "first": "https://raw.githubusercontent.com/rocket-pool/docs.rocketpool.net/main/docs/en/protocol/contracts-integrations.md",
+  "firstVia": "document",
+  "second": "coingecko:rocket-pool-eth"
+ },
+ {
+  "symbol": "rETH",
+  "network": "arbitrum",
+  "address": "0xEC70Dcb4A1EFa46b8F2D97C310C9c4790ba5ffA8",
+  "decimals": 18,
+  "onchainSymbol": "rETH",
+  "first": "https://raw.githubusercontent.com/rocket-pool/docs.rocketpool.net/main/docs/en/protocol/contracts-integrations.md",
+  "firstVia": "document",
+  "second": "coingecko:rocket-pool-eth"
+ },
+ {
+  "symbol": "rETH",
+  "network": "optimism",
+  "address": "0x9Bcef72be871e61ED4fBbc7630889beE758eb81D",
+  "decimals": 18,
+  "onchainSymbol": "rETH",
+  "first": "https://raw.githubusercontent.com/rocket-pool/docs.rocketpool.net/main/docs/en/protocol/contracts-integrations.md",
+  "firstVia": "document",
+  "second": "coingecko:rocket-pool-eth"
+ },
+ {
+  "symbol": "rETH",
+  "network": "base",
+  "address": "0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c",
+  "decimals": 18,
+  "onchainSymbol": "rETH",
+  "first": "https://raw.githubusercontent.com/rocket-pool/docs.rocketpool.net/main/docs/en/protocol/contracts-integrations.md",
+  "firstVia": "document",
+  "second": "coingecko:rocket-pool-eth"
+ },
+ {
+  "symbol": "rETH",
+  "network": "polygon",
+  "address": "0x0266F4F08D82372CF0FcbCCc0Ff74309089c74d1",
+  "decimals": 18,
+  "onchainSymbol": "rETH",
+  "first": "https://raw.githubusercontent.com/rocket-pool/docs.rocketpool.net/main/docs/en/protocol/contracts-integrations.md",
+  "firstVia": "document",
+  "second": "coingecko:rocket-pool-eth"
+ },
+ {
+  "symbol": "cbETH",
+  "network": "ethereum",
+  "address": "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704",
+  "decimals": 18,
+  "onchainSymbol": "cbETH",
+  "first": "https://www.coinbase.com/cbeth",
+  "firstVia": "document",
+  "second": "coingecko:coinbase-wrapped-staked-eth"
+ },
+ {
+  "symbol": "cbETH",
+  "network": "base",
+  "address": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+  "decimals": 18,
+  "onchainSymbol": "cbETH",
+  "first": "https://www.coinbase.com/cbeth",
+  "firstVia": "document",
+  "second": "coingecko:coinbase-wrapped-staked-eth"
+ },
+ {
+  "symbol": "cbETH",
+  "network": "optimism",
+  "address": "0xadDb6A0412DE1BA0F936DCaeb8Aaa24578dcF3B2",
+  "decimals": 18,
+  "onchainSymbol": "cbETH",
+  "first": "https://www.coinbase.com/cbeth",
+  "firstVia": "document",
+  "second": "coingecko:coinbase-wrapped-staked-eth"
+ },
+ {
+  "symbol": "cbETH",
+  "network": "arbitrum",
+  "address": "0x1DEBd73E752bEaF79865Fd6446b0c970EaE7732f",
+  "decimals": 18,
+  "onchainSymbol": "cbETH",
+  "first": "https://www.coinbase.com/cbeth",
+  "firstVia": "document",
+  "second": "coingecko:coinbase-wrapped-staked-eth"
+ },
+ {
+  "symbol": "weETH",
+  "network": "ethereum",
+  "address": "0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee",
+  "decimals": 18,
+  "onchainSymbol": "weETH",
+  "first": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-eeth"
+ },
+ {
+  "symbol": "weETH",
+  "network": "optimism",
+  "address": "0x5A7fACB970D094B6C7FF1df0eA68D99E6e73CBFF",
+  "decimals": 18,
+  "onchainSymbol": "weETH",
+  "first": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-eeth"
+ },
+ {
+  "symbol": "weETH",
+  "network": "avalanche",
+  "address": "0xA3D68b74bF0528fdD07263c60d6488749044914b",
+  "decimals": 18,
+  "onchainSymbol": "weETH",
+  "first": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-eeth"
+ },
+ {
+  "symbol": "weETH",
+  "network": "base",
+  "address": "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",
+  "decimals": 18,
+  "onchainSymbol": "weETH",
+  "first": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-eeth"
+ },
+ {
+  "symbol": "weETH",
+  "network": "hyperevm",
+  "address": "0xA3D68b74bF0528fdD07263c60d6488749044914b",
+  "decimals": 18,
+  "onchainSymbol": "weETH",
+  "first": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-eeth"
+ },
+ {
+  "symbol": "weETH",
+  "network": "bsc",
+  "address": "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",
+  "decimals": 18,
+  "onchainSymbol": "weETH",
+  "first": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-eeth"
+ },
+ {
+  "symbol": "weETH",
+  "network": "arbitrum",
+  "address": "0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe",
+  "decimals": 18,
+  "onchainSymbol": "weETH",
+  "first": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "firstVia": "document",
+  "second": "coingecko:arbitrum-bridged-wrapped-eeth"
+ },
+ {
+  "symbol": "ARB",
+  "network": "arbitrum",
+  "address": "0x912CE59144191C1204E64559FE8253a0e49E6548",
+  "decimals": 18,
+  "onchainSymbol": "ARB",
+  "first": "https://docs.arbitrum.foundation/deployment-addresses",
+  "firstVia": "document",
+  "second": "coingecko:arbitrum"
+ },
+ {
+  "symbol": "ARB",
+  "network": "ethereum",
+  "address": "0xB50721BCf8d664c30412Cfbc6cf7a15145234ad1",
+  "decimals": 18,
+  "onchainSymbol": "ARB",
+  "first": "https://docs.arbitrum.foundation/deployment-addresses",
+  "firstVia": "document",
+  "second": "coingecko:arbitrum"
+ },
+ {
+  "symbol": "OP",
+  "network": "optimism",
+  "address": "0x4200000000000000000000000000000000000042",
+  "decimals": 18,
+  "onchainSymbol": "OP",
+  "first": "https://specs.optimism.io/protocol/predeploys.html",
+  "firstVia": "document",
+  "second": "coingecko:optimism"
+ },
+ {
+  "symbol": "POL",
+  "network": "ethereum",
+  "address": "0x455e53CBB86018Ac2B8092FdCd39d8444aFFC3F6",
+  "decimals": 18,
+  "onchainSymbol": "POL",
+  "first": "https://static.polygon.technology/network/mainnet/v1/index.json",
+  "firstVia": "document",
+  "second": "coingecko:polygon-ecosystem-token"
+ },
+ {
+  "symbol": "WPOL",
+  "network": "polygon",
+  "address": "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+  "decimals": 18,
+  "onchainSymbol": "WPOL",
+  "first": "https://static.polygon.technology/network/mainnet/v1/index.json",
+  "firstVia": "document",
+  "second": "coingecko:wmatic"
+ },
+ {
+  "symbol": "WAVAX",
+  "network": "avalanche",
+  "address": "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+  "decimals": 18,
+  "onchainSymbol": "WAVAX",
+  "first": "https://build.avax.network/academy/blockchain/x402-payment-infrastructure/04-x402-on-avalanche/02-network-setup",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-avax"
+ },
+ {
+  "symbol": "WBNB",
+  "network": "bsc",
+  "address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+  "decimals": 18,
+  "onchainSymbol": "WBNB",
+  "first": "https://raw.githubusercontent.com/bnb-chain/bnb-chain.github.io/main/docs/bnb-smart-chain/benchmark/design-reference.md",
+  "firstVia": "document",
+  "second": "coingecko:wbnb"
+ },
+ {
+  "symbol": "WHYPE",
+  "network": "hyperevm",
+  "address": "0x5555555555555555555555555555555555555555",
+  "decimals": 18,
+  "onchainSymbol": "WHYPE",
+  "first": "https://raw.githubusercontent.com/hyperliquid-dex/hyper-evm-sync/main/src/run.rs",
+  "firstVia": "document",
+  "second": "coingecko:wrapped-hype"
+ },
+ {
+  "symbol": "MNT",
+  "network": "ethereum",
+  "address": "0x3c3a81e81dc49A522A592e7622A7E711c06bf354",
+  "decimals": 18,
+  "onchainSymbol": "MNT",
+  "first": "https://token-list.mantle.xyz/mantle.tokenlist.json",
+  "firstVia": "tokenlist",
+  "second": "coingecko:mantle"
+ },
+ {
+  "symbol": "cbXRP",
+  "network": "base",
+  "address": "0xcb585250f852C6c6bf90434AB21A00f02833a4af",
+  "decimals": 6,
+  "onchainSymbol": "cbXRP",
+  "first": "https://www.coinbase.com/cbbtc",
+  "firstVia": "document",
+  "second": "coingecko:coinbase-wrapped-xrp"
+ },
+ {
+  "symbol": "cbDOGE",
+  "network": "base",
+  "address": "0xcbD06E5A2B0C65597161de254AA074E489dEb510",
+  "decimals": 8,
+  "onchainSymbol": "cbDOGE",
+  "first": "https://www.coinbase.com/cbbtc",
+  "firstVia": "document",
+  "second": "coingecko:coinbase-wrapped-doge"
+ },
+ {
+  "symbol": "cbLTC",
+  "network": "base",
+  "address": "0xcb17C9Db87B595717C857a08468793f5bAb6445F",
+  "decimals": 8,
+  "onchainSymbol": "cbLTC",
+  "first": "https://www.coinbase.com/cbbtc",
+  "firstVia": "document",
+  "second": "coingecko:coinbase-wrapped-ltc"
+ },
+ {
+  "symbol": "cbADA",
+  "network": "base",
+  "address": "0xcbADA732173e39521CDBE8bf59a6Dc85A9fc7b8c",
+  "decimals": 6,
+  "onchainSymbol": "cbADA",
+  "first": "https://www.coinbase.com/cbbtc",
+  "firstVia": "document",
+  "second": "coingecko:coinbase-wrapped-ada"
+ },
+ {
+  "symbol": "MKR",
+  "network": "ethereum",
+  "address": "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
+  "decimals": 18,
+  "onchainSymbol": "MKR",
+  "first": "https://chainlog.sky.money/api/mainnet/active.json",
+  "firstVia": "document",
+  "second": "coingecko:maker"
+ },
+ {
+  "symbol": "SKY",
+  "network": "ethereum",
+  "address": "0x56072C95FAA701256059aa122697B133aDEd9279",
+  "decimals": 18,
+  "onchainSymbol": "SKY",
+  "first": "https://chainlog.sky.money/api/mainnet/active.json",
+  "firstVia": "document",
+  "second": "coingecko:sky"
+ },
+ {
+  "symbol": "CRV",
+  "network": "ethereum",
+  "address": "0xD533a949740bb3306d119CC777fa900bA034cd52",
+  "decimals": 18,
+  "onchainSymbol": "CRV",
+  "first": "https://docs.curve.finance/deployments.json",
+  "firstVia": "document",
+  "second": "coingecko:curve-dao-token"
+ },
+ {
+  "symbol": "CRV",
+  "network": "arbitrum",
+  "address": "0x11cDb42B0EB46D95f990BeDD4695A6e3fA034978",
+  "decimals": 18,
+  "onchainSymbol": "CRV",
+  "first": "https://docs.curve.finance/deployments.json",
+  "firstVia": "document",
+  "second": "coingecko:curve-dao-token"
+ },
+ {
+  "symbol": "CRV",
+  "network": "optimism",
+  "address": "0x0994206dfE8De6Ec6920FF4D779B0d950605Fb53",
+  "decimals": 18,
+  "onchainSymbol": "CRV",
+  "first": "https://docs.curve.finance/deployments.json",
+  "firstVia": "document",
+  "second": "coingecko:curve-dao-token"
+ },
+ {
+  "symbol": "CRV",
+  "network": "base",
+  "address": "0x8Ee73c484A26e0A5df2Ee2a4960B789967dd0415",
+  "decimals": 18,
+  "onchainSymbol": "CRV",
+  "first": "https://docs.curve.finance/deployments.json",
+  "firstVia": "document",
+  "second": "coingecko:curve-dao-token"
+ },
+ {
+  "symbol": "CRV",
+  "network": "polygon",
+  "address": "0x172370d5Cd63279eFa6d502DAB29171933a610AF",
+  "decimals": 18,
+  "onchainSymbol": "CRV",
+  "first": "https://docs.curve.finance/deployments.json",
+  "firstVia": "document",
+  "second": "coingecko:curve-dao-token"
+ },
+ {
+  "symbol": "COMP",
+  "network": "ethereum",
+  "address": "0xc00e94Cb662C3520282E6f5717214004A7f26888",
+  "decimals": 18,
+  "onchainSymbol": "COMP",
+  "first": "https://docs.compound.finance/",
+  "firstVia": "document",
+  "second": "coingecko:compound-governance-token"
+ },
+ {
+  "symbol": "COMP",
+  "network": "base",
+  "address": "0x9e1028F5F1D5eDE59748FFceE5532509976840E0",
+  "decimals": 18,
+  "onchainSymbol": "COMP",
+  "first": "https://docs.compound.finance/",
+  "firstVia": "document",
+  "second": "coingecko:compound-governance-token"
+ },
+ {
+  "symbol": "COMP",
+  "network": "arbitrum",
+  "address": "0x354A6dA3fcde098F8389cad84b0182725c6C91dE",
+  "decimals": 18,
+  "onchainSymbol": "COMP",
+  "first": "https://docs.compound.finance/",
+  "firstVia": "document",
+  "second": "coingecko:compound-governance-token"
+ },
+ {
+  "symbol": "COMP",
+  "network": "polygon",
+  "address": "0x8505b9d2254A7Ae468c0E9dd10Ccea3A837aef5c",
+  "decimals": 18,
+  "onchainSymbol": "COMP",
+  "first": "https://docs.compound.finance/",
+  "firstVia": "document",
+  "second": "coingecko:compound-governance-token"
+ },
+ {
+  "symbol": "SNX",
+  "network": "ethereum",
+  "address": "0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F",
+  "decimals": 18,
+  "onchainSymbol": "SNX",
+  "first": "https://docs.synthetix.io/about-synthetix/snx-token",
+  "firstVia": "document",
+  "second": "coingecko:havven"
+ },
+ {
+  "symbol": "SNX",
+  "network": "base",
+  "address": "0x22e6966B799c4D5B13BE962E1D117b56327FDa66",
+  "decimals": 18,
+  "onchainSymbol": "SNX",
+  "first": "https://raw.githubusercontent.com/Synthetixio/synthetix-deployments/main/omnibus-base-mainnet-andromeda.toml",
+  "firstVia": "document",
+  "second": "coingecko:havven"
+ },
+ {
+  "symbol": "SNX",
+  "network": "optimism",
+  "address": "0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4",
+  "decimals": 18,
+  "onchainSymbol": "SNX",
+  "first": "https://docs.synthetix.io/about-synthetix/snx-token",
+  "firstVia": "document",
+  "second": "coingecko:havven"
+ },
+ {
+  "symbol": "PENDLE",
+  "network": "ethereum",
+  "address": "0x808507121B80c02388fAd14726482e061B8da827",
+  "decimals": 18,
+  "onchainSymbol": "PENDLE",
+  "first": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/1-core.json",
+  "firstVia": "document",
+  "second": "coingecko:pendle"
+ },
+ {
+  "symbol": "PENDLE",
+  "network": "base",
+  "address": "0xA99F6e6785Da0F5d6fB42495Fe424BCE029Eeb3E",
+  "decimals": 18,
+  "onchainSymbol": "PENDLE",
+  "first": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/8453-core.json",
+  "firstVia": "document",
+  "second": "coingecko:pendle"
+ },
+ {
+  "symbol": "PENDLE",
+  "network": "bsc",
+  "address": "0xb3Ed0A426155B79B898849803E3B36552f7ED507",
+  "decimals": 18,
+  "onchainSymbol": "PENDLE",
+  "first": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/56-core.json",
+  "firstVia": "document",
+  "second": "coingecko:pendle"
+ },
+ {
+  "symbol": "PENDLE",
+  "network": "hyperevm",
+  "address": "0xD6Eb81136884713E843936843E286FD2a85A205A",
+  "decimals": 18,
+  "onchainSymbol": "PENDLE",
+  "first": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/999-core.json",
+  "firstVia": "document",
+  "second": "coingecko:pendle"
+ },
+ {
+  "symbol": "PENDLE",
+  "network": "arbitrum",
+  "address": "0x0c880f6761F1af8d9Aa9C466984b80DAb9a8c9e8",
+  "decimals": 18,
+  "onchainSymbol": "PENDLE",
+  "first": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/42161-core.json",
+  "firstVia": "document",
+  "second": "coingecko:pendle"
+ },
+ {
+  "symbol": "PENDLE",
+  "network": "optimism",
+  "address": "0xBC7B1Ff1c6989f006a1185318eD4E7b5796e66E1",
+  "decimals": 18,
+  "onchainSymbol": "PENDLE",
+  "first": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/10-core.json",
+  "firstVia": "document",
+  "second": "coingecko:pendle"
+ },
+ {
+  "symbol": "ENA",
+  "network": "ethereum",
+  "address": "0x57e114B691Db790C35207b2e685D4A43181e6061",
+  "decimals": 18,
+  "onchainSymbol": "ENA",
+  "first": "https://docs.ethena.fi/solution-design/key-addresses.md",
+  "firstVia": "document",
+  "second": "coingecko:ethena"
+ },
+ {
+  "symbol": "ENA",
+  "network": "arbitrum",
+  "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+  "decimals": 18,
+  "onchainSymbol": "ENA",
+  "first": "https://docs.ethena.fi/solution-design/key-addresses.md",
+  "firstVia": "document",
+  "second": "coingecko:ethena"
+ },
+ {
+  "symbol": "ENA",
+  "network": "avalanche",
+  "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+  "decimals": 18,
+  "onchainSymbol": "ENA",
+  "first": "https://docs.ethena.fi/solution-design/key-addresses.md",
+  "firstVia": "document",
+  "second": "coingecko:ethena"
+ },
+ {
+  "symbol": "ENA",
+  "network": "base",
+  "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+  "decimals": 18,
+  "onchainSymbol": "ENA",
+  "first": "https://docs.ethena.fi/solution-design/key-addresses.md",
+  "firstVia": "document",
+  "second": "coingecko:ethena"
+ },
+ {
+  "symbol": "ENA",
+  "network": "optimism",
+  "address": "0x58538e6A46E07434d7E7375Bc268D3cb839C0133",
+  "decimals": 18,
+  "onchainSymbol": "ENA",
+  "first": "https://docs.ethena.fi/solution-design/key-addresses.md",
+  "firstVia": "document",
+  "second": "coingecko:ethena"
+ },
+ {
+  "symbol": "ENA",
+  "network": "solana",
+  "address": "72QvBVwpxqmheEPfaCwWSWqEFsUy3rhWt6JhQBMNTwD1",
+  "decimals": 9,
+  "onchainSymbol": null,
+  "first": "https://docs.ethena.fi/solution-design/key-addresses.md",
+  "firstVia": "document",
+  "second": "coingecko:ethena"
+ },
+ {
+  "symbol": "GMX",
+  "network": "arbitrum",
+  "address": "0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a",
+  "decimals": 18,
+  "onchainSymbol": "GMX",
+  "first": "https://raw.githubusercontent.com/gmx-io/gmx-interface/master/sdk/src/configs/contracts.ts",
+  "firstVia": "document",
+  "second": "coingecko:gmx"
+ },
+ {
+  "symbol": "GMX",
+  "network": "avalanche",
+  "address": "0x62edc0692BD897D2295872a9FFCac5425011c661",
+  "decimals": 18,
+  "onchainSymbol": "GMX",
+  "first": "https://raw.githubusercontent.com/gmx-io/gmx-interface/master/sdk/src/configs/contracts.ts",
+  "firstVia": "document",
+  "second": "coingecko:gmx"
+ },
+ {
+  "symbol": "AERO",
+  "network": "base",
+  "address": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+  "decimals": 18,
+  "onchainSymbol": "AERO",
+  "first": "https://raw.githubusercontent.com/aerodrome-finance/contracts/main/README.md",
+  "firstVia": "document",
+  "second": "coingecko:aerodrome-finance"
+ },
+ {
+  "symbol": "VELO",
+  "network": "optimism",
+  "address": "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db",
+  "decimals": 18,
+  "onchainSymbol": "VELO",
+  "first": "https://raw.githubusercontent.com/velodrome-finance/contracts/main/README.md",
+  "firstVia": "document",
+  "second": "coingecko:velodrome-finance"
+ },
+ {
+  "symbol": "CAKE",
+  "network": "bsc",
+  "address": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+  "decimals": 18,
+  "onchainSymbol": "Cake",
+  "first": "https://docs.pancakeswap.finance/protocol/cake-tokenomics",
+  "firstVia": "document",
+  "second": "coingecko:pancakeswap-token"
+ },
+ {
+  "symbol": "CAKE",
+  "network": "ethereum",
+  "address": "0x152649eA73beAb28c5b49B26eb48f7EAD6d4c898",
+  "decimals": 18,
+  "onchainSymbol": "Cake",
+  "first": "https://developer.pancakeswap.finance/contracts/cake",
+  "firstVia": "document",
+  "second": "coingecko:pancakeswap-token"
+ },
+ {
+  "symbol": "CAKE",
+  "network": "base",
+  "address": "0x3055913c90Fcc1A6CE9a358911721eEb942013A1",
+  "decimals": 18,
+  "onchainSymbol": "Cake",
+  "first": "https://developer.pancakeswap.finance/contracts/cake",
+  "firstVia": "document",
+  "second": "coingecko:pancakeswap-token"
+ },
+ {
+  "symbol": "CAKE",
+  "network": "solana",
+  "address": "4qQeZ5LwSz6HuupUu8jCtgXyW1mYQcNbFAW1sWZp89HL",
+  "decimals": 9,
+  "onchainSymbol": null,
+  "first": "https://developer.pancakeswap.finance/contracts/cake",
+  "firstVia": "document",
+  "second": "coingecko:pancakeswap-token"
+ },
+ {
+  "symbol": "CAKE",
+  "network": "arbitrum",
+  "address": "0x1b896893dfc86bb67Cf57767298b9073D2c1bA2c",
+  "decimals": 18,
+  "onchainSymbol": "Cake",
+  "first": "https://developer.pancakeswap.finance/contracts/cake",
+  "firstVia": "document",
+  "second": "coingecko:pancakeswap-token"
+ },
+ {
+  "symbol": "JOE",
+  "network": "avalanche",
+  "address": "0x6e84a6216eA6dACC71eE8E6b0a5B7322EEbC0fDd",
+  "decimals": 18,
+  "onchainSymbol": "JOE",
+  "first": "https://raw.githubusercontent.com/traderjoe-xyz/joe-sdk/main/src/constants.ts",
+  "firstVia": "document",
+  "second": "coingecko:joe"
+ },
+ {
+  "symbol": "JOE",
+  "network": "arbitrum",
+  "address": "0x371c7ec6D8039ff7933a2AA28EB827Ffe1F52f07",
+  "decimals": 18,
+  "onchainSymbol": "JOE",
+  "first": "https://raw.githubusercontent.com/traderjoe-xyz/joe-sdk/main/src/constants.ts",
+  "firstVia": "document",
+  "second": "coingecko:joe"
+ },
+ {
+  "symbol": "JOE",
+  "network": "bsc",
+  "address": "0x371c7ec6D8039ff7933a2AA28EB827Ffe1F52f07",
+  "decimals": 18,
+  "onchainSymbol": "JOE",
+  "first": "https://raw.githubusercontent.com/traderjoe-xyz/joe-sdk/main/src/constants.ts",
+  "firstVia": "document",
+  "second": "coingecko:joe"
+ },
+ {
+  "symbol": "MORPHO",
+  "network": "ethereum",
+  "address": "0x58D97B57BB95320F9a05dC918Aef65434969c2B2",
+  "decimals": 18,
+  "onchainSymbol": "MORPHO",
+  "first": "https://docs.morpho.org/get-started/resources/addresses/",
+  "firstVia": "document",
+  "second": "coingecko:morpho"
+ },
+ {
+  "symbol": "MORPHO",
+  "network": "base",
+  "address": "0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842",
+  "decimals": 18,
+  "onchainSymbol": "MORPHO",
+  "first": "https://docs.morpho.org/get-started/resources/addresses/",
+  "firstVia": "document",
+  "second": "coingecko:morpho"
+ },
+ {
+  "symbol": "MORPHO",
+  "network": "arbitrum",
+  "address": "0x40BD670A58238e6E230c430BBb5cE6ec0d40df48",
+  "decimals": 18,
+  "onchainSymbol": "MORPHO",
+  "first": "https://docs.morpho.org/get-started/resources/addresses/",
+  "firstVia": "document",
+  "second": "coingecko:morpho"
+ },
+ {
+  "symbol": "EIGEN",
+  "network": "ethereum",
+  "address": "0xec53bF9167f50cDEB3Ae105f56099aaaB9061F83",
+  "decimals": 18,
+  "onchainSymbol": "EIGEN",
+  "first": "https://raw.githubusercontent.com/Layr-Labs/eigenlayer-contracts/main/README.md",
+  "firstVia": "document",
+  "second": "coingecko:eigenlayer"
+ },
+ {
+  "symbol": "ETH",
+  "network": "bsc",
+  "address": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
+  "decimals": 18,
+  "onchainSymbol": "ETH",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:binance-peg-weth"
+ },
+ {
+  "symbol": "XRP",
+  "network": "bsc",
+  "address": "0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE",
+  "decimals": 18,
+  "onchainSymbol": "XRP",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:binance-peg-xrp"
+ },
+ {
+  "symbol": "DOGE",
+  "network": "bsc",
+  "address": "0xbA2aE424d960c26247Dd6c32edC70B295c744C43",
+  "decimals": 8,
+  "onchainSymbol": "DOGE",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:binance-peg-dogecoin"
+ },
+ {
+  "symbol": "ADA",
+  "network": "bsc",
+  "address": "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47",
+  "decimals": 18,
+  "onchainSymbol": "ADA",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:binance-peg-cardano"
+ },
+ {
+  "symbol": "SOL",
+  "network": "bsc",
+  "address": "0x570A5D26f7765Ecb712C0924E4De545B89fD43dF",
+  "decimals": 18,
+  "onchainSymbol": "SOL",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:binance-peg-sol"
+ },
+ {
+  "symbol": "LTC",
+  "network": "bsc",
+  "address": "0x4338665CBB7B2485A8855A139b75D5e34AB0DB94",
+  "decimals": 18,
+  "onchainSymbol": "LTC",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:binance-peg-litecoin"
+ },
+ {
+  "symbol": "DOT",
+  "network": "bsc",
+  "address": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",
+  "decimals": 18,
+  "onchainSymbol": "DOT",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:binance-peg-polkadot"
+ },
+ {
+  "symbol": "AVAX",
+  "network": "bsc",
+  "address": "0x1CE0c2827e2eF14D5C4f29a091d735A204794041",
+  "decimals": 18,
+  "onchainSymbol": "AVAX",
+  "first": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "firstVia": "document",
+  "second": "coingecko:binance-peg-avalanche"
+ },
+ {
+  "symbol": "BRETT",
+  "network": "base",
+  "address": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+  "decimals": 18,
+  "onchainSymbol": "BRETT",
+  "first": "https://www.basedbrett.com/assets/index-4a61c05f.js",
+  "firstVia": "document",
+  "second": "coingecko:based-brett"
+ },
+ {
+  "symbol": "TOSHI",
+  "network": "base",
+  "address": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+  "decimals": 18,
+  "onchainSymbol": "TOSHI",
+  "first": "https://www.toshithecat.com/",
+  "firstVia": "document",
+  "second": "coingecko:toshi"
+ },
+ {
+  "symbol": "DEGEN",
+  "network": "base",
+  "address": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+  "decimals": 18,
+  "onchainSymbol": "DEGEN",
+  "first": "https://www.degen.tips/",
+  "firstVia": "document",
+  "second": "coingecko:degen-base"
+ },
+ {
+  "symbol": "JTO",
+  "network": "solana",
+  "address": "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
+  "decimals": 9,
+  "onchainSymbol": null,
+  "first": "https://www.jito.network/docs/governance/amended-and-restated-memorandum-of-association.md",
+  "firstVia": "document",
+  "second": "coingecko:jito-governance-token"
+ },
+ {
+  "symbol": "PYTH",
+  "network": "solana",
+  "address": "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
+  "decimals": 6,
+  "onchainSymbol": null,
+  "first": "https://raw.githubusercontent.com/pyth-network/governance/main/staking/app/constants.ts",
+  "firstVia": "document",
+  "second": "coingecko:pyth-network"
+ },
+ {
+  "symbol": "HNT",
+  "network": "solana",
+  "address": "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux",
+  "decimals": 8,
+  "onchainSymbol": null,
+  "first": "https://docs.helium.com/tokens/hnt-token/",
+  "firstVia": "document",
+  "second": "coingecko:helium"
+ },
+ {
+  "symbol": "ORCA",
+  "network": "solana",
+  "address": "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+  "decimals": 6,
+  "onchainSymbol": null,
+  "first": "https://docs.orca.so/governance/treasury.md",
+  "firstVia": "document",
+  "second": "coingecko:orca"
+ },
+ {
+  "symbol": "mSOL",
+  "network": "solana",
+  "address": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+  "decimals": 9,
+  "onchainSymbol": null,
+  "first": "https://docs.marinade.finance/developers/contract-addresses.md",
+  "firstVia": "document",
+  "second": "coingecko:msol"
+ },
+ {
+  "symbol": "jitoSOL",
+  "network": "solana",
+  "address": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
+  "decimals": 9,
+  "onchainSymbol": null,
+  "first": "https://www.jito.network/docs/jitosol/jitosol-liquid-staking/security/deployed-programs",
+  "firstVia": "document",
+  "second": "coingecko:jito-staked-sol"
+ },
+ {
+  "symbol": "bSOL",
+  "network": "solana",
+  "address": "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1",
+  "decimals": 9,
+  "onchainSymbol": null,
+  "first": "https://stake-docs.solblaze.org/developers/addresses",
+  "firstVia": "document",
+  "second": "coingecko:blazestake-staked-sol"
+ }
+]

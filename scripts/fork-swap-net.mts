@@ -1,5 +1,5 @@
 // Swap execution proof on a LOCAL FORK (anvil) of any EVM network listed in KYBER_ENABLED. Nothing reaches the real network.
-//   node scripts/fork-swap-net.mts <network>
+//   node scripts/fork-swap-net.mts <network>            (TOKEN=<symbol> swaps native → that registry token → native instead of the stablecoin)
 // Real KyberSwap route and calldata for today's state → verified and signed by the real Signer (passkey approval) → executed
 // on the fork: native → stablecoin, then stablecoin → native (with the exact-amount approval). Checks amounts and allowance.
 import { spawn } from 'node:child_process';
@@ -22,6 +22,9 @@ const PORT = 8547, FORK = `http://127.0.0.1:${PORT}`, UP = process.env.FORK_RPC 
 const keys = deriveKeys(generateMnemonic(wordlist, 128)); // fresh throwaway key (never the public test mnemonic)
 const ME = keys.addresses.evm, stable = n.tokens.find((t) => t.symbol === 'USDC') ?? n.tokens.find((t) => t.symbol === 'USDT') ?? n.tokens.find((t) => t.symbol === 'FDUSD');
 if (!stable) throw new Error(`no stablecoin in the registry for ${n.name}`);
+// optional: any registry token of this network, by its registry symbol (the swap is still native -> token -> native)
+const via = process.env.TOKEN ? n.tokens.find((t) => t.symbol === process.env.TOKEN) : stable;
+if (!via) throw new Error(`TOKEN=${process.env.TOKEN} is not in the registry of ${n.name}`);
 const SRC = process.env.KYBER_SOURCES; // optional includedSources
 let id = 0;
 const rpc = async <T>(method: string, params: unknown[] = []): Promise<T> => { const r = await fetch(FORK, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method, params }) }); const j = await r.json() as any; if (j.error) throw new Error(`${method}: ${j.error.message}`); return j.result; };
@@ -84,7 +87,7 @@ try {
     if (allowance !== 0n) throw new Error(`${label}: an allowance was left behind`);
     return got;
   }
-  const got = await swap(`${n.native.symbol} -> ${stable.symbol}`, 'native', stable.id, nativeIn, 100);
-  await swap(`${stable.symbol} -> ${n.native.symbol}`, stable.id, 'native', got / 2n, 100);
+  const got = await swap(`${n.native.symbol} -> ${via.symbol}`, 'native', via.id, nativeIn, 100);
+  await swap(`${via.symbol} -> ${n.native.symbol}`, via.id, 'native', got / 2n, 100);
   console.log(`FORK TEST OK on ${n.name} — nothing was sent to the real network`);
 } finally { stop(); }

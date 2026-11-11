@@ -133,7 +133,7 @@ const each = (f: (x: Fake) => void) => { for (const u of [A, B]) f(h[u]!); };
 const prep = (over: Partial<{ to: string; amount: bigint; memo: string; asset: string; from: string }> = {}) => a.prepare({ asset: 'native', from: ME, to: DEST, amount: TON1, ...over });
 const code = async (p: Promise<unknown>) => { try { await p; } catch (e) { return (e as { code?: string }).code ?? `threw: ${(e as Error).message}`; } return 'ok'; };
 const intentOf = (x: Record<string, string>, over: Partial<Intent> = {}): Intent => ({ v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: keys.keyId, network: 'ton', chainRef: n.chainRef, asset: 'native', symbol: 'TON', decimals: 9,
-  amount: TON1.toString(), from: ME, to: DEST, maxFee: '5000000', createdAt: NOW, expiresAt: NOW + 120, policyVersion: 2, x, ...over });
+  amount: TON1.toString(), from: ME, to: DEST, maxFee: '5000000', createdAt: NOW, expiresAt: NOW + 120, policyVersion: 3, x, ...over });
 
 describe('ton adapter: prepare', () => {
   it('agrees on both sources and returns the exact intent section', async () => {

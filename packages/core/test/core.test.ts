@@ -11,7 +11,7 @@ import {
 } from '../src/index.ts';
 
 const now = 1_800_000_000;
-const base = { v: 1 as const, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 2 };
+const base = { v: 1 as const, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 3 };
 const USDC_BASE = NETWORKS.base.tokens[0]!.id, USDC_SOL = NETWORKS.solana.tokens[0]!.id;
 const evmIntent: Intent = { ...base, network: 'base', chainRef: '8453', asset: USDC_BASE, symbol: 'USDC', decimals: 6, amount: '12500000',
   from: '0x9858EfFD232B4033E47d90003D41EC34EcaEda94', to: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', maxFee: '100000000000000',
@@ -71,7 +71,7 @@ describe('canonical intent hash', () => {
       { ...evmIntent, network: 'arbitrum', chainRef: '42161' }, { ...evmIntent, asset: 'native' }, { ...evmIntent, maxFee: '100000000000001' },
       { ...evmIntent, expiresAt: now + 121 }, { ...evmIntent, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { ...evmIntent, keyId: 'spw-0123456789abcdee' },
       { ...evmIntent, evm: { ...evmIntent.evm!, nonce: 4 } }, { ...evmIntent, evm: { ...evmIntent.evm!, gasLimit: '90001' } },
-      { ...evmIntent, evm: { ...evmIntent.evm!, maxFeePerGas: '1000000001' } }, { ...evmIntent, policyVersion: 3 }, { ...evmIntent, decimals: 18 },
+      { ...evmIntent, evm: { ...evmIntent.evm!, maxFeePerGas: '1000000001' } }, { ...evmIntent, policyVersion: 4 }, { ...evmIntent, decimals: 18 },
     ];
     const hs = new Set(muts.map((m) => toHex(intentHash(m))));
     expect(hs.size).toBe(muts.length);
@@ -152,6 +152,7 @@ describe('registry (wave 1: more networks and tokens)', () => {
       for (const a of [n.native, ...n.tokens]) expect(BigInt(DEFAULT_POLICY.perTx[`${n.id}:${a.symbol}`] ?? '0') > 0n, `${n.id}:${a.symbol}`).toBe(true);
       expect(new Set(n.tokens.map((t) => t.id.toLowerCase())).size).toBe(n.tokens.length); // no duplicate contracts
       expect(new Set(n.tokens.map((t) => t.symbol)).size).toBe(n.tokens.length); // one contract per ticker per network
+      expect(n.tokens.some((t) => t.symbol === n.native.symbol), `${n.id}: a token carries the native coin's ticker`).toBe(false); // limits are keyed by network:symbol
     }
     expect(Object.keys(NETWORKS).length).toBeGreaterThanOrEqual(10);
   });
@@ -207,7 +208,7 @@ describe('policy', () => {
     expect(checkPolicy(DEFAULT_POLICY, evmIntent, 90_000_000n, now, false).ok).toBe(false);
     expect(checkPolicy(DEFAULT_POLICY, evmIntent, 0n, now + 121, false).ok).toBe(false);
     expect(checkPolicy(DEFAULT_POLICY, { ...evmIntent, expiresAt: now + 3600 }, 0n, now, false).ok).toBe(false);
-    expect(checkPolicy(DEFAULT_POLICY, { ...evmIntent, symbol: 'DAI' }, 0n, now, false).ok).toBe(false);
+    expect(checkPolicy(DEFAULT_POLICY, { ...evmIntent, symbol: 'NOPE' }, 0n, now, false).ok).toBe(false);
     expect(checkPolicy(DEFAULT_POLICY, { ...evmIntent, policyVersion: 1 }, 0n, now, false).ok).toBe(false);
     expect(checkPolicy(DEFAULT_POLICY, { ...evmIntent, maxFee: '900000000000000000' }, 0n, now, false).ok).toBe(false);
     expect(checkPolicy({ ...DEFAULT_POLICY, allowlist: ['base:0x0000000000000000000000000000000000000001'] }, evmIntent, 0n, now, false).ok).toBe(false);

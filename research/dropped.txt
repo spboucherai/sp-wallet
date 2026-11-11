@@ -1,21 +1,31 @@
-LINK@polygon: second source differs: 0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39
-LINK@bsc: second source differs: 0xf8a0bf9cf54bb92f17374d9e9a321e6a111a51bd
-LINK@avalanche: on-chain symbol is "LINK.e"
-UNI@polygon: second source differs: 0xb33eaad8d922b1083446dc23f610c2567fb5180f
-UNI@base: no second source (CoinGecko) for this network
-UNI@bsc: second source differs: 0xbf5140a22578168fd562dccf235e5d43a02ce9b1
-WBTC@base: second source differs: 0x0555e30da8f98308edb960aa94c0db47230d2b9c
-WBTC@bsc: second source differs: 0x0555e30da8f98308edb960aa94c0db47230d2b9c
-WBTC@optimism: second source differs: 0x68f180fcce6836688e9084f035309e29bf0a2095
-WETH@arbitrum: no second source (CoinGecko) for this network
-WETH@optimism: no second source (CoinGecko) for this network
-WETH@base: no second source (CoinGecko) for this network
-WETH@polygon: no second source (CoinGecko) for this network
-PAXG@base: no second source (CoinGecko) for this network
-PAXG@solana: no second source (CoinGecko) for this network
-SHIB@bsc: no second source (CoinGecko) for this network
-SHIB@arbitrum: no second source (CoinGecko) for this network
-SHIB@optimism: no second source (CoinGecko) for this network
-SHIB@base: no second source (CoinGecko) for this network
-SHIB@polygon: no second source (CoinGecko) for this network
-SHIB@avalanche: no second source (CoinGecko) for this network
+EURC@optimism: first source: the address was not found in the issuer / network document (no evidence entry)
+PAXG@base: no second source: CoinGecko pax-gold lists no address on this network
+PAXG@solana: no second source: CoinGecko pax-gold lists no address on this network
+PEPE@avalanche: first source: the address was not found in the issuer / network document (no evidence entry)
+PEPE@arbitrum: first source: the address was not found in the issuer / network document (no evidence entry)
+PEPE@bsc: first source: the address was not found in the issuer / network document (no evidence entry)
+UBTC@hyperevm: first source: the address was not found in the issuer / network document (no evidence entry)
+UETH@hyperevm: first source: the address was not found in the issuer / network document (no evidence entry)
+USOL@hyperevm: first source: the address was not found in the issuer / network document (no evidence entry)
+cbETH@polygon: on-chain symbol is "fxcbETH"
+COMP@bsc: first source: the address was not found in the issuer / network document (no evidence entry)
+COMP@avalanche: first source: the address was not found in the issuer / network document (no evidence entry)
+SNX@polygon: first source: the address was not found in the issuer / network document (no evidence entry)
+SNX@avalanche: first source: the address was not found in the issuer / network document (no evidence entry)
+EIGEN@base: first source: the address was not found in the issuer / network document (no evidence entry)
+WIF@solana: first source: the address was not found in the issuer / network document (no evidence entry)
+W@solana: first source: the address was not found in the issuer / network document (no evidence entry)
+W@arbitrum: first source: the address was not found in the issuer / network document (no evidence entry)
+W@ethereum: first source: the address was not found in the issuer / network document (no evidence entry)
+W@base: first source: the address was not found in the issuer / network document (no evidence entry)
+stETH: EXCLUDED — rebasing balance (Lido): the balance changes without a transfer and a transfer can move 1–2 wei less than asked, which breaks the exact-amount accounting of sends and swaps — hold wstETH instead
+FLOKI: EXCLUDED — fee-on-transfer according to its own documentation (a tax is taken on transfers; not tested here): the amount received is not the amount sent, which breaks the swap minimum-output check and deposit accounting
+FRAX (legacy): EXCLUDED — Legacy Frax Dollar is being replaced by frxUSD; the issuer no longer promotes it — frxUSD is the candidate instead
+USDbC@base: EXCLUDED — bridged USDC on Base, deprecated by Base in favour of native USDC; thin liquidity
+USDC@tron: EXCLUDED — Circle ended its support of USDC on TRON in 2024; the TRON contract is absent from Circle's contract-address page
+LINK@polygon 0xb0897686c545045aFc77CF20eC7A532E3120E0F1 / LINK@bsc 0x404460C6A5EdE2D891e8297795264fDe62ADBB75: EXCLUDED — Chainlink's ERC-677 LINK (wave-1 candidates): CoinGecko lists another contract on these networks (the bridged / Binance-Peg ERC-20, which holds the liquidity); the two sources do not agree on these addresses, so they stay out. The contracts CoinGecko lists were registered instead, each with its own first source (Polygon, Binance)
+UNI@polygon / UNI@bsc 0x06e8bdE95BE4ce5cB1134BD47aD18a79fFB35822: EXCLUDED — wave-1 candidate address that CoinGecko does not list; replaced by the Polygon PoS bridge token and the Binance-Peg token, each confirmed by its own two sources
+SHIB on BNB Chain, Arbitrum, Optimism, Base, Polygon, Avalanche: EXCLUDED — wave-1 candidates from shib.io: CoinGecko lists no address on these networks and no canonical-bridge mapping was checked — still no second source
+DAI.e, USDT.e, WBTC.e, AAVE.e, UNI.e @avalanche: EXCLUDED — old Avalanche Bridge representations with little liquidity left; not proposed (USDC.e, WETH.e, LINK.e and BTC.b are the Avalanche representations kept)
+WETH / WBTC (Wormhole) @solana: EXCLUDED — not proposed: no issuer document stating the mint was found in the time available; Solana keeps WBTC (BitGo), cbBTC (Coinbase) and tBTC (Threshold), each with an identified issuer
+MKR/SKY, LDO, PEPE, ONDO… on other networks: EXCLUDED — not proposed beyond the deployments their issuer documents

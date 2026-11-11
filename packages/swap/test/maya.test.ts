@@ -27,8 +27,9 @@ describe('asset mapping', () => {
   const p = provider();
   it('serves BTC, ETH, Arbitrum ETH and the registry stablecoins that have an Available Maya pool', () => {
     expect([...p.assets.values()].map((a) => a.notation).sort()).toEqual([
-      'ARB.ETH', 'ARB.USDC-0XAF88D065E77C8CC2239327C5EDB3A432268E5831', 'BTC.BTC', 'ETH.ETH',
-      'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48', 'ETH.USDT-0XDAC17F958D2EE523A2206206994597C13D831EC7']);
+      'ARB.ETH', 'ARB.USDC-0XAF88D065E77C8CC2239327C5EDB3A432268E5831', 'ARB.USDT-0XFD086BC7CD5C481DCC9C85EBE478A1C0B69FCBB9', // USDT0 in the registry (same contract)
+      'ARB.WBTC-0X2F2A2543B76A4166549F7AAB2E75BEF0AEFC5B0F', 'ARB.WSTETH-0X5979D7B546E38E414F7E9822514BE443A4800529', 'BTC.BTC', 'ETH.ETH',
+      'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48', 'ETH.USDT-0XDAC17F958D2EE523A2206206994597C13D831EC7', 'ETH.WSTETH-0X7F39C581F595B53C5CB19BD0B3F8DA6C935E2CA0']);
     expect(p.capabilities()).toMatchObject({ networks: ['bitcoin', 'ethereum', 'arbitrum'], crossChain: true, needsKey: false, configured: true, kinds: ['native_swap'] });
     expect(createMayaProvider().id).toBe('maya');
   });

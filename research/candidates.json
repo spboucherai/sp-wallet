@@ -1,5 +1,5 @@
 {
- "_rule": "A deployment is listed only when (1) the issuer's own documentation states the address and (2) CoinGecko's contract list agrees. scripts/gen-tokens.mts then checks symbol/decimals (EVM) or mint owner program/decimals (Solana) on-chain and writes packages/core/src/tokens.ts.",
+ "_rule": "A deployment is listed only when (1) the document of the issuer (or of the network / canonical bridge for a bridged representation) named in `source` states the address — checked by scripts/check-sources.mts, result in evidence.json; (2) a second independent source agrees: CoinGecko's platform address for the coin id `cg` (cg.json), or, where CoinGecko lists no address, the canonical bridge's own token mapping read on-chain (`second`); (3) the contract answers symbol()/decimals() as expected on both RPC endpoints of its network, has code and a non-zero supply (Solana: an SPL mint owned by a token program, no transfer fee, no transfer hook). scripts/gen-tokens.mts applies (2) and (3), requires (1), and writes packages/core/src/tokens.ts.",
  "_read": "2026-11-10",
  "tokens": [
   {
@@ -14,8 +14,17 @@
     "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
     "avalanche": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
     "hyperevm": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
-    "solana": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-   }
+    "solana": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "bsc": {
+     "a": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+     "cg": "binance-bridged-usdc-bnb-smart-chain",
+     "name": "Binance-Peg USD Coin",
+     "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll"
+    }
+   },
+   "cg": "usd-coin",
+   "issuer": "Circle",
+   "flags": "issuer can freeze addresses and pause transfers (Circle blacklist)"
   },
   {
    "symbol": "USDT",
@@ -25,8 +34,28 @@
     "ethereum": "0xdac17f958d2ee523a2206206994597c13d831ec7",
     "avalanche": "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7",
     "solana": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
-    "tron": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
-   }
+    "tron": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+    "bsc": {
+     "a": "0x55d398326f99059ff775485246999027b3197955",
+     "cg": "binance-bridged-usdt-bnb-smart-chain",
+     "cgSymbol": "BSC-USD",
+     "name": "Binance-Peg BSC-USD (USDT)",
+     "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll"
+    },
+    "base": {
+     "a": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+     "cg": "l2-standard-bridged-usdt-base",
+     "name": "Bridged USDT (Base Standard Bridge)",
+     "source": "https://static.optimism.io/optimism.tokenlist.json"
+    }
+   },
+   "cg": "tether",
+   "issuer": "Tether",
+   "alias": [
+    "USD₮",
+    "USDt"
+   ],
+   "flags": "issuer can freeze addresses and pause transfers (Tether blacklist, can destroy frozen funds); the Ethereum contract has a transfer-fee switch, read as 0 on 2026-11-10 (basisPointsRate)"
   },
   {
    "symbol": "PYUSD",
@@ -37,25 +66,63 @@
     "arbitrum": "0x46850aD61C2B7d64d08c9C754F45254596696984",
     "polygon": "0x99aF3EeA856556646C98c8B9b2548Fe815240750",
     "solana": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo"
-   }
+   },
+   "cg": "paypal-usd",
+   "issuer": "Paxos (PayPal USD)",
+   "flags": "issuer can freeze addresses and pause transfers"
   },
   {
    "symbol": "DAI",
    "name": "Dai",
    "source": "https://chainlog.sky.money/api/mainnet/active.json",
    "d": {
-    "ethereum": "0x6B175474E89094C44Da98b954EedeAC495271d0F"
-   }
+    "ethereum": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+    "arbitrum": {
+     "a": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+     "cg": "makerdao-arbitrum-bridged-dai-arbitrum-one",
+     "name": "Dai (Sky Arbitrum bridge)",
+     "source": "https://tokenlist.arbitrum.io/ArbTokenLists/arbed_arb_whitelist_era.json"
+    },
+    "optimism": {
+     "a": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+     "cg": "makerdao-optimism-bridged-dai-optimism",
+     "name": "Dai (Sky Optimism bridge)",
+     "source": "https://static.optimism.io/optimism.tokenlist.json"
+    },
+    "base": {
+     "a": "0x50c5725949a6f0c72e6c4a641f24049a917db0cb",
+     "cg": "l2-standard-bridged-dai-base",
+     "name": "Dai (Base Standard Bridge)",
+     "source": "https://static.optimism.io/optimism.tokenlist.json"
+    },
+    "polygon": {
+     "a": "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063",
+     "cg": "polygon-pos-bridged-dai-polygon-pos",
+     "name": "Dai (Polygon PoS Bridge)",
+     "source": "https://static.polygon.technology/network/mainnet/v1/index.json ; https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json"
+    },
+    "bsc": {
+     "a": "0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3",
+     "cg": "binance-peg-dai",
+     "name": "Binance-Peg Dai",
+     "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll"
+    }
+   },
+   "cg": "dai",
+   "issuer": "Sky (MakerDAO)"
   },
   {
    "symbol": "USDS",
    "name": "USDS",
-   "source": "https://chainlog.sky.money/api/mainnet/active.json ; https://developers.skyeco.com/guides/skylink/",
+   "source": "https://chainlog.sky.money/api/mainnet/active.json ; https://developers.skyeco.com/guides/skylink/ ; https://docs.spark.fi/dev/savings/cross-chain-tokens ; https://developers.sky.money/guides/skylink/usds-ethereum-solana-bridge",
    "d": {
     "ethereum": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
     "base": "0x820C137fa70C8691f0e44Dc420a5e53c168921Dc",
-    "solana": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA"
-   }
+    "solana": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA",
+    "arbitrum": "0x6491c05a82219b8d1479057361ff1654749b876b"
+   },
+   "cg": "usds",
+   "issuer": "Sky"
   },
   {
    "symbol": "USDe",
@@ -67,8 +134,12 @@
     "arbitrum": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
     "optimism": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
     "bsc": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
-    "solana": "DEkqHyPN7GMRJ5cArtQFAWefqbZb33Hyf6s5iCwjEonT"
-   }
+    "solana": "DEkqHyPN7GMRJ5cArtQFAWefqbZb33Hyf6s5iCwjEonT",
+    "avalanche": "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34",
+    "hyperevm": "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34"
+   },
+   "cg": "ethena-usde",
+   "issuer": "Ethena"
   },
   {
    "symbol": "FDUSD",
@@ -79,7 +150,10 @@
     "bsc": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
     "arbitrum": "0x93C9932E4afa59201F0B5E63f7d816516F1669fE",
     "solana": "9zNQRsGLjNKwCUU5Gq5LR8beUCPzQMVMqKAi3SSZh54u"
-   }
+   },
+   "cg": "first-digital-usd",
+   "issuer": "First Digital Labs",
+   "flags": "issuer can freeze addresses and pause transfers"
   },
   {
    "symbol": "EURC",
@@ -89,8 +163,12 @@
     "ethereum": "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c",
     "base": "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
     "avalanche": "0xC891EB4cbdEFf6e073e859e987815Ed1505c2ACD",
-    "solana": "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr"
-   }
+    "solana": "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr",
+    "optimism": "0xdcb612005417dc906ff72c87df732e5a90d49e11"
+   },
+   "cg": "euro-coin",
+   "issuer": "Circle",
+   "flags": "issuer can freeze addresses and pause transfers"
   },
   {
    "symbol": "RLUSD",
@@ -98,7 +176,10 @@
    "source": "https://docs.ripple.com/products/stablecoin/overview/token-addresses",
    "d": {
     "ethereum": "0x8292bb45bf1ee4d140127049757c2e0ff06317ed"
-   }
+   },
+   "cg": "ripple-usd",
+   "issuer": "Ripple (Standard Custody)",
+   "flags": "issuer can freeze addresses and pause transfers"
   },
   {
    "symbol": "USDG",
@@ -108,7 +189,10 @@
     "ethereum": "0xe343167631d89B6Ffc58B88d6b7fB0228795491D",
     "arbitrum": "0x004B506865409877C9fA29bfb1ebA929984B9bbC",
     "solana": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH"
-   }
+   },
+   "cg": "global-dollar",
+   "issuer": "Paxos",
+   "flags": "issuer can freeze addresses and pause transfers"
   },
   {
    "symbol": "LINK",
@@ -118,12 +202,21 @@
     "ethereum": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
     "base": "0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196",
     "arbitrum": "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
-    "polygon": "0xb0897686c545045aFc77CF20eC7A532E3120E0F1",
+    "polygon": {
+     "a": "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39",
+     "name": "Chainlink (Polygon PoS Bridge)",
+     "source": "https://static.polygon.technology/network/mainnet/v1/index.json ; https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json ; https://docs.chain.link/resources/link-token-contracts"
+    },
     "optimism": "0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6",
-    "bsc": "0x404460C6A5EdE2D891e8297795264fDe62ADBB75",
-    "avalanche": "0x5947BB275c521040051D82396192181b413227A3",
+    "bsc": {
+     "a": "0xf8a0bf9cf54bb92f17374d9e9a321e6a111a51bd",
+     "name": "Binance-Peg ChainLink",
+     "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll"
+    },
     "solana": "LinkhB3afbBKb2EQQu7s7umdZceV3wcvAUJhQAfQ23L"
-   }
+   },
+   "cg": "chainlink",
+   "issuer": "Chainlink"
   },
   {
    "symbol": "UNI",
@@ -133,10 +226,28 @@
     "ethereum": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
     "arbitrum": "0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0",
     "optimism": "0x6fd9d7AD17242c41f7131d257212c54A0e816691",
-    "polygon": "0x06e8bdE95BE4ce5cB1134BD47aD18a79fFB35822",
-    "base": "0xc3De830EA07524a0761646a6a4e4be0e114a3C83",
-    "bsc": "0x06e8bdE95BE4ce5cB1134BD47aD18a79fFB35822"
-   }
+    "polygon": {
+     "a": "0xb33eaad8d922b1083446dc23f610c2567fb5180f",
+     "name": "Uniswap (Polygon PoS Bridge)",
+     "source": "https://static.polygon.technology/network/mainnet/v1/index.json ; https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json"
+    },
+    "base": {
+     "a": "0xc3De830EA07524a0761646a6a4e4be0e114a3C83",
+     "name": "Uniswap (Base Standard Bridge)",
+     "source": "https://static.optimism.io/optimism.tokenlist.json",
+     "second": {
+      "type": "op-bridge",
+      "l1": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984"
+     }
+    },
+    "bsc": {
+     "a": "0xbf5140a22578168fd562dccf235e5d43a02ce9b1",
+     "name": "Binance-Peg Uniswap",
+     "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll"
+    }
+   },
+   "cg": "uniswap",
+   "issuer": "Uniswap"
   },
   {
    "symbol": "AAVE",
@@ -147,8 +258,15 @@
     "arbitrum": "0xba5DdD1f9d7F570dc94a51479a000E3BCE967196",
     "base": "0x63706e401c06ac8513145b7687a14804d17f814b",
     "optimism": "0x76FB31fb4af56892A25e32cFC43De717950c9278",
-    "polygon": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B"
-   }
+    "polygon": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B",
+    "bsc": {
+     "a": "0xfb6115445bff7b52feb98650c87f44907e58f802",
+     "name": "Binance-Peg Aave",
+     "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll"
+    }
+   },
+   "cg": "aave",
+   "issuer": "Aave"
   },
   {
    "symbol": "LDO",
@@ -156,7 +274,9 @@
    "source": "https://docs.lido.fi/deployed-contracts/",
    "d": {
     "ethereum": "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32"
-   }
+   },
+   "cg": "lido-dao",
+   "issuer": "Lido DAO"
   },
   {
    "symbol": "WBTC",
@@ -164,12 +284,30 @@
    "source": "https://wbtc.network/ecosystem",
    "d": {
     "ethereum": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
-    "base": "0x1ceA84203673764244E05693e42E6Ace62bE9BA5",
-    "bsc": "0x39665e85a68a4d7328b8799135E2ff301a0Ca86f",
-    "optimism": "0xc3f854b2970f8727d28527ece33176fac67fef48",
+    "base": "0x0555e30da8f98308edb960aa94c0db47230d2b9c",
+    "bsc": "0x0555e30da8f98308edb960aa94c0db47230d2b9c",
+    "optimism": {
+     "a": "0x68f180fcce6836688e9084f035309e29bf0a2095",
+     "name": "Wrapped BTC (Optimism Standard Bridge)",
+     "source": "https://static.optimism.io/optimism.tokenlist.json"
+    },
     "avalanche": "0x0555e30da8f98308edb960aa94c0db47230d2b9c",
-    "solana": "5XZw2LKTyrfvfiskJ78AMpackRjPcyCif1WhUsPDuVqQ"
-   }
+    "solana": "5XZw2LKTyrfvfiskJ78AMpackRjPcyCif1WhUsPDuVqQ",
+    "arbitrum": {
+     "a": "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+     "cg": "arbitrum-bridged-wbtc-arbitrum-one",
+     "name": "Wrapped BTC (Arbitrum bridge)",
+     "source": "https://tokenlist.arbitrum.io/ArbTokenLists/arbed_arb_whitelist_era.json"
+    },
+    "polygon": {
+     "a": "0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6",
+     "cg": "polygon-bridged-wbtc-polygon-pos",
+     "name": "Wrapped BTC (Polygon PoS Bridge)",
+     "source": "https://static.polygon.technology/network/mainnet/v1/index.json ; https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json"
+    }
+   },
+   "cg": "wrapped-bitcoin",
+   "issuer": "BitGo / BiT Global (WBTC)"
   },
   {
    "symbol": "WETH",
@@ -177,11 +315,26 @@
    "source": "https://docs.arbitrum.io/build-decentralized-apps/reference/contract-addresses ; https://specs.optimism.io/protocol/predeploys.html ; https://docs.base.org/base-chain/network-information/base-contracts ; https://static.polygon.technology/network/mainnet/v1/index.json",
    "d": {
     "ethereum": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-    "arbitrum": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
-    "optimism": "0x4200000000000000000000000000000000000006",
-    "base": "0x4200000000000000000000000000000000000006",
-    "polygon": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
-   }
+    "arbitrum": {
+     "a": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+     "cg": "arbitrum-bridged-weth-arbitrum-one"
+    },
+    "optimism": {
+     "a": "0x4200000000000000000000000000000000000006",
+     "cg": "l2-standard-bridged-weth-optimism"
+    },
+    "base": {
+     "a": "0x4200000000000000000000000000000000000006",
+     "cg": "l2-standard-bridged-weth-base"
+    },
+    "polygon": {
+     "a": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+     "cg": "polygon-pos-bridged-weth-polygon-pos",
+     "name": "Wrapped Ether (Polygon PoS Bridge)"
+    }
+   },
+   "cg": "weth",
+   "issuer": "WETH9 wrapper contract of each network"
   },
   {
    "symbol": "PAXG",
@@ -191,7 +344,10 @@
     "ethereum": "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
     "base": "0xe904AEA5E1b110c9174728fA2efFc8aeD19E98Ef",
     "solana": "5GgRAEmv8ZxF2PR5hY72Qs5x1bnQ6UK2RbTPoqJ3wSwW"
-   }
+   },
+   "cg": "pax-gold",
+   "issuer": "Paxos",
+   "flags": "issuer can freeze addresses and pause transfers; Paxos can charge a fee on transfers (its current value was not read on-chain)"
   },
   {
    "symbol": "ONDO",
@@ -199,7 +355,9 @@
    "source": "https://docs.ondo.foundation/ondo-token",
    "d": {
     "ethereum": "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3"
-   }
+   },
+   "cg": "ondo-finance",
+   "issuer": "Ondo Foundation"
   },
   {
    "symbol": "RENDER",
@@ -207,7 +365,12 @@
    "source": "https://know.rendernetwork.com/general-render-network/rndr-to-render-what-you-need-to-know/render-network-upgrade-portal-faq",
    "d": {
     "solana": "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof"
-   }
+   },
+   "cg": "render-token",
+   "issuer": "Render Network Foundation",
+   "alias": [
+    "RNDR"
+   ]
   },
   {
    "symbol": "JUP",
@@ -215,7 +378,9 @@
    "source": "https://docs.jup.ag/user-docs/more/jup-token/faq.md",
    "d": {
     "solana": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"
-   }
+   },
+   "cg": "jupiter-exchange-solana",
+   "issuer": "Jupiter"
   },
   {
    "symbol": "RAY",
@@ -223,7 +388,9 @@
    "source": "https://docs.raydium.io/ray/index",
    "d": {
     "solana": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"
-   }
+   },
+   "cg": "raydium",
+   "issuer": "Raydium"
   },
   {
    "symbol": "BONK",
@@ -231,29 +398,885 @@
    "source": "bonkcoin.com (mint appears only as the target of the site's exchange links; not stated as text) + CoinGecko",
    "d": {
     "solana": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
-   }
+   },
+   "cg": "bonk",
+   "issuer": "Bonk community"
   },
   {
    "symbol": "PEPE",
    "name": "Pepe",
    "source": "https://www.pepe.vip",
    "d": {
-    "ethereum": "0x6982508145454Ce325dDbE47a25d4ec3d2311933"
-   }
+    "ethereum": "0x6982508145454Ce325dDbE47a25d4ec3d2311933",
+    "avalanche": "0xa659d083b677d6bffe1cb704e1473b896727be6d",
+    "arbitrum": "0x25d887ce7a35172c62febfd67a1856f20faebb00",
+    "bsc": "0x25d887ce7a35172c62febfd67a1856f20faebb00"
+   },
+   "cg": "pepe",
+   "issuer": "Pepe"
   },
   {
    "symbol": "SHIB",
    "name": "Shiba Inu",
    "source": "https://shib.io/tokens/shib",
    "d": {
-    "ethereum": "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
-    "bsc": "0xEc59dE82FFf1959E92b91daB975e4564FC3447cC",
-    "arbitrum": "0xB359155378FF5E2837f12ed0bee5168123c88ACC",
-    "optimism": "0x72cc27124EA2d36AC13D502C7EBdF28cEF90c31c",
-    "base": "0x9Ded28d9EC69F97efd718CE768dc39D78fd014F8",
-    "polygon": "0x7627D9C9b045A26672D57741C896B2A48844168D",
-    "avalanche": "0x2f643d728926C20269f0A04931dd7b4b6B650204"
+    "ethereum": "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE"
+   },
+   "cg": "shiba-inu",
+   "issuer": "Shiba Inu"
+  },
+  {
+   "symbol": "USDT0",
+   "name": "USDT0 (Tether omnichain, LayerZero OFT)",
+   "cg": "usdt0",
+   "issuer": "Everdawn Labs (USDT0), backed by USDT locked on Ethereum",
+   "source": "https://docs.usdt0.to/technical-documentation/deployments.md",
+   "d": {
+    "polygon": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+    "hyperevm": "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb",
+    "optimism": "0x01bff41798a0bcf287b996046ca68b395dbc1071",
+    "arbitrum": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+   },
+   "flags": "issuer can freeze addresses and pause transfers; upgradeable OFT",
+   "alias": [
+    "USD₮0"
+   ]
+  },
+  {
+   "symbol": "USDC.e",
+   "name": "Bridged USDC",
+   "cg": null,
+   "issuer": "Bridge representation of Ethereum USDC (not issued by Circle)",
+   "source": "",
+   "d": {
+    "polygon": {
+     "a": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+     "cg": "bridged-usdc-polygon-pos-bridge",
+     "name": "Bridged USDC (Polygon PoS Bridge)",
+     "onchain": "USDC",
+     "source": "https://static.polygon.technology/network/mainnet/v1/index.json ; https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json"
+    },
+    "arbitrum": {
+     "a": "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
+     "cg": "usd-coin-ethereum-bridged",
+     "name": "Bridged USDC (Arbitrum bridge)",
+     "onchain": "USDC",
+     "source": "https://tokenlist.arbitrum.io/ArbTokenLists/arbed_arb_whitelist_era.json"
+    },
+    "optimism": {
+     "a": "0x7f5c764cbc14f9669b88837ca1490cca17c31607",
+     "cg": "bridged-usd-coin-optimism",
+     "name": "Bridged USDC (Optimism Standard Bridge)",
+     "onchain": "USDC",
+     "source": "https://static.optimism.io/optimism.tokenlist.json"
+    },
+    "avalanche": {
+     "a": "0xa7d7079b0fead91f3e65f86e8915cb59c1a4c664",
+     "cg": "usd-coin-avalanche-bridged-usdc-e",
+     "name": "Bridged USDC (Avalanche Bridge)",
+     "onchain": "USDC.e",
+     "source": "https://raw.githubusercontent.com/ava-labs/avalanche-bridge-resources/main/avalanche_contract_address.json"
+    }
+   },
+   "flags": "bridge representation: redeemable only through the named bridge; many exchanges do not accept it as USDC"
+  },
+  {
+   "symbol": "GHO",
+   "name": "GHO",
+   "cg": "gho",
+   "issuer": "Aave DAO",
+   "source": "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/src/GhoEthereum.sol ; https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/src/GhoArbitrum.sol ; https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/src/GhoBase.sol ; https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/src/GhoAvalanche.sol",
+   "d": {
+    "ethereum": "0x40d16fc0246ad3160ccc09b8d0d3a2cd28ae6c2f",
+    "base": "0x6bb7a212910682dcfdbd5bcbb3e28fb4e8da10ee",
+    "arbitrum": "0x7dff72693f6a4149b17e7c6314655f6a9f7c8b33",
+    "avalanche": "0xfc421ad3c883bf9e7c4f42de845c4e4405799e73"
+   }
+  },
+  {
+   "symbol": "crvUSD",
+   "name": "crvUSD",
+   "cg": "crvusd",
+   "issuer": "Curve",
+   "source": "https://docs.curve.finance/deployments.json",
+   "d": {
+    "ethereum": "0xf939e0a03fb07f59a73314e73794be0e57ac1b4e",
+    "optimism": "0xc52d7f23a2e460248db6ee192cb23dd12bddcbf6",
+    "polygon": "0xc4ce1d6f5d98d65ee25cf85e9f2e9dcfee6cb5d6",
+    "bsc": "0xe2fb3f127f5450dee44afe054385d74c392bdef4",
+    "arbitrum": "0x498bf2b1e120fed3ad3d42ea2165e9b73f99c1e5",
+    "base": "0x417ac0e078398c154edfadd9ef675d30be60af93"
+   }
+  },
+  {
+   "symbol": "frxUSD",
+   "name": "Frax USD",
+   "cg": "frax-usd",
+   "issuer": "Frax",
+   "source": "https://docs.frax.com/protocol/crosschain/addresses ; https://docs.frax.com/protocol/assets/frxusd/addresses",
+   "d": {
+    "ethereum": "0xcacd6fd266af91b8aed52accc382b4e165586e29",
+    "solana": "GzX1ireZDU865FiMaKrdVB1H6AE8LAqWYCg6chrMrfBw",
+    "bsc": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "polygon": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "base": "0xe5020a6d073a794b6e7f05678707de47986fb0b6",
+    "avalanche": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "arbitrum": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "optimism": "0x80eede496655fb9047dd39d9f418d5483ed600df"
+   }
+  },
+  {
+   "symbol": "USDD",
+   "name": "USDD",
+   "cg": "usdd",
+   "issuer": "USDD (TRON DAO Reserve)",
+   "source": "https://docs.usdd.io/developers/deployment-addresses.md",
+   "d": {
+    "tron": "TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz",
+    "ethereum": "0x4f8e5de400de08b164e7421b3ee387f461becd1a",
+    "bsc": "0x45e51bc23d592eb2dba86da3985299f7895d66ba"
+   }
+  },
+  {
+   "symbol": "cbBTC",
+   "name": "Coinbase Wrapped BTC",
+   "cg": "coinbase-wrapped-btc",
+   "issuer": "Coinbase",
+   "source": "https://www.coinbase.com/cbbtc",
+   "d": {
+    "ethereum": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+    "solana": "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+    "base": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+    "arbitrum": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+   },
+   "flags": "issuer can freeze addresses and pause transfers"
+  },
+  {
+   "symbol": "tBTC",
+   "name": "tBTC",
+   "cg": "tbtc",
+   "issuer": "Threshold Network",
+   "source": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+   "d": {
+    "ethereum": "0x18084fba666a33d37592fa2633fd49a74dd93a88",
+    "polygon": "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b",
+    "optimism": "0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40",
+    "base": "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b",
+    "arbitrum": "0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40",
+    "solana": "6DNSN2BJsaPFdFFc1zP37kkeNe4Usc1Sqkzr9C9vPWcU"
+   }
+  },
+  {
+   "symbol": "BTCB",
+   "name": "Binance-Peg BTCB",
+   "cg": "binance-bitcoin",
+   "issuer": "Binance",
+   "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+   "d": {
+    "bsc": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c"
+   }
+  },
+  {
+   "symbol": "BTC.b",
+   "name": "Bitcoin (BTC.b)",
+   "cg": "bitcoin-avalanche-bridged-btc-b",
+   "issuer": "Avalanche Bridge / Lombard",
+   "source": "https://docs.lombard.finance/learn/transparency/smart-contracts",
+   "d": {
+    "avalanche": "0x152b9d0fdc40c096757f570a51e494bd4b943e50"
+   }
+  },
+  {
+   "symbol": "UBTC",
+   "name": "Unit Bitcoin",
+   "cg": "unit-bitcoin",
+   "issuer": "Unit (Hyperliquid)",
+   "source": "https://docs.hyperunit.xyz/",
+   "d": {
+    "hyperevm": "0x9fdbda0a5e284c32744d2f17ee5c74b284993463"
+   }
+  },
+  {
+   "symbol": "UETH",
+   "name": "Unit Ethereum",
+   "cg": "unit-ethereum",
+   "issuer": "Unit (Hyperliquid)",
+   "source": "https://docs.hyperunit.xyz/",
+   "d": {
+    "hyperevm": "0xbe6727b535545c67d5caa73dea54865b92cf7907"
+   }
+  },
+  {
+   "symbol": "USOL",
+   "name": "Unit Solana",
+   "cg": "unit-solana",
+   "issuer": "Unit (Hyperliquid)",
+   "source": "https://docs.hyperunit.xyz/",
+   "d": {
+    "hyperevm": "0x068f321fa8fb9f0d135f290ef6a3e2813e1c8a29"
+   }
+  },
+  {
+   "symbol": "WETH.e",
+   "name": "Wrapped Ether (Avalanche Bridge)",
+   "cg": "avalanche-bridged-weth-avalanche",
+   "issuer": "Avalanche Bridge",
+   "source": "https://raw.githubusercontent.com/ava-labs/avalanche-bridge-resources/main/avalanche_contract_address.json",
+   "d": {
+    "avalanche": {
+     "a": "0x49d5c2bdffac6ce2bfdb6640f4f80f226bc10bab",
+     "cgSymbol": "WETH"
+    }
+   }
+  },
+  {
+   "symbol": "LINK.e",
+   "name": "Chainlink (Avalanche Bridge)",
+   "cg": "chainlink",
+   "issuer": "Avalanche Bridge; address published by Chainlink",
+   "source": "https://docs.chain.link/resources/link-token-contracts ; https://raw.githubusercontent.com/ava-labs/avalanche-bridge-resources/main/avalanche_contract_address.json",
+   "d": {
+    "avalanche": {
+     "a": "0x5947bb275c521040051d82396192181b413227a3",
+     "cgSymbol": "LINK"
+    }
+   }
+  },
+  {
+   "symbol": "wstETH",
+   "name": "Lido Wrapped Staked ETH",
+   "cg": "wrapped-steth",
+   "issuer": "Lido",
+   "source": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+   "d": {
+    "ethereum": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+    "arbitrum": {
+     "a": "0x5979d7b546e38e414f7e9822514be443a4800529",
+     "cg": "arbitrum-bridged-wsteth-arbitrum",
+     "name": "Lido wstETH (Arbitrum bridge)"
+    },
+    "optimism": {
+     "a": "0x1f32b1c2345538c0c6f582fcb022739c4a194ebb",
+     "cg": "superbridge-bridged-wsteth-optimism",
+     "name": "Lido wstETH (Optimism bridge)"
+    },
+    "base": {
+     "a": "0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452",
+     "cg": "superbridge-bridged-wsteth-base",
+     "name": "Lido wstETH (Base bridge)"
+    },
+    "polygon": {
+     "a": "0x03b54a6e9a984069379fae1a4fc4dbae93b3bccd",
+     "cg": "polygon-bridged-wsteth-polygon",
+     "name": "Lido wstETH (Polygon PoS Bridge)"
+    },
+    "bsc": {
+     "a": "0x26c5e01524d2e6280a48f2c50ff6de7e52e9611c",
+     "cg": "wormhole-bridged-wsteth-bsc",
+     "name": "Lido wstETH (Wormhole + Axelar bridge)"
+    }
+   }
+  },
+  {
+   "symbol": "rETH",
+   "name": "Rocket Pool ETH",
+   "cg": "rocket-pool-eth",
+   "issuer": "Rocket Pool",
+   "source": "https://raw.githubusercontent.com/rocket-pool/docs.rocketpool.net/main/docs/en/protocol/contracts-integrations.md",
+   "d": {
+    "ethereum": "0xae78736cd615f374d3085123a210448e74fc6393",
+    "arbitrum": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8",
+    "optimism": "0x9bcef72be871e61ed4fbbc7630889bee758eb81d",
+    "base": "0xb6fe221fe9eef5aba221c348ba20a1bf5e73624c",
+    "polygon": "0x0266f4f08d82372cf0fcbccc0ff74309089c74d1"
+   }
+  },
+  {
+   "symbol": "cbETH",
+   "name": "Coinbase Wrapped Staked ETH",
+   "cg": "coinbase-wrapped-staked-eth",
+   "issuer": "Coinbase",
+   "source": "https://www.coinbase.com/cbeth",
+   "d": {
+    "ethereum": "0xbe9895146f7af43049ca1c1ae358b0541ea49704",
+    "base": "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+    "optimism": "0xaddb6a0412de1ba0f936dcaeb8aaa24578dcf3b2",
+    "arbitrum": "0x1debd73e752beaf79865fd6446b0c970eae7732f",
+    "polygon": "0x4b4327db1600b8b1440163f667e199cef35385f5"
+   }
+  },
+  {
+   "symbol": "weETH",
+   "name": "ether.fi Wrapped eETH",
+   "cg": "wrapped-eeth",
+   "issuer": "ether.fi",
+   "source": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+   "d": {
+    "ethereum": "0xcd5fe23c85820f7b72d0926fc9b05b43e359b7ee",
+    "optimism": "0x5a7facb970d094b6c7ff1df0ea68d99e6e73cbff",
+    "avalanche": "0xa3d68b74bf0528fdd07263c60d6488749044914b",
+    "base": "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a",
+    "hyperevm": "0xa3d68b74bf0528fdd07263c60d6488749044914b",
+    "bsc": "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a",
+    "arbitrum": {
+     "a": "0x35751007a407ca6feffe80b3cb397736d2cf4dbe",
+     "cg": "arbitrum-bridged-wrapped-eeth"
+    }
+   }
+  },
+  {
+   "symbol": "ARB",
+   "name": "Arbitrum",
+   "cg": "arbitrum",
+   "issuer": "Arbitrum Foundation",
+   "source": "https://docs.arbitrum.foundation/deployment-addresses",
+   "d": {
+    "arbitrum": "0x912ce59144191c1204e64559fe8253a0e49e6548",
+    "ethereum": "0xb50721bcf8d664c30412cfbc6cf7a15145234ad1"
+   }
+  },
+  {
+   "symbol": "OP",
+   "name": "Optimism",
+   "cg": "optimism",
+   "issuer": "Optimism Foundation",
+   "source": "https://specs.optimism.io/protocol/predeploys.html ; https://static.optimism.io/optimism.tokenlist.json",
+   "d": {
+    "optimism": "0x4200000000000000000000000000000000000042"
+   }
+  },
+  {
+   "symbol": "POL",
+   "name": "POL (ERC-20 on Ethereum)",
+   "cg": "polygon-ecosystem-token",
+   "issuer": "Polygon Labs",
+   "source": "https://static.polygon.technology/network/mainnet/v1/index.json ; https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json",
+   "d": {
+    "ethereum": "0x455e53cbb86018ac2b8092fdcd39d8444affc3f6"
+   }
+  },
+  {
+   "symbol": "WPOL",
+   "name": "Wrapped POL",
+   "cg": "wmatic",
+   "issuer": "Polygon Labs (wrapper contract)",
+   "source": "https://static.polygon.technology/network/mainnet/v1/index.json ; https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json",
+   "d": {
+    "polygon": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270"
+   },
+   "alias": [
+    "WMATIC"
+   ]
+  },
+  {
+   "symbol": "WAVAX",
+   "name": "Wrapped AVAX",
+   "cg": "wrapped-avax",
+   "issuer": "Ava Labs (wrapper contract)",
+   "source": "https://build.avax.network/academy/blockchain/x402-payment-infrastructure/04-x402-on-avalanche/02-network-setup",
+   "d": {
+    "avalanche": "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7"
+   }
+  },
+  {
+   "symbol": "WBNB",
+   "name": "Wrapped BNB",
+   "cg": "wbnb",
+   "issuer": "BNB Chain (wrapper contract)",
+   "source": "https://raw.githubusercontent.com/bnb-chain/bnb-chain.github.io/main/docs/bnb-smart-chain/benchmark/design-reference.md ; https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+   "d": {
+    "bsc": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+   }
+  },
+  {
+   "symbol": "WHYPE",
+   "name": "Wrapped HYPE",
+   "cg": "wrapped-hype",
+   "issuer": "Hyperliquid (wrapper contract)",
+   "source": "https://raw.githubusercontent.com/hyperliquid-dex/hyper-evm-sync/main/src/run.rs",
+   "d": {
+    "hyperevm": "0x5555555555555555555555555555555555555555"
+   }
+  },
+  {
+   "symbol": "MNT",
+   "name": "Mantle",
+   "cg": "mantle",
+   "issuer": "Mantle",
+   "source": "https://token-list.mantle.xyz/mantle.tokenlist.json",
+   "d": {
+    "ethereum": "0x3c3a81e81dc49a522a592e7622a7e711c06bf354"
+   }
+  },
+  {
+   "symbol": "cbXRP",
+   "name": "Coinbase Wrapped XRP",
+   "cg": "coinbase-wrapped-xrp",
+   "issuer": "Coinbase",
+   "source": "https://www.coinbase.com/cbbtc",
+   "d": {
+    "base": "0xcb585250f852c6c6bf90434ab21a00f02833a4af"
+   },
+   "flags": "issuer can freeze addresses and pause transfers"
+  },
+  {
+   "symbol": "cbDOGE",
+   "name": "Coinbase Wrapped DOGE",
+   "cg": "coinbase-wrapped-doge",
+   "issuer": "Coinbase",
+   "source": "https://www.coinbase.com/cbbtc",
+   "d": {
+    "base": "0xcbd06e5a2b0c65597161de254aa074e489deb510"
+   },
+   "flags": "issuer can freeze addresses and pause transfers"
+  },
+  {
+   "symbol": "cbLTC",
+   "name": "Coinbase Wrapped LTC",
+   "cg": "coinbase-wrapped-ltc",
+   "issuer": "Coinbase",
+   "source": "https://www.coinbase.com/cbbtc",
+   "d": {
+    "base": "0xcb17c9db87b595717c857a08468793f5bab6445f"
+   },
+   "flags": "issuer can freeze addresses and pause transfers"
+  },
+  {
+   "symbol": "cbADA",
+   "name": "Coinbase Wrapped ADA",
+   "cg": "coinbase-wrapped-ada",
+   "issuer": "Coinbase",
+   "source": "https://www.coinbase.com/cbbtc",
+   "d": {
+    "base": "0xcbada732173e39521cdbe8bf59a6dc85a9fc7b8c"
+   },
+   "flags": "issuer can freeze addresses and pause transfers"
+  },
+  {
+   "symbol": "MKR",
+   "name": "Maker",
+   "cg": "maker",
+   "issuer": "Sky (MakerDAO)",
+   "source": "https://chainlog.sky.money/api/mainnet/active.json",
+   "d": {
+    "ethereum": "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2"
+   }
+  },
+  {
+   "symbol": "SKY",
+   "name": "Sky",
+   "cg": "sky",
+   "issuer": "Sky",
+   "source": "https://chainlog.sky.money/api/mainnet/active.json",
+   "d": {
+    "ethereum": "0x56072c95faa701256059aa122697b133aded9279"
+   }
+  },
+  {
+   "symbol": "CRV",
+   "name": "Curve DAO",
+   "cg": "curve-dao-token",
+   "issuer": "Curve",
+   "source": "https://docs.curve.finance/deployments.json",
+   "d": {
+    "ethereum": "0xd533a949740bb3306d119cc777fa900ba034cd52",
+    "arbitrum": "0x11cdb42b0eb46d95f990bedd4695a6e3fa034978",
+    "optimism": "0x0994206dfe8de6ec6920ff4d779b0d950605fb53",
+    "base": "0x8ee73c484a26e0a5df2ee2a4960b789967dd0415",
+    "polygon": "0x172370d5cd63279efa6d502dab29171933a610af"
+   }
+  },
+  {
+   "symbol": "COMP",
+   "name": "Compound",
+   "cg": "compound-governance-token",
+   "issuer": "Compound",
+   "source": "https://docs.compound.finance/",
+   "d": {
+    "ethereum": "0xc00e94cb662c3520282e6f5717214004a7f26888",
+    "bsc": "0x52ce071bd9b1c4b00a0b92d298c512478cad67e8",
+    "base": "0x9e1028f5f1d5ede59748ffcee5532509976840e0",
+    "arbitrum": "0x354a6da3fcde098f8389cad84b0182725c6c91de",
+    "avalanche": "0xc3048e19e76cb9a3aa9d77d8c03c29fc906e2437",
+    "polygon": "0x8505b9d2254a7ae468c0e9dd10ccea3a837aef5c"
+   }
+  },
+  {
+   "symbol": "SNX",
+   "name": "Synthetix",
+   "cg": "havven",
+   "issuer": "Synthetix",
+   "source": "https://docs.synthetix.io/about-synthetix/snx-token ; https://raw.githubusercontent.com/Synthetixio/synthetix-deployments/main/omnibus-base-mainnet-andromeda.toml",
+   "d": {
+    "ethereum": "0xc011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f",
+    "polygon": "0x50b728d8d964fd00c2d0aad81718b71311fef68a",
+    "base": "0x22e6966b799c4d5b13be962e1d117b56327fda66",
+    "optimism": "0x8700daec35af8ff88c16bdf0418774cb3d7599b4",
+    "avalanche": "0xbec243c995409e6520d7c41e404da5deba4b209b"
+   }
+  },
+  {
+   "symbol": "PENDLE",
+   "name": "Pendle",
+   "cg": "pendle",
+   "issuer": "Pendle",
+   "source": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/1-core.json ; https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/42161-core.json ; https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/10-core.json ; https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/56-core.json ; https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/8453-core.json ; https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/999-core.json",
+   "d": {
+    "ethereum": "0x808507121b80c02388fad14726482e061b8da827",
+    "base": "0xa99f6e6785da0f5d6fb42495fe424bce029eeb3e",
+    "bsc": "0xb3ed0a426155b79b898849803e3b36552f7ed507",
+    "hyperevm": "0xd6eb81136884713e843936843e286fd2a85a205a",
+    "arbitrum": "0x0c880f6761f1af8d9aa9c466984b80dab9a8c9e8",
+    "optimism": "0xbc7b1ff1c6989f006a1185318ed4e7b5796e66e1"
+   }
+  },
+  {
+   "symbol": "ENA",
+   "name": "Ethena",
+   "cg": "ethena",
+   "issuer": "Ethena",
+   "source": "https://docs.ethena.fi/solution-design/key-addresses.md",
+   "d": {
+    "ethereum": "0x57e114b691db790c35207b2e685d4a43181e6061",
+    "arbitrum": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "avalanche": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "base": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "optimism": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "solana": "72QvBVwpxqmheEPfaCwWSWqEFsUy3rhWt6JhQBMNTwD1"
+   }
+  },
+  {
+   "symbol": "GMX",
+   "name": "GMX",
+   "cg": "gmx",
+   "issuer": "GMX",
+   "source": "https://raw.githubusercontent.com/gmx-io/gmx-interface/master/sdk/src/configs/contracts.ts",
+   "d": {
+    "arbitrum": "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a",
+    "avalanche": "0x62edc0692bd897d2295872a9ffcac5425011c661"
+   }
+  },
+  {
+   "symbol": "AERO",
+   "name": "Aerodrome",
+   "cg": "aerodrome-finance",
+   "issuer": "Aerodrome",
+   "source": "https://raw.githubusercontent.com/aerodrome-finance/contracts/main/README.md",
+   "d": {
+    "base": "0x940181a94a35a4569e4529a3cdfb74e38fd98631"
+   }
+  },
+  {
+   "symbol": "VELO",
+   "name": "Velodrome",
+   "cg": "velodrome-finance",
+   "issuer": "Velodrome",
+   "source": "https://raw.githubusercontent.com/velodrome-finance/contracts/main/README.md",
+   "d": {
+    "optimism": "0x9560e827af36c94d2ac33a39bce1fe78631088db"
+   }
+  },
+  {
+   "symbol": "CAKE",
+   "name": "PancakeSwap",
+   "cg": "pancakeswap-token",
+   "issuer": "PancakeSwap",
+   "source": "https://docs.pancakeswap.finance/protocol/cake-tokenomics ; https://developer.pancakeswap.finance/contracts/cake",
+   "d": {
+    "bsc": "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
+    "ethereum": "0x152649ea73beab28c5b49b26eb48f7ead6d4c898",
+    "base": "0x3055913c90fcc1a6ce9a358911721eeb942013a1",
+    "solana": "4qQeZ5LwSz6HuupUu8jCtgXyW1mYQcNbFAW1sWZp89HL",
+    "arbitrum": "0x1b896893dfc86bb67cf57767298b9073d2c1ba2c"
+   }
+  },
+  {
+   "symbol": "JOE",
+   "name": "JOE (LFJ)",
+   "cg": "joe",
+   "issuer": "LFJ (Trader Joe)",
+   "source": "https://raw.githubusercontent.com/traderjoe-xyz/joe-sdk/main/src/constants.ts",
+   "d": {
+    "avalanche": "0x6e84a6216ea6dacc71ee8e6b0a5b7322eebc0fdd",
+    "arbitrum": "0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07",
+    "bsc": "0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07"
+   }
+  },
+  {
+   "symbol": "MORPHO",
+   "name": "Morpho",
+   "cg": "morpho",
+   "issuer": "Morpho Association",
+   "source": "https://docs.morpho.org/get-started/resources/addresses/",
+   "d": {
+    "ethereum": "0x58d97b57bb95320f9a05dc918aef65434969c2b2",
+    "base": "0xbaa5cc21fd487b8fcc2f632f3f4e8d37262a0842",
+    "arbitrum": "0x40bd670a58238e6e230c430bbb5ce6ec0d40df48"
+   }
+  },
+  {
+   "symbol": "EIGEN",
+   "name": "EigenCloud (EIGEN)",
+   "cg": "eigenlayer",
+   "issuer": "Eigen Foundation",
+   "source": "https://raw.githubusercontent.com/Layr-Labs/eigenlayer-contracts/main/README.md",
+   "d": {
+    "ethereum": "0xec53bf9167f50cdeb3ae105f56099aaab9061f83",
+    "base": "0x2081ab0d9ec9e4303234ab26d86b20b3367946ee"
+   }
+  },
+  {
+   "symbol": "ETH",
+   "name": "Binance-Peg Ethereum",
+   "cg": "binance-peg-weth",
+   "issuer": "Binance",
+   "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+   "d": {
+    "bsc": {
+     "a": "0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+     "cgSymbol": "WETH"
+    }
+   }
+  },
+  {
+   "symbol": "XRP",
+   "name": "Binance-Peg XRP",
+   "cg": "binance-peg-xrp",
+   "issuer": "Binance",
+   "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+   "d": {
+    "bsc": "0x1d2f0da169ceb9fc7b3144628db156f3f6c60dbe"
+   }
+  },
+  {
+   "symbol": "DOGE",
+   "name": "Binance-Peg Dogecoin",
+   "cg": "binance-peg-dogecoin",
+   "issuer": "Binance",
+   "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+   "d": {
+    "bsc": "0xba2ae424d960c26247dd6c32edc70b295c744c43"
+   }
+  },
+  {
+   "symbol": "ADA",
+   "name": "Binance-Peg Cardano",
+   "cg": "binance-peg-cardano",
+   "issuer": "Binance",
+   "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+   "d": {
+    "bsc": "0x3ee2200efb3400fabb9aacf31297cbdd1d435d47"
+   }
+  },
+  {
+   "symbol": "SOL",
+   "name": "Binance-Peg SOL",
+   "cg": "binance-peg-sol",
+   "issuer": "Binance",
+   "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+   "d": {
+    "bsc": "0x570a5d26f7765ecb712c0924e4de545b89fd43df"
+   }
+  },
+  {
+   "symbol": "LTC",
+   "name": "Binance-Peg Litecoin",
+   "cg": "binance-peg-litecoin",
+   "issuer": "Binance",
+   "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+   "d": {
+    "bsc": "0x4338665cbb7b2485a8855a139b75d5e34ab0db94"
+   }
+  },
+  {
+   "symbol": "DOT",
+   "name": "Binance-Peg Polkadot",
+   "cg": "binance-peg-polkadot",
+   "issuer": "Binance",
+   "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+   "d": {
+    "bsc": "0x7083609fce4d1d8dc0c979aab8c869ea2c873402"
+   }
+  },
+  {
+   "symbol": "AVAX",
+   "name": "Binance-Peg Avalanche",
+   "cg": "binance-peg-avalanche",
+   "issuer": "Binance",
+   "source": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+   "d": {
+    "bsc": "0x1ce0c2827e2ef14d5c4f29a091d735a204794041"
+   }
+  },
+  {
+   "symbol": "BRETT",
+   "name": "Brett",
+   "cg": "based-brett",
+   "issuer": "Brett (Base)",
+   "source": "https://www.basedbrett.com/assets/index-4a61c05f.js",
+   "d": {
+    "base": "0x532f27101965dd16442e59d40670faf5ebb142e4"
+   }
+  },
+  {
+   "symbol": "TOSHI",
+   "name": "Toshi",
+   "cg": "toshi",
+   "issuer": "Toshi (Base)",
+   "source": "https://www.toshithecat.com/",
+   "d": {
+    "base": "0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4"
+   }
+  },
+  {
+   "symbol": "DEGEN",
+   "name": "Degen",
+   "cg": "degen-base",
+   "issuer": "Degen (Farcaster)",
+   "source": "https://www.degen.tips/",
+   "d": {
+    "base": "0x4ed4e862860bed51a9570b96d89af5e1b0efefed"
+   }
+  },
+  {
+   "symbol": "WIF",
+   "name": "dogwifhat",
+   "cg": "dogwifcoin",
+   "issuer": "dogwifhat",
+   "source": "https://dogwifcoin.org/",
+   "d": {
+    "solana": "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm"
+   }
+  },
+  {
+   "symbol": "JTO",
+   "name": "Jito",
+   "cg": "jito-governance-token",
+   "issuer": "Jito Foundation",
+   "source": "https://www.jito.network/docs/governance/amended-and-restated-memorandum-of-association.md ; https://raw.githubusercontent.com/jito-foundation/distributor/master/README.md",
+   "d": {
+    "solana": "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL"
+   }
+  },
+  {
+   "symbol": "PYTH",
+   "name": "Pyth Network",
+   "cg": "pyth-network",
+   "issuer": "Pyth Data Association",
+   "source": "https://raw.githubusercontent.com/pyth-network/governance/main/staking/app/constants.ts",
+   "d": {
+    "solana": "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3"
+   }
+  },
+  {
+   "symbol": "HNT",
+   "name": "Helium",
+   "cg": "helium",
+   "issuer": "Helium Foundation",
+   "source": "https://docs.helium.com/tokens/hnt-token/",
+   "d": {
+    "solana": "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux"
+   }
+  },
+  {
+   "symbol": "ORCA",
+   "name": "Orca",
+   "cg": "orca",
+   "issuer": "Orca",
+   "source": "https://docs.orca.so/governance/treasury.md",
+   "d": {
+    "solana": "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE"
+   }
+  },
+  {
+   "symbol": "W",
+   "name": "Wormhole",
+   "cg": "wormhole",
+   "issuer": "Wormhole Foundation",
+   "source": "https://wormhole.com/docs/",
+   "d": {
+    "solana": "85VBFQZC9TZkfaptBWjvUw7YbZjy52A6mjtPGjstQAmQ",
+    "arbitrum": "0xb0ffa8000886e57f86dd5264b9582b2ad87b2b91",
+    "ethereum": "0xb0ffa8000886e57f86dd5264b9582b2ad87b2b91",
+    "base": "0xb0ffa8000886e57f86dd5264b9582b2ad87b2b91"
+   }
+  },
+  {
+   "symbol": "mSOL",
+   "name": "Marinade Staked SOL",
+   "cg": "msol",
+   "issuer": "Marinade",
+   "source": "https://docs.marinade.finance/developers/contract-addresses.md",
+   "d": {
+    "solana": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So"
+   }
+  },
+  {
+   "symbol": "jitoSOL",
+   "name": "Jito Staked SOL",
+   "cg": "jito-staked-sol",
+   "issuer": "Jito",
+   "source": "https://www.jito.network/docs/jitosol/jitosol-liquid-staking/security/deployed-programs",
+   "d": {
+    "solana": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn"
+   }
+  },
+  {
+   "symbol": "bSOL",
+   "name": "BlazeStake Staked SOL",
+   "cg": "blazestake-staked-sol",
+   "issuer": "SolBlaze",
+   "source": "https://stake-docs.solblaze.org/developers/addresses",
+   "d": {
+    "solana": "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1"
    }
   }
- ]
+ ],
+ "excluded": [
+  {
+   "symbol": "stETH",
+   "why": "rebasing balance (Lido): the balance changes without a transfer and a transfer can move 1–2 wei less than asked, which breaks the exact-amount accounting of sends and swaps — hold wstETH instead"
+  },
+  {
+   "symbol": "FLOKI",
+   "why": "fee-on-transfer according to its own documentation (a tax is taken on transfers; not tested here): the amount received is not the amount sent, which breaks the swap minimum-output check and deposit accounting"
+  },
+  {
+   "symbol": "FRAX (legacy)",
+   "why": "Legacy Frax Dollar is being replaced by frxUSD; the issuer no longer promotes it — frxUSD is the candidate instead"
+  },
+  {
+   "symbol": "USDbC@base",
+   "why": "bridged USDC on Base, deprecated by Base in favour of native USDC; thin liquidity"
+  },
+  {
+   "symbol": "USDC@tron",
+   "why": "Circle ended its support of USDC on TRON in 2024; the TRON contract is absent from Circle's contract-address page"
+  },
+  {
+   "symbol": "LINK@polygon 0xb0897686c545045aFc77CF20eC7A532E3120E0F1 / LINK@bsc 0x404460C6A5EdE2D891e8297795264fDe62ADBB75",
+   "why": "Chainlink's ERC-677 LINK (wave-1 candidates): CoinGecko lists another contract on these networks (the bridged / Binance-Peg ERC-20, which holds the liquidity); the two sources do not agree on these addresses, so they stay out. The contracts CoinGecko lists were registered instead, each with its own first source (Polygon, Binance)"
+  },
+  {
+   "symbol": "UNI@polygon / UNI@bsc 0x06e8bdE95BE4ce5cB1134BD47aD18a79fFB35822",
+   "why": "wave-1 candidate address that CoinGecko does not list; replaced by the Polygon PoS bridge token and the Binance-Peg token, each confirmed by its own two sources"
+  },
+  {
+   "symbol": "SHIB on BNB Chain, Arbitrum, Optimism, Base, Polygon, Avalanche",
+   "why": "wave-1 candidates from shib.io: CoinGecko lists no address on these networks and no canonical-bridge mapping was checked — still no second source"
+  },
+  {
+   "symbol": "DAI.e, USDT.e, WBTC.e, AAVE.e, UNI.e @avalanche",
+   "why": "old Avalanche Bridge representations with little liquidity left; not proposed (USDC.e, WETH.e, LINK.e and BTC.b are the Avalanche representations kept)"
+  },
+  {
+   "symbol": "WETH / WBTC (Wormhole) @solana",
+   "why": "not proposed: no issuer document stating the mint was found in the time available; Solana keeps WBTC (BitGo), cbBTC (Coinbase) and tBTC (Threshold), each with an identified issuer"
+  },
+  {
+   "symbol": "MKR/SKY, LDO, PEPE, ONDO… on other networks",
+   "why": "not proposed beyond the deployments their issuer documents"
+  }
+ ],
+ "_schema": "tokens[]: symbol, name, cg (CoinGecko coin id), issuer, source (URLs separated by ' ; '), flags?, alias? (other accepted on-chain symbols), d: { network: address | { a: address, cg?, cgSymbol?, name?, source?, onchain? (exact on-chain symbol when it is not the ticker), second? } }"
 }

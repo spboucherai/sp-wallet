@@ -5,8 +5,6 @@ import { hostOf, rpcAny, rpcOne, rpcQuorum, type Adapter, type Deposit, type Hea
 
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const hx = (n: bigint | number) => numberToHex(n);
-/** Tokens whose on-chain symbol() legitimately differs from the ticker shown in the wallet. */
-const ONCHAIN_SYMBOL: Record<string, string> = {};
 
 export function evmAdapter(n: NetworkDef): Adapter {
   const call = <T>(m: string, p: unknown[]) => rpcAny<T>(n.rpc, m, p);
@@ -34,7 +32,9 @@ export function evmAdapter(n: NetworkDef): Adapter {
     const rs = await multi(n.tokens.flatMap((t) => [{ target: t.id, data: dec }, { target: t.id, data: sym }]));
     n.tokens.forEach((t, k) => {
       const d = rs[2 * k]!, y = rs[2 * k + 1]!;
-      const good = d.ok && y.ok && d.data !== '0x' && hexToNumber(d.data) === t.decimals && symbolOf(y.data).replace(/[^\x20-\x7e]/g, '').toUpperCase() === (ONCHAIN_SYMBOL[`${n.id}:${t.symbol}`] ?? t.symbol).toUpperCase();
+      // a token whose contract returns another symbol than the ticker (registry field onchainSymbol, e.g. "USD₮0", or "USDC" for USDC.e) must return exactly that
+      const sy = y.ok ? symbolOf(y.data) : '';
+      const good = d.ok && y.ok && d.data !== '0x' && hexToNumber(d.data) === t.decimals && (t.onchainSymbol !== undefined ? sy === t.onchainSymbol : sy.replace(/[^\x20-\x7e]/g, '').toUpperCase() === t.symbol.toUpperCase());
       if (good) disabled.delete(t.id); else { disabled.add(t.id); console.error(`[evm] ${n.id}: token ${t.symbol} ${t.id} failed on-chain metadata check — disabled`); }
     });
     tokensChecked = true;

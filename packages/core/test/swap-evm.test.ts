@@ -12,7 +12,7 @@ const call = (d: Desc, fn: 'swap' | 'swapGeneric' | 'swapSimpleMode' = 'swap') =
 const now = 1_800_000_000;
 function intent(data: string, o: Partial<Intent> = {}, swap: Partial<NonNullable<Intent['swap']>> = {}): Intent {
   return { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', network: 'base', chainRef: '8453', asset: USDC, symbol: 'USDC', decimals: 6, amount: '25000000',
-    from: ME, to: ME, maxFee: '2000000000000000', createdAt: now, expiresAt: now + 120, policyVersion: 2,
+    from: ME, to: ME, maxFee: '2000000000000000', createdAt: now, expiresAt: now + 120, policyVersion: 3,
     swap: { provider: 'kyberswap', toAsset: 'native', minOut: '12000000000000000', router: KYBER_ROUTER, dataHash: swapDataHash(data), approveGas: '70000', ...swap },
     evm: { nonce: 5, gasLimit: '600000', maxFeePerGas: '1000000000', maxPriorityFeePerGas: '1000000' }, ...o };
 }

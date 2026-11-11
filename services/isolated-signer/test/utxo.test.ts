@@ -29,7 +29,7 @@ async function setup() {
   const pk = new TestPasskey(RP, ORIGIN);
   await signer.enroll({ credential: pk.credential(), setupToken: 'setup-token' });
   let seq = 0;
-  const common = () => ({ v: 1 as const, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(++seq).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 2 });
+  const common = () => ({ v: 1 as const, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(++seq).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 3 });
   const sign = async (i: Intent, aux?: Record<string, unknown>) => signer.sign(i, pk.assert(intentHash(i)), aux);
   return { store, common, sign };
 }

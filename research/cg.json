@@ -1516,5 +1516,2059 @@
     "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce"
    }
   }
+ },
+ "aerodrome-finance": {
+  "symbol": "aero",
+  "name": "Aerodrome Finance",
+  "platforms": {
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x940181a94a35a4569e4529a3cdfb74e38fd98631",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x940181a94a35a4569e4529a3cdfb74e38fd98631"
+   }
+  }
+ },
+ "arbitrum": {
+  "symbol": "arb",
+  "name": "Arbitrum",
+  "platforms": {
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x912ce59144191c1204e64559fe8253a0e49e6548",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x912ce59144191c1204e64559fe8253a0e49e6548"
+   },
+   "arbitrum-nova": {
+    "decimal_place": 18,
+    "contract_address": "0xf823c3cd3cebe0a1fa952ba88dc9eef8e0bf46ad",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum_nova/tokens/0xf823c3cd3cebe0a1fa952ba88dc9eef8e0bf46ad"
+   },
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xb50721bcf8d664c30412cfbc6cf7a15145234ad1",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xb50721bcf8d664c30412cfbc6cf7a15145234ad1"
+   }
+  }
+ },
+ "arbitrum-bridged-wbtc-arbitrum-one": {
+  "symbol": "wbtc",
+  "name": "Arbitrum Bridged WBTC (Arbitrum One)",
+  "platforms": {
+   "arbitrum-one": {
+    "decimal_place": 8,
+    "contract_address": "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f"
+   }
+  }
+ },
+ "arbitrum-bridged-weth-arbitrum-one": {
+  "symbol": "weth",
+  "name": "Arbitrum Bridged WETH (Arbitrum One)",
+  "platforms": {
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
+   }
+  }
+ },
+ "arbitrum-bridged-wrapped-eeth": {
+  "symbol": "weeth",
+  "name": "Arbitrum Bridged Wrapped eETH (Arbitrum)",
+  "platforms": {
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x35751007a407ca6feffe80b3cb397736d2cf4dbe",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x35751007a407ca6feffe80b3cb397736d2cf4dbe"
+   }
+  }
+ },
+ "arbitrum-bridged-wsteth-arbitrum": {
+  "symbol": "wsteth",
+  "name": "Arbitrum Bridged wstETH (Arbitrum)",
+  "platforms": {
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x5979d7b546e38e414f7e9822514be443a4800529",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x5979d7b546e38e414f7e9822514be443a4800529"
+   }
+  }
+ },
+ "avalanche-bridged-weth-avalanche": {
+  "symbol": "weth",
+  "name": "Avalanche Bridged WETH (Avalanche)",
+  "platforms": {
+   "avalanche": {
+    "decimal_place": 18,
+    "contract_address": "0x49d5c2bdffac6ce2bfdb6640f4f80f226bc10bab",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0x49d5c2bdffac6ce2bfdb6640f4f80f226bc10bab"
+   }
+  }
+ },
+ "based-brett": {
+  "symbol": "brett",
+  "name": "Brett",
+  "platforms": {
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x532f27101965dd16442e59d40670faf5ebb142e4",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x532f27101965dd16442e59d40670faf5ebb142e4"
+   },
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0xa7440029eca41deabd8775ef1d6086b37d4df8d6",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0xa7440029eca41deabd8775ef1d6086b37d4df8d6"
+   }
+  }
+ },
+ "binance-bitcoin": {
+  "symbol": "btcb",
+  "name": "Binance Bitcoin",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c"
+   },
+   "harmony-shard-0": {
+    "decimal_place": 18,
+    "contract_address": "0x34224dcf981da7488fdd01c7fdd64e74cd55dcf7",
+    "geckoterminal_url": "https://www.geckoterminal.com/one/tokens/0x34224dcf981da7488fdd01c7fdd64e74cd55dcf7"
+   }
+  }
+ },
+ "binance-bridged-usdc-bnb-smart-chain": {
+  "symbol": "usdc",
+  "name": "Binance Bridged USDC (BNB Smart Chain)",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d"
+   }
+  }
+ },
+ "binance-bridged-usdt-bnb-smart-chain": {
+  "symbol": "bsc-usd",
+  "name": "Binance Bridged USDT (BNB Smart Chain)",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x55d398326f99059ff775485246999027b3197955",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x55d398326f99059ff775485246999027b3197955"
+   }
+  }
+ },
+ "binance-peg-avalanche": {
+  "symbol": "avax",
+  "name": "Binance-Peg Avalanche",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x1ce0c2827e2ef14d5c4f29a091d735a204794041",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x1ce0c2827e2ef14d5c4f29a091d735a204794041"
+   }
+  }
+ },
+ "binance-peg-cardano": {
+  "symbol": "ada",
+  "name": "Binance-Peg Cardano",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x3ee2200efb3400fabb9aacf31297cbdd1d435d47",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x3ee2200efb3400fabb9aacf31297cbdd1d435d47"
+   },
+   "harmony-shard-0": {
+    "decimal_place": 18,
+    "contract_address": "0x582617bd8ca80d22d4432e63fda52d74dcdcee4c",
+    "geckoterminal_url": "https://www.geckoterminal.com/one/tokens/0x582617bd8ca80d22d4432e63fda52d74dcdcee4c"
+   }
+  }
+ },
+ "binance-peg-dai": {
+  "symbol": "dai",
+  "name": "Binance-Peg DAI",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3"
+   }
+  }
+ },
+ "binance-peg-dogecoin": {
+  "symbol": "doge",
+  "name": "Binance-Peg Dogecoin",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 8,
+    "contract_address": "0xba2ae424d960c26247dd6c32edc70b295c744c43",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0xba2ae424d960c26247dd6c32edc70b295c744c43"
+   },
+   "avalanche": {
+    "decimal_place": 18,
+    "contract_address": "0x846e52d0dd71c2fdc891538b2d37ff84345c7b9f",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0x846e52d0dd71c2fdc891538b2d37ff84345c7b9f"
+   }
+  }
+ },
+ "binance-peg-litecoin": {
+  "symbol": "ltc",
+  "name": "Binance-Peg Litecoin",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x4338665cbb7b2485a8855a139b75d5e34ab0db94",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x4338665cbb7b2485a8855a139b75d5e34ab0db94"
+   }
+  }
+ },
+ "binance-peg-polkadot": {
+  "symbol": "dot",
+  "name": "Binance-Peg Polkadot",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x7083609fce4d1d8dc0c979aab8c869ea2c873402",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x7083609fce4d1d8dc0c979aab8c869ea2c873402"
+   }
+  }
+ },
+ "binance-peg-sol": {
+  "symbol": "sol",
+  "name": "Binance-Peg SOL",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x570a5d26f7765ecb712c0924e4de545b89fd43df",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x570a5d26f7765ecb712c0924e4de545b89fd43df"
+   }
+  }
+ },
+ "binance-peg-weth": {
+  "symbol": "weth",
+  "name": "Binance-Peg WETH",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x2170ed0880ac9a755fd29b2688956bd959f933f8"
+   }
+  }
+ },
+ "binance-peg-xrp": {
+  "symbol": "xrp",
+  "name": "Binance-Peg XRP",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x1d2f0da169ceb9fc7b3144628db156f3f6c60dbe",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x1d2f0da169ceb9fc7b3144628db156f3f6c60dbe"
+   }
+  }
+ },
+ "bitcoin-avalanche-bridged-btc-b": {
+  "symbol": "btc.b",
+  "name": "Lombard Bridged BTC",
+  "platforms": {
+   "avalanche": {
+    "decimal_place": 8,
+    "contract_address": "0x152b9d0fdc40c096757f570a51e494bd4b943e50",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0x152b9d0fdc40c096757f570a51e494bd4b943e50"
+   },
+   "megaeth": {
+    "decimal_place": 8,
+    "contract_address": "0xb0f70c0bd6fd87dbeb7c10dc692a2a6106817072",
+    "geckoterminal_url": "https://www.geckoterminal.com/megaeth/tokens/0xb0f70c0bd6fd87dbeb7c10dc692a2a6106817072"
+   },
+   "stable": {
+    "decimal_place": 8,
+    "contract_address": "0xb0f70c0bd6fd87dbeb7c10dc692a2a6106817072",
+    "geckoterminal_url": "https://www.geckoterminal.com/stable/tokens/0xb0f70c0bd6fd87dbeb7c10dc692a2a6106817072"
+   }
+  }
+ },
+ "blazestake-staked-sol": {
+  "symbol": "bsol",
+  "name": "BlazeStake Staked SOL",
+  "platforms": {
+   "solana": {
+    "decimal_place": 9,
+    "contract_address": "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1"
+   }
+  }
+ },
+ "bridged-usd-coin-optimism": {
+  "symbol": "usdc.e",
+  "name": "Standard Bridged USDC.e (Optimism)",
+  "platforms": {
+   "optimistic-ethereum": {
+    "decimal_place": 6,
+    "contract_address": "0x7f5c764cbc14f9669b88837ca1490cca17c31607",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x7f5c764cbc14f9669b88837ca1490cca17c31607"
+   }
+  }
+ },
+ "bridged-usdc-polygon-pos-bridge": {
+  "symbol": "usdc.e",
+  "name": "Polygon Bridged USDC (Polygon PoS)",
+  "platforms": {
+   "polygon-pos": {
+    "decimal_place": 6,
+    "contract_address": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x2791bca1f2de4661ed88a30c99a7a9449aa84174"
+   }
+  }
+ },
+ "coinbase-wrapped-ada": {
+  "symbol": "cbada",
+  "name": "Coinbase Wrapped ADA",
+  "platforms": {
+   "base": {
+    "decimal_place": 6,
+    "contract_address": "0xcbada732173e39521cdbe8bf59a6dc85a9fc7b8c",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xcbada732173e39521cdbe8bf59a6dc85a9fc7b8c"
+   }
+  }
+ },
+ "coinbase-wrapped-btc": {
+  "symbol": "cbbtc",
+  "name": "Coinbase Wrapped BTC",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 8,
+    "contract_address": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+   },
+   "base": {
+    "decimal_place": 8,
+    "contract_address": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+   },
+   "monad": {
+    "decimal_place": 8,
+    "contract_address": "0xd18b7ec58cdf4876f6afebd3ed1730e4ce10414b",
+    "geckoterminal_url": "https://www.geckoterminal.com/monad/tokens/0xd18b7ec58cdf4876f6afebd3ed1730e4ce10414b"
+   },
+   "solana": {
+    "decimal_place": 8,
+    "contract_address": "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij"
+   },
+   "arbitrum-one": {
+    "decimal_place": 8,
+    "contract_address": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+   },
+   "robinhood": {
+    "decimal_place": 8,
+    "contract_address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+    "geckoterminal_url": "https://www.geckoterminal.com/robinhood/tokens/0xcec185eb182c47d1ba1efc84e6959e18cd620be4"
+   }
+  }
+ },
+ "coinbase-wrapped-doge": {
+  "symbol": "cbdoge",
+  "name": "Coinbase Wrapped DOGE",
+  "platforms": {
+   "base": {
+    "decimal_place": 8,
+    "contract_address": "0xcbd06e5a2b0c65597161de254aa074e489deb510",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xcbd06e5a2b0c65597161de254aa074e489deb510"
+   }
+  }
+ },
+ "coinbase-wrapped-ltc": {
+  "symbol": "cbltc",
+  "name": "Coinbase Wrapped LTC",
+  "platforms": {
+   "base": {
+    "decimal_place": 8,
+    "contract_address": "0xcb17c9db87b595717c857a08468793f5bab6445f",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xcb17c9db87b595717c857a08468793f5bab6445f"
+   }
+  }
+ },
+ "coinbase-wrapped-staked-eth": {
+  "symbol": "cbeth",
+  "name": "Coinbase Wrapped Staked ETH",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xbe9895146f7af43049ca1c1ae358b0541ea49704",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xbe9895146f7af43049ca1c1ae358b0541ea49704"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22"
+   },
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x4b4327db1600b8b1440163f667e199cef35385f5",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x4b4327db1600b8b1440163f667e199cef35385f5"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x1debd73e752beaf79865fd6446b0c970eae7732f",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x1debd73e752beaf79865fd6446b0c970eae7732f"
+   },
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xaddb6a0412de1ba0f936dcaeb8aaa24578dcf3b2",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0xaddb6a0412de1ba0f936dcaeb8aaa24578dcf3b2"
+   }
+  }
+ },
+ "coinbase-wrapped-xrp": {
+  "symbol": "cbxrp",
+  "name": "Coinbase Wrapped XRP",
+  "platforms": {
+   "base": {
+    "decimal_place": 6,
+    "contract_address": "0xcb585250f852c6c6bf90434ab21a00f02833a4af",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xcb585250f852c6c6bf90434ab21a00f02833a4af"
+   }
+  }
+ },
+ "compound-governance-token": {
+  "symbol": "comp",
+  "name": "Compound",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xc00e94cb662c3520282e6f5717214004a7f26888",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xc00e94cb662c3520282e6f5717214004a7f26888"
+   },
+   "near-protocol": {
+    "decimal_place": 18,
+    "contract_address": "c00e94cb662c3520282e6f5717214004a7f26888.factory.bridge.near",
+    "geckoterminal_url": "https://www.geckoterminal.com/near/tokens/c00e94cb662c3520282e6f5717214004a7f26888.factory.bridge.near"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x9e1028f5f1d5ede59748ffcee5532509976840e0",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x9e1028f5f1d5ede59748ffcee5532509976840e0"
+   },
+   "harmony-shard-0": {
+    "decimal_place": 18,
+    "contract_address": "0x32137b9275ea35162812883582623cd6f6950958",
+    "geckoterminal_url": "https://www.geckoterminal.com/one/tokens/0x32137b9275ea35162812883582623cd6f6950958"
+   },
+   "energi": {
+    "decimal_place": 18,
+    "contract_address": "0x66bc411714e16b6f0c68be12bd9c666cc4576063",
+    "geckoterminal_url": "https://www.geckoterminal.com/nrg/tokens/0x66bc411714e16b6f0c68be12bd9c666cc4576063"
+   },
+   "sora": {
+    "decimal_place": 18,
+    "contract_address": "0x00dbd45af9f2ea406746f9025110297469e9d29efc60df8d88efb9b0179d6c2c"
+   },
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x8505b9d2254a7ae468c0e9dd10ccea3a837aef5c",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x8505b9d2254a7ae468c0e9dd10ccea3a837aef5c"
+   },
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x52ce071bd9b1c4b00a0b92d298c512478cad67e8",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x52ce071bd9b1c4b00a0b92d298c512478cad67e8"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x354a6da3fcde098f8389cad84b0182725c6c91de",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x354a6da3fcde098f8389cad84b0182725c6c91de"
+   },
+   "avalanche": {
+    "decimal_place": 18,
+    "contract_address": "0xc3048e19e76cb9a3aa9d77d8c03c29fc906e2437",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0xc3048e19e76cb9a3aa9d77d8c03c29fc906e2437"
+   }
+  }
+ },
+ "crvusd": {
+  "symbol": "crvusd",
+  "name": "crvUSD",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xf939e0a03fb07f59a73314e73794be0e57ac1b4e",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xf939e0a03fb07f59a73314e73794be0e57ac1b4e"
+   },
+   "fraxtal": {
+    "decimal_place": 18,
+    "contract_address": "0xb102f7efa0d5de071a8d37b3548e1c7cb148caf3",
+    "geckoterminal_url": "https://www.geckoterminal.com/fraxtal/tokens/0xb102f7efa0d5de071a8d37b3548e1c7cb148caf3"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x417ac0e078398c154edfadd9ef675d30be60af93",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x417ac0e078398c154edfadd9ef675d30be60af93"
+   },
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0xc4ce1d6f5d98d65ee25cf85e9f2e9dcfee6cb5d6",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0xc4ce1d6f5d98d65ee25cf85e9f2e9dcfee6cb5d6"
+   },
+   "taiko": {
+    "decimal_place": 18,
+    "contract_address": "0xc8f4518ed4bab9a972808a493107926ce8237068",
+    "geckoterminal_url": "https://www.geckoterminal.com/taiko/tokens/0xc8f4518ed4bab9a972808a493107926ce8237068"
+   },
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0xe2fb3f127f5450dee44afe054385d74c392bdef4",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0xe2fb3f127f5450dee44afe054385d74c392bdef4"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x498bf2b1e120fed3ad3d42ea2165e9b73f99c1e5",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x498bf2b1e120fed3ad3d42ea2165e9b73f99c1e5"
+   },
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xc52d7f23a2e460248db6ee192cb23dd12bddcbf6",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0xc52d7f23a2e460248db6ee192cb23dd12bddcbf6"
+   },
+   "xdai": {
+    "decimal_place": 18,
+    "contract_address": "0xabef652195f98a91e490f047a5006b71c85f058d",
+    "geckoterminal_url": "https://www.geckoterminal.com/xdai/tokens/0xabef652195f98a91e490f047a5006b71c85f058d"
+   }
+  }
+ },
+ "curve-dao-token": {
+  "symbol": "crv",
+  "name": "Curve DAO",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xd533a949740bb3306d119cc777fa900ba034cd52",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xd533a949740bb3306d119cc777fa900ba034cd52"
+   },
+   "fantom": {
+    "decimal_place": 18,
+    "contract_address": "0x1e4f97b9f9f913c46f1632781732927b9019c68b",
+    "geckoterminal_url": "https://www.geckoterminal.com/ftm/tokens/0x1e4f97b9f9f913c46f1632781732927b9019c68b"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x8ee73c484a26e0a5df2ee2a4960b789967dd0415",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x8ee73c484a26e0a5df2ee2a4960b789967dd0415"
+   },
+   "energi": {
+    "decimal_place": 18,
+    "contract_address": "0xd3319eaf3c4743ac75aace77befcfa445ed6e69e",
+    "geckoterminal_url": "https://www.geckoterminal.com/nrg/tokens/0xd3319eaf3c4743ac75aace77befcfa445ed6e69e"
+   },
+   "sora": {
+    "decimal_place": 18,
+    "contract_address": "0x002ead91a2de57b8855b53d4a62c25277073fd7f65f7e5e79f4936ed747fcad0"
+   },
+   "etherlink": {
+    "decimal_place": 18,
+    "contract_address": "0x004a476b5b76738e34c86c7144554b9d34402f13",
+    "geckoterminal_url": "https://www.geckoterminal.com/etherlink/tokens/0x004a476b5b76738e34c86c7144554b9d34402f13"
+   },
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x172370d5cd63279efa6d502dab29171933a610af",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x172370d5cd63279efa6d502dab29171933a610af"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x11cdb42b0eb46d95f990bedd4695a6e3fa034978",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x11cdb42b0eb46d95f990bedd4695a6e3fa034978"
+   },
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x0994206dfe8de6ec6920ff4d779b0d950605fb53",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x0994206dfe8de6ec6920ff4d779b0d950605fb53"
+   }
+  }
+ },
+ "degen-base": {
+  "symbol": "degen",
+  "name": "Degen",
+  "platforms": {
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x4ed4e862860bed51a9570b96d89af5e1b0efefed",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x4ed4e862860bed51a9570b96d89af5e1b0efefed"
+   },
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xfee293840d23b0b2de8c55e1cf7a9f01c157767c",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xfee293840d23b0b2de8c55e1cf7a9f01c157767c"
+   },
+   "solana": {
+    "decimal_place": 6,
+    "contract_address": "A7n89LqW67HJKzJkdWZa2xojuK4N5GBKHz3dfjATCZPz",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/A7n89LqW67HJKzJkdWZa2xojuK4N5GBKHz3dfjATCZPz"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x9f07f8a82cb1af1466252e505b7b7ddee103bc91",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x9f07f8a82cb1af1466252e505b7b7ddee103bc91"
+   },
+   "robinhood": {
+    "decimal_place": 18,
+    "contract_address": "0x0830a9dd26a04e959657ab6788d45f5725590c32",
+    "geckoterminal_url": "https://www.geckoterminal.com/robinhood/tokens/0x0830a9dd26a04e959657ab6788d45f5725590c32"
+   }
+  }
+ },
+ "dogwifcoin": {
+  "symbol": "wif",
+  "name": "dogwifhat",
+  "platforms": {
+   "solana": {
+    "decimal_place": 6,
+    "contract_address": "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm"
+   },
+   "unichain": {
+    "decimal_place": 6,
+    "contract_address": "0x97fadb3d000b953360fd011e173f12cddb5d70fa",
+    "geckoterminal_url": "https://www.geckoterminal.com/unichain/tokens/0x97fadb3d000b953360fd011e173f12cddb5d70fa"
+   }
+  }
+ },
+ "eigenlayer": {
+  "symbol": "eigen",
+  "name": "EigenCloud (prev. EigenLayer)",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xec53bf9167f50cdeb3ae105f56099aaab9061f83",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xec53bf9167f50cdeb3ae105f56099aaab9061f83"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x2081ab0d9ec9e4303234ab26d86b20b3367946ee",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x2081ab0d9ec9e4303234ab26d86b20b3367946ee"
+   }
+  }
+ },
+ "ethena": {
+  "symbol": "ena",
+  "name": "Ethena",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x57e114b691db790c35207b2e685d4a43181e6061",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x57e114b691db790c35207b2e685d4a43181e6061"
+   },
+   "mantle": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "geckoterminal_url": "https://www.geckoterminal.com/mantle/tokens/0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "metis-andromeda": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "geckoterminal_url": "https://www.geckoterminal.com/metis/tokens/0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "fraxtal": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "kava": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "zircuit": {
+    "decimal_place": 18,
+    "contract_address": "0x813635891aa06bd55036bbd8f7d1a34ab3de9a0f"
+   },
+   "swellchain": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "geckoterminal_url": "https://www.geckoterminal.com/swellchain/tokens/0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "morph-l2": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "geckoterminal_url": "https://www.geckoterminal.com/morph-l2/tokens/0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "mode": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "geckoterminal_url": "https://www.geckoterminal.com/mode/tokens/0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "the-open-network": {
+    "decimal_place": 0,
+    "contract_address": "EQAPh9RCprgg5kKumtJi8uB7nFKctPBwuRUu82JgTGmzklNV",
+    "geckoterminal_url": "https://www.geckoterminal.com/ton/tokens/EQAPh9RCprgg5kKumtJi8uB7nFKctPBwuRUu82JgTGmzklNV"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "blast": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "geckoterminal_url": "https://www.geckoterminal.com/blast/tokens/0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "avalanche": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "solana": {
+    "decimal_place": 9,
+    "contract_address": "72QvBVwpxqmheEPfaCwWSWqEFsUy3rhWt6JhQBMNTwD1",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/72QvBVwpxqmheEPfaCwWSWqEFsUy3rhWt6JhQBMNTwD1"
+   },
+   "manta-pacific": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "geckoterminal_url": "https://www.geckoterminal.com/manta-pacific/tokens/0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "scroll": {
+    "decimal_place": 18,
+    "contract_address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+    "geckoterminal_url": "https://www.geckoterminal.com/scroll/tokens/0x58538e6a46e07434d7e7375bc268d3cb839c0133"
+   },
+   "zksync": {
+    "decimal_place": 18,
+    "contract_address": "0x686b311f82b407f0be842652a98e5619f64cc25f"
+   }
+  }
+ },
+ "frax-usd": {
+  "symbol": "frxusd",
+  "name": "Frax USD",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xcacd6fd266af91b8aed52accc382b4e165586e29",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xcacd6fd266af91b8aed52accc382b4e165586e29"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "plume-network": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/plume-network/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "unichain": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/unichain/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "sonic": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/sonic/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "mode": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/mode/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "fraxtal": {
+    "decimal_place": 18,
+    "contract_address": "0xfc00000000000000000000000000000000000001",
+    "geckoterminal_url": "https://www.geckoterminal.com/fraxtal/tokens/0xfc00000000000000000000000000000000000001"
+   },
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "sei-v2": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/sei-evm/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "aurora": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/aurora/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "berachain": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/berachain/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "polygon-zkevm": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon-zkevm/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "ink": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/ink/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "scroll": {
+    "decimal_place": 18,
+    "contract_address": "0x397f939c3b91a74c321ea7129396492ba9cdce82",
+    "geckoterminal_url": "https://www.geckoterminal.com/scroll/tokens/0x397f939c3b91a74c321ea7129396492ba9cdce82"
+   },
+   "abstract": {
+    "decimal_place": 18,
+    "contract_address": "0xea77c590bb36c43ef7139ce649cfbcfd6163170d",
+    "geckoterminal_url": "https://www.geckoterminal.com/abstract/tokens/0xea77c590bb36c43ef7139ce649cfbcfd6163170d"
+   },
+   "movement": {
+    "decimal_place": 6,
+    "contract_address": "0xe067037681385b86d8344e6b7746023604c6ac90ddc997ba3c58396c258ad17b",
+    "geckoterminal_url": "https://www.geckoterminal.com/movement/tokens/0xe067037681385b86d8344e6b7746023604c6ac90ddc997ba3c58396c258ad17b"
+   },
+   "x-layer": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/x-layer/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "solana": {
+    "decimal_place": 9,
+    "contract_address": "GzX1ireZDU865FiMaKrdVB1H6AE8LAqWYCg6chrMrfBw",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/GzX1ireZDU865FiMaKrdVB1H6AE8LAqWYCg6chrMrfBw"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0xe5020a6d073a794b6e7f05678707de47986fb0b6",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xe5020a6d073a794b6e7f05678707de47986fb0b6"
+   },
+   "blast": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/blast/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "stable": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/stable/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "aptos": {
+    "decimal_place": 6,
+    "contract_address": "0xe067037681385b86d8344e6b7746023604c6ac90ddc997ba3c58396c258ad17b",
+    "geckoterminal_url": "https://www.geckoterminal.com/aptos/tokens/0xe067037681385b86d8344e6b7746023604c6ac90ddc997ba3c58396c258ad17b"
+   },
+   "avalanche": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "katana": {
+    "decimal_place": 18,
+    "contract_address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+    "geckoterminal_url": "https://www.geckoterminal.com/katana/tokens/0x80eede496655fb9047dd39d9f418d5483ed600df"
+   },
+   "zksync": {
+    "decimal_place": 18,
+    "contract_address": "0xea77c590bb36c43ef7139ce649cfbcfd6163170d",
+    "geckoterminal_url": "https://www.geckoterminal.com/zksync/tokens/0xea77c590bb36c43ef7139ce649cfbcfd6163170d"
+   },
+   "linea": {
+    "decimal_place": 18,
+    "contract_address": "0xc7346783f5e645aa998b106ef9e7f499528673d8",
+    "geckoterminal_url": "https://www.geckoterminal.com/linea/tokens/0xc7346783f5e645aa998b106ef9e7f499528673d8"
+   }
+  }
+ },
+ "gho": {
+  "symbol": "gho",
+  "name": "GHO",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x40d16fc0246ad3160ccc09b8d0d3a2cd28ae6c2f",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x40d16fc0246ad3160ccc09b8d0d3a2cd28ae6c2f"
+   },
+   "monad": {
+    "decimal_place": 18,
+    "contract_address": "0xfc421ad3c883bf9e7c4f42de845c4e4405799e73",
+    "geckoterminal_url": "https://www.geckoterminal.com/monad/tokens/0xfc421ad3c883bf9e7c4f42de845c4e4405799e73"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x6bb7a212910682dcfdbd5bcbb3e28fb4e8da10ee",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x6bb7a212910682dcfdbd5bcbb3e28fb4e8da10ee"
+   },
+   "ink": {
+    "decimal_place": 18,
+    "contract_address": "0xfc421ad3c883bf9e7c4f42de845c4e4405799e73",
+    "geckoterminal_url": "https://www.geckoterminal.com/ink/tokens/0xfc421ad3c883bf9e7c4f42de845c4e4405799e73"
+   },
+   "plasma": {
+    "decimal_place": 18,
+    "contract_address": "0xb77e872a68c62cfc0dfb02c067ecc3da23b4bbf3",
+    "geckoterminal_url": "https://www.geckoterminal.com/plasma/tokens/0xb77e872a68c62cfc0dfb02c067ecc3da23b4bbf3"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x7dff72693f6a4149b17e7c6314655f6a9f7c8b33",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x7dff72693f6a4149b17e7c6314655f6a9f7c8b33"
+   },
+   "avalanche": {
+    "decimal_place": 18,
+    "contract_address": "0xfc421ad3c883bf9e7c4f42de845c4e4405799e73",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0xfc421ad3c883bf9e7c4f42de845c4e4405799e73"
+   },
+   "xdai": {
+    "decimal_place": 18,
+    "contract_address": "0xfc421ad3c883bf9e7c4f42de845c4e4405799e73",
+    "geckoterminal_url": "https://www.geckoterminal.com/xdai/tokens/0xfc421ad3c883bf9e7c4f42de845c4e4405799e73"
+   }
+  }
+ },
+ "gmx": {
+  "symbol": "gmx",
+  "name": "GMX",
+  "platforms": {
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a"
+   },
+   "avalanche": {
+    "decimal_place": 18,
+    "contract_address": "0x62edc0692bd897d2295872a9ffcac5425011c661",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0x62edc0692bd897d2295872a9ffcac5425011c661"
+   }
+  }
+ },
+ "havven": {
+  "symbol": "snx",
+  "name": "Synthetix",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xc011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xc011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f"
+   },
+   "harmony-shard-0": {
+    "decimal_place": 18,
+    "contract_address": "0x7b9c523d59aefd362247bd5601a89722e3774dd2",
+    "geckoterminal_url": "https://www.geckoterminal.com/one/tokens/0x7b9c523d59aefd362247bd5601a89722e3774dd2"
+   },
+   "huobi-token": {
+    "decimal_place": 18,
+    "contract_address": "0x777850281719d5a96c29812ab72f822e0e09f3da",
+    "geckoterminal_url": "https://www.geckoterminal.com/heco/tokens/0x777850281719d5a96c29812ab72f822e0e09f3da"
+   },
+   "fantom": {
+    "decimal_place": 18,
+    "contract_address": "0x56ee926bd8c72b2d5fa1af4d9e4cbb515a1e3adc",
+    "geckoterminal_url": "https://www.geckoterminal.com/ftm/tokens/0x56ee926bd8c72b2d5fa1af4d9e4cbb515a1e3adc"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x22e6966b799c4d5b13be962e1d117b56327fda66",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x22e6966b799c4d5b13be962e1d117b56327fda66"
+   },
+   "near-protocol": {
+    "decimal_place": 18,
+    "contract_address": "c011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f.factory.bridge.near",
+    "geckoterminal_url": "https://www.geckoterminal.com/near/tokens/c011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f.factory.bridge.near"
+   },
+   "energi": {
+    "decimal_place": 18,
+    "contract_address": "0xa255461ff545d6ece153283f421d67d2de5d0e29",
+    "geckoterminal_url": "https://www.geckoterminal.com/nrg/tokens/0xa255461ff545d6ece153283f421d67d2de5d0e29"
+   },
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x50b728d8d964fd00c2d0aad81718b71311fef68a",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x50b728d8d964fd00c2d0aad81718b71311fef68a"
+   },
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x8700daec35af8ff88c16bdf0418774cb3d7599b4",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x8700daec35af8ff88c16bdf0418774cb3d7599b4"
+   },
+   "avalanche": {
+    "decimal_place": 18,
+    "contract_address": "0xbec243c995409e6520d7c41e404da5deba4b209b",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0xbec243c995409e6520d7c41e404da5deba4b209b"
+   }
+  }
+ },
+ "helium": {
+  "symbol": "hnt",
+  "name": "Helium",
+  "platforms": {
+   "solana": {
+    "decimal_place": 8,
+    "contract_address": "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux"
+   }
+  }
+ },
+ "jito-governance-token": {
+  "symbol": "jto",
+  "name": "Jito",
+  "platforms": {
+   "solana": {
+    "decimal_place": 9,
+    "contract_address": "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL"
+   }
+  }
+ },
+ "jito-staked-sol": {
+  "symbol": "jitosol",
+  "name": "Jito Staked SOL",
+  "platforms": {
+   "solana": {
+    "decimal_place": 9,
+    "contract_address": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn"
+   },
+   "neon-evm": {
+    "decimal_place": 9,
+    "contract_address": "0xfa8fb7e3bd299b2a9693b1bfdcf5dd13ab57007e",
+    "geckoterminal_url": "https://www.geckoterminal.com/neon-evm/tokens/0xfa8fb7e3bd299b2a9693b1bfdcf5dd13ab57007e"
+   },
+   "base": {
+    "decimal_place": 9,
+    "contract_address": "0x97be14dd8f994a5364573bc035d85309e7cb34de",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x97be14dd8f994a5364573bc035d85309e7cb34de"
+   },
+   "katana": {
+    "decimal_place": 18,
+    "contract_address": "0x6c16e26013f2431e8b2e1ba7067ecccad0db6c52",
+    "geckoterminal_url": "https://www.geckoterminal.com/katana/tokens/0x6c16e26013f2431e8b2e1ba7067ecccad0db6c52"
+   }
+  }
+ },
+ "joe": {
+  "symbol": "joe",
+  "name": "JOE",
+  "platforms": {
+   "avalanche": {
+    "decimal_place": 18,
+    "contract_address": "0x6e84a6216ea6dacc71ee8e6b0a5b7322eebc0fdd",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0x6e84a6216ea6dacc71ee8e6b0a5b7322eebc0fdd"
+   },
+   "mantle": {
+    "decimal_place": 18,
+    "contract_address": "0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07",
+    "geckoterminal_url": "https://www.geckoterminal.com/mantle/tokens/0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07"
+   },
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07"
+   }
+  }
+ },
+ "l2-standard-bridged-dai-base": {
+  "symbol": "dai",
+  "name": "L2 Standard Bridged DAI (Base)",
+  "platforms": {
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x50c5725949a6f0c72e6c4a641f24049a917db0cb",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x50c5725949a6f0c72e6c4a641f24049a917db0cb"
+   }
+  }
+ },
+ "l2-standard-bridged-usdt-base": {
+  "symbol": "usdt",
+  "name": "L2 Standard Bridged USDT (Base)",
+  "platforms": {
+   "base": {
+    "decimal_place": 6,
+    "contract_address": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"
+   }
+  }
+ },
+ "l2-standard-bridged-weth-base": {
+  "symbol": "weth",
+  "name": "L2 Standard Bridged WETH (Base)",
+  "platforms": {
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x4200000000000000000000000000000000000006",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x4200000000000000000000000000000000000006"
+   }
+  }
+ },
+ "l2-standard-bridged-weth-optimism": {
+  "symbol": "weth",
+  "name": "L2 Standard Bridged WETH (Optimism)",
+  "platforms": {
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x4200000000000000000000000000000000000006",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x4200000000000000000000000000000000000006"
+   }
+  }
+ },
+ "maker": {
+  "symbol": "mkr",
+  "name": "Maker",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2"
+   },
+   "energi": {
+    "decimal_place": 18,
+    "contract_address": "0x050317d93f29d1ba5ff3eac3b8157fd4e345588d",
+    "geckoterminal_url": "https://www.geckoterminal.com/nrg/tokens/0x050317d93f29d1ba5ff3eac3b8157fd4e345588d"
+   },
+   "sora": {
+    "decimal_place": 18,
+    "contract_address": "0x00ec184ef0b4bd955db05eea5a8489ae72888ab6e63682a15beca1cd39344c8f"
+   },
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x6f7c932e7684666c9fd1d44527765433e01ff61d",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x6f7c932e7684666c9fd1d44527765433e01ff61d"
+   },
+   "avalanche": {
+    "decimal_place": 18,
+    "contract_address": "0x88128fd4b259552a9a1d457f435a6527aab72d42",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0x88128fd4b259552a9a1d457f435a6527aab72d42"
+   }
+  }
+ },
+ "makerdao-arbitrum-bridged-dai-arbitrum-one": {
+  "symbol": "dai",
+  "name": "MakerDAO Arbitrum Bridged DAI (Arbitrum One)",
+  "platforms": {
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"
+   }
+  }
+ },
+ "makerdao-optimism-bridged-dai-optimism": {
+  "symbol": "dai",
+  "name": "MakerDAO Optimism Bridged DAI (Optimism)",
+  "platforms": {
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"
+   }
+  }
+ },
+ "mantle": {
+  "symbol": "mnt",
+  "name": "Mantle",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x3c3a81e81dc49a522a592e7622a7e711c06bf354",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x3c3a81e81dc49a522a592e7622a7e711c06bf354"
+   },
+   "mantle": {
+    "decimal_place": 18,
+    "contract_address": "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0000",
+    "geckoterminal_url": "https://www.geckoterminal.com/mantle/tokens/0xdeaddeaddeaddeaddeaddeaddeaddeaddead0000"
+   }
+  }
+ },
+ "morpho": {
+  "symbol": "morpho",
+  "name": "Morpho",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x58d97b57bb95320f9a05dc918aef65434969c2b2",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x58d97b57bb95320f9a05dc918aef65434969c2b2"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0xbaa5cc21fd487b8fcc2f632f3f4e8d37262a0842",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xbaa5cc21fd487b8fcc2f632f3f4e8d37262a0842"
+   },
+   "katana": {
+    "decimal_place": 18,
+    "contract_address": "0x1e5efca3d0db2c6d5c67a4491845c43253eb9e4e",
+    "geckoterminal_url": "https://www.geckoterminal.com/katana/tokens/0x1e5efca3d0db2c6d5c67a4491845c43253eb9e4e"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x40bd670a58238e6e230c430bbb5ce6ec0d40df48",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x40bd670a58238e6e230c430bbb5ce6ec0d40df48"
+   }
+  }
+ },
+ "msol": {
+  "symbol": "msol",
+  "name": "Marinade Staked SOL",
+  "platforms": {
+   "solana": {
+    "decimal_place": 9,
+    "contract_address": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So"
+   }
+  }
+ },
+ "optimism": {
+  "symbol": "op",
+  "name": "Optimism",
+  "platforms": {
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x4200000000000000000000000000000000000042",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x4200000000000000000000000000000000000042"
+   }
+  }
+ },
+ "orca": {
+  "symbol": "orca",
+  "name": "Orca",
+  "platforms": {
+   "solana": {
+    "decimal_place": 6,
+    "contract_address": "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE"
+   }
+  }
+ },
+ "pancakeswap-token": {
+  "symbol": "cake",
+  "name": "PancakeSwap",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82"
+   },
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x152649ea73beab28c5b49b26eb48f7ead6d4c898",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x152649ea73beab28c5b49b26eb48f7ead6d4c898"
+   },
+   "polygon-zkevm": {
+    "decimal_place": 18,
+    "contract_address": "0x0d1e753a25ebda689453309112904807625befbe",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon-zkevm/tokens/0x0d1e753a25ebda689453309112904807625befbe"
+   },
+   "opbnb": {
+    "decimal_place": 18,
+    "contract_address": "0x2779106e4f4a8a28d77a24c18283651a2ae22d1c",
+    "geckoterminal_url": "https://www.geckoterminal.com/opbnb/tokens/0x2779106e4f4a8a28d77a24c18283651a2ae22d1c"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x3055913c90fcc1a6ce9a358911721eeb942013a1",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x3055913c90fcc1a6ce9a358911721eeb942013a1"
+   },
+   "solana": {
+    "decimal_place": 9,
+    "contract_address": "4qQeZ5LwSz6HuupUu8jCtgXyW1mYQcNbFAW1sWZp89HL",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/4qQeZ5LwSz6HuupUu8jCtgXyW1mYQcNbFAW1sWZp89HL"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x1b896893dfc86bb67cf57767298b9073d2c1ba2c",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x1b896893dfc86bb67cf57767298b9073d2c1ba2c"
+   },
+   "aptos": {
+    "decimal_place": 8,
+    "contract_address": "0x159df6b7689437016108a019fd5bef736bac692b6d4a1f10c941f6fbb9a74ca6::oft::CakeOFT",
+    "geckoterminal_url": "https://www.geckoterminal.com/aptos/tokens/0x159df6b7689437016108a019fd5bef736bac692b6d4a1f10c941f6fbb9a74ca6::oft::CakeOFT"
+   },
+   "linea": {
+    "decimal_place": 18,
+    "contract_address": "0x0d1e753a25ebda689453309112904807625befbe",
+    "geckoterminal_url": "https://www.geckoterminal.com/linea/tokens/0x0d1e753a25ebda689453309112904807625befbe"
+   },
+   "zksync": {
+    "decimal_place": 18,
+    "contract_address": "0x3a287a06c66f9e95a56327185ca2bdf5f031cecd",
+    "geckoterminal_url": "https://www.geckoterminal.com/zksync/tokens/0x3a287a06c66f9e95a56327185ca2bdf5f031cecd"
+   }
+  }
+ },
+ "pendle": {
+  "symbol": "pendle",
+  "name": "Pendle",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x808507121b80c02388fad14726482e061b8da827",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x808507121b80c02388fad14726482e061b8da827"
+   },
+   "berachain": {
+    "decimal_place": 18,
+    "contract_address": "0xff9c599d51c407a45d631c6e89cb047efb88aef6",
+    "geckoterminal_url": "https://www.geckoterminal.com/berachain/tokens/0xff9c599d51c407a45d631c6e89cb047efb88aef6"
+   },
+   "hyperevm": {
+    "decimal_place": 18,
+    "contract_address": "0xd6eb81136884713e843936843e286fd2a85a205a",
+    "geckoterminal_url": "https://www.geckoterminal.com/hyperevm/tokens/0xd6eb81136884713e843936843e286fd2a85a205a"
+   },
+   "sonic": {
+    "decimal_place": 18,
+    "contract_address": "0xf1ef7d2d4c0c881cd634481e0586ed5d2871a74b",
+    "geckoterminal_url": "https://www.geckoterminal.com/sonic/tokens/0xf1ef7d2d4c0c881cd634481e0586ed5d2871a74b"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0xa99f6e6785da0f5d6fb42495fe424bce029eeb3e",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xa99f6e6785da0f5d6fb42495fe424bce029eeb3e"
+   },
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0xb3ed0a426155b79b898849803e3b36552f7ed507",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0xb3ed0a426155b79b898849803e3b36552f7ed507"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x0c880f6761f1af8d9aa9c466984b80dab9a8c9e8",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x0c880f6761f1af8d9aa9c466984b80dab9a8c9e8"
+   },
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xbc7b1ff1c6989f006a1185318ed4e7b5796e66e1",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0xbc7b1ff1c6989f006a1185318ed4e7b5796e66e1"
+   },
+   "monad": {
+    "decimal_place": 18,
+    "contract_address": "0x5e49e1f85813f2b65858860a3fa231b4186f2e0e",
+    "geckoterminal_url": "https://www.geckoterminal.com/monad/tokens/0x5e49e1f85813f2b65858860a3fa231b4186f2e0e"
+   },
+   "robinhood": {
+    "decimal_place": 18,
+    "contract_address": "0x5e49e1f85813f2b65858860a3fa231b4186f2e0e",
+    "geckoterminal_url": "https://www.geckoterminal.com/robinhood/tokens/0x5e49e1f85813f2b65858860a3fa231b4186f2e0e"
+   }
+  }
+ },
+ "polygon-bridged-wbtc-polygon-pos": {
+  "symbol": "wbtc",
+  "name": "Polygon Bridged WBTC (Polygon POS)",
+  "platforms": {
+   "polygon-pos": {
+    "decimal_place": 8,
+    "contract_address": "0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6"
+   }
+  }
+ },
+ "polygon-bridged-wsteth-polygon": {
+  "symbol": "wsteth",
+  "name": "Polygon Bridged wstETH (Polygon)",
+  "platforms": {
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x03b54a6e9a984069379fae1a4fc4dbae93b3bccd",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x03b54a6e9a984069379fae1a4fc4dbae93b3bccd"
+   }
+  }
+ },
+ "polygon-ecosystem-token": {
+  "symbol": "pol",
+  "name": "POL (ex-MATIC)",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x455e53cbb86018ac2b8092fdcd39d8444affc3f6",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x455e53cbb86018ac2b8092fdcd39d8444affc3f6"
+   },
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x0000000000000000000000000000000000001010",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x0000000000000000000000000000000000001010"
+   }
+  }
+ },
+ "polygon-pos-bridged-dai-polygon-pos": {
+  "symbol": "dai",
+  "name": "Polygon PoS Bridged DAI (Polygon POS)",
+  "platforms": {
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x8f3cf7ad23cd3cadbd9735aff958023239c6a063"
+   }
+  }
+ },
+ "polygon-pos-bridged-weth-polygon-pos": {
+  "symbol": "weth",
+  "name": "Polygon PoS Bridged WETH (Polygon POS)",
+  "platforms": {
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x7ceb23fd6bc0add59e62ac25578270cff1b9f619"
+   }
+  }
+ },
+ "pyth-network": {
+  "symbol": "pyth",
+  "name": "Pyth Network",
+  "platforms": {
+   "solana": {
+    "decimal_place": 6,
+    "contract_address": "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3"
+   },
+   "neon-evm": {
+    "decimal_place": 6,
+    "contract_address": "0x0575dd4afd93b7522fee4e0179f243eca3856137",
+    "geckoterminal_url": "https://www.geckoterminal.com/neon-evm/tokens/0x0575dd4afd93b7522fee4e0179f243eca3856137"
+   },
+   "manta-pacific": {
+    "decimal_place": 6,
+    "contract_address": "0x90e95735378a31bfad2dcd87128fbb80ffeb6917",
+    "geckoterminal_url": "https://www.geckoterminal.com/manta-pacific/tokens/0x90e95735378a31bfad2dcd87128fbb80ffeb6917"
+   }
+  }
+ },
+ "rocket-pool-eth": {
+  "symbol": "reth",
+  "name": "Rocket Pool ETH",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xae78736cd615f374d3085123a210448e74fc6393",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xae78736cd615f374d3085123a210448e74fc6393"
+   },
+   "unichain": {
+    "decimal_place": 18,
+    "contract_address": "0x94cac393f3444cef63a651ffc18497e7e8bd036a",
+    "geckoterminal_url": "https://www.geckoterminal.com/unichain/tokens/0x94cac393f3444cef63a651ffc18497e7e8bd036a"
+   },
+   "ronin": {
+    "decimal_place": 18,
+    "contract_address": "0x29c46e6f2a67872ad6b1dc04e1591934a96af62e",
+    "geckoterminal_url": "https://www.geckoterminal.com/ronin/tokens/0x29c46e6f2a67872ad6b1dc04e1591934a96af62e"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0xb6fe221fe9eef5aba221c348ba20a1bf5e73624c",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xb6fe221fe9eef5aba221c348ba20a1bf5e73624c"
+   },
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x0266f4f08d82372cf0fcbccc0ff74309089c74d1",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x0266f4f08d82372cf0fcbccc0ff74309089c74d1"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8"
+   },
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x9bcef72be871e61ed4fbbc7630889bee758eb81d",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x9bcef72be871e61ed4fbbc7630889bee758eb81d"
+   }
+  }
+ },
+ "sky": {
+  "symbol": "sky",
+  "name": "Sky",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x56072c95faa701256059aa122697b133aded9279",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x56072c95faa701256059aa122697b133aded9279"
+   },
+   "hydration": {
+    "decimal_place": 18,
+    "contract_address": "asset_registry%2F1000795"
+   }
+  }
+ },
+ "superbridge-bridged-wsteth-base": {
+  "symbol": "wsteth",
+  "name": "Superbridge Bridged wstETH (Base)",
+  "platforms": {
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452"
+   }
+  }
+ },
+ "superbridge-bridged-wsteth-optimism": {
+  "symbol": "wsteth",
+  "name": "Superbridge Bridged wstETH (Optimism)",
+  "platforms": {
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x1f32b1c2345538c0c6f582fcb022739c4a194ebb",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x1f32b1c2345538c0c6f582fcb022739c4a194ebb"
+   }
+  }
+ },
+ "tbtc": {
+  "symbol": "tbtc",
+  "name": "tBTC",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x18084fba666a33d37592fa2633fd49a74dd93a88",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x18084fba666a33d37592fa2633fd49a74dd93a88"
+   },
+   "sui": {
+    "decimal_place": 8,
+    "contract_address": "0x77045f1b9f811a7a8fb9ebd085b5b0c55c5cb0d1520ff55f7037f89b5da9f5f1::TBTC::TBTC",
+    "geckoterminal_url": "https://www.geckoterminal.com/sui-network/tokens/0x77045f1b9f811a7a8fb9ebd085b5b0c55c5cb0d1520ff55f7037f89b5da9f5f1::TBTC::TBTC"
+   },
+   "hydration": {
+    "decimal_place": 18,
+    "contract_address": "asset_registry%2F1000765"
+   },
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x236aa50979d5f3de3bd1eeb40e81137f22ab794b"
+   },
+   "starknet": {
+    "decimal_place": 18,
+    "contract_address": "0x04daa17763b286d1e59b97c283c0b8c949994c361e426a28f743c67bdfe9a32f",
+    "geckoterminal_url": "https://www.geckoterminal.com/starknet-alpha/tokens/0x04daa17763b286d1e59b97c283c0b8c949994c361e426a28f743c67bdfe9a32f"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x236aa50979d5f3de3bd1eeb40e81137f22ab794b"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40"
+   },
+   "solana": {
+    "decimal_place": 8,
+    "contract_address": "6DNSN2BJsaPFdFFc1zP37kkeNe4Usc1Sqkzr9C9vPWcU",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/6DNSN2BJsaPFdFFc1zP37kkeNe4Usc1Sqkzr9C9vPWcU"
+   },
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40"
+   },
+   "bob-network": {
+    "decimal_place": 18,
+    "contract_address": "0xbba2ef945d523c4e2608c9e1214c2cc64d4fc2e2",
+    "geckoterminal_url": "https://www.geckoterminal.com/bob-network/tokens/0xbba2ef945d523c4e2608c9e1214c2cc64d4fc2e2"
+   }
+  }
+ },
+ "toshi": {
+  "symbol": "toshi",
+  "name": "Toshi",
+  "platforms": {
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4"
+   },
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x6a2608dabe09bc1128eec7275b92dfb939d5db3f",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x6a2608dabe09bc1128eec7275b92dfb939d5db3f"
+   }
+  }
+ },
+ "unit-bitcoin": {
+  "symbol": "ubtc",
+  "name": "Unit Bitcoin",
+  "platforms": {
+   "hyperevm": {
+    "decimal_place": 8,
+    "contract_address": "0x9fdbda0a5e284c32744d2f17ee5c74b284993463",
+    "geckoterminal_url": "https://www.geckoterminal.com/hyperevm/tokens/0x9fdbda0a5e284c32744d2f17ee5c74b284993463"
+   },
+   "hyperliquid": {
+    "decimal_place": 10,
+    "contract_address": "0x8f254b963e8468305d409b33aa137c67"
+   }
+  }
+ },
+ "unit-ethereum": {
+  "symbol": "ueth",
+  "name": "Unit Ethereum",
+  "platforms": {
+   "hyperliquid": {
+    "decimal_place": 9,
+    "contract_address": "0xe1edd30daaf5caac3fe63569e24748da"
+   },
+   "hyperevm": {
+    "decimal_place": 18,
+    "contract_address": "0xbe6727b535545c67d5caa73dea54865b92cf7907",
+    "geckoterminal_url": "https://www.geckoterminal.com/hyperevm/tokens/0xbe6727b535545c67d5caa73dea54865b92cf7907"
+   }
+  }
+ },
+ "unit-solana": {
+  "symbol": "usol",
+  "name": "Unit Solana",
+  "platforms": {
+   "hyperevm": {
+    "decimal_place": 9,
+    "contract_address": "0x068f321fa8fb9f0d135f290ef6a3e2813e1c8a29",
+    "geckoterminal_url": "https://www.geckoterminal.com/hyperevm/tokens/0x068f321fa8fb9f0d135f290ef6a3e2813e1c8a29"
+   },
+   "hyperliquid": {
+    "decimal_place": 8,
+    "contract_address": "0x49b67c39f5566535de22b29b0e51e685"
+   }
+  }
+ },
+ "usd-coin-avalanche-bridged-usdc-e": {
+  "symbol": "usdc.e",
+  "name": "Avalanche Bridged USDC (Avalanche)",
+  "platforms": {
+   "avalanche": {
+    "decimal_place": 6,
+    "contract_address": "0xa7d7079b0fead91f3e65f86e8915cb59c1a4c664",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0xa7d7079b0fead91f3e65f86e8915cb59c1a4c664"
+   }
+  }
+ },
+ "usd-coin-ethereum-bridged": {
+  "symbol": "usdc.e",
+  "name": "Arbitrum Bridged USDC (Arbitrum)",
+  "platforms": {
+   "arbitrum-one": {
+    "decimal_place": 6,
+    "contract_address": "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0xff970a61a04b1ca14834a43f5de4533ebddb5cc8"
+   }
+  }
+ },
+ "usdd": {
+  "symbol": "usdd",
+  "name": "USDD",
+  "platforms": {
+   "tron": {
+    "decimal_place": 18,
+    "contract_address": "TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz",
+    "geckoterminal_url": "https://www.geckoterminal.com/tron/tokens/TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz"
+   },
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x4f8e5de400de08b164e7421b3ee387f461becd1a",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x4f8e5de400de08b164e7421b3ee387f461becd1a"
+   },
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x45e51bc23d592eb2dba86da3985299f7895d66ba",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x45e51bc23d592eb2dba86da3985299f7895d66ba"
+   }
+  }
+ },
+ "usdt0": {
+  "symbol": "usdt0",
+  "name": "USDT0",
+  "platforms": {
+   "ink": {
+    "decimal_place": 6,
+    "contract_address": "0x0200c29006150606b650577bbe7b6248f58470c1",
+    "geckoterminal_url": "https://www.geckoterminal.com/ink/tokens/0x0200c29006150606b650577bbe7b6248f58470c1"
+   },
+   "flare-network": {
+    "decimal_place": 6,
+    "contract_address": "0xe7cd86e13ac4309349f30b3435a9d337750fc82d",
+    "geckoterminal_url": "https://www.geckoterminal.com/flare/tokens/0xe7cd86e13ac4309349f30b3435a9d337750fc82d"
+   },
+   "mantle": {
+    "decimal_place": 6,
+    "contract_address": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+    "geckoterminal_url": "https://www.geckoterminal.com/mantle/tokens/0x779ded0c9e1022225f8e0630b35a9b54be713736"
+   },
+   "plasma": {
+    "decimal_place": 6,
+    "contract_address": "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb",
+    "geckoterminal_url": "https://www.geckoterminal.com/plasma/tokens/0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb"
+   },
+   "tempo": {
+    "decimal_place": 6,
+    "contract_address": "0x20c00000000000000000000014f22ca97301eb73",
+    "geckoterminal_url": "https://www.geckoterminal.com/tempo/tokens/0x20c00000000000000000000014f22ca97301eb73"
+   },
+   "hyperevm": {
+    "decimal_place": 6,
+    "contract_address": "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb",
+    "geckoterminal_url": "https://www.geckoterminal.com/hyperevm/tokens/0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb"
+   },
+   "stellar": {
+    "decimal_place": 7,
+    "contract_address": "CBSJZEIO5C7KC2SF3MKSNXXJSW5G3VTNBX4ATMKUI3B2MR4JKM4R26YF",
+    "geckoterminal_url": "https://www.geckoterminal.com/stellar/tokens/CBSJZEIO5C7KC2SF3MKSNXXJSW5G3VTNBX4ATMKUI3B2MR4JKM4R26YF"
+   },
+   "berachain": {
+    "decimal_place": 6,
+    "contract_address": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+    "geckoterminal_url": "https://www.geckoterminal.com/berachain/tokens/0x779ded0c9e1022225f8e0630b35a9b54be713736"
+   },
+   "monad": {
+    "decimal_place": 6,
+    "contract_address": "0xe7cd86e13ac4309349f30b3435a9d337750fc82d",
+    "geckoterminal_url": "https://www.geckoterminal.com/monad/tokens/0xe7cd86e13ac4309349f30b3435a9d337750fc82d"
+   },
+   "conflux": {
+    "decimal_place": 6,
+    "contract_address": "0xaf37e8b6c9ed7f6318979f56fc287d76c30847ff",
+    "geckoterminal_url": "https://www.geckoterminal.com/cfx/tokens/0xaf37e8b6c9ed7f6318979f56fc287d76c30847ff"
+   },
+   "rootstock": {
+    "decimal_place": 6,
+    "contract_address": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+    "geckoterminal_url": "https://www.geckoterminal.com/rootstock/tokens/0x779ded0c9e1022225f8e0630b35a9b54be713736"
+   },
+   "megaeth": {
+    "decimal_place": 6,
+    "contract_address": "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb",
+    "geckoterminal_url": "https://www.geckoterminal.com/megaeth/tokens/0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb"
+   },
+   "hedera-hashgraph": {
+    "decimal_place": 6,
+    "contract_address": "0x00000000000000000000000000000000009ce723",
+    "geckoterminal_url": "https://www.geckoterminal.com/hedera-hashgraph/tokens/0x00000000000000000000000000000000009ce723"
+   },
+   "unichain": {
+    "decimal_place": 6,
+    "contract_address": "0x9151434b16b9763660705744891fa906f660ecc5",
+    "geckoterminal_url": "https://www.geckoterminal.com/unichain/tokens/0x9151434b16b9763660705744891fa906f660ecc5"
+   },
+   "x-layer": {
+    "decimal_place": 6,
+    "contract_address": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+    "geckoterminal_url": "https://www.geckoterminal.com/x-layer/tokens/0x779ded0c9e1022225f8e0630b35a9b54be713736"
+   },
+   "sei-v2": {
+    "decimal_place": 6,
+    "contract_address": "0x9151434b16b9763660705744891fa906f660ecc5",
+    "geckoterminal_url": "https://www.geckoterminal.com/sei-evm/tokens/0x9151434b16b9763660705744891fa906f660ecc5"
+   },
+   "stable": {
+    "decimal_place": 6,
+    "contract_address": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+    "geckoterminal_url": "https://www.geckoterminal.com/stable/tokens/0x779ded0c9e1022225f8e0630b35a9b54be713736"
+   },
+   "arbitrum-one": {
+    "decimal_place": 6,
+    "contract_address": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+   },
+   "polygon-pos": {
+    "decimal_place": 6,
+    "contract_address": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0xc2132d05d31c914a87c6611c10748aeb04b58e8f"
+   },
+   "optimistic-ethereum": {
+    "decimal_place": 6,
+    "contract_address": "0x01bff41798a0bcf287b996046ca68b395dbc1071",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x01bff41798a0bcf287b996046ca68b395dbc1071"
+   },
+   "morph-l2": {
+    "decimal_place": 6,
+    "contract_address": "0xe7cd86e13ac4309349f30b3435a9d337750fc82d",
+    "geckoterminal_url": "https://www.geckoterminal.com/morph-l2/tokens/0xe7cd86e13ac4309349f30b3435a9d337750fc82d"
+   },
+   "hyperliquid": {
+    "decimal_place": 8,
+    "contract_address": "0x25faedc3f054130dbb4e4203aca63567"
+   }
+  }
+ },
+ "velodrome-finance": {
+  "symbol": "velo",
+  "name": "Velodrome Finance",
+  "platforms": {
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x9560e827af36c94d2ac33a39bce1fe78631088db",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x9560e827af36c94d2ac33a39bce1fe78631088db"
+   }
+  }
+ },
+ "wbnb": {
+  "symbol": "wbnb",
+  "name": "Wrapped BNB",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+   }
+  }
+ },
+ "wmatic": {
+  "symbol": "wpol",
+  "name": "Wrapped POL",
+  "platforms": {
+   "polygon-pos": {
+    "decimal_place": 18,
+    "contract_address": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon_pos/tokens/0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270"
+   },
+   "polygon-zkevm": {
+    "decimal_place": 18,
+    "contract_address": "0xa2036f0538221a77a3937f1379699f44945018d0",
+    "geckoterminal_url": "https://www.geckoterminal.com/polygon-zkevm/tokens/0xa2036f0538221a77a3937f1379699f44945018d0"
+   },
+   "fantom": {
+    "decimal_place": 18,
+    "contract_address": "0x40df1ae6074c35047bff66675488aa2f9f6384f3",
+    "geckoterminal_url": "https://www.geckoterminal.com/ftm/tokens/0x40df1ae6074c35047bff66675488aa2f9f6384f3"
+   },
+   "astar": {
+    "decimal_place": 18,
+    "contract_address": "0xdd90e5e87a2081dcf0391920868ebc2ffb81a1af",
+    "geckoterminal_url": "https://www.geckoterminal.com/astr/tokens/0xdd90e5e87a2081dcf0391920868ebc2ffb81a1af"
+   },
+   "telos": {
+    "decimal_place": 18,
+    "contract_address": "0x332730a4f6e03d9c55829435f10360e13cfa41ff",
+    "geckoterminal_url": "https://www.geckoterminal.com/tlos/tokens/0x332730a4f6e03d9c55829435f10360e13cfa41ff"
+   },
+   "sx-network": {
+    "decimal_place": 18,
+    "contract_address": "0xfa6f64dfbad14e6883321c2f756f5b22ff658f9c",
+    "geckoterminal_url": "https://www.geckoterminal.com/sxn/tokens/0xfa6f64dfbad14e6883321c2f756f5b22ff658f9c"
+   },
+   "velas": {
+    "decimal_place": 18,
+    "contract_address": "0xa649325aa7c5093d12d6f98eb4378deae68ce23f",
+    "geckoterminal_url": "https://www.geckoterminal.com/velas/tokens/0xa649325aa7c5093d12d6f98eb4378deae68ce23f"
+   },
+   "iotex": {
+    "decimal_place": 18,
+    "contract_address": "0x8e66c0d6b70c0b23d39f4b21a1eac52bba8ed89a",
+    "geckoterminal_url": "https://www.geckoterminal.com/iotx/tokens/0x8e66c0d6b70c0b23d39f4b21a1eac52bba8ed89a"
+   },
+   "linea": {
+    "decimal_place": 18,
+    "contract_address": "0x265b25e22bcd7f10a5bd6e6410f10537cc7567e8",
+    "geckoterminal_url": "https://www.geckoterminal.com/linea/tokens/0x265b25e22bcd7f10a5bd6e6410f10537cc7567e8"
+   }
+  }
+ },
+ "wormhole": {
+  "symbol": "w",
+  "name": "Wormhole",
+  "platforms": {
+   "solana": {
+    "decimal_place": 6,
+    "contract_address": "85VBFQZC9TZkfaptBWjvUw7YbZjy52A6mjtPGjstQAmQ",
+    "geckoterminal_url": "https://www.geckoterminal.com/solana/tokens/85VBFQZC9TZkfaptBWjvUw7YbZjy52A6mjtPGjstQAmQ"
+   },
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xb0ffa8000886e57f86dd5264b9582b2ad87b2b91",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xb0ffa8000886e57f86dd5264b9582b2ad87b2b91"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0xb0ffa8000886e57f86dd5264b9582b2ad87b2b91",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0xb0ffa8000886e57f86dd5264b9582b2ad87b2b91"
+   },
+   "arbitrum-one": {
+    "decimal_place": 18,
+    "contract_address": "0xb0ffa8000886e57f86dd5264b9582b2ad87b2b91",
+    "geckoterminal_url": "https://www.geckoterminal.com/arbitrum/tokens/0xb0ffa8000886e57f86dd5264b9582b2ad87b2b91"
+   }
+  }
+ },
+ "wormhole-bridged-wsteth-bsc": {
+  "symbol": "wsteth",
+  "name": "Wormhole Bridged wstETH (BSC)",
+  "platforms": {
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x26c5e01524d2e6280a48f2c50ff6de7e52e9611c",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x26c5e01524d2e6280a48f2c50ff6de7e52e9611c"
+   }
+  }
+ },
+ "wrapped-avax": {
+  "symbol": "wavax",
+  "name": "Wrapped AVAX",
+  "platforms": {
+   "avalanche": {
+    "decimal_place": 18,
+    "contract_address": "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7"
+   }
+  }
+ },
+ "wrapped-eeth": {
+  "symbol": "weeth",
+  "name": "Wrapped eETH",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xcd5fe23c85820f7b72d0926fc9b05b43e359b7ee",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0xcd5fe23c85820f7b72d0926fc9b05b43e359b7ee"
+   },
+   "base": {
+    "decimal_place": 18,
+    "contract_address": "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a",
+    "geckoterminal_url": "https://www.geckoterminal.com/base/tokens/0x04c0599ae5a44757c0af6f9ec3b93da8976c150a"
+   },
+   "plasma": {
+    "decimal_place": 18,
+    "contract_address": "0xa3d68b74bf0528fdd07263c60d6488749044914b",
+    "geckoterminal_url": "https://www.geckoterminal.com/plasma/tokens/0xa3d68b74bf0528fdd07263c60d6488749044914b"
+   },
+   "swellchain": {
+    "decimal_place": 18,
+    "contract_address": "0xa6cb988942610f6731e664379d15ffcfbf282b44",
+    "geckoterminal_url": "https://www.geckoterminal.com/swellchain/tokens/0xa6cb988942610f6731e664379d15ffcfbf282b44"
+   },
+   "berachain": {
+    "decimal_place": 18,
+    "contract_address": "0x7dcc39b4d1c53cb31e1abc0e358b43987fef80f7",
+    "geckoterminal_url": "https://www.geckoterminal.com/berachain/tokens/0x7dcc39b4d1c53cb31e1abc0e358b43987fef80f7"
+   },
+   "hyperevm": {
+    "decimal_place": 18,
+    "contract_address": "0xa3d68b74bf0528fdd07263c60d6488749044914b",
+    "geckoterminal_url": "https://www.geckoterminal.com/hyperevm/tokens/0xa3d68b74bf0528fdd07263c60d6488749044914b"
+   },
+   "initia": {
+    "decimal_place": 0,
+    "contract_address": "0xb14774f27e0ccea61f68fd522d20058c285a68a1b45d9a581ff754b326e186cc",
+    "geckoterminal_url": "https://www.geckoterminal.com/initia/tokens/0xb14774f27e0ccea61f68fd522d20058c285a68a1b45d9a581ff754b326e186cc"
+   },
+   "sonic": {
+    "decimal_place": 18,
+    "contract_address": "0xa3d68b74bf0528fdd07263c60d6488749044914b",
+    "geckoterminal_url": "https://www.geckoterminal.com/sonic/tokens/0xa3d68b74bf0528fdd07263c60d6488749044914b"
+   },
+   "linea": {
+    "decimal_place": 18,
+    "contract_address": "0x1bf74c010e6320bab11e2e5a532b5ac15e0b8aa6",
+    "geckoterminal_url": "https://www.geckoterminal.com/linea/tokens/0x1bf74c010e6320bab11e2e5a532b5ac15e0b8aa6"
+   },
+   "unichain": {
+    "decimal_place": 18,
+    "contract_address": "0x7dcc39b4d1c53cb31e1abc0e358b43987fef80f7",
+    "geckoterminal_url": "https://www.geckoterminal.com/unichain/tokens/0x7dcc39b4d1c53cb31e1abc0e358b43987fef80f7"
+   },
+   "mode": {
+    "decimal_place": 18,
+    "contract_address": "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a",
+    "geckoterminal_url": "https://www.geckoterminal.com/mode/tokens/0x04c0599ae5a44757c0af6f9ec3b93da8976c150a"
+   },
+   "ink": {
+    "decimal_place": 18,
+    "contract_address": "0xa3d68b74bf0528fdd07263c60d6488749044914b",
+    "geckoterminal_url": "https://www.geckoterminal.com/ink/tokens/0xa3d68b74bf0528fdd07263c60d6488749044914b"
+   },
+   "binance-smart-chain": {
+    "decimal_place": 18,
+    "contract_address": "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a",
+    "geckoterminal_url": "https://www.geckoterminal.com/bsc/tokens/0x04c0599ae5a44757c0af6f9ec3b93da8976c150a"
+   },
+   "monad": {
+    "decimal_place": 18,
+    "contract_address": "0xa3d68b74bf0528fdd07263c60d6488749044914b",
+    "geckoterminal_url": "https://www.geckoterminal.com/monad/tokens/0xa3d68b74bf0528fdd07263c60d6488749044914b"
+   },
+   "blast": {
+    "decimal_place": 18,
+    "contract_address": "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a",
+    "geckoterminal_url": "https://www.geckoterminal.com/blast/tokens/0x04c0599ae5a44757c0af6f9ec3b93da8976c150a"
+   },
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x5a7facb970d094b6c7ff1df0ea68d99e6e73cbff",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0x5a7facb970d094b6c7ff1df0ea68d99e6e73cbff"
+   },
+   "avalanche": {
+    "decimal_place": 18,
+    "contract_address": "0xa3d68b74bf0528fdd07263c60d6488749044914b",
+    "geckoterminal_url": "https://www.geckoterminal.com/avax/tokens/0xa3d68b74bf0528fdd07263c60d6488749044914b"
+   },
+   "morph-l2": {
+    "decimal_place": 18,
+    "contract_address": "0x7dcc39b4d1c53cb31e1abc0e358b43987fef80f7",
+    "geckoterminal_url": "https://www.geckoterminal.com/morph-l2/tokens/0x7dcc39b4d1c53cb31e1abc0e358b43987fef80f7"
+   },
+   "scroll": {
+    "decimal_place": 18,
+    "contract_address": "0x01f0a31698c4d065659b9bdc21b3610292a1c506",
+    "geckoterminal_url": "https://www.geckoterminal.com/scroll/tokens/0x01f0a31698c4d065659b9bdc21b3610292a1c506"
+   },
+   "zksync": {
+    "decimal_place": 18,
+    "contract_address": "0xc1fa6e2e8667d9be0ca938a54c7e0285e9df924a",
+    "geckoterminal_url": "https://www.geckoterminal.com/zksync/tokens/0xc1fa6e2e8667d9be0ca938a54c7e0285e9df924a"
+   }
+  }
+ },
+ "wrapped-hype": {
+  "symbol": "whype",
+  "name": "Wrapped HYPE",
+  "platforms": {
+   "hyperevm": {
+    "decimal_place": 18,
+    "contract_address": "0x5555555555555555555555555555555555555555",
+    "geckoterminal_url": "https://www.geckoterminal.com/hyperevm/tokens/0x5555555555555555555555555555555555555555"
+   },
+   "optimistic-ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0xd83e3d560ba6f05094d9d8b3eb8aaea571d1864e",
+    "geckoterminal_url": "https://www.geckoterminal.com/optimism/tokens/0xd83e3d560ba6f05094d9d8b3eb8aaea571d1864e"
+   }
+  }
+ },
+ "wrapped-steth": {
+  "symbol": "wsteth",
+  "name": "Wrapped stETH",
+  "platforms": {
+   "ethereum": {
+    "decimal_place": 18,
+    "contract_address": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+    "geckoterminal_url": "https://www.geckoterminal.com/eth/tokens/0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"
+   },
+   "megaeth": {
+    "decimal_place": 18,
+    "contract_address": "0x601ac63637933d88285a025c685ac4e9a92a98da",
+    "geckoterminal_url": "https://www.geckoterminal.com/megaeth/tokens/0x601ac63637933d88285a025c685ac4e9a92a98da"
+   },
+   "monad": {
+    "decimal_place": 18,
+    "contract_address": "0x10aeaf63194db8d453d4d85a06e5efe1dd0b5417",
+    "geckoterminal_url": "https://www.geckoterminal.com/monad/tokens/0x10aeaf63194db8d453d4d85a06e5efe1dd0b5417"
+   },
+   "unichain": {
+    "decimal_place": 18,
+    "contract_address": "0xc02fe7317d4eb8753a02c35fe019786854a92001",
+    "geckoterminal_url": "https://www.geckoterminal.com/unichain/tokens/0xc02fe7317d4eb8753a02c35fe019786854a92001"
+   }
+  }
  }
 }

@@ -39,7 +39,7 @@ function order(now: number, o: { amount?: bigint; to?: string; receiver?: string
   const data = encodeFunctionData({ abi: KYBER_ROUTER_ABI, functionName: 'swap', args: [{ callTarget: '0x8F10B468b06c6FD214B65F87778827F7D113f996', approveTarget: '0x0000000000000000000000000000000000000000', targetData: '0xabcd', desc, clientData: '0x' }] as never });
   const src = fromAsset === 'native' ? NETWORKS.base.native : NETWORKS.base.tokens.find((t) => t.id === fromAsset)!;
   const intent: Intent = { v: 1, proposalId: uuid(), keyId: o.keyId ?? vaultKeyId(keys.keyId, 1), network: o.network ?? 'base', chainRef: '8453', asset: fromAsset, symbol: src.symbol, decimals: src.decimals, amount: amount.toString(),
-    from: o.from ?? VAULT, to: o.to ?? VAULT, maxFee: '200000000000000', createdAt: now, expiresAt: now + 90, policyVersion: 2,
+    from: o.from ?? VAULT, to: o.to ?? VAULT, maxFee: '200000000000000', createdAt: now, expiresAt: now + 90, policyVersion: 3,
     swap: { provider: 'kyberswap', toAsset, minOut: minOut.toString(), router: KYBER_ROUTER, dataHash: swapDataHash(data), approveGas: fromAsset === 'native' ? '0' : '70000' },
     evm: { nonce: 0, gasLimit: '600000', maxFeePerGas: '200000000', maxPriorityFeePerGas: '1000000' } };
   return { intent, aux: { swapData: data } };
@@ -164,7 +164,7 @@ describe('returning funds', () => {
     const { signer, pk, t } = await setup();
     const m = mandate(t.now); await signer.approveMandate(m, pk.assert(mandateHash(m)));
     const ret = (to: string, o: Partial<Intent> = {}): Intent => ({ v: 1, proposalId: uuid(), keyId: vaultKeyId(keys.keyId, 1), network: 'base', chainRef: '8453', asset: USDC, symbol: 'USDC', decimals: 6, amount: '30000000',
-      from: VAULT, to, maxFee: '200000000000000', createdAt: t.now, expiresAt: t.now + 90, policyVersion: 2, evm: { nonce: 3, gasLimit: '90000', maxFeePerGas: '200000000', maxPriorityFeePerGas: '1000000' }, ...o });
+      from: VAULT, to, maxFee: '200000000000000', createdAt: t.now, expiresAt: t.now + 90, policyVersion: 3, evm: { nonce: 3, gasLimit: '90000', maxFeePerGas: '200000000', maxPriorityFeePerGas: '1000000' }, ...o });
     await expect(signer.signReturn(m.mandateId, ret('0x70997970C51812dc3A010C7d01b50e0d17dc79C8'))).rejects.toThrow(/owner/);
     await expect(signer.signReturn(m.mandateId, ret(keys.addresses.evm, { from: keys.addresses.evm }))).rejects.toThrow(/vault/);
     signer.revokeMandate(m.mandateId);

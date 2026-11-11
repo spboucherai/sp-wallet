@@ -30,6 +30,20 @@ export const CAPS: Record<string, string> = {
   TON: '45',
   LINK: '5', UNI: '7.5', AAVE: '0.4', LDO: '150', PAXG: '0.0125', ONDO: '135', RENDER: '30', JUP: '200', RAY: '30',
   BONK: '18000000', PEPE: '9000000', SHIB: '11000000',
+  // Registry v5 (2026-11-10). Same size: about 50 USD per transfer at the prices of 2026-11-10 (DefiLlama price API, coins.llama.fi,
+  // keyed by CoinGecko id; USD price in the comment). Tokens registered under an existing ticker (Binance-Peg ETH, XRP, DOGE, SOL,
+  // LTC, AVAX on BNB Chain; bridged USDC, USDT, DAI, WBTC, WETH, LINK, UNI, AAVE) use the existing limit of that ticker, unchanged.
+  USDT0: '50', 'USDC.e': '50', GHO: '50', crvUSD: '50', frxUSD: '50', USDD: '50', // 0.997–1.000
+  cbBTC: '0.0007', tBTC: '0.0007', BTCB: '0.0007', 'BTC.b': '0.0007', // 73 604 / 73 488 / 73 418 / 73 508
+  'WETH.e': '0.025', // 2 058
+  wstETH: '0.02', rETH: '0.021', cbETH: '0.021', weETH: '0.022', // 2 567 / 2 416 / 2 360 / 2 278
+  'LINK.e': '5', // 10.38
+  ARB: '300', OP: '500', WPOL: '550', WAVAX: '6', WBNB: '0.075', WHYPE: '0.7', MNT: '120', // 0.1643 / 0.09997 / 0.08861 / 8.407 / 679.6 / 71.64 / 0.4244
+  cbXRP: '47', cbDOGE: '730', cbLTC: '1', cbADA: '285', ADA: '285', DOT: '60', // 1.050 / 0.06822 / 50.87 / 0.1748 / 0.1754 / 0.8464
+  MKR: '0.036', SKY: '840', CRV: '200', COMP: '2.5', SNX: '300', PENDLE: '32', ENA: '325', GMX: '6.5', // 1 381 / 0.05974 / 0.2499 / 19.95 / 0.1643 / 1.583 / 0.1536 / 7.658
+  AERO: '90', VELO: '2100', CAKE: '27', JOE: '1850', MORPHO: '25', EIGEN: '300', // 0.5456 / 0.02373 / 1.835 / 0.02715 / 2.016 / 0.1615
+  BRETT: '13500', TOSHI: '550000', DEGEN: '60000', // 0.003725 / 0.00009058 / 0.0008329
+  JTO: '150', PYTH: '700', HNT: '200', ORCA: '40', mSOL: '0.43', jitoSOL: '0.46', bSOL: '0.45', // 0.3384 / 0.06958 / 0.2543 / 1.265 / 117.3 / 108.5 / 109.8
 };
 const STABLE_FEE: Record<string, string> = {
   ethereum: '5000000000000000', base: '300000000000000', arbitrum: '300000000000000', optimism: '300000000000000',
@@ -51,7 +65,7 @@ function buildDefaultPolicy(): Policy {
     perTx[`${n.id}:${a.symbol}`] = v.toString();
     daily[`${n.id}:${a.symbol}`] = (v * 2n).toString();
   }
-  return { version: 2, perTx, daily, maxFee: STABLE_FEE, maxApprovalTtlSec: 300, allowlist: [] };
+  return { version: 3, perTx, daily, maxFee: STABLE_FEE, maxApprovalTtlSec: 300, allowlist: [] };
 }
 /** Conservative defaults sized for a wallet holding a few tens of dollars per asset. */
 export const DEFAULT_POLICY: Policy = buildDefaultPolicy();

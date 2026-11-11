@@ -36,7 +36,7 @@ async function setup() {
 }
 let seq = 0;
 const intent = (t: number, over: Partial<Intent> = {}): Intent => ({ v: 1, proposalId: `7a1c1f0e-8f5f-4b1e-9c56-${String(++seq).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 90,
-  policyVersion: 2, network: 'cosmos', chainRef: NETWORKS.cosmos.chainRef, asset: 'native', symbol: 'ATOM', decimals: 6, amount: '3000000', from: keys.addresses.cosmos!, to: DEST, maxFee: '1500',
+  policyVersion: 3, network: 'cosmos', chainRef: NETWORKS.cosmos.chainRef, asset: 'native', symbol: 'ATOM', decimals: 6, amount: '3000000', from: keys.addresses.cosmos!, to: DEST, maxFee: '1500',
   memo: '104588310', x: X, ...over });
 
 describe('Cosmos Hub through the signer', () => {

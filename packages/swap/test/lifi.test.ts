@@ -297,7 +297,7 @@ describe('lifi: malformed and hostile answers are rejected', () => {
     const sw = await run(name, tamper(name, (d) => { d.routes[1].containsSwitchChain = true; }));
     expect(sw).toHaveLength(7);
     // a fee to pay on top in an asset outside the registry
-    const fee = await run(name, tamper(name, (d) => { const f = d.routes[0].steps[0].estimate.feeCosts[0]; f.included = false; f.token.address = '0x4200000000000000000000000000000000000006'; }));
+    const fee = await run(name, tamper(name, (d) => { const f = d.routes[0].steps[0].estimate.feeCosts[0]; f.included = false; f.token.address = '0x000000000000000000000000000000000000dEaD'; }));
     expect(fee).toHaveLength(7);
     // a fee to pay on top in a registry asset is reported as such
     const onTop = await run(name, tamper(name, (d) => { d.routes[0].steps[0].estimate.feeCosts[0].included = false; }));
