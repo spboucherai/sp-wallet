@@ -136,7 +136,8 @@ export const I18n = createContext<{ locale: Locale; setLocale: (l: Locale) => vo
 export function useT() {
   const { locale } = useContext(I18n);
   return (k: Key, vars?: Record<string, string | number>) => {
-    let s: string = D[k][locale === 'fr' ? 0 : 1];
+    const row = (D as Record<string, readonly [string, string]>)[k];
+    let s: string = row ? row[locale === 'fr' ? 0 : 1] : String(k).replace(/^[a-z]_/, '').replace(/_/g, ' '); // unknown key: readable fallback, never a crash
     if (vars) for (const [a, b] of Object.entries(vars)) s = s.replace(`{${a}}`, String(b));
     return s;
   };
