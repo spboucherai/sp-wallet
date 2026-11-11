@@ -154,3 +154,34 @@ KyberSwap same-chain execution is now enabled on Ethereum, Arbitrum, Polygon, Op
 - Not changed: EVM paths, signer limits, existing checks. `intent.ts`: provider enum gains `jupiter`, a Jupiter swap is only
   valid on a Solana network. No new dependency; `dist/signer.mjs` 2 573 229 → 2 586 739 bytes (+13 510, +0.5 %).
 - Not verified: anything sent to a real network; see the dossier §10.9.
+
+## Update 2026-11-11 (V6): native cross-chain swaps executed through THORChain
+
+- Enabled: BTC and LTC (native SegWit) ↔ ETH / USDC / USDT / DAI / WBTC on Ethereum, BTC ↔ LTC, and DOGE as a destination.
+  Not enabled, with reasons (dossier `docs/swap/providers/thorchain.md` §11): DOGE as source (fee ceiling), BCH, Base /
+  Avalanche / BSC (other router builds, sources not read), Cosmos / XRP / TRON / Solana, streaming swaps, Maya Protocol
+  (two public operators only: `maya.md` §8).
+- The vault address cannot be verified offline. Design (dossier §10): the intent commits to the vault **public key**, the
+  address and the memo; the signer derives the address from the key, rebuilds the memo (destination = the wallet's own
+  address, limit ≥ approved minimum, no affiliate / refund override / streaming) and the transaction (UTXO: vault, change,
+  `OP_RETURN`; Ethereum: pinned router `depositWithExpiry`, exact approval), then **asks five pinned THORNode operators
+  itself** and signs only if at least three answer and every one that answers lists the key as an active vault on a chain
+  that is not halted, at the same churn height and about the same block height. What remains trusted: simultaneous
+  compromise or collusion of all operators that answered, TLS, THORChain itself. The API is out of the trust path.
+- `packages/core/src/thorchain.ts` (tables, memo builder and strict parser, 1e8 conversions, vault key → address,
+  `checkThorVault`, builders), `intent.ts` (`xswap` section, hashed), `services/isolated-signer/src/vaults.ts` + a branch in
+  `signer.ts`, `services/api/src/xswap.ts` + `xswap-state.ts` (`POST /api/v1/xswap/proposals`, approval through the usual
+  `/transfers/proposals/:id/approve`, relay gate, tracking worker), proposals column `xswap`, kind `xswap`,
+  `apps/web/src/xswap.tsx` (review sheet with the vault address and the residual trust stated, progress
+  sent → observed → outbound → received / refunded).
+- UTXO adapter: `prepare` accepts `thor: { extraBytes, minRate }` (memo bytes, THORChain's fee rate within the wallet's
+  cap, change always returned). Existing builders refuse an `xswap` intent. No limit raised, no check weakened.
+- Tests: `packages/core/test/thorchain.test.ts`, `services/isolated-signer/test/xswap.test.ts`,
+  `services/api/test/xswap.test.ts` (database `spw_test_xswap`). Proof without funds: `npx tsx scripts/sim-thorchain.mts`
+  (live read-only operator checks, a signed and decoded Bitcoin transaction that is not broadcast, router deposits on an
+  anvil fork).
+- Signer: new outbound hosts `gateway.liquify.com`, `api-thorchain.rorcual.xyz`, `thorchain.ibs.team`,
+  `thornode.thorwallet.org`, `lcd-thorchain.keplr.app`. No new dependency; `dist/signer.mjs` 2 618 075 → 2 643 913 bytes
+  (+25 838, +1.0 %).
+- Not verified: anything sent to a real network — no real swap, outbound or refund; see the dossier §12.
+

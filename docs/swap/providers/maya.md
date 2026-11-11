@@ -101,3 +101,20 @@ The vault address remains unverifiable by the signer on its own; Maya's node set
 
 `GET /mayachain/tx/status/{hash}` (checked live), `GET /mayachain/tx/{hash}`,
 `GET https://midgard.mayachain.info/v2/actions?txid={hash}`.
+
+## 8. Execution: not enabled (v6, 2026-11-11)
+
+THORChain swaps are now executed by the wallet (`thorchain.md` §9–§13). The same code would cover Maya — same memo grammar,
+same vault model — but the defence it rests on does not exist for Maya today: the signer signs only when **at least three
+independently operated nodes** confirm the vault, and on 2026-11-11 only **two** keyless public MAYANode operators answered
+(`mayanode.mayachain.info`, also the only entry of the Cosmos chain registry, and `api-maya.liquify.com`;
+`midgard.mayachain.info` proxies the first one and is not independent; `gateway.liquify.com/chain/maya_api` answers
+"Chain not publicly accessible"; no THORWallet, Rorcual, IBS or Keplr node for Maya was found). With two operators a single
+compromise plus one outage, or one actor behind both, is enough to name a false vault. Lowering the quorum for Maya would be
+a weaker design than the one THORChain swaps ship with, so Maya stays `quote_only`.
+
+What enabling it would take: a third and preferably fourth independent MAYANode (or a self-hosted one), then a Maya table
+in `packages/core/src/thorchain.ts` (pools, short codes, routers with bytecode hashes after reading their sources, the
+`mayapub` key prefix), and two differences handled explicitly: the memo limit is enforced **before** the outbound fee on
+Maya (§3 above), so the approved minimum must be `limit − outbound fee`; and Maya streams only when asked.
+

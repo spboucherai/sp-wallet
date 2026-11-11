@@ -47,7 +47,9 @@ export interface Adapter {
   balances(addr: string): Promise<Record<string, bigint>>;
   /** asset ids hidden because their on-chain identity check failed */
   disabledAssets?(): string[];
-  prepare(d: { asset: string; from: string; to: string; amount: bigint; memo?: string }): Promise<Prepared>;
+  prepare(d: { asset: string; from: string; to: string; amount: bigint; memo?: string;
+    /** UTXO chains, THORChain vault payment: extra output bytes (the memo), a minimum fee rate, and change always returned to the wallet */
+    thor?: { extraBytes: number; minRate: number } }): Promise<Prepared>;
   broadcast(raw: string): Promise<void>;
   track(p: { txid: string; intent: any; blockRef: string | null; broadcastAt: number }): Promise<Tracked>;
   deposits(addr: string, cursor: number | null): Promise<{ items: Deposit[]; cursor: number; finalizedHeight: number }>;

@@ -50,7 +50,7 @@ export const swapDataHash = (data: string): string => { if (!/^0x([0-9a-fA-F]{2}
 export function verifyKyberSwap(i: Intent, data: string): SwapDesc {
   const n = getNetwork(i.network), s = i.swap;
   if (n.family !== 'evm' || !i.evm || !s) throw new Error('not an EVM swap intent');
-  if (i.bridge) throw new Error('an intent is a swap or a bridge, not both');
+  if (i.bridge || i.xswap) throw new Error('an intent is a swap or a bridge, not both');
   if (s.provider !== 'kyberswap') throw new Error('unknown swap provider');
   if (!KYBER_ENABLED[i.network]) throw new Error(`swap execution is not enabled on ${n.name}`);
   if (i.chainRef !== n.chainRef) throw new Error('chain id mismatch');

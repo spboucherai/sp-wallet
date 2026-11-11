@@ -34,6 +34,7 @@ alter table proposals add column if not exists pre_txid text;
 alter table proposals add column if not exists pre_state text;
 alter table proposals add column if not exists out_amount numeric(78,0);
 alter table proposals add column if not exists bridge jsonb;
+alter table proposals add column if not exists xswap jsonb;
 create unique index if not exists proposals_txid on proposals (network, txid) where txid is not null;
 create table if not exists deposits (
   network text not null, txid text not null, idx int not null, asset text not null, amount numeric(78,0) not null,

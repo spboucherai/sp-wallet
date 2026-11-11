@@ -106,7 +106,7 @@ export function bridgeOf(i: Intent): CctpBridge {
 export function verifyCctpBridge(i: Intent): { src: CctpPin; dst: CctpPin; amount: bigint; maxFee: bigint } {
   const n = getNetwork(i.network), b = i.bridge;
   if (n.family !== 'evm' || !i.evm || !b) throw new Error('not an EVM bridge intent');
-  if (i.swap) throw new Error('an intent is a swap or a bridge, not both');
+  if (i.swap || i.xswap) throw new Error('an intent is a swap or a bridge, not both');
   if (b.provider !== 'cctp') throw new Error('unknown bridge provider');
   const src = CCTP_ENABLED[i.network], dst = CCTP_ENABLED[b.toNetwork];
   if (!src) throw new Error(`CCTP execution is not enabled on ${n.name}`);
