@@ -10,7 +10,9 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { I18n, useT, type Key } from '../i18n';
 import { Btn, Field, Icon, inputCls, Notice } from '../ui';
 import { Row, Seg } from './bits';
-import { fmt, usd } from './dec';
+import { fmt, parseInput, usd } from './dec';
+import { amountInputText, sanitizeAmountText } from '../amount';   // v8 hardening: the wallet's single rule for typed amounts
+import { AmountProblem } from '../amountUi';
 import { buildGmx, clearGmxPrefill, gapi, gmxError, peekGmxPrefill, type GmxForm, type GmxMarket, type GmxStatus } from './gmx';
 import { EstimateRows, eth, GmxErrNotice, lev as levText, px, TwoStep, usdc } from './GmxBits';
 import { GmxConfirm, type GmxRequest } from './GmxConfirm';
@@ -21,7 +23,7 @@ export function GmxOrderPanel({ status, market, onMarket }: { status: GmxStatus;
   const t = useT(); const { locale } = useContext(I18n);
   const policy = status.authorization?.policy, maxLev = Math.max(1, Math.min(20, policy?.maxLeverage ?? 1)), w = status.wallet;
   const [f, setF] = useState<GmxForm>(() => { const p = peekGmxPrefill(market.instrument);   // coming from the router: a pre-filled form, nothing more
-    return p ? { side: p.side, collateral: p.collateral, mode: 'size', leverage: p.leverage, sizeUsd: p.sizeUsd, slippageBps: '50' } : { side: 'long', collateral: '', mode: 'leverage', leverage: String(Math.min(2, maxLev)), sizeUsd: '', slippageBps: '50' }; });
+    return p ? { side: p.side, collateral: amountInputText(p.collateral, locale), mode: 'size', leverage: amountInputText(p.leverage, locale), sizeUsd: amountInputText(p.sizeUsd, locale), slippageBps: '50' } : { side: 'long', collateral: '', mode: 'leverage', leverage: String(Math.min(2, maxLev)), sizeUsd: '', slippageBps: '50' }; });
   const [prefilled] = useState(() => peekGmxPrefill(market.instrument) !== null);
   useEffect(() => { clearGmxPrefill(market.instrument); }, [market.instrument]);
   const [request, setRequest] = useState<GmxRequest | null>(null);
@@ -48,17 +50,17 @@ export function GmxOrderPanel({ status, market, onMarket }: { status: GmxStatus;
         className={`min-h-12 rounded-2xl border text-[15px] font-semibold transition ${f.side === s ? (s === 'long' ? 'border-emerald bg-emerald/10 text-emerald' : 'border-danger bg-danger/10 text-danger') : 'border-line text-mute'}`}>{t(s === 'long' ? 'gxLong' : 'gxShort')}</button>)}</div>
 
     <Field label={t('gxCollateralIn')} hint={w ? t('gxCollateralHint', { have: fmt(w.usdc, { locale, dp: 2 }), max: fmt(w.limits.maxNow, { locale, dp: 2 }) }) : undefined}>
-      <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" aria-label={t('gxCollateralIn')} value={f.collateral} onChange={(e) => set({ collateral: e.target.value.replace(/[^0-9.,]/g, '') })} data-testid="gmx-collateral" />
-        <span className="w-12 shrink-0 text-[12.5px] text-mute">USDC</span></div></Field>
+      <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" aria-label={t('gxCollateralIn')} value={f.collateral} onChange={(e) => set({ collateral: sanitizeAmountText(e.target.value) })} data-testid="gmx-collateral" />
+        <span className="w-12 shrink-0 text-[12.5px] text-mute">USDC</span></div><AmountProblem ambiguousOnly text={f.collateral} /></Field>
 
     <Seg size="sm" label={t('gxSizeMode')} value={f.mode} onChange={(m) => set({ mode: m })} options={[{ id: 'leverage', label: t('gxModeLeverage') }, { id: 'size', label: t('gxModeSize') }]} />
     {f.mode === 'leverage' ? <div>
       <div className="mb-1 flex items-baseline justify-between text-[13px]"><label htmlFor="gx-lev" className="text-mute">{t('gxLeverage')}</label>
-        <span className="flex items-center gap-1"><input aria-label={t('gxLeverage')} inputMode="decimal" value={f.leverage} onChange={(e) => set({ leverage: e.target.value.replace(/[^0-9.,]/g, '').slice(0, 4) })} data-testid="gmx-leverage" className="h-9 w-16 rounded-lg border border-line bg-elev/60 px-2 text-right text-[14px] font-semibold outline-none focus:border-blue" /><span className="font-semibold">×</span></span></div>
-      <input id="gx-lev" type="range" min={1} max={maxLev} step={0.5} value={Math.max(1, Math.min(maxLev, Number(f.leverage.replace(',', '.')) || 1))} disabled={maxLev <= 1} onChange={(e) => set({ leverage: e.target.value })} className="h-11 w-full accent-[var(--blue)]" aria-valuetext={`${f.leverage}×`} />
+        <span className="flex items-center gap-1"><input aria-label={t('gxLeverage')} inputMode="decimal" value={f.leverage} onChange={(e) => set({ leverage: sanitizeAmountText(e.target.value).slice(0, 4) })} data-testid="gmx-leverage" className="h-9 w-16 rounded-lg border border-line bg-elev/60 px-2 text-right text-[14px] font-semibold outline-none focus:border-blue" /><span className="font-semibold">×</span></span></div>
+      <input id="gx-lev" type="range" min={1} max={maxLev} step={0.5} value={Math.max(1, Math.min(maxLev, Number(parseInput(f.leverage, locale) ?? '1') || 1))} disabled={maxLev <= 1} onChange={(e) => set({ leverage: amountInputText(e.target.value, locale) })} className="h-11 w-full accent-[var(--blue)]" aria-valuetext={`${f.leverage}×`} />
       <p className="text-[11.5px] leading-snug text-mute">{t('gxLeverageNote', { max: maxLev })}</p></div>
       : <Field label={t('gxSizeUsd')} hint={t('gxSizeHint', { max: policy ? fmt(policy.maxOrderSizeUsd, { locale, trim: true }) : '—' })}>
-        <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" aria-label={t('gxSizeUsd')} value={f.sizeUsd} onChange={(e) => set({ sizeUsd: e.target.value.replace(/[^0-9.,]/g, '') })} data-testid="gmx-size" /><span className="w-12 shrink-0 text-[12.5px] text-mute">USD</span></div></Field>}
+        <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" aria-label={t('gxSizeUsd')} value={f.sizeUsd} onChange={(e) => set({ sizeUsd: sanitizeAmountText(e.target.value) })} data-testid="gmx-size" /><span className="w-12 shrink-0 text-[12.5px] text-mute">USD</span></div><AmountProblem ambiguousOnly text={f.sizeUsd} /></Field>}
     <div className="rounded-2xl bg-elev/70 p-3" data-testid="gmx-derived">
       <Row label={t('gxEstSize')} strong>{built.sizeUsd ? usd(built.sizeUsd, locale) : '—'}</Row>
       <Row label={t('gxEstLeverage')}>{levText(built.leverage, locale)}</Row>

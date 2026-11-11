@@ -9,6 +9,7 @@ import { COMPARE_OPEN_CLS } from '../src/derivatives/Compare.tsx';
 import { defaultLimits } from '../src/derivatives/Accounts.tsx';
 import { usdcInput } from '../src/derivatives/collateral.ts';
 import { parseInput } from '../src/derivatives/dec.ts';
+import { buildGmx, gmxAuthFromForm } from '../src/derivatives/gmx.ts';
 import { errText, type Key } from '../src/i18n';
 import { localizeAlertParams, reasonText } from '../src/reasonTexts.ts';
 import { paperSummary, showPaperBook, type PaperBook } from '../src/screens/AgentPaper.tsx';
@@ -232,5 +233,64 @@ describe('D5 — the agent capital is a USD figure, whatever the cash leg', () =
     expect(fund).toMatch(/row\(t\('qaFundPlanned'\), usdCapital\(a\.capitalUsdc, loc\)\)/);            // the funding sheet
     expect(perp).toMatch(/t\('hdPaAllocated', \{ capital: usdCapital\(a\.capitalUsdc, locale\) \}\)/);   // a perp agent's page
     expect(agents).toMatch(/data-testid="capital-unit">USD</);                                           // the creation form: the capital is typed in USD
+  });
+});
+
+// v10 integration: the screens `main` gained after the hardening branch was cut (redesigned Send / Asset / Home / Activity,
+// GMX panels, Solana bridge sheets, Cardano / Polkadot notices) follow the same single rule.
+describe('D1 — the rule on the screens added by the redesign, GMX and the Solana bridge', () => {
+  const noRawSanitiser = (s: string, f: string) => { expect(s, f).not.toMatch(/replace\(',', '\.'\)/); expect(s, f).not.toMatch(/replace\(\/\[\^0-9\.,?\]\/g, ''\)(?!\) \|\| 0)/); };
+  it('the redesigned Send: the field keeps what is typed, Max is written for the screen, the API receives the canonical string', () => {
+    const s = src('../src/screens/Send.tsx');
+    expect(s).toMatch(/onChange=\{\(e\) => setAmount\(sanitizeAmountText\(e\.target\.value\)\)\}/);
+    expect(s).toMatch(/setAmount\(amountInputText\(bal\.display!, locale\)\)/);
+    expect(s).toMatch(/amount: amountOf\(amount, locale\) \?\? amount\.trim\(\)/);                       // what is posted: no float, no Number()
+    expect(s).toMatch(/disabled=\{!to \|\| !amountOf\(amount, locale\) \|\| pf\.data\?\.halted\}/);     // unreadable or ambiguous: no review
+    expect(s).toMatch(/<AmountProblem text=\{amount\} \/>/);
+    expect(s.match(/exactAmt\(cur\.amountDisplay\)/g)!.length).toBe(2);                                  // the receipt and the tracking card: every digit
+    expect(s).not.toMatch(/\{cur\.amountDisplay\}/); expect(s).not.toMatch(/Number\(amount|parseFloat/);
+    expect(s).toMatch(/\{cur\.amount\} \{t\('baseUnits'\)\}/);                                           // base units stay the raw integer that is signed
+    noRawSanitiser(s, 'Send');
+  });
+  it('GMX: typed collateral, size, leverage and the policy ceiling are read by the rule; values the app writes are read back', () => {
+    const panel = src('../src/derivatives/GmxOrderPanel.tsx'), auth = src('../src/derivatives/GmxAuthorize.tsx');
+    for (const k of ['collateral', 'sizeUsd']) expect(panel).toMatch(new RegExp(`set\\(\\{ ${k}: sanitizeAmountText\\(e\\.target\\.value\\) \\}\\)`));
+    expect(panel.match(/<AmountProblem ambiguousOnly/g)!.length).toBe(2); expect(auth).toMatch(/<AmountProblem ambiguousOnly text=\{f\.maxOrderSizeUsd\} \/>/);
+    expect(panel).toMatch(/collateral: amountInputText\(p\.collateral, locale\)/);                       // a router hand-over is written for the screen
+    expect(panel).toMatch(/set\(\{ leverage: amountInputText\(e\.target\.value, locale\) \}\)/);       // and so is the slider's value
+    expect(auth).toMatch(/maxOrderSizeUsd: amountInputText\(prev\?\.maxOrderSizeUsd \?\? '100', locale\)/);
+    noRawSanitiser(panel, 'GmxOrderPanel'); noRawSanitiser(auth, 'GmxAuthorize');
+    const st = { wallet: null, authorization: null }, form = { side: 'long' as const, mode: 'leverage' as const, sizeUsd: '', slippageBps: '50' };
+    setAmountLocale('fr');
+    expect(buildGmx({ ...form, collateral: '25,5', leverage: '2,5' }, '0xm', st).body).toMatchObject({ collateral: '25.5', leverage: '2.5' });
+    expect(buildGmx({ ...form, collateral: `1${NBSP}000,25`, leverage: '2' }, '0xm', st).body).toMatchObject({ collateral: '1000.25' });
+    expect(buildGmx({ ...form, collateral: '1.000', leverage: '2' }, '0xm', st)).toMatchObject({ body: null, problem: 'gxErrCollateral' });   // French screen: ambiguous, refused
+    expect(buildGmx({ ...form, collateral: amountInputText('12.345', 'fr'), leverage: '2' }, '0xm', st).body).toMatchObject({ collateral: '12.345' });   // a hand-over value survives
+    const a = gmxAuthFromForm({ markets: ['0xm'], maxLeverage: '3', maxOrderSizeUsd: '1 500,50', maxOrdersPerDay: '10', bandBps: '100', days: '30' }, 'fr');
+    expect(a).toMatchObject({ ok: true, body: { maxOrderSizeUsd: '1500.5' } });
+    setAmountLocale('en');
+    expect(buildGmx({ ...form, collateral: '1,000', leverage: '2' }, '0xm', st)).toMatchObject({ body: null, problem: 'gxErrCollateral' });
+    expect(buildGmx({ ...form, collateral: '25.5', leverage: '2.5' }, '0xm', st).body).toMatchObject({ collateral: '25.5', leverage: '2.5' });
+  });
+  it('no screen shows a server "display" amount as it came: balances, the Solana bridge facts and swap results go through trimAmt / exactAmt', () => {
+    const files = ['screens/Home.tsx', 'screens/Asset.tsx', 'screens/Assets.tsx', 'screens/Activity.tsx', 'screens/Send.tsx', 'screens/Swap.tsx', 'screens/Receive.tsx', 'bridge.tsx', 'xswap.tsx', 'plan.tsx'];
+    for (const f of files) expect([...src(`../src/${f}`).matchAll(/\{[A-Za-z_.!?]*[dD]isplay!?( \?\? [A-Za-z_.!?]*[dD]isplay!?)?\}/g)].map((m) => m[0]), f).toEqual([]);
+    const bridge = src('../src/bridge.tsx');
+    for (const k of ['depositDisplay', 'reclaimedDisplay', 'nonceRentDisplay']) expect(bridge, k).toMatch(new RegExp(`trimAmt\\(s\\.${k}`));
+    const swap = src('../src/screens/Swap.tsx');
+    for (const k of ['depositDisplay', 'networkFeeDisplay', 'nonceRentDisplay', 'tokenAccountRentDisplay']) expect(swap, k).toMatch(new RegExp(`trimAmt\\(brSol\\.${k}`));
+    setAmountLocale('fr');
+    expect(trimAmt('0.00203928', 9)).toBe('0,00203928'); expect(trimAmt('1234.000015', 9)).toBe(`1${NBSP}234,000015`);   // a Solana deposit, a large balance
+    setAmountLocale('en');
+    expect(trimAmt('1234.000015', 9)).toBe('1,234.000015');
+  });
+  it('Cardano / Polkadot notices write their figure in the language of the screen', () => {
+    const send = src('../src/screens/Send.tsx'), recv = src('../src/screens/Receive.tsx'), i18n = src('../src/i18n.ts');
+    expect(send).toMatch(/t\('dtSendHint', \{ amount: trimAmt\(n\.activation \?\? '0\.01', 12\) \}\)/);
+    expect(recv).toMatch(/t\('dtRecvEd', \{ amount: trimAmt\(n\.activation \?\? '0\.01', 12\) \}\)/);
+    expect(recv).toMatch(/amount: trimAmt\(n\.activation, 12\)/);
+    for (const f of [send, recv]) expect(f).not.toMatch(/amount: n\.activation\b(?! \?\?)/);
+    expect(i18n).toMatch(/cdSendHint: \['[^']*0,97 ADA[^']*',\s*'[^']*0\.97 ADA/);                      // the fixed Cardano figure is written per language
+    setAmountLocale('fr'); expect(trimAmt('0.01', 12)).toBe('0,01');
   });
 });

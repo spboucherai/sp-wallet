@@ -47,7 +47,7 @@ export function Activity() {
               <D k={t('amount')}>{exactAmt(i.amountDisplay)} {i.symbol} <span className="text-mute">({i.amount} {t('baseUnits')})</span></D>
               {i.xswap && <dl className="space-y-1.5"><XswapFacts x={i.xswap} symbol={i.symbol} fromName={i.networkName} /></dl>}
               {i.xswap && <XswapProgress id={i.id} x={i.xswap} symbol={i.symbol} onUpdate={() => void qc.invalidateQueries({ queryKey: ['activity'] })} />}
-              {i.kind === 'swap' && i.swap && !i.xswap && <D k={i.swap.receivedDisplay ? t('swReceived') : t('swMinGuaranteed')}>{i.swap.receivedDisplay ?? i.swap.minOutDisplay} {i.swap.toSymbol}</D>}
+              {i.kind === 'swap' && i.swap && !i.xswap && <D k={i.swap.receivedDisplay ? t('swReceived') : t('swMinGuaranteed')}>{exactAmt(i.swap.receivedDisplay ?? i.swap.minOutDisplay)} {i.swap.toSymbol}</D>}
               {i.kind === 'bridge' && i.bridge && <dl className="space-y-1.5"><BridgeFacts b={i.bridge} symbol={i.symbol} /></dl>}
               {i.kind === 'bridge' && i.bridge && !testNotSent(i) && <BridgeProgress id={i.id} b={i.bridge} onUpdate={() => void qc.invalidateQueries({ queryKey: ['activity'] })} />}
               {i.to && i.kind !== 'swap' && i.kind !== 'bridge' && <D k={t('to')}><Addr value={i.to} /></D>}

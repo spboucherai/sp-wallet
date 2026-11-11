@@ -97,7 +97,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
         <Field label={t('note')}><input className={inputCls} value={note} maxLength={80} onChange={(e) => setNote(e.target.value)} /></Field>
         {/* v8-cardano-polkadot: chain rules the amount must respect (the server enforces them and explains a refusal) */}
         {n?.family === 'cardano' && <Notice tone="info">{t('cdSendHint')}</Notice>}
-        {n?.family === 'polkadot' && <Notice tone="info">{t('dtSendHint', { amount: n.activation ?? '0.01' })}</Notice>}
+        {n?.family === 'polkadot' && <Notice tone="info">{t('dtSendHint', { amount: trimAmt(n.activation ?? '0.01', 12) })}</Notice>}
         {err && <Notice tone="danger">{err}</Notice>}
         <Btn full busy={busy === 'review'} disabled={!to || !amountOf(amount, locale) || pf.data?.halted} onClick={review}>{busy === 'review' ? t('preparing') : t('review')}</Btn>
       </Card>

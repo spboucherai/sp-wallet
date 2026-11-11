@@ -7,6 +7,8 @@
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useQueryClient } from '@tanstack/react-query';
 import { useContext, useRef, useState } from 'react';
+import { amountInputText, sanitizeAmountText } from '../amount';   // v8 hardening: the wallet's single rule for typed amounts
+import { AmountProblem } from '../amountUi';
 import { I18n, useT, type Key } from '../i18n';
 import { Btn, Field, Icon, inputCls, Notice } from '../ui';
 import { Row, Sheet, timeOf } from './bits';
@@ -22,7 +24,7 @@ export function GmxAuthorize({ status, onClose }: { status: GmxStatus; onClose: 
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient();
   const prev = status.authorization?.policy;
   const [f, setF] = useState<GmxAuthForm>(() => ({ markets: (prev?.allowedMarkets.length ? status.markets.filter((m) => prev.allowedMarkets.some((a) => a.toLowerCase() === m.market.toLowerCase())) : status.markets).map((m) => m.market),
-    maxLeverage: String(prev?.maxLeverage ?? 3), maxOrderSizeUsd: prev?.maxOrderSizeUsd ?? '100', maxOrdersPerDay: String(prev?.maxOrdersPerDay ?? 10), bandBps: String(prev?.maxPriceDeviationBps ?? 100), days: '30' }));
+    maxLeverage: String(prev?.maxLeverage ?? 3), maxOrderSizeUsd: amountInputText(prev?.maxOrderSizeUsd ?? '100', locale), maxOrdersPerDay: String(prev?.maxOrdersPerDay ?? 10), bandBps: String(prev?.maxPriceDeviationBps ?? 100), days: '30' }));
   const [step, setStep] = useState<Step>('form'), [p, setP] = useState<GmxAuthPrepared | null>(null), [read, setRead] = useState(false), [err, setErr] = useState<{ e: GmxErr; raw: unknown } | null>(null);
   const lock = useRef(false);
   const once = async (fn: () => Promise<void>) => { if (lock.current) return; lock.current = true; try { await fn(); } finally { lock.current = false; } };
@@ -50,8 +52,8 @@ export function GmxAuthorize({ status, onClose }: { status: GmxStatus; onClose: 
   const pol = p ? { ...(v.ok ? v.body : {}), ...(p.authorization.policy ?? {}) } as Partial<GmxAuthPrepared['authorization']['policy'] & { days: number }> : null;
   const name = (m: string) => status.markets.find((x) => x.market.toLowerCase() === m.toLowerCase())?.name ?? m;
   const num = (k: keyof GmxAuthForm, label: Key, hint: Key, unit: string, testid: string) => <Field label={t(label)} hint={t(hint)}>
-    <div className="flex items-center gap-2"><input className={inputCls} inputMode="numeric" autoComplete="off" aria-label={t(label)} value={f[k] as string} onChange={(e) => set(k, k === 'maxOrderSizeUsd' ? e.target.value.replace(/[^0-9.,]/g, '') : digits(e.target.value))} data-testid={testid} />
-      <span className="w-12 shrink-0 text-[12.5px] text-mute">{unit}</span></div></Field>;
+    <div className="flex items-center gap-2"><input className={inputCls} inputMode="numeric" autoComplete="off" aria-label={t(label)} value={f[k] as string} onChange={(e) => set(k, k === 'maxOrderSizeUsd' ? sanitizeAmountText(e.target.value) : digits(e.target.value))} data-testid={testid} />
+      <span className="w-12 shrink-0 text-[12.5px] text-mute">{unit}</span></div>{k === 'maxOrderSizeUsd' && <AmountProblem ambiguousOnly text={f.maxOrderSizeUsd} />}</Field>;
   return <Sheet title={t('gxAuthTitle')} wide onClose={() => { if (!busy) onClose(); }}>
     <div className="min-w-0 space-y-3" data-testid="gmx-authorize" data-step={step}>
       <ModeBand tone="mainnet" label="GMX v2 · Arbitrum" compact />
