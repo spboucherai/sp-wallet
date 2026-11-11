@@ -17,6 +17,7 @@ import { config, UserError } from './config.ts';
 import { audit, sql } from './db.ts';
 import { addressFor, signer } from './signer-client.ts';
 import { broadcastNow, move, view, type ProposalRow } from './transfers.ts';
+import { advanceSolSwap, createSolSwapProposal, recordSolSwapOutcome, solSwapExecInfo } from './swap-exec-sol.ts';
 
 const KYBER_API = 'https://aggregator-api.kyberswap.com';
 const CLIENT_ID = process.env.KYBERSWAP_CLIENT_ID ?? 'swap-router';
@@ -112,7 +113,7 @@ export async function prepareKyberSwap(o: { n: NetworkDef; me: string; keyId: st
 const Create = z.strictObject({ network: z.string().max(24), fromAsset: z.string().max(80), toAsset: z.string().max(80), amount: z.string().min(1).max(60), slippageBps: z.number().int().min(1).max(300).default(50) });
 
 export function swapExecRoutes(app: FastifyInstance): void {
-  app.get('/api/v1/swap/execution', async () => ({ enabled: true, provider: 'kyberswap', networks: Object.keys(KYBER_ENABLED), router: KYBER_ROUTER }));
+  app.get('/api/v1/swap/execution', async () => ({ enabled: true, provider: 'kyberswap', networks: Object.keys(KYBER_ENABLED), router: KYBER_ROUTER, solana: solSwapExecInfo() }));
 
   // Prepare a firm swap for the owner's wallet, then offer it for passkey approval.
   app.post('/api/v1/swap/proposals', async (req) => {
@@ -120,7 +121,8 @@ export function swapExecRoutes(app: FastifyInstance): void {
     if (!/^[A-Za-z0-9-]{16,64}$/.test(idem)) throw new UserError('idempotency', 'Idempotency-Key header required');
     const b = Create.parse(req.body);
     const n = getNetwork(b.network);
-    if (n.family !== 'evm') throw new UserError('swap_not_enabled', 'swap execution is only available on EVM networks for now', 422);
+    if (n.family === 'sol') return createSolSwapProposal(b, idem); // Jupiter: services/api/src/swap-exec-sol.ts
+    if (n.family !== 'evm') throw new UserError('swap_not_enabled', 'swap execution is only available on EVM networks and Solana for now', 422);
     let src, dst;
     try { src = getAsset(n.id, b.fromAsset); dst = getAsset(n.id, b.toAsset); } catch { throw new UserError('unsupported_asset', 'asset is not in the wallet registry'); }
     if (src.id === dst.id) throw new UserError('same_asset', 'choose two different assets');
@@ -156,6 +158,7 @@ export function swapExecRoutes(app: FastifyInstance): void {
 /** After signing: mine the exact-amount approval if there is one, simulate the swap against the real state, then relay it. */
 export async function advanceSwap(p: ProposalRow): Promise<ProposalRow> {
   if (p.state !== 'signed' || !p.raw || !p.intent) return p;
+  if (getNetwork(p.network).family === 'sol') return advanceSolSwap(p);
   const n = getNetwork(p.network), a = adapterFor(p.network);
   const fail = (error: string) => move(p, 'failed', { error });
   if (!config.broadcast) return broadcastNow(p);
@@ -179,6 +182,7 @@ export async function advanceSwap(p: ProposalRow): Promise<ProposalRow> {
 /** Once a swap is final, read what was actually received from the router's own event. */
 export async function recordSwapOutcome(p: ProposalRow): Promise<void> {
   if (p.kind !== 'swap' || !p.txid || p.out_amount !== null) return;
+  if (getNetwork(p.network).family === 'sol') return recordSolSwapOutcome(p);
   const n = getNetwork(p.network);
   const rc = await rpcAny<{ logs: { address: string; topics: [`0x${string}`, ...`0x${string}`[]]; data: `0x${string}` }[] } | null>(n.rpc, 'eth_getTransactionReceipt', [p.txid]).catch(() => null);
   for (const l of rc?.logs ?? []) {

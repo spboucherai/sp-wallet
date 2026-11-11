@@ -30,7 +30,7 @@ export const IntentSchema = z.strictObject({
    * (the output is delivered to the wallet itself). `dataHash` commits to the exact provider calldata the signer will verify.
    */
   swap: z.strictObject({
-    provider: z.enum(['kyberswap']), toAsset: z.string().min(1).max(80), minOut: U, router: z.string().min(20).max(100),
+    provider: z.enum(['kyberswap', 'jupiter']), toAsset: z.string().min(1).max(80), minOut: U, router: z.string().min(20).max(100),
     dataHash: z.string().regex(/^[0-9a-f]{64}$/), approveGas: U,
   }).optional(),
   /**
@@ -92,7 +92,7 @@ export function canonicalBytes(intent: Intent): Uint8Array {
   const plugin = fam !== 'evm' && fam !== 'btc' && fam !== 'sol';
   if ((fam === 'evm') !== !!i.evm || (fam === 'btc') !== !!i.btc || (fam === 'sol') !== !!i.sol || plugin !== !!i.x)
     throw new Error('intent chain section does not match network');
-  if (i.swap && fam !== 'evm') throw new Error('swaps are only defined for EVM networks');
+  if (i.swap && (i.swap.provider === 'jupiter' ? fam !== 'sol' : fam !== 'evm')) throw new Error('swaps are only defined for EVM networks (KyberSwap) and Solana (Jupiter)');
   if (i.bridge && (fam !== 'evm' || i.swap)) throw new Error('bridges are only defined for EVM networks and exclude a swap');
   baseUnits(i.amount);
   const parts: Uint8Array[] = [enc.encode(DOMAIN), new Uint8Array([0])];

@@ -496,6 +496,20 @@ const D = {
   e_bridge_not_enabled: ['Le transfert CCTP n’est pas activé entre ces réseaux.', 'CCTP transfer is not enabled between these networks.'],
   e_fast_unavailable: ['Le transfert rapide n’est pas disponible.', 'Fast transfer is not available.'], e_contract_changed: ['Un contrat de Circle a changé depuis sa revue : transferts refusés.', 'A Circle contract changed since its review: transfers refused.'],
   e_same_network: ['Choisissez deux réseaux différents.', 'Choose two different networks.'],
+  // Solana swaps through Jupiter. The licence requires the "Metis" label wherever the API is used.
+  swSolIntro: ['Sur Solana, les échanges entre SOL et les jetons du registre sont exécutés par Jupiter (Metis) ; le signataire décode lui-même la transaction.', 'On Solana, swaps between SOL and the registry tokens are executed through Jupiter (Metis); the signer decodes the transaction itself.'],
+  swSolGuarantee: ['Le signataire a décodé la transaction Solana : seul signataire et payeur = votre portefeuille, montant exact prélevé sur votre propre compte, minimum livré sur votre propre compte, aucun frais de plateforme, aucune autre instruction. Elle livre au moins ce minimum ou échoue entièrement.', 'The signer decoded the Solana transaction: your wallet is the only signer and payer, the exact amount leaves your own account, the minimum arrives in your own account, no platform fee, no other instruction. It delivers at least this minimum or fails entirely.'],
+  swSolRoute: ['Route', 'Route'], swSolNetworkFee: ['Frais de réseau', 'Network fee'], swSolPriority: ['dont priorité', 'of which priority'],
+  swSolRent: ['Dépôt du nouveau compte de jeton', 'Deposit for the new token account'],
+  swSolRentNote: ['Ce dépôt reste dans votre propre compte de jeton {sym} ; il n’est pas versé à un tiers.', 'This deposit stays in your own {sym} token account; it is not paid to a third party.'],
+  swSolSimulated: ['Simulé à l’instant', 'Simulated just now'], swSolExpiry: ['Si elle n’est pas incluse à temps, la transaction expire sans rien déplacer.', 'If it is not included in time, the transaction expires and nothing moves.'],
+  swSolRewritten: ['forme à comptes partagés', 'shared-accounts form'],
+  e_route_not_verifiable: ['Jupiter (Metis) ne propose en ce moment aucune route que le signataire peut vérifier pour cette paire. Rien n’a été signé ; réessayez dans un instant.', 'Jupiter (Metis) offers no route right now that the signer can verify for this pair. Nothing was signed; try again in a moment.'],
+  e_provider_busy: ['Le fournisseur limite le débit des requêtes ; réessayez dans quelques secondes.', 'The provider is rate-limiting requests; try again in a few seconds.'],
+  e_token_has_fee: ['Ce jeton prélève actuellement des frais de transfert : échange refusé.', 'This token currently charges a transfer fee: swap refused.'],
+  e_token_has_hook: ['Ce jeton exécute un programme à chaque transfert : échange refusé.', 'This token runs a program on every transfer: swap refused.'],
+  e_fee_ceiling: ['Le coût dépasse le plafond de frais du portefeuille.', 'The cost exceeds the wallet’s fee ceiling.'],
+  e_account_not_plain: ['Cette adresse n’est pas un compte ordinaire : échange refusé.', 'This address is not a plain account: swap refused.'],
 } as const;
 export type Key = keyof typeof D;
 export const I18n = createContext<{ locale: Locale; setLocale: (l: Locale) => void }>({ locale: 'fr', setLocale: () => {} });

@@ -11,6 +11,7 @@ export * from './market-listings.ts';
 export * from './market-symbols.ts';
 export * from './build-btc.ts';
 export * from './build-sol.ts';
+export * from './swap-sol.ts';
 export * from './policy.ts';
 export * from './audit.ts';
 export * from './state.ts';
