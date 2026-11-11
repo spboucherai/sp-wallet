@@ -84,6 +84,33 @@ create or replace function spw_audit_immutable() returns trigger language plpgsq
 begin raise exception 'audit_events is append-only'; end $$;
 drop trigger if exists audit_no_update on audit_events;
 create trigger audit_no_update before update or delete or truncate on audit_events for each statement execute function spw_audit_immutable();
+-- derivatives, wave 2 (read-only and paper). Every price, size and amount is numeric (exact) or a decimal string inside jsonb.
+create table if not exists deriv_paper_accounts (
+  id uuid primary key, venue text not null, network text not null, label text not null, initial_collateral numeric not null,
+  state jsonb not null, policy jsonb not null, meta jsonb not null default '{}',
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table if not exists deriv_orders (
+  account_id uuid not null references deriv_paper_accounts(id) on delete cascade, client_id text not null, venue_order_id text,
+  instrument text not null, side text not null, type text not null, size numeric not null, price numeric, trigger_price numeric,
+  reduce_only boolean not null, tif text not null, status text not null, filled numeric not null default 0, avg_fill_price numeric,
+  reject_reason text, origin text not null default 'owner', first_result jsonb,
+  created_at timestamptz not null, updated_at timestamptz not null, primary key (account_id, client_id));
+create index if not exists deriv_orders_recent on deriv_orders (account_id, created_at desc);
+create table if not exists deriv_fills (
+  account_id uuid not null references deriv_paper_accounts(id) on delete cascade, fill_id text not null, instrument text not null,
+  order_id text, client_id text, side text not null, price numeric not null, size numeric not null, fee numeric not null, fee_asset text not null,
+  closed_pnl numeric, liquidation boolean not null default false, ts timestamptz not null, primary key (account_id, fill_id));
+create index if not exists deriv_fills_recent on deriv_fills (account_id, ts desc);
+create table if not exists deriv_funding (
+  account_id uuid not null references deriv_paper_accounts(id) on delete cascade, instrument text not null, ts timestamptz not null,
+  amount numeric not null, rate numeric not null, size numeric not null, primary key (account_id, instrument, ts));
+create table if not exists deriv_risk_events (
+  id bigserial primary key, account_id uuid not null references deriv_paper_accounts(id) on delete cascade, ts timestamptz not null,
+  kind text not null, code text, message text not null, data jsonb not null default '{}', dedupe text, unique (account_id, dedupe));
+create index if not exists deriv_risk_events_recent on deriv_risk_events (account_id, ts desc);
+create table if not exists deriv_equity (
+  account_id uuid not null references deriv_paper_accounts(id) on delete cascade, ts timestamptz not null,
+  equity numeric not null, collateral numeric not null, margin_used numeric not null, unrealized_pnl numeric not null, primary key (account_id, ts));
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }
