@@ -11,7 +11,9 @@ from evasions import EVASIONS, HEADER
 from spq.purity import ALLOWED_MODULES, MODULE_API, MODULE_NAMES, OPEN_MODULES, check
 from spq.strategy import StrategyError, load_strategy, static_check
 
-LIBRARY = sorted(Path(__file__).resolve().parents[1].glob("strategies/*/*/strategy.py"))
+# rj_<job> directories are strategies installed by research jobs (on a deployed node, or — for a few seconds — by the API's
+# research tests running at the same time in this checkout): not the library, exactly as in conftest.py.
+LIBRARY = sorted(p for p in Path(__file__).resolve().parents[1].glob("strategies/*/*/strategy.py") if not p.parent.parent.name.startswith("rj_"))
 
 
 @pytest.mark.parametrize("name", sorted(EVASIONS))

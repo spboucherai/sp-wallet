@@ -10,6 +10,7 @@
 //                                                        CLAUDE_CODE_OAUTH_TOKEN) in this process — a dedicated key; it is given to
 //                                                        the gateway, never to the job. Tight budget. Not run by default.
 // Nothing is signed, no order exists, the signer is a stub that only answers its status.
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -111,13 +112,24 @@ try {
     const { runJob, jobPaths } = await import('../services/research-runner/src/job.ts'), { makeJob } = await import('../services/research-runner/test/helpers.ts');
     const pj = makeJob({ bars: 400 }), pcfg = { ...st.cfg, keepJobs: true, agent: { ...st.cfg.agent, argv: [...st.cfg.agent.argv] } }, pp = jobPaths(pcfg, pj.id);
     pcfg.agent.argv[2] = 'probe';
-    pcfg.agent.argv[3] = JSON.stringify({ home: homedir(), appDir: ROOT, canary, outside: path.join(scratch, 'written.txt'), apiPort: (a.address() as { port: number }).port, signerPort: (b.address() as { port: number }).port, unixSocket: unixPath, runnerPid: process.pid, stateDir: pp.state });
+    // a process of the same user OUTSIDE the sandbox with a secret in its environment: stands for the runner (its model key and
+    // runner secret). Without it the ps / sysctl probes had nothing to read and printed a vacuous DENIED.
+    const ENV_CANARY = 'CANARY-ENV-sim-7f3a91c2', envHolder = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 300000)'], { env: { PATH: process.env.PATH ?? '', SPW_SIM_ENV_CANARY: ENV_CANARY }, stdio: 'ignore' });
+    await new Promise((r) => setTimeout(r, 300));
+    const control = spawnSync('/bin/ps', ['-E', '-ww', '-p', String(envHolder.pid), '-o', 'command='], { encoding: 'utf8' }).stdout.includes(ENV_CANARY);
+    pcfg.agent.argv[3] = JSON.stringify({ home: homedir(), appDir: ROOT, canary, outside: path.join(scratch, 'written.txt'), envCanary: ENV_CANARY, envPid: envHolder.pid, apiPort: (a.address() as { port: number }).port, signerPort: (b.address() as { port: number }).port, unixSocket: unixPath, runnerPid: process.pid, stateDir: pp.state });
     const pr = await runJob(pj, pcfg, { log: () => {}, running: () => {}, cancelRequested: () => false });
     const probe = JSON.parse(readFileSync(path.join(pp.work, 'probe.json'), 'utf8')) as Record<string, any>;
-    a.close(); b.close(); unix.close();
+    a.close(); b.close(); unix.close(); envHolder.kill('SIGKILL');
+    say(`   control, OUTSIDE the sandbox: the environment of process ${envHolder.pid} (kern.procargs2, through ps -E) shows its canary: ${control}`);
+    if (!control) throw new Error('the control could not read the canary outside the sandbox: the environment probes would prove nothing');
     say(`   sandbox: ${pr.usage.sandbox}; connections that reached the stand-in API / signer listeners: ${hits.api} / ${hits.signer}`);
     for (const [k, v] of Object.entries({ ...probe, ...probe.python })) { if (k === 'python' || k === 'ok_env') continue; say(`   ${k.startsWith('ok_') || k === 'py_import' ? 'ALLOWED (must work)' : v.ok ? '!! NOT DENIED      ' : 'DENIED             '} ${k.padEnd(22)} ${v.ok ? '' : String(v.error).slice(0, 110)}`); }
     say(`   environment of the agent: ${probe.ok_env.value}…`);
+    const vacuous = Object.entries({ ...probe, ...probe.python }).filter(([, v]: [string, any]) => /PROBE-/.test(String(v?.error ?? ''))).map(([k]) => k);
+    const leaked = Object.entries({ ...probe, ...probe.python }).filter(([k, v]: [string, any]) => k !== 'python' && k !== 'ok_env' && !k.startsWith('ok_') && k !== 'py_import' && v.ok).map(([k]) => k);
+    if (vacuous.length || leaked.length || pr.usage.sandbox !== 'sandbox-exec') throw new Error(`sandbox probe FAILED: not denied [${leaked.join(', ')}], probes that did not run [${vacuous.join(', ')}], sandbox ${pr.usage.sandbox}`);
+    say(`   SANDBOX PROBE OK: ${Object.keys({ ...probe, ...probe.python }).length - 2} attempts, none got through, every probe ran (sysctl kern.procargs2: ${String(probe.sysctl_env.error).slice(0, 60)})`);
   }
 } finally { await st.stop(); }
 say('\ndone.');

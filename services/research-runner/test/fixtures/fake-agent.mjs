@@ -211,7 +211,9 @@ try:
     print(json.dumps({"ok": ${JSON.stringify(t.envCanary)}.encode() in raw, "error": "EPERM-or-hidden: canary not in %d bytes" % len(raw)}))
 except OSError as e:
     print(json.dumps({"ok": False, "error": "EPERM " + str(e)}))
-`]); try { return JSON.parse(r.stdout); } catch { return { ok: false, error: `EPERM-or-hidden: ${(r.stderr || '').slice(-160)}` }; } })();
+`]); if (!Number.isInteger(Number(t.envPid)) || !t.envCanary) return { ok: false, error: 'PROBE-NOT-RUN: no envPid / envCanary was given to the probe' };
+      // a probe that crashed proves nothing: it is reported as such, never as a denial
+      try { return JSON.parse(r.stdout); } catch { return { ok: false, error: `PROBE-ERROR: ${(r.stderr || String(r.error ?? '') || 'no output').slice(-160)}` }; } })();
     // positive controls: the things a job MUST be able to do
     out.ok_read_ro = attempt(() => fs.readFileSync(path.join(RO, 'CLAUDE.md'), 'utf8'));
     out.ok_write_work = attempt(() => { fs.writeFileSync(path.join(WORK, 'mine.txt'), 'x'); return fs.readFileSync(path.join(WORK, 'mine.txt'), 'utf8'); });

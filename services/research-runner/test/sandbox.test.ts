@@ -79,6 +79,9 @@ describe.skipIf(!sandboxAvailable() || !labReady())('sandbox: every forbidden ac
   it('v8: the environment of a process outside the sandbox (the runner\'s secrets) cannot be read — ps -E, the process list, sysctl kern.procargs2', () => {
     // before v8 the profile had a blanket `(allow sysctl-read)` and no process-info rule: all three answered
     for (const k of ['ps_env', 'ps_list', 'sysctl_env']) denied(k, /EPERM|not permitted|hidden/i);
+    // v10: the sysctl probe really ran (a probe that crashed, or that was given no process to read, is not a denial) and the
+    // kernel refused the read itself
+    expect(probe.sysctl_env!.error).not.toMatch(/PROBE-/); expect(probe.sysctl_env!.error).toMatch(/^EPERM .*(not permitted|Errno 1)/i);
     expect(profile).toContain('(deny sysctl-read (sysctl-name-prefix "kern.proc"))');
     expect(profile).toContain('(deny process-info*)');
   });

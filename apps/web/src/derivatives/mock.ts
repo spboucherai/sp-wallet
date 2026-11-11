@@ -523,6 +523,7 @@ async function route(method: string, path: string, q: URLSearchParams, b: any, h
   if (path === '/auth/state') return json(200, { setupRequired: false, authenticated: true });
   if (path === '/auth/logout') return json(200, {});
   if (path === '/settings') return json(200, { locale: 'fr', currency: 'CAD', hideBalances: false, prices: true });
+  if (path === '/alerts/unread') return json(200, MOCK_UNREAD);   // v10: the shell asks for it on every screen; the mock has no alert
   if (PERP.handles(path)) return out(PERP.route(method, path, b, q));   // v7 perp live
   if (!path.startsWith('/derivatives')) return json(503, { error: 'mock', message: 'mock mode: only the Futures terminal is simulated' });
   if (path.startsWith('/derivatives/live/')) return out(LIVE.route(method, path, b, headers, q));
@@ -616,6 +617,24 @@ function watch(account: string, venue: VenueId) {
     positions, openOrders: [], ts: now, source: 'venue' };
 }
 
+// v10: the shell opens `/api/v1/alerts/stream` on every screen (alerts.ts useUnread). Passed to the real EventSource it went to
+// the dev proxy, where nothing listens in mock mode: a 502 and a console error on every page, which six mock specs (rightly)
+// count as a failure. The mock answers it like the server does — one `unread` frame when the stream opens, then silence.
+const MOCK_UNREAD = { unread: 0, critical: 0, lastId: 0 };
+class MockAlertsStream extends EventTarget {
+  static readonly CONNECTING = 0; static readonly OPEN = 1; static readonly CLOSED = 2;
+  readonly CONNECTING = 0; readonly OPEN = 1; readonly CLOSED = 2;
+  readonly url: string; readonly withCredentials = false;
+  readyState = 0;
+  onopen: ((e: Event) => void) | null = null; onmessage: ((e: MessageEvent) => void) | null = null; onerror: ((e: Event) => void) | null = null;
+  constructor(url: string) {
+    super(); this.url = url;
+    setTimeout(() => { if (this.readyState === 2) return; this.readyState = 1; const o = new Event('open'); this.dispatchEvent(o); this.onopen?.(o);
+      this.dispatchEvent(new MessageEvent('unread', { data: JSON.stringify(MOCK_UNREAD) })); }, 60);
+  }
+  close(): void { this.readyState = 2; }
+}
+
 declare global { interface Window { __spwMock?: { setRate: (n: number) => void; stale: () => void; reconnect: () => void; resume: () => void; accounts: () => number; live: LiveHooks; /** v7 perp live */ perp: PerpHooks } } }
 
 export function installMock(): void {
@@ -638,6 +657,7 @@ export function installMock(): void {
   window.EventSource = new Proxy(RealES, { construct(target, args: [string, EventSourceInit?]) {
     const url = String(args[0]);
     if (LIVE.isStream(url)) return new LiveMockStream(url) as unknown as EventSource;
+    if (new URL(url, location.origin).pathname === '/api/v1/alerts/stream') return new MockAlertsStream(url) as unknown as EventSource;
     return url.includes('/api/v1/derivatives/stream') ? (new MockStream(url) as unknown as EventSource) : new target(...args);
   } });
   setInterval(worker, 1000);
