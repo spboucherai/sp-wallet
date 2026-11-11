@@ -8,6 +8,7 @@ import { Btn, Card, Coin, fiat, Icon, inputCls, NetDot, Notice, StatePill, trimA
 import { useQueryClient } from '@tanstack/react-query';
 import { BridgeFacts, BridgePill, BridgeProgress, bridgeDur } from '../bridge';
 import { XswapPill, XswapSheet } from '../xswap';
+import { PlanCards } from '../plan'; // v7 any-to-any plans
 
 interface SAsset { key: string; network: string; networkName: string; asset: string; symbol: string; name: string; decimals: number; native?: boolean }
 interface Fee { kind: string; symbol: string; network: string; display: string; includedInOutput: boolean; estimated: boolean; usd: number | null }
@@ -72,6 +73,8 @@ export function Swap() {
     if (usdc && eth) { setFromKey(usdc.key); setToKey(eth.key); }
   }, [assets, fromKey]);
   const from = by(fromKey), to = by(toKey);
+  // v7 any-to-any: a cross-network pair also gets multi-leg plans (apps/web/src/plan.tsx); single-leg flows below are unchanged
+  const crossNet = !!from && !!to && from.network !== to.network; const [planCount, setPlanCount] = useState(0);
   // USDC -> USDC between two networks served by CCTP: executed by the wallet itself (burn, attestation, mint)
   const brNets = useQuery({ queryKey: ['bridge-exec'], queryFn: () => get<{ networks: string[] }>('/bridge/execution'), staleTime: 600_000 });
   const isBridge = !!from && !!to && from.symbol === 'USDC' && to.symbol === 'USDC' && from.network !== to.network && !!brNets.data?.networks.includes(from.network) && brNets.data.networks.includes(to.network);
@@ -164,6 +167,8 @@ export function Swap() {
       <div className="flex rounded-2xl bg-elev p-1" role="radiogroup" aria-label={t('swMode')}>{(['best_price', 'fastest', 'balanced'] as Mode[]).map((m) =>
         <button key={m} role="radio" aria-checked={mode === m} onClick={() => setMode(m)} className={`min-h-10 flex-1 rounded-xl text-[13.5px] ${mode === m ? 'bg-surface font-semibold shadow-sm' : 'text-mute'}`}>{t(`sw_${m}` as Key)}</button>)}</div>
 
+      {crossNet && from && to && <PlanCards from={from} to={to} amount={amount} slip={slip} routes={routes} money={money} pname={pname} onCount={setPlanCount} />}
+
       {noProviders && <Notice tone="warn">{t('swNoProviders')}</Notice>}
       {phase === 'loading' && routes.length === 0 && <Card><div className="flex items-center gap-3 text-[14px] text-mute"><Icon n="spin" className="h-5 w-5" />{t('swSearching')}</div></Card>}
       {phase === 'error' && <Notice tone="danger">{t('swError')}</Notice>}
@@ -178,6 +183,7 @@ export function Swap() {
                   <div className="mt-0.5 text-[22px] font-semibold leading-tight tracking-tight">{trimAmt(r.amountOutDisplay, 8)} <span className="text-mute">{r.path[r.path.length - 1]!.symbol}</span></div>
                   <div className="text-[12.5px] text-mute">{t('swMin')} {trimAmt(r.minAmountOutDisplay, 8)}{r.valuation.netUsd != null ? ` · ${t('swNet')} ${money(r.valuation.netUsd)}` : ''}</div></div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  {crossNet && !r.executable && !r.providers.every((x) => ['cctp', 'kyberswap', 'jupiter', 'thorchain'].includes(x)) && <span data-testid="compare-only" className="rounded-full bg-elev px-2 py-0.5 text-[11px] font-semibold text-mute">{t('plCompareOnly')}</span>}
                   {r.tags.map((tag) => <span key={tag} className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-onprimary">{t(`sw_${tag}` as Key)}</span>)}
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${riskCls[r.risk.level]}`}><Icon n={r.risk.level === 'low' ? 'check' : 'warn'} className="h-3 w-3" />{t(`swRisk_${r.risk.level}` as Key)}</span>
                 </div>
@@ -205,7 +211,7 @@ export function Swap() {
         {isBridge ? null : (() => { const ex = sorted.find((r) => r.executable); return ex
           ? <><Btn full busy={busy === 'prepare'} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('swExecute', { via: pname(ex.providers[0]!) })}</Btn>
               {ex.id !== sorted[0]!.id && <p className="px-1 text-[12.5px] text-mute">{t('swExecNotBest')}</p>}</>
-          : <><button disabled className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-[15.5px] font-semibold text-onprimary opacity-40"><Icon n="lock" className="h-4 w-4" />{t('swExecuteDisabled')}</button>
+          : crossNet && planCount > 0 ? null /* a startable plan is offered above */ : <><button disabled className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-[15.5px] font-semibold text-onprimary opacity-40"><Icon n="lock" className="h-4 w-4" />{t('swExecuteDisabled')}</button>
               <p className="px-1 text-[12.5px] text-mute">{t('swExecWhere')} {t('swSolIntro')}</p></>; })()}
       </div>}
 

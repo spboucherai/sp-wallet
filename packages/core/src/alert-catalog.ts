@@ -10,7 +10,7 @@ export type AlertGroup = 'transfers' | 'agents' | 'derivatives' | 'security' | '
 export type AlertLocale = 'fr' | 'en';
 export type AlertParams = Record<string, string | number | boolean | null>;
 /** what an alert is about; the client turns it into a deep link */
-export interface AlertSubject { type: 'proposal' | 'agent' | 'account' | 'network' | 'deposit' | 'none'; id?: string; network?: string }
+export interface AlertSubject { type: 'proposal' | 'agent' | 'account' | 'network' | 'deposit' | 'plan' | 'none'; id?: string; network?: string }
 type Pair = readonly [fr: string, en: string];
 export interface AlertDef {
   kind: string; group: AlertGroup; severity: AlertSeverity;
@@ -43,6 +43,16 @@ export const ALERT_DEFS: readonly AlertDef[] = [
     ['{what} sur {network} : en attente depuis {minutes} min.', '{what} on {network}: pending for {minutes} min.']),
   d('deposit.received', 'transfers', 'info', true, ['Dépôt reçu', 'Deposit received'],
     ['{amount} {symbol} reçus sur {network}.', '{amount} {symbol} received on {network}.'], ['Sur {network}.', 'On {network}.']),
+
+  // ---- v7 any-to-any plans: a plan never approves anything itself — each step waits for the owner's passkey
+  d('plan.step_ready', 'transfers', 'info', true, ['Plan : étape à approuver', 'Plan: step to approve'],
+    ['{what} : l’étape {step} sur {steps} est prête sur {network}. Elle attend votre clé d’accès.', '{what}: step {step} of {steps} is ready on {network}. It waits for your passkey.'],
+    ['Une étape d’un plan d’échange attend votre approbation sur {network}.', 'A step of a swap plan waits for your approval on {network}.']),
+  d('plan.paused', 'transfers', 'warning', true, ['Plan en pause', 'Plan paused'],
+    ['{what} : arrêté à l’étape {step} sur {steps}. {reason} Les fonds restent dans votre portefeuille.', '{what}: stopped at step {step} of {steps}. {reason} The funds stay in your wallet.'],
+    ['Un plan d’échange est en pause sur {network}. Les fonds restent dans votre portefeuille.', 'A swap plan is paused on {network}. The funds stay in your wallet.']),
+  d('plan.done', 'transfers', 'info', true, ['Plan terminé', 'Plan completed'],
+    ['{what} : {amount} {symbol} reçus après {steps} étape(s).', '{what}: {amount} {symbol} received after {steps} step(s).'], ['Un plan d’échange est terminé.', 'A swap plan is completed.']),
 
   // ---- trading agents
   d('agent.order_filled', 'agents', 'info', true, ['Ordre d’agent exécuté', 'Agent order filled'],
@@ -199,6 +209,7 @@ export const alertPlaceholders = (tpl: string): string[] => [...tpl.matchAll(/\{
 export function alertPath(kind: string, subject: AlertSubject | null | undefined): string {
   const g = BY_KIND.get(kind)?.group;
   if (subject?.type === 'agent' && subject.id) return `/agents/${subject.id}`;
+  if (subject?.type === 'plan' && subject.id) return `/plan/${subject.id}`; // v7 plans: the plan's progress view
   if (subject?.type === 'account') return '/futures?v=accounts';
   if (subject?.type === 'proposal' || subject?.type === 'deposit') return '/activity';
   if (g === 'security') return '/security';

@@ -185,3 +185,25 @@ KyberSwap same-chain execution is now enabled on Ethereum, Arbitrum, Polygon, Op
   (+25 838, +1.0 %).
 - Not verified: anything sent to a real network — no real swap, outbound or refund; see the dossier §12.
 
+
+## Update 2026-11-11 (V7): any-to-any plans — cross-network swaps as a sequence of executable legs
+
+Dossier: `docs/v7/ANY-TO-ANY.md` (matrix of what is executable, guarantees per leg vs end to end, costs, recovery, Solana).
+
+- A plan chains the four operations above — KyberSwap swap, Jupiter swap, CCTP transfer, THORChain swap — through native
+  USDC as the only intermediate asset, at most three legs. It adds no bridge, no provider-built transaction and nothing to
+  the signer: each leg is an ordinary proposal created through its existing route when the previous leg has settled, sized
+  on what was actually received, with its own minimum output and its own passkey approval.
+- `packages/swap/src/plan.ts` (pure planner: enumeration, real quotes chained on the expected and on the guaranteed amount,
+  limits of each leg's own asset, minimums, gas per network, ranking on the guaranteed worst case, comparison-only quotes);
+  `services/api/src/plan-state.ts` (pure saga state machine); `services/api/src/plan-exec.ts` (`/api/v1/plans*`, worker
+  loop `plans`); table `plans`; alerts `plan.step_ready`, `plan.paused`, `plan.done`; UI `apps/web/src/plan.tsx` (plan
+  cards in Swap, start sheet, progress view, list in Activity, `/plan/<id>`).
+- The end-to-end minimum is NOT guaranteed in advance and the UI says so; the owner may set an overall floor checked before
+  each leg. A failed, refused or refunded leg pauses the plan (retry, re-plan from the asset held, stop here).
+- Solana ↔ EVM is shown as not executable yet, with the reason (the signer has no Solana CCTP builder/verifier; §5 of the dossier).
+- Tests: `packages/swap/test/plan.test.ts`, `services/api/test/plan-state.test.ts`, `services/api/test/plan-exec.test.ts`
+  (database `spw_test_plan`, created by the test). Proof without funds: `npx tsx scripts/fork-plan.mts` (two anvil forks,
+  the API as its own process, a passkey per leg). UI: `tests/e2e/qa-plan.spec.ts`, screenshots `docs/v7/screens/plan-*.png`.
+- Not verified: anything sent to a real network; a real Circle attestation for a plan's burn; plans with a THORChain or a
+  Jupiter leg end to end (planned and unit-tested only).

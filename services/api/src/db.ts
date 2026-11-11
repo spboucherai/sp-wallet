@@ -179,6 +179,12 @@ create index if not exists deriv_mandates_account on deriv_mandates (account_id,
 alter table deriv_orders add column if not exists mandate_id uuid;
 alter table deriv_orders add column if not exists agent jsonb;
 alter table deriv_orders add column if not exists estimate jsonb;
+-- >>> v7 any-to-any plans: a plan is a list of legs; each leg is an ordinary proposal created when the previous one has settled
+create table if not exists plans (
+  id uuid primary key, state text not null, current int not null default 0, legs jsonb not null, meta jsonb not null,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create index if not exists plans_open on plans (state) where state in ('active', 'paused');
+-- <<< v7 any-to-any plans
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }

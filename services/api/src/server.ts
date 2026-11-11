@@ -28,6 +28,7 @@ import { transferRoutes, view, type ProposalRow } from './transfers.ts';
 import { healthCache } from './worker.ts';
 import { alertRoutes } from './alerts/routes.ts';     // v6-alerts
 import { monitorRoutes } from './monitor/routes.ts'; // v6-alerts
+import { planRoutes, type PlanDeps } from './plan-exec.ts'; // v7 any-to-any plans
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
@@ -100,7 +101,7 @@ async function markets(): Promise<Record<string, Market> | null> {
 }
 async function prices(): Promise<Record<string, Market> | null> { return markets(); }
 
-export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService } = {}): Promise<FastifyInstance> {
+export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService; plan?: Partial<PlanDeps> } = {}): Promise<FastifyInstance> {
   const swapProviders = opts.swapProviders;
   const app = Fastify({ logger: { level: 'warn', redact: ['req.headers.cookie', 'req.headers.authorization'] }, bodyLimit: 64 * 1024, trustProxy: config.trustProxy });
   await app.register(cookie);
@@ -139,6 +140,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   swapExecRoutes(app);
   bridgeRoutes(app);
   xswapRoutes(app);
+  planRoutes(app, { prices: markets, ...opts.plan }); // v7 any-to-any plans: a saga over the routes above; signs nothing itself
   agentRoutes(app, { prices: markets });
   strategyRoutes(app);
   perpAgentRoutes(app, opts.derivatives); // v6 perp agents: paper only, on the derivatives module's paper accounts
