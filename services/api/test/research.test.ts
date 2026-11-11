@@ -128,6 +128,7 @@ describe.skipIf(!labReady())('research jobs — who can call what', () => {
     expect(JSON.stringify(ja)).not.toContain('token_hash');
     const line = { lines: [{ s: 'out', t: 'hello' }] };
     expect((await runner(`/jobs/${ja.id}/log`, line, { token: ja.token })).json).toEqual({ cancel: false });
+    expect((await runner(`/jobs/${ja.id}/log`, { lines: [] }, { token: ja.token })).json).toEqual({ cancel: false });   // v10: the runner's heartbeat (an empty batch asks whether to cancel)
     for (const [id, token] of [[jb.id, ja.token], [ja.id, jb.token], [ja.id, ''], [ja.id, 'x'.repeat(64)], ['00000000-0000-4000-8000-000000000000', ja.token], ['not-a-uuid', ja.token]] as const) {
       expect((await runner(`/jobs/${id}/log`, line, { token })).status, `${id} ${token.slice(0, 4)}`).toBe(403);
       expect((await runner(`/jobs/${id}/result`, { outcome: 'failed', reason: 'x', usage: {} }, { token })).status).toBe(403);

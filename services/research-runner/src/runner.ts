@@ -16,7 +16,16 @@ export async function processJob(job: RunnerJob, cfg: RunnerConfig, api: RunnerA
     });
     return sending;
   };
-  const timer = setInterval(() => { void flush(); }, cfg.logFlushMs);
+  // v10: a cancel request is learned from the ANSWER to a log push. An agent that prints nothing (thinking, or hung) pushed
+  // nothing, so the owner's cancel never reached the runner until the wall-clock budget: a silent job could not be cancelled.
+  // When there is nothing to send, an empty batch is pushed every heartbeat (4 s by default) to ask.
+  const heartbeatMs = Math.min(5000, cfg.logFlushMs * 2); let lastPush = Date.now();
+  const heartbeat = (): void => {
+    if (cancel || buffer.length || announce || Date.now() - lastPush < heartbeatMs) return;
+    lastPush = Date.now();
+    sending = sending.then(async () => { try { if ((await api.log(job, [])).cancel) cancel = true; } catch { /* the API is away: asked again at the next heartbeat */ } });
+  };
+  const timer = setInterval(() => { if (buffer.length || announce) lastPush = Date.now(); void flush(); heartbeat(); }, cfg.logFlushMs);
   const result = await runJob(job, cfg, {
     log: (s, t) => { if (buffer.length < 5000) buffer.push({ s, t }); else dropped += 1; },
     running: () => { announce = true; void flush(); },

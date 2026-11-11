@@ -8,6 +8,7 @@ import { RunnerResult, decodeSubmission, parseClaims } from '@spw/core/research-
 import { configFromEnv } from '../src/config.ts';
 import { agentArgv, collectSubmission, describeStreamEvent, jobPaths, runJob, sandboxAvailable } from '../src/job.ts';
 import { LedgerTail } from '../src/ledger.ts';
+import { processJob } from '../src/runner.ts';
 import { hooks, labReady, makeJob, testConfig } from './helpers.ts';
 import { appendFileSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -73,6 +74,17 @@ describe.skipIf(!labReady())('runner state machine (fake agent)', () => {
     setTimeout(() => { h.captured.cancel = true; }, 1500);
     const result = await runJob(job, cfg, h.hooks);
     expect(result).toMatchObject({ outcome: 'cancelled', reason: 'cancelled by the owner' });
+  }, T);
+
+  // v10: through the runner loop, as in production — the cancel is only known from the API's answer to a log push
+  it('cancel of a SILENT agent: nothing is printed after the first line, the heartbeat still learns the cancel', async () => {
+    const job = makeJob(), cfg = { ...testConfig('hang'), logFlushMs: 150 }, pushes: number[] = []; let cancelAt = 0, wanted = false;
+    const api = { claim: async () => null, result: async () => {}, log: async (_j: unknown, lines: unknown[]) => { pushes.push(lines.length); return { cancel: wanted }; } };
+    setTimeout(() => { wanted = true; cancelAt = Date.now(); }, 2500);   // long after the agent's only line (« working for ever ») was pushed
+    const result = await processJob(job, cfg, api as never);
+    expect(result).toMatchObject({ outcome: 'cancelled', reason: 'cancelled by the owner' });
+    expect(Date.now() - cancelAt).toBeLessThan(5000);                    // not the wall-clock budget (minutes)
+    expect(pushes.filter((n) => n === 0).length).toBeGreaterThan(2);     // empty batches were pushed to ask
   }, T);
 
   it('trial budget: more ledger lines than allowed → over_budget, and the consumed trials are reported', async () => {
