@@ -21,7 +21,7 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await page.getByRole('button', { name: /Créer ma clé/ }).click();
   await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('heading', { name: 'Actifs' })).toBeVisible();
-  await expect(page.getByText(/11\/11 réseaux opérationnels/)).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByText(/14\/14 réseaux opérationnels/)).toBeVisible({ timeout: 90_000 });
   await page.waitForTimeout(1500);
   await page.screenshot({ path: `${SHOTS}/02-home.png`, fullPage: true });
 

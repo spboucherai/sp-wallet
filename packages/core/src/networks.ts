@@ -142,6 +142,15 @@ const DEFS = {
     rpc: ['https://xrplcluster.com', 'https://s1.ripple.com'],
     explorerTx: 'https://livenet.xrpl.org/transactions/', explorerAddr: 'https://livenet.xrpl.org/accounts/', minConf: 1,
   },
+  tron: {
+    // chainRef = genesis block id. No `activation`: nothing stays locked on TRON (the sender pays 1 TRX to create the recipient).
+    // rpc[0] (TronGrid) also serves the /v1 history index used to discover deposits; both are java-tron HTTP APIs.
+    id: 'tron', family: 'tron', name: 'TRON',
+    chainRef: '00000000000000001ebf88508a03865c71d452e25f4d51194196a1d22b6653dc',
+    native: { id: 'native', symbol: 'TRX', name: 'TRON', decimals: 6 }, tokens: [], coinType: 195,
+    rpc: ['https://api.trongrid.io', 'https://tron-rpc.publicnode.com'],
+    explorerTx: 'https://tronscan.org/#/transaction/', explorerAddr: 'https://tronscan.org/#/address/', minConf: 19,
+  },
 } satisfies Record<string, NetworkDef>;
 
 /** Known ids are typed; any other string may be absent. */

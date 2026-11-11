@@ -30,6 +30,7 @@ async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Prom
 
 const COINGECKO: Record<string, string> = {
   ETH: 'ethereum', BTC: 'bitcoin', SOL: 'solana', POL: 'polygon-ecosystem-token', BNB: 'binancecoin', AVAX: 'avalanche-2', HYPE: 'hyperliquid',
+  LTC: 'litecoin', DOGE: 'dogecoin', BCH: 'bitcoin-cash', TRX: 'tron', XRP: 'ripple', XLM: 'stellar',
   USDC: 'usd-coin', USDT: 'tether', PYUSD: 'paypal-usd', DAI: 'dai', USDS: 'usds', USDe: 'ethena-usde', FDUSD: 'first-digital-usd', EURC: 'euro-coin', RLUSD: 'ripple-usd', USDG: 'global-dollar',
   LINK: 'chainlink', UNI: 'uniswap', AAVE: 'aave', LDO: 'lido-dao', WBTC: 'wrapped-bitcoin', WETH: 'weth', PAXG: 'pax-gold', ONDO: 'ondo-finance', RENDER: 'render-token',
   JUP: 'jupiter-exchange-solana', RAY: 'raydium', BONK: 'bonk', PEPE: 'pepe', SHIB: 'shiba-inu',

@@ -7,6 +7,7 @@ import { base58 } from '@scure/base';
 import { Transaction } from '@scure/btc-signer';
 import { hex } from '@scure/base';
 import { parseTransaction, recoverTransactionAddress, decodeFunctionData, erc20Abi } from 'viem';
+import { TronWeb, utils as tronUtils } from 'tronweb';
 import { buildSolMessage, intentHash, NETWORKS, verifyAuditChain, type Intent } from '@spw/core';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
 import { deriveKeys } from '../src/keys.ts';
@@ -67,6 +68,55 @@ describe('per-network keys', () => {
     await expect(signer.sign(bad, pk.assert(intentHash(bad)))).rejects.toThrow();
     const wrongChain = { ...ltc, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-eeeeeeeeeeee', chainRef: NETWORKS.bitcoin.chainRef };
     await expect(signer.sign(wrongChain, pk.assert(intentHash(wrongChain)))).rejects.toThrow(/chain/);
+  });
+  it('TRON: coin type 195 address (official SDK vector); signs a USDT intent identical to tronweb and refuses other shapes', async () => {
+    expect(keys.addresses.tron).toBe('TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH');
+    const sdkAccount = TronWeb.fromMnemonic(TEST_MNEMONIC, "m/44'/195'/0'/0/0");
+    expect(keys.addresses.tron).toBe(sdkAccount.address);
+    const { signer, pk, nowRef, store } = setup();
+    await signer.enroll({ credential: pk.credential(), setupToken: 'setup-token' });
+    const t = nowRef.t, usdt = NETWORKS.tron.tokens[0]!;
+    const x = { ref_block_bytes: '2660', ref_block_hash: 'afad6ef83bbf9b23', expiration: String((t + 240) * 1000), timestamp: String(t * 1000), fee_limit: '20000000' };
+    const tron: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-ffffffffff01', keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 2, network: 'tron', chainRef: NETWORKS.tron.chainRef,
+      asset: usdt.id, symbol: 'USDT', decimals: 6, amount: '12500000', from: keys.addresses.tron!, to: 'TKHuVq1oKVruCGLvqVexFs6dawKv6fQgFs', maxFee: '21000000', x };
+    const r = await signer.sign(tron, pk.assert(intentHash(tron)));
+    // the same transfer built and signed by the official SDK, offline
+    const tw = new TronWeb({ fullHost: 'http://127.0.0.1:9' });
+    const sdk = (await tw.transactionBuilder.triggerSmartContract(usdt.id, 'transfer(address,uint256)',
+      { feeLimit: 20_000_000, callValue: 0, txLocal: true, blockHeader: { ref_block_bytes: x.ref_block_bytes, ref_block_hash: x.ref_block_hash, expiration: Number(x.expiration), timestamp: Number(x.timestamp) } } as never,
+      [{ type: 'address', value: tron.to }, { type: 'uint256', value: tron.amount }], tron.from)).transaction;
+    const signed = await tw.trx.sign(sdk, sdkAccount.privateKey.slice(2));
+    expect(r.txid).toBe(sdk.txID);
+    const pb = tronUtils.transaction.txJsonToPb(sdk);
+    pb.addSignature(Uint8Array.from(Buffer.from(signed.signature[0]!, 'hex')));
+    expect(r.raw).toBe(Buffer.from(pb.serializeBinary()).toString('hex'));
+    expect(store.state.spent[`${new Date(t * 1000).toISOString().slice(0, 10)}|tron:USDT`]).toBe('12500000');
+
+    const deny = async (id: string, over: Partial<Intent>, re: RegExp) => {
+      const bad = { ...tron, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-ffffffffff${id}`, ...over } as Intent;
+      await expect(signer.sign(bad, pk.assert(intentHash(bad)))).rejects.toThrow(re);
+    };
+    await deny('02', { chainRef: NETWORKS.bitcoin.chainRef }, /chain/);
+    await deny('03', { maxFee: '20000000' }, /fee exceeds/); // fee_limit + bandwidth above the approved ceiling
+    await deny('04', { x: { ...x, fee_limit: '39000000' }, maxFee: '41000000' }, /fee ceiling above policy/);
+    await deny('05', { asset: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8', symbol: 'USDC' }, /limit|allowlisted/); // not allowlisted: no policy cap either
+    await deny('06', { x: { ...x, data: 'ff' } }, /exactly/);
+    await deny('07', { to: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' }, /TRON address/);
+    await deny('08', { to: usdt.id }, /token contract/);
+    await deny('09', { amount: '50000001' }, /per-transaction limit/);
+    await deny('10', { from: 'TV6MuMXfmLbBqPZvBHdwFsDnQeVfnmiuSi' }, /not controlled/);
+    await deny('11', { x: { ...x, expiration: String((t + 120 + 601) * 1000) } }, /approval window/);
+    const { x: _x, ...noX } = tron; // without its chain section the intent cannot even be hashed, so nothing can be approved
+    expect(() => intentHash(noX as Intent)).toThrow(/chain section/);
+    await expect(signer.sign(noX, pk.assert(intentHash(tron)))).rejects.toThrow();
+    // a native transfer through the same path
+    const trx: Intent = { ...tron, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-ffffffffff20', asset: 'native', symbol: 'TRX', amount: '2000000', maxFee: '1100000',
+      x: { ref_block_bytes: x.ref_block_bytes, ref_block_hash: x.ref_block_hash, expiration: x.expiration, timestamp: x.timestamp } };
+    const n = await signer.sign(trx, pk.assert(intentHash(trx)));
+    const sdkTrx = await tw.transactionBuilder.sendTrx(trx.to, 2_000_000, trx.from, { blockHeader: { ref_block_bytes: x.ref_block_bytes, ref_block_hash: x.ref_block_hash, expiration: Number(x.expiration), timestamp: Number(x.timestamp) } });
+    expect(n.txid).toBe(sdkTrx.txID);
+    expect(n.raw).toContain(sdkTrx.raw_data_hex);
+    await expect(signer.sign(trx, pk.assert(intentHash(trx)))).rejects.toThrow(/already signed/); // replay
   });
 });
 

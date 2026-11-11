@@ -2,10 +2,12 @@
 // and writes packages/core/src/tokens.ts. A deployment that fails any check is dropped and reported — never silently kept.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { decodeAbiParameters, encodeFunctionData, erc20Abi, getAddress, hexToNumber, hexToString } from 'viem';
+import { tronAddressBytes } from '../src/plugins/tron.ts';
 
 const RPC: Record<string, string> = { ethereum: 'https://ethereum-rpc.publicnode.com', base: 'https://mainnet.base.org', arbitrum: 'https://arb1.arbitrum.io/rpc', polygon: 'https://polygon-bor-rpc.publicnode.com',
-  optimism: 'https://mainnet.optimism.io', bsc: 'https://bsc-dataseed.bnbchain.org', avalanche: 'https://api.avax.network/ext/bc/C/rpc', hyperevm: 'https://rpc.hyperliquid.xyz/evm', solana: 'https://api.mainnet-beta.solana.com' };
-const CG: Record<string, string> = { ethereum: 'ethereum', base: 'base', arbitrum: 'arbitrum-one', polygon: 'polygon-pos', optimism: 'optimistic-ethereum', bsc: 'binance-smart-chain', avalanche: 'avalanche', hyperevm: 'hyperevm', solana: 'solana' };
+  optimism: 'https://mainnet.optimism.io', bsc: 'https://bsc-dataseed.bnbchain.org', avalanche: 'https://api.avax.network/ext/bc/C/rpc', hyperevm: 'https://rpc.hyperliquid.xyz/evm', solana: 'https://api.mainnet-beta.solana.com',
+  tron: 'https://tron-rpc.publicnode.com' /* java-tron HTTP API, not JSON-RPC */ };
+const CG: Record<string, string> = { ethereum: 'ethereum', base: 'base', arbitrum: 'arbitrum-one', polygon: 'polygon-pos', optimism: 'optimistic-ethereum', bsc: 'binance-smart-chain', avalanche: 'avalanche', hyperevm: 'hyperevm', solana: 'solana', tron: 'tron' };
 const TOKEN = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', TOKEN22 = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 /** on-chain symbol() values that legitimately differ from the ticker (checked by hand, with the reason) */
 const SYMBOL_ALIAS: Record<string, string[]> = { USDT: ['USDT', 'USD₮', 'USDt'], RENDER: ['RENDER', 'RNDR'], WBTC: ['WBTC'], USDe: ['USDe'] };
@@ -19,6 +21,19 @@ async function rpc(url: string, method: string, params: unknown[]): Promise<any>
       return j.result;
     } catch (e) { if (k === 3) throw e; await new Promise((r) => setTimeout(r, 1200 * (k + 1))); }
   }
+}
+/** TRON full-node HTTP API: read-only contract call, returns the ABI-encoded result. Fails on a revert or a missing contract. */
+async function tronCall(contract: string, selector: string): Promise<`0x${string}`> {
+  for (let k = 0; k < 4; k++) {
+    try {
+      const r = await fetch(RPC.tron + '/wallet/triggerconstantcontract', { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({ owner_address: contract, contract_address: contract, function_selector: selector, parameter: '', visible: true }) });
+      const j = await r.json() as any;
+      if (j.result?.result !== true || j.result?.message || !j.constant_result?.[0]) throw new Error(`constant call ${selector} failed`);
+      return `0x${j.constant_result[0]}`;
+    } catch (e) { if (k === 3) throw e; await new Promise((r) => setTimeout(r, 1200 * (k + 1))); }
+  }
+  throw new Error('unreachable');
 }
 const cand = JSON.parse(readFileSync('research/candidates.json', 'utf8'));
 const cg: Record<string, any> = existsSync('research/cg.json') ? JSON.parse(readFileSync('research/cg.json', 'utf8')) : {};
@@ -43,6 +58,18 @@ for (const t of cand.tokens) {
         if (ext.includes('nonTransferable')) throw new Error('non-transferable mint');
         deployments[net] = { address: raw, decimals: a.data.parsed.info.decimals, ...(a.owner === TOKEN22 ? { program: 'token2022' } : {}) };
         console.log('ok ', tag, raw, 'dec', a.data.parsed.info.decimals, a.owner === TOKEN22 ? `token2022 [${ext.join(',')}]` : 'token');
+      } else if (net === 'tron') {
+        // TRC-20: canonical base58check address, CoinGecko agrees exactly, contract code exists, decimals()/symbol() read from the chain
+        tronAddressBytes(raw);
+        if (second !== raw) throw new Error(`second source differs: ${second}`);
+        const info = await (await fetch(RPC.tron + '/wallet/getcontract', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ value: raw, visible: true }), signal: AbortSignal.timeout(15000) })).json() as any;
+        if (info.contract_address !== raw || !info.bytecode) throw new Error('no contract code');
+        const dec = hexToNumber(await tronCall(raw, 'decimals()'));
+        const sym = decodeAbiParameters([{ type: 'string' }], await tronCall(raw, 'symbol()'))[0];
+        const allowed = (SYMBOL_ALIAS[t.symbol] ?? [t.symbol]).map((s) => s.toUpperCase());
+        if (!allowed.includes(sym.toUpperCase())) throw new Error(`on-chain symbol is "${sym}"`);
+        deployments[net] = { address: raw, decimals: dec, ...(sym !== t.symbol ? { onchainSymbol: sym } : {}) };
+        console.log('ok ', tag, raw, 'dec', dec, sym);
       } else {
         const addr = getAddress(raw.toLowerCase());
         if (second.toLowerCase() !== addr.toLowerCase()) throw new Error(`second source differs: ${second}`);
@@ -72,7 +99,7 @@ const body = out.map((t) => `  // ${t.source}\n  { symbol: ${q(t.symbol)}, name:
   `    ${n}: { address: ${q(d.address)}${d.decimals !== undefined ? `, decimals: ${d.decimals}` : ''}${d.program ? `, program: ${q(d.program)}` : ''}${d.onchainSymbol ? `, onchainSymbol: ${q(d.onchainSymbol)}` : ''} },`).join('\n')}\n  } },`).join('\n');
 writeFileSync('packages/core/src/tokens.ts', `// GENERATED by scripts/gen-tokens.mts on ${new Date().toISOString().slice(0, 10)} from research/candidates.json — do not edit by hand.
 // Inclusion rule: issuer documentation states the address, CoinGecko's contract list agrees, and the contract's own
-// symbol()/decimals() (EVM) or mint owner program/decimals (Solana) match. The API re-checks the on-chain part at every start.
+// symbol()/decimals() (EVM, TRON) or mint owner program/decimals (Solana) match. The API re-checks the on-chain part at every start.
 export interface TokenDef {
   symbol: string; name: string; decimals: number;
   /** network id -> deployment. \`decimals\` overrides when a chain differs. \`onchainSymbol\`: what the contract itself returns when it is not the ticker. */
