@@ -1,0 +1,9 @@
+{
+ "source": "coinbase",
+ "recordedAt": 1794362573299,
+ "url": "https://api.exchange.coinbase.com/products/NOPE-USD/candles?granularity=3600",
+ "status": 404,
+ "body": {
+  "message": "NotFound"
+ }
+}

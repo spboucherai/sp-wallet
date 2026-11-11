@@ -76,7 +76,7 @@ async function refreshHealth(): Promise<void> {
   }));
 }
 
-function loop(name: string, fn: () => Promise<void>, everyMs: number): void {
+export function loop(name: string, fn: () => Promise<void>, everyMs: number): void {
   let running = false;
   const tick = async () => { if (running) return; running = true; try { await fn(); } catch (e) { log(`${name}: ${(e as Error).message}`); } finally { running = false; } };
   void tick();

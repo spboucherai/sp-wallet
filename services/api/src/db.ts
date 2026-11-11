@@ -48,6 +48,15 @@ create table if not exists swap_quotes (
   ms int not null, ok boolean not null, code text);
 create index if not exists swap_quotes_at on swap_quotes (at);
 create table if not exists settings (key text primary key, value jsonb not null);
+create table if not exists candles (
+  source text not null, symbol text not null, interval text not null, ts timestamptz not null,
+  open double precision not null, high double precision not null, low double precision not null, close double precision not null,
+  volume double precision not null, primary key (source, symbol, interval, ts));
+create index if not exists candles_series on candles (symbol, interval, ts);
+create table if not exists market_quality (
+  symbol text not null, interval text not null, checked_at timestamptz not null, last_ts timestamptz, fresh boolean not null,
+  gaps int not null, max_deviation_bps double precision, status text not null, detail jsonb not null default '{}',
+  primary key (symbol, interval));
 create table if not exists audit_events (
   seq bigint primary key, ts text not null, type text not null, actor text not null, data jsonb not null, prev text not null, hash text not null);
 create or replace function spw_audit_immutable() returns trigger language plpgsql as $$
