@@ -1,4 +1,4 @@
-export class ApiError extends Error { constructor(public status: number, public code: string, message: string) { super(message); } }
+export class ApiError extends Error { /** parsed JSON body of the error answer (risk refusals carry their code and reason there) */ body: unknown = undefined; constructor(public status: number, public code: string, message: string) { super(message); } }
 let onUnauth: () => void = () => {};
 export const setUnauthHandler = (f: () => void) => { onUnauth = f; };
 
@@ -10,7 +10,8 @@ export async function api<T = any>(method: string, path: string, body?: unknown,
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     if (r.status === 401 && j.error === 'unauthenticated') onUnauth();
-    throw new ApiError(r.status, j.error ?? 'error', j.message ?? 'error');
+    const err = new ApiError(r.status, j.error ?? 'error', j.message ?? 'error'); err.body = j;
+    throw err;
   }
   return j as T;
 }
