@@ -4,6 +4,7 @@
  * goes through it; JS numbers are used for charts and for compact read-only figures (24 h volume, open interest) only.
  */
 import { D, type Dec, type DecStr } from '../../../../packages/derivatives/src/decimal.ts';
+import { amountLocale, amountOf, type AmountLocale } from '../amount.ts';
 
 export { D };
 export type { Dec, DecStr };
@@ -90,15 +91,11 @@ export function fundingPerHour(rate: DecStr | null, intervalSec: number): Dec | 
   return D.div(D.mul(r, D.from(3600n)), D.from(BigInt(Math.round(intervalSec))), 12, 'half_even');
 }
 /** user input → canonical decimal string: accepts « 1 234,5 », "1,234.5", "0.01"; null when it is not a non-negative decimal */
-export function parseInput(raw: string): DecStr | null {
-  let s = raw.trim().replace(/[\s  ']/g, '');
-  if (!s) return null;
-  if (s.includes(',') && s.includes('.')) s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
-  else s = s.replace(',', '.');
-  if (!/^\d*\.?\d*$/.test(s) || !/\d/.test(s)) return null;
-  if (s.startsWith('.')) s = `0${s}`;
-  if (s.endsWith('.')) s = s.slice(0, -1);
-  s = s.replace(/^0+(?=\d)/, '');
+export function parseInput(raw: string, locale: AmountLocale = amountLocale()): DecStr | null {
+  // v8 hardening: a typed number is read by the wallet's single rule (../amount.ts) — an ambiguous « 1.000 » / "1,000" is refused
+  // (null), never guessed. As before, the result is normalised (no trailing zeros).
+  let s = amountOf(raw, locale);
+  if (s === null) return null;
   if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, '');
   return D.isValid(s) ? s : null;
 }

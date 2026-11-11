@@ -11,6 +11,7 @@ import { errText, I18n, useT, type Key } from '../i18n';
 import { Btn, Card, Field, H, inputCls, Notice, Skeleton } from '../ui';
 import { ageText, DataTable, PaperTag, Row, Seg, VENUE_NAME, VenueBadge, type Col } from './bits';
 import { D, dec, fmt, parseInput } from './dec';
+import { AmountProblem } from '../amountUi';   // v8 hardening: says when a typed number is ambiguous (never guessed)
 import { rapi, type CostComponent, type PaperPrefill, type Reason, type RouteAnswer, type RouteBody, type RoutedCandidate, type RouterSource, type TermKey } from './routerApi';
 import type { DerivAccount, VenueId } from './types';
 
@@ -40,7 +41,7 @@ export function RouterView({ accounts, onOpenPaper }: { accounts: DerivAccount[]
   const ready = !!size && !!lev && !problem && (f.type === 'market' || !!price);
   const body: RouteBody | null = ready ? { base: f.base, side: f.side, ...(f.unit === 'usd' ? { notionalUsd: size! } : { sizeBase: size! }), leverage: lev!, type: f.type, price: f.type === 'limit' ? price : null, reduceOnly: false,
     horizonHours: f.horizon, accountIds: f.account ? [f.account] : [] } : null;
-  const q = useQuery({ queryKey: ['deriv', 'route', sent], enabled: !!sent, queryFn: () => rapi.route(sent!), staleTime: 0, gcTime: 0, retry: 0, refetchOnWindowFocus: false });
+  const q = useQuery({ queryKey: ['deriv', 'route', sent, locale], enabled: !!sent, queryFn: () => rapi.route(sent!, locale), staleTime: 0, gcTime: 0, retry: 0, refetchOnWindowFocus: false });
   const run = () => { if (!body) return; if (JSON.stringify(body) === JSON.stringify(sent)) void q.refetch(); else setSent(body); };
   const stale = !!sent && !!body && JSON.stringify(body) !== JSON.stringify(sent);
   const horizonLabel = (h: string) => t(`rxH_${h}` as Key);
@@ -59,7 +60,7 @@ export function RouterView({ accounts, onOpenPaper }: { accounts: DerivAccount[]
               <Seg label={t('fxDirection')} value={f.side} onChange={(v) => set({ side: v })} options={[{ id: 'long', label: t('fxLong') }, { id: 'short', label: t('fxShort') }]} /></div>
             <Field label={t('fxSize')} hint={f.unit === 'usd' ? t('rxSizeUsdHint') : t('rxSizeBaseHint', { base: f.base })}>
               <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.size} onChange={(e) => set({ size: num(e.target.value) })} aria-label={t('fxSize')} />
-                <Seg size="sm" label={t('rxUnit')} value={f.unit} onChange={(v) => set({ unit: v })} options={[{ id: 'usd', label: 'USD' }, { id: 'base', label: f.base }]} className="shrink-0" /></div></Field>
+                <Seg size="sm" label={t('rxUnit')} value={f.unit} onChange={(v) => set({ unit: v })} options={[{ id: 'usd', label: 'USD' }, { id: 'base', label: f.base }]} className="shrink-0" /></div><AmountProblem ambiguousOnly text={f.size} /></Field>
             <Field label={t('fxLeverage')} hint={t('rxLevHint')}>
               <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.lev} onChange={(e) => set({ lev: num(e.target.value) })} aria-label={t('fxLeverage')} /><span className="text-mute">×</span></div></Field>
           </div>
@@ -70,7 +71,7 @@ export function RouterView({ accounts, onOpenPaper }: { accounts: DerivAccount[]
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div><span className="mb-1.5 block text-[13px] text-mute">{t('fxOrderType')}</span>
                 <Seg size="sm" label={t('fxOrderType')} value={f.type} onChange={(v) => set({ type: v })} options={[{ id: 'market', label: t('fxKind_market') }, { id: 'limit', label: t('fxKind_limit') }]} /></div>
-              {f.type === 'limit' && <Field label={t('fxPrice')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.price} onChange={(e) => set({ price: num(e.target.value) })} aria-label={t('fxPrice')} /></Field>}
+              {f.type === 'limit' && <Field label={t('fxPrice')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.price} onChange={(e) => set({ price: num(e.target.value) })} aria-label={t('fxPrice')} /><AmountProblem ambiguousOnly text={f.price} /></Field>}
             </div>
           </div>
           <Field label={t('rxAccount')} hint={t('rxAccountHint')}><select className={inputCls} value={f.account} onChange={(e) => set({ account: e.target.value })} aria-label={t('rxAccount')}>
@@ -148,7 +149,7 @@ function Results({ data, stale, locale, accounts, onOpenPaper }: { data: RouteAn
         <div className="mb-3"><Notice tone="warn"><b className="font-semibold">{t('fxNotInterchangeable')}</b> {t('rxDiffBody', { n: data.candidates.length, base: data.intent.base.toUpperCase(), k: data.differences.fields.length })}</Notice></div>
         <DataTable label={t('rxDiffTitle')} cols={diffCols} rows={data.differences.fields} rowKey={(d) => d.field} empty={t('rxDiffEmpty')} />
         <ul className="mt-4 list-disc space-y-1.5 pl-5 text-[13px] leading-snug">{(['fxNever1', 'fxNever2', 'fxNever3', 'fxNever4'] as const).map((k) => <li key={k}>{t(k)}</li>)}</ul>
-        <details className="mt-3"><summary className="flex min-h-11 cursor-pointer items-center text-[12.5px] font-medium text-blue">{t('rxEngineNotes', { n: data.warnings.length })}</summary>
+        <details className="mt-3"><summary className="flex min-h-11 cursor-pointer items-center text-[12.5px] font-medium text-blue">{t('hdEngineNotes', { n: data.warnings.length })}</summary>
           <ul className="list-disc space-y-1 pb-1 pl-5 text-[12.5px] leading-snug text-mute">{data.warnings.map((w) => <li key={w}>{w}</li>)}</ul></details>
       </Card>
     </div>

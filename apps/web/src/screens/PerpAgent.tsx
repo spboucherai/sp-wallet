@@ -9,7 +9,9 @@ import { DataTable, PaperTag, Pnl, Row, Seg, SideTag, Stat, timeOf, VenueBadge, 
 import { D, dec, fmt, usd } from '../derivatives/dec';
 import type { Fill, FundingPayment, Order, Position, RiskPolicy } from '../derivatives/types';
 import { errText, I18n, useT, type Key } from '../i18n';
-import { Btn, Card, Field, H, Icon, inputCls, Notice, Skeleton, when } from '../ui';
+import { Btn, Card, Field, H, Icon, inputCls, Notice, Skeleton, usdCapital, when } from '../ui';
+import { amountLocale, amountOf, sanitizeAmountText } from '../amount'; // v8 hardening
+import { AmountProblem } from '../amountUi';
 import { AgentState } from './Agents';
 import { AgentModeBand, GoLiveCard, LivePanel, PerpLiveState, Refusal } from './PerpAgentLive';   // v7 perp live: the real mode
 import { ResearchPanel } from './Research'; // v7 research runtime
@@ -35,7 +37,8 @@ export function PerpAgentForm({ nav, onCreated }: { nav: Nav; onCreated: () => P
   const [f, setF] = useState({ name: '', mission: '', capital: '1000', interval: '1h', instruments: [] as string[], search: '' });
   const [risk, setRisk] = useState<PerpRisk | null>(null), [busy, setBusy] = useState(false), [err, setErr] = useState('');
   const r = risk ?? q.data?.riskDefaults ?? { maxLeverage: 2, maxGrossExposureX: 1.5, maxPositionX: 1, maxDailyLossPct: 3, maxTotalLossPct: 10, slippageBps: 30, minTradePct: 2 };
-  const max = q.data?.maxInstruments ?? 8, cap = Number(f.capital) || 0;
+  const capital = amountOf(f.capital, amountLocale());   // v8: the typed capital → canonical; null while it cannot be read
+  const max = q.data?.maxInstruments ?? 8, cap = Number(capital ?? '') || 0;
   const all = q.data?.venues[0]?.instruments ?? [];
   const shown = all.filter((x) => x.eligible && (f.search ? x.symbol.includes(f.search.toUpperCase()) : true)).slice(0, f.search ? 40 : 24);
   const num = (k: keyof PerpRisk, label: string, hint: string, suffix: string, min: number, mx: number, int = false) => <Field label={label} hint={hint}><div className="flex items-center gap-2">
@@ -44,7 +47,7 @@ export function PerpAgentForm({ nav, onCreated }: { nav: Nav; onCreated: () => P
   const create = async () => {
     setBusy(true); setErr('');
     try {
-      const a = await post<{ id: string }>('/agents', { kind: 'perp', name: f.name.trim(), mission: f.mission.trim(), instruments: f.instruments, interval: f.interval, capitalUsdc: f.capital, risk: r });
+      const a = await post<{ id: string }>('/agents', { kind: 'perp', name: f.name.trim(), mission: f.mission.trim(), instruments: f.instruments, interval: f.interval, capitalUsdc: capital ?? f.capital, risk: r });
       await onCreated(); nav({ tab: 'agent', asset: a.id });
     } catch (e) { setErr(errText(t, e)); } finally { setBusy(false); }
   };
@@ -62,7 +65,7 @@ export function PerpAgentForm({ nav, onCreated }: { nav: Nav; onCreated: () => P
         {f.instruments.length > 0 && <p className="mt-2 text-[13px]">{t('paChosen')} <span className="font-semibold">{f.instruments.join(' · ')}</span></p>}
         <p className="mt-2 text-[12.5px] text-mute">{t('paInstrumentsNote')}</p></div>
       <div className="grid grid-cols-2 gap-3">
-        <Field label={t('paCapital')} hint={t('paCapitalHint', { min: q.data?.minCapital ?? '50' })}><div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" value={f.capital} onChange={(e) => setF({ ...f, capital: e.target.value.replace(',', '.').replace(/[^0-9.]/g, '') })} /><span className="w-12 shrink-0 text-[13px] text-mute">USDC</span></div></Field>
+        <Field label={t('paCapital')} hint={t('paCapitalHint', { min: q.data?.minCapital ?? '50' })}><div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" value={f.capital} onChange={(e) => setF({ ...f, capital: sanitizeAmountText(e.target.value) })} /><span className="w-12 shrink-0 text-[13px] text-mute">USDC</span></div><AmountProblem text={f.capital} /></Field>
         <Field label={t('agInterval')} hint={t('paIntervalHint')}><select className={inputCls} value={f.interval} onChange={(e) => setF({ ...f, interval: e.target.value })}>{(q.data?.intervals ?? ['1h', '4h']).map((i) => <option key={i} value={i}>{i.replace('h', ' h')}</option>)}</select></Field>
       </div>
       <div><div className="mb-2 text-[15px] font-semibold">{t('paLimits')}</div><p className="mb-3 text-[12.5px] text-mute">{t('paLimitsNote')}</p>
@@ -161,7 +164,7 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
       {!isLive && <Card><H right={<PaperTag />}>{t('paAccount')}</H>
         {!acct ? <p className="text-[14px] text-mute">{t('paNoAccount')}</p> : <>
           <div className="text-[30px] font-semibold tracking-tight">{usd(acct.state.equity, locale)}</div>
-          <div className="text-[13px] text-mute">{t('paAllocated', { capital: a.capitalUsdc })} · {t('paResult')} <Pnl value={result ? D.str(result) : null} locale={locale} /></div>
+          <div className="text-[13px] text-mute">{t('hdPaAllocated', { capital: usdCapital(a.capitalUsdc, locale) })} · {t('paResult')} <Pnl value={result ? D.str(result) : null} locale={locale} /></div>
           <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
             <Stat label={t('paCollateral')}>{usd(acct.state.collateral, locale)}</Stat><Stat label={t('paMarginUsed')}>{usd(acct.state.marginUsed, locale)}</Stat>
             <Stat label={t('paFree')}>{usd(acct.state.freeCollateral, locale)}</Stat><Stat label={t('paRealised')}><Pnl value={acct.totals?.realizedPnl} locale={locale} /></Stat>

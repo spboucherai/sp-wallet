@@ -1,6 +1,7 @@
 import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { useContext } from 'react';
 import { I18n, stateKey, useT } from './i18n';
+import { amountLocale, formatAmount, type AmountLocale } from './amount';
 
 const P: Record<string, string> = {
   home: 'M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z', down: 'M12 4v13m0 0l-5-5m5 5l5-5M5 21h14', up: 'M12 20V7m0 0l-5 5m5-5l5 5M5 3h14',
@@ -108,10 +109,15 @@ export function Change({ pct, suffix }: { pct: number; suffix?: string }) {
 export function Money({ children, hidden }: { children: ReactNode; hidden?: boolean }) {
   return <span className={hidden ? 'mask' : ''} aria-hidden={hidden || undefined}>{children}</span>;
 }
-export const trimAmt = (s: string, max = 6) => { const [i, f = ''] = s.split('.'); const ff = f.slice(0, max).replace(/0+$/, ''); return ff ? `${i}.${ff}` : i!; };
+/** A crypto amount for DISPLAY: truncated to `max` decimals (never rounded up), trailing zeros dropped, written in the screen's language (rule: amount.ts). */
+export const trimAmt = (s: string, max = 6, locale: AmountLocale = amountLocale()) => formatAmount(s, locale, { maxDecimals: max });
+/** The EXACT amount of a review screen (what is signed): every digit the server gave, in the screen's language. */
+export const exactAmt = (s: string, locale: AmountLocale = amountLocale()) => formatAmount(s, locale, { trim: false });
 /** A plain number in the owner's locale (decimal comma in French): percentages, ratios, small USD figures inside sentences. */
 export const numFmt = (n: number, locale: string, max = 2, min = 0) => new Intl.NumberFormat(locale === 'fr' ? 'fr-CA' : 'en-CA', { maximumFractionDigits: max, minimumFractionDigits: Math.min(min, max) }).format(n);
 export const fiat = (n: number, cur: string, locale: string) => new Intl.NumberFormat(locale === 'fr' ? 'fr-CA' : 'en-CA', { style: 'currency', currency: cur }).format(n);
+/** An agent's allocated capital: a USD figure whatever its cash leg (USDC, a bridged or pegged dollar, 6 or 18 decimals) — « 100,00 $ US » / "US$100.00". */
+export const usdCapital = (capital: string | number, locale: string): string => { const n = Number(capital); return Number.isFinite(n) ? fiat(n, 'USD', locale) : '—'; };
 export const when = (d: string | Date, locale: string) => new Date(d).toLocaleString(locale === 'fr' ? 'fr-CA' : 'en-CA', { dateStyle: 'medium', timeStyle: 'short' });
 /** A transfer signed on a server that does not broadcast (test stack): it will never confirm, and must not read as "sent". */
 export const testNotSent = (p: { state?: string; error?: string | null } | null | undefined): boolean => !!p && p.state === 'broadcast' && /broadcast disabled/i.test(p.error ?? '');

@@ -66,7 +66,7 @@ test('fund an agent on its own network: fixed network, limits, two transfers one
   await expect(sheet.getByText(/Limite du signataire : 50 USDC par transfert, 100 par jour/)).toBeVisible();
   // suggested: the planned capital capped by the per-transfer limit, and what is missing to reach the gas reserve
   await expect(sheet.locator('#qa-fund-cash')).toHaveValue('50');
-  const reserve = await sheet.locator('#qa-fund-gas').inputValue(); expect(Number(reserve)).toBeGreaterThan(0);
+  const reserve = await sheet.locator('#qa-fund-gas').inputValue(); expect(Number(reserve.replace(',', '.'))).toBeGreaterThan(0);   // v8: a suggested amount is written with the screen's decimal comma
   await expect(sheet.getByText(/Ce serveur est en mode test/)).toBeVisible();
   await shot(page, '02-fund-sheet'); await noOverflow(page);
 

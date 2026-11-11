@@ -44,14 +44,14 @@ function pickAccount(paper: DerivAccount[], live: LiveSummary[], accountId: stri
 }
 
 export function Futures({ instrument: routeId, view = 'terminal', nav }: { instrument?: string; view?: FuturesView; nav: Nav }) {
-  const t = useT();
+  const t = useT(); const { locale } = useContext(I18n);
   const [lastId, setLastId] = useLocalState<string>('spw-fut-market', DEFAULT_ID);
   const [accountId, setAccountId] = useLocalState<string | null>('spw-fut-account', null);
   const [base, setBase] = useLocalState<string>('spw-fut-base', 'BTC');
   const id = routeId || lastId || DEFAULT_ID;
   useEffect(() => { if (routeId && routeId !== lastId) setLastId(routeId); }, [routeId]);   // eslint-disable-line react-hooks/exhaustive-deps
   const venues = useQuery({ queryKey: ['deriv', 'venues'], queryFn: dapi.venues, refetchInterval: 30_000 });
-  const instruments = useQuery({ queryKey: ['deriv', 'instruments'], queryFn: () => dapi.instruments(), staleTime: 600_000, refetchInterval: 600_000 });
+  const instruments = useQuery({ queryKey: ['deriv', 'instruments', locale], queryFn: () => dapi.instruments(undefined, locale), staleTime: 600_000, refetchInterval: 600_000 });   // v8: settlement and mark-price sentences in the screen's language
   const accounts = useQuery({ queryKey: ['deriv', 'accounts'], queryFn: dapi.accounts, refetchInterval: 6000 });
   const go = (v: FuturesView, inst = id) => nav({ tab: 'futures', asset: inst, view: v === 'terminal' ? undefined : v });
   const phone = !useMedia('(min-width: 768px)');

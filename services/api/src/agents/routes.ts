@@ -1,5 +1,6 @@
 // Trading agents (V3): lifecycle, vaults, mandates. The engine that trades is in engine.ts; nothing here signs anything
 // except through the signer's mandate endpoints.
+import { getWithdrawal, listWithdrawals, requestWithdrawal } from './withdrawals.ts'; // v8
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { generateAuthenticationOptions } from '@simplewebauthn/server';
@@ -18,6 +19,7 @@ import { signer } from '../signer-client.ts';
 // >>> v6 perp agents: the shared routes delegate to perp-routes.ts when the agent's kind is 'perp'
 import { assertPerpApprovable, createPerpAgent, isPerp, perpDetail, perpMode, perpView, spotOnly } from './perp-routes.ts';
 // <<< v6 perp agents
+import { paperBookView } from './paper-view.ts'; // v8 hardening: read-only view of the paper book
 
 export interface AgentRow {
   id: string; name: string; mission: string; state: string; mode: string; network: string; universe: string[]; interval: string;
@@ -184,6 +186,8 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     return { ...view(a),
       vault: balances ? balances.map((x) => ({ symbol: x.symbol, assetSymbol: x.assetSymbol, name: x.name, kind: x.kind, issuer: x.issuer, role: x.role, asset: x.id, amount: x.amount.toString(), display: formatUnits(x.amount, x.decimals), usd: usd(x) })) : null,
       mandateStatus: sm ? { active: !sm.revoked && !sm.expired, revoked: sm.revoked, expired: sm.expired, expiresAt: sm.mandate.expiresAt, today: sm.today, maxOrder: sm.mandate.maxOrder, maxDaily: sm.mandate.maxDaily, maxOrdersPerDay: sm.mandate.maxOrdersPerDay } : null,
+      // v8 hardening: the SIMULATED positions (paper book), read-only and separate from the real vault above; null when the agent never ran on paper
+      paper: await paperBookView(a.id, cashOf(a), agentSymbols(a), async (s) => symbolPrices(s, await deps.prices().catch(() => null))).catch(() => null),
       versions, orders, equity: equity.reverse(), log };
   });
 
@@ -274,30 +278,20 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
   });
 
   // bring funds back: a vault can only pay the owner's own address (enforced by the signer)
+  // v8: a tracked operation (withdrawals.ts) — the answer carries its real state; `ok` is true only once it was broadcast
   app.post('/api/v1/agents/:id/withdraw', async (req) => {
     const a = await load((req.params as { id: string }).id); spotOnly(a); // v6: vault and mandate routes are for spot agents
-    const b = z.strictObject({ asset: z.string().max(80), network: z.string().max(24).optional() }).parse(req.body);
-    // any EVM network: funds sent to the vault's address on another network than the agent's can always come back
-    const n = getNetwork(b.network ?? a.network);
-    if (n.family !== 'evm') throw new UserError('unsupported_network', 'agent wallets exist on EVM networks only', 422);
-    if (a.state === 'LIVE' && n.id === a.network) throw new UserError('bad_state', 'revoke the mandate before withdrawing', 409);
-    const asset = getAsset(n.id, b.asset), st = await signer.status(true);
-    const owner = st.addresses[n.id]!;
-    const bal = await adapterFor(n.id).balances(a.vault_address);
-    const nonce = hexToNumber(await rpcQuorum<`0x${string}`>(n.rpc, 'eth_getTransactionCount', [a.vault_address, 'pending']));
-    const block = await rpcAny<{ baseFeePerGas?: `0x${string}` }>(n.rpc, 'eth_getBlockByNumber', ['latest', false]);
-    const baseFee = hexToBigInt(block.baseFeePerGas ?? '0x0'); let tip = 1_000_000n; try { tip = hexToBigInt(await rpcAny<`0x${string}`>(n.rpc, 'eth_maxPriorityFeePerGas', [])); } catch { /* floor */ }
-    const maxFeePerGas = baseFee * 2n + tip, gas = asset.id === 'native' ? 21_000n : 90_000n, fee = gas * maxFeePerGas;
-    const amount = asset.id === 'native' ? (bal.native ?? 0n) - fee : (bal[asset.id] ?? 0n);
-    if (amount <= 0n) throw new UserError('insufficient_funds', `nothing to withdraw in ${asset.symbol}`);
-    if (asset.id !== 'native' && (bal.native ?? 0n) < fee) throw new UserError('insufficient_gas', `the vault needs a little ${n.native.symbol} to pay the network fee`);
-    const now = Math.floor(Date.now() / 1000);
-    const intent = IntentSchema.parse({ v: 1, proposalId: randomUUID(), keyId: vaultKeyId(st.keyId, a.vault_index), network: n.id, chainRef: n.chainRef, asset: asset.id, symbol: asset.symbol, decimals: asset.decimals, amount: amount.toString(),
-      from: a.vault_address, to: owner, maxFee: fee.toString(), createdAt: now, expiresAt: now + 120, policyVersion: st.policy.version,
-      evm: { nonce, gasLimit: gas.toString(), maxFeePerGas: maxFeePerGas.toString(), maxPriorityFeePerGas: tip.toString() } });
-    const signed = await signer.vaultReturn(a.vault_index, intent); // needs no mandate: the signer only ever pays the owner's own address
-    if (config.broadcast) await adapterFor(n.id).broadcast(signed.raw);
-    await audit('agent.withdraw', 'owner', { agent: a.id, network: n.id, symbol: asset.symbol, amount: amount.toString(), txid: signed.txid });
-    return { ok: true, txid: signed.txid, symbol: asset.symbol, amount: formatUnits(amount, asset.decimals), explorer: n.explorerTx + signed.txid };
+    const b = z.strictObject({ asset: z.string().max(80), network: z.string().max(24).optional(), idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/).optional() }).parse(req.body);
+    return requestWithdrawal(a, b);
+  });
+  app.get('/api/v1/agents/:id/withdrawals', async (req) => {
+    const a = await load((req.params as { id: string }).id);
+    return { withdrawals: await listWithdrawals(a.id), broadcast: config.broadcast };
+  });
+  app.get('/api/v1/agents/:id/withdrawals/:wid', async (req) => {
+    const p = req.params as { id: string; wid: string }, a = await load(p.id);
+    const w = await getWithdrawal(a.id, z.uuid().parse(p.wid));
+    if (!w) throw new UserError('not_found', 'withdrawal not found', 404);
+    return w;
   });
 }

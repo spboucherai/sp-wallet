@@ -1741,6 +1741,44 @@ const D = {
   pnListTitle: ['Plans d’échange entre réseaux', 'Cross-network swap plans'], pnStepOf: ['Étape {k} sur {n}', 'Step {k} of {n}'], pnNeedsYou: ['attend votre approbation', 'waits for your approval'],
   e_plan_open: ['Un autre plan est encore ouvert', 'Another plan is still open'], e_plan_not_startable: ['Ce plan ne peut pas démarrer', 'This plan cannot start'], e_floor_above_estimate: ['Le plancher est au-dessus du résultat attendu', 'The floor is above the expected result'],
   // <<< end of the `pl` block
+  // --- hd: v8 hardening ---
+  // D1 — one rule for typed amounts (apps/web/src/amount.ts)
+  hdAmtInvalid: ['Montant illisible. Utilisez des chiffres, avec une virgule ou un point pour les décimales.', 'This amount cannot be read. Use digits, with a comma or a point for the decimals.'],
+  hdAmtAmbiguous: ['« {text} » peut se lire de deux façons (mille, ou un avec trois décimales). Rien n’est deviné : écrivez le montant sans séparateur de milliers, ou avec la virgule pour les décimales.',
+    '“{text}” can be read two ways (a thousand, or one with three decimals). Nothing is guessed: write the amount without a thousands separator, or with a point for the decimals.'],
+  hdAmtDecimals: ['Trop de décimales : {n} au plus pour cet actif.', 'Too many decimals: at most {n} for this asset.'],
+  // D2 — server-authored texts
+  hdEngineNotes: ['Messages du moteur ({n})', 'Engine messages ({n})'],
+  hdServerTechNote: ['Note technique du serveur', 'Technical note from the server'], hdTechDeposits: ['Dépôts, selon le serveur :', 'Deposits, according to the server:'],
+  e_not_found: ['Introuvable', 'Not found'], e_forbidden: ['Action non autorisée', 'Not allowed'], e_conflict: ['Modifié entre-temps : rechargez et réessayez', 'Changed in the meantime: reload and try again'],
+  e_unsupported: ['Non pris en charge', 'Not supported'], e_bad_asset: ['Actif invalide', 'Invalid asset'], e_bad_interval: ['Fréquence non prise en charge pour ce type de tâche', 'Interval not supported for this kind of job'],
+  e_bad_source: ['Ce portefeuille ne peut pas signer pour ce compte', 'This wallet cannot sign for this account'], e_below_fee: ['Montant inférieur ou égal aux frais de retrait de la plateforme', 'Amount not above the venue’s withdrawal fee'],
+  e_below_reserve: ['Montant insuffisant pour créer le compte du destinataire', 'Amount too small to create the recipient’s account'], e_bridge_paused: ['Le pont de la plateforme est verrouillé pour le moment', 'The venue bridge is locked for now'],
+  e_challenge_expired: ['Demande expirée, réessayez', 'Request expired, try again'], e_csrf: ['Requête refusée (origine non reconnue)', 'Request refused (unrecognised origin)'],
+  e_fee_too_high: ['Frais de réseau anormalement élevés : transfert refusé', 'Network fee abnormally high: transfer refused'], e_hash_mismatch: ['Le signataire a renvoyé une empreinte différente : rien n’a été signé', 'The signer returned a different fingerprint: nothing was signed'],
+  e_memo_required: ['Ce destinataire exige un mémo', 'This recipient requires a memo'], e_perp_agent: ['Non disponible pour un agent de contrats perpétuels', 'Not available for a perpetual-futures agent'],
+  e_proposal_expired: ['Cette proposition a expiré : refaites-la', 'This proposal has expired: make it again'], e_router_unavailable: ['Le routeur n’est pas configuré sur ce serveur', 'The router is not configured on this server'],
+  e_setup_closed: ['La configuration initiale est déjà faite', 'First-time setup is already done'], e_setup_token: ['Jeton de configuration requis', 'Setup token required'],
+  e_too_many_coins: ['Solde réparti sur trop de petits objets de pièces', 'Balance spread over too many small coin objects'], e_too_many_subscriptions: ['Trop d’appareils abonnés', 'Too many subscribed devices'],
+  e_too_many_symbols: ['Trop de marchés : 8 contrats perpétuels au plus', 'Too many markets: at most 8 perpetuals'], e_unknown_action: ['Opération inconnue', 'Unknown operation'],
+  e_unsupported_funds: ['Solde insuffisant sous forme de pièces utilisables', 'Not enough balance held as usable coins'], e_used_by_other_agent: ['Ce compte de plateforme sert déjà à un autre agent', 'This venue account is already used by another agent'],
+  e_wrong_kind: ['Cette stratégie n’est pas du type de cet agent (au comptant / contrats perpétuels)', 'This strategy is not of this agent’s kind (spot / perpetual futures)'], e_insufficient_usdc: ['USDC insuffisants dans le portefeuille', 'Not enough USDC in the wallet'],
+  // D4 — simulated positions on the agent page (never mixed with the real vault)
+  hdPaperTitle: ['SIMULATION — positions fictives, aucun fonds réel', 'SIMULATION — fictional positions, no real funds'],
+  hdPaperTotal: ['Valeur simulée du registre de simulation.', 'Simulated value of the paper book.'], hdPaperUnpriced: ['Sans {list} (prix inconnu).', 'Excluding {list} (no price).'],
+  hdPaperCash: ['liquidités simulées', 'simulated cash'], hdPaperPosition: ['position simulée', 'simulated position'], hdPaperNoPrice: ['prix inconnu', 'no price'],
+  hdPaperNote: ['Ces positions n’existent que dans le registre de simulation de l’agent (évalué le {date}). Elles ne sont pas dans son portefeuille, ne peuvent pas être retirées et ne s’ajoutent à aucun solde réel.',
+    'These positions exist only in the agent’s simulation ledger (valued {date}). They are not in its wallet, cannot be withdrawn and are not added to any real balance.'],
+  // D5 — the agent capital is a USD figure whatever the cash leg
+  hdPaAllocated: ['Capital simulé {capital}', 'Simulated capital {capital}'],
+  // B — an agent-vault withdrawal shows the server's real state (never "sent" before it is broadcast, never "arrived" before it is mined)
+  hdWdSigned: ['Retrait de {amount} {sym} signé — envoi au réseau en cours. Pas encore diffusé.', 'Withdrawal of {amount} {sym} signed — being relayed to the network. Not broadcast yet.'],
+  hdWdBroadcast: ['Retrait de {amount} {sym} diffusé sur le réseau — en attente d’inclusion dans un bloc. Pas encore confirmé.', 'Withdrawal of {amount} {sym} broadcast to the network — waiting to be included in a block. Not confirmed yet.'],
+  hdWdConfirmed: ['Retrait de {amount} {sym} confirmé : arrivé dans votre portefeuille principal.', 'Withdrawal of {amount} {sym} confirmed: it arrived in your main wallet.'],
+  hdWdUnverified: ['Transaction du retrait de {amount} {sym} incluse dans un bloc, mais le paiement vers votre adresse n’y a pas été retrouvé. Vérifiez dans l’explorateur.', 'The withdrawal transaction of {amount} {sym} was included in a block, but the payment to your address was not found in it. Check the explorer.'],
+  hdWdFailed: ['Retrait de {amount} {sym} échoué : les fonds n’ont pas quitté le portefeuille de l’agent.', 'Withdrawal of {amount} {sym} failed: the funds did not leave the agent’s wallet.'],
+  hdWdNotSent: ['Retrait de {amount} {sym} signé, mais non envoyé (diffusion désactivée sur ce serveur, ou relais impossible). Rien n’a quitté le portefeuille de l’agent.', 'Withdrawal of {amount} {sym} signed but NOT sent (broadcast disabled on this server, or it could not be relayed). Nothing left the agent’s wallet.'],
+  // --- end hd ---
 } as const;
 export type Key = keyof typeof D;
 export const I18n = createContext<{ locale: Locale; setLocale: (l: Locale) => void }>({ locale: 'fr', setLocale: () => {} });

@@ -15,6 +15,7 @@ import { Btn, Field, Icon, inputCls, Notice } from '../ui';
 import { RISK_CODES } from './api';
 import { Row, Seg, Sheet } from './bits';
 import { dpOf, fmt, priceDp, usd } from './dec';
+import { AmountProblem } from '../amountUi';   // v8 hardening: says when a typed number is ambiguous (never guessed)
 import { ApprovalSheet, LeverageSheet } from './LiveApproval';
 import { LiveErrNotice, ModeTag, OrderOutcome, SourceTag } from './LiveBits';
 import { buildLive, lapi, LIVE_SLIPPAGE_BPS as SLIPPAGE_BPS, liveError, toneOf, type CancelAll, type LiveConfig, type LiveDetail, type LiveErr, type LiveForm, type LiveOrderBody, type LiveSummary } from './live';
@@ -144,10 +145,10 @@ export function LiveOrderPanel({ instrument, account, detail, conn, workerError,
             className={`min-h-12 rounded-2xl border text-[15px] font-semibold transition ${f.side === s ? (s === 'buy' ? 'border-emerald bg-emerald text-white' : 'border-danger bg-danger text-white') : 'border-line text-mute hover:text-ink'}`}>{sideLabel(s)}</button>)}
         </div>
         <Seg size="sm" label={t('fxOrderType')} value={f.kind} onChange={(kind) => set({ kind })} options={(['market', 'limit', 'stop', 'tp'] as const).map((k) => ({ id: k, label: t(`fxKindShort_${k}` as Key), aria: t(`fxKind_${k}` as Key) }))} />
-        {f.kind === 'limit' && <Field label={`${t('fxLimitPrice')} (${instrument.quote})`}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.price} onChange={(e) => set({ price: num(e.target.value) })} /></Field>}
-        {(f.kind === 'stop' || f.kind === 'tp') && <Field label={`${t('fxTriggerPrice')} (${instrument.quote})`} hint={t(f.kind === 'stop' ? 'fxStopHint' : 'fxTpHint')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.trigger} onChange={(e) => set({ trigger: num(e.target.value) })} /></Field>}
+        {f.kind === 'limit' && <Field label={`${t('fxLimitPrice')} (${instrument.quote})`}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.price} onChange={(e) => set({ price: num(e.target.value) })} /><AmountProblem ambiguousOnly text={f.price} /></Field>}
+        {(f.kind === 'stop' || f.kind === 'tp') && <Field label={`${t('fxTriggerPrice')} (${instrument.quote})`} hint={t(f.kind === 'stop' ? 'fxStopHint' : 'fxTpHint')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.trigger} onChange={(e) => set({ trigger: num(e.target.value) })} /><AmountProblem ambiguousOnly text={f.trigger} /></Field>}
         <Field label={`${t('fxSize')} (${instrument.base})`} hint={sizeNote ?? (built.problem ? <span className="text-danger">{t(built.problem)}</span> : t('flSizeHint', { lot: fmt(instrument.lotSize, { locale, trim: true }), base: instrument.base }))}>
-          <input className={inputCls} inputMode="decimal" autoComplete="off" aria-label={t('fxSize')} value={f.size} placeholder="0" onChange={(e) => set({ size: num(e.target.value) })} /></Field>
+          <input className={inputCls} inputMode="decimal" autoComplete="off" aria-label={t('fxSize')} value={f.size} placeholder="0" onChange={(e) => set({ size: num(e.target.value) })} /><AmountProblem ambiguousOnly text={f.size} /></Field>
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-line px-3 py-2" data-testid="venue-leverage">
           <div className="min-w-0 text-[13px]"><div className="text-mute">{t('flVenueLeverage')}</div><div className="font-semibold">{venueLev ? `${fmt(venueLev.leverage, { locale, trim: true })}× · ${t(venueLev.marginMode === 'cross' ? 'fxCross' : 'fxIsolated')}` : t('flLevUnknown')}</div></div>
           <button type="button" disabled={!!a.halted} onClick={() => setLev(true)} className="min-h-11 shrink-0 rounded-xl border border-line px-3 text-[13px] font-semibold text-ink disabled:opacity-45">{t('flLevChange')}</button></div>

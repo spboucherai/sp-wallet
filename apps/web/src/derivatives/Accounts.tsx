@@ -11,6 +11,7 @@ import { dapi, paperAllowed } from './api';
 import { LiveSection } from './LiveAccounts';
 import { ageText, DataTable, PaperTag, Pnl, Row, ServerSays, Sheet, SideTag, Stat, VENUE_NAME, VenueBadge, type Col } from './bits';
 import { D, dec, fmt, parseInput, pct, priceDp, usd } from './dec';
+import { amountInputText, amountLocale } from '../amount';
 import type { DerivAccount, Instrument, Position, RiskPolicy, VenueId, VenueInfo, Watch } from './types';
 
 type LimitKey = 'maxLeverage' | 'maxOrderNotional' | 'maxPositionNotional' | 'maxGrossExposure' | 'minFreeCollateral' | 'maxDailyLoss' | 'maxTotalLoss' | 'minLiquidationDistanceBps' | 'maxDeviationBps' | 'maxMarkIndexBps' | 'maxDataAgeMs' | 'maxOrdersPerMinute' | 'maxOrdersPerDay';
@@ -26,13 +27,15 @@ type Limits = Record<LimitKey, string>;
  * so that what is created is what was read: leverage 3, order ≤ C, position ≤ 2C, exposure ≤ 3C, free collateral ≥ 0.1C,
  * daily loss 0.05C, total loss 0.2C. Every limit is explained under its field and can be changed.
  */
+/** v8 hardening: a value the app itself writes in a field uses the screen's decimal separator, so that the one rule of amount.ts reads it back exactly */
+const asTyped = (v: string): string => amountInputText(v, amountLocale());
 export function defaultLimits(collateral: string | null): Limits {
-  const c = dec(collateral) ?? D.from(10000n), times = (k: string) => D.str(D.mul(c, D.from(k)));
+  const c = dec(collateral) ?? D.from(10000n), times = (k: string) => asTyped(D.str(D.mul(c, D.from(k))));
   return { maxLeverage: '3', maxOrderNotional: times('1'), maxPositionNotional: times('2'), maxGrossExposure: times('3'), minFreeCollateral: times('0.1'), maxDailyLoss: times('0.05'), maxTotalLoss: times('0.2'),
     minLiquidationDistanceBps: '1000', maxDeviationBps: '200', maxMarkIndexBps: '100', maxDataAgeMs: '10000', maxOrdersPerMinute: '10', maxOrdersPerDay: '200' };
 }
 const defaultAllowed = (venue: string, list: Instrument[]) => [`${venue}:BTC`, `${venue}:ETH`].filter((id) => !list.length || list.some((i) => i.id === id));
-const limitsOf = (p: RiskPolicy): Limits => Object.fromEntries(LIMITS.map(({ k }) => [k, String(p[k])])) as Limits;
+const limitsOf = (p: RiskPolicy): Limits => Object.fromEntries(LIMITS.map(({ k }) => [k, asTyped(String(p[k]))])) as Limits;
 function toPolicy(l: Limits): Partial<RiskPolicy> | null {
   const out: Record<string, string | number> = {};
   for (const { k, int } of LIMITS) {

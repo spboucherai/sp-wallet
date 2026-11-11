@@ -8,6 +8,8 @@ import { get, post } from '../api';
 import type { Nav } from '../App';
 import { errText, I18n, useT, type Key } from '../i18n';
 import { Btn, Card, Field, H, Icon, inputCls, Notice, Skeleton, when } from '../ui';
+import { amountLocale, amountOf, sanitizeAmountText } from '../amount'; // v8 hardening
+import { AmountProblem } from '../amountUi';
 
 interface Budgets { wallSeconds: number; maxTrials: number; maxDiskMb: number; maxModelTokens: number; maxModelUsd: number }
 interface Usage { wallMs: number; trials: number; diskMb: number; modelTokens: number; modelRequests: number; modelUsd: number | null; ledgerTampered: boolean; sandbox: 'sandbox-exec' | 'none'; agent: string; labCommit: string | null }
@@ -45,7 +47,7 @@ export function ResearchForm({ agent, onCreated }: { agent?: { id: string; kind?
   const create = async () => {
     setBusy(true); setErr('');
     try {
-      const j = await post<JobV>('/research/jobs', { mission: f.mission.trim(), ...(agent ? { agentId: agent.id, universe: agent.universe } : { kind: f.kind, universe, interval: f.interval }), capitalUsd: Number(f.capital) || 1000,
+      const j = await post<JobV>('/research/jobs', { mission: f.mission.trim(), ...(agent ? { agentId: agent.id, universe: agent.universe } : { kind: f.kind, universe, interval: f.interval }), capitalUsd: Number(amountOf(f.capital, amountLocale()) ?? '') || 1000,
         budgets: { wallSeconds: Math.round(f.minutes * 60), maxTrials: Math.round(f.maxTrials), maxDiskMb: Math.round(f.diskMb), maxModelTokens: Math.round(f.tokensM * 1_000_000), maxModelUsd: f.usd } });
       setF((x) => ({ ...x, mission: '' })); onCreated(j.id);
     } catch (e) { setErr(errText(t, e)); } finally { setBusy(false); }
@@ -57,13 +59,13 @@ export function ResearchForm({ agent, onCreated }: { agent?: { id: string; kind?
         <Field label={t('rjKind')}><select data-testid="rj-kind" className={inputCls} value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as 'spot' | 'perp' })}><option value="spot">{t('rjKindSpot')}</option><option value="perp">{t('rjKindPerp')}</option></select></Field>
         <Field label={t('rjInterval')}><select className={inputCls} value={f.interval} onChange={(e) => setF({ ...f, interval: e.target.value })}><option value="1h">1 h</option>{f.kind === 'perp' ? <option value="4h">4 h</option> : <option value="1d">1 j / 1 d</option>}</select></Field>
         <div className="col-span-2"><Field label={t('rjSymbols')} hint={t('rjSymbolsHint')}><input data-testid="rj-symbols" className={inputCls} value={f.symbols} onChange={(e) => setF({ ...f, symbols: e.target.value })} /></Field></div></div>}
-      <Field label={t('rjCapital')} hint={t('rjCapitalHint')}><div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" value={f.capital} onChange={(e) => setF({ ...f, capital: e.target.value.replace(/[^0-9.]/g, '') })} /><span className="w-14 shrink-0 text-[13px] text-mute">USDC</span></div></Field>
+      <Field label={t('rjCapital')} hint={t('rjCapitalHint')}><div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" value={f.capital} onChange={(e) => setF({ ...f, capital: sanitizeAmountText(e.target.value) })} /><span className="w-14 shrink-0 text-[13px] text-mute">USD</span></div><AmountProblem text={f.capital} /></Field>
       <div><div className="mb-2 text-[13px] font-semibold text-mute">{t('rjBudgets')}</div>
         <div className="grid grid-cols-2 gap-3">{n('minutes', t('rjBudgetTime'), 'min', 1, 1440)}{n('maxTrials', t('rjBudgetTrials'), t('rjTrialsUnit'), 1, 5000)}{n('tokensM', t('rjBudgetTokens'), 'M', 0.01, 500)}{n('usd', t('rjBudgetUsd'), 'USD', 0.05, 1000)}</div>
         <p className="mt-2 text-[12.5px] text-mute">{t('rjBudgetsNote')}</p></div>
       <Notice tone="info">{t('rjFormNote')}</Notice>
       {err && <Notice tone="danger">{err}</Notice>}
-      <Btn full busy={busy} data-testid="rj-create" disabled={f.mission.trim().length < 10 || (!agent && universe.length === 0)} onClick={() => void create()}><Icon n="key" className="h-4 w-4" />{t('rjCreate')}</Btn>
+      <Btn full busy={busy} data-testid="rj-create" disabled={f.mission.trim().length < 10 || (!agent && universe.length === 0) || (f.capital.trim() !== '' && amountOf(f.capital, amountLocale()) === null)} onClick={() => void create()}><Icon n="key" className="h-4 w-4" />{t('rjCreate')}</Btn>
     </div>
   );
 }

@@ -4,7 +4,9 @@ import { startAuthentication } from '@simplewebauthn/browser';
 import { get, post } from '../api';
 import { usePortfolio, useSettings } from '../hooks';
 import { errText, I18n, useT, type Key } from '../i18n';
-import { Btn, Card, Coin, fiat, Icon, inputCls, NetDot, Notice, numFmt, StatePill, testNotSent, trimAmt } from '../ui';
+import { Btn, Card, Coin, exactAmt, fiat, Icon, inputCls, NetDot, Notice, numFmt, StatePill, testNotSent, trimAmt } from '../ui';
+import { amountInputText, amountOf, sanitizeAmountText } from '../amount'; // v8 hardening
+import { AmountProblem } from '../amountUi';
 import { issuerOf } from '../issuer';
 import { useQueryClient } from '@tanstack/react-query';
 import { BridgeFacts, BridgePill, BridgeProgress, bridgeDur } from '../bridge';
@@ -51,7 +53,9 @@ export function Swap() {
   const assetsQ = useQuery({ queryKey: ['swap-assets'], queryFn: () => get<{ assets: SAsset[] }>('/swap/assets'), staleTime: 600_000 });
   const provQ = useQuery({ queryKey: ['swap-providers'], queryFn: () => get<{ executionEnabled: boolean; providers: { id: string; name: string; state: string; enabled: boolean; p50: number | null; capabilities: { needsKey: boolean; configured: boolean } }[] }>('/swap/providers'), staleTime: 30_000 });
   const assets = assetsQ.data?.assets ?? [];
-  const [fromKey, setFromKey] = useState(''), [toKey, setToKey] = useState(''), [amount, setAmount] = useState(''), [slip, setSlip] = useState(50), [mode, setMode] = useState<Mode>('best_price');
+  const [fromKey, setFromKey] = useState(''), [toKey, setToKey] = useState(''), [amountText, setAmount] = useState(''), [slip, setSlip] = useState(50), [mode, setMode] = useState<Mode>('best_price');
+  // v8 hardening: the field keeps what was typed (comma or point); `amount` is its canonical reading (amount.ts) — '' while it is empty, invalid or ambiguous
+  const amount = amountOf(amountText, locale) ?? '';
   const [pick, setPick] = useState<'from' | 'to' | null>(null), [open, setOpen] = useState(''), [allRoutes, setAllRoutes] = useState(false);
   const [routes, setRoutes] = useState<RouteV[]>([]), [best, setBest] = useState<Partial<Record<Mode, string>>>({}), [provs, setProvs] = useState<Prov[]>([]);
   const [phase, setPhase] = useState<'idle' | 'loading' | 'done' | 'error'>('idle'), [reachable, setReachable] = useState(true), [took, setTook] = useState<number | null>(null), [first, setFirst] = useState<number | null>(null);
@@ -68,7 +72,7 @@ export function Swap() {
     if (!assets.length || fromKey) return;
     // pre-filled cross-network USDC transfer (link from the venue deposit screen): /swap?bridgeFrom=<network>&bridgeTo=<network>[&amount=…]
     const q = new URLSearchParams(location.search), u = (n: string | null) => assets.find((a) => a.network === n && a.symbol === 'USDC'), bf = u(q.get('bridgeFrom')), bt = u(q.get('bridgeTo'));
-    if (bf && bt && bf.key !== bt.key) { setFromKey(bf.key); setToKey(bt.key); const am = q.get('amount'); if (am && /^\d+(\.\d{1,6})?$/.test(am)) setAmount(am); return; }
+    if (bf && bt && bf.key !== bt.key) { setFromKey(bf.key); setToKey(bt.key); const am = q.get('amount'); if (am && /^\d+(\.\d{1,6})?$/.test(am)) setAmount(amountInputText(am, locale)); return; }
     // arriving from "fund the agent": USDC from one network to the agent's network, prefilled once
     try { const pre = JSON.parse(sessionStorage.getItem('spw-swap-prefill') ?? 'null') as { fromNetwork: string; toNetwork: string; symbol: string } | null; sessionStorage.removeItem('spw-swap-prefill');
       const f = pre && assets.find((a) => a.network === pre.fromNetwork && a.symbol === pre.symbol), g = pre && assets.find((a) => a.network === pre.toNetwork && a.symbol === pre.symbol);
@@ -142,7 +146,7 @@ export function Swap() {
 
   const side = (label: string, a: SAsset | undefined, which: 'from' | 'to', body: React.ReactNode) => (
     <div className="rounded-3xl bg-elev/70 p-4">
-      <div className="mb-2 flex items-center justify-between text-[13px] text-mute"><span>{label}</span>{which === 'from' && bal !== undefined && (bal === '?' ? <span className="text-warn">{t('qaBalUnknown')}</span> : <button className="-my-3 min-h-11 font-medium text-blue" onClick={() => setAmount(bal)}>{t('available')}{locale === 'fr' ? ' : ' : ': '}{trimAmt(bal, 6)}</button>)}</div>
+      <div className="mb-2 flex items-center justify-between text-[13px] text-mute"><span>{label}</span>{which === 'from' && bal !== undefined && (bal === '?' ? <span className="text-warn">{t('qaBalUnknown')}</span> : <button className="-my-3 min-h-11 font-medium text-blue" onClick={() => setAmount(amountInputText(bal, locale))}>{t('available')}{locale === 'fr' ? ' : ' : ': '}{trimAmt(bal, 6)}</button>)}</div>
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">{body}</div>
         <button onClick={() => setPick(which)} className="flex shrink-0 items-center gap-2 rounded-full bg-surface py-1.5 pl-1.5 pr-3 shadow-sm" aria-label={`${label}: ${a ? `${a.symbol} ${a.networkName}` : t('swChoose')}`}>
@@ -157,7 +161,8 @@ export function Swap() {
       <Notice tone="info">{t('swIntro')}</Notice>
       <Card className="!p-3">
         {side(t('swYouPay'), from, 'from', <>
-          <input className="w-full bg-transparent text-[30px] font-semibold tracking-tight outline-none placeholder:text-mute/50" inputMode="decimal" placeholder="0" aria-label={t('amount')} value={amount} onChange={(e) => setAmount(e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))} autoComplete="off" />
+          <input className="w-full bg-transparent text-[30px] font-semibold tracking-tight outline-none placeholder:text-mute/50" inputMode="decimal" placeholder="0" aria-label={t('amount')} value={amountText} onChange={(e) => setAmount(sanitizeAmountText(e.target.value))} autoComplete="off" />
+          <AmountProblem text={amountText} />
           <div className="h-5 text-[13px] text-mute">{chosen?.valuation.inUsd != null ? `≈ ${money(chosen.valuation.inUsd)}` : ' '}</div></>)}
         <div className="relative z-[1] -my-3 flex justify-center"><button onClick={flip} aria-label={t('swFlip')} className="grid h-11 w-11 place-items-center rounded-full border-4 border-surface bg-primary text-onprimary"><Icon n="swap" className="h-5 w-5 rotate-90" /></button></div>
         {side(t('swYouReceive'), to, 'to', <>
@@ -250,7 +255,7 @@ export function Swap() {
           <div className="mb-3 flex items-center justify-between"><h2 className="text-[20px] font-semibold tracking-tight">{prop.state === 'pending_approval' ? t('swReview') : t('swTracking')}</h2>{testNotSent(prop) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : <StatePill state={prop.state} />}</div>
           <div className="rounded-2xl bg-elev/70 p-4">
             <div className="text-[13px] text-mute">{t('swYouPay')}</div>
-            <div className="text-[24px] font-semibold tracking-tight">{prop.amountDisplay} <span className="text-mute">{prop.symbol}</span></div>
+            <div className="text-[24px] font-semibold tracking-tight">{exactAmt(prop.amountDisplay)} <span className="text-mute">{prop.symbol}</span></div>
             <div className="mt-3 text-[13px] text-mute">{prop.swap.received ? t('swReceived') : t('swMinGuaranteed')}</div>
             <div className="text-[24px] font-semibold tracking-tight">{trimAmt(prop.swap.receivedDisplay ?? prop.swap.minOutDisplay, 10)} <span className="text-mute">{prop.swap.toSymbol}</span></div>
             {!prop.swap.received && <div className="text-[13px] text-mute">{t('swExpected')} {trimAmt(prop.swap.expectedOutDisplay, 10)} {prop.swap.toSymbol}</div>}
@@ -291,7 +296,7 @@ export function Swap() {
           <div className="mb-3 flex items-center justify-between"><h2 className="text-[20px] font-semibold tracking-tight">{prop.state === 'pending_approval' ? t('brReview') : t('brTracking')}</h2><BridgePill b={prop.bridge} /></div>
           <div className="rounded-2xl bg-elev/70 p-4">
             <div className="text-[13px] text-mute">{prop.networkName} → {prop.bridge.toNetworkName}</div>
-            <div className="text-[24px] font-semibold tracking-tight">{prop.amountDisplay} <span className="text-mute">{prop.symbol}</span></div>
+            <div className="text-[24px] font-semibold tracking-tight">{exactAmt(prop.amountDisplay)} <span className="text-mute">{prop.symbol}</span></div>
           </div>
           <dl className="mt-3 space-y-2 text-[13.5px]">
             <BridgeFacts b={prop.bridge} symbol={prop.symbol} />

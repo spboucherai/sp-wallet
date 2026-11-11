@@ -7,6 +7,8 @@ import { startAuthentication } from '@simplewebauthn/browser';
 import { get, post } from './api';
 import { errText, useT, type Key } from './i18n';
 import { Btn, Card, Icon, inputCls, NetDot, Notice, StatePill, trimAmt } from './ui';
+import { amountInputText, amountLocale, amountOf, formatAmount, sanitizeAmountText } from './amount'; // v8 hardening: one rule for typed amounts
+import { AmountProblem } from './amountUi';
 
 interface AssetV { key: string; network: string; networkName: string; asset: string; symbol: string; decimals: number }
 interface FeeV { kind: string; symbol: string; network: string; networkName: string; display: string; usd: number | null; includedInOutput: boolean; estimated: boolean }
@@ -115,8 +117,9 @@ export function PlanCards({ from, to, amount, slip, routes, money, pname, onCoun
 
 function StartSheet({ plan: p, slip, amount, onClose, onStarted }: { plan: PlanQ; slip: number; amount: string; onClose: () => void; onStarted: (id: string) => void }) {
   const t = useT(); const [floor, setFloor] = useState(''), [busy, setBusy] = useState(false), [err, setErr] = useState('');
+  const floorC = amountOf(floor, amountLocale()), floorBad = floor.trim() !== '' && floorC === null;   // v8: the floor as typed → canonical; unreadable = no start
   const go = async () => { setBusy(true); setErr('');
-    try { const r = await post<PlanV>('/plans', { from: p.from.key, to: p.to.key, amount, slippageBps: slip, plan: p.id, ...(floor ? { floor } : {}) }); onStarted(r.id); }
+    try { const r = await post<PlanV>('/plans', { from: p.from.key, to: p.to.key, amount, slippageBps: slip, plan: p.id, ...(floorC ? { floor: floorC } : {}) }); onStarted(r.id); }
     catch (e) { setErr(errText(t, e)); } finally { setBusy(false); } };
   return (
     <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={t('pnStartTitle')}>
@@ -131,12 +134,13 @@ function StartSheet({ plan: p, slip, amount, onClose, onStarted }: { plan: PlanQ
           <Notice tone="info">{t('pnGuarantee', { n: p.approvals })}</Notice>
           <Notice tone="ok">{t('pnBetween')}</Notice>
           <label className="block"><span className="mb-1.5 block text-[13px] text-mute">{t('pnFloorLabel', { sym: p.to.symbol })}</span>
-            <input className={inputCls} inputMode="decimal" placeholder={t('pnFloorNone')} aria-label={t('pnFloorLabel', { sym: p.to.symbol })} value={floor} onChange={(e) => setFloor(e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))} autoComplete="off" />
-            <span className="mt-1.5 block text-xs text-mute">{t('pnFloorHint', { worst: trimAmt(p.worstOutDisplay, 8), sym: p.to.symbol })} <button type="button" className="font-semibold text-blue" onClick={() => setFloor(trimAmt(p.worstOutDisplay, 8))}>{t('pnFloorUseWorst')}</button></span></label>
+            <input className={inputCls} inputMode="decimal" placeholder={t('pnFloorNone')} aria-label={t('pnFloorLabel', { sym: p.to.symbol })} value={floor} onChange={(e) => setFloor(sanitizeAmountText(e.target.value))} autoComplete="off" />
+            <AmountProblem text={floor} />
+            <span className="mt-1.5 block text-xs text-mute">{t('pnFloorHint', { worst: trimAmt(p.worstOutDisplay, 8), sym: p.to.symbol })} <button type="button" className="font-semibold text-blue" onClick={() => setFloor(amountInputText(formatAmount(p.worstOutDisplay, 'en', { maxDecimals: 8, group: false }), amountLocale()))}>{t('pnFloorUseWorst')}</button></span></label>
           {err && <Notice tone="danger">{err}</Notice>}
         </div>
         <div className="mt-4 space-y-2.5">
-          <Btn full busy={busy} onClick={() => void go()}>{t('pnStartConfirm')}</Btn>
+          <Btn full busy={busy} disabled={floorBad} onClick={() => void go()}>{t('pnStartConfirm')}</Btn>
           <Btn full kind="ghost" disabled={busy} onClick={onClose}>{t('cancel')}</Btn>
         </div>
       </div>
@@ -217,8 +221,8 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
       {p.state === 'paused' && p.pause && <div className="space-y-3" data-testid="plan-paused" data-code={p.pause.code}>
         <Notice tone="warn"><b>{t(`pnPause_${['floor', 'refused', 'refunded', 'no_funds'].includes(p.pause.code) ? p.pause.code : 'other'}` as Key, { k: p.pause.leg + 1 })}</b> {p.pause.message} {t('pnPausedFunds', { amt: trimAmt(p.holding.amountDisplay, 8), sym: p.holding.symbol, net: p.holding.networkName })}</Notice>
         {p.pause.code === 'floor' && <label className="block"><span className="mb-1.5 block text-[13px] text-mute">{t('pnFloorChange', { sym: p.to.symbol })}</span>
-          <input className={inputCls} inputMode="decimal" placeholder={p.floorDisplay ?? ''} aria-label={t('pnFloorChange', { sym: p.to.symbol })} value={floor} onChange={(e) => setFloor(e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))} autoComplete="off" /></label>}
-        <Btn full busy={busy === 'retry'} disabled={!!busy} onClick={() => void simple('retry', p.pause?.code === 'floor' && floor !== '' ? { floor: Number(floor) > 0 ? floor : null } : {})} data-testid="plan-retry">{t('pnRetry')}</Btn>
+          <input className={inputCls} inputMode="decimal" placeholder={p.floorDisplay ?? ''} aria-label={t('pnFloorChange', { sym: p.to.symbol })} value={floor} onChange={(e) => setFloor(sanitizeAmountText(e.target.value))} autoComplete="off" /><AmountProblem text={floor} /></label>}
+        <Btn full busy={busy === 'retry'} disabled={!!busy || (p.pause.code === 'floor' && floor.trim() !== '' && amountOf(floor, amountLocale()) === null)} onClick={() => { const f = amountOf(floor, amountLocale()); void simple('retry', p.pause?.code === 'floor' && f !== null ? { floor: /[1-9]/.test(f) ? f : null } : {}); }} data-testid="plan-retry">{t('pnRetry')}</Btn>
         <Btn full kind="soft" busy={busy === 'replan'} disabled={!!busy} onClick={() => void simple('replan')} data-testid="plan-replan">{t('pnReplan', { sym: p.holding.symbol, net: p.holding.networkName })}</Btn>
         <Btn full kind="ghost" busy={busy === 'stop'} disabled={!!busy} onClick={() => void simple('stop')} data-testid="plan-stop">{t('pnStop')}</Btn>
       </div>}

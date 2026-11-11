@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import postgres from 'postgres';
+import { createTestDb } from './test-db.ts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { cashLegs, DEFAULT_POLICY, getNetwork, hasMarketData, MANDATE_NETWORKS, MARKET_LISTINGS, NETWORKS, tradableSymbols } from '@spw/core';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
@@ -15,7 +15,7 @@ import { createSignerServer } from '../../isolated-signer/src/server.ts';
 import { Signer } from '../../isolated-signer/src/signer.ts';
 import { Store } from '../../isolated-signer/src/store.ts';
 
-const ORIGIN = 'https://wallet.test', RP = 'wallet.test', SECRET = 'k'.repeat(48), DB = 'spw_v5_agents_test';
+const ORIGIN = 'https://wallet.test', RP = 'wallet.test', SECRET = 'k'.repeat(48), DB_LABEL = 'agent_networks';
 const keys = deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
 const owner = new TestPasskey(RP, ORIGIN);
 const LAB = existsSync(join(import.meta.dirname, '../../../research/.venv')); // `cd research && uv sync` (or any `uv run`) creates it
@@ -34,9 +34,7 @@ async function api(method: string, path: string, body?: unknown) {
 const create = (o: Record<string, unknown>) => api('POST', '/agents', { name: 'Agent', interval: '1h', capitalUsdc: '100', risk: RISK, ...o });
 
 beforeAll(async () => {
-  const admin = postgres('postgres:///postgres', { max: 1, onnotice: () => {} });
-  if (!(await admin`select 1 from pg_database where datname = ${DB}`).length) await admin.unsafe(`create database ${DB}`).catch((e: Error) => { if (!/already exists/.test(e.message)) throw e; });
-  await admin.end();
+  const DB = (await createTestDb(DB_LABEL)).name;
   const dir = mkdtempSync(join(tmpdir(), 'spw-v5-agents-'));
   const store = new Store(join(dir, 'state.json'), join(dir, 'policy.json'));
   store.state.setupTokenHash = createHash('sha256').update('the-setup-token').digest('hex');
@@ -133,6 +131,24 @@ describe('agents on several networks', () => {
     expect((await api('GET', `/agents/${arb.id}`)).json.vault.map((v: any) => [v.symbol, v.role])).toEqual([['USDC', 'cash'], ['ETH', 'asset'], ['LINK', 'asset'], ['UNI', 'asset'], ['AAVE', 'asset']]);
     const v = (await api('GET', `/agents/${avax.id}`)).json.vault;
     expect(v.map((x: any) => x.assetSymbol)).toEqual(['USDT', 'AVAX', 'WBTC']);
+  });
+
+  // v8 hardening (D4): the agent page lists the SIMULATED positions next to the real (empty) vault
+  it('GET /agents/:id carries the paper book read-only, apart from the real vault: null before any simulation, never seeded by the read', async () => {
+    const before = (await api('GET', `/agents/${base.id}`)).json;
+    expect(before.paper).toBeNull();                                                              // never ran on paper: no book
+    expect(await sql`select 1 from agent_paper where agent_id = ${base.id}`).toHaveLength(0);      // and the read did not create one
+    // a book as the engine leaves it after paper fills: 60 of cash, three symbols (one sold back to zero, one the server cannot price)
+    for (const [symbol, units] of [['USDC', 60], ['LINK', 2], ['ETH', 0.01], ['AAVE', 0], ['ZZZ', 5]] as const) await sql`insert into agent_paper (agent_id, symbol, units) values (${base.id}, ${symbol}, ${units})`;
+    try {
+      const t0 = Date.now(), d = (await api('GET', `/agents/${base.id}`)).json;
+      expect(d.paper.positions).toEqual([{ symbol: 'ETH', units: '0.01', usd: 20 }, { symbol: 'LINK', units: '2', usd: 20 }, { symbol: 'ZZZ', units: '5', usd: null }]);   // universe order; no price = null, not 0
+      expect(d.paper).toMatchObject({ cashSymbol: 'USDC', cashUsd: 60 });
+      expect(d.paper.asOf).toBeGreaterThanOrEqual(t0);
+      expect(d.vault.map((x: any) => [x.symbol, x.amount])).toEqual([['USDC', '0'], ['ETH', '0'], ['LINK', '0'], ['AAVE', '0']]);   // the real vault is untouched and still empty
+      expect((await sql`select symbol, units from agent_paper where agent_id = ${base.id} order by symbol`).map((r: any) => [r.symbol, r.units])).toEqual([['AAVE', 0], ['ETH', 0.01], ['LINK', 2], ['USDC', 60], ['ZZZ', 5]]);   // read-only
+      expect((await api('GET', `/agents/${arb.id}`)).json.paper).toBeNull();                         // another agent's book is its own
+    } finally { await sql`delete from agent_paper where agent_id = ${base.id}`; }
   });
 
   it('refuses what the registry or the listings do not support, with a reason', async () => {

@@ -14,6 +14,7 @@ import { I18n, useT, type Key } from '../i18n';
 import { Addr, Btn, Field, Icon, inputCls, Notice, Skeleton } from '../ui';
 import { ageText, Row, Sheet, timeOf } from './bits';
 import { bridgeLink, capi, COLLATERAL_CODES, depositIntegrity, depositProblem, opDone, opWords, withdrawIntegrity, withdrawProblem, type CollateralOp, type CollateralStatus, type DepositPrepared, type WithdrawPrepared } from './collateral';
+import { AmountProblem } from '../amountUi';   // v8 hardening: says when a typed number is ambiguous (never guessed)
 import { fmt, usd } from './dec';
 import { Bullet, LiveErrNotice, ModeBand, SourceTag } from './LiveBits';
 import { liveError, toneOf, type LiveErr, type LiveSummary } from './live';
@@ -102,7 +103,7 @@ function DepositSheet({ account, status, onClose }: { account: LiveSummary; stat
       <ModeBand tone={tone} label={account.label} />
       {(step === 'form' || step === 'preparing') && <>
         <Field label={t('hlcAmount')} hint={t('hlcDepositHint', { min: r.minimum, venueMin: r.venueMinimum, max: fmt(wl.limits.maxNow, { locale, trim: true }) })}>
-          <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" aria-label={t('hlcAmount')} value={raw} onChange={(e) => { setRaw(e.target.value.replace(/[^0-9.,]/g, '')); setErr(null); }} data-testid="deposit-amount" /><span className="w-12 shrink-0 text-[12.5px] text-mute">USDC</span></div></Field>
+          <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" aria-label={t('hlcAmount')} value={raw} onChange={(e) => { setRaw(e.target.value.replace(/[^0-9.,]/g, '')); setErr(null); }} data-testid="deposit-amount" /><span className="w-12 shrink-0 text-[12.5px] text-mute">USDC</span></div><AmountProblem ambiguousOnly text={raw} /></Field>
         <div className="rounded-2xl bg-elev/70 p-3"><Row label={t('hlcWalletHas', { network: r.networkName })} strong>{usdc(wl.usdc, locale)}</Row><Row label={t('hlcWalletGas')}>{fmt(wl.gas, { locale, dp: 6, trim: true })} {wl.gasSymbol}</Row>
           <Row label={t('hlcLimitTx')}>{usdc(wl.limits.perTransfer, locale)}</Row><Row label={t('hlcLimitDay')}>{usdc(wl.limits.perDay, locale)} · {t('hlcLimitSpent', { spent: fmt(wl.limits.spentToday, { locale, trim: true }) })}</Row></div>
         <Notice tone="warn"><div data-testid="deposit-minimum"><b className="font-semibold">{t('hlcMinTitle', { min: r.minimum })}</b> {t('hlcMinBody', { venueMin: r.venueMinimum, min: r.minimum })}</div></Notice>
@@ -181,7 +182,7 @@ function WithdrawSheet({ account, status, onClose }: { account: LiveSummary; sta
       <ModeBand tone={tone} label={account.label} />
       {(step === 'form' || step === 'preparing') && <>
         <Field label={t('hlcAmount')} hint={t('hlcWithdrawHint', { fee: wd.fee })}>
-          <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" aria-label={t('hlcAmount')} value={raw} onChange={(e) => { setRaw(e.target.value.replace(/[^0-9.,]/g, '')); setErr(null); }} data-testid="withdraw-amount" /><span className="w-12 shrink-0 text-[12.5px] text-mute">USDC</span></div></Field>
+          <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" aria-label={t('hlcAmount')} value={raw} onChange={(e) => { setRaw(e.target.value.replace(/[^0-9.,]/g, '')); setErr(null); }} data-testid="withdraw-amount" /><span className="w-12 shrink-0 text-[12.5px] text-mute">USDC</span></div><AmountProblem ambiguousOnly text={raw} /></Field>
         <div className="rounded-2xl bg-elev/70 p-3"><Row label={t('hlcVenueAvailable')} strong>{usdc(wd.available, locale)}</Row><Row label={t('hlcFeeVenue')}>{usdc(wd.fee, locale)}</Row>
           <Row label={t('hlcReceiveExpected')} strong>{v.receive ? usdc(v.receive, locale) : '—'}</Row></div>
         {v.problem && <Notice tone="danger"><div data-testid="withdraw-problem">{t(v.problem, { fee: wd.fee, have: fmt(wd.available ?? '0', { locale, trim: true }) })}</div></Notice>}

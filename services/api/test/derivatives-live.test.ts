@@ -25,7 +25,7 @@ let sql: any, lv: typeof import('../src/derivatives/live.ts'), ex: typeof import
 type Svc = import('../src/derivatives/exec.ts').LiveService;
 
 beforeAll(async () => {
-  await useDatabase('spw_deriv_live_test');
+  await useDatabase('deriv_live');
   const db = await import('../src/db.ts');
   sql = db.sql;
   await db.migrate();
@@ -550,6 +550,13 @@ describe('kill switch: halt, cancel-all and close are three separate actions', (
     const r = await w.svc.revoke(id, { cancelOpenOrders: false });
     expect(r).toMatchObject({ mode: 'READ_ONLY', tradable: false, authorization: { active: false } });
     expect(r.warning).toMatch(/1 order\(s\) still rest on the venue/);
+    expect(r.warning).toBe("1 order(s) still rest on the venue. The wallet can no longer cancel them (a revoked authorization signs nothing): cancel them in the venue's own interface, or approve a new authorization and cancel.");   // v8: default en, byte for byte
+    { // v8 hardening (D2): the same warning in the body's locale
+      const wf = world(), idf = await live(wf);
+      await place(wf, idf, LIMIT); wf.next();
+      const rf = await wf.svc.revoke(idf, { cancelOpenOrders: false, locale: 'fr' });
+      expect(rf.locale).toBe('fr'); expect(rf.warning).toMatch(/^1 ordre\(s\) restent sur la plateforme\. Le portefeuille ne peut plus les annuler/);
+    }
     expect(w.signer.status().venues[0]).toMatchObject({ revoked: true });
     expect(await refusal(w.svc.propose(id, body(LIMIT), key()))).toMatchObject({ code: 'mode_read_only' });
     expect(await refusal(w.svc.cancelAll(id))).toMatchObject({ code: 'mode_read_only' });

@@ -12,6 +12,8 @@ import { dapi, paperAllowed, riskRefusal } from './api';
 import { PaperTag, Row, Seg, ServerSays, Sheet, SideTag, VENUE_NAME } from './bits';
 import { D, dec, dpOf, fmt, onTick, parseInput, priceDp, usd, usdToSize, worstPrice, type Dec } from './dec';
 import { clearPaperPrefill, peekPaperPrefill } from './routerApi';
+import { amountInputText, amountLocale } from '../amount';
+import { AmountProblem } from '../amountUi';   // v8 hardening: says when a typed number is ambiguous (never guessed)
 import type { MarketStore } from './store';
 import type { DerivAccount, Instrument, OrderBody, Placed, VenueInfo } from './types';
 
@@ -61,7 +63,7 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
     const blank: Form = { side: 'buy', kind: 'market', unit: 'usd', size: '', lev: 3, price: '', trigger: '', reduceOnly: false, postOnly: false, sl: '', tp: '' };
     // hand-over from the router (simulation): the form starts filled with that order — still a form, nothing is sent until the owner confirms
     const p = peekPaperPrefill(instrument.id);
-    return p ? { ...blank, side: p.side, kind: p.kind, unit: p.unit, size: p.size, lev: Math.max(1, Math.min(p.lev, maxLev)), price: p.price, reduceOnly: p.reduceOnly } : blank;
+    return p ? { ...blank, side: p.side, kind: p.kind, unit: p.unit, size: amountInputText(p.size, amountLocale()), lev: Math.max(1, Math.min(p.lev, maxLev)), price: amountInputText(p.price, amountLocale()), reduceOnly: p.reduceOnly } : blank;   // v8: canonical → the screen's decimal separator
   });
   useEffect(() => { clearPaperPrefill(instrument.id); }, []);   // eslint-disable-line react-hooks/exhaustive-deps — the hand-over fills the form once
   const set = (p: Partial<Form>) => { setF((x) => ({ ...x, ...p })); setDone(null); setErr(null); };
@@ -170,13 +172,14 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
       </div>
       <Seg size="sm" label={t('fxOrderType')} value={f.kind} onChange={(kind) => set({ kind })} options={(['market', 'limit', 'stop', 'tp'] as const).map((k) => ({ id: k, label: t(`fxKindShort_${k}` as Key), aria: t(`fxKind_${k}` as Key) }))} />
 
-      {f.kind === 'limit' && <Field label={`${t('fxLimitPrice')} (${instrument.quote})`}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.price} placeholder={mark ? fmt(mark, { dp: pdp, locale }) : ''} onChange={(e) => set({ price: num(e.target.value) })} /></Field>}
-      {(f.kind === 'stop' || f.kind === 'tp') && <Field label={`${t('fxTriggerPrice')} (${instrument.quote})`} hint={t(f.kind === 'stop' ? 'fxStopHint' : 'fxTpHint')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.trigger} onChange={(e) => set({ trigger: num(e.target.value) })} /></Field>}
+      {f.kind === 'limit' && <Field label={`${t('fxLimitPrice')} (${instrument.quote})`}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.price} placeholder={mark ? fmt(mark, { dp: pdp, locale }) : ''} onChange={(e) => set({ price: num(e.target.value) })} /><AmountProblem ambiguousOnly text={f.price} /></Field>}
+      {(f.kind === 'stop' || f.kind === 'tp') && <Field label={`${t('fxTriggerPrice')} (${instrument.quote})`} hint={t(f.kind === 'stop' ? 'fxStopHint' : 'fxTpHint')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.trigger} onChange={(e) => set({ trigger: num(e.target.value) })} /><AmountProblem ambiguousOnly text={f.trigger} /></Field>}
       <Field label={t('fxSize')} hint={sizeNote ?? (built.problem ? <span className="text-danger">{t(built.problem)}</span> : t('fxSizeHint', { lot: fmt(instrument.lotSize, { locale, trim: true }), base: instrument.base }))}>
         <div className="flex gap-2">
           <input className={`${inputCls} min-w-0 flex-1`} inputMode="decimal" autoComplete="off" aria-label={t('fxSize')} value={f.size} placeholder="0" onChange={(e) => set({ size: num(e.target.value) })} />
           <Seg size="sm" label={t('fxSizeUnit')} value={f.unit} onChange={(unit) => set({ unit, size: '' })} options={[{ id: 'usd', label: 'USD' }, { id: 'base', label: instrument.base.slice(0, 6) }]} className="shrink-0" />
         </div>
+        <AmountProblem ambiguousOnly text={f.size} />
       </Field>
       <div>
         <div className="mb-1 flex items-baseline justify-between text-[13px]"><label htmlFor="fx-lev" className="text-mute">{t('fxLeverage')}</label><span className="font-semibold">{lev}×</span></div>
@@ -189,8 +192,8 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
       </div>
       {f.kind === 'market' && !f.reduceOnly && <fieldset className="rounded-2xl border border-line p-3"><legend className="px-1 text-[12.5px] text-mute">{t('fxAttached')}</legend>
         <div className="grid grid-cols-2 gap-2">
-          <Field label={t('fxStopLoss')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.sl} onChange={(e) => set({ sl: num(e.target.value) })} /></Field>
-          <Field label={t('fxTakeProfit')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.tp} onChange={(e) => set({ tp: num(e.target.value) })} /></Field>
+          <Field label={t('fxStopLoss')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.sl} onChange={(e) => set({ sl: num(e.target.value) })} /><AmountProblem ambiguousOnly text={f.sl} /></Field>
+          <Field label={t('fxTakeProfit')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.tp} onChange={(e) => set({ tp: num(e.target.value) })} /><AmountProblem ambiguousOnly text={f.tp} /></Field>
         </div><p className="mt-1.5 text-[11.5px] leading-snug text-mute">{t('fxAttachedHint')}</p></fieldset>}
       {marketLike && <p className="text-[11.5px] leading-snug text-mute">{t('fxSlippageNote', { pct: fmt(String(SLIPPAGE_BPS / 100), { locale, trim: true }) })}</p>}
 
