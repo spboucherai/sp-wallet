@@ -286,3 +286,105 @@ signer_revoked | signer_expired | signer_wind_down | signer_no_authorization | s
 Signal rows: an item of `orders.list` may be `status: "deferred"` (`code: live_cooldown | live_unknown_pending`).
 While the agent is on a venue account: `POST /agents/:id/perp/risk`, `/perp/flatten` and `mode: "PAPER"` answer `409 bad_state`;
 `POST /agents/:id/mode` with `PAUSED` / `STOPPED` is the live pause / stop. `GET /agents/perp/venues` → `live.available: true`.
+
+## GMX v2 trading (v8) — `services/api/src/derivatives/gmx-*.ts`
+
+Facts, pins, guarantees and evidence: `docs/v4/venues/gmx.md` Part C. All routes are under `/api/v1/derivatives/gmx`, behind
+the owner session. Decimals are strings; USD amounts are plain decimals (not 30-decimal integers); token amounts are whole
+units. **GMX has no venue account: the account is the wallet's own Arbitrum address**, an order is a wallet transaction
+(proposal `kind: "gmx"`), executed later by a GMX keeper. Three locks, all needed: server settings `SPW_DERIV_LIVE_MAINNET=on`
+**and** `SPW_DERIV_GMX_LIVE=on` (default off), and a venue policy approved with the passkey (stored and enforced by the signer).
+Reading (`GET /status`) works with everything off.
+
+| Route | Body | Answer |
+|---|---|---|
+| `GET /status?locale=fr\|en` | — | `GmxStatus` |
+| `GET /jurisdiction` | — | `{ venue: "gmx", fr: Ack, en: Ack }` (`Ack = { venue, locale, text, sha256, version, source }`) |
+| `POST /authorization/prepare` | `{ allowedMarkets: string[] /* market addresses */, maxLeverage: int 1–20, maxOrderSizeUsd: DecStr, maxOrdersPerDay: int 1–100, maxPriceDeviationBps: int 10–1000, days: int 1–90, locale: "fr"\|"en" }` | `{ authorization: GmxAuthorization, hash, ack: Ack, options /* WebAuthn request, challenge = hash */, maxExecutionFeeEth }` |
+| `POST /authorization/approve` | `{ authorization, assertion }` | `GmxStatus` |
+| `POST /authorization/revoke` | `{}` — no passkey | `GmxStatus` |
+| `POST /orders/preview` | `GmxOrderBody` | `GmxPreview` — nothing stored, nothing signed |
+| `POST /orders` (header `Idempotency-Key`) | `GmxOrderBody` | `GmxPrepared` — a stored proposal waiting for the passkey |
+| `POST /positions/close` (header `Idempotency-Key`) | `{ market, side: "long"\|"short", fraction?: DecStr (0–1], default "1", slippageBps?: int }` | `GmxPrepared` (a `decrease` of `fraction × size`) |
+| `POST /orders/:opId/cancel` | `{}` | `GmxPrepared` (a `cancel` operation for the pending order of `:opId`; `409 not_yet_cancellable` before the delay) |
+| `POST /operations/:opId/approve` | `{ assertion }` | `{ operation: GmxOperation }` |
+| `POST /operations/:opId/withdraw` | `{}` — before the passkey only | `{ operation }` |
+| `GET /operations/:opId` | — | `{ operation }` (refreshed from the chain) |
+
+```ts
+GmxOrderBody { market: string /* GM market address */, side: "long"|"short", action: "increase"|"decrease",
+  collateral?: DecStr /* USDC sent, increase only */, leverage?: DecStr /* increase: size = collateral × leverage */,
+  sizeUsd?: DecStr /* instead of leverage (increase), or the size to close (decrease) */, slippageBps?: int 1–500 /* default 50 */ }
+
+GmxStatus { venue: "gmx", network: "arbitrum", chainId: 42161,
+  settings: { liveMainnet: boolean, gmxLive: boolean },
+  tradable: boolean, blockers: BlockerCode[], blockerText: Record<BlockerCode, string> /* in the locale */,
+  pins: { id, reviewedAt, ok: boolean|null /* null = could not be checked */, checkedAt: number|null, problems: string[],
+          contracts: [{ name, address, explorer }] },
+  account: { address, explorer } | null,
+  wallet: { usdc: DecStr, eth: DecStr, weth: DecStr, limits: { perTransfer, perDay, spentToday, maxNow: DecStr /* USDC */ }, feeCeilingEth: DecStr } | null,
+  walletError: string|null,
+  authorization: null | { id, state: "active"|"expired"|"revoked"|"stale" /* stale = given for another contract set */,
+          policy: { allowedMarkets: string[], maxLeverage, maxOrderSizeUsd, maxOrdersPerDay, maxPriceDeviationBps, maxExecutionFeeWei },
+          createdAt, expiresAt /* unix s */, today: { increases, reduces } },
+  markets: [{ market, name, instrument, base: "BTC"|"ETH", indexDecimals, collateral: [{ token, symbol, decimals }], allowed: boolean,
+              mark: DecStr|null, oracleMin: DecStr|null, oracleMax: DecStr|null }],
+  positions: GmxPosition[], positionsSource: "chain", positionsError: string|null,
+  pendingOrders: GmxPendingOrder[],           // orders of the wallet stored on-chain now (Reader.getAccountOrders)
+  operations: GmxOperation[],                 // the engine's own records, newest first (20)
+  facts: { requestExpirationSec: 300, executionGas: string|null, twoStep: true }, ts }
+BlockerCode = "gmx_setting_off" | "mainnet_setting_off" | "not_authorized" | "authorization_expired" | "authorization_revoked"
+            | "contracts_changed" | "signer_halted" | "chain_unreadable" | "wallet_unreadable"
+
+GmxPosition { key, market, marketName, instrument, side: "long"|"short", collateralToken, collateralSymbol,
+  sizeUsd: DecStr, sizeTokens: DecStr, collateral: DecStr, entryPrice: DecStr, markPrice: DecStr|null,
+  pnlUsd: DecStr|null /* estimate at the mark, before fees */, leverage: DecStr|null, liquidationPrice: DecStr|null /* estimate */,
+  increasedAt: number /* unix s */, source: "chain", venueApi: { agrees: boolean|null, detail: string|null } /* cross-check with GMX's API */ }
+GmxPendingOrder { key, market, marketName, orderType: string, side: "long"|"short", sizeUsd, collateral, acceptablePrice,
+  executionFeeEth, updatedAt /* unix s */, cancellableAt /* unix s */, frozen: boolean, opId: string|null /* null = not created by this wallet's engine */ }
+
+GmxOperation { id, kind: "increase"|"decrease"|"cancel", state: OpState, final: boolean,
+  market: string|null, marketName: string|null, side: "long"|"short"|null, collateral: DecStr|null, collateralSymbol: string|null,
+  sizeUsd: DecStr|null, acceptablePrice: DecStr|null, slippageBps: number|null, leverage: DecStr|null,
+  executionFeeEth: DecStr, maxFeeEth: DecStr /* gas ceiling + execution fee */, needsApproval: boolean,
+  orderKey: string|null, targetOpId: string|null /* cancel: the operation whose order it cancels */,
+  hash: string|null /* intent hash = what the passkey signs */, proposalId, txid: string|null, explorer: string|null, approvalTxid: string|null,
+  createdAt, expiresAt: number|null, sentAt: number|null, orderCreatedAt: number|null, doneAt: number|null, checkedAt: number|null /* unix ms */,
+  cancellableAt: number|null /* unix ms: when the owner may cancel a still-pending market order */, overdue: boolean /* created, no keeper after 10 min */,
+  estimate: GmxEstimate|null,
+  outcome: null | { event: "OrderExecuted"|"OrderCancelled"|"OrderFrozen", txid, explorer,
+      executionPrice: DecStr|null, sizeUsd: DecStr|null, positionFeeUsd: DecStr|null, priceImpactUsd: DecStr|null, pnlUsd: DecStr|null,
+      collateralOut: DecStr|null /* tokens that came back to the wallet in that transaction */, executionFeeRefundEth: DecStr|null,
+      reason: string|null, reasonCode: string|null, cancelledBy: "keeper"|"owner"|null,
+      collateralReturned: boolean|null /* cancelled increase: the wallet's balance moved back by the collateral */ },
+  error: string|null }
+OpState = "pending_approval" | "signed" | "sent" | "created" /* on-chain, waiting for a GMX keeper */ | "executed" | "cancelled"
+        | "frozen" | "done" /* cancel operation mined */ | "failed" | "expired" | "withdrawn" | "unknown" /* sent, not found */
+
+GmxEstimate { source: "estimate", referencePrice: DecStr, oracleMin, oracleMax, acceptablePrice: DecStr, slippageBps,
+  sizeUsd, sizeTokens, collateral: DecStr|null, leverage: DecStr|null,
+  positionFee: { usd, bps, balanceImproved: boolean },
+  priceImpact: { usd: DecStr /* negative = cost */, uncertaintyUsd: DecStr, settledAt: "close", capped: boolean, note },
+  executionFee: { eth, usd: DecStr|null, sentWei: string, note /* the unused part is refunded */ },
+  gas: { maxEth, expectedEth, usd: DecStr|null }, approval: boolean,
+  funding: { perHour: DecStr /* fraction of size; positive = the position PAYS */, usdPerDay: DecStr },
+  borrow: { perHour: DecStr, usdPerDay: DecStr },
+  liquidationPrice: DecStr|null, liquidationNote: string, totalAtEntryUsd: DecStr|null /* position fee + gas + execution fee sent */, notes: string[], ts }
+GmxPreview { order: { market, marketName, side, action, collateral, sizeUsd, acceptablePrice, slippageBps, leverage },
+  estimate: GmxEstimate, risk: { ok: true } | { ok: false, code, reason }, blockers: BlockerCode[], signerWould: string|null /* a refusal the signer would give, known in advance */ }
+GmxPrepared { operation: GmxOperation, intent /* the canonical intent, section `gmx` */, estimate: GmxEstimate|null,
+  fields: [{ label: string /* machine key */, value: string }] /* exactly what the passkey signs, for the confirm sheet */,
+  fixed: [{ label, value }] /* what the signer fixes itself: receiver, cancellationReceiver, callback, uiFeeReceiver, swapPath, referralCode, minOutputAmount */,
+  options /* WebAuthn request; challenge = intent hash */ }
+```
+
+`fields[].label` keys: `action, market, side, orderType, collateral, sizeUsd, leverage, acceptablePrice, executionFee, maxFee,
+network, exchangeRouter, router, orderVault, orderKey, expiresAt`. `fixed[].label` keys: `receiver, cancellationReceiver,
+callbackContract, uiFeeReceiver, swapPath, referralCode, minOutputAmount, shouldUnwrapNativeToken`.
+
+Errors (HTTP, `error` code): `403 gmx_disabled` / `mainnet_disabled` (a server setting is off — nothing was built), `409
+not_authorized`, `503 contract_changed` ("GMX a publié de nouveaux contrats : nouvelle revue nécessaire"), `422 risk_<code>`
+(the risk engine), `422 venue_policy` (the venue policy the signer enforces: leverage, order size, execution fee, price band — checked here with GMX's oracle price before asking), `422 policy` (wallet limits), `422 signer_<code>` (the signer's refusal, verbatim), `422 simulation_failed`,
+`409 pending_tx` (another transaction of the wallet on Arbitrum is not confirmed), `409 not_yet_cancellable`, `409 bad_state`,
+`410 expired`, `503 chain_unreadable`. A `created` operation is NOT an executed order: the screen says "en attente d'exécution
+par le réseau GMX" until the chain shows `OrderExecuted`, `OrderCancelled` or `OrderFrozen` for the order key.

@@ -23,6 +23,8 @@ export interface SignerState {
   venueWithdrawals?: Record<string, import('./venue-collateral.ts').StoredVenueWithdrawal>;
   /** derivative mandates approved by the owner (mandateId -> record), each extending one venue authorization. Never deleted. */
   venueMandates?: Record<string, StoredVenueMandate>;
+  /** v8: GMX venue policies approved by the owner (authorizationId -> record). Never deleted: a revoked one stays revoked. */
+  gmx?: Record<string, import('./venue-gmx.ts').StoredGmxAuthorization>;
 }
 /** an order signed with a trading key that can still add exposure on the venue: kept until its venue expiry + a grace (venue-mandate.ts) */
 export interface VenuePendingOrder { clientId: string; instrument: string; side: 'buy' | 'sell'; size: string; price: string; /** unix ms */ until: number; /** unix ms */ signedAt?: number }

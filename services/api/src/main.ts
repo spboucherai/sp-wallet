@@ -11,6 +11,7 @@ import { startWorkers } from './worker.ts';
 import { startDerivativesWorker } from './derivatives/worker.ts';
 import { startLiveWorker } from './derivatives/live.ts';
 import { startCollateralWorker } from './derivatives/collateral.ts';
+import { startGmxWorker } from './derivatives/gmx-live.ts'; // v8
 import { startAlerts } from './alerts/dispatcher.ts'; // v6-alerts
 
 // Node's default happy-eyeballs gives each address only 250 ms: on this network that makes public RPC connections fail at random.
@@ -25,6 +26,7 @@ if (config.workers) {
   startDerivativesWorker(); // paper accounts only: public market data in, simulated fills out; no signer, no venue trading endpoint
   startLiveWorker(); // venue accounts: reconciliation only (reads); with no authorized account it does nothing
   startCollateralWorker(); // deposits and withdrawals in flight: venue ledger + the wallet's own chain records (reads; re-sends only already signed withdrawals)
+  startGmxWorker(); // v8 GMX: tracks the wallet's own orders on-chain until executed, cancelled or frozen (reads; relays only already signed transactions)
   await startAlerts(); // v6-alerts: ONE dispatcher tailing the audit chain, risk events and research log; read-only on those tables
   // trading agents: decisions only on bars the market engine declares fresh, complete and consistent across sources
   startAgentEngine({

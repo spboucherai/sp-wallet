@@ -1,0 +1,112 @@
+Fork of Arbitrum One (chain 42161) on http://127.0.0.1:8572 — throwaway wallet 0xCA9917Eb2E317163C1F6E295f58D809a1cD55E61 (seed in memory only)
+  ok   fork chain id 42161, forked at block 523357678
+
+1. The GMX contracts on the fork (unmodified mainnet state) against the pinned table
+  ok   exchangeRouter 0x7dE39FF2e232A2203196788d37e234cF8F1b83f1: 20999 bytes, sha256 76169686cbf23f3e… = pinned
+  ok   router 0x7452c558d45f8afC8c83dAe62C3f8A5BE19c71f6: 1503 bytes, sha256 f50f32351ad61911… = pinned
+  ok   orderVault 0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5: 4570 bytes, sha256 e3e5559ff93aefd3… = pinned
+  ok   dataStore 0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8: 10443 bytes, sha256 0524e4f2a73947f6… = pinned
+  ok   reader 0xfA26cBb46e2614609406de08CA1Dc7f70a684184: 23870 bytes, sha256 a8ac6f41c73e9279… = pinned
+  ok   orderHandler 0xa5D2d45228ee2E3A18AB122B2cE84997d008f4Eb: 24525 bytes, sha256 2113ebc4aa3bd22b… = pinned
+  ok   roleStore 0x3c3d99FD298f679DBC2CEcd132b4eC4d0F5e6e72: 2342 bytes, sha256 d50d6f1e6c1b751b… = pinned
+  ok   eventEmitter 0xC8ee91A54287DB53897056e12D9819156D3822Fb: 7998 bytes, sha256 29e899318a0b8cbc… = pinned
+  ok   RoleStore: exchangeRouter holds CONTROLLER
+  ok   RoleStore: exchangeRouter holds ROUTER_PLUGIN
+  ok   RoleStore: orderHandler holds CONTROLLER
+  ok   ExchangeRouter immutables: router, orderHandler, dataStore, roleStore = the pinned addresses
+  ok   OrderHandler.orderVault() = the pinned OrderVault
+  ok   DataStore WNT = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
+  ok   DataStore REQUEST_EXPIRATION_TIME = 300 s
+  ok   Reader.getMarket(BTC/USD [WBTC.b-USDC]): index, long and short tokens = the pinned row
+  ok   Reader.getMarket(ETH/USD [WETH-USDC]): index, long and short tokens = the pinned row
+  execution gas the contracts price an order at (DataStore): increase 4149674, decrease 4149674
+
+  the signer's own ETH price now (Coinbase + Kraken): 2084.84 USD — used as the market price of the whole run
+
+2. Authorization (venue policy approved once with the passkey) and what the signer refuses
+  ok   an order before any authorization → refused (not_authorized: GMX trading is not authorized on this signer: the owner must approve a venue policy first)
+  ok   authorization without a passkey → refused (bad_approval: the owner's passkey approval is required)
+  ok   authorization with the Hyperliquid acknowledgement → refused (acknowledgement: the acknowledgement hash is not the hash of the GMX jurisdiction summary this signer knows)
+  ok   authorization for another GMX contract set → refused (unsupported: the authorization names another GMX contract set than the one this build reviewed)
+  ok   authorization for another account → refused (wrong_source: the account is not this wallet's own address)
+  ok   authorized: ETH/USD [WETH-USDC] only, leverage ≤ 3×, order ≤ 100 USD, 5 increases a day, price band 100 bps, execution fee ≤ 0.00016 ETH, 7 days
+  ok   another receiver (there is no such field) → refused (bad_request: malformed intent)
+  ok   a callback contract (no such field) → refused (bad_request: malformed intent)
+  ok   a UI fee receiver (no such field) → refused (bad_request: malformed intent)
+  ok   a swap path (no such field) → refused (bad_request: malformed intent)
+  ok   a referral code (no such field) → refused (bad_request: malformed intent)
+  ok   a market that is not pinned (ETH/USD [WETH-WETH]) → refused (unsupported: this market is not in the wallet's pinned GMX market table)
+  ok   a pinned market outside the authorization (BTC/USD) → refused (policy: BTC/USD [WBTC.b-USDC] is not allowed by the authorization)
+  ok   another collateral token (WETH) → refused (unsupported: this collateral token is not accepted for the market)
+  ok   an unpinned router → refused (unsupported: the destination is not the pinned GMX ExchangeRouter)
+  ok   an unpinned token spender → refused (unsupported: the token spender is not the pinned GMX Router)
+  ok   leverage above the venue policy (61 USD on 20 USDC) → refused (policy: leverage 3.05× is above the authorized 3×)
+  ok   size above the venue policy (101 USD on 40 USDC) → refused (policy: order size 101 USD is above the authorized 100)
+  ok   execution fee above the authorization ceiling → refused (policy: execution fee 160000000000001 wei is above the authorized 160000000000000)
+  ok   acceptable price 2 % above the signer's own price → refused (price: acceptable price 2126.5368 is more than 100 bps away from the signer's own ETH price 2084.845)
+  ok   collateral above the wallet's per-transfer limit (60 USDC) → refused (policy: amount above per-transaction limit for arbitrum:USDC)
+  ok   a different size than the one the passkey approved → refused (bad_approval: approval verification failed: Unexpected authentication response challenge "3yPrs2Of2_LL6IvmGYEixRFsqToaDN8p87Fmv0Pqga0", expected "TcJI)
+  ok   a different collateral than the one the passkey approved → refused (bad_approval: approval verification failed: Unexpected authentication response challenge "e7mCYn-Cg-_if4BHnAyFdXUxRX8OtH2iTuCY80aZdGI", expected "NpUJ)
+  ok   no passkey → refused (bad_approval: Cannot read properties of undefined (reading 'id'))
+  ok   a passkey that is not enrolled → refused (unknown_credential: approval was not made with an enrolled passkey)
+  ok   an expired approval window → refused (policy: approval window expired)
+  ok   a plain transfer of USDC to the OrderVault → refused (gmx: this destination is a GMX contract: funds reach GMX only through a GMX order, which the signer builds itself)
+  ok   signer journal: no signature so far
+
+3. A MarketIncrease (long ETH/USD, 20 USDC collateral, 60 USD = 3×), built and signed by the signer, mined ON THE FORK
+  ok   approval transaction: USDC.approve(Router 0x7452c558d45f8afC8c83dAe62C3f8A5BE19c71f6, 20 USDC) — exact amount, mined (gas used 55437)
+  ok   order transaction: ExchangeRouter.multicall[sendWnt, sendTokens, createOrder], msg.value = execution fee 0.000128639894 ETH
+  ok   receipt status 1, gas used 929941
+  ok   OrderCreated 0xe872925f87fc96c16260f1f90dbe3ce915701b2143faef80464510151cc904b9: every field equals the approved one (account, receiver, cancellationReceiver = wallet; callback, UI fee receiver = 0; market; collateral token; empty swap path; type 2; size; collateral; acceptable price; execution fee; minOutput 0; isLong)
+       size 60 USD, collateral 20 USDC, acceptable price 2095.2642, execution fee 0.000128639894 ETH
+  ok   collateral: wallet −20 USDC, OrderVault +20 USDC
+  ok   execution fee: OrderVault +0.000128639894 WETH (wrapped from msg.value)
+  ok   USDC allowance of the Router: back to 0
+  ok   Reader (on-chain): the order is stored under the wallet, with the wallet as receiver and cancellation receiver
+  ok   the same approval again → refused (replay: proposal already signed)
+
+4. Simulated execution — GMX's own SimulationRouter.simulateExecuteLatestOrder (real code, no state change)
+  ok   at 2084.84 USD: reverts with EndOfOracleSimulation = the whole execution ran without an error (GMX's convention for a successful simulation)
+  ok   at 2105.69 USD (1 % above, beyond the acceptable price): OrderNotFulfillableAtAcceptablePrice — the contracts enforce the approved worst price
+
+5. Keeper execution ON THE FORK — real keeper address impersonated, real OrderHandler; price provider REPLACED (see header)
+  price provider 0x7BA7Ae61887F1aca28E0FE5aB1434ce85b6606aa (ChainlinkDataStreamProvider) replaced by the mock; keeper 0xE47b36382DC50b90bCF6176Ddb159C4b9333A7AB (holds ORDER_KEEPER) impersonated
+  ok   OrderHandler.executeOrder mined (gas 3112583): OrderExecuted for the order key
+  ok   PositionIncrease: account = wallet, size 60 USD, execution price 2084.461894250806, collateral in position 19.976 USDC
+       position fee 0.024 USDC (factor 0.0004)
+  ok   Reader (on-chain): one position, ETH/USD [WETH-USDC], long, size 60 USD, collateral 19.976 USDC, 0.028779186892039676 ETH
+  ok   Reader: the order is gone from the pending orders
+  ok   unused execution fee refunded to the wallet: +0.000077774756899228 ETH of the 0.000128639894 sent (the keeper kept 0.000050865137100772)
+
+6. Closing the position: a MarketDecrease of the whole size, built by the signer, executed the same way
+  ok   a close whose acceptable price is 2 % below the signer's price → refused (price: acceptable price 2043.1432 is more than 100 bps away from the signer's own ETH price 2085.2275)
+  ok   MarketDecrease created 0xa42c11d81e187c7d0b558a80ee733c403e7378c5ce6b8324786ba98a2451f348 (no approval, no token sent): every field equals the approved one
+  ok   no USDC left the wallet for the close
+  ok   keeper execution: OrderExecuted, PositionDecrease to size 0 (PnL −0.00000000000000188816 USD at an unchanged price, price impact −0.013060259828703086543692689266 USD)
+  ok   Reader (on-chain): no position left
+  ok   collateral back in the wallet: +19.937821 USDC of the 20 sent (round-trip cost in USDC: 0.062179 = position fees and price impact)
+
+7. Cancellation paths
+  ok   keeper execution at 2105.69 USD: the order is CANCELLED, not executed — OrderCancelled with reasonBytes = OrderNotFulfillableAtAcceptablePrice(price, acceptablePrice)
+  ok   collateral returned in full to the wallet: +20 USDC; unused execution fee: +0.000049196988732322 ETH
+  ok   Reader: no position, no pending order
+  ok   cancelOrder right after creation: the contracts answer RequestNotYetCancellable (a market order can be cancelled by its account only 300 s after its creation)
+  fork clock advanced by 301 s (now 1794423215)
+  ok   a cancellation carrying a market → refused (unsupported: a cancellation carries no order field)
+  ok   cancelOrder(0x97bb0f02c1275de8…) signed by the signer and mined (gas 650259, estimate 1485423): OrderCancelled reason "USER_INITIATED_CANCEL"
+  ok   collateral returned in full to the wallet: +20 USDC
+  ok   execution fee returned: +0.000046925638153654 ETH of the 0.000046925638153654 sent (before the gas of the cancellation itself, 0.000003269728542132 ETH)
+  ok   Reader: no pending order
+
+8. Limits and revocation
+  ok   signer counters today: 3 increases, 2 decreases/cancellations
+  ok   USDC counted against the wallet's daily limit: 60 of 100
+  ok   one more increase of 45 USDC (60 + 45 is above the wallet's daily USDC limit) → refused (policy: daily limit exceeded for arbitrum:USDC)
+  ok   an order after the authorization is revoked → refused (revoked: the GMX authorization was revoked)
+  ok   signer journal: 5 GMX signatures (3 increases, 1 decrease, 1 cancellation), each journaled twice (gmx.sign.ok + sign.ok)
+  ok   no ETH left in the ExchangeRouter (msg.value was exactly the execution fee)
+
+All checks passed.
+Proven on the fork: creation with exactly the approved fields; simulated execution by GMX's SimulationRouter (succeeds at the market price, fails beyond the acceptable price);
+keeper execution by the real OrderHandler with an impersonated real keeper and a MOCKED price provider (no signed oracle report); close; keeper cancellation; user cancellation after the delay.
+NOT proven: execution by GMX's real keepers with real signed Chainlink Data Streams prices (timing, price, liveness) — that only exists on mainnet.

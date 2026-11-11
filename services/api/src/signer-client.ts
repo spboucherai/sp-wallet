@@ -8,6 +8,8 @@ export interface SignerStatus {
   mandates?: { mandate: Mandate; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; today: { sold: Record<string, string>; orders: number } }[];
   venueMandates?: { mandate: { mandateId: string; authorizationId: string }; hash: string; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; phase: 'active' | 'wind_down' | 'ended'; windDownUntil: number | null;
     today: { orders: number; reduceOnly: number; cancels: number; leverage: number; turnover: string }; ordersLastHour: number; pendingOrders: number }[];
+  /** v8: GMX venue policies stored by the signer */
+  gmx?: import('./derivatives/gmx-exec.ts').GmxSignerAuth[];
   venues?: { authorization: { authorizationId: string; venue: string; network: string }; hash: string; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; today: { orders: number; cancels: number; leverage: number } }[];
 }
 
@@ -58,6 +60,9 @@ export const signer = {
   // derivative mandates: approval (passkey), one signature per venue action WITHOUT a passkey inside the limits the signer enforces, revocation
   venueMandateApprove: (mandate: unknown, assertion: unknown) => { cached = null; return call<{ mandateId: string; hash: string; authorizationId: string }>('POST', '/venue/mandate/approve', { mandate, assertion }); },
   venueMandateSign: (p: { mandateId: string; sign: unknown; context?: unknown }) => { cached = null; return call<{ signature: { r: string; s: string; v: number }; signer: string; kind: string; hash: string; mandateId: string; phase: string }>('POST', '/venue/mandate/sign', p); },
+  // v8 GMX v2: the venue policy (passkey) and its revocation; orders go through `sign` with an intent carrying a `gmx` section
+  gmxAuthorize: (authorization: unknown, assertion: unknown) => { cached = null; return call<{ authorizationId: string; hash: string }>('POST', '/venue/gmx/authorize', { authorization, assertion }); },
+  gmxRevoke: (authorizationId: string) => { cached = null; return call<{ revoked: true; revokedAt: string }>('POST', '/venue/gmx/revoke', { authorizationId }); },
   venueMandateRevoke: (mandateId: string) => { cached = null; return call<{ revoked: true; revokedAt: string; windDownUntil: number }>('POST', '/venue/mandate/revoke', { mandateId }); },
 };
 

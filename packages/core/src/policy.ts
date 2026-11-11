@@ -89,3 +89,23 @@ export function checkPolicy(policy: Policy, i: Intent, spentToday: bigint, nowSe
   if (policy.allowlist.length > 0 && !policy.allowlist.includes(`${i.network}:${i.to}`)) return deny('destination not in signer allowlist');
   return { ok: true };
 }
+
+// >>> v8 GMX v2 trading (additive)
+/**
+ * The policy checks of an intent through which NO asset amount leaves the wallet (a GMX decrease or cancel: `amount` is 0 and
+ * only fees are paid): everything `checkPolicy` checks except the per-transfer and daily amount limits, which have nothing to
+ * bound. Halt, policy version, approval window, fee ceiling and allowlist apply unchanged.
+ */
+export function checkPolicyNoSpend(policy: Policy, i: Intent, nowSec: number, halted: boolean): PolicyVerdict {
+  const deny = (reason: string): PolicyVerdict => ({ ok: false, reason });
+  if (baseUnits(i.amount) !== 0n) return deny('this intent moves an amount: the full policy applies');
+  if (halted) return deny('emergency halt is active');
+  if (i.policyVersion !== policy.version) return deny('policy version changed');
+  if (i.expiresAt <= nowSec) return deny('approval window expired');
+  if (i.createdAt > nowSec + 60) return deny('intent dated in the future');
+  if (i.expiresAt - i.createdAt > policy.maxApprovalTtlSec) return deny('approval window too long');
+  if (baseUnits(i.maxFee) > baseUnits(policy.maxFee[i.network] ?? '0')) return deny('fee ceiling above policy');
+  if (policy.allowlist.length > 0 && !policy.allowlist.includes(`${i.network}:${i.to}`)) return deny('destination not in signer allowlist');
+  return { ok: true };
+}
+// <<< v8 GMX v2 trading

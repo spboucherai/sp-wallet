@@ -192,6 +192,17 @@ create table if not exists deriv_collateral (
   created_at timestamptz not null default now(), updated_at timestamptz not null default now());
 create index if not exists deriv_collateral_open on deriv_collateral (account_id) where not final;
 create index if not exists deriv_collateral_recent on deriv_collateral (account_id, created_at desc);
+-- >>> v8 GMX v2 trading: one row per order action of the wallet on GMX (increase, decrease, cancel). The on-chain transaction is an ordinary proposal (kind 'gmx'); this row follows the ORDER by its key
+create table if not exists deriv_gmx_ops (
+  id uuid primary key, idempotency_key text unique, kind text not null, state text not null, final boolean not null default false, account text not null,
+  market text, is_long boolean, collateral_token text, amount text, size_usd text, acceptable_price text, slippage_bps int, execution_fee text not null default '0', max_fee text not null default '0',
+  needs_approval boolean not null default false, order_key text, target_op uuid, proposal_id uuid, op_hash text, txid text, pre_txid text, block_number bigint,
+  request jsonb not null default '{}', estimate jsonb, outcome jsonb, error text, attempts int not null default 0,
+  expires_at timestamptz, sent_at timestamptz, order_created_at timestamptz, done_at timestamptz, checked_at timestamptz,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create index if not exists deriv_gmx_ops_open on deriv_gmx_ops (created_at) where not final;
+create index if not exists deriv_gmx_ops_recent on deriv_gmx_ops (created_at desc);
+-- <<< v8 GMX v2 trading
 -- >>> v7 any-to-any plans: a plan is a list of legs; each leg is an ordinary proposal created when the previous one has settled
 create table if not exists plans (
   id uuid primary key, state text not null, current int not null default 0, legs jsonb not null, meta jsonb not null,
