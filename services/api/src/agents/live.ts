@@ -15,6 +15,7 @@ import { kyberQuote, prepareKyberSwap } from '../swap-exec.ts';
 import { paperHoldings, tickAgent, type Bar, type EngineDeps, type Holding, type PlannedOrder } from './engine.ts';
 import { gasReserve } from './gas.ts';
 import { labExec, RESEARCH_DIR, SIGNAL_MAX_RSS_MB } from './lab.ts';
+import { engineLoop } from '../loop-stats.ts';
 import { vaultBalances, type AgentRow } from './routes.ts';
 
 // v8: RESEARCH_DIR lives in lab.ts (the sandboxed laboratory runner); re-exported here for the modules that import it from live.ts
@@ -153,8 +154,6 @@ export async function enginePass(m: MarketDeps, now = Date.now()): Promise<Recor
 }
 
 export function startAgentEngine(m: MarketDeps, everyMs = 60_000): () => void {
-  let busy = false;
-  const t = setInterval(() => { if (busy) return; busy = true; enginePass(m).catch(() => {}).finally(() => { busy = false; }); }, everyMs);
-  t.unref();
-  return () => clearInterval(t);
+  // v8: with a heartbeat in loopStats — the monitoring screen and the `system.worker_failing` alert cover the engine
+  return engineLoop('agent-engine', everyMs, () => enginePass(m));
 }

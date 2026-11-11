@@ -8,6 +8,7 @@ import { alertSettings } from '../alerts/store.ts';
 import { capital, exposure, pnl } from './aggregate.ts';
 import { auditChainStatus, collectConnectors, diskFree, lastBackup, versions } from './health.ts';
 import { labStatus } from '../agents/lab.ts'; // v8
+import { capabilities } from '../capabilities.ts'; // v8
 
 const cache = new Map<string, { at: number; v: unknown }>();
 async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
@@ -56,13 +57,15 @@ export function monitorRoutes(app: FastifyInstance): void {
       connectors: connectors.map((c) => ({ ...c, ageSec: c.lastSuccessAt === null ? null : Math.max(0, Math.round((now - c.lastSuccessAt) / 1000)) })),
       loops: [...loopStats.values()].map((l) => ({ name: l.name, everyMs: l.everyMs, runs: l.runs, lastOkAt: l.lastOkAt, lastErrorAt: l.lastErrorAt, lastError: l.lastError, failures: l.failures,
         ageSec: l.lastOkAt === null ? null : Math.round((now - l.lastOkAt) / 1000), late: l.lastOkAt !== null && now - l.lastOkAt > Math.max(3 * l.everyMs, 60_000) })),
-      // the agent engine runs on its own timer, outside `loop()`: it has no heartbeat here (each agent's last bar is on the capital endpoint)
-      loopsNote: 'agent_engine_not_listed',
+      // v8: the agent engines (`agent-engine`, `perp-agent-engine`) report their heartbeat like every other loop
+      loopsNote: null,
       backup: backup ? { visible: true, lastAt: backup.lastAt, files: backup.files, ageHours: backup.lastAt === null ? null : Math.round((now - backup.lastAt) / 360_000) / 10 } : { visible: false, lastAt: null, files: 0, ageHours: null },
       disk: await diskFree(),
       audit,
       signer: st ? { reachable: true, halted: st.halted } : { reachable: false, halted: null },
       versions: versions(st),
+      // v8: optional capabilities of this server and the variable NAMES missing for those that are off (never a value)
+      capabilities: capabilities(),
       // v8: the OS sandbox every strategy process runs in; `ok: false` = signals and backtests do not run (agents hold)
       lab: await labStatus().then((l) => ({ mode: l.mode, ok: l.ok, reason: l.reason, checkedAt: l.checkedAt, lastFailureAt: l.lastFailureAt, lastFailure: l.lastFailure, calls: l.calls, refused: l.refused }), () => null),
     };

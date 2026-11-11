@@ -294,6 +294,10 @@ describe('monitoring dashboard', () => {
     expect(h.versions).toMatchObject({ signerKeyId: null, apiVersion: '1.0.0' });
     expect(h.disk.freePct).toBeGreaterThan(0);
     expect(h.signer).toEqual({ reachable: false, halted: null });
-    expect(JSON.stringify(h)).not.toMatch(/secret|privateKey|k{48}/i);
+    // v8: `capabilities` names the VARIABLES that are missing (SPW_RESEARCH_RUNNER_SECRET is a name, not a secret): the rest of
+    // the answer is checked as before, and the capabilities for values
+    { const { capabilities: caps, ...rest } = h; expect(JSON.stringify(rest)).not.toMatch(/secret|privateKey|k{48}/i);
+      expect(JSON.stringify(caps)).not.toMatch(/privateKey|k{48}|postgres:\/\//i); expect(caps.map((c: any) => c.id)).toContain('research_runner'); }
+    expect(h.loops.every((l: any) => typeof l.name === 'string')).toBe(true); expect(h.loopsNote).toBeNull(); expect(h.lab).toBeDefined();
   });
 });

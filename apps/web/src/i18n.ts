@@ -1778,6 +1778,15 @@ const D = {
   hdWdUnverified: ['Transaction du retrait de {amount} {sym} incluse dans un bloc, mais le paiement vers votre adresse n’y a pas été retrouvé. Vérifiez dans l’explorateur.', 'The withdrawal transaction of {amount} {sym} was included in a block, but the payment to your address was not found in it. Check the explorer.'],
   hdWdFailed: ['Retrait de {amount} {sym} échoué : les fonds n’ont pas quitté le portefeuille de l’agent.', 'Withdrawal of {amount} {sym} failed: the funds did not leave the agent’s wallet.'],
   hdWdNotSent: ['Retrait de {amount} {sym} signé, mais non envoyé (diffusion désactivée sur ce serveur, ou relais impossible). Rien n’a quitté le portefeuille de l’agent.', 'Withdrawal of {amount} {sym} signed but NOT sent (broadcast disabled on this server, or it could not be relayed). Nothing left the agent’s wallet.'],
+  // E — monitoring: the strategy sandbox and the server's optional capabilities
+  hdMoLab: ['Bac à sable des stratégies', 'Strategy sandbox'], hdMoLabOk: ['confiné', 'confined'], hdMoLabOff: ['DÉSACTIVÉ', 'OFF'], hdMoLabDown: ['indisponible', 'unavailable'],
+  hdMoLabOffNote: ['Le code de stratégie s’exécute sans confinement du système (réglage de développement SPW_LAB_SANDBOX=off).', 'Strategy code runs without OS confinement (development setting SPW_LAB_SANDBOX=off).'],
+  hdMoLabDownNote: ['Aucun signal ni backtest n’est exécuté : les agents restent en attente.', 'No signal and no backtest is run: agents hold.'],
+  hdCapOn: ['activé', 'on'], hdCapOff: ['désactivé', 'off'],
+  hdCap_deriv_live_mainnet: ['Dérivés réels sur le réseau principal', 'Live derivatives on mainnet'], hdCap_deriv_mandate_mainnet: ['Négociation autonome (mandat) sur le réseau principal', 'Autonomous (mandate) trading on mainnet'],
+  hdCap_research_runner: ['Recherche autonome (accès de l’exécuteur)', 'Autonomous research (runner access)'], hdCap_research_readonly_db: ['Rôle en lecture seule pour les backtests', 'Read-only role for backtests'],
+  hdCap_broadcast: ['Diffusion des transactions', 'Transaction broadcast'], hdCap_workers: ['Tâches de fond et moteurs des agents', 'Background tasks and agent engines'],
+  hdCap_strategy_sandbox_enforced: ['Confinement obligatoire du code de stratégie', 'Mandatory confinement of strategy code'], hdCap_web_app: ['Application web servie par ce processus', 'Web app served by this process'],
   // --- end hd ---
 } as const;
 export type Key = keyof typeof D;

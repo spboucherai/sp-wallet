@@ -12,6 +12,8 @@ import { startDerivativesWorker } from './derivatives/worker.ts';
 import { startLiveWorker } from './derivatives/live.ts';
 import { startCollateralWorker } from './derivatives/collateral.ts';
 import { startAlerts } from './alerts/dispatcher.ts'; // v6-alerts
+import { capabilitiesLine } from './capabilities.ts'; // v8
+import { labStatus } from './agents/lab.ts'; // v8
 
 // Node's default happy-eyeballs gives each address only 250 ms: on this network that makes public RPC connections fail at random.
 dns.setDefaultResultOrder('ipv4first');
@@ -34,4 +36,7 @@ if (config.workers) {
   startPerpAgentEngine(); // v6 perp agents (paper only): venue bars + funding in, simulated orders on their paper accounts out
 }
 console.log(`sp-wallet api listening on ${config.host}:${config.port} origin=${config.origin} broadcast=${config.broadcast ? 'on' : 'OFF'}`);
+// v8: which optional capabilities are on, and which variable is missing for the others (names only, never a value)
+console.log(`[startup] ${capabilitiesLine()}`);
+void labStatus().then((l) => console.log(`[startup] strategy sandbox: ${l.mode}${l.ok ? ' (confined, self-test passed)' : ` — ${l.reason}${l.mode === 'unavailable' ? ' — signals and backtests will NOT run' : ''}`}`));
 for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { void app.close().then(() => process.exit(0)); });

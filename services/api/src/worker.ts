@@ -81,8 +81,8 @@ async function refreshHealth(): Promise<void> {
 }
 
 // v6-alerts: heartbeat of every worker loop (read by the monitoring dashboard and the "worker failing" alert) — additive
-export interface LoopStat { name: string; everyMs: number; runs: number; lastStartAt: number | null; lastOkAt: number | null; lastErrorAt: number | null; lastError: string | null; /** failed passes in a row */ failures: number }
-export const loopStats = new Map<string, LoopStat>();
+import { loopStats, type LoopStat } from './loop-stats.ts'; // v8: the map lives in its own module (the agent engines report there too)
+export { loopStats, type LoopStat };
 
 export function loop(name: string, fn: () => Promise<void>, everyMs: number): void {
   let running = false;

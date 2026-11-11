@@ -1,0 +1,58 @@
+// V8 hardening (E): the start-up summary of optional capabilities (variable NAMES only, never a value) and the heartbeat of
+// the agent engines in loopStats. Pure / in-memory: no database.
+import { describe, expect, it } from 'vitest';
+import { capabilities, capabilitiesLine } from '../src/capabilities.ts';
+import { engineLoop, enginePassFailure, loopStats } from '../src/loop-stats.ts';
+
+const SECRET = 's3cr3t-value-that-must-never-be-printed-0123456789';
+describe('optional capabilities', () => {
+  it('says which are on and names the missing variable for the others — and never prints a value', () => {
+    const none = capabilities({});
+    const by = Object.fromEntries(none.map((c) => [c.id, c]));
+    expect(by.deriv_live_mainnet).toMatchObject({ on: false, missing: ['SPW_DERIV_LIVE_MAINNET'] });
+    expect(by.deriv_mandate_mainnet).toMatchObject({ on: false, missing: ['SPW_DERIV_LIVE_MAINNET', 'SPW_DERIV_MANDATE_MAINNET'] });
+    expect(by.research_runner).toMatchObject({ on: false, missing: ['SPW_RESEARCH_RUNNER_SECRET'] });
+    expect(by.research_readonly_db).toMatchObject({ on: false, missing: ['RESEARCH_DATABASE_URL'] });
+    expect(by.broadcast!.on).toBe(true); expect(by.workers!.on).toBe(true); expect(by.strategy_sandbox_enforced!.on).toBe(true);
+    const line = capabilitiesLine(none);
+    expect(line).toMatch(/^capabilities: deriv_live_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\) deriv_mandate_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\+SPW_DERIV_MANDATE_MAINNET\) research_runner=OFF\(missing SPW_RESEARCH_RUNNER_SECRET\) research_readonly_db=OFF\(missing RESEARCH_DATABASE_URL\) broadcast=on workers=on strategy_sandbox_enforced=on/);
+    expect(line.split('\n')).toHaveLength(1);
+
+    const env = { SPW_DERIV_LIVE_MAINNET: 'on', SPW_DERIV_MANDATE_MAINNET: 'on', SPW_RESEARCH_RUNNER_SECRET: SECRET, RESEARCH_DATABASE_URL: `postgres://reader:${SECRET}@db/sp_wallet`, SPW_BROADCAST: 'off', SPW_LAB_SANDBOX: 'off', SPW_WEB_DIR: '/srv/web' };
+    const all = capabilities(env), text = JSON.stringify(all) + capabilitiesLine(all);
+    expect(all.filter((c) => c.on).map((c) => c.id)).toEqual(['deriv_live_mainnet', 'deriv_mandate_mainnet', 'research_runner', 'research_readonly_db', 'workers', 'web_app']);
+    expect(text).not.toContain(SECRET); expect(text).not.toContain('reader'); expect(text).not.toContain('/srv/web');
+    expect(capabilitiesLine(all)).toMatch(/broadcast=OFF\(set off by SPW_BROADCAST\).*strategy_sandbox_enforced=OFF\(set off by SPW_LAB_SANDBOX\)/);
+  });
+  it('a runner secret that is too short is off, and the reason says so without the secret', () => {
+    const c = capabilities({ SPW_RESEARCH_RUNNER_SECRET: 'short-secret' }).find((x) => x.id === 'research_runner')!;
+    expect(c.on).toBe(false); expect(c.why).toMatch(/shorter than 32/); expect(c.why).not.toContain('short-secret');
+    expect(capabilities({ SPW_DERIV_LIVE_MAINNET: 'true' }).find((x) => x.id === 'deriv_live_mainnet')!.on).toBe(false);   // only "on" turns it on, as in the code that reads it
+  });
+});
+
+describe('agent engines — heartbeat', () => {
+  it('a pass fails when it throws or when every agent ended in an error; one healthy agent is enough', () => {
+    expect(enginePassFailure({})).toBeNull();
+    expect(enginePassFailure({ a: 'held', b: 'error: x' })).toBeNull();
+    expect(enginePassFailure({ a: 'error: signal runner could not start', b: 'backing off after an error' })).toBe('error: signal runner could not start');
+    expect(enginePassFailure({ a: 'backing off after an error' })).toBe('backing off after an error');
+  });
+  it('engineLoop registers in loopStats, counts failures in a row, resets on success, and unregisters on stop', async () => {
+    let n = 0;
+    const stop = engineLoop('test-engine', 10, async () => { n += 1; if (n === 2) throw new Error('boom'); return n <= 4 ? { a: 'error: cannot reach the signal runner' } : { a: 'no order: targets reached' }; });
+    const st = loopStats.get('test-engine')!;
+    expect(st).toMatchObject({ name: 'test-engine', everyMs: 10, runs: 0, failures: 0, lastOkAt: null });
+    for (let i = 0; i < 200 && st.failures < 4; i++) await new Promise((r) => setTimeout(r, 5));
+    expect(st.failures).toBe(4); expect(st.lastOkAt).toBeNull(); expect(st.lastError).toMatch(/cannot reach the signal runner|boom/);
+    for (let i = 0; i < 200 && st.failures !== 0; i++) await new Promise((r) => setTimeout(r, 5));
+    expect(st.failures).toBe(0); expect(st.lastOkAt).not.toBeNull(); expect(st.runs).toBeGreaterThanOrEqual(5);
+    stop();
+    expect(loopStats.has('test-engine')).toBe(false);
+  });
+  it('the real engines use it: both names are registered by their starters', async () => {
+    const src = (f: string) => import('node:fs').then((fs) => fs.readFileSync(new URL(f, import.meta.url), 'utf8'));
+    expect(await src('../src/agents/live.ts')).toMatch(/engineLoop\('agent-engine', everyMs, \(\) => enginePass\(m\)\)/);
+    expect(await src('../src/agents/perp-live.ts')).toMatch(/engineLoop\('perp-agent-engine', everyMs, \(\) => perpEnginePass\(\)\)/);
+  });
+});
