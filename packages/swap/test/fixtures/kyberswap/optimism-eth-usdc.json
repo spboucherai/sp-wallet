@@ -1,0 +1,136 @@
+{
+ "recordedAt": "2026-11-11T01:04:27.007Z",
+ "url": "https://aggregator-api.kyberswap.com/optimism/api/v1/routes?tokenIn=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&tokenOut=0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85&amountIn=10000000000000000",
+ "status": 200,
+ "body": {
+  "code": 0,
+  "message": "successfully",
+  "data": {
+   "routeSummary": {
+    "tokenIn": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "amountIn": "10000000000000000",
+    "amountInUsd": "20.441384944908567",
+    "tokenOut": "0x0b2c639c533813f4aa9d7837caf62653d097ff85",
+    "amountOut": "20438609",
+    "amountOutUsd": "20.442557557455462",
+    "gas": "467166",
+    "gasPrice": "1000717",
+    "gasUsd": "0.0009556367045041243",
+    "l1FeeUsd": "0.000013468242240397264",
+    "extraFee": {
+     "feeAmount": "",
+     "chargeFeeBy": "",
+     "isInBps": false,
+     "feeReceiver": ""
+    },
+    "route": [
+     [
+      {
+       "pool": "0x2a7606f119fd933076e550ae87b5b30adc50725c",
+       "tokenIn": "0x4200000000000000000000000000000000000006",
+       "tokenOut": "0x68f180fcce6836688e9084f035309e29bf0a2095",
+       "swapAmount": "10000000000000000",
+       "amountOut": "27949",
+       "exchange": "aero-cl",
+       "poolType": "uniswapv3",
+       "poolExtra": {
+        "swapFee": 305,
+        "priceLimit": "4295558253",
+        "blockNumber": 159380130
+       },
+       "extra": {
+        "_cs": "3975984644017663316",
+        "_ss": {
+         "pool": "0x4456d13fc6736e8e8330394c0c622103e06ea419",
+         "tokenIn": "0x4200000000000000000000000000000000000006",
+         "tokenOut": "0x68f180fcce6836688e9084f035309e29bf0a2095",
+         "swapAmount": "10000000000000000",
+         "amountOut": "27538",
+         "exchange": "curve-tricrypto-ng",
+         "poolType": "curve-tricrypto-ng",
+         "poolExtra": {
+          "tokenInIndex": 2,
+          "tokenOutIndex": 1,
+          "underlying": false,
+          "blockNumber": 159375826,
+          "TokenInIsNative": false,
+          "TokenOutIsNative": false
+         },
+         "extra": {
+          "K0": [
+           999718973691938200,
+           0,
+           0,
+           0
+          ],
+          "Xp": [
+           "8610027060325552828115",
+           "8763134347997066917915",
+           "9060871210112786161396"
+          ],
+          "LastPrices": [
+           "73702440167918224383728",
+           "2044299983760928151385"
+          ],
+          "PriceScale": [
+           "74731396623341088785691",
+           "2127731634460384580690"
+          ],
+          "XcpProfit": [
+           1095073771841329000,
+           0,
+           0,
+           0
+          ],
+          "D": [
+           14836023989775750000,
+           1432,
+           0,
+           0
+          ],
+          "VirtualPrice": [
+           1047543898279578100,
+           0,
+           0,
+           0
+          ]
+         }
+        },
+        "_ts": "1794359067",
+        "nSqrtRx96": "132474975424549908356137",
+        "nT": -266043,
+        "rAI": "0",
+        "ri": "30711beaSltLZKDu"
+       }
+      },
+      {
+       "pool": "0xadab76dd2dca7ae080a796f0ce86170e482afb4a",
+       "tokenIn": "0x68f180fcce6836688e9084f035309e29bf0a2095",
+       "tokenOut": "0x0b2c639c533813f4aa9d7837caf62653d097ff85",
+       "swapAmount": "27949",
+       "amountOut": "20438609",
+       "exchange": "uniswapv3",
+       "poolType": "uniswapv3",
+       "poolExtra": {
+        "swapFee": 3000,
+        "priceLimit": "1457652066949847389969617340386294118487833376467",
+        "blockNumber": 159377012
+       },
+       "extra": {
+        "rAI": "0",
+        "nSqrtRx96": "2925468235876465681310393161",
+        "nT": -65981
+       }
+      }
+     ]
+    ],
+    "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
+    "routeID": "30711beaSltLZKDu",
+    "checksum": "3975984644017663316",
+    "timestamp": 1794359067
+   },
+   "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"
+  },
+  "requestId": "30711bea-4a5b-4b64-a0ee-6a7ecb111278"
+ }
+}

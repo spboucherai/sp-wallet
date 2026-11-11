@@ -1,0 +1,110 @@
+{
+ "recordedAt": "2026-11-11T01:04:30.869Z",
+ "url": "https://aggregator-api.kyberswap.com/hyperevm/api/v1/routes?tokenIn=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&tokenOut=0xb88339CB7199b77E23DB6E890353E22632Ba630f&amountIn=1000000000000000000",
+ "status": 200,
+ "body": {
+  "code": 0,
+  "message": "successfully",
+  "data": {
+   "routeSummary": {
+    "tokenIn": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "amountIn": "1000000000000000000",
+    "amountInUsd": "71.8689199208561",
+    "tokenOut": "0xb88339cb7199b77e23db6e890353e22632ba630f",
+    "amountOut": "71724976",
+    "amountOutUsd": "71.83653619329968",
+    "gas": "682096",
+    "gasPrice": "100000000",
+    "gasUsd": "0.004902150280233626",
+    "l1FeeUsd": "0",
+    "extraFee": {
+     "feeAmount": "",
+     "chargeFeeBy": "",
+     "isInBps": false,
+     "feeReceiver": ""
+    },
+    "route": [
+     [
+      {
+       "pool": "0x20e6e73c91a29d21bde672562a4b16649d66623e",
+       "tokenIn": "0x5555555555555555555555555555555555555555",
+       "tokenOut": "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb",
+       "swapAmount": "1000000000000000000",
+       "amountOut": "71792816",
+       "exchange": "nest-v4",
+       "poolType": "algebra-integral",
+       "poolExtra": {
+        "blockNumber": 50937138,
+        "priceLimit": "4295558252"
+       },
+       "extra": {
+        "Liquidity": "43141381380756418",
+        "NamiTimepoint": null,
+        "Price": "671442209679092267432242",
+        "Tick": -233580,
+        "_cs": "16199983267696513960",
+        "_ss": {
+         "pool": "0xb9fa3bdfa88da2dc78c20ca03472e043992c6671",
+         "tokenIn": "0x5555555555555555555555555555555555555555",
+         "tokenOut": "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb",
+         "swapAmount": "1000000000000000000",
+         "amountOut": "71727381",
+         "exchange": "uscore-prop",
+         "poolType": "uscore-prop",
+         "poolExtra": {
+          "blockNumber": 50937266
+         },
+         "extra": null
+        },
+        "_ts": "1794359071",
+        "ri": "b1ad1b23HqdDYY6I"
+       }
+      },
+      {
+       "pool": "0x46abbdfc675ffa9ddf032c64fee363745204e63e",
+       "tokenIn": "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb",
+       "tokenOut": "0xb88339cb7199b77e23db6e890353e22632ba630f",
+       "swapAmount": "71792816",
+       "amountOut": "71724976",
+       "exchange": "ramses-v3",
+       "poolType": "ramses-v2",
+       "poolExtra": {
+        "swapFee": 19,
+        "priceLimit": "250541420775534450580036817217",
+        "blockNumber": 50937234
+       },
+       "extra": {
+        "_ss": {
+         "pool": "0x4dd810b2ba72e43ed2658d6ed639ebda47372048",
+         "tokenIn": "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb",
+         "tokenOut": "0xb88339cb7199b77e23db6e890353e22632ba630f",
+         "swapAmount": "71792816",
+         "amountOut": "7775015",
+         "exchange": "nest-v2",
+         "poolType": "velodrome",
+         "poolExtra": {
+          "f": 4,
+          "p": 10000,
+          "s": true,
+          "approvalAddress": "",
+          "blockNumber": 50753186
+         },
+         "extra": null
+        },
+        "nSqrtRx96": "79265361438756218342829904536",
+        "nT": 9,
+        "rAI": "0"
+       }
+      }
+     ]
+    ],
+    "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
+    "routeID": "b1ad1b23HqdDYY6I",
+    "checksum": "16199983267696513960",
+    "timestamp": 1794359071
+   },
+   "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"
+  },
+  "requestId": "b1ad1b23-1ea7-4361-8e88-42671e41bf02"
+ }
+}

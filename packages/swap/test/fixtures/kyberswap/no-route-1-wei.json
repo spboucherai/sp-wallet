@@ -1,0 +1,11 @@
+{
+ "recordedAt": "2026-11-11T01:04:32.190Z",
+ "url": "https://aggregator-api.kyberswap.com/ethereum/api/v1/routes?tokenIn=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&tokenOut=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&amountIn=1",
+ "status": 400,
+ "body": {
+  "code": 4008,
+  "message": "route not found",
+  "details": null,
+  "requestId": "1689fdb1-552a-4cb8-9826-929db3a8c158"
+ }
+}

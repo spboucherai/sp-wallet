@@ -1,0 +1,94 @@
+{
+ "recordedAt": "2026-11-11T01:04:25.741Z",
+ "url": "https://aggregator-api.kyberswap.com/polygon/api/v1/routes?tokenIn=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&tokenOut=0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359&amountIn=100000000000000000000",
+ "status": 200,
+ "body": {
+  "code": 0,
+  "message": "successfully",
+  "data": {
+   "routeSummary": {
+    "tokenIn": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "amountIn": "100000000000000000000",
+    "amountInUsd": "8.825543811103804",
+    "tokenOut": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+    "amountOut": "8813463",
+    "amountOutUsd": "8.828364846119902",
+    "gas": "490498",
+    "gasPrice": "279745623399",
+    "gasUsd": "0.012109940708966115",
+    "l1FeeUsd": "0",
+    "extraFee": {
+     "feeAmount": "",
+     "chargeFeeBy": "",
+     "isInBps": false,
+     "feeReceiver": ""
+    },
+    "route": [
+     [
+      {
+       "pool": "0x3ac4b2cdd65a9786d10d121ba4d4ad403f505d6d",
+       "tokenIn": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
+       "tokenOut": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+       "swapAmount": "100000000000000000000",
+       "amountOut": "8822333",
+       "exchange": "dodo-dpp",
+       "poolType": "dodo-dpp",
+       "poolExtra": {
+        "type": "DPP",
+        "baseToken": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
+        "quoteToken": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+        "blockNumber": 97102378
+       },
+       "extra": {
+        "_cs": "5674065612200078573",
+        "_ts": "1794359065",
+        "ri": "ff2f9965kdFIf7rn"
+       }
+      },
+      {
+       "pool": "0x31083a78e11b18e450fd139f9abea98cd53181b7",
+       "tokenIn": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+       "tokenOut": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+       "swapAmount": "8822333",
+       "amountOut": "8813463",
+       "exchange": "uniswapv3",
+       "poolType": "uniswapv3",
+       "poolExtra": {
+        "swapFee": 100,
+        "priceLimit": "1461446703485210103287273052203988822378723970341",
+        "blockNumber": 97102390
+       },
+       "extra": {
+        "_ss": {
+         "pool": "0x0b1a513ee24972daef112bc777a5610d4325c9e7",
+         "tokenIn": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+         "tokenOut": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+         "swapAmount": "8822333",
+         "amountOut": "8813505",
+         "exchange": "fluid-dex-t1",
+         "poolType": "fluid-dex-t1",
+         "poolExtra": {
+          "blockNumber": 97102403,
+          "approvalAddress": "0x0b1a513ee24972daef112bc777a5610d4325c9e7"
+         },
+         "extra": {
+          "hasNative": false
+         }
+        },
+        "nSqrtRx96": "79264220334858819419513612680",
+        "nT": 9,
+        "rAI": "0"
+       }
+      }
+     ]
+    ],
+    "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
+    "routeID": "ff2f9965kdFIf7rn",
+    "checksum": "5674065612200078573",
+    "timestamp": 1794359065
+   },
+   "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"
+  },
+  "requestId": "ff2f9965-91d1-487f-bae7-5d0760841790"
+ }
+}

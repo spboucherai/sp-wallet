@@ -1,0 +1,20 @@
+{
+ "recordedAt": "2026-11-11T01:04:34.644Z",
+ "url": "https://aggregator-api.kyberswap.com/ethereum/api/v1/routes?tokenIn=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&tokenOut=nothex&amountIn=10000000000000000",
+ "status": 400,
+ "body": {
+  "code": 4000,
+  "message": "bad request",
+  "details": [
+   {
+    "fieldViolations": [
+     {
+      "field": "tokenOut",
+      "description": "invalid"
+     }
+    ]
+   }
+  ],
+  "requestId": "85b5b066-2af4-43a7-a1f8-c7105bd5fefb"
+ }
+}

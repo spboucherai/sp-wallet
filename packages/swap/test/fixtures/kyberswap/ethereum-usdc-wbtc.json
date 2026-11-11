@@ -1,0 +1,129 @@
+{
+ "recordedAt": "2026-11-11T01:04:22.105Z",
+ "url": "https://aggregator-api.kyberswap.com/ethereum/api/v1/routes?tokenIn=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&tokenOut=0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599&amountIn=50000000",
+ "status": 200,
+ "body": {
+  "code": 0,
+  "message": "successfully",
+  "data": {
+   "routeSummary": {
+    "tokenIn": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "amountIn": "50000000",
+    "amountInUsd": "49.9973754087957",
+    "tokenOut": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+    "amountOut": "68258",
+    "amountOutUsd": "50.00335220340833",
+    "gas": "649085",
+    "gasPrice": "47484860",
+    "gasUsd": "0.06300993500304146",
+    "l1FeeUsd": "0",
+    "extraFee": {
+     "feeAmount": "",
+     "chargeFeeBy": "",
+     "isInBps": false,
+     "feeReceiver": ""
+    },
+    "route": [
+     [
+      {
+       "pool": "kipseli-prop_0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+       "tokenIn": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+       "tokenOut": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+       "swapAmount": "50000000",
+       "amountOut": "24467143636781784",
+       "exchange": "kipseli-prop",
+       "poolType": "kipseli-prop",
+       "poolExtra": {
+        "blockNumber": 26388278,
+        "routerAddress": "0x5cdbe59400cc2efdcc2b54acca4a99fe00dd588c",
+        "approvalAddress": "0x5cdbe59400cc2efdcc2b54acca4a99fe00dd588c"
+       },
+       "extra": {
+        "_ce": {
+         "prCnt": 1,
+         "tgtAmtOut": "24467143636781784",
+         "ces": [
+          {
+           "pool": "0x00b9edc1583bf6ef09ff3a09f6c23ecb57fd7d0bb75625717ec81eed181e22d7",
+           "tokenIn": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+           "tokenOut": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+           "swapAmount": "50000000",
+           "amountOut": "24457533123111059",
+           "exchange": "uniswap-v4",
+           "poolType": "uniswap-v4",
+           "poolExtra": {
+            "blockNumber": 26388271,
+            "router": "0x66a9893cc07d91d95644aedd05d03f95e1dba8af",
+            "permit2Addr": "0x000000000022d473030f116ddee9f6b43ac78ba3",
+            "tokenIn": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "tokenOut": "0x0000000000000000000000000000000000000000",
+            "fee": 100,
+            "tickSpacing": 1,
+            "hookAddress": "0x0000000000000000000000000000000000000000",
+            "hookData": "",
+            "priceLimit": "1461446703485210103287273052203988822378723970341",
+            "manager": "0x000000000004444c5dc75cb358380d2e3de08a90"
+           },
+           "extra": {
+            "rAI": "0",
+            "nSqrtRx96": "3582128525703295343354529",
+            "nT": -200093,
+            "HookSwapInfo": null
+           }
+          }
+         ]
+        },
+        "_cs": "9886515511578159020",
+        "_ts": "1794359062",
+        "ri": "f9bf11d6v3dCbbNh"
+       }
+      },
+      {
+       "pool": "0xe6ff8b9a37b0fab776134636d9981aa778c4e718",
+       "tokenIn": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+       "tokenOut": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+       "swapAmount": "24467143636781784",
+       "amountOut": "68258",
+       "exchange": "uniswapv3",
+       "poolType": "uniswapv3",
+       "poolExtra": {
+        "swapFee": 100,
+        "priceLimit": "1461446703485210103287273052203988822378723970341",
+        "blockNumber": 26388275
+       },
+       "extra": {
+        "_ss": {
+         "pool": "0xd51a44d3fae010294c616388b506acda1bfaae46",
+         "tokenIn": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+         "tokenOut": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+         "swapAmount": "24467143636781784",
+         "amountOut": "68234",
+         "exchange": "curve",
+         "poolType": "curve-tricrypto",
+         "poolExtra": {
+          "tokenInIndex": 2,
+          "tokenOutIndex": 1,
+          "underlying": false,
+          "blockNumber": 26388271,
+          "TokenInIsNative": null,
+          "TokenOutIsNative": null
+         },
+         "extra": null
+        },
+        "nSqrtRx96": "47432371498710519271675982036273752",
+        "nT": 266062,
+        "rAI": "0"
+       }
+      }
+     ]
+    ],
+    "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
+    "routeID": "f9bf11d6v3dCbbNh",
+    "checksum": "9886515511578159020",
+    "timestamp": 1794359062
+   },
+   "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"
+  },
+  "requestId": "f9bf11d6-bf77-426d-b361-d2dba4ccb0b4"
+ }
+}

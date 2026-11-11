@@ -1,0 +1,88 @@
+{
+ "recordedAt": "2026-11-11T01:04:29.570Z",
+ "url": "https://aggregator-api.kyberswap.com/avalanche/api/v1/routes?tokenIn=0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E&tokenOut=0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7&amountIn=20000000",
+ "status": 200,
+ "body": {
+  "code": 0,
+  "message": "successfully",
+  "data": {
+   "routeSummary": {
+    "tokenIn": "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e",
+    "amountIn": "20000000",
+    "amountInUsd": "20.02710230262199",
+    "tokenOut": "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7",
+    "amountOut": "20021713",
+    "amountOutUsd": "20.054859132914295",
+    "gas": "356167",
+    "gasPrice": "7500000150",
+    "gasUsd": "0.02244893635231716",
+    "l1FeeUsd": "0",
+    "extraFee": {
+     "feeAmount": "",
+     "chargeFeeBy": "",
+     "isInBps": false,
+     "feeReceiver": ""
+    },
+    "route": [
+     [
+      {
+       "pool": "0xb292292b84a8d2ddc7996f687ad919be38e7c4dfe97d37e2ca33691ab5304f4f",
+       "tokenIn": "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e",
+       "tokenOut": "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7",
+       "swapAmount": "20000000",
+       "amountOut": "20021713",
+       "exchange": "uniswap-v4",
+       "poolType": "uniswap-v4",
+       "poolExtra": {
+        "blockNumber": 99981379,
+        "router": "0x94b75331ae8d42c1b61065089b7d48fe14aa73b7",
+        "permit2Addr": "0x000000000022d473030f116ddee9f6b43ac78ba3",
+        "tokenIn": "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e",
+        "tokenOut": "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7",
+        "fee": 14,
+        "tickSpacing": 1,
+        "hookAddress": "0x0000000000000000000000000000000000000000",
+        "hookData": "",
+        "priceLimit": "79212319258289487113226433916",
+        "manager": "0x06380c0e0912312b5150364b9dc4542ba0dbbc85"
+       },
+       "extra": {
+        "HookSwapInfo": null,
+        "_cs": "16231962579329449120",
+        "_ss": {
+         "pool": "0x1da20ac34187b2d9c74f729b85acb225d3341b25",
+         "tokenIn": "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e",
+         "tokenOut": "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7",
+         "swapAmount": "20000000",
+         "amountOut": "20013309",
+         "exchange": "curve-stable-plain",
+         "poolType": "curve-stable-plain",
+         "poolExtra": {
+          "tokenInIndex": 1,
+          "tokenOutIndex": 2,
+          "underlying": false,
+          "blockNumber": 99962749,
+          "TokenInIsNative": false,
+          "TokenOutIsNative": false
+         },
+         "extra": null
+        },
+        "_ts": "1794359069",
+        "nSqrtRx96": "79184957235972049874264325915",
+        "nT": -11,
+        "rAI": "0",
+        "ri": "c4fab398qsJACKtg"
+       }
+      }
+     ]
+    ],
+    "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
+    "routeID": "c4fab398qsJACKtg",
+    "checksum": "16231962579329449120",
+    "timestamp": 1794359069
+   },
+   "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"
+  },
+  "requestId": "c4fab398-aac2-4008-ab60-4d0dbbbf2243"
+ }
+}
