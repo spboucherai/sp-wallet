@@ -1,6 +1,6 @@
 /**
  * Typed client of the derivatives routes — exactly the table "API contract (wave 2: read-only and paper)" of
- * docs/v4/DERIVATIVES-ARCHITECTURE.md, nothing else. There is no live-trading call in this file because there is no such route.
+ * docs/v4/DERIVATIVES-ARCHITECTURE.md, nothing else. There is no live-trading call in this file: those are in `live.ts`.
  *
  * Where the table leaves a shape open, the expectation is written next to the call and a small normaliser accepts the obvious
  * variants, so a backend deviation shows up as a missing value («—») rather than a crash:

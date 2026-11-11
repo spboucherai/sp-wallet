@@ -1,5 +1,7 @@
 /**
- * Trade → Futures: market data (read-only) and PAPER trading. There is no live trading in this delivery and the screen says so.
+ * Trade → Futures: market data (read-only), PAPER trading, and controlled LIVE trading on a venue account (Hyperliquid testnet
+ * or mainnet, passkey per order — see derivatives/Live*.tsx). Which money the selected account moves is on a band that is
+ * always on screen: « SIMULATION », « TESTNET — argent fictif », « RÉEL — argent réel ».
  * Phone: sticky market header + tabs (Chart · Book · Trade · Positions). Tablet: chart and book on the left, order panel on
  * the right. Desktop: chart | book + trades | order panel, blotter underneath. This component never listens to the stream:
  * the header, the book, the trades and the chart each subscribe to their own slice of the market store.
@@ -11,19 +13,33 @@ import { errText, I18n, useT } from '../i18n';
 import { Btn, Card, Notice, Skeleton } from '../ui';
 import { AccountsView, VenueStrip } from '../derivatives/Accounts';
 import { dapi } from '../derivatives/api';
-import { PaperTag, Seg, useLocalState, useMedia, VENUE_NAME } from '../derivatives/bits';
+import { Seg, useLocalState, useMedia, VENUE_NAME } from '../derivatives/bits';
 import { Blotter } from '../derivatives/Blotter';
 import { BookPanel, LiquidityPanel, TradesPanel } from '../derivatives/Book';
 import { Candles, type Overlay } from '../derivatives/Candles';
 import { CompareView } from '../derivatives/Compare';
 import { priceDp } from '../derivatives/dec';
+import { lapi, toneOf, type LiveSummary, type Tone } from '../derivatives/live';
+import { AccountSwitch, ModeBand, ModeTag } from '../derivatives/LiveBits';
+import { LiveBlotter } from '../derivatives/LiveBlotter';
+import { LiveOrderPanel } from '../derivatives/LiveOrderPanel';
+import { useLiveAccount } from '../derivatives/liveStore';
 import { MarketHeader, MarketPicker, MarketStats, StaleBanner, Veil } from '../derivatives/Market';
 import { OrderPanel } from '../derivatives/OrderPanel';
 import { useMarketStore, useSlice, type MarketStore } from '../derivatives/store';
-import type { AccountDetail, DerivAccount, Instrument, Interval, VenueInfo } from '../derivatives/types';
+import { venueOf, type DerivAccount, type Instrument, type Interval, type Order, type Position, type VenueInfo } from '../derivatives/types';
 
 export type FuturesView = 'terminal' | 'compare' | 'accounts';
 const DEFAULT_ID = 'hyperliquid:BTC';
+/**
+ * The accounts that can trade a venue's markets, paper first, and the one in use: the stored choice when it is among them,
+ * otherwise the first paper account — a venue account is never selected by default, only by the owner.
+ */
+function pickAccount(paper: DerivAccount[], live: LiveSummary[], accountId: string | null, venue: string): { paper: DerivAccount[]; live: LiveSummary[]; account: DerivAccount | null; venueAccount: LiveSummary | null } {
+  const p = paper.filter((a) => a.venue === venue), l = live.filter((a) => a.venue === venue);
+  const venueAccount = p.some((a) => a.id === accountId) ? null : l.find((a) => a.id === accountId) ?? null;
+  return { paper: p, live: l, venueAccount, account: venueAccount ? null : p.find((a) => a.id === accountId) ?? p[0] ?? null };
+}
 
 export function Futures({ instrument: routeId, view = 'terminal', nav }: { instrument?: string; view?: FuturesView; nav: Nav }) {
   const t = useT();
@@ -38,31 +54,36 @@ export function Futures({ instrument: routeId, view = 'terminal', nav }: { instr
   const go = (v: FuturesView, inst = id) => nav({ tab: 'futures', asset: inst, view: v === 'terminal' ? undefined : v });
   const phone = !useMedia('(min-width: 768px)');
   const paper = useMemo(() => (accounts.data ?? []).filter((a) => a.kind === 'paper'), [accounts.data]);
+  // venue accounts of controlled live trading; a backend without the live routes simply has none
+  const liveQ = useQuery({ queryKey: ['deriv', 'live', 'accounts'], queryFn: lapi.accounts, refetchInterval: 15_000, retry: 0 });
+  const live = useMemo(() => liveQ.data ?? [], [liveQ.data]);
+  const sel = pickAccount(paper, live, accountId, venueOf(id));
+  const tone: Tone = sel.venueAccount ? toneOf(sel.venueAccount) : 'paper', anyLive = live.some((a) => a.mode === 'MANUAL_LIVE');
   const list = instruments.data?.instruments ?? [], unread = instruments.data?.errors ?? [];
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-1">
-        <div className="hidden items-center gap-2.5 sm:flex"><h1 className="text-[24px] font-semibold tracking-[-0.02em] lg:text-[28px]">{t('fxTitle')}</h1><PaperTag /></div>
+        <div className="hidden items-center gap-2.5 sm:flex"><h1 className="text-[24px] font-semibold tracking-[-0.02em] lg:text-[28px]">{t('fxTitle')}</h1><ModeTag tone={tone} /></div>
         <Seg tabs size="sm" label={t('fxViews')} value={view} onChange={(v) => go(v)} className="w-full sm:w-auto sm:min-w-[330px]" options={[{ id: 'terminal', label: t('fxViewTerminal') }, { id: 'compare', label: t('fxViewCompare') }, { id: 'accounts', label: t('fxViewAccounts') }]} />
       </div>
-      <p className="text-[12.5px] leading-snug text-mute" data-testid="paper-banner">{t('fxBanner')}</p>
+      <p className="text-[12.5px] leading-snug text-mute" data-testid="paper-banner">{t(tone === 'paper' ? (anyLive ? 'flBannerSimLive' : 'flBannerOff') : tone === 'testnet' ? 'flBannerTestnet' : 'flBannerReal')}</p>
       {venues.isError ? <Notice tone="danger">{t('fxApiDown')} {errText(t, venues.error)}</Notice> : venues.data && !(phone && view === 'terminal') ? <VenueStrip venues={venues.data} compact /> : null}
       {unread.length > 0 && <Notice tone="warn">{t('fxVenueErrors', { venues: unread.map((e) => VENUE_NAME[e.venue as keyof typeof VENUE_NAME] ?? e.venue).join(', ') })}</Notice>}
-      {view === 'terminal' && <Terminal id={id} instruments={list} instrumentsLoading={instruments.isLoading} venues={venues.data ?? []} accounts={paper} accountId={accountId} onAccount={setAccountId}
+      {view === 'terminal' && <Terminal id={id} instruments={list} instrumentsLoading={instruments.isLoading} venues={venues.data ?? []} accounts={paper} liveAccounts={live} accountId={accountId} onAccount={setAccountId}
         onMarket={(m) => go('terminal', m)} goAccounts={() => go('accounts')} />}
       {view === 'compare' && <CompareView instruments={list} base={base} onBase={setBase} onOpen={(m) => go('terminal', m)} />}
-      {view === 'accounts' && <AccountsView venues={venues.data ?? []} instruments={list} accounts={accounts.data ?? []} loading={accounts.isLoading} selected={accountId} onSelect={setAccountId} />}
+      {view === 'accounts' && <AccountsView venues={venues.data ?? []} instruments={list} accounts={paper} loading={accounts.isLoading} selected={accountId} onSelect={setAccountId} />}
     </div>
   );
 }
 
-function overlaysOf(detail: AccountDetail | DerivAccount | null | undefined, id: string, t: ReturnType<typeof useT>): Overlay[] {
+function overlaysOf(detail: { positions: Position[]; openOrders: Order[] } | null | undefined, id: string, t: ReturnType<typeof useT>, venue = false): Overlay[] {
   if (!detail) return [];
   const out: Overlay[] = [];
   for (const p of detail.positions) if (p.instrument === id) {
     out.push({ price: Number(p.entryPrice), label: `${t('fxEntry')} ${t(p.side === 'long' ? 'fxLong' : 'fxShort')}`, kind: 'entry' });
-    if (p.liquidationPrice) out.push({ price: Number(p.liquidationPrice), label: `${t('fxLiqShort')} (${t('estimate')})`, kind: 'liq' });
+    if (p.liquidationPrice) out.push({ price: Number(p.liquidationPrice), label: venue ? t('fxLiqShort') : `${t('fxLiqShort')} (${t('estimate')})`, kind: 'liq' });
   }
   for (const o of detail.openOrders) if (o.instrument === id) {
     const side = t(o.side === 'buy' ? 'fxSide_buy' : 'fxSide_sell');
@@ -72,7 +93,7 @@ function overlaysOf(detail: AccountDetail | DerivAccount | null | undefined, id:
   return out;
 }
 
-function Terminal({ id, instruments, instrumentsLoading, venues, accounts, accountId, onAccount, onMarket, goAccounts }: { id: string; instruments: Instrument[]; instrumentsLoading: boolean; venues: VenueInfo[]; accounts: DerivAccount[]; accountId: string | null;
+function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveAccounts, accountId, onAccount, onMarket, goAccounts }: { id: string; instruments: Instrument[]; instrumentsLoading: boolean; venues: VenueInfo[]; accounts: DerivAccount[]; liveAccounts: LiveSummary[]; accountId: string | null;
   onAccount: (id: string) => void; onMarket: (id: string) => void; goAccounts: () => void }) {
   const t = useT(); const { locale } = useContext(I18n);
   const store = useMarketStore(id);
@@ -84,11 +105,17 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, accou
   const instrument = meta.instrument ?? instruments.find((i) => i.id === id) ?? null;
   const byId = useMemo(() => new Map(instruments.map((i) => [i.id, i])), [instruments]);
   const venue = venues.find((v) => v.id === instrument?.venue);
-  const mine = useMemo(() => accounts.filter((a) => a.venue === instrument?.venue), [accounts, instrument?.venue]);
-  const account = mine.find((a) => a.id === accountId) ?? mine[0] ?? null;
+  const picked = useMemo(() => pickAccount(accounts, liveAccounts, accountId, instrument?.venue ?? venueOf(id)), [accounts, liveAccounts, accountId, instrument?.venue, id]);
+  const mine = picked.paper, { account, venueAccount } = picked, chosen = venueAccount ?? account;
   const detail = useQuery({ queryKey: ['deriv', 'account', account?.id], enabled: !!account, queryFn: () => dapi.account(account!.id), refetchInterval: (q) => ((q.state.data?.positions.length ?? 0) + (q.state.data?.openOrders.length ?? 0) > 0 ? 3000 : 10_000) });
   const d = account && detail.data?.id === account.id ? detail.data : undefined;
-  const overlays = useMemo(() => overlaysOf(d ?? account, id, t), [d, account, id, locale]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const lv = useLiveAccount(venueAccount?.id ?? null);
+  const liveCfg = useQuery({ queryKey: ['deriv', 'live', 'config'], queryFn: lapi.config, enabled: !!venueAccount, staleTime: 60_000, refetchInterval: 60_000, retry: 0 });
+  const held = venueAccount ? (lv.detail?.venueState.error ? null : lv.detail?.venueState ?? null) : d ?? account;
+  const overlays = useMemo(() => overlaysOf(held, id, t, !!venueAccount), [held, id, locale]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const tone: Tone = chosen ? toneOf(chosen) : 'paper';
+  const switcher = <AccountSwitch value={chosen?.id ?? ''} onChange={onAccount} choices={[...mine, ...picked.live].map((a) => ({ id: a.id, label: a.label, tone: toneOf(a) }))} />;
+  const band = <ModeBand tone={tone} label={chosen?.label} compact={phone} />;
   const unknown = !instrumentsLoading && instruments.length > 0 && !byId.has(id) && meta.error !== null;
 
   if (unknown) return <Card><div className="space-y-3"><Notice tone="warn">{t('fxUnknownMarket', { id })}</Notice><Btn kind="soft" onClick={() => onMarket(instruments[0]!.id)}>{t('fxOpenDefault', { symbol: instruments[0]!.symbol })}</Btn></div></Card>;
@@ -97,19 +124,24 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, accou
   const chart = <Veil store={store}><Candles store={store} interval={interval} onInterval={setIntervalV} overlays={overlays} priceDp={pdp} locale={locale} stale={false} height={phone ? 300 : wide ? 430 : 380} /></Veil>;
   const book = instrument ? (hasBook ? <Veil store={store}><BookPanel store={store} instrument={instrument} rows={phone ? 9 : 10} /></Veil> : <LiquidityPanel store={store} />) : <Skeleton h="h-64" />;
   const trades = instrument && hasBook ? <Veil store={store}><TradesPanel store={store} instrument={instrument} rows={phone ? 14 : wide ? 9 : 14} /></Veil> : null;
-  const order = instrument ? <OrderPanel store={store} instrument={instrument} account={account} accounts={mine} venue={venue} onAccount={onAccount} goAccounts={goAccounts} /> : <Skeleton h="h-64" />;
-  const blotter = <Blotter account={account} detail={d} instruments={byId} onSelect={onMarket} />;
+  const order = !instrument ? <Skeleton h="h-64" />
+    : venueAccount ? <LiveOrderPanel instrument={instrument} account={venueAccount} detail={lv.detail} conn={lv.conn} workerError={lv.workerError} config={liveCfg.data} switcher={switcher} goAccounts={goAccounts} />
+    : <OrderPanel store={store} instrument={instrument} account={account} accounts={mine} venue={venue} onAccount={onAccount} goAccounts={goAccounts} switcher={picked.live.length > 0 && account ? switcher : undefined} />;
+  const blotter = venueAccount ? <LiveBlotter account={venueAccount} detail={lv.detail} instruments={byId} ttlMs={liveCfg.data?.bounds.orderApprovalTtlMs ?? 90_000} onSelect={onMarket} />
+    : <Blotter account={account} detail={d} instruments={byId} onSelect={onMarket} />;
+  const nPos = held?.positions.length ?? 0;
   const head = (s: string) => <h3 className="mb-2 text-[13px] font-semibold text-mute">{s}</h3>;
   const picker = pick && <MarketPicker instruments={instruments} current={id} onClose={() => setPick(false)} onPick={(m) => { setPick(false); onMarket(m); }} />;
   const error = meta.error && !store.ticker ? <Notice tone="danger">{t('fxMarketError')}</Notice> : null;
   const facts = instrument && <VenueFacts instrument={instrument} store={store} />;
 
   if (phone) return (
-    <div className="space-y-3" data-testid="terminal" data-layout="phone">
+    <div className="space-y-3" data-testid="terminal" data-layout="phone" data-tone={tone}>
       <div className="nav-glass sticky top-[calc(env(safe-area-inset-top)+64px)] z-[5] -mx-5 space-y-2 border-b border-line px-5 pb-2 pt-2">
+        {band}
         <MarketHeader store={store} instrument={instrument} onPick={() => setPick(true)} compact />
         <Seg tabs size="sm" label={t('fxPanels')} value={tab} onChange={setTab} options={[{ id: 'chart', label: t('fxTabChart') }, { id: 'book', label: t(hasBook ? 'fxTabBook' : 'fxTabLiquidity') }, { id: 'trade', label: t('fxTabTrade') },
-          { id: 'positions', label: `${t('fxTabPositions')}${account && (d ?? account).positions.length ? ` (${(d ?? account).positions.length})` : ''}` }]} />
+          { id: 'positions', label: `${t('fxTabPositions')}${nPos ? ` (${nPos})` : ''}` }]} />
       </div>
       <StaleBanner store={store} />{error}
       <div role="tabpanel" aria-label={t('fxPanels')}>
@@ -122,7 +154,8 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, accou
     </div>
   );
   return (
-    <div className="space-y-3" data-testid="terminal" data-layout={wide ? 'desktop' : 'tablet'}>
+    <div className="space-y-3" data-testid="terminal" data-layout={wide ? 'desktop' : 'tablet'} data-tone={tone}>
+      <div className="sticky top-[calc(env(safe-area-inset-top)+64px)] z-[5] lg:top-2">{band}</div>
       <Card className="!p-4"><MarketHeader store={store} instrument={instrument} onPick={() => setPick(true)} compact={false} /></Card>
       <StaleBanner store={store} />{error}
       {wide ? <div className="grid grid-cols-[minmax(0,1fr)_292px_324px] items-start gap-3">

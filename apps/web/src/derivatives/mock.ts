@@ -9,7 +9,10 @@
  * GMX tickers / markets / config / candles) and then moves with a small random walk so that the stream is alive. Paper accounts
  * are the repository's real `PaperAccount` engine and real `checkOrder` risk engine, so refusals carry the real risk codes.
  *
- * Test hooks: `window.__spwMock` — `setRate(perSecond)`, `stale()`, `reconnect()`, `resume()`, `perf()`.
+ * The routes of controlled LIVE trading (`/derivatives/live/*`) are simulated by `mockLive.ts`: venue accounts, authorization
+ * with a simulated passkey, proposals, approvals, venue refusals, `unknown` → reconciled, halt, divergence.
+ *
+ * Test hooks: `window.__spwMock` — `setRate(perSecond)`, `stale()`, `reconnect()`, `resume()`, `perf()`, and `live.*` (mockLive.ts).
  * Nothing here talks to a venue; nothing here is evidence that the real backend behaves the same way.
  */
 import dydxBookRaw from '../../../../packages/derivatives/test/fixtures/dydx/orderbook-BTC-USD.json?raw';
@@ -29,6 +32,7 @@ import { freeCollateralAfterOrder, initialMargin } from '../../../../packages/de
 import { PaperAccount } from '../../../../packages/derivatives/src/paper.ts';
 import { checkOrder } from '../../../../packages/derivatives/src/risk.ts';
 import { stepAt, worstPrice as worstPriceOf } from './dec';
+import { createLiveMock, type LiveHooks } from './mockLive';
 import { aggregateBars, type Bar } from './reducers';
 import type { Book, Candle, CompareRow, Instrument, Interval, Liquidity, OrderRequest, Position, PublicTrade, RiskPolicy, Ticker, VenueId, VenueInfo } from './types';
 import { INTERVAL_MS } from './types';
@@ -474,6 +478,26 @@ class MockStream extends EventTarget {
   close(): void { this.readyState = 2; if (this.timer) clearTimeout(this.timer); STREAMS.delete(this); }
 }
 
+/** controlled live trading (mockLive.ts) on top of the same simulated markets */
+const LIVE = createLiveMock({ sim: (id) => sim(id), fresh: (s) => fresh(s as Sim), priceProblem: (venue, tick, p) => HL_SIG(venue, D.from(tick), p),
+  worstPrice: (ref, side, bps, tick, venue) => D.str(worstPriceOf(D.from(ref), side, bps, D.from(tick), venue)) });
+/** the stream of one venue account: `status` and `account` first, then every event of the account */
+class LiveMockStream extends EventTarget {
+  static readonly CONNECTING = 0; static readonly OPEN = 1; static readonly CLOSED = 2;
+  readonly CONNECTING = 0; readonly OPEN = 1; readonly CLOSED = 2;
+  readonly url: string; readonly withCredentials = false;
+  readyState = 0;
+  onopen: ((e: Event) => void) | null = null; onmessage: ((e: MessageEvent) => void) | null = null; onerror: ((e: Event) => void) | null = null;
+  private off: (() => void) | null = null;
+  constructor(url: string) {
+    super();
+    this.url = url;
+    setTimeout(() => { if (this.readyState === 2) return; this.readyState = 1; this.dispatchEvent(new Event('open'));
+      this.off = LIVE.subscribe(url, (event, data) => { if (this.readyState === 1) this.dispatchEvent(new MessageEvent(event, { data: JSON.stringify(data) })); }); }, 80);
+  }
+  close(): void { this.readyState = 2; this.off?.(); }
+}
+
 const json = (status: number, j: unknown): Response => new Response(JSON.stringify(j), { status, headers: { 'content-type': 'application/json' } });
 const out = (o: Outcome) => json(o.status, o.json);
 async function route(method: string, path: string, q: URLSearchParams, b: any, headers: Headers): Promise<Response> {
@@ -482,6 +506,7 @@ async function route(method: string, path: string, q: URLSearchParams, b: any, h
   if (path === '/auth/logout') return json(200, {});
   if (path === '/settings') return json(200, { locale: 'fr', currency: 'CAD', hideBalances: false, prices: true });
   if (!path.startsWith('/derivatives')) return json(503, { error: 'mock', message: 'mock mode: only the Futures terminal is simulated' });
+  if (path.startsWith('/derivatives/live/')) return out(LIVE.route(method, path, b, headers));
   const p = path.slice('/derivatives'.length);
   const unknown = () => json(404, { error: 'unknown_instrument', message: 'unknown instrument' });
   if (venue && !VENUES.some((v) => v.id === venue)) return json(404, { error: 'unknown_venue', message: `unknown venue ${venue}` });
@@ -565,7 +590,7 @@ function watch(account: string, venue: VenueId) {
     positions, openOrders: [], ts: now, source: 'venue' };
 }
 
-declare global { interface Window { __spwMock?: { setRate: (n: number) => void; stale: () => void; reconnect: () => void; resume: () => void; accounts: () => number } } }
+declare global { interface Window { __spwMock?: { setRate: (n: number) => void; stale: () => void; reconnect: () => void; resume: () => void; accounts: () => number; live: LiveHooks } } }
 
 export function installMock(): void {
   PROFILES = profiles();
@@ -585,9 +610,14 @@ export function installMock(): void {
   };
   const RealES = window.EventSource;
   window.EventSource = new Proxy(RealES, { construct(target, args: [string, EventSourceInit?]) {
-    return String(args[0]).includes('/api/v1/derivatives/stream') ? (new MockStream(String(args[0])) as unknown as EventSource) : new target(...args);
+    const url = String(args[0]);
+    if (LIVE.isStream(url)) return new LiveMockStream(url) as unknown as EventSource;
+    return url.includes('/api/v1/derivatives/stream') ? (new MockStream(url) as unknown as EventSource) : new target(...args);
   } });
   setInterval(worker, 1000);
+  setInterval(LIVE.step, 1000);
+  LIVE.installPasskey();
+  if (q.get('mainnet') === '1') LIVE.hooks.mainnet(true);   // `&mainnet=1`: the simulated server setting SPW_DERIV_LIVE_MAINNET starts on
   const freeze = (v: boolean) => { for (const s of SIMS.values()) s.frozen = v; };
   window.__spwMock = {
     setRate: (n) => { RATE = Math.max(1, Math.min(60, n)); },
@@ -595,6 +625,7 @@ export function installMock(): void {
     reconnect: () => { freeze(true); for (const s of STREAMS) s.drop(); setTimeout(() => { freeze(false); for (const s of STREAMS) s.up(); }, 2500); },
     resume: () => { freeze(false); for (const s of STREAMS) s.up(); },
     accounts: () => ACCTS.size,
+    live: LIVE.hooks,
   };
   console.info('[SP Wallet] mock mode: derivatives API simulated in the browser from recorded fixtures — no backend, no venue.');
 }
