@@ -12,7 +12,7 @@ import type { SwapProvider } from './types.ts';
 const OFF_BY_DEFAULT = new Set(['debridge']);
 const POLICY: Record<string, SwapProvider['policy']> = {
   // keyless LI.FI allows 75 route requests per 2 hours per IP: spend them slowly; a key lifts this (LIFI_API_KEY)
-  lifi: { ratePerSec: 0.01, burst: 6, timeoutMs: 3500 },
+  lifi: { ratePerSec: 0.01, burst: 6, timeoutMs: 3500, scarce: true },
   debridge: { timeoutMs: 4500 },
 };
 export function createEnabledProviders(env: ProviderEnv = {}): SwapProvider[] {

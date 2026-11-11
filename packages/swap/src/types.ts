@@ -108,7 +108,9 @@ export interface HttpClient {
 export interface SwapProvider {
   id: string; name: string;
   /** provider-specific runtime limits (rate, timeout) that override the defaults, e.g. a keyless tier's quota */
-  policy?: { timeoutMs?: number; ratePerSec?: number; burst?: number };
+  policy?: { timeoutMs?: number; ratePerSec?: number; burst?: number;
+    /** tight request quota: only asked for direct cross-chain requests, never for the legs of a composed route or same-chain pairs */
+    scarce?: boolean };
   capabilities(): ProviderCapabilities;
   /** cheap, local pre-filter (no network): can this provider possibly serve the pair? */
   supportsPair(from: AssetRef, to: AssetRef): boolean;

@@ -63,12 +63,12 @@ export class SwapRouter {
     const hubJobs = hubs.map(async (hub) => {
       // leg 1 delivers the intermediate asset to the wallet itself; leg 2 spends only what leg 1 guarantees
       const hubRecipient = hub.network === req.from.network ? req.sender : req.recipient;
-      const leg1 = await this.agg.collect({ ...req, to: { network: hub.network, asset: hub.asset }, recipient: hubRecipient }, { deadlineMs: Math.floor(deadline * 0.5), signal: opts.signal });
+      const leg1 = await this.agg.collect({ ...req, to: { network: hub.network, asset: hub.asset }, recipient: hubRecipient }, { deadlineMs: Math.floor(deadline * 0.5), signal: opts.signal, role: 'leg' });
       for (const q of leg1.quotes) this.observe(q, 0);
       const best1 = leg1.quotes.sort((a, b) => (a.minAmountOut > b.minAmountOut ? -1 : 1))[0];
       if (!best1) return;
       const leg2 = await this.agg.collect({ from: { network: hub.network, asset: hub.asset }, to: req.to, amountIn: best1.minAmountOut, sender: hubRecipient, recipient: req.recipient, slippageBps: req.slippageBps },
-        { deadlineMs: remaining(), signal: opts.signal });
+        { deadlineMs: remaining(), signal: opts.signal, role: 'leg' });
       for (const q of leg2.quotes) this.observe(q, 0);
       const best2 = leg2.quotes.sort((a, b) => (a.minAmountOut > b.minAmountOut ? -1 : 1))[0];
       if (!best2) return;
