@@ -249,3 +249,22 @@ Live trading exists for Hyperliquid perpetuals in `MANUAL_LIVE` only, and ships 
   read-only registry used by market data and paper trading still exposes no trading object.
 - Mainnet: three locks — the adapter's `allowMainnetExchange`, set only from the server setting `SPW_DERIV_LIVE_MAINNET=on`
   (default off), and an authorized account.
+
+## Derivative mandate (`MANDATE_LIVE`, V6, Hyperliquid) — as built
+
+Full description: `docs/v6/DERIVATIVE-MANDATE.md`. Differences from the text above ("Signing", "Controlled live"), all deliberate:
+
+- A mandate is **not** a mode of the authorization: the authorization stays `MANUAL_LIVE` (the signer still refuses an
+  authorization whose mode is `MANDATE_LIVE`), and a separate canonical object (`SPW-VENUE-MANDATE-v1`), approved with one
+  passkey assertion, extends it. An account holds both: `mode: "MANUAL_LIVE"`, `modes: ["MANUAL_LIVE", "MANDATE_LIVE"]`.
+- Signer endpoints `POST /venue/mandate/approve | /venue/mandate/sign | /venue/mandate/revoke`
+  (`services/isolated-signer/src/venue-mandate.ts`); `/status` lists `venueMandates`. `/venue/sign` is unchanged.
+- The signer now enforces position and gross-exposure limits itself, from its own read of the venue's public info endpoint
+  (`venue-read.ts` — the signer's second kind of outbound request, after exchange prices) and its own prices; it fails
+  closed when it cannot read. `deriv_mandates` exists.
+- Revoking or letting a mandate expire stops new exposure at once and leaves 24 h in which cancels and reduce-only orders
+  are still signed; revoking the authorization stops everything.
+- Mainnet: a fourth lock for autonomous trading, the server setting `SPW_DERIV_MANDATE_MAINNET=on` (default off), on top of
+  `SPW_DERIV_LIVE_MAINNET=on`.
+- The agent runtime reaches live trading through `services/api/src/derivatives/mandate.ts` only; no HTTP route places a
+  mandate order.

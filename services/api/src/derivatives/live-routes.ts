@@ -7,7 +7,8 @@ import { RiskPolicySchema } from '@spw/derivatives';
 import { jurisdictionAck } from '@spw/derivatives/live';
 import { UserError } from '../config.ts';
 import { venueFailure } from './data.ts';
-import { ApproveAuthorizationSchema, AssertionBodySchema, AuthorizationBodySchema, CreateLiveAccountSchema, HaltBodySchema, LeverageBodySchema, RevokeBodySchema, type LiveService } from './exec.ts';
+import { ApproveAuthorizationSchema, ApproveMandateSchema, AssertionBodySchema, AuthorizationBodySchema, CreateLiveAccountSchema, HaltBodySchema, LeverageBodySchema, MandateBodySchema, RevokeBodySchema, type LiveService } from './exec.ts';
+import { liveLocale } from './live-texts.ts';
 import { live } from './live.ts';
 import { CloseBodySchema, OrderBodySchema } from './paper.ts';
 
@@ -29,7 +30,9 @@ export function liveRoutes(app: FastifyInstance, svc: LiveService = live()): voi
   /** a venue that cannot be read is a 503, a request it refuses a 422 — never a 500 */
   const run = <T>(fn: (req: FastifyRequest, reply: FastifyReply) => Promise<T>) => async (req: FastifyRequest, reply: FastifyReply): Promise<T> => { try { return await fn(req, reply); } catch (e) { throw venueFailure(e); } };
 
-  app.get(`${P}/config`, run(async () => svc.config()));
+  /** `?locale=fr|en` selects the language of the server-authored sentences (default en); codes never change */
+  const locale = (req: FastifyRequest) => liveLocale((req.query as { locale?: unknown } | undefined)?.locale);
+  app.get(`${P}/config`, run(async (req) => svc.config(locale(req))));
   app.get(`${P}/jurisdiction`, run(async (req) => {
     const q = z.object({ venue: z.literal('hyperliquid').default('hyperliquid') }).parse(req.query);
     return { venue: q.venue, fr: jurisdictionAck(q.venue, 'fr'), en: jurisdictionAck(q.venue, 'en') };
@@ -39,13 +42,20 @@ export function liveRoutes(app: FastifyInstance, svc: LiveService = live()): voi
   app.get(`${P}/accounts`, run(async () => ({ accounts: await svc.list(), ts: svc.now() })));
   app.post(`${P}/accounts`, run(async (req) => svc.createAccount(CreateLiveAccountSchema.parse(req.body))));
   app.get(`${P}/accounts/:id`, run(async (req) => svc.get(id(req))));
-  app.get(`${P}/accounts/:id/collateral`, run(async (req) => svc.collateral(id(req))));
+  app.get(`${P}/accounts/:id/collateral`, run(async (req) => svc.collateral(id(req), locale(req))));
 
   // enabling: prepare (authorization + acknowledgement text + WebAuthn request) → approve (assertion) ; disabling: revoke (no passkey)
   app.post(`${P}/accounts/:id/authorization/prepare`, run(async (req) => svc.prepareAuthorization(id(req), AuthorizationBodySchema.parse(req.body))));
   app.post(`${P}/accounts/:id/authorization/approve`, run(async (req) => svc.approveAuthorization(id(req), ApproveAuthorizationSchema.parse(req.body))));
   app.post(`${P}/accounts/:id/authorization/revoke`, run(async (req) => svc.revoke(id(req), RevokeBodySchema.parse(req.body ?? {}))));
   app.post(`${P}/accounts/:id/policy`, run(async (req) => svc.setPolicy(id(req), RiskPolicySchema.strict().parse(req.body))));
+
+  // MANDATE_LIVE: prepare (canonical mandate + acknowledgement text + WebAuthn request) → approve (assertion) ; revoke (no passkey).
+  // There is NO route that places a mandate order: only the server-side agent runtime can (derivatives/mandate.ts).
+  app.get(`${P}/accounts/:id/mandate`, run(async (req) => svc.mandateStatus(id(req))));
+  app.post(`${P}/accounts/:id/mandate/prepare`, run(async (req) => svc.prepareMandate(id(req), MandateBodySchema.parse(req.body))));
+  app.post(`${P}/accounts/:id/mandate/approve`, run(async (req) => svc.approveMandate(id(req), ApproveMandateSchema.parse(req.body))));
+  app.post(`${P}/accounts/:id/mandate/revoke`, run(async (req) => svc.revokeMandate(id(req), RevokeBodySchema.parse(req.body ?? {}))));
 
   // orders: preview (nothing stored) → propose (stored, WebAuthn request over the order hash) → approve (assertion) ; cancel (no passkey)
   app.post(`${P}/accounts/:id/orders/preview`, run(async (req) => svc.preview(id(req), OrderBodySchema.parse(req.body))));
@@ -75,7 +85,8 @@ export function liveRoutes(app: FastifyInstance, svc: LiveService = live()): voi
     reply.hijack();
     reply.raw.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', connection: 'keep-alive', 'x-accel-buffering': 'no' });
     const write = (chunk: string): void => { if (!reply.raw.writableEnded && !reply.raw.destroyed) reply.raw.write(chunk); };
-    write(`event: status\ndata: ${JSON.stringify({ mode: first.mode, halt: first.halted, divergence: first.divergence, ts: svc.now() })}\n\n`);
+    // `halt` is the OWNER's halt (as in every later `status` and `account` event); `halted` is the effective reason new orders are refused
+    write(`event: status\ndata: ${JSON.stringify({ mode: first.mode, modes: first.modes, halt: first.halt, halted: first.halted, divergence: first.divergence, ts: svc.now() })}\n\n`);
     write(`event: account\ndata: ${JSON.stringify({ ...first.venueState, divergence: first.divergence, halt: first.halt, mode: first.mode })}\n\n`);
     const off = svc.subscribe(account, (ev) => write(`event: ${ev.event}\ndata: ${JSON.stringify(ev.data)}\n\n`));
     const beat = setInterval(() => write(': keep-alive\n\n'), 15_000);

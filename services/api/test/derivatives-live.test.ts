@@ -610,7 +610,11 @@ describe('asset table and mainnet locks', () => {
   it('mainnet with the server setting off: read-only account, every proposal refused with a clear message, the mainnet exchange endpoint never called; testnet works', async () => {
     const w = world();
     expect(w.svc.config()).toMatchObject({ mainnetEnabled: false, mandateLive: { available: false } });
+    // v6: a mainnet venue account is not even created while the setting is off (it was created READ_ONLY before); one that exists stays, read-only
+    expect(await refusal(w.svc.createAccount({ venue: 'hyperliquid', network: 'mainnet', label: 'm' }))).toMatchObject({ code: 'mainnet_disabled', status: 403 });
+    w.flags.mainnet = true;
     const main = await account(w, { network: 'mainnet' });
+    w.flags.mainnet = false;
     expect((await w.svc.get(main))).toMatchObject({ mode: 'READ_ONLY', network: 'mainnet', mainnetEnabled: false, tradable: false, agentAddress: keys.venueKey('hyperliquid', 'mainnet').address });
     const r = await refusal(w.svc.prepareAuthorization(main, ex.AuthorizationBodySchema.parse({ policy: POLICY, days: 30, locale: 'fr' })));
     expect(r).toMatchObject({ code: 'mainnet_disabled', status: 403 });

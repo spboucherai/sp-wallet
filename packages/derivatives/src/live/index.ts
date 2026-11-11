@@ -5,6 +5,7 @@
 export * from './canonical.ts';
 export * from './hl-assets.ts';
 export * from './jurisdiction.ts';
+export * from './mandate.ts';
 export { D, type DecStr } from '../decimal.ts';
 export { VenueError, type OrderRequest } from '../models.ts';
 export type { SignRequest } from '../venue.ts';

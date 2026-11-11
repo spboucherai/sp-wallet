@@ -127,3 +127,63 @@ divergence, halt, mode, ts, source: "venue" }` (first, then after every reconcil
   `423 halted`; `429 too_many_streams`; `503 asset_table_mismatch|venue_unavailable|venue_rate_limited|signer_unreachable`.
 - `venueState.error` non-null = the venue could not be read: show the account as unreadable, never as empty.
 - Collateral: `GET …/collateral` is read-only. Deposits and withdrawals are not built (docs/v4/venues/hyperliquid.md, section 14).
+
+## V6 — `MANDATE_LIVE`, locale, and the fixes that came with it (2026-11-11)
+
+This section supersedes, where they differ, the sentences above that say `MANDATE_LIVE` does not exist. Design and proof:
+`docs/v6/DERIVATIVE-MANDATE.md`. Everything above about manual orders is unchanged.
+
+### Changed answers (existing routes)
+
+| Route | Change |
+|---|---|
+| `GET /config` | accepts `?locale=fr\|en` (default `en`). New fields: `locale`, `mainnet: { enabled, code: "mainnet_disabled"\|null, reason: string\|null }`, `reasons: { <code>: { fr, en } }` (codes: `mainnet_disabled`, `mandate_mainnet_disabled`, `mandate_unavailable`), `modes` now `["READ_ONLY","MANUAL_LIVE","MANDATE_LIVE"]`, `mandateLive: { available: true, code: null, reason: null, mainnet: { enabled, code: "mandate_mainnet_disabled"\|null, reason }, bounds: { maxDays: 30, maxOrdersPerHour: 60, maxLeverageChangesPerDay: 20, maxInstruments: 8, windDownSeconds: 86400, orderTtlMs: 30000 } }`. `mainnetEnabled` stays. |
+| `POST /accounts` | `network: "mainnet"` while mainnet is off → `403 mainnet_disabled` (message = `reasons.mainnet_disabled.en`). It used to create a READ_ONLY account. An existing mainnet account stays. |
+| `GET /accounts`, `GET /accounts/:id` (and every answer that is an `AccountDetail`) | new fields `modes: string[]` (`["READ_ONLY"]`, `["MANUAL_LIVE"]` or `["MANUAL_LIVE","MANDATE_LIVE"]`), `mandate: MandateSummary\|null`, `pendingMandate: { mandateId, preparedAt }\|null`. `mode` is unchanged and stays `MANUAL_LIVE` under a mandate. |
+| `GET /accounts/:id/collateral` | accepts `?locale=`; adds `locale`; `deposits.how` / `withdrawals.how` in that language. |
+| `POST /accounts/:id/authorization/prepare` | the body's `locale` now also selects the language of `agent.can[]`, `agent.cannot[]`, `agent.note`, `whatIsSigned.byMainKey`, `whatIsSigned.byPasskey`; adds `locale`. |
+| `POST /accounts/:id/authorization/revoke` | body accepts `locale` (default `en`); adds `cancelError: { code, message }\|null` — why cancel-all could not run (`cancelled` is then `null`); `venueAgent` in that language; adds `locale`. `warning` is English only. Also revokes the account's mandate (no wind-down). |
+| `POST /accounts/:id/orders` (and `/close`) | a concurrent duplicate with the same `Idempotency-Key` now waits for the first call and returns the built proposal (`options` non-null, `idempotent: true`). `estimate` is returned on every idempotent replay (it was `null`); `null` only for a proposal that was refused. |
+| `POST /accounts/:id/orders/:clientId/approve` | when it answers `423 halted` (halt or divergence, non-reduce-only order) or `503 asset_table_mismatch`, the proposal is now ended: `state: "cancelled"`, `final: true`, `reason: "withdrawn: …"` (it used to stay `risk_checked`). |
+| `GET /accounts/:id/stream` | first `status` event: `{ mode, modes, halt, halted, divergence, ts }` where `halt` is the OWNER's halt text or `null` (as in `account` events and later `status` events — it used to carry the effective reason) and `halted` is the effective reason. The `status` events of halt and resume are `{ halt, halted, ts }` (resume now emits one). Mandate approval / revocation emit `status { mode, modes, mandate: <id>\|null, ts }`. |
+
+**Locale shape.** Every server-authored sentence stays a plain string in the same field as before, in the language asked
+for; the answer carries `locale: "fr"|"en"` next to it; machine-readable codes (`error`, `code`, states) never change with
+the locale. Selection: `?locale=` on `GET` routes, the body's `locale` on `POST …/prepare` and `…/revoke`. Default `en` =
+the exact strings these routes returned before. Error `message`s of refusals are English; for the mainnet refusals use
+`config.reasons[<error code>][locale]`.
+
+### `MANDATE_LIVE` routes (owner session, CSRF header on writes)
+
+| Route | Body | Answer |
+|---|---|---|
+| `GET /accounts/:id/mandate` | — | `{ modes, mandate: MandateSummary\|null, pendingMandate, signer: SignerMandate\|null, ts }` |
+| `POST /accounts/:id/mandate/prepare` | `MandateBody` | `{ mandate: VenueMandate, hash, acknowledgement: Ack, locale, authorization: { id, hash, expiresAt, policy: VenuePolicy }, warning: string, enforcedBySigner: string[], trustedBySigner: string[], notEnforced: string[], windDown: { seconds: 86400, text }, whatIsSigned: { byPasskey }, venueState, options, ts }` |
+| `POST /accounts/:id/mandate/approve` | `{ assertion, acknowledged: true }` | `AccountDetail` (`modes` includes `MANDATE_LIVE`) |
+| `POST /accounts/:id/mandate/revoke` | `{ cancelOpenOrders?: boolean, locale?: "fr"\|"en" }` — no passkey | `AccountDetail & { cancelled: CancelAll\|null, cancelError: { code, message }\|null, locale, windDown: { until /* ms */, text, openPositions, openOrders } }` |
+
+There is **no route that places a mandate order**; orders come from the server-side agent runtime only and appear in
+`orders` with `origin: "mandate"` (and in the `order` stream events).
+
+```ts
+MandateBody   { instruments: [{ instrument, maxLeverage /* 1…20 */, maxPositionNotional: DecStr }]  // 1…8, ⊂ the authorization's
+                maxOrderNotional, maxGrossExposure, maxDailyTurnover, floorEquity: DecStr  // all > 0
+                maxOrdersPerDay /* 1…500 */, maxOrdersPerHour /* 1…60 */, maxPriceDeviationBps? /* default: the authorization's */,
+                days /* 1…30 */, locale?: "fr"|"en", strategySha256 /* 64 hex */, agentId /* [A-Za-z0-9._:-]{1,64} */ }
+VenueMandate  { v: 1, mandateId, authorizationId, keyId, venue, network, account, agentAddress, strategySha256, agentId, instruments,
+                maxOrderNotional, maxGrossExposure, maxOrdersPerDay, maxOrdersPerHour, maxDailyTurnover, floorEquity, maxPriceDeviationBps,
+                createdAt, expiresAt /* unix SECONDS */, ackSha256 }
+MandateSummary{ id, hash, authorizationId, agentId, strategySha256, limits: VenueMandate, phase: "active"|"wind_down"|"ended", active: boolean,
+                createdAt, expiresAt, expired, approvedAt, revokedAt, windDownUntil /* ms */ | null, ackSha256 }
+SignerMandate { mandate, hash, approvedAt, revoked, revokedAt, expired, phase, windDownUntil /* unix s */ | null,
+                today: { orders, reduceOnly, cancels, leverage, turnover: DecStr }, ordersLastHour, pendingOrders }
+```
+
+Before the passkey prompt of a mandate, show: `warning`, every field of `mandate` (the limits, the strategy hash, the agent,
+the expiry), `acknowledgement.text` in full, `enforcedBySigner`, `trustedBySigner`, `notEnforced`, `windDown.text`. The
+passkey signs `hash` (SHA-256 of the canonical mandate, which contains `ackSha256`).
+
+Errors: `403 mainnet_disabled | mandate_mainnet_disabled`; `400 bad_policy` (wider than the authorization, or outside the
+bounds); `409 bad_state` (a mandate is already active / nothing prepared / no mandate to revoke); `422 mode_read_only |
+authorization_expired | signer_<code>`; `423 halted` (signer emergency halt at prepare); `503 mandate_unavailable |
+asset_table_mismatch`. A refused approval consumes the preparation: prepare again.

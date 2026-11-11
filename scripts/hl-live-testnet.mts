@@ -142,11 +142,9 @@ try {
   check(acct.mode === 'READ_ONLY' && acct.tradable === false, 'a new venue account is READ_ONLY');
   const refusedRO = await api('POST', `${P}/accounts/${id}/orders`, { instrument: BTC, side: 'buy', type: 'limit', size: SIZE, price: '50000' }, `ro-${Date.now()}`);
   check(refusedRO.status === 422 && refusedRO.json.error === 'mode_read_only', `an order on a READ_ONLY account is refused (${refusedRO.status} ${refusedRO.json.error})`);
-  const mainAcct = await ok('POST', `${P}/accounts`, { venue: 'hyperliquid', network: 'mainnet', label: 'HL mainnet' }).catch((e: Error) => ({ error: e.message }));
-  if (!('error' in mainAcct)) {
-    const m = await api('POST', `${P}/accounts/${mainAcct.id}/authorization/prepare`, { policy: { allowedInstruments: [BTC], maxLeverage: 2, maxOrderNotional: '20', maxPositionNotional: '40', maxGrossExposure: '60', maxOrdersPerDay: 5, maxPriceDeviationBps: 300 }, days: 1, locale: 'en' });
-    check(m.status === 403 && m.json.error === 'mainnet_disabled', `mainnet authorization with the setting off: ${m.status} ${m.json.error} — "${String(m.json.message).slice(0, 110)}…"`);
-  } else log(`  (mainnet account not created: ${mainAcct.error.slice(0, 120)} — the mainnet guard of this script refused the venue read)`);
+  // v6: with the mainnet setting off a mainnet venue account is not even created (it used to be created READ_ONLY)
+  const mainAcct = await api('POST', `${P}/accounts`, { venue: 'hyperliquid', network: 'mainnet', label: 'HL mainnet' });
+  check(mainAcct.status === 403 && mainAcct.json.error === 'mainnet_disabled', `mainnet venue account with the setting off: ${mainAcct.status} ${mainAcct.json.error} — "${String(mainAcct.json.message).slice(0, 110)}…"`);
 
   // funding, when asked for
   let equity = D.from(acct.venueState.state?.equity ?? '0');

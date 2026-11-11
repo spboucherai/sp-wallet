@@ -14,16 +14,18 @@ import { generateAuthenticationOptions } from '@simplewebauthn/server';
 import { z } from 'zod';
 import { toB64u } from '@spw/core';
 import {
-  checkOrder, D, hlFormatPrice, initialMargin, RiskPolicySchema, VenueError,
+  checkOrder, D, hlFormatPrice, initialMargin, OrderRequestSchema, RiskPolicySchema, VenueError,
   type AccountState, type Book, type DecStr, type Fill, type Instrument, type Order, type OrderRequest, type Position, type RiskPolicy, type RiskResult, type RiskUsage, type Ticker,
 } from '@spw/derivatives';
 import {
   hex, hlCloid, hlPinnedAsset, HL_PINNED_AT, HL_PINNED_ASSETS, jurisdictionAck, validateVenueAuthorization, venueAgentWireName, venueAuthorizationHash, venueLeverageHash, venueOrderHash, venueOrderNotional,
   VenuePolicySchema, VENUE_AUTH_MAX_DAYS, VENUE_POLICY_BOUNDS,
-  type HlNetwork, type JurisdictionAck, type SignRequest, type VenueAuthorization, type VenueLeverage, type VenueOrder, type VenuePolicy,
+  validateVenueMandate, VENUE_MANDATE_BOUNDS, VENUE_MANDATE_MAX_DAYS, VENUE_MANDATE_WIND_DOWN_S, venueMandateHash, venueMandatePhase, VenueMandateSchema,
+  type HlNetwork, type JurisdictionAck, type SignRequest, type VenueAuthorization, type VenueLeverage, type VenueMandate, type VenueMandatePhase, type VenueOrder, type VenuePolicy,
 } from '@spw/derivatives/live';
 import { UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
+import { LIVE_REASONS, liveReason, liveTexts, type LiveLocale } from './live-texts.ts';
 import { LIVE_ACTION_TTL_MS, type LiveVenue, type LiveVenues } from './live-venue.ts';
 import { CloseBodySchema, DEFAULT_SLIPPAGE_BPS, OrderBodySchema, worstPrice, type OrderBody } from './paper.ts';
 
@@ -45,8 +47,18 @@ export interface LiveSignerPort {
   venueSign(p: { authorizationId: string; sign: unknown; context?: unknown; assertion?: unknown }): Promise<{ signature: { r: string; s: string; v: number }; signer: string; kind: string; hash: string }>;
   venueRevoke(authorizationId: string): Promise<{ revoked: true; revokedAt: string }>;
 }
+/** the signer's derivative-mandate endpoints (services/isolated-signer/src/venue-mandate.ts) */
+export interface MandateSignerPort {
+  venueMandateApprove(mandate: unknown, assertion: unknown): Promise<{ mandateId: string; hash: string; authorizationId: string }>;
+  venueMandateSign(p: { mandateId: string; sign: unknown; context?: unknown }): Promise<{ signature: { r: string; s: string; v: number }; signer: string; kind: string; hash: string; mandateId: string; phase: string }>;
+  venueMandateRevoke(mandateId: string): Promise<{ revoked: true; revokedAt: string; windDownUntil: number }>;
+}
 export interface LiveDeps {
   venues: LiveVenues; signer: LiveSignerPort; now: () => number; rpId: string;
+  /** MANDATE_LIVE: absent = mandates are unavailable (every mandate route answers 503 mandate_unavailable) */
+  mandateSigner?: MandateSignerPort;
+  /** server setting SPW_DERIV_MANDATE_MAINNET=on (default off): autonomous trading on mainnet needs it AND mainnetEnabled */
+  mandateMainnetEnabled?: () => boolean;
   /** server setting SPW_DERIV_LIVE_MAINNET=on (default off) */
   mainnetEnabled: () => boolean;
   /** enrolled passkeys, for the WebAuthn request options */
@@ -73,13 +85,27 @@ export const AssertionBodySchema = z.strictObject({ assertion: z.record(z.string
 export const CreateLiveAccountSchema = z.strictObject({ venue: z.literal('hyperliquid'), network: z.enum(['mainnet', 'testnet']), label: z.string().trim().min(1).max(60).default('Hyperliquid') });
 export const LeverageBodySchema = z.strictObject({ instrument: z.string().min(3).max(120), leverage: z.number().int().min(1).max(VENUE_POLICY_BOUNDS.maxLeverage), marginMode: z.enum(['cross', 'isolated']).default('cross') });
 export const HaltBodySchema = z.strictObject({ reason: z.string().trim().max(200).default('') });
-export const RevokeBodySchema = z.strictObject({ cancelOpenOrders: z.boolean().default(false) });
+export const RevokeBodySchema = z.strictObject({ cancelOpenOrders: z.boolean().default(false), locale: z.enum(['fr', 'en']).default('en') });
+/** the limits of a derivative mandate, as the owner chooses them (everything else of the canonical mandate comes from the account and its authorization) */
+export const MandateBodySchema = z.strictObject({
+  ...VenueMandateSchema.pick({ instruments: true, maxOrderNotional: true, maxGrossExposure: true, maxOrdersPerDay: true, maxOrdersPerHour: true, maxDailyTurnover: true, floorEquity: true, strategySha256: true, agentId: true }).shape,
+  /** default: the band of the authorization */
+  maxPriceDeviationBps: VenueMandateSchema.shape.maxPriceDeviationBps.optional(), days: z.number().int().min(1).max(VENUE_MANDATE_MAX_DAYS), locale: z.enum(['fr', 'en']).default('en'),
+});
+export const ApproveMandateSchema = z.strictObject({ assertion: z.record(z.string(), z.unknown()), acknowledged: z.literal(true) });
+/** who places a mandate order: the strategy version and the agent the mandate was approved for, and the order's idempotency key */
+export const MandateOrderCtxSchema = z.strictObject({ strategySha256: z.string().regex(/^[0-9a-f]{64}$/), agentId: z.string().regex(/^[A-Za-z0-9._:-]{1,64}$/), clientId: z.string().regex(/^[A-Za-z0-9._:-]{8,100}$/) });
+export type MandateOrderCtx = z.infer<typeof MandateOrderCtxSchema>;
+/** venue expiry of an order signed under a mandate: short, because the signer counts a signed order as exposure until it has expired */
+export const MANDATE_ACTION_TTL_MS = 30_000;
+interface MandateRow { id: string; account_id: string; authorization_id: string; state: 'prepared' | 'consumed' | 'failed' | 'active' | 'revoked'; mandate: VenueMandate; hash: string;
+  ack: Pick<JurisdictionAck, 'locale' | 'sha256' | 'version'>; prepared_at: Date; approved_at: Date | null; revoked_at: Date | null }
 
 const canon = (x: string): DecStr => D.str(D.from(x));
 const canonN = (x: string | null): DecStr | null => (x === null ? null : canon(x));
 const dayStart = (now: number): number => Math.floor(now / 86_400_000) * 86_400_000;
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 300);
-const MAINNET_OFF = 'live trading on Hyperliquid MAINNET is disabled on this server (SPW_DERIV_LIVE_MAINNET is not "on"): nothing was built, signed or sent. The testnet account works.';
+const MAINNET_OFF = LIVE_REASONS.mainnet_disabled.en;
 
 /** API-side risk policy derived from the authorization the owner approved; every field can be tightened later, none widened past it */
 export function liveRiskPolicy(vp: VenuePolicy, network: HlNetwork): RiskPolicy {
@@ -103,6 +129,8 @@ export class LiveService {
   readonly deps: LiveDeps;
   readonly now: () => number;
   private readonly listeners = new Map<string, Set<(ev: LiveEvent) => void>>();
+  /** proposals being built right now, by account and idempotency key: a concurrent duplicate waits for the first instead of answering half-built */
+  private readonly building = new Map<string, Promise<unknown>>();
   constructor(deps: LiveDeps) { this.deps = deps; this.now = deps.now; }
 
   // ------------------------------------------------------------------ stream (same shape as the market hub: event + data)
@@ -197,16 +225,29 @@ export class LiveService {
     } catch (e) { return { state: null, positions: [], openOrders: [], error: msg(e), ts: this.now(), source: 'venue' }; }
   }
 
-  config() {
+  config(locale: LiveLocale = 'en') {
+    const mainnet = this.deps.mainnetEnabled(), mandates = this.deps.mandateSigner !== undefined, mandateMainnet = mainnet && (this.deps.mandateMainnetEnabled?.() ?? false);
+    const mandateCode = !mandates ? 'mandate_unavailable' as const : null;
     return {
-      mainnetEnabled: this.deps.mainnetEnabled(), venues: [{ venue: 'hyperliquid' as const, networks: ['testnet', 'mainnet'] as const }], modes: ['READ_ONLY', 'MANUAL_LIVE'] as const,
-      mandateLive: { available: false, reason: 'MANDATE_LIVE (agents trading derivatives) is not part of this delivery; the signer refuses it' },
+      mainnetEnabled: mainnet, locale,
+      /** why mainnet is closed, as a code and as a sentence in the requested locale; null when it is open */
+      mainnet: { enabled: mainnet, code: mainnet ? null : 'mainnet_disabled' as const, reason: mainnet ? null : liveReason('mainnet_disabled', locale) },
+      venues: [{ venue: 'hyperliquid' as const, networks: ['testnet', 'mainnet'] as const }], modes: (mandates ? ['READ_ONLY', 'MANUAL_LIVE', 'MANDATE_LIVE'] : ['READ_ONLY', 'MANUAL_LIVE']) as string[],
+      mandateLive: { available: mandates, code: mandateCode, reason: mandateCode ? liveReason(mandateCode, locale) : null,
+        mainnet: { enabled: mandateMainnet, code: mandateMainnet ? null : 'mandate_mainnet_disabled' as const, reason: mandateMainnet ? null : liveReason('mandate_mainnet_disabled', locale) },
+        bounds: { ...VENUE_MANDATE_BOUNDS, windDownSeconds: VENUE_MANDATE_WIND_DOWN_S, orderTtlMs: MANDATE_ACTION_TTL_MS } },
+      /** every reason code above, in both languages */
+      reasons: LIVE_REASONS,
       pinnedAssets: { pinnedAt: HL_PINNED_AT, mainnet: HL_PINNED_ASSETS.mainnet.map((x) => ({ instrument: `hyperliquid:${x.symbol}`, maxLeverage: x.maxLeverage })), testnet: HL_PINNED_ASSETS.testnet.map((x) => ({ instrument: `hyperliquid:${x.symbol}`, maxLeverage: x.maxLeverage })) },
       bounds: { ...VENUE_POLICY_BOUNDS, maxAuthorizationDays: VENUE_AUTH_MAX_DAYS, orderApprovalTtlMs: LIVE_ACTION_TTL_MS }, ts: this.now(),
     };
   }
 
-  async list() { return (await sql<AccountRow[]>`select * from deriv_accounts order by created_at`).map((a) => this.summary(a)); }
+  async list() {
+    const rows = await sql<AccountRow[]>`select * from deriv_accounts order by created_at`, out = [];
+    for (const a of rows) out.push({ ...this.summary(a), ...(await this.mandateInfo(a)) });
+    return out;
+  }
 
   async get(id: string) {
     const a = await this.account(id);
@@ -220,7 +261,7 @@ export class LiveService {
       sql`select * from (select * from deriv_equity where account_id = ${id} order by ts desc limit 1500) e order by ts`,
     ]);
     return {
-      ...this.summary(a), venueState: venue,
+      ...this.summary(a), ...(await this.mandateInfo(a)), venueState: venue,
       orders: orders.map((r) => this.orderView(r)), actions: actions.map((r) => this.actionView(r)),
       fills: fills.map((f): Fill & { source: 'venue' } => ({ instrument: f.instrument, orderId: f.order_id, clientId: f.client_id, side: f.side, price: canon(f.price), size: canon(f.size), fee: canon(f.fee), feeAsset: f.fee_asset,
         closedPnl: canonN(f.closed_pnl), ts: f.ts.getTime(), id: f.fill_id, liquidation: f.liquidation, source: 'venue' })),
@@ -232,13 +273,12 @@ export class LiveService {
   }
 
   /** read-only: what can be withdrawn / what backs the positions, and where the funding instructions are. Nothing is moved from here. */
-  async collateral(id: string) {
-    const a = await this.account(id), v = await this.venueState(a);
+  async collateral(id: string, locale: LiveLocale = 'en') {
+    const a = await this.account(id), v = await this.venueState(a), t = liveTexts(locale);
     return {
       account: a.account, network: a.network, equity: v.state?.equity ?? null, collateral: v.state?.collateral ?? null, freeCollateral: v.state?.freeCollateral ?? null, marginUsed: v.state?.marginUsed ?? null,
       withdrawable: v.state?.withdrawable ?? null, asset: 'USDC', error: v.error, ts: v.ts, source: 'venue' as const,
-      deposits: { supported: false, how: 'docs/v4/venues/hyperliquid.md, section 14: native USDC on Arbitrum sent by the account itself to the venue bridge (minimum 5 USDC), done by the owner outside this engine' },
-      withdrawals: { supported: false, how: 'not built: needs the user-signed withdraw3 action and an allowlisted destination in the signer policy (same section)' },
+      locale, deposits: { supported: false, how: t.depositsHow }, withdrawals: { supported: false, how: t.withdrawalsHow },
     };
   }
 
@@ -252,6 +292,8 @@ export class LiveService {
 
   /** a venue account is the owner's own address on the venue; it starts READ_ONLY and trades nothing */
   async createAccount(body: z.infer<typeof CreateLiveAccountSchema>) {
+    // a mainnet venue account is not even created while the server keeps mainnet closed (an account that already exists stays, read-only)
+    if (body.network === 'mainnet' && !this.deps.mainnetEnabled()) throw new UserError('mainnet_disabled', MAINNET_OFF, 403);
     const key = await this.venueKey(body.venue, body.network), id = randomUUID(), now = new Date(this.now());
     const ins = await sql`insert into deriv_accounts (id, venue, network, account, agent_address, label, mode, policy, created_at, updated_at)
       values (${id}, ${body.venue}, ${body.network}, ${key.account.toLowerCase()}, ${key.address.toLowerCase()}, ${body.label}, 'READ_ONLY', ${sql.json(READ_ONLY_POLICY as never)}, ${now}, ${now})
@@ -280,13 +322,11 @@ export class LiveService {
     const hash = venueAuthorizationHash(authorization);
     const pending: Pending = { authorization, ack: { locale: ack.locale, sha256: ack.sha256, version: ack.version }, preparedAt: nowMs };
     await sql`update deriv_accounts set pending = ${sql.json(pending as never)}, updated_at = ${new Date(nowMs)} where id = ${id}`;
-    const v = await this.venueState(a);
+    const v = await this.venueState(a), t = liveTexts(body.locale);
     return {
-      authorization, hash: hex(hash), acknowledgement: ack,
-      agent: { address: a.agent_address, name: body.agentName, wireName: venueAgentWireName(authorization), validUntil: authorization.expiresAt * 1000,
-        can: ['place orders', 'cancel orders', 'change leverage'], cannot: ['withdraw', 'transfer to another address'],
-        note: 'On the venue an API wallet could also move collateral between the account\'s own balances; the signer refuses to sign anything but orders, cancels and leverage changes.' },
-      whatIsSigned: { byMainKey: 'one approveAgent action naming the trading key above (the only venue message the wallet key signs)', byPasskey: 'the SHA-256 of this authorization, which includes the hash of the acknowledgement text' },
+      authorization, hash: hex(hash), acknowledgement: ack, locale: body.locale,
+      agent: { address: a.agent_address, name: body.agentName, wireName: venueAgentWireName(authorization), validUntil: authorization.expiresAt * 1000, can: t.can, cannot: t.cannot, note: t.agentNote },
+      whatIsSigned: { byMainKey: t.byMainKey, byPasskey: t.byPasskey },
       venueState: v, options: await this.options(hash), ts: nowMs,
     };
   }
@@ -333,12 +373,19 @@ export class LiveService {
   }
 
   /** stopping never needs a passkey. The signer forgets nothing: a revoked authorization signs nothing, not even a cancel. */
-  async revoke(id: string, body: z.infer<typeof RevokeBodySchema>) {
+  async revoke(id: string, body: { cancelOpenOrders: boolean; locale?: LiveLocale }) {
     const a = await this.account(id);
-    let cancelled: Awaited<ReturnType<LiveService['cancelAll']>> | null = null;
-    if (body.cancelOpenOrders && a.mode === 'MANUAL_LIVE') cancelled = await this.cancelAll(id).catch(() => null);
+    let cancelled: Awaited<ReturnType<LiveService['cancelAll']>> | null = null, cancelError: { code: string; message: string } | null = null;
+    if (body.cancelOpenOrders && a.mode === 'MANUAL_LIVE') {
+      try { cancelled = await this.cancelAll(id); }
+      catch (e) { cancelError = { code: e instanceof UserError ? e.code : 'internal', message: msg(e) }; }          // said to the owner; the revocation goes on
+    }
     if (a.authorization_id) await this.deps.signer.venueRevoke(a.authorization_id);
     const now = new Date(this.now());
+    // a mandate dies with its authorization: no wind-down (the signer signs nothing for a revoked authorization)
+    const ended = await sql<{ id: string }[]>`update deriv_mandates set state = 'revoked', revoked_at = ${now}, updated_at = ${now} where account_id = ${id} and state = 'active' returning id`;
+    for (const m of ended) await this.deps.mandateSigner?.venueMandateRevoke(m.id).catch(() => {});
+    await sql`delete from deriv_mandates where account_id = ${id} and state = 'prepared'`;
     await sql`update deriv_accounts set mode = 'READ_ONLY', policy = ${sql.json({ ...a.policy, mode: 'READ_ONLY' } as never)}, pending = null, revoked_at = ${a.authorization_id ? now : a.revoked_at}, updated_at = ${now} where id = ${id}`;
     await sql`update deriv_orders set state = 'cancelled', status = 'cancelled', final = true, reject_reason = 'withdrawn: the venue authorization was revoked before approval', updated_at = ${now}
       where account_id = ${id} and state = any(${PRE_SUBMIT})`;
@@ -346,8 +393,10 @@ export class LiveService {
     const v = await this.venueState(a);
     this.emit(id, { event: 'status', data: { mode: 'READ_ONLY', ts: now.getTime() } });
     return { ...(await this.get(id)), cancelled,
+      /** why cancel-all could not run (`cancelled` is then null); null when it ran or was not asked for */
+      cancelError,
       warning: v.openOrders.length ? `${v.openOrders.length} order(s) still rest on the venue. The wallet can no longer cancel them (a revoked authorization signs nothing): cancel them in the venue's own interface, or approve a new authorization and cancel.` : null,
-      venueAgent: 'The trading key stays registered at the venue until its expiry, but it exists only in the signer, which now refuses to use it.' };
+      venueAgent: liveTexts(body.locale ?? 'en').venueAgent, locale: body.locale ?? 'en' };
   }
 
   /** the API-side risk policy can be tightened freely; it can never exceed what the passkey-approved authorization allows */
@@ -396,13 +445,13 @@ export class LiveService {
   }
 
   /** live market + the account's REAL state from the venue, then the risk engine with the account's policy */
-  private async check(a: AccountRow, venue: LiveVenue, body: OrderBody, clientId: string) {
+  private async check(a: AccountRow, venue: LiveVenue, body: OrderBody, clientId: string, over: RiskPolicy | null = null) {
     const inst = await venue.instrument(body.instrument);
     const read = async <T>(fn: () => Promise<T>): Promise<T> => { try { return await fn(); } catch (e) { if (e instanceof VenueError) throw new UserError('venue_unavailable', msg(e), 503); throw e; } };
     const [m, state, positions, openOrders, lev] = await Promise.all([venue.market(inst), read(() => venue.adapter.account(a.account)), read(() => venue.adapter.positions(a.account)),
       read(() => venue.adapter.openOrders(a.account)), venue.leverageOf(a.account, inst.symbol)]);
     const now = this.now(), { req, refusal } = this.request(body, inst, m.book, clientId);
-    const policy: RiskPolicy = { ...RiskPolicySchema.parse(a.policy), halt: this.effectiveHalt(a) };
+    const policy: RiskPolicy = { ...RiskPolicySchema.parse(over ?? a.policy), halt: this.effectiveHalt(a) };
     let risk: RiskResult = refusal ?? checkOrder(policy, req, { instrument: inst, account: state, positions, openOrders, book: m.book, ticker: m.ticker, now, usage: await this.usage(a.id, now), leverage: lev.leverage });
     // the signer bounds EVERY order by its notional, reduce-only included (it cannot see positions): said here rather than at the passkey prompt
     const cap = a.venue_authorization?.policy.maxOrderNotional;
@@ -434,9 +483,33 @@ export class LiveService {
    * retry — of this call, of the approval, or of the submission — can never place a second order.
    */
   async propose(id: string, body: OrderBody, key: string, origin: 'owner' | 'close' = 'owner') {
+    // a duplicate that arrives while the first call is still building waits for it, then answers the built proposal
+    const k = `${id}|${key}`, running = this.building.get(k);
+    if (running) {
+      await running.catch(() => {});
+      // (when the first call failed before storing anything — a lock, an unreadable venue — this one simply runs)
+      const [built] = await sql`select client_id from deriv_orders where account_id = ${id} and client_id = ${key}`;
+      if (built) return this.proposalAnswer(await this.settledRow(id, key), true);
+    }
+    const p = this.proposeOnce(id, body, key, origin);
+    this.building.set(k, p);
+    try { return await p; } finally { if (this.building.get(k) === p) this.building.delete(k); }
+  }
+
+  /** the stored order of an idempotency key, once it is no longer half-built (`proposed` is the state of a proposal being built — by this process or another) */
+  private async settledRow(id: string, key: string): Promise<Row> {
+    for (let k = 0; ; k++) {
+      const [row] = await sql`select * from deriv_orders where account_id = ${id} and client_id = ${key}`;
+      if (!row) throw new UserError('unknown_order', 'unknown order', 404);
+      if (row.state !== 'proposed' || k >= 40 || this.now() - (row.created_at as Date).getTime() > 30_000) return row;
+      await new Promise((res) => setTimeout(res, 50));
+    }
+  }
+
+  private async proposeOnce(id: string, body: OrderBody, key: string, origin: 'owner' | 'close') {
     const a = await this.account(id);
     const [prior] = await sql`select * from deriv_orders where account_id = ${id} and client_id = ${key}`;
-    if (prior) return this.proposalAnswer(prior, true);
+    if (prior) return this.proposalAnswer(await this.settledRow(id, key), true);
     const stop = this.blocked(a, 'trade');
     if (stop) throw stop;
     const venue = this.deps.venues.get(a.network);
@@ -445,7 +518,7 @@ export class LiveService {
     const ins = await sql`insert into deriv_orders (account_id, client_id, cloid, instrument, side, type, size, price, trigger_price, reduce_only, tif, status, state, origin, created_at, updated_at)
       values (${id}, ${key}, ${hlCloid(key)}, ${req.instrument}, ${req.side}, ${req.type}, ${req.size}, ${req.price}, ${req.triggerPrice}, ${req.reduceOnly}, ${req.tif}, 'pending', 'proposed', ${origin}, ${at}, ${at})
       on conflict (account_id, client_id) do nothing returning client_id`;
-    if (!ins.length) { const [again] = await sql`select * from deriv_orders where account_id = ${id} and client_id = ${key}`; return this.proposalAnswer(again!, true); }
+    if (!ins.length) return this.proposalAnswer(await this.settledRow(id, key), true);
     if (!c.risk.ok) {
       await sql`update deriv_orders set state = 'rejected', status = 'rejected', final = true, reject_reason = ${`${c.risk.code}: ${c.risk.reason}`.slice(0, 500)}, updated_at = ${at} where account_id = ${id} and client_id = ${key}`;
       await this.riskEvent(id, 'order_refused', c.risk.code, c.risk.reason, { clientId: key, instrument: req.instrument, side: req.side, type: req.type, size: req.size, price: req.price, reduceOnly: req.reduceOnly, origin });
@@ -462,16 +535,17 @@ export class LiveService {
       await sql`update deriv_orders set state = 'rejected', status = 'rejected', final = true, reject_reason = ${msg(e)}, updated_at = ${at} where account_id = ${id} and client_id = ${key}`;
       throw new UserError('venue_rejected', msg(e), 422);
     }
-    const hash = venueOrderHash(canonical);
+    const hash = venueOrderHash(canonical), estimate = this.estimate(c);
     const [row] = await sql`update deriv_orders set state = 'risk_checked', request = ${sql.json(canonical as never)}, order_hash = ${hex(hash)}, nonce = ${nonce}, expires_at = ${new Date(canonical.expiresAt)},
-      action = ${built.action as never}::json, sign_request = ${built.sign as never}::json, updated_at = ${at} where account_id = ${id} and client_id = ${key} returning *`;
+      action = ${built.action as never}::json, sign_request = ${built.sign as never}::json, estimate = ${sql.json(estimate as never)}, updated_at = ${at} where account_id = ${id} and client_id = ${key} returning *`;
     await this.audit(origin === 'close' ? 'deriv.live.close_proposed' : 'deriv.live.order_proposed', { account: id, clientId: key, hash: hex(hash), instrument: canonical.instrument, side: canonical.side, type: canonical.type, size: canonical.size,
       price: canonical.price, triggerPrice: canonical.triggerPrice, reduceOnly: canonical.reduceOnly, tif: canonical.tif, nonce });
     this.emit(id, { event: 'order', data: this.orderView(row!) });
-    return this.proposalAnswer(row!, false, this.estimate(c));
+    return this.proposalAnswer(row!, false);
   }
 
-  private async proposalAnswer(r: Row, idempotent: boolean, estimate: ReturnType<LiveService['estimate']> | null = null) {
+  /** `estimate` is the one computed when the proposal was made (stored with it), also on an idempotent replay; null for a proposal that was refused */
+  private async proposalAnswer(r: Row, idempotent: boolean, estimate: ReturnType<LiveService['estimate']> | null = (r.estimate as ReturnType<LiveService['estimate']> | null) ?? null) {
     const order = this.orderView(r), approvable = r.state === 'risk_checked' && r.expires_at.getTime() > this.now();
     return { order, canonical: order.canonical, hash: order.hash, expiresAt: order.expiresAt, estimate, idempotent,
       /** the WebAuthn request whose challenge is the order hash; null when there is nothing (left) to approve */
@@ -498,13 +572,21 @@ export class LiveService {
     const stop = this.blocked(a, 'trade');
     if (stop) throw stop;
     const halt = this.effectiveHalt(a);
-    if (halt && !row.reduce_only) throw new UserError('halted', `trading is halted: ${halt}`, 423);
+    if (halt && !row.reduce_only) {
+      // the proposal ends here: it must not stay approvable until its window closes
+      await this.setOrder(id, key, { state: 'cancelled', final: true, reason: `withdrawn: trading was halted before the approval (${halt}); nothing was signed`.slice(0, 500) });
+      throw new UserError('halted', `trading is halted: ${halt}`, 423);
+    }
     if (row.expires_at.getTime() <= this.now() + 2_000) {
       await this.setOrder(id, key, { state: 'cancelled', final: true, reason: 'the approval window expired before the passkey approval; nothing was signed' });
       throw new UserError('proposal_expired', 'this proposal has expired; propose the order again', 410);
     }
     const venue = this.deps.venues.get(a.network);
-    await venue.assertPinned();
+    try { await venue.assertPinned(); }
+    catch (e) {
+      if (e instanceof UserError && e.code === 'asset_table_mismatch') await this.setOrder(id, key, { state: 'cancelled', final: true, reason: `withdrawn: ${msg(e)}`.slice(0, 500) });
+      throw e;
+    }
     const taken = await sql`update deriv_orders set state = 'authorized', updated_at = ${new Date(this.now())} where account_id = ${id} and client_id = ${key} and state = 'risk_checked' returning client_id`;
     if (!taken.length) { const [cur] = await sql`select * from deriv_orders where account_id = ${id} and client_id = ${key}`; return { order: this.orderView(cur!), idempotent: true }; }
 
@@ -527,7 +609,8 @@ export class LiveService {
   private async submit(a: AccountRow, venue: LiveVenue, row: Row, signature: unknown): Promise<void> {
     const key = row.client_id as string;
     try {
-      const r = await venue.trading().submit(row.action, signature, Number(row.nonce));
+      // the venue expiry sent with the action must be the one that was signed (manual: 90 s, mandate: 30 s after the nonce)
+      const r = await venue.trading((row.expires_at as Date).getTime() - Number(row.nonce)).submit(row.action, signature, Number(row.nonce));
       await this.setOrder(a.id, key, { state: 'submitted', venueOrderId: r.venueOrderIds[0] ?? null, answer: r.raw, submitted: true });
       await this.audit('deriv.live.order_submitted', { account: a.id, clientId: key, hash: row.order_hash, venueOrderId: r.venueOrderIds[0] ?? null });
     } catch (e) {
@@ -604,7 +687,7 @@ export class LiveService {
   }
 
   /** one signed venue action that is not an order (cancel, leverage): recorded, signed, sent */
-  private async act(a: AccountRow, venue: LiveVenue, kind: 'cancel' | 'leverage', request: Record<string, unknown>, built: { action: unknown; sign: SignRequest }, nonce: number, o: { id?: string; context?: unknown; assertion?: unknown; hash?: string } = {}): Promise<{ row: Row; outcome: 'accepted' | 'refused' | 'unknown'; error: string | null }> {
+  private async act(a: AccountRow, venue: LiveVenue, kind: 'cancel' | 'leverage', request: Record<string, unknown>, built: { action: unknown; sign: SignRequest }, nonce: number, o: { id?: string; context?: unknown; assertion?: unknown; hash?: string; /** sign under this derivative mandate (no passkey) instead of the authorization */ mandateId?: string } = {}): Promise<{ row: Row; outcome: 'accepted' | 'refused' | 'unknown'; error: string | null }> {
     const id = o.id ?? randomUUID(), at = new Date(this.now());
     if (!o.id) await sql`insert into deriv_actions (id, account_id, kind, state, request, action_hash, nonce, expires_at, action, sign_request, created_at, updated_at)
       values (${id}, ${a.id}, ${kind}, 'authorized', ${sql.json(request as never)}, ${o.hash ?? null}, ${nonce}, ${new Date(nonce + LIVE_ACTION_TTL_MS)}, ${built.action as never}::json, ${built.sign as never}::json, ${at}, ${at})`;
@@ -614,9 +697,11 @@ export class LiveService {
       this.emit(a.id, { event: 'action', data: this.actionView(r!) });
       return r!;
     };
-    let signed: Awaited<ReturnType<LiveSignerPort['venueSign']>>;
-    try { signed = await this.deps.signer.venueSign({ authorizationId: a.authorization_id!, sign: built.sign, ...(o.context ? { context: o.context } : {}), ...(o.assertion ? { assertion: o.assertion } : {}) }); }
-    catch (e) { await set('rejected', `not signed: ${msg(e)}`); throw e; }
+    let signed: { signature: { r: string; s: string; v: number } };
+    try {
+      signed = o.mandateId ? await this.mandateSigner().venueMandateSign({ mandateId: o.mandateId, sign: built.sign })
+        : await this.deps.signer.venueSign({ authorizationId: a.authorization_id!, sign: built.sign, ...(o.context ? { context: o.context } : {}), ...(o.assertion ? { assertion: o.assertion } : {}) });
+    } catch (e) { await set('rejected', `not signed: ${msg(e)}`); throw e; }
     await set('signed', null, { signature: signed.signature });
     try {
       const r = await venue.trading().submit(built.action, signed.signature, nonce);
@@ -710,17 +795,18 @@ export class LiveService {
       where account_id = ${id} and state = any(${PRE_SUBMIT}) and not reduce_only returning client_id`;
     await this.riskEvent(id, 'halt', 'halted', text, { withdrawnProposals: withdrawn.length });
     await this.audit('deriv.live.halt', { account: id, reason: body.reason, withdrawnProposals: withdrawn.length });
-    this.emit(id, { event: 'status', data: { halt: text, ts: now } });
+    this.emit(id, { event: 'status', data: { halt: text, halted: text, ts: now } });
     void a;
     return { ...(await this.get(id)), note: 'New orders are stopped. Resting orders are still on the venue (cancel-all is a separate action) and positions are still open (close is a separate action).' };
   }
 
   /** lifts an owner halt. A divergence is not lifted here: it clears when the venue and the records agree again, or when the owner re-bases them. */
   async resume(id: string) {
-    await this.account(id);
+    const a = await this.account(id);
     await sql`update deriv_accounts set halt = null, updated_at = ${new Date(this.now())} where id = ${id}`;
     await this.riskEvent(id, 'resume', null, 'owner halt lifted');
     await this.audit('deriv.live.resume', { account: id });
+    this.emit(id, { event: 'status', data: { halt: null, halted: this.effectiveHalt({ ...a, halt: null }), ts: this.now() } });
     return this.get(id);
   }
 
@@ -876,5 +962,283 @@ export class LiveService {
       catch (e) { s.errors.push(`account ${id}: ${msg(e)}`); this.emit(id, { event: 'status', data: { error: msg(e), ts: this.now() } }); }
     }
     return s;
+  }
+
+  // ------------------------------------------------------------------ MANDATE_LIVE: a derivative mandate on top of the authorization
+  //
+  // The account keeps `mode: 'MANUAL_LIVE'` (manual orders still need the passkey, exactly as before); an active mandate adds
+  // `MANDATE_LIVE` to `modes`. A mandate order goes through the same pipeline as a manual one — live data, the venue's real
+  // state, the risk engine, a stored order, the signer, the venue, reconciliation by client order id — with one difference: the
+  // signer is asked through /venue/mandate/sign, which needs no passkey and enforces the mandate's limits itself.
+
+  private mandateSigner(): MandateSignerPort {
+    const s = this.deps.mandateSigner;
+    if (!s) throw new UserError('mandate_unavailable', liveReason('mandate_unavailable'), 503);
+    return s;
+  }
+  /** the two mainnet locks of autonomous trading; null = open */
+  private mandateLock(a: AccountRow): UserError | null {
+    if (a.network !== 'mainnet') return null;
+    if (!this.deps.mainnetEnabled()) return new UserError('mainnet_disabled', MAINNET_OFF, 403);
+    if (!(this.deps.mandateMainnetEnabled?.() ?? false)) return new UserError('mandate_mainnet_disabled', liveReason('mandate_mainnet_disabled'), 403);
+    return null;
+  }
+  /** the mandate that governs the account now (the last one approved), with its phase as the signer will see it */
+  private async currentMandate(a: AccountRow): Promise<{ row: MandateRow; phase: VenueMandatePhase; windDownUntil: number | null } | null> {
+    const [row] = await sql<MandateRow[]>`select * from deriv_mandates where account_id = ${a.id} and state in ('active', 'revoked') order by approved_at desc limit 1`;
+    if (!row) return null;
+    const now = Math.floor(this.now() / 1000), ph = venueMandatePhase(row.mandate, row.revoked_at ? Math.floor(row.revoked_at.getTime() / 1000) : null, now);
+    // the authorization is the root: when it is gone the mandate signs nothing, whatever its own dates say
+    const rootAlive = a.mode === 'MANUAL_LIVE' && a.authorization_id === row.authorization_id && !!a.venue_authorization && now < a.venue_authorization.expiresAt;
+    return { row, phase: rootAlive ? ph.phase : 'ended', windDownUntil: ph.windDownUntil === null ? null : ph.windDownUntil * 1000 };
+  }
+  private async mandateInfo(a: AccountRow) {
+    const cur = await this.currentMandate(a), [prep] = await sql<MandateRow[]>`select * from deriv_mandates where account_id = ${a.id} and state = 'prepared' order by prepared_at desc limit 1`;
+    const m = cur?.row.mandate;
+    return {
+      /** every mode the account is in: MANDATE_LIVE is added to MANUAL_LIVE while a mandate is active (manual orders still need the passkey) */
+      modes: (a.mode === 'MANUAL_LIVE' && cur?.phase === 'active' ? ['MANUAL_LIVE', 'MANDATE_LIVE'] : [a.mode]) as string[],
+      mandate: cur && m ? { id: m.mandateId, hash: cur.row.hash, authorizationId: m.authorizationId, agentId: m.agentId, strategySha256: m.strategySha256, limits: m,
+        phase: cur.phase, active: cur.phase === 'active', createdAt: m.createdAt * 1000, expiresAt: m.expiresAt * 1000, expired: this.now() >= m.expiresAt * 1000, approvedAt: cur.row.approved_at?.getTime() ?? null,
+        revokedAt: cur.row.revoked_at?.getTime() ?? null, windDownUntil: cur.windDownUntil, ackSha256: m.ackSha256 } : null,
+      pendingMandate: prep ? { mandateId: prep.mandate.mandateId, preparedAt: prep.prepared_at.getTime() } : null,
+    };
+  }
+
+  /** step 1: the canonical mandate, the acknowledgement text to DISPLAY again, what the signer will enforce, and the WebAuthn request */
+  async prepareMandate(id: string, body: z.infer<typeof MandateBodySchema>) {
+    const a = await this.account(id);
+    this.mandateSigner();
+    const lock = this.mandateLock(a) ?? this.blocked(a, 'trade');
+    if (lock) throw lock;
+    const auth = a.venue_authorization!;
+    const st = await this.deps.signer.status(true);
+    if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
+    if ((await this.currentMandate(a))?.phase === 'active') throw new UserError('bad_state', 'a mandate is already active on this venue account: revoke it to change its limits', 409);
+    await this.deps.venues.get(a.network).assertPinned();
+    const nowMs = this.now(), nowS = Math.floor(nowMs / 1000), ack = jurisdictionAck('hyperliquid', body.locale);
+    const mandate: VenueMandate = { v: 1, mandateId: randomUUID(), authorizationId: a.authorization_id!, keyId: auth.keyId, venue: 'hyperliquid', network: a.network, account: a.account, agentAddress: a.agent_address,
+      strategySha256: body.strategySha256, agentId: body.agentId, instruments: body.instruments, maxOrderNotional: body.maxOrderNotional, maxGrossExposure: body.maxGrossExposure, maxOrdersPerDay: body.maxOrdersPerDay,
+      maxOrdersPerHour: body.maxOrdersPerHour, maxDailyTurnover: body.maxDailyTurnover, floorEquity: body.floorEquity, maxPriceDeviationBps: body.maxPriceDeviationBps ?? auth.policy.maxPriceDeviationBps,
+      createdAt: nowS, expiresAt: nowS + body.days * 86400, ackSha256: ack.sha256 };
+    try { validateVenueMandate(mandate, auth, nowS); } catch (e) { throw new UserError('bad_policy', msg(e), 400); }
+    for (const i of mandate.instruments) { const pin = hlPinnedAsset(a.network, i.instrument); if (!pin || i.maxLeverage > pin.maxLeverage) throw new UserError('bad_policy', `${i.instrument}: not in the pinned ${a.network} asset table, or leverage above the venue maximum`, 400); }
+    const hash = venueMandateHash(mandate), at = new Date(nowMs);
+    await sql`delete from deriv_mandates where account_id = ${id} and state = 'prepared'`;
+    await sql`insert into deriv_mandates (id, account_id, authorization_id, state, mandate, hash, ack, prepared_at, created_at, updated_at)
+      values (${mandate.mandateId}, ${id}, ${mandate.authorizationId}, 'prepared', ${sql.json(mandate as never)}, ${hex(hash)}, ${sql.json({ locale: ack.locale, sha256: ack.sha256, version: ack.version } as never)}, ${at}, ${at}, ${at})`;
+    const v = await this.venueState(a), t = liveTexts(body.locale);
+    return {
+      mandate, hash: hex(hash), acknowledgement: ack, locale: body.locale,
+      authorization: { id: a.authorization_id!, hash: a.authorization_hash, expiresAt: auth.expiresAt * 1000, policy: auth.policy },
+      warning: t.mandateWarning, enforcedBySigner: t.enforcedBySigner, trustedBySigner: t.trustedBySigner, notEnforced: t.notEnforced,
+      windDown: { seconds: VENUE_MANDATE_WIND_DOWN_S, text: t.windDown }, whatIsSigned: { byPasskey: t.mandateByPasskey },
+      venueState: v, options: await this.options(hash), ts: nowMs,
+    };
+  }
+
+  /** step 2: the signer judges the passkey and stores the mandate. No key signs anything here, and nothing is sent to the venue. */
+  async approveMandate(id: string, body: z.infer<typeof ApproveMandateSchema>) {
+    const a = await this.account(id), ms = this.mandateSigner();
+    const lock = this.mandateLock(a) ?? this.blocked(a, 'trade');
+    if (lock) throw lock;
+    const [taken] = await sql<MandateRow[]>`update deriv_mandates set state = 'consumed', updated_at = ${new Date(this.now())} where account_id = ${id} and state = 'prepared' returning *`;   // a mandate is approved once
+    if (!taken) throw new UserError('bad_state', 'prepare the mandate first', 409);
+    const m = taken.mandate;
+    let r: Awaited<ReturnType<MandateSignerPort['venueMandateApprove']>>;
+    try { r = await ms.venueMandateApprove(m, body.assertion); }
+    catch (e) {
+      await sql`update deriv_mandates set state = 'failed', updated_at = ${new Date(this.now())} where id = ${m.mandateId}`;
+      await this.audit('deriv.live.mandate_refused', { account: id, mandateId: m.mandateId, reason: msg(e) });
+      throw e;
+    }
+    const now = new Date(this.now());
+    await sql`update deriv_mandates set state = 'active', approved_at = ${now}, updated_at = ${now} where id = ${m.mandateId}`;
+    await this.audit('deriv.live.mandate_acknowledged', { account: id, mandateId: m.mandateId, mandateHash: r.hash, ackSha256: taken.ack.sha256, locale: taken.ack.locale, version: taken.ack.version,
+      statement: 'the owner confirmed again with his passkey having read the jurisdiction summary; letting an automated strategy trade derivatives on this venue inside the mandate is his own decision' });
+    await this.audit('deriv.live.mandate_approved', { account: id, venue: a.venue, network: a.network, mandateId: m.mandateId, hash: r.hash, authorizationId: m.authorizationId, strategySha256: m.strategySha256, agentId: m.agentId,
+      instruments: m.instruments, maxOrderNotional: m.maxOrderNotional, maxGrossExposure: m.maxGrossExposure, maxOrdersPerDay: m.maxOrdersPerDay, maxOrdersPerHour: m.maxOrdersPerHour, maxDailyTurnover: m.maxDailyTurnover,
+      floorEquity: m.floorEquity, maxPriceDeviationBps: m.maxPriceDeviationBps, expiresAt: m.expiresAt });
+    this.emit(id, { event: 'status', data: { mode: a.mode, modes: ['MANUAL_LIVE', 'MANDATE_LIVE'], mandate: m.mandateId, ts: now.getTime() } });
+    return this.get(id);
+  }
+
+  /**
+   * Stops the mandate — no passkey. On the signer first (no new exposure from that instant), then, if asked, cancel-all. Positions
+   * are NOT closed: during the wind-down the engine may still close them with reduce-only orders, and the owner can close with his passkey.
+   */
+  async revokeMandate(id: string, body: { cancelOpenOrders: boolean; locale?: LiveLocale }) {
+    const a = await this.account(id), ms = this.mandateSigner(), cur = await this.currentMandate(a);
+    if (!cur) throw new UserError('bad_state', 'this venue account has no mandate', 409);
+    const now = new Date(this.now());
+    let windDownUntil = cur.windDownUntil;
+    if (cur.row.state === 'active') {
+      const r = await ms.venueMandateRevoke(cur.row.id);
+      windDownUntil = r.windDownUntil * 1000;
+      await sql`update deriv_mandates set state = 'revoked', revoked_at = ${now}, updated_at = ${now} where id = ${cur.row.id} and state = 'active'`;
+      await this.audit('deriv.live.mandate_revoked', { account: id, mandateId: cur.row.id, windDownUntil });
+      await this.riskEvent(id, 'mandate_revoked', null, 'the derivative mandate was revoked: no order that can add exposure is signed any more', { mandateId: cur.row.id, windDownUntil });
+    }
+    let cancelled: Awaited<ReturnType<LiveService['cancelAll']>> | null = null, cancelError: { code: string; message: string } | null = null;
+    if (body.cancelOpenOrders) {
+      try { cancelled = await this.cancelAll(id); }
+      catch (e) { cancelError = { code: e instanceof UserError ? e.code : 'internal', message: msg(e) }; }
+    }
+    const v = await this.venueState(a);
+    this.emit(id, { event: 'status', data: { mode: a.mode, modes: [a.mode], mandate: null, ts: now.getTime() } });
+    return { ...(await this.get(id)), cancelled, cancelError, locale: body.locale ?? 'en',
+      windDown: { until: windDownUntil, text: liveTexts(body.locale ?? 'en').windDown, openPositions: v.positions.length, openOrders: v.openOrders.length } };
+  }
+
+  /** the mandate as the API holds it, and the signer's own record of it (counters of the day, phase) */
+  async mandateStatus(id: string) {
+    const a = await this.account(id), info = await this.mandateInfo(a);
+    const st = info.mandate ? await this.deps.signer.status(true).catch(() => null) as { venueMandates?: { mandate: { mandateId: string } }[] } | null : null;
+    return { ...info, signer: st?.venueMandates?.find((x) => x.mandate.mandateId === info.mandate!.id) ?? null, ts: this.now() };
+  }
+
+  /** the API-side risk policy of a mandate order: the account's policy, tightened by the mandate — never wider than either */
+  private mandatePolicy(a: AccountRow, m: VenueMandate, instrument: string): RiskPolicy {
+    const p = RiskPolicySchema.parse(a.policy), min = (x: DecStr, y: DecStr): DecStr => D.str(D.min(D.from(x), D.from(y))), mi = m.instruments.find((i) => i.instrument === instrument);
+    return { ...p, allowedInstruments: p.allowedInstruments.filter((i) => m.instruments.some((x) => x.instrument === i)), maxOrderNotional: min(p.maxOrderNotional, m.maxOrderNotional),
+      maxPositionNotional: mi ? min(p.maxPositionNotional, mi.maxPositionNotional) : p.maxPositionNotional, maxGrossExposure: min(p.maxGrossExposure, m.maxGrossExposure),
+      maxDeviationBps: min(p.maxDeviationBps, String(m.maxPriceDeviationBps)), maxOrdersPerDay: Math.min(p.maxOrdersPerDay, m.maxOrdersPerDay) };
+  }
+
+  /**
+   * ONE order placed by an approved automated strategy, without a passkey. Server-side only: there is no HTTP route to it.
+   * `ctx.clientId` is the idempotency key (the venue's client order id is derived from it): calling again with the same key
+   * never places a second order, it returns the first one as the venue reports it now. Returns the reconciled order.
+   * Refusals are UserErrors with a stable code: the risk engine's codes, `signer_<code>` for the signer's, and mandate_none,
+   * mandate_mismatch, mandate_wind_down, mandate_floor_equity, mandate_mainnet_disabled, mainnet_disabled, halted, …
+   */
+  async placeMandateOrder(id: string, req: OrderRequest, ctx: MandateOrderCtx) {
+    const c = MandateOrderCtxSchema.parse(ctx), k = `${id}|${c.clientId}`, running = this.building.get(k);
+    if (running) { await running.catch(() => {}); const again = await this.placeMandateOrderReplay(id, c.clientId); if (again) return again; }
+    const p = this.placeMandateOnce(id, req, c);
+    this.building.set(k, p);
+    try { return await p; } finally { if (this.building.get(k) === p) this.building.delete(k); }
+  }
+
+  async placeMandateOrderReplay(id: string, key: string) {
+    const [row] = await sql`select * from deriv_orders where account_id = ${id} and client_id = ${key}`;
+    if (!row) return null;
+    if (row.origin !== 'mandate') throw new UserError('idempotency', 'this client id belongs to an order that was not placed under the mandate', 409);
+    const a = await this.account(id);
+    const now = row.final ? row : (await this.reconcileOrder(a, this.deps.venues.get(a.network), key).catch(() => null)) ?? row;
+    return { order: this.orderView(now), idempotent: true, estimate: (row.estimate ?? null) as ReturnType<LiveService['estimate']> | null };
+  }
+
+  private async placeMandateOnce(id: string, req: OrderRequest, c: MandateOrderCtx) {
+    const key = c.clientId, prior = await this.placeMandateOrderReplay(id, key);
+    if (prior) return prior;
+    const a = await this.account(id), ms = this.mandateSigner();
+    const lock = this.mandateLock(a) ?? this.blocked(a, 'trade');
+    if (lock) throw lock;
+    const cur = await this.currentMandate(a);
+    if (!cur || cur.phase === 'ended') throw new UserError('mandate_none', 'no derivative mandate is in force on this venue account: the owner approves one with his passkey', 422);
+    const m = cur.row.mandate;
+    if (c.strategySha256 !== m.strategySha256 || c.agentId !== m.agentId) throw new UserError('mandate_mismatch', 'the mandate was approved for another strategy version or another agent', 422);
+    const parsed = OrderRequestSchema.safeParse({ ...req, clientId: key });      // the idempotency key is ctx.clientId; req.clientId is ignored
+    if (!parsed.success || parsed.data.price === null) throw new UserError('bad_request', 'a mandate order is a complete order request and names its price (limit price, or worst acceptable price for a market order)', 400);
+    const r0 = parsed.data;
+    if (cur.phase === 'wind_down' && !r0.reduceOnly) throw new UserError('mandate_wind_down', `the mandate ${cur.row.state === 'revoked' ? 'was revoked' : 'has expired'}: only cancels and reduce-only orders are placed until the wind-down ends`, 422);
+    const venue = this.deps.venues.get(a.network);
+    await venue.assertPinned();
+    const body = OrderBodySchema.parse({ instrument: r0.instrument, side: r0.side, type: r0.type, size: r0.size, price: r0.price, triggerPrice: r0.triggerPrice, reduceOnly: r0.reduceOnly, tif: r0.tif });
+    const chk = await this.check(a, venue, body, key, this.mandatePolicy(a, m, r0.instrument)), { req: order, inst, now } = chk, at = new Date(now);
+    let refusal: { code: string; reason: string } | null = chk.risk.ok ? null : { code: chk.risk.code, reason: chk.risk.reason };
+    const notional = order.price === null ? null : venueOrderNotional({ size: order.size, price: order.price, triggerPrice: order.triggerPrice });
+    // what the signer will refuse is said here first, from the venue state the API just read
+    if (!refusal && !m.instruments.some((i) => i.instrument === order.instrument)) refusal = { code: 'instrument_not_allowed', reason: `${order.instrument} is not allowed by the mandate` };
+    if (!refusal && notional !== null && D.gt(D.from(notional), D.from(m.maxOrderNotional))) refusal = { code: 'order_notional_exceeded', reason: `order notional ${notional} exceeds the mandate's ${m.maxOrderNotional} per order (reduce-only orders included: close in smaller parts)` };
+    if (!refusal && !order.reduceOnly && D.lt(D.from(chk.state.equity), D.from(m.floorEquity))) refusal = { code: 'mandate_floor_equity', reason: `account value ${chk.state.equity} is below the mandate's floor ${m.floorEquity}: only cancels and reduce-only orders` };
+    const agent = { mandateId: m.mandateId, agentId: c.agentId, strategySha256: c.strategySha256 };
+    const ins = await sql`insert into deriv_orders (account_id, client_id, cloid, instrument, side, type, size, price, trigger_price, reduce_only, tif, status, state, origin, mandate_id, agent, created_at, updated_at)
+      values (${id}, ${key}, ${hlCloid(key)}, ${order.instrument}, ${order.side}, ${order.type}, ${order.size}, ${order.price}, ${order.triggerPrice}, ${order.reduceOnly}, ${order.tif}, 'pending', 'proposed', 'mandate', ${m.mandateId}, ${sql.json(agent as never)}, ${at}, ${at})
+      on conflict (account_id, client_id) do nothing returning client_id`;
+    if (!ins.length) { const again = await this.placeMandateOrderReplay(id, key); if (again) return again; throw new UserError('idempotency', 'this client id is in use', 409); }
+    const refuse = async (code: string, reason: string, status = 422): Promise<never> => {
+      await this.setOrder(id, key, { state: 'rejected', final: true, reason: `${code}: ${reason}`.slice(0, 500) });
+      await this.riskEvent(id, 'order_refused', code, reason, { clientId: key, instrument: order.instrument, side: order.side, type: order.type, size: order.size, price: order.price, reduceOnly: order.reduceOnly, origin: 'mandate', ...agent });
+      throw new UserError(code, reason, status);
+    };
+    if (refusal) await refuse(refusal.code, refusal.reason);
+    const trading = venue.trading(MANDATE_ACTION_TTL_MS), nonce = await this.nextNonce(id);
+    let built: ReturnType<typeof trading.buildOrder>, canonical: VenueOrder;
+    try {
+      built = trading.buildOrder(order, { instrument: inst, nonce });
+      const norm = trading.normalizeRequest(order, inst);
+      canonical = { v: 1, authorizationId: a.authorization_id!, venue: 'hyperliquid', network: a.network, account: a.account, kind: 'order', instrument: norm.instrument, side: norm.side, type: norm.type as VenueOrder['type'],
+        size: norm.size, price: norm.price!, triggerPrice: norm.triggerPrice, reduceOnly: norm.reduceOnly, tif: norm.tif, clientId: norm.clientId, nonce, expiresAt: nonce + MANDATE_ACTION_TTL_MS };
+    } catch (e) { return refuse('venue_rejected', msg(e)); }
+    const hash = venueOrderHash(canonical), estimate = this.estimate(chk);
+    // no approval step: the mandate is the authorization. `authorized` = handed to the signer, which decides.
+    const [row] = await sql`update deriv_orders set state = 'authorized', request = ${sql.json(canonical as never)}, order_hash = ${hex(hash)}, nonce = ${nonce}, expires_at = ${new Date(canonical.expiresAt)},
+      action = ${built.action as never}::json, sign_request = ${built.sign as never}::json, estimate = ${sql.json(estimate as never)}, updated_at = ${at} where account_id = ${id} and client_id = ${key} and state = 'proposed' returning *`;
+    // withdrawn meanwhile by a halt or a revocation (they end every proposal that is not yet with the signer): nothing is signed
+    if (!row) { const [cur] = await sql`select * from deriv_orders where account_id = ${id} and client_id = ${key}`; return { order: this.orderView(cur!), idempotent: false, estimate: null }; }
+    await this.audit('deriv.live.mandate_order', { account: id, clientId: key, hash: hex(hash), instrument: canonical.instrument, side: canonical.side, type: canonical.type, size: canonical.size, price: canonical.price,
+      triggerPrice: canonical.triggerPrice, reduceOnly: canonical.reduceOnly, tif: canonical.tif, nonce, ...agent }, `agent:${c.agentId}`);
+    this.emit(id, { event: 'order', data: this.orderView(row!) });
+    let signed: Awaited<ReturnType<MandateSignerPort['venueMandateSign']>>;
+    try { signed = await ms.venueMandateSign({ mandateId: m.mandateId, sign: built.sign, context: { order: canonical } }); }
+    catch (e) {
+      // refused, or unreachable: either way no signature came back, so nothing can have been sent
+      await this.setOrder(id, key, { state: 'rejected', final: true, reason: `not signed: ${msg(e)}` });
+      await this.riskEvent(id, 'order_refused', e instanceof UserError ? e.code : 'signer', `the signer did not sign the mandate order: ${msg(e)}`, { clientId: key, origin: 'mandate', ...agent });
+      throw e;
+    }
+    await this.setOrder(id, key, { state: 'signed', signature: signed.signature });
+    await this.submit(a, venue, row!, signed.signature);
+    const final = await this.reconcileOrder(a, venue, key).catch(() => null);
+    const [now2] = await sql`select * from deriv_orders where account_id = ${id} and client_id = ${key}`;
+    return { order: this.orderView(final ?? now2!), idempotent: false, estimate: estimate as ReturnType<LiveService['estimate']> | null };
+  }
+
+  /**
+   * The leverage setting of one instrument, changed under the mandate — no passkey. The signer signs it only at or below the
+   * mandate's leverage for that instrument, and never when it would change the margin mode of an open position. The venue's
+   * own setting decides the outcome (`venue.confirmed`).
+   */
+  async setMandateLeverage(id: string, body: z.infer<typeof LeverageBodySchema>, ctx: Pick<MandateOrderCtx, 'strategySha256' | 'agentId'>) {
+    const a = await this.account(id);
+    const lock = this.mandateLock(a) ?? this.blocked(a, 'trade');
+    if (lock) throw lock;
+    const cur = await this.currentMandate(a);
+    if (!cur || cur.phase !== 'active') throw new UserError(cur?.phase === 'wind_down' ? 'mandate_wind_down' : 'mandate_none', 'no derivative mandate is active on this venue account', 422);
+    const m = cur.row.mandate, mi = m.instruments.find((i) => i.instrument === body.instrument);
+    if (ctx.strategySha256 !== m.strategySha256 || ctx.agentId !== m.agentId) throw new UserError('mandate_mismatch', 'the mandate was approved for another strategy version or another agent', 422);
+    const halt = this.effectiveHalt(a);
+    if (halt) throw new UserError('halted', `trading is halted: ${halt}`, 423);
+    if (!mi) throw new UserError('instrument_not_allowed', `${body.instrument} is not allowed by the mandate`, 422);
+    if (body.leverage > mi.maxLeverage) throw new UserError('leverage_exceeded', `leverage ${body.leverage} is above the mandate's ${mi.maxLeverage} for ${body.instrument}`, 422);
+    const venue = this.deps.venues.get(a.network);
+    await venue.assertPinned();
+    const inst = await venue.instrument(body.instrument);
+    if (!inst.marginModes.includes(body.marginMode)) throw new UserError('venue_rejected', `${inst.id} does not offer ${body.marginMode} margin`, 422);
+    const nonce = await this.nextNonce(id);
+    let built: { action: unknown; sign: SignRequest };
+    try { built = venue.trading().buildUpdateLeverage({ instrument: inst, leverage: body.leverage, marginMode: body.marginMode, nonce }); } catch (e) { throw new UserError('venue_rejected', msg(e), 422); }
+    const request = { instrument: inst.id, leverage: body.leverage, marginMode: body.marginMode, mandateId: m.mandateId, agentId: ctx.agentId, strategySha256: ctx.strategySha256 };
+    const r = await this.act(a, venue, 'leverage', request, built, nonce, { mandateId: m.mandateId });
+    const now = await venue.leverageOf(a.account, inst.symbol).catch(() => null);
+    const confirmed = now !== null && now.leverage === String(body.leverage) && now.marginMode === body.marginMode;
+    const state = confirmed ? 'confirmed' : r.outcome === 'refused' ? 'rejected' : 'unknown';
+    const [row] = await sql`update deriv_actions set state = ${state}, updated_at = ${new Date(this.now())} where id = ${r.row.id} returning *`;
+    await this.audit('deriv.live.mandate_leverage', { account: id, action: r.row.id, ...request, state, error: r.error }, `agent:${ctx.agentId}`);
+    this.emit(id, { event: 'action', data: this.actionView(row!) });
+    return { action: this.actionView(row!), venue: { leverage: now, confirmed, source: 'venue' as const } };
+  }
+
+  /** what an automated strategy needs to decide: the venue's own account state, positions and open orders, and whether it may trade */
+  async mandateAccountState(id: string) {
+    const a = await this.account(id), info = await this.mandateInfo(a), v = await this.venueState(a), halted = this.effectiveHalt(a), lock = this.mandateLock(a) ?? this.blocked(a, 'trade');
+    const phase = info.mandate?.phase ?? null;
+    return { accountId: a.id, venue: a.venue, network: a.network, account: a.account, mode: a.mode, modes: info.modes, mandate: info.mandate,
+      /** may an order that ADDS exposure be placed right now? (reduce-only orders also pass while halted and during the wind-down) */
+      canOpen: lock === null && phase === 'active' && halted === null && v.error === null, canReduce: lock === null && (phase === 'active' || phase === 'wind_down'),
+      blocked: lock ? { code: lock.code, message: lock.message } : null, halted, divergence: a.divergence,
+      state: v.state, positions: v.positions, openOrders: v.openOrders, error: v.error, ts: v.ts, source: 'venue' as const };
   }
 }
