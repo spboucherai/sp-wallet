@@ -29,7 +29,7 @@ const big = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : 
 
 export function swapRoutes(app: FastifyInstance, deps: SwapDeps): void {
   const providers = deps.providers ?? createProviders(process.env);
-  const runtimes = providers.map((p) => new ProviderRuntime(p, DEFAULT_POLICY, httpClient(p.id)));
+  const runtimes = providers.map((p) => new ProviderRuntime(p, { ...DEFAULT_POLICY, ...p.policy }, httpClient(p.id)));
   const agg = new QuoteAggregator(runtimes), graph = new LiquidityGraph(providers);
   // prices are refreshed outside the hot path; the valuer itself is synchronous
   let priceMap: Record<string, { usd: number }> = {};

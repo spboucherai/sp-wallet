@@ -1,0 +1,1 @@
+{"recordedAt":"2026-11-11T01:12:04.663Z","url":"https://api.jup.ag/swap/v2/build?inputMint=2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH&outputMint=5XZw2LKTyrfvfiskJ78AMpackRjPcyCif1WhUsPDuVqQ&amount=1000000000000000000&taker=GkwFnmMDvn3HGMpJpWBg8tgJxr3NxNvg3AXxvXVPbRGJ&slippageBps=50","status":400,"body":{"error":"Insufficient liquidity"}}

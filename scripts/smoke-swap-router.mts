@@ -3,7 +3,7 @@ import { NETWORKS, formatUnits, getAsset, parseUnits } from '@spw/core';
 import { createProviders, DEFAULT_POLICY, httpClient, LiquidityGraph, ProviderRuntime, QuoteAggregator, SwapRouter, type AssetRef } from '@spw/swap';
 const tok = (n: string, s: string): AssetRef => ({ network: n, asset: s === 'native' ? 'native' : NETWORKS[n]!.tokens.find((t) => t.symbol === s)!.id });
 const providers = createProviders(process.env);
-const agg = new QuoteAggregator(providers.map((p) => new ProviderRuntime(p, DEFAULT_POLICY, httpClient(p.id))));
+const agg = new QuoteAggregator(providers.map((p) => new ProviderRuntime(p, { ...DEFAULT_POLICY, ...p.policy }, httpClient(p.id))));
 const prices: Record<string, number> = {};
 try { const ids: Record<string, string> = { ETH: 'ethereum', USDC: 'usd-coin', SOL: 'solana', BTC: 'bitcoin', WBTC: 'wrapped-bitcoin', LINK: 'chainlink', POL: 'polygon-ecosystem-token', AVAX: 'avalanche-2', BNB: 'binancecoin', USDT: 'tether' };
   const j = await (await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${Object.values(ids).join(',')}&vs_currencies=usd`)).json() as Record<string, { usd: number }>;

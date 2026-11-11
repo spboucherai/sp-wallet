@@ -105,6 +105,8 @@ export interface HttpClient {
 /** What a provider adapter must implement. Unsupported behaviour is omitted, never faked. */
 export interface SwapProvider {
   id: string; name: string;
+  /** provider-specific runtime limits (rate, timeout) that override the defaults, e.g. a keyless tier's quota */
+  policy?: { timeoutMs?: number; ratePerSec?: number; burst?: number };
   capabilities(): ProviderCapabilities;
   /** cheap, local pre-filter (no network): can this provider possibly serve the pair? */
   supportsPair(from: AssetRef, to: AssetRef): boolean;

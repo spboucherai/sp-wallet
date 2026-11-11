@@ -1,0 +1,1 @@
+{"recordedAt":"2026-11-11T01:07:51.000Z","url":"https://api.jup.ag/swap/v2/build?inputMint=So11111111111111111111111111111111111111112&outputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=300000000&taker=GkwFnmMDvn3HGMpJpWBg8tgJxr3NxNvg3AXxvXVPbRGJ&slippageBps=50","status":429,"body":{"code":429,"message":"[API Gateway] Too many requests"}}
