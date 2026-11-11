@@ -22,11 +22,10 @@ export const KYBER_ROUTER_ABI = routerAbi as Abi;
 /**
  * Networks where swap execution is enabled, with the SHA-256 of the router's runtime bytecode as deployed there.
  * A network is added only after its verified source has been read (the bytecode differs per chain: the WETH address is immutable).
- * HyperEVM is NOT enabled: it runs a different, cut-down router (no partial fill, no swapGeneric) that needs its own review.
  * The router owner could misuse a standing allowance (swapGeneric + whitelist): approvals here are always exact-amount and consumed by the swap.
  * The API refuses to prepare a swap if the on-chain code no longer hashes to this value.
  */
-export const KYBER_ENABLED: Record<string, { codeSha256: string; reviewed: string }> = {
+export const KYBER_ENABLED: Record<string, { codeSha256: string; reviewed: string; reduced?: true }> = {
   base: { codeSha256: '0596142c28e41e14a9b2374f1b05c1f9daffe3e8185982e475e194165ec1ba30', reviewed: '2026-11-10, verified source on basescan (MetaAggregationRouterV2, solc 0.8.9, not a proxy)' },
   ethereum: { codeSha256: 'a2848fcf2af625baa810eccbe1cc2a4d0738dcfeb75519fd697f4e7df5b43d70', reviewed: '2026-11-10, verified source (etherscan) compared with Base: same router logic (solc 0.8.9, not a proxy); runtime bytecode equals Ethereum\'s except the wrapped-native immutable; swap proven on a fork' },
   arbitrum: { codeSha256: 'f415153fc009cc188942e61f932d74a0e3a57f8edf1ff15e86b80316566bc0be', reviewed: '2026-11-10, verified source (arbiscan) compared with Base: same router logic (solc 0.8.9, not a proxy); runtime bytecode equals Ethereum\'s except the wrapped-native immutable; swap proven on a fork' },
@@ -34,7 +33,11 @@ export const KYBER_ENABLED: Record<string, { codeSha256: string; reviewed: strin
   optimism: { codeSha256: 'cc975fd0c7202ae680b44835ebe84b66c35c3312ba65a788cff1797843ad9a24', reviewed: '2026-11-10, verified source (optimistic.etherscan) compared with Base: same router logic (solc 0.8.9, not a proxy); runtime bytecode equals Ethereum\'s except the wrapped-native immutable; swap proven on a fork' },
   bsc: { codeSha256: '490e7b952f674cef0c24dd14a7e186dde993f609c9a6c29b0c217d188f5ec264', reviewed: '2026-11-10, verified source (bscscan) compared with Base: same router logic (solc 0.8.9, not a proxy); runtime bytecode equals Ethereum\'s except the wrapped-native immutable; swap proven on a fork' },
   avalanche: { codeSha256: 'e8cd97d1ba8070943c359bb199bbe5453ad81dcbe552a4d74f37af56e24c66d5', reviewed: '2026-11-10, verified source (snowscan) compared with Base: same router logic (solc 0.8.9, not a proxy); runtime bytecode equals Ethereum\'s except the wrapped-native immutable; swap proven on a fork' },
+  // HyperEVM runs a cut-down router (solc 0.8.17): no swapGeneric, no whitelist, no partial fill (flag 0x01 is ignored, the
+  // minimum-return check is always strict). `reduced` makes the verifier refuse swapGeneric and the partial-fill flag there.
+  hyperevm: { codeSha256: 'bacf3c0d4d75039f6fce97796ec7262cc19459adaaff6e90fdde7ff7d56bee5d', reduced: true, reviewed: '2026-11-10, verified source read in full (MetaAggregationRouterV2 reduced variant, not a proxy): pulls at most desc.amount, strict minReturnAmount at dstReceiver, fees only with feeReceivers; swap proven on a fork' },
 };
+const FLAG_PARTIAL_FILL = 0x01n;
 const FLAG_REQUIRES_EXTRA_ETH = 0x02n, FLAG_SIMPLE_SWAP = 0x20n;
 const MAX_SWAP_GAS = 2_000_000n, APPROVE_GAS_CAP = 120_000n;
 
@@ -77,6 +80,7 @@ export function verifyKyberSwap(i: Intent, data: string): SwapDesc {
   if (desc.minReturnAmount < minOut) throw new Error('calldata guarantees less than the approved minimum');
   if (desc.feeReceivers.length !== 0 || desc.feeAmounts.length !== 0) throw new Error('calldata carries fee receivers');
   if (desc.permit !== '0x') throw new Error('calldata carries a permit');
+  if (KYBER_ENABLED[i.network]!.reduced && (fn === 'swapGeneric' || (desc.flags & FLAG_PARTIAL_FILL) !== 0n)) throw new Error('calldata uses a router feature that does not exist on this network');
   if ((desc.flags & FLAG_REQUIRES_EXTRA_ETH) !== 0n) throw new Error('calldata asks for extra native coin');
   // simple mode skips the router's msg.value check: native coin sent with it would stay in the router
   if (src.id === 'native' && (fn === 'swapSimpleMode' || (desc.flags & FLAG_SIMPLE_SWAP) !== 0n)) throw new Error('simple-mode calldata cannot spend the native coin');

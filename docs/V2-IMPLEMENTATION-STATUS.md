@@ -81,3 +81,6 @@ KyberSwap same-chain execution is now enabled on Ethereum, Arbitrum, Polygon, Op
 - Signer fee ceilings are unchanged; on Polygon a complex route at a high gas price can exceed 0.5 POL and is then refused.
 - Agent mandates remain Base-only (`MANDATE_NETWORKS`).
 - Still not built: cross-chain execution, Solana (Jupiter) execution, native BTC/THORChain execution.
+
+- 2026-11-10 (night): HyperEVM enabled too. Its router is a reduced variant (no `swapGeneric`, no partial fill); the verifier refuses
+  `swapGeneric` and the partial-fill flag there (`reduced: true`). Fork proof: `NATIVE_IN=0.5 npx tsx scripts/fork-swap-net.mts hyperevm`.
