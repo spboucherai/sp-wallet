@@ -148,7 +148,7 @@ def main(argv=None) -> int:
             notes.append(f"{s}: close vs {a.cross_source} on {dev['bars']} common bars: median |diff| "
                          f"{dev['median_abs_rel_diff']:.5f}, max {dev['max_abs_rel_diff']:.5f} (relative)")
     every = {k: int(v) for k, v in (x.split("=") for x in a.decision_every)}
-    dirs = find_strategies(a.strategies)
+    dirs = [d for d in find_strategies(a.strategies) if load_strategy(d).kind == "spot"]  # perps: spq.perp_pipeline
     jobs = []
     for d in dirs:
         name = d.parent.name

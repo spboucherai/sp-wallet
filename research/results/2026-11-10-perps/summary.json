@@ -1,0 +1,1171 @@
+{
+ "rows": [
+  {
+   "strategy": "funding_carry_neutral_perp/1",
+   "sha256": "cc9178d88987fa88c260cf09b5f8645dec67f4c6c13942c587869d9cf11ee3d8",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "HYPE",
+    "BTC.SPOT",
+    "ETH.SPOT",
+    "SOL.SPOT",
+    "HYPE.SPOT"
+   ],
+   "total_return": -0.000128103099617638,
+   "cagr": -0.0011238720266999458,
+   "volatility": 0.002012208358465125,
+   "sharpe": -0.5578355963561503,
+   "sortino": -0.7224022278900221,
+   "max_drawdown": 0.00031535013775307874,
+   "worst_intrabar_drawdown": 0.004182396333907046,
+   "calmar": -3.563886271646233,
+   "turnover": 0.4371873926326649,
+   "trades": 6,
+   "win_rate": 0.5,
+   "profit_factor": 0.9667514521074869,
+   "fees_paid": 0.31741154188154,
+   "slippage_paid": 0.26296476446,
+   "funding_pnl": 0.3625327467239,
+   "exposure": 0.025353785170376484,
+   "long_exposure": 0.012721127371995506,
+   "short_exposure": 0.012632657798380973,
+   "gross_leverage_mean": 0.025353785170376484,
+   "gross_leverage_max": 0.2349957733815327,
+   "net_leverage_mean": 8.84695736145324e-05,
+   "time_in_market": 0.13313313313313313,
+   "avg_holding_hours": 133.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_max": 0.1326972485118326,
+   "sharpe_ci": [
+    -3.2472495029171715,
+    2.1691574696321743
+   ],
+   "train": {
+    "total_return": 0.00014070865112492115,
+    "sharpe": 0.25380607674482075,
+    "max_drawdown": 0.0004420682809481713,
+    "liquidations": 0,
+    "funding_pnl": 0.3803796292093,
+    "fees_paid": 0.44365714327435,
+    "trades": 11
+   },
+   "validation": {
+    "total_return": -0.0016353377104824096,
+    "sharpe": -3.886347262164593,
+    "max_drawdown": 0.0016353377104824096,
+    "liquidations": 0,
+    "funding_pnl": 0.688500186615003,
+    "fees_paid": 1.33597433415742,
+    "trades": 20
+   },
+   "own_trials": 13,
+   "trials_tested": 94,
+   "deflated_sharpe": 0.007188809057189697,
+   "own_benchmarks": {
+    "perp_long_1x": {
+     "total_return": -0.2213473436665384,
+     "sharpe": -4.467796952183205,
+     "max_drawdown": 0.2539299076568955
+    },
+    "buy_and_hold": {
+     "total_return": -0.21404073333848017,
+     "sharpe": -4.330051283737055,
+     "max_drawdown": 0.24667832941551637
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   }
+  },
+  {
+   "strategy": "funding_carry_perp/1",
+   "sha256": "2d6a335497fc7d43288cfcd18046d66ed597d0b1798647d7f0f76a67e85b54ac",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "HYPE"
+   ],
+   "total_return": 0.011976969381236158,
+   "cagr": 0.11015975725531035,
+   "volatility": 0.05622939132471708,
+   "sharpe": 1.886621412574268,
+   "sortino": 2.74332275172554,
+   "max_drawdown": 0.011903606871131234,
+   "worst_intrabar_drawdown": 0.013192195255920303,
+   "calmar": 9.254317489472127,
+   "turnover": 0.4859000894618383,
+   "trades": 6,
+   "win_rate": 1.0,
+   "profit_factor": null,
+   "fees_paid": 0.2192489858727,
+   "slippage_paid": 0.097444454,
+   "funding_pnl": 0.786692821108932,
+   "exposure": 0.026213976792226115,
+   "long_exposure": 0.0,
+   "short_exposure": 0.026213976792226115,
+   "gross_leverage_mean": 0.026213976792226115,
+   "gross_leverage_max": 0.2643605945902205,
+   "net_leverage_mean": -0.026213976792226115,
+   "time_in_market": 0.13313313313313313,
+   "avg_holding_hours": 133.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_max": 0.13218029729511024,
+   "sharpe_ci": [
+    -2.520370741071089,
+    5.581297906491391
+   ],
+   "train": {
+    "total_return": 0.043321718030740364,
+    "sharpe": 1.771450731178674,
+    "max_drawdown": 0.02203695301020292,
+    "liquidations": 0,
+    "funding_pnl": 0.828552831233923,
+    "fees_paid": 0.3086259804936,
+    "trades": 9
+   },
+   "validation": {
+    "total_return": -0.04389336993208848,
+    "sharpe": -2.613841702116667,
+    "max_drawdown": 0.055144296202341736,
+    "liquidations": 0,
+    "funding_pnl": 1.47913934427936,
+    "fees_paid": 0.8973699503679,
+    "trades": 14
+   },
+   "own_trials": 13,
+   "trials_tested": 94,
+   "deflated_sharpe": 0.05349504365371495,
+   "own_benchmarks": {
+    "perp_long_1x": {
+     "total_return": -0.2213473436665384,
+     "sharpe": -4.467796952183205,
+     "max_drawdown": 0.2539299076568955
+    },
+    "buy_and_hold": {
+     "total_return": -0.21404073333848017,
+     "sharpe": -4.330051283737055,
+     "max_drawdown": 0.24667832941551637
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   }
+  },
+  {
+   "strategy": "har_rv_perp/1",
+   "sha256": "1d98cbbb9ce58e874064d622e788c81d35ca42f24ccd8e944c7bdbacc1bec7fa",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "HYPE"
+   ],
+   "total_return": -0.09904554944897659,
+   "cagr": -0.5996852084328601,
+   "volatility": 0.4929477952330872,
+   "sharpe": -1.6112868593559895,
+   "sortino": -2.3067735234153317,
+   "max_drawdown": 0.2086161295412069,
+   "worst_intrabar_drawdown": 0.21037124827209353,
+   "calmar": -2.8745869734603016,
+   "turnover": 29.624509421168817,
+   "trades": 63,
+   "win_rate": 0.36,
+   "profit_factor": 0.60635661530423,
+   "fees_paid": 12.4080659548407,
+   "slippage_paid": 5.514739702,
+   "funding_pnl": 1.768166207864172,
+   "exposure": 1.3022943707846442,
+   "long_exposure": 0.41326267058177274,
+   "short_exposure": 0.8890317002028715,
+   "gross_leverage_mean": 1.3022943707846442,
+   "gross_leverage_max": 1.6750340452891588,
+   "net_leverage_mean": -0.4757690296210987,
+   "time_in_market": 0.988988988988989,
+   "avg_holding_hours": 89.81818181818181,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_max": 0.8375170226445794,
+   "sharpe_ci": [
+    -7.028199475630651,
+    3.11186874540806
+   ],
+   "train": {
+    "total_return": -0.10123061739448769,
+    "sharpe": -0.8202013201686584,
+    "max_drawdown": 0.30566190406083993,
+    "liquidations": 0,
+    "funding_pnl": -1.521220380127842,
+    "fees_paid": 22.7395581503598,
+    "trades": 148
+   },
+   "validation": {
+    "total_return": -0.13667236708656127,
+    "sharpe": -2.7170027156943015,
+    "max_drawdown": 0.23446958237312832,
+    "liquidations": 0,
+    "funding_pnl": -0.481454935942572,
+    "fees_paid": 12.8920592126187,
+    "trades": 67
+   },
+   "own_trials": 15,
+   "trials_tested": 94,
+   "deflated_sharpe": 0.0027801672776503004,
+   "own_benchmarks": {
+    "perp_long_1x": {
+     "total_return": -0.2213473436665384,
+     "sharpe": -4.467796952183205,
+     "max_drawdown": 0.2539299076568955
+    },
+    "buy_and_hold": {
+     "total_return": -0.21404073333848017,
+     "sharpe": -4.330051283737055,
+     "max_drawdown": 0.24667832941551637
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   }
+  },
+  {
+   "strategy": "ma_trend_perp/1",
+   "sha256": "08a48e729eb64d5fb820cb93cf7d9aa92daf6c585a5b9cd98ae9119311b67171",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "HYPE"
+   ],
+   "total_return": -0.064104475647622,
+   "cagr": -0.44095514108583833,
+   "volatility": 0.46615227568740053,
+   "sharpe": -1.015033749357393,
+   "sortino": -1.4604826679521106,
+   "max_drawdown": 0.16975555943701504,
+   "worst_intrabar_drawdown": 0.17489848365251037,
+   "calmar": -2.5975888068010367,
+   "turnover": 41.1996109211856,
+   "trades": 85,
+   "win_rate": 0.3472222222222222,
+   "profit_factor": 0.7443461747459033,
+   "fees_paid": 17.2504264047966,
+   "slippage_paid": 7.666891524,
+   "funding_pnl": 2.414862281174583,
+   "exposure": 1.2833994618007403,
+   "long_exposure": 0.42385345225352866,
+   "short_exposure": 0.8595460095472118,
+   "gross_leverage_mean": 1.2833994618007403,
+   "gross_leverage_max": 1.551980469238766,
+   "net_leverage_mean": -0.43569255729368306,
+   "time_in_market": 0.998998998998999,
+   "avg_holding_hours": 66.53333333333333,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_max": 0.775990234619383,
+   "sharpe_ci": [
+    -7.057025755759402,
+    4.084711422594386
+   ],
+   "train": {
+    "total_return": 0.04034860964457021,
+    "sharpe": 0.48221299596862455,
+    "max_drawdown": 0.35281689920865966,
+    "liquidations": 0,
+    "funding_pnl": -1.040307957298157,
+    "fees_paid": 38.2289182441317,
+    "trades": 196
+   },
+   "validation": {
+    "total_return": -0.059061968678007615,
+    "sharpe": -0.8538575740071661,
+    "max_drawdown": 0.23596694310378907,
+    "liquidations": 0,
+    "funding_pnl": -4.385730784892808,
+    "fees_paid": 15.9275111171148,
+    "trades": 76
+   },
+   "own_trials": 11,
+   "trials_tested": 94,
+   "deflated_sharpe": 0.004968902257354037,
+   "own_benchmarks": {
+    "perp_long_1x": {
+     "total_return": -0.2213473436665384,
+     "sharpe": -4.467796952183205,
+     "max_drawdown": 0.2539299076568955
+    },
+    "buy_and_hold": {
+     "total_return": -0.21404073333848017,
+     "sharpe": -4.330051283737055,
+     "max_drawdown": 0.24667832941551637
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   }
+  },
+  {
+   "strategy": "pairs_coint_perp/1",
+   "sha256": "f9923aa5ac84e25676d90c0ba5d0f4e0cc965bf5219efd709da22c16d45e4575",
+   "symbols": [
+    "BTC",
+    "ETH"
+   ],
+   "total_return": -0.01726182890554273,
+   "cagr": -0.1417326476394577,
+   "volatility": 0.05163357279339109,
+   "sharpe": -2.934215177935658,
+   "sortino": -3.5143674326930237,
+   "max_drawdown": 0.020625322377218702,
+   "worst_intrabar_drawdown": 0.03141358776101255,
+   "calmar": -6.871778537435406,
+   "turnover": 10.1832515534962,
+   "trades": 22,
+   "win_rate": 0.45454545454545453,
+   "profit_factor": 0.7094699156358433,
+   "fees_paid": 4.5487883415357,
+   "slippage_paid": 2.021683282,
+   "funding_pnl": -0.057627282007052,
+   "exposure": 0.23720531703552705,
+   "long_exposure": 0.11433806833373115,
+   "short_exposure": 0.1228672487017959,
+   "gross_leverage_mean": 0.23720531703552705,
+   "gross_leverage_max": 1.0457795233375506,
+   "net_leverage_mean": -0.00852918036806474,
+   "time_in_market": 0.23723723723723725,
+   "avg_holding_hours": 47.4,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_max": 0.5228897616687753,
+   "sharpe_ci": [
+    -7.0440535293991715,
+    2.015029019472922
+   ],
+   "train": {
+    "total_return": -0.044820612644881574,
+    "sharpe": -2.9755544899759263,
+    "max_drawdown": 0.049590690472800514,
+    "liquidations": 0,
+    "funding_pnl": -0.409615881096087,
+    "fees_paid": 4.5477264997854,
+    "trades": 20
+   },
+   "validation": {
+    "total_return": 0.008122983777278714,
+    "sharpe": 3.0156777609997483,
+    "max_drawdown": 0.0033563707093506867,
+    "liquidations": 0,
+    "funding_pnl": -0.07099454770077,
+    "fees_paid": 0.9232416650205,
+    "trades": 5
+   },
+   "own_trials": 15,
+   "trials_tested": 94,
+   "deflated_sharpe": 0.0002359766502463367,
+   "own_benchmarks": {
+    "perp_long_1x": {
+     "total_return": -0.19314156806473004,
+     "sharpe": -4.480721410141827,
+     "max_drawdown": 0.22216643068990793
+    },
+    "buy_and_hold": {
+     "total_return": -0.18603877118736367,
+     "sharpe": -4.317672689803349,
+     "max_drawdown": 0.2144481582981015
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   }
+  },
+  {
+   "strategy": "ts_momentum_perp/1",
+   "sha256": "90cb7cb110ecea695f8b2351faee3ae0cabe283c98f8dfc12cc12320dd69f655",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "HYPE"
+   ],
+   "total_return": 0.011332769681336341,
+   "cagr": 0.103971988802664,
+   "volatility": 0.3844664961498863,
+   "sharpe": 0.44876462559343777,
+   "sortino": 0.6954896877252316,
+   "max_drawdown": 0.12600977995107254,
+   "worst_intrabar_drawdown": 0.1314887983509777,
+   "calmar": 0.8251104703383703,
+   "turnover": 65.05059918102648,
+   "trades": 138,
+   "win_rate": 0.23308270676691728,
+   "profit_factor": 1.042226949521454,
+   "fees_paid": 28.2605519267496,
+   "slippage_paid": 12.560284544,
+   "funding_pnl": 3.446686152085788,
+   "exposure": 0.9663120023665288,
+   "long_exposure": 0.20266569543823468,
+   "short_exposure": 0.7636463069282942,
+   "gross_leverage_mean": 0.9663120023665288,
+   "gross_leverage_max": 1.0610974909173931,
+   "net_leverage_mean": -0.5609806114900594,
+   "time_in_market": 0.998998998998999,
+   "avg_holding_hours": 30.007518796992482,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_max": 0.5305487454586966,
+   "sharpe_ci": [
+    -5.813056572948212,
+    5.753891884954661
+   ],
+   "train": {
+    "total_return": 0.23557762746022326,
+    "sharpe": 1.7701167689526662,
+    "max_drawdown": 0.216064430984507,
+    "liquidations": 0,
+    "funding_pnl": -5.801032011842,
+    "fees_paid": 81.9249621359346,
+    "trades": 335
+   },
+   "validation": {
+    "total_return": 0.009525240494928866,
+    "sharpe": 0.40920290806014675,
+    "max_drawdown": 0.2154904194721744,
+    "liquidations": 0,
+    "funding_pnl": -6.978934911049859,
+    "fees_paid": 31.2533942160213,
+    "trades": 137
+   },
+   "own_trials": 5,
+   "trials_tested": 94,
+   "deflated_sharpe": 0.01791675261583556,
+   "own_benchmarks": {
+    "perp_long_1x": {
+     "total_return": -0.2213473436665384,
+     "sharpe": -4.467796952183205,
+     "max_drawdown": 0.2539299076568955
+    },
+    "buy_and_hold": {
+     "total_return": -0.21404073333848017,
+     "sharpe": -4.330051283737055,
+     "max_drawdown": 0.24667832941551637
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   }
+  },
+  {
+   "strategy": "vol_breakout_perp/1",
+   "sha256": "aea15314a810a58be158d1a49c66302fa89dabfa66dacf5e4e02470bf1fc09e2",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "HYPE"
+   ],
+   "total_return": -0.023190368717953214,
+   "cagr": -0.18612796538359633,
+   "volatility": 0.17712658486895863,
+   "sharpe": -1.0741950803056528,
+   "sortino": -1.4694083598460594,
+   "max_drawdown": 0.055548010749599586,
+   "worst_intrabar_drawdown": 0.06300519775181057,
+   "calmar": -3.3507584317038397,
+   "turnover": 10.967692268805829,
+   "trades": 42,
+   "win_rate": 0.5217391304347826,
+   "profit_factor": 0.6444443994005106,
+   "fees_paid": 4.9107622299615,
+   "slippage_paid": 2.18257977,
+   "funding_pnl": 1.237383282008263,
+   "exposure": 0.3142399310983856,
+   "long_exposure": 0.03972912374960546,
+   "short_exposure": 0.2745108073487801,
+   "gross_leverage_mean": 0.3142399310983856,
+   "gross_leverage_max": 1.0210081605653452,
+   "net_leverage_mean": -0.23478168359917467,
+   "time_in_market": 0.5695695695695696,
+   "avg_holding_hours": 54.43478260869564,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_max": 0.5105040802826726,
+   "sharpe_ci": [
+    -6.082322344817858,
+    3.4034311462372684
+   ],
+   "train": {
+    "total_return": 0.13817277624394952,
+    "sharpe": 1.4683666890481248,
+    "max_drawdown": 0.1439282309436759,
+    "liquidations": 0,
+    "funding_pnl": -1.059463540771271,
+    "fees_paid": 13.6557691012791,
+    "trades": 107
+   },
+   "validation": {
+    "total_return": 0.08668424960840482,
+    "sharpe": 2.609981508694632,
+    "max_drawdown": 0.0971014955866617,
+    "liquidations": 0,
+    "funding_pnl": -4.012619001007504,
+    "fees_paid": 5.0437990185876,
+    "trades": 41
+   },
+   "own_trials": 11,
+   "trials_tested": 94,
+   "deflated_sharpe": 0.004488033177289087,
+   "own_benchmarks": {
+    "perp_long_1x": {
+     "total_return": -0.2213473436665384,
+     "sharpe": -4.467796952183205,
+     "max_drawdown": 0.2539299076568955
+    },
+    "buy_and_hold": {
+     "total_return": -0.21404073333848017,
+     "sharpe": -4.330051283737055,
+     "max_drawdown": 0.24667832941551637
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   }
+  },
+  {
+   "strategy": "zscore_reversion_perp/1",
+   "sha256": "0d67f26c4367aaa76e5277a642c64b4b9d21fc7fc92cc8e19756ad62edf7e81b",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "HYPE"
+   ],
+   "total_return": 0.059743168377579314,
+   "cagr": 0.6641783960004575,
+   "volatility": 0.2618605557337998,
+   "sharpe": 2.0756422202873828,
+   "sortino": 3.119014770119783,
+   "max_drawdown": 0.05900432963351532,
+   "worst_intrabar_drawdown": 0.06680952983777722,
+   "calmar": 11.256434911230556,
+   "turnover": 44.269988374880064,
+   "trades": 177,
+   "win_rate": 0.7111111111111111,
+   "profit_factor": 1.6853660939375406,
+   "fees_paid": 20.5127381335401,
+   "slippage_paid": 9.116744418,
+   "funding_pnl": -0.048369070880558,
+   "exposure": 0.3651142425643305,
+   "long_exposure": 0.2240659951884857,
+   "short_exposure": 0.14104824737584487,
+   "gross_leverage_mean": 0.3651142425643305,
+   "gross_leverage_max": 1.0187242438773483,
+   "net_leverage_mean": 0.08301774781264085,
+   "time_in_market": 0.6536536536536537,
+   "avg_holding_hours": 16.266666666666666,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_max": 0.5093621219386743,
+   "sharpe_ci": [
+    -1.7743326314631271,
+    5.815084655514435
+   ],
+   "train": {
+    "total_return": -0.11889062849040666,
+    "sharpe": -1.1267585804743507,
+    "max_drawdown": 0.20859527327605643,
+    "liquidations": 0,
+    "funding_pnl": 2.014263590181239,
+    "fees_paid": 53.0104042065879,
+    "trades": 504
+   },
+   "validation": {
+    "total_return": 0.02328887145504388,
+    "sharpe": 0.9216538421276381,
+    "max_drawdown": 0.11551261866876217,
+    "liquidations": 0,
+    "funding_pnl": 1.424433931157535,
+    "fees_paid": 19.3968211021137,
+    "trades": 168
+   },
+   "own_trials": 11,
+   "trials_tested": 94,
+   "deflated_sharpe": 0.05919865819757458,
+   "own_benchmarks": {
+    "perp_long_1x": {
+     "total_return": -0.2213473436665384,
+     "sharpe": -4.467796952183205,
+     "max_drawdown": 0.2539299076568955
+    },
+    "buy_and_hold": {
+     "total_return": -0.21404073333848017,
+     "sharpe": -4.330051283737055,
+     "max_drawdown": 0.24667832941551637
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   }
+  },
+  {
+   "strategy": "benchmark: perp long 1x incl. funding",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "HYPE"
+   ],
+   "total_return": -0.2213473436665384,
+   "cagr": -0.8887592396173908,
+   "volatility": 0.46702600799921073,
+   "sharpe": -4.467796952183205,
+   "sortino": -5.861265356457314,
+   "max_drawdown": 0.2539299076568955,
+   "worst_intrabar_drawdown": 0.2564006350616894,
+   "calmar": -3.5000179688099706,
+   "turnover": 1.0959510366811065,
+   "trades": 4,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.449436559338,
+   "slippage_paid": 0.19970964,
+   "funding_pnl": -9.048657467200504,
+   "exposure": 1.0032475421230125,
+   "long_exposure": 1.0032475421230125,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 1.0032475421230125,
+   "gross_leverage_max": 1.0106960846301005,
+   "net_leverage_mean": 1.0032475421230125,
+   "time_in_market": 0.998998998998999,
+   "avg_holding_hours": 998.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_max": 1.0106960846301003,
+   "sharpe_ci": [
+    -8.917806326692983,
+    0.17236082000450878
+   ],
+   "train": {
+    "total_return": 0.10373427446965366,
+    "sharpe": 0.8015631085114164,
+    "max_drawdown": 0.23441046046374692
+   },
+   "validation": {
+    "total_return": 0.2609244079097377,
+    "sharpe": 4.293474026567944,
+    "max_drawdown": 0.08879009979526975
+   }
+  },
+  {
+   "strategy": "benchmark: buy and hold spot",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "HYPE"
+   ],
+   "total_return": -0.21404073333848017,
+   "cagr": -0.8792553003129503,
+   "volatility": 0.4633494914187109,
+   "sharpe": -4.330051283737055,
+   "sortino": -5.680692822887477,
+   "max_drawdown": 0.24667832941551637,
+   "worst_intrabar_drawdown": null,
+   "calmar": -3.5643799858555556,
+   "turnover": 1.093122907703468,
+   "trades": 4,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.999000999000999,
+   "slippage_paid": 0.9980029960049942,
+   "funding_pnl": null,
+   "exposure": 0.998998998998999,
+   "long_exposure": null,
+   "short_exposure": null,
+   "gross_leverage_mean": null,
+   "gross_leverage_max": null,
+   "net_leverage_mean": null,
+   "time_in_market": null,
+   "avg_holding_hours": null,
+   "liquidations": null,
+   "wiped_out": null,
+   "margin_utilisation_max": null,
+   "sharpe_ci": [
+    -8.837107871222571,
+    0.41727237757923047
+   ],
+   "train": {
+    "total_return": 0.12227404924818797,
+    "sharpe": 0.8957071066653247,
+    "max_drawdown": 0.23047182960249368
+   },
+   "validation": {
+    "total_return": 0.2735110342674052,
+    "sharpe": 4.514849720075643,
+    "max_drawdown": 0.08744681467125615
+   }
+  }
+ ],
+ "benchmarks": {
+  "symbols": [
+   "BTC",
+   "ETH",
+   "SOL",
+   "HYPE"
+  ],
+  "buy_and_hold_is_spot": true,
+  "splits": {
+   "train": [
+    "2026-04-16T20:00:00+00:00",
+    "2026-08-19T21:00:00+00:00"
+   ],
+   "validation": [
+    "2026-08-19T22:00:00+00:00",
+    "2026-09-30T12:00:00+00:00"
+   ],
+   "test": [
+    "2026-09-30T13:00:00+00:00",
+    "2026-11-11T03:00:00+00:00"
+   ]
+  },
+  "train": {
+   "perp_long_1x": {
+    "total_return": 0.10373427446965366,
+    "cagr": 0.33453980943946005,
+    "volatility": 0.5458767564022523,
+    "sharpe": 0.8015631085114164,
+    "sortino": 1.1482975008328404,
+    "max_drawdown": 0.23441046046374692,
+    "calmar": 1.4271539281038133,
+    "turnover": 1.0300649132271156,
+    "turnover_annual": 3.011805287005852,
+    "trades": 4,
+    "closed_lots": 4,
+    "win_rate": 0.25,
+    "profit_factor": 4.841314075571533,
+    "fees_paid": 0.4496544073989,
+    "slippage_paid": 0.199806442,
+    "exposure": 1.0089757456387753,
+    "bars": 2997,
+    "final_equity": 1103.7342744696537,
+    "returns": {
+     "n": 2996,
+     "mean": 4.99491632107213e-05,
+     "std": 0.005832336182029504,
+     "skew": 0.0012191918996125473,
+     "excess_kurtosis": 9.423090546264337,
+     "min": -0.062276129114845036,
+     "p01": -0.01601515360307191,
+     "p05": -0.009116519501664783,
+     "median": 0.00013233116868904826,
+     "p95": 0.00878914504752204,
+     "p99": 0.01754089410433768,
+     "max": 0.046728508581332484,
+     "positive_fraction": 0.5110146862483311
+    },
+    "realised_pnl": 0.0,
+    "funding_pnl": -21.369094680947406,
+    "liquidation_penalties": 0.0,
+    "long_exposure": 1.0089757456387753,
+    "short_exposure": 0.0,
+    "gross_leverage_mean": 1.0089757456387753,
+    "gross_leverage_max": 1.0223277645577848,
+    "net_leverage_mean": 1.0089757456387753,
+    "net_leverage_max": 1.0223277645577848,
+    "net_leverage_min": 0.0,
+    "time_in_market": 0.9996663329996663,
+    "avg_holding_bars": 2996.0,
+    "avg_holding_hours": 2996.0,
+    "liquidations": 0,
+    "wiped_out": false,
+    "margin_utilisation_mean": 1.0093125199196962,
+    "margin_utilisation_max": 1.0223277645577848,
+    "worst_intrabar_drawdown": 0.23981962074158447,
+    "orders_cut": 0,
+    "orders_refused": 0,
+    "funding_payments": 11980,
+    "funding_missing": 0,
+    "sharpe_ci": [
+     -2.6589967044239406,
+     4.135831267591842
+    ]
+   },
+   "buy_and_hold": {
+    "total_return": 0.12227404924818797,
+    "cagr": 0.401148481969011,
+    "volatility": 0.5382843357081196,
+    "sharpe": 0.8957071066653247,
+    "sortino": 1.2832410201033995,
+    "max_drawdown": 0.23047182960249368,
+    "calmar": 1.740553206267733,
+    "turnover": 1.0225529650766285,
+    "turnover_annual": 2.989841112840876,
+    "trades": 4,
+    "closed_lots": 4,
+    "win_rate": 0.25,
+    "profit_factor": 4.481416136507867,
+    "fees_paid": 0.999000999000999,
+    "slippage_paid": 0.9980029960049941,
+    "exposure": 0.9996663329996663,
+    "bars": 2997,
+    "final_equity": 1122.274049248188,
+    "returns": {
+     "n": 2996,
+     "mean": 5.503939553657376e-05,
+     "std": 0.005751216131754,
+     "skew": 0.0010513141002466725,
+     "excess_kurtosis": 9.173615007205791,
+     "min": -0.06069018852617747,
+     "p01": -0.016110812628167492,
+     "p05": -0.0089213720519557,
+     "median": 0.00013348657644163264,
+     "p95": 0.008500867434406367,
+     "p99": 0.017437870399066465,
+     "max": 0.0456570488865391,
+     "positive_fraction": 0.5153538050734312
+    },
+    "sharpe_ci": [
+     -2.5627656258134865,
+     4.2739435184508405
+    ]
+   }
+  },
+  "validation": {
+   "perp_long_1x": {
+    "total_return": 0.2609244079097377,
+    "cagr": 6.652506350006012,
+    "volatility": 0.5035140227471263,
+    "sharpe": 4.293474026567944,
+    "sortino": 6.320235631312813,
+    "max_drawdown": 0.08879009979526975,
+    "calmar": 74.92396523199336,
+    "turnover": 0.8571731202908862,
+    "turnover_annual": 7.52388430235287,
+    "trades": 4,
+    "closed_lots": 4,
+    "win_rate": 1.0,
+    "profit_factor": null,
+    "fees_paid": 0.4496040693333,
+    "slippage_paid": 0.199784074,
+    "exposure": 1.0043704366253303,
+    "bars": 999,
+    "final_equity": 1260.9244079097377,
+    "returns": {
+     "n": 998,
+     "mean": 0.00024678360487186384,
+     "std": 0.005379718074794317,
+     "skew": 0.13967412907215765,
+     "excess_kurtosis": 4.744029292948768,
+     "min": -0.029838587305423103,
+     "p01": -0.015054862998248108,
+     "p05": -0.00751784434622989,
+     "median": 0.00024473901740729165,
+     "p95": 0.008452138890639624,
+     "p99": 0.015268540891888007,
+     "max": 0.03231364789169011,
+     "positive_fraction": 0.5290581162324649
+    },
+    "realised_pnl": 0.0,
+    "funding_pnl": -13.237293946928887,
+    "liquidation_penalties": 0.0,
+    "long_exposure": 1.0043704366253303,
+    "short_exposure": 0.0,
+    "gross_leverage_mean": 1.0043704366253303,
+    "gross_leverage_max": 1.0104026590309618,
+    "net_leverage_mean": 1.0043704366253303,
+    "net_leverage_max": 1.0104026590309618,
+    "net_leverage_min": 0.0,
+    "time_in_market": 0.998998998998999,
+    "avg_holding_bars": 998.0,
+    "avg_holding_hours": 998.0,
+    "liquidations": 0,
+    "wiped_out": false,
+    "margin_utilisation_mean": 1.0053768198283617,
+    "margin_utilisation_max": 1.0104026590309618,
+    "worst_intrabar_drawdown": 0.09941523385105544,
+    "orders_cut": 0,
+    "orders_refused": 0,
+    "funding_payments": 3988,
+    "funding_missing": 0,
+    "sharpe_ci": [
+     -1.0524806068112948,
+     9.980363736486735
+    ]
+   },
+   "buy_and_hold": {
+    "total_return": 0.2735110342674052,
+    "cagr": 7.349627356691615,
+    "volatility": 0.497471023023893,
+    "sharpe": 4.514849720075643,
+    "sortino": 6.656083877397504,
+    "max_drawdown": 0.08744681467125615,
+    "calmar": 84.04682759825492,
+    "turnover": 0.8527278785571027,
+    "turnover_annual": 7.484865948056333,
+    "trades": 4,
+    "closed_lots": 4,
+    "win_rate": 1.0,
+    "profit_factor": null,
+    "fees_paid": 0.999000999000999,
+    "slippage_paid": 0.9980029960049941,
+    "exposure": 0.998998998998999,
+    "bars": 999,
+    "final_equity": 1273.5110342674052,
+    "returns": {
+     "n": 998,
+     "mean": 0.00025639348276771306,
+     "std": 0.005315152574394377,
+     "skew": 0.1439011343322574,
+     "excess_kurtosis": 4.892801860558535,
+     "min": -0.029325283035919858,
+     "p01": -0.015067576125250063,
+     "p05": -0.0074686932768585675,
+     "median": 0.0002600742972812542,
+     "p95": 0.008218082801328736,
+     "p99": 0.015256798692933907,
+     "max": 0.032167101500680584,
+     "positive_fraction": 0.5320641282565131
+    },
+    "sharpe_ci": [
+     -0.8970523382742132,
+     10.262517865689748
+    ]
+   }
+  },
+  "test": {
+   "perp_long_1x": {
+    "total_return": -0.2213473436665384,
+    "cagr": -0.8887592396173908,
+    "volatility": 0.46702600799921073,
+    "sharpe": -4.467796952183205,
+    "sortino": -5.861265356457314,
+    "max_drawdown": 0.2539299076568955,
+    "calmar": -3.5000179688099706,
+    "turnover": 1.0959510366811065,
+    "turnover_annual": 9.619770622571636,
+    "trades": 4,
+    "closed_lots": 4,
+    "win_rate": 0.0,
+    "profit_factor": 0.0,
+    "fees_paid": 0.449436559338,
+    "slippage_paid": 0.19970964,
+    "exposure": 1.0032475421230125,
+    "bars": 999,
+    "final_equity": 778.6526563334616,
+    "returns": {
+     "n": 998,
+     "mean": -0.00023819376428415098,
+     "std": 0.004989867497482182,
+     "skew": -0.6030242992468015,
+     "excess_kurtosis": 7.6738401220094,
+     "min": -0.032221899914061214,
+     "p01": -0.014235435155096652,
+     "p05": -0.007635001537081454,
+     "median": -0.00010853188979492723,
+     "p95": 0.006481981990350277,
+     "p99": 0.012752320859532781,
+     "max": 0.028696369434238145,
+     "positive_fraction": 0.48597194388777554
+    },
+    "realised_pnl": 0.0,
+    "funding_pnl": -9.048657467200504,
+    "liquidation_penalties": 0.0,
+    "long_exposure": 1.0032475421230125,
+    "short_exposure": 0.0,
+    "gross_leverage_mean": 1.0032475421230125,
+    "gross_leverage_max": 1.0106960846301005,
+    "net_leverage_mean": 1.0032475421230125,
+    "net_leverage_max": 1.0106960846301005,
+    "net_leverage_min": 0.0,
+    "time_in_market": 0.998998998998999,
+    "avg_holding_bars": 998.0,
+    "avg_holding_hours": 998.0,
+    "liquidations": 0,
+    "wiped_out": false,
+    "margin_utilisation_mean": 1.0042528001812518,
+    "margin_utilisation_max": 1.0106960846301003,
+    "worst_intrabar_drawdown": 0.2564006350616894,
+    "orders_cut": 0,
+    "orders_refused": 0,
+    "funding_payments": 3988,
+    "funding_missing": 0,
+    "sharpe_ci": [
+     -8.917806326692983,
+     0.17236082000450878
+    ]
+   },
+   "buy_and_hold": {
+    "total_return": -0.21404073333848017,
+    "cagr": -0.8792553003129503,
+    "volatility": 0.4633494914187109,
+    "sharpe": -4.330051283737055,
+    "sortino": -5.680692822887477,
+    "max_drawdown": 0.24667832941551637,
+    "calmar": -3.5643799858555556,
+    "turnover": 1.093122907703468,
+    "turnover_annual": 9.594946564611604,
+    "trades": 4,
+    "closed_lots": 4,
+    "win_rate": 0.0,
+    "profit_factor": 0.0,
+    "fees_paid": 0.999000999000999,
+    "slippage_paid": 0.9980029960049942,
+    "exposure": 0.998998998998999,
+    "bars": 999,
+    "final_equity": 785.9592666615198,
+    "returns": {
+     "n": 998,
+     "mean": -0.000229032769421975,
+     "std": 0.0049505863219699575,
+     "skew": -0.6153557122122388,
+     "excess_kurtosis": 7.742582715471723,
+     "min": -0.031632258547799386,
+     "p01": -0.014458738234697585,
+     "p05": -0.007640524433962398,
+     "median": -9.924607910366534e-05,
+     "p95": 0.006587000181977829,
+     "p99": 0.012783468081855282,
+     "max": 0.02858538769214025,
+     "positive_fraction": 0.48597194388777554
+    },
+    "sharpe_ci": [
+     -8.837107871222571,
+     0.41727237757923047
+    ]
+   }
+  }
+ },
+ "history_depth": {
+  "BTC": {
+   "symbol": "BTC",
+   "measured_at": "2026-11-11T04:11:51+00:00",
+   "candles": {
+    "1h": {
+     "rows_served": 5001,
+     "first": "2026-04-16T20:00:00+00:00",
+     "days": 208.3
+    },
+    "4h": {
+     "rows_served": 5001,
+     "first": "2024-07-30T20:00:00+00:00",
+     "days": 833.3
+    },
+    "1d": {
+     "rows_served": 2276,
+     "first": "2020-08-19T00:00:00+00:00",
+     "days": 2275.2
+    }
+   },
+   "funding": {
+    "first": "2023-05-12T00:00:00.048000+00:00",
+    "days": 1279.2,
+    "rows_per_page": 500
+   }
+  },
+  "ETH": {
+   "symbol": "ETH",
+   "measured_at": "2026-11-11T04:13:49+00:00",
+   "candles": {
+    "1h": {
+     "rows_served": 5001,
+     "first": "2026-04-16T20:00:00+00:00",
+     "days": 208.3
+    },
+    "4h": {
+     "rows_served": 5001,
+     "first": "2024-07-30T20:00:00+00:00",
+     "days": 833.3
+    },
+    "1d": {
+     "rows_served": 2276,
+     "first": "2020-08-19T00:00:00+00:00",
+     "days": 2275.2
+    }
+   },
+   "funding": {
+    "first": "2023-05-12T00:00:00.048000+00:00",
+    "days": 1279.2,
+    "rows_per_page": 500
+   }
+  },
+  "SOL": {
+   "symbol": "SOL",
+   "measured_at": "2026-11-11T04:15:47+00:00",
+   "candles": {
+    "1h": {
+     "rows_served": 5001,
+     "first": "2026-04-16T20:00:00+00:00",
+     "days": 208.3
+    },
+    "4h": {
+     "rows_served": 5001,
+     "first": "2024-07-30T20:00:00+00:00",
+     "days": 833.3
+    },
+    "1d": {
+     "rows_served": 2250,
+     "first": "2020-09-14T00:00:00+00:00",
+     "days": 2249.2
+    }
+   },
+   "funding": {
+    "first": "2023-05-12T00:00:00.048000+00:00",
+    "days": 1279.2,
+    "rows_per_page": 500
+   }
+  },
+  "HYPE": {
+   "symbol": "HYPE",
+   "measured_at": "2026-11-11T04:16:51+00:00",
+   "candles": {
+    "1h": {
+     "rows_served": 5002,
+     "first": "2026-04-16T19:00:00+00:00",
+     "days": 208.4
+    },
+    "4h": {
+     "rows_served": 4236,
+     "first": "2024-12-05T08:00:00+00:00",
+     "days": 705.8
+    },
+    "1d": {
+     "rows_served": 707,
+     "first": "2024-12-05T00:00:00+00:00",
+     "days": 706.2
+    }
+   },
+   "funding": {
+    "first": "2024-12-05T10:00:00.004000+00:00",
+    "days": 705.8,
+    "rows_per_page": 500
+   }
+  }
+ }
+}

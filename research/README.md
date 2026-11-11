@@ -267,3 +267,112 @@ What these numbers say, and do not say:
   models (Markov switching, HMM), microstructure / order-book / funding / on-chain signals, portfolio optimisation
   (risk parity, mean-variance), stop-loss or trailing-stop execution logic, intrabar fills, parameter optimisers
   beyond a grid, combinatorial purged cross-validation and the probability of backtest overfitting.
+
+## Perpetual futures (V4)
+
+Everything above is the spot laboratory and is unchanged. This section is the extension to perpetual futures — long and
+short, leverage, funding, margin, liquidation. The model, its formulas with their sources, every simplification and the
+reading guide of a version-2 report are in **`docs/v4/quant-perps.md`**; this is the short version.
+
+```
+src/spq/
+  data/hyperliquid.py   candles + funding history from Hyperliquid's public info endpoint (read-only), funding store,
+                        alignment check
+  margin.py             margin arithmetic in decimal.Decimal: a port of packages/derivatives/src/margin.ts
+  perp_engine.py        cross-margin USDC account: fills, funding, initial-margin check, intrabar liquidation, exact ledger
+  perp_metrics.py       v1 metrics + funding PnL, leverage, liquidations, worst intrabar drawdown, ...
+  perp_research.py      PerpExperiment (same split / sealing / trial ledger), benchmarks, funding stress windows
+  perp_report.py        report, schema version 2          perp_backtest.py, perp_pipeline.py   CLIs
+schema/   backtest-report-v2.schema.json, signal-input-v2.schema.json, signal-output-v2.schema.json
+strategies/<name>_perp/1/      results/2026-11-10-perps/
+```
+
+```bash
+# public, keyless data: Hyperliquid perpetual candles + funding, and Coinbase spot for the benchmark / spot legs
+uv run python -m spq.data.hyperliquid --symbols BTC,ETH,SOL,HYPE --interval 1h --out data --depth
+uv run python -m spq.data.fetch --symbols BTC,ETH,SOL,HYPE --interval 1h --start 2026-04-10 --out data
+
+uv run python -m spq.perp_backtest --strategy strategies/ts_momentum_perp/1 --data-dir data --out report.json
+uv run python -m spq.perp_pipeline --strategies strategies --data-dir data --out results/2026-11-10-perps \
+    --rebalance-threshold 0.05 --decision-every har_rv_perp=24
+```
+
+**Data.** `candleSnapshot`, `fundingHistory`, `meta` and nothing else. The venue serves **only its most recent 5 000
+candles per interval** (1h: about 208 days) and the full hourly funding history (BTC, ETH, SOL: since 2023-05-12). Closed
+bars, UTC, gaps counted and never filled. A funding settlement belongs to the bar that opens at its hour. Candles are trade
+prices: the API has no historical mark or oracle price.
+
+**Strategy contract v2.** `META["kind"] = "perp"` plus `max_leverage` (bound of one weight) and `max_gross_exposure`
+(bound of the sum of absolute weights). `target_weights` returns signed fractions of account equity (negative = short);
+`data[symbol]` also carries `funding` and `premium` (and `mark`, `index` when available), all truncated at the decision bar.
+A symbol `X.SPOT` is a spot leg (long only, paid in full). A META without `kind` is the spot contract, exactly as before.
+`spq.describe` and `spq.signal` refuse a perp strategy unless the caller passes `--contract 2`, so a caller that only knows
+the spot contract can neither list nor run one; with it, `spq.signal` requires the funding history, refuses any value dated
+after the decision bar and prints `{"schema_version": 2, "kind": "perp", ..., "weights": {"BTC": -0.5, ...}}`.
+
+**Backtester.** Funding at each hourly settlement on the position held, fill at the next open (taker 4.5 bps + 2 bps
+slippage by default), initial margin `notional / leverage` checked at order time (orders that do not fit are cut pro rata or
+refused), maintenance margin `1 / (2 × venue max leverage)`, liquidation inside the bar when the low (long) or high (short)
+crosses the level where equity equals the maintenance margin — closed at that level plus a 100 bps penalty, flagged in the
+trade log —, wipe-out at zero equity. The account ledger is exact decimal arithmetic: `final equity = initial + Σ realised
+PnL + Σ funding − Σ fees − Σ slippage (+ unrealised PnL)` to the last digit, checked on every run (`checks.ledger`).
+
+**Strategies** (`strategies/<name>_perp/1/`, each with hypothesis, mechanism and what would refute it; parameters written
+before any backtest):
+
+| Strategy | Idea |
+|---|---|
+| `ts_momentum_perp/1` | long an asset whose 7-day return is positive, short otherwise |
+| `ma_trend_perp/1` | long/short on two moving averages, size inversely proportional to realised volatility |
+| `zscore_reversion_perp/1` | fade a 2-sigma deviation from the 48-hour mean, exit at the mean, stop at 4 sigma |
+| `pairs_coint_perp/1` | BTC–ETH spread, market-neutral, hedge ratio on a rolling window ending at the decision bar |
+| `funding_carry_perp/1` | short a perpetual whose funding is persistently high, sized by a funding z-score — **directional** |
+| `funding_carry_neutral_perp/1` | the same signal hedged: spot long + perpetual short |
+| `vol_breakout_perp/1` | follow a 24-hour move larger than twice its usual size for 48 hours |
+| `har_rv_perp/1` | trend position sized by a HAR-RV volatility forecast, flat when the forecast is far above normal |
+
+**Not implemented, on purpose: microstructure strategies.** Order-book-imbalance and other order-book signals cannot be
+backtested here: they need historical book (or tick) data, the public endpoint only serves the current book and none was
+recorded. A candle backtest of such a strategy would be a fake; it belongs to the paper engine once books have been
+recorded.
+
+### Results on real data (2026-11-10, perps)
+
+Hyperliquid 1h candles and funding, BTC, ETH, SOL, HYPE, 2026-04-16 → 2026-11-11 (4 995 common closed bars after the
+5 bars missing in the Coinbase spot series are removed). Train → 2026-08-19, validation → 2026-09-30, **test 2026-09-30 →
+2026-11-11** (999 bars, 41.6 days). Taker 4.5 bps + slippage 2 bps, 1 000 USDC, minimum order 10 USD, rebalance threshold
+0.05. Full tables and reports: `results/2026-11-10-perps/`.
+
+| Strategy | Test return | Sharpe (95 % CI) | Max DD | Fees + slippage / funding (USD) | Gross lev. mean | Liquidations | Train / validation return | Deflated Sharpe (94 trials) |
+|---|---:|---|---:|---:|---:|---:|---|---:|
+| zscore_reversion_perp/1 | +6.0 % | 2.08 [−1.77, 5.82] | −5.9 % | 29.63 / −0.05 | 0.37 | 0 | −11.9 % / +2.3 % | 0.059 |
+| funding_carry_perp/1 | +1.2 % | 1.89 [−2.52, 5.58] | −1.2 % | 0.32 / +0.79 | 0.03 | 0 | +4.3 % / −4.4 % | 0.053 |
+| ts_momentum_perp/1 | +1.1 % | 0.45 [−5.81, 5.75] | −12.6 % | 40.82 / +3.45 | 0.97 | 0 | +23.6 % / +1.0 % | 0.018 |
+| funding_carry_neutral_perp/1 | −0.0 % | −0.56 [−3.25, 2.17] | −0.0 % | 0.58 / +0.36 | 0.03 | 0 | +0.0 % / −0.2 % | 0.007 |
+| pairs_coint_perp/1 | −1.7 % | −2.93 [−7.04, 2.02] | −2.1 % | 6.57 / −0.06 | 0.24 | 0 | −4.5 % / +0.8 % | 0.000 |
+| vol_breakout_perp/1 | −2.3 % | −1.07 [−6.08, 3.40] | −5.6 % | 7.09 / +1.24 | 0.31 | 0 | +13.8 % / +8.7 % | 0.004 |
+| ma_trend_perp/1 | −6.4 % | −1.02 [−7.06, 4.08] | −17.0 % | 24.92 / +2.41 | 1.28 | 0 | +4.0 % / −5.9 % | 0.005 |
+| har_rv_perp/1 | −9.9 % | −1.61 [−7.03, 3.11] | −20.9 % | 17.92 / +1.77 | 1.30 | 0 | −10.1 % / −13.7 % | 0.003 |
+| **perp long 1× incl. funding** | **−22.1 %** | −4.47 [−8.92, 0.17] | −25.4 % | 0.65 / −9.05 | 1.00 | 0 | +10.4 % / +26.1 % | |
+| **buy and hold spot** | **−21.4 %** | −4.33 [−8.84, 0.42] | −24.7 % | 2.00 / — | | | +12.2 % / +27.4 % | |
+
+**No strategy shows an edge that survives the statistics.** Every bootstrap interval contains zero and the deflated Sharpe
+ratios are at most 0.06 (0.95 needed). The test split is 42 days of a market that fell 21–22 %: all eight strategies ended
+above the two long benchmarks there, which is what being net short or mostly flat does in a falling market; on the
+validation split, when the market rose 26–27 %, all eight were far below them. No strategy is above `perp_long_1x` on all
+three splits, and the sign of most results flips from one split to the next. No liquidation occurred (gross leverage never
+above 2.13×). Details and the limits of the run: `results/2026-11-10-perps/summary.md`.
+
+### Known limits (perps)
+
+- **About 208 days of hourly history** on the venue's own candles, four correlated assets, one venue; the test split is six
+  weeks.
+- **Funding is charged on the perpetual's price, not on the oracle price**, and liquidation uses trade highs and lows, not
+  the mark price: neither historical series is served. Flat maintenance margin (no tiers), whole-account liquidation with a
+  fixed penalty (no partial liquidation, no backstop, no ADL), a pessimistic worst case when several positions are open.
+- **Fills** as in the spot engine: next open, constant slippage, no book, no impact, every fill a taker.
+- **Spot legs** come from another venue's candles and share one cash pool with the perpetual account, with no transfer
+  delay or cost; the USD / USDT basis is unhedged.
+- **The look-ahead check compares decisions at two cut points**: a leak that happens not to change those decisions is not
+  detected by it (the unit tests use rules that always react).
+- The version-2 shapes (`--contract 2`, report, signal) have no consumer yet on the TypeScript side: they are proposals.

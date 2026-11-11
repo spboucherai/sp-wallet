@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sp-wallet.local/schema/signal-output-v2.schema.json",
+  "title": "Output of python -m spq.signal --contract 2 for a perpetual-futures strategy (one line on stdout, exit code 0)",
+  "description": "Version 2 of the signal output. The version-1 output (signal-output.schema.json) is unchanged and is still what a spot strategy prints. The weights are TARGETS in fractions of account equity, not orders: sizing, margin, liquidation distance and every risk limit belong to the engine and the signer.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "strategy_sha256",
+    "as_of",
+    "weights",
+    "max_leverage",
+    "max_gross_exposure"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "kind": {
+      "const": "perp"
+    },
+    "strategy_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "as_of": {
+      "type": "string",
+      "format": "date-time",
+      "description": "bar-open time (UTC) of the last closed bar the decision is based on; no input dated after it was used"
+    },
+    "weights": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "description": "one entry per symbol of META['universe']: signed notional / account equity, negative = short. A perpetual is within +/- max_leverage, a spot leg ('<SYMBOL>.SPOT') within [0, 1], and the absolute values sum to at most max_gross_exposure (checked by the runner before printing)"
+    },
+    "max_leverage": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "META['max_leverage'], part of the hashed file"
+    },
+    "max_gross_exposure": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "META['max_gross_exposure'], part of the hashed file"
+    }
+  },
+  "additionalProperties": false
+}

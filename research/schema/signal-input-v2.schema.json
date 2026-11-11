@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sp-wallet.local/schema/signal-input-v2.schema.json",
+  "title": "Input of python -m spq.signal --contract 2 (perpetual-futures strategy)",
+  "description": "The version-1 input (signal-input.schema.json) plus funding, and optionally mark and index, for the perpetuals of the universe. Nothing dated after the last candle's bar-open time may be present: such a value does not exist yet at the decision and the runner refuses the input.",
+  "type": "object",
+  "required": [
+    "candles",
+    "funding"
+  ],
+  "properties": {
+    "candles": {
+      "type": "object",
+      "description": "exactly the symbols of META['universe'] (spot legs '<SYMBOL>.SPOT' included); closed bars, oldest first, [ts, open, high, low, close, volume]",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "bar-open time: ISO 8601 UTC or epoch seconds"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 6,
+          "maxItems": 6
+        }
+      }
+    },
+    "funding": {
+      "type": "object",
+      "description": "exactly the perpetuals of META['universe']; hourly settlements, oldest first: [ts, rate] or [ts, rate, premium]. ts = settlement time (within 60 s of the hour), rate = fraction of notional that longs paid at that settlement (negative: shorts paid). A settlement is attached to the bar that opens at its hour.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 3
+        }
+      }
+    },
+    "mark": {
+      "$ref": "#/$defs/price_series",
+      "description": "optional, perpetuals only: [ts, mark price] on bar-open times of the candles"
+    },
+    "index": {
+      "$ref": "#/$defs/price_series",
+      "description": "optional, perpetuals only: [ts, index / oracle price] on bar-open times of the candles"
+    },
+    "as_of": {
+      "type": "string",
+      "format": "date-time",
+      "description": "optional; must equal the bar-open time of the last bar supplied"
+    },
+    "interval": {
+      "type": "string",
+      "description": "optional; must equal META['interval']"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "price_series": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    }
+  }
+}

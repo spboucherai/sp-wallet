@@ -56,6 +56,8 @@ def main(argv=None) -> int:
     a = parser().parse_args(argv)
     try:
         strategy = load_strategy(a.strategy, a.sha256)
+        if strategy.kind != "spot":
+            raise StrategyError(f"{strategy.name} is a {strategy.kind} strategy: use python -m spq.perp_backtest")
         symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()] if a.symbols else strategy.universe
         interval = a.interval or strategy.meta["interval"]
         config = BacktestConfig(interval=interval, fee_bps=a.fee_bps, slippage_bps=a.slippage_bps,

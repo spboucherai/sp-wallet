@@ -27,6 +27,30 @@ increasing, for exactly the symbols of META['universe'], with identical timestam
 META['lookback'] bars; the last `lookback` bars are passed to the strategy. The runner has no clock: it cannot
 tell whether the last bar is really closed, that is the engine's duty. Parameters always come from META (they are
 part of the hashed file): the input cannot override them, otherwise an approved hash would not pin the behaviour.
+
+Contract 2 — perpetual futures (META["kind"] = "perp"; docs/v4/quant-perps.md). Nothing above changes for spot
+strategies. A perp strategy is only run when the caller passes `--contract 2` (without it: exit 2, so a caller
+that only knows the spot contract can never receive signed, leveraged weights by accident); `--contract 2` on a
+spot strategy is refused the same way. Input (schema/signal-input-v2.schema.json):
+
+    {"candles": {"BTC": [[ts, o, h, l, c, v], ...], "BTC.SPOT": [...]},      # every symbol of the universe
+     "funding": {"BTC": [[ts, rate], ...] or [[ts, rate, premium], ...]},   # every PERPETUAL of the universe
+     "mark": {"BTC": [[ts, price], ...]}, "index": {...},                   # optional, perpetuals only
+     "as_of": ..., "interval": ...}
+
+Funding rows are hourly settlements: `ts` = the settlement hour (an instant within 60 s of the hour is attached to
+it), `rate` = the fraction of notional longs paid at that instant, oldest first, strictly increasing. Each row is
+attached to the bar that OPENS at its hour, exactly as in the backtester. A settlement — or a mark / index value —
+dated AFTER the last bar's open time is refused (exit 2): it does not exist yet at the decision. Bars of the
+lookback window without a settlement are refused beyond the same limits as missing bars. Output
+(schema/signal-output-v2.schema.json), one line:
+
+    {"schema_version": 2, "kind": "perp", "strategy_sha256": "<hex>", "as_of": "...",
+     "weights": {"BTC": -0.5, "ETH": 0.25}, "max_leverage": 2.0, "max_gross_exposure": 2.0}
+
+Weights are signed fractions of account equity (negative = short), each within +/- max_leverage (a spot leg within
+[0, 1]) and their absolute values sum to at most max_gross_exposure; anything else is exit 6. These are TARGETS,
+not orders: sizing, margin, liquidation distance and every risk limit are the engine's and the signer's duty.
 """
 from __future__ import annotations
 
@@ -37,8 +61,11 @@ import sys
 
 import pandas as pd
 
+import numpy as np
+
 from .data.core import COLUMNS, DataError, align, normalise, to_utc
-from .strategy import HashMismatch, StrategyError, WeightsError, load_strategy, validate_weights
+from .strategy import (HashMismatch, StrategyError, WeightsError, is_spot_leg, load_strategy, validate_perp_weights,
+                       validate_weights)
 
 EXIT_INPUT, EXIT_HASH, EXIT_STRATEGY, EXIT_RUNTIME, EXIT_WEIGHTS = 2, 3, 4, 5, 6
 FAR_FUTURE = "2262-01-01T00:00:00Z"
@@ -116,8 +143,109 @@ def parse_input(payload, meta: dict, *, max_gap_bars: int = 6, max_missing_fract
     return align(data), as_of
 
 
-def compute_signal(strategy_dir, sha256: str, payload, **limits) -> dict:
+def _rows(obj, sym: str, what: str, widths: tuple[int, ...]) -> list:
+    rows = obj.get(sym)
+    if not isinstance(rows, list) or not rows:
+        raise InputError(f"{sym}: {what} must be a non-empty array")
+    if not all(isinstance(r, list) and len(r) in widths for r in rows):
+        raise InputError(f"{sym}: every {what} row must have {' or '.join(map(str, widths))} values")
+    for r in rows:
+        if any(isinstance(x, bool) or not isinstance(x, (int, float)) or x != x or x in (float("inf"), float("-inf"))
+               for x in r[1:]):
+            raise InputError(f"{sym}: {what} values must be finite numbers")
+    try:
+        ts = [to_utc(pd.Timestamp(r[0], unit="s") if isinstance(r[0], (int, float)) else r[0]) for r in rows]
+    except Exception as e:  # noqa: BLE001
+        raise InputError(f"{sym}: unreadable {what} timestamp ({e})") from e
+    if any(b <= a for a, b in zip(ts, ts[1:])):
+        raise InputError(f"{sym}: {what} timestamps must be strictly increasing (oldest first, no duplicates)")
+    return [(t, *r[1:]) for t, r in zip(ts, rows)]
+
+
+def _nan_runs(values) -> tuple[int, int]:
+    """(number of NaN, longest run of NaN)."""
+    bad = np.isnan(np.asarray(values, dtype="float64"))
+    longest = run = 0
+    for b in bad:
+        run = run + 1 if b else 0
+        longest = max(longest, run)
+    return int(bad.sum()), longest
+
+
+def parse_perp_input(payload, meta: dict, *, max_gap_bars: int = 6, max_missing_fraction: float = 0.02):
+    """Contract 2: candles as in parse_input, plus funding (mandatory) and mark / index (optional) for perpetuals.
+
+    Nothing dated after the decision bar's open time may be in the input."""
+    from .data.hyperliquid import FUNDING_TOLERANCE_MS, attach_funding
+
+    if not isinstance(payload, dict):
+        raise InputError('input must be an object with "candles" and "funding" objects')
+    unknown_keys = set(payload) - {"candles", "funding", "mark", "index", "as_of", "interval"}
+    if unknown_keys:
+        raise InputError(f"unexpected input keys {sorted(unknown_keys)} (parameters cannot be overridden)")
+    data, as_of = parse_input({k: payload[k] for k in ("candles", "as_of", "interval") if k in payload}, meta,
+                              max_gap_bars=max_gap_bars, max_missing_fraction=max_missing_fraction)
+    perps = [s for s in meta["universe"] if not is_spot_leg(s)]
+    funding = payload.get("funding")
+    if not isinstance(funding, dict) or sorted(funding) != sorted(perps):
+        raise InputError(f'"funding" must be an object with exactly the perpetuals {sorted(perps)}')
+    limit = int(len(next(iter(data.values()))) * max_missing_fraction)
+    for sym in perps:
+        rows = _rows(funding, sym, "funding", (2, 3))
+        hour = [t.round("h") for t, *_ in rows]
+        if any(abs((t - h).total_seconds()) * 1000 > FUNDING_TOLERANCE_MS for (t, *_), h in zip(rows, hour)):
+            raise InputError(f"{sym}: funding timestamps must be hourly settlement times")
+        if len(set(hour)) != len(hour):
+            raise InputError(f"{sym}: two funding rows for the same settlement hour")
+        if hour[-1] > as_of:
+            raise InputError(f"{sym}: funding settlement {iso_z(hour[-1])} is dated after the decision bar "
+                             f"({iso_z(as_of)}): a rate that is not settled yet cannot be an input")
+        f = pd.DataFrame({"rate": [r[1] for r in rows], "premium": [r[2] if len(r) > 2 else float("nan") for r in rows]},
+                         index=pd.DatetimeIndex(hour, name="ts").as_unit("ns"))
+        data[sym] = attach_funding(data[sym], f)
+        missing, gap = _nan_runs(data[sym]["funding"])
+        if missing > limit or gap > max_gap_bars:
+            raise InputError(f"{sym}: {missing} bars of the lookback window have no funding settlement "
+                             f"(longest run {gap}); refusing to compute a signal on a broken funding series")
+    for name in ("mark", "index"):
+        if name not in payload:
+            continue
+        series = payload[name]
+        if not isinstance(series, dict) or not set(series) <= set(perps) or not series:
+            raise InputError(f'"{name}" must be an object keyed by perpetuals of the universe')
+        for sym in series:
+            rows = _rows(series, sym, name, (2,))
+            if rows[-1][0] > as_of:
+                raise InputError(f"{sym}: {name} value dated {iso_z(rows[-1][0])} is after the decision bar "
+                                 f"({iso_z(as_of)})")
+            if any(v <= 0 for _, v in rows):
+                raise InputError(f"{sym}: {name} prices must be positive")
+            s = pd.Series([v for _, v in rows], index=pd.DatetimeIndex([t for t, _ in rows]).as_unit("ns"))
+            if not s.index[s.index >= data[sym].index[0]].isin(data[sym].index).all():
+                raise InputError(f"{sym}: {name} timestamps must be bar-open times of the candles")
+            data[sym] = data[sym].assign(**{name: s.reindex(data[sym].index).to_numpy()})
+            missing, gap = _nan_runs(data[sym][name])
+            if missing > limit or gap > max_gap_bars:
+                raise InputError(f"{sym}: {missing} bars of the lookback window have no {name} value")
+    return data, as_of
+
+
+def compute_signal(strategy_dir, sha256: str, payload, contract: int = 1, **limits) -> dict:
     strategy = load_strategy(strategy_dir, sha256)
+    if strategy.kind == "perp":
+        if contract != 2:
+            raise InputError("this is a perpetual-futures strategy (contract 2: signed, leveraged weights); "
+                             "it is only run for a caller that passes --contract 2")
+        data, as_of = parse_perp_input(payload, strategy.meta, **limits)
+        with contextlib.redirect_stdout(sys.stderr):
+            raw = strategy.raw(data)
+        weights = validate_perp_weights(raw, strategy.universe, strategy.meta["max_leverage"],
+                                        strategy.meta["max_gross_exposure"])
+        return {"schema_version": 2, "kind": "perp", "strategy_sha256": strategy.sha256, "as_of": iso_z(as_of),
+                "weights": weights, "max_leverage": float(strategy.meta["max_leverage"]),
+                "max_gross_exposure": float(strategy.meta["max_gross_exposure"])}
+    if contract != 1:
+        raise InputError("--contract 2 was requested but this is a spot strategy (contract 1)")
     data, as_of = parse_input(payload, strategy.meta, **limits)
     with contextlib.redirect_stdout(sys.stderr):
         raw = strategy.raw(data)
@@ -133,6 +261,8 @@ def main(argv=None) -> int:
         p.add_argument("--input", required=True, help="JSON file, or - for stdin")
         p.add_argument("--max-gap-bars", type=int, default=6)
         p.add_argument("--max-missing-fraction", type=float, default=0.02)
+        p.add_argument("--contract", type=int, choices=(1, 2), default=1,
+                       help="1 = spot contract (default); 2 = perpetual futures (required to run a perp strategy)")
         try:
             a = p.parse_args(argv)
         except SystemExit as e:  # --help
@@ -148,7 +278,7 @@ def main(argv=None) -> int:
         except ValueError as e:
             raise InputError(f"input is not valid JSON: {e}") from e
         try:
-            out = compute_signal(a.strategy, a.sha256, payload, max_gap_bars=a.max_gap_bars,
+            out = compute_signal(a.strategy, a.sha256, payload, contract=a.contract, max_gap_bars=a.max_gap_bars,
                                  max_missing_fraction=a.max_missing_fraction)
         except (HashMismatch, StrategyError, InputError, WeightsError):
             raise
