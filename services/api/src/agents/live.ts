@@ -31,7 +31,8 @@ export function runSignal(strategy: { path: string; sha256: string }, data: Reco
   const last = Math.max(...common);
   const input = JSON.stringify({ candles, interval, as_of: new Date(last).toISOString().replace('.000Z', 'Z') });
   return new Promise((resolve, reject) => {
-    const env = { PATH: `${path.dirname(process.execPath)}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`, HOME: process.env.HOME ?? '/tmp', UV_OFFLINE: '1', PYTHONDONTWRITEBYTECODE: '1' }; // no secrets, no database URL
+    const home = process.env.HOME ?? '/tmp';
+    const env = { PATH: `${home}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`, HOME: home, UV_OFFLINE: '1', PYTHONDONTWRITEBYTECODE: '1' }; // no secrets, no database URL
     const ch = spawn(UV, ['run', '--frozen', '--no-sync', 'python', '-m', 'spq.signal', '--strategy', dir, '--sha256', strategy.sha256, '--input', '-'], { cwd: RESEARCH_DIR, env, stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '', err = '', done = false;
     const finish = (e: Error | null, v?: Record<string, number>) => { if (done) return; done = true; clearTimeout(timer); if (e) reject(e); else resolve(v!); };

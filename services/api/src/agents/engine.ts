@@ -28,7 +28,7 @@ export interface EngineDeps {
 }
 export interface PlannedOrder { fromSymbol: string; toSymbol: string; fromId: string; toId: string; fromDecimals: number; toDecimals: number; amountIn: bigint; usd: number; reason: string }
 
-const LOOKBACK = 800, MIN_TRADE_USD = 2, MIN_TRADE_FRACTION = 0.02, MAX_ORDERS_PER_BAR = 6;
+const LOOKBACK = 2500, MIN_TRADE_USD = 2, MIN_TRADE_FRACTION = 0.02, MAX_ORDERS_PER_BAR = 6;
 const log = (a: AgentRow, kind: string, title: string, body = '', data?: unknown) => sql`insert into research_log (agent_id, kind, title, body, data) values (${a.id}, ${kind}, ${title}, ${body}, ${data === undefined ? null : sql.json(data as never)})`;
 
 /** Validate a strategy's answer: only universe symbols, each weight in [0, 1], total at most 1. Anything else means "hold". */
