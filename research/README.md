@@ -96,6 +96,15 @@ Rules enforced by `spq.strategy`:
 - **Pure function.** No memory between calls: if a rule needs a state ("in position since the breakout"), rebuild
   it from the window (see `donchian_breakout`). Parameters live in `META["params"]`: they are part of the hashed
   file, so approving a hash approves the parameters. To try other parameters for real, write a new version.
+- **v8 — what the purity guard is.** A lint for honest mistakes and research hygiene, NOT a security boundary. The
+  security boundary is the OS sandbox of every process that loads a strategy (`docs/v8/SANDBOX.md`; its tests run with
+  this lint disabled). The static check (`spq.purity`) was a short deny-list and was trivially evaded — 17 of the 19
+  patterns of `tests/evasions.py` passed it, nine of them shown to execute (`from typing import sys`,
+  `pd.io.common.os`, `np.ctypeslib`, `(x for x in ()).gi_frame.f_builtins`, `locals()["__builtins__"]`, a `match` class
+  pattern reading `__globals__`, `pd.eval`, …). It is now an allow-list policy: listed modules used through a reviewed
+  API, a module object never used as a value, no dunder or `_private` access anywhere, no `class` / decorator / global
+  state, no string evaluation (`.format`, `.eval`, `.query`, string annotations), `numpy.random` refused statically
+  (exit 4 at load instead of 5 at run time). The 26 library strategies pass unchanged (same files, same hashes).
 - Purity is enforced as far as an in-process check can:
   1. *static* (AST): imports limited to `math`, `numpy`, `pandas`, `scipy`, `statsmodels`, `arch`, `sklearn` and a
      few stdlib helpers; `open`, `eval`, `exec`, `__import__`, `getattr`, `.now()`, `.today()`, `read_csv`, `load`,

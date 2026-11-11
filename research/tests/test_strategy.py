@@ -122,9 +122,12 @@ def test_runtime_guard_blocks_network_files_clock_and_randomness():
 
 
 def test_guard_is_applied_to_loaded_strategies_and_restored_on_error(strategy_dir):
-    # passes the static check (no forbidden name) but draws random numbers at run time
+    # v8: the static lint now refuses numpy.random outright; loaded unchecked (strict=False), the runtime guard is
+    # what stops the draw
     d = strategy_dir("import numpy as np\nreturn {s: float(np.random.rand()) / 2 for s in data}\n")
-    s = load_strategy(d)
+    with pytest.raises(StrategyError, match="numpy.random"):
+        load_strategy(d)
+    s = load_strategy(d, strict=False)
     with pytest.raises(PurityError, match="random"):
         s(make_data(20))
     assert np.random.rand() < 1.0                   # entry points are restored after the failure

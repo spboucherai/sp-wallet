@@ -2,10 +2,11 @@
 
     python -m spq.lint --strategy <dir>
 
-Prints {"sha256", "bytes", "problems": [...]} and exits 0 when the source passes the static check of spq.strategy
-(allow-listed imports, no open/eval/exec/getattr/..., no clock, no file or network helper), 3 when it does not,
-2 when the file cannot be read. Nothing of the file is executed: it is parsed (ast) and hashed. This is what the
-API runs on a submitted strategy before any other laboratory command touches it.
+Prints {"sha256", "bytes", "problems": [...]} and exits 0 when the source passes the static check of spq.purity
+(reviewed module API, no dunder, no module object as a value, no class / decorator, no string evaluation, no clock,
+file or network helper), 3 when it does not, 2 when the file cannot be read. Nothing of the file is executed: it is
+parsed (ast) and hashed. This is what the API runs on a submitted strategy before any other laboratory command
+touches it. It is a lint: the process that later runs the strategy is confined by the OS whatever this says.
 """
 from __future__ import annotations
 
