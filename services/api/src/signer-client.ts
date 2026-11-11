@@ -6,6 +6,7 @@ export interface SignerStatus {
   keyId: string; addresses: Record<string, string>; halted: boolean; enrollmentOpen: boolean;
   credentials: { id: string; addedAt: string }[]; policy: Policy; spentToday: Record<string, string>; journalHead: string | null; journalLength: number;
   mandates?: { mandate: Mandate; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; today: { sold: Record<string, string>; orders: number } }[];
+  venues?: { authorization: { authorizationId: string; venue: string; network: string }; hash: string; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; today: { orders: number; cancels: number; leverage: number } }[];
 }
 
 async function call<T>(method: 'GET' | 'POST', path: string, payload?: unknown): Promise<T> {
@@ -44,7 +45,11 @@ export const signer = {
   mandateApprove: (mandate: unknown, assertion: unknown) => { cached = null; return call<{ mandateId: string; hash: string }>('POST', '/mandate/approve', { mandate, assertion }); },
   mandateRevoke: (mandateId: string) => { cached = null; return call<{ ok: true }>('POST', '/mandate/revoke', { mandateId }); },
   mandateSign: (mandateId: string, intent: unknown, aux?: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string; pre?: { raw: string; txid: string } }>('POST', '/mandate/sign', { mandateId, intent, ...(aux ? { aux } : {}) }); },
-  mandateReturn: (mandateId: string, intent: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string }>('POST', '/mandate/return', { mandateId, intent }); },
+  mandateReturn: (mandateId: string, intent: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string }>('POST', '/mandate/return', { mandateId, intent }); },  // live derivatives: venue trading key, authorization (passkey), one signature per venue action, revocation
+  venueKey: (venue: string, network: string) => call<{ venue: string; network: string; address: string; path: string; account: string }>('POST', '/venue/key', { venue, network }),
+  venueAuthorize: (authorization: unknown, assertion: unknown) => { cached = null; return call<{ authorizationId: string; hash: string; agentAddress: string; approve: { action: unknown; signature: { r: string; s: string; v: number }; nonce: number } }>('POST', '/venue/authorize', { authorization, assertion }); },
+  venueSign: (p: { authorizationId: string; sign: unknown; context?: unknown; assertion?: unknown }) => { cached = null; return call<{ signature: { r: string; s: string; v: number }; signer: string; kind: string; hash: string }>('POST', '/venue/sign', p); },
+  venueRevoke: (authorizationId: string) => { cached = null; return call<{ revoked: true; revokedAt: string }>('POST', '/venue/revoke', { authorizationId }); },
 };
 
 /** The wallet's address on a network; fails closed when the signer has no key for it. */

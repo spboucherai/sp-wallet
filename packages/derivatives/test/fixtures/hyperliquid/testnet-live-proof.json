@@ -1,0 +1,163 @@
+{
+ "recordedAt": "2026-11-11T04:32:24.615Z",
+ "network": "testnet",
+ "note": "throwaway seed generated in memory by scripts/hl-live-testnet.mts; the account never existed on the venue",
+ "account": "0xe06252f11d8beac14b7f8a026dd02febdba1400f",
+ "agent": "0x78d1c6e0bee0f04b2ca06d5e03f14f20f15cf5c8",
+ "exchanges": [
+  {
+   "step": "API authorization/approve (signer signs approveAgent with the wallet key; the API sends it to the testnet)",
+   "status": 422,
+   "answer": {
+    "error": "venue_rejected",
+    "message": "the venue did not register the trading key: hyperliquid: Must deposit before performing actions. User: 0xe06252f11d8beac14b7f8a026dd02febdba1400f — the authorization was revoked on the signer, nothing can trade. Fund the venue account first if the venue asks for a deposit, then prepare a new authorization."
+   }
+  },
+  {
+   "step": "approveAgent signed by the wallet key (user-signed action)",
+   "request": {
+    "action": {
+     "type": "approveAgent",
+     "hyperliquidChain": "Testnet",
+     "signatureChainId": "0x66eee",
+     "agentAddress": "0x78d1c6e0bee0f04b2ca06d5e03f14f20f15cf5c8",
+     "agentName": "spw-live valid_until 1794457941000",
+     "nonce": 1794371541665
+    },
+    "nonce": 1794371541665,
+    "signature": {
+     "r": "0xa378701c373874428d426855d738e8513d01a37afa8652bfc7d5e1b3e3332345",
+     "s": "0x2eadf78d2bc6130f57e96b877f103b25d68b75b2811d16fbcd81883f6bc2264e",
+     "v": 27
+    },
+    "vaultAddress": null,
+    "expiresAfter": null
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "Must deposit before performing actions. User: 0xe06252f11d8beac14b7f8a026dd02febdba1400f"
+   }
+  },
+  {
+   "step": "order signed by the trading key (expiresAfter = nonce + 90 s)",
+   "request": {
+    "action": {
+     "type": "order",
+     "orders": [
+      {
+       "a": 3,
+       "b": true,
+       "p": "73070",
+       "s": "0.0002",
+       "r": false,
+       "t": {
+        "limit": {
+         "tif": "Alo"
+        }
+       },
+       "c": "0x5d36245d4a22d2c75f3ec09f78653a56"
+      }
+     ],
+     "grouping": "na"
+    },
+    "nonce": 1794371542788,
+    "signature": {
+     "r": "0x79cba3e8518c405edb8d5d4325789a600fb3f1347ab122cf5124925fc3f0c088",
+     "s": "0x5b8e01c1ad459a735e706ee86ecddfd4029c296ee1899fbb5f5207a54e3e6974",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": 1794371632788
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0x78d1c6e0bee0f04b2ca06d5e03f14f20f15cf5c8 does not exist."
+   }
+  },
+  {
+   "step": "cancelByCloid signed by the trading key",
+   "request": {
+    "action": {
+     "type": "cancelByCloid",
+     "cancels": [
+      {
+       "asset": 3,
+       "cloid": "0x5d36245d4a22d2c75f3ec09f78653a56"
+      }
+     ]
+    },
+    "nonce": 1794371543427,
+    "signature": {
+     "r": "0xa5724676b8fd483273352abfb24d4cc75b21f03090987c55afeef44b6f7a407f",
+     "s": "0x7964c0e384046d1d37f081951647e233795debd9767565879e59c8addfaf3f2d",
+     "v": 27
+    },
+    "vaultAddress": null,
+    "expiresAfter": 1794371633427
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0x78d1c6e0bee0f04b2ca06d5e03f14f20f15cf5c8 does not exist."
+   }
+  },
+  {
+   "step": "updateLeverage signed by the trading key",
+   "request": {
+    "action": {
+     "type": "updateLeverage",
+     "asset": 3,
+     "isCross": true,
+     "leverage": 3
+    },
+    "nonce": 1794371543905,
+    "signature": {
+     "r": "0x7d18e12ce80ecb4164ae82056501b5c5fe7ef9e052f317312a653d608d1656f1",
+     "s": "0x143bc91c9ec692a8ccdf21430a520bf8d5f45cda147d602e989c1c806d6bb37f",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": 1794371633905
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0x78d1c6e0bee0f04b2ca06d5e03f14f20f15cf5c8 does not exist."
+   }
+  },
+  {
+   "step": "signer: order at half the market price (passkey-approved all the same)",
+   "answer": "signer_price: price 37281 is more than 1000 bps away from the signer's own BTC price 73639.0975"
+  },
+  {
+   "step": "signer: order above the authorized notional",
+   "answer": "signer_policy: order notional 730.7 is above the authorized 60"
+  },
+  {
+   "step": "signer: order on an instrument outside the authorization",
+   "answer": "signer_policy: hyperliquid:ETH is not allowed by the authorization"
+  },
+  {
+   "step": "signer: payload differs from the order shown for approval",
+   "answer": "signer_mismatch: the order shown for approval and the payload to sign differ (size)"
+  },
+  {
+   "step": "signer: an approveAgent for another address smuggled through /venue/sign",
+   "answer": "signer_unsupported: an agent approval can only be signed through /venue/authorize, by the main key, with the owner's passkey"
+  },
+  {
+   "step": "signer: a transfer (usdClassTransfer) smuggled through /venue/sign",
+   "answer": "signer_unsupported: this payload is not an order, a cancel or a leverage change (usdClassTransfer): the trading key signs nothing else"
+  },
+  {
+   "step": "signer: a cancel after revocation",
+   "answer": "signer_revoked: authorization revoked"
+  },
+  {
+   "step": "signer: an order after revocation",
+   "answer": "signer_revoked: authorization revoked"
+  }
+ ]
+}

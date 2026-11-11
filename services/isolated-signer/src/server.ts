@@ -56,6 +56,12 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
       if (route === 'POST /mandate/revoke') { signer.revokeMandate(String(json.mandateId)); return { ok: true }; }
       if (route === 'POST /mandate/sign') return await signer.signDelegated(String(json.mandateId), json.intent, json.aux && typeof json.aux === 'object' ? json.aux : undefined);
       if (route === 'POST /mandate/return') return await signer.signReturn(String(json.mandateId), json.intent);
+      // live derivatives: a dedicated trading key per venue and network; the authorization needs the owner's passkey, orders and
+      // leverage changes need it too (MANUAL_LIVE), cancels do not, revoking is always allowed (venue.ts)
+      if (route === 'POST /venue/key') return signer.venueKey(json.venue, json.network);
+      if (route === 'POST /venue/authorize') return await signer.venueAuthorize(json.authorization, json.assertion);
+      if (route === 'POST /venue/sign') return await signer.venueSign(json);
+      if (route === 'POST /venue/revoke') return signer.venueRevoke(String(json.authorizationId));
       throw new SignerError('not_found', 'no such route');
     };
     queue = queue.then(run).then((r) => send(200, r), (e: unknown) => {

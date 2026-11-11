@@ -3,10 +3,11 @@
 Checked against the official documentation, the official Python SDK and the live public API on **2026-11-10 / 11** (UTC 2026-11-11).
 Adapter: `packages/derivatives/src/venues/hyperliquid/` (entry point `@spw/derivatives/hyperliquid`). Scope: **perpetuals of the first perp
 dex** (the validator-operated USDC dex). Out of scope: spot, builder-deployed dexes (HIP-3), outcome markets (HIP-4), TWAP, order
-modification, sub-accounts, vaults, deposits and withdrawals.
+modification, sub-accounts, vaults, deposits and withdrawals (how the owner funds the account, and what a later delivery needs: section 14).
 
 **Nothing was sent to the mainnet exchange endpoint.** Mainnet was used read-only (`POST /info`, websocket subscriptions). The testnet
-exchange endpoint received 12 requests signed by a key generated in memory by `scripts/hl-testnet.mts` and discarded (section 9).
+exchange endpoint received 12 requests signed by a key generated in memory by `scripts/hl-testnet.mts` and discarded (section 9),
+and 10 more (two runs of five) from `scripts/hl-live-testnet.mts`, signed by the isolated signer on a throwaway in-memory seed (section 13).
 
 ## 1. Sources
 
@@ -327,3 +328,149 @@ A funded account would have gone past this check to the business rules (margin, 
 - The agent-name character set: the adapter accepts `[A-Za-z0-9_-]{1,16}` (+ optional ` valid_until <ms>`), which is our own
   restriction; the documentation gives none.
 - Deposits and withdrawals (nothing implemented, nothing sent).
+
+## 13. Controlled live trading (2026-11-11) — keys, authorization, signer checks
+
+Code: signer `services/isolated-signer/src/venue.ts`; shared canonical objects and the pinned asset table
+`packages/derivatives/src/live/`; execution engine `services/api/src/derivatives/exec.ts`; routes `docs/v4/API-LIVE-NOTES.md`.
+It ships disabled: a venue account is `READ_ONLY` until the owner approves an authorization with his passkey.
+
+**Two keys.**
+
+| Key | Path | Signs | Never signs |
+|---|---|---|---|
+| Wallet key (the account) | `m/44'/60'/0'/0/0` | on this venue, exactly one message: `approveAgent` naming the signer's own trading key, once per authorization, inside `POST /venue/authorize`, after the passkey approved the canonical authorization | orders, cancels, transfers, `withdraw3`, `usdSend`, `usdClassTransfer`, an `approveAgent` for any other address |
+| Trading key (API wallet) | `m/44'/60'/9000'/0/0` mainnet, `…/0/1` testnet (vault index 9000 is now refused, so no agent vault can share the path) | `order` (one per signature), `cancel`, `cancelByCloid`, `updateLeverage` — only under a stored, unrevoked, unexpired authorization | everything `describe()` calls `other` (`agentSendAsset`, `vaultTransfer`, `subAccountTransfer`, `updateIsolatedMargin`, `cDeposit2`, `scheduleCancel`, `twapOrder`, builder fees…), anything with a `vaultAddress`, anything without `expiresAfter` |
+
+The API wallet is registered under a name with `valid_until <authorization expiry in ms>`, so the venue itself drops it when the
+authorization ends (≤ 90 days; the venue allows 180).
+
+**The trading key is deterministic, and the documentation advises against reusing an agent address** ("once an agent is
+deregistered, its used nonce state may be pruned … previously signed actions can be replayed"). The design keeps one key per
+network (binding), and removes what a replay could do: the signer refuses any L1 action without `expiresAfter`, and requires
+it at most 120 s after the nonce (the engine uses 90 s). A signed order therefore dies on the venue within two minutes,
+whatever happens to the venue's nonce set later. `expiresAfter` is part of the action hash; the testnet named our trading key
+for actions carrying it (below), so the hash is right.
+
+**What the signer checks on `POST /venue/sign`** (from its own stored copy of the authorization, never from the request):
+authorization known / not revoked / not expired / `MANUAL_LIVE`; venue and network of the request equal the authorization's;
+its own `describe()` on the payload with the pinned asset table → `order`, `cancel` or `leverage` (an `approve_agent` or
+`other` is refused); no vault address; `expiresAfter` present and ≤ nonce + 120 s, not passed; nonce within (now − 120 s,
+now + 60 s], never used, and — the venue's own rule — above the lowest of the 100 highest nonces signed with this key.
+For an order: exactly one order in the action; the canonical order sent for approval equals the payload field by field
+(instrument, side, type, size, price, trigger price, reduce-only, time in force, client id, nonce, expiry); instrument
+allowed; notional (size × the highest of limit and trigger price, exact decimals) ≤ `maxOrderNotional`; orders signed today
+< `maxOrdersPerDay`; client id never signed before; every price of the order within `maxPriceDeviationBps` of the signer's
+**own** mid (Coinbase + Kraken, both must answer and agree within 1 % — `prices.ts`; no price, no signature); passkey
+assertion whose challenge is the SHA-256 of the canonical order; emergency halt off. For a leverage change: canonical form
+equal to the payload, instrument allowed, leverage ≤ `maxLeverage`, passkey, halt off. For a cancel: instrument allowed —
+no passkey, and it is signed even under the emergency halt (withdrawing an order is always possible while the authorization
+lives). Counters, the client id and the nonce are written to disk before the signature is returned.
+
+**What the signer cannot check.** It has no view of positions. So (a) a reduce-only order needs the passkey like any other
+and is bounded by `maxOrderNotional` like any other; (b) `maxPositionNotional` and `maxGrossExposure` are committed to by
+the passkey but enforced by the API's risk engine against the venue's real state — a compromised API could ignore them, and
+is then still bounded by: passkey per order, notional per order, orders per day, the price band, the expiry.
+
+**Price band and its limits.** The signer's mid is a USD spot price; the venue quotes a USDT-margined perpetual. The band
+must cover that basis (a few basis points on mainnet). On testnet the mark wanders (74 562 against a signer mid of 73 639 on
+2026-11-11, 1.25 %), so a testnet authorization needs a wide band (the script uses 1000 bps). The band applies to the
+trigger price too: a stop further from the market than the band cannot be signed. Only symbols `prices.ts` can price
+(`[A-Z]{2,6}`, quoted on both exchanges) can trade — which is one reason the pinned table holds BTC, ETH and SOL only.
+
+**Pinned asset table** (`packages/derivatives/src/live/hl-assets.ts`): mainnet BTC 0, ETH 1, SOL 5; testnet BTC 3, ETH 4,
+SOL 0; read from `meta` on 2026-11-11. The signer names instruments through this table only. Trade-off: a table handed over
+by the API could say "index 7 is BTC"; a pinned one cannot be falsified but goes stale if the venue renumbers. The API
+compares the live `meta` with the table before every proposal and approval and refuses to trade on any difference
+(`503 asset_table_mismatch`, nothing signed); the fix is a reviewed change of the table and a redeploy of both bundles. A
+lower venue maximum leverage is not treated as a difference (the venue refuses what exceeds it).
+
+**Info requests added for reconciliation** — shapes read live on testnet, 2026-11-11:
+
+| Request | Answer |
+|---|---|
+| `orderStatus {user, oid}` (`oid`: number, or the cloid as hex) | unknown: `{"status":"unknownOid"}`; known: `{"status":"order","order":{"order":{coin, side, limitPx, sz, oid, timestamp, triggerCondition, isTrigger, triggerPx, children, isPositionTpsl, reduceOnly, orderType, origSz, tif, cloid},"status":"filled","statusTimestamp":…}}` — the same order object as `historicalOrders`; found by oid and by cloid alike |
+| `userRole {user}` | `{"role":"user"}` for an account, `{"role":"missing"}` for an address the venue has never seen (our throwaway wallet and trading key), `{"role":"agent","data":{"user":"0x20a0…d92e"}}` for an API wallet of an existing account — all three seen live |
+| `activeAssetData {user, coin}` | `{user, coin, leverage: {type, value}, maxTradeSzs, availableToTrade, markPx}` — answered for any address (default 20× cross on BTC) |
+| `extraAgents {user}` (not used) | `[{name, address, validUntil}]` |
+
+In recorded order histories a cancelled order keeps its remaining size in `sz` (e.g. `sz 0.00226`, `origSz 0.00288`,
+`canceled`), a filled one has `sz 0.0`: the engine takes the filled size as the larger of `origSz − sz` and the sum of the
+fills carrying the client order id, and the average price from the fills.
+
+**Testnet proof of the two keys** — `npx tsx scripts/hl-live-testnet.mts --record`, 2026-11-11 04:32 UTC, recorded in
+`test/fixtures/hyperliquid/testnet-live-proof.json` and replayed by `test/hyperliquid/live-proof.test.ts`. Throwaway seed in
+memory; real signer class behind its HMAC channel, real API routes, real exchange prices; 5 requests to the testnet exchange
+endpoint per run (two runs were made), none to mainnet (the script refuses the mainnet host before sending).
+
+| Sent to `https://api.hyperliquid-testnet.xyz/exchange` | Answer (HTTP 200) |
+|---|---|
+| `approveAgent` signed by the wallet key `0xe062…400f`, naming the trading key `0x78d1…f5c8` (through the API's authorization route, then once more directly) | `{"status":"err","response":"Must deposit before performing actions. User: 0xe06252f11d8beac14b7f8a026dd02febdba1400f"}` |
+| `order` (post-only buy 0.0002 BTC @ 73070, `expiresAfter = nonce + 90 s`) signed by the trading key after a passkey approval | `{"status":"err","response":"User or API Wallet 0x78d1c6e0bee0f04b2ca06d5e03f14f20f15cf5c8 does not exist."}` |
+| `cancelByCloid` signed by the trading key, no passkey | same answer, naming `0x78d1…f5c8` |
+| `updateLeverage` 3× cross signed by the trading key after a passkey approval | same answer, naming `0x78d1…f5c8` |
+
+The venue recovered the wallet key from the approval and the trading key from the three L1 actions: its hashes equal ours,
+and the wallet key is nowhere in the trading path. On the API side the refusal of the approval left the account `READ_ONLY`
+and revoked the signer authorization. Not proven (needs a funded account): everything after the venue accepts the approval.
+
+**Not verified (live trading)**
+
+- Any accepted action on a funded account: our own approval being listed by `userRole`, an order resting, filling, being
+  cancelled, a leverage change, the per-order answers of a real `order` request. The funded path of the script is written
+  and has never run.
+- What `orderStatus` reports for an IOC order that fills partly (`filled` with a remaining `sz`, or `canceled`): the engine
+  handles both; the tests' fake venue answers `canceled`.
+- The venue's wording when an action arrives after its `expiresAfter`, or with a reused nonce (the tests' fake does not model them).
+- That `orderStatus` finds an order by cloid immediately after it is accepted, and how long after it is closed.
+- How quickly `userFills` shows a fill after the order status changes (the engine waits up to a minute for the fills to add
+  up before it stops watching a finished order, and needs two consecutive passes to declare a divergence).
+- Whether the venue lets the same API-wallet address be approved again after a revocation and a new authorization (same
+  name, same address) — expected from "an agent of the same name is replaced", not tried.
+- The address-based rate limit (1 request per USDC traded, 10 000 initial) on a new account under real use; the engine's own
+  load is about 110–150 weight per order (proposal + approval) and 45–65 per reconciliation pass (every 10 s), against the
+  documented 1200 per minute per IP — room for about six orders a minute, which is the default `maxOrdersPerMinute`.
+
+## 14. Funding the venue account (collateral) — facts and what is not built
+
+The venue account is the wallet's own EVM address. `GET /api/v1/derivatives/live/accounts/:id/collateral` shows, read from
+the venue (`clearinghouseState`): equity, collateral (account value without unrealized PnL), free collateral, margin used
+and `withdrawable`. **This delivery builds and sends no deposit and no withdrawal.**
+
+How the owner funds the account (sources: section 8 and the venue's "USDC" / bridge page):
+
+- **What:** native USDC on **Arbitrum One** (`0xaf88d065e77c8cC2239327C5EDb3A432268e5831`), sent **by the account address
+  itself** to the venue's bridge contract `0x2df1c51e09aecf9cacb7bc98cb1742757f163df7` (source `hyperliquid-dex/contracts/Bridge2.sol`).
+  "The user sends native USDC to the bridge, and it is credited to the account that sent it in less than 1 minute."
+- **Minimum:** "The minimum deposit amount is 5 USDC. If you send an amount less than this, it will not be credited and be
+  lost forever." The documentation describes native USDC only: anything else sent there must be assumed lost.
+- **Fees:** no deposit fee is documented; the transfer costs Arbitrum gas, paid in ETH on Arbitrum by the sending address.
+  A withdrawal costs 1 USDC ("at the time of this writing") and takes about 5 minutes.
+- **Status of that route:** the venue's page now calls the Arbitrum bridge the legacy route and names Circle CCTP as "the
+  preferred method for minting USDC natively on the Hyperliquid L1". Whether the legacy bridge still credits deposits was
+  **not tested** (nothing was sent). Before sending anything: read the venue's page again and check the bridge address
+  there, then send the minimum first.
+- **Testnet:** bridge `0x08cfc1B6b2dCF36A1480b99353A354AA8AC56f89`; mock USDC comes from the faucet, which requires a mainnet
+  deposit by the same address (section 9), or from another testnet account by `usdSend`.
+
+Mechanically, a deposit is an ordinary USDC transfer on Arbitrum from the wallet's address; the wallet's existing transfer
+flow could make it today (passkey, the signer's per-transfer and daily USDC caps apply, the signer allowlist is empty by
+default). It is deliberately **not** offered as a venue action here: nothing in the wallet checks the bridge address or the
+5 USDC minimum, and a mistake is unrecoverable.
+
+What a later delivery needs, precisely:
+
+1. **Deposit as a first-class intent.** The bridge address pinned in the signer bundle per network (not received from the
+   API), listed in the signer policy `allowlist` as `arbitrum:0x2df1…3df7`; a signer-side rule for that destination: asset
+   = native USDC only, amount ≥ 5 USDC, source = the wallet address; the UI states the destination by name. Then
+   reconciliation of the credit from the venue (`userNonFundingLedgerUpdates`, not read today) before showing it as collateral.
+2. **Withdrawal.** The user-signed `withdraw3` action (`{type, hyperliquidChain, signatureChainId, destination, amount, time}`,
+   EIP-712 primary type `HyperliquidTransaction:Withdraw`, request nonce = `time`), signed by the **wallet key** — the
+   trading key cannot authorize it. The typed-data builder exists and is wired to nothing
+   (`buildWithdraw3TypedDataOnly`). Needed: a signer endpoint of its own with a passkey assertion over a canonical
+   withdrawal (amount, destination, time, network); **destination fixed to the wallet's own address** by the signer (as
+   vault returns are), not chosen by the API; an amount cap in the signer policy; `describe()` extended to return
+   `withdraw` for that exact shape, accepted only on that endpoint; reconciliation of the 1 USDC fee and of the arrival on
+   Arbitrum (about 5 minutes).
+3. **Spot ⇄ perp** (`usdClassTransfer`, user-signed, builder present and unwired) only if the account uses separate spot and
+   perp balances; accounts under the "unified account" abstraction are not read correctly today (section 12).

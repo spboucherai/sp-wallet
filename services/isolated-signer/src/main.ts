@@ -70,7 +70,8 @@ if (cmd === 'init') {
   const broken = verifyAuditChain(store.state.journal);
   if (broken !== null) { console.error(`signer journal hash chain broken at seq ${broken} — refusing to start`); process.exit(1); }
   const secret = existsSync(paths.secret) ? readFileSync(paths.secret, 'utf8').trim() : need('SPW_SIGNER_SECRET');
-  // outbound HTTPS is used for one thing only: reading public exchange prices to check agent orders
+  // outbound HTTPS is used for one thing only: reading public exchange prices to check agent orders and live venue orders
+  // (the signer never talks to a venue: it reads and signs payloads, the API sends them)
   dns.setDefaultResultOrder('ipv4first'); net.setDefaultAutoSelectFamilyAttemptTimeout(2500);
   const signer = new Signer(keys, store, { rpId: need('SPW_RP_ID'), origin: need('SPW_ORIGIN') }, undefined, exchangePrices());
   const host = process.env.SPW_SIGNER_HOST ?? '127.0.0.1', port = Number(process.env.SPW_SIGNER_PORT ?? 8651);
