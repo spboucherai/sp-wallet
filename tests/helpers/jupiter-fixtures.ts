@@ -1,7 +1,7 @@
 // Recorded Jupiter /build answers (v1 transactions) with the message, intent and mainnet simulation that went with them
 // (scripts/sim-jupiter.mts --record), and the means to re-address one to another wallet for a test.
 import { readFileSync } from 'node:fs';
-import { associatedTokenAddress, compileSolV1Message, decodeSolV1Message, NETWORKS, solMessageHash, TOKEN_PROGRAM, tokenProgramOf, WSOL_MINT, type Intent, type SolIxInput, type SolV1Message } from '@spw/core';
+import { associatedTokenAddress, compileSolV1Message, decodeSolV1Message, DEFAULT_POLICY, NETWORKS, solMessageHash, TOKEN_PROGRAM, tokenProgramOf, WSOL_MINT, type Intent, type SolIxInput, type SolV1Message } from '@spw/core';
 
 export interface JupFixture { wallet: string; from: string; to: string; converted: boolean; intent: Intent; message: string; build: any;
   simulation: { fee: number; unitsConsumed: number; preBalances: number[]; postBalances: number[]; preTokenBalances: any[]; postTokenBalances: any[] }; effects: { spent: string; received: string; rentKept: string } }
@@ -25,11 +25,13 @@ export function buildFor(f: JupFixture, me: string): any {
   for (const [a, b] of Object.entries(addressMap(f.wallet, me))) s = s.split(a).join(b);
   return JSON.parse(s);
 }
-/** the recorded message and intent, re-addressed to `me` (same instructions, same order, same account positions) */
+/** the recorded message and intent, re-addressed to `me` (same instructions, same order, same account positions). The recording
+ *  carries the policy version in force on the day it was made; the re-addressed intent is one for the signer of TODAY, so it
+ *  names the default policy's current version (an intent for another version is refused: `policy version changed`). */
 export function readdress(f: JupFixture, me: string, keyId: string, o: Partial<Intent> = {}): { intent: Intent; message: string; msg: Uint8Array } {
   const m = decodeSolV1Message(new Uint8Array(Buffer.from(f.message, 'base64'))), map = addressMap(f.wallet, me);
   const msg = compileSolV1Message({ payer: me, blockhash: m.blockhash, computeUnitLimit: m.computeUnitLimit, priorityFeeLamports: m.priorityFeeLamports, loadedAccountsDataSizeLimit: m.loadedAccountsDataSizeLimit,
     instructions: ixInputs(m).map((x) => ({ ...x, accounts: x.accounts.map((a) => ({ ...a, pubkey: map[a.pubkey] ?? a.pubkey })) })) });
-  const intent: Intent = { ...f.intent, keyId, from: me, to: me, ...o, swap: { ...f.intent.swap!, dataHash: solMessageHash(msg) } };
+  const intent: Intent = { ...f.intent, keyId, from: me, to: me, policyVersion: DEFAULT_POLICY.version, ...o, swap: { ...f.intent.swap!, dataHash: solMessageHash(msg) } };
   return { intent, message: Buffer.from(msg).toString('base64'), msg };
 }

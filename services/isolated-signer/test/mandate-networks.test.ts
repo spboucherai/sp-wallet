@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { encodeFunctionData, parseTransaction, recoverTransactionAddress } from 'viem';
-import { cashLegs, getNetwork, KYBER_NATIVE, KYBER_ROUTER, KYBER_ROUTER_ABI, MANDATE_NETWORKS, mandateHash, swapDataHash, vaultKeyId, type Intent, type Mandate } from '@spw/core';
+import { cashLegs, DEFAULT_POLICY, getNetwork, KYBER_NATIVE, KYBER_ROUTER, KYBER_ROUTER_ABI, MANDATE_NETWORKS, mandateHash, swapDataHash, vaultKeyId, type Intent, type Mandate } from '@spw/core';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
 import { deriveKeys } from '../src/keys.ts';
 import { Signer } from '../src/signer.ts';
@@ -44,7 +44,7 @@ function order(network: string, index: number, now: number, from: string, to: st
   const data = encodeFunctionData({ abi: KYBER_ROUTER_ABI, functionName: o.fn ?? 'swap', args: [{ callTarget: '0x8F10B468b06c6FD214B65F87778827F7D113f996', approveTarget: '0x0000000000000000000000000000000000000000', targetData: '0xabcd', desc, clientData: '0x' }] as never });
   const maxFeePerGas = o.maxFeePerGas ?? '200000000';
   const intent: Intent = { v: 1, proposalId: uuid(), keyId: vaultKeyId(keys.keyId, index), network, chainRef: o.chainRef ?? getNetwork(network).chainRef, asset: from, symbol: src.symbol, decimals: src.decimals, amount: amount.toString(),
-    from: vault, to: vault, maxFee: o.maxFee ?? (670_000n * BigInt(maxFeePerGas)).toString(), createdAt: now, expiresAt: now + 90, policyVersion: 2,
+    from: vault, to: vault, maxFee: o.maxFee ?? (670_000n * BigInt(maxFeePerGas)).toString(), createdAt: now, expiresAt: now + 90, policyVersion: DEFAULT_POLICY.version,
     swap: { provider: 'kyberswap', toAsset: to, minOut: minOut.toString(), router: KYBER_ROUTER, dataHash: swapDataHash(data), approveGas: from === 'native' ? '0' : '70000' },
     evm: { nonce: 0, gasLimit: '600000', maxFeePerGas, maxPriorityFeePerGas: '1000000' } };
   return { intent, aux: { swapData: data } };
@@ -55,7 +55,11 @@ describe('delegated orders, network by network', () => {
   it('signs for the mandate network only: its chain id, the pinned router, the vault of that agent', async () => {
     const { signer, pk, t, asked } = await setup();
     const withCash = MANDATE_NETWORKS.filter((id) => cashLegs(getNetwork(id)).length > 0);
-    expect(withCash).toEqual(['base', 'ethereum', 'arbitrum', 'polygon', 'optimism', 'avalanche', 'hyperevm']); // BNB Smart Chain: no cash leg in the registry yet
+    // derived from the registry, so a network that gains a cash leg is exercised with no change here; these eight must be there
+    // (BNB Smart Chain since registry v5: Binance-Peg USDC, 18 decimals — the only cash leg that is not in 6 decimals)
+    expect(withCash).toEqual(expect.arrayContaining(['base', 'ethereum', 'arbitrum', 'polygon', 'optimism', 'bsc', 'avalanche', 'hyperevm']));
+    expect(cashLegs(getNetwork('bsc'))[0]).toMatchObject({ symbol: 'USDC', decimals: 18 });
+    const ten = (id: string) => 10n * 10n ** BigInt(cashLegs(getNetwork(id))[0]!.decimals); // 10 units of that network's cash leg, in ITS decimals
     const made: Record<string, { m: Mandate; index: number; cash: string }> = {};
     for (const [k, id] of withCash.entries()) {
       const index = k + 1, cash = cashLegs(getNetwork(id))[0]!, m = mandate(id, index, ['native', cash.id], t.now); // one vault index per agent, whatever its network
@@ -64,7 +68,8 @@ describe('delegated orders, network by network', () => {
     }
     for (const id of withCash) {
       const { m, index, cash } = made[id]!, net = getNetwork(id);
-      const o = order(id, index, t.now, cash, 'native', 10_000000n, 1, PX[net.native.symbol]!);
+      const o = order(id, index, t.now, cash, 'native', ten(id), 1, PX[net.native.symbol]!);
+      expect(BigInt(o.intent.swap!.minOut) > 0n, id).toBe(true);
       const r = await signer.signDelegated(m.mandateId, o.intent, o.aux);
       const tx = parseTransaction(r.raw as `0x${string}`), pre = parseTransaction(r.pre!.raw as `0x${string}`);
       expect(tx.chainId, id).toBe(Number(net.chainRef)); expect(pre.chainId, id).toBe(Number(net.chainRef)); // a signature valid on that chain only
@@ -73,6 +78,13 @@ describe('delegated orders, network by network', () => {
       expect(await recoverTransactionAddress({ serializedTransaction: r.raw as `0x02${string}` }), id).toBe(keys.vault(index).address);
       expect(asked.at(-1), id).toEqual(['USDC', net.native.symbol]);
     }
+    // decimals are the asset's own, network by network: 10 USDC on BNB Smart Chain is 10^19 base units, and the price check values
+    // it as 10 USD — an order guaranteeing 90 % of that is refused there exactly as on a 6-decimal network
+    for (const id of ['bsc', 'base']) { const { m, index, cash } = made[id]!, net = getNetwork(id);
+      const thin = order(id, index, t.now, cash, 'native', ten(id), 1, PX[net.native.symbol]!, { keep: 0.9 });
+      await expect(signer.signDelegated(m.mandateId, thin.intent, thin.aux), id).rejects.toThrow(/guaranteed output is worth 90\.00 %/);
+      const big = order(id, index, t.now, cash, 'native', 101n * 10n ** BigInt(cashLegs(net)[0]!.decimals), 1, PX[net.native.symbol]!); // the helper's mandate caps an order at 100 units
+      await expect(signer.signDelegated(m.mandateId, big.intent, big.aux), id).rejects.toThrow(/order above the per-order limit/); }
     // a mandate never serves another network, even for the same vault key and the same assets by symbol
     const b = made.base!, a = made.arbitrum!;
     const cross = order('arbitrum', b.index, t.now, a.cash, 'native', 10_000000n, 1, 2000);

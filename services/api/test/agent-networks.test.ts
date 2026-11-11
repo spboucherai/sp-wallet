@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { cashLegs, DEFAULT_POLICY, getNetwork, MANDATE_NETWORKS, NETWORKS } from '@spw/core';
+import { cashLegs, DEFAULT_POLICY, getNetwork, hasMarketData, MANDATE_NETWORKS, MARKET_LISTINGS, NETWORKS, tradableSymbols } from '@spw/core';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
 import { deriveKeys } from '../../isolated-signer/src/keys.ts';
 import { createSignerServer } from '../../isolated-signer/src/server.ts';
@@ -65,7 +65,7 @@ beforeAll(async () => {
   cookie = String(s.setCookie).split(';')[0]!;
   // one fresh hourly bar per symbol, on two sources
   const ts = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000 - 3_600_000);
-  for (const [symbol, close] of Object.entries({ ETH: 2000, LINK: 10, UNI: 5, AAVE: 100, AVAX: 20, BTC: 60_000, POL: 0.5, HYPE: 25 })) for (const source of ['coinbase', 'kraken'])
+  for (const [symbol, close] of Object.entries({ ETH: 2000, LINK: 10, UNI: 5, AAVE: 100, AVAX: 20, BTC: 60_000, POL: 0.5, HYPE: 25, BNB: 600 })) for (const source of ['coinbase', 'kraken'])
     await sql`insert into candles (source, symbol, interval, ts, open, high, low, close, volume) values (${source}, ${symbol}, '1h', ${ts}, ${close}, ${close}, ${close}, ${close}, 1)`;
 }, 60_000);
 afterAll(async () => { for (const [id, rpc] of Object.entries(rpcBackup)) NETWORKS[id]!.rpc = rpc; await app?.close(); signerSrv?.close(); node?.close(); await sql?.end(); });
@@ -75,7 +75,8 @@ describe('what an agent can trade, per network', () => {
     await sql`insert into market_quality (symbol, interval, checked_at, last_ts, fresh, gaps, status) values ('ETH', '1h', now(), now(), true, 0, 'ok'), ('LINK', '1h', now(), now(), false, 3, 'gap')`;
     const r = await api('GET', '/agents/networks');
     expect(r.status).toBe(200);
-    expect(r.json.networks.map((n: any) => n.id)).toEqual(['base', 'ethereum', 'arbitrum', 'polygon', 'optimism', 'bsc', 'avalanche', 'hyperevm']);
+    expect(r.json.networks.map((n: any) => n.id)).toEqual([...MANDATE_NETWORKS]); // every execution-enabled network, in that order
+    expect(r.json.networks.map((n: any) => n.id)).toEqual(expect.arrayContaining(['base', 'ethereum', 'arbitrum', 'polygon', 'optimism', 'bsc', 'avalanche', 'hyperevm']));
     expect(r.json).toMatchObject({ maxSymbols: 12, maxLiveSymbols: 11 });
     const by = Object.fromEntries(r.json.networks.map((n: any) => [n.id, n]));
     expect(by.base).toMatchObject({ name: 'Base', native: 'ETH', enabled: true, defaultCash: 'USDC', feeWarning: false });
@@ -89,7 +90,18 @@ describe('what an agent can trade, per network', () => {
     expect(by.base.symbols.find((s: any) => s.symbol === 'LINK').data['1h']).toMatchObject({ status: 'gap', fresh: false });
     expect(by.base.symbols.find((s: any) => s.symbol === 'AAVE').data).toEqual({ '1h': null, '1d': null }); // no data yet
     expect(by.base.symbols.find((s: any) => s.symbol === 'EUR')).toMatchObject({ live: false, sources: ['bitstamp', 'kraken'] });
-    expect(by.bsc).toMatchObject({ enabled: false, cash: [], defaultCash: null }); // no cash leg in the registry there yet
+    // network by network, exactly what the registry says: the cash legs (by registry id and name), the symbols and their default asset
+    for (const id of MANDATE_NETWORKS) { const n = getNetwork(id), legs = cashLegs(n), t = tradableSymbols(n);
+      expect(by[id].cash, id).toEqual(legs.map((c) => ({ symbol: c.symbol, asset: c.id, name: c.name })));
+      expect(by[id], id).toMatchObject({ enabled: legs.length > 0 && t.length > 0, defaultCash: legs.some((c) => c.symbol === 'USDC') ? 'USDC' : null, native: n.native.symbol });
+      expect(by[id].symbols.map((x: any) => [x.symbol, x.defaultAsset, x.live]), id).toEqual(t.map((x) => [x.symbol, x.defaultId, x.live]));
+      for (const x of by[id].symbols) for (const rep of x.representations) if (rep.kind === 'wrapped' || rep.kind === 'pegged') expect(rep.issuer, `${id}:${rep.assetSymbol}`).toBeTruthy(); }
+    // BNB Smart Chain is enabled since registry v5: Binance-Peg USDC (default) and USDT, named as such
+    expect(by.bsc).toMatchObject({ enabled: true, defaultCash: 'USDC', cash: [{ symbol: 'USDC', name: 'Binance-Peg USD Coin' }, { symbol: 'USDT', name: 'Binance-Peg BSC-USD (USDT)' }] });
+    expect(by.bsc.symbols.find((x: any) => x.symbol === 'BTC').representations.map((x: any) => x.assetSymbol)).toEqual(['WBTC', 'BTCB']);
+    expect(by.bsc.symbols.find((x: any) => x.symbol === 'ETH').representations).toEqual([expect.objectContaining({ assetSymbol: 'ETH', name: 'Binance-Peg Ethereum', kind: 'token' })]); // a token there, not the native coin
+    expect(by.ethereum.symbols.find((x: any) => x.symbol === 'BTC').representations.map((x: any) => x.assetSymbol)).toEqual(expect.arrayContaining(['WBTC', 'cbBTC', 'tBTC']));
+    for (const id of MANDATE_NETWORKS) for (const x of by[id].symbols) for (const rep of x.representations) expect(['USDC.e', 'USDT0', 'BTC.b', 'WETH.e', 'LINK.e'], `${id}:${rep.assetSymbol}`).not.toContain(rep.assetSymbol); // bridged variants: not offered
     expect(by.avalanche.cash.map((c: any) => c.symbol)).toEqual(['USDC', 'USDT']);
     // gas: 450 000 gas at 0.01 gwei per order; the reserve is the floor of two orders at the policy ceiling
     expect(by.arbitrum.gas).toMatchObject({ perOrder: '0.0000045', gasPriceGwei: 0.01, reserve: '0.0006' });
@@ -124,13 +136,20 @@ describe('agents on several networks', () => {
   });
 
   it('refuses what the registry or the listings do not support, with a reason', async () => {
+    // derived from the registry, so they stay refusals when it grows: a symbol the exchanges list but that no asset of Base tracks,
+    // and a network whose only cash leg is USDC (a bridged USDT0 or USDC.e there is NOT a cash leg)
+    const absent = Object.keys(MARKET_LISTINGS).find((x) => /^[A-Z0-9]{2,10}$/.test(x) && hasMarketData(x) && !['USDC', 'USDT'].includes(x) && !tradableSymbols(getNetwork('base')).some((t) => t.symbol === x))!;
+    const usdcOnly = getNetwork(MANDATE_NETWORKS.find((id) => cashLegs(getNetwork(id)).map((c) => c.symbol).join() === 'USDC')!);
+    expect(absent).toBeTruthy(); expect(usdcOnly.tokens.some((t) => t.symbol === 'USDT0' || t.symbol === 'USDC.e')).toBe(true);
     const cases: [Record<string, unknown>, RegExp][] = [
       [{ network: 'solana', universe: ['SOL'] }, /agents trade on Base, Ethereum/],
       [{ network: 'nowhere', universe: ['ETH'] }, /agents trade on/],
-      [{ network: 'bsc', universe: ['BNB'] }, /no cash leg/],
-      [{ network: 'base', universe: ['BTC'] }, /no asset of the wallet registry tracks BTC on Base/],
+      [{ network: 'base', universe: [absent] }, new RegExp(`no asset of the wallet registry tracks ${absent} on Base`)],
       [{ network: 'base', universe: ['NOPE'] }, /no market data/],
-      [{ network: 'base', universe: ['ETH'], cash: 'USDT' }, /USDT is not in the wallet registry on Base/],
+      [{ network: usdcOnly.id, universe: [usdcOnly.native.symbol], cash: 'USDT' }, new RegExp(`USDT is not in the wallet registry on ${usdcOnly.name}; choose USDC`)],
+      [{ network: 'avalanche', universe: ['ETH'] }, /no asset of the wallet registry tracks ETH on Avalanche/], // WETH.e is not ETH without a reviewed entry
+      [{ network: 'avalanche', universe: ['AVAX'], assets: { AVAX: getNetwork('avalanche').tokens.find((t) => t.symbol === 'BTC.b')!.id } }, /does not track/],
+      [{ network: 'bsc', universe: ['BNB'], assets: { BNB: getNetwork('bsc').tokens.find((t) => t.symbol === 'ETH')!.id } }, /does not track/], // Binance-Peg ETH is not BNB
       [{ network: 'base', universe: ['ETH', 'ETH'] }, /duplicate/],
       [{ network: 'base', universe: ['USDC'] }, /cash leg/],
       [{ network: 'ethereum', universe: ['ETH'], assets: { ETH: getNetwork('ethereum').tokens.find((t) => t.symbol === 'LINK')!.id } }, /does not track/],
@@ -154,6 +173,39 @@ describe('agents on several networks', () => {
     // WETH as ETH: the native coin is then held for gas only, shown apart
     const v = (await api('GET', `/agents/${r.json.id}`)).json.vault;
     expect(v.map((x: any) => [x.symbol, x.assetSymbol, x.role])).toEqual([['USDC', 'USDC', 'cash'], ['ETH', 'WETH', 'asset'], ['BTC', 'WBTC', 'asset'], ['ETH', 'ETH', 'gas']]);
+  });
+
+  it('BNB Smart Chain: an 18-decimal cash leg end to end — creation, vault view, mandate caps, signer approval', async () => {
+    const B = getNetwork('bsc'), id = (x: string) => B.tokens.find((t) => t.symbol === x)!.id;
+    const r = await create({ name: 'BNB three', network: 'bsc', universe: ['BNB', 'ETH', 'BTC'], capitalUsdc: '100' });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ network: 'bsc', cash: 'USDC', capitalUsdc: '100' }); // the allocated capital is a USD amount: 100, not 100 × 10^-12
+    expect(r.json.holdings.map((h: any) => [h.symbol, h.asset, h.assetSymbol, h.kind])).toEqual([['USDC', id('USDC'), 'USDC', 'cash'], ['BNB', 'native', 'BNB', 'native'], ['ETH', id('ETH'), 'ETH', 'token'], ['BTC', id('WBTC'), 'WBTC', 'wrapped']]);
+    expect((await sql`select capital_usdc from agents where id = ${r.json.id}`)[0].capital_usdc).toBe('100000000'); // stored in 6-decimal units by design, whatever the cash leg
+    // the vault holds 12.5 USDC (18 decimals) and 0.01 BNB: shown and valued in the asset's own decimals
+    const saved = adapters.bsc.balances;
+    adapters.bsc.balances = async () => ({ native: 10_000_000_000_000_000n, [id('USDC')]: 12_500_000_000_000_000_000n, [id('WBTC')]: 50_000n });
+    try {
+      const v = (await api('GET', `/agents/${r.json.id}`)).json.vault;
+      expect(v.map((x: any) => [x.symbol, x.display, x.usd])).toEqual([['USDC', '12.5', 12.5], ['BNB', '0.01', 6], ['ETH', '0', 0], ['BTC', '0.0005', 30]]);
+      const vid = '7a1c1f0e-8f5f-4b1e-9c56-0000000000b5';
+      await sql`insert into strategy_versions (id, agent_id, name, version, code_sha256, path, status, report) values (${vid}, ${r.json.id}, 'ts_momentum', '3', ${'ef'.repeat(32)}, 'strategies/ts_momentum/3', 'approved', '{"metrics":{}}')`;
+      await sql`update agents set strategy_version_id = ${vid}, state = 'AWAITING_APPROVAL' where id = ${r.json.id}`;
+      const ok = await api('POST', `/agents/${r.json.id}/mandate/prepare`);
+      expect(ok.status).toBe(200);
+      const m = ok.json.mandate;
+      expect(m).toMatchObject({ network: 'bsc', vault: r.json.vaultAddress, provider: 'kyberswap' });
+      expect(m.assets).toEqual([id('USDC'), 'native', id('ETH'), id('WBTC')]);
+      // RISK: 20 USD per order, 100 USD a day — in base units of each asset: USDC 18 decimals, BNB at 600 USD, Binance-Peg ETH at 2 000 USD, WBTC (8 decimals) at 60 000 USD
+      expect(m.maxOrder).toEqual({ [id('USDC')]: '20000000000000000000', native: '33333330000000000', [id('ETH')]: '10000000000000000', [id('WBTC')]: '33333' });
+      expect(m.maxDaily[id('USDC')]).toBe('100000000000000000000');
+      expect(ok.json.limits.map((l: any) => [l.symbol, l.maxOrder, l.maxDaily])).toEqual([['USDC', '20', '100'], ['BNB', '0.03333333', '0.16666667'], ['ETH', '0.01', '0.05'], ['WBTC (BTC)', '0.00033333', '0.00166667']]);
+      expect(ok.json.gasReserve).toMatchObject({ symbol: 'BNB', required: '0.002', held: '0.01' }); // two orders at the policy's fee ceiling for BNB Smart Chain
+      const live = await api('POST', `/agents/${r.json.id}/mandate/approve`, { assertion: owner.assert(Buffer.from(ok.json.options.challenge, 'base64url')) });
+      expect(live.status).toBe(200); expect(live.json.state).toBe('LIVE'); // the signer validated the same mandate against its own registry
+      const st = (await api('GET', `/agents/${r.json.id}`)).json.mandateStatus;
+      expect(st).toMatchObject({ active: true, maxOrder: m.maxOrder });
+    } finally { adapters.bsc.balances = saved; }
   });
 
   it('prepares a mandate for the agent\'s own network only with the gas reserve in the vault', async () => {

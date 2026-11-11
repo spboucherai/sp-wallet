@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { base58 } from '@scure/base';
-import { compileSolV1Message, decodeSolV1Message, intentHash, JUPITER_PROGRAM, solMessageHash, verifyAuditChain, type Intent } from '@spw/core';
+import { compileSolV1Message, decodeSolV1Message, DEFAULT_POLICY, intentHash, JUPITER_PROGRAM, solMessageHash, verifyAuditChain, type Intent } from '@spw/core';
 import { ixInputs, jupFixture, readdress, solAta } from '../../../tests/helpers/jupiter-fixtures.ts';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
 import { deriveKeys } from '../src/keys.ts';
@@ -49,7 +49,7 @@ describe('signing a Jupiter swap', () => {
     expect(await code(s.signer.sign(intent, ok(), { swapMessage: fresh('usdc-jup').message }))).toMatch(/^unsupported: message does not match the approved hash/);
     expect(await code(s.signer.sign(intent, ok(), { swapData: message }))).toMatch(/^unsupported: swap message is not base64/); // the EVM helper name is not read
     // the recorded transaction itself (for the public address it was built for): its payer is not this signer's wallet
-    const foreign = { ...f.intent, keyId: keys.keyId, proposalId: intent.proposalId };
+    const foreign = { ...f.intent, keyId: keys.keyId, proposalId: intent.proposalId, policyVersion: intent.policyVersion }; // the recording, under the policy version in force today
     expect(await code(s.signer.sign(foreign, s.pk.assert(intentHash(foreign)), { swapMessage: f.message }))).toMatch(/^wrong_source/);
     const mine = { ...foreign, from: ME, to: ME }; // intent claims the wallet, message still pays from the other address
     expect(await code(s.signer.sign(mine, s.pk.assert(intentHash(mine)), { swapMessage: f.message }))).toMatch(/^unsupported: fee payer is not the wallet/);
@@ -84,7 +84,7 @@ describe('signing a Jupiter swap', () => {
     expect(await sign({ ...intent, amount: '60000000' })).toMatch(/^policy: amount above per-transaction limit for solana:USDC/);
     expect(await sign({ ...intent, maxFee: '3000001' })).toMatch(/^policy: fee ceiling above policy/);
     expect(await sign({ ...intent, expiresAt: intent.createdAt + 1 })).toMatch(/^policy: approval window expired/);
-    expect(await sign({ ...intent, policyVersion: 1 })).toMatch(/^policy: policy version changed/);
+    for (const v of [DEFAULT_POLICY.version - 1, DEFAULT_POLICY.version + 1]) expect(await sign({ ...intent, policyVersion: v }), String(v)).toMatch(/^policy: policy version changed/); // an intent prepared under another policy, older or newer
     expect(await sign({ ...intent, keyId: 'spw-0000000000000000' })).toMatch(/^wrong_key/);
     expect(() => intentHash({ ...intent, network: 'base', chainRef: '8453' })).toThrow(/does not match network/); // a Jupiter intent cannot even be hashed for an EVM network
     const other: Intent = { ...intent, swap: { ...intent.swap!, minOut: '1' } };

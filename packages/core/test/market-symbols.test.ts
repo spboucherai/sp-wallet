@@ -4,8 +4,9 @@ import {
   resolveAgentAssets, tradableSymbols, validateMandate, type AssetDef, type Mandate, type NetworkDef,
 } from '../src/index.ts';
 
-/** A network of the registry with extra assets injected: what the registry will look like once it grows. */
-const grown = (id: string, extra: AssetDef[], drop: string[] = []): NetworkDef => { const n = getNetwork(id); return { ...n, tokens: [...n.tokens.filter((t) => !drop.includes(t.symbol)), ...extra] }; };
+/** A FIXED registry for one network: only the named tokens of today's registry, plus injected ones. The expectations built on it
+ *  do not move when the real registry grows (which is how these tests broke once: they pinned "what Base does not hold yet"). */
+const fixed = (id: string, keep: string[], extra: AssetDef[] = []): NetworkDef => { const n = getNetwork(id), tokens = keep.map((s) => { const t = n.tokens.find((x) => x.symbol === s); if (!t) throw new Error(`${s} is not on ${id}`); return t; }); return { ...n, tokens: [...tokens, ...extra] }; };
 const tok = (symbol: string, k: number, name = symbol, decimals = 18): AssetDef => ({ id: `0x${k.toString(16).padStart(40, '0')}`, symbol, name, decimals });
 const sym = (n: NetworkDef, s: string) => tradableSymbols(n).find((x) => x.symbol === s);
 
@@ -47,53 +48,116 @@ describe('registry asset → market symbol', () => {
     const eth = getNetwork('ethereum'), base = getNetwork('base');
     expect(sym(eth, 'ETH')!.representations.map((r) => [r.assetSymbol, r.kind])).toEqual([['ETH', 'native'], ['WETH', 'wrapped']]);
     expect(sym(eth, 'ETH')!.defaultId).toBe('native'); // rule 1: the native coin
-    expect(sym(eth, 'BTC')!.representations.map((r) => r.assetSymbol)).toEqual(['WBTC']);
-    expect(sym(eth, 'BTC')!.representations[0]!.issuer).toMatch(/BitGo/);
+    // bitcoin on Ethereum: every reviewed wrapper the registry holds there, in reviewed rank order; WBTC (rank 1) is the default
+    const btc = sym(eth, 'BTC')!;
+    expect(btc.representations.map((r) => r.assetSymbol)).toEqual(eth.tokens.filter((t) => ASSET_TRACKS[t.symbol]?.tracks === 'BTC').sort((x, y) => ASSET_TRACKS[x.symbol]!.rank - ASSET_TRACKS[y.symbol]!.rank).map((t) => t.symbol));
+    expect(btc.representations.map((r) => r.assetSymbol)).toEqual(expect.arrayContaining(['WBTC', 'cbBTC', 'tBTC'])); // registry v5
+    expect(btc.representations[0]).toMatchObject({ assetSymbol: 'WBTC', kind: 'wrapped', issuer: expect.stringMatching(/BitGo/) });
+    expect(btc.defaultId).toBe(eth.tokens.find((t) => t.symbol === 'WBTC')!.id);
+    expect(btc.representations.find((r) => r.assetSymbol === 'cbBTC')).toMatchObject({ decimals: 8, issuer: expect.stringMatching(/Coinbase/) });
+    expect(btc.representations.find((r) => r.assetSymbol === 'tBTC')).toMatchObject({ decimals: 18, issuer: expect.stringMatching(/Threshold/) }); // its own decimals, not WBTC's
+    expect(sym(getNetwork('bsc'), 'BTC')!.representations.map((r) => r.assetSymbol)).toEqual(['WBTC', 'BTCB']);
     expect(sym(base, 'LINK')!).toMatchObject({ live: true, defaultId: base.tokens.find((t) => t.symbol === 'LINK')!.id });
     expect(sym(base, 'EUR')!).toMatchObject({ live: false, sources: ['bitstamp', 'kraken'] }); // EURC, paper only
     expect(sym(base, 'EUR')!.representations[0]).toMatchObject({ assetSymbol: 'EURC', kind: 'pegged', issuer: expect.stringMatching(/Circle/) });
     for (const id of Object.keys(KYBER_ENABLED)) { const n = getNetwork(id), t = tradableSymbols(n);
       expect(t.some((x) => x.symbol === n.native.symbol), id).toBe(true); // every native coin of an execution network has market data
-      for (const x of t) { expect(x.sources.length, `${id}:${x.symbol}`).toBeGreaterThanOrEqual(2); expect(['USDC', 'USDT']).not.toContain(x.symbol); } }
+      for (const x of t) { const at = `${id}:${x.symbol}`;
+        expect(x.sources.length, at).toBeGreaterThanOrEqual(2); expect(['USDC', 'USDT']).not.toContain(x.symbol);
+        // the default rule, restated: the native coin; else the token that is the symbol; else the lowest reviewed rank; a tie at the winning level → none
+        const reps = x.representations, nat = reps.find((r) => r.kind === 'native'), own = reps.filter((r) => r.kind === 'token'), low = Math.min(...reps.map((r) => r.rank)), wrap = reps.filter((r) => r.rank === low);
+        expect(x.defaultId, at).toBe(nat ? 'native' : own.length ? (own.length === 1 ? own[0]!.id : null) : wrap.length === 1 ? wrap[0]!.id : null);
+        expect(x.defaultId, `${at}: today's registry never needs an explicit choice`).not.toBeNull();
+        for (const r of reps) { expect(r.decimals, at).toBe([n.native, ...n.tokens].find((a) => a.id === r.id)!.decimals); // the registry's decimals for THAT network
+          if (r.kind === 'wrapped' || r.kind === 'pegged') expect(r.issuer, `${at}:${r.assetSymbol}`).toBeTruthy(); else expect(r.assetSymbol, at).toBe(x.symbol); } } }
     expect(cashLegs(getNetwork('avalanche')).map((c) => c.symbol)).toEqual(['USDC', 'USDT']);
-    expect(cashLegs(getNetwork('bsc'))).toEqual([]); // neither is in the registry on BNB Smart Chain today
+    // BNB Smart Chain since registry v5: Binance-Peg USDC and USDT, the only cash legs in 18 decimals
+    expect(cashLegs(getNetwork('bsc')).map((c) => [c.symbol, c.decimals, /Binance-Peg/.test(c.name)])).toEqual([['USDC', 18, true], ['USDT', 18, true]]);
+    for (const id of Object.keys(KYBER_ENABLED)) for (const c of cashLegs(getNetwork(id))) expect(c, id).toMatchObject({ id: getNetwork(id).tokens.find((t) => t.symbol === c.symbol)!.id, decimals: getNetwork(id).tokens.find((t) => t.symbol === c.symbol)!.decimals });
+  });
+
+  it('spells tickers exactly as the registry does, and never takes a bridged or re-issued variant for the asset itself', () => {
+    const all = Object.keys(KYBER_ENABLED).flatMap((id) => getNetwork(id).tokens.map((t) => ({ id, t })));
+    const tickers = new Set(all.map((x) => x.t.symbol));
+    // a table key that differs from a registry ticker only by case (CBBTC for cbBTC) would silently never match; BTCB (Binance) and BTC.b (Avalanche Bridge) are two assets
+    const fold = (x: string) => x.toLowerCase();
+    for (const k of Object.keys(ASSET_TRACKS)) for (const s of tickers) if (fold(s) === fold(k)) expect(s, `ASSET_TRACKS.${k} against the registry ticker ${s}`).toBe(k);
+    for (const k of ['cbBTC', 'tBTC', 'BTCB', 'WBTC', 'WETH', 'cbXRP', 'cbDOGE', 'cbADA', 'cbLTC', 'WBNB', 'WAVAX', 'WPOL', 'WHYPE', 'EURC']) { expect(tickers.has(k), k).toBe(true); expect(ASSET_TRACKS[k], k).toBeDefined(); }
+    // bridged dollars are other assets from other issuers: never a cash leg, never priced as USDC / USDT, not tradable
+    for (const s of ['USDC.e', 'USDT0']) { expect(tickers.has(s), s).toBe(true);
+      expect(marketSymbolOf(tok(s, 9)), s).toBe(s); expect(priceSymbolOf(tok(s, 9)), s).toEqual({ symbol: s, cash: false }); expect(hasMarketData(s), s).toBe(false); expect(ASSET_TRACKS[s], s).toBeUndefined(); }
+    for (const { id, t } of all.filter((x) => /^USD[CT]/.test(x.t.symbol) && !['USDC', 'USDT'].includes(x.t.symbol))) {
+      expect(cashLegs(getNetwork(id)).some((c) => c.id === t.id), `${id}:${t.symbol}`).toBe(false);
+      expect(tradableSymbols(getNetwork(id)).some((x) => x.representations.some((r) => r.id === t.id)), `${id}:${t.symbol}`).toBe(false);
+    }
+    const onlyBridged: NetworkDef = { ...getNetwork('arbitrum'), tokens: getNetwork('arbitrum').tokens.filter((t) => !['USDC', 'USDT'].includes(t.symbol)) }; // USDC.e and USDT0 remain
+    expect(onlyBridged.tokens.map((t) => t.symbol)).toEqual(expect.arrayContaining(['USDC.e', 'USDT0']));
+    expect(cashLegs(onlyBridged)).toEqual([]); expect(() => resolveAgentAssets(onlyBridged, ['ETH'])).toThrow(/no cash leg/);
+    // bridge tickers with no reviewed entry (no issuer named in the table) are their own symbol: no USD listing, so not tradable —
+    // and they do not ride on the underlying's price either
+    for (const s of ['BTC.b', 'WETH.e', 'LINK.e']) { expect(tickers.has(s), s).toBe(true); expect(ASSET_TRACKS[s], s).toBeUndefined();
+      expect(marketSymbolOf(tok(s, 9)), s).toBe(s); expect(hasMarketData(s), s).toBe(false); }
+    const avax = getNetwork('avalanche');
+    expect(sym(avax, 'BTC')!.representations.map((r) => r.assetSymbol)).not.toContain('BTC.b'); expect(sym(avax, 'ETH')).toBeUndefined(); expect(sym(avax, 'LINK')).toBeUndefined();
+    // in general: a registry ticker that is not a plain exchange ticker is tradable only through a reviewed entry naming its issuer
+    for (const { id, t } of all) { const rep = tradableSymbols(getNetwork(id)).flatMap((x) => x.representations).find((r) => r.id === t.id);
+      if (rep && !/^[A-Z0-9]{2,10}$/.test(t.symbol)) { expect(ASSET_TRACKS[t.symbol], `${id}:${t.symbol}`).toBeDefined(); expect(rep.issuer, `${id}:${t.symbol}`).toBeTruthy(); } }
   });
 
   it('picks up assets the registry does not hold yet, with no code change', () => {
-    const base = getNetwork('base');
-    expect(sym(base, 'BTC')).toBeUndefined(); expect(sym(base, 'XRP')).toBeUndefined(); expect(sym(base, 'UNI')).toBeUndefined();
-    const n = grown('base', [tok('cbBTC', 0xb1, 'Coinbase Wrapped BTC', 8), tok('tBTC', 0xb2, 'Threshold BTC'), tok('WBTC', 0xb3, 'Wrapped Bitcoin', 8), tok('cbXRP', 0xb4, 'Coinbase Wrapped XRP', 6), tok('UNI', 0xb5, 'Uniswap'),
-      tok('WETH', 0xb6, 'Wrapped Ether'), tok('wstETH', 0xb7, 'Wrapped staked ETH'), tok('NEWCOIN', 0xb8)]);
-    expect(sym(n, 'BTC')!.representations.map((r) => r.assetSymbol)).toEqual(['WBTC', 'cbBTC', 'tBTC']); // reviewed rank order
+    const small = fixed('base', ['USDC', 'LINK']); // a fixed small registry: what Base held before these assets were added
+    expect(sym(small, 'BTC')).toBeUndefined(); expect(sym(small, 'XRP')).toBeUndefined(); expect(sym(small, 'UNI')).toBeUndefined();
+    const n = fixed('base', ['USDC', 'LINK'], [tok('cbBTC', 0xb1, 'Coinbase Wrapped BTC', 8), tok('tBTC', 0xb2, 'Threshold BTC'), tok('WBTC', 0xb3, 'Wrapped Bitcoin', 8), tok('cbXRP', 0xb4, 'Coinbase Wrapped XRP', 6), tok('UNI', 0xb5, 'Uniswap'),
+      tok('WETH', 0xb6, 'Wrapped Ether'), tok('wstETH', 0xb7, 'Wrapped staked ETH'), tok('NEWCOIN', 0xb8), tok('BTC.b', 0xb9, 'Bitcoin (BTC.b)', 8), tok('USDC.e', 0xba, 'Bridged USDC', 6)]);
+    expect(sym(n, 'BTC')!.representations.map((r) => r.assetSymbol)).toEqual(['WBTC', 'cbBTC', 'tBTC']); // reviewed rank order; BTC.b has no reviewed entry
     expect(sym(n, 'BTC')!.defaultId).toBe(tok('WBTC', 0xb3).id);
     expect(sym(n, 'XRP')!.representations[0]).toMatchObject({ assetSymbol: 'cbXRP', name: 'Coinbase Wrapped XRP', issuer: expect.stringMatching(/Coinbase/) });
     expect(sym(n, 'UNI')!.representations[0]!.kind).toBe('token');
     expect(sym(n, 'ETH')!.representations.map((r) => r.assetSymbol)).toEqual(['ETH', 'WETH']);
     expect(sym(n, 'wstETH')).toBeUndefined(); expect(sym(n, 'NEWCOIN')).toBeUndefined(); // no USD listing on two exchanges: no market data
+    expect(tradableSymbols(n).map((t) => t.symbol)).toEqual(['BTC', 'ETH', 'LINK', 'UNI', 'XRP']); // nothing else: neither BTC.b nor USDC.e
     const r = resolveAgentAssets(n, ['BTC', 'XRP', 'UNI', 'ETH', 'LINK']);
     expect(r.assets.map((a) => [a.symbol, a.assetSymbol])).toEqual([['BTC', 'WBTC'], ['XRP', 'cbXRP'], ['UNI', 'UNI'], ['ETH', 'ETH'], ['LINK', 'LINK']]);
     expect(resolveAgentAssets(n, ['BTC', 'ETH'], { assets: { BTC: tok('cbBTC', 0xb1).id, ETH: tok('WETH', 0xb6).id } }).assets.map((a) => [a.assetSymbol, a.decimals, a.kind])).toEqual([['cbBTC', 8, 'wrapped'], ['WETH', 18, 'wrapped']]);
     // without WBTC the default falls to the next rank
-    expect(sym(grown('base', [tok('cbBTC', 0xb1), tok('tBTC', 0xb2)]), 'BTC')!.defaultId).toBe(tok('cbBTC', 0xb1).id);
+    expect(sym(fixed('base', ['USDC'], [tok('cbBTC', 0xb1), tok('tBTC', 0xb2)]), 'BTC')!.defaultId).toBe(tok('cbBTC', 0xb1).id);
+    expect(sym(fixed('base', ['USDC'], [tok('BTCB', 0xb1), tok('tBTC', 0xb2)]), 'BTC')!.defaultId).toBe(tok('tBTC', 0xb2).id);
+    // a token that IS the symbol comes before any wrapper of it, whatever the wrapper's rank (rule 2)
+    const own = fixed('polygon', ['USDC'], [tok('WETH', 0xb6), tok('ETH', 0xbb)]);
+    expect(sym(own, 'ETH')!.representations.map((x) => [x.assetSymbol, x.kind])).toEqual([['ETH', 'token'], ['WETH', 'wrapped']]); expect(sym(own, 'ETH')!.defaultId).toBe(tok('ETH', 0xbb).id);
+    // and the real registry of today resolves the same way with what it holds now
+    const base = getNetwork('base');
+    expect(resolveAgentAssets(base, ['BTC', 'XRP']).assets.map((a) => [a.symbol, a.assetSymbol, a.decimals])).toEqual([['BTC', 'WBTC', 8], ['XRP', 'cbXRP', 6]]);
+    expect(resolveAgentAssets(base, ['BTC'], { assets: { BTC: base.tokens.find((t) => t.symbol === 'tBTC')!.id } }).assets[0]).toMatchObject({ assetSymbol: 'tBTC', decimals: 18 });
   });
 
   it('refuses every ambiguous or wrong choice', () => {
-    const base = getNetwork('base');
-    // two registry tokens with the same ticker: no default, the owner must choose
-    const twin = grown('base', [tok('cbBTC', 0xc1), tok('cbBTC', 0xc2)]);
+    const base = getNetwork('base'), bare = fixed('base', ['USDC', 'LINK']);
+    // two registry tokens with the same ticker at the winning level: no default, the owner must choose
+    const twin = fixed('base', ['USDC', 'LINK'], [tok('cbBTC', 0xc1), tok('cbBTC', 0xc2)]);
     expect(sym(twin, 'BTC')!.defaultId).toBeNull();
     expect(() => resolveAgentAssets(twin, ['BTC'])).toThrow(/several representations.*choose one/);
     expect(resolveAgentAssets(twin, ['BTC'], { assets: { BTC: tok('cbBTC', 0xc2).id } }).assets[0]!.id).toBe(tok('cbBTC', 0xc2).id);
+    // the same twins below a single better-ranked wrapper: the tie is not at the winning level, the default stands
+    const under = fixed('base', ['USDC', 'LINK'], [tok('cbBTC', 0xc1), tok('cbBTC', 0xc2), tok('WBTC', 0xc3, 'Wrapped Bitcoin', 8)]);
+    expect(sym(under, 'BTC')!.defaultId).toBe(tok('WBTC', 0xc3).id);
+    // two tokens that both ARE the symbol: no default either
+    const two = fixed('base', ['USDC'], [tok('UNI', 0xc4), tok('UNI', 0xc5)]);
+    expect(sym(two, 'UNI')!.defaultId).toBeNull(); expect(() => resolveAgentAssets(two, ['UNI'])).toThrow(/choose one/);
     const link = base.tokens.find((t) => t.symbol === 'LINK')!.id;
     expect(() => resolveAgentAssets(base, ['ETH'], { assets: { ETH: link } })).toThrow(/does not track/); // LINK is not ETH
     expect(() => resolveAgentAssets(base, ['ETH'], { assets: { LINK: link } })).toThrow(/not in the universe/);
-    expect(() => resolveAgentAssets(base, ['BTC'])).toThrow(/no asset of the wallet registry tracks BTC on Base/);
+    expect(() => resolveAgentAssets(bare, ['BTC'])).toThrow(/no asset of the wallet registry tracks BTC on Base/);
+    // on the real registry: a symbol the exchanges list but that no asset of the network tracks
+    const absent = Object.keys(MARKET_LISTINGS).filter((s) => hasMarketData(s) && !['USDC', 'USDT'].includes(s) && !sym(base, s));
+    expect(absent.length).toBeGreaterThan(0);
+    for (const s of absent.slice(0, 5)) expect(() => resolveAgentAssets(base, [s]), s).toThrow(new RegExp(`no asset of the wallet registry tracks ${s} on Base`));
     expect(() => resolveAgentAssets(base, ['NOPE'])).toThrow(/no market data/);
     expect(() => resolveAgentAssets(base, ['ETH', 'ETH'])).toThrow(/duplicate/);
     expect(() => resolveAgentAssets(base, ['USDC'])).toThrow(/cash leg/);
     expect(() => resolveAgentAssets(base, [])).toThrow(/between 1 and 12/);
     expect(() => resolveAgentAssets(getNetwork('solana'), ['SOL'])).toThrow(/do not trade/);
-    const many = grown('ethereum', []), all = tradableSymbols(many).map((t) => t.symbol);
+    const many = getNetwork('ethereum'), all = tradableSymbols(many).map((t) => t.symbol);
     expect(all.length).toBeGreaterThan(MAX_AGENT_SYMBOLS);
     expect(resolveAgentAssets(many, all.slice(0, 12)).assets).toHaveLength(12);
     expect(() => resolveAgentAssets(many, all.slice(0, 13))).toThrow(/between 1 and 12/);
@@ -103,12 +167,26 @@ describe('registry asset → market symbol', () => {
     const avax = getNetwork('avalanche');
     expect(resolveAgentAssets(avax, ['AVAX']).cash).toMatchObject({ symbol: 'USDC', kind: 'cash' });
     expect(resolveAgentAssets(avax, ['AVAX'], { cash: 'USDT' }).cash).toMatchObject({ symbol: 'USDT', decimals: 6 });
-    expect(() => resolveAgentAssets(getNetwork('base'), ['ETH'], { cash: 'USDT' })).toThrow(/USDT is not in the wallet registry on Base; choose USDC/);
+    // every execution-enabled network: USDC when the registry holds it there, in the registry's decimals for that network; USDT never by default
+    for (const id of MANDATE_NETWORKS) { const n = getNetwork(id), legs = cashLegs(n), usdc = n.tokens.find((t) => t.symbol === 'USDC'), usdt = n.tokens.find((t) => t.symbol === 'USDT');
+      if (usdc) expect(resolveAgentAssets(n, [n.native.symbol]).cash, id).toMatchObject({ symbol: 'USDC', id: usdc.id, decimals: usdc.decimals, name: usdc.name });
+      else expect(() => resolveAgentAssets(n, [n.native.symbol]), id).toThrow(legs.length ? /choose USDT as the cash leg/ : /no cash leg/);
+      if (usdt) expect(resolveAgentAssets(n, [n.native.symbol], { cash: 'USDT' }).cash, id).toMatchObject({ symbol: 'USDT', id: usdt.id, decimals: usdt.decimals });
+      else expect(() => resolveAgentAssets(n, [n.native.symbol], { cash: 'USDT' }), id).toThrow(new RegExp(`USDT is not in the wallet registry on ${n.name}`)); }
+    // BNB Smart Chain: Binance-Peg dollars in 18 decimals (everywhere else a cash leg has 6)
+    expect(resolveAgentAssets(getNetwork('bsc'), ['BNB'])).toMatchObject({ cash: { symbol: 'USDC', decimals: 18, name: 'Binance-Peg USD Coin' }, assets: [{ symbol: 'BNB', id: 'native' }] });
+    expect(resolveAgentAssets(getNetwork('bsc'), ['BNB'], { cash: 'USDT' }).cash).toMatchObject({ symbol: 'USDT', decimals: 18 });
+    // fixed registries: a network holding USDC only, one holding USDT only, one holding neither
+    const usdcOnly = fixed('base', ['USDC', 'LINK']);
+    expect(() => resolveAgentAssets(usdcOnly, ['ETH'], { cash: 'USDT' })).toThrow(/USDT is not in the wallet registry on Base; choose USDC/);
     expect(() => resolveAgentAssets(getNetwork('base'), ['ETH'], { cash: 'USDS' })).toThrow(/cannot be a cash leg/);
-    expect(() => resolveAgentAssets(getNetwork('bsc'), ['BNB'])).toThrow(/no cash leg/);
-    const bsc = grown('bsc', [tok('USDT', 0xd1, 'Tether USD')]); // where USDC does not exist: the owner chooses USDT
+    expect(() => resolveAgentAssets(getNetwork('base'), ['ETH'], { cash: 'USDC.e' })).toThrow(/cannot be a cash leg/);
+    expect(() => resolveAgentAssets(fixed('bsc', []), ['BNB'])).toThrow(/no cash leg/);
+    const bsc = fixed('bsc', [], [tok('USDT', 0xd1, 'Tether USD')]); // where USDC does not exist: the owner chooses USDT
     expect(() => resolveAgentAssets(bsc, ['BNB'])).toThrow(/choose USDT as the cash leg/);
     expect(resolveAgentAssets(bsc, ['BNB'], { cash: 'USDT' })).toMatchObject({ cash: { symbol: 'USDT', decimals: 18 }, assets: [{ symbol: 'BNB', id: 'native' }] });
+    // two tokens answering to "USDC" on one network: neither is taken
+    expect(cashLegs(fixed('base', ['USDC'], [tok('USDC', 0xd2, 'Another USDC', 6)]))).toEqual([]);
   });
 });
 

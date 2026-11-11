@@ -308,9 +308,17 @@ describe('order: proposal → passkey → signer → venue → reconciliation', 
 describe('idempotency: a retry can never place a second order', () => {
   it('same Idempotency-Key, double approval, approval after the end: one order on the venue', async () => {
     const w = world(), id = await live(w), k = key();
-    const [p, again] = await Promise.all([w.svc.propose(id, body(LIMIT), k), w.svc.propose(id, body(LIMIT), k)]);
-    expect([p.idempotent, again.idempotent].sort()).toEqual([false, true]);
-    expect(again.hash).toBe(p.hash);
+    const pair = await Promise.all([w.svc.propose(id, body(LIMIT), k), w.svc.propose(id, body(LIMIT), k)]);
+    expect(pair.map((x) => x.idempotent).sort()).toEqual([false, true]);
+    // exactly one call creates the proposal; which of the two is a matter of timing, and so is what the other one sees: the row
+    // is inserted ('proposed') before its hash is computed ('risk_checked'), and the losing call may read it in between. It then
+    // has no hash and nothing to approve YET — never another hash. (Asserting `again.hash === p.hash` here failed about every
+    // second run of this test alone.)
+    const p = pair.find((x) => !x.idempotent)!, again = pair.find((x) => x.idempotent)!;
+    expect(p.hash).toMatch(/^[0-9a-f]{64}$/); expect(p.options).not.toBeNull();
+    if (again.hash === null) expect(again).toMatchObject({ options: null, order: { state: 'proposed' } }); else expect(again.hash).toBe(p.hash);
+    expect(await w.svc.propose(id, body(LIMIT), k)).toMatchObject({ idempotent: true, hash: p.hash, order: { state: 'risk_checked' } }); // once it is built, every retry gets the same proposal
+    expect((await w.svc.propose(id, body(LIMIT), k)).options).not.toBeNull();
     expect((await w.svc.propose(id, body({ ...LIMIT, size: '0.004' }), k))).toMatchObject({ idempotent: true, order: { size: '0.002' } });   // the key decides, not the body
     expect((await sql`select count(*)::int as n from deriv_orders where account_id = ${id}`)[0].n).toBe(1);
     const assertion = w.pk.assert(b64(p.hash!)) as never;

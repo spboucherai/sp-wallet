@@ -340,7 +340,7 @@ describe('approval, sending and outcome', () => {
   it('a message swapped in the database after preparation is refused by the signer; an expired approval window too', async () => {
     const prep = await prepare(chain.f), id = prep.json.proposal.id;
     const other = chain.use('usdc-jup'); void other;
-    const evil = await exec.prepareJupiterSwap({ n: N, me: ME, keyId: keys.keyId, fromAsset: solToken('USDC').id, toAsset: solToken('JUP').id, amount: 25_000000n, slippageBps: 50, policyVersion: 2, proposalId: crypto.randomUUID(), feeCeiling: 3_000_000n });
+    const evil = await exec.prepareJupiterSwap({ n: N, me: ME, keyId: keys.keyId, fromAsset: solToken('USDC').id, toAsset: solToken('JUP').id, amount: 25_000000n, slippageBps: 50, policyVersion: store.policy.version, proposalId: crypto.randomUUID(), feeCeiling: 3_000_000n });
     await sql`update proposals set aux = ${sql.json({ swapMessage: evil.message })} where id = ${id}`;
     const r = await approve(prep);
     expect(r.status).toBe(422); expect(r.json.message).toMatch(/message does not match the approved hash/);
