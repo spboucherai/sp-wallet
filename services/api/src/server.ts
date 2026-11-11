@@ -9,6 +9,7 @@ import { formatUnits, getNetwork, NETWORKS, normalizeAddress, type NetworkDef, t
 import { authRoutes, deviceRoutes, isAuthed, listCreds } from './auth.ts';
 import { adapterFor } from './chains/index.ts';
 import { http } from './chains/rpc.ts';
+import { createGecko } from './gecko.ts';
 import { config, secureCookies, UserError } from './config.ts';
 import { audit, auditList, getSetting, setSetting, sql } from './db.ts';
 import { marketDataRoutes } from './market/routes.ts';
@@ -72,19 +73,8 @@ const COINGECKO: Record<string, string> = {
   mSOL: 'msol', jitoSOL: 'jito-staked-sol', bSOL: 'blazestake-staked-sol',
 };
 interface Market { usd: number; cad: number; change24h: number | null; change7d: number | null; marketCap: number | null; volume24h: number | null; high24h: number | null; low24h: number | null; ath: number | null; rank: number | null; spark: number[] }
-const stale = new Map<string, unknown>();
-/** CoinGecko GET with stale-on-error: a rate limit never blanks the screen. Only public coin ids are sent — never addresses or balances. */
-async function gecko<T>(key: string, ttlMs: number, path: string): Promise<T | null> {
-  return cached(key, ttlMs, async () => {
-    try {
-      const r = await http('https://api.coingecko.com/api/v3' + path, { headers: { accept: 'application/json' } });
-      if (!r.ok) throw new Error(String(r.status));
-      const j = (await r.json()) as T;
-      stale.set(key, j);
-      return j;
-    } catch { return (stale.get(key) as T | undefined) ?? null; }
-  });
-}
+// CoinGecko GET with stale-on-error and a short retry after a failure: gecko.ts (v10)
+const gecko = createGecko((url, init) => http(url, init));
 type GeckoRow = { id: string; current_price: number; price_change_percentage_24h_in_currency?: number; price_change_percentage_7d_in_currency?: number; market_cap?: number; total_volume?: number; high_24h?: number; low_24h?: number; ath?: number; market_cap_rank?: number; sparkline_in_7d?: { price: number[] } };
 const thin = (a: number[], max: number) => (a.length <= max ? a : Array.from({ length: max }, (_, k) => a[Math.round((k * (a.length - 1)) / (max - 1))]!));
 async function markets(): Promise<Record<string, Market> | null> {
