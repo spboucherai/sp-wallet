@@ -5,6 +5,7 @@ const NETS = Object.values(NETWORKS) as NetworkDef[];
 import { config } from './config.ts';
 import { audit, sql } from './db.ts';
 import { signer } from './signer-client.ts';
+import { advanceSwap, recordSwapOutcome } from './swap-exec.ts';
 import { broadcastNow, move, type ProposalRow } from './transfers.ts';
 
 export const healthCache = new Map<string, Health>();
@@ -25,12 +26,14 @@ async function reconcile(): Promise<void> {
       if (p.state === 'signed') {
         // never relay a transaction whose approval window is long gone
         if (p.expires_at && Date.now() - p.expires_at.getTime() > 10 * 60_000) { await move(p, 'failed', { error: 'could not be broadcast in time; nothing was sent' }); continue; }
-        p = await broadcastNow(p);
-        if (p.state === 'signed') continue;
+        p = p.kind === 'swap' ? await advanceSwap(p) : await broadcastNow(p);
+        if (p.state !== 'broadcast') continue;
       }
       if (!config.broadcast || !p.txid || !p.intent) continue;
       const a = adapterFor(p.network);
-      const t = await a.track({ txid: p.txid, intent: p.intent, blockRef: p.block_ref, broadcastAt: (p.broadcast_at?.getTime() ?? Date.now()) / 1000 });
+      // a swap preceded by an approval uses the next nonce
+      const tracked = p.kind === 'swap' && p.pre_raw && p.intent.evm ? { ...p.intent, evm: { ...p.intent.evm, nonce: p.intent.evm.nonce + 1 } } : p.intent;
+      const t = await a.track({ txid: p.txid, intent: tracked, blockRef: p.block_ref, broadcastAt: (p.broadcast_at?.getTime() ?? Date.now()) / 1000 });
       if (t.rebroadcast && p.raw && Date.now() - (p.last_broadcast_at?.getTime() ?? 0) > 45_000) {
         await a.broadcast(p.raw).catch(() => {});
         await sql`update proposals set last_broadcast_at = now() where id = ${p.id}`;
@@ -38,7 +41,8 @@ async function reconcile(): Promise<void> {
       if (t.state !== p.state) {
         const patch: Record<string, unknown> = { confirmations: t.confirmations, block_ref: t.blockRef ?? null, error: t.error ?? null };
         if (t.state === 'finalized') patch.finalized_at = new Date();
-        await move(p, t.state, patch);
+        const moved = await move(p, t.state, patch);
+        if (t.state === 'finalized' || t.state === 'confirming') await recordSwapOutcome(moved).catch(() => {});
       } else if (t.confirmations !== p.confirmations) await sql`update proposals set confirmations = ${t.confirmations}, block_ref = ${t.blockRef ?? p.block_ref} where id = ${p.id}`;
     } catch (e) { log(`reconcile ${p.id}: ${(e as Error).message}`); }
   }

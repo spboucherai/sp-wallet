@@ -33,6 +33,9 @@ describe('KyberSwap calldata verification (what the signer enforces without trus
     const { approve, swap } = buildEvmSwapTxs(i, d);
     expect(approve).toBeNull(); expect(swap.nonce).toBe(5); expect(swap.value).toBe(10n ** 16n);
     expect(() => buildEvmSwapTxs({ ...i, swap: { ...i.swap!, approveGas: '70000' } }, d)).toThrow(/approval gas/);
+    // token input with an allowance already in place: a single transaction at the first nonce
+    const t = buildEvmSwapTxs(intent(good, {}, { approveGas: '0' }), good);
+    expect(t.approve).toBeNull(); expect(t.swap.nonce).toBe(5); expect(t.swap.value).toBe(0n);
   });
   it.each([
     ['pays another address', desc({ dstReceiver: '0x000000000000000000000000000000000000dEaD' }), /another address/],

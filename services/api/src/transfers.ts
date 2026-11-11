@@ -15,7 +15,9 @@ import { addressFor, signer } from './signer-client.ts';
 
 export interface ProposalRow {
   id: string; state: ProposalState; version: number; network: string; asset: string; symbol: string; decimals: number; amount: string;
-  from_addr: string; to_addr: string; note: string; memo: string | null; aux: Record<string, unknown> | null; fee_estimate: string | null; max_fee: string | null; warnings: string[];
+  from_addr: string; to_addr: string; note: string; memo: string | null; aux: Record<string, unknown> | null;
+  kind: 'transfer' | 'swap'; swap: { provider: string; toAsset: string; toSymbol: string; toDecimals: number; expectedOut: string; minOut: string; slippageBps: number; needsApproval: boolean; simulated: boolean } | null;
+  pre_raw: string | null; pre_txid: string | null; pre_state: string | null; out_amount: string | null; fee_estimate: string | null; max_fee: string | null; warnings: string[];
   intent: Intent | null; intent_hash: string | null; raw: string | null; txid: string | null; block_ref: string | null; confirmations: number; error: string | null;
   created_at: Date; updated_at: Date; expires_at: Date | null; broadcast_at: Date | null; last_broadcast_at: Date | null; finalized_at: Date | null;
 }
@@ -31,6 +33,11 @@ export function view(p: ProposalRow) {
     warnings: p.warnings, intentHash: p.intent_hash, txid: p.txid, explorer: p.txid ? n.explorerTx + p.txid : null,
     confirmations: p.confirmations, error: p.error, createdAt: p.created_at, updatedAt: p.updated_at, expiresAt: p.expires_at,
     broadcastAt: p.broadcast_at, finalizedAt: p.finalized_at,
+    kind: p.kind ?? 'transfer',
+    swap: p.swap ? { provider: p.swap.provider, toAsset: p.swap.toAsset, toSymbol: p.swap.toSymbol, slippageBps: p.swap.slippageBps, needsApproval: p.swap.needsApproval, simulated: p.swap.simulated,
+      expectedOut: p.swap.expectedOut, expectedOutDisplay: formatUnits(BigInt(p.swap.expectedOut), p.swap.toDecimals), minOut: p.swap.minOut, minOutDisplay: formatUnits(BigInt(p.swap.minOut), p.swap.toDecimals),
+      received: p.out_amount, receivedDisplay: p.out_amount ? formatUnits(BigInt(p.out_amount), p.swap.toDecimals) : null,
+      approvalTxid: p.pre_txid, approvalState: p.pre_raw ? (p.pre_state ?? 'pending') : null } : null,
   };
 }
 
@@ -109,6 +116,7 @@ export function transferRoutes(app: FastifyInstance): void {
   app.post('/api/v1/transfers/proposals/:id/request-approval', async (req) => {
     let p = await load((req.params as { id: string }).id);
     if (p.state !== 'draft' && p.state !== 'pending_approval') throw new UserError('bad_state', `proposal is ${p.state}`, 409);
+    if (p.kind === 'swap') throw new UserError('bad_state', 'a swap is prepared once; start a new one', 409);
     const n = getNetwork(p.network), st = await signer.status(true);
     if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
     // One transfer in flight per network: a second one prepared before the first is confirmed would reuse the same
@@ -153,11 +161,12 @@ export function transferRoutes(app: FastifyInstance): void {
     if (p.state !== 'pending_approval' || !p.intent) throw new UserError('bad_state', `proposal is ${p.state}`, 409);
     if (p.expires_at && p.expires_at.getTime() < Date.now()) { await move(p, 'expired', { error: 'approval window expired' }); throw new UserError('expired', 'approval window expired; start again', 410); }
     p = await move(p, 'approved');
-    let signed: { raw: string; txid: string; hash: string };
+    let signed: { raw: string; txid: string; hash: string; pre?: { raw: string; txid: string } };
     try { signed = await signer.sign(p.intent, body.assertion, p.aux ?? undefined); }
     catch (e) { await move(p, 'failed', { error: (e as Error).message.slice(0, 300) }); throw e; }
     if (signed.hash !== p.intent_hash) { await move(p, 'failed', { error: 'signer hash mismatch' }); throw new UserError('hash_mismatch', 'signer returned a different intent hash', 500); }
-    p = await move(p, 'signed', { raw: signed.raw, txid: signed.txid });
+    p = await move(p, 'signed', { raw: signed.raw, txid: signed.txid, ...(signed.pre ? { pre_raw: signed.pre.raw, pre_txid: signed.pre.txid } : {}) });
+    if (p.kind === 'swap') { const { advanceSwap } = await import('./swap-exec.ts'); return view(await advanceSwap(p)); }
     return view(await broadcastNow(p));
   });
 

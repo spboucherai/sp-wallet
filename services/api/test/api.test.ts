@@ -207,7 +207,7 @@ describe('transfer lifecycle', () => {
     expect(dump).not.toContain(cookie.split('=')[1]);
   });
 
-  it('swap: quotes are for the wallet\'s own addresses, hostile answers are dropped, execution is disabled', async () => {
+  it('swap: quotes are for the wallet\'s own addresses, hostile answers are dropped, execution is gated', async () => {
     expect((await api('POST', '/api/v1/swap/quote', { from: 'base:native', to: `base:${USDC}`, amount: '0.01' }, { cookie: null })).status).toBe(401);
     expect((await api('GET', '/api/v1/swap/assets', undefined, { cookie: null })).status).toBe(401);
     const q = await api('POST', '/api/v1/swap/quote', { from: 'base:native', to: `base:${USDC}`, amount: '0.01', recipient: '0x000000000000000000000000000000000000dEaD' });
@@ -228,9 +228,17 @@ describe('transfer lifecycle', () => {
     expect(sse.headers['content-type']).toContain('text/event-stream');
     const events = sse.body.split('\n\n').filter(Boolean).map((b: string) => b.split('\n')[0]!.replace('event: ', ''));
     expect(events[0]).toBe('start'); expect(events.filter((e: string) => e === 'route').length).toBe(2); expect(events[events.length - 1]).toBe('done');
-    expect((await api('POST', '/api/v1/swap/execute', {})).status).toBe(423);
+    // execution: authenticated, idempotent, only on networks whose router has been reviewed, and refused while halted
+    expect((await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: USDC, amount: '0.01' }, { cookie: null, idem: crypto.randomUUID() })).status).toBe(401);
+    expect((await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: USDC, amount: '0.01' })).json.error).toBe('idempotency');
+    expect((await api('POST', '/api/v1/swap/proposals', { network: 'solana', fromAsset: 'native', toAsset: 'x', amount: '1' }, { idem: crypto.randomUUID() })).json.error).toBe('swap_not_enabled');
+    expect((await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: '0xdAC17F958D2ee523a2206206994597C13D831ec7', amount: '1' }, { idem: crypto.randomUUID() })).json.error).toBe('unsupported_asset');
+    expect((await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: 'native', amount: '1' }, { idem: crypto.randomUUID() })).json.error).toBe('same_asset');
+    expect((await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: USDC, amount: '0.01', recipient: '0x000000000000000000000000000000000000dEaD' }, { idem: crypto.randomUUID() })).status).toBe(400); // no way to name a recipient
+    expect((await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: USDC, amount: '0.01' }, { idem: crypto.randomUUID() })).json.error).toBe('halted'); // the suite halted the signer earlier
     const st = (await api('GET', '/api/v1/swap/providers')).json;
-    expect(st.executionEnabled).toBe(false); expect(st.providers.length).toBe(3);
+    expect(st.providers.length).toBe(3);
+    expect((await api('GET', '/api/v1/swap/execution')).json.networks).toEqual(['base']);
     const rows = await sql`select provider, ok, code from swap_quotes`;
     expect(rows.length).toBeGreaterThanOrEqual(4);
   });

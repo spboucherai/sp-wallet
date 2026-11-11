@@ -27,6 +27,12 @@ create table if not exists proposals (
   expires_at timestamptz, broadcast_at timestamptz, last_broadcast_at timestamptz, finalized_at timestamptz);
 alter table proposals add column if not exists memo text;
 alter table proposals add column if not exists aux jsonb;
+alter table proposals add column if not exists kind text not null default 'transfer';
+alter table proposals add column if not exists swap jsonb;
+alter table proposals add column if not exists pre_raw text;
+alter table proposals add column if not exists pre_txid text;
+alter table proposals add column if not exists pre_state text;
+alter table proposals add column if not exists out_amount numeric(78,0);
 create unique index if not exists proposals_txid on proposals (network, txid) where txid is not null;
 create table if not exists deposits (
   network text not null, txid text not null, idx int not null, asset text not null, amount numeric(78,0) not null,

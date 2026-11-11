@@ -1,3 +1,4 @@
+import '../rpc-override.ts'; // must run before any adapter reads the registry
 import { NETWORKS, type NetworkDef } from '@spw/core';
 import { aptosAdapter } from './aptos.ts';
 import { bchAdapter } from './bch.ts';

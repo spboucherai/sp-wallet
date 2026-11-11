@@ -71,7 +71,7 @@ export function swapRoutes(app: FastifyInstance, deps: SwapDeps): void {
 
   app.get('/api/v1/swap/assets', async () => ({ assets: [...graph.nodes.values()].map((n) => ({ key: n.key, network: n.network, networkName: n.networkName, asset: n.asset, symbol: n.symbol, name: n.name, decimals: n.decimals, native: n.native })) }));
   app.get('/api/v1/swap/providers', async () => ({
-    executionEnabled: false,
+    executionEnabled: true,
     providers: runtimes.map((r) => ({ ...r.stats(), name: r.provider.name, capabilities: r.provider.capabilities() })),
   }));
   app.get('/api/v1/swap/stats', async () => {
@@ -105,6 +105,4 @@ export function swapRoutes(app: FastifyInstance, deps: SwapDeps): void {
     reply.raw.end();
   });
 
-  // Execution is not implemented: say so explicitly rather than leaving an ambiguous 404.
-  app.post('/api/v1/swap/execute', async () => { throw new UserError('swap_disabled', 'swap execution is not enabled: this version compares routes only', 423); });
 }

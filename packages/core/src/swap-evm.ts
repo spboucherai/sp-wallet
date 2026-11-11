@@ -83,10 +83,12 @@ export function buildEvmSwapTxs(i: Intent, data: string): { approve: Transaction
   const gas = baseUnits(e.gasLimit), maxFeePerGas = baseUnits(e.maxFeePerGas), tip = baseUnits(e.maxPriorityFeePerGas), approveGas = baseUnits(s.approveGas);
   if (tip > maxFeePerGas) throw new Error('priority fee above max fee');
   if (gas < 60_000n || gas > MAX_SWAP_GAS) throw new Error('swap gas limit out of range');
-  if (src.id === 'native' ? approveGas !== 0n : (approveGas < 30_000n || approveGas > APPROVE_GAS_CAP)) throw new Error('approval gas out of range');
+  // approveGas 0 = no approval transaction: native input, or a token whose existing allowance already covers the amount
+  // (the signer cannot see allowances; if it were insufficient the swap simply reverts)
+  if (approveGas !== 0n && (src.id === 'native' || approveGas < 30_000n || approveGas > APPROVE_GAS_CAP)) throw new Error('approval gas out of range');
   if ((gas + approveGas) * maxFeePerGas > baseUnits(i.maxFee)) throw new Error('fee exceeds approved maximum');
   const common = { type: 'eip1559' as const, chainId: Number(n.chainRef), maxFeePerGas, maxPriorityFeePerGas: tip };
-  const approve = src.id === 'native' ? null : {
+  const approve = approveGas === 0n ? null : {
     ...common, nonce: e.nonce, gas: approveGas, to: src.id as Hex, value: 0n,
     data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [KYBER_ROUTER as Hex, amount] }), // exact amount, never unlimited
   };
