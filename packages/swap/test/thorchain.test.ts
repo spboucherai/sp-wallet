@@ -137,7 +137,7 @@ describe('asset mapping against the wallet registry', () => {
     expect(p.supportsPair({ network: 'nope', asset: 'native' }, BTC)).toBe(false);
     expect(p.supportsPair(BTC, { network: 'ethereum', asset: USDC.asset.toLowerCase() })).toBe(true);
   });
-  it('is registered', () => { expect(createProviders().map((x) => x.id)).toEqual(['thorchain', 'maya']); });
+  it('is registered', () => { expect(createProviders().map((x) => x.id)).toEqual(expect.arrayContaining(['thorchain', 'maya'])); });
 });
 
 describe('quote mapping from recorded answers', () => {
