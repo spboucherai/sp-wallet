@@ -174,3 +174,12 @@ Hyperliquid is lowest on both figures. dYdX's book costs 12 bps of slippage at 5
 - The service was run against live venues only through the script's own snapshot builder; `RouteService` itself is tested on
   fixtures, never against the live APIs, and `chain-costs.ts` has no fixture test of its own (it ran live in the script).
 - Engine texts (`basis`, `uncertainty`, reasons' details, contract terms) are English; the UI localises labels and reason codes.
+
+## 11. GMX becomes executable (v8, 2026-11-11)
+
+The router still executes nothing. What changed: for a **pinned** GMX market (`BTC/USD [BTC-USDC]`, `ETH/USD [WETH-USDC]`),
+when the GMX engine reports the wallet as tradable (both server settings on, venue policy approved, pins intact), the snapshot
+carries `wallet.trading: "live"` and the wallet's own USDC on Arbitrum as the collateral account, so `wallet_cannot_trade_here`
+and `no_collateral_account` disappear (or become `insufficient_collateral_there`) and `executableNow` can be true. The UI's
+« Ouvrir… » then pre-fills the GMX order panel (market, side, collateral = notional ÷ leverage, leverage). Every other GMX pool
+stays read-only. Service: `route.ts` (`GmxPort`), `gmx-exec.ts` (`tradability`); test: `services/api/test/derivatives-gmx.test.ts`.

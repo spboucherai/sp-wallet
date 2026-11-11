@@ -18,6 +18,8 @@ import { venueAuthorize, venueKeyAddress, venueRevoke, venueSign, venueStatus, t
 import { venueDepositVerdict, venueWithdraw } from './venue-collateral.ts';
 import { venueMandateApprove, venueMandateRevoke, venueMandateSign, venueMandateStatus, type VenueMandateSignRequest } from './venue-mandate.ts';
 import { noVenueReader, type VenueReader } from './venue-read.ts';
+import { checkPolicyNoSpend } from '@spw/core'; // v8 GMX: decrease / cancel move no asset amount
+import { gmxAuthorize, gmxPlainVerdict, gmxPrepare, gmxRevoke, gmxStatus } from './venue-gmx.ts'; // v8 GMX v2 orders (wallet transactions built here)
 
 export class SignerError extends Error { constructor(public code: string, msg: string) { super(msg); } }
 const sha = (s: string | Uint8Array) => createHash('sha256').update(s).digest();
@@ -41,6 +43,7 @@ export class Signer {
         expired: this.now() >= m.mandate.expiresAt, today: m.usage[today] ?? { sold: {}, orders: 0 } })),
       venues: venueStatus(this.venueCtx()),
       venueMandates: venueMandateStatus(this.venueCtx()),
+      gmx: gmxStatus(this.venueCtx()), // v8
     };
   }
 
@@ -60,6 +63,9 @@ export class Signer {
   venueMandateApprove(mandate: unknown, assertion?: AuthenticationResponseJSON) { return venueMandateApprove(this.venueCtx(), mandate, assertion); }
   venueMandateSign(req: VenueMandateSignRequest) { return venueMandateSign(this.venueCtx(), req); }
   venueMandateRevoke(mandateId: string) { return venueMandateRevoke(this.venueCtx(), mandateId); }
+  // v8 GMX v2: the venue policy (passkey, once); orders themselves go through `sign` with an intent carrying a `gmx` section
+  gmxAuthorize(authorization: unknown, assertion?: AuthenticationResponseJSON) { return gmxAuthorize(this.venueCtx(), authorization, assertion); }
+  gmxRevoke(authorizationId: string) { return gmxRevoke(this.venueCtx(), authorizationId); }
 
   private async verifyAssertion(assertion: AuthenticationResponseJSON, challenge: Uint8Array): Promise<StoredCredential> {
     const cred = this.store.state.credentials.find((c) => c.id === assertion.id);
@@ -326,14 +332,28 @@ export class Signer {
     // venue deposits (venue-collateral.ts): pinned bridge, native USDC, floor above the venue minimum; a plain transfer to a venue bridge is refused
     const vd = venueDepositVerdict(i, own!);
     if (vd) deny('venue_deposit', vd);
+    // v8 GMX: a plain transfer to a pinned GMX contract is refused (funds reach GMX only through an order built below)
+    const gv = gmxPlainVerdict(i);
+    if (gv) deny('gmx', gv);
 
     const day = new Date(now * 1000).toISOString().slice(0, 10), spendKey = `${day}|${i.network}:${i.symbol}`;
-    const verdict = checkPolicy(st.policy, i, BigInt(st.state.spent[spendKey] ?? '0'), now, st.state.halted);
+    // v8 GMX: a decrease or a cancellation moves no asset amount (amount = 0, checked by the builder): the amount limits have nothing to bound, everything else applies
+    const verdict = i.gmx && i.gmx.action !== 'increase' ? checkPolicyNoSpend(st.policy, i, now, st.state.halted) : checkPolicy(st.policy, i, BigInt(st.state.spent[spendKey] ?? '0'), now, st.state.halted);
     if (!verdict.ok) deny('policy', verdict.reason);
 
     // Rebuild the chain transaction from the intent alone; any unsupported shape throws here.
     let build: () => Promise<{ raw: string; txid: string; pre?: { raw: string; txid: string } }>;
-    if (i.xswap) {
+    if (i.gmx) {
+      // v8 GMX v2 order: authorization, pinned contracts, transaction built from the intent, venue policy at the signer's own prices (venue-gmx.ts)
+      let ready: Awaited<ReturnType<typeof gmxPrepare>>;
+      try { ready = await gmxPrepare(this.venueCtx(), i, own!); } catch (e) { return deny(e instanceof SignerError ? e.code : 'unsupported', (e as Error).message); }
+      build = async () => {
+        const acct = privateKeyToAccount(`0x${Buffer.from(this.keys.evmPriv).toString('hex')}`);
+        const raw = await acct.signTransaction(ready.main), pre = ready.approve ? await acct.signTransaction(ready.approve) : null;
+        ready.commit(keccak256(raw));
+        return { raw, txid: keccak256(raw), ...(pre ? { pre: { raw: pre, txid: keccak256(pre) } } : {}) };
+      };
+    } else if (i.xswap) {
       // native cross-chain swap: memo and transaction are rebuilt here, and the vault is confirmed by this signer's own THORNode operators
       try { build = await this.xswapBuild(i, net, aux); } catch (e) { return deny(e instanceof SignerError ? e.code : 'unsupported', (e as Error).message); }
     } else
@@ -404,7 +424,8 @@ export class Signer {
     st.log('sign.ok', { proposalId: i.proposalId, hash: Buffer.from(hash).toString('hex'), network: i.network, symbol: i.symbol, amount: i.amount, to: i.to, txid: out.txid, ...(i.swap ? { swap: i.swap.provider, toAsset: i.swap.toAsset, minOut: i.swap.minOut } : {}),
       ...(i.xswap ? { xswap: i.xswap.provider, toNetwork: i.xswap.toNetwork, toAsset: i.xswap.toAsset, minOut: i.xswap.minOut, vault: i.xswap.vault, vaultPubKey: i.xswap.vaultPubKey, memo: i.xswap.memo } : {}),
       ...(i.bridge ? { bridge: i.bridge.provider, toNetwork: i.bridge.toNetwork, cctpMaxFee: i.bridge.maxFee, minFinalityThreshold: i.bridge.minFinalityThreshold } : {}),
-      ...(i.venueDeposit ? { venueDeposit: i.venueDeposit.venue, venueNetwork: i.venueDeposit.venueNetwork, route: i.venueDeposit.route } : {}) });
+      ...(i.venueDeposit ? { venueDeposit: i.venueDeposit.venue, venueNetwork: i.venueDeposit.venueNetwork, route: i.venueDeposit.route } : {}),
+      ...(i.gmx ? { gmx: i.gmx.action, market: i.gmx.market, sizeDeltaUsd: i.gmx.sizeDeltaUsd, isLong: i.gmx.isLong } : {}) });
     st.save();
     return { ...out, hash: Buffer.from(hash).toString('hex') };
   }

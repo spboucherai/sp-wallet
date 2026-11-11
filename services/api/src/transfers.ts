@@ -18,7 +18,7 @@ import { xswapView, type XswapState } from './xswap-state.ts';
 export interface ProposalRow {
   id: string; state: ProposalState; version: number; network: string; asset: string; symbol: string; decimals: number; amount: string;
   from_addr: string; to_addr: string; note: string; memo: string | null; aux: Record<string, unknown> | null;
-  kind: 'transfer' | 'swap' | 'bridge' | 'xswap'; xswap?: XswapState | null; bridge: BridgeState | null; swap: { provider: string; toAsset: string; toSymbol: string; toDecimals: number; expectedOut: string; minOut: string; slippageBps: number; needsApproval: boolean; simulated: boolean } | null;
+  kind: 'transfer' | 'swap' | 'bridge' | 'xswap' | 'gmx' /* v8: a GMX order action, followed by derivatives/gmx-exec.ts */; xswap?: XswapState | null; bridge: BridgeState | null; swap: { provider: string; toAsset: string; toSymbol: string; toDecimals: number; expectedOut: string; minOut: string; slippageBps: number; needsApproval: boolean; simulated: boolean } | null;
   pre_raw: string | null; pre_txid: string | null; pre_state: string | null; out_amount: string | null; fee_estimate: string | null; max_fee: string | null; warnings: string[];
   intent: Intent | null; intent_hash: string | null; raw: string | null; txid: string | null; block_ref: string | null; confirmations: number; error: string | null;
   created_at: Date; updated_at: Date; expires_at: Date | null; broadcast_at: Date | null; last_broadcast_at: Date | null; finalized_at: Date | null;

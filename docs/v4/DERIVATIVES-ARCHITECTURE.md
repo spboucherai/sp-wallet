@@ -289,3 +289,23 @@ Full description: `docs/v6/DERIVATIVE-MANDATE.md`. Differences from the text abo
   wallet proposal in `proposals`). Code: `services/api/src/derivatives/collateral.ts` + `collateral-routes.ts`; facts and
   evidence: `docs/v4/venues/hyperliquid.md` section 15. A deposit does not need an authorized account (it must come first: the
   venue refuses every action of an account that never deposited); both need the server setting on mainnet.
+
+## GMX v2 trading (V8) — as built
+
+Full description: `docs/v4/venues/gmx.md` Part C; routes: `docs/v4/API-LIVE-NOTES.md` ("GMX v2 trading"). Differences from the
+text above, all deliberate:
+
+- **Principle 3 does not hold for GMX.** There is no venue account and no trading key: an order is a transaction of the main
+  wallet key, because the collateral is a token the wallet holds. The main key therefore signs a third kind of thing for a
+  venue: GMX order transactions (`multicall[sendWnt, sendTokens?, createOrder]`, `cancelOrder`) and the exact-amount approval
+  of GMX's `Router` — **built by the signer itself** from an intent section (`gmx`), never received. Hyperliquid is unchanged.
+- It goes through `POST /sign` (passkey over the intent hash, wallet policy, replay cache) — not `/venue/sign`. The venue
+  policy is a separate canonical object (`SPW-GMX-AUTH-v1`), approved once with a passkey (`POST /venue/gmx/authorize`,
+  revoked with `/venue/gmx/revoke`), stored in the signer state (`gmx`), bound to the reviewed contract set.
+- Modes: `MANUAL_LIVE` only. No mandate, no agent.
+- The risk engine (`checkOrder`) runs on an account view built from the wallet's USDC and its on-chain positions, with a
+  one-level book synthesised from GMX's oracle min/max (GMX has no book). Daily and total loss limits are not tracked for GMX.
+- Data model: `deriv_gmx_ops` (one row per increase / decrease / cancel) + a `proposals` row of kind `gmx`. Order states:
+  `pending_approval → signed → sent → created → executed | cancelled | frozen`, plus `unknown`, `failed`, `expired`,
+  `withdrawn`; a cancel operation ends `done`.
+- Mainnet only (GMX has no testnet API): `SPW_DERIV_LIVE_MAINNET=on` **and** `SPW_DERIV_GMX_LIVE=on` (default off).

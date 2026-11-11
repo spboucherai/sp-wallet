@@ -4,6 +4,10 @@ Checked against the official documentation, the OpenAPI specification, the contr
 **2026-11-10** (2026-11-11 UTC). Adapter: `packages/derivatives/src/venues/gmx/` — **read side only**
 (`capabilities.orders = false`). Nothing was signed or sent: only public `GET` requests and one public GraphQL query.
 
+**v8 (2026-11-11): trading exists — Part C at the end of this file** (orders as wallet transactions built by the signer;
+pins, guarantees, fork proof, what is not verified). Parts A and B are kept as written; where Part C contradicts Part B
+(e.g. the subaccount proposal, "no code wired"), Part C is the state of the code.
+
 **What makes this venue different (the router must not assume otherwise)**
 
 - **There is no order book.** A trader opens against a liquidity pool at the signed oracle price, adjusted by price impact. `book()`
@@ -16,7 +20,7 @@ Checked against the official documentation, the OpenAPI specification, the contr
 - **Costs that an order-book venue does not have**: borrowing fee, price impact (capped, partly settled at close), execution fee
   in the native token, in addition to position fee and funding.
 
-Part A describes the read adapter as delivered. Part B is the trading model dossier (no trading code is wired).
+Part A describes the read adapter as delivered. Part B is the trading model dossier as gathered on 2026-11-10 (documentation). Part C is trading as built in v8.
 
 ---
 
@@ -790,3 +794,207 @@ the allowance small; re-authorise deliberately.
 **Open points before building** (all in "Not verified"): confirm on-chain that the subaccount feature flag is clear for the
 router used; confirm the submission path (GMX API `/orders/txns/*` with `subaccountAddress` + `subaccountApproval`, or
 self-submission); read `MAX_UI_FEE_FACTOR` and the subaccount fee-swap cap; pin the deployed bytecode to a source commit.
+
+---
+
+# Part C — Trading from this wallet (v8, delivered 2026-11-11)
+
+Part B's proposal (a GMX *subaccount* key that cannot withdraw) was **not** built. What was built is the Classic flow: **every
+order is a transaction of the wallet's own key**, built by the isolated signer from an owner-approved intent, one passkey per
+order. Reasons: the collateral is a token the wallet itself holds; a subaccount would still need a standing allowance of the
+wallet's tokens to GMX's `Router` and a relay path that was never verified (Part B, "Not verified"); and with one passkey per
+order there is nothing for a delegated key to do. Consequence, stated plainly: **architecture principle 3 ("the main wallet
+key never trades on a venue") does not hold for GMX** — the main key signs GMX order transactions, and only those the signer
+built itself. `MANDATE_LIVE` (agents) does not exist for GMX.
+
+Code: `packages/derivatives/src/live/gmx.ts` (pins, ABI, intent verification, calldata builder, venue policy — shared, pure,
+bundled into the signer), `packages/core/src/intent.ts` (section `gmx`), `services/isolated-signer/src/venue-gmx.ts`,
+`services/api/src/derivatives/gmx-{chain,exec,live,routes}.ts`, `apps/web/src/derivatives/Gmx*.tsx`.
+Proof: `scripts/fork-gmx.mts` (output of 2026-11-11 in `docs/v8/fork-gmx-2026-11-11.txt`). Tests:
+`packages/derivatives/test/gmx-live.test.ts`, `services/isolated-signer/test/venue-gmx.test.ts`,
+`services/api/test/derivatives-gmx.test.ts`, `tests/e2e/futures-gmx.spec.ts`.
+
+## C1. What an order through this wallet guarantees, and what it does not
+
+**Guaranteed by the signer (it refuses to sign otherwise) — proven on the fork against the real contracts:**
+
+- the transaction goes to the **pinned ExchangeRouter** and is exactly `multicall([sendWnt(OrderVault, executionFee),
+  sendTokens(USDC, OrderVault, collateral)?, createOrder(params)])` with `msg.value = executionFee`, or `cancelOrder(key)`;
+  an increase is preceded, when needed, by `USDC.approve(Router, collateral)` — exact amount, consumed by the order (the
+  allowance is back to 0 after creation);
+- `receiver` = `cancellationReceiver` = the wallet; `callbackContract` = 0, `callbackGasLimit` = 0; `uiFeeReceiver` = 0;
+  `swapPath` = []; `referralCode` = 0; `dataList` = []; `decreasePositionSwapType` = NoSwap; `autoCancel` = false;
+  `shouldUnwrapNativeToken` = false; `triggerPrice` = 0, `validFromTime` = 0 (market orders). None of these is a field of the
+  intent: the API cannot choose them, and an intent that tries to carry one is malformed;
+- market ∈ the pinned table (BTC/USD [WBTC.b-USDC], ETH/USD [WETH-USDC]) and ∈ the venue policy; collateral = native USDC;
+- the passkey signed the SHA-256 of the canonical intent: market, side, collateral amount, `sizeDeltaUsd`, `acceptablePrice`,
+  `executionFee`, gas ceiling, nonce, expiry, the three contract addresses, the authorization id;
+- wallet policy as for a send: collateral within the per-transfer and daily USDC limits, gas + execution fee within the
+  Arbitrum fee ceiling, approval window, emergency halt, allowlist, replay cache;
+- venue policy (approved once with the passkey, with GMX's jurisdiction acknowledgement): allowed markets, leverage of the
+  order (`sizeDeltaUsd` ÷ collateral valued at the signer's own price) ≤ max, size ≤ max, increases per day, execution fee ≤
+  ceiling, expiry ≤ 90 days, bound to the reviewed contract set (`GMX_PINS.id`);
+- the acceptable price is within the policy's band of the **signer's own** Coinbase + Kraken price of the index asset; no
+  price ⇒ no signature (closes included; a cancellation needs no price);
+- a plain transfer to any pinned GMX contract is refused (tokens sent straight to the OrderVault belong to whoever creates
+  the next order).
+
+**Guaranteed by GMX's contracts, given those fields (verified source read; exercised on the fork):**
+
+- `sendTokens` pulls only from `msg.sender`, through the allowance given to `Router` (`router.pluginTransfer(token,
+  msg.sender, receiver, amount)`; `Router.pluginTransfer` is `onlyRouterPlugin`);
+- the order's account is `msg.sender`; its collateral is what the vault measured; its fee is the WNT the vault measured;
+- executed ⇒ every output goes to `receiver` (the wallet); cancelled ⇒ the collateral of an increase and the unused fee go to
+  `cancellationReceiver` (the wallet); the order executes only if the execution price respects `acceptablePrice`, otherwise a
+  market order is **cancelled** (`OrderNotFulfillableAtAcceptablePrice`);
+- `cancelOrder(key)` requires `order.account == msg.sender`; a market order can be cancelled by its account only
+  `REQUEST_EXPIRATION_TIME` = 300 s after its creation (`RequestNotYetCancellable` before); order keepers may cancel it after
+  the same delay (reason `USER_INITIATED_CANCEL`).
+
+**NOT guaranteed — residual trust:**
+
+- **Keepers.** Whether, when and at which oracle timestamp a GMX keeper executes the order. Until then the collateral sits in
+  the OrderVault. The owner can take it back after 300 s (one more transaction, gas only).
+- **Oracle.** The execution price is GMX's signed Chainlink Data Streams price (min/max), not the signer's price. The
+  acceptable price bounds it on one side; nothing bounds it on the favourable side, and liquidation uses the same oracle.
+- **GMX role holders** (`CONFIG_KEEPER`, `TIMELOCK_ADMIN`/multisig, `CONTROLLER`s) can change market parameters (fees, price
+  impact, funding and borrowing factors, minimum collateral, max open interest, gas limits, the request expiration time),
+  disable features (create / execute / cancel per order type), set oracle providers, and deploy new handlers. `CONTROLLER`
+  contracts can move the vaults. The pins detect a *replaced* router or handler and a changed market, not a parameter change.
+- **After execution** the position is GMX state: PnL, funding, borrowing, price impact at close, liquidation, ADL. A profit on
+  a long is paid in the pool's long token (WETH / WBTC.b) — it arrives as that ERC-20, not as USDC. Positive funding must be
+  claimed (`claimFundingFees`) — **not built**; capped price-impact rebates (`claimCollateral`) — **not built**.
+- **The estimate is an estimate.** Position fee and price impact come from the router model (ROUTER.md: the impact formula is
+  verified for decreases only); the reconciliation after execution reads the real figures from the events.
+- **The API's honesty about state** rests on its own reads of Arbitrum (two public RPC endpoints) and of GMX's events; a
+  lying RPC could delay or misreport tracking, never redirect funds.
+
+## C2. Pins, sources, and how to re-review after a GMX release
+
+Read on **2026-11-11** (block ≈ 523 348 500). GMX's contracts are **not proxies**: logic changes ship as new deployments and
+roles move in `RoleStore` ("Contract addresses change when logic contracts are upgraded … `DataStore` and `RoleStore`
+addresses are permanent", docs).
+
+| Contract | Address (Arbitrum One) | Runtime bytes | SHA-256 of the runtime bytecode (both RPC endpoints) |
+|---|---|---|---|
+| ExchangeRouter | `0x7dE39FF2e232A2203196788d37e234cF8F1b83f1` | 20 999 | `76169686cbf23f3e226d92841776b8e1f1b0647ebc7a76ce29a75eb014bffde5` |
+| Router (the ERC-20 spender) | `0x7452c558d45f8afC8c83dAe62C3f8A5BE19c71f6` | 1 503 | `f50f32351ad61911d5a96e82483ce53780e61eec6cd2a12ccdd85f5637544484` |
+| OrderVault | `0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5` | 4 570 | `e3e5559ff93aefd36027dfa7deb77ff350028c80fded2687456243e680dc0669` |
+| DataStore | `0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8` | 10 443 | `0524e4f2a73947f6e74c2a3e33bc399c56db0d5a6d428ab5c013957a0964f77b` |
+| Reader | `0xfA26cBb46e2614609406de08CA1Dc7f70a684184` | 23 870 | `a8ac6f41c73e92794168cda29d75d90831e433f865e666cb72136eddd4ba5fc7` |
+| OrderHandler (immutable of the ExchangeRouter) | `0xa5D2d45228ee2E3A18AB122B2cE84997d008f4Eb` | 24 525 | `2113ebc4aa3bd22b80e44e075eea137aabdfb67438883b9e3ee14e5cb6f5e06e` |
+| RoleStore | `0x3c3d99FD298f679DBC2CEcd132b4eC4d0F5e6e72` | 2 342 | `d50d6f1e6c1b751b9c8a90a26e7a1d04939f281b9a0ee322fecd7c8d50d19de1` |
+| EventEmitter | `0xC8ee91A54287DB53897056e12D9819156D3822Fb` | 7 998 | `29e899318a0b8cbc8cce0cbae83f88efcfb72970d34bf1fed7bb2898a0e8db78` |
+| SimulationRouter (dry run only, not on the signing path) | `0xaD3051cB1aE3a86b335f12A9a41BD4d995a137ea` | 6 994 | `ff09bf6a840bc854949cb03f7604488a6fcac20576e65850940fec11d7ba82d4` |
+
+Roles read on-chain (`RoleStore.hasRole`, key = `keccak256(abi.encode(name))`): ExchangeRouter holds `CONTROLLER` and
+`ROUTER_PLUGIN`; OrderHandler holds `CONTROLLER`. Wiring read on-chain: `ExchangeRouter.router()/orderHandler()/dataStore()/
+roleStore()` and `OrderHandler.orderVault()` are the pinned addresses; `DataStore[WNT]` = WETH
+`0x82aF49447D8a07e3bd95BD0d56f35241523fBab1`; `DataStore[REQUEST_EXPIRATION_TIME]` = 300; `Reader.getMarket` returns the
+pinned index / long / short tokens of both markets. DataStore gas parameters the same day: `INCREASE_ORDER_GAS_LIMIT` =
+`DECREASE_ORDER_GAS_LIMIT` = 3 000 000, `ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1` = 133 637, `ESTIMATED_GAS_FEE_PER_ORACLE_PRICE`
+= 338 679, `ESTIMATED_GAS_FEE_MULTIPLIER_FACTOR` = 1e30 ⇒ 4 149 674 gas priced per order; `MAX_UI_FEE_FACTOR` = 0.001;
+`MIN_COLLATERAL_USD` = `MIN_POSITION_SIZE_USD` = 1 USD.
+
+Sources (all read 2026-11-11):
+- addresses: https://docs.gmx.io/docs/api/contracts/addresses/ — identical to `deployments/arbitrum/<Name>.json` of
+  gmx-io/gmx-synthetics, branch `updates` @ `bf30ebb4cff17b7f92f8c738f145e75b871a1576` (2026-07-24, still the head);
+- **verified sources on Arbiscan** of ExchangeRouter and OrderHandler (both `solc v0.8.29+commit.ab55807c`, optimizer on, 10
+  runs, `Proxy: 0`), read for: `BaseRouter.sendWnt / sendTokens`, `Router.pluginTransfer`, `ExchangeRouter.createOrder /
+  cancelOrder`, `OrderHandler.createOrder / cancelOrder / executeOrder / simulateExecuteOrder`, `OrderUtils._createOrder /
+  cancelOrder`, `BaseHandler.validateRequestCancellation`, `OrderEventUtils`, `EventUtils`, `ReferralUtils.setTraderReferralCode`
+  (a zero code is a no-op), `GasUtils.validateAndCapExecutionFee`. The ExchangeRouter's constructor arguments (Arbiscan)
+  name the pinned Router, RoleStore, DataStore, EventEmitter and OrderHandler;
+- the ABI used by this build is compared in the tests with the verified ExchangeRouter ABI and with 11 real transactions
+  (10 creations, 1 user cancellation) recorded read-only from Arbitrum (`scripts/record-gmx-order-fixtures.mts`).
+
+**What fails closed, and where.** The API (`gmx-chain.ts`, `checkPins`) refuses to prepare — and refuses again right before a
+signed order would leave — when any pinned bytecode hash differs on any RPC endpoint, a required role is gone, an immutable
+or the WNT / expiration key reads differently, or a pinned market no longer reads back; the screen then says « GMX a publié
+de nouveaux contrats : nouvelle revue nécessaire ». The signer cannot read the chain: it pins the addresses in its bundle,
+and every authorization commits to `GMX_PINS.id`, so a rebuilt table voids the old authorization (`contract_changed`).
+Honest limit: if GMX deploys a new ExchangeRouter and does not revoke the old one's roles, the old router keeps working and
+nothing here notices; that is safe (same reviewed code, same reviewed handler), just not current.
+
+**How to re-review after a GMX release** (in this order):
+1. read the docs address table and `deployments/arbitrum/` at the commit the docs link to; note every changed address;
+2. for each changed contract, open the verified source on Arbiscan and re-read the functions listed above; check in
+   particular that `createOrder` still takes `account = msg.sender`, that `sendTokens` still pulls from `msg.sender` only,
+   where cancellation and execution send funds, the `CreateOrderParams` field list (a new field needs a fixed value here),
+   and the cancellation rule;
+3. `cast code <address>` on both registry RPC endpoints → SHA-256; `RoleStore.hasRole` for the three required roles;
+   `Reader.getMarket` for each market; the DataStore keys above;
+4. update `GMX_PINS` (new `id`), `GMX_MARKETS`, the ABI if it changed; run `packages/derivatives/test/gmx-live.test.ts`
+   after re-recording real transactions (`node scripts/record-gmx-order-fixtures.mts`), then **`npx tsx scripts/fork-gmx.mts`**
+   — it must pass in full against the new contracts;
+5. rebuild and redeploy the signer; the owner approves a new venue policy (the old one is `stale`).
+
+## C3. Flow and states
+
+1. `POST /orders/preview` → estimate (fees, impact, liquidation), risk engine (`checkOrder` on an account view built from the
+   wallet's USDC and its on-chain positions), the signer's venue policy applied in advance with GMX's oracle price.
+2. `POST /orders` → gates (both settings, authorization, pins, halt, one transaction in flight per network), intent, the same
+   `buildGmxTxs` as the signer, simulation (`eth_call`) and gas estimate when no approval is needed, wallet policy; a
+   proposal (`kind: gmx`) and an operation row; WebAuthn request over the intent hash.
+3. `POST /operations/:id/approve` → signer → approval transaction mined (if any) → pins checked again → the order
+   transaction simulated against the real state → broadcast → receipt.
+4. `created`: the order key is read from `OrderCreated` in the receipt and compared field by field with the approved plan.
+   « En attente d'exécution par le réseau GMX ». Then, by key: `Reader.getOrder` (still pending / frozen) and the
+   EventEmitter's logs → `executed` (execution price, position fee, price impact, PnL, tokens returned, fee refund — from
+   the events of the keeper's transaction), `cancelled` (reason; for an increase, the return of the collateral is verified
+   from the `Transfer` OrderVault → wallet of that transaction), `frozen`, or `unknown` (left the order store, no event
+   found yet — never assumed). Everything is in PostgreSQL: a restart continues.
+5. Positions and pending orders shown are read **on-chain** (`Reader.getAccountPositions / getAccountOrders`), cross-checked
+   with GMX's API (`venueApi.agrees`).
+
+## C4. Costs (measured on the fork, 2026-11-11, base fee ≈ 0.02 gwei, ETH ≈ 2 090 USD)
+
+| | Gas used | Notes |
+|---|---|---|
+| Approval | ≈ 55 000 | exact amount; skipped when the allowance already covers the collateral |
+| Create increase (multicall) | 929 917 – 929 941 | ≈ 0.00002 ETH ≈ 0.04 USD at 0.02 gwei |
+| Create decrease | similar | no token transfer |
+| `cancelOrder` by the owner | 650 259 | the execution fee comes back in full (the account is its own keeper) |
+| Keeper execution (paid from the execution fee) | 3.03 – 3.11 M + the fixed part | fee sent 0.000129 ETH (4 149 674 gas × (1.5 × base + tip)); refunded 0.0000778 ETH on execution, 0.0000492 ETH on a keeper cancellation |
+| Position fee | 0.04 % (balance improved) or 0.06 % of size | 0.024 USDC on 60 USD |
+| Round trip 60 USD at an unchanged price | 0.0624 USDC | two position fees + price impact (−0.0146 USD at the close) |
+
+The wallet's default fee ceiling on Arbitrum (0.0003 ETH) covers gas ceiling + execution fee up to a base fee of about
+0.03 gwei; above that an order is refused by the wallet policy (no limit was raised for GMX).
+
+## C5. Verified / not verified
+
+**Verified**
+- Everything in C1's first two lists, C2's table and wiring, on both RPC endpoints (pins) and on an anvil fork (behaviour).
+- On the fork, with the real contracts: creation with exactly the approved fields; **simulated execution** through GMX's
+  `SimulationRouter.simulateExecuteLatestOrder` (reverts with `EndOfOracleSimulation` at the market price = success; with
+  `OrderNotFulfillableAtAcceptablePrice` 1 % beyond); **keeper execution** by an impersonated real `ORDER_KEEPER` calling the
+  real `OrderHandler.executeOrder` — with the bytecode of `ChainlinkDataStreamProvider` replaced on the fork by
+  `scripts/lib/GmxMockOracleProvider.sol` (returns the price it is handed, verifies no signature); close by MarketDecrease;
+  keeper-side cancellation with the collateral returned; owner cancellation refused before 300 s and mined after.
+- Encoding against the verified ABI and 11 real transactions; exact price / USD conversions; the state machine incl.
+  never-found and restart; pins failing closed (API tests with a scripted chain).
+
+**Not verified**
+- **Execution by GMX's real keepers with real signed Data Streams prices**: timing, the price actually used, keeper liveness,
+  what a keeper does with an execution fee at 1.5 × the base fee when gas spikes. Nothing was sent to mainnet.
+- The real chain port (`gmx-chain.ts`): its READS were run live against both public RPC endpoints on 2026-11-11
+  (`npx tsx scripts/smoke-gmx-chain.mts`: pins, roles, gas parameters, nonce quorum, 20 positions and 17 pending orders of a
+  public address through Reader, the events of a recorded order, a refused `eth_call`). Its `broadcast` and receipt path, the
+  paging of `eth_getLogs` beyond one span, and its behaviour when the two endpoints disagree were NOT exercised live (nothing
+  is ever sent by a test).
+- The linked libraries of OrderHandler (OrderUtils `0x2b19a6ab…`, ExecuteOrderUtils, GasUtils…) were read as part of the
+  OrderHandler's verified source bundle; their own deployed bytecode was hashed (OrderUtils) but not separately compared with
+  that source. OrderVault, DataStore, Reader, RoleStore, EventEmitter: address + bytecode pinned, verified source **not**
+  read line by line (their behaviour is the one exercised on the fork).
+- Which GMX roles are held by which keys today (multisig, timelock delays) — not read.
+- Frozen orders, liquidation, ADL, funding claims, positions with a WETH/WBTC profit: no fork scenario.
+- Shorts and the BTC market were not run on the fork (same code path; unit-tested encoding).
+- The UI was tested against the dev mock only.
+
+## C6. Not built (excluded on purpose)
+
+Limit / stop / take-profit orders (`LimitIncrease`, `LimitDecrease`, `StopLossDecrease`) and `updateOrder`; native ETH or
+WETH/WBTC collateral; swap paths (paying with another token); `SwapPnlTokenToCollateralToken`; partial collateral
+withdrawal on a decrease (a decrease sends `initialCollateralDeltaAmount = 0`: collateral comes back when the position
+closes); `claimFundingFees`, `claimCollateral`; Express / relay / subaccounts / GMX Account; Avalanche and MegaETH; agents.

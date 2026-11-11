@@ -61,6 +61,29 @@ export const IntentSchema = z.strictObject({
     provider: z.enum(['thorchain']), toNetwork: z.string().min(2).max(24).regex(/^[a-z0-9-]+$/), toAsset: z.string().min(1).max(80), minOut: U, limit: U,
     memo: z.string().min(5).max(250), vault: z.string().min(20).max(100), vaultPubKey: z.string().min(20).max(120), router: z.string().max(100), expiry: z.number().int().positive(), approveGas: U,
   }).optional(),
+  // >>> v8 GMX v2 trading (additive)
+  /**
+   * Present when the intent is ONE GMX v2 order action on Arbitrum, sent from the wallet's own address to the pinned
+   * ExchangeRouter (`to`). The signer BUILDS the calldata itself from these fields (packages/derivatives/src/live/gmx.ts):
+   * `multicall([sendWnt(orderVault, executionFee), sendTokens(collateral, orderVault, amount)?, createOrder(params)])` with
+   * msg.value = executionFee, or `cancelOrder(orderKey)`. `asset`/`amount` are the collateral token and the collateral sent
+   * (increase), the position's collateral token and 0 (decrease), the native coin and 0 (cancel). Receiver, cancellation
+   * receiver = the wallet; no callback, no UI fee, no referral code, no swap path: those are not fields, they are fixed.
+   * `maxFee` covers gas AND the execution fee (both leave the wallet in the native coin).
+   */
+  gmx: z.strictObject({
+    venue: z.literal('gmx-v2'), action: z.enum(['increase', 'decrease', 'cancel']), authorizationId: z.uuid(),
+    exchangeRouter: z.string().regex(/^0x[0-9a-fA-F]{40}$/), router: z.string().regex(/^0x[0-9a-fA-F]{40}$/), orderVault: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+    market: z.string().regex(/^0x[0-9a-fA-F]{40}$/), indexToken: z.string().regex(/^0x[0-9a-fA-F]{40}$/), collateralToken: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+    orderType: z.enum(['MarketIncrease', 'MarketDecrease', 'None']), isLong: z.boolean(),
+    /** USD with 30 decimals */ sizeDeltaUsd: U,
+    /** USD per index token unit, 30 − token decimals */ acceptablePrice: U, triggerPrice: U,
+    /** wei of the native coin, sent as msg.value and wrapped into the order vault */ executionFee: U,
+    approveGas: U,
+    /** cancel only: the key of the order to cancel (0x + 64 hex, lower case) */
+    orderKey: z.string().regex(/^0x[0-9a-f]{64}$/).optional(),
+  }).optional(),
+  // <<< v8 GMX v2 trading
   evm: z.strictObject({
     nonce: z.number().int().nonnegative(), gasLimit: U, maxFeePerGas: U, maxPriorityFeePerGas: U,
   }).optional(),
@@ -103,6 +126,11 @@ function fields(i: Intent): [string, string][] {
     ['xswap.memo', i.xswap.memo], ['xswap.vault', i.xswap.vault], ['xswap.vaultPubKey', i.xswap.vaultPubKey], ['xswap.router', i.xswap.router], ['xswap.expiry', String(i.xswap.expiry)], ['xswap.approveGas', i.xswap.approveGas]);
   if (i.venueDeposit) f.push(['venueDeposit.venue', i.venueDeposit.venue], ['venueDeposit.venueNetwork', i.venueDeposit.venueNetwork], ['venueDeposit.route', i.venueDeposit.route],
     ['venueDeposit.bridge', i.venueDeposit.bridge], ['venueDeposit.minAmount', i.venueDeposit.minAmount]);
+  // >>> v8 GMX v2 trading (additive)
+  if (i.gmx) { const g = i.gmx; f.push(['gmx.venue', g.venue], ['gmx.action', g.action], ['gmx.authorizationId', g.authorizationId], ['gmx.exchangeRouter', g.exchangeRouter], ['gmx.router', g.router], ['gmx.orderVault', g.orderVault],
+    ['gmx.market', g.market], ['gmx.indexToken', g.indexToken], ['gmx.collateralToken', g.collateralToken], ['gmx.orderType', g.orderType], ['gmx.isLong', g.isLong ? '1' : '0'], ['gmx.sizeDeltaUsd', g.sizeDeltaUsd],
+    ['gmx.acceptablePrice', g.acceptablePrice], ['gmx.triggerPrice', g.triggerPrice], ['gmx.executionFee', g.executionFee], ['gmx.approveGas', g.approveGas], ['gmx.orderKey', g.orderKey ?? '']); }
+  // <<< v8 GMX v2 trading
   if (i.memo !== undefined) f.push(['memo', i.memo]);
   if (i.x) for (const k of Object.keys(i.x).sort()) f.push([`x.${k}`, i.x[k]!]);
   return f;
@@ -119,6 +147,8 @@ export function canonicalBytes(intent: Intent): Uint8Array {
   if (i.bridge && (fam !== 'evm' || i.swap)) throw new Error('bridges are only defined for EVM networks and exclude a swap');
   if (i.xswap && ((fam !== 'evm' && fam !== 'btc') || i.swap || i.bridge)) throw new Error('cross-chain swaps are only defined for EVM and Bitcoin-style sources and exclude a swap or a bridge');
   if (i.venueDeposit && (fam !== 'evm' || i.swap || i.bridge || i.xswap || i.memo !== undefined)) throw new Error('a venue deposit is a plain EVM transfer: no swap, no bridge, no cross-chain swap, no memo');
+  // v8: a GMX order action is an EVM transaction of its own kind
+  if (i.gmx && (fam !== 'evm' || i.swap || i.bridge || i.xswap || i.venueDeposit || i.memo !== undefined)) throw new Error('a GMX order is an EVM transaction: no swap, no bridge, no cross-chain swap, no venue deposit, no memo');
   baseUnits(i.amount);
   const parts: Uint8Array[] = [enc.encode(DOMAIN), new Uint8Array([0])];
   for (const [k, v] of fields(i)) {

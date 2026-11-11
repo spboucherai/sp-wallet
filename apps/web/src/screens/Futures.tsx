@@ -29,6 +29,12 @@ import { OrderPanel } from '../derivatives/OrderPanel';
 import { RouterView } from '../derivatives/Router';   // router (simulation)
 import { hasPaperPrefill, setPaperPrefill } from '../derivatives/routerApi';
 import { useMarketStore, useSlice, type MarketStore } from '../derivatives/store';
+// >>> v8 GMX trading
+import { gmxMarketOf, peekGmxPrefill, setGmxPrefill, useGmx } from '../derivatives/gmx';
+import { GmxActivity } from '../derivatives/GmxActivity';
+import { GmxCard, GmxLocked } from '../derivatives/GmxCard';
+import { GmxOrderPanel } from '../derivatives/GmxOrderPanel';
+// <<< v8 GMX trading
 import { venueOf, type DerivAccount, type Instrument, type Interval, type Order, type Position, type VenueInfo } from '../derivatives/types';
 
 export type FuturesView = 'terminal' | 'compare' | 'accounts' | 'router';
@@ -62,22 +68,31 @@ export function Futures({ instrument: routeId, view = 'terminal', nav }: { instr
   const sel = pickAccount(paper, live, accountId, venueOf(id));
   const tone: Tone = sel.venueAccount ? toneOf(sel.venueAccount) : 'paper', anyLive = live.some((a) => a.mode === 'MANUAL_LIVE');
   const list = instruments.data?.instruments ?? [], unread = instruments.data?.errors ?? [];
+  // >>> v8 GMX trading: GMX has no venue account — its status (settings, authorization, wallet, positions read from the chain) is one read; a backend without the routes has none
+  const { locale: gxLocale } = useContext(I18n);
+  const gmx = useGmx(gxLocale).data;
+  const gxReal = view === 'terminal' && !!gmx?.tradable && !!gmxMarketOf(gmx, id);   // this market's order panel moves real money
+  // <<< v8 GMX trading
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-1">
-        <div className="hidden items-center gap-2.5 sm:flex"><h1 className="text-[24px] font-semibold tracking-[-0.02em] lg:text-[28px]">{t('fxTitle')}</h1><ModeTag tone={tone} /></div>
+        <div className="hidden items-center gap-2.5 sm:flex"><h1 className="text-[24px] font-semibold tracking-[-0.02em] lg:text-[28px]">{t('fxTitle')}</h1><ModeTag tone={/* v8 GMX trading */ gxReal ? 'mainnet' : tone} /></div>
         <Seg tabs size="sm" label={t('fxViews')} value={view} onChange={(v) => go(v)} className="w-full sm:w-auto sm:min-w-[330px]" options={[{ id: 'terminal', label: t('fxViewTerminal') }, { id: 'compare', label: t('fxViewCompare') }, { id: 'router', label: t('rxTab') }, { id: 'accounts', label: t('fxViewAccounts') }]} />
       </div>
-      <p className="text-[12.5px] leading-snug text-mute" data-testid="paper-banner">{t(tone === 'paper' ? (anyLive ? 'flBannerSimLive' : 'flBannerOff') : tone === 'testnet' ? 'flBannerTestnet' : 'flBannerReal')}</p>
+      <p className="text-[12.5px] leading-snug text-mute" data-testid="paper-banner">{t(/* v8 GMX trading */ gxReal ? 'gxBannerReal' : tone === 'paper' ? (anyLive ? 'flBannerSimLive' : 'flBannerOff') : tone === 'testnet' ? 'flBannerTestnet' : 'flBannerReal')}</p>
       {venues.isError ? <Notice tone="danger">{t('fxApiDown')} {errText(t, venues.error)}</Notice> : venues.data && !(phone && view === 'terminal') ? <VenueStrip venues={venues.data} compact /> : null}
       {unread.length > 0 && <Notice tone="warn">{t('fxVenueErrors', { venues: unread.map((e) => VENUE_NAME[e.venue as keyof typeof VENUE_NAME] ?? e.venue).join(', ') })}</Notice>}
       {view === 'terminal' && <Terminal id={id} instruments={list} instrumentsLoading={instruments.isLoading} venues={venues.data ?? []} accounts={paper} liveAccounts={live} accountId={accountId} onAccount={setAccountId}
         onMarket={(m) => go('terminal', m)} goAccounts={() => go('accounts')} />}
       {view === 'compare' && <CompareView instruments={list} base={base} onBase={setBase} onOpen={(m) => go('terminal', m)} />}
       {/* router (simulation): the only action is to open the PAPER order panel, pre-filled */}
-      {view === 'router' && <RouterView accounts={paper} onOpenPaper={(p, account) => { setPaperPrefill(p); if (account) setAccountId(account); go('terminal', p.instrument); }} />}
+      {view === 'router' && <RouterView accounts={paper} onOpenPaper={(p, account) => { setPaperPrefill(p); if (account) setAccountId(account); go('terminal', p.instrument); }}
+        /* >>> v8 GMX trading: when GMX is tradable, a GMX candidate can pre-fill the GMX order panel */ gmx={gmx} onOpenGmx={(p) => { setGmxPrefill(p); go('terminal', p.instrument); }} /* <<< v8 GMX trading */ />}
       {view === 'accounts' && <AccountsView venues={venues.data ?? []} instruments={list} accounts={paper} loading={accounts.isLoading} selected={accountId} onSelect={setAccountId} />}
+      {/* >>> v8 GMX trading: the GMX « account » is the wallet's own address */}
+      {view === 'accounts' && gmx && <GmxCard status={gmx} onOpen={(m) => go('terminal', m)} />}
+      {/* <<< v8 GMX trading */}
     </div>
   );
 }
@@ -104,7 +119,7 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
   const meta = useSlice(store, 'meta');
   const phone = !useMedia('(min-width: 768px)'), wide = useMedia('(min-width: 1360px)');
   const [interval, setIntervalV] = useLocalState<Interval>('spw-fut-interval', '1h');
-  const [tab, setTab] = useState<'chart' | 'book' | 'trade' | 'positions'>(() => (hasPaperPrefill(id) ? 'trade' : 'chart'));   // coming from the router: the order panel first
+  const [tab, setTab] = useState<'chart' | 'book' | 'trade' | 'positions'>(() => (hasPaperPrefill(id) || /* v8 GMX trading */ peekGmxPrefill(id) !== null ? 'trade' : 'chart'));   // coming from the router: the order panel first
   const [pick, setPick] = useState(false);
   const instrument = meta.instrument ?? instruments.find((i) => i.id === id) ?? null;
   const byId = useMemo(() => new Map(instruments.map((i) => [i.id, i])), [instruments]);
@@ -117,10 +132,13 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
   const liveCfg = useQuery({ queryKey: ['deriv', 'live', 'config', locale], queryFn: () => lapi.config(locale), enabled: !!venueAccount, staleTime: 60_000, refetchInterval: 60_000, retry: 0 });
   const held = venueAccount ? (lv.detail?.venueState.error ? null : lv.detail?.venueState ?? null) : d ?? account;
   const overlays = useMemo(() => overlaysOf(held, id, t, !!venueAccount), [held, id, locale]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const tone: Tone = chosen ? toneOf(chosen) : 'paper';
+  let tone: Tone = chosen ? toneOf(chosen) : 'paper';   // `let`: v8 GMX trading (below)
   const switcher = <AccountSwitch value={chosen?.id ?? ''} onChange={onAccount} choices={[...mine, ...picked.live].map((a) => ({ id: a.id, label: a.label, tone: toneOf(a) }))} />;
-  const band = <ModeBand tone={tone} label={chosen?.label} compact={phone} />;
+  let band = <ModeBand tone={tone} label={chosen?.label} compact={phone} />;   // `let`: v8 GMX trading (below)
   const unknown = !instrumentsLoading && instruments.length > 0 && !byId.has(id) && meta.error !== null;
+  // >>> v8 GMX trading
+  const gmxQ = useGmx(locale, venueOf(id) === 'gmx');
+  // <<< v8 GMX trading
 
   if (unknown) return <Card><div className="space-y-3"><Notice tone="warn">{t('fxUnknownMarket', { id })}</Notice><Btn kind="soft" onClick={() => onMarket(instruments[0]!.id)}>{t('fxOpenDefault', { symbol: instruments[0]!.symbol })}</Btn></div></Card>;
   const pdp = priceDp(instrument?.tickSize, store.ticker?.mark);
@@ -128,12 +146,23 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
   const chart = <Veil store={store}><Candles store={store} interval={interval} onInterval={setIntervalV} overlays={overlays} priceDp={pdp} locale={locale} stale={false} height={phone ? 300 : wide ? 430 : 380} /></Veil>;
   const book = instrument ? (hasBook ? <Veil store={store}><BookPanel store={store} instrument={instrument} rows={phone ? 9 : 10} /></Veil> : <LiquidityPanel store={store} />) : <Skeleton h="h-64" />;
   const trades = instrument && hasBook ? <Veil store={store}><TradesPanel store={store} instrument={instrument} rows={phone ? 14 : wide ? 9 : 14} /></Veil> : null;
-  const order = !instrument ? <Skeleton h="h-64" />
+  let order = !instrument ? <Skeleton h="h-64" />   // `let`: v8 GMX trading (below)
     : venueAccount ? <LiveOrderPanel instrument={instrument} account={venueAccount} detail={lv.detail} conn={lv.conn} workerError={lv.workerError} config={liveCfg.data} switcher={switcher} goAccounts={goAccounts} />
     : <OrderPanel store={store} instrument={instrument} account={account} accounts={mine} venue={venue} onAccount={onAccount} goAccounts={goAccounts} switcher={picked.live.length > 0 && account ? switcher : undefined} />;
-  const blotter = venueAccount ? <LiveBlotter account={venueAccount} detail={lv.detail} instruments={byId} ttlMs={liveCfg.data?.bounds.orderApprovalTtlMs ?? 90_000} onSelect={onMarket} />
+  let blotter = venueAccount ? <LiveBlotter account={venueAccount} detail={lv.detail} instruments={byId} ttlMs={liveCfg.data?.bounds.orderApprovalTtlMs ?? 90_000} onSelect={onMarket} />
     : <Blotter account={account} detail={d} instruments={byId} onSelect={onMarket} />;
-  const nPos = held?.positions.length ?? 0;
+  let nPos = held?.positions.length ?? 0;
+  // >>> v8 GMX trading: on a market GMX lists for this wallet, the blotter is the wallet's own GMX activity (read from the chain) and, when
+  // trading is open, the order panel is GMX's — with the real-money band. Closed: the existing panel stays, followed by why it is closed.
+  const gxStatus = gmxQ.data, gxMarket = gmxMarketOf(gxStatus, id);
+  if (gxStatus && gxMarket) {
+    if (gxStatus.tradable) { tone = 'mainnet'; band = <ModeBand tone="mainnet" label="GMX v2 · Arbitrum" compact />;
+      order = <GmxOrderPanel key={gxMarket.market} status={gxStatus} market={gxMarket} onMarket={onMarket} />; }
+    else order = <div className="space-y-4">{order}<GmxLocked status={gxStatus} goAccounts={goAccounts} /></div>;
+    blotter = <GmxActivity status={gxStatus} market={gxMarket.market} onSelect={onMarket} />;
+    nPos = gxStatus.positions.filter((p) => p.market.toLowerCase() === gxMarket.market.toLowerCase()).length;
+  }
+  // <<< v8 GMX trading
   const head = (s: string) => <h3 className="mb-2 text-[13px] font-semibold text-mute">{s}</h3>;
   const picker = pick && <MarketPicker instruments={instruments} current={id} onClose={() => setPick(false)} onPick={(m) => { setPick(false); onMarket(m); }} />;
   const error = meta.error && !store.ticker ? <Notice tone="danger">{t('fxMarketError')}</Notice> : null;

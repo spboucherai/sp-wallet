@@ -35,6 +35,7 @@ import { stepAt, worstPrice as worstPriceOf } from './dec';
 import { createLiveMock, type LiveHooks } from './mockLive';
 import { createRouterMock } from './mockRouter';   // router (simulation): POST /derivatives/route, GET /derivatives/route/assets
 import { createPerpMock, type PerpHooks } from './mockPerpLive';   // v7 perp live: the perp-agent routes
+import { createGmxMock, type GmxHooks, type GmxScenario } from './mockGmx';   // >>> v8 GMX trading <<<
 import { aggregateBars, type Bar } from './reducers';
 import type { Book, Candle, CompareRow, Instrument, Interval, Liquidity, OrderRequest, Position, PublicTrade, RiskPolicy, Ticker, VenueId, VenueInfo } from './types';
 import { INTERVAL_MS } from './types';
@@ -512,7 +513,10 @@ const ROUTER = createRouterMock({
   account: (id) => { const a = ACCTS.get(id); if (!a) return null; const v = view(a); return { id: a.id, venue: a.venue, label: a.label, mode: a.policy.mode, equity: v.state.equity, freeCollateral: v.state.freeCollateral, preview: (body) => preview(a, body) }; },
 });
 // --- /router ---
-const json = (status: number, j: unknown): Response => new Response(JSON.stringify(j), { status, headers: { 'content-type': 'application/json' } });
+// >>> v8 GMX trading: the GMX routes (mockGmx.ts) priced on this mock's GMX markets
+const GMX = createGmxMock({ now: () => Date.now(), mark: (id) => { const s = sim(id); return s ? Number(fresh(s).ticker.mark) : null; } });
+// <<< v8 GMX trading
+const json =(status: number, j: unknown): Response => new Response(JSON.stringify(j), { status, headers: { 'content-type': 'application/json' } });
 const out = (o: Outcome) => json(o.status, o.json);
 async function route(method: string, path: string, q: URLSearchParams, b: any, headers: Headers): Promise<Response> {
   const venue = (q.get('venue') || undefined) as VenueId | undefined, now = Date.now();
@@ -522,6 +526,9 @@ async function route(method: string, path: string, q: URLSearchParams, b: any, h
   if (PERP.handles(path)) return out(PERP.route(method, path, b, q));   // v7 perp live
   if (!path.startsWith('/derivatives')) return json(503, { error: 'mock', message: 'mock mode: only the Futures terminal is simulated' });
   if (path.startsWith('/derivatives/live/')) return out(LIVE.route(method, path, b, headers, q));
+  // >>> v8 GMX trading
+  if (path.startsWith('/derivatives/gmx/')) return out(GMX.route(method, path, b, headers, q));
+  // <<< v8 GMX trading
   const p = path.slice('/derivatives'.length);
   const unknown = () => json(404, { error: 'unknown_instrument', message: 'unknown instrument' });
   if (venue && !VENUES.some((v) => v.id === venue)) return json(404, { error: 'unknown_venue', message: `unknown venue ${venue}` });
@@ -642,6 +649,11 @@ export function installMock(): void {
   const scenario = sessionStorage.getItem('spw-mock-perp');
   if (scenario) PERP.hooks.scenario(scenario as Parameters<PerpHooks['scenario']>[0]);
   // <<< v7 perp live
+  // >>> v8 GMX trading: `&gmx=<scenario>` (mockGmx.ts) — kept for the tab, like `mock=1`; `&gmx=` forgets it. Both server settings are off without it.
+  if (q.has('gmx')) { if (q.get('gmx')) sessionStorage.setItem('spw-mock-gmx', q.get('gmx')!); else sessionStorage.removeItem('spw-mock-gmx'); }
+  const gmxScenario = sessionStorage.getItem('spw-mock-gmx');
+  if (gmxScenario) GMX.hooks.scenario(gmxScenario as GmxScenario);
+  // <<< v8 GMX trading
   if (q.get('mainnet') === '1') LIVE.hooks.mainnet(true);   // `&mainnet=1`: the simulated server setting SPW_DERIV_LIVE_MAINNET starts on
   const freeze = (v: boolean) => { for (const s of SIMS.values()) s.frozen = v; };
   window.__spwMock = {
@@ -653,5 +665,8 @@ export function installMock(): void {
     live: LIVE.hooks,
     perp: PERP.hooks,   // v7 perp live
   };
+  // >>> v8 GMX trading: `window.__spwMock.gmx` (GmxHooks)
+  (window.__spwMock as unknown as { gmx: GmxHooks }).gmx = GMX.hooks;
+  // <<< v8 GMX trading
   console.info('[SP Wallet] mock mode: derivatives API simulated in the browser from recorded fixtures — no backend, no venue.');
 }

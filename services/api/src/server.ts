@@ -16,6 +16,7 @@ import { derivativesRoutes } from './derivatives/routes.ts';
 import type { Derivatives } from './derivatives/index.ts';
 import { liveRoutes } from './derivatives/live-routes.ts';
 import { collateralRoutes } from './derivatives/collateral-routes.ts';
+import { gmxRoutes } from './derivatives/gmx-routes.ts'; // v8 GMX v2 trading
 import type { LiveService } from './derivatives/exec.ts';
 import { addressFor, signer } from './signer-client.ts';
 import { swapRoutes } from './swap.ts';
@@ -104,7 +105,7 @@ async function markets(): Promise<Record<string, Market> | null> {
 }
 async function prices(): Promise<Record<string, Market> | null> { return markets(); }
 
-export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService; collateral?: import('./derivatives/collateral.ts').CollateralService; plan?: Partial<PlanDeps> } = {}): Promise<FastifyInstance> {
+export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService; collateral?: import('./derivatives/collateral.ts').CollateralService; gmx?: import('./derivatives/gmx-exec.ts').GmxService; plan?: Partial<PlanDeps> } = {}): Promise<FastifyInstance> {
   const swapProviders = opts.swapProviders;
   const app = Fastify({ logger: { level: 'warn', redact: ['req.headers.cookie', 'req.headers.authorization'] }, bodyLimit: 64 * 1024, trustProxy: config.trustProxy });
   await app.register(cookie);
@@ -155,6 +156,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   derivativesRoutes(app, opts.derivatives);
   liveRoutes(app, opts.live); // controlled live trading: nothing trades until the owner authorizes a venue account with his passkey
   collateralRoutes(app, opts.collateral); // deposit to / withdraw from a venue account: passkey per operation, pinned bridge, own address only
+  gmxRoutes(app, opts.gmx); // v8: GMX v2 orders as wallet transactions; off unless SPW_DERIV_GMX_LIVE=on and the owner approved a venue policy
   await alertRoutes(app); // v6-alerts: in-app alerts, push subscriptions, webhook — all behind the owner session
   monitorRoutes(app);     // v6-alerts: read-only monitoring dashboard
   await researchRoutes(app, { perp: () => perpRuntime().lab }); // v7 research runtime: jobs for the owner, a narrow endpoint pair for the runner

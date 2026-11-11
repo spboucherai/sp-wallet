@@ -2,6 +2,7 @@
 // through `DerivData`, public chain data through `ChainCostsReader`, and asks the paper / live services what their risk policy
 // would SAY about the order (their `preview`, which places nothing). It builds no order, signs nothing, calls no signer and no
 // venue trading endpoint. The estimates themselves are the pure functions of @spw/derivatives (router.ts).
+import { gmxMarketByInstrument } from '@spw/derivatives/live'; // v8
 import { z } from 'zod';
 import {
   D, OrderIntentSchema, ROUTER_FACTS, orderBodyFor, routeOrder,
@@ -24,6 +25,8 @@ export interface LivePort {
   list(): Promise<{ id: string; venue: string; network: string; label: string; mode: string; account: string }[]>;
   preview(id: string, body: OrderBody): Promise<{ risk: RiskResult }>;
 }
+/** v8: what the GMX engine says about the wallet itself — GMX has no venue account, the wallet IS the account (gmx-exec.ts `tradability`) */
+export interface GmxPort { tradability(): Promise<{ tradable: boolean; usdc: DecStr | null }> }
 export interface PolicyCheck {
   accountId: string; label: string; kind: 'paper' | 'venue'; mode: string; network: string;
   /** null: the policy was not asked (the reason says why) */
@@ -38,16 +41,17 @@ interface Acct { id: string; venue: VenueId; network: string; label: string; kin
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 200);
 const WALLET: Record<VenueId, { trading: 'paper' | 'none'; note: string }> = {
   hyperliquid: { trading: 'paper', note: 'this wallet trades Hyperliquid in simulation (paper account); live trading exists and stays off until the owner authorizes a venue account with his passkey' },
-  gmx: { trading: 'none', note: 'this wallet only READS GMX: no GMX order can be built or sent from it today' },
+  gmx: { trading: 'none', note: 'GMX trading is not enabled on this wallet now (server settings, venue policy, or a market outside the pinned table): it only reads GMX' },
   dydx: { trading: 'none', note: 'market data only on this venue' },
 };
 
 export class RouteService {
   readonly data: DerivData; readonly paper: PaperService; readonly registry: VenueRegistry;
   private readonly chain: ChainCostsReader; private readonly live: LivePort | null;
+  private readonly gmx: GmxPort | null; private gmxSeen: { at: number; v: { tradable: boolean; usdc: DecStr | null } } | null = null; // v8
 
-  constructor(o: { data: DerivData; paper: PaperService; chain?: ChainCostsReader; live?: LivePort | null }) {
-    this.data = o.data; this.paper = o.paper; this.registry = o.data.registry; this.live = o.live ?? null;
+  constructor(o: { data: DerivData; paper: PaperService; chain?: ChainCostsReader; live?: LivePort | null; gmx?: GmxPort | null }) {
+    this.data = o.data; this.paper = o.paper; this.registry = o.data.registry; this.live = o.live ?? null; this.gmx = o.gmx ?? null;
     this.chain = o.chain ?? createChainCostsReader({ now: o.data.now });
   }
 
@@ -90,13 +94,25 @@ export class RouteService {
     }));
   }
 
+  // >>> v8 GMX trading: when the wallet can create GMX orders (both server settings on, venue policy approved, pins intact) and the
+  // instrument is one of the pinned markets, the router says so and counts the wallet's own USDC on Arbitrum as the collateral
+  private async gmxWallet(inst: Instrument): Promise<{ wallet: VenueSnapshot['wallet']; account: RouterAccount | null } | null> {
+    if (!this.gmx || inst.venue !== 'gmx' || !gmxMarketByInstrument(inst.id)) return null;
+    if (!this.gmxSeen || this.data.now() - this.gmxSeen.at > 10_000) this.gmxSeen = { at: this.data.now(), v: await this.gmx.tradability().catch(() => ({ tradable: false, usdc: null })) };
+    const t = this.gmxSeen.v;
+    if (!t.tradable) return null;
+    return { wallet: { trading: 'live', note: 'this wallet can create this GMX order: a wallet transaction approved with the passkey, executed later by a GMX keeper' },
+      account: t.usdc === null ? null : { id: 'gmx-wallet', label: 'wallet on Arbitrum One (USDC)', kind: 'venue', mode: 'MANUAL_LIVE', equity: t.usdc, freeCollateral: t.usdc } };
+  }
+  // <<< v8 GMX trading
+
   private async snapshot(v: VenueEntry, inst: Instrument, chain: ChainCosts, acct: Acct | undefined): Promise<VenueSnapshot> {
-    const ticker = await this.data.ticker(inst);
+    const ticker = await this.data.ticker(inst), gw = await this.gmxWallet(inst); // v8
     const s: VenueSnapshot = {
       venue: v.id, restriction: v.restriction,
-      wallet: acct?.kind === 'venue' && acct.mode === 'MANUAL_LIVE' && acct.error === null ? { trading: 'live', note: `« ${acct.label} » is a venue account authorized for live trading (passkey per order)` } : WALLET[v.id],
+      wallet: acct?.kind === 'venue' && acct.mode === 'MANUAL_LIVE' && acct.error === null ? { trading: 'live', note: `« ${acct.label} » is a venue account authorized for live trading (passkey per order)` } : gw?.wallet ?? WALLET[v.id],
       instrument: inst, ticker, book: null, gmx: null, fundingRange: null, chain,
-      account: acct && acct.equity !== null && acct.freeCollateral !== null ? { id: acct.id, label: acct.label, kind: acct.kind, mode: acct.mode, equity: acct.equity, freeCollateral: acct.freeCollateral } satisfies RouterAccount : null,
+      account: acct && acct.equity !== null && acct.freeCollateral !== null ? { id: acct.id, label: acct.label, kind: acct.kind, mode: acct.mode, equity: acct.equity, freeCollateral: acct.freeCollateral } satisfies RouterAccount : gw?.account ?? null,
     };
     const soft = async (fn: () => Promise<void>): Promise<void> => { try { await fn(); } catch (e) { s.unavailable = msg(e); } };
     if (v.facts.hasOrderBook) await soft(async () => { s.book = await this.data.book(inst); });

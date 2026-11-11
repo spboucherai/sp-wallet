@@ -13,6 +13,7 @@ import { ageText, DataTable, PaperTag, Row, Seg, VENUE_NAME, VenueBadge, type Co
 import { D, dec, fmt, parseInput } from './dec';
 import { rapi, type CostComponent, type PaperPrefill, type Reason, type RouteAnswer, type RouteBody, type RoutedCandidate, type RouterSource, type TermKey } from './routerApi';
 import type { DerivAccount, VenueId } from './types';
+import type { GmxPrefill, GmxStatus } from './gmx';   // >>> v8 GMX trading <<<
 
 const HORIZONS = ['1', '8', '24', '168', '720'] as const;
 const TERMS: TermKey[] = ['structure', 'execution', 'collateral', 'settlement', 'quote', 'markPrice', 'fundingInterval', 'fundingRule', 'otherCarry', 'maxLeverage', 'marginModes', 'tick', 'lot', 'sizeUnit', 'minOrder', 'maintenance', 'liquidation', 'fees'];
@@ -27,7 +28,7 @@ export function SrcTag({ source }: { source: RouterSource | 'paper' }) {
   return <span className={`ml-1.5 inline-flex shrink-0 items-center rounded-md border px-1 py-px align-middle text-[10px] font-bold uppercase tracking-[0.05em] ${cls}`} title={t(`rxSrcTitle_${source}` as Key)} data-src={source}>{t(`rxSrc_${source}` as Key)}</span>;
 }
 
-export function RouterView({ accounts, onOpenPaper }: { accounts: DerivAccount[]; onOpenPaper: (p: PaperPrefill, accountId: string | null) => void }) {
+export function RouterView({ accounts, onOpenPaper, gmx, onOpenGmx }: { accounts: DerivAccount[]; onOpenPaper: (p: PaperPrefill, accountId: string | null) => void; /* v8 GMX trading */ gmx?: GmxStatus; onOpenGmx?: (p: GmxPrefill) => void }) {
   const t = useT(); const { locale } = useContext(I18n);
   const [f, setF] = useState<Form>({ base: 'BTC', side: 'long', unit: 'usd', size: '25000', lev: '3', horizon: '24', type: 'market', price: '', account: '' });
   const [sent, setSent] = useState<RouteBody | null>(null);
@@ -83,7 +84,7 @@ export function RouterView({ accounts, onOpenPaper }: { accounts: DerivAccount[]
       {!sent ? <Card><p className="py-6 text-center text-[13.5px] text-mute">{t('rxEmpty')}</p></Card>
         : q.isLoading ? <Skeleton h="h-64" />
         : q.isError ? <Notice tone="danger">{errText(t, q.error) || t('fxErrGeneric')}</Notice>
-        : q.data ? <Results data={q.data} stale={stale} locale={locale} accounts={accounts} onOpenPaper={onOpenPaper} /> : null}
+        : q.data ? <Results data={q.data} stale={stale} locale={locale} accounts={accounts} onOpenPaper={onOpenPaper} gmx={gmx} onOpenGmx={onOpenGmx} /> : null}
     </div>
   );
 }
@@ -97,7 +98,7 @@ function usdT(x: string | null | undefined, locale: string, sign = false): strin
 const bpsT = (x: string | null | undefined, locale: string, sign = false) => (dec(x) ? `${fmt(x, { dp: 2, locale, sign })} ${locale === 'en' ? 'bps' : 'pb'}` : '—');
 const priceT = (x: string | null | undefined, locale: string) => { const d = dec(x); if (!d) return '—'; const n = D.toNumber(d); return fmt(d, { dp: n >= 1000 ? 2 : n >= 1 ? 4 : 6, locale }); };
 
-function Results({ data, stale, locale, accounts, onOpenPaper }: { data: RouteAnswer; stale: boolean; locale: string; accounts: DerivAccount[]; onOpenPaper: (p: PaperPrefill, accountId: string | null) => void }) {
+function Results({ data, stale, locale, accounts, onOpenPaper, gmx, onOpenGmx }: { data: RouteAnswer; stale: boolean; locale: string; accounts: DerivAccount[]; onOpenPaper: (p: PaperPrefill, accountId: string | null) => void; /* v8 GMX trading */ gmx?: GmxStatus; onOpenGmx?: (p: GmxPrefill) => void }) {
   const t = useT();
   const bps = locale === 'en' ? 'bps' : 'pb', fix = (s: string) => s;
   const rows = data.ranking.rows, first = rows[0];
@@ -140,7 +141,7 @@ function Results({ data, stale, locale, accounts, onOpenPaper }: { data: RouteAn
       </Card>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2" data-testid="router-cards">
-        {data.candidates.map((c) => <Candidate key={c.instrument} c={c} locale={locale} account={accounts.find((a) => a.venue === c.venue && a.kind === 'paper') ?? null} onOpenPaper={onOpenPaper} />)}
+        {data.candidates.map((c) => <Candidate key={c.instrument} c={c} locale={locale} account={accounts.find((a) => a.venue === c.venue && a.kind === 'paper') ?? null} onOpenPaper={onOpenPaper} gmx={gmx} onOpenGmx={onOpenGmx} />)}
       </div>
 
       <Card>
@@ -189,11 +190,14 @@ function CostRow({ k, locale }: { k: CostComponent; locale: string }) {
   </li>;
 }
 
-function Candidate({ c, locale, account, onOpenPaper }: { c: RoutedCandidate; locale: string; account: DerivAccount | null; onOpenPaper: (p: PaperPrefill, accountId: string | null) => void }) {
+function Candidate({ c, locale, account, onOpenPaper, gmx, onOpenGmx }: { c: RoutedCandidate; locale: string; account: DerivAccount | null; onOpenPaper: (p: PaperPrefill, accountId: string | null) => void; /* v8 GMX trading */ gmx?: GmxStatus; onOpenGmx?: (p: GmxPrefill) => void }) {
   const t = useT(); const fix = (s: string) => s;
   const fl = c.fill, o = c.order, g = fl?.gmx ?? null, base = symbolOf(c.instrument).split(/[-/ ]/)[0]!;
   const restricted = c.eligibility.reasons.some((r) => r.code === 'venue_restricted');
   const canOpen = c.venue === 'hyperliquid' && c.eligibility.eligible && !!o && o.sizeUnit === 'base' && D.isPos(D.from(o.sizeBase)) && !!c.margin;
+  // >>> v8 GMX trading
+  const gxMarket = c.venue === 'gmx' && gmx?.tradable ? gmx.markets.find((m) => m.instrument === c.instrument && m.allowed) ?? null : null;
+  // <<< v8 GMX trading
   const open = () => { if (!o || !c.margin) return; onOpenPaper({ instrument: c.instrument, side: o.side, kind: o.type, unit: 'base', size: o.sizeBase, lev: Math.max(1, Math.floor(Number(c.margin.leverage))), price: o.limitPrice ?? '', reduceOnly: o.reduceOnly }, account?.id ?? null); };
   return (
     <Card className={restricted ? '!border-warn/40' : ''}>
@@ -258,6 +262,12 @@ function Candidate({ c, locale, account, onOpenPaper }: { c: RoutedCandidate; lo
         {c.venue === 'hyperliquid' && <div className="space-y-1.5 border-t border-line pt-3">
           <Btn full kind="soft" disabled={!canOpen} onClick={open} data-testid="router-open-paper">{t('rxOpenPaper')}</Btn>
           <p className="text-[12px] leading-snug text-mute">{t(canOpen ? 'rxOpenPaperHint' : 'rxOpenPaperOff')}</p></div>}
+        {/* >>> v8 GMX trading: only when GMX is tradable and this pool is a market of the venue policy — it pre-fills the GMX order panel, nothing is sent */}
+        {gxMarket && onOpenGmx && o && c.margin && !o.reduceOnly && <div className="space-y-1.5 border-t border-line pt-3">
+          <Btn full kind="soft" onClick={() => { const size = D.div(D.from(c.margin!.notionalUsd), D.one, 2, 'down'), l = D.from(c.margin!.leverage);
+            onOpenGmx({ instrument: c.instrument, side: o.positionSide, sizeUsd: D.str(size), leverage: D.str(D.div(l, D.one, 1, 'down')), collateral: D.isPos(l) ? D.str(D.div(size, l, 2, 'up')) : '' }); }} data-testid="router-open-gmx">{t('gxRouterOpen')}</Btn>
+          <p className="text-[12px] leading-snug text-mute">{t('gxRouterOpenHint')}</p></div>}
+        {/* <<< v8 GMX trading */}
       </div>
     </Card>
   );
