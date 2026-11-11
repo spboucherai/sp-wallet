@@ -21,7 +21,7 @@ export interface NetworkDef {
   family: Family;
   name: string;
   /**
-   * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id.
+   * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. Aptos: chain id.
    * Bitcoin Cash shares its genesis block with Bitcoin, Bitcoin SV and eCash, so its reference is the hash of block 661648,
    * the first block after the last of those splits (November 2020; a Bitcoin Cash Node checkpoint), which exists on no other chain.
    */
@@ -180,6 +180,18 @@ const DEFS = {
     native: { id: 'native', symbol: 'TRX', name: 'TRON', decimals: 6 }, tokens: [], coinType: 195,
     rpc: ['https://api.trongrid.io', 'https://tron-rpc.publicnode.com'],
     explorerTx: 'https://tronscan.org/#/transaction/', explorerAddr: 'https://tronscan.org/#/address/', minConf: 19,
+  },
+  aptos: {
+    // chainRef = the chain id (1 = mainnet), which is part of every signed transaction. Public full nodes prune history, so the
+    // genesis transaction cannot be read; the adapter verifies the chain id from the node and from the on-chain 0x1::chain_id
+    // resource, a pinned ledger checkpoint, and that both sources report the same hash for the same recent block.
+    // Sources: Aptos Labs (keyless tier) and PublicNode (independent operator); verified live 2026-11-10.
+    // rpc[0] also serves the keyless indexer (/v1/graphql) used only to discover deposits, each then verified on a full node.
+    // No `activation`: an Aptos account needs no minimum balance (the sender pays the storage fee of a new recipient).
+    id: 'aptos', family: 'aptos', name: 'Aptos', chainRef: '1',
+    native: { id: 'native', symbol: 'APT', name: 'Aptos', decimals: 8 }, tokens: [], coinType: 637,
+    rpc: ['https://api.mainnet.aptoslabs.com/v1', 'https://aptos-rest.publicnode.com/v1'],
+    explorerTx: 'https://explorer.aptoslabs.com/txn/', explorerAddr: 'https://explorer.aptoslabs.com/account/', minConf: 1,
   },
 } satisfies Record<string, NetworkDef>;
 
