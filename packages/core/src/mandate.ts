@@ -24,6 +24,9 @@ export const MandateSchema = z.strictObject({
   /** per asset id: largest input of a single order and total input per UTC day, base units. A missing asset cannot be sold. */
   maxOrder: z.record(z.string(), U), maxDaily: z.record(z.string(), U),
   maxOrdersPerDay: z.number().int().min(1).max(500),
+  /** worst execution the signer will accept, measured against its own view of market prices: the guaranteed output must be
+   *  worth at least (1 − this) of the input, in basis points */
+  maxSlippageBps: z.number().int().min(10).max(500),
   createdAt: z.number().int().positive(), expiresAt: z.number().int().positive(),
   /** SHA-256 of the strategy code this mandate was approved for (audit trail; the engine refuses to run anything else) */
   strategySha256: z.string().regex(/^[0-9a-f]{64}$/),
@@ -37,7 +40,7 @@ export function mandateBytes(m: Mandate): Uint8Array {
   const x = MandateSchema.parse(m);
   const f: [string, string][] = [['v', '1'], ['mandateId', x.mandateId], ['keyId', x.keyId], ['vaultIndex', String(x.vaultIndex)], ['vault', x.vault], ['network', x.network], ['provider', x.provider],
     ['assets', [...x.assets].sort().join(',')], ...Object.keys(x.maxOrder).sort().map((k) => [`maxOrder.${k}`, x.maxOrder[k]!] as [string, string]),
-    ...Object.keys(x.maxDaily).sort().map((k) => [`maxDaily.${k}`, x.maxDaily[k]!] as [string, string]), ['maxOrdersPerDay', String(x.maxOrdersPerDay)],
+    ...Object.keys(x.maxDaily).sort().map((k) => [`maxDaily.${k}`, x.maxDaily[k]!] as [string, string]), ['maxOrdersPerDay', String(x.maxOrdersPerDay)], ['maxSlippageBps', String(x.maxSlippageBps)],
     ['createdAt', String(x.createdAt)], ['expiresAt', String(x.expiresAt)], ['strategySha256', x.strategySha256], ['label', x.label]];
   const parts: Uint8Array[] = [enc.encode('SPW-MANDATE-v1'), new Uint8Array([0])];
   for (const [k, v] of f) { const kb = enc.encode(k), vb = enc.encode(v), h = new Uint8Array(6); new DataView(h.buffer).setUint16(0, kb.length); new DataView(h.buffer).setUint32(2, vb.length); parts.push(h, kb, vb); }
@@ -84,5 +87,20 @@ export function checkMandateOrder(m: Mandate, i: Intent, usage: MandateUsage, no
   if (BigInt(usage.sold[i.asset] ?? '0') + amount > baseUnits(perDay)) return deny('daily volume limit reached');
   if (usage.orders >= m.maxOrdersPerDay) return deny('daily order count reached');
   if (opts.maxFee === undefined || baseUnits(i.maxFee) > baseUnits(opts.maxFee)) return deny('fee ceiling above policy');
+  return { ok: true };
+}
+
+/**
+ * Price guard for a delegated order: the value the swap guarantees (minimum output at the signer's price) must be at least
+ * (1 − maxSlippageBps) of the value given up. Prices are floats and are used for this comparison only, never for amounts.
+ */
+export function checkOrderPrice(m: Mandate, i: Intent, prices: Record<string, number>, outSymbol: string, outDecimals: number): MandateVerdict {
+  const pIn = prices[i.symbol] ?? 0, pOut = prices[outSymbol] ?? 0;
+  if (!(pIn > 0) || !(pOut > 0) || !i.swap) return { ok: false, reason: 'no trustworthy market price for this pair' };
+  const unitsIn = Number(baseUnits(i.amount)) / 10 ** i.decimals, unitsOut = Number(baseUnits(i.swap.minOut)) / 10 ** outDecimals;
+  const valueIn = unitsIn * pIn, valueOut = unitsOut * pOut;
+  if (!(valueIn > 0) || !Number.isFinite(valueOut)) return { ok: false, reason: 'order value cannot be computed' };
+  const floor = valueIn * (1 - m.maxSlippageBps / 10_000);
+  if (valueOut < floor) return { ok: false, reason: `guaranteed output is worth ${(100 * valueOut / valueIn).toFixed(2)} % of the input at market price; the mandate requires at least ${(100 - m.maxSlippageBps / 100).toFixed(2)} %` };
   return { ok: true };
 }

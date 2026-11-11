@@ -22,17 +22,18 @@ async function setup() {
   const dir = mkdtempSync(join(tmpdir(), 'spw-mandate-'));
   const store = new Store(join(dir, 'state.json'), join(dir, 'policy.json'));
   store.state.setupTokenHash = createHash('sha256').update('tok').digest('hex');
-  const signer = new Signer(keys, store, { rpId: RP, origin: ORIGIN }, () => t.now);
+  const px = { ETH: 2000, USDC: 1, LINK: 10, fail: '' };
+  const signer = new Signer(keys, store, { rpId: RP, origin: ORIGIN }, () => t.now, { get: async (syms) => { if (px.fail) throw new Error(px.fail); return Object.fromEntries(syms.map((s) => [s, (px as unknown as Record<string, number>)[s]!])); } });
   const pk = new TestPasskey(RP, ORIGIN);
   await signer.enroll({ credential: pk.credential(), setupToken: 'tok' });
-  return { signer, store, pk, t };
+  return { signer, store, pk, t, px };
 }
 const mandate = (now: number, o: Partial<Mandate> = {}): Mandate => ({ v: 1, mandateId: uuid(), keyId: keys.keyId, vaultIndex: 1, vault: VAULT, network: 'base', provider: 'kyberswap',
-  assets: ['native', USDC], maxOrder: { [USDC]: '20000000', native: '10000000000000000' }, maxDaily: { [USDC]: '50000000', native: '20000000000000000' }, maxOrdersPerDay: 4,
+  assets: ['native', USDC], maxOrder: { [USDC]: '20000000', native: '10000000000000000' }, maxDaily: { [USDC]: '50000000', native: '20000000000000000' }, maxOrdersPerDay: 4, maxSlippageBps: 150,
   createdAt: now, expiresAt: now + 30 * 86400, strategySha256: 'ab'.repeat(32), label: 'ETH trend', ...o });
 /** A swap order for the vault: USDC -> ETH by default, with router calldata paying `receiver`. */
 function order(now: number, o: { amount?: bigint; to?: string; receiver?: string; from?: string; fromAsset?: string; toAsset?: string; keyId?: string; minOut?: bigint; network?: string } = {}) {
-  const amount = o.amount ?? 10_000000n, fromAsset = o.fromAsset ?? USDC, toAsset = o.toAsset ?? 'native', minOut = o.minOut ?? 4_000000000000000n;
+  const amount = o.amount ?? 10_000000n, fromAsset = o.fromAsset ?? USDC, toAsset = o.toAsset ?? 'native', minOut = o.minOut ?? (amount * 10n ** 12n * 99n) / (2000n * 100n); // USDC -> ETH at 2000 USD/ETH, guaranteeing 99 % of the value
   const tok = (a: string) => (a === 'native' ? KYBER_NATIVE : a);
   const desc = { srcToken: tok(fromAsset), dstToken: tok(toAsset), srcReceivers: [], srcAmounts: [], feeReceivers: [], feeAmounts: [], dstReceiver: o.receiver ?? VAULT, amount, minReturnAmount: minOut, flags: 0n, permit: '0x' };
   const data = encodeFunctionData({ abi: KYBER_ROUTER_ABI, functionName: 'swap', args: [{ callTarget: '0x8F10B468b06c6FD214B65F87778827F7D113f996', approveTarget: '0x0000000000000000000000000000000000000000', targetData: '0xabcd', desc, clientData: '0x' }] as never });
@@ -104,6 +105,7 @@ describe('delegated orders', () => {
     await no('owner key id', { keyId: keys.keyId }, /vault key/);
     await no('another vault key id', { keyId: vaultKeyId(keys.keyId, 2) }, /vault key/);
     await no('zero minimum output', { minOut: 0n }, /positive/);
+    await no('sold far below market: guarantees 80 % of the value', { minOut: 4_000000000000000n }, /at market price/);
     await expect(signer.signDelegated('7a1c1f0e-8f5f-4b1e-9c56-999999999999', order(t.now).intent, order(t.now).aux)).rejects.toThrow(/unknown mandate/);
     // a plain transfer is not a delegated order
     const x = order(t.now); const transfer = { ...x.intent, swap: undefined, to: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' };
@@ -137,6 +139,23 @@ describe('delegated orders', () => {
     const m = mandate(t.now); await signer.approveMandate(m, pk.assert(mandateHash(m)));
     const x = order(t.now);
     await expect(signer.sign(x.intent, pk.assert(intentHash(x.intent)), x.aux)).rejects.toThrow(/another key|not controlled/);
+  });
+});
+
+describe('the signer\'s own price view', () => {
+  it('refuses an order when prices cannot be established, and applies the mandate tolerance exactly', async () => {
+    const { signer, pk, t, px } = await setup();
+    const m = mandate(t.now); await signer.approveMandate(m, pk.assert(mandateHash(m)));
+    const at = (minOut: bigint) => { const x = order(t.now, { minOut }); return signer.signDelegated(m.mandateId, x.intent, x.aux); };
+    await expect(at(4_924000000000000n)).rejects.toThrow(/at market price/); // 98.48 % < 98.5 %
+    await at(4_926000000000000n);                                             // 98.52 % ≥ 98.5 %
+    px.ETH = 1000; // the market halves: the same guaranteed ETH is now worth half the USDC given up
+    await expect(at(4_950000000000000n)).rejects.toThrow(/at market price/);
+    px.ETH = 2000; px.fail = 'price sources disagree on ETH';
+    await expect(at(4_950000000000000n)).rejects.toThrow(/market price unavailable/);
+    px.fail = '';
+    await at(4_950000000000000n);
+    expect(signer.status().mandates[0]!.today.orders).toBe(2); // refused orders are not counted
   });
 });
 

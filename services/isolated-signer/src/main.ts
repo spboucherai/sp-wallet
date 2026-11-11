@@ -5,7 +5,10 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { verifyAuditChain } from '@spw/core';
+import dns from 'node:dns';
+import net from 'node:net';
 import { deriveKeys } from './keys.ts';
+import { exchangePrices } from './prices.ts';
 import { initKeystore, loadMnemonic } from './keystore.ts';
 import { createSignerServer } from './server.ts';
 import { Signer } from './signer.ts';
@@ -67,7 +70,9 @@ if (cmd === 'init') {
   const broken = verifyAuditChain(store.state.journal);
   if (broken !== null) { console.error(`signer journal hash chain broken at seq ${broken} — refusing to start`); process.exit(1); }
   const secret = existsSync(paths.secret) ? readFileSync(paths.secret, 'utf8').trim() : need('SPW_SIGNER_SECRET');
-  const signer = new Signer(keys, store, { rpId: need('SPW_RP_ID'), origin: need('SPW_ORIGIN') });
+  // outbound HTTPS is used for one thing only: reading public exchange prices to check agent orders
+  dns.setDefaultResultOrder('ipv4first'); net.setDefaultAutoSelectFamilyAttemptTimeout(2500);
+  const signer = new Signer(keys, store, { rpId: need('SPW_RP_ID'), origin: need('SPW_ORIGIN') }, undefined, exchangePrices());
   const host = process.env.SPW_SIGNER_HOST ?? '127.0.0.1', port = Number(process.env.SPW_SIGNER_PORT ?? 8651);
   const allowed = (process.env.SPW_SIGNER_ALLOW_IPS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   createSignerServer(signer, secret, allowed).listen(port, host, () => console.log(`signer ${keys.keyId} listening on ${host}:${port} halted=${store.state.halted}`));

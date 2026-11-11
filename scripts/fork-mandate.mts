@@ -11,6 +11,7 @@ import { encodeFunctionData, erc20Abi, formatUnits, hexToBigInt, numberToHex, pa
 import { KYBER_NATIVE, KYBER_ROUTER, mandateHash, NETWORKS, swapDataHash, vaultKeyId, type Intent, type Mandate } from '@spw/core';
 import { TestPasskey } from '../tests/helpers/passkey.ts';
 import { deriveKeys } from '../services/isolated-signer/src/keys.ts';
+import { exchangePrices } from '../services/isolated-signer/src/prices.ts';
 import { Signer } from '../services/isolated-signer/src/signer.ts';
 import { Store } from '../services/isolated-signer/src/store.ts';
 
@@ -38,12 +39,12 @@ try {
   const store = new Store(join(dir, 'state.json'), join(dir, 'policy.json'));
   store.state.setupTokenHash = createHash('sha256').update('t').digest('hex');
   store.policy = { ...store.policy, maxFee: { ...store.policy.maxFee, base: '5000000000000000' } }; // anvil's inflated priority fee
-  const signer = new Signer(keys, store, { rpId: 'wallet.test', origin: 'https://wallet.test' });
+  const signer = new Signer(keys, store, { rpId: 'wallet.test', origin: 'https://wallet.test' }, undefined, exchangePrices()); // real exchange prices, fetched by the signer itself
   const pk = new TestPasskey('wallet.test', 'https://wallet.test');
   await signer.enroll({ credential: pk.credential(), setupToken: 't' });
   const now = () => Math.floor(Date.now() / 1000);
   const mandate: Mandate = { v: 1, mandateId: randomUUID(), keyId: keys.keyId, vaultIndex: 1, vault: VAULT, network: 'base', provider: 'kyberswap', assets: ['native', USDC],
-    maxOrder: { [USDC]: '25000000', native: '15000000000000000' }, maxDaily: { [USDC]: '40000000', native: '30000000000000000' }, maxOrdersPerDay: 3,
+    maxOrder: { [USDC]: '25000000', native: '15000000000000000' }, maxDaily: { [USDC]: '40000000', native: '30000000000000000' }, maxOrdersPerDay: 3, maxSlippageBps: 150,
     createdAt: now(), expiresAt: now() + 7 * 86400, strategySha256: createHash('sha256').update('demo strategy').digest('hex'), label: 'fork demo' };
   await signer.approveMandate(mandate, pk.assert(mandateHash(mandate))); // the only passkey use in this whole run
   console.log('mandate approved with the passkey: 25 USDC per order, 40 USDC per day, 3 orders per day, 7 days');

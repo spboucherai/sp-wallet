@@ -5,10 +5,11 @@ import { base58 } from '@scure/base';
 import { keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
-  baseUnits, buildBtcTx, buildEvmSwapTxs, buildEvmTx, checkMandateOrder, MandateSchema, mandateHash, validateMandate, vaultKeyId, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash, pluginFor,
+  baseUnits, buildBtcTx, buildEvmSwapTxs, buildEvmTx, checkMandateOrder, checkOrderPrice, getAsset, MandateSchema, mandateHash, validateMandate, vaultKeyId, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash, pluginFor,
   solWireTransaction, toB64u, type Intent, type Mandate,
 } from '@spw/core';
 import type { Keys } from './keys.ts';
+import { noPrices, type PriceView } from './prices.ts';
 import type { Store, StoredCredential } from './store.ts';
 
 export class SignerError extends Error { constructor(public code: string, msg: string) { super(msg); } }
@@ -17,7 +18,7 @@ export interface SignerConfig { rpId: string; origin: string }
 export interface SignResult { raw: string; txid: string; hash: string; /** swaps with a token input: the exact-amount approval that must be mined first */ pre?: { raw: string; txid: string } }
 
 export class Signer {
-  constructor(private keys: Keys, private store: Store, private cfg: SignerConfig, private now: () => number = () => Math.floor(Date.now() / 1000)) {}
+  constructor(private keys: Keys, private store: Store, private cfg: SignerConfig, private now: () => number = () => Math.floor(Date.now() / 1000), private prices: PriceView = noPrices) {}
 
   status() {
     const s = this.store.state, today = new Date(this.now() * 1000).toISOString().slice(0, 10);
@@ -121,6 +122,12 @@ export class Signer {
     let txs;
     try { txs = buildEvmSwapTxs(i, typeof aux?.swapData === 'string' ? aux.swapData : ''); } // recipient = vault, minimum output, exact amount: same checks as for the owner
     catch (e) { return deny('unsupported', (e as Error).message); }
+    // the signer's own price check: the guaranteed output must be worth close to what is given up, at prices it fetched itself
+    const outAsset = getAsset(i.network, i.swap!.toAsset);
+    let px: Record<string, number>;
+    try { px = await this.prices.get([i.symbol, outAsset.symbol]); } catch (e) { return deny('no_price', `market price unavailable (${(e as Error).message.slice(0, 80)}); order refused`); }
+    const fair = checkOrderPrice(m, i, px, outAsset.symbol, outAsset.decimals);
+    if (!fair.ok) deny('price', fair.reason);
     // count the order before releasing a signature
     usage.sold[i.asset] = (BigInt(usage.sold[i.asset] ?? '0') + baseUnits(i.amount)).toString(); usage.orders += 1; sm.usage[day] = usage;
     st.state.used[i.proposalId] = i.expiresAt; st.prune(now);

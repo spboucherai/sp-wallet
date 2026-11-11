@@ -63,7 +63,7 @@ export function mandateFor(a: AgentRow, keyId: string, strategySha256: string, p
     return parseUnits((usd / p).toFixed(Math.min(x.decimals, 8)), x.decimals).toString(); };
   const m: Mandate = { v: 1, mandateId: randomUUID(), keyId, vaultIndex: a.vault_index, vault: a.vault_address, network: a.network, provider: 'kyberswap', assets: assets.map((x) => x.id),
     maxOrder: Object.fromEntries(assets.map((x) => [x.id, cap(a.risk.maxOrderUsd, x)])), maxDaily: Object.fromEntries(assets.map((x) => [x.id, cap(a.risk.maxDailyUsd, x)])),
-    maxOrdersPerDay: a.risk.maxOrdersPerDay, createdAt: now, expiresAt: now + a.risk.mandateDays * 86400, strategySha256, label: a.name.slice(0, 60) };
+    maxOrdersPerDay: a.risk.maxOrdersPerDay, maxSlippageBps: Math.min(500, Math.max(150, a.risk.slippageBps + 80)), createdAt: now, expiresAt: now + a.risk.mandateDays * 86400, strategySha256, label: a.name.slice(0, 60) };
   validateMandate(MandateSchema.parse(m), now);
   return m;
 }
