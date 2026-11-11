@@ -1,7 +1,6 @@
 // The engine's real-world side: the signal runner (a sandboxed Python process), live holdings, and the live order path
 // prepare → delegated signature (the signer checks the mandate, the calldata and its own prices) → approval → simulation →
 // broadcast → receipt. Nothing here holds a key or can widen a limit; a refusal by the signer is final for that order.
-import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -15,45 +14,39 @@ import { signer } from '../signer-client.ts';
 import { kyberQuote, prepareKyberSwap } from '../swap-exec.ts';
 import { paperHoldings, tickAgent, type Bar, type EngineDeps, type Holding, type PlannedOrder } from './engine.ts';
 import { gasReserve } from './gas.ts';
+import { labExec, RESEARCH_DIR, SIGNAL_MAX_RSS_MB } from './lab.ts';
 import { vaultBalances, type AgentRow } from './routes.ts';
 
-// the bundled server runs from the repository root (dist/api.mjs); from source the module sits four levels below it
-export const RESEARCH_DIR = path.resolve(process.env.SPW_RESEARCH_DIR ?? [path.join(process.cwd(), 'research'), path.join(import.meta.dirname, '../../../../research')].find((d) => existsSync(path.join(d, 'pyproject.toml'))) ?? path.join(process.cwd(), 'research'));
-const UV = process.env.SPW_UV_BIN ?? 'uv';
+// v8: RESEARCH_DIR lives in lab.ts (the sandboxed laboratory runner); re-exported here for the modules that import it from live.ts
+export { RESEARCH_DIR };
 const SIGNAL_TIMEOUT_MS = 60_000;
 
-/** Run the approved strategy in a separate process with an almost empty environment. Any deviation throws (→ hold). */
-export function runSignal(strategy: { path: string; sha256: string }, data: Record<string, Bar[]>, interval: string): Promise<Record<string, number>> {
+/** Run the approved strategy in a separate, OS-sandboxed process (lab.ts: no network, read-only laboratory + this one strategy
+ *  directory, a scratch directory, no fork) with an almost empty environment. Any deviation throws (→ hold). */
+export async function runSignal(strategy: { path: string; sha256: string }, data: Record<string, Bar[]>, interval: string): Promise<Record<string, number>> {
   const dir = path.resolve(RESEARCH_DIR, strategy.path);
-  if (!dir.startsWith(path.join(RESEARCH_DIR, 'strategies') + path.sep) || !existsSync(path.join(dir, 'strategy.py'))) return Promise.reject(new Error('strategy directory is not inside research/strategies'));
-  if (!/^[0-9a-f]{64}$/.test(strategy.sha256)) return Promise.reject(new Error('bad strategy hash'));
+  if (!dir.startsWith(path.join(RESEARCH_DIR, 'strategies') + path.sep) || !existsSync(path.join(dir, 'strategy.py'))) throw new Error('strategy directory is not inside research/strategies');
+  if (!/^[0-9a-f]{64}$/.test(strategy.sha256)) throw new Error('bad strategy hash');
   // identical timestamps for every symbol: keep only the bars all of them have (the runner refuses a series with real gaps)
   const syms = Object.keys(data), common = syms.map((s) => new Set(data[s]!.map((b) => b.ts))).reduce((x, y) => new Set([...x].filter((t) => y.has(t))));
   const candles = Object.fromEntries(syms.map((s) => [s, data[s]!.filter((b) => common.has(b.ts)).map((b) => [Math.floor(b.ts / 1000), b.open, b.high, b.low, b.close, b.volume])]));
   const last = Math.max(...common);
   const input = JSON.stringify({ candles, interval, as_of: new Date(last).toISOString().replace('.000Z', 'Z') });
-  return new Promise((resolve, reject) => {
-    const home = process.env.HOME ?? '/tmp';
-    const env = { PATH: `${home}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`, HOME: home, UV_OFFLINE: '1', PYTHONDONTWRITEBYTECODE: '1' }; // no secrets, no database URL
-    const ch = spawn(UV, ['run', '--frozen', '--no-sync', 'python', '-m', 'spq.signal', '--strategy', dir, '--sha256', strategy.sha256, '--input', '-'], { cwd: RESEARCH_DIR, env, stdio: ['pipe', 'pipe', 'pipe'] });
-    let out = '', err = '', done = false;
-    const finish = (e: Error | null, v?: Record<string, number>) => { if (done) return; done = true; clearTimeout(timer); if (e) reject(e); else resolve(v!); };
-    const timer = setTimeout(() => { ch.kill('SIGKILL'); finish(new Error('signal timed out')); }, SIGNAL_TIMEOUT_MS);
-    ch.stdout.on('data', (c: Buffer) => { out += c; if (out.length > 100_000) { ch.kill('SIGKILL'); finish(new Error('signal output too large')); } });
-    ch.stderr.on('data', (c: Buffer) => { if (err.length < 2000) err += c; });
-    ch.on('error', (e) => finish(new Error(`signal runner could not start: ${e.message}`)));
-    ch.on('close', (code) => {
-      if (code !== 0) return finish(new Error(`signal exit ${code}: ${err.trim().split('\n').pop()?.slice(0, 200) ?? ''}`));
-      try {
-        const j = JSON.parse(out) as { strategy_sha256?: string; as_of?: string; weights?: Record<string, number> };
-        if (j.strategy_sha256 !== strategy.sha256) throw new Error('signal computed by another strategy hash');
-        if (!j.as_of || Date.parse(j.as_of) !== last) throw new Error('signal is not for the last closed bar');
-        if (!j.weights || typeof j.weights !== 'object') throw new Error('no weights');
-        finish(null, j.weights);
-      } catch (e) { finish(new Error(`unreadable signal: ${(e as Error).message}`)); }
-    });
-    ch.stdin.on('error', () => {}); ch.stdin.end(input);
-  });
+  let r;
+  try { r = await labExec(['spq.signal', '--strategy', dir, '--sha256', strategy.sha256, '--input', '-'], { timeoutMs: SIGNAL_TIMEOUT_MS, stdin: input, strategyDir: dir, maxOut: 100_000, onOverflow: 'kill', maxRssMb: SIGNAL_MAX_RSS_MB }); }
+  catch (e) { throw new Error(`signal runner could not start: ${(e as Error).message}`); }
+  if (r.killed === 'timeout') throw new Error('signal timed out');
+  if (r.killed === 'output') throw new Error('signal output too large');
+  if (r.killed === 'memory') throw new Error('signal used too much memory');
+  if (r.code === null) throw new Error(`signal runner could not start: ${r.err.trim().split('\n').pop()?.slice(0, 200) ?? ''}`);
+  if (r.code !== 0) throw new Error(`signal exit ${r.code}: ${r.err.trim().split('\n').pop()?.slice(0, 200) ?? ''}`);
+  try {
+    const j = JSON.parse(r.out) as { strategy_sha256?: string; as_of?: string; weights?: Record<string, number> };
+    if (j.strategy_sha256 !== strategy.sha256) throw new Error('signal computed by another strategy hash');
+    if (!j.as_of || Date.parse(j.as_of) !== last) throw new Error('signal is not for the last closed bar');
+    if (!j.weights || typeof j.weights !== 'object') throw new Error('no weights');
+    return j.weights;
+  } catch (e) { throw new Error(`unreadable signal: ${(e as Error).message}`); }
 }
 
 /** The agent's own assets in the vault. The gas reserve of the network (gas.ts: sized from recent gas prices and the signer

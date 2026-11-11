@@ -158,6 +158,16 @@ export const ALERT_DEFS: readonly AlertDef[] = [
     ['Aucune sauvegarde de la base depuis {hours} h.', 'No database backup for {hours} h.'], ['Aucune sauvegarde de la base depuis {hours} h.', 'No database backup for {hours} h.']),
   d('system.disk_low', 'system', 'warning', true, ['Espace disque faible', 'Disk space low'],
     ['Il reste {pct} % d’espace libre sur la machine de l’API.', '{pct} % of disk space is left on the API host.'], ['Il reste {pct} % d’espace libre sur la machine de l’API.', '{pct} % of disk space is left on the API host.']),
+  // --- v8 hardening: the OS sandbox of strategy code (services/api/src/agents/lab.ts) ---
+  d('system.lab_sandbox_unavailable', 'system', 'critical', true, ['Bac à sable des stratégies indisponible', 'Strategy sandbox unavailable'],
+    ['Le bac à sable du code de stratégie ne fonctionne pas ({reason}). Aucun signal ni backtest n’est exécuté : les agents restent en attente.', 'The sandbox for strategy code does not work ({reason}). No signal and no backtest is run: agents hold.'],
+    ['Le bac à sable du code de stratégie ne fonctionne pas. Aucun signal ni backtest n’est exécuté : les agents restent en attente.', 'The sandbox for strategy code does not work. No signal and no backtest is run: agents hold.']),
+  d('system.lab_sandbox_back', 'system', 'info', true, ['Bac à sable des stratégies rétabli', 'Strategy sandbox back'],
+    ['Le bac à sable du code de stratégie fonctionne de nouveau.', 'The sandbox for strategy code works again.'], ['Le bac à sable du code de stratégie fonctionne de nouveau.', 'The sandbox for strategy code works again.']),
+  d('system.lab_sandbox_off', 'system', 'critical', true, ['Bac à sable des stratégies DÉSACTIVÉ', 'Strategy sandbox turned OFF'],
+    ['SPW_LAB_SANDBOX=off : le code de stratégie s’exécute SANS confinement du système. Réglage de développement, à retirer sur une machine qui détient des fonds.', 'SPW_LAB_SANDBOX=off: strategy code runs WITHOUT OS confinement. A development setting: remove it on a machine that holds funds.'],
+    ['SPW_LAB_SANDBOX=off : le code de stratégie s’exécute SANS confinement du système.', 'SPW_LAB_SANDBOX=off: strategy code runs WITHOUT OS confinement.']),
+  // --- end v8 hardening ---
   d('conn.down', 'system', 'warning', true, ['Source indisponible', 'Source unavailable'],
     ['{name} ne répond plus depuis {minutes} min.', '{name} has not answered for {minutes} min.'], ['{name} ne répond plus depuis {minutes} min.', '{name} has not answered for {minutes} min.']),
   d('conn.up', 'system', 'info', true, ['Source rétablie', 'Source back'],

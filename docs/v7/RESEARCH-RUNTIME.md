@@ -97,12 +97,13 @@ destination at all: data are files exported by the API (no database role on the 
   the model in the strict sense. Recent bars are.
 - `sandbox-exec` is deprecated by Apple (still what macOS ships and what this was tested on). On a platform without it the
   runner refuses to start unless `SPW_RUNNER_SANDBOX=off`; a job run that way says `sandbox: none` in its result and the
-  UI shows a warning.
+  UI shows a warning. The API's own evaluation fails closed (v8): `SPW_LAB_SANDBOX=off` is the only way to run it unconfined.
 - The coding agent's own permission system (`--permission-mode dontAsk`, tool list) is convenience, not a boundary.
-- **After approval**, a job strategy runs like any library strategy: in the engine's signal process, which has a minimal
-  environment and a timeout but **no OS sandbox** (`services/api/src/agents/live.ts`, unchanged here — trading code).
-  The laboratory's purity guard is "a guard against mistakes, not a security sandbox". The owner should read the code
-  shown on the job before approving; wrapping the signal process in the same profile is the natural next step.
+- **After approval** (v8, `docs/v8/SANDBOX.md`): a job strategy runs like any library strategy, and every such process —
+  signals, describe, backtests, this evaluation — is now inside a stricter profile than the job's: no network at all, no
+  fork, one strategy directory, one scratch directory, fail closed. The laboratory's purity guard remains a lint.
+- v8 also closed a hole in THIS profile: `(allow sysctl-read)` let a job read the environment of other processes of the
+  same user (`kern.procargs2`), i.e. the runner's secrets. `kern.proc*` and `process-info` on other processes are now denied.
 
 ## The job
 

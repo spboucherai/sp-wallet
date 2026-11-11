@@ -53,8 +53,10 @@ export function sandboxProfile(spec: SandboxSpec): string {
     '(allow process-fork)',
     '(allow process-exec*)',
     '(allow signal (target same-sandbox))',
-    '(allow process-info* (target same-sandbox))',
-    '(allow sysctl-read)',
+    // v8: `(deny default)` does NOT cover process-info on macOS 27 (proc_pidpath / proc_listallpids of other processes
+    // answered), and a blanket sysctl-read lets the job read `kern.procargs2.<pid>` — the argv AND ENVIRONMENT of any
+    // process of the same user (the runner's own secrets). Both are closed here; a process still sees itself.
+    ...PROCESS_PRIVACY,
     `(allow file-read-metadata ${walk.map((p) => `(literal ${q(p)})`).join(' ')})`,
     `(allow file-read* (literal "/") ${read.map((p) => `(subpath ${q(p)})`).join(' ')})`,
     // OpenSSL's configuration and the CA bundle of Homebrew builds of node / python (read at start-up)
@@ -67,6 +69,62 @@ export function sandboxProfile(spec: SandboxSpec): string {
   ];
   return lines.join('\n') + '\n';
 }
+
+// ---- v8 hardening ------------------------------------------------------------------------------------------------------
+/** Other processes are invisible: no proc_info on them, no `kern.proc*` sysctl (kern.procargs2 = their environment). */
+const PROCESS_PRIVACY = [
+  '(deny process-info*)',
+  '(allow process-info* (target same-sandbox))',
+  '(allow sysctl-read)',
+  '(deny sysctl-read (sysctl-name-prefix "kern.proc"))',
+] as const;
+
+/** v8 — the profile of a process that RUNS STRATEGY CODE inside the wallet API (signals, backtests, describe, the research
+ *  evaluation). Stricter than the research job's profile, because such a process is one Python interpreter and nothing else:
+ *    - no network rule at all (no loopback port either), no Unix socket, no Mach lookup;
+ *    - NO `process-fork`: fork(), posix_spawn() and subprocess all fail, so nothing can outlive the call (the `setsid`
+ *      escape of a forking job does not exist here) and no other program (curl, sh, ps) can be started;
+ *    - `process-exec` only for the interpreter itself (sandbox-exec must exec it once);
+ *    - read: the OS libraries, the interpreter's own install prefix, the laboratory's code + virtualenv, the ONE strategy
+ *      directory of the call, the caller's read-only data; no Homebrew, no /usr/bin, no /etc, no home directory;
+ *    - write: one scratch directory. */
+export interface LabSandboxSpec {
+  /** canonical path of the scratch directory (the only writable place, and the cwd) */
+  scratch: string;
+  /** canonical read-only paths: laboratory code, virtualenv, interpreter prefix, the strategy directory, data */
+  readable: string[];
+  /** canonical paths sandbox-exec may exec: the interpreter (its real path, and the symlink it is started through) */
+  exec: string[];
+  /** the interpreter is a Homebrew build: its dylibs live under the Homebrew prefix */
+  homebrew?: boolean;
+}
+/** what a dynamically linked interpreter may need from the OS. Measured on macOS 27 arm64 with a standalone CPython 3.12 +
+ *  numpy/pandas/scipy/statsmodels/arch/scikit-learn: NONE of these is opened (everything comes from the dyld shared cache);
+ *  they are kept because dyld falls back to them when a library is not in the cache. Nothing here belongs to the user. */
+export const LAB_SYSTEM_READ = ['/usr/lib', '/System/Library', '/private/var/db/dyld', '/private/var/db/timezone', '/private/etc/localtime'] as const;
+
+export function labSandboxProfile(spec: LabSandboxSpec): string {
+  if (!spec.scratch) throw new Error('sandbox: a scratch directory is required');
+  if (!spec.exec.length) throw new Error('sandbox: the interpreter path is required');
+  const read = [...LAB_SYSTEM_READ, ...(spec.homebrew ? HOMEBREW_READ : []), ...spec.readable];
+  const walk = [...new Set(['/', ...[...read, spec.scratch, ...spec.exec].flatMap(ancestors)])];
+  return [
+    '(version 1)',
+    '(deny default)',
+    `(allow process-exec* ${spec.exec.map((p) => `(literal ${q(p)})`).join(' ')})`,
+    '(allow signal (target self))',
+    '(deny process-info*)',
+    '(allow process-info* (target self))',
+    '(allow sysctl-read)',
+    '(deny sysctl-read (sysctl-name-prefix "kern.proc"))',
+    `(allow file-read-metadata ${walk.map((p) => `(literal ${q(p)})`).join(' ')})`,
+    `(allow file-read* (literal "/") ${read.map((p) => `(subpath ${q(p)})`).join(' ')})`,
+    `(allow file-read* ${[...DEVICES_R, '/dev/null'].map((p) => `(literal ${q(p)})`).join(' ')})`,
+    '(allow file-write* (literal "/dev/null"))',
+    `(allow file-read* file-write* (subpath ${q(spec.scratch)}))`,
+  ].join('\n') + '\n';
+}
+// ---- end v8 ------------------------------------------------------------------------------------------------------------
 
 export const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
 /** argv prefix that runs a command under the profile */

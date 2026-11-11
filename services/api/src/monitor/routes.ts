@@ -7,6 +7,7 @@ import { healthCache, loopStats } from '../worker.ts';
 import { alertSettings } from '../alerts/store.ts';
 import { capital, exposure, pnl } from './aggregate.ts';
 import { auditChainStatus, collectConnectors, diskFree, lastBackup, versions } from './health.ts';
+import { labStatus } from '../agents/lab.ts'; // v8
 
 const cache = new Map<string, { at: number; v: unknown }>();
 async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
@@ -62,6 +63,8 @@ export function monitorRoutes(app: FastifyInstance): void {
       audit,
       signer: st ? { reachable: true, halted: st.halted } : { reachable: false, halted: null },
       versions: versions(st),
+      // v8: the OS sandbox every strategy process runs in; `ok: false` = signals and backtests do not run (agents hold)
+      lab: await labStatus().then((l) => ({ mode: l.mode, ok: l.ok, reason: l.reason, checkedAt: l.checkedAt, lastFailureAt: l.lastFailureAt, lastFailure: l.lastFailure, calls: l.calls, refused: l.refused }), () => null),
     };
   }));
 }

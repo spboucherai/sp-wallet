@@ -12,7 +12,9 @@ export interface World {
   clock: { t: number; advance(ms: number): number };
   /** scripted environment read by the condition rules */
   env: { signer: SignerStatus | null; rpc: any[]; loops: any[]; backup: { dir: string; lastAt: number | null; files: number } | null; disk: { path: string; freePct: number; freeGb: number; totalGb: number } | null;
-    fetch: typeof fetch; fault: DispatcherDeps['fault'] };
+    fetch: typeof fetch; fault: DispatcherDeps['fault'];
+    /** v8: the strategy sandbox as the condition rules see it (scripted: the tests do not depend on this machine's sandbox) */
+    lab: { mode: 'sandbox-exec' | 'off' | 'unavailable'; ok: boolean; reason: string | null; python: string; checkedAt: number | null; lastFailureAt: number | null; lastFailure: string | null; calls: number; refused: number } };
   dispatcher(o?: Partial<DispatcherDeps>): AlertDispatcher;
   alerts(where?: string): Promise<any[]>;
 }
@@ -28,10 +30,11 @@ export async function world(dbName: string): Promise<World> {
   const store = await import('../src/alerts/store.ts'), mod = await import('../src/alerts/dispatcher.ts');
   await store.migrateAlerts(true);
   const clock = { t: Date.now(), advance(ms: number) { this.t += ms; return this.t; } };
-  const env: World['env'] = { signer: SIGNER_OK, rpc: [], loops: [], backup: null, disk: null, fetch: (async () => new Response(null, { status: 201 })) as typeof fetch, fault: undefined };
+  const env: World['env'] = { signer: SIGNER_OK, rpc: [], loops: [], backup: null, disk: null, fetch: (async () => new Response(null, { status: 201 })) as typeof fetch, fault: undefined,
+    lab: { mode: 'sandbox-exec', ok: true, reason: null, python: '/x/python', checkedAt: 0, lastFailureAt: null, lastFailure: null, calls: 0, refused: 0 } };
   const dispatcher = (o: Partial<DispatcherDeps> = {}) => new mod.AlertDispatcher({
     now: () => clock.t, fetch: ((...a: Parameters<typeof fetch>) => env.fetch(...a)) as typeof fetch, origin: 'https://wallet.test', settleMs: -1e12 /* the scripted clock is behind the audit rows' real timestamps */, allowHttpWebhook: true,
-    signerStatus: async () => env.signer, rpcHealth: () => env.rpc, loops: () => env.loops, backup: () => env.backup, disk: async () => env.disk, fault: (s, src) => env.fault?.(s, src), ...o });
+    signerStatus: async () => env.signer, rpcHealth: () => env.rpc, loops: () => env.loops, backup: () => env.backup, disk: async () => env.disk, lab: async () => env.lab, fault: (s, src) => env.fault?.(s, src), ...o });
   const alerts = (where = 'true') => db.sql.unsafe(`select * from alerts where ${where} order by id`) as Promise<any[]>;
   return { sql: db.sql, db, store, mod, clock, env, dispatcher, alerts };
 }

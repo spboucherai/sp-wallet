@@ -1,38 +1,29 @@
 // Strategy library and backtests. The API never writes strategy code: it lists what the research zone put under
 // research/strategies, pins a version by the SHA-256 of its strategy.py, and runs the laboratory's backtest on stored candles.
-import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
+import postgres from 'postgres';
 import { z } from 'zod';
 import { JOB_STRATEGY_RE, listingSources, MAX_AGENT_SYMBOLS } from '@spw/core';
 import { config, UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
-import { RESEARCH_DIR } from './live.ts';
+import { dropScratch, labExec, RESEARCH_DIR, scratchDir } from './lab.ts';
 import { agentSymbols, type AgentRow } from './routes.ts';
 
-const UV = process.env.SPW_UV_BIN ?? 'uv';
 const ROOT = path.join(RESEARCH_DIR, 'strategies');
 export interface StrategyInfo { path: string; sha256: string;
   /** universe-generic: META['universe'] == ['*'], the symbols are the agent's (between minSymbols and maxSymbols of them) */
   generic: boolean; minSymbols: number; maxSymbols: number;
   meta: { name: string; version: string; universe: string[]; interval: string; lookback: number; params: Record<string, unknown>; min_symbols?: number; max_symbols?: number } }
 
-/** Run a laboratory command with a minimal environment (no wallet secret; the database URL only when asked). */
-export function py(args: string[], o: { timeoutMs: number; env?: Record<string, string> } = { timeoutMs: 60_000 }): Promise<{ code: number | null; out: string; err: string }> {
-  return new Promise((resolve) => {
-    const home = process.env.HOME ?? '/tmp';
-    const ch = spawn(UV, ['run', '--frozen', '--no-sync', 'python', '-m', ...args], { cwd: RESEARCH_DIR, stdio: ['ignore', 'pipe', 'pipe'],
-      env: { PATH: `${home}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`, HOME: home, UV_OFFLINE: '1', PYTHONDONTWRITEBYTECODE: '1', ...o.env } });
-    let out = '', err = '';
-    const timer = setTimeout(() => ch.kill('SIGKILL'), o.timeoutMs);
-    ch.stdout.on('data', (c: Buffer) => { if (out.length < 2_000_000) out += c; });
-    ch.stderr.on('data', (c: Buffer) => { err = (err + c).slice(-4000); });
-    ch.on('error', (e) => { clearTimeout(timer); resolve({ code: null, out, err: `could not start: ${e.message}` }); });
-    ch.on('close', (code) => { clearTimeout(timer); resolve({ code, out, err }); });
-  });
+/** Run a laboratory command (v8: always inside the OS sandbox of lab.ts — no network, NO database URL, read-only laboratory,
+ *  one scratch directory). `strategyDir` is the only strategy directory the process can read. Never throws: when the sandbox
+ *  is unavailable the answer is `code: null` with the reason, exactly like a process that could not start. */
+export function py(args: string[], o: { timeoutMs: number; strategyDir?: string; readable?: string[]; scratch?: string } = { timeoutMs: 60_000 }): Promise<{ code: number | null; out: string; err: string }> {
+  return labExec(args, o).then((r) => ({ code: r.killed ? null : r.code, out: r.out, err: r.killed ? `${r.err}\nkilled: ${r.killed}` : r.err }),
+    (e: Error) => ({ code: null, out: '', err: `could not start: ${e.message}` }));
 }
 
 const Rel = z.string().regex(/^[a-z0-9_]{1,40}\/[a-z0-9_]{1,12}$/);
@@ -45,7 +36,7 @@ export async function describe(rel: string): Promise<StrategyInfo> {
   Rel.parse(rel);
   const dir = path.join(ROOT, rel);
   if (!existsSync(path.join(dir, 'strategy.py'))) throw new UserError('not_found', 'strategy version not found', 404);
-  const r = await py(['spq.describe', '--strategy', dir]);
+  const r = await py(['spq.describe', '--strategy', dir], { timeoutMs: 60_000, strategyDir: dir });
   if (r.code !== 0) throw new UserError('bad_strategy', `the laboratory refused this strategy: ${r.err.trim().split('\n').pop()?.slice(0, 160) ?? ''}`, 422);
   const p = Info.parse(JSON.parse(r.out));
   const generic = isGeneric(p.meta.universe);
@@ -89,19 +80,63 @@ export function backtestSource(symbols: string[]): string | null {
   return (['coinbase', 'bitstamp', 'kraken'] as const).find((src) => symbols.every((x) => listingSources(x).includes(src))) ?? null;
 }
 
+const BAR: Record<string, string> = { '1h': '1 hour', '4h': '4 hours', '1d': '1 day' };
+/** v8: the candles of a backtest as FILES prepared by the API (the laboratory process has no database URL and no network):
+ *  `<root>/<source>/<SYMBOL>_<interval>.csv`, every closed bar of ONE source, oldest first — the rows the laboratory's own
+ *  PostgreSQL loader used to read (`spq.data.pg.read_pg`), in the layout its file loader reads. Numbers are written in their
+ *  shortest round-trip form and pandas parses them back to the exact float64 (measured; lab-identity.test.ts): same values. */
+export async function exportCandles(root: string, source: string, symbols: string[], interval: string, db: typeof sql = sql): Promise<void> {
+  const step = BAR[interval];
+  if (!step) throw new Error(`unsupported interval ${interval}`);
+  for (const sym of symbols) {
+    const rows = await db<{ t: string; o: number; h: number; l: number; c: number; v: number }[]>`select extract(epoch from ts)::bigint::text as t, open as o, high as h, low as l, close as c, volume as v
+      from candles where source = ${source} and symbol = ${sym} and interval = ${interval} and ts + ${step}::interval <= now() order by ts`;
+    if (!rows.length) throw new Error(`no ${interval} candles of ${sym} from ${source} in the market store`);
+    const f = path.join(root, source, `${sym}_${interval}.csv`); mkdirSync(path.dirname(f), { recursive: true });
+    writeFileSync(f, `ts,open,high,low,close,volume\n${rows.map((r) => `${r.t},${r.o},${r.h},${r.l},${r.c},${r.v}`).join('\n')}\n`);
+  }
+}
+
+/** Where the candles of a backtest are read from: RESEARCH_DATABASE_URL when it is set (the read-only role of the research
+ *  zone — before v8 this URL was handed to the laboratory process itself), else the API's own connection. Read-only session. */
+export async function withCandleDb<T>(fn: (db: typeof sql) => Promise<T>): Promise<T> {
+  const url = process.env.RESEARCH_DATABASE_URL;
+  if (!url) return fn(sql);
+  const db = postgres(url, { max: 1, idle_timeout: 5, onnotice: () => {}, connection: { default_transaction_read_only: true } });
+  try { return await fn(db as unknown as typeof sql); } finally { await db.end({ timeout: 5 }).catch(() => {}); }
+}
+
+/** The cross-run trial ledger (research/results/ledger.jsonl) is written by the API, never by the sandboxed process: the
+ *  process works on a copy in its scratch directory; the lines it APPENDED are then added to the real file. A copy whose
+ *  beginning no longer matches (rewritten history) is not merged. */
+export const LEDGER = (): string => path.join(RESEARCH_DIR, 'results', 'ledger.jsonl');
+export function stageLedger(scratch: string): { copy: string; merge(): boolean } {
+  const real = LEDGER(), copy = path.join(scratch, 'ledger.jsonl'), before = existsSync(real) ? readFileSync(real, 'utf8') : '';
+  if (before) writeFileSync(copy, before); // (no file at all when there is no ledger yet, as before)
+  return { copy, merge: () => { let after = ''; try { after = readFileSync(copy, 'utf8'); } catch { return false; }
+    if (!after.startsWith(before)) return false;
+    const added = after.slice(before.length);
+    if (added) { mkdirSync(path.dirname(real), { recursive: true }); appendFileSync(real, added); }
+    return true; } };
+}
+
 const running = new Set<string>();
 /** Backtest a registered version on the stored candles and attach the report. Never throws; the outcome is stored on the row. */
 export async function backtest(versionId: string, info: StrategyInfo, symbols: string[]): Promise<void> {
   if (running.has(versionId)) return; running.add(versionId);
-  const tmp = mkdtempSync(path.join(tmpdir(), 'spw-bt-')), out = path.join(tmp, 'report.json');
+  const tmp = scratchDir(), out = path.join(tmp, 'report.json'), data = path.join(tmp, 'data');
   try {
     await sql`update strategy_versions set status = 'backtesting', notes = '' where id = ${versionId} and status in ('draft', 'backtesting')`;
     const source = backtestSource(symbols);
     if (!source || !symbols.every((x) => /^[A-Z0-9]{2,10}$/.test(x))) { await sql`update strategy_versions set status = 'draft', notes = ${`backtest failed: no single exchange lists every symbol (${symbols.join(', ')}); the laboratory does not mix candle sources`} where id = ${versionId} and status = 'backtesting'`; return; }
+    // v8: the candles are handed over as files by THIS process; the laboratory process is offline and has no database URL
+    await withCandleDb((db) => exportCandles(data, source, symbols, info.meta.interval, db));
+    const ledger = stageLedger(tmp), dir = path.join(RESEARCH_DIR, info.path);
     // the agent's symbols are always passed: a generic strategy has no list of its own, a fixed one equals them (checked at registration)
-    const r = await py(['spq.backtest', '--strategy', path.join(RESEARCH_DIR, info.path), '--sha256', info.sha256, '--symbols', symbols.join(','), '--out', out, '--ledger', path.join(RESEARCH_DIR, 'results', 'ledger.jsonl')],
-      { timeoutMs: 20 * 60_000, env: { DATABASE_URL: process.env.RESEARCH_DATABASE_URL ?? config.databaseUrl, SPQ_CANDLE_SOURCE: source } }); // the loader opens a read-only session
+    const r = await py(['spq.backtest', '--strategy', dir, '--sha256', info.sha256, '--symbols', symbols.join(','), '--data-dir', data, '--source', source, '--out', out, '--ledger', ledger.copy],
+      { timeoutMs: 20 * 60_000, strategyDir: dir, scratch: tmp });
     if (r.code !== 0 || !existsSync(out)) { await sql`update strategy_versions set status = 'draft', notes = ${`backtest failed: ${r.err.trim().split('\n').pop()?.slice(0, 300) ?? 'no report'}`} where id = ${versionId} and status = 'backtesting'`; return; }
+    ledger.merge();
     const report = JSON.parse(readFileSync(out, 'utf8')) as { strategy_sha256?: string; config?: { symbols?: string[] } };
     if (report.strategy_sha256 !== info.sha256) { await sql`update strategy_versions set status = 'draft', notes = 'backtest report is for another code hash' where id = ${versionId}`; return; }
     // the report must be about the agent's own symbols (it records them in config.symbols)
@@ -109,7 +144,7 @@ export async function backtest(versionId: string, info: StrategyInfo, symbols: s
     await sql`update strategy_versions set status = 'draft', report = ${sql.json(report as never)}, notes = '' where id = ${versionId} and status = 'backtesting'`;
     await audit('strategy.backtested', 'engine', { version: versionId, sha256: info.sha256 });
   } catch (e) { await sql`update strategy_versions set status = 'draft', notes = ${`backtest failed: ${(e as Error).message.slice(0, 200)}`} where id = ${versionId} and status = 'backtesting'`.catch(() => {}); }
-  finally { running.delete(versionId); rmSync(tmp, { recursive: true, force: true }); }
+  finally { running.delete(versionId); dropScratch(tmp); }
 }
 
 export function strategyRoutes(app: FastifyInstance): void {

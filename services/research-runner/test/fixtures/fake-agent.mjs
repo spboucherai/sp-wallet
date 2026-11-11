@@ -188,6 +188,30 @@ t("py_write_outside", lambda: open(${JSON.stringify(t.outside)}, "w").write("x")
 t("py_import", lambda: __import__("pandas"))
 print(json.dumps(res))
 `]); try { return JSON.parse(r.stdout); } catch { return { failed: { ok: false, error: (r.stderr || '').slice(-200) } }; } })();
+    // v8: the ENVIRONMENT of a process outside the sandbox (the runner holds the model key and the runner secret in its own).
+    // `ps -E` and the sysctl behind it (kern.procargs2.<pid>) return the argv and environment of any process of the same user.
+    out.ps_env = (() => { const r = spawnSync('/bin/ps', ['-E', '-ww', '-p', String(t.envPid), '-o', 'command='], { encoding: 'utf8', timeout: 8000 });
+      const seen = `${r.stdout || ''}`.includes(t.envCanary); return { ok: seen, error: seen ? '' : `EPERM-or-hidden: status ${r.status}, ${(r.stderr || String(r.error ?? '') || 'canary not in output').trim().slice(0, 120)}` }; })();
+    out.ps_list = (() => { const r = spawnSync('/bin/ps', ['-ax', '-o', 'pid='], { encoding: 'utf8', timeout: 8000 });
+      const seen = `${r.stdout || ''}`.split('\n').map((x) => x.trim()).includes(String(t.envPid)); return { ok: seen, error: seen ? '' : `EPERM-or-hidden: status ${r.status}` }; })();
+    out.sysctl_env = (() => { const r = py(['-c', `
+import ctypes, json, os
+libc = ctypes.CDLL(None, use_errno=True)
+def procargs(pid):
+    mib = (ctypes.c_int * 3)(1, 49, pid)
+    size = ctypes.c_size_t(0)
+    if libc.sysctl(mib, 3, None, ctypes.byref(size), None, 0) != 0:
+        raise OSError(ctypes.get_errno(), os.strerror(ctypes.get_errno()))
+    buf = ctypes.create_string_buffer(size.value)
+    if libc.sysctl(mib, 3, buf, ctypes.byref(size), None, 0) != 0:
+        raise OSError(ctypes.get_errno(), os.strerror(ctypes.get_errno()))
+    return buf.raw[: size.value]
+try:
+    raw = procargs(${Number(t.envPid)})
+    print(json.dumps({"ok": ${JSON.stringify(t.envCanary)}.encode() in raw, "error": "EPERM-or-hidden: canary not in %d bytes" % len(raw)}))
+except OSError as e:
+    print(json.dumps({"ok": False, "error": "EPERM " + str(e)}))
+`]); try { return JSON.parse(r.stdout); } catch { return { ok: false, error: `EPERM-or-hidden: ${(r.stderr || '').slice(-160)}` }; } })();
     // positive controls: the things a job MUST be able to do
     out.ok_read_ro = attempt(() => fs.readFileSync(path.join(RO, 'CLAUDE.md'), 'utf8'));
     out.ok_write_work = attempt(() => { fs.writeFileSync(path.join(WORK, 'mine.txt'), 'x'); return fs.readFileSync(path.join(WORK, 'mine.txt'), 'utf8'); });

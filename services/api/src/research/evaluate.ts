@@ -67,7 +67,7 @@ export interface ServerSummary {
 }
 
 async function describeSandboxed(dir: string, kind: 'spot' | 'perp', scratch: string): Promise<{ d: Described; sandbox: 'sandbox-exec' | 'none' }> {
-  const r = await labRun(['spq.describe', '--strategy', dir, ...(kind === 'perp' ? ['--contract', '2'] : [])], { timeoutMs: 60_000, scratch, readable: [dir] });
+  const r = await labRun(['spq.describe', '--strategy', dir, ...(kind === 'perp' ? ['--contract', '2'] : [])], { timeoutMs: 60_000, scratch, strategyDir: dir });
   if (r.code !== 0) refuse(`the laboratory refused this strategy: ${lastLine(r.err, 200)}`);
   const p = Described.safeParse((() => { try { return JSON.parse(r.out); } catch { return null; } })());
   if (!p.success) return refuse('the laboratory\'s description of the strategy is not readable');
@@ -152,11 +152,11 @@ export async function evaluateSubmission(jobId: string, result: Extract<RunnerRe
     // 5 — the server's own backtests, from files, sandboxed
     const dirs = dataDirs(job), rep = path.join(scratch, 'replication.json'), out = path.join(scratch, 'report.json'), jobLedger = path.join(scratch, 'job-ledger.jsonl');
     writeFileSync(jobLedger, result.archive.ledger);
-    const r1 = await labRun(backtestArgs(job, dir, d.sha256, dirs.dev, rep, { resamples: 300, folds: 3 }), { timeoutMs: 20 * 60_000, scratch, readable: [dirs.dev] });
+    const r1 = await labRun(backtestArgs(job, dir, d.sha256, dirs.dev, rep, { resamples: 300, folds: 3 }), { timeoutMs: 20 * 60_000, scratch, readable: [dirs.dev], strategyDir: dir });
     if (r1.code !== 0 || !existsSync(rep)) refuse(`the server could not reproduce the evaluation on the agent's data: ${lastLine(r1.err)}`);
     const repReport = JSON.parse(readFileSync(rep, 'utf8')) as { metrics?: Record<string, unknown> };
     summary.replication = { train: pick(repReport.metrics?.train), validation: pick(repReport.metrics?.validation), inner_test: pick(repReport.metrics?.test) };
-    const r2 = await labRun(backtestArgs(job, dir, d.sha256, dirs.full, out, { ledger: path.join(scratch, 'server-ledger.jsonl'), jobLedger }), { timeoutMs: 30 * 60_000, scratch, readable: [dirs.full] });
+    const r2 = await labRun(backtestArgs(job, dir, d.sha256, dirs.full, out, { ledger: path.join(scratch, 'server-ledger.jsonl'), jobLedger }), { timeoutMs: 30 * 60_000, scratch, readable: [dirs.full], strategyDir: dir });
     if (r2.code !== 0 || !existsSync(out)) refuse(`the server-side backtest failed: ${lastLine(r2.err)}`);
     const report = JSON.parse(readFileSync(out, 'utf8')) as Record<string, any>;
     if (report.strategy_sha256 !== d.sha256) refuse('the server report is for another code hash');
