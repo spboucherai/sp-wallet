@@ -2,11 +2,13 @@
 // Odos is deliberately absent: its API was permanently shut down on 2026-07-30 (docs/swap/providers/odos.md).
 import type { SwapProvider } from '../types.ts';
 import { createCctpProvider } from './cctp.ts';
+import { createDebridgeProvider } from './debridge.ts';
 import { createJupiterProvider } from './jupiter.ts';
 import { createKyberswapProvider } from './kyberswap.ts';
+import { createLifiProvider } from './lifi.ts';
 
 export interface ProviderEnv { [key: string]: string | undefined }
 /** Every real provider adapter, in a fixed order. A provider that needs a key reports `configured: false` without one. */
 export function createProviders(env: ProviderEnv = {}): SwapProvider[] {
-  return [createCctpProvider(env), createJupiterProvider(env), createKyberswapProvider(env)];
+  return [createCctpProvider(env), createDebridgeProvider(env), createJupiterProvider(env), createKyberswapProvider(env), createLifiProvider(env)];
 }

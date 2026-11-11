@@ -1,8 +1,8 @@
 // Live, read-only: run the real router (all configured providers) on a few pairs and print the ranked routes.
 import { NETWORKS, formatUnits, getAsset, parseUnits } from '@spw/core';
-import { createProviders, DEFAULT_POLICY, httpClient, LiquidityGraph, ProviderRuntime, QuoteAggregator, SwapRouter, type AssetRef } from '@spw/swap';
+import { createEnabledProviders, DEFAULT_POLICY, httpClient, LiquidityGraph, ProviderRuntime, QuoteAggregator, SwapRouter, type AssetRef } from '@spw/swap';
 const tok = (n: string, s: string): AssetRef => ({ network: n, asset: s === 'native' ? 'native' : NETWORKS[n]!.tokens.find((t) => t.symbol === s)!.id });
-const providers = createProviders(process.env);
+const providers = createEnabledProviders(process.env);
 const agg = new QuoteAggregator(providers.map((p) => new ProviderRuntime(p, { ...DEFAULT_POLICY, ...p.policy }, httpClient(p.id))));
 const prices: Record<string, number> = {};
 try { const ids: Record<string, string> = { ETH: 'ethereum', USDC: 'usd-coin', SOL: 'solana', BTC: 'bitcoin', WBTC: 'wrapped-bitcoin', LINK: 'chainlink', POL: 'polygon-ecosystem-token', AVAX: 'avalanche-2', BNB: 'binancecoin', USDT: 'tether' };

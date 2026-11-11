@@ -1,0 +1,198 @@
+{
+ "base-usdc-sol-usdc": {
+  "fromChainId": 8453,
+  "toChainId": 1151111081099710,
+  "fromTokenAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "toTokenAddress": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "fromAmount": "25000000",
+  "fromAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "toAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "eth-eth-sol-sol": {
+  "fromChainId": 1,
+  "toChainId": 1151111081099710,
+  "fromTokenAddress": "0x0000000000000000000000000000000000000000",
+  "toTokenAddress": "11111111111111111111111111111111",
+  "fromAmount": "12000000000000000",
+  "fromAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "toAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "sol-sol-arb-usdc": {
+  "fromChainId": 1151111081099710,
+  "toChainId": 42161,
+  "fromTokenAddress": "11111111111111111111111111111111",
+  "toTokenAddress": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "fromAmount": "300000000",
+  "fromAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+  "toAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "arb-eth-arb-usdc": {
+  "fromChainId": 42161,
+  "toChainId": 42161,
+  "fromTokenAddress": "0x0000000000000000000000000000000000000000",
+  "toTokenAddress": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "fromAmount": "12000000000000000",
+  "fromAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "toAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "eth-link-sol-jup": {
+  "fromChainId": 1,
+  "toChainId": 1151111081099710,
+  "fromTokenAddress": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+  "toTokenAddress": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+  "fromAmount": "3000000000000000000",
+  "fromAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "toAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "btc-btc-eth-eth": {
+  "fromChainId": 20000000000001,
+  "toChainId": 1,
+  "fromTokenAddress": "bitcoin",
+  "toTokenAddress": "0x0000000000000000000000000000000000000000",
+  "fromAmount": "40000",
+  "fromAddress": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+  "toAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "eth-usdc-btc-btc": {
+  "fromChainId": 1,
+  "toChainId": 20000000000001,
+  "fromTokenAddress": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  "toTokenAddress": "bitcoin",
+  "fromAmount": "40000000",
+  "fromAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "toAddress": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "tron-usdt-eth-usdt": {
+  "fromChainId": 728126428,
+  "toChainId": 1,
+  "fromTokenAddress": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+  "toTokenAddress": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+  "fromAmount": "30000000",
+  "fromAddress": "TV6MuMXfmLbBqPZvBHdwFsDnQeVfnmiuSi",
+  "toAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "arb-usdc-tron-trx": {
+  "fromChainId": 42161,
+  "toChainId": 728126428,
+  "fromTokenAddress": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "toTokenAddress": "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+  "fromAmount": "30000000",
+  "fromAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "toAddress": "TV6MuMXfmLbBqPZvBHdwFsDnQeVfnmiuSi",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "sui-sui-base-usdc": {
+  "fromChainId": 9270000000000000,
+  "toChainId": 8453,
+  "fromTokenAddress": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+  "toTokenAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "fromAmount": "10000000000",
+  "fromAddress": "0x7d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b58e",
+  "toAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "hyper-hype-base-eth": {
+  "fromChainId": 999,
+  "toChainId": 8453,
+  "fromTokenAddress": "0x0000000000000000000000000000000000000000",
+  "toTokenAddress": "0x0000000000000000000000000000000000000000",
+  "fromAmount": "1000000000000000000",
+  "fromAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "toAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "no-route-dust": {
+  "fromChainId": 8453,
+  "toChainId": 1151111081099710,
+  "fromTokenAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "toTokenAddress": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "fromAmount": "10",
+  "fromAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "toAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "no-route-stellar": {
+  "fromChainId": 8453,
+  "toChainId": 1201081091099710,
+  "fromTokenAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "toTokenAddress": "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA",
+  "fromAmount": "25000000",
+  "fromAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "toAddress": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ },
+ "error-unknown-token": {
+  "fromChainId": 8453,
+  "toChainId": 1151111081099710,
+  "fromTokenAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02914",
+  "toTokenAddress": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "fromAmount": "25000000",
+  "fromAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "toAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+  "options": {
+   "slippage": 0.005,
+   "integrator": "sp-wallet",
+   "allowSwitchChain": false
+  }
+ }
+}

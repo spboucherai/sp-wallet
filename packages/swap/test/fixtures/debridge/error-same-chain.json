@@ -1,0 +1,1 @@
+{"errorCode":25,"errorId":"SAME_SOURCE_AND_DESTINATION_CHAINS","errorMessage":"Currently, DLN does not allows quoting and placing quotes within a same chain. Please use a separate set of endpoints: https://api.dln.trade/v1.0/#/single%20chain%20swap","reqId":"dabe430a-d5a1-41f1-9fec-6b7729d1287a"}

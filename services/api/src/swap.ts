@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { formatUnits, getAsset, getNetwork, parseUnits } from '@spw/core';
 import {
-  assetKey, createProviders, DEFAULT_POLICY, httpClient, LiquidityGraph, ProviderRuntime, QuoteAggregator, SwapRouter,
+  assetKey, createEnabledProviders, DEFAULT_POLICY, httpClient, LiquidityGraph, ProviderRuntime, QuoteAggregator, SwapRouter,
   type AssetRef, type QuoteEvent, type Route, type RouteSearch, type SwapProvider, type SwapQuoteRequest, type Valuer,
 } from '@spw/swap';
 import { UserError } from './config.ts';
@@ -28,7 +28,7 @@ const refOf = (s: string): AssetRef => {
 const big = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v);
 
 export function swapRoutes(app: FastifyInstance, deps: SwapDeps): void {
-  const providers = deps.providers ?? createProviders(process.env);
+  const providers = deps.providers ?? createEnabledProviders(process.env);
   const runtimes = providers.map((p) => new ProviderRuntime(p, { ...DEFAULT_POLICY, ...p.policy }, httpClient(p.id)));
   const agg = new QuoteAggregator(runtimes), graph = new LiquidityGraph(providers);
   // prices are refreshed outside the hot path; the valuer itself is synchronous
