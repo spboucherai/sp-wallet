@@ -85,7 +85,9 @@ export async function jupiterGuards(n: NetworkDef, me: string, assets: AssetDef[
     codeCheckedAt = Date.now();
   }
   const w = (await rpcQuorum<{ value: Acct }>(n.rpc, 'getAccountInfo', [me, { encoding: 'base64', commitment: 'confirmed', dataSlice: { offset: 0, length: 0 } }], (a, b) => a.value?.owner === b.value?.owner && a.value?.executable === b.value?.executable)).value;
-  if (!w || w.owner !== SYSTEM_PROGRAM || w.executable) throw new UserError('account_not_plain', 'this wallet address is not a plain system account; swaps are refused', 503);
+  // an address that has never received anything has no account at all: that is an empty wallet, not a suspicious one
+  if (!w) throw new UserError('insufficient_funds', 'this wallet holds no SOL yet: receive some SOL first (it also pays the network fee)', 422);
+  if (w.owner !== SYSTEM_PROGRAM || w.executable) throw new UserError('account_not_plain', 'this wallet address is not a plain system account; swaps are refused', 503);
   for (const a of assets) {
     if (a.program !== 'token2022') continue;
     const m = (await rpcQuorum<{ value: Acct }>(n.rpc, 'getAccountInfo', [a.id, { encoding: 'jsonParsed', commitment: 'finalized' }], (x, y) => JSON.stringify(x.value?.data) === JSON.stringify(y.value?.data))).value;

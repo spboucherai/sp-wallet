@@ -1,7 +1,7 @@
 // Strategy library and backtests. The API never writes strategy code: it lists what the research zone put under
 // research/strategies, pins a version by the SHA-256 of its strategy.py, and runs the laboratory's backtest on stored candles.
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -55,14 +55,20 @@ export async function describe(rel: string): Promise<StrategyInfo> {
   return info;
 }
 export async function library(): Promise<(StrategyInfo & { readme: string })[]> {
-  const out: (StrategyInfo & { readme: string })[] = [];
-  if (!existsSync(ROOT)) return out;
+  if (!existsSync(ROOT)) return [];
+  const rels: [string, string][] = [];
   for (const name of readdirSync(ROOT).sort()) { if (!/^[a-z0-9_]{1,40}$/.test(name)) continue;
-    for (const ver of readdirSync(path.join(ROOT, name)).sort()) { if (!/^[a-z0-9_]{1,12}$/.test(ver)) continue;
-      try { const i = await describe(`${name}/${ver}`); let readme = '';
-        for (const f of [path.join(ROOT, name, ver, 'README.md'), path.join(ROOT, name, '1', 'README.md')]) { try { readme = readFileSync(f, 'utf8').slice(0, 1500); if (readme.length > 200) break; } catch { /* none */ } }
-        out.push({ ...i, readme }); } catch { /* not loadable: not offered */ } } }
-  return out;
+    for (const ver of readdirSync(path.join(ROOT, name)).sort()) if (/^[a-z0-9_]{1,12}$/.test(ver)) rels.push([name, ver]); }
+  // LISTING ONLY (the page waited ~20 s: one laboratory process per version, one after the other). A version already described
+  // under the same code hash is served from memory, the others are described in parallel. Registration still calls describe().
+  const found = await Promise.all(rels.map(async ([name, ver]) => {
+    try { let hit: StrategyInfo | undefined;
+      try { hit = cache.get(`${name}/${ver}:${createHash('sha256').update(readFileSync(path.join(ROOT, name, ver, 'strategy.py'))).digest('hex')}`); } catch { /* unreadable: describe() decides */ }
+      const i = hit ?? await describe(`${name}/${ver}`); let readme = '';
+      for (const f of [path.join(ROOT, name, ver, 'README.md'), path.join(ROOT, name, '1', 'README.md')]) { try { readme = readFileSync(f, 'utf8').slice(0, 1500); if (readme.length > 200) break; } catch { /* none */ } }
+      return [{ ...i, readme }]; } catch { return []; /* not loadable: not offered */ }
+  }));
+  return found.flat();
 }
 const sameSet = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
 

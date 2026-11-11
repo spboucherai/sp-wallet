@@ -13,8 +13,10 @@ export function Assets({ nav }: { nav: Nav }) {
   const cur = settings.currency, ck = (cur === 'USD' ? 'usd' : 'cad') as 'usd' | 'cad';
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
+    // majors first: the market-cap rank of the price feed; assets without one go last
+    const rank = (sym: string) => pf.data?.prices?.[sym]?.rank ?? 9999;
     return (pf.data?.balances ?? []).filter((b) => (!net || b.network === net) && (!s || b.symbol.toLowerCase().includes(s) || b.name.toLowerCase().includes(s) || b.networkName.toLowerCase().includes(s)))
-      .sort((a, b) => Number(b.amount !== '0' && b.amount !== null) - Number(a.amount !== '0' && a.amount !== null) || Number(b.asset === 'native') - Number(a.asset === 'native') || a.symbol.localeCompare(b.symbol));
+      .sort((a, b) => Number(b.amount !== '0' && b.amount !== null) - Number(a.amount !== '0' && a.amount !== null) || rank(a.symbol) - rank(b.symbol) || a.symbol.localeCompare(b.symbol) || Number(b.asset === 'native') - Number(a.asset === 'native') || a.networkName.localeCompare(b.networkName));
   }, [pf.data, q, net]);
   if (!pf.data) return <Skeleton h="h-96" />;
   return (

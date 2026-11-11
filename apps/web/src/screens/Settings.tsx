@@ -7,10 +7,10 @@ import { Btn, Card, H, Icon } from '../ui';
 
 function Seg<T extends string>({ value, options, onChange, label }: { value: T; options: [T, string][]; onChange: (v: T) => void; label: string }) {
   return <div className="flex rounded-2xl bg-elev p-1" role="radiogroup" aria-label={label}>{options.map(([v, l]) =>
-    <button key={v} role="radio" aria-checked={value === v} onClick={() => onChange(v)} className={`min-h-10 flex-1 rounded-xl text-[14px] ${value === v ? 'bg-surface font-semibold shadow-sm' : 'text-mute'}`}>{l}</button>)}</div>;
+    <button key={v} role="radio" aria-checked={value === v} onClick={() => onChange(v)} className={`min-h-11 flex-1 rounded-xl text-[14px] ${value === v ? 'bg-surface font-semibold shadow-sm' : 'text-mute'}`}>{l}</button>)}</div>;
 }
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
-  return <button role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} className={`relative h-8 w-14 shrink-0 rounded-full transition ${on ? 'bg-emerald' : 'bg-line'}`}><span className={`absolute top-1 h-6 w-6 rounded-full bg-white transition-all ${on ? 'left-7' : 'left-1'}`} /></button>;
+  return <button role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} className="grid h-11 w-16 shrink-0 place-items-center"><span className={`relative block h-8 w-14 rounded-full transition ${on ? 'bg-emerald' : 'bg-line'}`}><span className={`absolute top-1 h-6 w-6 rounded-full bg-white transition-all ${on ? 'left-7' : 'left-1'}`} /></span></button>;
 }
 
 export function Settings({ lock, go }: { lock: () => void; go: (t: Tab) => void }) {

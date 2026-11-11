@@ -5,7 +5,7 @@ import { get, post } from '../api';
 import type { Tab } from '../App';
 import { useNetworks, usePortfolio, type Proposal } from '../hooks';
 import { errText, useT, type Key } from '../i18n';
-import { Addr, Btn, Card, Chips, Field, H, Icon, inputCls, Notice, short, StatePill, trimAmt } from '../ui';
+import { Addr, Btn, Card, Chips, Field, H, Icon, inputCls, Notice, short, StatePill, testNotSent, trimAmt } from '../ui';
 import { AgentRecipientNotice } from './AgentFund';
 
 type Step = 'form' | 'review' | 'track';
@@ -73,7 +73,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
         {n?.family === 'evm' && <AgentRecipientNotice to={to} network={net} networkName={n.name} />}
         {(book.data ?? []).filter((b) => b.network === net).length > 0 && <div><div className="mb-1.5 text-[13px] text-mute">{t('addressBook')}</div>
           <div className="flex flex-wrap gap-2">{book.data!.filter((b) => b.network === net).map((b) => <button key={b.id} onClick={() => setTo(b.address)} className={`rounded-full border px-3 py-1.5 text-[13px] ${to === b.address ? 'border-emerald text-emerald' : 'border-line'}`}><Icon n="book" className="mr-1 inline h-3.5 w-3.5" />{b.label} · {short(b.address)}</button>)}</div></div>}
-        <Field label={`${t('amount')} (${a?.symbol ?? ''})`} hint={bal?.display != null ? <>{t('available')}: {trimAmt(bal.display, 8)} {bal.symbol}</> : undefined}>
+        <Field label={`${t('amount')} (${a?.symbol ?? ''})`} hint={bal?.display != null ? <>{t('available')}{t('available') === 'Disponible' ? ' : ' : ': '}{trimAmt(bal.display, 8)} {bal.symbol}</> : bal ? <span className="text-warn">{t('qaBalUnknown')}</span> : undefined}>
           <div className="flex gap-2">
             <input className={`${inputCls} text-lg`} inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))} autoComplete="off" />
             {asset !== 'native' && bal?.display != null && <Btn kind="soft" onClick={() => setAmount(bal.display!)}>{t('max')}</Btn>}
@@ -121,15 +121,16 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
     <div className="space-y-4">
       <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('tracking')}</h1>
       <Card className="space-y-4">
-        <div className="flex items-start justify-between gap-3"><div><div className="text-2xl font-semibold">{cur.amountDisplay} {cur.symbol}</div><div className="text-xs text-mute">{cur.networkName} → {short(cur.to)}</div></div><StatePill state={cur.state} /></div>
-        {!bad && <ol className="space-y-2.5" aria-label={t('status')}>{FLOW.slice(1).map((s, k) => { const done = idx > k + 1 || cur.state === 'finalized', now = idx === k + 1 && cur.state !== 'finalized';
+        <div className="flex items-start justify-between gap-3"><div><div className="text-2xl font-semibold">{cur.amountDisplay} {cur.symbol}</div><div className="text-xs text-mute">{cur.networkName} → {short(cur.to)}</div></div>{testNotSent(cur) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : <StatePill state={cur.state} />}</div>
+        {testNotSent(cur) && <Notice tone="warn">{t('qaTestNotSent')}</Notice>}
+        {!bad && !testNotSent(cur) && <ol className="space-y-2.5" aria-label={t('status')}>{FLOW.slice(1).map((s, k) => { const done = idx > k + 1 || cur.state === 'finalized', now = idx === k + 1 && cur.state !== 'finalized';
           return <li key={s} className={`flex items-center gap-3 text-[14.5px] ${done ? 'text-emerald' : now ? 'text-ink' : 'text-mute'}`}>
             <span className={`grid h-6 w-6 place-items-center rounded-full border ${done ? 'border-emerald' : now ? 'border-blue text-blue' : 'border-line'}`}><Icon n={done ? 'check' : now ? 'spin' : 'clock'} className="h-3.5 w-3.5" /></span>
             {t(`s_${s}` as Key)}{s === 'confirming' && cur.confirmations > 0 ? ` · ${cur.confirmations} ${t('confirmations')}` : ''}</li>; })}</ol>}
         {cur.error && bad && <Notice tone="danger">{cur.error}</Notice>}
-        {!bad && cur.state !== 'finalized' && <p className="text-xs text-mute">{t('broadcastNote')}</p>}
+        {!bad && cur.state !== 'finalized' && !testNotSent(cur) && <p className="text-xs text-mute">{t('broadcastNote')}</p>}
         {cur.txid && <Row k={t('txid')}><span className="break-all font-mono text-[11.5px]">{cur.txid}</span></Row>}
-        {cur.explorer && <a className="inline-flex items-center gap-1.5 text-sm text-blue" href={cur.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
+        {cur.explorer && !testNotSent(cur) && <a className="inline-flex min-h-11 items-center gap-1.5 text-sm text-blue" href={cur.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
       </Card>
       {cur.state === 'finalized' && !(book.data ?? []).some((b) => b.network === cur.network && b.address === cur.to) && <SaveAddr network={cur.network} address={cur.to} onSaved={() => void book.refetch()} />}
       <div className="grid grid-cols-2 gap-3"><Btn kind="soft" onClick={reset}>{t('newTransfer')}</Btn><Btn kind="ghost" onClick={() => go('activity')}>{t('activity')}</Btn></div>

@@ -1152,6 +1152,46 @@ const D = {
   qaSendAgentWrongNet: ['Attention : cette adresse est le portefeuille de votre agent « {name} », qui vit sur {agentNet} — pas sur {net}.', 'Careful: this address is the wallet of your agent “{name}”, which lives on {agentNet} — not on {net}.'],
   qaSendAgentWrongNetHow: ['Des fonds envoyés ici arriveront à la même adresse mais sur un réseau que l’agent ne peut pas utiliser ; il faudra les retirer depuis la page de l’agent. Choisissez le réseau {agentNet}, ou utilisez « Financer l’agent ».', 'Funds sent here will reach the same address but on a network the agent cannot use; they will have to be withdrawn from the agent page. Choose the {agentNet} network, or use “Fund the agent”.'],
   qaFundNote: ['L’agent ne peut utiliser que des {cash} et du {native} reçus sur {network}. Une réserve de {native} reste toujours hors de portée de la stratégie ; elle est exigée pour passer en réel. L’agent ne peut jamais toucher votre portefeuille principal.', 'The agent can only use {cash} and {native} received on {network}. A reserve of {native} always stays out of the strategy’s reach; it is required to go live. The agent can never touch your main wallet.'],
+  qaIss_WETH: ['le contrat de dépôt WETH du réseau (aucun dépositaire ; pont canonique sur une couche 2)', 'the WETH deposit contract of the network (no custodian; canonical bridge on a layer 2)'],
+  qaIss_WBTC: ['BitGo / BiT Global (dépositaires des bitcoins)', 'BitGo / BiT Global (custodians of the bitcoin)'], qaIss_cbBTC: ['Coinbase (dépositaire des bitcoins)', 'Coinbase (custodian of the bitcoin)'],
+  qaIss_tBTC: ['Threshold Network (groupe de signataires qui détient les bitcoins)', 'Threshold Network (signer set holding the bitcoin)'], qaIss_BTCB: ['Binance (dépositaire des bitcoins)', 'Binance (custodian of the bitcoin)'],
+  qaIss_cb: ['Coinbase (dépositaire des {under})', 'Coinbase (custodian of the {under})'], qaIss_wnative: ['le contrat de dépôt {sym} (aucun dépositaire)', 'the {sym} deposit contract (no custodian)'], qaIss_EURC: ['Circle (réserves en euros)', 'Circle (euro reserves)'],
+  qaIssBinancePeg: ['Binance (jeton « Binance-Peg » : Binance détient le sous-jacent et émet ce jeton)', 'Binance (“Binance-Peg” token: Binance holds the underlying and issues this token)'],
+  qaIssBridged: ['pont {bridge} (jeton ponté, pas l’émission d’origine)', '{bridge} (bridged token, not the original issue)'], qaIssBridgedGeneric: ['pont entre réseaux (jeton ponté, pas l’émission d’origine)', 'cross-network bridge (bridged token, not the original issue)'],
+  qaIssVia: ['arrivé sur ce réseau par le pont {bridge}', 'brought to this network by the {bridge}'],
+  qaTag_pegged: ['adossé', 'pegged'], qaTag_bridged: ['ponté', 'bridged'], qaTag_wrapped: ['enveloppé', 'wrapped'],
+  qaCashNote: ['Sur {net}, {sym} est « {name} ». Émetteur : {issuer}.', 'On {net}, {sym} is “{name}”. Issuer: {issuer}.'], qaCashDecimals: ['Ce jeton a {dec} décimales (et non 6).', 'This token has {dec} decimals (not 6).'],
+  qaReprDefault: ['choix par défaut', 'default choice'], qaReprLiquid: ['le plus liquide sur {net}', 'the most liquid on {net}'],
+  qaReprHint: ['Sur {net}, {liquid} est la forme la plus liquide de {sym} ; la règle par défaut retient {def}. Le choix vous appartient : il est enregistré avec l’agent.', 'On {net}, {liquid} is the most liquid form of {sym}; the default rule picks {def}. The choice is yours: it is recorded with the agent.'],
+  qaReprChoose: ['Choisissez la forme de {sym} à détenir.', 'Choose which form of {sym} to hold.'],
+  qaNoDataLegend: ['point orange : historique de prix en cours de collecte, le backtest ne sera possible qu’ensuite', 'orange dot: price history still being collected, a backtest is only possible afterwards'],
+  qaIv_1h: ['Chaque heure', 'Hourly'], qaIv_1d: ['Chaque jour', 'Daily'],
+  qaWarnFees: ['Sur {net}, un ordre coûte environ {usd} $ US de frais de réseau, soit {pct} % du plus gros ordre de cet agent ({max} $ US). De petits ordres sont mangés par les frais.', 'On {net} one order costs about {usd} USD in network fees: {pct} % of this agent’s largest order ({max} USD). Small orders are eaten by fees.'],
+  qaWarnTooMany: ['Un mandat couvre au plus 12 actifs (la trésorerie et 11 symboles) : avec {n} symboles, cet agent peut tourner en simulation mais pas passer en réel.', 'A mandate covers at most 12 assets (the cash leg and 11 symbols): with {n} symbols this agent can be paper traded but not go live.'],
+  qaStop_owner: ['Arrêté par vous.', 'Stopped by you.'], qaStop_revoked: ['Mandat révoqué par vous.', 'Mandate revoked by you.'], qaStop_expired: ['Le mandat a expiré ; approuvez-en un nouveau pour continuer.', 'The mandate expired; approve a new one to continue.'],
+  qaStop_mismatch: ['La stratégie approuvée ne correspond plus au mandat.', 'The approved strategy no longer matches the mandate.'],
+  qaStop_loss: ['Limite de perte atteinte : valeur de {eq} $ US pour {cap} $ US alloués (limite {lim} %) ; les positions ont été vendues en {cash}.', 'Loss limit reached: equity {eq} USD against {cap} USD allocated (limit {lim} %); positions were sold to {cash}.'],
+  qaLog_hold: ['Pas de signal valide : position conservée', 'No valid signal: holding'], qaLog_noquote: ['Pas de devis exécutable : ordre ignoré', 'No executable quote: order skipped'], qaLog_stopped: ['Agent arrêté', 'Agent stopped'],
+  e_internal: ['Erreur interne du serveur. Réessayez dans un instant.', 'Internal server error. Try again in a moment.'],
+  e_bad_request: ['Requête invalide.', 'Invalid request.'],
+  qaTestNotSent: ['Mode test : la diffusion est désactivée sur ce serveur. La transaction a été signée mais rien n’a été envoyé au réseau ; elle ne sera jamais confirmée et les soldes ne changeront pas.', 'Test mode: broadcasting is disabled on this server. The transaction was signed but nothing was sent to the network; it will never confirm and balances will not change.'],
+  qaSignedNotSent: ['Signé, non envoyé (test)', 'Signed, not sent (test)'],
+  qaSwExecHere: ['exécutable ici', 'executable here'], qaSwCompareOnly: ['comparaison seulement', 'comparison only'],
+  qaSwOtherRoutes: ['Routes d’autres fournisseurs — comparaison seulement, non exécutables ici', 'Routes of other providers — comparison only, not executable here'],
+  qaSwMoreRoutes: ['Voir les {n} autres routes', 'Show the {n} other routes'], qaSwLessRoutes: ['Réduire la liste', 'Collapse the list'],
+  qaSwProviders1: ['1 fournisseur interrogé en {ms} ms', '1 provider queried in {ms} ms'],
+  qaSwSt_unavailable: ['ne répond pas', 'not answering'], qaSwSt_timeout: ['délai dépassé', 'timed out'], qaSwSt_error: ['erreur', 'error'], qaSwSt_unsupported: ['paire non prise en charge', 'pair not supported'],
+  qaBalUnknown: ['solde indisponible', 'balance unavailable'],
+  qaPegNote: ['« {name} » n’est pas l’émission d’origine de {sym}. Il dépend de son émetteur — {issuer} — et peut décrocher de l’actif qu’il représente.', '“{name}” is not the original issue of {sym}. It depends on its issuer — {issuer} — and can lose its peg to the asset it represents.'],
+  qaIssuerShort: ['émetteur : {issuer}', 'issuer: {issuer}'],
+  qaEntries1: ['entrée', 'entry'], qaDepositShown1: ['Un dépôt apparaît ici une fois confirmé sur la chaîne (1 confirmation pour la finalité).', 'A deposit shows here once confirmed on-chain (1 confirmation for finality).'],
+  qaLimitsSearch: ['Filtrer les limites (actif ou réseau)', 'Filter the limits (asset or network)'], qaLimitsNone: ['Aucune limite ne correspond.', 'No matching limit.'], qaLimitsShown: ['{n} sur {total}', '{n} of {total}'],
+  qaErrNotActivated: ['Ce compte n’est pas encore activé sur ce réseau : il doit d’abord recevoir le dépôt minimal (voir l’écran Recevoir).', 'This account is not activated on this network yet: it must first receive the minimum deposit (see the Receive screen).'],
+  qaBrNeedsApproval: ['Deux transactions seront signées sur le réseau de départ : une autorisation limitée au montant exact de {sym}, puis la destruction. Elle est simulée à nouveau juste avant son envoi.', 'Two transactions will be signed on the source network: an approval limited to the exact amount of {sym}, then the burn. It is simulated again just before it is sent.'],
+  qaSolNotFunded: ['Votre adresse Solana n’a encore jamais reçu de SOL : le compte n’existe pas sur le réseau, aucun échange n’est possible. Recevez d’abord du SOL (écran Recevoir).', 'Your Solana address has never received SOL: the account does not exist on the network yet, no swap is possible. Receive some SOL first (Receive screen).'],
+  qaAgNoGas: ['Passage en réel refusé : le portefeuille de l’agent détient {held} {sym} et la réserve de frais exigée sur {net} est de {need} {sym}. Ajoutez la réserve avec « Financer l’agent », puis recommencez.', 'Going live is refused: the agent’s wallet holds {held} {sym} and the fee reserve required on {net} is {need} {sym}. Add the reserve with “Fund the agent”, then try again.'],
+  qaOrderTarget: ['cible {pct} %', 'target {pct} %'],
+  qaPaperVaultNote: ['Simulation en cours : les soldes ci-dessous sont les fonds RÉELS du portefeuille de l’agent sur le réseau. Les ordres simulés n’y touchent pas et ne créent aucun solde : ils figurent dans « Ordres » (marqués « simulation ») et dans la courbe de valeur.', 'Paper trading: the balances below are the REAL funds of the agent’s wallet on the network. Simulated orders do not touch them and create no balance: they are listed under “Orders” (marked “paper”) and in the value curve.'],
   // ── end of qa* ──
   // --- native cross-chain swaps through THORChain (v6) ---
   xsReview: ['Vérifier l’échange inter-chaînes', 'Review the cross-chain swap'], xsTracking: ['Échange inter-chaînes', 'Cross-chain swap'], xsProgress: ['Progression de l’échange', 'Swap progress'],
@@ -1461,6 +1501,8 @@ export function errText(t: (k: Key) => string, e: unknown): string {
   if (x?.name === 'NotAllowedError') return '';
   const k = `e_${x?.code}`;
   const detail = x?.message && x.message !== 'error' && x.message !== x.code ? x.message : '';
-  return k in D ? (detail ? `${t(k as Key)} (${detail})` : t(k as Key)) : detail || String(x?.code ?? 'error');
+  // a translated code speaks for itself; the server's English sentence is appended only when it carries a figure (an amount, a limit)
+  if (/account is not activated yet/.test(detail)) return t('qaErrNotActivated');
+  return k in D ? (detail && /\d/.test(detail) && x?.code !== 'bad_address' ? `${t(k as Key)} (${detail})` : t(k as Key)) : detail || String(x?.code ?? 'error');
 }
 export const stateKey = (s: string) => (`s_${s}` in D ? (`s_${s}` as Key) : 's_draft');

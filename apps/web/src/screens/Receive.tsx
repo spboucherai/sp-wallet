@@ -26,7 +26,7 @@ export function Receive({ initial }: { initial?: string }) {
       {n.family === 'evm' && <Notice tone="info">{t('evmSame')}</Notice>}
       {n.activation && <Notice tone="info">{t('activationNote', { network: n.name, amount: n.activation, sym: n.native.symbol })}</Notice>}
       <Card><H>{t('addressFromSigner')}</H><ul className="space-y-2 text-[13.5px] text-mute">
-        <li>{t('depositShown', { n: n.minConf })}</li>
+        <li>{n.minConf === 1 ? t('qaDepositShown1') : t('depositShown', { n: n.minConf })}</li>
         {n.tokens.length > 0 && <li>{t('gasNote', { sym: n.native.symbol })}</li>}
       </ul></Card>
     </div>

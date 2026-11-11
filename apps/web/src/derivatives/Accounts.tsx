@@ -9,7 +9,7 @@ import { errText, I18n, useT, type Key } from '../i18n';
 import { Btn, Card, Field, H, Icon, inputCls, Notice, short, Skeleton } from '../ui';
 import { dapi, paperAllowed } from './api';
 import { LiveSection } from './LiveAccounts';
-import { ageText, DataTable, PaperTag, Pnl, Row, Sheet, SideTag, Stat, VENUE_NAME, VenueBadge, type Col } from './bits';
+import { ageText, DataTable, PaperTag, Pnl, Row, ServerSays, Sheet, SideTag, Stat, VENUE_NAME, VenueBadge, type Col } from './bits';
 import { D, dec, fmt, parseInput, pct, priceDp, usd } from './dec';
 import type { DerivAccount, Instrument, Position, RiskPolicy, VenueId, VenueInfo, Watch } from './types';
 
@@ -81,7 +81,7 @@ export function VenueStrip({ venues, compact }: { venues: VenueInfo[]; compact?:
   return <ul className="divide-y divide-line" data-testid="venue-list">{venues.map((v) => <li key={v.id} className="py-3 first:pt-0 last:pb-0">
     <div className="flex flex-wrap items-center gap-2"><VenueBadge venue={v.id} /><VenuePill v={v} /><span className="text-[12px] text-mute">{v.network}{v.lastOkAt ? ` · ${t('fxLastOk', { age: ageText(Date.now() - v.lastOkAt) })}` : ''}</span></div>
     <p className="mt-1.5 text-[13px] leading-snug">{t(`fxVenueWhat_${v.id}` as Key)}</p>
-    {v.restriction && <p className="mt-1 text-[12px] leading-snug text-mute">{t('fxServerSays')} {v.restriction}</p>}</li>)}</ul>;
+    {v.restriction && <ServerSays text={v.restriction} className="mt-1 text-[12px] leading-snug text-mute" />}</li>)}</ul>;
 }
 
 export function AccountsView({ venues, instruments, accounts, loading, selected, onSelect }: { venues: VenueInfo[]; instruments: Instrument[]; accounts: DerivAccount[]; loading: boolean; selected: string | null; onSelect: (id: string) => void }) {

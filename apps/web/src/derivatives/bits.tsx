@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useT, type Key } from '../i18n';
+import { I18n, useT, type Key } from '../i18n';
 import { Icon } from '../ui';
 import { D, dec, fmt, usd } from './dec';
 import type { VenueId } from './types';
@@ -100,3 +100,11 @@ const p2 = (n: number) => String(n).padStart(2, '0');
 export const timeOf = (ts: number, locale: string, withDate = false) => { const d = new Date(ts); return withDate ? `${d.toLocaleDateString(locale === 'fr' ? 'fr-CA' : 'en-CA', { month: 'short', day: 'numeric' })} ${p2(d.getHours())}:${p2(d.getMinutes())}` : `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`; };
 /** « 14 s », « 3 min », « 2 h » */
 export const ageText = (ms: number | null): string => (ms === null ? '—' : ms < 60_000 ? `${Math.max(0, Math.round(ms / 1000))} s` : ms < 3_600_000 ? `${Math.round(ms / 60_000)} min` : `${Math.round(ms / 3_600_000)} h`);
+
+/** A sentence written by the server, in English. Where the interface already says the same thing in the owner's language
+ *  (every use of this component follows such a sentence), the English original is only shown in the English interface. */
+export function ServerSays({ text, className, mono }: { text: string; className: string; mono?: boolean }) {
+  const t = useT(); const { locale } = useContext(I18n);
+  if (locale !== 'en') return null;
+  return <span className={`block ${className}`}>{t('fxServerSays')} {mono ? <span className="font-mono text-[11px]">{text}</span> : text}</span>;
+}

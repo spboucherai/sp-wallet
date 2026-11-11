@@ -11,7 +11,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { I18n, useT, type Key } from '../i18n';
 import { Addr, Btn, Card, Field, H, Icon, inputCls, Notice, Skeleton, when } from '../ui';
-import { Row, Sheet, Stat, timeOf } from './bits';
+import { Row, ServerSays, Sheet, Stat, timeOf } from './bits';
 import { fmt, usd } from './dec';
 import { Bullet, LiveErrNotice, ModeBand, ModeTag, SourceTag } from './LiveBits';
 import { defaultPolicyForm, isUnfunded, lapi, liveError, policyFromForm, samePolicy, sha256Hex, toneOf, venueWords, type Collateral, type LiveConfig, type LiveErr, type LiveNetwork, type LiveSummary, type PolicyForm, type Prepared, type Revoked, type VenuePolicy } from './live';
@@ -254,7 +254,7 @@ export function LiveSection({ selected, onSelect }: { selected: string | null; o
       {err && <div className="mt-3"><LiveErrNotice err={err} /></div>}
       {/* >>> v7 perp live: the V6 shape of GET /config — mandates exist; on mainnet they are closed by a SERVER SETTING, said with the server's own words */}
       <p className="mt-3 text-[12.5px] leading-snug text-mute" data-testid="mandate-mode-note">{cfg.mandateLive.available ? t('plMandateModeNote') : t('flMandateNote')} {t('fxLiveNote')}</p>
-      {!cfg.mandateLive.available && cfg.mandateLive.reason && <p className="mt-1 break-words text-[11.5px] text-mute">{t('fxServerSays')} <span className="font-mono text-[11px]">{cfg.mandateLive.reason}</span></p>}
+      {!cfg.mandateLive.available && cfg.mandateLive.reason && <ServerSays mono text={cfg.mandateLive.reason} className="mt-1 break-words text-[11.5px] text-mute" />}
       {cfg.mandateLive.available && cfg.mandateLive.mainnet && !cfg.mandateLive.mainnet.enabled && <div className="mt-2 rounded-2xl border border-dashed border-line bg-elev/60 p-3 text-[12.5px] leading-snug" data-testid="mandate-mainnet-setting">
         <b className="flex items-start gap-1.5 font-semibold"><Icon n="lock" className="mt-0.5 h-3.5 w-3.5 shrink-0" />{t('plLockTitle')}</b><span className="mt-1 block text-mute">{t('plLockBody')}</span>
         <span className="mt-1 block break-words font-mono text-[11px] text-mute">{t('plLockSays')} {cfg.mandateLive.mainnet.reason ?? cfg.reasons?.mandate_mainnet_disabled?.[locale]}</span></div>}
