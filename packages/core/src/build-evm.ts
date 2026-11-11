@@ -10,6 +10,7 @@ export function buildEvmTx(i: Intent): TransactionSerializableEIP1559 {
   if (n.family !== 'evm' || !i.evm) throw new Error('not an EVM intent');
   if (i.swap) throw new Error('this is a swap intent, not a transfer');
   if (i.bridge) throw new Error('this is a bridge intent, not a transfer');
+  if (i.xswap) throw new Error('this is a cross-chain swap intent, not a transfer');
   if (i.chainRef !== n.chainRef) throw new Error('chain id mismatch');
   const asset = getAsset(i.network, i.asset); // throws when token is not allowlisted
   if (asset.decimals !== i.decimals || asset.symbol !== i.symbol) throw new Error('asset metadata mismatch');

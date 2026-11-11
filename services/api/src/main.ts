@@ -4,6 +4,7 @@ import { config } from './config.ts';
 import { migrate } from './db.ts';
 import { buildServer } from './server.ts';
 import { startAgentEngine } from './agents/live.ts';
+import { startPerpAgentEngine } from './agents/perp-live.ts'; // v6 perp agents
 import { assertFresh, getSeries, type Interval, type MarketSymbol } from './market/index.ts';
 import { startMarketWorker } from './market/worker.ts';
 import { startWorkers } from './worker.ts';
@@ -26,6 +27,7 @@ if (config.workers) {
     series: async (s, i, limit) => (await getSeries(s as MarketSymbol, i as Interval, { limit })).bars,
     assertFresh: async (s, i) => { await assertFresh(s as MarketSymbol, i as Interval); },
   });
+  startPerpAgentEngine(); // v6 perp agents (paper only): venue bars + funding in, simulated orders on their paper accounts out
 }
 console.log(`sp-wallet api listening on ${config.host}:${config.port} origin=${config.origin} broadcast=${config.broadcast ? 'on' : 'OFF'}`);
 for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { void app.close().then(() => process.exit(0)); });

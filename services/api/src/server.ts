@@ -20,8 +20,10 @@ import { addressFor, signer } from './signer-client.ts';
 import { swapRoutes } from './swap.ts';
 import { swapExecRoutes } from './swap-exec.ts';
 import { bridgeRoutes } from './bridge.ts';
+import { xswapRoutes } from './xswap.ts';
 import { agentRoutes } from './agents/routes.ts';
 import { strategyRoutes } from './agents/strategies.ts';
+import { perpAgentRoutes } from './agents/perp-routes.ts'; // v6 perp agents
 import { transferRoutes, view, type ProposalRow } from './transfers.ts';
 import { healthCache } from './worker.ts';
 
@@ -134,8 +136,10 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   swapRoutes(app, { providers: swapProviders, prices: markets });
   swapExecRoutes(app);
   bridgeRoutes(app);
+  xswapRoutes(app);
   agentRoutes(app, { prices: markets });
   strategyRoutes(app);
+  perpAgentRoutes(app, opts.derivatives); // v6 perp agents: paper only, on the derivatives module's paper accounts
   marketDataRoutes(app);
   derivativesRoutes(app, opts.derivatives);
   liveRoutes(app, opts.live); // controlled live trading: nothing trades until the owner authorizes a venue account with his passkey
@@ -201,7 +205,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     const dep = await sql<{ network: string; txid: string; idx: number; asset: string; amount: string; from_addr: string; block: string; block_time: Date | null; seen_at: Date; finalized: string | null }[]>`
       select d.*, c.finalized from deposits d left join scan_cursor c on c.network = d.network order by coalesce(d.block_time, d.seen_at) desc limit ${q.limit}`;
     const items = [
-      ...out.map((p) => ({ ...view(p), kind: (p.kind === 'swap' ? 'swap' : p.kind === 'bridge' ? 'bridge' : 'send') as 'send' | 'swap' | 'bridge', at: p.created_at })),
+      ...out.map((p) => ({ ...view(p), kind: (p.kind === 'swap' || p.kind === 'xswap' ? 'swap' : p.kind === 'bridge' ? 'bridge' : 'send') as 'send' | 'swap' | 'bridge', at: p.created_at })),
       ...dep.map((d) => {
         const n = getNetwork(d.network), a = d.asset === 'native' ? n.native : n.tokens.find((t) => t.id === d.asset)!;
         return { kind: 'receive' as const, at: d.block_time ?? d.seen_at, id: `${d.network}:${d.txid}:${d.idx}`, network: d.network, networkName: n.name, asset: d.asset, symbol: a.symbol,

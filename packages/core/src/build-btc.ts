@@ -17,6 +17,7 @@ export const dustOf = (n: NetworkDef) => BigInt(n.utxo?.dust ?? 546);
 export function buildBtcTx(i: Intent, aux?: Record<string, unknown>): Transaction {
   const n = getNetwork(i.network);
   if (n.family !== 'btc' || !n.utxo || !i.btc) throw new Error('not a UTXO intent');
+  if (i.xswap) throw new Error('this is a cross-chain swap intent, not a transfer');
   if (i.chainRef !== n.chainRef) throw new Error('chain identity mismatch');
   if (i.asset !== 'native' || i.decimals !== n.native.decimals || i.symbol !== n.native.symbol) throw new Error('asset mismatch');
   const P = btcParams(n), DUST = dustOf(n);

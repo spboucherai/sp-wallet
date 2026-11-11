@@ -108,6 +108,14 @@ export function derivativesRoutes(app: FastifyInstance, d: Derivatives = derivat
     return data.watch(v.id, q.account);
   });
 
+  // ------------------------------------------------------------------ router (simulation) — docs/v4/ROUTER.md
+  // Compares the execution conditions of ONE order intent across the venues. Nothing is placed, signed or sent; the answer is
+  // an estimate (`source: 'estimate'`) and its ranking is information, never a selection.
+  const router = (): NonNullable<Derivatives['router']> => { if (!d.router) throw new UserError('router_unavailable', 'the router is not configured on this instance', 503); return d.router; };
+  app.get(`${P}/route/assets`, async () => router().assets());
+  app.post(`${P}/route`, async (req) => router().route(req.body));
+  // ------------------------------------------------------------------ /router
+
   // ------------------------------------------------------------------ paper accounts
 
   app.get(`${P}/accounts`, async () => ({ accounts: await paper.list(), ts: data.now() }));

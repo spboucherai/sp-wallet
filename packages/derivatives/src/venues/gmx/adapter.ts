@@ -48,11 +48,19 @@ export const GMX_CAPABILITIES: Capabilities = {
 export interface GmxLiquidity {
   instrument: string; symbol: string; market: string;
   /** USD */ openInterestLongUsd: DecStr; openInterestShortUsd: DecStr; maxOpenInterestLongUsd: DecStr; maxOpenInterestShortUsd: DecStr;
+  /** open interest in index tokens per side, and whether the contracts use it (× price) to measure the imbalance — `null` when the venue does not say.
+   *  Recorded proof (test/gmx): the venue's own `closePriceImpactDeltaUsd` is reproduced with tokens × mark, and is 3× off with the USD figures above. */
+  openInterestLongTokens: DecStr; openInterestShortTokens: DecStr; useOpenInterestInTokensForBalance: boolean | null;
+  /** virtual inventory of the index token for positions, shared by every market on that index. `applies`: the market has one (null: not published).
+   *  `tokens` / `usd`: its signed value in the contracts' convention — negative = traders are net LONG across those markets — or null when
+   *  GET /markets/values could not be read. A NEGATIVE price impact is the worse of the market's own and the one computed on this inventory. */
+  virtualInventory: { applies: boolean | null; tokens: DecStr | null; usd: DecStr | null };
   /** USD that can still be opened on each side: pool view, then the JIT-aware capacity the venue recommends for sizing */
   availableLiquidityLongUsd: DecStr; availableLiquidityShortUsd: DecStr; capacityLongUsd: DecStr; capacityShortUsd: DecStr; capacityLimitedBy: { long: string; short: string };
   /** per hour, as a fraction; sign as published by the venue: positive = the side RECEIVES, negative = the side PAYS */
   fundingRateLongPerHour: DecStr; fundingRateShortPerHour: DecStr; borrowingRateLongPerHour: DecStr; borrowingRateShortPerHour: DecStr; netRateLongPerHour: DecStr; netRateShortPerHour: DecStr;
-  /** price impact = f(change in |long OI − short OI|): factor × imbalance^exponent, capped at the max factors (fractions of size) */
+  /** price impact = f(change in |long OI − short OI|): factor × imbalance^exponent, capped at the max factors (fractions of size).
+   *  The imbalance is measured on tokens × price when `useOpenInterestInTokensForBalance` is true (see packages/derivatives/src/router.ts). */
   priceImpact: { factorPositive: DecStr; factorNegative: DecStr; exponentPositive: DecStr; exponentNegative: DecStr; maxFactorPositive: DecStr; maxFactorNegative: DecStr; maxFactorForLiquidations: DecStr };
   positionFeeFactor: { balanceImproved: DecStr; balanceNotImproved: DecStr };
   minCollateralFactor: DecStr; minCollateralFactorForLiquidation: DecStr; minCollateralFactorPerUsdOfOpenInterest: { long: DecStr; short: DecStr };
@@ -232,7 +240,9 @@ export function createGmxAdapter(o: GmxAdapterOptions = {}): GmxAdapter {
 
     async liquidity(symbol?: string): Promise<GmxLiquidity[]> {
       const ts = now();
-      const [c, tk, cf] = await Promise.all([context(), get(`${api}/markets/tickers`, W.marketTickers), get(`${api}/markets/config`, W.marketConfigs)]);
+      const [c, tk, cf, vals] = await Promise.all([context(), get(`${api}/markets/tickers`, W.marketTickers), get(`${api}/markets/config`, W.marketConfigs),
+        // only the virtual inventory comes from here: if it cannot be read the liquidity view stands, with that one input unknown (null)
+        get(`${api}/markets/values`, W.marketValues).then((v) => new Map(v.map((x) => [lc(x.marketTokenAddress), x])), () => null)]);
       if (symbol !== undefined) perp(c, symbol);
       const config = new Map(cf.map((x) => [lc(x.marketTokenAddress), x]));
       const out: GmxLiquidity[] = [];
@@ -243,6 +253,11 @@ export function createGmxAdapter(o: GmxAdapterOptions = {}): GmxAdapter {
         out.push({
           instrument: instrumentId(m.symbol), symbol: m.symbol, market: m.marketTokenAddress,
           openInterestLongUsd: W.usd(t.longInterestUsd), openInterestShortUsd: W.usd(t.shortInterestUsd),
+          openInterestLongTokens: W.tokenAmount(t.longInterestInTokens, indexDecimals(c, m)), openInterestShortTokens: W.tokenAmount(t.shortInterestInTokens, indexDecimals(c, m)),
+          useOpenInterestInTokensForBalance: g.useOpenInterestInTokensForBalance ?? null,
+          virtualInventory: { applies: g.virtualIndexTokenId === undefined ? null : BigInt(g.virtualIndexTokenId) !== 0n,
+            tokens: vals?.get(lc(t.marketTokenAddress)) ? W.tokenAmount(vals.get(lc(t.marketTokenAddress))!.virtualInventoryForPositionsInTokens, indexDecimals(c, m)) : null,
+            usd: vals?.get(lc(t.marketTokenAddress)) ? W.usd(vals.get(lc(t.marketTokenAddress))!.virtualInventoryForPositions) : null },
           maxOpenInterestLongUsd: W.usd(g.maxOpenInterestLong), maxOpenInterestShortUsd: W.usd(g.maxOpenInterestShort),
           availableLiquidityLongUsd: W.usd(t.availableLiquidityLong), availableLiquidityShortUsd: W.usd(t.availableLiquidityShort),
           capacityLongUsd: W.usd(t.capacityLong.availableLiquidity), capacityShortUsd: W.usd(t.capacityShort.availableLiquidity),

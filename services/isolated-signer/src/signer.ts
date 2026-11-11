@@ -9,10 +9,14 @@ import {
   solWireTransaction, toB64u, type CctpMintGas, type Intent, type Mandate,
 } from '@spw/core';
 import { buildSolSwapMessage, solV1Wire } from '@spw/core'; // Jupiter swaps on Solana (kept apart from the shared import line)
+import { buildXswapBtcTx, buildXswapEvmTxs, verifyXswap, type NetworkDef } from '@spw/core'; // THORChain native swaps
+import { noVaults, type VaultView } from './vaults.ts';
 import type { Keys } from './keys.ts';
 import { noPrices, type PriceView } from './prices.ts';
 import type { Store, StoredCredential } from './store.ts';
 import { venueAuthorize, venueKeyAddress, venueRevoke, venueSign, venueStatus, type VenueCtx, type VenueSignRequest } from './venue.ts';
+import { venueMandateApprove, venueMandateRevoke, venueMandateSign, venueMandateStatus, type VenueMandateSignRequest } from './venue-mandate.ts';
+import { noVenueReader, type VenueReader } from './venue-read.ts';
 
 export class SignerError extends Error { constructor(public code: string, msg: string) { super(msg); } }
 const sha = (s: string | Uint8Array) => createHash('sha256').update(s).digest();
@@ -20,7 +24,7 @@ export interface SignerConfig { rpId: string; origin: string }
 export interface SignResult { raw: string; txid: string; hash: string; /** swaps with a token input: the exact-amount approval that must be mined first */ pre?: { raw: string; txid: string } }
 
 export class Signer {
-  constructor(private keys: Keys, private store: Store, private cfg: SignerConfig, private now: () => number = () => Math.floor(Date.now() / 1000), private prices: PriceView = noPrices) {}
+  constructor(private keys: Keys, private store: Store, private cfg: SignerConfig, private now: () => number = () => Math.floor(Date.now() / 1000), private prices: PriceView = noPrices, private venueInfo: VenueReader = noVenueReader, private vaults: VaultView = noVaults) {}
 
   status() {
     const s = this.store.state, today = new Date(this.now() * 1000).toISOString().slice(0, 10);
@@ -35,6 +39,7 @@ export class Signer {
       mandates: Object.values(s.mandates ?? {}).map((m) => ({ mandate: m.mandate, approvedAt: m.approvedAt, revoked: m.revoked, revokedAt: m.revokedAt ?? null,
         expired: this.now() >= m.mandate.expiresAt, today: m.usage[today] ?? { sold: {}, orders: 0 } })),
       venues: venueStatus(this.venueCtx()),
+      venueMandates: venueMandateStatus(this.venueCtx()),
     };
   }
 
@@ -42,12 +47,16 @@ export class Signer {
   // Live derivatives (venue.ts). The trading key is a dedicated key; the main key signs only the venue's agent approval,
   // inside venueAuthorize, after the owner's passkey approved the canonical authorization.
   private venueCtx(): VenueCtx {
-    return { keys: this.keys, store: this.store, now: this.now, prices: this.prices, verify: (a, c) => this.verifyAssertion(a, c), fail: (code, msg) => new SignerError(code, msg) };
+    return { keys: this.keys, store: this.store, now: this.now, prices: this.prices, venueInfo: this.venueInfo, verify: (a, c) => this.verifyAssertion(a, c), fail: (code, msg) => new SignerError(code, msg) };
   }
   venueKey(venue: unknown, network: unknown) { return venueKeyAddress(this.venueCtx(), venue, network); }
   venueAuthorize(authorization: unknown, assertion?: AuthenticationResponseJSON) { return venueAuthorize(this.venueCtx(), authorization, assertion); }
   venueRevoke(authorizationId: string) { return venueRevoke(this.venueCtx(), authorizationId); }
   venueSign(req: VenueSignRequest) { return venueSign(this.venueCtx(), req); }
+  // derivative mandates (venue-mandate.ts): one passkey approval, then orders without a passkey inside limits enforced here
+  venueMandateApprove(mandate: unknown, assertion?: AuthenticationResponseJSON) { return venueMandateApprove(this.venueCtx(), mandate, assertion); }
+  venueMandateSign(req: VenueMandateSignRequest) { return venueMandateSign(this.venueCtx(), req); }
+  venueMandateRevoke(mandateId: string) { return venueMandateRevoke(this.venueCtx(), mandateId); }
 
   private async verifyAssertion(assertion: AuthenticationResponseJSON, challenge: Uint8Array): Promise<StoredCredential> {
     const cred = this.store.state.credentials.find((c) => c.id === assertion.id);
@@ -264,6 +273,27 @@ export class Signer {
     return { raw, txid, messageHash: v.messageHash, minted: v.minted.toString(), replayed: false };
   }
 
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Native cross-chain swap (THORChain). Everything is rebuilt from the intent: the memo pays the wallet's own address on the
+  // destination chain at least the approved minimum, the transaction pays the committed vault and nothing else. The vault key
+  // itself cannot be proven offline, so it must be confirmed, now, by every THORNode operator this signer can reach (at least
+  // three, its own list, no API in the path). Fails closed. Runs before the passkey is looked at; nothing is recorded on refusal.
+  private async xswapBuild(i: Intent, net: NetworkDef, aux?: Record<string, unknown>): Promise<() => Promise<{ raw: string; txid: string; pre?: { raw: string; txid: string } }>> {
+    const dest = this.keys.addresses[i.xswap!.toNetwork] ?? '';
+    const plan = verifyXswap(i, dest);
+    const utxo = net.family === 'btc' ? buildXswapBtcTx(i, dest, aux) : null, evm = net.family === 'evm' ? buildXswapEvmTxs(i, dest) : null;
+    if (!utxo && !evm) throw new Error('THORChain swaps are not defined for this network family');
+    let v;
+    try { v = await this.vaults.check(plan.want); } catch (e) { throw new SignerError('vault_unconfirmed', `the vault is not confirmed by the signer's THORNode operators: ${(e as Error).message.slice(0, 200)}`); }
+    return async () => {
+      this.store.log('xswap.vault_confirmed', { proposalId: i.proposalId, vault: i.xswap!.vault, vaultPubKey: i.xswap!.vaultPubKey, operators: v.operators, silent: v.silent, height: v.height, churnHeight: v.statusSince });
+      if (utxo) { utxo.sign(this.keys.utxoPriv(net)); utxo.finalize(); return { raw: utxo.hex, txid: utxo.id }; }
+      const acct = privateKeyToAccount(`0x${Buffer.from(this.keys.evmPriv).toString('hex')}`);
+      const raw = await acct.signTransaction(evm!.deposit), pre = evm!.approve ? await acct.signTransaction(evm!.approve) : null;
+      return { raw, txid: keccak256(raw), ...(pre ? { pre: { raw: pre, txid: keccak256(pre) } } : {}) };
+    };
+  }
+
   halt(): void {
     this.store.state.halted = true;
     this.store.log('halt.on', {});
@@ -297,6 +327,10 @@ export class Signer {
 
     // Rebuild the chain transaction from the intent alone; any unsupported shape throws here.
     let build: () => Promise<{ raw: string; txid: string; pre?: { raw: string; txid: string } }>;
+    if (i.xswap) {
+      // native cross-chain swap: memo and transaction are rebuilt here, and the vault is confirmed by this signer's own THORNode operators
+      try { build = await this.xswapBuild(i, net, aux); } catch (e) { return deny(e instanceof SignerError ? e.code : 'unsupported', (e as Error).message); }
+    } else
     try {
       if (i.bridge) {
         // nothing provider-built: approval and burn are rebuilt from the intent and the pinned tables
@@ -362,6 +396,7 @@ export class Signer {
     st.prune(now);
     const out = await build!();
     st.log('sign.ok', { proposalId: i.proposalId, hash: Buffer.from(hash).toString('hex'), network: i.network, symbol: i.symbol, amount: i.amount, to: i.to, txid: out.txid, ...(i.swap ? { swap: i.swap.provider, toAsset: i.swap.toAsset, minOut: i.swap.minOut } : {}),
+      ...(i.xswap ? { xswap: i.xswap.provider, toNetwork: i.xswap.toNetwork, toAsset: i.xswap.toAsset, minOut: i.xswap.minOut, vault: i.xswap.vault, vaultPubKey: i.xswap.vaultPubKey, memo: i.xswap.memo } : {}),
       ...(i.bridge ? { bridge: i.bridge.provider, toNetwork: i.bridge.toNetwork, cctpMaxFee: i.bridge.maxFee, minFinalityThreshold: i.bridge.minFinalityThreshold } : {}) });
     st.save();
     return { ...out, hash: Buffer.from(hash).toString('hex') };

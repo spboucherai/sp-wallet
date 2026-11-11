@@ -24,8 +24,9 @@ const activeAssetDataAnswer = z.looseObject({ leverage: z.looseObject({ type: z.
 export interface LiveVenue {
   readonly network: HlNetwork;
   readonly adapter: HyperliquidAdapter;
-  /** builder / submitter on the pinned table; `submit` reaches the mainnet exchange endpoint only when the server setting allows it */
-  trading(): HlTrading;
+  /** builder / submitter on the pinned table; `submit` reaches the mainnet exchange endpoint only when the server setting allows it.
+   *  `ttlMs`: venue expiry of the actions it builds and sends, after their nonce (default LIVE_ACTION_TTL_MS; mandate orders use a shorter one) */
+  trading(ttlMs?: number): HlTrading;
   instrument(id: string): Promise<Instrument>;
   /** ticker and book read NOW (never a cached value): the context of a live order */
   market(inst: Instrument): Promise<{ ticker: Ticker; book: Book }>;
@@ -59,7 +60,7 @@ export class LiveVenues {
     const wrap = async <T>(fn: () => Promise<T>): Promise<T> => { try { return await fn(); } catch (e) { throw venueFailure(e); } };
     return {
       network, adapter,
-      trading: () => createHlTrading({ network, assets: hlPinnedAssets(network), http: adapter.http, now, expiresAfterMs: LIVE_ACTION_TTL_MS,
+      trading: (ttlMs = LIVE_ACTION_TTL_MS) => createHlTrading({ network, assets: hlPinnedAssets(network), http: adapter.http, now, expiresAfterMs: ttlMs,
         // two locks on the mainnet exchange endpoint: the adapter's own flag, set only from the server setting
         allowMainnetExchange: network === 'mainnet' && mainnetEnabled() }),
       async instrument(id) {

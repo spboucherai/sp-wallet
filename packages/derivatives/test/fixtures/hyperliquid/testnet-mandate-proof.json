@@ -1,0 +1,194 @@
+{
+ "recordedAt": "2026-11-11T06:04:35.450Z",
+ "network": "testnet",
+ "note": "throwaway seed generated in memory by scripts/hl-mandate-testnet.mts; the account never existed on the venue",
+ "account": "0x8300112dfcd111c77ec78e2af506507bd8e00b44",
+ "agent": "0xc174d2c52561a66e5a947feb023233f19e9e0682",
+ "mandateId": "86575464-ba0f-442e-a39a-aad3812ee7b0",
+ "exchanges": [
+  {
+   "step": "signer read: clearinghouseState + frontendOpenOrders of the throwaway account (testnet info endpoint)",
+   "answer": {
+    "time": 1794377071146,
+    "accountValue": "0.0",
+    "totalNtlPos": "0.0",
+    "positions": [],
+    "openOrders": []
+   }
+  },
+  {
+   "step": "API authorization/approve (signer signs approveAgent with the wallet key; the API sends it to the testnet)",
+   "status": 422,
+   "answer": {
+    "error": "venue_rejected",
+    "message": "the venue did not register the trading key: hyperliquid: Must deposit before performing actions. User: 0x8300112dfcd111c77ec78e2af506507bd8e00b44 — the authorization was revoked on the signer, nothing can trade. Fund the venue account first if the venue asks for a deposit, then prepare a new authorization."
+   }
+  },
+  {
+   "step": "approveAgent signed by the wallet key (user-signed action)",
+   "request": {
+    "action": {
+     "type": "approveAgent",
+     "hyperliquidChain": "Testnet",
+     "signatureChainId": "0x66eee",
+     "agentAddress": "0xc174d2c52561a66e5a947feb023233f19e9e0682",
+     "agentName": "spw-live valid_until 1794549872000",
+     "nonce": 1794377072719
+    },
+    "nonce": 1794377072719,
+    "signature": {
+     "r": "0x50dfb8e6ef0f58149bb141d0e441aa360900e9efe7b3e54cb0ea888f568283b0",
+     "s": "0x4f2b95412c478397ec74e3510b32df683411cf97bb9616e8c0f9b2c321a1e6ce",
+     "v": 27
+    },
+    "vaultAddress": null,
+    "expiresAfter": null
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "Must deposit before performing actions. User: 0x8300112dfcd111c77ec78e2af506507bd8e00b44"
+   }
+  },
+  {
+   "step": "updateLeverage signed under the mandate (no passkey)",
+   "request": {
+    "action": {
+     "type": "updateLeverage",
+     "asset": 3,
+     "isCross": true,
+     "leverage": 3
+    },
+    "nonce": 1794377073225,
+    "signature": {
+     "r": "0xded78f8b34d2ed7e70835b2aec63879458814399a256785348303dec44870769",
+     "s": "0x6f94f1e205ba13a6de1ee332a6c9158491169be0f3f4af29a07b7b90f4eae374",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": 1794377103225
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0xc174d2c52561a66e5a947feb023233f19e9e0682 does not exist."
+   }
+  },
+  {
+   "step": "signer: leverage 4× (the mandate says 3×)",
+   "answer": "signer_leverage_exceeded: leverage 4 is above the mandate's 3× for hyperliquid:BTC"
+  },
+  {
+   "step": "signer: order buy 0.0002 BTC @ 73509 that can add exposure, on an account the venue values at 0.0",
+   "answer": "signer_floor_equity: the venue reports an account value of 0.0, below the mandate's floor of 5: only cancels and reduce-only orders are signed"
+  },
+  {
+   "step": "reduce-only order signed under the mandate (no passkey; expiresAfter = nonce + 30 s)",
+   "request": {
+    "action": {
+     "type": "order",
+     "orders": [
+      {
+       "a": 3,
+       "b": false,
+       "p": "74259",
+       "s": "0.0002",
+       "r": true,
+       "t": {
+        "limit": {
+         "tif": "Ioc"
+        }
+       },
+       "c": "0x0eb3762f532a00385f10e50efc38bce4"
+      }
+     ],
+     "grouping": "na"
+    },
+    "nonce": 1794377074412,
+    "signature": {
+     "r": "0x2806cbc972f18a5b9ff3a94d480f7171f7cbfd84d1abf72ce09e3ebd8d668b52",
+     "s": "0x5f95171f091889b76f37d3f72e9a05963a8a541fd023fd50fcc378ae81037e2c",
+     "v": 27
+    },
+    "vaultAddress": null,
+    "expiresAfter": 1794377104412
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0xc174d2c52561a66e5a947feb023233f19e9e0682 does not exist."
+   }
+  },
+  {
+   "step": "cancelByCloid signed under the mandate",
+   "request": {
+    "action": {
+     "type": "cancelByCloid",
+     "cancels": [
+      {
+       "asset": 3,
+       "cloid": "0x0eb3762f532a00385f10e50efc38bce4"
+      }
+     ]
+    },
+    "nonce": 1794377074893,
+    "signature": {
+     "r": "0x61f2d447136c34b692ff089d70cc9a84e3181182cc309b707eb413f4fb5bb60f",
+     "s": "0x6231ae48b2eac0b94ca13920d72dadbcc28dfb40614050bf1c226c4233e85333",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": 1794377104893
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0xc174d2c52561a66e5a947feb023233f19e9e0682 does not exist."
+   }
+  },
+  {
+   "step": "signer: reduce-only order at half the market price",
+   "answer": "signer_price: price 37505 is more than 1000 bps away from the signer's own BTC price 73779.9525"
+  },
+  {
+   "step": "signer: order above the mandate's notional per order (reduce-only included)",
+   "answer": "signer_order_notional: order notional 367.545 is above the mandate's 30 per order"
+  },
+  {
+   "step": "signer: order on an instrument outside the mandate",
+   "answer": "signer_instrument: hyperliquid:ETH is not allowed by the mandate"
+  },
+  {
+   "step": "signer: the API describes a plain sell as reduce-only",
+   "answer": "signer_mismatch: the order described by the API and the payload to sign differ (reduce-only)"
+  },
+  {
+   "step": "signer: the same client id again",
+   "answer": "signer_replay: an order with this client id was already signed"
+  },
+  {
+   "step": "signer: an approveAgent for another address smuggled through /venue/mandate/sign",
+   "answer": "signer_unsupported: this payload is not an order, a cancel or a leverage change (hl_user): a mandate signs nothing else"
+  },
+  {
+   "step": "signer: a signature valid for more than 120 s",
+   "answer": "signer_policy: validity window longer than 120 s"
+  },
+  {
+   "step": "signer: an order that can add exposure during the wind-down",
+   "answer": "signer_wind_down: the mandate was revoked: only cancels and reduce-only orders are signed until the wind-down ends"
+  },
+  {
+   "step": "signer: a leverage change during the wind-down",
+   "answer": "signer_wind_down: the mandate has ended: only cancels and reduce-only orders are signed until the wind-down ends"
+  },
+  {
+   "step": "signer: a reduce-only order after the AUTHORIZATION was revoked",
+   "answer": "signer_revoked: the venue authorization of this mandate was revoked: nothing is signed"
+  },
+  {
+   "step": "signer: a cancel after the authorization was revoked",
+   "answer": "signer_revoked: the venue authorization of this mandate was revoked: nothing is signed"
+  }
+ ]
+}

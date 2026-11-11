@@ -63,6 +63,10 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
       if (route === 'POST /venue/authorize') return await signer.venueAuthorize(json.authorization, json.assertion);
       if (route === 'POST /venue/sign') return await signer.venueSign(json);
       if (route === 'POST /venue/revoke') return signer.venueRevoke(String(json.authorizationId));
+      // derivative mandates: approval needs the owner's passkey; signing needs none (every limit is checked by the signer); revoking is always allowed
+      if (route === 'POST /venue/mandate/approve') return await signer.venueMandateApprove(json.mandate, json.assertion);
+      if (route === 'POST /venue/mandate/sign') return await signer.venueMandateSign(json);
+      if (route === 'POST /venue/mandate/revoke') return signer.venueMandateRevoke(String(json.mandateId));
       throw new SignerError('not_found', 'no such route');
     };
     queue = queue.then(run).then((r) => send(200, r), (e: unknown) => {

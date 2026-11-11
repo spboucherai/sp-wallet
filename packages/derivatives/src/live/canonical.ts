@@ -198,3 +198,6 @@ export function withinBand(price: DecStr, mid: DecStr, bps: number): boolean {
   if (!D.isPos(p) || !D.isPos(m)) return false;
   return D.lte(D.mul(D.abs(D.sub(p, m)), D.from(10000n)), D.mul(D.from(BigInt(bps)), m));
 }
+
+/** the serialization above, for the other canonical objects of live trading (mandate.ts) */
+export const canonicalEncode = encode;

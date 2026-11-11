@@ -37,6 +37,6 @@ export function configuredSymbols(agentSymbols: readonly string[] = [], env: Rec
 /** The configuration in force now: the registry-derived set, with the symbols of every agent that is not stopped first. */
 export async function activeMarketConfig(): Promise<MarketConfig> {
   let used: string[] = [];
-  try { used = (await sql<{ universe: string[] }[]>`select universe from agents where state not in ('STOPPED', 'FAILED')`).flatMap((r) => r.universe); } catch { /* no agents table yet: the default set */ }
+  try { used = (await sql<{ universe: string[] }[]>`select universe from agents where state not in ('STOPPED', 'FAILED') and kind = 'spot'`).flatMap((r) => r.universe); } catch { /* no agents table yet: the default set */ }
   return marketConfig(used);
 }

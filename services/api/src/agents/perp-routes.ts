@@ -1,0 +1,193 @@
+// Perp agents (V6): lifecycle and views. A perp agent is bound to ONE venue (Hyperliquid), 1 to 8 of its instruments, one
+// interval and ONE derivatives paper account created for it (collateral = the agent's capital, risk policy = the owner's limits).
+// SIMULATION only: it has no vault and no mandate, creation never asks the signer for anything, and going live is not
+// available — it needs a signer-enforced derivatives mandate that does not exist yet.
+// The routes live in the `/api/v1/agents` family; the shared ones (list, create, detail, mode, approve) delegate here from
+// routes.ts when the agent's kind is 'perp'.
+import { randomUUID } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { formatUnits, parseUnits } from '@spw/core';
+import { D } from '@spw/derivatives';
+import { UserError } from '../config.ts';
+import { audit, sql } from '../db.ts';
+import type { Derivatives } from '../derivatives/index.ts';
+import { GATE, PERP_INTERVALS } from './perp-data.ts';
+import { CAP_HEADROOM, flattenPerp, instrumentId, LEVERAGE_HEADROOM, PERP_VENUE, perpPolicy, PerpRisk, type PerpAgentRow, type PerpBook } from './perp-engine.ts';
+import { createPerpRuntime, perpRuntime, setPerpRuntime } from './perp-live.ts';
+import { perpLibrary, perpReportProblem, registerPerpStrategy } from './perp-strategies.ts';
+import type { AgentRow } from './routes.ts';
+
+export const MAX_PERP_INSTRUMENTS = 8;
+export const LIVE_UNAVAILABLE = 'Live trading of a perp agent needs a derivatives mandate enforced by the isolated signer (instruments, leverage, notional and loss limits checked by the signer on every order). That mandate is not available yet: this agent trades a simulated account only.';
+/** symbols the laboratory accepts as they are (upper-case tickers); mixed-case listings (kPEPE…) are not offered */
+const SYMBOL = /^[A-Z0-9]{2,10}$/;
+const PerpCreate = z.strictObject({
+  kind: z.literal('perp'), name: z.string().min(2).max(40), mission: z.string().max(400).default(''), venue: z.literal(PERP_VENUE).default(PERP_VENUE),
+  instruments: z.array(z.string().regex(SYMBOL)).min(1).max(MAX_PERP_INSTRUMENTS).refine((x) => new Set(x).size === x.length, 'duplicate instrument'),
+  interval: z.enum(PERP_INTERVALS).default('1h'),
+  /** collateral of the paper account, USDC */
+  capitalUsdc: z.string().regex(/^\d{2,7}(\.\d{1,6})?$/), risk: PerpRisk.default(PerpRisk.parse({})) });
+
+export const isPerp = (a: Pick<AgentRow, 'id'> & { kind?: string }): a is PerpAgentRow => a.kind === 'perp';
+/** routes that only make sense for a spot agent's vault and mandate */
+export function spotOnly(a: Pick<AgentRow, 'id'> & { kind?: string }): void {
+  if (isPerp(a)) throw new UserError('perp_agent', `not available for a perp agent. ${LIVE_UNAVAILABLE}`, 409);
+}
+
+export const perpView = (a: PerpAgentRow) => ({
+  id: a.id, kind: 'perp' as const, simulation: true, name: a.name, mission: a.mission, state: a.state, mode: 'PAPER', venue: PERP_VENUE, network: PERP_VENUE, networkName: 'Hyperliquid', universe: a.universe,
+  instruments: a.universe.map(instrumentId), cash: 'USDC', interval: a.interval, risk: a.risk, capitalUsdc: formatUnits(BigInt(a.capital_usdc), 6), accountId: a.deriv_account_id,
+  strategyVersionId: a.strategy_version_id, mandateId: null, mandate: null, vaultAddress: '', holdings: null,
+  flag: a.perp?.flag ?? null, hold: a.perp?.hold ?? null, flattening: a.perp?.flatten ?? null,
+  lastBar: a.last_bar, stopReason: a.stop_reason, createdAt: a.created_at, updatedAt: a.updated_at });
+
+const rt = () => perpRuntime();
+const paper = () => rt().deriv.paper;
+const data = () => rt().deriv.data;
+
+export async function createPerpAgent(body: unknown) {
+  const b = PerpCreate.parse(body);
+  const capital = D.str(D.from(b.capitalUsdc));
+  if (D.lt(D.from(capital), D.from(50n))) throw new UserError('bad_request', 'a perp agent needs at least 50 USDC of simulated capital (the venue\'s minimum order is 10 USD)', 400);
+  if (b.risk.maxDailyLossPct > b.risk.maxTotalLossPct) throw new UserError('bad_request', 'the daily loss limit cannot exceed the total loss limit', 400);
+  // every instrument must exist on the venue, be active and accept cross margin (the paper account is cross-margin)
+  const list = (await data().instruments(PERP_VENUE)).value, warnings: { code: string; message: string }[] = [];
+  for (const s of b.instruments) {
+    const inst = list.find((i) => i.symbol === s);
+    if (!inst) throw new UserError('unknown_instrument', `${s} is not a Hyperliquid perpetual`, 422);
+    if (inst.status !== 'active') throw new UserError('instrument_halted', `${inst.id} is ${inst.status} on the venue`, 422);
+    if (!inst.marginModes.includes('cross')) throw new UserError('unsupported_instrument', `${inst.id} is isolated-margin only; the paper account is cross-margin`, 422);
+    if (D.lt(D.from(inst.maxLeverage), D.from(BigInt(b.risk.maxLeverage)))) warnings.push({ code: 'leverage', message: `${s}: the venue allows ${inst.maxLeverage}x at most; its orders use that setting, the account limit stays ${b.risk.maxLeverage}x` });
+  }
+  // the paper account of the agent: collateral = capital, policy = the owner's limits, only the agent's instruments allowed
+  const account = await paper().create({ venue: PERP_VENUE, label: `Agent · ${b.name}`.slice(0, 60), collateral: capital, policy: perpPolicy(b.instruments, capital, b.risk) });
+  const id = randomUUID();
+  let row: PerpAgentRow;
+  try {
+    const rows = await sql.begin(async (tx) => {
+      await tx`select pg_advisory_xact_lock(7707002)`;
+      // no vault: a negative index keeps the unique column and can never collide with a signer-derived vault (index ≥ 1)
+      const rows = await tx<{ next: number }[]>`select least(coalesce(min(vault_index), 0), 0) - 1 as next from agents`;
+      return tx<PerpAgentRow[]>`insert into agents (id, kind, name, mission, network, universe, cash, assets, interval, risk, vault_index, vault_address, capital_usdc, deriv_account_id, mode)
+        values (${id}, 'perp', ${b.name}, ${b.mission}, ${PERP_VENUE}, ${tx.json(b.instruments)}, 'USDC', ${tx.json({})}, ${b.interval}, ${tx.json(b.risk as never)}, ${rows[0]!.next}, '', ${parseUnits(capital, 6).toString()}, ${account.id}, 'PAPER') returning *`;
+    }) as unknown as PerpAgentRow[];
+    row = rows[0]!;
+  } catch (e) { await sql`delete from deriv_paper_accounts where id = ${account.id}`.catch(() => {}); throw e; }
+  await audit('agent.created', 'owner', { id, kind: 'perp', name: b.name, venue: PERP_VENUE, instruments: b.instruments, account: account.id, capital, risk: b.risk });
+  return { ...perpView(row), warnings };
+}
+
+const pick = (o: Record<string, unknown> | undefined, keys: string[]): Record<string, unknown> | null => (o ? Object.fromEntries(keys.map((k) => [k, o[k] ?? null])) : null);
+const SPLIT_KEYS = ['total_return', 'sharpe', 'max_drawdown', 'worst_intrabar_drawdown', 'trades', 'fees_paid', 'slippage_paid', 'funding_pnl', 'liquidations', 'wiped_out', 'gross_leverage_max', 'margin_utilisation_max', 'orders_cut', 'orders_refused'];
+/** What the owner must read before approving: the figures, and every reason to distrust them. */
+export function perpReportSummary(report: any, sha256: string, symbols: string[]) {
+  if (!report) return null;
+  const c = report.config ?? {}, notes: string[] = Array.isArray(report.checks?.notes) ? report.checks.notes : [];
+  const days = c.start && c.end ? Math.round((Date.parse(c.end) - Date.parse(c.start)) / 86_400_000) : null;
+  const liq = (split: string): number => (Array.isArray(report.liquidations?.[split]) ? report.liquidations[split].length : 0);
+  return {
+    schemaVersion: report.schema_version ?? null, generatedAt: report.generated_at ?? null,
+    config: pick(c, ['symbols', 'interval', 'start', 'end', 'bars', 'fee_bps', 'slippage_bps', 'leverage', 'max_leverage', 'max_gross_exposure', 'liquidation_penalty_bps', 'funding_reference_price', 'initial_cash', 'source']),
+    historyDays: days, splits: report.splits ?? null,
+    metrics: Object.fromEntries(['train', 'validation', 'test'].map((s) => [s, pick(report.metrics?.[s], SPLIT_KEYS)])),
+    benchmarks: { buy_and_hold: pick(report.benchmarks?.buy_and_hold, ['total_return', 'sharpe', 'max_drawdown']), perp_long_1x: pick(report.benchmarks?.perp_long_1x, ['total_return', 'sharpe', 'max_drawdown']) },
+    /** false: no spot candles were supplied, the "buy and hold" benchmark is the perpetual's own price held */
+    buyAndHoldIsSpot: !notes.some((n) => n.startsWith('no spot candles were supplied')),
+    robustness: pick(report.robustness, ['trials_tested', 'deflated_sharpe', 'bootstrap_sharpe_ci']),
+    checks: pick(report.checks, ['lookahead', 'data_quality', 'ledger', 'funding_alignment']),
+    liquidations: { train: liq('train'), validation: liq('validation'), test: liq('test') },
+    /** non-null: the version cannot be approved */
+    problem: perpReportProblem(report, sha256, symbols),
+  };
+}
+
+export async function perpDetail(a: PerpAgentRow) {
+  const account = await paper().get(a.deriv_account_id).catch(() => null);
+  const rows = await sql`select id, name, version, code_sha256, status, notes, created_at, approved_at, meta, report from strategy_versions where agent_id = ${a.id} order by created_at desc`;
+  const versions = rows.map((v) => ({ id: v.id, name: v.name, version: v.version, code_sha256: v.code_sha256, status: v.status, notes: v.notes, created_at: v.created_at, approved_at: v.approved_at,
+    meta: v.meta, summary: perpReportSummary(v.report, v.code_sha256, a.universe) }));
+  const signals = await sql`select bar, status, reason, strategy_sha256, weights, scaled, scale, equity::text as equity, targets, orders, updated_at from perp_agent_signals where agent_id = ${a.id} order by bar desc limit 60`;
+  const equity = await sql`select ts, mode, equity_usd from agent_equity where agent_id = ${a.id} order by ts desc limit 500`;
+  const log = await sql`select ts, kind, title, body from research_log where agent_id = ${a.id} order by ts desc limit 40`;
+  return { ...perpView(a),
+    account: account ? { id: account.id, label: account.label, state: account.state, policy: account.policy, settings: account.settings, totals: account.totals, initialCollateral: account.initialCollateral,
+      positions: account.positions, openOrders: account.openOrders, orders: account.orders.slice(0, 60), fills: account.fills.slice(0, 60), funding: account.funding.slice(0, 60),
+      riskEvents: account.riskEvents.slice(0, 60), equity: account.equity, updatedAt: account.updatedAt } : null,
+    versions, signals, equity: equity.reverse(), log,
+    execution: { kind: 'paper', note: 'Orders are simulated against the venue\'s live order book by the paper engine. Nothing is signed and no order reaches the venue.' },
+    live: { available: false, reason: LIVE_UNAVAILABLE },
+    rules: { markIndexBps: GATE.markIndexBps, lastCloseBps: GATE.lastCloseBps, leverageHeadroom: LEVERAGE_HEADROOM, capHeadroom: CAP_HEADROOM,
+      simplifications: ['flat 2 % maintenance margin fraction', 'cross margin only', 'the liquidation price is a single-position estimate', 'a simulated liquidation closes the whole account at the mark',
+        'fills walk the live book with no latency, no queue position and no market impact', 'funding is applied on the mark at the venue\'s funding times with the venue\'s published rate'] } };
+}
+
+/** Owner changes of state. PAPER needs an approved version and an account whose circuit breaker is not set. */
+export async function perpMode(a: PerpAgentRow, mode: 'PAPER' | 'PAUSED' | 'STOPPED' | 'RESEARCH') {
+  if (mode === 'PAPER') {
+    if (!a.strategy_version_id) throw new UserError('no_strategy', 'approve a strategy version first', 409);
+    const acct = await paper().get(a.deriv_account_id);
+    if (acct.policy.halt !== null) throw new UserError('halted', `the paper account is halted (${acct.policy.halt}); replace the limits and lift the halt, or reset the account in the Futures terminal`, 409);
+  }
+  const state = mode === 'PAPER' ? 'PAPER_TRADING' : mode;
+  const book: PerpBook = { ...(a.perp ?? {}) };
+  if (mode === 'PAPER') { book.flatten = null; book.hold = null; }
+  const [r] = await sql<PerpAgentRow[]>`update agents set state = ${state}, mode = 'PAPER', perp = ${sql.json(book as never)}, stop_reason = ${mode === 'STOPPED' ? 'stopped by the owner' : null}, updated_at = now() where id = ${a.id} returning *`;
+  await audit('agent.mode', 'owner', { id: a.id, kind: 'perp', state });
+  return perpView(r!);
+}
+
+/** Approval of a perp version: the report must be a version-2 report for this hash and these instruments, with its integrity checks passing. */
+export function assertPerpApprovable(a: PerpAgentRow, v: { code_sha256: string; report: unknown; meta: { kind?: string } }): void {
+  if (v.meta?.kind !== 'perp') throw new UserError('wrong_kind', 'this version is not a perpetual-futures strategy', 409);
+  const why = perpReportProblem(v.report, v.code_sha256, a.universe);
+  if (why) throw new UserError('bad_report', why, 409);
+}
+
+export const registerPerp = (a: PerpAgentRow, rel: string) => registerPerpStrategy(a, rel, rt().lab);
+export { perpLibrary };
+
+const loadPerp = async (id: string): Promise<PerpAgentRow> => {
+  if (!z.uuid().safeParse(id).success) throw new UserError('not_found', 'agent not found', 404);
+  const [a] = await sql<PerpAgentRow[]>`select * from agents where id = ${id}`;
+  if (!a || a.kind !== 'perp') throw new UserError('not_found', 'perp agent not found', 404);
+  return a;
+};
+
+export function perpAgentRoutes(app: FastifyInstance, d?: Derivatives): void {
+  // an injected derivatives instance (tests, the simulation script) gets its own runtime: same caches, same rate budget
+  if (d) setPerpRuntime(createPerpRuntime(d));
+  app.addHook('onClose', async () => { if (d) setPerpRuntime(null); });
+
+  // what a perp agent can be built from: the venue, its instruments as the venue lists them now, the limits' bounds
+  app.get('/api/v1/agents/perp/venues', async () => {
+    const [list, tickers] = await Promise.all([data().instruments(PERP_VENUE), data().tickers(PERP_VENUE).catch(() => null)]);
+    const instruments = list.value.map((i) => {
+      const t = tickers?.value.find((x) => x.instrument === i.id);
+      const why = !SYMBOL.test(i.symbol) ? 'ticker format not supported by the laboratory' : i.status !== 'active' ? `${i.status} on the venue` : !i.marginModes.includes('cross') ? 'isolated margin only' : null;
+      return { symbol: i.symbol, id: i.id, maxLeverage: i.maxLeverage, lotSize: i.lotSize, minNotional: i.minNotional, mark: t?.mark ?? null, funding: t?.funding ?? null, volume24h: t?.volume24h ?? null, eligible: why === null, why };
+    }).sort((x, y) => Number(y.volume24h ?? 0) - Number(x.volume24h ?? 0));
+    return { venues: [{ id: PERP_VENUE, name: 'Hyperliquid', network: data().registry.get(PERP_VENUE).adapter.network, paper: true, instruments }], maxInstruments: MAX_PERP_INSTRUMENTS, intervals: PERP_INTERVALS,
+      riskDefaults: PerpRisk.parse({}), minCapital: '50', live: { available: false, reason: LIVE_UNAVAILABLE }, ts: data().now() };
+  });
+
+  // the owner replaces the limits: the agent's own and the account's risk policy change together
+  app.post('/api/v1/agents/:id/perp/risk', async (req) => {
+    const a = await loadPerp((req.params as { id: string }).id);
+    const b = z.strictObject({ risk: PerpRisk, liftHalt: z.boolean().default(false) }).parse(req.body);
+    if (b.risk.maxDailyLossPct > b.risk.maxTotalLossPct) throw new UserError('bad_request', 'the daily loss limit cannot exceed the total loss limit', 400);
+    const acct = await paper().get(a.deriv_account_id);
+    await paper().setPolicy(a.deriv_account_id, perpPolicy(a.universe, formatUnits(BigInt(a.capital_usdc), 6), b.risk, b.liftHalt ? null : acct.policy.halt));
+    const [r] = await sql<PerpAgentRow[]>`update agents set risk = ${sql.json(b.risk as never)}, updated_at = now() where id = ${a.id} returning *`;
+    await audit('agent.perp_risk', 'owner', { id: a.id, risk: b.risk, liftHalt: b.liftHalt });
+    return perpView(r!);
+  });
+
+  // close every position of the agent's account with reduce-only orders (always possible, also when stopped or halted)
+  app.post('/api/v1/agents/:id/perp/flatten', async (req) => {
+    const a = await loadPerp((req.params as { id: string }).id), run = rt();
+    const f = await flattenPerp(a, run.deps, run.deps.executor(a), `m${Math.floor(run.deps.now() / 1000)}`);
+    await audit('agent.perp_flatten', 'owner', { id: a.id, orders: f.results.length, left: f.left.length });
+    return { orders: f.results, positionsLeft: f.left.length };
+  });
+}

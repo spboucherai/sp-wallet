@@ -7,3 +7,4 @@ results/*/ledger/
 report.json
 results/ledger.jsonl
 strategies/zz_forktest/
+strategies/zz_perptest/

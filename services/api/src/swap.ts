@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CCTP_ENABLED, formatUnits, getAsset, getNetwork, KYBER_ENABLED, parseUnits } from '@spw/core';
+import { CCTP_ENABLED, formatUnits, getAsset, getNetwork, KYBER_ENABLED, parseUnits, thorPairEnabled } from '@spw/core';
 import {
   assetKey, createEnabledProviders, DEFAULT_POLICY, httpClient, LiquidityGraph, ProviderRuntime, QuoteAggregator, SwapRouter,
   type AssetRef, type QuoteEvent, type Route, type RouteSearch, type SwapProvider, type SwapQuoteRequest, type Valuer,
@@ -47,17 +47,19 @@ export function swapRoutes(app: FastifyInstance, deps: SwapDeps): void {
     const cctpSpeed = cctp ? ((r.legs[0]!.raw as { transfer?: string } | undefined)?.transfer === 'fast' ? 'fast' : 'standard') : null;
     // Jupiter on Solana: the signer decodes the v1 transaction itself (services/api/src/swap-exec-sol.ts); whether a given route can be put in the verifiable form is decided when the swap is prepared
     const jupiter = r.legs.length === 1 && r.providers[0] === 'jupiter' && first.network === last.network && getNetwork(first.network).family === 'sol';
-    const executable = cctp || jupiter || (r.legs.length === 1 && r.providers[0] === 'kyberswap' && !!KYBER_ENABLED[first.network] && first.network === last.network);
+    // THORChain native swap on a pinned pair: memo and transaction built by the signer, vault confirmed by its own THORNode operators (services/api/src/xswap.ts)
+    const thor = r.legs.length === 1 && r.providers[0] === 'thorchain' && thorPairEnabled(first, last);
+    const executable = cctp || jupiter || thor || (r.legs.length === 1 && r.providers[0] === 'kyberswap' && !!KYBER_ENABLED[first.network] && first.network === last.network);
     // on a reviewed router the signer decodes and enforces recipient and minimum output itself: not an opaque transaction
-    const flags = executable ? r.risk.flags.filter((f) => f.code !== 'opaque_transaction' && !(cctp && f.code === 'not_executable')) : r.risk.flags;
+    const flags = executable ? r.risk.flags.filter((f) => f.code !== 'opaque_transaction' && !((cctp || thor) && f.code === 'not_executable')) : r.risk.flags;
     const level = flags.some((f) => f.level === 'high') ? 'high' : flags.some((f) => f.level === 'medium') ? 'medium' : 'low';
     const risk = executable ? { level, score: Math.max(0, r.risk.score - 12), flags } : r.risk;
     return {
       id: r.id, providers: r.providers, path: r.path.map(viewAsset), tags: r.tags, pareto: r.pareto,
       // the wallet can execute this route itself today (signer-verified calldata on a reviewed router)
-      executable, exec: executable ? (cctp ? { via: 'cctp' as const, speed: cctpSpeed } : jupiter ? { via: 'jupiter' as const } : { via: 'kyberswap' as const }) : null,
+      executable, exec: executable ? (thor ? { via: 'thorchain' as const } : cctp ? { via: 'cctp' as const, speed: cctpSpeed } : jupiter ? { via: 'jupiter' as const } : { via: 'kyberswap' as const }) : null,
       amountOut: r.amountOut, minAmountOut: r.minAmountOut, amountOutDisplay: formatUnits(r.amountOut, out.decimals), minAmountOutDisplay: formatUnits(r.minAmountOut, out.decimals),
-      estimatedSeconds: r.estimatedSeconds, expiresAt: r.expiresAt, executability: executable ? { class: 'verified' as const } : r.executability, valuation: r.valuation, risk,
+      estimatedSeconds: r.estimatedSeconds, expiresAt: r.expiresAt, executability: thor ? { class: 'verified' as const, reason: 'memo and transaction are built by the signer; the vault address is confirmed by at least three independent THORNode operators asked by the signer itself' } : executable ? { class: 'verified' as const } : r.executability, valuation: r.valuation, risk,
       atomic: r.legs.length === 1 && r.legs[0]!.atomic, refundable: r.legs.some((l) => l.refundable === false) ? false : r.legs.some((l) => l.refundable === null) ? null : true,
       priceImpactBps: r.legs.every((l) => l.priceImpactBps !== null) ? r.legs.reduce((s, l) => s + l.priceImpactBps!, 0) : null,
       steps: r.legs.flatMap((l) => l.steps.map((s) => ({ kind: s.kind, provider: s.provider, from: viewAsset(s.from), to: viewAsset(s.to), via: s.via, contracts: s.contracts }))),

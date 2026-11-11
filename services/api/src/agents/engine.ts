@@ -89,6 +89,7 @@ async function usage(a: AgentRow, mode: string, now: number): Promise<{ usd: num
 /** One engine step for one agent. Safe to call as often as wanted: it acts at most once per closed bar and per in-flight order. */
 export async function tickAgent(a: AgentRow, d: EngineDeps): Promise<string> {
   if (a.state !== 'PAPER_TRADING' && a.state !== 'LIVE') return 'idle';
+  if (a.kind === 'perp') return 'idle'; // v6: a perp agent is never traded by the spot engine
   const mode = a.state === 'LIVE' ? 'LIVE' : 'PAPER';
   if (mode === 'LIVE' && (await d.halted())) return 'halted';
   if (mode === 'LIVE' && (await d.inFlight(a))) return 'order in flight';

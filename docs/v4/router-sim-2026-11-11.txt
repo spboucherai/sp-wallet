@@ -1,0 +1,293 @@
+Derivatives router — live read-only simulation  2026-11-11T06:16:26.607Z
+No order, no signature, no trading endpoint. Every cost below is an estimate on a snapshot.
+
+Arbitrum gas price 0.02 gwei; ETH 2065 USD (GMX oracle mid of ETH/USD)
+GMX execution fee: 0.00008244342 ETH — minimum the contracts require at this gas price: 4122171 gas (DataStore: increase order gas limit 3000000, base 130266, 330635 per oracle price × 3, multiplier 1) × 20000000 wei; the venue's interface adds a buffer, and the unused part is refunded
+
+=== BTC long 1000 USD, 3×, market, 24 h — 6 instruments
+  hyperliquid:BTC  [eligible in simulation; setup: no_collateral_account]
+      fill: 0.01354 at avg 73810 (worst 73810), 0.068 bps vs mid 73809.5; 1/20 levels, 0.02 % of the snapshot side
+      costs USD: spread/slippage 0.0068 | fee 0.4497 | impact — | exec fee — | gas — | funding 0.2999 | borrow — | collateral 0.0026
+      margin: initial 333.13 USD at 3×; maintenance 0.0125; liquidation (estimate) 49829.54, 3249 bps away
+      ALL-IN over 24 h: 0.759 USD = 7.594 bps ± 0.0614 USD; closing right away would add 0.4808 USD → round trip 1.2397 USD (12.41 bps)
+  gmx:BTC/USD [BTC-USDC]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 1000 USD at oracle 73732.6274 (range 73732.6274 – 73732.6274); impact 0.2534 USD (caps +4 / −5), imbalance 1408644 → 1407644 USD (tokens × oracle mid), balance improved, virtual inventory none; 0.001 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 0.4 | impact -0.2534 | exec fee 0.1702 | gas 0.0413 | funding 0.315 | borrow 0 | collateral unknown
+      margin: initial 333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 49461.56, 3292 bps away
+      ALL-IN over 24 h: 0.6731 USD = 6.731 bps ± 0.6077 USD  (unknown, not included: collateral_transfer); closing right away would add 1.1157 USD → round trip 1.7888 USD (17.89 bps)
+  gmx:BTC/USD [BTC-BTC]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 1000 USD at oracle 73732.6274 (range 73732.6274 – 73732.6274); impact 0 USD (caps +4 / −5), imbalance 290473 → 291473 USD (tokens × oracle mid), balance not improved, virtual inventory none; 0.043 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 0.6 | impact 0 | exec fee 0.1702 | gas 0.0413 | funding 0.5533 | borrow 0.6534 | collateral unknown
+      margin: initial 333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 49476.39, 3290 bps away
+      ALL-IN over 24 h: 2.0183 USD = 20.183 bps ± 0.8043 USD  (unknown, not included: collateral_transfer); closing right away would add 0.6115 USD → round trip 2.6299 USD (26.3 bps)
+  gmx:BTC/USD [TBTC-TBTC]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 1000 USD at oracle 73732.6274 (range 73732.6274 – 73732.6274); impact -0.0093 USD (caps +4 / −5), imbalance 964 → 1964 USD (tokens × oracle mid), balance not improved, virtual inventory none; 0.89 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 0.6 | impact 0.0093 | exec fee 0.1702 | gas 0.0413 | funding 0.5533 | borrow 0.0117 | collateral unknown
+      margin: initial 333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 49476.39, 3290 bps away
+      ALL-IN over 24 h: 1.3859 USD = 13.859 bps ± 0.1718 USD  (unknown, not included: collateral_transfer); closing right away would add 0.6038 USD → round trip 1.9897 USD (19.9 bps)
+  gmx:BTC/USD [USDG-USDG]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 1000 USD at oracle 73732.6274 (range 73732.6274 – 73732.6274); impact 0.0118 USD (caps +4 / −5), imbalance 1285 → 285 USD (tokens × oracle mid), balance improved, virtual inventory none; 0.024 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 0.4 | impact -0.0118 | exec fee 0.1702 | gas 0.0413 | funding 0.4371 | borrow 0 | collateral unknown
+      margin: initial 333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 49461.56, 3292 bps away
+      ALL-IN over 24 h: 1.0368 USD = 10.368 bps ± 0.202 USD  (unknown, not included: collateral_transfer); closing right away would add 0.8257 USD → round trip 1.8625 USD (18.62 bps)
+  dydx:BTC-USD  [NOT AVAILABLE TO YOU]
+      fill: 0.0135 at avg 73759 (worst 73759), 0.136 bps vs mid 73758; 1/50 levels, 0.01 % of the snapshot side
+      costs USD: spread/slippage 0.0135 | fee 0.4979 | impact — | exec fee — | gas — | funding -0.0213 | borrow — | collateral unknown
+      margin: initial 331.92 USD at 3×; maintenance unknown; liquidation (estimate) unknown, unknown bps away
+      ALL-IN over 24 h: 0.4901 USD = 4.922 bps ± 0.0348 USD  (unknown, not included: collateral_transfer); closing right away would add 0.8437 USD → round trip 1.3338 USD (13.4 bps)
+  ranking by all-in cost (information, nothing selected): #1 gmx:BTC/USD [BTC-USDC] 0.6731 USD (6.73 bps) ~near tie with 4 [round trip #2: 1.79]  |  #2 hyperliquid:BTC 0.759 USD (7.59 bps) ~near tie with 1 [round trip #1: 1.24]  |  #3 gmx:BTC/USD [USDG-USDG] 1.0368 USD (10.37 bps) ~near tie with 3 [round trip #3: 1.86]  |  #4 gmx:BTC/USD [TBTC-TBTC] 1.3859 USD (13.86 bps) ~near tie with 3 [round trip #4: 1.99]  |  #5 gmx:BTC/USD [BTC-BTC] 2.0183 USD (20.18 bps) ~near tie with 3 [round trip #5: 2.63]
+  NOTE: the order changes when an immediate close is added (round trip).
+  6 different contracts on BTC. None of them is the same contract as another — not even two pools of one venue: 18 of 18 terms differ between them, and a position on one cannot be closed, netted or margined on another.
+
+=== BTC long 25000 USD, 3×, market, 24 h — 6 instruments
+  hyperliquid:BTC  [eligible in simulation; setup: no_collateral_account]
+      fill: 0.33872 at avg 73810 (worst 73810), 0.406 bps vs mid 73807; 1/20 levels, 0.4 % of the snapshot side
+      costs USD: spread/slippage 1.0162 | fee 11.2504 | impact — | exec fee — | gas — | funding 7.5027 | borrow — | collateral 0.0026
+      margin: initial 8333.64 USD at 3×; maintenance 0.0125; liquidation (estimate) 49829.54, 3249 bps away
+      ALL-IN over 24 h: 19.7718 USD = 7.909 bps ± 2.3516 USD; closing right away would add 13.8847 USD → round trip 33.6565 USD (13.46 bps)
+  gmx:BTC/USD [BTC-USDC]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 25000 USD at oracle 73730.9017 (range 73730.9017 – 73730.9017); impact 6.3026 USD (caps +100 / −125), imbalance 1408611 → 1383611 USD (tokens × oracle mid), balance improved, virtual inventory none; 0.028 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 10 | impact -6.3026 | exec fee 0.1702 | gas 0.0413 | funding 7.8756 | borrow 0 | collateral unknown
+      margin: initial 8333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 49460.41, 3292 bps away
+      ALL-IN over 24 h: 11.7845 USD = 4.714 bps ± 12.6192 USD  (unknown, not included: collateral_transfer); closing right away would add 22.7747 USD → round trip 34.5592 USD (13.82 bps)
+  gmx:BTC/USD [BTC-BTC]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 25000 USD at oracle 73730.9017 (range 73730.9017 – 73730.9017); impact 0 USD (caps +100 / −125), imbalance 290466 → 315466 USD (tokens × oracle mid), balance not improved, virtual inventory none; 1.086 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 15 | impact 0 | exec fee 0.1702 | gas 0.0413 | funding 13.8334 | borrow 16.3358 | collateral unknown
+      margin: initial 8333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 49475.23, 3290 bps away
+      ALL-IN over 24 h: 45.3807 USD = 18.152 bps ± 17.5677 USD  (unknown, not included: collateral_transfer); closing right away would add 10.2115 USD → round trip 55.5923 USD (22.24 bps)
+  gmx:BTC/USD [TBTC-TBTC]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 25000 USD at oracle 73730.9017 (range 73730.9017 – 73730.9017); impact -0.8972 USD (caps +100 / −125), imbalance 964 → 25964 USD (tokens × oracle mid), balance not improved, virtual inventory none; 22.254 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 15 | impact 0.8972 | exec fee 0.1702 | gas 0.0413 | funding 13.8334 | borrow 0.2921 | collateral unknown
+      margin: initial 8333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 49475.23, 3290 bps away
+      ALL-IN over 24 h: 30.2343 USD = 12.094 bps ± 2.4212 USD  (unknown, not included: collateral_transfer); closing right away would add 9.4639 USD → round trip 39.6981 USD (15.88 bps)
+  gmx:BTC/USD [USDG-USDG]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 25000 USD at oracle 73730.9017 (range 73730.9017 – 73730.9017); impact -1.8064 USD (caps +100 / −125), imbalance 1285 → 23715 USD (tokens × oracle mid), balance not improved, virtual inventory none; 0.601 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 15 | impact 1.8064 | exec fee 0.1702 | gas 0.0413 | funding 10.9264 | borrow 0 | collateral unknown
+      margin: initial 8333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 49475.23, 3290 bps away
+      ALL-IN over 24 h: 27.9444 USD = 11.178 bps ± 4.0227 USD  (unknown, not included: collateral_transfer); closing right away would add 8.7109 USD → round trip 36.6553 USD (14.66 bps)
+  dydx:BTC-USD  [NOT AVAILABLE TO YOU]
+      fill: 0.3391 at avg 73744.6025 (worst 73753), 2.794 bps vs mid 73724; 2/50 levels, 0.27 % of the snapshot side
+      costs USD: spread/slippage 6.9863 | fee 12.5034 | impact — | exec fee — | gas — | funding -0.5345 | borrow — | collateral unknown
+      margin: initial 8335.6 USD at 3×; maintenance unknown; liquidation (estimate) unknown, unknown bps away
+      ALL-IN over 24 h: 18.9552 USD = 7.582 bps ± 3.2473 USD  (unknown, not included: collateral_transfer); closing right away would add 19.4827 USD → round trip 38.4379 USD (15.38 bps)
+  ranking by all-in cost (information, nothing selected): #1 gmx:BTC/USD [BTC-USDC] 11.7845 USD (4.71 bps) ~near tie with 2 [round trip #2: 34.56]  |  #2 hyperliquid:BTC 19.7718 USD (7.91 bps) ~near tie with 1 [round trip #1: 33.66]  |  #3 gmx:BTC/USD [USDG-USDG] 27.9444 USD (11.18 bps) ~near tie with 3 [round trip #3: 36.66]  |  #4 gmx:BTC/USD [TBTC-TBTC] 30.2343 USD (12.09 bps) ~near tie with 2 [round trip #4: 39.7]  |  #5 gmx:BTC/USD [BTC-BTC] 45.3807 USD (18.15 bps) ~near tie with 2 [round trip #5: 55.59]
+  NOTE: the order changes when an immediate close is added (round trip).
+  6 different contracts on BTC. None of them is the same contract as another — not even two pools of one venue: 18 of 18 terms differ between them, and a position on one cannot be closed, netted or margined on another.
+
+=== BTC long 500000 USD, 3×, market, 24 h — 6 instruments
+  hyperliquid:BTC  [eligible in simulation; setup: no_collateral_account]
+      fill: 6.77538 at avg 73797 (worst 73797), 0.068 bps vs mid 73796.5; 1/20 levels, 13.59 % of the snapshot side
+      costs USD: spread/slippage 3.3877 | fee 225.0012 | impact — | exec fee — | gas — | funding 150.0754 | borrow — | collateral 0.0026
+      margin: initial 166667.57 USD at 3×; maintenance 0.0125; liquidation (estimate) 49820.76, 3249 bps away
+      ALL-IN over 24 h: 378.4669 USD = 7.569 bps ± 30.0766 USD; closing right away would add 273.0437 USD → round trip 651.5106 USD (13.03 bps)
+  gmx:BTC/USD [BTC-USDC]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 500000 USD at oracle 73730.8555 (range 73730.8555 – 73730.8555); impact 112.1507 USD (caps +2000 / −2500), imbalance 1408610 → 908610 USD (tokens × oracle mid), balance improved, virtual inventory none; 0.56 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 200 | impact -112.1507 | exec fee 0.1702 | gas 0.0413 | funding 157.5114 | borrow 0 | collateral unknown
+      margin: initial 166666.67 USD at 3×; maintenance 0.005; liquidation (estimate) 49460.37, 3292 bps away
+      ALL-IN over 24 h: 245.5722 USD = 4.911 bps ± 236.4726 USD  (unknown, not included: collateral_transfer); closing right away would add 434.7924 USD → round trip 680.3646 USD (13.61 bps)
+  gmx:BTC/USD [BTC-BTC]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 500000 USD at oracle 73730.8555 (range 73730.8555 – 73730.8555); impact 0 USD (caps +2000 / −2500), imbalance 290466 → 790466 USD (tokens × oracle mid), balance not improved, virtual inventory none; 21.713 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 300 | impact 0 | exec fee 0.1702 | gas 0.0413 | funding 276.6679 | borrow 326.7154 | collateral unknown
+      margin: initial 166666.67 USD at 3×; maintenance 0.005; liquidation (estimate) 49475.2, 3290 bps away
+      ALL-IN over 24 h: 903.5948 USD = 18.072 bps ± 349.3444 USD  (unknown, not included: collateral_transfer); closing right away would add 200.2115 USD → round trip 1103.8063 USD (22.08 bps)
+  gmx:BTC/USD [TBTC-TBTC]  [not eligible: above_capacity]
+      fill: 500000 USD at oracle 73730.8555 (range 73730.8555 – 73730.8555); impact -110.3696 USD (caps +2000 / −2500), imbalance 964 → 500964 USD (tokens × oracle mid), balance not improved, virtual inventory none; 445.086 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 300 | impact 110.3696 | exec fee 0.1702 | gas 0.0413 | funding 276.6679 | borrow 5.8424 | collateral unknown
+      margin: initial 166666.67 USD at 3×; maintenance 0.005; liquidation (estimate) 49475.2, 3290 bps away
+      ALL-IN over 24 h: 693.0914 USD = 13.862 bps ± 138.841 USD  (unknown, not included: collateral_transfer); closing right away would add 108.2369 USD → round trip 801.3283 USD (16.03 bps)
+      ! size 500000 USD is above the capacity still open on the long side, 112337.726245 USD (limited by reserve)
+  gmx:BTC/USD [USDG-USDG]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 500000 USD at oracle 73730.8555 (range 73730.8555 – 73730.8555); impact -265.5918 USD (caps +2000 / −2500), imbalance 1285 → 498715 USD (tokens × oracle mid), balance not improved, virtual inventory none; 12.021 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 300 | impact 265.5918 | exec fee 0.1702 | gas 0.0413 | funding 218.5284 | borrow 0 | collateral unknown
+      margin: initial 166666.67 USD at 3×; maintenance 0.005; liquidation (estimate) 49475.2, 3290 bps away
+      ALL-IN over 24 h: 784.3318 USD = 15.687 bps ± 307.908 USD  (unknown, not included: collateral_transfer); closing right away would add -21.1102 USD → round trip 763.2215 USD (15.26 bps)
+  dydx:BTC-USD  [NOT AVAILABLE TO YOU]
+      fill: 6.782 at avg 73803.736 (worst 73814), 10.816 bps vs mid 73724; 9/50 levels, 5.39 % of the snapshot side
+      costs USD: spread/slippage 540.7696 | fee 250.2685 | impact — | exec fee — | gas — | funding -10.6905 | borrow — | collateral unknown
+      margin: initial 166845.65 USD at 3×; maintenance unknown; liquidation (estimate) unknown, unknown bps away
+      ALL-IN over 24 h: 780.3476 USD = 15.607 bps ± 64.9465 USD  (unknown, not included: collateral_transfer); closing right away would add 444.6783 USD → round trip 1225.0259 USD (24.5 bps)
+  ranking by all-in cost (information, nothing selected): #1 gmx:BTC/USD [BTC-USDC] 245.5722 USD (4.91 bps) ~near tie with 2 [round trip #2: 680.36]  |  #2 hyperliquid:BTC 378.4669 USD (7.57 bps) ~near tie with 1 [round trip #1: 651.51]  |  #3 gmx:BTC/USD [USDG-USDG] 784.3318 USD (15.69 bps) ~near tie with 2 [round trip #3: 763.22]  |  #4 gmx:BTC/USD [BTC-BTC] 903.5948 USD (18.07 bps) ~near tie with 1 [round trip #4: 1103.81]
+  NOTE: the order changes when an immediate close is added (round trip).
+  6 different contracts on BTC. None of them is the same contract as another — not even two pools of one venue: 18 of 18 terms differ between them, and a position on one cannot be closed, netted or margined on another.
+
+=== ETH long 1000 USD, 3×, market, 24 h — 6 instruments
+  hyperliquid:ETH  [eligible in simulation; setup: no_collateral_account]
+      fill: 0.4839 at avg 2066.5 (worst 2066.5), 0.242 bps vs mid 2066.45; 1/20 levels, 0.01 % of the snapshot side
+      costs USD: spread/slippage 0.0242 | fee 0.45 | impact — | exec fee — | gas — | funding 0.3001 | borrow — | collateral 0.0026
+      margin: initial 333.33 USD at 3×; maintenance 0.02; liquidation (estimate) 1405.78, 3197 bps away
+      ALL-IN over 24 h: 0.7769 USD = 7.769 bps ± 0.2233 USD; closing right away would add 0.4742 USD → round trip 1.251 USD (12.51 bps)
+  gmx:ETH/USD [USDG-USDG]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 1000 USD at oracle 2064.5744 (range 2064.5744 – 2064.5744); impact -0.5338 USD (caps +4 / −5), imbalance 132 → 1132 USD (tokens × oracle mid), balance not improved, virtual inventory known (it gives the figure); 0.039 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 0.6 | impact 0.5338 | exec fee 0.1702 | gas 0.0413 | funding 0.4356 | borrow 0.0008 | collateral unknown
+      margin: initial 333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 1385.38, 3290 bps away
+      ALL-IN over 24 h: 1.7817 USD = 17.817 bps ± 0.6404 USD  (unknown, not included: collateral_transfer); closing right away would add 0.6024 USD → round trip 2.3842 USD (23.84 bps)
+  gmx:ETH/USD [WETH-USDC]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 1000 USD at oracle 2064.5744 (range 2064.5744 – 2064.5744); impact -0.2135 USD (caps +4 / −5), imbalance 184008 → 185008 USD (tokens × oracle mid), balance not improved, virtual inventory known (it gives the figure); 0.002 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 0.6 | impact 0.2135 | exec fee 0.1702 | gas 0.0413 | funding 0.1825 | borrow 0.0926 | collateral unknown
+      margin: initial 333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 1385.38, 3290 bps away
+      ALL-IN over 24 h: 1.3001 USD = 13.001 bps ± 0.517 USD  (unknown, not included: collateral_transfer); closing right away would add 0.4883 USD → round trip 1.7884 USD (17.88 bps)
+  gmx:ETH/USD [WETH-WETH]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 1000 USD at oracle 2064.5744 (range 2064.5744 – 2064.5744); impact 0 USD (caps +4 / −5), imbalance 165085 → 166085 USD (tokens × oracle mid), balance not improved, virtual inventory known; 0.018 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 0.6 | impact 0 | exec fee 0.1702 | gas 0.0413 | funding 0.4356 | borrow 0.2266 | collateral unknown
+      margin: initial 333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 1385.38, 3290 bps away
+      ALL-IN over 24 h: 1.4737 USD = 14.737 bps ± 0.4341 USD  (unknown, not included: collateral_transfer); closing right away would add 0.6115 USD → round trip 2.0853 USD (20.85 bps)
+  gmx:ETH/USD [WSTETH-USDE]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 1000 USD at oracle 2064.5744 (range 2064.5744 – 2064.5744); impact -0.2154 USD (caps +4 / −5), imbalance 192 → 1192 USD (tokens × oracle mid), balance not improved, virtual inventory known (it gives the figure); 9.315 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 0.6 | impact 0.2154 | exec fee 0.1702 | gas 0.0413 | funding 0.3803 | borrow 0.3043 | collateral unknown
+      margin: initial 333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 1385.38, 3290 bps away
+      ALL-IN over 24 h: 1.7115 USD = 17.115 bps ± 0.6531 USD  (unknown, not included: collateral_transfer); closing right away would add 0.6076 USD → round trip 2.3192 USD (23.19 bps)
+  dydx:ETH-USD  [NOT AVAILABLE TO YOU]
+      fill: 0.484 at avg 2064.8 (worst 2064.8), 0.242 bps vs mid 2064.75; 1/50 levels, 0.01 % of the snapshot side
+      costs USD: spread/slippage 0.0242 | fee 0.4997 | impact — | exec fee — | gas — | funding 0.0219 | borrow — | collateral unknown
+      margin: initial 333.12 USD at 3×; maintenance unknown; liquidation (estimate) unknown, unknown bps away
+      ALL-IN over 24 h: 0.5458 USD = 5.462 bps ± 0.0461 USD  (unknown, not included: collateral_transfer); closing right away would add 0.6672 USD → round trip 1.213 USD (12.14 bps)
+  ranking by all-in cost (information, nothing selected): #1 hyperliquid:ETH 0.7769 USD (7.77 bps) ~near tie with 1 [round trip #1: 1.25]  |  #2 gmx:ETH/USD [WETH-USDC] 1.3001 USD (13 bps) ~near tie with 4 [round trip #2: 1.79]  |  #3 gmx:ETH/USD [WETH-WETH] 1.4737 USD (14.74 bps) ~near tie with 3 [round trip #3: 2.09]  |  #4 gmx:ETH/USD [WSTETH-USDE] 1.7115 USD (17.12 bps) ~near tie with 3 [round trip #4: 2.32]  |  #5 gmx:ETH/USD [USDG-USDG] 1.7817 USD (17.82 bps) ~near tie with 3 [round trip #5: 2.38]
+  6 different contracts on ETH. None of them is the same contract as another — not even two pools of one venue: 18 of 18 terms differ between them, and a position on one cannot be closed, netted or margined on another.
+
+=== ETH long 25000 USD, 3×, market, 24 h — 6 instruments
+  hyperliquid:ETH  [eligible in simulation; setup: no_collateral_account]
+      fill: 12.098 at avg 2066.5 (worst 2066.5), 0.242 bps vs mid 2066.45; 1/20 levels, 0.27 % of the snapshot side
+      costs USD: spread/slippage 0.6049 | fee 11.2502 | impact — | exec fee — | gas — | funding 7.5023 | borrow — | collateral 0.0026
+      margin: initial 8333.51 USD at 3×; maintenance 0.02; liquidation (estimate) 1405.78, 3197 bps away
+      ALL-IN over 24 h: 19.36 USD = 7.744 bps ± 5.5505 USD; closing right away would add 11.8546 USD → round trip 31.2146 USD (12.49 bps)
+  gmx:ETH/USD [USDG-USDG]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 25000 USD at oracle 2064.2666 (range 2064.2666 – 2064.2666); impact -13.6199 USD (caps +100 / −125), imbalance 132 → 25132 USD (tokens × oracle mid), balance not improved, virtual inventory known (it gives the figure); 0.964 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 15 | impact 13.6199 | exec fee 0.1702 | gas 0.0413 | funding 10.8896 | borrow 0.0212 | collateral unknown
+      margin: initial 8333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 1385.17, 3290 bps away
+      ALL-IN over 24 h: 39.7422 USD = 15.897 bps ± 13.7469 USD  (unknown, not included: collateral_transfer); closing right away would add 8.8228 USD → round trip 48.565 USD (19.43 bps)
+  gmx:ETH/USD [WETH-USDC]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 25000 USD at oracle 2064.2666 (range 2064.2666 – 2064.2666); impact -5.4397 USD (caps +100 / −125), imbalance 183981 → 208981 USD (tokens × oracle mid), balance not improved, virtual inventory known (it gives the figure); 0.043 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 15 | impact 5.4397 | exec fee 0.1702 | gas 0.0413 | funding 4.5625 | borrow 2.3147 | collateral unknown
+      margin: initial 8333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 1385.17, 3290 bps away
+      ALL-IN over 24 h: 27.5285 USD = 11.011 bps ± 10.4902 USD  (unknown, not included: collateral_transfer); closing right away would add 7.0176 USD → round trip 34.5461 USD (13.82 bps)
+  gmx:ETH/USD [WETH-WETH]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 25000 USD at oracle 2064.2666 (range 2064.2666 – 2064.2666); impact 0 USD (caps +100 / −125), imbalance 165060 → 190060 USD (tokens × oracle mid), balance not improved, virtual inventory known; 0.449 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 15 | impact 0 | exec fee 0.1702 | gas 0.0413 | funding 10.8896 | borrow 5.6651 | collateral unknown
+      margin: initial 8333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 1385.17, 3290 bps away
+      ALL-IN over 24 h: 31.7662 USD = 12.706 bps ± 8.3151 USD  (unknown, not included: collateral_transfer); closing right away would add 10.2115 USD → round trip 41.9777 USD (16.79 bps)
+  gmx:ETH/USD [WSTETH-USDE]  [not eligible: above_capacity]
+      fill: 25000 USD at oracle 2064.2666 (range 2064.2666 – 2064.2666); impact -5.4958 USD (caps +100 / −125), imbalance 192 → 25192 USD (tokens × oracle mid), balance not improved, virtual inventory known (it gives the figure); 232.888 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 15 | impact 5.4958 | exec fee 0.1702 | gas 0.0413 | funding 9.5071 | borrow 7.6078 | collateral unknown
+      margin: initial 8333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 1385.17, 3290 bps away
+      ALL-IN over 24 h: 37.8222 USD = 15.129 bps ± 13.9005 USD  (unknown, not included: collateral_transfer); closing right away would add 9.6491 USD → round trip 47.4713 USD (18.99 bps)
+      ! size 25000 USD is above the capacity still open on the long side, 10734.780768 USD (limited by reserve)
+  dydx:ETH-USD  [NOT AVAILABLE TO YOU]
+      fill: 12.108 at avg 2065.3993 (worst 2065.8), 3.145 bps vs mid 2064.75; 4/50 levels, 0.31 % of the snapshot side
+      costs USD: spread/slippage 7.8619 | fee 12.5039 | impact — | exec fee — | gas — | funding 0.5483 | borrow — | collateral unknown
+      margin: initial 8335.95 USD at 3×; maintenance unknown; liquidation (estimate) unknown, unknown bps away
+      ALL-IN over 24 h: 20.9142 USD = 8.366 bps ± 1.1537 USD  (unknown, not included: collateral_transfer); closing right away would add 19.7907 USD → round trip 40.7049 USD (16.28 bps)
+  ranking by all-in cost (information, nothing selected): #1 hyperliquid:ETH 19.36 USD (7.74 bps) ~near tie with 2 [round trip #1: 31.21]  |  #2 gmx:ETH/USD [WETH-USDC] 27.5285 USD (11.01 bps) ~near tie with 3 [round trip #2: 34.55]  |  #3 gmx:ETH/USD [WETH-WETH] 31.7662 USD (12.71 bps) ~near tie with 3 [round trip #3: 41.98]  |  #4 gmx:ETH/USD [USDG-USDG] 39.7422 USD (15.9 bps) ~near tie with 2 [round trip #4: 48.57]
+  6 different contracts on ETH. None of them is the same contract as another — not even two pools of one venue: 18 of 18 terms differ between them, and a position on one cannot be closed, netted or margined on another.
+
+=== ETH long 500000 USD, 3×, market, 24 h — 6 instruments
+  hyperliquid:ETH  [eligible in simulation; setup: no_collateral_account]
+      fill: 241.9608 at avg 2066.5 (worst 2066.5), 0.242 bps vs mid 2066.45; 1/20 levels, 5.49 % of the snapshot side
+      costs USD: spread/slippage 12.098 | fee 225.0054 | impact — | exec fee — | gas — | funding 150.0472 | borrow — | collateral 0.0026
+      margin: initial 166670.66 USD at 3×; maintenance 0.02; liquidation (estimate) 1405.78, 3197 bps away
+      ALL-IN over 24 h: 387.1531 USD = 7.743 bps ± 110.987 USD; closing right away would add 273.147 USD → round trip 660.3001 USD (13.21 bps)
+  gmx:ETH/USD [USDG-USDG]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 500000 USD at oracle 2064.2528 (range 2064.2528 – 2064.2528); impact -368.1181 USD (caps +2000 / −2500), imbalance 132 → 500132 USD (tokens × oracle mid), balance not improved, virtual inventory known (it gives the figure); 19.288 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 300 | impact 368.1181 | exec fee 0.1702 | gas 0.0413 | funding 217.7913 | borrow 0.4242 | collateral unknown
+      margin: initial 166666.67 USD at 3×; maintenance 0.005; liquidation (estimate) 1385.16, 3290 bps away
+      ALL-IN over 24 h: 886.5452 USD = 17.731 bps ± 368.6481 USD  (unknown, not included: collateral_transfer); closing right away would add 28.4397 USD → round trip 914.9849 USD (18.3 bps)
+  gmx:ETH/USD [WETH-USDC]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 500000 USD at oracle 2064.2528 (range 2064.2528 – 2064.2528); impact -144.226 USD (caps +2000 / −2500), imbalance 183980 → 683980 USD (tokens × oracle mid), balance not improved, virtual inventory known (it gives the figure); 0.865 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 300 | impact 144.226 | exec fee 0.1702 | gas 0.0413 | funding 91.2501 | borrow 46.2944 | collateral unknown
+      margin: initial 166666.67 USD at 3×; maintenance 0.005; liquidation (estimate) 1385.16, 3290 bps away
+      ALL-IN over 24 h: 581.9821 USD = 11.64 bps ± 243.2267 USD  (unknown, not included: collateral_transfer); closing right away would add 101.0427 USD → round trip 683.0248 USD (13.66 bps)
+  gmx:ETH/USD [WETH-WETH]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 500000 USD at oracle 2064.2528 (range 2064.2528 – 2064.2528); impact 0 USD (caps +2000 / −2500), imbalance 165059 → 665059 USD (tokens × oracle mid), balance not improved, virtual inventory known; 8.974 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 300 | impact 0 | exec fee 0.1702 | gas 0.0413 | funding 217.7913 | borrow 113.3016 | collateral unknown
+      margin: initial 166666.67 USD at 3×; maintenance 0.005; liquidation (estimate) 1385.16, 3290 bps away
+      ALL-IN over 24 h: 631.3044 USD = 12.626 bps ± 164.2916 USD  (unknown, not included: collateral_transfer); closing right away would add 200.2115 USD → round trip 831.516 USD (16.63 bps)
+  gmx:ETH/USD [WSTETH-USDE]  [not eligible: above_capacity]
+      fill: 500000 USD at oracle 2064.2528 (range 2064.2528 – 2064.2528); impact -148.5389 USD (caps +2000 / −2500), imbalance 192 → 500192 USD (tokens × oracle mid), balance not improved, virtual inventory known (it gives the figure); 4657.929 % of remaining capacity
+      costs USD: spread/slippage 0 | fee 300 | impact 148.5389 | exec fee 0.1702 | gas 0.0413 | funding 190.1427 | borrow 152.1557 | collateral unknown
+      margin: initial 166666.67 USD at 3×; maintenance 0.005; liquidation (estimate) 1385.16, 3290 bps away
+      ALL-IN over 24 h: 791.0488 USD = 15.821 bps ± 314.6247 USD  (unknown, not included: collateral_transfer); closing right away would add 130.8867 USD → round trip 921.9355 USD (18.44 bps)
+      ! size 500000 USD is above the capacity still open on the long side, 10734.38412 USD (limited by reserve)
+  dydx:ETH-USD  [NOT AVAILABLE TO YOU]
+      fill: 242.16 at avg 2068.6262 (worst 2069.3), 18.773 bps vs mid 2064.75; 13/50 levels, 6.05 % of the snapshot side
+      costs USD: spread/slippage 938.6687 | fee 250.4693 | impact — | exec fee — | gas — | funding 10.9667 | borrow — | collateral unknown
+      margin: initial 166979.51 USD at 3×; maintenance unknown; liquidation (estimate) unknown, unknown bps away
+      ALL-IN over 24 h: 1200.1046 USD = 24.002 bps ± 23.0747 USD  (unknown, not included: collateral_transfer); closing right away would add 1267.9036 USD → round trip 2468.0083 USD (49.36 bps)
+  ranking by all-in cost (information, nothing selected): #1 hyperliquid:ETH 387.1531 USD (7.74 bps) ~near tie with 2 [round trip #1: 660.3]  |  #2 gmx:ETH/USD [WETH-USDC] 581.9821 USD (11.64 bps) ~near tie with 3 [round trip #2: 683.02]  |  #3 gmx:ETH/USD [WETH-WETH] 631.3044 USD (12.63 bps) ~near tie with 3 [round trip #3: 831.52]  |  #4 gmx:ETH/USD [USDG-USDG] 886.5452 USD (17.73 bps) ~near tie with 2 [round trip #4: 914.98]
+  6 different contracts on ETH. None of them is the same contract as another — not even two pools of one venue: 18 of 18 terms differ between them, and a position on one cannot be closed, netted or margined on another.
+
+=== DOGE long 25000 USD, 3×, market, 24 h — 3 instruments
+  hyperliquid:DOGE  [eligible in simulation; setup: no_collateral_account]
+      fill: 367029 at avg 0.0681 (worst 0.0681), 1.21 bps vs mid 0.0681; 4/20 levels, 10.92 % of the snapshot side
+      costs USD: spread/slippage 3.0241 | fee 11.2514 | impact — | exec fee — | gas — | funding -7.5851 | borrow — | collateral 0.0026
+      margin: initial 8334.34 USD at 3×; maintenance 0.05; liquidation (estimate) 0.05, 2982 bps away
+      ALL-IN over 24 h: 6.6929 USD = 2.677 bps ± 11.8513 USD; closing right away would add 17.2474 USD → round trip 23.9404 USD (9.58 bps)
+  gmx:DOGE/USD [WETH-USDC]  [eligible in simulation; setup: wallet_cannot_trade_here, no_collateral_account]
+      fill: 25000 USD at oracle 0.0681 (range 0.0681 – 0.0681); impact -3.3129 USD (caps +100 / −250), imbalance 4921 → 29921 USD (tokens × oracle mid), balance not improved, virtual inventory known; 1.524 % of remaining capacity
+      costs USD: spread/slippage 2.2988 | fee 15 | impact 3.3129 | exec fee 0.1702 | gas 0.0413 | funding 10.274 | borrow 5.0374 | collateral unknown
+      margin: initial 8333.33 USD at 3×; maintenance 0.005; liquidation (estimate) 0.05, 3290 bps away
+      ALL-IN over 24 h: 36.1345 USD = 14.454 bps ± 15.2038 USD  (unknown, not included: collateral_transfer); closing right away would add 10.3017 USD → round trip 46.4363 USD (18.57 bps)
+  dydx:DOGE-USD  [NOT AVAILABLE TO YOU]
+      fill: 366900 at avg 0.0684 (worst 0.0693), 46.793 bps vs mid 0.0681; 3/50 levels, 0 % of the snapshot side
+      costs USD: spread/slippage 116.9595 | fee 12.556 | impact — | exec fee — | gas — | funding 0 | borrow — | collateral unknown
+      margin: initial 8370.67 USD at 3×; maintenance unknown; liquidation (estimate) unknown, unknown bps away
+      ALL-IN over 24 h: 129.5155 USD = 51.816 bps ± 78.8835 USD  (unknown, not included: collateral_transfer); closing right away would add 93.7474 USD → round trip 223.2629 USD (89.32 bps)
+  ranking by all-in cost (information, nothing selected): #1 hyperliquid:DOGE 6.6929 USD (2.68 bps) [round trip #1: 23.94]  |  #2 gmx:DOGE/USD [WETH-USDC] 36.1345 USD (14.45 bps) [round trip #2: 46.44]
+  3 different contracts on DOGE. None of them is the same contract as another — not even two pools of one venue: 18 of 18 terms differ between them, and a position on one cannot be closed, netted or margined on another.
+
+=== Cross-check 1 — Hyperliquid fill simulation vs an independent computation on the RAW l2Book (integer arithmetic, own request)
+  BTC long 1000 USD: router avg 73807 | independent avg 73807.000000 | rel. diff 0.00e+0 | filled, levels, worst price identical
+  BTC short 1000 USD: router avg 73806 | independent avg 73806.000000 | rel. diff 0.00e+0 | filled, levels, worst price identical
+  BTC long 25000 USD: router avg 73807 | independent avg 73807.000000 | rel. diff 0.00e+0 | filled, levels, worst price identical
+  BTC short 25000 USD: router avg 73806 | independent avg 73806.000000 | rel. diff 0.00e+0 | filled, levels, worst price identical
+  BTC long 500000 USD: router avg 73809.349704 | independent avg 73809.349704 | rel. diff 0.00e+0 | filled, levels, worst price identical
+  BTC short 500000 USD: router avg 73806 | independent avg 73806.000000 | rel. diff 1.97e-16 | filled, levels, worst price identical
+  ETH long 1000 USD: router avg 2066.8 | independent avg 2066.800000 | rel. diff 0.00e+0 | filled, levels, worst price identical
+  ETH short 1000 USD: router avg 2066.7 | independent avg 2066.700000 | rel. diff 0.00e+0 | filled, levels, worst price identical
+  ETH long 25000 USD: router avg 2066.8 | independent avg 2066.800000 | rel. diff 0.00e+0 | filled, levels, worst price identical
+  ETH short 25000 USD: router avg 2066.7 | independent avg 2066.700000 | rel. diff 0.00e+0 | filled, levels, worst price identical
+  ETH long 500000 USD: router avg 2066.8 | independent avg 2066.800000 | rel. diff 2.20e-16 | filled, levels, worst price identical
+  ETH short 500000 USD: router avg 2066.675023 | independent avg 2066.675023 | rel. diff 5.50e-15 | filled, levels, worst price identical
+  DOGE long 25000 USD: router avg 0.068125 | independent avg 0.068125 | rel. diff 2.37e-10 | filled, levels, worst price identical
+  DOGE short 25000 USD: router avg 0.068104 | independent avg 0.068104 | rel. diff 6.71e-10 | filled, levels, worst price identical
+  largest relative difference on the average price: 6.71e-10 (float rounding of the independent side)
+
+=== Cross-check 2 — GMX price impact: router formula vs the venue's closePriceImpactDeltaUsd of real open positions
+    (the venue publishes no pre-trade estimate for an OPENING order on a read-only endpoint; POST /orders/txns/prepare is on the order path and is not called)
+  BTC/USD [BTC-USDC] short 545 USD (now 546): router 0.140062 | venue 0.138283 | rel. diff 1.286 %   [virtual inventory none; with the cost-basis size instead of tokens × price: 0.140029]
+  BTC/USD [BTC-USDC] long 6241 USD (now 6233): router -1.922853 | venue -1.898500 | rel. diff 1.283 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -1.925454]
+  BTC/USD [BTC-USDC] long 6725 USD (now 6723): router -2.074328 | venue -2.074381 | rel. diff 0.003 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -2.074787]
+  TAO/USD [BTC-USDC] long 6713 USD (now 6701): router 0.091363 | venue 0.091369 | rel. diff 0.007 %   [virtual inventory none; with the cost-basis size instead of tokens × price: 0.091435]
+  BTC/USD [BTC-USDC] long 15625 USD (now 15662): router -4.841563 | venue -4.841563 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -4.830167]
+  SPX6900/USD [WETH-USDC] long 7051 USD (now 7847): router -0.859902 | venue -0.859902 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -0.691857]
+  BTC/USD [BTC-USDC] short 9 USD (now 9): router 0.002303 | venue 0.002303 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: 0.002299]
+  GOLD/USD [WETH-USDC] long 1392 USD (now 1396): router 0.006271 | venue 0.006271 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: 0.006251]
+  BTC/USD [BTC-USDC] long 5547 USD (now 5549): router -1.711613 | venue -1.711613 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -1.711152]
+  LTC/USD [WETH-USDC] long 2657 USD (now 2650): router 0.010296 | venue 0.010296 | rel. diff 0.000 %   [virtual inventory known; with the cost-basis size instead of tokens × price: 0.010300]
+  SOL/USD [SOL-USDC] short 819 USD (now 818): router -0.280139 | venue -0.280139 | rel. diff 0.000 %   [virtual inventory known, decisive (market alone: -0.263571); with the cost-basis size instead of tokens × price: -0.280481]
+  BTC/USD [BTC-USDC] short 6591 USD (now 6597): router 1.691340 | venue 1.691340 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: 1.689705]
+  CC/USD [BTC-USDC] long 16441 USD (now 15691): router -19.138997 | venue -19.138997 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -20.739802]
+  BTC/USD [BTC-USDC] long 730 USD (now 730): router -0.224875 | venue -0.224875 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -0.224803]
+  BTC/USD [BTC-USDC] long 33534 USD (now 32534): router -10.093323 | venue -10.093323 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -10.405850]
+  BTC/USD [BTC-USDC] long 7368 USD (now 7372): router -2.274771 | venue -2.274771 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -2.273574]
+  HYPE/USD [USDG-USDG] long 13882 USD (now 13871): router -0.466499 | venue -0.466499 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -0.467285]
+  ETH/USD [WETH-USDC] long 8582 USD (now 8577): router 1.041312 | venue 1.041312 | rel. diff 0.000 %   [virtual inventory known; with the cost-basis size instead of tokens × price: 1.041889]
+  BTC/USD [BTC-USDC] long 2251 USD (now 2257): router -0.695760 | venue -0.695756 | rel. diff 0.001 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -0.693916]
+  ETH/USD [WETH-USDC] short 14316 USD (now 14310): router -3.087608 | venue -3.087631 | rel. diff 0.001 %   [virtual inventory known, decisive (market alone: -2.159839); with the cost-basis size instead of tokens × price: -3.088919]
+  ETH/USD [WETH-USDC] short 8406 USD (now 8410): router -1.805990 | venue -1.805990 | rel. diff 0.000 %   [virtual inventory known, decisive (market alone: -1.258122); with the cost-basis size instead of tokens × price: -1.805026]
+  GMX/USD [GMX-USDC] short 16739 USD (now 15190): router -78.780708 | venue -78.780708 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -89.356600]
+  BTC/USD [BTC-USDC] short 958934 USD (now 943592): router 187.714330 | venue 187.714330 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: 189.733763]
+  ETH/USD [WETH-USDC] long 8151 USD (now 8164): router 0.991829 | venue 0.991861 | rel. diff 0.003 %   [virtual inventory known; with the cost-basis size instead of tokens × price: 0.990248]
+  ZEC/USD [USDG-USDG] long 1232 USD (now 1187): router -0.059855 | venue -0.059855 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -0.062246]
+  ETH/USD [WETH-USDC] long 1814 USD (now 1675): router 0.205599 | venue 0.205599 | rel. diff 0.000 %   [virtual inventory known; with the cost-basis size instead of tokens × price: 0.222591]
+  BTC/USD [BTC-USDC] long 2486 USD (now 2237): router -0.689398 | venue -0.689398 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -0.766238]
+  ZEC/USD [USDG-USDG] short 3320 USD (now 2999): router 0.082124 | venue 0.082124 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: 0.089250]
+  ETH/USD [WSTETH-USDE] long 1656 USD (now 1511): router -0.005613 | venue -0.005613 | rel. diff 0.000 %   [virtual inventory known; with the cost-basis size instead of tokens × price: -0.006677]
+  BTC/USD [BTC-USDC] long 2393 USD (now 2194): router -0.676388 | venue -0.676388 | rel. diff 0.000 %   [virtual inventory none; with the cost-basis size instead of tokens × price: -0.737784]
+  30 positions compared; largest relative difference 1.2858 %; 0 beyond 2 %; 3 decided by the virtual inventory
+
+=== Cross-check 3 — gas used by recent transactions (receipts), next to the constants the router assumes
+  GMX market-increase requests sent to ExchangeRouter (Classic, 10 receipts): gas used min 882358 / median 945091 / max 1740858 — router constant 1000000
+  the same through the relay (Express, 30 receipts, gas paid by the relay and charged as a relay fee): gas used min 1010170 / median 1463154 / max 3853509
+  ETH sent with the Classic requests (execution fee; plus the collateral when it is ETH): min 0.00013355 / median 0.00023092 / max 1.00025158 — router's figure, the contracts' minimum at the current gas price: 0.00008244342
+  plain USDC transfers (10 receipts in the last 160 blocks): gas used min 40374 / median 62245 / max 62870 — router constant 62000
+
+done — nothing was sent anywhere.

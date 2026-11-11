@@ -19,14 +19,25 @@ export interface SignerState {
   bridges?: Record<string, StoredBridge>;
   /** live derivatives: venue authorizations approved by the owner (authorizationId -> record). Never deleted: a revoked one stays revoked. */
   venues?: Record<string, StoredVenueAuthorization>;
+  /** derivative mandates approved by the owner (mandateId -> record), each extending one venue authorization. Never deleted. */
+  venueMandates?: Record<string, StoredVenueMandate>;
 }
+/** an order signed with a trading key that can still add exposure on the venue: kept until its venue expiry + a grace (venue-mandate.ts) */
+export interface VenuePendingOrder { clientId: string; instrument: string; side: 'buy' | 'sell'; size: string; price: string; /** unix ms */ until: number; /** unix ms */ signedAt?: number }
+/**
+ * `usage`: per UTC day — orders that can add exposure, reduce-only orders, cancels, leverage changes, and the summed notional of
+ * the first. `hour`: unix seconds of the exposure-adding orders signed in the last hour.
+ */
+export interface StoredVenueMandate { mandate: import('@spw/derivatives/live').VenueMandate; hash: string; approvedAt: string; revoked: boolean; revokedAt?: string;
+  usage: Record<string, { orders: number; reduceOnly: number; cancels: number; leverage: number; turnover: string }>; hour: number[] }
 /**
  * `approve`: the one approveAgent signature the main key made for this authorization (kept so that a lost answer gets the same
  * bytes again, never a second signature). `nonces`: the highest venue nonces signed with the trading key (ascending, at most 100 — the venue's own rule). `clientIds`: client
  * order id -> unix day number it was signed (replay; kept three days). `usage`: orders signed per UTC day.
  */
 export interface StoredVenueAuthorization { authorization: import('@spw/derivatives/live').VenueAuthorization; hash: string; approvedAt: string; revoked: boolean; revokedAt?: string;
-  approve: { action: unknown; signature: { r: string; s: string; v: number }; nonce: number }; nonces: number[]; clientIds: Record<string, number>; usage: Record<string, { orders: number; cancels: number; leverage: number }> }
+  approve: { action: unknown; signature: { r: string; s: string; v: number }; nonce: number }; nonces: number[]; clientIds: Record<string, number>; usage: Record<string, { orders: number; cancels: number; leverage: number }>;
+  /** exposure ledger shared by manual and mandate orders of this trading key (read only by mandates) */ pending?: VenuePendingOrder[] }
 /**
  * `mint` is set when a receiveMessage transaction has been signed for this bridge. `raw` is kept so that an identical
  * request (lost answer, restart) gets the same bytes back instead of a second signature.
@@ -70,6 +81,11 @@ export class Store {
     for (const v of Object.values(this.state.venues ?? {})) {
       for (const d of Object.keys(v.usage)) if (d < keep) delete v.usage[d];
       for (const [c, d] of Object.entries(v.clientIds)) if (d < Math.floor(nowSec / 86400) - 3) delete v.clientIds[c];
+      if (v.pending) v.pending = v.pending.filter((p) => p.until > nowSec * 1000);
+    }
+    for (const m of Object.values(this.state.venueMandates ?? {})) {
+      for (const d of Object.keys(m.usage)) if (d < keep) delete m.usage[d];
+      m.hour = m.hour.filter((t) => t > nowSec - 3600);
     }
   }
 }

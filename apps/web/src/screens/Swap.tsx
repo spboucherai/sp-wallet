@@ -8,11 +8,12 @@ import { Btn, Card, Coin, fiat, Icon, inputCls, NetDot, Notice, numFmt, StatePil
 import { issuerOf } from '../issuer';
 import { useQueryClient } from '@tanstack/react-query';
 import { BridgeFacts, BridgePill, BridgeProgress, bridgeDur } from '../bridge';
+import { XswapPill, XswapSheet } from '../xswap';
 
 interface SAsset { key: string; network: string; networkName: string; asset: string; symbol: string; name: string; decimals: number; native?: boolean }
 interface Fee { kind: string; symbol: string; network: string; display: string; includedInOutput: boolean; estimated: boolean; usd: number | null }
 interface BridgeQuote { options: { speed: 'standard' | 'fast'; available: boolean; feeDisplay: string; minReceiveDisplay: string; seconds: number }[]; destinationGas: { symbol: string; needDisplay: string; balanceDisplay: string; enough: boolean }; toName: string; fromName: string }
-interface RouteV { id: string; executable: boolean; exec?: { via: 'kyberswap' | 'cctp' | 'jupiter'; speed?: 'standard' | 'fast' | null } | null; providers: string[]; path: SAsset[]; tags: string[]; pareto: boolean; amountOutDisplay: string; minAmountOutDisplay: string; estimatedSeconds: number | null; expiresAt: number;
+interface RouteV { id: string; executable: boolean; exec?: { via: 'kyberswap' | 'cctp' | 'jupiter' | 'thorchain'; speed?: 'standard' | 'fast' | null } | null; providers: string[]; path: SAsset[]; tags: string[]; pareto: boolean; amountOutDisplay: string; minAmountOutDisplay: string; estimatedSeconds: number | null; expiresAt: number;
   executability: { class: 'verified' | 'opaque' | 'quote_only'; reason?: string }; valuation: { inUsd: number | null; outUsd: number | null; minOutUsd: number | null; extraFeesUsd: number; netUsd: number | null };
   risk: { level: 'low' | 'medium' | 'high'; score: number; flags: { code: string; level: string; detail?: string }[] }; atomic: boolean; refundable: boolean | null; priceImpactBps: number | null;
   steps: { kind: string; provider: string; from: SAsset; to: SAsset; via: string[]; contracts: { network: string; address: string; role: string }[] }[]; fees: Fee[] }
@@ -59,7 +60,7 @@ export function Swap() {
   const live = useQuery({ queryKey: ['proposal', exec?.proposal.id], enabled: !!exec && !['pending_approval'].includes(exec.proposal.state), refetchInterval: 3000, queryFn: () => get<any>(`/transfers/proposals/${exec!.proposal.id}`) });
   const prop = live.data ?? exec?.proposal;
   useEffect(() => { if (!exec || exec.proposal.state !== 'pending_approval') return; const tick = () => setLeft(Math.max(0, Math.round((new Date(exec.proposal.expiresAt).getTime() - Date.now()) / 1000))); tick(); const h = setInterval(tick, 500); return () => clearInterval(h); }, [exec]);
-  useEffect(() => { if (prop?.state === 'finalized' || prop?.bridge?.stage === 'done') void qc.invalidateQueries({ queryKey: ['portfolio'] }); }, [prop?.state, prop?.bridge?.stage, qc]);
+  useEffect(() => { if (prop?.state === 'finalized' || prop?.bridge?.stage === 'done' || prop?.xswap?.done) void qc.invalidateQueries({ queryKey: ['portfolio'] }); }, [prop?.state, prop?.bridge?.stage, prop?.xswap?.done, qc]);
   const balances = useMemo(() => new Map((pf.data?.balances ?? []).map((b) => [`${b.network}:${b.asset === 'native' ? 'native' : b.asset.startsWith('0x') ? b.asset.toLowerCase() : b.asset}`, b.display ?? '?'])), [pf.data]);
   const by = (k: string) => assets.find((a) => a.key === k);
   useEffect(() => { // sensible defaults once the registry is loaded
@@ -103,7 +104,10 @@ export function Swap() {
   const prepare = async () => {
     if (!from || !to) return;
     setBusy('prepare'); setExecErr('');
+    // a THORChain native swap (two different networks) has its own preparation: vault confirmation, quotes of two operators, memo
+    const thor = routes.find((r) => r.executable)?.exec?.via === 'thorchain' && !routes.some((r) => r.executable && r.exec?.via !== 'thorchain');
     try { setExec(isBridge ? await post('/bridge/proposals', { fromNetwork: from.network, toNetwork: to.network, amount, speed: brSpeed }, { 'idempotency-key': crypto.randomUUID() })
+      : thor ? await post('/xswap/proposals', { fromNetwork: from.network, fromAsset: from.asset, toNetwork: to.network, toAsset: to.asset, amount, slippageBps: slip }, { 'idempotency-key': crypto.randomUUID() })
       : await post('/swap/proposals', { network: from.network, fromAsset: from.asset, toAsset: to.asset, amount, slippageBps: slip }, { 'idempotency-key': crypto.randomUUID() })); }
     // an address that never received SOL does not exist on Solana: the server reports it as "not a plain account"
     catch (e) { setExecErr((e as { code?: string }).code === 'account_not_plain' && from.network === 'solana' && ['0', undefined].includes(balances.get('solana:native')) ? t('qaSolNotFunded') : errText(t, e)); } finally { setBusy(''); }
@@ -232,7 +236,7 @@ export function Swap() {
         {took !== null && <>{(() => { const n = provs.length + new Set(routes.flatMap((r) => r.providers)).size; return n === 1 ? t('qaSwProviders1', { ms: took }) : t('swTook', { n, ms: took }); })()}{first !== null ? ` · ${t('swFirst', { ms: first })}` : ''}. </>}
         {provs.filter((p) => p.status !== 'no_route').map((p) => `${pname(p.provider)}${locale === 'fr' ? ' : ' : ': '}${p.status === 'skipped' ? t('swSkipped') : ['unavailable', 'timeout', 'error', 'unsupported'].includes(p.status) ? t(`qaSwSt_${p.status}` as Key) : p.code ?? p.status}`).join(' · ')}</p>}
 
-      {exec && prop && !prop.bridge && <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={t('swReview')}>
+      {exec && prop && !prop.bridge && !prop.xswap && <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={t('swReview')}>
         <div className="rise max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-surface p-5 lg:rounded-3xl">
           <div className="mb-3 flex items-center justify-between"><h2 className="text-[20px] font-semibold tracking-tight">{prop.state === 'pending_approval' ? t('swReview') : t('swTracking')}</h2>{testNotSent(prop) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : <StatePill state={prop.state} />}</div>
           <div className="rounded-2xl bg-elev/70 p-4">
@@ -296,6 +300,19 @@ export function Swap() {
           {prop.state !== 'pending_approval' && !testNotSent(prop) && <div className="mt-4"><BridgeProgress id={prop.id} b={prop.bridge} onUpdate={(p) => { setExec({ ...exec, proposal: p }); void qc.invalidateQueries({ queryKey: ['proposal', p.id] }); }} /></div>}
           {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
           {prop.explorer && !testNotSent(prop) && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <a className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue" href={prop.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
+          <div className="mt-4 space-y-2.5">
+            {prop.state === 'pending_approval' && <Btn full busy={!!busy} disabled={left === 0} onClick={() => void approve()}><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>}
+            <Btn full kind="ghost" disabled={!!busy} onClick={() => void closeExec()}>{prop.state === 'pending_approval' ? t('cancel') : t('swClose')}</Btn>
+          </div>
+        </div>
+      </div>}
+
+      {exec && prop?.xswap && <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={t('xsReview')}>
+        <div className="rise max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-surface p-5 lg:rounded-3xl">
+          <div className="mb-3 flex items-center justify-between"><h2 className="text-[20px] font-semibold tracking-tight">{prop.state === 'pending_approval' ? t('xsReview') : t('xsTracking')}</h2><XswapPill x={prop.xswap} /></div>
+          <XswapSheet prop={prop} left={left} onUpdate={(p) => { setExec({ ...exec, proposal: p }); void qc.invalidateQueries({ queryKey: ['proposal', p.id] }); }} />
+          {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
+          {prop.explorer && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <a className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue" href={prop.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
           <div className="mt-4 space-y-2.5">
             {prop.state === 'pending_approval' && <Btn full busy={!!busy} disabled={left === 0} onClick={() => void approve()}><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>}
             <Btn full kind="ghost" disabled={!!busy} onClick={() => void closeExec()}>{prop.state === 'pending_approval' ? t('cancel') : t('swClose')}</Btn>
