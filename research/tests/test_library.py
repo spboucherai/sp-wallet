@@ -62,7 +62,7 @@ def test_library_strategy_contract(directory):
     assert sum(validate_weights(s.raw(tiny), s.universe).values()) <= 1.0
     flat = {sym: df.assign(open=10.0, high=10.0, low=10.0, close=10.0).iloc[:s.lookback] for sym, df in full.items()}
     assert sum(validate_weights(s.raw(flat), s.universe).values()) <= 1.0
-    two = {sym: full[sym].iloc[:s.lookback] for sym in ("ETH", "BTC")}
+    two = {sym: full[sym].iloc[:s.lookback] for sym in s.universe[:2]}
     assert sum(validate_weights(s.raw(two), ["ETH", "BTC"]).values()) <= 1.0 + 1e-9
 
 
