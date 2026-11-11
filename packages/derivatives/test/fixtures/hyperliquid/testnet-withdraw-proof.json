@@ -1,0 +1,30 @@
+{
+ "recordedAt": "2026-11-11T06:13:53.722Z",
+ "network": "testnet",
+ "endpoint": "https://api.hyperliquid-testnet.xyz/exchange",
+ "account": "0xca8cc61fb8284f0728f6ed196ceb941c3f969f98",
+ "note": "throwaway key generated in memory; account never deposited",
+ "request": {
+  "action": {
+   "type": "withdraw3",
+   "hyperliquidChain": "Testnet",
+   "signatureChainId": "0x66eee",
+   "destination": "0xca8cc61fb8284f0728f6ed196ceb941c3f969f98",
+   "amount": "12.3",
+   "time": 1794377633474
+  },
+  "nonce": 1794377633474,
+  "signature": {
+   "r": "0x3aea029f3bc1ecf66e7dcae561c3691c73ada2937ff17e3462c1e54008c619bc",
+   "s": "0x2c51b7bb5068df87d3b9e5ca6729605ef8099f17a5d377290b90e61398bf30e0",
+   "v": 27
+  },
+  "vaultAddress": null,
+  "expiresAfter": null
+ },
+ "status": 200,
+ "answer": {
+  "status": "err",
+  "response": "Must deposit before performing actions. User: 0xca8cc61fb8284f0728f6ed196ceb941c3f969f98"
+ }
+}

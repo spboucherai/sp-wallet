@@ -134,7 +134,7 @@ for (const size of SIZES) {
       await expect(card.getByTestId('trading-key')).toContainText('0x7e57');
       await expect(card.getByTestId('trading-key')).toContainText('Elle ne peut ni retirer des fonds');
       // funding is explained, never offered: deposits and withdrawals are not built
-      await expect(card.getByTestId('funding-box')).toContainText('ne sont pas construits dans SP Wallet');
+      await expect(card.getByTestId('funding-box')).toContainText('« Déposer » et « Retirer » se font ci-dessous');
       await expect(card.getByTestId('funding-box').getByRole('button')).toHaveCount(0);
       await card.scrollIntoViewIfNeeded();
       await shot(page, '02-account-readonly', true);

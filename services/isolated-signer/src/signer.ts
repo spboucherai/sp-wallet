@@ -15,6 +15,7 @@ import type { Keys } from './keys.ts';
 import { noPrices, type PriceView } from './prices.ts';
 import type { Store, StoredCredential } from './store.ts';
 import { venueAuthorize, venueKeyAddress, venueRevoke, venueSign, venueStatus, type VenueCtx, type VenueSignRequest } from './venue.ts';
+import { venueDepositVerdict, venueWithdraw } from './venue-collateral.ts';
 import { venueMandateApprove, venueMandateRevoke, venueMandateSign, venueMandateStatus, type VenueMandateSignRequest } from './venue-mandate.ts';
 import { noVenueReader, type VenueReader } from './venue-read.ts';
 
@@ -53,6 +54,8 @@ export class Signer {
   venueAuthorize(authorization: unknown, assertion?: AuthenticationResponseJSON) { return venueAuthorize(this.venueCtx(), authorization, assertion); }
   venueRevoke(authorizationId: string) { return venueRevoke(this.venueCtx(), authorizationId); }
   venueSign(req: VenueSignRequest) { return venueSign(this.venueCtx(), req); }
+  /** collateral: withdraw3 to the wallet's own address, the second (and last) kind of venue message the main key signs */
+  venueWithdraw(withdrawal: unknown, assertion?: AuthenticationResponseJSON) { return venueWithdraw(this.venueCtx(), withdrawal, assertion); }
   // derivative mandates (venue-mandate.ts): one passkey approval, then orders without a passkey inside limits enforced here
   venueMandateApprove(mandate: unknown, assertion?: AuthenticationResponseJSON) { return venueMandateApprove(this.venueCtx(), mandate, assertion); }
   venueMandateSign(req: VenueMandateSignRequest) { return venueMandateSign(this.venueCtx(), req); }
@@ -320,6 +323,9 @@ export class Signer {
     if (i.from !== own) deny('wrong_source', 'source address is not controlled by this signer');
     if (i.swap || i.bridge ? i.to !== own : i.to === own) deny('self_send', i.swap ? 'a swap must deliver to the wallet itself' : i.bridge ? 'a bridge must deliver to the wallet itself' : 'destination equals source');
     if (st.state.used[i.proposalId] !== undefined) deny('replay', 'proposal already signed');
+    // venue deposits (venue-collateral.ts): pinned bridge, native USDC, floor above the venue minimum; a plain transfer to a venue bridge is refused
+    const vd = venueDepositVerdict(i, own!);
+    if (vd) deny('venue_deposit', vd);
 
     const day = new Date(now * 1000).toISOString().slice(0, 10), spendKey = `${day}|${i.network}:${i.symbol}`;
     const verdict = checkPolicy(st.policy, i, BigInt(st.state.spent[spendKey] ?? '0'), now, st.state.halted);
@@ -397,7 +403,8 @@ export class Signer {
     const out = await build!();
     st.log('sign.ok', { proposalId: i.proposalId, hash: Buffer.from(hash).toString('hex'), network: i.network, symbol: i.symbol, amount: i.amount, to: i.to, txid: out.txid, ...(i.swap ? { swap: i.swap.provider, toAsset: i.swap.toAsset, minOut: i.swap.minOut } : {}),
       ...(i.xswap ? { xswap: i.xswap.provider, toNetwork: i.xswap.toNetwork, toAsset: i.xswap.toAsset, minOut: i.xswap.minOut, vault: i.xswap.vault, vaultPubKey: i.xswap.vaultPubKey, memo: i.xswap.memo } : {}),
-      ...(i.bridge ? { bridge: i.bridge.provider, toNetwork: i.bridge.toNetwork, cctpMaxFee: i.bridge.maxFee, minFinalityThreshold: i.bridge.minFinalityThreshold } : {}) });
+      ...(i.bridge ? { bridge: i.bridge.provider, toNetwork: i.bridge.toNetwork, cctpMaxFee: i.bridge.maxFee, minFinalityThreshold: i.bridge.minFinalityThreshold } : {}),
+      ...(i.venueDeposit ? { venueDeposit: i.venueDeposit.venue, venueNetwork: i.venueDeposit.venueNetwork, route: i.venueDeposit.route } : {}) });
     st.save();
     return { ...out, hash: Buffer.from(hash).toString('hex') };
   }

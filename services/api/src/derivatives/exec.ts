@@ -278,7 +278,7 @@ export class LiveService {
     return {
       account: a.account, network: a.network, equity: v.state?.equity ?? null, collateral: v.state?.collateral ?? null, freeCollateral: v.state?.freeCollateral ?? null, marginUsed: v.state?.marginUsed ?? null,
       withdrawable: v.state?.withdrawable ?? null, asset: 'USDC', error: v.error, ts: v.ts, source: 'venue' as const,
-      locale, deposits: { supported: false, how: t.depositsHow }, withdrawals: { supported: false, how: t.withdrawalsHow },
+      locale, deposits: { supported: a.network === 'mainnet', how: t.depositsHow }, withdrawals: { supported: true, how: t.withdrawalsHow },
     };
   }
 

@@ -183,6 +183,15 @@ create index if not exists deriv_mandates_account on deriv_mandates (account_id,
 alter table deriv_orders add column if not exists mandate_id uuid;
 alter table deriv_orders add column if not exists agent jsonb;
 alter table deriv_orders add column if not exists estimate jsonb;
+-- collateral of venue accounts (v6): deposits (a wallet proposal + the credit read from the venue's ledger) and withdrawals (withdraw3 + arrival on the wallet)
+create table if not exists deriv_collateral (
+  id uuid primary key, account_id uuid not null, kind text not null, state text not null, final boolean not null default false, venue_network text not null,
+  amount numeric not null check (amount > 0), fee numeric, chain_network text, proposal_id uuid, txid text, op_hash text, request jsonb not null default '{}',
+  action json, signature jsonb, venue_answer jsonb, nonce bigint, balance_before jsonb, balance_after jsonb, ledger jsonb, arrival jsonb, error text, attempts int not null default 0,
+  expires_at timestamptz, sent_at timestamptz, venue_at timestamptz, done_at timestamptz, checked_at timestamptz,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create index if not exists deriv_collateral_open on deriv_collateral (account_id) where not final;
+create index if not exists deriv_collateral_recent on deriv_collateral (account_id, created_at desc);
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }

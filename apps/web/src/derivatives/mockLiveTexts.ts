@@ -36,20 +36,20 @@ export const liveReason = (code: LiveReasonCode, locale: LiveLocale = 'en'): str
 
 const T = {
   depositsHow: {
-    en: 'docs/v4/venues/hyperliquid.md, section 14: native USDC on Arbitrum sent by the account itself to the venue bridge (minimum 5 USDC), done by the owner outside this engine',
-    fr: 'docs/v4/venues/hyperliquid.md, section 14 : USDC natif sur Arbitrum envoyé par le compte lui-même au pont de la plateforme (minimum 5 USDC), fait par le propriétaire en dehors de ce moteur',
+    en: 'docs/v4/venues/hyperliquid.md, section 15: native USDC on Arbitrum sent by the wallet itself to the pinned venue bridge, with the passkey (venue minimum 5 USDC; the wallet refuses less than 6) — routes …/collateral/status and …/collateral/deposit/…; mainnet only (testnet collateral is mock USDC from the venue faucet)',
+    fr: 'docs/v4/venues/hyperliquid.md, section 15 : USDC natif sur Arbitrum envoyé par le portefeuille lui-même au pont épinglé de la plateforme, avec la clé d\'accès (minimum de la plateforme 5 USDC ; le portefeuille refuse moins de 6) — routes …/collateral/status et …/collateral/deposit/… ; réseau principal seulement (sur le testnet, la garantie est de l\'USDC fictif du robinet de la plateforme)',
   },
   withdrawalsHow: {
-    en: 'not built: needs the user-signed withdraw3 action and an allowlisted destination in the signer policy (same section)',
-    fr: 'non construit : exige l\'action withdraw3 signée par l\'utilisateur et une destination autorisée dans la politique du signataire (même section)',
+    en: 'routes …/collateral/withdraw/…: the user-signed withdraw3 action, signed by the wallet key after a passkey approval, to the wallet\'s own address only; venue fee 1 USDC (same section)',
+    fr: 'routes …/collateral/withdraw/… : l\'action withdraw3 signée par la clé du portefeuille après approbation par clé d\'accès, uniquement vers l\'adresse du portefeuille ; frais de la plateforme 1 USDC (même section)',
   },
   agentNote: {
     en: 'On the venue an API wallet could also move collateral between the account\'s own balances; the signer refuses to sign anything but orders, cancels and leverage changes.',
     fr: 'Sur la plateforme, un portefeuille API pourrait aussi déplacer la garantie entre les soldes du compte lui-même ; le signataire refuse de signer autre chose que des ordres, des annulations et des changements de levier.',
   },
   byMainKey: {
-    en: 'one approveAgent action naming the trading key above (the only venue message the wallet key signs)',
-    fr: 'une seule action approveAgent désignant la clé de négociation ci-dessus (le seul message de la plateforme que signe la clé du portefeuille)',
+    en: 'one approveAgent action naming the trading key above (the wallet key signs nothing else to trade; its only other venue message is a withdrawal to the wallet\'s own address, approved separately with the passkey)',
+    fr: 'une seule action approveAgent désignant la clé de négociation ci-dessus (la clé du portefeuille ne signe rien d\'autre pour négocier ; son seul autre message pour la plateforme est un retrait vers l\'adresse du portefeuille, approuvé à part avec la clé d\'accès)',
   },
   byPasskey: {
     en: 'the SHA-256 of this authorization, which includes the hash of the acknowledgement text',

@@ -16,6 +16,7 @@
 import { hex, validateVenueAuthorization, venueAgentWireName, venueAuthorizationHash, venueLeverageHash, venueOrderHash, venueOrderNotional, VenuePolicySchema, VENUE_AUTH_MAX_DAYS, VENUE_POLICY_BOUNDS, withinBand,
   type VenueAuthorization, type VenueLeverage, type VenueOrder, type VenuePolicy } from '../../../../packages/derivatives/src/live/canonical.ts';
 import { HL_PINNED_ASSETS, HL_PINNED_AT } from '../../../../packages/derivatives/src/live/hl-assets.ts';
+import { createCollateralMock, type CollateralHooks } from './mockCollateral';
 // >>> v7 perp live: the repository's own canonical mandate (schema, hash, validity, phase)
 import { validateVenueMandate, VENUE_MANDATE_BOUNDS, VENUE_MANDATE_WIND_DOWN_S, venueMandateHash, venueMandatePhase, VenueMandateSchema, type VenueMandate } from '../../../../packages/derivatives/src/live/mandate.ts';
 import { mockLiveReasons, mockLiveTexts, type MockLocale } from './mockLiveTexts';
@@ -80,6 +81,7 @@ export interface LiveHooks {
   /** the foreign order is gone from the venue */ settle: (network: Net) => void;
   /** the venue cannot be read (venueState.error) */ unreadable: (on: boolean) => void;
   accounts: () => { id: string; network: Net; mode: string; orders: number }[];
+  /** deposits and withdrawals of collateral (mockCollateral.ts) */ collateral: CollateralHooks;
 }
 
 export function createLiveMock(env: LiveMockEnv) {
@@ -89,6 +91,12 @@ export function createLiveMock(env: LiveMockEnv) {
   const now = () => Date.now();
   const emit = (id: string, event: string, data: unknown) => { for (const l of [...(listeners.get(id) ?? [])]) l(event, data); };
   const options = (hashHex: string) => ({ challenge: b64u(unhex(hashHex)), timeout: 120_000, rpId: location.hostname, allowCredentials: [], userVerification: 'required' as const });
+  // deposit / withdraw of collateral (mockCollateral.ts): the venue side is this mock's own venue account
+  const COLLATERAL = createCollateralMock({ now, mainnet: () => MAINNET, keyId: 'spw-mock0000000000', options, refuse: (code, message, status) => new Refuse(code, message, status),
+    balance: (m) => { const a = ACCTS.get(m.id); if (!a || UNREADABLE) return null; if (!a.venue) return { equity: '0', withdrawable: '0' }; const st = a.venue.accountState(now()); return { equity: st.equity, withdrawable: st.freeCollateral }; },
+    move: (m, delta) => { const a = ACCTS.get(m.id); if (!a) return; if (!a.venue) { if (D.isPos(D.from(delta))) a.venue = newVenue(a, delta); } else a.venue.state.collateral = D.str(D.add(D.from(a.venue.state.collateral), D.from(delta))); snapshot(a); },
+    refusal: (assertion, hashHex) => { let challenge = ''; try { challenge = JSON.parse(atob(String((assertion as any)?.response?.clientDataJSON).replace(/-/g, '+').replace(/_/g, '/'))).challenge; } catch { /* not an assertion */ }
+      return challenge === b64u(unhex(hashHex)) ? null : new Refuse('signer_bad_approval', 'the passkey assertion does not approve this action (challenge mismatch)', 422); } });
   const newVenue = (a: { account: string }, collateral: string) => PaperAccount.create({ venue: 'hyperliquid', account: a.account, collateral, config: { takerFeeRate: '0.00045', makerFeeRate: '0.00015', liquidationFeeRate: '0', feeAsset: 'USDC', leverage: '20', leverageByInstrument: {}, maintenanceMarginFraction: '0.0125' } });
   const effectiveHalt = (a: LAcct) => a.halt ?? (a.divergence ? `the venue's state and the wallet's records differ (${a.divergence}): new orders are stopped until it clears` : null);
   const blocked = (a: LAcct, what: 'trade' | 'stop'): Refuse | null => {
@@ -486,7 +494,9 @@ export function createLiveMock(env: LiveMockEnv) {
     if (rest === '' && method === 'GET') return ok(detail(a));
     if (rest === '/collateral') { const v = venueState(a); return ok({ account: a.account, network: a.network, equity: v.state?.equity ?? null, collateral: v.state?.collateral ?? null, freeCollateral: v.state?.freeCollateral ?? null, marginUsed: v.state?.marginUsed ?? null,
       withdrawable: v.state?.withdrawable ?? null, asset: 'USDC', error: v.error, ts: v.ts, source: 'venue', locale,
-      deposits: { supported: false, how: mockLiveTexts(locale).depositsHow }, withdrawals: { supported: false, how: mockLiveTexts(locale).withdrawalsHow } }); }
+      deposits: { supported: a.network === 'mainnet', how: mockLiveTexts(locale).depositsHow }, withdrawals: { supported: true, how: mockLiveTexts(locale).withdrawalsHow } }); }
+    // deposit / withdraw: simulated by mockCollateral.ts (time stands in for the chain and the venue; see its header for what is real)
+    if (rest.startsWith('/collateral/')) return ok(COLLATERAL.handle(method, rest.slice('/collateral'.length), b, a));
     // >>> v7 perp live: MANDATE_LIVE routes (no route places a mandate order)
     if (rest === '/mandate' && method === 'GET') return ok(mandateStatus(a));
     if (rest === '/mandate/prepare') return ok(prepareMandate(a, b));
@@ -531,6 +541,7 @@ export function createLiveMock(env: LiveMockEnv) {
     settle: (network) => { const a = [...ACCTS.values()].find((x) => x.network === network); if (a) a.foreign = []; },
     unreadable: (on) => { UNREADABLE = on; },
     accounts: () => [...ACCTS.values()].map((a) => ({ id: a.id, network: a.network, mode: a.mode, orders: a.orders.length })),
+    collateral: COLLATERAL.hooks,
   };
 
   /** the simulated passkey: answers after a pause, with an assertion that carries the challenge it was asked to sign */

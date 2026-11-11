@@ -74,7 +74,7 @@ is false while the worker still watches an order. `partially_filled` + `final: t
 | `GET /accounts` | — | `{ accounts: AccountSummary[], ts }` |
 | `POST /accounts` | `{ venue: "hyperliquid", network: "testnet"\|"mainnet", label? }` | `AccountDetail` (`READ_ONLY`; one account per venue and network — a second call returns the same one) |
 | `GET /accounts/:id` | — | `AccountDetail` |
-| `GET /accounts/:id/collateral` | — | `{ account, network, equity, collateral, freeCollateral, marginUsed, withdrawable, asset: "USDC", error, ts, source: "venue", deposits: { supported: false, how }, withdrawals: { supported: false, how } }` |
+| `GET /accounts/:id/collateral` | — | `{ account, network, equity, collateral, freeCollateral, marginUsed, withdrawable, asset: "USDC", error, ts, source: "venue", deposits: { supported, how }, withdrawals: { supported, how } }` (read-only; moving collateral: section "Collateral" below) |
 | `POST /accounts/:id/authorization/prepare` | `{ policy: VenuePolicy, days: 1…90, locale: "fr"\|"en", agentName?: string }` | `{ authorization, hash, acknowledgement: Ack, agent: { address, name, wireName, validUntil, can: string[], cannot: string[], note }, whatIsSigned: { byMainKey, byPasskey }, venueState, options, ts }` |
 | `POST /accounts/:id/authorization/approve` | `{ assertion, acknowledged: true }` | `AccountDetail` (`MANUAL_LIVE`) |
 | `POST /accounts/:id/authorization/revoke` | `{ cancelOpenOrders?: boolean }` | `AccountDetail & { cancelled: CancelAll\|null, warning: string\|null, venueAgent: string }` |
@@ -126,7 +126,65 @@ divergence, halt, mode, ts, source: "venue" }` (first, then after every reconcil
   `409 bad_state|wrong_key`; `410 proposal_expired`; `422 mode_read_only|authorization_expired|venue_rejected|no_position|below_min_size|instrument_not_allowed|leverage_exceeded`;
   `423 halted`; `429 too_many_streams`; `503 asset_table_mismatch|venue_unavailable|venue_rate_limited|signer_unreachable`.
 - `venueState.error` non-null = the venue could not be read: show the account as unreadable, never as empty.
-- Collateral: `GET …/collateral` is read-only. Deposits and withdrawals are not built (docs/v4/venues/hyperliquid.md, section 14).
+- Collateral: `GET …/collateral` is read-only. Deposits and withdrawals have their own routes: next section.
+
+## Collateral: deposit and withdraw (v6)
+
+All under `/api/v1/derivatives/live/accounts/:id/collateral`. Code `services/api/src/derivatives/collateral.ts`,
+`collateral-routes.ts`; facts and evidence `docs/v4/venues/hyperliquid.md` section 15. Amounts are decimal strings of USDC
+(at most 6 decimals). Mainnet needs `SPW_DERIV_LIVE_MAINNET=on` (`403 mainnet_disabled` otherwise). An authorization is NOT
+needed: deposit first (the venue refuses every action of an account that never deposited).
+
+| Route | Body | Answer |
+|---|---|---|
+| `GET /status` | — | `{ account, accountId, venue, network, mainnetEnabled, venueBalance, route, withdrawal, wallet, walletError, deposit: { available, reason, bridgeFrom[] }, withdraw: { available, reason }, operations: Operation[], ts }` |
+| `POST /deposit/prepare` | `{ amount }` | `{ operation, intent, route: { network, networkName, bridge, minimum, venueMinimum, expectedSeconds }, fee: { estimate, max, symbol }, liveness, venueBalance, options }` — `options.challenge` = SHA-256 of the canonical intent |
+| `POST /deposit/:opId/approve` | `{ assertion }` | `{ operation }` (signed and broadcast: `state: "sent"`) |
+| `POST /withdraw/prepare` | `{ amount }` | `{ operation, withdrawal, hash, whatIsSigned: { byMainKey, byPasskey, action }, receive, venueBalance, options }` — `options.challenge` = SHA-256 of the canonical withdrawal |
+| `POST /withdraw/:opId/approve` | `{ assertion }` | `{ operation }` (`submitted`, `rejected` with the venue's words, or `unknown`) |
+| `GET /operations/:opId` | — | `{ operation }` — re-reads the venue's ledger and the wallet's chain records now |
+| `POST /operations/:opId/cancel` | — | `{ operation }` — before the passkey only (`409 bad_state` afterwards) |
+
+- `venueBalance`: `{ abstraction, equity, withdrawable, spotUsdc, total, error, ts }`. `abstraction` is the venue's account
+  mode (`default` for an account that never changed it: collateral in the perp margin; `unifiedAccount` / `portfolioMargin`:
+  collateral reported in the spot state — `total` follows the mode).
+- `route` (null on testnet: no deposit route): `{ id: "arbitrum-bridge2", network: "arbitrum", networkName, bridge, bridgeExplorer,
+  asset: "USDC", token, venueMinimum: "5", minimum: "6", expectedSeconds: 60, credits: "sender", venueFee: "0", legacy: true, pinnedAt, codeSha256 }`.
+- `withdrawal`: `{ fee: "1", expectedSeconds: 240, destination (= account), payoutNetworkName, arrivalTracked, available }`.
+- `wallet` (null on testnet): `{ address, network, networkName, usdc, gas, gasSymbol, limits: { perTransfer, perDay, spentToday, maxNow }, elsewhere: [{ network, name, usdc }] }`.
+  `elsewhere` is filled when the wallet lacks the minimum on the deposit network: native USDC on the other CCTP networks.
+  Nothing is bridged automatically; link to `/swap?bridgeFrom=<network>&bridgeTo=arbitrum[&amount=…]` (the Swap screen pre-fills from it).
+- `deposit.reason`: `no_route | mainnet_disabled | halted | usdc_elsewhere | no_usdc | no_gas | limit_reached | wallet_unreadable`;
+  `withdraw.reason`: `mainnet_disabled | halted | venue_unreadable`.
+- `liveness` (deposit prepare): `{ ok, checkedAt, checked, credited, detail, samples: [{ tx, usdc, credited }] }` — the most
+  recent transfers of at least 5 USDC into the bridge (last 10 minutes, else last hour), each looked up in the venue's ledger
+  of its sender. `ok: false` → `503 route_not_proven`, nothing prepared. A positive result is reused for 5 minutes.
+- `Operation`: `{ id, kind: "deposit" | "withdraw", state, final, venueNetwork, amount, asset, fee, expectedReceive, chainNetwork,
+  chainNetworkName, bridge, txid, explorer, hash, proposalId, proposalState, confirmations, createdAt, expiresAt, sentAt, venueAt,
+  doneAt, checkedAt, expectedSeconds, overdue, check: string[], balanceBefore, balanceAfter, ledger, arrival, venueAnswer, error,
+  attempts, arrivalTracked }`.
+  - Deposit states: `pending_approval → signed → sent → awaiting_credit → credited`; ends also `failed` (signer refusal, or
+    the transaction reverted / was replaced: nothing reached the venue), `expired`, `cancelled`. **`credited` is the only
+    success**: it is set when the venue's ledger (`userNonFundingLedgerUpdates`) holds a `deposit` entry whose `hash` is our
+    Arbitrum transaction hash. `awaiting_credit` = confirmed on-chain, not yet in the venue's ledger: show "waiting for the
+    venue to credit". After 10 minutes `overdue: true` and `check` lists what to look at
+    (`tx_success, tx_to_bridge, amount_min, venue_ledger, venue_status`); polling goes on, the state stays `awaiting_credit`.
+  - Withdrawal states: `pending_approval → approved → signed → submitted → completed`; `unknown` (no readable answer: the same
+    signed bytes are sent again, at most 3 times; it resolves to `submitted`/`completed` when the ledger or the wallet shows
+    the withdrawal, or to `rejected` after 30 minutes without any trace); `rejected` (the venue refused: its words in `error`),
+    `failed` (not signed), `expired`, `cancelled`. **`completed` is the only success**: on mainnet it needs the arrival
+    (`arrival: { txid, amount, seenAt }`: USDC from the bridge to the wallet, recorded by the wallet's own deposit scan);
+    on testnet (`arrivalTracked: false`) it is set when the venue's ledger shows the withdrawal. After 15 minutes
+    `overdue: true`, `check`: `venue_ledger, bridge_paused, wallet_scan, venue_status`.
+- Errors: `422 below_minimum | no_route | insufficient_usdc | policy | below_fee | insufficient_collateral | simulation_failed |
+  signer_<code>` (`signer_venue_deposit`, `signer_wrong_destination`, `signer_bad_approval`, …); `403 mainnet_disabled`;
+  `409 deposit_in_progress | withdrawal_in_progress | pending_tx | bad_state | wrong_account | conflict`; `410 expired`;
+  `423 halted`; `503 contract_changed | bridge_paused | route_not_proven | account_has_code | rpc_degraded | venue_unavailable`;
+  `404 unknown_account | unknown_operation`.
+- A deposit also exists as an ordinary wallet proposal (`GET /api/v1/transfers/proposals/:proposalId`, note
+  `Hyperliquid mainnet deposit`, warning `venue_deposit`); the wallet's worker broadcasts and tracks it like any transfer.
+- The browser mock (`?mock=1`) simulates these routes (`apps/web/src/derivatives/mockCollateral.ts`: time stands in for the chain and
+  the venue; hooks `window.__spwMock.live.collateral.{wallet, creditAfter, payoutAfter, age}`); browser spec `tests/e2e/futures-collateral.spec.ts`.
 
 ## V6 — `MANDATE_LIVE`, locale, and the fixes that came with it (2026-11-11)
 

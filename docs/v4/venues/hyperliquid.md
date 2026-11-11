@@ -198,6 +198,9 @@ table would be told "BTC" for another asset's index. The signer must pin or fetc
 
 ## 8. Deposits, withdrawals, sub-accounts, vaults (facts, not implemented)
 
+> Deposits and withdrawals are built since v6 (2026-11-11): **section 15** is current (facts re-read, evidence, route, code).
+> Sub-accounts and vaults remain unused.
+
 - **Deposit**: "CCTP is the preferred method for minting USDC natively on the Hyperliquid L1" (Circle:
   https://developers.circle.com/cctp/howtos/transfer-usdc-from-arbitrum-to-hypercore). The **legacy Arbitrum bridge** ("deprecated";
   contract `0x2df1c51e09aecf9cacb7bc98cb1742757f163df7` on Arbitrum, source `hyperliquid-dex/contracts/Bridge2.sol`; testnet
@@ -339,7 +342,7 @@ It ships disabled: a venue account is `READ_ONLY` until the owner approves an au
 
 | Key | Path | Signs | Never signs |
 |---|---|---|---|
-| Wallet key (the account) | `m/44'/60'/0'/0/0` | on this venue, exactly one message: `approveAgent` naming the signer's own trading key, once per authorization, inside `POST /venue/authorize`, after the passkey approved the canonical authorization | orders, cancels, transfers, `withdraw3`, `usdSend`, `usdClassTransfer`, an `approveAgent` for any other address |
+| Wallet key (the account) | `m/44'/60'/0'/0/0` | on this venue, exactly one message: `approveAgent` naming the signer's own trading key, once per authorization, inside `POST /venue/authorize`, after the passkey approved the canonical authorization | orders, cancels, transfers, `usdSend`, `spotSend`, `usdClassTransfer`, an `approveAgent` for any other address, a `withdraw3` to any address but the wallet's own. **Since v6 it signs a second message**: `withdraw3` to the wallet's own address, inside `POST /venue/withdraw`, after a passkey approval of the canonical withdrawal (section 15) |
 | Trading key (API wallet) | `m/44'/60'/9000'/0/0` mainnet, `…/0/1` testnet (vault index 9000 is now refused, so no agent vault can share the path) | `order` (one per signature), `cancel`, `cancelByCloid`, `updateLeverage` — only under a stored, unrevoked, unexpired authorization | everything `describe()` calls `other` (`agentSendAsset`, `vaultTransfer`, `subAccountTransfer`, `updateIsolatedMargin`, `cDeposit2`, `scheduleCancel`, `twapOrder`, builder fees…), anything with a `vaultAddress`, anything without `expiresAfter` |
 
 The API wallet is registered under a name with `valid_until <authorization expiry in ms>`, so the venue itself drops it when the
@@ -433,6 +436,9 @@ and revoked the signer authorization. Not proven (needs a funded account): every
 
 ## 14. Funding the venue account (collateral) — facts and what is not built
 
+> Superseded by **section 15** (v6, 2026-11-11): deposit and withdrawal are built. This section is kept as the record of
+> what was known and required before; its "not built" statements no longer hold.
+
 The venue account is the wallet's own EVM address. `GET /api/v1/derivatives/live/accounts/:id/collateral` shows, read from
 the venue (`clearinghouseState`): equity, collateral (account value without unrealized PnL), free collateral, margin used
 and `withdrawable`. **This delivery builds and sends no deposit and no withdrawal.**
@@ -474,3 +480,243 @@ What a later delivery needs, precisely:
    Arbitrum (about 5 minutes).
 3. **Spot ⇄ perp** (`usdClassTransfer`, user-signed, builder present and unwired) only if the account uses separate spot and
    perp balances; accounts under the "unified account" abstraction are not read correctly today (section 12).
+
+## 15. Collateral: deposit and withdraw, built (v6, 2026-11-11)
+
+Sections 8 and 14 described deposits and withdrawals as facts "not implemented". They are now built; where this section and
+those differ, this one is current. Every fact below was read again from its primary source on **2026-11-11** (UTC).
+
+Code: shared rules and the pinned table `packages/derivatives/src/live/collateral.ts`; signer
+`services/isolated-signer/src/venue-collateral.ts`; API `services/api/src/derivatives/collateral.ts` + `collateral-routes.ts`;
+screens `apps/web/src/derivatives/LiveCollateral.tsx`; routes `docs/v4/API-LIVE-NOTES.md` ("Collateral").
+
+### 15.1 Sources (read 2026-11-11)
+
+| What | Where | What it says |
+|---|---|---|
+| Venue, "USDC" page | https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/bridge2 (canonical name of the page: `…/api/usdc`) | "CCTP is the preferred method for minting USDC natively on the Hyperliquid L1." · heading "Legacy Bridge": "The legacy bridge is deprecated." · "The user sends native USDC to the bridge, and it is credited to the account that sent it in less than 1 minute." · "The minimum deposit amount is 5 USDC." "If you send an amount less than this, it will not be credited and be lost forever." · withdrawal: "requires a user wallet signature on Hyperliquid only, and no Arbitrum transaction", "handled entirely by validators", "the funds arrive in the user wallet in 3-4 minutes" · bridge `0x2df1c51e09aecf9cacb7bc98cb1742757f163df7` (Arbitrum), testnet `0x08cfc1B6b2dCF36A1480b99353A354AA8AC56f89` · `batchedDepositWithPermit` deposits on behalf of another user. No fee is stated on that page. |
+| Venue, exchange endpoint | https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint | `withdraw3`: `{ type, hyperliquidChain: "Mainnet" \| "Testnet", signatureChainId, amount, time, destination }`, "time: current timestamp in milliseconds as a Number, should match nonce"; "There is a $1 fee for withdrawing at the time of this writing and withdrawals take approximately 5 minutes to finalize." · "User-signed actions … do not support the `expiresAfter` field." · `usdClassTransfer`: "transfer USDC from the user's spot wallet to perp wallet and vice versa". |
+| Venue, onboarding | https://hyperliquid.gitbook.io/hyperliquid-docs/onboarding/how-to-start-trading | "You can send USDC on Arbitrum/Ethereum/Base/Polygon to the deposit address shown" (the web interface's own deposit addresses), "You can also transfer USDC from other chains via CCTP."; "The gas is only for depositing." No minimum and no withdrawal fee amount on that page. |
+| Venue, account modes | https://hyperliquid.gitbook.io/hyperliquid-docs/trading/account-abstraction-modes | "Unified account" (single balance per asset), "Portfolio margin", "Manual / Standard" ("separate perp and spot balances"); "For API users, unified account and portfolio margin show all balances and holds in the spot clearinghouse state." The default mode of a new account is not stated there. |
+| Venue, HyperCore ⇄ HyperEVM | https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/hypercore-less-than-greater-than-hyperevm-transfers | generic tokens: ERC-20 transfer to the token's system address (`0x20…<index>`), "credited to the Core based on the emitted `Transfer` event"; HYPE to `0x2222…2222`; "There are currently no checks that the system address has sufficient supply". USDC is not described there (Circle's `CoreDepositWallet` handles it). |
+| Circle, Arbitrum → HyperCore | https://developers.circle.com/cctp/howtos/transfer-usdc-from-arbitrum-to-hypercore | `CctpExtension.batchDepositForBurnWithAuth` with an EIP-3009 `ReceiveWithAuthorization` signature; destination domain 19; `mintRecipient` and `destinationCaller` = `CctpForwarder` on HyperEVM ("If either value is wrong, the funds become permanently stuck"); hook data `"cctp-forward"` + version + length + HyperCore recipient + destination dex (0 = perps, `0xffffffff` = spot); forwarding fee 0.20 USDC ("a 10 USDC transfer yields 9.80 USDC on HyperCore"). |
+| Circle, addresses | https://developers.circle.com/cctp/references/hypercore-contract-addresses | mainnet: `CctpExtension` (Arbitrum) `0xA95d9c1F655341597C94393fDdc30cf3c08E4fcE`, `CctpExtensionV2` `0x3289e443a95B28Bcedacc4B33C689b0C9b84ffAB`, `CctpForwarder` (HyperEVM) `0xb21D281DEdb17AE5B501F6AA8256fe38C4e45757`, `CoreDepositWallet` (HyperEVM) `0x6B9E773128f453f5c2C60935Ee2DE2CBc5390A24`. Not pinned, not used by the wallet. |
+| Circle, concept | https://developers.circle.com/cctp/concepts/cctp-on-hypercore | "There is no minimum deposit amount."; "a one-time 1 USDC activation fee, managed entirely by the Hyperliquid protocol" on the first outbound action; "HyperCore balances reflect protocol-level credits, not Circle-issued USDC."; forwarding "has a dynamic destination chain gas fee". |
+| Bridge source | https://github.com/hyperliquid-dex/contracts/blob/master/Bridge2.sol and the verified source of `0x2df1…3df7` on https://arbiscan.io (Etherscan API `getsourcecode`, chain 42161) | contract `Bridge2`, solc 0.8.9, optimizer on (1 000 000 runs), not a proxy. The `contract Bridge2 { … }` body of the verified file equals the repository's, comments and whitespace aside (17 119 characters each; SHA-256 of the normalised body `aacd2e02…77c1`). Deployed 2023-11-30 (block 155 689 071, tx `0xd2bfb554…e2da`) by `0x1d4c01e1…1fbc`. |
+
+Secondary sources (third-party guides, found by a web search, not authoritative) say the 1 USDC fee "is deducted from the
+withdrawal amount" and that the amount must exceed the fee. The venue's own pages do not say which.
+
+### 15.2 The bridge contract and the trust it adds
+
+Read from the verified source and from the chain (both registry RPC endpoints agree; `scripts/check-hl-bridge.mts`):
+
+- **A deposit is a plain ERC-20 transfer** of native USDC (`0xaf88d065e77c8cC2239327C5EDb3A432268e5831`) to the contract. There
+  is no deposit function to call for one's own funds; the contract's `Deposit` event is declared and **never emitted** (the
+  header comment's "DepositEvent" is stale); the validators watch USDC `Transfer`s into the address. `batchedDepositWithPermit`
+  exists for deposits on behalf of another user (not used). Because a deposit does not execute bridge code, **a paused bridge
+  still receives transfers** — which is why the API reads `paused()` itself and refuses to deposit while it is true.
+- **Not upgradeable, no owner.** No proxy (EIP-1967 implementation slot empty), no `delegatecall`, no `selfdestruct`, no
+  `onlyOwner` in the contract body. Runtime bytecode pinned: 19 394 bytes, SHA-256
+  `37ff6a58c3c80d99fd85ba0898ba3a5ae8d55b82c4a4d758dd258af3b05fc3c7`.
+- **Withdrawals**: `batchedRequestWithdrawals` (anyone may submit; needs signatures of more than 2/3 of the validator power,
+  hot keys) records a pending withdrawal; after the dispute period — `disputePeriodSeconds` = **200 s**, counted in time and
+  in blocks — a **finalizer** calls `batchedFinalizeWithdrawals`, which pays `usd` to `destination`. That is the "3–4 minutes".
+- **Who can stop or change it**: any `lockerThreshold` (= **2**) lockers can pause it (`voteEmergencyLock`); unpausing
+  (`emergencyUnlock`), replacing the validator set, invalidating pending withdrawals (`invalidateWithdrawals`), changing the
+  dispute period, the block duration and the locker threshold need a quorum (> 2/3 of power) of the validators' **cold** keys;
+  adding lockers/finalizers needs the hot quorum, removing them the cold one.
+- State on 2026-11-11: `nValidators` = **4**, `totalValidatorPower` = 4, `epoch` = 7, not paused, no locker voting to lock,
+  119.05 M USDC held.
+
+Trust added by depositing: (1) the USDC leaves the wallet and is held by this contract, releasable by 3 of 4 validator hot
+keys after a 200 s dispute window that 2 lockers can use to freeze it; (2) the credit on the venue is an off-chain act of the
+same validators — nothing on Arbitrum forces it; (3) the venue calls this route **deprecated**: it works today (15.3) and may
+be switched off, which the wallet cannot learn from the chain. Mitigations built: the bytecode and `paused()` are checked on
+two RPC sources before every deposit, and the API refuses to prepare a deposit unless the venue's ledger shows that it
+credited the most recent deposits made through the bridge (15.5).
+
+### 15.3 Is the legacy bridge still crediting? Evidence of 2026-11-11
+
+`node scripts/check-hl-bridge.mts --samples 8` (read-only: JSON-RPC reads on Arbitrum, `POST /info` on the venue; full output
+recorded in `docs/v4/venues/hyperliquid-bridge-evidence-2026-11-11.json`). Window: Arbitrum blocks 523 181 723 – 523 201 683
+(about 83 minutes before 06:14 UTC): **74** USDC transfers into the bridge, **84** out of it. Each sampled log was read on
+`arb1.arbitrum.io` and confirmed by its receipt on a second endpoint (`arbitrum.drpc.org`; the registry's second endpoint,
+publicnode, refuses receipts and logs older than a few minutes without a token — it did confirm bytecode and state).
+
+| Arbitrum transfer into the bridge (UTC) | From | USDC | Venue ledger of the SAME address (`userNonFundingLedgerUpdates`) |
+|---|---|---|---|
+| 04:39:04 `0xcfd025fb…` | `0x008407e2…39e4` | 2064.077644 | `deposit` 2064.077644, 6 s later |
+| 04:53:12 `0x401821c5…` | `0xcc1c32da…f9bb` | 128.314783 | `deposit` 128.314783, 7 s later |
+| 05:13:35 `0x3a12cc4b…` | `0xe0e03770…a3b0` | 10.704146 | `deposit` 10.704146, 11 s later |
+| 05:21:17 `0xf283f1c7…` | `0x9560ae0c…d37d` | 84.79 | `deposit` 84.79, 7 s later |
+| 05:45:39 `0x5fd00699…` | `0x032521c5…cf05` | 97 | `deposit` 97.0, 9 s later |
+| 05:50:39 `0x54f9369c…` | `0xf18db14a…8117` | 5002.501251 | `deposit` 5002.501251, 8 s later |
+| 06:03:11 `0xb8cad3c9…` | `0x735ec2a0…8ad2` | 100.785593 | `deposit` 100.785593, 8 s later |
+| 06:09:19 `0xd7115c2d…` | `0xd61f4cc6…fe5e` | 1000.045991 | `deposit` 1000.045991, 7 s later |
+
+8 of 8 credited, to the sending address, in 6–11 s. Two earlier runs the same morning (05:44 and 05:48 UTC) gave 6/6 and
+8/8, among them a deposit of exactly **5 USDC** (`0xfefa07f0…`, credited 7 s later) and of **6 USDC** (`0x81fe3e9f…`, 8 s).
+The ledger entry's `hash` **is the Arbitrum transaction hash** (seen on the 6 USDC deposit: entry hash `0x81fe3e9f8b63fe94…`),
+which is what the wallet uses to recognise its own deposit. No deposit below 5 USDC occurred in the windows read, so "below
+the minimum is lost" rests on the venue's page alone.
+
+Withdrawals in the same window, matched on the destination's own account (half of the payouts go to an address that is not
+the account that asked — an exchange, another wallet — and cannot be matched this way):
+
+| Payout on Arbitrum (UTC) | To | USDC received | Venue ledger |
+|---|---|---|---|
+| 05:09:00 | `0xc5ae0ec3…8b11` | 23.751098 | `withdraw` usdc 23.751098, fee 1.0, nonce 1794373505553000 → asked 234 s earlier |
+| 05:16:28 | `0x62a22e13…556c` | 5.496896 | `withdraw` usdc 5.496896, fee 1.0, asked 235 s earlier |
+| 05:43:53 | `0x6ff07e78…5c5c` | 489 | `withdraw` usdc 489.0, fee 1.0, asked 234 s earlier |
+| 05:58:29 | `0x887f8444…4ba5` | 4.7 | `withdraw` usdc 4.7, fee 1.0, asked 241 s earlier |
+
+Read from these: the ledger's `usdc` is the amount **received**; `fee` is `"1.0"`; `nonce` is the request's `time` in
+microseconds (`time × 1000`); the entry is dated a few seconds after the payout; request → payout ≈ 232–241 s.
+
+Shapes read live (mainnet `POST /info`):
+`userNonFundingLedgerUpdates {user, startTime[, endTime]}` → `[{ time, hash, delta: { type: "deposit", usdc } | { type: "withdraw", usdc, nonce, fee } | … }]`;
+`userAbstraction {user}` → `"default" | "unifiedAccount" | …`; `spotClearinghouseState {user}` → `{ balances: [{ coin, token, total, hold, entryNtl }] }`.
+
+### 15.4 Who is credited, and where the money lands
+
+- **The sender is credited** (venue page; every sampled deposit: 22 lookups over three runs, about 20 distinct deposits). The wallet's EVM address is the venue account, so a
+  transfer from the wallet funds the owner's account. The signer refuses a deposit whose `from` is not its own address, and the
+  screen refuses to ask for the passkey if the prepared sender is not the venue account.
+- **Perp margin, in the default mode.** `0xeeab2d67…f55f` (`userAbstraction` = `"default"`) deposited 6 + 6 USDC at 05:32 and
+  05:33 UTC; at 05:47 its `clearinghouseState` showed `accountValue` 11.995209, `withdrawable` 10.961603 and an open BTC
+  position, its `spotClearinghouseState` no balance. An address that never chose a mode answers `"default"` (seen on an
+  address the venue only knows from transfers). So for the owner's fresh account **no `usdClassTransfer` is needed** before
+  trading perpetuals — it is **not built**, and the signer cannot sign it.
+- Accounts that switched to "unified account" in the venue's interface (`0x5d7bd23d…6cef`, `0x05db0be6…2680`) show the same
+  deposits in the **spot** state and zeros in `clearinghouseState`. The collateral screens read `userAbstraction` and, when it
+  is not `default`, the spot USDC as well (`venueBalance.total`). The trading engine still reads `clearinghouseState` only
+  (section 12): an account switched to unified mode from the venue's interface is not traded correctly from the wallet.
+- **Deposit before authorizing.** The venue refuses every action of an account that never deposited ("Must deposit before
+  performing actions", sections 9 and 13) — including the `approveAgent` of the authorization. The deposit therefore needs no
+  authorization and comes first.
+
+### 15.5 The route offered, and why
+
+**One route: native USDC on Arbitrum One → the Bridge2 contract (the venue's "legacy bridge").**
+
+| | Arbitrum Bridge2 (offered) | Circle CCTP: Arbitrum → HyperCore (`CctpExtension`) | Wallet's CCTP to HyperEVM, then `CoreDepositWallet` |
+|---|---|---|---|
+| Proven to credit today | yes — every sampled real deposit (about 20), 6–11 s | not observed by us | not observed by us |
+| What the main key signs | one USDC `transfer` (an existing, tested shape) | an EIP-3009 `ReceiveWithAuthorization` typed message **and** a contract call — a new kind of signature | burn, mint, approval, deposit: four transactions on two chains |
+| New contracts to pin and review | 1 (immutable, 2023) | `CctpExtension`, `CctpForwarder`, `CoreDepositWallet`, the forwarding service | `CoreDepositWallet` + HYPE for gas on HyperEVM |
+| Fee to the venue / Circle | 0 | 0.20 USDC forwarding (2 % of 10 USDC) | 0, plus gas on both chains |
+| Other costs | — | "1 USDC activation fee" on the account's first outbound action (Circle) | same |
+| Failure mode | below 5 USDC: lost (refused by the app at < 6) | wrong `mintRecipient` / `destinationCaller` / hook data: "permanently stuck" | wrong function or recipient: unknown |
+| Status | "deprecated" by the venue, working | "preferred" by the venue | — |
+
+For an owner holding tens of dollars under a 50 USDC per transfer limit, the bridge is the route with the fewest moving
+parts and the only one whose result was observed. Its one real weakness — the venue may retire it — is handled by refusing
+to prepare a deposit unless the route is seen to credit right now (below). CCTP to HyperCore is the route to build when the
+venue announces an end date for the bridge; the wallet's existing CCTP (section "cross-network transfer") already brings
+USDC **to Arbitrum** from Ethereum, Base, Optimism, Polygon, Avalanche and HyperEVM, and the deposit screen links to it,
+pre-filled, when the wallet holds USDC elsewhere. Nothing is bridged silently.
+
+Numbers the wallet enforces: venue minimum **5 USDC**; wallet floor **6 USDC** (API and signer both refuse less); deposits are
+ordinary USDC sends for the signer's policy — **50 USDC per transfer, 100 per day** on `arbitrum:USDC` by default, shared
+with other USDC sends on Arbitrum, fee ceiling 0.0003 ETH; a non-empty signer allowlist must contain
+`arbitrum:0x2Df1c51E09aECF9cacB7bc98cB1742757f163dF7` (it is empty by default). Cost of a deposit: Arbitrum gas only (45 059
+gas on the fork). Withdrawal: venue fee **1 USDC**, no gas for the owner, about **4 minutes**.
+
+### 15.6 What was built
+
+**Deposit** — an intent the signer recognises: an ordinary wallet intent (`packages/core/src/intent.ts`) with a section
+`venueDeposit: { venue: "hyperliquid", venueNetwork: "mainnet", route: "arbitrum-bridge2", bridge, minAmount }`, part of the
+canonical bytes the passkey signs. `Signer.sign` calls `venueDepositVerdict` for every intent:
+
+- with the section: venue network → pinned chain (Arbitrum One, 42161); asset = the pinned token, which must also be the
+  registry's native USDC there; `to` = the section's bridge = the pinned bridge; `from` = the signer's own address; amount ≥
+  6 USDC and `minAmount` = that floor; no swap, bridge or memo. Then the unchanged policy (per transfer, per day, fee ceiling,
+  approval window, allowlist, halt), the passkey over the intent hash, the replay cache; the signer builds the transaction.
+- without the section: **any transfer to a venue bridge address (mainnet or testnet, on any network) is refused** — the
+  minimum cannot be bypassed with a plain send, and the generic transfer screen can no longer lose money there.
+
+The API (`prepareDeposit`): account = the wallet's address; mainnet setting; halt; no other deposit in flight and no
+unconfirmed transfer on Arbitrum; **guards** on both RPC endpoints (bytecode hash = pin, `usdcToken()` = pin, `paused()` false,
+no code on the wallet address); **liveness** (the 3 most recent transfers ≥ 5 USDC into the bridge, older than a minute, in
+the last 10 minutes or else the last hour: at least one must be in the venue's ledger, else `503 route_not_proven`); balance
+(with the list of networks that hold USDC when Arbitrum does not); gas estimate and simulation by the wallet's EVM adapter; the
+same `checkVenueDepositIntent` + `buildEvmTx` + `checkPolicy` as the signer; then the proposal and the WebAuthn request. At
+approval the guards run again. After the broadcast the wallet's own worker tracks the transaction; the collateral worker reads
+the venue's ledger every 10 s and marks the deposit `credited` only on a `deposit` entry whose hash is our transaction.
+
+**Withdrawal** — canonical object `VenueWithdrawal` (`SPW-VENUE-WITHDRAW-v1`), passkey over its SHA-256, `POST /venue/withdraw`
+on the signer: key id; account = destination = the signer's **own derived address** (anything else: `wrong_destination`);
+amount > fee, fee = 1; `time` within (now − 300 s, now + 60 s] and above every `time` already signed for that network;
+approval window ≤ 300 s; ≤ 10 signatures a day; no halt; never the same id twice. The action is built by the signer
+(`buildVenueWithdraw` → the SDK's `withdraw3` typed data: domain `HyperliquidSignTransaction`, chain id `0x66eee`, primary
+type `HyperliquidTransaction:Withdraw`, `hyperliquidChain` from the network, `nonce` = `time`) and read back field by field
+before the main key signs. The API checks the answer (same hash, same action, signature recovers to the account), stores it,
+and posts `{ action, nonce, signature, vaultAddress: null, expiresAfter: null }`; mainnet only with the server setting.
+`ok` → `submitted`; `err` → `rejected` with the venue's words; no readable answer → `unknown`: the identical bytes are sent
+again (the venue takes a nonce once) at most 3 times, 20 s apart, and the outcome is decided by the venue's ledger or the
+wallet's chain scan, never assumed; after 30 minutes without a trace it ends `rejected`. `completed` needs the USDC seen by
+the wallet's own deposit scan (a transfer from the bridge of the ledger's `usdc`, or of amount − fee / amount before the ledger
+entry exists).
+
+No amount cap was added to withdrawals: the only possible destination is the wallet itself.
+
+**Testnet.** No deposit route: the testnet bridge is on Arbitrum Sepolia, which is not one of the wallet's networks, and testnet
+collateral is mock USDC from the venue's faucet (section 9). Withdrawals are signed for `Testnet` and sent to the testnet
+endpoint; the payout chain is not followed, so a testnet withdrawal is `completed` when the venue's ledger shows it.
+
+### 15.7 Proofs (no real funds, nothing sent to mainnet)
+
+- `npx tsx scripts/fork-hl-deposit.mts` — anvil fork of Arbitrum One at block 523 201 495, fresh random key funded on the
+  fork: bytecode = pin, not paused; refusals (4 USDC, 5.999999 USDC, another destination, ETH, a plain send of 2 USDC to the
+  bridge, no passkey); then the 10 USDC deposit signed by the real signer class and mined on the fork: receipt status 1,
+  45 059 gas, one `Transfer(wallet → 0x2Df1…dF7, 10 USDC)`, **0 events from the bridge itself**, wallet −10, bridge +10, replay
+  refused. The Hyperliquid side cannot be forked: nothing here says the venue would credit it — 15.3 does, from other
+  people's real deposits.
+- `npx tsx scripts/hl-withdraw-testnet.mts --send --record` — real signer class, throwaway seed in memory: refusals (another
+  destination, amount = fee, no passkey, passkey over another amount); a Testnet and a Mainnet `withdraw3` whose signatures
+  recover to the wallet address from the typed data (the Mainnet one is sent nowhere); the Testnet one posted to
+  `https://api.hyperliquid-testnet.xyz/exchange` → HTTP 200
+  `{"status":"err","response":"Must deposit before performing actions. User: 0xca8cc61fb8284f0728f6ed196ceb941c3f969f98"}` —
+  the venue recovered our address from the signature, so its hash of the action equals ours (fixture
+  `test/fixtures/hyperliquid/testnet-withdraw-proof.json`, replayed by `test/hyperliquid/withdraw-proof.test.ts`).
+- `npx tsx scripts/smoke-hl-collateral.mts` — the API's own guards and liveness check against the real endpoints, read-only:
+  bytecode pinned on both RPC endpoints, not paused; "3 of the 3 most recent deposits into the bridge are in the venue's ledger".
+- `withdraw3` typed data against the official SDK: `tests/signing_test.py::test_sign_withdraw_from_bridge_action` and the two
+  cross-vectors of `sdk-vectors.json`, through `buildVenueWithdraw` (`services/isolated-signer/test/venue-collateral.test.ts`).
+
+### 15.8 Not verified
+
+- **Our own deposit.** Nothing was sent to the bridge. That the venue credits a deposit made by THIS wallet is inferred from
+  about 20 deposits by other addresses the same morning. First real use: start with the minimum the app allows (6 USDC).
+- **Deposits below 5 USDC are lost**: the venue's statement only; none was observed.
+- **Any accepted withdrawal.** The venue answered our `withdraw3` only with "Must deposit before performing actions". Not
+  seen from our side: an `ok` answer and its exact shape, the ledger entry appearing for our own account, when it appears (at
+  request or at payout — the four samples are dated just after the payout), the arrival being matched by the wallet's scan.
+- **Whether the 1 USDC fee is taken out of the amount or on top of it.** The screens say "you will receive amount − 1" (the
+  ledger shows `usdc` received + `fee`; third-party guides say "deducted from the amount"). The reconciliation accepts both
+  and records what really arrived.
+- **A minimum withdrawal amount** on the venue (the wallet requires amount > 1 USDC), and the venue's words for a withdrawal
+  it refuses on a funded account (insufficient balance, open positions, duplicate nonce). The tests' fake invents them.
+- **`nonce` in the ledger = `time × 1000`**: seen on four third-party withdrawals; the wallet accepts `time` and `time × 1000`.
+- **Unified-account / portfolio-margin accounts**: where a bridge deposit lands for them and what `withdraw3` draws from were
+  not tested; the owner's account is expected to be in the default mode (it has never used the venue's interface).
+- **The `default` mode of a brand-new account that deposits through the bridge**: inferred from one depositor in that mode
+  and from never-configured addresses answering `"default"`; not from a new account of ours.
+- **The CCTP → HyperCore route**: documentation only; no contract of it was read, pinned or called.
+- **A paused bridge** and what the venue does with deposits made while it is paused; **retirement of the bridge** (how the
+  venue would announce it; whether late deposits would be credited or returned).
+- **The wallet's deposit scan as arrival detector in production**: it reads `Transfer` logs to the wallet address with a
+  bounded catch-up (20 000 blocks ≈ 83 minutes on Arbitrum): after a longer outage of the API a payout could be missed by the
+  scan, the withdrawal would stay `submitted`/overdue while the money is in the wallet (the balance shows it; the ledger
+  entry completes nothing on mainnet without the arrival).
+- **The screens against the real backend.** The sheets were driven in a browser (phone and desktop) against the in-browser
+  mock only (`tests/e2e/futures-collateral.spec.ts`, 6 tests: minimum refused, review, "waiting for the venue", credited,
+  overdue checklist, wrong passkey, USDC on another network, withdrawal to arrival; screenshots `docs/v4/screens/collateral-*.png`).
+  In that mock time stands in for the chain and the venue (`apps/web/src/derivatives/mockCollateral.ts`). The same screens
+  against the real API, signer and venue were not driven: no funded account exists.
+- **The venue's own interface** named in the overdue checklist ("Portfolio → Deposits and Withdrawals" on
+  app.hyperliquid.xyz): written from memory of that interface, not checked.
+- **publicnode as second RPC for history**: it refused `eth_getLogs` / receipts older than a few minutes without a token on
+  2026-11-11. The API's liveness check uses `rpcAny` (first endpoint that answers); the guards use both endpoints (current
+  state only), which worked.

@@ -19,6 +19,8 @@ export interface SignerState {
   bridges?: Record<string, StoredBridge>;
   /** live derivatives: venue authorizations approved by the owner (authorizationId -> record). Never deleted: a revoked one stays revoked. */
   venues?: Record<string, StoredVenueAuthorization>;
+  /** venue withdrawals signed by the main key after a passkey approval (withdrawalId -> record), kept 30 days (venue-collateral.ts) */
+  venueWithdrawals?: Record<string, import('./venue-collateral.ts').StoredVenueWithdrawal>;
   /** derivative mandates approved by the owner (mandateId -> record), each extending one venue authorization. Never deleted. */
   venueMandates?: Record<string, StoredVenueMandate>;
 }

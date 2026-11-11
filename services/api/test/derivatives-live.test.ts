@@ -122,7 +122,7 @@ describe('a venue account starts READ_ONLY and nothing trades', () => {
     expect(await refusal(w.svc.close(id, { instrument: BTC, fraction: '1' }))).toMatchObject({ code: 'mode_read_only' });
     expect(w.t.exchangeCalls()).toBe(0);
     expect(w.signs).toHaveLength(0);
-    expect((await w.svc.collateral(id))).toMatchObject({ withdrawable: '1000', asset: 'USDC', source: 'venue', deposits: { supported: false }, withdrawals: { supported: false } });
+    expect((await w.svc.collateral(id))).toMatchObject({ withdrawable: '1000', asset: 'USDC', source: 'venue', deposits: { supported: false }, withdrawals: { supported: true } });   // testnet: no deposit route; withdrawals are built (v6, collateral.ts)
     expect(await w.svc.active()).toEqual([]);                                                                            // the worker has nothing to do
   });
 });

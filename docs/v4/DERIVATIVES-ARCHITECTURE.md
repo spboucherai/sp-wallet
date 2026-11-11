@@ -26,6 +26,14 @@ as it is; it does not restate the brief.
 3. **The main wallet key never trades on a venue.** Each venue gets a dedicated *trading key* derived by the signer on its own
    path. On Hyperliquid this is an *API wallet* ("agent"): it can place and cancel orders but cannot withdraw. The owner
    authorizes it once (passkey) with the venue's own approval action signed by the main key, and can revoke it.
+   **The main key signs exactly two kinds of venue message, and nothing else** (v6, 2026-11-11 — it was one before): (a)
+   `approveAgent`, naming the signer's own trading key, once per authorization, inside `POST /venue/authorize`; (b) `withdraw3`,
+   a withdrawal of collateral **to the wallet's own address only**, inside `POST /venue/withdraw`. Each needs a passkey
+   assertion over its own canonical object (authorization / withdrawal), each is built by the signer itself from that object,
+   and neither endpoint signs anything it is handed. No `usdSend`, `spotSend`, `sendAsset`, `usdClassTransfer`, no withdrawal to
+   another address and no approval of another agent can be reached (`services/isolated-signer/test/venue-collateral.test.ts`,
+   "nothing else is reachable"). A **deposit** is not a venue message: it is an ordinary wallet transaction (USDC transfer on
+   Arbitrum) whose intent carries a `venueDeposit` section that the signer checks against a bridge address pinned in its bundle.
 4. **Exact arithmetic.** Prices, sizes, margin, PnL, fees, funding: decimal strings end to end, computed with the `Dec` type
    (`packages/derivatives/src/decimal.ts`, bigint mantissa + scale). No `number` in any value that feeds a decision or an order.
    `number` is allowed for display and charts only.
@@ -171,6 +179,15 @@ intent: venue, network, trading address, limits, expiry — on Hyperliquid this 
 applies the stored venue policy: `MANUAL_LIVE` needs a passkey assertion over the order hash; `MANDATE_LIVE` needs an active
 derivative mandate), `POST /venue/revoke`. The signer refuses any payload whose `describe` is `other`.
 
+Collateral (v6, `services/isolated-signer/src/venue-collateral.ts`): `POST /venue/withdraw` `{ withdrawal, assertion }` — passkey
+over the canonical `VenueWithdrawal` (`SPW-VENUE-WITHDRAW-v1`: id, key id, venue, network, account, destination, amount, fee,
+time, window); the signer requires account = destination = its own derived address, amount > the venue fee, a current `time`
+that only moves forward, at most 10 signatures a day, no emergency halt; it builds `withdraw3` itself (`buildVenueWithdraw`) and
+signs it with the main key. Deposits go through the existing `POST /sign` with an intent whose `venueDeposit` section is
+checked by `venueDepositVerdict` (pinned bridge, native USDC on the pinned chain, floor 6 USDC above the venue's 5 USDC
+minimum, sender = the wallet) before the ordinary policy (per-transfer and daily limits, fee ceiling, allowlist) and the
+passkey; an intent without the section that pays a venue bridge address is refused.
+
 Testnet and mainnet use different trading keys (`<i>` = 0 mainnet, 1 testnet) and different stored authorizations.
 
 ## Data model (PostgreSQL, created in `services/api/src/db.ts`)
@@ -268,3 +285,7 @@ Full description: `docs/v6/DERIVATIVE-MANDATE.md`. Differences from the text abo
   `SPW_DERIV_LIVE_MAINNET=on`.
 - The agent runtime reaches live trading through `services/api/src/derivatives/mandate.ts` only; no HTTP route places a
   mandate order.
+- Collateral (v6): deposits and withdrawals are in `deriv_collateral` (one row per operation, resumable; a deposit also has its
+  wallet proposal in `proposals`). Code: `services/api/src/derivatives/collateral.ts` + `collateral-routes.ts`; facts and
+  evidence: `docs/v4/venues/hyperliquid.md` section 15. A deposit does not need an authorized account (it must come first: the
+  venue refuses every action of an account that never deposited); both need the server setting on mainnet.

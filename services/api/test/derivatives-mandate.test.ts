@@ -597,15 +597,15 @@ describe('fixes of the live engine that came with the mandate', () => {
     w.t.fund(ACCOUNT, '1000');
     const id = (await w.svc.createAccount({ venue: 'hyperliquid', network: 'testnet', label: 'test' })).id as string;
     const en = await w.svc.collateral(id), fr = await w.svc.collateral(id, 'fr');
-    expect(en).toMatchObject({ locale: 'en', deposits: { supported: false, how: expect.stringMatching(/^docs\/v4\/venues\/hyperliquid.md, section 14: native USDC on Arbitrum/) }, withdrawals: { how: expect.stringMatching(/^not built/) } });
-    expect(fr).toMatchObject({ locale: 'fr', deposits: { supported: false, how: expect.stringMatching(/USDC natif sur Arbitrum/) }, withdrawals: { how: expect.stringMatching(/^non construit/) } });
+    expect(en).toMatchObject({ locale: 'en', deposits: { supported: false, how: expect.stringMatching(/^docs\/v4\/venues\/hyperliquid.md, section 15: native USDC on Arbitrum/) }, withdrawals: { supported: true, how: expect.stringMatching(/withdraw3 action, signed by the wallet key/) } });
+    expect(fr).toMatchObject({ locale: 'fr', deposits: { supported: false, how: expect.stringMatching(/USDC natif sur Arbitrum/) }, withdrawals: { supported: true, how: expect.stringMatching(/withdraw3 signée par la clé du portefeuille/) } });
     const pf = await w.svc.prepareAuthorization(id, ex.AuthorizationBodySchema.parse({ policy: POLICY, days: 30, locale: 'fr' }));
     expect(pf).toMatchObject({ locale: 'fr', agent: { can: ['placer des ordres', 'annuler des ordres', 'changer le levier'], cannot: ['retirer des fonds', 'transférer vers une autre adresse'] } });
     expect(pf.agent.note).toMatch(/le signataire refuse de signer autre chose/);
     expect(pf.whatIsSigned.byMainKey).toMatch(/une seule action approveAgent/); expect(pf.whatIsSigned.byPasskey).toMatch(/SHA-256 de cette autorisation/);
     const pe = await w.svc.prepareAuthorization(id, ex.AuthorizationBodySchema.parse({ policy: POLICY, days: 30, locale: 'en' }));
     expect(pe).toMatchObject({ locale: 'en', agent: { can: ['place orders', 'cancel orders', 'change leverage'], cannot: ['withdraw', 'transfer to another address'] },
-      whatIsSigned: { byMainKey: 'one approveAgent action naming the trading key above (the only venue message the wallet key signs)', byPasskey: 'the SHA-256 of this authorization, which includes the hash of the acknowledgement text' } });
+      whatIsSigned: { byMainKey: 'one approveAgent action naming the trading key above (the wallet key signs nothing else to trade; its only other venue message is a withdrawal to the wallet\'s own address, approved separately with the passkey)', byPasskey: 'the SHA-256 of this authorization, which includes the hash of the acknowledgement text' } });
     expect(pe.agent.note).toMatch(/^On the venue an API wallet could also move collateral/);
   });
 });

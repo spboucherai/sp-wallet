@@ -65,6 +65,9 @@ export function Swap() {
   const by = (k: string) => assets.find((a) => a.key === k);
   useEffect(() => { // sensible defaults once the registry is loaded
     if (!assets.length || fromKey) return;
+    // pre-filled cross-network USDC transfer (link from the venue deposit screen): /swap?bridgeFrom=<network>&bridgeTo=<network>[&amount=…]
+    const q = new URLSearchParams(location.search), u = (n: string | null) => assets.find((a) => a.network === n && a.symbol === 'USDC'), bf = u(q.get('bridgeFrom')), bt = u(q.get('bridgeTo'));
+    if (bf && bt && bf.key !== bt.key) { setFromKey(bf.key); setToKey(bt.key); const am = q.get('amount'); if (am && /^\d+(\.\d{1,6})?$/.test(am)) setAmount(am); return; }
     // arriving from "fund the agent": USDC from one network to the agent's network, prefilled once
     try { const pre = JSON.parse(sessionStorage.getItem('spw-swap-prefill') ?? 'null') as { fromNetwork: string; toNetwork: string; symbol: string } | null; sessionStorage.removeItem('spw-swap-prefill');
       const f = pre && assets.find((a) => a.network === pre.fromNetwork && a.symbol === pre.symbol), g = pre && assets.find((a) => a.network === pre.toNetwork && a.symbol === pre.symbol);

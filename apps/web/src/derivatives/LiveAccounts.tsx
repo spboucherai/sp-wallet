@@ -1,6 +1,6 @@
 /**
  * « Négociation réelle » of the Accounts view: the venue accounts (one per network), their state as the venue reports it, the
- * dedicated trading key, how to fund the account (explained — deposits and withdrawals are not built, so there is no button),
+ * dedicated trading key, how to fund the account (explained here; « Déposer » / « Retirer » live in LiveCollateral.tsx),
  * the authorization flow (limits → review: jurisdiction text, what is signed, key and expiry, limits → passkey) and revocation.
  * Mainnet is shown, and blocked with the reason, while the server setting keeps it off: that setting is the owner's, on the
  * server — there is no switch for it here.
@@ -15,6 +15,7 @@ import { Row, ServerSays, Sheet, Stat, timeOf } from './bits';
 import { fmt, usd } from './dec';
 import { Bullet, LiveErrNotice, ModeBand, ModeTag, SourceTag } from './LiveBits';
 import { defaultPolicyForm, isUnfunded, lapi, liveError, policyFromForm, samePolicy, sha256Hex, toneOf, venueWords, type Collateral, type LiveConfig, type LiveErr, type LiveNetwork, type LiveSummary, type PolicyForm, type Prepared, type Revoked, type VenuePolicy } from './live';
+import { CollateralPanel } from './LiveCollateral';
 import { HaltBanner } from './LiveOrderPanel';
 import { liveKey, refreshLive } from './liveStore';
 
@@ -23,14 +24,14 @@ const NETWORKS: LiveNetwork[] = ['testnet', 'mainnet'];
 /** the server's English capability words, in the screen's language; unknown words are shown as the server wrote them */
 const CAN: Record<string, Key> = { 'place orders': 'flCan_place', 'cancel orders': 'flCan_cancel', 'change leverage': 'flCan_leverage', withdraw: 'flCannot_withdraw', 'transfer to another address': 'flCannot_transfer' };
 
-/** how the venue account is funded: an explanation, never a button (deposits and withdrawals are not built) */
+/** how the venue account is funded: the explanation. The buttons (« Déposer », « Retirer ») are in CollateralPanel, LiveCollateral.tsx */
 export function FundingBox({ network, collateral }: { network: LiveNetwork; collateral?: Collateral }) {
   const t = useT();
   return <div className="rounded-2xl border border-line p-3.5 text-[13px] leading-snug" data-testid="funding-box">
     <div className="mb-1.5 text-[13.5px] font-semibold">{t('flFundTitle')}</div>
     <ul className="space-y-1.5">
       {(network === 'mainnet' ? (['flFundMain1', 'flFundMain2', 'flFundMain3'] as const) : (['flFundTest1', 'flFundTest2'] as const)).map((k) => <Bullet key={k} icon="chev">{t(k)}</Bullet>)}
-      <Bullet icon="lock">{t('flFundNotBuilt')}</Bullet>
+      <Bullet icon="key">{t('hlcFundBuilt')}</Bullet>
     </ul>
     {collateral && <p className="mt-2 break-words text-[11.5px] text-mute">{t('fxServerSays')} <span className="font-mono text-[11px]">{collateral.deposits.how}</span></p>}
     {collateral && <p className="mt-1 break-words text-[11.5px] text-mute">{t('flWithdrawalsServer')} <span className="font-mono text-[11px]">{collateral.withdrawals.how}</span></p>}
@@ -210,6 +211,7 @@ function LiveAccountCard({ a, config, selected, onSelect }: { a: LiveSummary; co
     {!live && auth?.revokedAt && <p className="mt-3 text-[12.5px] text-mute">{t('flRevokedAt', { date: when(new Date(auth.revokedAt), locale) })}</p>}
 
     <div className="mt-3"><FundingBox network={a.network} collateral={c} /></div>
+    <div className="mt-3"><CollateralPanel account={a} /></div>
 
     <div className="mt-3 flex flex-wrap gap-2">
       {!selected && <Btn kind="soft" onClick={() => onSelect(a.id)}>{t('fxUse')}</Btn>}

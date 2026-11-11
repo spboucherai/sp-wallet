@@ -163,8 +163,9 @@ export function buildUsdClassTransferTypedDataOnly(o: { network: HlNetwork; amou
 
 export interface HlWithdraw3Action { type: 'withdraw3'; hyperliquidChain: 'Mainnet' | 'Testnet'; signatureChainId: string; destination: Hex; amount: string; time: number }
 /**
- * DATA BUILDER ONLY — NOT WIRED TO ANYTHING. Typed data of a withdrawal through the Arbitrum bridge (`withdraw3`).
- * Sends funds OUT of the venue; must only ever be signed by the account key after an explicit owner decision.
+ * DATA BUILDER ONLY. Typed data of a withdrawal through the Arbitrum bridge (`withdraw3`). Sends funds OUT of the venue.
+ * Since v6 it has exactly ONE caller that leads to a signature: `buildVenueWithdraw` (live/collateral.ts), used by the isolated
+ * signer after the owner's passkey approved the canonical withdrawal, with `destination` = the wallet's own address.
  */
 export function buildWithdraw3TypedDataOnly(o: { network: HlNetwork; destination: string; amount: string; time: number; signatureChainId?: string }): HlUserSigned<HlWithdraw3Action> {
   const signatureChainId = o.signatureChainId ?? HL_DEFAULT_SIGNATURE_CHAIN_ID, hyperliquidChain = hlChainName(o.network), amount = usdAmount(o.amount), destination = hlAddress(o.destination);

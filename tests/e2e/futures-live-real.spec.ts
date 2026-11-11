@@ -73,7 +73,7 @@ for (const size of SIZES) {
       await expect(card.getByTestId('venue-state')).toContainText('plateforme');
       const account = /account (0x[0-9a-f]{40})/.exec(log)![1]!;
       await expect(card).toContainText(account.slice(0, 6));
-      await expect(card.getByTestId('funding-box')).toContainText('section 14');             // the server's own words about deposits
+      await expect(card.getByTestId('funding-box')).toContainText('section 15');             // the server's own words about deposits
       await expect(card.getByTestId('funding-box').getByRole('button')).toHaveCount(0);
       await card.scrollIntoViewIfNeeded();
       await shot(page, '01-account-readonly', true);
@@ -97,7 +97,7 @@ for (const size of SIZES) {
       await expect(sheet.getByTestId('venue-words')).toContainText(`Must deposit before performing actions. User: ${account}`);
       await expect(sheet.getByTestId('auth-refused')).toContainText('La plateforme a refusé d’enregistrer la clé de négociation.');
       await expect(sheet.getByTestId('auth-refused')).toContainText('n’accepte aucune action d’un compte qui n’a jamais reçu de dépôt');
-      await expect(sheet.getByTestId('funding-box')).toContainText('ne sont pas construits dans SP Wallet');
+      await expect(sheet.getByTestId('funding-box')).toContainText('« Déposer » et « Retirer » se font ci-dessous');
       await shot(page, '03-venue-refused');
       await sheet.getByRole('button', { name: 'Fermer', exact: true }).last().click();
       await expect(card).toHaveAttribute('data-mode', 'READ_ONLY');

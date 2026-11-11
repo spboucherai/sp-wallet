@@ -1,11 +1,12 @@
 // Live derivatives on a venue (Hyperliquid): the signer side. Docs: docs/v4/DERIVATIVES-ARCHITECTURE.md ("Signing"), docs/v4/venues/hyperliquid.md.
 //
 // Two keys, two very different powers:
-//   - the MAIN wallet key signs exactly one kind of venue message: Hyperliquid's `approveAgent`, naming the signer's own trading
+//   - the MAIN wallet key signs, in THIS file, exactly one kind of venue message: Hyperliquid's `approveAgent`, naming the signer's own trading
 //     key, once per authorization, and only after the owner's passkey approved the canonical authorization (venueAuthorize);
 //   - the TRADING key (API wallet, path m/44'/60'/9000'/0/<i>) signs orders, cancels and leverage changes, only under a stored,
 //     unrevoked, unexpired authorization, and only after this file has read the payload ITSELF (`describe`, pinned asset table).
 // Nothing here can sign a transfer, a withdrawal, a sub-account or vault action, or an agent approval outside venueAuthorize.
+// (v6: the main key's second and last venue message, `withdraw3` to the wallet's own address, is in venue-collateral.ts.)
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { sign } from 'viem/accounts';
 import {
@@ -52,7 +53,7 @@ export function venueStatus(ctx: VenueCtx) {
 
 /**
  * The owner enables live trading on one venue account: passkey assertion over the canonical authorization. On success the
- * MAIN key signs the venue's approveAgent action for the signer's own trading key — the only venue message it ever signs.
+ * MAIN key signs the venue's approveAgent action for the signer's own trading key — the only venue message it signs here.
  */
 export async function venueAuthorize(ctx: VenueCtx, raw: unknown, assertion: AuthenticationResponseJSON | undefined): Promise<VenueAuthorizeResult> {
   const st = ctx.store, now = ctx.now();

@@ -1,0 +1,251 @@
+{
+ "at": "2026-11-11T06:14:25.060Z",
+ "bridge": "0x2Df1c51E09aECF9cacB7bc98cB1742757f163dF7",
+ "usdc": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+ "sources": {
+  "rpc": [
+   "https://arb1.arbitrum.io/rpc",
+   "https://arbitrum-one-rpc.publicnode.com"
+  ],
+  "info": "https://api.hyperliquid.xyz/info"
+ },
+ "contract": {
+  "codeBytes": 19394,
+  "codeSha256": "37ff6a58c3c80d99fd85ba0898ba3a5ae8d55b82c4a4d758dd258af3b05fc3c7",
+  "pinned": "37ff6a58c3c80d99fd85ba0898ba3a5ae8d55b82c4a4d758dd258af3b05fc3c7",
+  "paused": false,
+  "usdcToken": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "nValidators": "4",
+  "totalValidatorPower": "4",
+  "disputePeriodSeconds": "200",
+  "blockDurationMillis": "350",
+  "lockerThreshold": "2",
+  "epoch": "7",
+  "hotValidatorSetHash": "0x1503ca1a4eac24ce351d93ef962f13cb745a9d08f50cef522ca8aa216e13fb7f",
+  "coldValidatorSetHash": "0x55a3e95e596d9e4918403663b9e83d046fdf17cdcbdb4fe6bf5429afde0adc2d",
+  "lockersVotingLock": [],
+  "usdcHeld": "119054371.749492"
+ },
+ "deposits": {
+  "window": {
+   "from": 523181723,
+   "to": 523201683
+  },
+  "count": 74,
+  "checked": 8,
+  "credited": 8,
+  "samples": [
+   {
+    "onBothRpc": "arbitrum.drpc.org",
+    "tx": "0xcfd025fb9c0632dec47373dc578835442c122fbc9393af7bea20d9e144856e41",
+    "block": 523183660,
+    "from": "0x008407e28e6a6d4a9ab7d454728773750fdb39e4",
+    "usdc": "2064.077644",
+    "chainTime": "2026-11-11T04:39:04Z",
+    "credited": true,
+    "venueTime": "2026-11-11T04:39:09.671Z",
+    "delaySeconds": 6,
+    "venueHash": "0xcfd025fb9c0632dec47373dc578835442c122fbc9393af7bea20d9e144856e41"
+   },
+   {
+    "onBothRpc": "arbitrum.drpc.org",
+    "tx": "0x401821c543d163a47281117235cc8e8b9bbdef223368d12f5a6185683090a36a",
+    "block": 523186557,
+    "from": "0xcc1c32da2ac09b9cc5a088cba124e72bd09af9bb",
+    "usdc": "128.314783",
+    "chainTime": "2026-11-11T04:53:12Z",
+    "credited": true,
+    "venueTime": "2026-11-11T04:53:19.399Z",
+    "delaySeconds": 7,
+    "venueHash": "0x401821c543d163a47281117235cc8e8b9bbdef223368d12f5a6185683090a36a"
+   },
+   {
+    "onBothRpc": "arbitrum.drpc.org",
+    "tx": "0x3a12cc4b57598727a4d3ca073b9eb4226ca3bc7b4686a5c0885afb2f075c372e",
+    "block": 523190538,
+    "from": "0xe0e03770e2fea120bc42e4d483793793d679a3b0",
+    "usdc": "10.704146",
+    "chainTime": "2026-11-11T05:13:35Z",
+    "credited": true,
+    "venueTime": "2026-11-11T05:13:46.228Z",
+    "delaySeconds": 11,
+    "venueHash": "0x3a12cc4b57598727a4d3ca073b9eb4226ca3bc7b4686a5c0885afb2f075c372e"
+   },
+   {
+    "onBothRpc": "arbitrum.drpc.org",
+    "tx": "0xf283f1c7b2a353fd70f5ffbb8012ad39c81818bedec1adc040f801f25adf8392",
+    "block": 523192034,
+    "from": "0x9560ae0c91c0a4bc4a6d67c56e5f9422bda6d37d",
+    "usdc": "84.79",
+    "chainTime": "2026-11-11T05:21:17Z",
+    "credited": true,
+    "venueTime": "2026-11-11T05:21:23.678Z",
+    "delaySeconds": 7,
+    "venueHash": "0xf283f1c7b2a353fd70f5ffbb8012ad39c81818bedec1adc040f801f25adf8392"
+   },
+   {
+    "onBothRpc": "arbitrum.drpc.org",
+    "tx": "0x5fd0069953f986bbd4f3c8c3434351e48f87f5b0a35e3dd02e6b318e4b5527d8",
+    "block": 523196439,
+    "from": "0x032521c5612e741d383e91eeb3db29a100bdcf05",
+    "usdc": "97",
+    "chainTime": "2026-11-11T05:45:39Z",
+    "credited": true,
+    "venueTime": "2026-11-11T05:45:47.589Z",
+    "delaySeconds": 9,
+    "venueHash": "0x5fd0069953f986bbd4f3c8c3434351e48f87f5b0a35e3dd02e6b318e4b5527d8"
+   },
+   {
+    "onBothRpc": "arbitrum.drpc.org",
+    "tx": "0x54f9369c85b9a5cb80a19d4332358a0a2ebea17bf01ab950e394691fcdd88baf",
+    "block": 523197375,
+    "from": "0xf18db14a14d6d19e80d09b5d6326a7c3106b8117",
+    "usdc": "5002.501251",
+    "chainTime": "2026-11-11T05:50:39Z",
+    "credited": true,
+    "venueTime": "2026-11-11T05:50:47.003Z",
+    "delaySeconds": 8,
+    "venueHash": "0x54f9369c85b9a5cb80a19d4332358a0a2ebea17bf01ab950e394691fcdd88baf"
+   },
+   {
+    "onBothRpc": "arbitrum.drpc.org",
+    "tx": "0xb8cad3c96ea0b21d3635b48c066972bf558a491a48308073448f2fde7ba03129",
+    "block": 523199645,
+    "from": "0x735ec2a03a750ab6655967291b372ffbd66c8ad2",
+    "usdc": "100.785593",
+    "chainTime": "2026-11-11T06:03:11Z",
+    "credited": true,
+    "venueTime": "2026-11-11T06:03:18.619Z",
+    "delaySeconds": 8,
+    "venueHash": "0xb8cad3c96ea0b21d3635b48c066972bf558a491a48308073448f2fde7ba03129"
+   },
+   {
+    "onBothRpc": "arbitrum.drpc.org",
+    "tx": "0xd7115c2d75dbce6a42230bad28930455851f28f4f1023bc52b95e9f5bfcc6b4e",
+    "block": 523200763,
+    "from": "0xd61f4cc6309e403aec7d958f80d5b836062afe5e",
+    "usdc": "1000.045991",
+    "chainTime": "2026-11-11T06:09:19Z",
+    "credited": true,
+    "venueTime": "2026-11-11T06:09:25.709Z",
+    "delaySeconds": 7,
+    "venueHash": "0xd7115c2d75dbce6a42230bad28930455851f28f4f1023bc52b95e9f5bfcc6b4e"
+   }
+  ]
+ },
+ "belowMinimum": {
+  "count": 0,
+  "samples": []
+ },
+ "withdrawals": {
+  "count": 84,
+  "checked": 8,
+  "matched": 4,
+  "samples": [
+   {
+    "tx": "0x414c3d7528e0b5359806ffff29b0a737b8cda0b63002dbc6df242527f36a9914",
+    "onSecondRpc": "arbitrum.drpc.org",
+    "to": "0x6e3dc58e6de252f4126228a4f2f7c03f5a1eec96",
+    "received": "10.04",
+    "chainTime": "2026-11-11T04:44:29Z",
+    "matched": false,
+    "venueTime": null,
+    "venueUsdc": null,
+    "fee": null,
+    "nonce": null,
+    "requestToArrivalSeconds": null
+   },
+   {
+    "tx": "0xa0d0096fcff880d080c82c6609df82bd3e62acd6307d37fc53bf2556d34fb227",
+    "onSecondRpc": "arbitrum.drpc.org",
+    "to": "0x5e5e6f7d126a98dd6839b9eb08cc08be0cc950dd",
+    "received": "705",
+    "chainTime": "2026-11-11T04:56:24Z",
+    "matched": false,
+    "venueTime": null,
+    "venueUsdc": null,
+    "fee": null,
+    "nonce": null,
+    "requestToArrivalSeconds": null
+   },
+   {
+    "tx": "0x60bd4125937e73aedb512ee5ae8e336988a67823b0d75c1096c3c57e77f80eee",
+    "onSecondRpc": "arbitrum.drpc.org",
+    "to": "0xc5ae0ec3df2c96be9dfce579bfe84f3906e78b11",
+    "received": "23.751098",
+    "chainTime": "2026-11-11T05:09:00Z",
+    "matched": true,
+    "venueTime": "2026-11-11T05:09:07.398Z",
+    "venueUsdc": "23.751098",
+    "fee": "1.0",
+    "nonce": 1794373505553000,
+    "requestToArrivalSeconds": 234
+   },
+   {
+    "tx": "0x1e0136c4354e09e3910073a84a267cb8e6ee322d73dcb650e87c10eeb676a550",
+    "onSecondRpc": "arbitrum.drpc.org",
+    "to": "0x62a22e13464929b079ba531df4e5c1608dcb556c",
+    "received": "5.496896",
+    "chainTime": "2026-11-11T05:16:28Z",
+    "matched": true,
+    "venueTime": "2026-11-11T05:16:35.814Z",
+    "venueUsdc": "5.496896",
+    "fee": "1.0",
+    "nonce": 1794373952929000,
+    "requestToArrivalSeconds": 235
+   },
+   {
+    "tx": "0xb0726d8115acf686ce29b79b409744a1b9295a0ee76c991f458a6e80efe9206e",
+    "onSecondRpc": "arbitrum.drpc.org",
+    "to": "0x740577d8576f5bdf3bc3e8b87170f8d2ba6df6fc",
+    "received": "209.5",
+    "chainTime": "2026-11-11T05:28:54Z",
+    "matched": false,
+    "venueTime": null,
+    "venueUsdc": null,
+    "fee": null,
+    "nonce": null,
+    "requestToArrivalSeconds": null
+   },
+   {
+    "tx": "0x9b909641ec32c074e8e81346423f2a0a08f057371e8c49583198c7906ac3d8e8",
+    "onSecondRpc": "arbitrum.drpc.org",
+    "to": "0x6ff07e788af54fd33e07de518ac8293abb175c5c",
+    "received": "489",
+    "chainTime": "2026-11-11T05:43:53Z",
+    "matched": true,
+    "venueTime": "2026-11-11T05:44:00.213Z",
+    "venueUsdc": "489.0",
+    "fee": "1.0",
+    "nonce": 1794375598642000,
+    "requestToArrivalSeconds": 234
+   },
+   {
+    "tx": "0xea50317006e222ee34a44fba82c8c70b0e535f91b2e7051f716dcfb78ff1267e",
+    "onSecondRpc": "arbitrum.drpc.org",
+    "to": "0x887f8444d274ce6820794107b437d5381b224ba5",
+    "received": "4.7",
+    "chainTime": "2026-11-11T05:58:29Z",
+    "matched": true,
+    "venueTime": "2026-11-11T05:58:36.392Z",
+    "venueUsdc": "4.7",
+    "fee": "1.0",
+    "nonce": 1794376467862000,
+    "requestToArrivalSeconds": 241
+   },
+   {
+    "tx": "0xe44b43724ca1b1ee308a9a1829c4b7e2fd297e3f03b0b5ccf5d4b5624e948111",
+    "onSecondRpc": "arbitrum.drpc.org",
+    "to": "0xfb21faf14d4bffcfcb722e6668559b1de6109ece",
+    "received": "5.366214",
+    "chainTime": "2026-11-11T06:13:42Z",
+    "matched": false,
+    "venueTime": null,
+    "venueUsdc": null,
+    "fee": null,
+    "nonce": null,
+    "requestToArrivalSeconds": null
+   }
+  ]
+ }
+}

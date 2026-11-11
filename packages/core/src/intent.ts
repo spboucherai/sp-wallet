@@ -43,6 +43,15 @@ export const IntentSchema = z.strictObject({
     maxFee: U, minFinalityThreshold: z.number().int().min(1).max(0xffffffff), messenger: z.string().min(20).max(100), transmitter: z.string().min(20).max(100), approveGas: U,
   }).optional(),
   /**
+   * Present when the intent funds the owner's account on a derivatives venue (v6): a plain token transfer from the wallet's own
+   * address to the venue's bridge contract. The signer checks every field against a table pinned in its bundle
+   * (@spw/derivatives/live, `checkVenueDepositIntent`): venue network → chain, native USDC only, `to` = the pinned bridge,
+   * amount ≥ `minAmount` = its own floor above the venue minimum. An ordinary transfer to a venue bridge is refused.
+   */
+  venueDeposit: z.strictObject({
+    venue: z.enum(['hyperliquid']), venueNetwork: z.enum(['mainnet', 'testnet']), route: z.string().regex(/^[a-z0-9-]{3,32}$/), bridge: z.string().min(20).max(100), minAmount: U,
+  }).optional(),
+  /**
    * Present when the intent is a native cross-chain swap through THORChain, from the wallet to itself (packages/core/src/thorchain.ts).
    * `asset`/`amount` are the input; `to` is the Asgard vault that receives it and must equal `vault`, which must be the address of
    * `vaultPubKey`. The signer rebuilds `memo` itself (destination = the wallet's own address on `toNetwork`, `limit` in 1e8 units
@@ -92,6 +101,8 @@ function fields(i: Intent): [string, string][] {
     ['bridge.minFinalityThreshold', String(i.bridge.minFinalityThreshold)], ['bridge.messenger', i.bridge.messenger], ['bridge.transmitter', i.bridge.transmitter], ['bridge.approveGas', i.bridge.approveGas]);
   if (i.xswap) f.push(['xswap.provider', i.xswap.provider], ['xswap.toNetwork', i.xswap.toNetwork], ['xswap.toAsset', i.xswap.toAsset], ['xswap.minOut', i.xswap.minOut], ['xswap.limit', i.xswap.limit],
     ['xswap.memo', i.xswap.memo], ['xswap.vault', i.xswap.vault], ['xswap.vaultPubKey', i.xswap.vaultPubKey], ['xswap.router', i.xswap.router], ['xswap.expiry', String(i.xswap.expiry)], ['xswap.approveGas', i.xswap.approveGas]);
+  if (i.venueDeposit) f.push(['venueDeposit.venue', i.venueDeposit.venue], ['venueDeposit.venueNetwork', i.venueDeposit.venueNetwork], ['venueDeposit.route', i.venueDeposit.route],
+    ['venueDeposit.bridge', i.venueDeposit.bridge], ['venueDeposit.minAmount', i.venueDeposit.minAmount]);
   if (i.memo !== undefined) f.push(['memo', i.memo]);
   if (i.x) for (const k of Object.keys(i.x).sort()) f.push([`x.${k}`, i.x[k]!]);
   return f;
@@ -107,6 +118,7 @@ export function canonicalBytes(intent: Intent): Uint8Array {
   if (i.swap && (i.swap.provider === 'jupiter' ? fam !== 'sol' : fam !== 'evm')) throw new Error('swaps are only defined for EVM networks (KyberSwap) and Solana (Jupiter)');
   if (i.bridge && (fam !== 'evm' || i.swap)) throw new Error('bridges are only defined for EVM networks and exclude a swap');
   if (i.xswap && ((fam !== 'evm' && fam !== 'btc') || i.swap || i.bridge)) throw new Error('cross-chain swaps are only defined for EVM and Bitcoin-style sources and exclude a swap or a bridge');
+  if (i.venueDeposit && (fam !== 'evm' || i.swap || i.bridge || i.xswap || i.memo !== undefined)) throw new Error('a venue deposit is a plain EVM transfer: no swap, no bridge, no cross-chain swap, no memo');
   baseUnits(i.amount);
   const parts: Uint8Array[] = [enc.encode(DOMAIN), new Uint8Array([0])];
   for (const [k, v] of fields(i)) {
