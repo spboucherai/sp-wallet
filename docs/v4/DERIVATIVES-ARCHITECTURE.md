@@ -227,3 +227,25 @@ latest book and ticker to the paper engine (`onBook`, `onTicker`), apply funding
 published rate, snapshot equity every minute, write `deriv_risk_events` (liquidation, margin warning at 80 % of maintenance,
 loss-limit breach → `policy.halt`). State is persisted after every change (`deriv_paper_accounts.state jsonb`) so a restart
 continues exactly. Live trading routes do not exist in this wave.
+
+## Controlled live (delivery 8, Hyperliquid) — as built
+
+Live trading exists for Hyperliquid perpetuals in `MANUAL_LIVE` only, and ships disabled. Details: `docs/v4/venues/hyperliquid.md`
+(sections 13 and 14) and, for the routes, `docs/v4/API-LIVE-NOTES.md`. Differences from the text above, all deliberate:
+
+- Signer endpoints `POST /venue/key | /venue/authorize | /venue/sign | /venue/revoke` (`services/isolated-signer/src/venue.ts`). The
+  authorization commits to more than "venue, network, trading address, limits, expiry": also the account, the agent name, the mode,
+  the nonce of the one `approveAgent` it lets the wallet key sign, and the SHA-256 of the jurisdiction acknowledgement shown to the owner.
+- `MANDATE_LIVE` is not implemented: the signer refuses it by name. `deriv_mandates` does not exist.
+- Venue accounts are in `deriv_accounts`. Their orders, fills, funding, risk events and equity share the paper tables
+  (`deriv_orders`, `deriv_fills`, `deriv_funding`, `deriv_risk_events`, `deriv_equity`), keyed by the account id; for that the
+  foreign keys of those tables to `deriv_paper_accounts` were dropped. `deriv_orders` gained the live columns (`state`, `final`,
+  `cloid`, `request`, `order_hash`, `nonce`, `expires_at`, `action`, `sign_request`, `signature`, `venue_answer`, `submitted_at`);
+  paper rows leave them null. Signed actions that are not orders (cancels, leverage) are in `deriv_actions`.
+  `deriv_instruments` and `deriv_positions_snap` still do not exist (instruments and positions are read from the venue).
+- Order states as specified, with two precisions: a proposal that expires or is withdrawn before approval ends `cancelled`
+  (nothing was signed); an order the venue never received ends `rejected` with the reason `never placed`.
+- The live engine has its own venue objects (`live-venue.ts`), bound to the asset table pinned in `@spw/derivatives/live`; the
+  read-only registry used by market data and paper trading still exposes no trading object.
+- Mainnet: three locks — the adapter's `allowMainnetExchange`, set only from the server setting `SPW_DERIV_LIVE_MAINNET=on`
+  (default off), and an authorized account.

@@ -1,5 +1,6 @@
 // Routes of the derivatives module — the "API contract (wave 2)" table of docs/v4/DERIVATIVES-ARCHITECTURE.md, route for route.
-// Authentication and CSRF are the global hook of server.ts. Decimals are strings. Live trading routes do not exist.
+// Authentication and CSRF are the global hook of server.ts. Decimals are strings. Read-only and paper only: the live
+// trading routes are in live-routes.ts.
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { RiskPolicySchema, type VenueId } from '@spw/derivatives';

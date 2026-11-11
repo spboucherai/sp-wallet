@@ -17,7 +17,16 @@ export interface SignerState {
   mandates?: Record<string, StoredMandate>;
   /** bridges approved by the owner (proposalId -> record): each authorises the one matching mint on the destination, with no expiry */
   bridges?: Record<string, StoredBridge>;
+  /** live derivatives: venue authorizations approved by the owner (authorizationId -> record). Never deleted: a revoked one stays revoked. */
+  venues?: Record<string, StoredVenueAuthorization>;
 }
+/**
+ * `approve`: the one approveAgent signature the main key made for this authorization (kept so that a lost answer gets the same
+ * bytes again, never a second signature). `nonces`: the highest venue nonces signed with the trading key (ascending, at most 100 — the venue's own rule). `clientIds`: client
+ * order id -> unix day number it was signed (replay; kept three days). `usage`: orders signed per UTC day.
+ */
+export interface StoredVenueAuthorization { authorization: import('@spw/derivatives/live').VenueAuthorization; hash: string; approvedAt: string; revoked: boolean; revokedAt?: string;
+  approve: { action: unknown; signature: { r: string; s: string; v: number }; nonce: number }; nonces: number[]; clientIds: Record<string, number>; usage: Record<string, { orders: number; cancels: number; leverage: number }> }
 /**
  * `mint` is set when a receiveMessage transaction has been signed for this bridge. `raw` is kept so that an identical
  * request (lost answer, restart) gets the same bytes back instead of a second signature.
@@ -56,5 +65,11 @@ export class Store {
     for (const m of Object.values(this.state.mandates ?? {})) for (const d of Object.keys(m.usage)) if (d < keep) delete m.usage[d];
     // a bridge whose mint was signed is kept 90 more days (retries); one that was never minted is kept for ever
     for (const [k, b] of Object.entries(this.state.bridges ?? {})) if (b.mint && b.mint.signedAt + 90 * 86400 < nowSec) delete this.state.bridges![k];
+    // venue authorizations: daily counters and client order ids older than three days go (an order approval is valid two minutes,
+    // and the venue nonce only moves forward, so an old client id cannot come back without a new passkey approval)
+    for (const v of Object.values(this.state.venues ?? {})) {
+      for (const d of Object.keys(v.usage)) if (d < keep) delete v.usage[d];
+      for (const [c, d] of Object.entries(v.clientIds)) if (d < Math.floor(nowSec / 86400) - 3) delete v.clientIds[c];
+    }
   }
 }

@@ -11,6 +11,7 @@ import {
 import type { Keys } from './keys.ts';
 import { noPrices, type PriceView } from './prices.ts';
 import type { Store, StoredCredential } from './store.ts';
+import { venueAuthorize, venueKeyAddress, venueRevoke, venueSign, venueStatus, type VenueCtx, type VenueSignRequest } from './venue.ts';
 
 export class SignerError extends Error { constructor(public code: string, msg: string) { super(msg); } }
 const sha = (s: string | Uint8Array) => createHash('sha256').update(s).digest();
@@ -32,8 +33,20 @@ export class Signer {
       bridges: Object.entries(s.bridges ?? {}).map(([id, b]) => ({ id, ...b.bridge, approvedAt: b.approvedAt, burnTxid: b.burnTxid, mintTxid: b.mint?.txid ?? null, mintSignatures: b.mint?.signatures ?? 0 })),
       mandates: Object.values(s.mandates ?? {}).map((m) => ({ mandate: m.mandate, approvedAt: m.approvedAt, revoked: m.revoked, revokedAt: m.revokedAt ?? null,
         expired: this.now() >= m.mandate.expiresAt, today: m.usage[today] ?? { sold: {}, orders: 0 } })),
+      venues: venueStatus(this.venueCtx()),
     };
   }
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Live derivatives (venue.ts). The trading key is a dedicated key; the main key signs only the venue's agent approval,
+  // inside venueAuthorize, after the owner's passkey approved the canonical authorization.
+  private venueCtx(): VenueCtx {
+    return { keys: this.keys, store: this.store, now: this.now, prices: this.prices, verify: (a, c) => this.verifyAssertion(a, c), fail: (code, msg) => new SignerError(code, msg) };
+  }
+  venueKey(venue: unknown, network: unknown) { return venueKeyAddress(this.venueCtx(), venue, network); }
+  venueAuthorize(authorization: unknown, assertion?: AuthenticationResponseJSON) { return venueAuthorize(this.venueCtx(), authorization, assertion); }
+  venueRevoke(authorizationId: string) { return venueRevoke(this.venueCtx(), authorizationId); }
+  venueSign(req: VenueSignRequest) { return venueSign(this.venueCtx(), req); }
 
   private async verifyAssertion(assertion: AuthenticationResponseJSON, challenge: Uint8Array): Promise<StoredCredential> {
     const cred = this.store.state.credentials.find((c) => c.id === assertion.id);

@@ -1,6 +1,6 @@
 // Venue registry of the derivatives module (contract: docs/v4/DERIVATIVES-ARCHITECTURE.md, "API contract (wave 2").
 // READ side only: the registry hands out a narrowed view of each adapter (market data, account reads, stream). The adapters'
-// trading objects, signing helpers and raw HTTP clients are not reachable from here, so nothing in this service can build,
+// trading objects, signing helpers and raw HTTP clients are not reachable from here, so nothing that goes through this registry can build,
 // sign or send an order to a venue.
 import {
   createDydxAdapter, createGmxAdapter, createHyperliquidAdapter, VenueError,

@@ -1,4 +1,4 @@
-// The signer's own view of market prices, used only for delegated (agent) orders. It asks two independent public
+// The signer's own view of market prices, used for delegated (agent) orders and for live venue orders (venue.ts). It asks two independent public
 // exchanges itself, so a compromised API or engine cannot make it accept an order that sells an asset far below
 // its market value. Any doubt — one source down, stale, or the two disagreeing — means no signature.
 export interface PriceView { /** USD price per whole unit of each symbol; throws when a trustworthy price cannot be established */ get(symbols: string[]): Promise<Record<string, number>> }

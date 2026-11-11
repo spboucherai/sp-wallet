@@ -258,6 +258,9 @@ importers:
       '@spw/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@spw/derivatives':
+        specifier: workspace:*
+        version: link:../../packages/derivatives
       micro-key-producer:
         specifier: 0.10.2
         version: 0.10.2

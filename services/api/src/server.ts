@@ -14,6 +14,8 @@ import { audit, auditList, getSetting, setSetting, sql } from './db.ts';
 import { marketDataRoutes } from './market/routes.ts';
 import { derivativesRoutes } from './derivatives/routes.ts';
 import type { Derivatives } from './derivatives/index.ts';
+import { liveRoutes } from './derivatives/live-routes.ts';
+import type { LiveService } from './derivatives/exec.ts';
 import { addressFor, signer } from './signer-client.ts';
 import { swapRoutes } from './swap.ts';
 import { swapExecRoutes } from './swap-exec.ts';
@@ -82,7 +84,7 @@ async function markets(): Promise<Record<string, Market> | null> {
 }
 async function prices(): Promise<Record<string, Market> | null> { return markets(); }
 
-export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives } = {}): Promise<FastifyInstance> {
+export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService } = {}): Promise<FastifyInstance> {
   const swapProviders = opts.swapProviders;
   const app = Fastify({ logger: { level: 'warn', redact: ['req.headers.cookie', 'req.headers.authorization'] }, bodyLimit: 64 * 1024, trustProxy: config.trustProxy });
   await app.register(cookie);
@@ -124,6 +126,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   strategyRoutes(app);
   marketDataRoutes(app);
   derivativesRoutes(app, opts.derivatives);
+  liveRoutes(app, opts.live); // controlled live trading: nothing trades until the owner authorizes a venue account with his passkey
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));
   app.get('/api/v1/health/ready', async () => {

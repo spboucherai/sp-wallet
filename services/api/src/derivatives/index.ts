@@ -1,5 +1,6 @@
 // Derivatives module (wave 2: read-only and paper) — public surface for the rest of the API service.
-// No live trading here: no signing, no signer call, no request to a venue's trading endpoint.
+// No live trading here: no signing, no signer call, no request to a venue's trading endpoint. Controlled live trading is a
+// separate part with its own venue objects: exec.ts, live.ts, live-venue.ts, live-routes.ts.
 import { DerivData } from './data.ts';
 import { PaperService } from './paper.ts';
 import { createDefaultRegistry, type VenueRegistry } from './venues.ts';

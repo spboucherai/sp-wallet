@@ -112,6 +112,41 @@ create index if not exists deriv_risk_events_recent on deriv_risk_events (accoun
 create table if not exists deriv_equity (
   account_id uuid not null references deriv_paper_accounts(id) on delete cascade, ts timestamptz not null,
   equity numeric not null, collateral numeric not null, margin_used numeric not null, unrealized_pnl numeric not null, primary key (account_id, ts));
+-- derivatives, controlled live (venue accounts). A venue account starts READ_ONLY; only the owner's passkey (through the signer) changes that.
+create table if not exists deriv_accounts (
+  id uuid primary key, venue text not null, network text not null, account text not null, agent_address text not null, agent_name text not null default '',
+  label text not null default '', mode text not null default 'READ_ONLY', policy jsonb not null, pending jsonb,
+  authorization_id uuid, authorization_hash text, venue_authorization jsonb, halt text, divergence text, meta jsonb not null default '{}',
+  last_nonce bigint not null default 0, authorized_at timestamptz, revoked_at timestamptz,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), unique (venue, network, account));
+-- orders, fills, funding, risk events and equity of venue accounts live in the same tables as the paper ones, keyed by the account
+-- id (a uuid of either table): the foreign keys to deriv_paper_accounts are dropped, nothing else changes for paper accounts.
+alter table deriv_orders drop constraint if exists deriv_orders_account_id_fkey;
+alter table deriv_fills drop constraint if exists deriv_fills_account_id_fkey;
+alter table deriv_funding drop constraint if exists deriv_funding_account_id_fkey;
+alter table deriv_risk_events drop constraint if exists deriv_risk_events_account_id_fkey;
+alter table deriv_equity drop constraint if exists deriv_equity_account_id_fkey;
+-- live order state machine: proposed → risk_checked → authorized → signed → submitted → open|filled|partially_filled|cancelled|rejected, plus unknown
+alter table deriv_orders add column if not exists state text;
+alter table deriv_orders add column if not exists final boolean not null default false;
+alter table deriv_orders add column if not exists cloid text;
+alter table deriv_orders add column if not exists request jsonb;
+alter table deriv_orders add column if not exists order_hash text;
+alter table deriv_orders add column if not exists nonce bigint;
+alter table deriv_orders add column if not exists expires_at timestamptz;
+-- json, not jsonb: the venue hashes an action with its keys in order, and jsonb does not keep the order of keys
+alter table deriv_orders add column if not exists action json;
+alter table deriv_orders add column if not exists sign_request json;
+alter table deriv_orders add column if not exists signature jsonb;
+alter table deriv_orders add column if not exists venue_answer jsonb;
+alter table deriv_orders add column if not exists submitted_at timestamptz;
+create index if not exists deriv_orders_live on deriv_orders (account_id) where state is not null and not final;
+-- leverage changes and cancels sent to a venue (one row per signed action)
+create table if not exists deriv_actions (
+  id uuid primary key, account_id uuid not null, kind text not null, state text not null, request jsonb not null, action_hash text,
+  nonce bigint not null, expires_at timestamptz not null, action json not null, sign_request json not null, signature jsonb, venue_answer jsonb,
+  error text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create index if not exists deriv_actions_recent on deriv_actions (account_id, created_at desc);
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }

@@ -25,7 +25,12 @@ export interface Keys {
   vault(index: number): { priv: Uint8Array; address: string };
   /** signing handle for a plugin family network; the plugin never sees the private key */
   handle(n: NetworkDef): KeyHandle;
+  /** dedicated trading key of a derivatives venue (Hyperliquid API wallet): its own path, one key per network, never the wallet key */
+  venueKey(venue: 'hyperliquid', network: 'mainnet' | 'testnet'): { priv: Uint8Array; address: string; path: string };
 }
+/** HD account reserved for venue trading keys: `m/44'/60'/9000'/<venue index>/<i>`, i = 0 mainnet, 1 testnet. Never a vault. */
+export const VENUE_ACCOUNT = 9000;
+export const venuePath = (venue: 'hyperliquid', network: 'mainnet' | 'testnet') => `m/44'/60'/${VENUE_ACCOUNT}'/${{ hyperliquid: 0 }[venue]}/${network === 'mainnet' ? 0 : 1}`;
 
 /** Standard derivations: BIP-44 (EVM), BIP-84/44 (UTXO chains), SLIP-0010 ed25519 (Solana and ed25519 plugins). One curve per path. */
 export function deriveKeys(mnemonic: string): Keys {
@@ -65,8 +70,15 @@ export function deriveKeys(mnemonic: string): Keys {
   const keyId = 'spw-' + Buffer.from(sha256(new TextEncoder().encode(`${evm}|${addresses.btc}|${sol}`))).toString('hex').slice(0, 16);
   const vault = (index: number) => {
     if (!Number.isInteger(index) || index < 1 || index > 100_000) throw new Error('vault index out of range');
+    // m/44'/60'/9000'/0/0 would be the Hyperliquid mainnet trading key: that account is reserved, no vault may ever share a key with it
+    if (index === VENUE_ACCOUNT) throw new Error('vault index reserved for venue trading keys');
     const priv = secp(`m/44'/60'/${index}'/0/0`).priv;
     return { priv, address: privateKeyToAccount(`0x${Buffer.from(priv).toString('hex')}`).address };
   };
-  return { keyId, addresses, evmPriv, solSeed, utxoPriv: (n) => secp(utxoPath(n)).priv, handle, vault };
+  const venueKey = (venue: 'hyperliquid', network: 'mainnet' | 'testnet') => {
+    if (venue !== 'hyperliquid' || (network !== 'mainnet' && network !== 'testnet')) throw new Error('no trading key for this venue');
+    const path = venuePath(venue, network), priv = secp(path).priv;
+    return { priv, address: privateKeyToAccount(`0x${Buffer.from(priv).toString('hex')}`).address.toLowerCase(), path };
+  };
+  return { keyId, addresses, evmPriv, solSeed, utxoPriv: (n) => secp(utxoPath(n)).priv, handle, vault, venueKey };
 }

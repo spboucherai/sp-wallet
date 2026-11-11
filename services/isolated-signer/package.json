@@ -12,6 +12,7 @@
     "@scure/btc-signer": "2.4.1",
     "@simplewebauthn/server": "14.1.0",
     "@spw/core": "workspace:*",
+    "@spw/derivatives": "workspace:*",
     "micro-key-producer": "0.10.2",
     "viem": "2.57.17",
     "zod": "4.6.7"
