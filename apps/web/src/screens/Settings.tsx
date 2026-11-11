@@ -22,6 +22,9 @@ export function Settings({ lock, go }: { lock: () => void; go: (t: Tab) => void 
       <button onClick={() => go('security')} className="card flex w-full items-center gap-3.5 p-4 text-left">
         <span className="grid h-11 w-11 place-items-center rounded-full bg-elev"><Icon n="shield" /></span>
         <span className="flex-1 text-[15.5px] font-semibold">{t('securityLink')}</span><Icon n="chev" className="h-5 w-5 text-mute" /></button>
+      <button onClick={() => go('agents')} className="card flex w-full items-center gap-3.5 p-4 text-left lg:hidden">
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-elev"><Icon n="key" /></span>
+        <span className="flex-1 text-[15.5px] font-semibold">{t('agents')}</span><Icon n="chev" className="h-5 w-5 text-mute" /></button>
       <Card className="space-y-6">
         <div><H>{t('language')}</H><Seg label={t('language')} value={locale} options={[['fr', 'Français'], ['en', 'English']]} onChange={(l) => { setLocale(l); void update({ locale: l }); }} /></div>
         <div><H>{t('currency')}</H><Seg label={t('currency')} value={settings.currency} options={[['CAD', 'CAD'], ['USD', 'USD']]} onChange={(c) => void update({ currency: c })} /></div>

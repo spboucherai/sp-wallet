@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { get, post, setUnauthHandler } from './api';
 import { I18n, useT, type Key, type Locale } from './i18n';
 import { Activity } from './screens/Activity';
+import { Agent, Agents } from './screens/Agents';
 import { Asset } from './screens/Asset';
 import { Assets } from './screens/Assets';
 import { Gate } from './screens/Gate';
@@ -14,16 +15,18 @@ import { Settings } from './screens/Settings';
 import { Swap } from './screens/Swap';
 import { Btn, Icon, Notice } from './ui';
 
-const TABS = [['home', '/', 'home'], ['swap', '/swap', 'swap'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
-export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets';
+const TABS = [['home', '/', 'home'], ['swap', '/swap', 'swap'], ['agents', '/agents', 'key'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
+export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent';
 /** Where to go, with optional pre-selection (asset page, or send/receive pre-filled). */
 export interface Route { tab: Tab; network?: string; asset?: string }
 export type Nav = (r: Route) => void;
-const pathOf = (r: Route) => (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
+const pathOf = (r: Route) => r.tab === 'agent' ? `/agents/${r.asset}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
 function routeOf(): Route {
   const m = /^\/asset\/([a-z0-9-]+)\/(.+)$/.exec(location.pathname);
   if (m) return { tab: 'asset', network: m[1], asset: decodeURIComponent(m[2]!) };
   if (location.pathname === '/assets') return { tab: 'assets' };
+  const ag = /^\/agents\/([0-9a-f-]{36})$/.exec(location.pathname);
+  if (ag) return { tab: 'agent', asset: ag[1] };
   const q = new URLSearchParams(location.search);
   return { tab: TABS.find((t) => t[1] === location.pathname)?.[0] ?? 'home', network: q.get('n') ?? undefined, asset: q.get('a') ?? undefined };
 }
@@ -85,6 +88,8 @@ function Shell({ tab, route, nav, go, lock }: { tab: Tab; route: Route; nav: Nav
           {tab === 'receive' && <Receive initial={route.network} />}
           {tab === 'send' && <Send go={go} initial={route} />}
           {tab === 'swap' && <Swap />}
+          {tab === 'agents' && <Agents nav={nav} />}
+          {tab === 'agent' && <Agent id={route.asset ?? ''} nav={nav} />}
           {tab === 'activity' && <Activity />}
           {tab === 'security' && <Security />}
           {tab === 'settings' && <Settings lock={lock} go={go} />}
