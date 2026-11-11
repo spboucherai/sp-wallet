@@ -36,6 +36,8 @@ export const signer = {
   },
   enroll: (p: unknown) => { cached = null; return call<{ ok: true }>('POST', '/enroll', p); },
   sign: (intent: unknown, assertion: unknown, aux?: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string; pre?: { raw: string; txid: string } }>('POST', '/sign', { intent, assertion, ...(aux ? { aux } : {}) }); },
+  bridgeMint: (p: { proposalId: string; message: string; attestation: string; evm: { nonce: number; gasLimit: string; maxFeePerGas: string; maxPriorityFeePerGas: string }; assertion?: unknown }) => {
+    cached = null; return call<{ raw: string; txid: string; messageHash: string; minted: string; replayed: boolean }>('POST', '/bridge/mint', p); },
   halt: () => { cached = null; return call<{ ok: true }>('POST', '/halt', {}); },
   // agent vaults and mandates
   vaultAddress: (index: number) => call<{ address: string }>('POST', '/vault/address', { index }),

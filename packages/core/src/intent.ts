@@ -33,6 +33,15 @@ export const IntentSchema = z.strictObject({
     provider: z.enum(['kyberswap']), toAsset: z.string().min(1).max(80), minOut: U, router: z.string().min(20).max(100),
     dataHash: z.string().regex(/^[0-9a-f]{64}$/), approveGas: U,
   }).optional(),
+  /**
+   * Present when the intent is a cross-chain USDC transfer (Circle CCTP) from the wallet to itself. `asset`/`amount` are the
+   * USDC burned on `network`, `to` must equal `from` (the wallet's own address, the same on every EVM network). The signer
+   * builds the burn calldata itself from these fields; `maxFee` here is the CCTP fee ceiling in USDC base units (0 = Standard).
+   */
+  bridge: z.strictObject({
+    provider: z.enum(['cctp']), toNetwork: z.string().min(2).max(24).regex(/^[a-z0-9-]+$/), toDomain: z.number().int().min(0).max(0xffffffff),
+    maxFee: U, minFinalityThreshold: z.number().int().min(1).max(0xffffffff), messenger: z.string().min(20).max(100), transmitter: z.string().min(20).max(100), approveGas: U,
+  }).optional(),
   evm: z.strictObject({
     nonce: z.number().int().nonnegative(), gasLimit: U, maxFeePerGas: U, maxPriorityFeePerGas: U,
   }).optional(),
@@ -69,6 +78,8 @@ function fields(i: Intent): [string, string][] {
     ['sol.createAta', i.sol.createAta ? '1' : '0'], ['sol.computeUnitLimit', String(i.sol.computeUnitLimit)],
     ['sol.computeUnitPrice', i.sol.computeUnitPrice]);
   if (i.swap) f.push(['swap.provider', i.swap.provider], ['swap.toAsset', i.swap.toAsset], ['swap.minOut', i.swap.minOut], ['swap.router', i.swap.router], ['swap.dataHash', i.swap.dataHash], ['swap.approveGas', i.swap.approveGas]);
+  if (i.bridge) f.push(['bridge.provider', i.bridge.provider], ['bridge.toNetwork', i.bridge.toNetwork], ['bridge.toDomain', String(i.bridge.toDomain)], ['bridge.maxFee', i.bridge.maxFee],
+    ['bridge.minFinalityThreshold', String(i.bridge.minFinalityThreshold)], ['bridge.messenger', i.bridge.messenger], ['bridge.transmitter', i.bridge.transmitter], ['bridge.approveGas', i.bridge.approveGas]);
   if (i.memo !== undefined) f.push(['memo', i.memo]);
   if (i.x) for (const k of Object.keys(i.x).sort()) f.push([`x.${k}`, i.x[k]!]);
   return f;
@@ -82,6 +93,7 @@ export function canonicalBytes(intent: Intent): Uint8Array {
   if ((fam === 'evm') !== !!i.evm || (fam === 'btc') !== !!i.btc || (fam === 'sol') !== !!i.sol || plugin !== !!i.x)
     throw new Error('intent chain section does not match network');
   if (i.swap && fam !== 'evm') throw new Error('swaps are only defined for EVM networks');
+  if (i.bridge && (fam !== 'evm' || i.swap)) throw new Error('bridges are only defined for EVM networks and exclude a swap');
   baseUnits(i.amount);
   const parts: Uint8Array[] = [enc.encode(DOMAIN), new Uint8Array([0])];
   for (const [k, v] of fields(i)) {

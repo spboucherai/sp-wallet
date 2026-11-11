@@ -84,3 +84,42 @@ KyberSwap same-chain execution is now enabled on Ethereum, Arbitrum, Polygon, Op
 
 - 2026-11-10 (night): HyperEVM enabled too. Its router is a reduced variant (no `swapGeneric`, no partial fill); the verifier refuses
   `swapGeneric` and the partial-fill flag there (`reduced: true`). Fork proof: `NATIVE_IN=0.5 npx tsx scripts/fork-swap-net.mts hyperevm`.
+
+## Update 2026-11-11: cross-chain USDC execution through Circle CCTP (EVM ↔ EVM)
+
+**Implemented, not deployed, never run on a real network.** Dossier: `docs/swap/providers/cctp.md` §2 (pins, upgradeability) and §12.
+
+- Scope: USDC between Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche and HyperEVM, always from the wallet to its own
+  address. No hooks, no destination caller, no swap leg, no Solana, no EURC.
+- Intent: optional `bridge` section (provider, destination network and domain, Circle fee ceiling, finality threshold, pinned
+  messenger and transmitter, exact approval). Intents without it hash exactly as before.
+- Signer: builds the exact-amount approval and `depositForBurn` itself (no provider calldata exists on this path); policy as
+  for a send. It records the approved bridge and later signs **one** `receiveMessage` whose message bytes are exactly that
+  burn (route, token, amount, fee ceiling, wallet as burner and recipient, no hook, no destination caller), to the pinned
+  transmitter, under the destination fee ceiling. An identical request returns the same bytes; any further signature needs
+  the owner's passkey over the new parameters. New narrow route `POST /bridge/mint`. No limit was raised.
+- Pins: both proxies (one bytecode hash for all networks), the implementation address **and** bytecode hash behind each,
+  the minter; checked on both RPC sources before preparing and before minting. An upgrade by Circle stops transfers on that
+  network until the new implementation is reviewed (`node scripts/cctp-pins.mts`). The proxy admins are addresses without
+  code and there is no timelock: recorded as a trust statement in the dossier.
+- API: `kind: 'bridge'` proposals, `bridge` column, routes `/api/v1/bridge/{execution,quote,proposals,proposals/:id/finish,
+  proposals/:id/retry-mint[/options]}`, worker loop every 5 s, audit events `bridge.*`. Refuses to burn when the destination
+  holds no gas for the mint. Resumable from the database and the signer's state file; the mint has no deadline.
+- Web: USDC → USDC across networks in the Swap screen (speed, Circle fee, expected time, gas needed on the destination,
+  progress, "finish"); bridges listed in Activity with the same progress and action. FR/EN.
+- Tests: `packages/core/test/cctp.test.ts` (48), `services/isolated-signer/test/bridge.test.ts` (26),
+  `services/api/test/bridge.test.ts` (16, scripted chain serving the real mainnet bytecode so the pinned hashes are exercised).
+- Not changed: the KyberSwap path, signer limits, existing checks. The CCTP quote adapter still labels Solana and EURC routes
+  quote-only.
+- Fork proof (`npx tsx scripts/fork-cctp.mts <source> <destination>`, two anvil forks, fresh keys, 2026-11-11), every enabled
+  network once as source and once as destination, all checks passing: base→arbitrum (49), arbitrum→ethereum (49),
+  ethereum→optimism (49), optimism→polygon (49), polygon→avalanche (46), avalanche→hyperevm (46), hyperevm→base (45; fewer
+  checks where Circle offers no Fast from the source). Measured gas: approval ≈ 55 500, burn ≈ 109 000–111 500, mint ≈ 171 300.
+  Polygon needs `FORK_RPC_POLYGON=https://polygon.drpc.org` (the first registry endpoint refuses archive reads).
+  **A real Circle attestation cannot exist for a fork-only burn**: on the destination fork two test attesters are enabled
+  through the impersonated attester manager and a local stand-in signs the fork's own message. Circle's real service is
+  exercised read-only (public messages fetched and their signatures checked against the on-chain attester set).
+- Not verified: any transfer on a real network; the real "our burn → Iris message" pairing; re-attestation of an expired
+  Fast message; the Standard fee switch; recompilation of Circle's contracts; the screens in a browser. Full list: dossier §12.8.
+- Operational note: with the signer's current fee ceilings a mint on Ethereum is refused when 240 000 gas × (2 × base fee + tip)
+  exceeds 0.005 ETH (base fee above roughly 10 gwei); the transfer is then not started (or waits, if already burned).

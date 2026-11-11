@@ -6,6 +6,7 @@ import { config } from './config.ts';
 import { audit, sql } from './db.ts';
 import { signer } from './signer-client.ts';
 import { advanceSwap, recordSwapOutcome } from './swap-exec.ts';
+import { advanceBridgeBurn, advanceBridges } from './bridge.ts';
 import { broadcastNow, move, type ProposalRow } from './transfers.ts';
 
 export const healthCache = new Map<string, Health>();
@@ -26,13 +27,13 @@ async function reconcile(): Promise<void> {
       if (p.state === 'signed') {
         // never relay a transaction whose approval window is long gone
         if (p.expires_at && Date.now() - p.expires_at.getTime() > 10 * 60_000) { await move(p, 'failed', { error: 'could not be broadcast in time; nothing was sent' }); continue; }
-        p = p.kind === 'swap' ? await advanceSwap(p) : await broadcastNow(p);
+        p = p.kind === 'swap' ? await advanceSwap(p) : p.kind === 'bridge' ? await advanceBridgeBurn(p) : await broadcastNow(p);
         if (p.state !== 'broadcast') continue;
       }
       if (!config.broadcast || !p.txid || !p.intent) continue;
       const a = adapterFor(p.network);
       // a swap preceded by an approval uses the next nonce
-      const tracked = p.kind === 'swap' && p.pre_raw && p.intent.evm ? { ...p.intent, evm: { ...p.intent.evm, nonce: p.intent.evm.nonce + 1 } } : p.intent;
+      const tracked = (p.kind === 'swap' || p.kind === 'bridge') && p.pre_raw && p.intent.evm ? { ...p.intent, evm: { ...p.intent.evm, nonce: p.intent.evm.nonce + 1 } } : p.intent;
       const t = await a.track({ txid: p.txid, intent: tracked, blockRef: p.block_ref, broadcastAt: (p.broadcast_at?.getTime() ?? Date.now()) / 1000 });
       if (t.rebroadcast && p.raw && Date.now() - (p.last_broadcast_at?.getTime() ?? 0) > 45_000) {
         await a.broadcast(p.raw).catch(() => {});
@@ -87,6 +88,7 @@ export function startWorkers(): void {
   loop('health', refreshHealth, 45_000);
   loop('expire', expireStale, 15_000);
   loop('reconcile', reconcile, 8_000);
+  loop('bridges', advanceBridges, 5_000);
   loop('deposits', scanDeposits, 75_000);
 }
-export { refreshHealth, reconcile, expireStale, isTerminal };
+export { refreshHealth, reconcile, expireStale, isTerminal, advanceBridges };
