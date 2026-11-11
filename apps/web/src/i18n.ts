@@ -1741,6 +1741,18 @@ const D = {
   pnListTitle: ['Plans d’échange entre réseaux', 'Cross-network swap plans'], pnStepOf: ['Étape {k} sur {n}', 'Step {k} of {n}'], pnNeedsYou: ['attend votre approbation', 'waits for your approval'],
   e_plan_open: ['Un autre plan est encore ouvert', 'Another plan is still open'], e_plan_not_startable: ['Ce plan ne peut pas démarrer', 'This plan cannot start'], e_floor_above_estimate: ['Le plancher est au-dessus du résultat attendu', 'The floor is above the expected result'],
   // <<< end of the `pl` block
+  // >>> v9 design system — ONE contiguous block, every key prefixed `ds`: keep additions inside it
+  dsOfflineBody: ['Vérifiez la connexion de cet appareil, puis réessayez. Rien n’a été envoyé.', 'Check this device’s connection, then retry. Nothing was sent.'],
+  dsAllocation: ['Répartition de la valeur détenue', 'Split of the value held'], dsOther: ['Autres', 'Other'],
+  dsAgentsNone: ['Aucun agent', 'No agent'], dsAgents1: ['1 agent', '1 agent'], dsAgentsN: ['{n} agents', '{n} agents'],
+  dsFuturesSub: ['Marchés perpétuels', 'Perpetual markets'], dsAlertsUnread: ['{n} non lues', '{n} unread'], dsAlertsNone: ['Rien de nouveau', 'Nothing new'],
+  dsSecuritySub: ['Signataire et limites', 'Signer and limits'], dsSupported: ['Pris en charge', 'Supported'], dsShare: ['Partager l’adresse', 'Share the address'],
+  dsToday: ['Aujourd’hui', 'Today'], dsYesterday: ['Hier', 'Yesterday'],
+  dsNoActivityBody: ['Vos envois, réceptions et échanges apparaîtront ici.', 'Your transfers, deposits and swaps will appear here.'],
+  dsSteps: ['Étapes de l’envoi', 'Steps of the transfer'], dsStepDetails: ['Détails', 'Details'], dsStepReview: ['Vérification', 'Review'], dsStepTrack: ['Suivi', 'Tracking'],
+  dsAddrFormatOk: ['Format d’adresse valide (42 caractères). Vérifiez toujours le début et la fin.', 'Valid address format (42 characters). Always check its beginning and end.'],
+  dsAddrFormatPartial: ['{n}/42 caractères', '{n}/42 characters'],
+  // <<< end of the `ds` block
 } as const;
 export type Key = keyof typeof D;
 export const I18n = createContext<{ locale: Locale; setLocale: (l: Locale) => void }>({ locale: 'fr', setLocale: () => {} });

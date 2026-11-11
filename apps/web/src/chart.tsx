@@ -6,7 +6,36 @@ export function Spark({ data, w = 64, h = 26 }: { data: number[]; w?: number; h?
   if (data.length < 2) return <span style={{ width: w, height: h }} className="inline-block" />;
   const min = Math.min(...data), max = Math.max(...data), span = max - min || 1;
   const d = data.map((v, k) => `${k ? 'L' : 'M'}${((k / (data.length - 1)) * (w - 2) + 1).toFixed(1)} ${(h - 2 - ((v - min) / span) * (h - 4)).toFixed(1)}`).join('');
-  return <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" className="shrink-0 text-mute"><path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  const ly = h - 2 - ((data[data.length - 1]! - min) / span) * (h - 4);
+  return <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" className="shrink-0 overflow-visible text-mute"><path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" /><circle cx={w - 1} cy={ly} r="2" fill="currentColor" /></svg>;
+}
+
+export interface Part { id: string; label: string; value: number }
+/**
+ * How one whole splits, above a list that already gives each part's name and amount: a THIN segmented bar (8 px, rounded
+ * ends, 2 px surface gaps, no text on it) and a legend that carries name and share in text colour — the hue only keys the
+ * swatch. At most five parts and "other", hues in a fixed order (validated on both surfaces, docs/v9/DESIGN.md): the text
+ * says everything, so nothing depends on telling two hues apart. Hover or focus on a part emphasises it in bar and legend.
+ */
+export function AllocationBar({ parts, otherLabel, label, pct }: { parts: Part[]; otherLabel: string; label: string; pct: (share: number) => string }) {
+  const [on, setOn] = useState<string | null>(null);
+  const total = parts.reduce((s, p) => s + p.value, 0);
+  if (!(total > 0)) return null;
+  const sorted = [...parts].filter((p) => p.value > 0).sort((a, b) => b.value - a.value);
+  const head = sorted.slice(0, 5), rest = sorted.slice(5).reduce((s, p) => s + p.value, 0);
+  const segs = [...head.map((p, k) => ({ ...p, color: `var(--s${k + 1})` })), ...(rest > 0 ? [{ id: '__other', label: otherLabel, value: rest, color: 'var(--s-other)' }] : [])];
+  return (
+    <div data-testid="allocation">
+      <div className="flex h-2 gap-[2px]" role="img" aria-label={`${label} : ${segs.map((s) => `${s.label} ${pct(s.value / total)}`).join(', ')}`}>
+        {segs.map((s) => <span key={s.id} onPointerEnter={() => setOn(s.id)} onPointerLeave={() => setOn(null)} className="h-full min-w-[3px] rounded-full transition-opacity"
+          style={{ flexGrow: s.value, flexBasis: 0, background: s.color, opacity: on && on !== s.id ? 0.35 : 1 }} />)}
+      </div>
+      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px]">{segs.map((s) =>
+        <li key={s.id} tabIndex={0} onFocus={() => setOn(s.id)} onBlur={() => setOn(null)} onPointerEnter={() => setOn(s.id)} onPointerLeave={() => setOn(null)}
+          className={`inline-flex items-center gap-1.5 rounded-md transition-opacity ${on && on !== s.id ? 'opacity-50' : ''}`}>
+          <span className="h-2 w-2 rounded-full" style={{ background: s.color }} aria-hidden="true" /><span className="text-mute">{s.label}</span><span className="font-semibold">{pct(s.value / total)}</span></li>)}</ul>
+    </div>
+  );
 }
 
 /**

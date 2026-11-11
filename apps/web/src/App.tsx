@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { get, post, setUnauthHandler } from './api';
 import { I18n, useT, type Key, type Locale } from './i18n';
 import { Activity } from './screens/Activity';
@@ -14,7 +14,7 @@ import { Security } from './screens/Security';
 import { Send } from './screens/Send';
 import { Settings } from './screens/Settings';
 import { Swap } from './screens/Swap';
-import { Btn, Icon, Notice, Skeleton } from './ui';
+import { Btn, EmptyState, haptic, Icon, Skeleton, usePullToRefresh } from './ui';
 import { useAlertsRuntime, useUnread } from './alerts'; // v6-alerts
 import { Research } from './screens/Research'; // v7 research runtime
 import { PlanScreen } from './plan'; // v7 any-to-any plans
@@ -66,7 +66,7 @@ export function App() {
   useEffect(() => { const f = () => { if (document.visibilityState === 'visible') void qc.invalidateQueries({ queryKey: ['auth'] }); }; document.addEventListener('visibilitychange', f); return () => document.removeEventListener('visibilitychange', f); }, [qc]);
 
   let body;
-  if (state.isLoading) body = <div className="grid h-full place-items-center text-mute"><Icon n="spin" className="h-6 w-6" /></div>;
+  if (state.isLoading) body = <div className="grid h-full place-items-center text-mute" role="status" aria-label="SP Wallet"><div className="flex flex-col items-center gap-5"><img src="/icon.svg" alt="" width={64} height={64} className="h-16 w-16 rounded-[20px] shadow-e2" /><Icon n="spin" className="h-5 w-5" /></div></div>;
   else if (state.isError || !state.data) body = <Offline retry={() => void state.refetch()} />;
   else if (!state.data.authenticated) body = <Gate setup={state.data.setupRequired} onDone={() => void state.refetch()} />;
   else body = <Shell tab={tab} route={route} nav={nav} go={go} openPath={openPath} locale={locale} lock={async () => { await post('/auth/logout').catch(() => {}); qc.clear(); void state.refetch(); }} />;
@@ -75,22 +75,26 @@ export function App() {
 
 function Offline({ retry }: { retry: () => void }) {
   const t = useT();
-  return <div className="mx-auto grid h-full max-w-sm place-items-center px-6"><div className="w-full space-y-4"><Notice tone="warn">{t('offline')}</Notice><Btn full kind="soft" onClick={retry}>{t('retry')}</Btn></div></div>;
+  return <div className="safe-t safe-b mx-auto grid h-full max-w-sm place-items-center px-6"><div className="rise w-full"><EmptyState icon="cloudOff" title={t('offline')} action={<Btn kind="soft" onClick={retry}><Icon n="refresh" className="h-4 w-4" />{t('retry')}</Btn>}>{t('dsOfflineBody')}</EmptyState></div></div>;
 }
 
 function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; route: Route; nav: Nav; go: (t: Tab) => void; lock: () => void; openPath: (path: string) => void; locale: Locale }) {
-  const t = useT();
+  const t = useT(); const qc = useQueryClient();
   const unread = useUnread(); useAlertsRuntime(locale, openPath); // v6-alerts
+  // v9: the phone header condenses once the page scrolls (an attribute, not a re-render); pull down on Home/Activity refreshes
+  const header = useRef<HTMLElement>(null);
+  useEffect(() => { let raf = 0; const f = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => header.current?.toggleAttribute('data-scrolled', scrollY > 6)); }; f(); addEventListener('scroll', f, { passive: true }); return () => { removeEventListener('scroll', f); cancelAnimationFrame(raf); }; }, [tab]);
+  const ptr = usePullToRefresh(tab === 'home' || tab === 'activity', () => qc.invalidateQueries());
   const bell = (cls: string) => <button onClick={() => go('alerts')} data-testid="alerts-bell" aria-label={`${t('alBell')}${unread.unread ? ` (${unread.unread})` : ''}`} aria-current={tab === 'alerts' ? 'page' : undefined} className={cls}>
     <span className="relative"><Icon n="bell" />{unread.unread > 0 && <span data-testid="alerts-badge" className={`absolute -right-2 -top-2 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[10.5px] font-bold leading-none text-white ${unread.critical ? 'bg-danger' : 'bg-blue'}`}>{unread.unread > 99 ? '99+' : unread.unread}</span>}</span>{cls.includes('w-full') && t('alTitle')}</button>;
   const MOBILE: [Tab, string][] = [['home', 'home'], ['swap', 'swap'], ['send', 'up'], ['activity', 'list'], ['settings', 'gear']];
   const trade = tab === 'swap' || tab === 'futures';   // Futures lives inside the trade area: the five phone tabs stay as they are
   const side = (id: Tab, icon: string) => { const on = tab === id || (id === 'swap' && tab === 'futures'); return (
-    <button key={id} onClick={() => go(id)} aria-current={on ? 'page' : undefined} className={`flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-[15px] font-medium transition ${on ? 'bg-primary text-onprimary' : 'text-mute hover:bg-elev hover:text-ink'}`}><Icon n={icon} />{t(id as Key)}</button>); };
+    <button key={id} onClick={() => go(id)} aria-current={on ? 'page' : undefined} className={`press flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-[15px] font-medium ${on ? 'bg-primary text-onprimary shadow-e1' : 'text-mute hover:bg-elev hover:text-ink'}`}><Icon n={icon} />{t(id as Key)}</button>); };
   return (
-    <div className={`mx-auto flex min-h-full ${tab === 'futures' ? 'max-w-[1680px]' : 'max-w-6xl'}`}>
+    <div className={`safe-x mx-auto flex min-h-full ${tab === 'futures' ? 'max-w-[1680px]' : 'max-w-6xl'}`}>{ptr}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col p-5 lg:flex">
-        <div className="mb-8 flex items-center gap-3 px-2 pt-2"><img src="/icon.svg" alt="" className="h-9 w-9 rounded-xl" /><span className="text-[19px] font-semibold tracking-tight">SP Wallet</span></div>
+        <div className="mb-8 flex items-center gap-3 px-2 pt-2"><img src="/icon.svg" alt="" width={36} height={36} className="h-9 w-9 rounded-xl shadow-e1" /><span className="text-[19px] font-semibold tracking-[-0.02em]">SP Wallet</span></div>
         <nav className="space-y-1.5" aria-label="Navigation">{TABS.map(([id, , icon]) => side(id, icon))}</nav>
         <div className="mt-auto space-y-1.5">{/* v6-alerts */}
           {bell(`flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-[15px] font-medium transition ${tab === 'alerts' ? 'bg-primary text-onprimary' : 'text-mute hover:bg-elev hover:text-ink'}`)}
@@ -99,9 +103,9 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
         </div>
       </aside>
       <div className="min-w-0 flex-1">
-        <header className="safe-t nav-glass sticky top-0 z-10 lg:hidden">
-          <div className="flex items-center justify-between px-5 py-3">
-            <div className="flex items-center gap-2.5"><img src="/icon.svg" alt="" className="h-8 w-8 rounded-[10px]" /><span className="text-[17px] font-semibold tracking-tight">SP Wallet</span></div>
+        <header ref={header} className="app-header safe-t nav-glass sticky top-0 z-10 lg:hidden">
+          <div className="app-header-row flex items-center justify-between px-5 py-2.5">
+            <div className="app-brand flex items-center gap-2.5"><img src="/icon.svg" alt="" width={32} height={32} className="h-8 w-8 rounded-[10px]" /><span className="text-[17px] font-semibold tracking-[-0.02em]">SP Wallet</span></div>
             <div className="flex items-center gap-1">
               {bell(`grid h-11 w-11 place-items-center rounded-full ${tab === 'alerts' ? 'bg-elev text-ink' : 'text-mute'}`)}
               <button onClick={() => go('security')} aria-label={t('security')} aria-current={tab === 'security' ? 'page' : undefined} className={`grid h-11 w-11 place-items-center rounded-full ${tab === 'security' ? 'bg-elev text-ink' : 'text-mute'}`}><Icon n="shield" /></button>
@@ -109,8 +113,8 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
             </div>
           </div>
         </header>
-        <main key={tab === 'futures' ? 'futures' : tab + (route.network ?? '') + (route.asset ?? '')} className={`rise mx-auto w-full px-5 pb-32 pt-3 lg:pb-12 ${tab === 'futures' ? 'max-w-none lg:pt-6' : 'max-w-xl lg:max-w-2xl lg:pt-10'}`}>
-          {trade && <div role="tablist" aria-label={t('fxTradeArea')} className={`mb-3 flex gap-1 rounded-2xl bg-elev p-1 ${tab === 'futures' ? 'max-w-sm' : ''}`}>{([['swap', 'fxSpot'], ['futures', 'fxFutures']] as const).map(([id, k]) =>
+        <main key={tab === 'futures' ? 'futures' : tab + (route.network ?? '') + (route.asset ?? '')} className={`rise mx-auto w-full px-5 pb-[calc(env(safe-area-inset-bottom)+8rem)] pt-2 lg:pb-12 ${tab === 'futures' ? 'max-w-none lg:pt-6' : 'max-w-xl lg:max-w-2xl lg:pt-10'}`}>
+          {trade && <div role="tablist" aria-label={t('fxTradeArea')} className={`mb-3 mt-1 flex gap-1 rounded-2xl bg-elev p-1 ${tab === 'futures' ? 'max-w-sm' : ''}`}>{([['swap', 'fxSpot'], ['futures', 'fxFutures']] as const).map(([id, k]) =>
             <button key={id} role="tab" aria-selected={tab === id} onClick={() => { if (tab !== id) go(id); }} className={`min-h-11 flex-1 rounded-xl px-3 text-[14px] font-semibold transition ${tab === id ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-mute hover:text-ink'}`}>{t(k)}</button>)}</div>}
           {tab === 'home' && <Home go={go} nav={nav} />}
           {tab === 'assets' && <Assets nav={nav} />}
@@ -129,13 +133,13 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
           {tab === 'monitor' && <Suspense fallback={<Skeleton h="h-72" />}><Monitor open={openPath} /></Suspense>}
           {tab === 'research' && <Research nav={nav} job={route.asset} />}{/* v7 research runtime */}
         </main>
-        <nav aria-label="Navigation" className="safe-b nav-glass fixed inset-x-0 bottom-0 z-10 border-t border-line lg:hidden">
-          <div className="mx-auto flex max-w-xl items-end px-2 pt-2">{MOBILE.map(([id, icon]) => { const on = tab === id || (id === 'home' && (tab === 'asset' || tab === 'assets')) || (id === 'swap' && tab === 'futures');
+        <nav aria-label="Navigation" className="tabbar safe-b nav-glass fixed inset-x-0 bottom-0 z-10 lg:hidden">
+          <div className="mx-auto flex max-w-xl items-end px-2 pt-1.5">{MOBILE.map(([id, icon]) => { const on = tab === id || (id === 'home' && (tab === 'asset' || tab === 'assets')) || (id === 'swap' && tab === 'futures');
             return id === 'send'
-              ? <button key={id} onClick={() => go(id)} aria-current={on ? 'page' : undefined} aria-label={t('send')} className="flex flex-1 flex-col items-center gap-1 text-[11px] font-medium text-ink">
-                  <span className="-mt-5 grid h-[52px] w-[52px] place-items-center rounded-full bg-primary text-onprimary shadow-[0_10px_24px_-8px_rgba(11,16,32,0.55)]"><Icon n="up" className="h-6 w-6" /></span><span>{t('send')}</span></button>
-              : <button key={id} onClick={() => go(id)} aria-current={on ? 'page' : undefined} className={`flex min-h-[50px] flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium ${on ? 'text-ink' : 'text-mute'}`}>
-                  <Icon n={icon} className="h-6 w-6" /><span>{t(id as Key)}</span></button>; })}</div>
+              ? <button key={id} onClick={() => { haptic(); go(id); }} aria-current={on ? 'page' : undefined} aria-label={t('send')} className="flex flex-1 flex-col items-center gap-1 text-[11px] font-semibold text-ink">
+                  <span className="tab-fab -mt-6 grid h-[56px] w-[56px] place-items-center rounded-full bg-primary text-onprimary ring-4 ring-bg"><Icon n="up" className="h-6 w-6" /></span><span>{t('send')}</span></button>
+              : <button key={id} onClick={() => { haptic(); go(id); }} aria-current={on ? 'page' : undefined} className={`press relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 text-[11px] ${on ? 'font-semibold text-ink' : 'font-medium text-mute'}`}>
+                  <span className={`grid h-7 w-12 place-items-center rounded-full transition-colors ${on ? 'bg-elev' : ''}`}><Icon n={icon} className="h-[22px] w-[22px]" /></span><span>{t(id as Key)}</span></button>; })}</div>
         </nav>
       </div>
     </div>

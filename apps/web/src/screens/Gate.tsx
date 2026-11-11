@@ -23,12 +23,13 @@ export function Gate({ setup, onDone }: { setup: boolean; onDone: () => void }) 
     await post('/auth/setup/verify', { challengeId: o.challengeId, response, setupToken: token.trim(), label: navigator.platform || 'Passkey' });
   });
   return (
-    <main className="safe-t safe-b mx-auto flex min-h-full max-w-sm flex-col justify-center px-6">
-      <div className="rise">
-        <img src="/icon.svg" alt="" className="mb-7 h-[72px] w-[72px] rounded-[22px] shadow-[0_18px_36px_-16px_rgba(11,16,32,0.6)]" />
-        <h1 className="text-[38px] font-semibold leading-none tracking-[-0.03em]">SP Wallet</h1>
-        <p className="mt-2.5 text-[16px] text-mute">{t('tagline')}</p>
-        <div className="mt-8 space-y-4">
+    <main className="gate safe-t safe-b relative mx-auto flex min-h-full max-w-sm flex-col justify-center px-6">
+      <div className="gate-aura" aria-hidden="true" />
+      <div className="rise relative">
+        <img src="/icon.svg" alt="" width={84} height={84} className="gate-icon mb-8 h-[84px] w-[84px] rounded-[26px]" />
+        <h1 className="t-display text-[44px]">SP Wallet</h1>
+        <p className="mt-3 text-[16.5px] text-mute">{t('tagline')}</p>
+        <div className="mt-9 space-y-4">
           {!supported && <Notice tone="danger">{t('noWebauthn')}</Notice>}
           {setup ? (<>
             <Notice tone="info"><b>{t('setupTitle')}</b><br />{t('setupBody')}</Notice>

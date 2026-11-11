@@ -15,4 +15,9 @@ if (import.meta.env.DEV) {
   if (sessionStorage.getItem('spw-mock') !== null) (await import('./derivatives/mock')).installMock();
 }
 applyTheme(localStorage.getItem('spw-theme') === 'dark' ? 'dark' : 'light'); // light by default
+// Development only: /__icons shows every logo of the set on one page (src/IconWall.tsx); removed from the production bundle.
+if (import.meta.env.DEV && location.pathname === '/__icons') {
+  const { IconWall } = await import('./IconWall');
+  createRoot(document.getElementById('root')!).render(<IconWall />);
+} else
 createRoot(document.getElementById('root')!).render(<StrictMode><QueryClientProvider client={qc}><App /></QueryClientProvider></StrictMode>);

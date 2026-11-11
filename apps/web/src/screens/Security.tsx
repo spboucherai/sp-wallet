@@ -4,7 +4,7 @@ import { useContext, useState } from 'react';
 import { get, post } from '../api';
 import { useNetworks } from '../hooks';
 import { errText, I18n, useT } from '../i18n';
-import { Btn, Card, Coin, H, Icon, inputCls, Notice, Skeleton, when } from '../ui';
+import { Btn, Card, Coin, H, Icon, inputCls, Notice, PageTitle, Skeleton, SkeletonRows, when } from '../ui';
 
 const fmt = (v: string, d: number) => { const s = v.padStart(d + 1, '0'); const i = s.slice(0, s.length - d), f = s.slice(s.length - d).replace(/0+$/, ''); return f ? `${i}.${f}` : i; };
 
@@ -15,7 +15,7 @@ export function Security() {
   const au = useQuery({ queryKey: ['audit'], queryFn: () => get<any>('/security/audit?limit=60'), refetchInterval: 30_000 });
   const [showAudit, setShowAudit] = useState(false), [allLimits, setAllLimits] = useState(false), [lq, setLq] = useState('');
   const [halt, setHalt] = useState(''), [haltOpen, setHaltOpen] = useState(false), [busy, setBusy] = useState(''), [err, setErr] = useState('');
-  if (ov.isLoading || !ov.data) return <div className="space-y-4"><Skeleton h="h-40" /><Skeleton h="h-40" /></div>;
+  if (ov.isLoading || !ov.data) return <div className="space-y-4" aria-busy="true"><Skeleton h="h-11" className="!w-40 !rounded-xl" /><Skeleton h="h-44" /><SkeletonRows n={4} /></div>;
   const s = ov.data.signer;
   const act = async (name: string, fn: () => Promise<unknown>) => { setBusy(name); setErr(''); try { await fn(); await qc.invalidateQueries(); } catch (e) { setErr(errText(t, e)); } finally { setBusy(''); } };
   const addDevice = () => act('device', async () => {
@@ -31,12 +31,12 @@ export function Security() {
   const decOf = (net: string, sym: string) => { const n = nets.data?.find((x) => x.id === net); return (n?.native.symbol === sym ? n.native : n?.tokens.find((x) => x.symbol === sym))?.decimals ?? 0; };
   return (
     <div className="space-y-4">
-      <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('security')}</h1>
+      <PageTitle>{t('security')}</PageTitle>
       {err && <Notice tone="danger">{err}</Notice>}
       <Card>
         <H>{t('signer')}</H>
         {!s.reachable ? <Notice tone="danger">{t('signer')} : {t('unreachable')}</Notice> : <>
-          <div className={`flex items-center gap-2 text-[15px] font-medium ${s.halted ? 'text-danger' : 'text-emerald'}`}><Icon n={s.halted ? 'stop' : 'check'} />{s.halted ? t('signingOff') : t('signingOn')}</div>
+          <div className={`flex items-center gap-3 rounded-2xl p-3 text-[15.5px] font-semibold ${s.halted ? 'bg-danger/[0.09] text-danger' : 'bg-emerald/[0.08] text-emerald'}`}><span className={`grid h-9 w-9 place-items-center rounded-full ${s.halted ? 'bg-danger/15' : 'bg-emerald/15'}`}><Icon n={s.halted ? 'stop' : 'check'} /></span>{s.halted ? t('signingOff') : t('signingOn')}</div>
           <dl className="mt-3 space-y-1.5 text-[13px] text-mute"><div className="flex justify-between gap-3"><dt>{t('keyId')}</dt><dd className="font-mono text-ink">{s.keyId}</dd></div>
             <div className="flex justify-between gap-3"><dt>{t('signerJournal')}</dt><dd className="text-ink">{s.journalLength} {s.journalLength === 1 ? t('qaEntries1') : t('entries')}</dd></div></dl>
           {!s.halted && (haltOpen ? <div className="mt-4 space-y-3"><Notice tone="danger">{t('haltConfirm')}</Notice>
@@ -58,7 +58,7 @@ export function Security() {
               <div className="min-w-0 flex-1"><div className="text-[14.5px] font-semibold leading-tight">{sym} <span className="font-normal text-mute">· {nameOf(net)}</span></div>
                 <div className="text-[12.5px] text-mute">{fmt(s.policy.perTx[k], dec)} {t('perTxShort')}</div></div>
               <div className="text-right"><div className="text-[14.5px] font-semibold leading-tight">{fmt((day - used > 0n ? day - used : 0n).toString(), dec)}</div><div className="text-[12.5px] text-mute">{t('remaining')}</div></div></div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-elev" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${sym} ${nameOf(net)}`}><div className="h-full rounded-full bg-blue" style={{ width: `${Math.min(100, pct)}%` }} /></div>
+            <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-elev" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${sym} ${nameOf(net)}`}><div className="h-full rounded-full bg-blue" style={{ width: `${Math.min(100, pct)}%` }} /></div>
           </li>; })}</ul>
         {keys.length > 6 && <button className="mt-2 min-h-11 text-[14px] font-medium text-blue" aria-expanded={allLimits} onClick={() => { setAllLimits(!allLimits); setLq(''); }}>{allLimits ? t('showLess') : `${t('showAll')} (${keys.length})`}</button>}
         <p className="mt-4 text-[12.5px] text-mute">{t('limitsNote')}</p></Card>}

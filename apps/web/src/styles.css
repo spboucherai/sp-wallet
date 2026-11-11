@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 
+/* ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   SP Wallet design system (v9) — tokens, then the component layer every screen inherits. Reference: docs/v9/DESIGN.md.
+   Rules of the system: colour never carries a meaning alone; amounts use tabular figures (display numerals excepted);
+   motion is short, transform/opacity only, and off under prefers-reduced-motion; nothing here hides or shortens money text.
+   ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -13,61 +18,180 @@
   --color-danger: var(--danger);
   --color-primary: var(--primary);
   --color-onprimary: var(--onprimary);
+  --color-plate: var(--plate);
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --shadow-e1: var(--e1);
+  --shadow-e2: var(--e2);
+  --shadow-e3: var(--e3);
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 :root, [data-theme='light'] {
-  --bg: #f4f6fb; --surface: #ffffff; --elev: #eef1f7; --line: rgba(15, 23, 42, 0.08); --ink: #0b1020; --mute: #667085;
-  --emerald: #0a9d70; --blue: #2f66f5; --warn: #b4690e; --danger: #d43d51; --primary: #0b1020; --onprimary: #ffffff;
-  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.12);
-  --nav-bg: rgba(255, 255, 255, 0.86);
+  --bg: #f3f4f7; --surface: #ffffff; --elev: #eceef3; --line: rgba(13, 18, 32, 0.09); --ink: #0a0d14; --mute: #596273;
+  --emerald: #087a55; --blue: #2257e0; --warn: #9a5b06; --danger: #c22a40; --primary: #0a0d14; --onprimary: #ffffff; --ondanger: #ffffff;
+  --plate: #ffffff; --plate-line: rgba(13, 18, 32, 0.1);
+  /* elevation: e1 resting card · e2 raised control (tab bar action, popover) · e3 sheet / hero */
+  --e1: 0 1px 1px rgba(13, 18, 32, 0.03), 0 6px 20px -10px rgba(13, 18, 32, 0.12);
+  --e2: 0 2px 4px rgba(13, 18, 32, 0.06), 0 12px 28px -10px rgba(13, 18, 32, 0.28);
+  --e3: 0 -8px 40px -12px rgba(13, 18, 32, 0.3), 0 24px 56px -24px rgba(13, 18, 32, 0.5);
+  --card-shadow: var(--e1);
+  --nav-bg: rgba(255, 255, 255, 0.78); --scrim: rgba(10, 13, 20, 0.42);
+  /* data-viz series (allocation bar): fixed order, validated for both surfaces — docs/v9/DESIGN.md */
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s-other: #8a93a3;
   color-scheme: light;
 }
 [data-theme='dark'] {
-  --bg: #080b12; --surface: #111725; --elev: #1a2336; --line: rgba(247, 249, 252, 0.08); --ink: #f7f9fc; --mute: #8b97b0;
-  --emerald: #35e7ac; --blue: #6d9aff; --warn: #f4b65b; --danger: #f26d79; --primary: #35e7ac; --onprimary: #04130d;
-  --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
-  --nav-bg: rgba(10, 14, 23, 0.86);
+  --bg: #06080c; --surface: #0f131b; --elev: #1a202c; --line: rgba(240, 244, 255, 0.09); --ink: #f4f6fa; --mute: #98a2b6;
+  --emerald: #35e7ac; --blue: #7ea6ff; --warn: #f4b65b; --danger: #ff7d88; --primary: #35e7ac; --onprimary: #04130d; --ondanger: #2a0508;
+  --plate: #1e2533; --plate-line: rgba(240, 244, 255, 0.12);
+  --e1: 0 1px 0 rgba(255, 255, 255, 0.035) inset, 0 8px 24px -14px rgba(0, 0, 0, 0.8);
+  --e2: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 12px 28px -10px rgba(0, 0, 0, 0.85);
+  --e3: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 -12px 48px -12px rgba(0, 0, 0, 0.9);
+  --card-shadow: var(--e1);
+  --nav-bg: rgba(9, 12, 18, 0.74); --scrim: rgba(0, 0, 0, 0.6);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s-other: #6b7486;
   color-scheme: dark;
 }
 
 /* base rules live in the base layer so utilities (text-*, bg-*) can override them */
 @layer base {
 html, body, #root { height: 100%; }
+html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45;
   -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none;
-  font-variant-numeric: tabular-nums; letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.005em; min-height: 100dvh;
 }
-h1, h2, h3 { font-family: var(--font-display); }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; }
 button, input, select, textarea { font: inherit; color: inherit; }
 input, select, textarea { font-size: 16px; } /* prevents iOS zoom on focus */
-button { cursor: pointer; }
+button { cursor: pointer; touch-action: manipulation; }
+button:disabled { cursor: default; }
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 8px; }
+::selection { background: color-mix(in srgb, var(--blue) 28%, transparent); }
+/* page titles: every screen's <h1> is the large title of the type scale */
+main h1 { letter-spacing: -0.028em; line-height: 1.08; }
 }
+
+/* ── layout helpers ───────────────────────────────────────────────────────────────────────────────────────────────────── */
 .safe-b { padding-bottom: max(env(safe-area-inset-bottom), 10px); }
 .safe-t { padding-top: env(safe-area-inset-top); }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--card-shadow); }
-.nav-glass { background: var(--nav-bg); -webkit-backdrop-filter: saturate(180%) blur(18px); backdrop-filter: saturate(180%) blur(18px); }
-/* the balance card is always dark: it reads as a physical card in both themes */
-.hero {
-  position: relative; overflow: hidden; border-radius: 28px; color: #f7f9fc;
-  background: radial-gradient(90% 120% at 100% 0%, rgba(77, 131, 255, 0.55), transparent 60%),
-    radial-gradient(80% 110% at 0% 100%, rgba(53, 231, 172, 0.38), transparent 55%), linear-gradient(145deg, #131c33, #070a12 70%);
-  box-shadow: 0 24px 48px -24px rgba(19, 28, 51, 0.65);
-}
-.hero::after { content: ''; position: absolute; inset: 0; border-radius: inherit; border: 1px solid rgba(255, 255, 255, 0.1); pointer-events: none; }
-.hero-btn { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.16); color: #fff; }
-.hero-btn-main { background: #ffffff; color: #0b1020; }
-.mask { filter: blur(10px); user-select: none; }
+.safe-x { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.h-dvh-full { min-height: 100dvh; }
 .no-scrollbar { scrollbar-width: none; } .no-scrollbar::-webkit-scrollbar { display: none; }
+.mask { filter: blur(10px); user-select: none; }
+
+/* ── surfaces ─────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--card-shadow); }
+button.card, a.card { transition: transform 0.14s var(--ease-spring), background-color 0.14s; }
+button.card:active, a.card:active { transform: scale(0.985); background: color-mix(in srgb, var(--elev) 55%, var(--surface)); }
+.nav-glass { background: var(--nav-bg); -webkit-backdrop-filter: saturate(180%) blur(22px); backdrop-filter: saturate(180%) blur(22px); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .nav-glass { background: var(--surface); } }
+/* the sticky phone header condenses once the page has scrolled (data-scrolled is set by the shell, no re-render) */
+.app-header { transition: box-shadow 0.2s, background-color 0.2s; }
+.app-header .app-header-row { transition: padding 0.2s var(--ease-spring); }
+.app-header .app-brand { transition: transform 0.2s var(--ease-spring); transform-origin: left center; }
+.app-header[data-scrolled] { box-shadow: 0 1px 0 var(--line), 0 10px 24px -18px rgba(13, 18, 32, 0.35); }
+.app-header[data-scrolled] .app-header-row { padding-top: 4px; padding-bottom: 4px; }
+.app-header[data-scrolled] .app-brand { transform: scale(0.9); }
+.app-header:not([data-scrolled]) { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.tabbar { box-shadow: 0 -1px 0 var(--line); }
+.tab-fab { box-shadow: var(--e2); transition: transform 0.16s var(--ease-spring); }
+.tab-fab:active, button:active > .tab-fab { transform: scale(0.92); }
+
+/* segmented controls (every `bg-elev` track with a `bg-surface` thumb, shared component or inline): in dark the thumb is LIGHTER than its track */
+[data-theme='dark'] :is([role='radiogroup'], [role='tablist']).bg-elev > .bg-surface { background: #2b3445; box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 2px 6px rgba(0, 0, 0, 0.4); }
+
+/* ── press feedback: every tappable thing answers the finger ──────────────────────────────────────────────────────────── */
+.press { transition: transform 0.14s var(--ease-spring), background-color 0.14s, opacity 0.14s; }
+.press:active:not(:disabled) { transform: scale(0.97); }
+.row-press { transition: background-color 0.12s; }
+.row-press:active { background: color-mix(in srgb, var(--elev) 70%, transparent); }
+@media (hover: hover) { .row-press:hover { background: color-mix(in srgb, var(--elev) 45%, transparent); } }
+
+/* ── type roles ───────────────────────────────────────────────────────────────────────────────────────────────────────── */
+/* display numerals: proportional figures (a hero amount set in tabular figures looks loose), tight tracking */
+.t-display { font-family: var(--font-display); font-weight: 650; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: proportional-nums; }
+.t-title { font-family: var(--font-display); font-size: 30px; font-weight: 650; letter-spacing: -0.028em; line-height: 1.08; }
+.t-eyebrow { font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); }
+
+/* ── balance hero: always dark, an "aurora" whose hue follows the portfolio's 24 h direction (data-mood) ────────────────── */
+.hero {
+  position: relative; overflow: hidden; isolation: isolate; border-radius: 30px; color: #f7f9fc;
+  background: linear-gradient(150deg, #121a2e 0%, #0a0e19 55%, #06080d 100%);
+  box-shadow: 0 28px 56px -28px rgba(10, 16, 34, 0.75), 0 2px 6px rgba(10, 16, 34, 0.18);
+  --aur-a: 99, 140, 255; --aur-b: 53, 231, 172;
+}
+.hero[data-mood='up'] { --aur-a: 77, 131, 255; --aur-b: 53, 231, 172; }
+.hero[data-mood='down'] { --aur-a: 120, 110, 255; --aur-b: 255, 122, 138; }
+.hero[data-mood='flat'] { --aur-a: 99, 140, 255; --aur-b: 150, 160, 190; }
+.hero::before, .hero::after { content: ''; position: absolute; z-index: -1; pointer-events: none; border-radius: 50%; will-change: transform; }
+.hero::before { width: 120%; aspect-ratio: 1; right: -45%; top: -70%; background: radial-gradient(closest-side, rgba(var(--aur-a), 0.62), rgba(var(--aur-a), 0) 100%); animation: aurora-a 22s ease-in-out infinite alternate; }
+.hero::after { width: 105%; aspect-ratio: 1; left: -40%; bottom: -85%; background: radial-gradient(closest-side, rgba(var(--aur-b), 0.46), rgba(var(--aur-b), 0) 100%); animation: aurora-b 26s ease-in-out infinite alternate; }
+.hero-edge { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; border: 1px solid rgba(255, 255, 255, 0.1); }
+@keyframes aurora-a { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(-9%, 7%, 0) scale(1.12); } }
+@keyframes aurora-b { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(11%, -6%, 0) scale(1.08); } }
+.hero-btn { background: rgba(255, 255, 255, 0.11); border: 1px solid rgba(255, 255, 255, 0.14); color: #fff; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.hero-btn-main { background: #ffffff; color: #0a0d14; }
+.hero-chip { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.08); }
+
+/* ── logos ────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+/* every logo sits on a round plate: full-bleed discs cover it; free-form marks keep the plate so they never vanish on a surface */
+.logo { position: relative; display: inline-block; flex: none; border-radius: 50%; }
+.logo-plate { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: var(--plate); box-shadow: inset 0 0 0 1px var(--plate-line); }
+.logo-plate::after { content: ''; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--plate-line); pointer-events: none; } /* a hairline edge over every logo: a dark disc on a dark surface, a white one on white, keep their outline */
+.logo-plate.skel { position: absolute; border-radius: 50%; }
+.logo-plate img { display: block; opacity: 0; transition: opacity 0.18s; }
+.logo-plate img[data-ok] { opacity: 1; }
+.logo-letters { font-weight: 700; line-height: 1; color: #fff; letter-spacing: -0.02em; }
+.logo-badge { position: absolute; right: -2px; bottom: -2px; border-radius: 50%; box-shadow: 0 0 0 2px var(--ring, var(--surface)); }
+
+/* ── screens' shared furniture ───────────────────────────────────────────────────────────────────────────────────────── */
+/* long lists (249 assets): rows outside the viewport are not laid out or painted until they scroll in */
+.cv-list > li { content-visibility: auto; contain-intrinsic-size: auto 68px; }
+/* the receipt the passkey signs: dashed separators, like a ticket; every value stays whole */
+.receipt > .border-t { border-top-style: dashed; }
+/* lock screen: a quiet aurora in the brand's two colours behind the mark */
+.gate-aura { position: absolute; inset: -10% -30% auto; height: 62%; pointer-events: none; opacity: 0.55; filter: blur(48px);
+  background: radial-gradient(42% 46% at 28% 42%, rgba(53, 231, 172, 0.5), transparent 70%), radial-gradient(46% 50% at 74% 34%, rgba(77, 131, 255, 0.55), transparent 72%); }
+[data-theme='dark'] .gate-aura { opacity: 0.4; }
+.gate-icon { box-shadow: 0 22px 44px -18px rgba(10, 16, 34, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06); }
+
+/* ── loading: skeletons that shimmer in place of the final layout ─────────────────────────────────────────────────────── */
+.skel { position: relative; overflow: hidden; background: var(--elev); border-radius: 22px; }
+.skel::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 55%, transparent), transparent); animation: shimmer 1.4s ease-in-out infinite; }
+@keyframes shimmer { to { transform: translateX(100%); } }
+
+/* ── sheets: every modal dialog of the app (they all share this markup) gets the scrim, the spring and the grabber here ── */
+[role='dialog'][aria-modal='true'].fixed { background: var(--scrim); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: scrim-in 0.2s ease-out backwards; overscroll-behavior: contain; }
+[role='dialog'][aria-modal='true'].fixed > *:first-child, .fixed > [role='dialog'][aria-modal='true'] { position: relative; box-shadow: var(--e3); animation: sheet-in 0.36s var(--ease-spring) backwards; max-height: min(92dvh, 100dvh - env(safe-area-inset-top) - 12px); }
+@media (max-width: 1023px) {
+  [role='dialog'][aria-modal='true'].fixed > *:first-child, .fixed > [role='dialog'][aria-modal='true'] { border-top-left-radius: 28px; border-top-right-radius: 28px; }
+  [role='dialog'][aria-modal='true'].fixed > *:first-child::before, .fixed > [role='dialog'][aria-modal='true']::before { content: ''; position: absolute; top: 7px; left: 50%; width: 38px; height: 5px; margin-left: -19px; border-radius: 3px; background: color-mix(in srgb, var(--mute) 38%, transparent); pointer-events: none; z-index: 2; }
+}
+@keyframes scrim-in { from { opacity: 0; } }
+@keyframes sheet-in { from { transform: translateY(28px); opacity: 0; } }
+.sheet-dragging { transition: none !important; animation: none !important; }
+
+/* ── motion ───────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 /* `backwards`, not `both`: a filled transform keeps a stacking context on <main>, which trapped every sheet (position: fixed, z-30) under the bottom navigation */
-.rise { animation: rise 0.26s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.rise { animation: rise 0.28s var(--ease-spring) backwards; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .pulse-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .rise, .spin, .pulse-dot { animation: none; } * { transition: none !important; } }
+@keyframes tick { from { opacity: 0.35; transform: translateY(0.18em); } }
+.tick { animation: tick 0.32s var(--ease-spring); }
+@keyframes pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: none; } }
+.pop { animation: pop 0.34s var(--ease-spring) backwards; }
+.ptr { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 8px); z-index: 20; margin-left: -18px; display: grid; height: 36px; width: 36px; place-items: center; border-radius: 50%; background: var(--surface); color: var(--ink); box-shadow: var(--e2); pointer-events: none; will-change: transform, opacity; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rise, .spin, .pulse-dot, .tick, .pop, .skel::after, .hero::before, .hero::after, [role='dialog'][aria-modal='true'].fixed, [role='dialog'][aria-modal='true'].fixed > *:first-child, .fixed > [role='dialog'][aria-modal='true'] { animation: none; }
+  * { transition: none !important; }
+}
+/* forced colours (Windows high contrast): plates and separators stay visible */
+@media (forced-colors: active) { .card, .logo-plate { border: 1px solid CanvasText; } }

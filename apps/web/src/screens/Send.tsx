@@ -5,7 +5,7 @@ import { get, post } from '../api';
 import type { Tab } from '../App';
 import { useNetworks, usePortfolio, type Proposal } from '../hooks';
 import { errText, useT, type Key } from '../i18n';
-import { Addr, Btn, Card, Chips, Field, H, Icon, inputCls, Notice, short, StatePill, testNotSent, trimAmt } from '../ui';
+import { Addr, Btn, Card, Chips, Coin, Field, H, Icon, inputCls, NetworkIcon, Notice, PageTitle, short, StatePill, testNotSent, trimAmt } from '../ui';
 import { AgentRecipientNotice } from './AgentFund';
 
 type Step = 'form' | 'review' | 'track';
@@ -29,6 +29,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
   const bal = pf.data?.balances.find((b) => b.network === net && b.asset === asset);
   const a = assets.find((x) => x.id === asset);
   const fail = (e: unknown) => setErr(errText(t, e));
+  useEffect(() => { window.scrollTo(0, 0); }, [step]);   // each step starts at its top: the review is read from the amount down
 
   // live status while tracking
   const live = useQuery({ queryKey: ['proposal', p?.id], enabled: step === 'track' && !!p, refetchInterval: 4000, queryFn: () => get<Proposal>(`/transfers/proposals/${p!.id}`) });
@@ -58,24 +59,33 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
   const reset = () => { setStep('form'); setP(null); setTo(''); setAmount(''); setNote(''); setMemo(''); setErr(''); setIdem(crypto.randomUUID()); };
   const cancel = async () => { if (p) await post(`/transfers/proposals/${p.id}/reject`).catch(() => {}); reset(); };
 
+  // v9: where the owner is in the flow (details → review → tracking); the current step is named, not only coloured
+  const steps = <ol className="flex items-center gap-2" aria-label={t('dsSteps')} data-testid="send-steps">{(['form', 'review', 'track'] as const).map((id, k) => { const cur = id === step, done = ['form', 'review', 'track'].indexOf(step) > k;
+    return <li key={id} aria-current={cur ? 'step' : undefined} className={`flex items-center gap-2 text-[12.5px] ${cur ? 'font-semibold text-ink' : 'text-mute'} ${k < 2 ? 'flex-1' : ''}`}>
+      <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11.5px] font-bold ${cur ? 'bg-primary text-onprimary' : done ? 'bg-emerald/15 text-emerald' : 'bg-elev text-mute'}`}>{done ? <Icon n="check" className="h-3.5 w-3.5" /> : k + 1}</span>
+      <span className="whitespace-nowrap">{t(id === 'form' ? 'dsStepDetails' : id === 'review' ? 'dsStepReview' : 'dsStepTrack')}</span>{k < 2 && <span className="h-px min-w-3 flex-1 bg-line" aria-hidden="true" />}</li>; })}</ol>;
+  // format only (the server and the signer validate for real at review): a 0x address of 40 hex digits
+  const evmOk = n?.family === 'evm' && to ? /^0x[0-9a-fA-F]{40}$/.test(to) : null;
   if (step === 'form') return (
     <div className="space-y-4">
-      <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('sendTitle')}</h1>
+      <PageTitle>{t('sendTitle')}</PageTitle>
+      {steps}
       {pf.data?.halted && <Notice tone="danger">{t('haltedBanner')}</Notice>}
       <Card className="space-y-4">
         <div><div className="mb-2 text-[13px] text-mute">{t('network')}</div>
           <Chips label={t('network')} value={net} onChange={(v) => { setNet(v); setTo(''); setMemo(''); }} options={(nets.data ?? []).map((x) => ({ id: x.id, label: x.name, net: x.id }))} /></div>
         <div><div className="mb-2 text-[13px] text-mute">{t('asset')}</div>
-          <Chips label={t('asset')} value={asset} onChange={setAsset} options={assets.map((x) => ({ id: x.id, label: x.symbol }))} /></div>
+          <Chips label={t('asset')} value={asset} onChange={setAsset} options={assets.map((x) => ({ id: x.id, label: x.symbol, sym: x.symbol }))} /></div>
         <Field label={t('destination')}>
           <textarea className={`${inputCls} min-h-[84px] resize-none break-all font-mono text-[14px]`} value={to} onChange={(e) => setTo(e.target.value.replace(/\s/g, ''))} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="off" />
         </Field>
+        {evmOk !== null && <p data-testid="addr-format" className={`-mt-2 flex items-center gap-1.5 text-[12.5px] ${evmOk ? 'text-emerald' : 'text-mute'}`}><Icon n={evmOk ? 'check' : 'clock'} className="h-3.5 w-3.5" />{evmOk ? t('dsAddrFormatOk') : t('dsAddrFormatPartial', { n: to.length })}</p>}
         {n?.family === 'evm' && <AgentRecipientNotice to={to} network={net} networkName={n.name} />}
         {(book.data ?? []).filter((b) => b.network === net).length > 0 && <div><div className="mb-1.5 text-[13px] text-mute">{t('addressBook')}</div>
-          <div className="flex flex-wrap gap-2">{book.data!.filter((b) => b.network === net).map((b) => <button key={b.id} onClick={() => setTo(b.address)} className={`rounded-full border px-3 py-1.5 text-[13px] ${to === b.address ? 'border-emerald text-emerald' : 'border-line'}`}><Icon n="book" className="mr-1 inline h-3.5 w-3.5" />{b.label} · {short(b.address)}</button>)}</div></div>}
+          <div className="flex flex-wrap gap-2">{book.data!.filter((b) => b.network === net).map((b) => <button key={b.id} onClick={() => setTo(b.address)} className={`press min-h-11 rounded-full border px-3.5 py-1.5 text-[13px] ${to === b.address ? 'border-emerald bg-emerald/[0.07] text-emerald' : 'border-line'}`}><Icon n="book" className="mr-1 inline h-3.5 w-3.5" />{b.label} · {short(b.address)}</button>)}</div></div>}
         <Field label={`${t('amount')} (${a?.symbol ?? ''})`} hint={bal?.display != null ? <>{t('available')}{t('available') === 'Disponible' ? ' : ' : ': '}{trimAmt(bal.display, 8)} {bal.symbol}</> : bal ? <span className="text-warn">{t('qaBalUnknown')}</span> : undefined}>
           <div className="flex gap-2">
-            <input className={`${inputCls} text-lg`} inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))} autoComplete="off" />
+            <input className={`${inputCls} text-[19px] font-semibold`} inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))} autoComplete="off" />
             {asset !== 'native' && bal?.display != null && <Btn kind="soft" onClick={() => setAmount(bal.display!)}>{t('max')}</Btn>}
           </div>
         </Field>
@@ -92,16 +102,19 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
   const needCheck = cur.warnings.includes('new_destination') || cur.warnings.includes('address_poisoning_suspected');
   if (step === 'review') return (
     <div className="space-y-4">
-      <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('reviewTitle')}</h1>
-      <Card className="space-y-4">
-        <div><div className="text-[13px] text-mute">{t('youSend')}</div>
-          <div className="font-[family-name:var(--font-display)] text-[38px] font-semibold leading-tight tracking-[-0.03em]">{cur.amountDisplay} <span className="text-mute">{cur.symbol}</span></div>
-          <div className="font-mono text-xs text-mute">{cur.amount} {t('baseUnits')} · {cur.networkName}</div></div>
+      <PageTitle>{t('reviewTitle')}</PageTitle>
+      {steps}
+      {/* the receipt the passkey signs: every field in full, nothing shortened, nothing animated */}
+      <Card className="receipt space-y-4" >
+        <div className="flex items-start gap-3.5"><Coin sym={cur.symbol} net={cur.network} size={48} />
+          <div className="min-w-0"><div className="text-[13px] text-mute">{t('youSend')}</div>
+          <div className="t-display break-words text-[clamp(30px,9.5vw,40px)] !leading-[1.08]">{cur.amountDisplay} <span className="text-mute">{cur.symbol}</span></div>
+          <div className="mt-1 break-all font-mono text-xs text-mute">{cur.amount} {t('baseUnits')} · {cur.networkName}</div></div></div>
         <Row k={t('to')}><Addr value={cur.to} /></Row>
         <AgentRecipientNotice to={cur.to} network={cur.network} networkName={cur.networkName} />
         {cur.memo && <Row k={t('memo')}><span className="break-all font-mono text-[14px]">{cur.memo}</span></Row>}
         <Row k={t('from')}><span className="font-mono text-[13px] text-mute">{short(cur.from)}</span></Row>
-        <Row k={t('network')}>{cur.networkName}</Row>
+        <Row k={t('network')}><span className="inline-flex items-center gap-2"><NetworkIcon net={cur.network} size={20} />{cur.networkName}</span></Row>
         <Row k={t('fee')}>{cur.feeDisplay ? `≈ ${trimAmt(cur.feeDisplay, 9)} ${cur.feeSymbol}` : '—'}</Row>
         <Row k={t('feeMax')}>{cur.maxFeeDisplay ? `${trimAmt(cur.maxFeeDisplay, 9)} ${cur.feeSymbol}` : '—'}</Row>
         {cur.intentHash && <Row k={t('fingerprint')}><span className="break-all font-mono text-[11px] text-mute">{cur.intentHash}</span></Row>}
@@ -109,7 +122,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
       <Notice tone="ok">{t('simulated')}</Notice>
       {cur.warnings.map((w) => <Notice key={w} tone={w === 'address_poisoning_suspected' ? 'danger' : 'warn'}>{t(`w_${w}` as Key)}</Notice>)}
       <Notice tone="info">{t('boundNote')} {t('irreversible')}</Notice>
-      {needCheck && <label className="flex items-start gap-3 rounded-xl border border-line p-3 text-[14px]"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[var(--primary)]" checked={checked} onChange={(e) => setChecked(e.target.checked)} />{t('iChecked')}</label>}
+      {needCheck && <label className="flex min-h-11 items-start gap-3 rounded-2xl border border-line bg-surface p-3.5 text-[14px]"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[var(--primary)]" checked={checked} onChange={(e) => setChecked(e.target.checked)} />{t('iChecked')}</label>}
       {err && <Notice tone="danger">{err}</Notice>}
       <Btn full busy={!!busy} disabled={needCheck && !checked} onClick={approve}><Icon n="key" />{busy === 'passkey' ? t('approving') : busy === 'prepare' ? t('preparing') : t('approve')}</Btn>
       <Btn full kind="ghost" disabled={!!busy} onClick={cancel}>{t('cancel')}</Btn>
@@ -119,9 +132,10 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
   const idx = FLOW.indexOf(cur.state), bad = idx < 0;
   return (
     <div className="space-y-4">
-      <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('tracking')}</h1>
+      <PageTitle>{t('tracking')}</PageTitle>
+      {steps}
       <Card className="space-y-4">
-        <div className="flex items-start justify-between gap-3"><div><div className="text-2xl font-semibold">{cur.amountDisplay} {cur.symbol}</div><div className="text-xs text-mute">{cur.networkName} → {short(cur.to)}</div></div>{testNotSent(cur) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : <StatePill state={cur.state} />}</div>
+        <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><Coin sym={cur.symbol} net={cur.network} size={40} /><div className="min-w-0"><div className="break-words text-2xl font-semibold tracking-[-0.02em]">{cur.amountDisplay} {cur.symbol}</div><div className="text-xs text-mute">{cur.networkName} → {short(cur.to)}</div></div></div>{testNotSent(cur) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : <StatePill state={cur.state} />}</div>
         {testNotSent(cur) && <Notice tone="warn">{t('qaTestNotSent')}</Notice>}
         {!bad && !testNotSent(cur) && <ol className="space-y-2.5" aria-label={t('status')}>{FLOW.slice(1).map((s, k) => { const done = idx > k + 1 || cur.state === 'finalized', now = idx === k + 1 && cur.state !== 'finalized';
           return <li key={s} className={`flex items-center gap-3 text-[14.5px] ${done ? 'text-emerald' : now ? 'text-ink' : 'text-mute'}`}>
