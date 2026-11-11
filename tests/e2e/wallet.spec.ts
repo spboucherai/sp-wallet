@@ -55,8 +55,14 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await page.screenshot({ path: `${SHOTS}/04-receive.png`, fullPage: true });
   await page.getByRole('radio', { name: 'Solana' }).click();
   await expect(page.getByText(/Envoyez uniquement SOL \/ USDC \/ .*sur le réseau Solana/)).toBeVisible();
-  await page.getByRole('radio', { name: 'Bitcoin' }).click();
+  await page.getByRole('radio', { name: 'Bitcoin', exact: true }).click();
   await expect(page.locator('img[alt^="QR bc1q"]')).toBeVisible();
+  for (const [name, prefix] of [['Bitcoin Cash', 'bitcoincash:q'], ['Dogecoin', 'D'], ['Litecoin', 'ltc1q'], ['TRON', 'T'], ['XRP Ledger', 'r'], ['Stellar', 'G']] as const) {
+    await page.getByRole('radio', { name, exact: true }).click();
+    await expect(page.locator(`img[alt^="QR ${prefix}"]`)).toBeVisible();
+  }
+  await expect(page.getByText(/un compte doit détenir au moins 1 XLM/)).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/04b-receive-stellar.png`, fullPage: true });
 
   // send: invalid address is refused, then an empty wallet cannot draft a transfer (live mainnet balance check)
   await page.getByRole('navigation').getByRole('button', { name: 'Envoyer' }).click();
