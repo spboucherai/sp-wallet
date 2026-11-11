@@ -78,9 +78,18 @@ async function refreshHealth(): Promise<void> {
   }));
 }
 
+// v6-alerts: heartbeat of every worker loop (read by the monitoring dashboard and the "worker failing" alert) — additive
+export interface LoopStat { name: string; everyMs: number; runs: number; lastStartAt: number | null; lastOkAt: number | null; lastErrorAt: number | null; lastError: string | null; /** failed passes in a row */ failures: number }
+export const loopStats = new Map<string, LoopStat>();
+
 export function loop(name: string, fn: () => Promise<void>, everyMs: number): void {
   let running = false;
-  const tick = async () => { if (running) return; running = true; try { await fn(); } catch (e) { log(`${name}: ${(e as Error).message}`); } finally { running = false; } };
+  const st: LoopStat = { name, everyMs, runs: 0, lastStartAt: null, lastOkAt: null, lastErrorAt: null, lastError: null, failures: 0 };
+  loopStats.set(name, st);
+  const tick = async () => { if (running) return; running = true; st.lastStartAt = Date.now(); st.runs += 1;
+    try { await fn(); st.lastOkAt = Date.now(); st.failures = 0; }
+    catch (e) { log(`${name}: ${(e as Error).message}`); st.lastErrorAt = Date.now(); st.lastError = (e as Error).message.slice(0, 200); st.failures += 1; }
+    finally { running = false; } };
   void tick();
   setInterval(tick, everyMs).unref();
 }

@@ -8,6 +8,7 @@ const P: Record<string, string> = {
   check: 'M5 12.5l4.5 4.5L19 7.5', x: 'M6 6l12 12M18 6L6 18', warn: 'M12 3l10 18H2zM12 10v5m0 3v.01', copy: 'M9 9h10v11H9zM5 15V4h10', ext: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6',
   key: 'M15 7a4 4 0 11-3.9 5H8v3H5v3H2v-3l7.2-7.2A4 4 0 0115 7z', clock: 'M12 7v5l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z', stop: 'M8 3h8l5 5v8l-5 5H8l-5-5V8zM9 9l6 6m0-6l-6 6',
   star: 'M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.2-4.1 5.8-.8z', search: 'M11 18a7 7 0 100-14 7 7 0 000 14zm5-2l4.5 4.5', plus: 'M12 5v14M5 12h14', minus: 'M5 12h14', bars: 'M4 20V11m5.5 9V4m5.5 16v-7m5 7V8',
+  bell: 'M6 16V11a6 6 0 1112 0v5l1.5 2h-15zM10 20a2 2 0 004 0',
   chev: 'M9 6l6 6-6 6', swap: 'M7 8h11l-3-3M17 16H6l3 3', book: 'M5 4h13v16H5zM9 4v16M12 9h3', lock: 'M6 11h12v9H6zM8 11V8a4 4 0 018 0v3', spin: 'M12 3a9 9 0 109 9',
 };
 export function Icon({ n, className = 'h-5 w-5' }: { n: keyof typeof P | string; className?: string }) {
