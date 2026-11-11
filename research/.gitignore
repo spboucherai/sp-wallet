@@ -5,3 +5,5 @@ __pycache__/
 /data/
 results/*/ledger/
 report.json
+results/ledger.jsonl
+strategies/zz_forktest/

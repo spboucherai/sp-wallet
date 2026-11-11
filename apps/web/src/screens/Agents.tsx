@@ -20,7 +20,7 @@ export function Agents({ nav }: { nav: Nav }) {
   const t = useT(); const qc = useQueryClient();
   const q = useQuery({ queryKey: ['agents'], queryFn: () => get<{ agents: AgentV[] }>('/agents'), refetchInterval: 30_000 });
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState('');
-  const [f, setF] = useState({ name: '', mission: '', capital: '100', universe: ['ETH'], interval: '1h', maxExposurePct: 50, maxLossPct: 5, maxOrderUsd: 25, maxDailyUsd: 100, maxOrdersPerDay: 12 });
+  const [f, setF] = useState({ name: '', mission: '', capital: '100', universe: ['ETH', 'LINK', 'AAVE'], interval: '1h', maxExposurePct: 50, maxLossPct: 5, maxOrderUsd: 25, maxDailyUsd: 100, maxOrdersPerDay: 12 });
   const create = async () => {
     setBusy(true); setErr('');
     try {
@@ -64,6 +64,7 @@ export function Agents({ nav }: { nav: Nav }) {
 export function Agent({ id, nav }: { id: string; nav: Nav }) {
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient();
   const q = useQuery({ queryKey: ['agent', id], queryFn: () => get<any>(`/agents/${id}`), refetchInterval: 15_000 });
+  const lib = useQuery({ queryKey: ['strategies'], queryFn: () => get<{ strategies: any[] }>('/strategies'), staleTime: 300_000 });
   const [busy, setBusy] = useState(''), [err, setErr] = useState(''), [mandate, setMandate] = useState<any>(null), [note, setNote] = useState('');
   if (q.isLoading || !q.data) return <div className="space-y-4"><Skeleton h="h-40" /><Skeleton h="h-56" /></div>;
   const a = q.data;
@@ -107,9 +108,18 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
             <div className="rounded-xl bg-surface p-2"><div className="text-mute">Sharpe</div><div className="text-[14px] font-semibold">{num2(metric(v, 'test', 'sharpe'))}</div><div className="text-[11px] text-mute">{t('agVs')} {num2(v.benchmarks?.buy_and_hold?.sharpe ?? null)}</div></div>
             <div className="rounded-xl bg-surface p-2"><div className="text-mute">{t('agDD')}</div><div className="text-[14px] font-semibold">{pct(metric(v, 'test', 'max_drawdown'))}</div><div className="text-[11px] text-mute">{t('agVs')} {pct(v.benchmarks?.buy_and_hold?.max_drawdown ?? null)}</div></div></div>
             <p className="mt-2 text-[12px] text-mute">{t('agReportNote', { trials: v.robustness?.trials_tested ?? '?', dsr: typeof v.robustness?.deflated_sharpe === 'number' ? v.robustness.deflated_sharpe.toFixed(2) : '?', fee: v.config?.fee_bps ?? '?', slip: v.config?.slippage_bps ?? '?' })}</p></>
-            : <p className="mt-2 text-[12.5px] text-mute">{t('agNoReport')}</p>}
+            : <p className="mt-2 text-[12.5px] text-mute">{v.status === 'backtesting' ? t('agBacktesting') : v.notes ? v.notes : t('agNoReport')}</p>}
           {v.status !== 'approved' && v.metrics && a.state !== 'LIVE' && <Btn kind="soft" full className="mt-3" busy={busy === `a${v.id}`} onClick={() => act(`a${v.id}`, () => post(`/agents/${id}/strategies/${v.id}/approve`))}>{t('agApproveVersion')}</Btn>}
         </li>)}</ul>}
+        {a.state !== 'LIVE' && (() => { const have = new Set((a.versions as any[]).map((v) => v.code_sha256)), uni = [...(a.universe as string[])].sort().join();
+          const fit = (lib.data?.strategies ?? []).filter((x) => !have.has(x.sha256) && [...x.meta.universe].sort().join() === uni && x.meta.interval === a.interval);
+          return <div className="mt-4"><div className="mb-2 text-[13px] font-semibold text-mute">{t('agLibrary')}</div>
+            {lib.isLoading ? <Skeleton h="h-16" /> : fit.length === 0 ? <p className="text-[13px] text-mute">{t('agLibNone', { assets: (a.universe as string[]).join(', '), interval: a.interval })}</p> :
+              <ul className="space-y-2">{fit.map((x) => <li key={x.sha256} className="flex items-center gap-3 rounded-2xl border border-line p-3">
+                <span className="min-w-0 flex-1"><span className="block font-semibold">{x.meta.name} <span className="font-normal text-mute">v{x.meta.version}</span></span>
+                  <span className="block truncate text-[12px] text-mute">{x.meta.universe.join(' · ')} · {x.meta.interval} · {Object.entries(x.meta.params).map(([k, v]) => `${k} ${String(v)}`).join(', ')}</span></span>
+                <Btn kind="soft" busy={busy === `r${x.sha256}`} onClick={() => act(`r${x.sha256}`, () => post(`/agents/${id}/strategies`, { path: x.path.replace(/^strategies\//, '') }))}>{t('agLibTest')}</Btn></li>)}</ul>}
+          </div>; })()}
       </Card>
 
       <Card><H>{t('agControl')}</H>

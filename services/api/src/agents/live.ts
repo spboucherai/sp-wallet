@@ -16,7 +16,8 @@ import { kyberQuote, prepareKyberSwap } from '../swap-exec.ts';
 import { paperHoldings, tickAgent, type Bar, type EngineDeps, type Holding, type PlannedOrder } from './engine.ts';
 import { vaultBalances, type AgentRow } from './routes.ts';
 
-export const RESEARCH_DIR = path.resolve(process.env.SPW_RESEARCH_DIR ?? path.join(import.meta.dirname, '../../../../research'));
+// the bundled server runs from the repository root (dist/api.mjs); from source the module sits four levels below it
+export const RESEARCH_DIR = path.resolve(process.env.SPW_RESEARCH_DIR ?? [path.join(process.cwd(), 'research'), path.join(import.meta.dirname, '../../../../research')].find((d) => existsSync(path.join(d, 'pyproject.toml'))) ?? path.join(process.cwd(), 'research'));
 const UV = process.env.SPW_UV_BIN ?? 'uv';
 const SIGNAL_TIMEOUT_MS = 60_000;
 
@@ -54,8 +55,10 @@ export function runSignal(strategy: { path: string; sha256: string }, data: Reco
   });
 }
 
+/** Native coin kept out of the strategy's reach so the vault can always pay network fees (also for selling and withdrawing). */
+export const GAS_RESERVE = 0.0015;
 export async function liveHoldings(a: AgentRow): Promise<Holding[]> {
-  return (await vaultBalances(a)).map((x) => ({ symbol: x.symbol, id: x.id, decimals: x.decimals, units: Number(formatUnits(x.amount, x.decimals)) }));
+  return (await vaultBalances(a)).map((x) => { const units = Number(formatUnits(x.amount, x.decimals)); return { symbol: x.symbol, id: x.id, decimals: x.decimals, units: x.id === 'native' ? Math.max(0, units - GAS_RESERVE) : units }; });
 }
 
 const OPEN = ['prepared', 'signed', 'broadcast'];

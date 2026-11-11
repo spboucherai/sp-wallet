@@ -39,7 +39,7 @@ def test_library_strategy_contract(directory):
     s = load_strategy(directory)                      # strict: passes the static purity check
     assert s.static_problems == [] and s.sha256 == sha256_file(directory / "strategy.py")
     assert s.name == directory.parent.name and s.meta["version"] == directory.name
-    assert s.meta["interval"] == "1h" and s.universe == ["ETH", "BTC", "LINK", "SOL"]
+    assert s.meta["interval"] == "1h" and s.universe in (["ETH", "BTC", "LINK", "SOL"], ["ETH", "LINK", "AAVE"])
 
     full = synthetic(s, s.lookback + 400, seed=5)
     stride = 97 if s.name != "garch_regime" else 199
