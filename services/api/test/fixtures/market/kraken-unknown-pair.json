@@ -1,0 +1,11 @@
+{
+ "source": "kraken",
+ "recordedAt": 1794362573299,
+ "url": "https://api.kraken.com/0/public/OHLC?pair=NOPEUSD&interval=60",
+ "status": 200,
+ "body": {
+  "error": [
+   "EQuery:Unknown asset pair"
+  ]
+ }
+}

@@ -1,0 +1,7 @@
+{
+ "source": "bitstamp",
+ "recordedAt": 1794362573299,
+ "url": "https://www.bitstamp.net/api/v2/ohlc/nopeusd/?step=3600&limit=5",
+ "status": 404,
+ "body": null
+}

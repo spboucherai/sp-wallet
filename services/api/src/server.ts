@@ -11,6 +11,7 @@ import { adapterFor } from './chains/index.ts';
 import { http } from './chains/rpc.ts';
 import { config, secureCookies, UserError } from './config.ts';
 import { audit, auditList, getSetting, setSetting, sql } from './db.ts';
+import { marketDataRoutes } from './market/routes.ts';
 import { addressFor, signer } from './signer-client.ts';
 import { swapRoutes } from './swap.ts';
 import { swapExecRoutes } from './swap-exec.ts';
@@ -115,6 +116,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   swapRoutes(app, { providers: swapProviders, prices: markets });
   swapExecRoutes(app);
   agentRoutes(app, { prices: markets });
+  marketDataRoutes(app);
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));
   app.get('/api/v1/health/ready', async () => {
