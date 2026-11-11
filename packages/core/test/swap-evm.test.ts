@@ -55,7 +55,9 @@ describe('KyberSwap calldata verification (what the signer enforces without trus
     expect(() => verifyKyberSwap(intent(padded), padded)).toThrow(/canonical/); // trailing bytes the decoder would ignore
     expect(() => verifyKyberSwap(intent(good, {}, { router: '0x000000000000000000000000000000000000dEaD' }), good)).toThrow(/pinned/);
     expect(() => verifyKyberSwap(intent(good, { to: '0x000000000000000000000000000000000000dEaD' }), good)).toThrow(/wallet itself/);
-    expect(() => verifyKyberSwap(intent(good, { network: 'ethereum', chainRef: '1', asset: NETWORKS.ethereum.tokens.find((t) => t.symbol === 'USDC')!.id }), good)).toThrow(/not enabled/);
+    expect(() => verifyKyberSwap(intent(good, { network: 'hyperevm', chainRef: '999', asset: NETWORKS.hyperevm.tokens.find((t) => t.symbol === 'USDC')!.id }), good)).toThrow(/not enabled/);
+    // calldata built for Base is not valid on another enabled network: it names Base's token addresses
+    expect(() => verifyKyberSwap(intent(good, { network: 'ethereum', chainRef: '1', asset: NETWORKS.ethereum.tokens.find((t) => t.symbol === 'USDC')!.id }), good)).toThrow();
     expect(() => verifyKyberSwap(intent(good, {}, { toAsset: '0xdAC17F958D2ee523a2206206994597C13D831ec7' }), good)).toThrow(/allowlisted/);
     expect(() => verifyKyberSwap(intent(good, {}, { minOut: '0' }), good)).toThrow(/positive/);
     const other = encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: ['0x000000000000000000000000000000000000dEaD', 1n] });

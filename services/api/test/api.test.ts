@@ -238,7 +238,7 @@ describe('transfer lifecycle', () => {
     expect((await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: USDC, amount: '0.01' }, { idem: crypto.randomUUID() })).json.error).toBe('halted'); // the suite halted the signer earlier
     const st = (await api('GET', '/api/v1/swap/providers')).json;
     expect(st.providers.length).toBe(3);
-    expect((await api('GET', '/api/v1/swap/execution')).json.networks).toEqual(['base']);
+    expect((await api('GET', '/api/v1/swap/execution')).json.networks).toEqual(['base', 'ethereum', 'arbitrum', 'polygon', 'optimism', 'bsc', 'avalanche']);
     const rows = await sql`select provider, ok, code from swap_quotes`;
     expect(rows.length).toBeGreaterThanOrEqual(4);
   });

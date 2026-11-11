@@ -64,3 +64,20 @@ Measured: 3,000 concurrent route searches over three in-process providers comple
 
 ## Stop conditions in force (from the V2 brief)
 The owner authorized on 2026-11-10: deploying V2, real-money execution including provider-built transactions, and installing a local fork tool. Still not done without asking: raising signer limits, moving real assets on the owner's behalf.
+
+## Update 2026-11-10 (late evening): execution enabled on six more EVM networks
+
+KyberSwap same-chain execution is now enabled on Ethereum, Arbitrum, Polygon, Optimism, BNB Chain and Avalanche, in addition to Base
+(`KYBER_ENABLED` in `packages/core/src/swap-evm.ts`, one pinned runtime-bytecode hash per network).
+
+- Evidence: verified sources on the seven explorers compared (same router logic as Base; Arbitrum, Polygon, Optimism and Avalanche
+  byte-identical to Ethereum, BNB identical once comments are stripped); runtime bytecode of the six equals Ethereum's except three
+  occurrences of the wrapped-native immutable; `scripts/fork-swap-net.mts <network>` executed native → stablecoin → native on a fork
+  of each of the six. No real swap has been broadcast on any network yet.
+- HyperEVM stays disabled: a different, cut-down router (solc 0.8.17, no partial fill, no `swapGeneric`) that needs its own review.
+- Not recompiled from source; "verified" rests on the explorers. The router owner address was not checked per chain. The owner
+  could abuse a standing allowance (`swapGeneric` + whitelist): approvals are exact-amount and consumed by the swap, never unlimited.
+- New signer check: simple-mode calldata may not spend the native coin (the router skips its msg.value check in that mode).
+- Signer fee ceilings are unchanged; on Polygon a complex route at a high gas price can exceed 0.5 POL and is then refused.
+- Agent mandates remain Base-only (`MANDATE_NETWORKS`).
+- Still not built: cross-chain execution, Solana (Jupiter) execution, native BTC/THORChain execution.

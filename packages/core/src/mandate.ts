@@ -6,6 +6,8 @@ import { baseUnits } from './amounts.ts';
 import { getAsset, getNetwork } from './networks.ts';
 import type { Intent } from './intent.ts';
 import { KYBER_ENABLED } from './swap-evm.ts';
+/** Agents trade on Base only; enabling owner swaps on another network does not extend mandates to it. */
+export const MANDATE_NETWORKS = ['base'];
 
 const U = z.string().regex(/^(0|[1-9]\d{0,77})$/);
 export const MAX_MANDATE_DAYS = 90;
@@ -54,7 +56,7 @@ export const vaultKeyId = (ownerKeyId: string, index: number) => `${ownerKeyId}-
 /** Structural validity of a mandate at approval time (the signer also checks the vault address against its own derivation). */
 export function validateMandate(m: Mandate, nowSec: number): void {
   const n = getNetwork(m.network);
-  if (n.family !== 'evm' || !KYBER_ENABLED[m.network]) throw new Error(`mandates are not available on ${n.name}`);
+  if (n.family !== 'evm' || !KYBER_ENABLED[m.network] || !MANDATE_NETWORKS.includes(m.network)) throw new Error(`mandates are not available on ${n.name}`);
   const seen = new Set<string>();
   for (const a of m.assets) { const d = getAsset(m.network, a); const k = d.id.toLowerCase(); if (seen.has(k)) throw new Error('duplicate asset'); seen.add(k); if (d.id !== a) throw new Error('asset id is not in registry form'); }
   for (const map of [m.maxOrder, m.maxDaily]) for (const k of Object.keys(map)) if (!m.assets.includes(k)) throw new Error('limit set for an asset outside the mandate');

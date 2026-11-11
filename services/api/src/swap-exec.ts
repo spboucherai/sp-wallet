@@ -47,12 +47,74 @@ async function chainGuards(n: NetworkDef, me: string): Promise<void> {
   if ((await rpcQuorum<string>(n.rpc, 'eth_getCode', [me, 'latest'])) !== '0x') throw new UserError('account_has_code', 'this wallet address carries code (delegation); swaps are refused', 503);
 }
 
+/** Expected output right now for an exact input, from the same on-chain-liquidity routes used for execution. Signs nothing. */
+export async function kyberQuote(n: NetworkDef, fromAsset: string, toAsset: string, amount: bigint): Promise<bigint> {
+  const r = await kyber(n.id, `/routes?tokenIn=${tokenOf(fromAsset)}&tokenOut=${tokenOf(toAsset)}&amountIn=${amount}&excludeRFQSources=true&excludedSources=kyberswap-limit-order-v2,kyberswap-limit-order`, RouteResp);
+  return BigInt(r.data.routeSummary.amountOut);
+}
+
+export interface PreparedSwap { intent: Intent; data: string; expected: bigint; minOut: bigint; needApprove: boolean; simulated: boolean; feeEstimate: bigint; maxFee: bigint; fn: string }
+/**
+ * Prepare a firm KyberSwap swap for an address the signer controls (the owner's wallet or an agent vault): guards, balance
+ * and allowance, fresh on-chain-liquidity route, calldata verified exactly as the signer will, nonce agreement, gas from the
+ * node's own estimate (which is also the simulation) when possible. Throws UserError; signs nothing.
+ */
+export async function prepareKyberSwap(o: { n: NetworkDef; me: string; keyId: string; fromAsset: string; toAsset: string; amount: bigint; slippageBps: number; policyVersion: number; proposalId: string; ttlSec?: number }): Promise<PreparedSwap> {
+  const { n, me } = o;
+  let src, dst;
+  try { src = getAsset(n.id, o.fromAsset); dst = getAsset(n.id, o.toAsset); } catch { throw new UserError('unsupported_asset', 'asset is not in the wallet registry'); }
+  if (src.id === dst.id) throw new UserError('same_asset', 'choose two different assets');
+  const amount = o.amount;
+  if (amount <= 0n) throw new UserError('bad_amount', 'amount must be greater than zero');
+  await chainGuards(n, me);
+  const bal = await adapterFor(n.id).balances(me);
+  if ((bal[src.id] ?? 0n) < amount) throw new UserError('insufficient_funds', `insufficient ${src.symbol} balance`);
+  const allowance = src.id === 'native' ? 0n : hexToBigInt(await rpcAny<`0x${string}`>(n.rpc, 'eth_call', [{ to: src.id, data: encodeFunctionData({ abi: erc20Abi, functionName: 'allowance', args: [me as `0x${string}`, KYBER_ROUTER as `0x${string}`] }) }, 'latest']));
+  const needApprove = src.id !== 'native' && allowance < amount;
+  // firm route from on-chain liquidity only: off-chain signed orders can expire or be taken before inclusion
+  const route = await kyber(n.id, `/routes?tokenIn=${tokenOf(src.id)}&tokenOut=${tokenOf(dst.id)}&amountIn=${amount}&excludeRFQSources=true&excludedSources=kyberswap-limit-order-v2,kyberswap-limit-order`, RouteResp);
+  const now = Math.floor(Date.now() / 1000);
+  const built = await kyber(n.id, '/route/build', BuildResp, { method: 'POST', body: JSON.stringify({ routeSummary: route.data.routeSummary, sender: me, recipient: me, slippageTolerance: o.slippageBps, deadline: now + 600, source: CLIENT_ID }) });
+  if (built.data.routerAddress.toLowerCase() !== KYBER_ROUTER.toLowerCase()) throw new UserError('router_changed', 'the provider answered with another router; refused', 502);
+  if (BigInt(built.data.amountIn) !== amount) throw new UserError('provider_bad_answer', 'the provider built another amount', 502);
+  const data = built.data.data, expected = BigInt(built.data.amountOut);
+  const nonce = hexToNumber(await rpcQuorum<`0x${string}`>(n.rpc, 'eth_getTransactionCount', [me, 'pending']));
+  if (nonce !== hexToNumber(await rpcAny<`0x${string}`>(n.rpc, 'eth_getTransactionCount', [me, 'latest']))) throw new UserError('pending_tx', 'a previous transaction from this address is still pending on this network', 409);
+  const block = await rpcAny<{ baseFeePerGas?: `0x${string}` }>(n.rpc, 'eth_getBlockByNumber', ['latest', false]);
+  if (!block.baseFeePerGas) throw new UserError('rpc_degraded', 'network did not report a base fee', 503);
+  const baseFee = hexToBigInt(block.baseFeePerGas);
+  let tip = 1_000_000n; try { tip = hexToBigInt(await rpcAny<`0x${string}`>(n.rpc, 'eth_maxPriorityFeePerGas', [])); } catch { /* floor */ }
+  const maxFeePerGas = baseFee * 2n + tip;
+  const call = { from: me, to: KYBER_ROUTER, data, value: numberToHex(src.id === 'native' ? amount : 0n) };
+  let gas: bigint, simulated = false;
+  if (!needApprove) {
+    const est = await rpcAny<`0x${string}`>(n.rpc, 'eth_estimateGas', [call]).then(hexToBigInt, (e: Error) => { throw new UserError('simulation_failed', `the swap would fail right now: ${e.message.slice(0, 120)}`, 422); });
+    gas = (est * 13n) / 10n + 30_000n; simulated = true;
+  } else gas = BigInt(built.data.gas) * 2n + 100_000n;
+  if (gas > 2_000_000n) gas = 2_000_000n;
+  const approveGas = needApprove ? 70_000n : 0n, maxFee = (gas + approveGas) * maxFeePerGas;
+  if ((bal.native ?? 0n) < maxFee + (src.id === 'native' ? amount : 0n)) throw new UserError('insufficient_gas', `not enough ${n.native.symbol} on ${n.name} to pay the network fee`);
+  const draft = (minOut: bigint): Intent => IntentSchema.parse({
+    v: 1, proposalId: o.proposalId, keyId: o.keyId, network: n.id, chainRef: n.chainRef, asset: src.id, symbol: src.symbol, decimals: src.decimals, amount: amount.toString(),
+    from: me, to: me, maxFee: maxFee.toString(), createdAt: now, expiresAt: now + (o.ttlSec ?? 75), policyVersion: o.policyVersion,
+    swap: { provider: 'kyberswap', toAsset: dst.id, minOut: minOut.toString(), router: KYBER_ROUTER, dataHash: swapDataHash(data), approveGas: approveGas.toString() },
+    evm: { nonce, gasLimit: gas.toString(), maxFeePerGas: maxFeePerGas.toString(), maxPriorityFeePerGas: tip.toString() },
+  });
+  let desc;
+  try { desc = verifyKyberSwap(draft(1n), data); } catch (e) { throw new UserError('provider_bad_answer', `calldata refused: ${(e as Error).message}`, 502); }
+  const floor = (expected * BigInt(10_000 - o.slippageBps)) / 10_000n;
+  if (desc.minReturnAmount * 1000n < floor * 999n) throw new UserError('provider_bad_answer', 'the calldata guarantees less than the requested tolerance allows', 502);
+  const intent = draft(desc.minReturnAmount);
+  buildEvmSwapTxs(intent, data); // exactly what the signer will rebuild
+  return { intent, data, expected, minOut: desc.minReturnAmount, needApprove, simulated, feeEstimate: (gas + approveGas) * (baseFee + tip), maxFee, fn: desc.functionName };
+}
+
 const Create = z.strictObject({ network: z.string().max(24), fromAsset: z.string().max(80), toAsset: z.string().max(80), amount: z.string().min(1).max(60), slippageBps: z.number().int().min(1).max(300).default(50) });
 
 export function swapExecRoutes(app: FastifyInstance): void {
   app.get('/api/v1/swap/execution', async () => ({ enabled: true, provider: 'kyberswap', networks: Object.keys(KYBER_ENABLED), router: KYBER_ROUTER }));
 
-  // Prepare a firm swap: fresh route + calldata, verified locally exactly as the signer will, simulated, then offered for approval.
+  // Prepare a firm swap for the owner's wallet, then offer it for passkey approval.
   app.post('/api/v1/swap/proposals', async (req) => {
     const idem = String(req.headers['idempotency-key'] ?? '');
     if (!/^[A-Za-z0-9-]{16,64}$/.test(idem)) throw new UserError('idempotency', 'Idempotency-Key header required');
@@ -70,67 +132,17 @@ export function swapExecRoutes(app: FastifyInstance): void {
     const me = addressFor(st, n.id);
     const [busy] = await sql<{ id: string }[]>`select id from proposals where network = ${n.id} and state in ('approved', 'signed', 'broadcast') limit 1`;
     if (busy) throw new UserError('pending_tx', 'a previous transfer or swap on this network is not confirmed yet; wait for it before starting another', 409);
-    await chainGuards(n, me);
-
-    // balances and allowance
-    const bal = await adapterFor(n.id).balances(me);
-    if ((bal[src.id] ?? 0n) < amount) throw new UserError('insufficient_funds', `insufficient ${src.symbol} balance`);
-    const allowance = src.id === 'native' ? 0n : hexToBigInt(await rpcAny<`0x${string}`>(n.rpc, 'eth_call', [{ to: src.id, data: encodeFunctionData({ abi: erc20Abi, functionName: 'allowance', args: [me as `0x${string}`, KYBER_ROUTER as `0x${string}`] }) }, 'latest']));
-    const needApprove = src.id !== 'native' && allowance < amount;
-
-    // firm route from on-chain liquidity only: off-chain signed orders can expire or be taken before inclusion
-    const route = await kyber(n.id, `/routes?tokenIn=${tokenOf(src.id)}&tokenOut=${tokenOf(dst.id)}&amountIn=${amount}&excludeRFQSources=true&excludedSources=kyberswap-limit-order-v2,kyberswap-limit-order`, RouteResp);
-    const now = Math.floor(Date.now() / 1000);
-    const built = await kyber(n.id, '/route/build', BuildResp, { method: 'POST', body: JSON.stringify({ routeSummary: route.data.routeSummary, sender: me, recipient: me, slippageTolerance: b.slippageBps, deadline: now + 600, source: CLIENT_ID }) });
-    if (built.data.routerAddress.toLowerCase() !== KYBER_ROUTER.toLowerCase()) throw new UserError('router_changed', 'the provider answered with another router; refused', 502);
-    if (BigInt(built.data.amountIn) !== amount) throw new UserError('provider_bad_answer', 'the provider built another amount', 502);
-    const data = built.data.data, expected = BigInt(built.data.amountOut);
-
-    // fees and nonce (both sources must agree on the nonce)
-    const nonce = hexToNumber(await rpcQuorum<`0x${string}`>(n.rpc, 'eth_getTransactionCount', [me, 'pending']));
-    if (nonce !== hexToNumber(await rpcAny<`0x${string}`>(n.rpc, 'eth_getTransactionCount', [me, 'latest']))) throw new UserError('pending_tx', 'a previous transaction from this wallet is still pending on this network', 409);
-    const block = await rpcAny<{ baseFeePerGas?: `0x${string}` }>(n.rpc, 'eth_getBlockByNumber', ['latest', false]);
-    if (!block.baseFeePerGas) throw new UserError('rpc_degraded', 'network did not report a base fee', 503);
-    const baseFee = hexToBigInt(block.baseFeePerGas);
-    let tip = 1_000_000n; try { tip = hexToBigInt(await rpcAny<`0x${string}`>(n.rpc, 'eth_maxPriorityFeePerGas', [])); } catch { /* floor */ }
-    const maxFeePerGas = baseFee * 2n + tip;
-
-    // gas: the node's own estimate when the swap can be simulated now (native input or allowance in place), which is also the
-    // simulation; otherwise the provider's figure with a wide margin, and the swap is simulated again after the approval is mined
-    const call = { from: me, to: KYBER_ROUTER, data, value: numberToHex(src.id === 'native' ? amount : 0n) };
-    let gas: bigint, simulated = false;
-    if (!needApprove) {
-      const est = await rpcAny<`0x${string}`>(n.rpc, 'eth_estimateGas', [call]).then(hexToBigInt, (e: Error) => { throw new UserError('simulation_failed', `the swap would fail right now: ${e.message.slice(0, 120)}`, 422); });
-      gas = (est * 13n) / 10n + 30_000n; simulated = true;
-    } else gas = BigInt(built.data.gas) * 2n + 100_000n;
-    if (gas > 2_000_000n) gas = 2_000_000n;
-    const approveGas = needApprove ? 70_000n : 0n;
-    const maxFee = (gas + approveGas) * maxFeePerGas;
-    if ((bal.native ?? 0n) < maxFee + (src.id === 'native' ? amount : 0n)) throw new UserError('insufficient_gas', `not enough ${n.native.symbol} on ${n.name} to pay the network fee`);
-
-    // the guaranteed minimum is whatever the calldata itself enforces; it must be consistent with the requested tolerance
     const id = randomUUID();
-    const draft = (minOut: bigint): Intent => IntentSchema.parse({
-      v: 1, proposalId: id, keyId: st.keyId, network: n.id, chainRef: n.chainRef, asset: src.id, symbol: src.symbol, decimals: src.decimals, amount: amount.toString(),
-      from: me, to: me, maxFee: maxFee.toString(), createdAt: now, expiresAt: now + 75, policyVersion: st.policy.version,
-      swap: { provider: 'kyberswap', toAsset: dst.id, minOut: minOut.toString(), router: KYBER_ROUTER, dataHash: swapDataHash(data), approveGas: approveGas.toString() },
-      evm: { nonce, gasLimit: gas.toString(), maxFeePerGas: maxFeePerGas.toString(), maxPriorityFeePerGas: tip.toString() },
-    });
-    let desc;
-    try { desc = verifyKyberSwap(draft(1n), data); } catch (e) { throw new UserError('provider_bad_answer', `calldata refused: ${(e as Error).message}`, 502); }
-    const floor = (expected * BigInt(10_000 - b.slippageBps)) / 10_000n;
-    if (desc.minReturnAmount * 1000n < floor * 999n) throw new UserError('provider_bad_answer', 'the calldata guarantees less than the requested tolerance allows', 502);
-    const intent = draft(desc.minReturnAmount);
-    buildEvmSwapTxs(intent, data); // exactly what the signer will rebuild
+    const ps = await prepareKyberSwap({ n, me, keyId: st.keyId, fromAsset: src.id, toAsset: dst.id, amount, slippageBps: b.slippageBps, policyVersion: st.policy.version, proposalId: id });
+    const { intent, data } = ps, now = intent.createdAt;
     const verdict = checkPolicy(st.policy, intent, BigInt(st.spentToday[`${n.id}:${src.symbol}`] ?? '0'), now, st.halted);
     if (!verdict.ok) throw new UserError('policy', verdict.reason, 422);
-
     const hash = intentHash(intent);
-    const swap = { provider: 'kyberswap', toAsset: dst.id, toSymbol: dst.symbol, toDecimals: dst.decimals, expectedOut: expected.toString(), minOut: desc.minReturnAmount.toString(), slippageBps: b.slippageBps,
-      needsApproval: needApprove, simulated, fn: desc.functionName };
+    const swap = { provider: 'kyberswap', toAsset: dst.id, toSymbol: dst.symbol, toDecimals: dst.decimals, expectedOut: ps.expected.toString(), minOut: ps.minOut.toString(), slippageBps: b.slippageBps,
+      needsApproval: ps.needApprove, simulated: ps.simulated, fn: ps.fn };
     const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, state, kind, network, asset, symbol, decimals, amount, from_addr, to_addr, note, fee_estimate, max_fee, warnings, intent, intent_hash, aux, swap, expires_at)
-      values (${id}, ${idem}, 'pending_approval', 'swap', ${n.id}, ${src.id}, ${src.symbol}, ${src.decimals}, ${amount.toString()}, ${me}, ${me}, ${`swap → ${dst.symbol}`}, ${((gas + approveGas) * (baseFee + tip)).toString()}, ${maxFee.toString()},
-        ${sql.json(needApprove ? ['swap_needs_approval'] : [])}, ${sql.json(intent as never)}, ${toHex(hash)}, ${sql.json({ swapData: data })}, ${sql.json(swap)}, ${new Date(intent.expiresAt * 1000)})
+      values (${id}, ${idem}, 'pending_approval', 'swap', ${n.id}, ${src.id}, ${src.symbol}, ${src.decimals}, ${amount.toString()}, ${me}, ${me}, ${`swap → ${dst.symbol}`}, ${ps.feeEstimate.toString()}, ${ps.maxFee.toString()},
+        ${sql.json(ps.needApprove ? ['swap_needs_approval'] : [])}, ${sql.json(intent as never)}, ${toHex(hash)}, ${sql.json({ swapData: data })}, ${sql.json(swap)}, ${new Date(intent.expiresAt * 1000)})
       on conflict (idempotency_key) do nothing returning *`;
     if (!p) throw new UserError('conflict', 'duplicate request', 409);
     await audit('swap.prepared', 'owner', { id, network: n.id, from: src.symbol, to: dst.symbol, amount: amount.toString(), minOut: swap.minOut, hash: toHex(hash) });
