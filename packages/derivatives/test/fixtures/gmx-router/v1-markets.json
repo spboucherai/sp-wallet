@@ -1,0 +1,7 @@
+{
+ "recordedAt": "2026-11-11T05:54:53.735Z",
+ "url": "https://arbitrum.gmxapi.io/v1/markets",
+ "status": 200,
+ "trimmed": "only BTC/USD [BTC-USDC] and ETH/USD [WETH-USDC]",
+ "text": "[{\"symbol\":\"BTC/USD [BTC-USDC]\",\"marketTokenAddress\":\"0x47c031236e19d024b42f8AE6780E44A573170703\",\"indexTokenAddress\":\"0x47904963fc8b2340414262125aF798B9655E58Cd\",\"longTokenAddress\":\"0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f\",\"shortTokenAddress\":\"0xaf88d065e77c8cC2239327C5EDb3A432268e5831\",\"isListed\":true,\"isSpotOnly\":false,\"leverageTiers\":[{\"maxLeverage\":\"2000000\",\"minCollateralFactor\":\"5000000000000000000000000000\"}],\"minPositionSizeUsd\":\"1000000000000000000000000000000\",\"minCollateralUsd\":\"1000000000000000000000000000000\"},{\"symbol\":\"ETH/USD [WETH-USDC]\",\"marketTokenAddress\":\"0x70d95587d40A2caf56bd97485aB3Eec10Bee6336\",\"indexTokenAddress\":\"0x82aF49447D8a07e3bd95BD0d56f35241523fBab1\",\"longTokenAddress\":\"0x82aF49447D8a07e3bd95BD0d56f35241523fBab1\",\"shortTokenAddress\":\"0xaf88d065e77c8cC2239327C5EDb3A432268e5831\",\"isListed\":true,\"isSpotOnly\":false,\"leverageTiers\":[{\"maxLeverage\":\"2000000\",\"minCollateralFactor\":\"5000000000000000000000000000\"}],\"minPositionSizeUsd\":\"1000000000000000000000000000000\",\"minCollateralUsd\":\"1000000000000000000000000000000\"}]"
+}

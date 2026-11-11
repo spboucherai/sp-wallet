@@ -139,6 +139,9 @@ describe('GMX market data', () => {
     expect(toRaw(l!.availableLiquidityShortUsd, 30).toString()).toBe(tk.availableLiquidityShort);
     expect(toRaw(l!.capacityLongUsd, 30).toString()).toBe(tk.capacityLong.availableLiquidity);
     expect(toRaw(l!.maxOpenInterestLongUsd, 30).toString()).toBe(cf.maxOpenInterestLong);
+    // open interest in index tokens, and the market's flag saying that the balance (price impact, fee tier) is measured on it × price
+    expect(toRaw(l!.openInterestLongTokens, 8).toString()).toBe(tk.longInterestInTokens); expect(toRaw(l!.openInterestShortTokens, 8).toString()).toBe(tk.shortInterestInTokens);
+    expect(l!.useOpenInterestInTokensForBalance).toBe(true); expect(cf.useOpenInterestInTokensForBalance).toBe(true);
     expect(toRaw(l!.priceImpact.factorNegative, 30).toString()).toBe(cf.positionImpactFactorNegative);
     expect(toRaw(l!.priceImpact.exponentPositive, 30).toString()).toBe(cf.positionImpactExponentFactorPositive);
     // venue sign kept here: net = funding − borrowing for each side

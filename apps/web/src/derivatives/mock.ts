@@ -33,6 +33,7 @@ import { PaperAccount } from '../../../../packages/derivatives/src/paper.ts';
 import { checkOrder } from '../../../../packages/derivatives/src/risk.ts';
 import { stepAt, worstPrice as worstPriceOf } from './dec';
 import { createLiveMock, type LiveHooks } from './mockLive';
+import { createRouterMock } from './mockRouter';   // router (simulation): POST /derivatives/route, GET /derivatives/route/assets
 import { aggregateBars, type Bar } from './reducers';
 import type { Book, Candle, CompareRow, Instrument, Interval, Liquidity, OrderRequest, Position, PublicTrade, RiskPolicy, Ticker, VenueId, VenueInfo } from './types';
 import { INTERVAL_MS } from './types';
@@ -498,6 +499,15 @@ class LiveMockStream extends EventTarget {
   close(): void { this.readyState = 2; this.off?.(); }
 }
 
+// --- router (simulation) ---
+const ROUTER = createRouterMock({
+  instruments: () => SEEDS.map((s) => s.inst),
+  markets: (base) => SEEDS.filter((s) => s.inst.base.toUpperCase() === base).map((sd) => { const s = fresh(sim(sd.inst.id)!); return { inst: s.inst, ticker: s.ticker, book: s.book }; }),
+  restriction: (venue) => VENUES.find((v) => v.id === venue)?.restriction ?? null,
+  gmxDecimals: (base) => GMX_DECIMALS[base] ?? 18,
+  account: (id) => { const a = ACCTS.get(id); if (!a) return null; const v = view(a); return { id: a.id, venue: a.venue, label: a.label, mode: a.policy.mode, equity: v.state.equity, freeCollateral: v.state.freeCollateral, preview: (body) => preview(a, body) }; },
+});
+// --- /router ---
 const json = (status: number, j: unknown): Response => new Response(JSON.stringify(j), { status, headers: { 'content-type': 'application/json' } });
 const out = (o: Outcome) => json(o.status, o.json);
 async function route(method: string, path: string, q: URLSearchParams, b: any, headers: Headers): Promise<Response> {
@@ -522,6 +532,10 @@ async function route(method: string, path: string, q: URLSearchParams, b: any, h
     const hours = Math.min(480, Number(q.get('hours')) || 24), r = rng(`${s.inst.id}:f`), base = Number(s.ticker.funding ?? 0), H = 3_600_000, end = Math.floor(now / H) * H;
     return json(200, { instrument: s.inst.id, history: Array.from({ length: hours }, (_, i) => ({ ts: end - (hours - 1 - i) * H, rate: n2sSigned(base * (0.6 + r() * 0.8)) })), intervalSec: s.inst.fundingIntervalSec, ts: now, source: 'venue' }); }
   if (p === '/compare') return json(200, compare(q.get('base') ?? 'BTC'));
+  // --- router (simulation): the real router on the mock's markets (mockRouter.ts) ---
+  if (p === '/route/assets' && method === 'GET') return out(ROUTER.assets());
+  if (p === '/route' && method === 'POST') return out(ROUTER.route(b));
+  // --- /router ---
   if (p === '/watch') {
     const acct = q.get('account') ?? '';
     if (venue === 'dydx') return json(403, { error: 'venue_restricted', message: DYDX_RESTRICTION });

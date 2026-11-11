@@ -48,9 +48,15 @@ export const marketConfig = z.object({
   positionImpactFactorPositive: uintStr, positionImpactFactorNegative: uintStr,
   positionImpactExponentFactorPositive: uintStr, positionImpactExponentFactorNegative: uintStr,
   maxPositionImpactFactorPositive: uintStr, maxPositionImpactFactorNegative: uintStr, maxPositionImpactFactorForLiquidations: uintStr,
+  /** when true the contracts measure the long/short imbalance (price impact, fee tier) on open interest IN TOKENS × price, not on the USD cost basis */
+  useOpenInterestInTokensForBalance: z.boolean().optional(),
+  /** non-zero: the index token has a virtual inventory shared by every market on it (a negative price impact is the worse of the market's own and the virtual one) */
+  virtualIndexTokenId: z.string().regex(/^0x[0-9a-fA-F]{64}$/).optional(),
 });
 export type MarketConfig = z.infer<typeof marketConfig>;
 export const marketConfigs = z.array(marketConfig);
+/** GET /markets/values — only what the price-impact formula needs. Signed: negative = traders are net LONG across the index's markets (contract convention). */
+export const marketValues = z.array(z.object({ marketTokenAddress: address, virtualInventoryForPositionsInTokens: intStr, virtualInventoryForPositions: intStr }));
 
 export const tokenInfo = z.object({ symbol: z.string().min(1), address, decimals: z.number().int().min(0).max(30), isSynthetic: z.boolean().optional(), isNative: z.boolean().optional() });
 export const tokensInfo = z.array(tokenInfo);
