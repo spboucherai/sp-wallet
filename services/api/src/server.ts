@@ -12,6 +12,8 @@ import { http } from './chains/rpc.ts';
 import { config, secureCookies, UserError } from './config.ts';
 import { audit, auditList, getSetting, setSetting, sql } from './db.ts';
 import { marketDataRoutes } from './market/routes.ts';
+import { derivativesRoutes } from './derivatives/routes.ts';
+import type { Derivatives } from './derivatives/index.ts';
 import { addressFor, signer } from './signer-client.ts';
 import { swapRoutes } from './swap.ts';
 import { swapExecRoutes } from './swap-exec.ts';
@@ -80,7 +82,7 @@ async function markets(): Promise<Record<string, Market> | null> {
 }
 async function prices(): Promise<Record<string, Market> | null> { return markets(); }
 
-export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[] } = {}): Promise<FastifyInstance> {
+export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives } = {}): Promise<FastifyInstance> {
   const swapProviders = opts.swapProviders;
   const app = Fastify({ logger: { level: 'warn', redact: ['req.headers.cookie', 'req.headers.authorization'] }, bodyLimit: 64 * 1024, trustProxy: config.trustProxy });
   await app.register(cookie);
@@ -121,6 +123,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   agentRoutes(app, { prices: markets });
   strategyRoutes(app);
   marketDataRoutes(app);
+  derivativesRoutes(app, opts.derivatives);
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));
   app.get('/api/v1/health/ready', async () => {
