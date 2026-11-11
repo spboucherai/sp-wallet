@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { I18n, useT, type Key } from '../i18n';
-import { Icon } from '../ui';
+import { Icon, VenueIcon } from '../ui';
 import { D, dec, fmt, usd } from './dec';
 import type { VenueId } from './types';
 
@@ -22,8 +22,8 @@ export function PaperTag({ className = '' }: { className?: string }) {
 export const VENUE_NAME: Record<VenueId, string> = { hyperliquid: 'Hyperliquid', dydx: 'dYdX v4', gmx: 'GMX v2' };
 const VENUE_DOT: Record<VenueId, string> = { hyperliquid: '#1f9e8f', dydx: '#6966ff', gmx: '#2d6be0' };
 export function VenueBadge({ venue, className = '' }: { venue: VenueId; className?: string }) {
-  return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2 py-0.5 text-[11.5px] font-semibold text-ink ${className}`}>
-    <span className="h-2 w-2 rounded-full" style={{ background: VENUE_DOT[venue] ?? '#667085' }} aria-hidden="true" />{VENUE_NAME[venue] ?? venue}</span>;
+  return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface py-0.5 pl-1 pr-2 text-[11.5px] font-semibold text-ink ${className}`}>
+    <VenueIcon venue={venue} size={16} />{VENUE_NAME[venue] ?? venue}</span>;
 }
 
 /** Long / short: a word and an arrow, the colour only repeats them */

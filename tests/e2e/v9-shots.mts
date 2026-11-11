@@ -6,7 +6,7 @@
 //
 // The wallet is the throwaway one of that stack (in-memory seed, broadcast off). Needs `cwebp` to convert; keeps PNG otherwise.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium, type Page } from '@playwright/test';
@@ -39,11 +39,15 @@ for (const cfg of CONFIGS) {
   await context.addInitScript((t) => { localStorage.setItem('spw-theme', t); localStorage.setItem('spw-locale', 'fr'); }, cfg.theme);
   const page = await context.newPage();
   const want = (n: string) => !only.length || only.includes(n);
-  if (want('gate')) { await page.goto('/'); await settle(page, 900); await shot(page, 'gate', cfg); }
-  const pk = await virtualPasskey(context, page, passkeyFile(Number(new URL(BASE).port)));
-  await enter(page, pk, 'qa-setup-token');
+  // V9_REPLAY=1: BASE is `npx tsx tests/e2e/v9-perf.mts dist/web x --serve <port>` — the bundle with the API replayed from
+  // the recorded answers (no passkey, read-only screens only); used when the local forks cannot give the wallet its balances
+  const replay = !!process.env.V9_REPLAY;
+  if (replay) await page.clock.install({ time: new Date(JSON.parse(readFileSync(resolve('tests/e2e/fixtures/v9/api.json'), 'utf8')).recordedAt) });
+  if (want('gate') && !replay) { await page.goto('/'); await settle(page, 900); await shot(page, 'gate', cfg); }
+  const pk = replay ? null : await virtualPasskey(context, page, passkeyFile(Number(new URL(BASE).port)));
+  if (pk) await enter(page, pk, 'qa-setup-token'); else await page.goto('/');
   // seed once: two paper agents, an address-book entry (idempotent enough: skipped when agents exist)
-  const agents = await api(page, 'GET', '/agents');
+  const agents = replay ? { json: { agents: [{ id: 'x' }] } } : await api(page, 'GET', '/agents');
   let list: { id: string }[] = (agents.json?.agents ?? agents.json ?? []) as never;
   if (Array.isArray(list) && list.length === 0) {
     await api(page, 'POST', '/agents', { name: 'Momentum Base', mission: 'Suivre la tendance sur ETH et BTC, prudemment.', network: 'base', universe: ['ETH', 'BTC'], interval: '1h', capitalUsdc: '60' });
@@ -65,6 +69,6 @@ for (const cfg of CONFIGS) {
     try { await page.goto(path); await settle(page, name.startsWith('futures') ? 4500 : 1800); if (act) { await act(page); await settle(page, 600); } await shot(page, name, cfg); if (cfg.mobile && ['home', 'asset-eth', 'security', 'agent'].includes(name)) await shot(page, `${name}-full`, cfg, true); }
     catch (e) { console.log(`FAILED ${name}-${cfg.id}: ${String(e).slice(0, 200)}`); }
   }
-  await pk.save(); await context.close();
+  await pk?.save(); await context.close();
 }
 await browser.close();
