@@ -286,4 +286,37 @@ describe.skipIf(!READY)('strategy sandbox — fail closed', () => {
   });
 });
 
+// v10 integration: `main` grew (GMX, Solana CCTP, Cardano, Polkadot, the plan executor) after the sandbox branch was cut. This
+// runs everywhere (no sandbox needed): a new file that starts a process, or that runs laboratory code without `labExec`, fails here.
+describe('one runner: nothing in the API or the research runner starts laboratory code by itself', () => {
+  const walk = (dir: string, out: string[] = []): string[] => { for (const e of readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, e.name); if (e.isDirectory()) walk(p, out); else if (/\.(ts|mts)$/.test(e.name)) out.push(p); } return out; };
+  const code = (f: string) => readFileSync(f, 'utf8').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '');   // line comments only: route strings contain /* and */
+  const rel = (f: string) => path.relative(REPO_ROOT, f);
+  it('API: child_process is imported by the runner only (and by the read-only `git rev-parse` of the research routes)', () => {
+    const files = walk(path.join(REPO_ROOT, 'services/api/src'));
+    expect(files.length).toBeGreaterThan(80);
+    const starters = files.filter((f) => /node:child_process|['"]child_process['"]|\bBun\.spawn|\bDeno\.run|new Worker\(/.test(code(f))).map(rel).sort();
+    expect(starters).toEqual(['services/api/src/agents/lab.ts', 'services/api/src/research/routes.ts']);
+    const routes = code(path.join(REPO_ROOT, 'services/api/src/research/routes.ts'));
+    expect(routes.match(/execFileSync\(/g)).toHaveLength(1); expect(routes).toMatch(/execFileSync\('git', \['-C', RESEARCH_DIR, 'rev-parse', 'HEAD'\]/);   // no interpreter, no shell
+    for (const f of files) { const c = code(f); expect(c, rel(f)).not.toMatch(/['"`]uv['"`]|uv run|\.venv\/bin\/python(?!['"`]\))|python3?['"`],/); }
+    // every laboratory module is started through labExec (directly, or through the two thin wrappers that only add a result shape)
+    const callers = files.filter((f) => /['"`]spq\.[a-z_.]+['"`]/.test(code(f))).map(rel).sort();
+    expect(callers).toEqual(['services/api/src/agents/live.ts', 'services/api/src/agents/perp-signal.ts', 'services/api/src/agents/perp-strategies.ts', 'services/api/src/agents/strategies.ts',
+      'services/api/src/research/dataset.ts', 'services/api/src/research/evaluate.ts']);
+    for (const f of callers) expect(code(path.join(REPO_ROOT, f)), f).toMatch(/\blabExec\(|\blabRun\(|\bpy\(/);   // py = the wrapper of strategies.ts (checked below)
+    expect(code(path.join(REPO_ROOT, 'services/api/src/research/lab.ts'))).toMatch(/return labExec\(args, o\)/);
+    expect(code(path.join(REPO_ROOT, 'services/api/src/agents/strategies.ts'))).toMatch(/return labExec\(args, o\)/);
+  });
+  it('research runner: processes are started in job.ts only, and the two that run Python or the agent go through the job profile', () => {
+    const files = walk(path.join(REPO_ROOT, 'services/research-runner/src'));
+    expect(files.filter((f) => /node:child_process/.test(code(f))).map(rel)).toEqual(['services/research-runner/src/job.ts']);
+    const job = code(path.join(REPO_ROOT, 'services/research-runner/src/job.ts'));
+    expect(job.match(/\bspawn\(/g)).toHaveLength(3);                                                       // `sh` (git/tar helpers), the data import, the agent
+    expect(job).toMatch(/const argv = confine\(confined \? prep : null, \[cfg\.python, '-m', 'spq\.data\.hl_import'/);
+    expect(job).toMatch(/const argv = confine\(confined \? p\.profile : null, agentArgv\(cfg, job, rp\)\)/);
+    expect(job.match(/sandboxProfile\(/g)!.length).toBeGreaterThanOrEqual(2);                             // both use the fixed profile of @spw/core (no kern.procargs2)
+  });
+});
+
 void CONTROL_MASK;

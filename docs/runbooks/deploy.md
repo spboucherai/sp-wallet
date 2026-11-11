@@ -37,7 +37,8 @@ only) and `~/sp-wallet-signer-data` (keystore, `state.json`, `policy.json`). Com
    | `RESEARCH_DATABASE_URL` | backtest candles are read with the API's own role instead of the read-only one |
    | `SPW_RESEARCH_RUNNER_SECRET` (≥ 32 chars) | the research runner routes answer 404; research jobs stay queued |
 
-   (`SPW_DERIV_MANDATE_MAINNET=on` as well if perp agents trade on mainnet.) Then:
+   (`SPW_DERIV_MANDATE_MAINNET=on` as well if perp agents trade on mainnet. `SPW_DERIV_GMX_LIVE` is OFF by default and is
+   meant to stay off until GMX trading is deliberately opened: `deriv_gmx_live=OFF(missing SPW_DERIV_GMX_LIVE)` is then the expected line.) Then:
    ```bash
    pm2 restart sp-wallet            # (confirm) keeps the stored environment
    pm2 logs sp-wallet --lines 30 --nostream
@@ -45,7 +46,7 @@ only) and `~/sp-wallet-signer-data` (keystore, `state.json`, `policy.json`). Com
 5. **Read the start-up lines** (v8). The API prints, without any value:
    ```
    sp-wallet api listening on … broadcast=on
-   [startup] capabilities: deriv_live_mainnet=on deriv_mandate_mainnet=on research_runner=on research_readonly_db=on broadcast=on workers=on strategy_sandbox_enforced=on web_app=on
+   [startup] capabilities: deriv_live_mainnet=on deriv_mandate_mainnet=on deriv_gmx_live=OFF(missing SPW_DERIV_GMX_LIVE) research_runner=on research_readonly_db=on broadcast=on workers=on strategy_sandbox_enforced=on web_app=on
    [startup] strategy sandbox: sandbox-exec (confined, self-test passed)
    ```
    An `=OFF(missing NAME)` there is the variable that was forgotten. `strategy sandbox: unavailable — …` means no signal
