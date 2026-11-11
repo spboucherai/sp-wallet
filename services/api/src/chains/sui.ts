@@ -296,12 +296,18 @@ export function suiAdapter(n: NetworkDef, call: GrpcCall = grpcCall): Adapter {
         if (next > latest - 2n) next = latest - 2n;
         return { items, cursor: Math.max(cursor ?? 0, Number(next)), finalizedHeight: Number(latest) };
       };
-      if (cursor === null) return any((u) => scan(u, null));
+      const fromOldestKept = () => any(async (u) => { const i = await info(u); if (i.lowest === null) throw new Error('source does not report its history range'); return scan(u, i.lowest + 1n); });
+      if (cursor === null) {
+        // newest-first listing walks back until it finds 50 items; for an address with little or no recent activity it runs
+        // into pruned history and the node answers OUT_OF_RANGE. Then scan forward from the oldest checkpoint still kept.
+        try { return await any((u) => scan(u, null)); }
+        catch (e) { if (e instanceof GrpcError && e.grpcCode === GRPC_OUT_OF_RANGE) return fromOldestKept(); throw e; }
+      }
       const errs: unknown[] = [];
       for (const u of sources) { try { return await scan(u, BigInt(cursor) + 1n); } catch (e) { errs.push(e); } }
       // every source answered that it no longer holds history that far back (long downtime): resume from the oldest checkpoint kept
       if (!errs.every((e) => e instanceof GrpcError && e.grpcCode === GRPC_OUT_OF_RANGE)) throw errs[errs.length - 1];
-      return any(async (u) => { const i = await info(u); if (i.lowest === null) throw errs[0]; return scan(u, i.lowest + 1n); });
+      return fromOldestKept();
     },
   };
 }
