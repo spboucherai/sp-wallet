@@ -31,7 +31,8 @@ for db in $(psql -At -d postgres -c "select datname from pg_database where datna
 done
 if [ "$LEGACY" = 1 ]; then
   for db in spw_test spw_market_test spw_test_cctp spw_test_jupiter spw_test_plan spw_test_xswap spw_v5_agents_test spw_v6_alerts_api_test spw_v6_alerts_engine_test spw_v7_research_test \
-            spw_deriv_test spw_deriv_paper_test spw_deriv_live_test spw_deriv_router_test spw_deriv_collateral_test spw_deriv_mandate_test spw_perp_agent_test spw_perp_live_test; do
+            spw_deriv_test spw_deriv_paper_test spw_deriv_live_test spw_deriv_router_test spw_deriv_collateral_test spw_deriv_mandate_test spw_perp_agent_test spw_perp_live_test \
+            spw_test_cctp_sol spw_deriv_gmx_test; do
     if [ "$(psql -At -d postgres -c "select 1 from pg_database where datname = '$db'")" = 1 ]; then drop "$db"; fi
   done
 fi

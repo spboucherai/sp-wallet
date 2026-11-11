@@ -2,13 +2,13 @@
 // a scripted Solana cluster, a scripted EVM chain and a scripted attestation service (no network). The scripted cluster
 // DECODES the transactions it receives (v1 messages, signatures checked) and plays the three Circle instructions the way the
 // source describes them; what the real programs do with the same bytes is proven by mainnet simulation
-// (scripts/sim-solana-cctp.mts). Database: spw_test_cctp_sol, created here.
+// (scripts/sim-solana-cctp.mts). Database: one per run (test-db.ts, label bridge_sol).
 import { createHash, createPublicKey, verify as edVerify } from 'node:crypto';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import postgres from 'postgres';
+import { createTestDb } from './test-db.ts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { base58 } from '@scure/base';
 import { decodeFunctionData, encodeAbiParameters, keccak256, numberToHex, pad, parseTransaction, toFunctionSelector, type Hex } from 'viem';
@@ -23,7 +23,7 @@ import { createSignerServer } from '../../isolated-signer/src/server.ts';
 import { Signer } from '../../isolated-signer/src/signer.ts';
 import { Store } from '../../isolated-signer/src/store.ts';
 
-const ORIGIN = 'https://wallet.test', RP = 'wallet.test', SECRET = 'q'.repeat(48), DB = 'spw_test_cctp_sol';
+const ORIGIN = 'https://wallet.test', RP = 'wallet.test', SECRET = 'q'.repeat(48), DB_LABEL = 'bridge_sol';
 const keys = deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'), ME = keys.addresses.evm, ME_SOL = keys.addresses.solana!;
 const owner = new TestPasskey(RP, ORIGIN);
 const CODE = JSON.parse(readFileSync(new URL('./fixtures/cctp-code.json', import.meta.url), 'utf8')) as Record<string, string>;
@@ -206,9 +206,7 @@ async function prepare(body: unknown) {
 const approve = async (prep: { proposal: any; options: any }) => { const ap = await api('POST', `/api/v1/transfers/proposals/${prep.proposal.id}/approve`, { assertion: assert(prep.options) }); expect(ap.status, JSON.stringify(ap.json)).toBe(200); return ap.json; };
 
 beforeAll(async () => {
-  const admin = postgres('postgres:///postgres', { max: 1, onnotice: () => {} });
-  if ((await admin`select 1 from pg_database where datname = ${DB}`).length === 0) await admin.unsafe(`create database ${DB}`).catch((e: Error) => { if (!/already exists/.test(e.message)) throw e; });
-  await admin.end();
+  const DB = (await createTestDb(DB_LABEL)).name;   // v8: unique per checkout and per run (test-db.ts)
   fake = createServer((req, res) => {
     let body = ''; req.on('data', (c) => (body += c)); req.on('end', () => {
       const send = (code: number, o: unknown) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };

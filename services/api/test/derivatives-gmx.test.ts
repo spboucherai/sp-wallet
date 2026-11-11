@@ -1,6 +1,6 @@
 // GMX v2 trading, end to end inside the process: the REAL engine (gmx-exec.ts) and its routes, the REAL isolated signer class
 // (public test mnemonic, real WebAuthn assertions from a software passkey, a scripted price view), PostgreSQL (database
-// spw_deriv_gmx_test, created here if missing), GMX market data replayed from recorded fixtures, and a scripted fake of the
+// one per run, test-db.ts label deriv_gmx), GMX market data replayed from recorded fixtures, and a scripted fake of the
 // chain side (GmxChain) that "mines" the signed transactions it is handed: it decodes them with the same ABI as the fork proof
 // and emits real EventEmitter logs (EventLog2, ABI-encoded) for OrderCreated / OrderExecuted / OrderCancelled / OrderFrozen.
 // No network: nothing is broadcast anywhere. The real contracts are exercised by scripts/fork-gmx.mts.
@@ -31,7 +31,7 @@ type Order = import('../src/derivatives/gmx-chain.ts').GmxChainOrder;
 type Receipt = import('../src/derivatives/gmx-chain.ts').GmxReceipt;
 
 beforeAll(async () => {
-  await useDatabase('spw_deriv_gmx_test');
+  await useDatabase('deriv_gmx');
   const db = await import('../src/db.ts');
   sql = db.sql;
   await db.migrate(); await db.migrate();

@@ -1,8 +1,10 @@
 // V8 hardening (C): the shared test-database helper. Names are unique per checkout and per run; a database is created empty
 // and dropped again; nothing but spw_t_* databases can ever be dropped by it.
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import postgres from 'postgres';
 import { describe, expect, it } from 'vitest';
-import { createTestDb, dropTestDbs, newRunId, runId, TEST_DB_PREFIX, testDbName } from './test-db.ts';
+import { createTestDb, dropTestDbs, newRunId, REPO_ROOT, runId, TEST_DB_PREFIX, testDbName } from './test-db.ts';
 
 describe('test databases', () => {
   it('a name carries the run id (start time, checkout hash, random) and the label; two runs never share one', () => {
@@ -31,4 +33,26 @@ describe('test databases', () => {
     await dropTestDbs((n) => { seen.push(n); return false; });
     for (const n of seen) expect(n.startsWith(TEST_DB_PREFIX)).toBe(true);
   }, 180_000);
+
+  // v10 integration: the convention is CHECKED, so a test file merged from another branch cannot bring a fixed name back
+  // (bridge-sol.test.ts and derivatives-gmx.test.ts arrived from `main` with spw_test_cctp_sol / spw_deriv_gmx_test).
+  it('no test file of the vitest suite names a database itself: every one comes from this helper', () => {
+    const files: string[] = [];
+    const walk = (dir: string): void => { for (const e of readdirSync(dir, { withFileTypes: true })) { if (e.name === 'node_modules' || e.name === 'fixtures') continue; const p = path.join(dir, e.name); if (e.isDirectory()) walk(p); else if (/\.(ts|mts)$/.test(e.name)) files.push(p); } };
+    for (const group of ['packages', 'services', 'apps']) for (const pkg of readdirSync(path.join(REPO_ROOT, group), { withFileTypes: true })) {
+      const dir = path.join(REPO_ROOT, group, pkg.name, 'test'); try { walk(dir); } catch { /* a package without tests */ }
+    }
+    expect(files.length).toBeGreaterThan(100);
+    const offenders: string[] = [];
+    for (const f of files) {
+      const rel = path.relative(REPO_ROOT, f); if (rel === 'services/api/test/test-db.ts' || rel === 'services/api/test/test-db.test.ts') continue;
+      const code = readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');   // comments may still tell the history
+      // a literal database name in a URL (not the placeholder of files that never query, not a name interpolated from the helper), a database created or dropped by hand, an admin connection, a legacy name
+      for (const m of code.matchAll(/postgres(?:ql)?:\/\/\/?([A-Za-z0-9_$\{\}.:@-]*)/g)) if (/^[A-Za-z0-9_]+$/.test(m[1]!) && m[1] !== 'unused') offenders.push(`${rel}: ${m[0]}`);
+      if (/create database|drop database|\bcreatedb\b|\bdropdb\b/i.test(code)) offenders.push(`${rel}: creates or drops a database itself`);
+      for (const m of code.matchAll(/['"`](spw_[a-z0-9_]*test[a-z0-9_]*)['"`]/g)) offenders.push(`${rel}: fixed name ${m[1]}`);
+      for (const m of code.matchAll(/\b(?:useDatabase|useTestDatabase|createTestDb|testDbName|alertsWorld)\(\s*['"`]([^'"`]*)['"`]/g)) if (/^spw_|_test$/.test(m[1]!)) offenders.push(`${rel}: label ${m[1]} looks like a fixed database name`);
+    }
+    expect(offenders).toEqual([]);
+  });
 });
