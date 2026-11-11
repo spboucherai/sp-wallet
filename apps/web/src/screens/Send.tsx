@@ -6,6 +6,7 @@ import type { Tab } from '../App';
 import { useNetworks, usePortfolio, type Proposal } from '../hooks';
 import { errText, useT, type Key } from '../i18n';
 import { Addr, Btn, Card, Chips, Field, H, Icon, inputCls, Notice, short, StatePill, trimAmt } from '../ui';
+import { AgentRecipientNotice } from './AgentFund';
 
 type Step = 'form' | 'review' | 'track';
 const FLOW = ['pending_approval', 'signed', 'broadcast', 'confirming', 'finalized'];
@@ -69,6 +70,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
         <Field label={t('destination')}>
           <textarea className={`${inputCls} min-h-[84px] resize-none break-all font-mono text-[14px]`} value={to} onChange={(e) => setTo(e.target.value.replace(/\s/g, ''))} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="off" />
         </Field>
+        {n?.family === 'evm' && <AgentRecipientNotice to={to} network={net} networkName={n.name} />}
         {(book.data ?? []).filter((b) => b.network === net).length > 0 && <div><div className="mb-1.5 text-[13px] text-mute">{t('addressBook')}</div>
           <div className="flex flex-wrap gap-2">{book.data!.filter((b) => b.network === net).map((b) => <button key={b.id} onClick={() => setTo(b.address)} className={`rounded-full border px-3 py-1.5 text-[13px] ${to === b.address ? 'border-emerald text-emerald' : 'border-line'}`}><Icon n="book" className="mr-1 inline h-3.5 w-3.5" />{b.label} · {short(b.address)}</button>)}</div></div>}
         <Field label={`${t('amount')} (${a?.symbol ?? ''})`} hint={bal?.display != null ? <>{t('available')}: {trimAmt(bal.display, 8)} {bal.symbol}</> : undefined}>
@@ -96,6 +98,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
           <div className="font-[family-name:var(--font-display)] text-[38px] font-semibold leading-tight tracking-[-0.03em]">{cur.amountDisplay} <span className="text-mute">{cur.symbol}</span></div>
           <div className="font-mono text-xs text-mute">{cur.amount} {t('baseUnits')} · {cur.networkName}</div></div>
         <Row k={t('to')}><Addr value={cur.to} /></Row>
+        <AgentRecipientNotice to={cur.to} network={cur.network} networkName={cur.networkName} />
         {cur.memo && <Row k={t('memo')}><span className="break-all font-mono text-[14px]">{cur.memo}</span></Row>}
         <Row k={t('from')}><span className="font-mono text-[13px] text-mute">{short(cur.from)}</span></Row>
         <Row k={t('network')}>{cur.networkName}</Row>

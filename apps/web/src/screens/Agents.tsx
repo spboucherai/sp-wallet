@@ -6,6 +6,7 @@ import type { Nav } from '../App';
 import { PriceChart } from '../chart';
 import { errText, I18n, useT, type Key } from '../i18n';
 import { Addr, Btn, Card, Coin, CopyBtn, Field, fiat, H, Icon, inputCls, Notice, Skeleton, trimAmt, when } from '../ui';
+import { AgentChecklist, ElsewhereFunds, FundSheet, fundingInProgress, WithdrawSheet, type AgentNet } from './AgentFund';
 
 interface AgentV { id: string; name: string; mission: string; state: string; mode: string; network: string; networkName: string; cash: string; universe: string[]; interval: string; capitalUsdc: string; vaultAddress: string;
   risk: { maxExposurePct: number; maxLossPct: number; maxOrderUsd: number; maxDailyUsd: number; maxOrdersPerDay: number; mandateDays: number; slippageBps: number }; strategyVersionId: string | null; mandateId: string | null; stopReason: string | null; lastBar: string | null }
@@ -91,7 +92,9 @@ export function Agents({ nav }: { nav: Nav }) {
 export function Agent({ id, nav }: { id: string; nav: Nav }) {
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient();
   const q = useQuery({ queryKey: ['agent', id], queryFn: () => get<any>(`/agents/${id}`), refetchInterval: 15_000 });
-  const else_ = useQuery({ queryKey: ['agent-elsewhere', id], queryFn: () => get<{ holdings: any[] }>(`/agents/${id}/elsewhere`), refetchInterval: 60_000 });
+  // gas reserve of the agent's network (same query as the creation form)
+  const netsQ = useQuery({ queryKey: ['agent-networks'], queryFn: () => get<{ networks: AgentNet[] }>('/agents/networks'), staleTime: 60_000 });
+  const [sheet, setSheet] = useState<'' | 'fund' | 'withdraw'>('');
   const lib = useQuery({ queryKey: ['strategies'], queryFn: () => get<{ strategies: any[] }>('/strategies'), staleTime: 300_000 });
   const [busy, setBusy] = useState(''), [err, setErr] = useState(''), [mandate, setMandate] = useState<any>(null), [note, setNote] = useState('');
   if (q.isLoading || !q.data) return <div className="space-y-4"><Skeleton h="h-40" /><Skeleton h="h-56" /></div>;
@@ -112,26 +115,29 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
       {a.stopReason && <Notice tone="warn">{a.stopReason}</Notice>}
       {err && <Notice tone="danger">{err}</Notice>}{note && <Notice tone="ok">{note}</Notice>}
 
+      <AgentChecklist a={a} gas={netsQ.data?.networks.find((n) => n.id === a.network)?.gas ?? null} approved={!!approved} busy={busy}
+        onFund={() => setSheet('fund')} onStrategy={() => document.getElementById('qa-strategies')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        onPaper={() => void act('paper', () => post(`/agents/${id}/mode`, { mode: 'PAPER' }))} onLive={() => { document.getElementById('qa-control')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); void prepare(); }} />
+      {sheet === 'fund' && <FundSheet a={a} gas={netsQ.data?.networks.find((n) => n.id === a.network)?.gas ?? null} nav={nav} onClose={() => { setSheet(''); void qc.invalidateQueries({ queryKey: ['agent', id] }); }} />}
+      {sheet === 'withdraw' && <WithdrawSheet a={a} onClose={() => setSheet('')} />}
+
       <Card><H>{t('agVault')}</H>
         <div className="text-[30px] font-semibold tracking-tight">{fiat(vaultUsd, 'USD', locale)}</div>
         <div className="text-[13px] text-mute">{t('agAllocated')} {a.capitalUsdc} {a.cash ?? 'USDC'}</div>
         <ul className="mt-3 divide-y divide-line">{(a.vault ?? []).map((x: any) => <li key={x.asset} className="flex items-center gap-3 py-2.5"><Coin sym={x.symbol} size={32} /><span className="flex-1 text-[15px] font-medium">{x.symbol}{x.role === 'gas' ? <span className="block text-[12px] font-normal text-mute">{t('agGasRole')}</span> : x.assetSymbol && x.assetSymbol !== x.symbol ? <span className="block text-[12px] font-normal text-mute">{t('agHeldAs', { asset: `${x.assetSymbol} — ${x.name}` })}{x.issuer ? ` · ${t('agIssuer', { issuer: x.issuer })}` : ''}</span> : null}</span><span className="text-right text-[14.5px] font-semibold">{trimAmt(x.display, 8)}<span className="block text-[12px] font-normal text-mute">{x.usd !== null ? fiat(x.usd, 'USD', locale) : ''}</span></span></li>)}</ul>
         <div className="mt-3 rounded-2xl bg-elev/70 p-3"><div className="mb-1 text-[12px] text-mute">{t('agVaultAddr', { network: a.networkName })}</div><Addr value={a.vaultAddress} /></div>
-        <div className="mt-3 grid grid-cols-2 gap-3"><CopyBtn text={a.vaultAddress} full />
-          <Btn kind="soft" onClick={() => nav({ tab: 'send', network: a.network ?? 'base' })}><Icon n="up" className="h-4 w-4" />{t('agFund')}</Btn></div>
-        <p className="mt-2 text-[12.5px] text-mute">{t('agFundNote', { cash: a.cash ?? 'USDC', native: (a.vault ?? []).find((x: any) => x.asset === 'native')?.assetSymbol ?? 'ETH', network: a.networkName })}</p>
+        <div className="mt-3 space-y-2.5">
+          <Btn full onClick={() => setSheet('fund')}><Icon n="up" className="h-4 w-4" />{fundingInProgress(a.id) ? t('qaFundResume') : t('qaFundOpen')}</Btn>
+          <div className="grid grid-cols-2 gap-3"><CopyBtn text={a.vaultAddress} full />
+            <Btn kind="soft" disabled={!(a.vault ?? []).some((x: any) => x.amount !== '0')} onClick={() => setSheet('withdraw')}><Icon n="down" className="h-4 w-4" />{t('agWithdraw')}</Btn></div></div>
+        <p className="mt-2 text-[12.5px] text-mute">{t('qaFundNote', { cash: a.cash ?? 'USDC', native: (a.vault ?? []).find((x: any) => x.asset === 'native')?.assetSymbol ?? 'ETH', network: a.networkName })}</p>
         {(a.holdings ?? []).some((h: any) => h.kind === 'wrapped' || h.kind === 'pegged') && <div className="mt-3"><Notice tone="warn">{t('agIssuerNote', { assets: (a.holdings as any[]).filter((h) => h.kind === 'wrapped' || h.kind === 'pegged').map((h) => `${h.assetSymbol} — ${h.issuer}`).join(' ; ') })}</Notice></div>}
-        {a.state !== 'LIVE' && <div className="mt-3 flex flex-wrap gap-2">{(a.vault ?? []).filter((x: any) => x.amount !== '0').map((x: any) =>
-          <Btn key={x.asset} kind="ghost" busy={busy === `w${x.asset}`} onClick={() => act(`w${x.asset}`, async () => { const r = await post<any>(`/agents/${id}/withdraw`, { asset: x.asset }); setNote(`${t('agWithdrawn')} ${r.amount} ${r.symbol}`); })}>{t('agWithdraw')} {x.symbol}</Btn>)}</div>}
-        {(else_.data?.holdings ?? []).length > 0 && <div className="mt-4"><Notice tone="warn">{t('agElsewhere', { network: a.networkName })}</Notice>
-          <ul className="mt-2 space-y-2">{else_.data!.holdings.map((h: any) => <li key={`${h.network}:${h.asset}`} className="flex items-center gap-3 rounded-2xl border border-line p-3">
-            <span className="min-w-0 flex-1"><span className="block font-semibold">{h.display} {h.symbol}</span><span className="block text-[12.5px] text-mute">{h.networkName}{!h.hasGas && h.asset !== 'native' ? ` · ${t('agElsewhereGas', { gas: h.gas })}` : ''}</span></span>
-            <Btn kind="soft" busy={busy === `e${h.network}${h.asset}`} onClick={() => act(`e${h.network}${h.asset}`, async () => { const r = await post<any>(`/agents/${id}/withdraw`, { asset: h.asset, network: h.network }); setNote(`${t('agWithdrawn')} ${r.amount} ${r.symbol}`); await qc.invalidateQueries({ queryKey: ['agent-elsewhere', id] }); })}>{t('agWithdraw')}</Btn></li>)}</ul></div>}
+        <ElsewhereFunds a={a} />
       </Card>
 
       {eq.length > 1 && <Card><H>{t('agEquity')}</H><PriceChart points={eq} format={(v) => fiat(v, 'USD', locale)} formatTime={(ts) => new Date(ts).toLocaleDateString(locale === 'fr' ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })} /></Card>}
 
-      <Card><H>{t('agStrategy')}</H>
+      <div id="qa-strategies" className="scroll-mt-20" /><Card><H>{t('agStrategy')}</H>
         {(a.versions as any[]).length === 0 ? <p className="text-[14px] text-mute">{t('agNoStrategy')}</p> : <ul className="space-y-3">{(a.versions as any[]).map((v) => <li key={v.id} className="rounded-2xl bg-elev/70 p-3.5">
           <div className="flex items-center justify-between gap-2"><span className="font-semibold">{v.name} <span className="font-normal text-mute">v{v.version}</span></span><span className="rounded-full bg-surface px-2 py-0.5 text-[11.5px] font-semibold">{t(`agV_${v.status}` as Key)}</span></div>
           <div className="mt-1 break-all font-mono text-[11px] text-mute">sha256 {v.code_sha256}</div>
@@ -156,7 +162,7 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
           </div>; })()}
       </Card>
 
-      <Card><H>{t('agControl')}</H>
+      <div id="qa-control" className="scroll-mt-20" /><Card><H>{t('agControl')}</H>
         <div className="space-y-2.5">
           {approved && ['AWAITING_APPROVAL', 'PAUSED', 'STOPPED', 'CREATED'].includes(a.state) && <Btn kind="soft" full busy={busy === 'paper'} onClick={() => act('paper', () => post(`/agents/${id}/mode`, { mode: 'PAPER' }))}>{t('agStartPaper')}</Btn>}
           {a.state === 'PAPER_TRADING' && <Btn kind="ghost" full busy={busy === 'pause'} onClick={() => act('pause', () => post(`/agents/${id}/mode`, { mode: 'PAUSED' }))}>{t('agPause')}</Btn>}

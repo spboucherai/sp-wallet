@@ -1,0 +1,339 @@
+// Funding an agent's wallet from the main wallet, bringing funds back, and the readiness checklist of the agent page.
+// Nothing here is a new money path: funding is the ordinary transfer flow (draft → frozen intent → passkey → signer),
+// with the network and the recipient fixed to the agent's own; withdrawing is the existing vault-return route.
+import { startAuthentication } from '@simplewebauthn/browser';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { get, post } from '../api';
+import type { Nav } from '../App';
+import { useAccounts, useNetworks, usePortfolio, type Net, type Proposal } from '../hooks';
+import { errText, I18n, useT, type Key } from '../i18n';
+import { Addr, Btn, Coin, CopyBtn, Icon, inputCls, NetDot, Notice, trimAmt } from '../ui';
+
+type T = (k: Key, v?: Record<string, string | number>) => string;
+export interface VaultRow { symbol: string; assetSymbol: string; name: string; kind: string; issuer: string | null; role: 'cash' | 'asset' | 'gas'; asset: string; amount: string; display: string; usd: number | null }
+export interface FundAgent { id: string; name: string; state: string; network: string; networkName: string; cash: string; capitalUsdc: string; vaultAddress: string; strategyVersionId: string | null;
+  holdings: { symbol: string; asset: string; assetSymbol: string; name: string; kind: string }[] | null; vault: VaultRow[] | null }
+interface GasInfo { reserve: string; perOrder: string; perOrderUsd: number | null }
+export interface AgentNet { id: string; name: string; native: string; gas: GasInfo | null; feeWarning: boolean; symbols: { symbol: string; live: boolean }[] }
+interface Overview { broadcast?: boolean; signer: { reachable: boolean; halted?: boolean; policy?: { perTx: Record<string, string>; daily: Record<string, string> }; spentToday?: Record<string, string> } }
+interface Elsewhere { network: string; networkName: string; asset: string; symbol: string; display: string; gas: string; hasGas: boolean; gasHeld?: string; gasNeed?: string | null; gasEnough?: boolean | null }
+
+// ── exact decimal arithmetic on display strings (amounts never go through floating point) ─────────────────────────────────
+export const toUnits = (s: string, dec: number): bigint => { const m = /^(\d*)(?:\.(\d*))?$/.exec(s.trim()); if (!m || (!m[1] && !m[2])) return 0n; return BigInt((m[1] || '0') + (m[2] ?? '').slice(0, dec).padEnd(dec, '0')); };
+export const fromUnits = (v: bigint, dec: number): string => { const neg = v < 0n, s = (neg ? -v : v).toString().padStart(dec + 1, '0'); const i = s.slice(0, s.length - dec), f = dec ? s.slice(s.length - dec).replace(/0+$/, '') : ''; return (neg ? '-' : '') + (f ? `${i}.${f}` : i); };
+const minBig = (...xs: bigint[]) => xs.reduce((a, b) => (b < a ? b : a));
+/** Round a base-unit amount UP to `keep` significant decimals (a gas top-up must not fall one wei short). */
+const ceilTo = (v: bigint, dec: number, keep: number): bigint => { if (dec <= keep) return v; const q = 10n ** BigInt(dec - keep); return ((v + q - 1n) / q) * q; };
+const sameAsset = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+const TEST_NOT_SENT = /broadcast disabled/i;
+const OK = ['confirming', 'finalized'], BAD = ['failed', 'rejected', 'expired', 'replaced'];
+
+/** Plain words for a refusal of the transfer flow; the server's English detail is only used when no code is known. */
+export function fundErr(t: T, e: unknown, ctx: { sym: string; net: string; native: string; perTx?: string; left?: string }): string {
+  const x = e as { code?: string; message?: string; name?: string };
+  if (x?.name === 'NotAllowedError' || x?.name === 'AbortError') return t('qaFundPasskeyCancelled');
+  const m = x?.message ?? '';
+  switch (x?.code) {
+    case 'policy': return /per-transaction/.test(m) ? t('qaFundErrPerTx', { max: ctx.perTx ?? '?', sym: ctx.sym }) : /daily limit/.test(m) ? t('qaFundErrDaily', { left: ctx.left ?? '0', sym: ctx.sym }) : /fee ceiling/.test(m) ? t('qaFundErrFee', { net: ctx.net }) : /halt/.test(m) ? t('e_halted') : `${t('e_policy')} (${m})`;
+    case 'insufficient_funds': return t('qaFundErrBalance', { sym: ctx.sym, net: ctx.net });
+    case 'insufficient_gas': return t('qaFundErrGas', { native: ctx.native, net: ctx.net });
+    case 'pending_tx': return t('qaFundErrPending', { net: ctx.net });
+    case 'halted': return t('e_halted');
+    case 'expired': return t('qaFundErrExpired');
+    case 'offline': return t('offline');
+    default: return errText(t, e);
+  }
+}
+
+/** One ordinary transfer of the main wallet, up to the signer: draft, frozen intent, passkey over its hash, approval. */
+async function sendTransfer(o: { network: string; asset: string; to: string; amount: string; note: string; idem: string; onDraft?: (id: string) => void }): Promise<Proposal> {
+  const p = await post<Proposal>('/transfers/proposals', { network: o.network, asset: o.asset, to: o.to, amount: o.amount, note: o.note.slice(0, 80) }, { 'idempotency-key': o.idem });
+  o.onDraft?.(p.id);
+  if (!['draft', 'pending_approval'].includes(p.state)) return p;                     // resumed: already past the passkey
+  const ra = await post<{ proposal: Proposal; options: never }>(`/transfers/proposals/${p.id}/request-approval`);
+  const assertion = await startAuthentication({ optionsJSON: ra.options });           // challenge = fingerprint of this exact transfer
+  return post<Proposal>(`/transfers/proposals/${p.id}/approve`, { assertion });
+}
+
+function Sheet({ title, onClose, children, label }: { title: string; label?: string; onClose: () => void; children: ReactNode }) {
+  const t = useT();
+  useEffect(() => { const f = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, [onClose]);
+  return <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={label ?? title}>
+    <div className="rise safe-b max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-surface p-5 lg:rounded-3xl">
+      <div className="mb-3 flex items-start justify-between gap-3"><h2 className="text-[20px] font-semibold leading-tight tracking-tight">{title}</h2>
+        <button onClick={onClose} aria-label={t('qaClose')} className="-mr-2 -mt-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-mute"><Icon n="x" /></button></div>
+      {children}
+    </div></div>;
+}
+const NetBanner = ({ net, children }: { net: string; children: ReactNode }) => <div className="flex items-center gap-2.5 rounded-2xl border border-primary/25 bg-elev/70 px-4 py-3 text-[15px] font-semibold"><NetDot net={net} /><span>{children}</span></div>;
+
+// ── funding ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+interface Leg { key: 'cash' | 'gas'; asset: string; symbol: string; amount: string; idem: string; proposalId?: string; state?: string; error?: string; txError?: string | null; explorer?: string | null }
+const store = (id: string) => `spw-fund-${id}`;
+const loadLegs = (id: string): Leg[] | null => { try { const j = JSON.parse(localStorage.getItem(store(id)) ?? 'null') as { at: number; legs: Leg[] } | null; return j && Date.now() - j.at < 86_400_000 && Array.isArray(j.legs) ? j.legs : null; } catch { return null; } };
+const legDone = (l: Leg) => OK.includes(l.state ?? '');
+const legTest = (l: Leg) => l.state === 'broadcast' && TEST_NOT_SENT.test(l.txError ?? '');
+/** True when a funding run of this agent was started and is not finished (the agent page offers to resume it). */
+export const fundingInProgress = (id: string): boolean => { const l = loadLegs(id); return !!l && l.some((x) => !!x.proposalId || !!x.error) && !l.every(legDone); };
+
+export function FundSheet({ a, gas, nav, onClose }: { a: FundAgent; gas: GasInfo | null; nav: Nav; onClose: () => void }) {
+  const t = useT(); const qc = useQueryClient();
+  const pf = usePortfolio(), nets = useNetworks(), acc = useAccounts();
+  const ov = useQuery({ queryKey: ['security'], queryFn: () => get<Overview>('/security/overview'), staleTime: 15_000 });
+  const br = useQuery({ queryKey: ['bridge-exec'], queryFn: () => get<{ networks: string[] }>('/bridge/execution'), staleTime: 600_000 });
+  const n: Net | undefined = nets.data?.find((x) => x.id === a.network);
+  const cashId = a.holdings?.[0]?.asset ?? a.vault?.find((x) => x.role === 'cash')?.asset ?? '';
+  const cashDef = n?.tokens.find((x) => sameAsset(x.id, cashId)), native = n?.native;
+  const cashDec = cashDef?.decimals ?? 6, natDec = native?.decimals ?? 18, natSym = native?.symbol ?? '';
+  const cashName = a.holdings?.[0]?.name ?? a.cash;
+  const main = (asset: string) => pf.data?.balances.find((b) => b.network === a.network && sameAsset(b.asset, asset));
+  const mainCash = BigInt(main(cashId)?.amount ?? '0'), mainNat = BigInt(main('native')?.amount ?? '0');
+  const vaultOf = (asset: string) => BigInt(a.vault?.find((x) => sameAsset(x.asset, asset))?.amount ?? '0');
+  const vCash = vaultOf(cashId), vNat = vaultOf('native');
+  const reserve = gas ? toUnits(gas.reserve, natDec) : null;
+  const missing = reserve !== null && reserve > vNat ? ceilTo(reserve - vNat, natDec, 6) : 0n;
+  const pol = ov.data?.signer.policy, spent = ov.data?.signer.spentToday ?? {};
+  const cap = (sym: string, dec: number) => { const k = `${a.network}:${sym}`; if (!pol || pol.perTx[k] === undefined) return null; const per = BigInt(pol.perTx[k]), day = BigInt(pol.daily[k] ?? '0'), used = BigInt(spent[k] ?? '0'); const left = day > used ? day - used : 0n; return { per, left, perD: fromUnits(per, dec), leftD: fromUnits(left, dec), dayD: fromUnits(day, dec) }; };
+  const capCash = cap(a.cash, cashDec), capNat = cap(natSym, natDec);
+  const maxCash = minBig(mainCash, ...(capCash ? [capCash.per, capCash.left] : []));
+  const planned = toUnits(a.capitalUsdc, cashDec);
+
+  const [legs, setLegsRaw] = useState<Leg[] | null>(() => loadLegs(a.id));
+  const setLegs = (l: Leg[] | null) => { setLegsRaw(l); if (l) localStorage.setItem(store(a.id), JSON.stringify({ at: Date.now(), legs: l })); else localStorage.removeItem(store(a.id)); };
+  const [cashAmt, setCashAmt] = useState(''), [gasAmt, setGasAmt] = useState(''), [busy, setBusy] = useState(false), [touched, setTouched] = useState(false);
+  // suggested amounts, once the balances are known: what is missing to reach the planned capital / the gas reserve
+  useEffect(() => { if (touched || legs || !pf.data || !n) return;
+    const want = planned > vCash ? planned - vCash : 0n, c = minBig(want, maxCash);
+    setCashAmt(c > 0n ? fromUnits(c, cashDec) : ''); setGasAmt(missing > 0n ? fromUnits(missing, natDec) : '');
+  }, [pf.data, n, ov.data, a.vault, touched, legs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cashU = toUnits(cashAmt, cashDec), gasU = toUnits(gasAmt, natDec);
+  const cashTooMuch = cashU > mainCash, cashOverPer = !!capCash && cashU > capCash.per, cashOverDay = !!capCash && cashU > capCash.left;
+  const gasTooMuch = gasU > 0n && gasU >= mainNat, gasOverPer = !!capNat && gasU > capNat.per;
+  const usdcElsewhere = a.cash === 'USDC' ? (pf.data?.balances ?? []).filter((b) => b.symbol === 'USDC' && b.network !== a.network && b.amount !== null && b.amount !== '0') : [];
+  const canBridge = (from: string) => !!br.data?.networks.includes(from) && br.data.networks.includes(a.network);
+  const myAddr = acc.data?.accounts.find((x) => x.network === a.network)?.address;
+
+  // progress of the transfer in flight (and of a resumed one)
+  const cur = legs?.find((l) => l.proposalId && !legDone(l) && !BAD.includes(l.state ?? ''));
+  const live = useQuery({ queryKey: ['proposal', cur?.proposalId], enabled: !!cur?.proposalId, refetchInterval: 3000, queryFn: () => get<Proposal>(`/transfers/proposals/${cur!.proposalId}`) });
+  useEffect(() => { const p = live.data; if (!p || !legs || !cur || p.id !== cur.proposalId) return;
+    if (p.state === cur.state && (p.error ?? null) === (cur.txError ?? null)) return;
+    setLegs(legs.map((l) => (l.proposalId === p.id ? { ...l, state: p.state, txError: p.error, explorer: p.explorer } : l)));
+    if (OK.includes(p.state)) { void qc.invalidateQueries({ queryKey: ['agent', a.id] }); void qc.invalidateQueries({ queryKey: ['portfolio'] }); }
+  }, [live.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ctxOf = (l: Leg) => ({ sym: l.symbol, net: a.networkName, native: natSym, perTx: (l.key === 'cash' ? capCash : capNat)?.perD, left: (l.key === 'cash' ? capCash : capNat)?.leftD });
+  const run = async (all: Leg[], k: number) => {
+    const l = all[k]!; let next = all.map((x, i) => (i === k ? { ...x, error: undefined } : x)); setLegs(next); setBusy(true);
+    const patch = (p: Partial<Leg>) => { next = next.map((x, i) => (i === k ? { ...x, ...p } : x)); setLegs(next); };
+    try {
+      const p = await sendTransfer({ network: a.network, asset: l.asset, to: a.vaultAddress, amount: l.amount, note: `Agent ${a.name}`, idem: l.idem, onDraft: (id) => patch({ proposalId: id, state: 'draft' }) });
+      patch({ proposalId: p.id, state: p.state, txError: p.error, explorer: p.explorer });
+      void qc.invalidateQueries({ queryKey: ['security'] });
+    } catch (e) {
+      // a draft left behind is cancelled so that a retry starts clean (a new idempotency key)
+      const id = next[k]!.proposalId; if (id) await post(`/transfers/proposals/${id}/reject`).catch(() => {});
+      patch({ error: fundErr(t, e, ctxOf(l)), proposalId: undefined, state: undefined, idem: crypto.randomUUID() });
+    } finally { setBusy(false); }
+  };
+  const start = () => { const l: Leg[] = [];
+    if (cashU > 0n) l.push({ key: 'cash', asset: cashId, symbol: a.cash, amount: fromUnits(cashU, cashDec), idem: crypto.randomUUID() });
+    if (gasU > 0n) l.push({ key: 'gas', asset: 'native', symbol: natSym, amount: fromUnits(gasU, natDec), idem: crypto.randomUUID() });
+    if (l.length) void run(l, 0); };
+  const finish = () => { setLegs(null); void qc.invalidateQueries({ queryKey: ['agent', a.id] }); void qc.invalidateQueries({ queryKey: ['portfolio'] }); onClose(); };
+  const row = (k: string, v: ReactNode) => <div className="flex justify-between gap-3"><dt className="text-mute">{k}</dt><dd className="text-right font-medium">{v}</dd></div>;
+  const toSwap = (from: string) => { sessionStorage.setItem('spw-swap-prefill', JSON.stringify({ fromNetwork: from, toNetwork: a.network, symbol: 'USDC' })); nav({ tab: 'swap' }); };
+
+  const title = t('qaFundTitle', { name: a.name });
+  if (legs) { // ── progress: one transfer after the other, each with its own passkey prompt
+    const nextK = legs.findIndex((l) => !legDone(l)), allDone = nextK < 0, stuck = legs.some(legTest);
+    return <Sheet title={title} onClose={onClose}>
+      <NetBanner net={a.network}>{t('qaFundOnly', { net: a.networkName })}</NetBanner>
+      <ol className="mt-4 space-y-3" aria-label={t('qaFundProgress')}>{legs.map((l, k) => { const done = legDone(l), test = legTest(l), bad = BAD.includes(l.state ?? ''), waiting = !!l.proposalId && !done && !bad && !test, isNext = k === nextK;
+        return <li key={l.key} className="rounded-2xl border border-line p-3.5" data-leg={l.key} data-state={done ? 'done' : test ? 'test' : bad ? 'failed' : waiting ? 'waiting' : l.error ? 'error' : 'todo'}>
+          <div className="flex items-center gap-3"><span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[12px] font-semibold ${done ? 'bg-emerald/15 text-emerald' : bad || l.error ? 'bg-danger/10 text-danger' : waiting ? 'bg-primary text-onprimary' : 'bg-elev text-mute'}`}>{done ? <Icon n="check" className="h-3.5 w-3.5" /> : waiting ? <Icon n="spin" className="h-3.5 w-3.5" /> : bad || l.error ? <Icon n="x" className="h-3.5 w-3.5" /> : k + 1}</span>
+            <span className="min-w-0 flex-1"><span className="block text-[15px] font-semibold">{k + 1}/{legs.length} · {trimAmt(l.amount, 8)} {l.symbol}{l.key === 'gas' ? ` (${t('agGasRole')})` : ''}</span>
+              <span className="block text-[13px] text-mute">{done ? (l.state === 'finalized' ? t('qaFundLegFinal') : t('qaFundLegConfirming')) : test ? t('qaFundLegTest') : bad ? t('qaFundLegFailed') : waiting ? (l.state === 'broadcast' || l.state === 'signed' ? t('qaFundLegSent') : t('qaFundLegSigning')) : isNext && busy ? t('qaFundLegPasskey') : t('qaFundLegTodo')}</span></span></div>
+          {l.error && <div className="mt-2.5"><Notice tone="danger">{l.error}</Notice></div>}
+          {bad && l.txError && <div className="mt-2.5"><Notice tone="danger">{l.txError}</Notice></div>}
+          {l.explorer && !test && <a className="mt-2 inline-flex min-h-11 items-center gap-1.5 text-sm text-blue" href={l.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
+        </li>; })}</ol>
+      {stuck && <div className="mt-3"><Notice tone="warn">{t('qaFundTestMode')}</Notice></div>}
+      {allDone && <div className="mt-3"><Notice tone="ok">{t('qaFundAllDone', { net: a.networkName })}</Notice></div>}
+      <div className="mt-4 space-y-2.5">
+        {!allDone && !stuck && (() => { const l = legs[nextK]!, waiting = !!l.proposalId && !BAD.includes(l.state ?? '');
+          if (waiting) return <p className="flex items-center gap-2 text-[13px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('qaFundWait', { net: a.networkName })}</p>;
+          const retry = !!l.error || BAD.includes(l.state ?? '');
+          return <Btn full busy={busy} onClick={() => void run(retry && BAD.includes(l.state ?? '') ? legs.map((x, i) => (i === nextK ? { ...x, proposalId: undefined, state: undefined, txError: undefined, idem: crypto.randomUUID() } : x)) : legs, nextK)}><Icon n="key" />{retry ? t('qaFundRetry', { k: nextK + 1, n: legs.length, amount: trimAmt(l.amount, 8), sym: l.symbol }) : t('qaFundStep', { k: nextK + 1, n: legs.length, amount: trimAmt(l.amount, 8), sym: l.symbol })}</Btn>; })()}
+        {allDone || stuck ? <Btn full kind={allDone ? 'primary' : 'soft'} onClick={finish}>{t('qaFundFinish')}</Btn>
+          : <><Btn full kind="ghost" disabled={busy} onClick={onClose}>{t('qaFundLater')}</Btn>
+            {!legs.some((l) => l.proposalId && !BAD.includes(l.state ?? '')) && <Btn full kind="ghost" disabled={busy} onClick={() => setLegs(null)}>{t('qaFundAbandon')}</Btn>}</>}
+        {!allDone && !stuck && <p className="text-[12.5px] text-mute">{t('qaFundResumeNote')}</p>}
+      </div>
+    </Sheet>;
+  }
+
+  const nothing = cashU === 0n && gasU === 0n, blocked = cashTooMuch || cashOverPer || cashOverDay || gasTooMuch || gasOverPer || !!ov.data?.signer.halted;
+  return <Sheet title={title} onClose={onClose}>
+    <NetBanner net={a.network}>{t('qaFundOnly', { net: a.networkName })}</NetBanner>
+    <div className="mt-3 rounded-2xl bg-elev/70 p-3.5"><div className="mb-1 text-[12px] text-mute">{t('qaFundTo', { net: a.networkName })}</div><Addr value={a.vaultAddress} /><div className="mt-1 text-[12px] text-mute">{t('qaFundToNote')}</div></div>
+    {!pf.data || !n ? <p className="mt-4 flex items-center gap-2 text-[13.5px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('qaLoading')}</p> : <>
+      <section className="mt-4" aria-label={a.cash}>
+        <div className="mb-1.5 flex items-baseline justify-between gap-3"><label htmlFor="qa-fund-cash" className="text-[14px] font-semibold">{a.cash} <span className="font-normal text-mute">· {cashName} · {t('qaFundCashRole')}</span></label></div>
+        <div className="flex gap-2"><div className="relative min-w-0 flex-1"><input id="qa-fund-cash" className={`${inputCls} pr-16 text-lg`} inputMode="decimal" placeholder="0" value={cashAmt} autoComplete="off" onChange={(e) => { setTouched(true); setCashAmt(e.target.value.replace(',', '.').replace(/[^0-9.]/g, '')); }} /><span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[13px] text-mute">{a.cash}</span></div>
+          <Btn kind="soft" disabled={maxCash === 0n} onClick={() => { setTouched(true); setCashAmt(fromUnits(maxCash, cashDec)); }}>{t('max')}</Btn></div>
+        <p className="mt-1.5 text-[12.5px] text-mute">{t('qaFundMainHas', { amount: trimAmt(fromUnits(mainCash, cashDec), 6), sym: a.cash, net: a.networkName })}{capCash ? ` ${t('qaFundLimit', { per: trimAmt(capCash.perD, 6), day: trimAmt(capCash.dayD, 6), left: trimAmt(capCash.leftD, 6), sym: a.cash })}` : ''}</p>
+        {cashTooMuch ? <div className="mt-2"><Notice tone="danger">{t('qaFundErrBalance', { sym: a.cash, net: a.networkName })}</Notice></div>
+          : cashOverPer ? <div className="mt-2"><Notice tone="danger">{t('qaFundErrPerTx', { max: trimAmt(capCash!.perD, 6), sym: a.cash })}</Notice></div>
+          : cashOverDay ? <div className="mt-2"><Notice tone="danger">{t('qaFundErrDaily', { left: trimAmt(capCash!.leftD, 6), sym: a.cash })}</Notice></div> : null}
+        {(mainCash === 0n || cashTooMuch) && <div className="mt-2 space-y-2"><Notice tone="warn">{t('qaFundNoCash', { sym: a.cash, net: a.networkName })}{usdcElsewhere.length > 0 && <> {t('qaFundCashElsewhere')}
+          <ul className="mt-1.5 space-y-0.5">{usdcElsewhere.map((b) => <li key={b.network} className="flex items-center gap-2"><NetDot net={b.network} /><span>{trimAmt(b.display ?? '0', 6)} USDC · {b.networkName}</span></li>)}</ul></>}</Notice>
+          {usdcElsewhere.filter((b) => canBridge(b.network)).map((b) => <Btn key={b.network} kind="soft" full onClick={() => toSwap(b.network)}><Icon n="swap" className="h-4 w-4 shrink-0" />{t('qaFundBridge', { from: b.networkName, to: a.networkName })}</Btn>)}
+          {usdcElsewhere.length > 0 && !usdcElsewhere.some((b) => canBridge(b.network)) && <p className="text-[12.5px] text-mute">{t('qaFundNoBridge', { sym: a.cash, net: a.networkName })}</p>}</div>}
+      </section>
+
+      <section className="mt-5" aria-label={natSym}>
+        <div className="mb-1.5 flex items-baseline justify-between gap-3"><label htmlFor="qa-fund-gas" className="text-[14px] font-semibold">{natSym} <span className="font-normal text-mute">· {t('qaFundGasRole')}</span></label></div>
+        <div className="flex gap-2"><div className="relative min-w-0 flex-1"><input id="qa-fund-gas" className={`${inputCls} pr-16 text-lg`} inputMode="decimal" placeholder="0" value={gasAmt} autoComplete="off" onChange={(e) => { setTouched(true); setGasAmt(e.target.value.replace(',', '.').replace(/[^0-9.]/g, '')); }} /><span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[13px] text-mute">{natSym}</span></div>
+          {missing > 0n && <Btn kind="soft" onClick={() => { setTouched(true); setGasAmt(fromUnits(missing, natDec)); }}>{t('qaFundGasSuggest', { amount: trimAmt(fromUnits(missing, natDec), 6) })}</Btn>}</div>
+        <p className="mt-1.5 text-[12.5px] text-mute">{reserve === null ? t('qaFundGasUnknown') : missing > 0n ? t('qaFundGasMissing', { reserve: trimAmt(gas!.reserve, 6), held: trimAmt(fromUnits(vNat, natDec), 6), missing: trimAmt(fromUnits(missing, natDec), 6), sym: natSym }) : t('qaFundGasOk', { reserve: trimAmt(gas!.reserve, 6), sym: natSym })} {t('qaFundMainHas', { amount: trimAmt(fromUnits(mainNat, natDec), 6), sym: natSym, net: a.networkName })}</p>
+        {gasOverPer && <div className="mt-2"><Notice tone="danger">{t('qaFundErrPerTx', { max: trimAmt(capNat!.perD, 6), sym: natSym })}</Notice></div>}
+        {(gasTooMuch || (mainNat === 0n && (cashU > 0n || missing > 0n))) && <div className="mt-2 space-y-2"><Notice tone="warn">{t('qaFundNoNative', { native: natSym, net: a.networkName })}{myAddr && <span className="mt-1.5 block"><Addr value={myAddr} /></span>}</Notice>
+          <div className="grid grid-cols-2 gap-2">{myAddr && <CopyBtn text={myAddr} full />}<Btn kind="soft" onClick={() => nav({ tab: 'receive', network: a.network })}><Icon n="down" className="h-4 w-4" />{t('receive')}</Btn></div></div>}
+      </section>
+
+      <dl className="mt-5 space-y-1.5 rounded-2xl bg-elev/70 p-3.5 text-[13.5px]">
+        {row(t('qaFundVaultNow'), `${trimAmt(fromUnits(vCash, cashDec), 6)} ${a.cash} · ${trimAmt(fromUnits(vNat, natDec), 6)} ${natSym}`)}
+        {row(t('qaFundVaultAfter'), `${trimAmt(fromUnits(vCash + cashU, cashDec), 6)} ${a.cash} · ${trimAmt(fromUnits(vNat + gasU, natDec), 6)} ${natSym}`)}
+        {row(t('qaFundPlanned'), `${a.capitalUsdc} ${a.cash}`)}
+      </dl>
+      {ov.data?.signer.halted && <div className="mt-3"><Notice tone="danger">{t('haltedBanner')}</Notice></div>}
+      {ov.data?.broadcast === false && <div className="mt-3"><Notice tone="warn">{t('qaFundTestBanner')}</Notice></div>}
+      <p className="mt-3 text-[12.5px] text-mute">{cashU > 0n && gasU > 0n ? t('qaFundTwoSteps', { net: a.networkName }) : t('qaFundOneStep')}</p>
+      <div className="mt-4 space-y-2.5">
+        <Btn full busy={busy} disabled={nothing || blocked} onClick={start}><Icon n="key" />{nothing ? t('qaFundEnter') : t('qaFundGo', { what: [cashU > 0n ? `${trimAmt(fromUnits(cashU, cashDec), 6)} ${a.cash}` : '', gasU > 0n ? `${trimAmt(fromUnits(gasU, natDec), 6)} ${natSym}` : ''].filter(Boolean).join(' + ') })}</Btn>
+        <Btn full kind="ghost" onClick={onClose}>{t('cancel')}</Btn>
+      </div></>}
+  </Sheet>;
+}
+
+// ── withdrawing from the agent's wallet on its own network ───────────────────────────────────────────────────────────────
+export function WithdrawSheet({ a, onClose }: { a: FundAgent; onClose: () => void }) {
+  const t = useT(); const qc = useQueryClient();
+  const ov = useQuery({ queryKey: ['security'], queryFn: () => get<Overview>('/security/overview'), staleTime: 15_000 });
+  const [busy, setBusy] = useState(''), [res, setRes] = useState<Record<string, { ok: boolean; text: string; explorer?: string }>>({});
+  const live = a.state === 'LIVE', rows = (a.vault ?? []).filter((x) => x.amount !== '0');
+  const native = (a.vault ?? []).find((x) => x.asset === 'native'), natSym = native?.assetSymbol ?? '';
+  // the native coin pays the fee of every other withdrawal: it leaves last
+  const ordered = [...rows].sort((x, y) => Number(x.asset === 'native') - Number(y.asset === 'native'));
+  const go = async (x: VaultRow) => { setBusy(x.asset);
+    try { const r = await post<{ amount: string; symbol: string; explorer: string }>(`/agents/${a.id}/withdraw`, { asset: x.asset });
+      setRes((m) => ({ ...m, [x.asset]: { ok: true, text: ov.data?.broadcast === false ? t('qaWdTest', { amount: trimAmt(r.amount, 8), sym: r.symbol }) : t('qaWdSent', { amount: trimAmt(r.amount, 8), sym: r.symbol }), explorer: ov.data?.broadcast === false ? undefined : r.explorer } }));
+      await qc.invalidateQueries({ queryKey: ['agent', a.id] }); void qc.invalidateQueries({ queryKey: ['portfolio'] });
+    } catch (e) { setRes((m) => ({ ...m, [x.asset]: { ok: false, text: (e as { code?: string }).code === 'bad_state' ? t('qaWdLive') : fundErr(t, e, { sym: x.assetSymbol, net: a.networkName, native: natSym }) } })); }
+    finally { setBusy(''); } };
+  return <Sheet title={t('qaWdTitle')} onClose={onClose}>
+    <NetBanner net={a.network}>{t('qaWdFrom', { name: a.name, net: a.networkName })}</NetBanner>
+    <p className="mt-3 text-[13.5px] text-mute">{t('qaWdIntro', { native: natSym })}</p>
+    {live && <div className="mt-3"><Notice tone="warn">{t('qaWdLive')}</Notice></div>}
+    {ordered.length === 0 ? <p className="mt-4 text-[14px] text-mute">{t('qaWdEmpty')}</p> : <ul className="mt-4 space-y-2.5">{ordered.map((x) => <li key={x.asset} className="rounded-2xl border border-line p-3">
+      <div className="flex items-center gap-3"><Coin sym={x.assetSymbol} net={a.network} size={36} />
+        <span className="min-w-0 flex-1"><span className="block text-[15px] font-semibold">{trimAmt(x.display, 8)} {x.assetSymbol}</span><span className="block truncate text-[12.5px] text-mute">{x.name}{x.asset === 'native' ? ` · ${t('qaWdNativeLast')}` : ''}</span></span>
+        <Btn kind="soft" disabled={live || (!!busy && busy !== x.asset)} busy={busy === x.asset} onClick={() => void go(x)}>{t('agWithdraw')}</Btn></div>
+      {res[x.asset] && <div className="mt-2.5"><Notice tone={res[x.asset]!.ok ? 'ok' : 'danger'}>{res[x.asset]!.text}{res[x.asset]!.explorer && <a className="mt-1 flex min-h-11 items-center gap-1.5 text-blue" href={res[x.asset]!.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}</Notice></div>}
+    </li>)}</ul>}
+    <Btn full kind="ghost" className="mt-4" onClick={onClose}>{t('qaClose')}</Btn>
+  </Sheet>;
+}
+
+// ── funds the vault's address holds on networks the agent does not trade on ──────────────────────────────────────────────
+export function ElsewhereFunds({ a }: { a: FundAgent }) {
+  const t = useT(); const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['agent-elsewhere', a.id], queryFn: () => get<{ holdings: Elsewhere[] }>(`/agents/${a.id}/elsewhere`), refetchInterval: 30_000 });
+  const pf = usePortfolio(), nets = useNetworks();
+  const ov = useQuery({ queryKey: ['security'], queryFn: () => get<Overview>('/security/overview'), staleTime: 15_000 });
+  const [busy, setBusy] = useState(''), [msg, setMsg] = useState<Record<string, { ok: boolean; text: string }>>({});
+  const [top, setTop] = useState<Record<string, { id: string; state: string; error: string | null }>>({});
+  const pending = Object.entries(top).find(([, v]) => !OK.includes(v.state) && !BAD.includes(v.state) && !TEST_NOT_SENT.test(v.error ?? ''));
+  const live = useQuery({ queryKey: ['proposal', pending?.[1].id], enabled: !!pending, refetchInterval: 3000, queryFn: () => get<Proposal>(`/transfers/proposals/${pending![1].id}`) });
+  useEffect(() => { const p = live.data; if (!p || !pending || p.id !== pending[1].id) return; if (p.state === pending[1].state && p.error === pending[1].error) return;
+    setTop((m) => ({ ...m, [pending[0]]: { id: p.id, state: p.state, error: p.error } })); if (OK.includes(p.state)) void qc.invalidateQueries({ queryKey: ['agent-elsewhere', a.id] });
+  }, [live.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = q.data?.holdings ?? [];
+  const byNet = useMemo(() => { const m = new Map<string, Elsewhere[]>(); for (const h of list) m.set(h.network, [...(m.get(h.network) ?? []), h]);
+    // tokens first: the native coin pays their withdrawal fee and leaves last
+    return [...m.entries()].map(([k, v]) => [k, [...v].sort((x, y) => Number(x.asset === 'native') - Number(y.asset === 'native'))] as [string, Elsewhere[]]); }, [list]);
+  if (list.length === 0) return null;
+  const key = (h: Elsewhere) => `${h.network}:${h.asset}`;
+  const withdraw = async (h: Elsewhere) => { setBusy(key(h));
+    try { const r = await post<{ amount: string; symbol: string }>(`/agents/${a.id}/withdraw`, { asset: h.asset, network: h.network });
+      setMsg((m) => ({ ...m, [key(h)]: { ok: true, text: ov.data?.broadcast === false ? t('qaWdTest', { amount: trimAmt(r.amount, 8), sym: r.symbol }) : t('qaWdSent', { amount: trimAmt(r.amount, 8), sym: r.symbol }) } }));
+      await qc.invalidateQueries({ queryKey: ['agent-elsewhere', a.id] }); void qc.invalidateQueries({ queryKey: ['portfolio'] });
+    } catch (e) { setMsg((m) => ({ ...m, [key(h)]: { ok: false, text: fundErr(t, e, { sym: h.symbol, net: h.networkName, native: h.gas }) } })); } finally { setBusy(''); } };
+  return <div className="mt-4" data-testid="agent-elsewhere">
+    <div className="mb-2 text-[15px] font-semibold">{t('qaElseTitle')}</div>
+    <Notice tone="warn">{t('qaElseIntro', { network: a.networkName })}</Notice>
+    <div className="mt-3 space-y-3">{byNet.map(([net, hs]) => { const h0 = hs[0]!, n = nets.data?.find((x) => x.id === net), dec = n?.native.decimals ?? 18;
+      const tokens = hs.filter((h) => h.asset !== 'native'), lacking = tokens.length > 0 && (h0.gasEnough === false || (h0.gasEnough == null && !h0.hasGas));
+      const need = h0.gasNeed ? toUnits(h0.gasNeed, dec) : 0n, held = toUnits(h0.gasHeld ?? '0', dec);
+      // enough for every token of this network, with a margin for a fee that moves; rounded up
+      const send = ceilTo((need * BigInt(tokens.length) * 3n) / 2n - held, dec, 6), sendD = fromUnits(send > 0n ? send : 0n, dec);
+      const mainNat = BigInt(pf.data?.balances.find((b) => b.network === net && b.asset === 'native')?.amount ?? '0');
+      const tp = top[net], tpTest = !!tp && TEST_NOT_SENT.test(tp.error ?? '');
+      const topUp = async () => { setBusy(`gas${net}`); setMsg((m) => ({ ...m, [`gas${net}`]: { ok: true, text: '' } }));
+        try { const p = await sendTransfer({ network: net, asset: 'native', to: a.vaultAddress, amount: sendD, note: `Agent ${a.name}`, idem: crypto.randomUUID() }); setTop((m) => ({ ...m, [net]: { id: p.id, state: p.state, error: p.error } })); }
+        catch (e) { setMsg((m) => ({ ...m, [`gas${net}`]: { ok: false, text: fundErr(t, e, { sym: h0.gas, net: h0.networkName, native: h0.gas }) } })); } finally { setBusy(''); } };
+      return <section key={net} className="rounded-2xl border border-line p-3.5" aria-label={h0.networkName}>
+        <div className="mb-2 flex items-center gap-2 text-[14px] font-semibold"><NetDot net={net} />{h0.networkName}</div>
+        <ul className="space-y-2.5">{hs.map((h) => <li key={key(h)}>
+          <div className="flex items-center gap-3"><Coin sym={h.symbol} net={h.network} size={32} /><span className="min-w-0 flex-1 text-[15px] font-semibold">{trimAmt(h.display, 8)} {h.symbol}{h.asset === 'native' && <span className="block text-[12px] font-normal text-mute">{t('qaWdNativeLast')}</span>}</span>
+            <Btn kind="soft" busy={busy === key(h)} disabled={(!!busy && busy !== key(h)) || (h.asset !== 'native' && lacking)} onClick={() => void withdraw(h)}>{t('agWithdraw')}</Btn></div>
+          {msg[key(h)]?.text && <div className="mt-2"><Notice tone={msg[key(h)]!.ok ? 'ok' : 'danger'}>{msg[key(h)]!.text}</Notice></div>}</li>)}</ul>
+        {lacking && <div className="mt-3 space-y-2"><Notice tone="info">{h0.gasNeed ? t('qaElseNeedGas', { native: h0.gas, net: h0.networkName, need: trimAmt(h0.gasNeed, 8), held: trimAmt(h0.gasHeld ?? '0', 8) }) : t('agElsewhereGas', { gas: h0.gas })}</Notice>
+          {tp && !BAD.includes(tp.state) && !tpTest ? <p className="flex items-center gap-2 text-[13px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('qaElseGasSent', { native: h0.gas })}</p>
+            : tpTest ? <Notice tone="warn">{t('qaFundTestMode')}</Notice>
+            : h0.gasNeed && mainNat > send ? <Btn full kind="soft" busy={busy === `gas${net}`} disabled={!!busy && busy !== `gas${net}`} onClick={() => void topUp()}><Icon n="key" className="h-4 w-4 shrink-0" />{t('qaElseSendGas', { amount: trimAmt(sendD, 6), native: h0.gas, net: h0.networkName })}</Btn>
+            : <p className="text-[12.5px] text-mute">{t('qaElseNoMainGas', { native: h0.gas, net: h0.networkName })}</p>}
+          {msg[`gas${net}`]?.text && <Notice tone="danger">{msg[`gas${net}`]!.text}</Notice>}</div>}
+      </section>; })}</div>
+  </div>;
+}
+
+// ── readiness checklist ──────────────────────────────────────────────────────────────────────────────────────────────────
+export function AgentChecklist({ a, gas, approved, busy, onFund, onStrategy, onPaper, onLive }: { a: FundAgent; gas: GasInfo | null; approved: boolean; busy: string; onFund: () => void; onStrategy: () => void; onPaper: () => void; onLive: () => void }) {
+  const t = useT(); const { locale } = useContext(I18n);
+  const nat = (a.vault ?? []).find((x) => x.asset === 'native'), natSym = nat?.assetSymbol ?? '', planned = Number(a.capitalUsdc), reserveN = gas ? Number(gas.reserve) : 0;
+  // capital = everything the strategy can use: the fee reserve is not part of it, even when the agent trades the native coin
+  const usd = (a.vault ?? []).reduce((s, x) => { if (x.role === 'gas' || x.usd === null) return s; if (x.asset !== 'native') return s + x.usd; const d = Number(x.display); return s + (d > 0 ? (x.usd * Math.max(0, d - reserveN)) / d : 0); }, 0);
+  const fundsOk = a.vault !== null && usd >= planned * 0.98, fundsSome = usd > 0;
+  const gasOk = !!gas && !!nat && Number(nat.display) >= Number(gas.reserve);
+  const live = a.state === 'LIVE', paper = a.state === 'PAPER_TRADING';
+  const f = (v: number) => new Intl.NumberFormat(locale === 'fr' ? 'fr-CA' : 'en-CA', { maximumFractionDigits: 2 }).format(v);
+  const line = (ok: boolean | 'part', label: string, detail: string, id: string) => <li className="flex items-start gap-3" data-check={id} data-ok={String(ok)}>
+    <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full ${ok === true ? 'bg-emerald/15 text-emerald' : ok === 'part' ? 'bg-warn/15 text-warn' : 'bg-elev text-mute'}`}><Icon n={ok === true ? 'check' : ok === 'part' ? 'clock' : 'x'} className="h-3.5 w-3.5" /></span>
+    <span className="min-w-0"><span className="block text-[14.5px] font-medium">{label}<span className="sr-only"> — {ok === true ? t('qaChkYes') : t('qaChkNo')}</span></span><span className="block text-[12.5px] text-mute">{detail}</span></span></li>;
+  const next = live ? null : !fundsOk || (!gasOk && fundsSome && approved) ? { label: fundingInProgress(a.id) ? t('qaFundResume') : !fundsOk ? t('qaFundOpen') : t('qaChkAddGas', { native: natSym }), on: onFund, icon: 'up', id: 'fund' }
+    : !approved ? { label: t('qaChkPickStrategy'), on: onStrategy, icon: 'list', id: 'strategy' }
+    : !paper ? { label: t('agStartPaper'), on: onPaper, icon: 'clock', id: 'paper' }
+    : gasOk ? { label: t('agGoLive'), on: onLive, icon: 'key', id: 'live' } : { label: t('qaChkAddGas', { native: natSym }), on: onFund, icon: 'up', id: 'fund' };
+  return <section className="card p-5" aria-label={t('qaChkTitle')} data-testid="agent-checklist">
+    <h2 className="mb-3 text-[17px] font-semibold tracking-tight">{t('qaChkTitle')}</h2>
+    <ul className="space-y-3">
+      {line(fundsOk ? true : fundsSome ? 'part' : false, t('qaChkFunds'), a.vault === null ? t('qaChkUnknown') : t('qaChkFundsDetail', { have: f(usd), planned: f(planned), cash: a.cash, net: a.networkName }), 'funds')}
+      {line(gasOk, t('qaChkGas', { native: natSym }), !gas ? t('qaFundGasUnknown') : t('qaChkGasDetail', { have: trimAmt(nat?.display ?? '0', 6), need: trimAmt(gas.reserve, 6), native: natSym }), 'gas')}
+      {line(approved, t('qaChkStrategy'), approved ? t('qaChkStrategyOk') : t('agNeedsStrategy'), 'strategy')}
+      {line(live || paper ? true : false, t('qaChkMode'), live ? t('qaChkModeLive') : paper ? t('qaChkModePaper') : t('qaChkModeOff'), 'mode')}
+    </ul>
+    {next && <Btn full className="mt-4" busy={busy === next.id} onClick={next.on} data-next={next.id}><Icon n={next.icon} className="h-4 w-4" />{next.label}</Btn>}
+  </section>;
+}
+
+/** Notice for the Send screen: the typed recipient is one of the owner's agent wallets. */
+export function AgentRecipientNotice({ to, network, networkName }: { to: string; network: string; networkName: string }) {
+  const t = useT();
+  const q = useQuery({ queryKey: ['agents'], queryFn: () => get<{ agents: { id: string; name: string; network: string; networkName: string; vaultAddress: string; cash: string }[] }>('/agents'), staleTime: 60_000, enabled: /^0x[0-9a-fA-F]{40}$/.test(to) });
+  const ag = q.data?.agents.find((x) => x.vaultAddress.toLowerCase() === to.toLowerCase());
+  if (!ag) return null;
+  return ag.network === network ? <Notice tone="info">{t('qaSendAgent', { name: ag.name, net: ag.networkName })}</Notice>
+    : <Notice tone="danger"><b>{t('qaSendAgentWrongNet', { name: ag.name, agentNet: ag.networkName, net: networkName })}</b> {t('qaSendAgentWrongNetHow', { agentNet: ag.networkName })}</Notice>;
+}

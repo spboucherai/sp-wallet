@@ -63,6 +63,10 @@ export function Swap() {
   const by = (k: string) => assets.find((a) => a.key === k);
   useEffect(() => { // sensible defaults once the registry is loaded
     if (!assets.length || fromKey) return;
+    // arriving from "fund the agent": USDC from one network to the agent's network, prefilled once
+    try { const pre = JSON.parse(sessionStorage.getItem('spw-swap-prefill') ?? 'null') as { fromNetwork: string; toNetwork: string; symbol: string } | null; sessionStorage.removeItem('spw-swap-prefill');
+      const f = pre && assets.find((a) => a.network === pre.fromNetwork && a.symbol === pre.symbol), g = pre && assets.find((a) => a.network === pre.toNetwork && a.symbol === pre.symbol);
+      if (f && g) { setFromKey(f.key); setToKey(g.key); return; } } catch { /* no prefill */ }
     const usdc = assets.find((a) => a.network === 'base' && a.symbol === 'USDC'), eth = assets.find((a) => a.network === 'base' && a.native);
     if (usdc && eth) { setFromKey(usdc.key); setToKey(eth.key); }
   }, [assets, fromKey]);
