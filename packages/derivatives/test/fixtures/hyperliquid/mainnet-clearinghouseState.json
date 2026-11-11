@@ -1,0 +1,97 @@
+{
+ "recordedAt": "2026-11-11T03:05:49.914Z",
+ "network": "mainnet",
+ "request": {
+  "type": "clearinghouseState",
+  "user": "0x3d62aa392daa9cc4cbe9e11d57681ea1371f3447"
+ },
+ "status": 200,
+ "body": {
+  "marginSummary": {
+   "accountValue": "6515.769962",
+   "totalNtlPos": "51217.3",
+   "totalRawUsd": "57733.069962",
+   "totalMarginUsed": "2226.1"
+  },
+  "crossMarginSummary": {
+   "accountValue": "6515.769962",
+   "totalNtlPos": "51217.3",
+   "totalRawUsd": "57733.069962",
+   "totalMarginUsed": "2226.1"
+  },
+  "crossMaintenanceMarginUsed": "1113.05",
+  "withdrawable": "8.589962",
+  "assetPositions": [
+   {
+    "type": "oneWay",
+    "position": {
+     "coin": "BTC",
+     "szi": "-0.3",
+     "leverage": {
+      "type": "cross",
+      "value": 40
+     },
+     "entryPx": "73728.0",
+     "positionValue": "22114.8",
+     "unrealizedPnl": "3.6",
+     "returnOnEquity": "0.0065104167",
+     "liquidationPx": "91502.7323851852",
+     "marginUsed": "552.87",
+     "maxLeverage": 40,
+     "cumFunding": {
+      "allTime": "6.33548",
+      "sinceOpen": "-0.827937",
+      "sinceChange": "-0.827937"
+     }
+    }
+   },
+   {
+    "type": "oneWay",
+    "position": {
+     "coin": "ETH",
+     "szi": "-10.0",
+     "leverage": {
+      "type": "cross",
+      "value": 25
+     },
+     "entryPx": "2056.35",
+     "positionValue": "20617.0",
+     "unrealizedPnl": "-53.5",
+     "returnOnEquity": "-0.0650424295",
+     "liquidationPx": "2591.3784276471",
+     "marginUsed": "824.68",
+     "maxLeverage": 25,
+     "cumFunding": {
+      "allTime": "13.27634",
+      "sinceOpen": "-0.281091",
+      "sinceChange": "0.0"
+     }
+    }
+   },
+   {
+    "type": "oneWay",
+    "position": {
+     "coin": "AVAX",
+     "szi": "-1000.0",
+     "leverage": {
+      "type": "cross",
+      "value": 10
+     },
+     "entryPx": "8.5089",
+     "positionValue": "8485.5",
+     "unrealizedPnl": "23.434255",
+     "returnOnEquity": "0.027540764",
+     "liquidationPx": "13.6309475829",
+     "marginUsed": "848.55",
+     "maxLeverage": 10,
+     "cumFunding": {
+      "allTime": "-0.090408",
+      "sinceOpen": "-0.090408",
+      "sinceChange": "-0.090408"
+     }
+    }
+   }
+  ],
+  "time": 1794366349403
+ }
+}

@@ -1,0 +1,10 @@
+{
+ "recordedAt": "2026-11-11T03:06:15.731Z",
+ "network": "testnet",
+ "request": {
+  "type": "clearinghouseState",
+  "user": "not-an-address"
+ },
+ "status": 422,
+ "body": "Failed to deserialize the JSON body into the target type"
+}

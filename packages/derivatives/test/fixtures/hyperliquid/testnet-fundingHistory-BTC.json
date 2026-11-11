@@ -1,0 +1,84 @@
+{
+ "recordedAt": "2026-11-11T03:06:06.254Z",
+ "network": "testnet",
+ "request": {
+  "type": "fundingHistory",
+  "coin": "BTC",
+  "startTime": 1794323163281
+ },
+ "status": 200,
+ "body": [
+  {
+   "coin": "BTC",
+   "fundingRate": "0.000605277",
+   "premium": "0.0053422158",
+   "time": 1794326400012
+  },
+  {
+   "coin": "BTC",
+   "fundingRate": "0.0015180065",
+   "premium": "0.012644052",
+   "time": 1794330000002
+  },
+  {
+   "coin": "BTC",
+   "fundingRate": "0.0011589436",
+   "premium": "0.0097715489",
+   "time": 1794333600018
+  },
+  {
+   "coin": "BTC",
+   "fundingRate": "0.000619526",
+   "premium": "0.0054562083",
+   "time": 1794337200038
+  },
+  {
+   "coin": "BTC",
+   "fundingRate": "0.0006718556",
+   "premium": "0.0058748444",
+   "time": 1794340800016
+  },
+  {
+   "coin": "BTC",
+   "fundingRate": "0.0002306259",
+   "premium": "0.0023450071",
+   "time": 1794344400013
+  },
+  {
+   "coin": "BTC",
+   "fundingRate": "0.0001872438",
+   "premium": "0.0019979501",
+   "time": 1794348000029
+  },
+  {
+   "coin": "BTC",
+   "fundingRate": "0.0002015682",
+   "premium": "0.0021125458",
+   "time": 1794351600075
+  },
+  {
+   "coin": "BTC",
+   "fundingRate": "0.00039743",
+   "premium": "0.00367944",
+   "time": 1794355200037
+  },
+  {
+   "coin": "BTC",
+   "fundingRate": "0.0005705778",
+   "premium": "0.0050646225",
+   "time": 1794358800065
+  },
+  {
+   "coin": "BTC",
+   "fundingRate": "0.0005743316",
+   "premium": "0.0050946528",
+   "time": 1794362400024
+  },
+  {
+   "coin": "BTC",
+   "fundingRate": "0.0007220036",
+   "premium": "0.0062760287",
+   "time": 1794366000015
+  }
+ ]
+}

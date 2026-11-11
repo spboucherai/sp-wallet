@@ -1,0 +1,9 @@
+{
+ "recordedAt": "2026-11-11T03:06:07.075Z",
+ "network": "testnet",
+ "request": {
+  "type": "notAnInfoType"
+ },
+ "status": 422,
+ "body": "Failed to deserialize the JSON body into the target type"
+}

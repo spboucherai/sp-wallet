@@ -1,0 +1,11 @@
+{
+  "name": "@spw/derivatives",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./hyperliquid": "./src/venues/hyperliquid/index.ts"
+  },
+  "dependencies": { "@noble/hashes": "2.4.0", "viem": "2.57.17", "zod": "4.6.7" }
+}

@@ -1,0 +1,395 @@
+{
+ "recordedAt": "2026-11-11T03:15:43.777Z",
+ "network": "testnet",
+ "note": "throwaway key generated in memory by scripts/hl-testnet.mts; the account never existed on the venue",
+ "account": "0xe9024c83d938a8f2e475500e1708eb3c33e54838",
+ "exchanges": [
+  {
+   "step": "approveAgent (user-signed)",
+   "signer": "0xe9024c83d938a8f2e475500e1708eb3c33e54838",
+   "request": {
+    "action": {
+     "type": "approveAgent",
+     "hyperliquidChain": "Testnet",
+     "signatureChainId": "0x66eee",
+     "agentAddress": "0x27db1128c1278cdf74f599a306bf840fbc1b4b7b",
+     "agentName": "spw-proof",
+     "nonce": 1794366936938
+    },
+    "nonce": 1794366936938,
+    "signature": {
+     "r": "0xc33fe62fcb4ba8ee7ad7642ae765f43ad4e722d01e022a2c4b1ef48ba16a1f02",
+     "s": "0x0b4499adb3f3bad857abaee094790635ea5d82389176e74d4867714363523273",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": null
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "Must deposit before performing actions. User: 0xe9024c83d938a8f2e475500e1708eb3c33e54838"
+   },
+   "namesSigner": true
+  },
+  {
+   "step": "order: post-only limit buy",
+   "signer": "0xe9024c83d938a8f2e475500e1708eb3c33e54838",
+   "request": {
+    "action": {
+     "type": "order",
+     "orders": [
+      {
+       "a": 3,
+       "b": true,
+       "p": "67819",
+       "s": "0.001",
+       "r": false,
+       "t": {
+        "limit": {
+         "tif": "Alo"
+        }
+       },
+       "c": "0xd9b8a9ddd6a156a8a8da46714047b077"
+      }
+     ],
+     "grouping": "na"
+    },
+    "nonce": 1794366937508,
+    "signature": {
+     "r": "0xf6ead98e847d914195e84ca420da578ef0fdf1f921afc7a4e6a3cbf038967857",
+     "s": "0x4a8ea123175a6ba2fd0ee5e1f3368328ff4ac56920baeb13f5c1e37b18ece881",
+     "v": 27
+    },
+    "vaultAddress": null,
+    "expiresAfter": null
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0xe9024c83d938a8f2e475500e1708eb3c33e54838 does not exist."
+   },
+   "namesSigner": true
+  },
+  {
+   "step": "order: stop market, reduce-only",
+   "signer": "0xe9024c83d938a8f2e475500e1708eb3c33e54838",
+   "request": {
+    "action": {
+     "type": "order",
+     "orders": [
+      {
+       "a": 3,
+       "b": false,
+       "p": "67819",
+       "s": "0.001",
+       "r": true,
+       "t": {
+        "trigger": {
+         "isMarket": true,
+         "triggerPx": "67819",
+         "tpsl": "sl"
+        }
+       },
+       "c": "0x0a0d7b02dbc64c2c98f97857d9c06fd8"
+      }
+     ],
+     "grouping": "na"
+    },
+    "nonce": 1794366938075,
+    "signature": {
+     "r": "0x5b59c8e8f02cca3d80022b636304a7e85e8da7e1b405da67063fce103612500e",
+     "s": "0x50274ee29f922ff77f6db270006fbe30edc44ee6e8bffd5581d371cda9b850dc",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": null
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0xe9024c83d938a8f2e475500e1708eb3c33e54838 does not exist."
+   },
+   "namesSigner": true
+  },
+  {
+   "step": "cancel by order id",
+   "signer": "0xe9024c83d938a8f2e475500e1708eb3c33e54838",
+   "request": {
+    "action": {
+     "type": "cancel",
+     "cancels": [
+      {
+       "a": 3,
+       "o": 123456789
+      }
+     ]
+    },
+    "nonce": 1794366938641,
+    "signature": {
+     "r": "0x7a3d5172b18ef5d1072d4062879769168188d9329558b6d9a42f5091afb1b88b",
+     "s": "0x0fce4ad3d26c6ace416d27cbb1ab646fc106cd3aadf364cb40300d335e3421d9",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": null
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0xe9024c83d938a8f2e475500e1708eb3c33e54838 does not exist."
+   },
+   "namesSigner": true
+  },
+  {
+   "step": "cancel by client order id",
+   "signer": "0xe9024c83d938a8f2e475500e1708eb3c33e54838",
+   "request": {
+    "action": {
+     "type": "cancelByCloid",
+     "cancels": [
+      {
+       "asset": 3,
+       "cloid": "0xd9b8a9ddd6a156a8a8da46714047b077"
+      }
+     ]
+    },
+    "nonce": 1794366939299,
+    "signature": {
+     "r": "0x16edfb71eb172505578cd4588bcb40734ea048ae068f7570834f7c351f0e564a",
+     "s": "0x678d750b7d406c3c683c8795a8faa1926aebf71a4afbcaf6f921b682761ec59f",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": null
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0xe9024c83d938a8f2e475500e1708eb3c33e54838 does not exist."
+   },
+   "namesSigner": true
+  },
+  {
+   "step": "updateLeverage",
+   "signer": "0xe9024c83d938a8f2e475500e1708eb3c33e54838",
+   "request": {
+    "action": {
+     "type": "updateLeverage",
+     "asset": 3,
+     "isCross": true,
+     "leverage": 3
+    },
+    "nonce": 1794366939868,
+    "signature": {
+     "r": "0x420319cdb85592c66630932f93fc9d24b42bb78828e39fd548df87fce7d50b14",
+     "s": "0x00f54bea08aff0e1c9f2f934e41e7dd27c4d55299015cb64567e918e9bd7b164",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": null
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0xe9024c83d938a8f2e475500e1708eb3c33e54838 does not exist."
+   },
+   "namesSigner": true
+  },
+  {
+   "step": "order with expiresAfter = nonce + 60 s",
+   "signer": "0xe9024c83d938a8f2e475500e1708eb3c33e54838",
+   "request": {
+    "action": {
+     "type": "order",
+     "orders": [
+      {
+       "a": 3,
+       "b": true,
+       "p": "67819",
+       "s": "0.001",
+       "r": false,
+       "t": {
+        "limit": {
+         "tif": "Alo"
+        }
+       },
+       "c": "0x32457f4b2bb45af01e227b182e45afb4"
+      }
+     ],
+     "grouping": "na"
+    },
+    "nonce": 1794366940753,
+    "signature": {
+     "r": "0xbd60f3d53ef1f11f7a8b976a28651c10e3f7c67c3114b62728ac7745511d7e46",
+     "s": "0x0606139905b5b6aad60fd58c80ad36c0b53b0238eff787715948736db359d703",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": 1794367000753
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0xe9024c83d938a8f2e475500e1708eb3c33e54838 does not exist."
+   },
+   "namesSigner": true
+  },
+  {
+   "step": "WRONG signature: signed for nonce + 1",
+   "signer": "0xe9024c83d938a8f2e475500e1708eb3c33e54838",
+   "request": {
+    "action": {
+     "type": "order",
+     "orders": [
+      {
+       "a": 3,
+       "b": true,
+       "p": "67819",
+       "s": "0.001",
+       "r": false,
+       "t": {
+        "limit": {
+         "tif": "Alo"
+        }
+       },
+       "c": "0x8532fb56abfd514fde8a49f98992a96c"
+      }
+     ],
+     "grouping": "na"
+    },
+    "nonce": 1794366941328,
+    "signature": {
+     "r": "0xae140825806a54aadf1e23e359d126e1e7ee75863fbddf770cd3fe70b7c134b6",
+     "s": "0x163842c47a67d651e8f437d2c5a59cc6f48a3b9dbd3be11adbd67d3a58f72cde",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": null
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0x4cdf2dfb19e548ec12aab2ce2a2a5ef0f37142a5 does not exist."
+   },
+   "namesSigner": false
+  },
+  {
+   "step": "WRONG signature: phantom agent of mainnet",
+   "signer": "0xe9024c83d938a8f2e475500e1708eb3c33e54838",
+   "request": {
+    "action": {
+     "type": "order",
+     "orders": [
+      {
+       "a": 3,
+       "b": true,
+       "p": "67819",
+       "s": "0.001",
+       "r": false,
+       "t": {
+        "limit": {
+         "tif": "Alo"
+        }
+       },
+       "c": "0xe883c479a5b921f53d9545d726432837"
+      }
+     ],
+     "grouping": "na"
+    },
+    "nonce": 1794366941906,
+    "signature": {
+     "r": "0xb962f00f406815509fa0ddb8a13f83ff5ea7b47390db5d25d4650bb79cf4f647",
+     "s": "0x711675ec683beec72b035e334958fbac1df1996f8950919011b8465e0c9f4374",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": null
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0x02de353fd67ed63e5dbcb4d5a18a877efe73d3bb does not exist."
+   },
+   "namesSigner": false
+  },
+  {
+   "step": "WRONG signature: action changed after signing",
+   "signer": "0xe9024c83d938a8f2e475500e1708eb3c33e54838",
+   "request": {
+    "action": {
+     "type": "order",
+     "orders": [
+      {
+       "a": 3,
+       "b": true,
+       "p": "67819",
+       "s": "0.01",
+       "r": false,
+       "t": {
+        "limit": {
+         "tif": "Alo"
+        }
+       },
+       "c": "0xcedb18ae3ce9c65c1a2d7600a5af07a1"
+      }
+     ],
+     "grouping": "na"
+    },
+    "nonce": 1794366942477,
+    "signature": {
+     "r": "0x105c4b26d067630eb81e20bee018f4a74a6fb677792b4bfe19ab0c89c426b293",
+     "s": "0x45e06251fcc68b7e769631f9cce93680b825bca9467208c2725e0d4cacdf1059",
+     "v": 28
+    },
+    "vaultAddress": null,
+    "expiresAfter": null
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "User or API Wallet 0xf571ec3ecae392871290ad8f6598d3f8f1af86b0 does not exist."
+   },
+   "namesSigner": false
+  },
+  {
+   "step": "WRONG signature: r = s = 0",
+   "signer": "0xe9024c83d938a8f2e475500e1708eb3c33e54838",
+   "request": {
+    "action": {
+     "type": "order",
+     "orders": [
+      {
+       "a": 3,
+       "b": true,
+       "p": "67819",
+       "s": "0.001",
+       "r": false,
+       "t": {
+        "limit": {
+         "tif": "Alo"
+        }
+       },
+       "c": "0xc90a96525b310d73263fa30e881dcba2"
+      }
+     ],
+     "grouping": "na"
+    },
+    "nonce": 1794366943046,
+    "signature": {
+     "r": "0x0000000000000000000000000000000000000000000000000000000000000000",
+     "s": "0x0000000000000000000000000000000000000000000000000000000000000000",
+     "v": 27
+    },
+    "vaultAddress": null,
+    "expiresAfter": null
+   },
+   "status": 200,
+   "answer": {
+    "status": "err",
+    "response": "Unable to recover signer."
+   },
+   "namesSigner": false
+  }
+ ]
+}
