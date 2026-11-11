@@ -1,0 +1,1 @@
+{"errorCode":152,"errorId":"NOT_A_TOKEN","errorMessage":"The following addresses are not tokens: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02914 on chain 8453 (field: srcChainTokenIn)","errorPayload":{"tokens":[{"address":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02914","chainId":8453,"field":"srcChainTokenIn"}]},"reqId":"900d6dd9-0f8f-422c-99a2-ed74bab0b533"}
