@@ -20,7 +20,11 @@ export interface NetworkDef {
   id: NetworkId;
   family: Family;
   name: string;
-  /** EVM: decimal chain id. BTC: genesis block hash. SOL: genesis hash. */
+  /**
+   * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash.
+   * Bitcoin Cash shares its genesis block with Bitcoin, Bitcoin SV and eCash, so its reference is the hash of block 661648,
+   * the first block after the last of those splits (November 2020; a Bitcoin Cash Node checkpoint), which exists on no other chain.
+   */
   chainRef: string;
   native: AssetDef;
   tokens: AssetDef[];
@@ -30,7 +34,15 @@ export interface NetworkDef {
   /** BIP-44 coin type used for key derivation (plugin and UTXO families) */
   coinType?: number;
   /** Bitcoin-style chains: address encoding and script kind */
-  utxo?: { bech32?: string; pubKeyHash: number; scriptHash: number; kind: 'wpkh' | 'pkh'; dust: number };
+  utxo?: {
+    bech32?: string; pubKeyHash: number; scriptHash: number; kind: 'wpkh' | 'pkh'; dust: number;
+    /** CashAddr prefix (Bitcoin Cash) */
+    cashaddr?: string;
+    /** bounds for the fee rate in base units per byte, for chains whose node estimate is not a market rate */
+    feeRate?: { min: number; max: number };
+    /** height of the block whose hash is `chainRef` (default 0 = genesis) */
+    refHeight?: number;
+  };
   /** destination memo / tag support: free text or an unsigned 32-bit number */
   memo?: 'text' | 'uint32';
   /** minimum the account must hold to exist on-chain (shown on the receive screen), in whole units of the native coin */
@@ -112,6 +124,24 @@ const DEFS = {
     utxo: { bech32: 'ltc', pubKeyHash: 0x30, scriptHash: 0x32, kind: 'wpkh', dust: 5460 },
     rpc: ['https://litecoinspace.org/api', 'blockbook:https://litecoin.atomicwallet.io/api/v2'],
     explorerTx: 'https://litecoinspace.org/tx/', explorerAddr: 'https://litecoinspace.org/address/', minConf: 6,
+  },
+  // Dust: Dogecoin Core's soft dust limit, 0.01 DOGE (doc/fee-recommendation.md, read 2026-11-10; an output below it costs an
+  // extra 0.01 DOGE of fee, below 0.001 DOGE it is rejected). Fee: 0.01 DOGE/kB recommended = 1000 koinu per byte.
+  dogecoin: {
+    id: 'dogecoin', family: 'btc', name: 'Dogecoin',
+    chainRef: '1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691',
+    native: { id: 'native', symbol: 'DOGE', name: 'Dogecoin', decimals: 8 }, tokens: [], coinType: 3,
+    utxo: { pubKeyHash: 0x1e, scriptHash: 0x16, kind: 'pkh', dust: 1_000_000, feeRate: { min: 1000, max: 10_000 } },
+    rpc: ['blockbook:https://blockbook.doge.zelcore.io/api/v2', 'bitcore:https://api.bitcore.io/api/DOGE/mainnet'],
+    explorerTx: 'https://blockbook.doge.zelcore.io/tx/', explorerAddr: 'https://blockbook.doge.zelcore.io/address/', minConf: 20,
+  },
+  bitcoincash: {
+    id: 'bitcoincash', family: 'bch', name: 'Bitcoin Cash',
+    chainRef: '0000000000000000029e471c41818d24b8b74c911071c4ef0b4a0509f9b5a8ce',
+    native: { id: 'native', symbol: 'BCH', name: 'Bitcoin Cash', decimals: 8 }, tokens: [], coinType: 145,
+    utxo: { cashaddr: 'bitcoincash', pubKeyHash: 0x00, scriptHash: 0x05, kind: 'pkh', dust: 546, feeRate: { min: 1.1, max: 20 }, refHeight: 661648 },
+    rpc: ['blockbook:https://blockbook.bch.zelcore.io/api/v2', 'bitcore:https://api.bitcore.io/api/BCH/mainnet'],
+    explorerTx: 'https://blockbook.bch.zelcore.io/tx/', explorerAddr: 'https://blockbook.bch.zelcore.io/address/', minConf: 6,
   },
   solana: {
     id: 'solana', family: 'sol', name: 'Solana',
