@@ -106,7 +106,12 @@ export async function backtest(versionId: string, info: StrategyInfo, symbols: s
 }
 
 export function strategyRoutes(app: FastifyInstance): void {
-  app.get('/api/v1/strategies', async () => ({ strategies: await library() }));
+  // v6: `?kind=perp` lists the contract-2 library (perp agents); without it the spot library, which can never contain a perp strategy
+  app.get('/api/v1/strategies', async (req) => {
+    const q = z.object({ kind: z.enum(['spot', 'perp']).default('spot') }).parse(req.query);
+    if (q.kind === 'perp') return { kind: 'perp', strategies: await (await import('./perp-routes.ts')).perpLibrary() };
+    return { strategies: await library() };
+  });
 
   // pin a library version to an agent and backtest it; approval stays a separate owner action and needs the report
   app.post('/api/v1/agents/:id/strategies', async (req) => {
@@ -114,6 +119,8 @@ export function strategyRoutes(app: FastifyInstance): void {
     const b = z.strictObject({ path: Rel }).parse(req.body);
     const [a] = await sql<AgentRow[]>`select * from agents where id = ${id}`;
     if (!a) throw new UserError('not_found', 'agent not found', 404);
+    // v6: a perp agent takes only contract-2 strategies (described with --contract 2, backtested by spq.perp_backtest)
+    if (a.kind === 'perp') { const p = await import('./perp-routes.ts'); return p.registerPerp(a as never, b.path); }
     const info = await describe(b.path);
     const symbols = agentSymbols(a), fit = fitsAgent(info, symbols, a.interval);
     if (!fit.ok) throw new UserError(fit.code, fit.message, 422);

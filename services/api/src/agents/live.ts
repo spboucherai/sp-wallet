@@ -141,7 +141,7 @@ const backoff = new Map<string, number>();
 /** One pass over every active agent: settle open orders, then let the engine decide. Errors never cross agents. */
 export async function enginePass(m: MarketDeps, now = Date.now()): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
-  const agents = await sql<AgentRow[]>`select * from agents where state in ('PAPER_TRADING', 'LIVE') order by created_at`;
+  const agents = await sql<AgentRow[]>`select * from agents where state in ('PAPER_TRADING', 'LIVE') and kind = 'spot' order by created_at`; // v6: perp agents have their own engine (perp-live.ts)
   for (const a of agents) {
     try {
       for (const r of await sql<OrderRow[]>`select * from agent_orders where agent_id = ${a.id} and mode = 'LIVE' and state in ${sql(OPEN)} order by ts`) await advanceOrder(a, r, now);

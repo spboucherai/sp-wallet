@@ -15,6 +15,9 @@ import { getSeries } from '../market/series.ts';
 import { listQuality } from '../market/store.ts';
 import { FEE_WARN_SHARE, feeShare, FLOOR_ORDERS, gasReserve, RESERVE_ORDERS, type GasReserve } from './gas.ts';
 import { signer } from '../signer-client.ts';
+// >>> v6 perp agents: the shared routes delegate to perp-routes.ts when the agent's kind is 'perp'
+import { assertPerpApprovable, createPerpAgent, isPerp, perpDetail, perpMode, perpView, spotOnly } from './perp-routes.ts';
+// <<< v6 perp agents
 
 export interface AgentRow {
   id: string; name: string; mission: string; state: string; mode: string; network: string; universe: string[]; interval: string;
@@ -22,6 +25,8 @@ export interface AgentRow {
   cash: string | null; assets: Record<string, string> | null;
   risk: Risk; vault_index: number; vault_address: string; capital_usdc: string; strategy_version_id: string | null; mandate_id: string | null; mandate: Mandate | null;
   last_bar: Date | null; stop_reason: string | null; created_at: Date; updated_at: Date;
+  /** v6: 'spot' (default) or 'perp'; a perp agent has no vault and no mandate, its paper account is `deriv_account_id` (perp-engine.ts) */
+  kind?: string; deriv_account_id?: string | null; perp?: unknown;
 }
 const Risk = z.strictObject({
   /** share of the vault that may be invested in non-USDC assets, percent */
@@ -129,9 +134,10 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     return { networks, maxSymbols: MAX_AGENT_SYMBOLS, maxLiveSymbols: 11, feeWarnShare: FEE_WARN_SHARE };
   });
 
-  app.get('/api/v1/agents', async () => ({ agents: (await sql<AgentRow[]>`select * from agents order by created_at desc`).map(view) }));
+  app.get('/api/v1/agents', async () => ({ agents: (await sql<AgentRow[]>`select * from agents order by created_at desc`).map((a) => (isPerp(a) ? perpView(a) : view(a))) })); // v6: perp agents have their own view
 
   app.post('/api/v1/agents', async (req) => {
+    if ((req.body as { kind?: unknown } | null)?.kind === 'perp') return createPerpAgent(req.body); // v6: a perp agent (paper account, no vault, no signer call)
     const b = Create.parse(req.body);
     if (!MANDATE_NETWORKS.includes(b.network)) throw new UserError('unsupported_network', `agents trade on ${MANDATE_NETWORKS.map((x) => getNetwork(x).name).join(', ')}`, 422);
     const n = getNetwork(b.network);
@@ -165,6 +171,7 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
 
   app.get('/api/v1/agents/:id', async (req) => {
     const a = await load((req.params as { id: string }).id);
+    if (isPerp(a)) return perpDetail(a); // v6
     const balances = await vaultBalances(a).catch(() => null);
     const px = await symbolPrices((balances ?? []).filter((x) => x.kind !== 'cash').map((x) => x.symbol), await deps.prices().catch(() => null));
     const usd = (x: VaultBalance) => { const p = x.kind === 'cash' ? 1 : px[x.symbol]; return p === undefined ? null : Number(formatUnits(x.amount, x.decimals)) * p; };
@@ -184,6 +191,7 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
   app.post('/api/v1/agents/:id/mode', async (req) => {
     const a = await load((req.params as { id: string }).id);
     const b = z.strictObject({ mode: z.enum(['PAPER', 'PAUSED', 'STOPPED', 'RESEARCH']) }).parse(req.body);
+    if (isPerp(a)) return perpMode(a, b.mode); // v6
     if (b.mode === 'PAPER' && !a.strategy_version_id) throw new UserError('no_strategy', 'approve a strategy version first', 409);
     if (a.state === 'LIVE' && b.mode === 'PAPER') throw new UserError('bad_state', 'revoke the mandate before returning to paper trading', 409);
     const state = b.mode === 'PAPER' ? 'PAPER_TRADING' : b.mode;
@@ -199,17 +207,20 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     const [v] = await sql`select * from strategy_versions where id = ${z.uuid().parse(sid)} and agent_id = ${a.id}`;
     if (!v) throw new UserError('not_found', 'strategy version not found', 404);
     if (!v.report) throw new UserError('no_report', 'this version has no backtest report: it cannot be approved', 409);
+    // v6: kinds never cross — a perp agent approves only a contract-2 version with a valid version-2 report, a spot agent never one
+    if (isPerp(a)) assertPerpApprovable(a, v as never); else if ((v.meta as { kind?: string } | null)?.kind === 'perp') throw new UserError('wrong_kind', 'a perpetual-futures strategy cannot run on a spot agent', 409);
     if (a.state === 'LIVE') throw new UserError('bad_state', 'the code of a live agent cannot change: revoke the mandate first, then approve the new version and a new mandate', 409);
     await sql`update strategy_versions set status = 'retired' where agent_id = ${a.id} and status = 'approved'`;
     await sql`update strategy_versions set status = 'approved', approved_at = now() where id = ${v.id}`;
     const [r] = await sql<AgentRow[]>`update agents set strategy_version_id = ${v.id}, state = case when state in ('CREATED','RESEARCHING','BACKTESTING','AWAITING_APPROVAL') then 'AWAITING_APPROVAL' else state end, updated_at = now() where id = ${a.id} returning *`;
     await audit('strategy.approved', 'owner', { agent: a.id, version: v.id, sha256: v.code_sha256 });
+    if (isPerp(r!)) return perpView(r!); // v6
     return view(r!);
   });
 
   // mandate: prepared from the agent's limits, approved with a passkey whose challenge is the mandate hash
   app.post('/api/v1/agents/:id/mandate/prepare', async (req) => {
-    const a = await load((req.params as { id: string }).id);
+    const a = await load((req.params as { id: string }).id); spotOnly(a); // v6: vault and mandate routes are for spot agents
     if (!a.strategy_version_id) throw new UserError('no_strategy', 'approve a strategy version first', 409);
     if (a.state === 'LIVE') throw new UserError('bad_state', 'a mandate is already active; revoke it to change limits', 409);
     const [v] = await sql`select code_sha256 from strategy_versions where id = ${a.strategy_version_id}`;
@@ -228,7 +239,7 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     return { mandate, hash: toHex(hash), limits: human, options, network: n.id, networkName: n.name, gasReserve: { required: formatUnits(gas.reserve, n.native.decimals), held: formatUnits(gas.held, n.native.decimals), symbol: n.native.symbol } };
   });
   app.post('/api/v1/agents/:id/mandate/approve', async (req) => {
-    const a = await load((req.params as { id: string }).id);
+    const a = await load((req.params as { id: string }).id); spotOnly(a); // v6: vault and mandate routes are for spot agents
     const b = z.object({ assertion: z.record(z.string(), z.unknown()) }).parse(req.body);
     if (!a.mandate) throw new UserError('bad_state', 'prepare the mandate first', 409);
     await requireGasReserve(a, (await signer.status(true)).policy.maxFee[a.network]);
@@ -239,7 +250,7 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
   });
   // stopping never needs a passkey
   app.post('/api/v1/agents/:id/revoke', async (req) => {
-    const a = await load((req.params as { id: string }).id);
+    const a = await load((req.params as { id: string }).id); spotOnly(a); // v6: vault and mandate routes are for spot agents
     if (a.mandate_id) await signer.mandateRevoke(a.mandate_id);
     const [row] = await sql<AgentRow[]>`update agents set state = 'STOPPED', stop_reason = 'mandate revoked by the owner', updated_at = now() where id = ${a.id} returning *`;
     await audit('mandate.revoked', 'owner', { agent: a.id, mandateId: a.mandate_id });
@@ -248,7 +259,7 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
 
   // what the vault's address holds on every EVM network (the same address exists on all of them)
   app.get('/api/v1/agents/:id/elsewhere', async (req) => {
-    const a = await load((req.params as { id: string }).id);
+    const a = await load((req.params as { id: string }).id); spotOnly(a); // v6: vault and mandate routes are for spot agents
     const nets = Object.values(NETWORKS).filter((n) => n.family === 'evm' && n.id !== a.network);
     const found = (await Promise.all(nets.map(async (n) => { try { const b = await adapterFor(n.id).balances(a.vault_address);
       return [n.native, ...n.tokens].filter((x) => (b[x.id] ?? 0n) > 0n).map((x) => ({ network: n.id, networkName: n.name, asset: x.id, symbol: x.symbol, display: formatUnits(b[x.id]!, x.decimals), gas: n.native.symbol, hasGas: (b.native ?? 0n) > 0n })); } catch { return []; } }))).flat();
@@ -257,7 +268,7 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
 
   // bring funds back: a vault can only pay the owner's own address (enforced by the signer)
   app.post('/api/v1/agents/:id/withdraw', async (req) => {
-    const a = await load((req.params as { id: string }).id);
+    const a = await load((req.params as { id: string }).id); spotOnly(a); // v6: vault and mandate routes are for spot agents
     const b = z.strictObject({ asset: z.string().max(80), network: z.string().max(24).optional() }).parse(req.body);
     // any EVM network: funds sent to the vault's address on another network than the agent's can always come back
     const n = getNetwork(b.network ?? a.network);

@@ -150,6 +150,25 @@ create table if not exists deriv_actions (
   nonce bigint not null, expires_at timestamptz not null, action json not null, sign_request json not null, signature jsonb, venue_answer jsonb,
   error text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
 create index if not exists deriv_actions_recent on deriv_actions (account_id, created_at desc);
+-- >>> v6 perp agents (paper only): additive. An agent of kind 'perp' owns one derivatives paper account; it has no vault (a
+-- negative vault_index keeps the unique column, the signer is never asked for an address) and no mandate.
+alter table agents add column if not exists kind text not null default 'spot';
+alter table agents add column if not exists deriv_account_id uuid;
+alter table agents add column if not exists perp jsonb not null default '{}';
+-- the venue's own closed bars and hourly funding settlements (exact decimals), so that a signal does not refetch its lookback
+create table if not exists perp_candles (
+  venue text not null, symbol text not null, interval text not null, ts timestamptz not null,
+  open numeric not null, high numeric not null, low numeric not null, close numeric not null, volume numeric not null,
+  primary key (venue, symbol, interval, ts));
+create table if not exists perp_funding (
+  venue text not null, symbol text not null, ts timestamptz not null, time_ms bigint not null, rate numeric not null, premium numeric,
+  primary key (venue, symbol, ts));
+-- one decision per agent and closed bar (the signal log): the row exists before any order of that bar is sent
+create table if not exists perp_agent_signals (
+  agent_id uuid not null references agents(id), bar timestamptz not null, status text not null, reason text not null default '',
+  strategy_sha256 text not null, weights jsonb, scaled jsonb, scale text, equity numeric, targets jsonb, orders jsonb,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), primary key (agent_id, bar));
+-- <<< v6 perp agents
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }

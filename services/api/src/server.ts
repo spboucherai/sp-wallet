@@ -22,6 +22,7 @@ import { swapExecRoutes } from './swap-exec.ts';
 import { bridgeRoutes } from './bridge.ts';
 import { agentRoutes } from './agents/routes.ts';
 import { strategyRoutes } from './agents/strategies.ts';
+import { perpAgentRoutes } from './agents/perp-routes.ts'; // v6 perp agents
 import { transferRoutes, view, type ProposalRow } from './transfers.ts';
 import { healthCache } from './worker.ts';
 
@@ -136,6 +137,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   bridgeRoutes(app);
   agentRoutes(app, { prices: markets });
   strategyRoutes(app);
+  perpAgentRoutes(app, opts.derivatives); // v6 perp agents: paper only, on the derivatives module's paper accounts
   marketDataRoutes(app);
   derivativesRoutes(app, opts.derivatives);
   liveRoutes(app, opts.live); // controlled live trading: nothing trades until the owner authorizes a venue account with his passkey

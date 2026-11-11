@@ -6,6 +6,10 @@ import type { Nav } from '../App';
 import { PriceChart } from '../chart';
 import { errText, I18n, useT, type Key } from '../i18n';
 import { Addr, Btn, Card, Coin, CopyBtn, Field, fiat, H, Icon, inputCls, Notice, Skeleton, trimAmt, when } from '../ui';
+// >>> v6 perp agents (simulation only): their form and their detail page live in PerpAgent.tsx
+import { Seg } from '../derivatives/bits';
+import { PerpAgentDetail, PerpAgentForm } from './PerpAgent';
+// <<< v6 perp agents
 
 interface AgentV { id: string; name: string; mission: string; state: string; mode: string; network: string; networkName: string; cash: string; universe: string[]; interval: string; capitalUsdc: string; vaultAddress: string;
   risk: { maxExposurePct: number; maxLossPct: number; maxOrderUsd: number; maxDailyUsd: number; maxOrdersPerDay: number; mandateDays: number; slippageBps: number }; strategyVersionId: string | null; mandateId: string | null; stopReason: string | null; lastBar: string | null }
@@ -24,6 +28,7 @@ export function Agents({ nav }: { nav: Nav }) {
   const t = useT(); const qc = useQueryClient();
   const q = useQuery({ queryKey: ['agents'], queryFn: () => get<{ agents: AgentV[] }>('/agents'), refetchInterval: 30_000 });
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState('');
+  const [kind, setKind] = useState<'spot' | 'perp'>('spot'); // v6: which kind of agent the form creates
   const nets = useQuery({ queryKey: ['agent-networks'], queryFn: () => get<{ networks: Net[]; maxSymbols: number; maxLiveSymbols: number }>('/agents/networks'), staleTime: 60_000, enabled: open });
   const [f, setF] = useState({ name: '', mission: '', capital: '100', network: 'base', cash: '', universe: [] as string[], assets: {} as Record<string, string>, interval: '1h', maxExposurePct: 50, maxLossPct: 5, maxOrderUsd: 25, maxDailyUsd: 100, maxOrdersPerDay: 12 });
   const net = nets.data?.networks.find((n) => n.id === f.network), maxSym = nets.data?.maxSymbols ?? 12;
@@ -49,7 +54,11 @@ export function Agents({ nav }: { nav: Nav }) {
       <div className="flex items-center justify-between pt-2"><h1 className="text-[30px] font-semibold tracking-[-0.02em]">{t('agents')}</h1>
         <Btn kind="soft" onClick={() => setOpen(!open)}><Icon n={open ? 'x' : 'key'} className="h-4 w-4" />{open ? t('cancel') : t('agNew')}</Btn></div>
       <Notice tone="info">{t('agIntro')}</Notice>
-      {open && <Card className="space-y-4">
+      {/* >>> v6 perp agents: the kind of agent; a perp agent has its own form */}
+      {open && <Seg<'spot' | 'perp'> value={kind} onChange={setKind} label={t('paKindLabel')} options={[{ id: 'spot', label: t('paKindSpot') }, { id: 'perp', label: t('paKindPerp') }]} />}
+      {open && kind === 'perp' && <Card><PerpAgentForm nav={nav} onCreated={async () => { await qc.invalidateQueries({ queryKey: ['agents'] }); setOpen(false); }} /></Card>}
+      {/* <<< v6 perp agents */}
+      {open && kind === 'spot' && <Card className="space-y-4">
         <Field label={t('agName')}><input className={inputCls} maxLength={40} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="ETH Trend" /></Field>
         <Field label={t('agMission')}><textarea className={`${inputCls} min-h-[72px] resize-none`} maxLength={400} value={f.mission} onChange={(e) => setF({ ...f, mission: e.target.value })} /></Field>
         <Field label={t('agNetwork')} hint={t('agNetworkNote')}><select className={inputCls} value={f.network} onChange={(e) => setF({ ...f, network: e.target.value, universe: [], assets: {}, cash: '' })}>
@@ -82,7 +91,7 @@ export function Agents({ nav }: { nav: Nav }) {
       {q.isLoading ? <Skeleton h="h-40" /> : (q.data?.agents.length ?? 0) === 0 ? !open && <Card><p className="py-6 text-center text-[14px] text-mute">{t('agNone')}</p></Card> :
         <div className="space-y-3">{q.data!.agents.map((a) => <button key={a.id} onClick={() => nav({ tab: 'agent', asset: a.id })} className="card flex w-full items-center gap-3.5 p-4 text-left">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-elev"><Icon n="swap" /></span>
-          <span className="min-w-0 flex-1"><span className="block truncate text-[16px] font-semibold">{a.name}</span><span className="block truncate text-[12.5px] text-mute">{a.universe.join(' · ')} · {a.capitalUsdc} {a.cash ?? 'USDC'} · {a.networkName}</span></span>
+          <span className="min-w-0 flex-1"><span className="block truncate text-[16px] font-semibold">{a.name}</span><span className="block truncate text-[12.5px] text-mute">{a.universe.join(' · ')} · {a.capitalUsdc} {a.cash ?? 'USDC'} · {a.networkName}</span>{(a as { kind?: string }).kind === 'perp' && <span className="mt-0.5 inline-block rounded-md border border-blue/35 bg-blue/8 px-1.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-blue">{t('paListTag')}</span>}</span>
           <AgentState state={a.state} /><Icon n="chev" className="h-4 w-4 text-mute" /></button>)}</div>}
     </div>
   );
@@ -91,11 +100,13 @@ export function Agents({ nav }: { nav: Nav }) {
 export function Agent({ id, nav }: { id: string; nav: Nav }) {
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient();
   const q = useQuery({ queryKey: ['agent', id], queryFn: () => get<any>(`/agents/${id}`), refetchInterval: 15_000 });
-  const else_ = useQuery({ queryKey: ['agent-elsewhere', id], queryFn: () => get<{ holdings: any[] }>(`/agents/${id}/elsewhere`), refetchInterval: 60_000 });
-  const lib = useQuery({ queryKey: ['strategies'], queryFn: () => get<{ strategies: any[] }>('/strategies'), staleTime: 300_000 });
+  const spot = !!q.data && q.data.kind !== 'perp'; // v6: the vault and the spot library do not exist for a perp agent
+  const else_ = useQuery({ queryKey: ['agent-elsewhere', id], queryFn: () => get<{ holdings: any[] }>(`/agents/${id}/elsewhere`), refetchInterval: 60_000, enabled: spot });
+  const lib = useQuery({ queryKey: ['strategies'], queryFn: () => get<{ strategies: any[] }>('/strategies'), staleTime: 300_000, enabled: spot });
   const [busy, setBusy] = useState(''), [err, setErr] = useState(''), [mandate, setMandate] = useState<any>(null), [note, setNote] = useState('');
   if (q.isLoading || !q.data) return <div className="space-y-4"><Skeleton h="h-40" /><Skeleton h="h-56" /></div>;
   const a = q.data;
+  if (a.kind === 'perp') return <PerpAgentDetail a={a} id={id} nav={nav} />; // v6: simulation-only detail page
   const act = async (name: string, fn: () => Promise<unknown>) => { setBusy(name); setErr(''); setNote(''); try { await fn(); await qc.invalidateQueries({ queryKey: ['agent', id] }); await qc.invalidateQueries({ queryKey: ['agents'] }); } catch (e) { const m = errText(t, e); if (m) setErr(m); } finally { setBusy(''); } };
   const prepare = () => act('prepare', async () => setMandate(await post(`/agents/${id}/mandate/prepare`)));
   const approveMandate = () => act('mandate', async () => { const assertion = await startAuthentication({ optionsJSON: mandate.options }); await post(`/agents/${id}/mandate/approve`, { assertion }); setMandate(null); });
