@@ -108,7 +108,10 @@ describe('agent vault withdrawal — a tracked operation', () => {
     expect([a.json.duplicate, b.json.duplicate].filter(Boolean)).toHaveLength(1); expect(c.json.duplicate).toBe(true);
     expect((await sql`select count(*)::int as n from agent_withdrawals`)[0].n).toBe(1);
     // once it is final, the same key still returns it (no second withdrawal); a new request without the key is a new operation
-    chain.receipts[a.json.txid] = receiptOk(a.json, { token: USDC.id, value: 25_000_000n }); await settle(a.json.id, 'confirmed');
+    // (the answer to the losing tap can be the row while it was still `requested`, without a txid yet: read it again)
+    const cur = (await api('GET', `/agents/${agent.id}/withdrawals/${a.json.id}`)).json;
+    expect(cur.txid).toMatch(/^0x[0-9a-f]{64}$/);
+    chain.receipts[cur.txid] = receiptOk(cur, { token: USDC.id, value: 25_000_000n }); await settle(a.json.id, 'confirmed');
     expect((await api('POST', `/agents/${agent.id}/withdraw`, { asset: USDC.id, idempotencyKey: 'tap-0001' })).json).toMatchObject({ id: a.json.id, state: 'confirmed', duplicate: true });
     expect(signs).toBe(1);
   });

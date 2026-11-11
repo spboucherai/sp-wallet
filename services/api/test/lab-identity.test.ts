@@ -22,12 +22,17 @@ let lab: typeof import('../src/agents/lab.ts'), live: typeof import('../src/agen
 let strategies: typeof import('../src/agents/strategies.ts');
 const library: string[] = [];
 
-/** the invocation of the signal runner as it was before v8: uv, cwd = research/, three environment variables, no sandbox */
-function legacy(args: string[], o: { input?: string; env?: Record<string, string> } = {}): { status: number | null; stdout: string; stderr: string; ms: number } {
+/** the invocation of the laboratory as it was before v8: the virtualenv's interpreter (through `uv run`), cwd = research/,
+ *  three environment variables, no sandbox */
+function legacy(args: string[], o: { input?: string; env?: Record<string, string>; viaUv?: boolean } = {}): { status: number | null; stdout: string; stderr: string; ms: number } {
   const home = process.env.HOME ?? '/tmp', t0 = Date.now();
   const env = { PATH: `${home}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`, HOME: home, UV_OFFLINE: '1', PYTHONDONTWRITEBYTECODE: '1', ...o.env };
-  const r = UV ? spawnSync(UV, ['run', '--frozen', '--no-sync', 'python', '-m', ...args], { cwd: REAL_LAB, env, input: o.input, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-    : spawnSync(REAL_PYTHON, ['-m', ...args], { cwd: REAL_LAB, env, input: o.input, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  // `uv run` only execs the virtualenv's interpreter; it is used here for the latency figure only. For the comparisons the
+  // interpreter is started directly (same binary, same environment): several `uv run` at once — suites running in parallel —
+  // were seen to hang for ever, and spawnSync would then block this whole test process. Every call has a timeout.
+  const useUv = !!UV && o.viaUv === true;
+  const r = useUv ? spawnSync(UV, ['run', '--frozen', '--no-sync', 'python', '-m', ...args], { cwd: REAL_LAB, env, input: o.input, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 120_000, killSignal: 'SIGKILL' })
+    : spawnSync(REAL_PYTHON, ['-m', ...args], { cwd: REAL_LAB, env, input: o.input, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 300_000, killSignal: 'SIGKILL' });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr, ms: Date.now() - t0 };
 }
 const SYMS: Record<string, [number, number]> = { BTC: [11, 60_000], ETH: [23, 3000], LINK: [31, 15], SOL: [41, 150], AAVE: [53, 90], HYPE: [61, 25] };
@@ -94,7 +99,7 @@ describe.skipIf(!READY)('confinement does not change a signal', () => {
     const last = data.BTC.at(-1)!.ts, input = JSON.stringify({ candles: Object.fromEntries(Object.entries(data).map(([s, b]) => [s, b.map((x) => [Math.floor(x.ts / 1000), x.open, x.high, x.low, x.close, x.volume])])), interval: '1h', as_of: new Date(last).toISOString().replace('.000Z', 'Z') });
     const boxed: number[] = [], old: number[] = [];
     for (let i = 0; i < 7; i++) { const t0 = Date.now(); await live.runSignal({ path: info.path, sha256: info.sha256 }, data, '1h'); boxed.push(Date.now() - t0);
-      old.push(legacy(['spq.signal', '--strategy', path.join(REAL_LAB, 'strategies', rel), '--sha256', info.sha256, '--input', '-'], { input }).ms); }
+      old.push(legacy(['spq.signal', '--strategy', path.join(REAL_LAB, 'strategies', rel), '--sha256', info.sha256, '--input', '-'], { input, viaUv: true }).ms); }
     void dir;
     console.log(`[lab-identity] one signal call (ma_trend/3, ${info.meta.lookback} bars x 2 symbols), 7 runs: sandboxed median ${median(boxed)} ms (min ${Math.min(...boxed)}, max ${Math.max(...boxed)}); pre-v8 ${UV ? 'uv run' : 'python'} median ${median(old)} ms (min ${Math.min(...old)}, max ${Math.max(...old)})`);
     expect(median(boxed)).toBeLessThan(5000);                             // 0.14 % of a 1 h bar at the very worst
