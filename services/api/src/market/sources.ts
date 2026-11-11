@@ -14,6 +14,7 @@
 //            an unpaced loop was refused ("EGeneral:Too many requests") after 10 calls in 1.3 s, and at one call every 1.5 s the
 //            connection stalled after about 20 calls: calls are spaced 3 s apart.
 import { z } from 'zod';
+import { MARKET_LISTINGS } from '@spw/core';
 import { http } from '../chains/rpc.ts';
 import { INTERVAL_MS, SourceError, isClosed, type Candle, type HttpJson, type Interval, type MarketSource, type MarketSymbol, type SourceId } from './types.ts';
 
@@ -36,7 +37,7 @@ function pacer(ms: number) {
 
 export interface SourceOpts { get?: HttpJson; /** minimum delay between two calls; tests pass 0 */ spacingMs?: number }
 interface Def {
-  id: SourceId; maxBars: number; historyBars: number | null; spacingMs: number; pairs: Partial<Record<MarketSymbol, string>>;
+  id: SourceId; maxBars: number; historyBars: number | null; spacingMs: number; pairs: Record<MarketSymbol, string | undefined>;
   url(pair: string, interval: Interval, range: { start: number; end: number }, now: number): string;
   /** raw bars of the answer, in any order, the open bar possibly included */
   parse(status: number, body: unknown): Candle[];
@@ -65,14 +66,14 @@ const schema = <T>(id: SourceId, s: z.ZodType<T>, body: unknown): T => {
   return r.data;
 };
 const msgOf = (body: unknown) => JSON.stringify(body ?? null).slice(0, 160);
-const all = (pair: (s: MarketSymbol) => string, syms: readonly MarketSymbol[]) => Object.fromEntries(syms.map((s) => [s, pair(s)])) as Partial<Record<MarketSymbol, string>>;
-const LISTED: readonly MarketSymbol[] = ['BTC', 'ETH', 'SOL', 'LINK', 'AAVE', 'AVAX', 'BNB', 'DOGE', 'LTC', 'XRP'];
+/** Pair names of one exchange, from the reviewed static table of USD listings (never discovered at run time). */
+const pairsOf = (id: SourceId): Record<MarketSymbol, string | undefined> => Object.fromEntries(Object.entries(MARKET_LISTINGS).flatMap(([s, l]) => (l[id] ? [[s, l[id]]] : [])));
 
 const CoinbaseRows = z.array(z.tuple([z.number().int(), z.number(), z.number(), z.number(), z.number(), z.number()]));
 export const coinbaseSource = (opts: SourceOpts = {}): MarketSource => make({
   // 298 bars per call rather than the 300 allowed: a window ending "now" spans up to two more intervals (measured: a span
   // of 300.04 intervals is accepted, 301.04 is refused with HTTP 400)
-  id: 'coinbase', maxBars: 298, historyBars: null, spacingMs: 250, pairs: all((s) => `${s}-USD`, LISTED),
+  id: 'coinbase', maxBars: 298, historyBars: null, spacingMs: 250, pairs: pairsOf('coinbase'),
   url(pair, interval, { start, end }, now) {
     // A window that reaches the latest closed bar ends at the current second instead of the grid: the URL is then unique,
     // which keeps Cloudflare's 300 s cache from serving a copy taken before that bar was final (or before it existed).
@@ -89,7 +90,7 @@ export const coinbaseSource = (opts: SourceOpts = {}): MarketSource => make({
 const num = z.string().regex(/^-?\d+(\.\d+)?([eE][-+]?\d+)?$/).transform(Number);
 const BitstampBody = z.object({ data: z.object({ ohlc: z.array(z.object({ timestamp: z.string().regex(/^\d+$/).transform(Number), open: num, high: num, low: num, close: num, volume: num })) }) });
 export const bitstampSource = (opts: SourceOpts = {}): MarketSource => make({
-  id: 'bitstamp', maxBars: 1000, historyBars: null, spacingMs: 250, pairs: all((s) => `${s.toLowerCase()}usd`, LISTED),
+  id: 'bitstamp', maxBars: 1000, historyBars: null, spacingMs: 250, pairs: pairsOf('bitstamp'),
   url: (pair, interval, { start, end }) => `https://www.bitstamp.net/api/v2/ohlc/${pair}/?step=${INTERVAL_MS[interval] / 1000}&limit=${(end - start) / INTERVAL_MS[interval] + 1}&end=${end / 1000}`,
   parse(status, body) {
     const code = String((body as { code?: unknown } | null)?.code ?? '');
@@ -101,9 +102,8 @@ export const bitstampSource = (opts: SourceOpts = {}): MarketSource => make({
 
 const KrakenBody = z.object({ error: z.array(z.string()), result: z.record(z.string(), z.unknown()).optional() });
 const KrakenRows = z.array(z.tuple([z.number().int(), num, num, num, num, num, num, z.number()]));
-const KRAKEN_PAIR: Partial<Record<MarketSymbol, string>> = { BTC: 'XBTUSD', DOGE: 'XDGUSD' };
 export const krakenSource = (opts: SourceOpts = {}): MarketSource => make({
-  id: 'kraken', maxBars: 720, historyBars: 720, spacingMs: 3000, pairs: all((s) => KRAKEN_PAIR[s] ?? `${s}USD`, LISTED),
+  id: 'kraken', maxBars: 720, historyBars: 720, spacingMs: 3000, pairs: pairsOf('kraken'),
   url: (pair, interval, { start }) => `https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=${INTERVAL_MS[interval] / 60_000}&since=${start / 1000 - 1}`,
   parse(status, body) {
     if (status === 429) throw new SourceError('kraken', 'rate_limited', 'too many requests');

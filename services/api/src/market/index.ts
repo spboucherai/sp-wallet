@@ -4,3 +4,4 @@ export { getSeries, assertFresh, checkQuality, type Series } from './series.ts';
 export { DEFAULT_QUALITY, DEFAULT_PRIORITY, type QualityOpts, type QualityReport } from './quality.ts';
 export { startMarketWorker } from './worker.ts';
 export { marketDataRoutes } from './routes.ts';
+export { activeMarketConfig, configuredSymbols, registrySymbols } from './symbols.ts';

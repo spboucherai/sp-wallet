@@ -72,7 +72,7 @@ def build_report(
     notes = list(notes or [])
     exp = Experiment(data, config, fractions=fractions, ledger=ledger)
     symbols = exp.symbols
-    if sorted(symbols) != sorted(strategy.universe):
+    if not strategy.generic and sorted(symbols) != sorted(strategy.universe):  # v5: a generic universe has no list to differ from
         notes.append(f"symbols {symbols} differ from META['universe'] {strategy.universe}")
     if config.interval != strategy.meta["interval"]:
         notes.append(f"interval {config.interval} differs from META['interval'] {strategy.meta['interval']}")

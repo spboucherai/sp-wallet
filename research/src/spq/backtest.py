@@ -24,7 +24,7 @@ def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="python -m spq.backtest", description=__doc__.split("\n")[0])
     p.add_argument("--strategy", required=True, help="strategy version directory (contains strategy.py)")
     p.add_argument("--sha256", default=None, help="refuse to run if strategy.py has another hash")
-    p.add_argument("--symbols", default=None, help="comma-separated; default: META['universe']")
+    p.add_argument("--symbols", default=None, help="comma-separated; default: META['universe'] (required when it is ['*'])")
     p.add_argument("--interval", default=None, help="default: META['interval']")
     p.add_argument("--start", default=None, help="UTC, inclusive")
     p.add_argument("--end", default=None, help="UTC, exclusive")
@@ -58,7 +58,8 @@ def main(argv=None) -> int:
         strategy = load_strategy(a.strategy, a.sha256)
         if strategy.kind != "spot":
             raise StrategyError(f"{strategy.name} is a {strategy.kind} strategy: use python -m spq.perp_backtest")
-        symbols = [s.strip().upper() for s in a.symbols.split(",") if s.strip()] if a.symbols else strategy.universe
+        given = [s.strip().upper() for s in a.symbols.split(",") if s.strip()] if a.symbols else None
+        symbols = strategy.symbols_for(given)  # v5: a generic strategy takes --symbols (validated); a fixed one is unchanged
         interval = a.interval or strategy.meta["interval"]
         config = BacktestConfig(interval=interval, fee_bps=a.fee_bps, slippage_bps=a.slippage_bps,
                                 initial_cash=a.initial_cash, min_order=a.min_order,

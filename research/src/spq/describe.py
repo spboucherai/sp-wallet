@@ -5,14 +5,17 @@
 Contract versions. Without `--contract` (= 1) the output is exactly the one above and a perpetual-futures strategy
 (META["kind"] = "perp", contract 2: signed, leveraged weights) is REFUSED with exit 4: a caller that only knows the
 spot contract must not be offered a strategy whose weights it would misread. With `--contract 2` every strategy is
-described and the output gains "contract" (1 or 2) and "kind" ("spot" or "perp")."""
+described and the output gains "contract" (1 or 2) and "kind" ("spot" or "perp").
+
+A universe-generic strategy reports "universe": ["*"] in meta (with "min_symbols" / "max_symbols" when it sets them),
+"generic": true, and the bounds in force as "min_symbols" / "max_symbols" at the top level; the output always has "generic"."""
 from __future__ import annotations
 
 import argparse
 import json
 import sys
 
-from .strategy import StrategyError, load_strategy, sha256_file
+from .strategy import StrategyError, load_strategy, sha256_file, symbol_bounds
 
 
 def main(argv=None) -> int:
@@ -26,7 +29,9 @@ def main(argv=None) -> int:
         if s.kind == "perp" and a.contract < 2:
             raise StrategyError("perpetual-futures strategy (contract 2): not available to a contract-1 caller; "
                                 "pass --contract 2 if signed, leveraged weights are understood")
-        out = {"sha256": sha256_file(f"{a.strategy}/strategy.py"), "meta": s.meta}
+        out = {"sha256": sha256_file(f"{a.strategy}/strategy.py"), "meta": s.meta, "generic": s.generic}
+        if s.generic:
+            out["min_symbols"], out["max_symbols"] = symbol_bounds(s.meta)
         if a.contract >= 2:
             out.update({"contract": 2 if s.kind == "perp" else 1, "kind": s.kind})
     except BaseException as e:  # noqa: BLE001

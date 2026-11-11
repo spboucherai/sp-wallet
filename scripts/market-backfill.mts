@@ -19,7 +19,8 @@ const { INTERVAL_MS, SYMBOLS } = await import('../services/api/src/market/types.
 type Interval = keyof typeof INTERVAL_MS;
 
 const DAY = 86_400_000, depth = (v: string) => (v === 'all' ? null : Number(v) * DAY);
-const cfg = { ...marketConfig(), symbols: arg('symbols', SYMBOLS.join(',')).split(',') as (typeof SYMBOLS)[number][], intervals: arg('intervals', '1h,1d,5m').split(',') as Interval[],
+// --symbols: any ticker of the listings table (default: the base ten); every interval asked is ingested for every symbol given
+const cfg = { ...marketConfig(), only: {}, first: [], symbols: arg('symbols', SYMBOLS.join(',')).split(',') as (typeof SYMBOLS)[number][], intervals: arg('intervals', '1h,1d,5m').split(',') as Interval[],
   depthMs: { '1h': depth(arg('days-1h', '730')), '1d': depth(arg('days-1d', 'all')), '5m': depth(arg('days-5m', '30')) } };
 const sources = defaultSources(), priority = sources.map((s) => s.id);
 await migrate();

@@ -107,7 +107,7 @@ def describe(args, capsys):
 def test_describe_spot_output_is_unchanged_and_perp_needs_contract_2(strategy_dir, capsys):
     spot = strategy_dir("return {s: 0.5 for s in data}\n")
     code, out, err = describe(["--strategy", str(spot)], capsys)
-    assert code == 0 and set(json.loads(out)) == {"sha256", "meta"}                 # exactly the version-1 output
+    assert code == 0 and set(json.loads(out)) == {"sha256", "meta", "generic"}      # the version-1 output (plus v5 "generic")
     perp = strategy_dir(BODY, meta=PERP_META)
     code, out, err = describe(["--strategy", str(perp)], capsys)
     assert code == 4 and out == "" and "contract 2" in err                           # not offered to a v1 caller

@@ -213,7 +213,7 @@ describe('getSeries', () => {
   });
 
   it('refuses an unknown symbol or interval', async () => {
-    expect(await code(series.getSeries('POL' as never, '1h', { limit: 1 }))).toBe('unsupported');
+    expect(await code(series.getSeries('NOPE' as never, '1h', { limit: 1 }))).toBe('unsupported');
     expect(await code(series.getSeries('BTC', '2h' as never, { limit: 1 }))).toBe('unsupported');
   });
 });
@@ -306,7 +306,7 @@ describe('assertFresh', () => {
     expect(await code(series.assertFresh('BTC', '1h', NOW))).toBe('no_data');
     await fill();
     expect(await code(series.assertFresh('ETH', '1d', NOW))).toBe('no_data');
-    expect(await code(series.assertFresh('POL' as never, '1h', NOW))).toBe('unsupported');
+    expect(await code(series.assertFresh('NOPE' as never, '1h', NOW))).toBe('unsupported');
     expect(await code(series.assertFresh('BTC', '1w' as never, NOW))).toBe('unsupported');
     await sql`alter table candles rename to candles_gone`;
     try { await expect(series.assertFresh('BTC', '1h', NOW)).rejects.toThrow(/candles/); }
@@ -354,11 +354,18 @@ describe('quality record and routes', () => {
     expect(candles.bars.map((b: any) => [b.ts, b.source])).toEqual([[LAST - 2 * H, 'coinbase'], [LAST - H, 'bitstamp'], [LAST, 'coinbase']]);
     expect(Object.keys(candles.bars[0]).sort()).toEqual(['close', 'high', 'low', 'open', 'source', 'ts', 'volume']);
     expect((await app.inject({ method: 'GET', url: '/api/v1/market-data/candles?symbol=BTC&interval=1h' })).json().bars).toHaveLength(300);
-    for (const bad of ['symbol=POL&interval=1h', 'symbol=BTC&interval=2h', 'symbol=BTC&interval=1h&limit=0', 'symbol=BTC&interval=1h&limit=9999999', 'interval=1h'])
+    for (const bad of ['symbol=NOPE&interval=1h', 'symbol=BTC&interval=2h', 'symbol=BTC&interval=1h&limit=0', 'symbol=BTC&interval=1h&limit=9999999', 'interval=1h'])
       expect((await app.inject({ method: 'GET', url: `/api/v1/market-data/candles?${bad}` })).statusCode).not.toBe(200);
     const status = (await app.inject({ method: 'GET', url: '/api/v1/market-data/status' })).json();
-    expect(status.symbols).toHaveLength(10);
-    expect(status.sources.map((s: any) => [s.id, Object.keys(s.pairs).length])).toEqual([['coinbase', 10], ['bitstamp', 10], ['kraken', 10]]);
+    // V5: the base ten plus every symbol the token registry makes tradable on an execution-enabled network
+    const BASE = ['BTC', 'ETH', 'SOL', 'LINK', 'AAVE', 'AVAX', 'BNB', 'DOGE', 'LTC', 'XRP'];
+    expect(status.symbols.slice(0, 10)).toEqual(BASE);
+    expect(status.symbols.length).toBeGreaterThan(10);
+    expect(status.symbols).toEqual(expect.arrayContaining(['UNI', 'POL', 'HYPE']));
+    expect(status.only['5m']).toEqual(BASE);
+    expect(status.sources.map((s: any) => s.id)).toEqual(['coinbase', 'bitstamp', 'kraken']);
+    for (const s of status.sources) { for (const b of BASE) expect(s.pairs[b]).toBeTruthy(); for (const k of Object.keys(s.pairs)) expect(status.symbols).toContain(k); }
+    for (const sym of status.symbols) expect(status.sources.filter((s: any) => s.pairs[sym]).length).toBeGreaterThanOrEqual(2); // two exchanges at least
     expect(status.coverage).toEqual([
       { source: 'bitstamp', symbol: 'BTC', interval: '1h', bars: 300, first: new Date(LAST - 299 * H).toISOString(), last: new Date(LAST).toISOString() },
       { source: 'coinbase', symbol: 'BTC', interval: '1h', bars: 299, first: new Date(LAST - 299 * H).toISOString(), last: new Date(LAST).toISOString() },

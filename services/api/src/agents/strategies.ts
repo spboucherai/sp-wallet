@@ -7,14 +7,18 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { listingSources, MAX_AGENT_SYMBOLS } from '@spw/core';
 import { config, UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
 import { RESEARCH_DIR } from './live.ts';
-import type { AgentRow } from './routes.ts';
+import { agentSymbols, type AgentRow } from './routes.ts';
 
 const UV = process.env.SPW_UV_BIN ?? 'uv';
 const ROOT = path.join(RESEARCH_DIR, 'strategies');
-export interface StrategyInfo { path: string; sha256: string; meta: { name: string; version: string; universe: string[]; interval: string; lookback: number; params: Record<string, unknown> } }
+export interface StrategyInfo { path: string; sha256: string;
+  /** universe-generic: META['universe'] == ['*'], the symbols are the agent's (between minSymbols and maxSymbols of them) */
+  generic: boolean; minSymbols: number; maxSymbols: number;
+  meta: { name: string; version: string; universe: string[]; interval: string; lookback: number; params: Record<string, unknown>; min_symbols?: number; max_symbols?: number } }
 
 /** Run a laboratory command with a minimal environment (no wallet secret; the database URL only when asked). */
 export function py(args: string[], o: { timeoutMs: number; env?: Record<string, string> } = { timeoutMs: 60_000 }): Promise<{ code: number | null; out: string; err: string }> {
@@ -32,7 +36,10 @@ export function py(args: string[], o: { timeoutMs: number; env?: Record<string, 
 }
 
 const Rel = z.string().regex(/^[a-z0-9_]{1,40}\/[a-z0-9_]{1,12}$/);
-const Info = z.object({ sha256: z.string().regex(/^[0-9a-f]{64}$/), meta: z.object({ name: z.string(), version: z.string(), universe: z.array(z.string()).min(1), interval: z.string(), lookback: z.number().int().positive(), params: z.record(z.string(), z.unknown()) }) });
+const Info = z.object({ sha256: z.string().regex(/^[0-9a-f]{64}$/), meta: z.object({ name: z.string(), version: z.string(), universe: z.array(z.string()).min(1), interval: z.string(), lookback: z.number().int().positive(), params: z.record(z.string(), z.unknown()),
+  min_symbols: z.number().int().min(1).max(MAX_AGENT_SYMBOLS).optional(), max_symbols: z.number().int().min(1).max(MAX_AGENT_SYMBOLS).optional() }) });
+/** Generic = exactly ['*'] (decided here from META, not from what the laboratory says about it). */
+export const isGeneric = (universe: string[]): boolean => universe.length === 1 && universe[0] === '*';
 const cache = new Map<string, StrategyInfo>();
 export async function describe(rel: string): Promise<StrategyInfo> {
   Rel.parse(rel);
@@ -41,7 +48,9 @@ export async function describe(rel: string): Promise<StrategyInfo> {
   const r = await py(['spq.describe', '--strategy', dir]);
   if (r.code !== 0) throw new UserError('bad_strategy', `the laboratory refused this strategy: ${r.err.trim().split('\n').pop()?.slice(0, 160) ?? ''}`, 422);
   const p = Info.parse(JSON.parse(r.out));
-  const info = { path: `strategies/${rel}`, ...p };
+  const generic = isGeneric(p.meta.universe);
+  if (!generic && p.meta.universe.includes('*')) throw new UserError('bad_strategy', 'a universe is a list of symbols or exactly ["*"]', 422);
+  const info: StrategyInfo = { path: `strategies/${rel}`, ...p, generic, minSymbols: generic ? p.meta.min_symbols ?? 1 : p.meta.universe.length, maxSymbols: generic ? p.meta.max_symbols ?? MAX_AGENT_SYMBOLS : p.meta.universe.length };
   cache.set(`${rel}:${p.sha256}`, info);
   return info;
 }
@@ -57,18 +66,39 @@ export async function library(): Promise<(StrategyInfo & { readme: string })[]> 
 }
 const sameSet = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
 
+/** Can this library version be attached to an agent trading these symbols at this interval? Pure. A fixed universe must
+ *  equal the agent's symbols; a generic one fits any agent whose number of symbols is within its bounds. */
+export function fitsAgent(info: Pick<StrategyInfo, 'generic' | 'minSymbols' | 'maxSymbols' | 'meta'>, symbols: string[], interval: string): { ok: true } | { ok: false; code: string; message: string } {
+  if (info.meta.interval !== interval) return { ok: false, code: 'interval_mismatch', message: `this strategy decides every ${info.meta.interval}; the agent is set to ${interval}` };
+  if (info.generic) {
+    if (symbols.length < info.minSymbols || symbols.length > info.maxSymbols) return { ok: false, code: 'universe_size', message: `this strategy needs between ${info.minSymbols} and ${info.maxSymbols} symbols; the agent trades ${symbols.length} (${symbols.join(', ')})` };
+    return { ok: true };
+  }
+  if (!sameSet(info.meta.universe, symbols)) return { ok: false, code: 'universe_mismatch', message: `this strategy trades ${info.meta.universe.join(', ')}; the agent's assets are ${symbols.join(', ')}` };
+  return { ok: true };
+}
+/** The laboratory backtests on ONE candle source (it never mixes them): the first, in the consolidation order, that lists every symbol. */
+export function backtestSource(symbols: string[]): string | null {
+  return (['coinbase', 'bitstamp', 'kraken'] as const).find((src) => symbols.every((x) => listingSources(x).includes(src))) ?? null;
+}
+
 const running = new Set<string>();
 /** Backtest a registered version on the stored candles and attach the report. Never throws; the outcome is stored on the row. */
-export async function backtest(versionId: string, info: StrategyInfo): Promise<void> {
+export async function backtest(versionId: string, info: StrategyInfo, symbols: string[]): Promise<void> {
   if (running.has(versionId)) return; running.add(versionId);
   const tmp = mkdtempSync(path.join(tmpdir(), 'spw-bt-')), out = path.join(tmp, 'report.json');
   try {
     await sql`update strategy_versions set status = 'backtesting', notes = '' where id = ${versionId} and status in ('draft', 'backtesting')`;
-    const r = await py(['spq.backtest', '--strategy', path.join(RESEARCH_DIR, info.path), '--sha256', info.sha256, '--out', out, '--ledger', path.join(RESEARCH_DIR, 'results', 'ledger.jsonl')],
-      { timeoutMs: 20 * 60_000, env: { DATABASE_URL: process.env.RESEARCH_DATABASE_URL ?? config.databaseUrl, SPQ_CANDLE_SOURCE: 'coinbase' } }); // the loader opens a read-only session
+    const source = backtestSource(symbols);
+    if (!source || !symbols.every((x) => /^[A-Z0-9]{2,10}$/.test(x))) { await sql`update strategy_versions set status = 'draft', notes = ${`backtest failed: no single exchange lists every symbol (${symbols.join(', ')}); the laboratory does not mix candle sources`} where id = ${versionId} and status = 'backtesting'`; return; }
+    // the agent's symbols are always passed: a generic strategy has no list of its own, a fixed one equals them (checked at registration)
+    const r = await py(['spq.backtest', '--strategy', path.join(RESEARCH_DIR, info.path), '--sha256', info.sha256, '--symbols', symbols.join(','), '--out', out, '--ledger', path.join(RESEARCH_DIR, 'results', 'ledger.jsonl')],
+      { timeoutMs: 20 * 60_000, env: { DATABASE_URL: process.env.RESEARCH_DATABASE_URL ?? config.databaseUrl, SPQ_CANDLE_SOURCE: source } }); // the loader opens a read-only session
     if (r.code !== 0 || !existsSync(out)) { await sql`update strategy_versions set status = 'draft', notes = ${`backtest failed: ${r.err.trim().split('\n').pop()?.slice(0, 300) ?? 'no report'}`} where id = ${versionId} and status = 'backtesting'`; return; }
-    const report = JSON.parse(readFileSync(out, 'utf8')) as { strategy_sha256?: string };
+    const report = JSON.parse(readFileSync(out, 'utf8')) as { strategy_sha256?: string; config?: { symbols?: string[] } };
     if (report.strategy_sha256 !== info.sha256) { await sql`update strategy_versions set status = 'draft', notes = 'backtest report is for another code hash' where id = ${versionId}`; return; }
+    // the report must be about the agent's own symbols (it records them in config.symbols)
+    if (!Array.isArray(report.config?.symbols) || !sameSet(report.config.symbols, symbols)) { await sql`update strategy_versions set status = 'draft', notes = 'backtest report is for other symbols than the agent\'s' where id = ${versionId}`; return; }
     await sql`update strategy_versions set status = 'draft', report = ${sql.json(report as never)}, notes = '' where id = ${versionId} and status = 'backtesting'`;
     await audit('strategy.backtested', 'engine', { version: versionId, sha256: info.sha256 });
   } catch (e) { await sql`update strategy_versions set status = 'draft', notes = ${`backtest failed: ${(e as Error).message.slice(0, 200)}`} where id = ${versionId} and status = 'backtesting'`.catch(() => {}); }
@@ -85,13 +115,13 @@ export function strategyRoutes(app: FastifyInstance): void {
     const [a] = await sql<AgentRow[]>`select * from agents where id = ${id}`;
     if (!a) throw new UserError('not_found', 'agent not found', 404);
     const info = await describe(b.path);
-    if (!sameSet(info.meta.universe, a.universe.filter((s) => s !== 'USDC'))) throw new UserError('universe_mismatch', `this strategy trades ${info.meta.universe.join(', ')}; the agent's assets are ${a.universe.join(', ')}`, 422);
-    if (info.meta.interval !== a.interval) throw new UserError('interval_mismatch', `this strategy decides every ${info.meta.interval}; the agent is set to ${a.interval}`, 422);
+    const symbols = agentSymbols(a), fit = fitsAgent(info, symbols, a.interval);
+    if (!fit.ok) throw new UserError(fit.code, fit.message, 422);
     const [row] = await sql<{ id: string; status: string; has_report: boolean }[]>`insert into strategy_versions (id, agent_id, name, version, code_sha256, path, meta)
-      values (${randomUUID()}, ${a.id}, ${info.meta.name}, ${info.meta.version}, ${info.sha256}, ${info.path}, ${sql.json(info.meta as never)})
+      values (${randomUUID()}, ${a.id}, ${info.meta.name}, ${info.meta.version}, ${info.sha256}, ${info.path}, ${sql.json({ ...info.meta, generic: info.generic, symbols } as never)})
       on conflict (agent_id, code_sha256) do update set path = excluded.path returning id, status, report is not null as has_report`;
-    await audit('strategy.registered', 'owner', { agent: a.id, version: row!.id, path: info.path, sha256: info.sha256 });
-    if (!row!.has_report && row!.status !== 'approved') void backtest(row!.id, info);
-    return { id: row!.id, sha256: info.sha256, status: row!.has_report ? row!.status : 'backtesting' };
+    await audit('strategy.registered', 'owner', { agent: a.id, version: row!.id, path: info.path, sha256: info.sha256, generic: info.generic, symbols });
+    if (!row!.has_report && row!.status !== 'approved') void backtest(row!.id, info, symbols);
+    return { id: row!.id, sha256: info.sha256, generic: info.generic, symbols, status: row!.has_report ? row!.status : 'backtesting' };
   });
 }

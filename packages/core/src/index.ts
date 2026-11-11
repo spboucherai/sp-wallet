@@ -7,6 +7,8 @@ export * from './build-evm.ts';
 export * from './swap-evm.ts';
 export * from './cctp.ts';
 export * from './mandate.ts';
+export * from './market-listings.ts';
+export * from './market-symbols.ts';
 export * from './build-btc.ts';
 export * from './build-sol.ts';
 export * from './policy.ts';
