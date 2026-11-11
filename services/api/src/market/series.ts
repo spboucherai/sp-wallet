@@ -41,8 +41,9 @@ export async function checkQuality(symbol: MarketSymbol, interval: Interval, now
 /** Fails closed. Resolves (with the report) only if, at `now`:
  *  - the latest consolidated bar is the one that should be the latest closed bar, or the one before (`maxLagBars`, default 1);
  *  - the `lookback` bars (default 200) ending at that bar are all there: no hole, and the history is that long;
- *  - each of the last `agreeBars` bars (default 3) exists on at least `minSources` sources (default 2) and their closes
- *    differ by at most `maxDeviationBps` (default 50).
+ *  - each of the last `agreeBars` bars (default 3) exists on at least `minSources` sources (default 2), and the bar the
+ *    series uses is confirmed by `minSources - 1` other sources within `maxDeviationBps` (default 50); a further source
+ *    that disagrees is recorded, not blocking.
  *  Otherwise throws MarketDataError (code stale | gap | insufficient_history | insufficient_sources | disagreement | no_data |
  *  unsupported) carrying the full report. A database failure also throws: no answer is never a yes. */
 export async function assertFresh(symbol: MarketSymbol, interval: Interval, now: number = Date.now(), o: Partial<QualityOpts> = {}): Promise<QualityReport> {

@@ -110,14 +110,20 @@ export function evaluate(bySource: BySource, interval: Interval, now: number, o:
   for (let k = opts.agreeBars - 1; k >= 0; k--) {
     const ts = lastTs - k * iv, closes: Partial<Record<SourceId, number>> = {};
     for (const s of opts.priority) { const c = bar(known[s]!, ts); if (c) closes[s] = c.close; }
-    const bps = byTs.get(ts)?.bps ?? null;
+    // The bar the series actually uses is the one of the highest-ranked source that has it. It must be corroborated: at least
+    // `minSources - 1` OTHER sources within the tolerance of it. A further source that disagrees (typically a thin venue whose
+    // last trade is old) is recorded but does not block; the deviation that gates is the one to the nearest corroborators.
+    const used = opts.priority.find((s) => closes[s] !== undefined);
+    const others = used === undefined ? [] : opts.priority.filter((s) => s !== used && closes[s] !== undefined)
+      .map((s) => (Math.abs(closes[s]! - closes[used]!) / ((closes[s]! + closes[used]!) / 2)) * 1e4).sort((x, y) => x - y);
+    const need = opts.minSources - 1, bps = others.length >= need && need > 0 ? others[need - 1]! : byTs.get(ts)?.bps ?? null;
     report.agreement.push({ ts, closes, bps });
     if (Object.keys(closes).length < opts.minSources) alone++;
     if (bps !== null) report.maxDeviationBps = Math.max(report.maxDeviationBps ?? 0, bps);
   }
   if (alone > 0) fail('insufficient_sources', `${alone} of the last ${opts.agreeBars} bars are confirmed by fewer than ${opts.minSources} sources`);
   if (report.maxDeviationBps !== null && report.maxDeviationBps > opts.maxDeviationBps)
-    fail('disagreement', `sources differ by ${report.maxDeviationBps.toFixed(1)} bps on the last ${opts.agreeBars} bars (allowed: ${opts.maxDeviationBps})`);
+    fail('disagreement', `the bar used is not confirmed: the nearest confirming source differs by ${report.maxDeviationBps.toFixed(1)} bps on the last ${opts.agreeBars} bars (allowed: ${opts.maxDeviationBps})`);
   report.status = failures[0]?.code ?? 'ok';
   return report;
 }
