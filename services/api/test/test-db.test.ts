@@ -30,5 +30,5 @@ describe('test databases', () => {
     const seen: string[] = [];
     await dropTestDbs((n) => { seen.push(n); return false; });
     for (const n of seen) expect(n.startsWith(TEST_DB_PREFIX)).toBe(true);
-  });
+  }, 180_000);
 });

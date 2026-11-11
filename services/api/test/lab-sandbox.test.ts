@@ -141,7 +141,9 @@ describe.skipIf(!READY)('strategy sandbox — a hostile strategy through each re
     const c = await owner('POST', '/research/jobs', { mission: 'Développe une stratégie statistique BTC/ETH et teste-la sur données historiques', universe: ['BTC', 'ETH'] });
     expect(c.status, JSON.stringify(c.json)).toBe(200);
     await waitFor(c.json.id, (j) => j.dataset?.ready === true);
-    const job = (await runner('/claim', { runnerId: 'hostile' })).json.job;
+    // (the data set is marked ready a moment before the job is queued for the runner: ask until it is handed out)
+    let job: any = null;
+    for (let i = 0; i < 100 && !job; i++) { job = (await runner('/claim', { runnerId: 'hostile' })).json?.job ?? null; if (!job) await new Promise((res) => setTimeout(res, 100)); }
     expect(job.id).toBe(c.json.id);
     const source = hostileStrategy({ name: job.strategyName, version: job.strategyVersion, kind: 'spot', universe: ['BTC', 'ETH'], behaviour: 'raise', targets });
     const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
@@ -166,6 +168,8 @@ describe.skipIf(!READY)('strategy sandbox — a hostile strategy through each re
 
   it('the scratch directory of a call is removed afterwards; a second call starts from an empty one', async () => {
     const mine = (): string[] => readdirSync(realpathSync(tmpdir())).filter((n) => /^spw-lab-[A-Za-z0-9]{6}$/.test(n));
+    // the evaluation of the previous test drops its scratch directory just after the job reaches its final state: wait for it
+    for (let i = 0; i < 100 && mine().length; i++) await new Promise((r) => setTimeout(r, 100));
     expect(mine()).toEqual([]);
     const s = add('zz_hostile/3');
     for (let i = 0; i < 2; i++) noLeak(decodeWeights(await live.runSignal({ path: s.path, sha256: s.sha256 }, spotBars, '1h'), ['BTC', 'ETH']), `call ${i}`);

@@ -70,6 +70,13 @@ beforeAll(async () => {
 afterAll(async () => { NETWORKS[NET]!.rpc = rpcBackup; await app?.close(); signerSrv?.close(); node?.close(); await sql?.end(); });
 beforeEach(async () => { await sql`delete from agent_withdrawals`; Object.assign(chain, { nonce: chain.nonce + 1, latestNonce: chain.nonce + 1, receipts: {}, txs: {}, sent: [], broadcastFails: false, down: false, balances: { native: 10n ** 16n, [USDC.id]: 25_000_000n } }); cfg.broadcast = true; signs = 0; });
 
+/** run the worker step until the withdrawal reaches `state` (a pass concludes nothing when the node answers late, e.g. on a loaded machine) */
+async function settle(id: string, state: string, now?: number): Promise<any> {
+  let w: any;
+  for (let i = 0; i < 40; i++) { await wd.advanceWithdrawals(now); w = (await api('GET', `/agents/${agent.id}/withdrawals/${id}`)).json; if (w.state === state) return w; await new Promise((r) => setTimeout(r, 50)); }
+  return w;
+}
+
 describe('agent vault withdrawal — a tracked operation', () => {
   it('signed → broadcast → confirmed only when the receipt succeeded AND the payment to the owner is in it', async () => {
     const r = await api('POST', `/agents/${agent.id}/withdraw`, { asset: USDC.id });
@@ -83,7 +90,7 @@ describe('agent vault withdrawal — a tracked operation', () => {
     chain.down = true; await wd.advanceWithdrawals(); chain.down = false;
     expect((await api('GET', `/agents/${agent.id}/withdrawals/${r.json.id}`)).json.state).toBe('broadcast');
     chain.receipts[r.json.txid] = receiptOk(r.json, { token: USDC.id, value: 25_000_000n });
-    await wd.advanceWithdrawals();
+    await settle(r.json.id, 'confirmed');
     const done = (await api('GET', `/agents/${agent.id}/withdrawals`)).json;
     expect(done.withdrawals).toHaveLength(1);
     expect(done.withdrawals[0]).toMatchObject({ id: r.json.id, ok: true, state: 'confirmed', arrived: true, error: null });
@@ -101,7 +108,7 @@ describe('agent vault withdrawal — a tracked operation', () => {
     expect([a.json.duplicate, b.json.duplicate].filter(Boolean)).toHaveLength(1); expect(c.json.duplicate).toBe(true);
     expect((await sql`select count(*)::int as n from agent_withdrawals`)[0].n).toBe(1);
     // once it is final, the same key still returns it (no second withdrawal); a new request without the key is a new operation
-    chain.receipts[a.json.txid] = receiptOk(a.json, { token: USDC.id, value: 25_000_000n }); await wd.advanceWithdrawals();
+    chain.receipts[a.json.txid] = receiptOk(a.json, { token: USDC.id, value: 25_000_000n }); await settle(a.json.id, 'confirmed');
     expect((await api('POST', `/agents/${agent.id}/withdraw`, { asset: USDC.id, idempotencyKey: 'tap-0001' })).json).toMatchObject({ id: a.json.id, state: 'confirmed', duplicate: true });
     expect(signs).toBe(1);
   });
@@ -116,16 +123,16 @@ describe('agent vault withdrawal — a tracked operation', () => {
 
   it('a revert is failed; a mined transaction that does not pay the owner is confirmed but NOT arrived; a replaced nonce is failed', async () => {
     const a = (await api('POST', `/agents/${agent.id}/withdraw`, { asset: USDC.id })).json;
-    chain.receipts[a.txid] = receiptOk(a, { status: 0 }); await wd.advanceWithdrawals();
+    chain.receipts[a.txid] = receiptOk(a, { status: 0 }); await settle(a.id, 'failed');
     expect((await api('GET', `/agents/${agent.id}/withdrawals/${a.id}`)).json).toMatchObject({ ok: false, state: 'failed', arrived: false });
     const b = (await api('POST', `/agents/${agent.id}/withdraw`, { asset: USDC.id })).json;
     expect(b.id).not.toBe(a.id);
-    chain.receipts[b.txid] = receiptOk(b, { token: USDC.id, value: 25_000_000n, to: '0x000000000000000000000000000000000000dEaD' }); await wd.advanceWithdrawals();
+    chain.receipts[b.txid] = receiptOk(b, { token: USDC.id, value: 25_000_000n, to: '0x000000000000000000000000000000000000dEaD' }); await settle(b.id, 'confirmed');
     const bb = (await api('GET', `/agents/${agent.id}/withdrawals/${b.id}`)).json;
     expect(bb).toMatchObject({ state: 'confirmed', arrived: false }); expect(bb.error).toMatch(/not found in the transaction/);
     const c = (await api('POST', `/agents/${agent.id}/withdraw`, { asset: 'native' })).json;
     expect(c.state).toBe('broadcast');
-    chain.latestNonce = chain.nonce + 1; await wd.advanceWithdrawals();   // the vault's nonce moved on without this transaction
+    chain.latestNonce = chain.nonce + 1; await settle(c.id, 'failed');   // the vault's nonce moved on without this transaction
     expect((await api('GET', `/agents/${agent.id}/withdrawals/${c.id}`)).json).toMatchObject({ state: 'failed' });
   });
 
@@ -134,19 +141,17 @@ describe('agent vault withdrawal — a tracked operation', () => {
     chain.receipts[r.txid] = receiptOk(r);
     const [row] = await sql`select amount::text as amount from agent_withdrawals where id = ${r.id}`;
     chain.txs[r.txid] = { to: keys.addresses.evm, value: `0x${BigInt(row.amount).toString(16)}` };
-    await wd.advanceWithdrawals();
-    expect((await api('GET', `/agents/${agent.id}/withdrawals/${r.id}`)).json).toMatchObject({ state: 'confirmed', arrived: true });
+    expect(await settle(r.id, 'confirmed')).toMatchObject({ state: 'confirmed', arrived: true });
   });
 
   it('a relay that fails keeps the withdrawal signed and retries; after ten minutes it is not_sent; a row stuck in requested fails', async () => {
     chain.broadcastFails = true;
     const r = (await api('POST', `/agents/${agent.id}/withdraw`, { asset: USDC.id })).json;
     expect(r).toMatchObject({ ok: false, state: 'signed', explorer: null });
-    chain.broadcastFails = false; await wd.advanceWithdrawals();
-    expect((await api('GET', `/agents/${agent.id}/withdrawals/${r.id}`)).json.state).toBe('broadcast');
+    chain.broadcastFails = false;
+    expect((await settle(r.id, 'broadcast')).state).toBe('broadcast');
     await sql`update agent_withdrawals set state = 'signed' where id = ${r.id}`; chain.broadcastFails = true;
-    await wd.advanceWithdrawals(Date.now() + 11 * 60_000);
-    expect((await api('GET', `/agents/${agent.id}/withdrawals/${r.id}`)).json).toMatchObject({ ok: false, state: 'not_sent' });
+    expect(await settle(r.id, 'not_sent', Date.now() + 11 * 60_000)).toMatchObject({ ok: false, state: 'not_sent' });
     await sql`insert into agent_withdrawals (id, agent_id, network, asset, symbol, decimals, amount, from_addr, to_addr, nonce, state, created_at) values (gen_random_uuid(), ${agent.id}, ${NET}, 'native', 'ETH', 18, 1, '0xa', '0xb', 1, 'requested', now() - interval '5 minutes')`;
     await wd.advanceWithdrawals();
     expect((await sql`select state, error from agent_withdrawals where asset = 'native'`)[0]).toMatchObject({ state: 'failed', error: 'interrupted during signing; nothing was sent' });
