@@ -45,7 +45,9 @@ export function swapRoutes(app: FastifyInstance, deps: SwapDeps): void {
     const usdcOf = (a: AssetRef) => getNetwork(a.network).family === 'evm' && !!CCTP_ENABLED[a.network] && getAsset(a.network, a.asset).symbol === 'USDC';
     const cctp = r.legs.length === 1 && r.providers[0] === 'cctp' && first.network !== last.network && usdcOf(first) && usdcOf(last);
     const cctpSpeed = cctp ? ((r.legs[0]!.raw as { transfer?: string } | undefined)?.transfer === 'fast' ? 'fast' : 'standard') : null;
-    const executable = cctp || (r.legs.length === 1 && r.providers[0] === 'kyberswap' && !!KYBER_ENABLED[first.network] && first.network === last.network);
+    // Jupiter on Solana: the signer decodes the v1 transaction itself (services/api/src/swap-exec-sol.ts); whether a given route can be put in the verifiable form is decided when the swap is prepared
+    const jupiter = r.legs.length === 1 && r.providers[0] === 'jupiter' && first.network === last.network && getNetwork(first.network).family === 'sol';
+    const executable = cctp || jupiter || (r.legs.length === 1 && r.providers[0] === 'kyberswap' && !!KYBER_ENABLED[first.network] && first.network === last.network);
     // on a reviewed router the signer decodes and enforces recipient and minimum output itself: not an opaque transaction
     const flags = executable ? r.risk.flags.filter((f) => f.code !== 'opaque_transaction' && !(cctp && f.code === 'not_executable')) : r.risk.flags;
     const level = flags.some((f) => f.level === 'high') ? 'high' : flags.some((f) => f.level === 'medium') ? 'medium' : 'low';
@@ -53,7 +55,7 @@ export function swapRoutes(app: FastifyInstance, deps: SwapDeps): void {
     return {
       id: r.id, providers: r.providers, path: r.path.map(viewAsset), tags: r.tags, pareto: r.pareto,
       // the wallet can execute this route itself today (signer-verified calldata on a reviewed router)
-      executable, exec: executable ? (cctp ? { via: 'cctp' as const, speed: cctpSpeed } : { via: 'kyberswap' as const }) : null,
+      executable, exec: executable ? (cctp ? { via: 'cctp' as const, speed: cctpSpeed } : jupiter ? { via: 'jupiter' as const } : { via: 'kyberswap' as const }) : null,
       amountOut: r.amountOut, minAmountOut: r.minAmountOut, amountOutDisplay: formatUnits(r.amountOut, out.decimals), minAmountOutDisplay: formatUnits(r.minAmountOut, out.decimals),
       estimatedSeconds: r.estimatedSeconds, expiresAt: r.expiresAt, executability: executable ? { class: 'verified' as const } : r.executability, valuation: r.valuation, risk,
       atomic: r.legs.length === 1 && r.legs[0]!.atomic, refundable: r.legs.some((l) => l.refundable === false) ? false : r.legs.some((l) => l.refundable === null) ? null : true,

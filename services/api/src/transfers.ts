@@ -38,7 +38,9 @@ export function view(p: ProposalRow) {
     swap: p.swap ? { provider: p.swap.provider, toAsset: p.swap.toAsset, toSymbol: p.swap.toSymbol, slippageBps: p.swap.slippageBps, needsApproval: p.swap.needsApproval, simulated: p.swap.simulated,
       expectedOut: p.swap.expectedOut, expectedOutDisplay: formatUnits(BigInt(p.swap.expectedOut), p.swap.toDecimals), minOut: p.swap.minOut, minOutDisplay: formatUnits(BigInt(p.swap.minOut), p.swap.toDecimals),
       received: p.out_amount, receivedDisplay: p.out_amount ? formatUnits(BigInt(p.out_amount), p.swap.toDecimals) : null,
-      approvalTxid: p.pre_txid, approvalState: p.pre_raw ? (p.pre_state ?? 'pending') : null } : null,
+      approvalTxid: p.pre_txid, approvalState: p.pre_raw ? (p.pre_state ?? 'pending') : null,
+      /** provider-specific facts shown on the review sheet (Solana: licence label, venues, priority fee, token-account rent) */
+      detail: (p.swap as { detail?: Record<string, unknown> }).detail ?? null } : null,
     bridge: p.bridge ? bridgeView(p, p.bridge) : null,
   };
 }

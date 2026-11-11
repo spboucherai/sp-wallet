@@ -11,7 +11,7 @@ import { BridgeFacts, BridgePill, BridgeProgress, bridgeDur } from '../bridge';
 interface SAsset { key: string; network: string; networkName: string; asset: string; symbol: string; name: string; decimals: number; native?: boolean }
 interface Fee { kind: string; symbol: string; network: string; display: string; includedInOutput: boolean; estimated: boolean; usd: number | null }
 interface BridgeQuote { options: { speed: 'standard' | 'fast'; available: boolean; feeDisplay: string; minReceiveDisplay: string; seconds: number }[]; destinationGas: { symbol: string; needDisplay: string; balanceDisplay: string; enough: boolean }; toName: string; fromName: string }
-interface RouteV { id: string; executable: boolean; exec?: { via: 'kyberswap' | 'cctp'; speed?: 'standard' | 'fast' | null } | null; providers: string[]; path: SAsset[]; tags: string[]; pareto: boolean; amountOutDisplay: string; minAmountOutDisplay: string; estimatedSeconds: number | null; expiresAt: number;
+interface RouteV { id: string; executable: boolean; exec?: { via: 'kyberswap' | 'cctp' | 'jupiter'; speed?: 'standard' | 'fast' | null } | null; providers: string[]; path: SAsset[]; tags: string[]; pareto: boolean; amountOutDisplay: string; minAmountOutDisplay: string; estimatedSeconds: number | null; expiresAt: number;
   executability: { class: 'verified' | 'opaque' | 'quote_only'; reason?: string }; valuation: { inUsd: number | null; outUsd: number | null; minOutUsd: number | null; extraFeesUsd: number; netUsd: number | null };
   risk: { level: 'low' | 'medium' | 'high'; score: number; flags: { code: string; level: string; detail?: string }[] }; atomic: boolean; refundable: boolean | null; priceImpactBps: number | null;
   steps: { kind: string; provider: string; from: SAsset; to: SAsset; via: string[]; contracts: { network: string; address: string; role: string }[] }[]; fees: Fee[] }
@@ -121,6 +121,8 @@ export function Swap() {
   const bal = from ? balances.get(from.key) : undefined;
   const riskCls = { low: 'text-emerald bg-emerald/10', medium: 'text-warn bg-warn/12', high: 'text-danger bg-danger/10' } as const;
   const noProviders = (provQ.data?.providers.length ?? 0) === 0;
+  // display name of a provider id; Jupiter's licence requires its "Metis" label wherever a route of theirs is shown
+  const pname = (id: string) => provQ.data?.providers.find((p) => p.id === id)?.name ?? (id === 'jupiter' ? 'Jupiter (Metis)' : id);
 
   const side = (label: string, a: SAsset | undefined, which: 'from' | 'to', body: React.ReactNode) => (
     <div className="rounded-3xl bg-elev/70 p-4">
@@ -164,7 +166,7 @@ export function Swap() {
           <section key={r.id} className={`card overflow-hidden ${sel ? 'ring-2 ring-primary' : ''}`}>
             <button className="w-full p-4 text-left" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '' : r.id)}>
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><div className="text-[13px] text-mute">{r.providers.join(' → ')}</div>
+                <div className="min-w-0"><div className="text-[13px] text-mute">{r.providers.map(pname).join(' → ')}</div>
                   <div className="mt-0.5 text-[22px] font-semibold leading-tight tracking-tight">{trimAmt(r.amountOutDisplay, 8)} <span className="text-mute">{r.path[r.path.length - 1]!.symbol}</span></div>
                   <div className="text-[12.5px] text-mute">{t('swMin')} {trimAmt(r.minAmountOutDisplay, 8)}{r.valuation.netUsd != null ? ` · ${t('swNet')} ${money(r.valuation.netUsd)}` : ''}</div></div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -183,7 +185,7 @@ export function Swap() {
               <div><div className="mb-1.5 text-[11.5px] uppercase tracking-wide text-mute">{t('swSteps')}</div>
                 <ol className="space-y-2">{r.steps.map((s, i) => <li key={i} className="flex gap-2.5"><span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-semibold text-onprimary">{i + 1}</span>
                   <span className="min-w-0"><span className="font-medium">{t(`swKind_${s.kind}` as Key)}</span> {s.from.symbol} ({s.from.networkName}) → {s.to.symbol} ({s.to.networkName})
-                    <span className="block text-mute">{s.provider}{s.via.length ? ` · ${s.via.slice(0, 4).join(', ')}` : ''}</span></span></li>)}</ol></div>
+                    <span className="block text-mute">{pname(s.provider)}{s.via.length ? ` · ${s.via.slice(0, 4).join(', ')}` : ''}</span></span></li>)}</ol></div>
               {r.fees.length > 0 && <div><div className="mb-1.5 text-[11.5px] uppercase tracking-wide text-mute">{t('swFees')}</div>
                 <ul className="space-y-1">{r.fees.map((f, i) => <li key={i} className="flex justify-between gap-3"><span>{t(`swFee_${f.kind}` as Key)}{f.estimated ? ` (${t('estimate')})` : ''}{f.includedInOutput ? ` · ${t('swIncluded')}` : ''}</span><span className="shrink-0">{trimAmt(f.display, 8)} {f.symbol}{f.usd != null ? ` · ${money(f.usd)}` : ''}</span></li>)}</ul></div>}
               <div><div className="mb-1.5 text-[11.5px] uppercase tracking-wide text-mute">{t('swRisk')}</div>
@@ -193,10 +195,10 @@ export function Swap() {
           </section>); })}
         {execErr && <Notice tone="danger">{execErr}</Notice>}
         {isBridge ? null : (() => { const ex = sorted.find((r) => r.executable); return ex
-          ? <><Btn full busy={busy === 'prepare'} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('swExecute', { via: ex.providers[0]! })}</Btn>
+          ? <><Btn full busy={busy === 'prepare'} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('swExecute', { via: pname(ex.providers[0]!) })}</Btn>
               {ex.id !== sorted[0]!.id && <p className="px-1 text-[12.5px] text-mute">{t('swExecNotBest')}</p>}</>
           : <><button disabled className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-[15.5px] font-semibold text-onprimary opacity-40"><Icon n="lock" className="h-4 w-4" />{t('swExecuteDisabled')}</button>
-              <p className="px-1 text-[12.5px] text-mute">{t('swExecWhere')}</p></>; })()}
+              <p className="px-1 text-[12.5px] text-mute">{t('swExecWhere')} {t('swSolIntro')}</p></>; })()}
       </div>}
 
       {isBridge && amountOk && <Card>
@@ -233,14 +235,22 @@ export function Swap() {
             {!prop.swap.received && <div className="text-[13px] text-mute">{t('swExpected')} {trimAmt(prop.swap.expectedOutDisplay, 10)} {prop.swap.toSymbol}</div>}
           </div>
           <dl className="mt-3 space-y-2 text-[13.5px]">
-            <div className="flex justify-between gap-3"><dt className="text-mute">{t('network')}</dt><dd>{prop.networkName} · KyberSwap</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-mute">{t('network')}</dt><dd>{prop.networkName} · {prop.swap.detail?.label ?? 'KyberSwap'}</dd></div>
+            {prop.swap.detail && <>
+              <div className="flex justify-between gap-3"><dt className="text-mute">{t('swSolRoute')}</dt><dd className="text-right">{(prop.swap.detail.venues as string[]).join(' + ')}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-mute">{t('swSolNetworkFee')}</dt><dd className="text-right">{trimAmt(prop.swap.detail.networkFeeDisplay, 9)} {prop.feeSymbol} <span className="text-mute">({t('swSolPriority')} {trimAmt(prop.swap.detail.priorityFeeDisplay, 9)})</span></dd></div>
+              {prop.swap.detail.createsAccount && <div className="flex justify-between gap-3"><dt className="text-mute">{t('swSolRent')}</dt><dd>{trimAmt(prop.swap.detail.rentDisplay, 9)} {prop.feeSymbol}</dd></div>}
+              {prop.state === 'pending_approval' && <div className="flex justify-between gap-3"><dt className="text-mute">{t('swSolSimulated')}</dt><dd>{trimAmt(prop.swap.detail.simulatedOutDisplay, 10)} {prop.swap.toSymbol}</dd></div>}
+            </>}
             <div className="flex justify-between gap-3"><dt className="text-mute">{t('feeMax')}</dt><dd>{prop.maxFeeDisplay ? `${trimAmt(prop.maxFeeDisplay, 9)} ${prop.feeSymbol}` : '—'}</dd></div>
             {prop.swap.approvalState && <div className="flex justify-between gap-3"><dt className="text-mute">{t('swApproval')}</dt><dd>{t(`swAppr_${prop.swap.approvalState}` as Key)}</dd></div>}
             {prop.intentHash && <div><dt className="text-mute">{t('fingerprint')}</dt><dd className="break-all font-mono text-[11px] text-mute">{prop.intentHash}</dd></div>}
             {prop.txid && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <div><dt className="text-mute">{t('txid')}</dt><dd className="break-all font-mono text-[11px]">{prop.txid}</dd></div>}
           </dl>
           {prop.state === 'pending_approval' && <div className="mt-3 space-y-3">
-            <Notice tone="ok">{t('swGuarantee')}</Notice>
+            <Notice tone="ok">{prop.swap.detail ? t('swSolGuarantee') : t('swGuarantee')}</Notice>
+            {prop.swap.detail?.createsAccount && <Notice tone="info">{t('swSolRentNote', { sym: prop.swap.toSymbol })}</Notice>}
+            {prop.swap.detail && <Notice tone="info">{t('swSolExpiry')}</Notice>}
             {prop.swap.needsApproval && <Notice tone="info">{t('swNeedsApproval', { sym: prop.symbol })}</Notice>}
             <Notice tone="info">{t('irreversible')} {t('expiresIn')} {left} s.</Notice>
           </div>}

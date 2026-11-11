@@ -8,6 +8,7 @@ import {
   baseUnits, bridgeOf, buildBtcTx, buildCctpBurnTxs, buildCctpMintTx, cctpMintRetryBytes, verifyCctpMint, buildEvmSwapTxs, buildEvmTx, checkMandateOrder, checkOrderPrice, getAsset, MandateSchema, mandateHash, priceSymbolOf, validateMandate, vaultKeyId, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash, pluginFor,
   solWireTransaction, toB64u, type CctpMintGas, type Intent, type Mandate,
 } from '@spw/core';
+import { buildSolSwapMessage, solV1Wire } from '@spw/core'; // Jupiter swaps on Solana (kept apart from the shared import line)
 import type { Keys } from './keys.ts';
 import { noPrices, type PriceView } from './prices.ts';
 import type { Store, StoredCredential } from './store.ts';
@@ -311,6 +312,14 @@ export class Signer {
           // the approved bridge is recorded with the burn it authorised: it is the only authority for the later mint
           (st.state.bridges ??= {})[i.proposalId] = { bridge: bridgeOf(i), approvedAt: now, burnTxid: keccak256(raw) };
           return { raw, txid: keccak256(raw), ...(pre ? { pre: { raw: pre, txid: keccak256(pre) } } : {}) };
+        };
+      } else if (i.swap && net.family === 'sol') {
+        // Jupiter on Solana: the message bytes come as unauthenticated helper data; the signer decodes them and checks the
+        // single signer, every instruction, the wallet's own token accounts, the exact input and the minimum output
+        const msg = buildSolSwapMessage(i, typeof aux?.swapMessage === 'string' ? aux.swapMessage : '');
+        build = async () => {
+          const sig = ed25519.sign(msg, this.keys.solSeed);
+          return { raw: Buffer.from(solV1Wire(sig, msg)).toString('base64'), txid: base58.encode(sig) };
         };
       } else if (i.swap) {
         // the provider calldata comes as unauthenticated helper data: it must hash to the approved value and pass every check

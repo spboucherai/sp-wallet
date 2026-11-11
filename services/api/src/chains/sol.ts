@@ -121,7 +121,7 @@ export function solAdapter(n: NetworkDef): Adapter {
       }
       let maxSlot = cursor ?? 0;
       for (const [sig, slot] of [...sigs].slice(0, 15)) {
-        const tx = await call<any>('getTransaction', [sig, { encoding: 'jsonParsed', commitment: 'finalized', maxSupportedTransactionVersion: 0 }]);
+        const tx = await call<any>('getTransaction', [sig, { encoding: 'jsonParsed', commitment: 'finalized', maxSupportedTransactionVersion: 1 }]);
         if (!tx?.meta) continue;
         const keys: string[] = tx.transaction.message.accountKeys.map((k: any) => k.pubkey ?? k);
         const signer = keys[0] ?? '';

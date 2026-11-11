@@ -231,7 +231,8 @@ describe('transfer lifecycle', () => {
     // execution: authenticated, idempotent, only on networks whose router has been reviewed, and refused while halted
     expect((await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: USDC, amount: '0.01' }, { cookie: null, idem: crypto.randomUUID() })).status).toBe(401);
     expect((await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: USDC, amount: '0.01' })).json.error).toBe('idempotency');
-    expect((await api('POST', '/api/v1/swap/proposals', { network: 'solana', fromAsset: 'native', toAsset: 'x', amount: '1' }, { idem: crypto.randomUUID() })).json.error).toBe('swap_not_enabled');
+    expect((await api('POST', '/api/v1/swap/proposals', { network: 'bitcoin', fromAsset: 'native', toAsset: 'x', amount: '1' }, { idem: crypto.randomUUID() })).json.error).toBe('swap_not_enabled');
+    expect((await api('POST', '/api/v1/swap/proposals', { network: 'solana', fromAsset: 'native', toAsset: 'x', amount: '1' }, { idem: crypto.randomUUID() })).json.error).toBe('unsupported_asset'); // Solana is served by Jupiter since V5 (swap-sol.test.ts)
     expect((await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: '0xdAC17F958D2ee523a2206206994597C13D831ec7', amount: '1' }, { idem: crypto.randomUUID() })).json.error).toBe('unsupported_asset');
     expect((await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: 'native', amount: '1' }, { idem: crypto.randomUUID() })).json.error).toBe('same_asset');
     expect((await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: USDC, amount: '0.01', recipient: '0x000000000000000000000000000000000000dEaD' }, { idem: crypto.randomUUID() })).status).toBe(400); // no way to name a recipient

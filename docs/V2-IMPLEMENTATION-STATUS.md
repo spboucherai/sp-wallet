@@ -123,3 +123,34 @@ KyberSwap same-chain execution is now enabled on Ethereum, Arbitrum, Polygon, Op
   Fast message; the Standard fee switch; recompilation of Circle's contracts; the screens in a browser. Full list: dossier §12.8.
 - Operational note: with the signer's current fee ceilings a mint on Ethereum is refused when 240 000 gas × (2 × base fee + tip)
   exceeds 0.005 ETH (base fee above roughly 10 gwei); the transfer is then not started (or waits, if already burned).
+
+## Update 2026-11-10 (V5): swap execution on Solana through Jupiter (Metis)
+
+- Scope: SOL ↔ registry SPL tokens (and token ↔ token) on Solana, exact input, output to the wallet itself. Dossier:
+  `docs/swap/providers/jupiter.md` §10.
+- Transaction: **Solana v1** (SIMD-0385), built by the API from `GET /swap/v2/build?transactionVersion=1`. **No address
+  lookup tables**: the signer refuses legacy and v0 messages, so every account is visible to it.
+- Signer (`packages/core/src/swap-sol.ts`, hand-written codec, no Solana SDK): one signer = fee payer = the wallet; fixed
+  instruction grammar (own token-account creation, exact wrap, one Jupiter instruction, unwrap to the wallet); Jupiter
+  instruction `shared_accounts_route_v2` only, with the twelve fixed accounts derived, exact `in_amount`, minimum
+  `floor(quoted × (10 000 − bps) / 10 000)` ≥ the approved one, no platform or positive-slippage fee, wallet absent from
+  the route accounts; fee + rent bound ≤ approved ceiling; intent commits to the SHA-256 of the message.
+- **`route_v2` is excluded**: venue programs act with the wallet's signature and the declared source account binds nothing
+  (a USDT route re-declared as USDC executes in simulation). The API rewrites direct routes into the shared-accounts form
+  and keeps them only if they simulate; otherwise it asks for another route (≤ 3 calls) or refuses
+  (`route_not_verifiable`).
+- Program pin (`JUPITER_PIN`): ProgramData last-deploy slot 462802085, upgrade authority, executable SHA-256; checked on
+  both RPC endpoints before preparing. The program is upgradeable and its source was not read: residual trust, stated in
+  the dossier.
+- API (`services/api/src/swap-exec-sol.ts`): `kind: 'swap'` proposals on `solana` in the existing table/worker; simulation
+  of the exact bytes before approval and of the signed bytes before sending; expiry without sending = failed, nothing
+  moved; outcome from the confirmed transaction's balance tables; audit `swap.prepared` / `swap.not_sent` / `swap.settled`.
+  `chains/sol.ts` now reads transactions with `maxSupportedTransactionVersion: 1`.
+- Web: Solana routes executable in the Swap screen, labelled "Jupiter (Metis)"; review sheet with route, network fee,
+  priority fee, token-account deposit, simulated output. FR/EN.
+- Tests: `packages/core/test/swap-sol.test.ts`, `services/isolated-signer/test/swap-sol.test.ts`,
+  `services/api/test/swap-sol.test.ts`, on ten recorded mainnet answers (`packages/core/test/fixtures/jupiter-exec/`).
+- Proof without funds: `npx tsx scripts/sim-jupiter.mts` (mainnet `simulateTransaction` only).
+- Not changed: EVM paths, signer limits, existing checks. `intent.ts`: provider enum gains `jupiter`, a Jupiter swap is only
+  valid on a Solana network. No new dependency; `dist/signer.mjs` 2 573 229 → 2 586 739 bytes (+13 510, +0.5 %).
+- Not verified: anything sent to a real network; see the dossier §10.9.
