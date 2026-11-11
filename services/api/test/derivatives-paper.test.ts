@@ -8,7 +8,7 @@ let sql: any, mod: typeof import('../src/derivatives/index.ts'), wk: typeof impo
 type Deriv = import('../src/derivatives/index.ts').Derivatives;
 
 beforeAll(async () => {
-  await useDatabase('spw_deriv_paper_test');
+  await useDatabase('deriv_paper');
   const db = await import('../src/db.ts');
   sql = db.sql;
   await db.migrate();

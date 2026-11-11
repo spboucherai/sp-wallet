@@ -41,11 +41,14 @@ const noLeak = (m: { importMask: number; callMask: number }, where: string): voi
 
 beforeAll(async () => {
   if (!READY) return;
+  scratchRoot = realpathSync(mkdtempSync(path.join(tmpdir(), 'spw-lab-canary-'))); // (before TMPDIR moves: a Unix socket path must stay short)
+  // a private temporary root for this file: the scratch directories of ITS calls are then the only spw-lab-* entries in it
+  // (other test files run laboratory processes at the same time in the shared one)
+  process.env.TMPDIR = realpathSync(mkdtempSync(path.join(tmpdir(), 'spw-lab-tmproot-')));
   // the fixture laboratory must be chosen before any module of the API is imported (RESEARCH_DIR is read at load)
   fx = fixtureLab({ lint: 'off' });
   Object.assign(process.env, { SPW_RESEARCH_DIR: fx.dir, SPW_RESEARCH_PYTHON: fx.python, SPW_RESEARCH_RUNNER_SECRET: SECRET, SPW_RESEARCH_LAB_COMMIT: '' });
   delete process.env.SPW_LAB_SANDBOX;
-  scratchRoot = realpathSync(mkdtempSync(path.join(tmpdir(), 'spw-lab-canary-')));
   const canary = path.join(scratchRoot, 'secret.txt'), envFile = path.join(scratchRoot, '.env');
   writeFileSync(canary, 'CANARY-SECRET-0123456789'); writeFileSync(envFile, 'SPW_SIGNER_SECRET=canary-not-a-real-secret\n');
   const listen = (key: keyof typeof connections, where: number | string) => new Promise<Server>((resolve) => { const s = createServer((c) => { connections[key] += 1; c.destroy(); });
@@ -162,11 +165,11 @@ describe.skipIf(!READY)('strategy sandbox — a hostile strategy through each re
   });
 
   it('the scratch directory of a call is removed afterwards; a second call starts from an empty one', async () => {
-    const before = readdirSync(realpathSync(tmpdir())).filter((n) => n.startsWith('spw-lab-') && !n.startsWith('spw-lab-fixture-') && !n.startsWith('spw-lab-canary-'));
+    const mine = (): string[] => readdirSync(realpathSync(tmpdir())).filter((n) => /^spw-lab-[A-Za-z0-9]{6}$/.test(n));
+    expect(mine()).toEqual([]);
     const s = add('zz_hostile/3');
     for (let i = 0; i < 2; i++) noLeak(decodeWeights(await live.runSignal({ path: s.path, sha256: s.sha256 }, spotBars, '1h'), ['BTC', 'ETH']), `call ${i}`);
-    const after = readdirSync(realpathSync(tmpdir())).filter((n) => n.startsWith('spw-lab-') && !n.startsWith('spw-lab-fixture-') && !n.startsWith('spw-lab-canary-'));
-    expect(after.filter((n) => !before.includes(n))).toEqual([]);
+    expect(mine()).toEqual([]);
   });
 });
 

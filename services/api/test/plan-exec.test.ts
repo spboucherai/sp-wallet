@@ -8,7 +8,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import postgres from 'postgres';
+import { createTestDb } from './test-db.ts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { decodeFunctionData, encodeAbiParameters, keccak256, numberToHex, pad, parseTransaction, toFunctionSelector, type Hex } from 'viem';
 import { CCTP_ABI, CCTP_ENABLED, CCTP_MESSAGE_TRANSMITTER, CCTP_TOKEN_MESSENGER, CCTP_TOKEN_MINTER, cctpBytes32, EIP1967_IMPLEMENTATION_SLOT, encodeCctpMessage, NETWORKS, type Intent } from '@spw/core';
@@ -19,7 +19,7 @@ import { createSignerServer } from '../../isolated-signer/src/server.ts';
 import { Signer } from '../../isolated-signer/src/signer.ts';
 import { Store } from '../../isolated-signer/src/store.ts';
 
-const ORIGIN = 'https://wallet.test', RP = 'wallet.test', SECRET = 'p'.repeat(48), DB = 'spw_test_plan';
+const ORIGIN = 'https://wallet.test', RP = 'wallet.test', SECRET = 'p'.repeat(48), DB_LABEL = 'plan_exec';
 const keys = deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'), ME = keys.addresses.evm;
 const owner = new TestPasskey(RP, ORIGIN);
 const CODE = JSON.parse(readFileSync(new URL('./fixtures/cctp-code.json', import.meta.url), 'utf8')) as Record<string, string>; // real mainnet bytecode, so the pinned hashes are exercised
@@ -113,9 +113,7 @@ function attested(i: Intent) {
 const tick = async () => { await worker.reconcile(); await sql`update proposals set bridge = jsonb_set(bridge, '{nextAt}', '0') where kind = 'bridge'`; await bridge.advanceBridges(); await plans.advancePlans(); };
 
 beforeAll(async () => {
-  const admin = postgres('postgres:///postgres', { max: 1, onnotice: () => {} });
-  if ((await admin`select 1 from pg_database where datname = ${DB}`).length === 0) await admin.unsafe(`create database ${DB}`).catch((e: Error) => { if (!/already exists/.test(e.message)) throw e; });
-  await admin.end();
+  const DB = (await createTestDb(DB_LABEL)).name;
   for (const id of ['base', 'arbitrum']) chains[id] = new Chain(id);
   fake = createServer((req, res) => {
     let body = ''; req.on('data', (c) => (body += c)); req.on('end', () => {

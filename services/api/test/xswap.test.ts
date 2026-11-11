@@ -6,6 +6,7 @@ import { mkdtempSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createTestDb } from './test-db.ts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { NETWORKS, THORNODE_OPERATORS, thorVaultAddress, utxoPaymentTo, type Intent, type ThorVaultWant } from '@spw/core';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
@@ -80,7 +81,7 @@ beforeAll(async () => {
   const vaults = { check: async (w: ThorVaultWant) => { signerVault.calls.push(w); if (signerVault.refuse) throw new Error(signerVault.refuse); return { operators: ['a', 'b', 'c'], silent: [], height: 1000, statusSince: 900, gasRate: 3n, dustThreshold: 1000n, outboundFee: 1059n, members: 19 }; } };
   signerSrv = createSignerServer(new Signer(keys, store, { rpId: RP, origin: ORIGIN }, undefined, undefined, undefined, vaults), SECRET).listen(0, '127.0.0.1');
   await new Promise((r) => signerSrv.once('listening', r));
-  Object.assign(process.env, { SPW_ORIGIN: ORIGIN, SPW_RP_ID: RP, DATABASE_URL: 'postgres:///spw_test_xswap', SPW_SIGNER_SECRET: SECRET, SPW_SIGNER_URL: `http://127.0.0.1:${(signerSrv.address() as { port: number }).port}`, SPW_BROADCAST: 'on', SPW_WORKERS: 'off' });
+  Object.assign(process.env, { SPW_ORIGIN: ORIGIN, SPW_RP_ID: RP, DATABASE_URL: (await createTestDb('xswap')).url, SPW_SIGNER_SECRET: SECRET, SPW_SIGNER_URL: `http://127.0.0.1:${(signerSrv.address() as { port: number }).port}`, SPW_BROADCAST: 'on', SPW_WORKERS: 'off' });
   const db = await import('../src/db.ts'); sql = db.sql;
   await sql.unsafe('drop schema public cascade; create schema public;'); await db.migrate();
   adapters = (await import('../src/chains/index.ts')).adapters;

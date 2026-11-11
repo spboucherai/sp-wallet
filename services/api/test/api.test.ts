@@ -3,6 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createTestDb } from './test-db.ts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { decodeFunctionData, erc20Abi, parseTransaction, recoverTransactionAddress } from 'viem';
 import { NETWORKS } from '@spw/core';
@@ -35,7 +36,7 @@ beforeAll(async () => {
   store.state.setupTokenHash = createHash('sha256').update('the-setup-token').digest('hex');
   signerSrv = createSignerServer(new Signer(keys, store, { rpId: RP, origin: ORIGIN }), SECRET).listen(0, '127.0.0.1');
   await new Promise((r) => signerSrv.once('listening', r));
-  Object.assign(process.env, { SPW_ORIGIN: ORIGIN, SPW_RP_ID: RP, DATABASE_URL: 'postgres:///spw_test', SPW_SIGNER_SECRET: SECRET,
+  Object.assign(process.env, { SPW_ORIGIN: ORIGIN, SPW_RP_ID: RP, DATABASE_URL: (await createTestDb('api')).url, SPW_SIGNER_SECRET: SECRET,
     SPW_SIGNER_URL: `http://127.0.0.1:${(signerSrv.address() as { port: number }).port}`, SPW_BROADCAST: 'off', SPW_WORKERS: 'off' });
   const db = await import('../src/db.ts');
   sql = db.sql;
