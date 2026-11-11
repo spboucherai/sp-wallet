@@ -57,7 +57,7 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await expect(page.getByText(/Envoyez uniquement SOL \/ USDC \/ .*sur le réseau Solana/)).toBeVisible();
   await page.getByRole('radio', { name: 'Bitcoin', exact: true }).click();
   await expect(page.locator('img[alt^="QR bc1q"]')).toBeVisible();
-  for (const [name, prefix] of [['Bitcoin Cash', 'bitcoincash:q'], ['Dogecoin', 'D'], ['Litecoin', 'ltc1q'], ['TRON', 'T'], ['XRP Ledger', 'r'], ['Stellar', 'G'], ['Sui', '0x']] as const) {
+  for (const [name, prefix] of [['Bitcoin Cash', 'bitcoincash:q'], ['Dogecoin', 'D'], ['Litecoin', 'ltc1q'], ['TRON', 'T'], ['XRP Ledger', 'r'], ['Sui', '0x'], ['Aptos', '0x'], ['Cosmos Hub', 'cosmos1'], ['NEAR Protocol', ''], ['TON', 'UQ'], ['Stellar', 'G']] as const) {
     await page.getByRole('radio', { name, exact: true }).click();
     await expect(page.locator(`img[alt^="QR ${prefix}"]`)).toBeVisible();
   }
