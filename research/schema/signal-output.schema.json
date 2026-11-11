@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sp-wallet.local/schema/signal-output.schema.json",
+  "title": "Output of python -m spq.signal (one line on stdout, exit code 0)",
+  "type": "object",
+  "required": [
+    "strategy_sha256",
+    "as_of",
+    "weights"
+  ],
+  "properties": {
+    "strategy_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "as_of": {
+      "type": "string",
+      "format": "date-time",
+      "description": "bar-open time (UTC) of the last closed bar the decision is based on"
+    },
+    "weights": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "description": "one entry per symbol of META['universe']; sum <= 1, the rest is USDC"
+    }
+  },
+  "additionalProperties": false
+}
