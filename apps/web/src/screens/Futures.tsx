@@ -110,7 +110,7 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
   const detail = useQuery({ queryKey: ['deriv', 'account', account?.id], enabled: !!account, queryFn: () => dapi.account(account!.id), refetchInterval: (q) => ((q.state.data?.positions.length ?? 0) + (q.state.data?.openOrders.length ?? 0) > 0 ? 3000 : 10_000) });
   const d = account && detail.data?.id === account.id ? detail.data : undefined;
   const lv = useLiveAccount(venueAccount?.id ?? null);
-  const liveCfg = useQuery({ queryKey: ['deriv', 'live', 'config'], queryFn: lapi.config, enabled: !!venueAccount, staleTime: 60_000, refetchInterval: 60_000, retry: 0 });
+  const liveCfg = useQuery({ queryKey: ['deriv', 'live', 'config', locale], queryFn: () => lapi.config(locale), enabled: !!venueAccount, staleTime: 60_000, refetchInterval: 60_000, retry: 0 });
   const held = venueAccount ? (lv.detail?.venueState.error ? null : lv.detail?.venueState ?? null) : d ?? account;
   const overlays = useMemo(() => overlaysOf(held, id, t, !!venueAccount), [held, id, locale]);   // eslint-disable-line react-hooks/exhaustive-deps
   const tone: Tone = chosen ? toneOf(chosen) : 'paper';

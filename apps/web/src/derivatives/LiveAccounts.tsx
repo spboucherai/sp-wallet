@@ -5,6 +5,7 @@
  * Mainnet is shown, and blocked with the reason, while the server setting keeps it off: that setting is the owner's, on the
  * server — there is no switch for it here.
  */
+import { AgentOnAccount } from './LiveAgentNote';   // v7 perp live
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useRef, useState } from 'react';
@@ -146,7 +147,7 @@ function AuthorizeSheet({ account, config, collateral, onClose }: { account: Liv
 }
 
 function RevokeSheet({ account, onClose }: { account: LiveSummary; onClose: () => void }) {
-  const t = useT(); const qc = useQueryClient();
+  const t = useT(); const qc = useQueryClient(); const { locale } = useContext(I18n);
   // how many orders rest on the venue right now (the venue's own list); unknown stays unknown
   const d = useQuery({ queryKey: liveKey(account.id), queryFn: () => lapi.account(account.id), retry: 0 });
   const openOrders = d.data && !d.data.venueState.error ? d.data.venueState.openOrders.length : null;
@@ -154,7 +155,7 @@ function RevokeSheet({ account, onClose }: { account: LiveSummary; onClose: () =
   const lock = useRef(false);
   const revoke = async () => {
     if (lock.current) return; lock.current = true; setBusy(true); setErr(null);
-    try { setDone(await lapi.revoke(account.id, cancelFirst)); } catch (e) { setErr(liveError(e)); } finally { lock.current = false; setBusy(false); void refreshLive(qc, account.id); }
+    try { setDone(await lapi.revoke(account.id, cancelFirst, locale)); } catch (e) { setErr(liveError(e)); } finally { lock.current = false; setBusy(false); void refreshLive(qc, account.id); }
   };
   return <Sheet title={t('flRevokeTitle')} onClose={() => { if (!busy) onClose(); }}><div className="space-y-3" data-testid="revoke-sheet">
     <ModeBand tone={toneOf(account)} label={account.label} />
@@ -178,7 +179,7 @@ function RevokeSheet({ account, onClose }: { account: LiveSummary; onClose: () =
 function LiveAccountCard({ a, config, selected, onSelect }: { a: LiveSummary; config: LiveConfig; selected: boolean; onSelect: (id: string) => void }) {
   const t = useT(); const { locale } = useContext(I18n);
   const tone = toneOf(a), off = a.network === 'mainnet' && !a.mainnetEnabled, auth = a.authorization, live = a.mode === 'MANUAL_LIVE';
-  const col = useQuery({ queryKey: ['deriv', 'live', 'collateral', a.id], queryFn: () => lapi.collateral(a.id), refetchInterval: 30_000, retry: 0 });
+  const col = useQuery({ queryKey: ['deriv', 'live', 'collateral', a.id], queryFn: () => lapi.collateral(a.id, locale), refetchInterval: 30_000, retry: 0 });
   const [sheet, setSheet] = useState<'authorize' | 'revoke' | null>(null);
   const c = col.data;
   return <li className={`rounded-2xl border p-4 ${selected ? 'border-ink' : 'border-line'}`} data-testid={`live-account-${a.network}`} data-mode={a.mode}>
@@ -194,6 +195,8 @@ function LiveAccountCard({ a, config, selected, onSelect }: { a: LiveSummary; co
         <p className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-mute"><SourceTag />{t('flReadAt', { time: timeOf(c.ts, locale) })} · {c.asset}</p></>}
     </div>
     <HaltBanner account={a} />
+    {/* v7 perp live: an account an agent trades says so */}
+    {a.mandate && a.mandate.phase !== 'ended' && <div className="mt-3"><AgentOnAccount account={a} /></div>}
 
     <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
       <div className="rounded-2xl bg-elev/70 p-3"><div className="mb-1 text-[12px] text-mute">{t('flAccountAddr')}</div><Addr value={a.account} /><p className="mt-1 text-[12px] leading-snug text-mute">{t('flAccountAddrNote')}</p></div>
@@ -221,7 +224,8 @@ function LiveAccountCard({ a, config, selected, onSelect }: { a: LiveSummary; co
 
 export function LiveSection({ selected, onSelect }: { selected: string | null; onSelect: (id: string) => void }) {
   const t = useT(); const qc = useQueryClient();
-  const config = useQuery({ queryKey: ['deriv', 'live', 'config'], queryFn: lapi.config, staleTime: 10_000, refetchInterval: 30_000, retry: 0 });
+  const { locale } = useContext(I18n);
+  const config = useQuery({ queryKey: ['deriv', 'live', 'config', locale], queryFn: () => lapi.config(locale), staleTime: 10_000, refetchInterval: 30_000, retry: 0 });   // v7: the server's sentences in the screen's language
   const accounts = useQuery({ queryKey: ['deriv', 'live', 'accounts'], queryFn: lapi.accounts, refetchInterval: 15_000, retry: 0 });
   const [busy, setBusy] = useState(''), [err, setErr] = useState<LiveErr | null>(null);
   const lock = useRef(false);
@@ -248,8 +252,13 @@ export function LiveSection({ selected, onSelect }: { selected: string | null; o
           {off && <p className="mt-1.5 text-[12.5px] font-medium leading-snug text-warn" data-testid="mainnet-blocked">{t('flMainnetBlocked')}</p>}
           <Btn className="mt-3" kind={n === 'testnet' ? 'primary' : 'soft'} busy={busy === n} disabled={off || !!busy} onClick={() => void create(n)}><Icon n="plus" className="h-4 w-4" />{t(n === 'testnet' ? 'flCreateTestnet' : 'flCreateMainnet')}</Btn></li>; })}</ul>
       {err && <div className="mt-3"><LiveErrNotice err={err} /></div>}
-      <p className="mt-3 text-[12.5px] leading-snug text-mute">{t('flMandateNote')} {t('fxLiveNote')}</p>
-      {!cfg.mandateLive.available && <p className="mt-1 break-words text-[11.5px] text-mute">{t('fxServerSays')} <span className="font-mono text-[11px]">{cfg.mandateLive.reason}</span></p>}
+      {/* >>> v7 perp live: the V6 shape of GET /config — mandates exist; on mainnet they are closed by a SERVER SETTING, said with the server's own words */}
+      <p className="mt-3 text-[12.5px] leading-snug text-mute" data-testid="mandate-mode-note">{cfg.mandateLive.available ? t('plMandateModeNote') : t('flMandateNote')} {t('fxLiveNote')}</p>
+      {!cfg.mandateLive.available && cfg.mandateLive.reason && <p className="mt-1 break-words text-[11.5px] text-mute">{t('fxServerSays')} <span className="font-mono text-[11px]">{cfg.mandateLive.reason}</span></p>}
+      {cfg.mandateLive.available && cfg.mandateLive.mainnet && !cfg.mandateLive.mainnet.enabled && <div className="mt-2 rounded-2xl border border-dashed border-line bg-elev/60 p-3 text-[12.5px] leading-snug" data-testid="mandate-mainnet-setting">
+        <b className="flex items-start gap-1.5 font-semibold"><Icon n="lock" className="mt-0.5 h-3.5 w-3.5 shrink-0" />{t('plLockTitle')}</b><span className="mt-1 block text-mute">{t('plLockBody')}</span>
+        <span className="mt-1 block break-words font-mono text-[11px] text-mute">{t('plLockSays')} {cfg.mandateLive.mainnet.reason ?? cfg.reasons?.mandate_mainnet_disabled?.[locale]}</span></div>}
+      {/* <<< v7 perp live */}
     </>}</div>
   </Card>;
 }

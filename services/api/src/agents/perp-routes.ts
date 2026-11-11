@@ -1,7 +1,7 @@
 // Perp agents (V6): lifecycle and views. A perp agent is bound to ONE venue (Hyperliquid), 1 to 8 of its instruments, one
 // interval and ONE derivatives paper account created for it (collateral = the agent's capital, risk policy = the owner's limits).
-// SIMULATION only: it has no vault and no mandate, creation never asks the signer for anything, and going live is not
-// available — it needs a signer-enforced derivatives mandate that does not exist yet.
+// It is created in SIMULATION: no vault, no mandate, creation never asks the signer for anything. V7: it can go LIVE on a
+// venue account under a derivative mandate enforced by the isolated signer (perp-live-cycle.ts) — the routes are at the end.
 // The routes live in the `/api/v1/agents` family; the shared ones (list, create, detail, mode, approve) delegate here from
 // routes.ts when the agent's kind is 'perp'.
 import { randomUUID } from 'node:crypto';
@@ -11,7 +11,10 @@ import { formatUnits, parseUnits } from '@spw/core';
 import { D } from '@spw/derivatives';
 import { UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
-import type { Derivatives } from '../derivatives/index.ts';
+import type { LiveService } from '../derivatives/exec.ts';
+import { derivatives, type Derivatives } from '../derivatives/index.ts';
+import { liveLocale } from '../derivatives/live-texts.ts';
+import { approveLive, isLiveActive, LiveApproveBody, liveBlock, LivePrepareBody, liveReadiness, pauseLive, prepareLive, resumeLive, stopLive } from './perp-live-cycle.ts';
 import { GATE, PERP_INTERVALS } from './perp-data.ts';
 import { CAP_HEADROOM, flattenPerp, instrumentId, LEVERAGE_HEADROOM, PERP_VENUE, perpPolicy, PerpRisk, type PerpAgentRow, type PerpBook } from './perp-engine.ts';
 import { createPerpRuntime, perpRuntime, setPerpRuntime } from './perp-live.ts';
@@ -19,7 +22,7 @@ import { perpLibrary, perpReportProblem, registerPerpStrategy } from './perp-str
 import type { AgentRow } from './routes.ts';
 
 export const MAX_PERP_INSTRUMENTS = 8;
-export const LIVE_UNAVAILABLE = 'Live trading of a perp agent needs a derivatives mandate enforced by the isolated signer (instruments, leverage, notional and loss limits checked by the signer on every order). That mandate is not available yet: this agent trades a simulated account only.';
+export const LIVE_UNAVAILABLE = 'Live trading of a perp agent needs a derivatives mandate enforced by the isolated signer (instruments, leverage, notional and loss limits checked by the signer on every order). A perp agent has no spot vault and no spot mandate: it goes live from its own page (venue account, then mandate).';
 /** symbols the laboratory accepts as they are (upper-case tickers); mixed-case listings (kPEPE…) are not offered */
 const SYMBOL = /^[A-Z0-9]{2,10}$/;
 const PerpCreate = z.strictObject({
@@ -36,7 +39,9 @@ export function spotOnly(a: Pick<AgentRow, 'id'> & { kind?: string }): void {
 }
 
 export const perpView = (a: PerpAgentRow) => ({
-  id: a.id, kind: 'perp' as const, simulation: true, name: a.name, mission: a.mission, state: a.state, mode: 'PAPER', venue: PERP_VENUE, network: PERP_VENUE, networkName: 'Hyperliquid', universe: a.universe,
+  id: a.id, kind: 'perp' as const, simulation: a.mode !== 'LIVE', name: a.name, mission: a.mission, state: a.state, mode: a.mode === 'LIVE' ? 'LIVE' as const : 'PAPER' as const,
+  /** V7: the network of the venue account of an agent whose mode is LIVE (testnet = the money is not real); null in simulation */
+  liveNetwork: a.mode === 'LIVE' ? a.perp?.live?.network ?? null : null, venue: PERP_VENUE, network: PERP_VENUE, networkName: 'Hyperliquid', universe: a.universe,
   instruments: a.universe.map(instrumentId), cash: 'USDC', interval: a.interval, risk: a.risk, capitalUsdc: formatUnits(BigInt(a.capital_usdc), 6), accountId: a.deriv_account_id,
   strategyVersionId: a.strategy_version_id, mandateId: null, mandate: null, vaultAddress: '', holdings: null,
   flag: a.perp?.flag ?? null, hold: a.perp?.hold ?? null, flattening: a.perp?.flatten ?? null,
@@ -115,8 +120,10 @@ export async function perpDetail(a: PerpAgentRow) {
       positions: account.positions, openOrders: account.openOrders, orders: account.orders.slice(0, 60), fills: account.fills.slice(0, 60), funding: account.funding.slice(0, 60),
       riskEvents: account.riskEvents.slice(0, 60), equity: account.equity, updatedAt: account.updatedAt } : null,
     versions, signals, equity: equity.reverse(), log,
-    execution: { kind: 'paper', note: 'Orders are simulated against the venue\'s live order book by the paper engine. Nothing is signed and no order reaches the venue.' },
-    live: { available: false, reason: LIVE_UNAVAILABLE },
+    execution: a.mode === 'LIVE' && a.perp?.live
+      ? { kind: 'live' as const, network: a.perp.live.network, note: `Orders are REAL orders on the Hyperliquid ${a.perp.live.network} account${a.perp.live.network === 'testnet' ? ' (test network: the money is not real)' : ' (real money)'}: signed by the isolated signer under the mandate, without a passkey, and confirmed by the venue's own records. Positions, fills, funding and equity are read from the venue.` }
+      : { kind: 'paper' as const, note: 'Orders are simulated against the venue\'s live order book by the paper engine. Nothing is signed and no order reaches the venue.' },
+    live: await liveBlock(a, rt(), true),
     rules: { markIndexBps: GATE.markIndexBps, lastCloseBps: GATE.lastCloseBps, leverageHeadroom: LEVERAGE_HEADROOM, capHeadroom: CAP_HEADROOM,
       simplifications: ['flat 2 % maintenance margin fraction', 'cross margin only', 'the liquidation price is a single-position estimate', 'a simulated liquidation closes the whole account at the mark',
         'fills walk the live book with no latency, no queue position and no market impact', 'funding is applied on the mark at the venue\'s funding times with the venue\'s published rate'] } };
@@ -124,6 +131,13 @@ export async function perpDetail(a: PerpAgentRow) {
 
 /** Owner changes of state. PAPER needs an approved version and an account whose circuit breaker is not set. */
 export async function perpMode(a: PerpAgentRow, mode: 'PAPER' | 'PAUSED' | 'STOPPED' | 'RESEARCH') {
+  // V7: an agent that is on a venue account changes state through the live life cycle only (pause keeps positions; stop
+  // revokes the mandate and closes them). It returns to simulation once it is STOPPED.
+  if (isLiveActive(a)) {
+    if (mode === 'PAUSED') return perpView(a.state === 'PAUSED' ? a : await pauseLive(a));
+    if (mode === 'STOPPED') { await stopLive(a, rt(), 'en'); return perpView((await sql<PerpAgentRow[]>`select * from agents where id = ${a.id}`)[0]!); }
+    throw new UserError('bad_state', 'this agent is on a venue account: stop it first (the mandate is revoked and its positions are closed), then return to simulation', 409);
+  }
   if (mode === 'PAPER') {
     if (!a.strategy_version_id) throw new UserError('no_strategy', 'approve a strategy version first', 409);
     const acct = await paper().get(a.deriv_account_id);
@@ -154,10 +168,10 @@ const loadPerp = async (id: string): Promise<PerpAgentRow> => {
   return a;
 };
 
-export function perpAgentRoutes(app: FastifyInstance, d?: Derivatives): void {
-  // an injected derivatives instance (tests, the simulation script) gets its own runtime: same caches, same rate budget
-  if (d) setPerpRuntime(createPerpRuntime(d));
-  app.addHook('onClose', async () => { if (d) setPerpRuntime(null); });
+export function perpAgentRoutes(app: FastifyInstance, d?: Derivatives, l?: LiveService): void {
+  // an injected derivatives instance or live engine (tests, the simulation scripts) gets its own runtime: same caches, same rate budget
+  if (d || l) setPerpRuntime(createPerpRuntime(d ?? derivatives(), l ? { live: l } : {}));
+  app.addHook('onClose', async () => { if (d || l) setPerpRuntime(null); });
 
   // what a perp agent can be built from: the venue, its instruments as the venue lists them now, the limits' bounds
   app.get('/api/v1/agents/perp/venues', async () => {
@@ -168,13 +182,14 @@ export function perpAgentRoutes(app: FastifyInstance, d?: Derivatives): void {
       return { symbol: i.symbol, id: i.id, maxLeverage: i.maxLeverage, lotSize: i.lotSize, minNotional: i.minNotional, mark: t?.mark ?? null, funding: t?.funding ?? null, volume24h: t?.volume24h ?? null, eligible: why === null, why };
     }).sort((x, y) => Number(y.volume24h ?? 0) - Number(x.volume24h ?? 0));
     return { venues: [{ id: PERP_VENUE, name: 'Hyperliquid', network: data().registry.get(PERP_VENUE).adapter.network, paper: true, instruments }], maxInstruments: MAX_PERP_INSTRUMENTS, intervals: PERP_INTERVALS,
-      riskDefaults: PerpRisk.parse({}), minCapital: '50', live: { available: false, reason: LIVE_UNAVAILABLE }, ts: data().now() };
+      riskDefaults: PerpRisk.parse({}), minCapital: '50', live: (() => { const m = rt().live().config('en').mandateLive; return { available: m.available, reason: m.reason }; })(), ts: data().now() };
   });
 
   // the owner replaces the limits: the agent's own and the account's risk policy change together
   app.post('/api/v1/agents/:id/perp/risk', async (req) => {
     const a = await loadPerp((req.params as { id: string }).id);
     const b = z.strictObject({ risk: PerpRisk, liftHalt: z.boolean().default(false) }).parse(req.body);
+    if (isLiveActive(a)) throw new UserError('bad_state', 'the limits of an agent that is on a venue account are those of its mandate: stop the agent, change the limits, then approve a new mandate', 409);
     if (b.risk.maxDailyLossPct > b.risk.maxTotalLossPct) throw new UserError('bad_request', 'the daily loss limit cannot exceed the total loss limit', 400);
     const acct = await paper().get(a.deriv_account_id);
     await paper().setPolicy(a.deriv_account_id, perpPolicy(a.universe, formatUnits(BigInt(a.capital_usdc), 6), b.risk, b.liftHalt ? null : acct.policy.halt));
@@ -186,8 +201,28 @@ export function perpAgentRoutes(app: FastifyInstance, d?: Derivatives): void {
   // close every position of the agent's account with reduce-only orders (always possible, also when stopped or halted)
   app.post('/api/v1/agents/:id/perp/flatten', async (req) => {
     const a = await loadPerp((req.params as { id: string }).id), run = rt();
+    if (a.mode === 'LIVE') throw new UserError('bad_state', 'this agent is (or was) on a venue account: "stop" closes its positions with reduce-only orders under the mandate; afterwards, close by hand in the Futures terminal with your passkey', 409);
     const f = await flattenPerp(a, run.deps, run.deps.executor(a), `m${Math.floor(run.deps.now() / 1000)}`);
     await audit('agent.perp_flatten', 'owner', { id: a.id, orders: f.results.length, left: f.left.length });
     return { orders: f.results, positionsLeft: f.left.length };
   });
+
+  // >>> v7 perp agents LIVE — going live on a venue account under a signer-enforced mandate, and leaving it. No route places
+  // an order. Pause, resume and stop need no passkey; going live needs exactly one (judged by the signer, not here).
+  const param = (req: { params: unknown }) => loadPerp((req.params as { id: string }).id);
+  /** the checklist: approved version · authorised venue account · funded · mandate — and the mandate that would be proposed */
+  app.get('/api/v1/agents/:id/perp/live', async (req) => {
+    const q = z.object({ account: z.uuid().optional(), locale: z.string().max(5).optional(), days: z.coerce.number().int().min(1).max(30).optional() }).parse(req.query);
+    return liveReadiness(await param(req), rt(), { account: q.account, locale: liveLocale(q.locale), days: q.days });
+  });
+  app.post('/api/v1/agents/:id/perp/live/prepare', async (req) => prepareLive(await param(req), rt(), LivePrepareBody.parse(req.body)));
+  app.post('/api/v1/agents/:id/perp/live/approve', async (req) => perpDetail(await approveLive(await param(req), rt(), LiveApproveBody.parse(req.body))));
+  app.post('/api/v1/agents/:id/perp/live/pause', async (req) => perpDetail(await pauseLive(await param(req))));
+  app.post('/api/v1/agents/:id/perp/live/resume', async (req) => perpDetail(await resumeLive(await param(req), rt())));
+  app.post('/api/v1/agents/:id/perp/live/stop', async (req) => {
+    const a = await param(req), b = z.strictObject({ locale: z.enum(['fr', 'en']).default('en') }).parse(req.body ?? {});
+    const r = await stopLive(a, rt(), b.locale);
+    return { ...(await perpDetail(await loadPerp(a.id))), windDown: r.windDown, result: r.result };
+  });
+  // <<< v7 perp agents LIVE
 }

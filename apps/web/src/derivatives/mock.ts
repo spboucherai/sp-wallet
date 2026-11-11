@@ -33,6 +33,7 @@ import { PaperAccount } from '../../../../packages/derivatives/src/paper.ts';
 import { checkOrder } from '../../../../packages/derivatives/src/risk.ts';
 import { stepAt, worstPrice as worstPriceOf } from './dec';
 import { createLiveMock, type LiveHooks } from './mockLive';
+import { createPerpMock, type PerpHooks } from './mockPerpLive';   // v7 perp live: the perp-agent routes
 import { aggregateBars, type Bar } from './reducers';
 import type { Book, Candle, CompareRow, Instrument, Interval, Liquidity, OrderRequest, Position, PublicTrade, RiskPolicy, Ticker, VenueId, VenueInfo } from './types';
 import { INTERVAL_MS } from './types';
@@ -481,6 +482,9 @@ class MockStream extends EventTarget {
 /** controlled live trading (mockLive.ts) on top of the same simulated markets */
 const LIVE = createLiveMock({ sim: (id) => sim(id), fresh: (s) => fresh(s as Sim), priceProblem: (venue, tick, p) => HL_SIG(venue, D.from(tick), p),
   worstPrice: (ref, side, bps, tick, venue) => D.str(worstPriceOf(D.from(ref), side, bps, D.from(tick), venue)) });
+// >>> v7 perp live: ONE scripted perp agent whose real mode runs on the venue accounts above (mockPerpLive.ts)
+const PERP = createPerpMock(LIVE.agentSide, { mark: (id) => { const s = sim(id); return s ? fresh(s).ticker.mark : null; }, lot: (id) => sim(id)?.inst.lotSize ?? '0.00001', fund: (n, usdc) => LIVE.hooks.fund(n, usdc) });
+// <<< v7 perp live
 /** the stream of one venue account: `status` and `account` first, then every event of the account */
 class LiveMockStream extends EventTarget {
   static readonly CONNECTING = 0; static readonly OPEN = 1; static readonly CLOSED = 2;
@@ -505,8 +509,9 @@ async function route(method: string, path: string, q: URLSearchParams, b: any, h
   if (path === '/auth/state') return json(200, { setupRequired: false, authenticated: true });
   if (path === '/auth/logout') return json(200, {});
   if (path === '/settings') return json(200, { locale: 'fr', currency: 'CAD', hideBalances: false, prices: true });
+  if (PERP.handles(path)) return out(PERP.route(method, path, b, q));   // v7 perp live
   if (!path.startsWith('/derivatives')) return json(503, { error: 'mock', message: 'mock mode: only the Futures terminal is simulated' });
-  if (path.startsWith('/derivatives/live/')) return out(LIVE.route(method, path, b, headers));
+  if (path.startsWith('/derivatives/live/')) return out(LIVE.route(method, path, b, headers, q));
   const p = path.slice('/derivatives'.length);
   const unknown = () => json(404, { error: 'unknown_instrument', message: 'unknown instrument' });
   if (venue && !VENUES.some((v) => v.id === venue)) return json(404, { error: 'unknown_venue', message: `unknown venue ${venue}` });
@@ -590,7 +595,7 @@ function watch(account: string, venue: VenueId) {
     positions, openOrders: [], ts: now, source: 'venue' };
 }
 
-declare global { interface Window { __spwMock?: { setRate: (n: number) => void; stale: () => void; reconnect: () => void; resume: () => void; accounts: () => number; live: LiveHooks } } }
+declare global { interface Window { __spwMock?: { setRate: (n: number) => void; stale: () => void; reconnect: () => void; resume: () => void; accounts: () => number; live: LiveHooks; /** v7 perp live */ perp: PerpHooks } } }
 
 export function installMock(): void {
   PROFILES = profiles();
@@ -616,7 +621,13 @@ export function installMock(): void {
   } });
   setInterval(worker, 1000);
   setInterval(LIVE.step, 1000);
+  setInterval(PERP.step, 1000);   // v7 perp live: a stopping agent closes its positions
   LIVE.installPasskey();
+  // >>> v7 perp live: `&perp=<scenario>` starts the scripted perp agent in a scenario (kept for the tab, like `mock=1`; `&perp=` forgets it)
+  if (q.has('perp')) { if (q.get('perp')) sessionStorage.setItem('spw-mock-perp', q.get('perp')!); else sessionStorage.removeItem('spw-mock-perp'); }
+  const scenario = sessionStorage.getItem('spw-mock-perp');
+  if (scenario) PERP.hooks.scenario(scenario as Parameters<PerpHooks['scenario']>[0]);
+  // <<< v7 perp live
   if (q.get('mainnet') === '1') LIVE.hooks.mainnet(true);   // `&mainnet=1`: the simulated server setting SPW_DERIV_LIVE_MAINNET starts on
   const freeze = (v: boolean) => { for (const s of SIMS.values()) s.frozen = v; };
   window.__spwMock = {
@@ -626,6 +637,7 @@ export function installMock(): void {
     resume: () => { freeze(false); for (const s of STREAMS) s.up(); },
     accounts: () => ACCTS.size,
     live: LIVE.hooks,
+    perp: PERP.hooks,   // v7 perp live
   };
   console.info('[SP Wallet] mock mode: derivatives API simulated in the browser from recorded fixtures — no backend, no venue.');
 }

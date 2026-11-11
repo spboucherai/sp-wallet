@@ -16,6 +16,10 @@
 import { hex, validateVenueAuthorization, venueAgentWireName, venueAuthorizationHash, venueLeverageHash, venueOrderHash, venueOrderNotional, VenuePolicySchema, VENUE_AUTH_MAX_DAYS, VENUE_POLICY_BOUNDS, withinBand,
   type VenueAuthorization, type VenueLeverage, type VenueOrder, type VenuePolicy } from '../../../../packages/derivatives/src/live/canonical.ts';
 import { HL_PINNED_ASSETS, HL_PINNED_AT } from '../../../../packages/derivatives/src/live/hl-assets.ts';
+// >>> v7 perp live: the repository's own canonical mandate (schema, hash, validity, phase)
+import { validateVenueMandate, VENUE_MANDATE_BOUNDS, VENUE_MANDATE_WIND_DOWN_S, venueMandateHash, venueMandatePhase, VenueMandateSchema, type VenueMandate } from '../../../../packages/derivatives/src/live/mandate.ts';
+import { mockLiveReasons, mockLiveTexts, type MockLocale } from './mockLiveTexts';
+// <<< v7 perp live
 import { jurisdictionAck } from '../../../../packages/derivatives/src/live/jurisdiction.ts';
 import { D } from '../../../../packages/derivatives/src/decimal.ts';
 import { initialMargin } from '../../../../packages/derivatives/src/margin.ts';
@@ -28,20 +32,25 @@ export interface LiveMockEnv { sim: (id: string) => SimLike | null; fresh: (s: S
 type Net = 'testnet' | 'mainnet';
 type State = 'proposed' | 'risk_checked' | 'authorized' | 'signed' | 'submitted' | 'unknown' | 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected';
 interface LOrder { clientId: string; cloid: string; instrument: string; side: 'buy' | 'sell'; type: string; size: string; price: string | null; triggerPrice: string | null; reduceOnly: boolean; tif: string; state: State; final: boolean;
-  venueOrderId: string | null; filled: string; avgFillPrice: string | null; reason: string | null; origin: 'owner' | 'close'; hash: string | null; nonce: number | null; expiresAt: number | null; canonical: VenueOrder | null;
+  venueOrderId: string | null; filled: string; avgFillPrice: string | null; reason: string | null; origin: 'owner' | 'close' | 'mandate'; hash: string | null; nonce: number | null; expiresAt: number | null; canonical: VenueOrder | null;
   createdAt: number; updatedAt: number; submittedAt: number | null; signed: boolean; /** an `unknown` answer is revealed by the "reconciliation" at this time */ revealAt: number | null; req: OrderRequest | null }
 interface LAction { id: string; kind: 'leverage' | 'cancel'; state: string; request: Record<string, unknown>; hash: string | null; nonce: number; expiresAt: number; error: string | null; createdAt: number; updatedAt: number }
 interface Ev { id: number; ts: number; kind: string; code: string | null; message: string; data: Record<string, unknown> }
 interface LAcct { id: string; network: Net; label: string; account: string; agentAddress: string; mode: 'READ_ONLY' | 'MANUAL_LIVE'; policy: RiskPolicy; halt: string | null; divergence: string | null;
   pending: { authorization: VenueAuthorization; preparedAt: number } | null; auth: VenueAuthorization | null; authHash: string | null; authorizedAt: number | null; revokedAt: number | null; createdAt: number; updatedAt: number;
   venue: PaperAccount | null; foreign: Order[]; orders: LOrder[]; actions: LAction[]; events: Ev[]; equity: { ts: number; equity: string; collateral: string; marginUsed: string; unrealizedPnl: string; source: 'venue' }[];
-  lastNonce: number; leverage: Record<string, { leverage: string; marginMode: 'cross' | 'isolated' }>; signedToday: number }
+  lastNonce: number; leverage: Record<string, { leverage: string; marginMode: 'cross' | 'isolated' }>; signedToday: number;
+  // >>> v7 perp live: the derivative mandate of the account (the last one approved) and the simulated signer's counters of the day
+  mandate?: { mandate: VenueMandate; hash: string; approvedAt: number; revokedAt: number | null } | null; pendingMandate?: { mandate: VenueMandate; hash: string; preparedAt: number } | null;
+  mstats?: { orders: number; reduceOnly: number; cancels: number; leverage: number; turnover: string; stamps: number[] }
+  // <<< v7 perp live
+}
 type Out = { status: number; json: any };
 class Refuse extends Error { status: number; code: string; constructor(code: string, message: string, status: number) { super(message); this.code = code; this.status = status; } }
 
 const WALLET = '0x5ad0c0ffee5ad0c0ffee5ad0c0ffee5ad0c0ffee', AGENT: Record<Net, string> = { testnet: '0x7e57a9e170000000000000000000000000a9e171', mainnet: '0x4ea1a9e170000000000000000000000000a9e170' };
 const PATHS: Record<Net, string> = { mainnet: "m/44'/60'/9000'/0/0", testnet: "m/44'/60'/9000'/0/1" };
-const MAINNET_OFF = 'live trading on Hyperliquid MAINNET is disabled on this server (SPW_DERIV_LIVE_MAINNET is not "on"): nothing was built, signed or sent. The testnet account works.';
+const MAINNET_OFF = mockLiveReasons.mainnet_disabled.en;
 const READ_ONLY_POLICY: RiskPolicy = { mode: 'READ_ONLY', allowedInstruments: [], halt: null, maxDataAgeMs: 5_000, maxDeviationBps: '0', maxMarkIndexBps: '0', maxLeverage: '1', maxOrderNotional: '0',
   maxGrossExposure: '0', maxPositionNotional: '0', minFreeCollateral: '0', minLiquidationDistanceBps: '0', maxDailyLoss: '0', maxTotalLoss: '0', maxOrdersPerMinute: 0, maxOrdersPerDay: 0 };
 const PRE = ['proposed', 'risk_checked'], AT_VENUE = ['submitted', 'unknown', 'open', 'partially_filled', 'filled'];
@@ -105,7 +114,22 @@ export function createLiveMock(env: LiveMockEnv) {
     halted: effectiveHalt(a), mainnetEnabled: MAINNET, tradable: blocked(a, 'trade') === null,
     authorization: a.auth ? { id: a.auth.authorizationId, hash: a.authHash, mode: a.auth.mode, agentName: a.auth.agentName, policy: a.auth.policy, createdAt: a.auth.createdAt * 1000, expiresAt: a.auth.expiresAt * 1000, ackSha256: a.auth.ackSha256,
       active: a.mode === 'MANUAL_LIVE' && now() < a.auth.expiresAt * 1000, expired: now() >= a.auth.expiresAt * 1000, revokedAt: a.revokedAt, authorizedAt: a.authorizedAt } : null,
-    pendingAuthorization: a.pending ? { authorizationId: a.pending.authorization.authorizationId, preparedAt: a.pending.preparedAt } : null, createdAt: a.createdAt, updatedAt: a.updatedAt });
+    pendingAuthorization: a.pending ? { authorizationId: a.pending.authorization.authorizationId, preparedAt: a.pending.preparedAt } : null, createdAt: a.createdAt, updatedAt: a.updatedAt, ...mandateInfo(a) });
+  // >>> v7 perp live: exec.ts `currentMandate` / `mandateInfo`
+  function mandatePhase(a: LAcct) {
+    const m = a.mandate; if (!m) return null;
+    const nowS = Math.floor(now() / 1000), ph = venueMandatePhase(m.mandate, m.revokedAt === null ? null : Math.floor(m.revokedAt / 1000), nowS);
+    const rootAlive = a.mode === 'MANUAL_LIVE' && a.auth?.authorizationId === m.mandate.authorizationId && nowS < (a.auth?.expiresAt ?? 0);
+    return { phase: rootAlive ? ph.phase : 'ended' as const, windDownUntil: ph.windDownUntil === null ? null : ph.windDownUntil * 1000 };
+  }
+  function mandateInfo(a: LAcct) {
+    const m = a.mandate, ph = mandatePhase(a);
+    return { modes: (a.mode === 'MANUAL_LIVE' && ph?.phase === 'active' ? ['MANUAL_LIVE', 'MANDATE_LIVE'] : [a.mode]) as string[],
+      mandate: m && ph ? { id: m.mandate.mandateId, hash: m.hash, authorizationId: m.mandate.authorizationId, agentId: m.mandate.agentId, strategySha256: m.mandate.strategySha256, limits: m.mandate, phase: ph.phase, active: ph.phase === 'active',
+        createdAt: m.mandate.createdAt * 1000, expiresAt: m.mandate.expiresAt * 1000, expired: now() >= m.mandate.expiresAt * 1000, approvedAt: m.approvedAt, revokedAt: m.revokedAt, windDownUntil: ph.windDownUntil, ackSha256: m.mandate.ackSha256 } : null,
+      pendingMandate: a.pendingMandate ? { mandateId: a.pendingMandate.mandate.mandateId, preparedAt: a.pendingMandate.preparedAt } : null };
+  }
+  // <<< v7 perp live
   const detail = (a: LAcct) => ({ ...summary(a), venueState: venueState(a), orders: [...a.orders].reverse().slice(0, 100).map(orderView), actions: [...a.actions].reverse().slice(0, 50),
     fills: a.venue ? [...a.venue.state.fills].reverse().slice(0, 100).map((f) => ({ ...f, source: 'venue' as const })) : [], funding: a.venue ? [...a.venue.state.funding].reverse().slice(0, 100).map((f) => ({ ...f, source: 'venue' as const })) : [],
     riskEvents: [...a.events].reverse().slice(0, 100), equity: a.equity, ts: now() });
@@ -278,9 +302,8 @@ export function createLiveMock(env: LiveMockEnv) {
     const hash = hex(venueAuthorizationHash(authorization));
     a.pending = { authorization, preparedAt: nowMs }; a.updatedAt = nowMs;
     return { authorization, hash, acknowledgement: ack,
-      agent: { address: a.agentAddress, name: authorization.agentName, wireName: venueAgentWireName(authorization), validUntil: authorization.expiresAt * 1000, can: ['place orders', 'cancel orders', 'change leverage'], cannot: ['withdraw', 'transfer to another address'],
-        note: 'On the venue an API wallet could also move collateral between the account\'s own balances; the signer refuses to sign anything but orders, cancels and leverage changes.' },
-      whatIsSigned: { byMainKey: 'one approveAgent action naming the trading key above (the only venue message the wallet key signs)', byPasskey: 'the SHA-256 of this authorization, which includes the hash of the acknowledgement text' },
+      agent: { address: a.agentAddress, name: authorization.agentName, wireName: venueAgentWireName(authorization), validUntil: authorization.expiresAt * 1000, can: mockLiveTexts(body.locale).can, cannot: mockLiveTexts(body.locale).cannot, note: mockLiveTexts(body.locale).agentNote },
+      whatIsSigned: { byMainKey: mockLiveTexts(body.locale).byMainKey, byPasskey: mockLiveTexts(body.locale).byPasskey }, locale: body.locale as MockLocale,   // v7: the body's locale selects the language of the server's sentences
       venueState: venueState(a), options: options(hash), ts: nowMs };
   }
   function approveAuthorization(a: LAcct, body: any) {
@@ -302,11 +325,13 @@ export function createLiveMock(env: LiveMockEnv) {
     if (body.cancelOpenOrders && a.mode === 'MANUAL_LIVE') { try { cancelled = cancelAll(a); } catch { cancelled = null; } }
     const had = !!a.auth;
     Object.assign(a, { mode: 'READ_ONLY', policy: { ...a.policy, mode: 'READ_ONLY' }, pending: null, revokedAt: had ? now() : a.revokedAt, updatedAt: now() });
+    if (a.mandate && a.mandate.revokedAt === null) a.mandate.revokedAt = now();   // v7: revoking the authorization also revokes its mandate (no wind-down: the root is gone)
+    a.pendingMandate = null;
     for (const o of a.orders) if (!o.final && PRE.includes(o.state)) setOrder(a, o, { state: 'cancelled', final: true, reason: 'withdrawn: the venue authorization was revoked before approval' });
     emit(a.id, 'status', { mode: 'READ_ONLY', ts: now() });
     const v = venueState(a);
     return { ...detail(a), cancelled, warning: v.openOrders.length ? `${v.openOrders.length} order(s) still rest on the venue. The wallet can no longer cancel them (a revoked authorization signs nothing): cancel them in the venue's own interface, or approve a new authorization and cancel.` : null,
-      venueAgent: 'The trading key stays registered at the venue until its expiry, but it exists only in the signer, which now refuses to use it.' };
+      cancelError: null, locale: (body.locale === 'fr' ? 'fr' : 'en') as MockLocale, venueAgent: mockLiveTexts(body.locale === 'fr' ? 'fr' : 'en').venueAgent };
   }
   function proposeLeverage(a: LAcct, body: any) {
     const stop = blocked(a, 'trade'); if (stop) throw stop;
@@ -337,14 +362,111 @@ export function createLiveMock(env: LiveMockEnv) {
     return { action: x, idempotent: false, venue: { leverage: a.leverage[c.instrument], confirmed: true, source: 'venue' as const } };
   }
 
+  // >>> v7 perp live ------------------------------------------------------------ MANDATE_LIVE (exec.ts, end of LiveService)
+  /** SPW_DERIV_MANDATE_MAINNET: OFF, and this mock offers no way to turn it on (it is a server setting, not a switch) */
+  const MANDATE_MAINNET: boolean = false;
+  function config(locale: MockLocale) {
+    const mandateMainnet = MAINNET && MANDATE_MAINNET, t = now();
+    return { mainnetEnabled: MAINNET, locale, mainnet: { enabled: MAINNET, code: MAINNET ? null : 'mainnet_disabled', reason: MAINNET ? null : mockLiveReasons.mainnet_disabled[locale] },
+      venues: [{ venue: 'hyperliquid', networks: ['testnet', 'mainnet'] }], modes: ['READ_ONLY', 'MANUAL_LIVE', 'MANDATE_LIVE'],
+      mandateLive: { available: true, code: null, reason: null, mainnet: { enabled: mandateMainnet, code: mandateMainnet ? null : 'mandate_mainnet_disabled', reason: mandateMainnet ? null : mockLiveReasons.mandate_mainnet_disabled[locale] },
+        bounds: { ...VENUE_MANDATE_BOUNDS, windDownSeconds: VENUE_MANDATE_WIND_DOWN_S, orderTtlMs: 30_000 } },
+      reasons: mockLiveReasons,
+      pinnedAssets: { pinnedAt: HL_PINNED_AT, mainnet: HL_PINNED_ASSETS.mainnet.map((x) => ({ instrument: `hyperliquid:${x.symbol}`, maxLeverage: x.maxLeverage })), testnet: HL_PINNED_ASSETS.testnet.map((x) => ({ instrument: `hyperliquid:${x.symbol}`, maxLeverage: x.maxLeverage })) },
+      bounds: { ...VENUE_POLICY_BOUNDS, maxAuthorizationDays: VENUE_AUTH_MAX_DAYS, orderApprovalTtlMs: 90_000 }, ts: t };
+  }
+  function mandateLock(a: LAcct): Refuse | null {
+    if (a.network !== 'mainnet') return null;
+    if (!MAINNET) return new Refuse('mainnet_disabled', MAINNET_OFF, 403);
+    if (!MANDATE_MAINNET) return new Refuse('mandate_mainnet_disabled', mockLiveReasons.mandate_mainnet_disabled.en, 403);
+    return null;
+  }
+  function prepareMandate(a: LAcct, body: any) {
+    const lock = mandateLock(a) ?? blocked(a, 'trade'); if (lock) throw lock;
+    if (mandatePhase(a)?.phase === 'active') throw new Refuse('bad_state', 'a mandate is already active on this venue account: revoke it to change its limits', 409);
+    const locale: MockLocale = body.locale === 'fr' ? 'fr' : 'en', auth = a.auth!, nowMs = now(), nowS = Math.floor(nowMs / 1000), ack = jurisdictionAck('hyperliquid', locale);
+    if (!Number.isInteger(body.days) || body.days < 1 || body.days > VENUE_MANDATE_BOUNDS.maxDays) throw new Refuse('bad_request', 'invalid mandate body', 400);
+    const parsed = VenueMandateSchema.safeParse({ v: 1, mandateId: crypto.randomUUID(), authorizationId: auth.authorizationId, keyId: auth.keyId, venue: 'hyperliquid', network: a.network, account: a.account, agentAddress: a.agentAddress,
+      strategySha256: body.strategySha256, agentId: body.agentId, instruments: body.instruments, maxOrderNotional: body.maxOrderNotional, maxGrossExposure: body.maxGrossExposure, maxOrdersPerDay: body.maxOrdersPerDay, maxOrdersPerHour: body.maxOrdersPerHour,
+      maxDailyTurnover: body.maxDailyTurnover, floorEquity: body.floorEquity, maxPriceDeviationBps: body.maxPriceDeviationBps ?? auth.policy.maxPriceDeviationBps, createdAt: nowS, expiresAt: nowS + body.days * 86400, ackSha256: ack.sha256 });
+    if (!parsed.success) throw new Refuse('bad_request', 'invalid mandate body', 400);
+    const mandate = parsed.data;
+    try { validateVenueMandate(mandate, auth, nowS); } catch (e) { throw new Refuse('bad_policy', e instanceof Error ? e.message : String(e), 400); }
+    for (const i of mandate.instruments) { const pin = HL_PINNED_ASSETS[a.network].find((x) => `hyperliquid:${x.symbol}` === i.instrument); if (!pin || i.maxLeverage > pin.maxLeverage) throw new Refuse('bad_policy', `${i.instrument}: not in the pinned ${a.network} asset table, or leverage above the venue maximum`, 400); }
+    const hash = hex(venueMandateHash(mandate)), t = mockLiveTexts(locale);
+    a.pendingMandate = { mandate, hash, preparedAt: nowMs };
+    return { mandate, hash, acknowledgement: ack, locale, authorization: { id: auth.authorizationId, hash: a.authHash, expiresAt: auth.expiresAt * 1000, policy: auth.policy }, warning: t.mandateWarning,
+      enforcedBySigner: t.enforcedBySigner, trustedBySigner: t.trustedBySigner, notEnforced: t.notEnforced, windDown: { seconds: VENUE_MANDATE_WIND_DOWN_S, text: t.windDown }, whatIsSigned: { byPasskey: t.mandateByPasskey },
+      venueState: venueState(a), options: options(hash), ts: nowMs };
+  }
+  function approveMandate(a: LAcct, body: any) {
+    const lock = mandateLock(a) ?? blocked(a, 'trade'); if (lock) throw lock;
+    if (body.acknowledged !== true) throw new Refuse('bad_request', 'the acknowledgement must be confirmed', 400);
+    const p = a.pendingMandate; if (!p) throw new Refuse('bad_state', 'prepare the mandate first', 409);
+    a.pendingMandate = null;                                   // a refused approval consumes the preparation
+    const no = signerRefusal(a, p.hash, body.assertion); if (no) throw no;
+    a.mandate = { mandate: p.mandate, hash: p.hash, approvedAt: now(), revokedAt: null }; a.mstats = { orders: 0, reduceOnly: 0, cancels: 0, leverage: 0, turnover: '0', stamps: [] }; a.updatedAt = now();
+    emit(a.id, 'status', { mode: a.mode, modes: ['MANUAL_LIVE', 'MANDATE_LIVE'], mandate: p.mandate.mandateId, ts: now() });
+    return detail(a);
+  }
+  function revokeMandate(a: LAcct, body: any) {
+    if (!a.mandate) throw new Refuse('bad_state', 'this venue account has no mandate', 409);
+    if (a.mandate.revokedAt === null) { a.mandate.revokedAt = now(); riskEvent(a, 'mandate_revoked', null, 'the derivative mandate was revoked: no order that can add exposure is signed any more', { mandateId: a.mandate.mandate.mandateId }); }
+    let cancelled: ReturnType<typeof cancelAll> | null = null, cancelError: { code: string; message: string } | null = null;
+    if (body?.cancelOpenOrders) { try { cancelled = cancelAll(a); } catch (e) { cancelError = { code: e instanceof Refuse ? e.code : 'internal', message: e instanceof Error ? e.message : String(e) }; } }
+    const locale: MockLocale = body?.locale === 'fr' ? 'fr' : 'en', v = venueState(a);
+    emit(a.id, 'status', { mode: a.mode, modes: [a.mode], mandate: null, ts: now() });
+    return { ...detail(a), cancelled, cancelError, locale, windDown: { until: mandatePhase(a)?.windDownUntil ?? null, text: mockLiveTexts(locale).windDown, openPositions: v.positions.length, openOrders: v.openOrders.length } };
+  }
+  function signerMandate(a: LAcct) {
+    const m = a.mandate, ph = mandatePhase(a), st = a.mstats;
+    if (!m || !ph || !st) return null;
+    return { mandate: m.mandate, hash: m.hash, approvedAt: m.approvedAt, revoked: m.revokedAt !== null, revokedAt: m.revokedAt, expired: now() >= m.mandate.expiresAt * 1000, phase: ph.phase,
+      windDownUntil: ph.windDownUntil === null ? null : Math.floor(ph.windDownUntil / 1000), today: { orders: st.orders, reduceOnly: st.reduceOnly, cancels: st.cancels, leverage: st.leverage, turnover: st.turnover },
+      ordersLastHour: st.stamps.filter((x) => x > now() - 3_600_000).length, pendingOrders: 0 };
+  }
+  function mandateStatus(a: LAcct) { return { ...mandateInfo(a), signer: signerMandate(a), ts: now() }; }
+  /**
+   * ONE order of the agent runtime under the mandate (no passkey; there is no HTTP route to this). A market order as the venue
+   * takes it: limit IOC at a worst price. The simulated signer applies the mandate's phase, order notional, position limit,
+   * hourly count and floor; a refusal is thrown with the backend's `signer_<code>` and stored as a rejected order.
+   */
+  function placeMandate(a: LAcct, o: { instrument: string; side: 'buy' | 'sell'; size: string; reduceOnly: boolean; clientId: string; slippageBps?: number }) {
+    const prior = a.orders.find((x) => x.clientId === o.clientId); if (prior) return orderView(prior);
+    const lock = mandateLock(a) ?? blocked(a, 'trade'); if (lock) throw lock;
+    const ph = mandatePhase(a), m = a.mandate?.mandate, st = a.mstats;
+    if (!ph || !m || !st || ph.phase === 'ended') throw new Refuse('mandate_none', 'no derivative mandate is in force on this venue account: the owner approves one with his passkey', 422);
+    const s = env.fresh(env.sim(o.instrument)!), best = o.side === 'buy' ? s.book!.asks[0]! : s.book!.bids[0]!, price = env.worstPrice(best[0], o.side, o.slippageBps ?? 30, s.inst.tickSize, s.inst.venue), t = now();
+    const req: OrderRequest = { instrument: o.instrument, side: o.side, type: 'market', size: canon(o.size), price, triggerPrice: null, reduceOnly: o.reduceOnly, tif: 'ioc', clientId: o.clientId };
+    const nonce = nextNonce(a), cloid = cloidOf(o.clientId);
+    const canonical: VenueOrder = { v: 1, authorizationId: a.auth!.authorizationId, venue: 'hyperliquid', network: a.network, account: a.account, kind: 'order', instrument: o.instrument, side: o.side, type: 'limit', size: req.size, price, triggerPrice: null,
+      reduceOnly: o.reduceOnly, tif: 'ioc', clientId: cloid, nonce, expiresAt: nonce + 30_000 };
+    const row: LOrder = { clientId: o.clientId, cloid, instrument: o.instrument, side: o.side, type: 'market', size: req.size, price, triggerPrice: null, reduceOnly: o.reduceOnly, tif: 'ioc', state: 'authorized', final: false, venueOrderId: null, filled: '0',
+      avgFillPrice: null, reason: null, origin: 'mandate', hash: hex(venueOrderHash(canonical)), nonce, expiresAt: canonical.expiresAt, canonical, createdAt: t, updatedAt: t, submittedAt: null, signed: false, revealAt: null, req };
+    a.orders.push(row);
+    const notional = venueOrderNotional(canonical), mi = m.instruments.find((i) => i.instrument === o.instrument), v = venueState(a), pos = v.positions.find((p) => p.instrument === o.instrument);
+    const held = pos ? D.mul(D.from(pos.size), D.from(s.ticker.mark)) : D.zero, adds = !o.reduceOnly;
+    const no = (code: string, message: string): never => { setOrder(a, row, { state: 'rejected', final: true, reason: `not signed: ${message}` }); riskEvent(a, 'order_refused', `signer_${code}`, `the signer did not sign the mandate order: ${message}`, { clientId: o.clientId, origin: 'mandate', agentId: m.agentId }); throw new Refuse(`signer_${code}`, message, 422); };
+    if (!mi) return no('instrument', `${o.instrument} is not allowed by the mandate`);
+    if (D.gt(D.from(notional), D.from(m.maxOrderNotional))) return no('order_notional', `order notional ${notional} exceeds the mandate's ${m.maxOrderNotional}`);
+    if (adds && ph.phase !== 'active') return no(a.mandate!.revokedAt !== null ? 'revoked' : 'expired', 'the mandate is no longer active: only cancels and reduce-only orders are signed during the wind-down');
+    if (adds && st.stamps.filter((x) => x > t - 3_600_000).length >= m.maxOrdersPerHour) return no('orders_hour', `${m.maxOrdersPerHour} orders already signed in the last hour`);
+    if (adds && D.lt(D.from(v.state!.equity), D.from(m.floorEquity))) return no('floor_equity', `account value ${v.state!.equity} is below the mandate's floor ${m.floorEquity}`);
+    if (adds && D.gt(D.add(held, D.from(notional)), D.from(mi.maxPositionNotional))) return no('position_exceeded', `worst-case ${o.instrument.slice(o.instrument.indexOf(':') + 1)} position ${D.str(D.quantize(D.add(held, D.from(notional)), D.from('0.01'), 'up'))} exceeds the mandate's ${mi.maxPositionNotional}`);
+    if (adds) { st.orders += 1; st.turnover = D.str(D.add(D.from(st.turnover), D.from(notional))); st.stamps.push(t); } else st.reduceOnly += 1;
+    setOrder(a, row, { state: 'signed', signed: true });
+    a.venue!.submit({ ...req, clientId: cloid }, s.book!, s.ticker, t);
+    setOrder(a, row, { state: 'submitted', submittedAt: t, venueOrderId: String(++OID) });
+    reconcileOrder(a, row); snapshot(a);
+    return orderView(row);
+  }
+  // <<< v7 perp live
+
   // ------------------------------------------------------------------ HTTP
   const P = '/derivatives/live';
-  function handle(method: string, path: string, b: any, headers: Headers): Out {
-    const p = path.slice(P.length), t = now(), ok = (json: unknown): Out => ({ status: 200, json });
-    if (p === '/config') return ok({ mainnetEnabled: MAINNET, venues: [{ venue: 'hyperliquid', networks: ['testnet', 'mainnet'] }], modes: ['READ_ONLY', 'MANUAL_LIVE'],
-      mandateLive: { available: false, reason: 'MANDATE_LIVE (agents trading derivatives) is not part of this delivery; the signer refuses it' },
-      pinnedAssets: { pinnedAt: HL_PINNED_AT, mainnet: HL_PINNED_ASSETS.mainnet.map((x) => ({ instrument: `hyperliquid:${x.symbol}`, maxLeverage: x.maxLeverage })), testnet: HL_PINNED_ASSETS.testnet.map((x) => ({ instrument: `hyperliquid:${x.symbol}`, maxLeverage: x.maxLeverage })) },
-      bounds: { ...VENUE_POLICY_BOUNDS, maxAuthorizationDays: VENUE_AUTH_MAX_DAYS, orderApprovalTtlMs: 90_000 }, ts: t });
+  function handle(method: string, path: string, b: any, headers: Headers, q?: URLSearchParams): Out {
+    const p = path.slice(P.length), t = now(), ok = (json: unknown): Out => ({ status: 200, json }), locale: MockLocale = q?.get('locale') === 'fr' ? 'fr' : 'en';
+    if (p === '/config') return ok(config(locale));   // v7: the V6 shape, in the requested locale
     if (p === '/jurisdiction') return ok({ venue: 'hyperliquid', fr: jurisdictionAck('hyperliquid', 'fr'), en: jurisdictionAck('hyperliquid', 'en') });
     if (p === '/venue-key') { if (b.venue !== 'hyperliquid') throw new Refuse('unknown_venue', 'live trading exists on Hyperliquid only', 404); const n = b.network as Net; if (!AGENT[n]) throw new Refuse('bad_request', 'unknown network', 400); return ok({ venue: 'hyperliquid', network: n, address: AGENT[n], path: PATHS[n], account: WALLET }); }
     if (p === '/accounts' && method === 'GET') return ok({ accounts: [...ACCTS.values()].map(summary), ts: t });
@@ -363,9 +485,14 @@ export function createLiveMock(env: LiveMockEnv) {
     const needKey = (): string => { if (!key || !IDEM.test(key)) throw new Refuse('idempotency', 'an Idempotency-Key header (8 to 100 characters: letters, digits, . _ : -) is required', 400); return key; };
     if (rest === '' && method === 'GET') return ok(detail(a));
     if (rest === '/collateral') { const v = venueState(a); return ok({ account: a.account, network: a.network, equity: v.state?.equity ?? null, collateral: v.state?.collateral ?? null, freeCollateral: v.state?.freeCollateral ?? null, marginUsed: v.state?.marginUsed ?? null,
-      withdrawable: v.state?.withdrawable ?? null, asset: 'USDC', error: v.error, ts: v.ts, source: 'venue',
-      deposits: { supported: false, how: 'docs/v4/venues/hyperliquid.md, section 14: native USDC on Arbitrum sent by the account itself to the venue bridge (minimum 5 USDC), done by the owner outside this engine' },
-      withdrawals: { supported: false, how: 'not built: needs the user-signed withdraw3 action and an allowlisted destination in the signer policy (same section)' } }); }
+      withdrawable: v.state?.withdrawable ?? null, asset: 'USDC', error: v.error, ts: v.ts, source: 'venue', locale,
+      deposits: { supported: false, how: mockLiveTexts(locale).depositsHow }, withdrawals: { supported: false, how: mockLiveTexts(locale).withdrawalsHow } }); }
+    // >>> v7 perp live: MANDATE_LIVE routes (no route places a mandate order)
+    if (rest === '/mandate' && method === 'GET') return ok(mandateStatus(a));
+    if (rest === '/mandate/prepare') return ok(prepareMandate(a, b));
+    if (rest === '/mandate/approve') return ok(approveMandate(a, b));
+    if (rest === '/mandate/revoke') return ok(revokeMandate(a, b));
+    // <<< v7 perp live
     if (rest === '/authorization/prepare') return ok(prepare(a, b));
     if (rest === '/authorization/approve') return ok(approveAuthorization(a, b));
     if (rest === '/authorization/revoke') return ok(revoke(a, b));
@@ -423,18 +550,34 @@ export function createLiveMock(env: LiveMockEnv) {
     try { Object.defineProperty(c, 'get', { value: get, configurable: true, writable: true }); } catch { /* the real prompt stays */ }
   }
 
+  // >>> v7 perp live: what the agent mock (mockPerpLive.ts) needs from the simulated live engine — the stand-in of services/api/src/derivatives/mandate.ts
+  const agentSide = {
+    accounts: () => [...ACCTS.values()], get: (id: string) => ACCTS.get(id), summary, detail, config, venueState, mandateInfo, mandateStatus, prepareMandate, approveMandate, revokeMandate, placeMandate, mandateLock, blocked: (a: LAcct) => blocked(a, 'trade'),
+    mainnet: () => MAINNET,
+    /** test scenarios: a funded account authorized without the screens (the canonical authorization is the real one) */
+    force(network: Net, policy: VenuePolicy, days = 30): LAcct {
+      if (network === 'mainnet') MAINNET = true;
+      handle('POST', `${P}/accounts`, { venue: 'hyperliquid', network, label: network === 'testnet' ? 'Hyperliquid testnet' : 'Hyperliquid mainnet' }, new Headers());
+      const a = [...ACCTS.values()].find((x) => x.network === network)!;
+      if (!a.venue) { a.venue = newVenue(a, D.isPos(D.from(FUND[network])) ? FUND[network] : '1000'); snapshot(a); }
+      if (a.mode !== 'MANUAL_LIVE') { const p = prepare(a, { policy, days, locale: 'fr' }); a.pending = null;
+        Object.assign(a, { mode: 'MANUAL_LIVE', auth: p.authorization, authHash: p.hash, policy: liveRiskPolicy(p.authorization.policy, a.network), halt: null, divergence: null, authorizedAt: now(), revokedAt: null, updatedAt: now(), signedToday: 0 }); }
+      return a;
+    },
+  };
+  // <<< v7 perp live
   return {
-    hooks, step, installPasskey,
+    hooks, step, installPasskey, agentSide,
     isStream: (url: string) => /\/api\/v1\/derivatives\/live\/accounts\/[^/]+\/stream/.test(url),
-    route(method: string, path: string, b: any, headers: Headers): Out {
-      try { return handle(method, path, b, headers); }
+    route(method: string, path: string, b: any, headers: Headers, q?: URLSearchParams): Out {
+      try { return handle(method, path, b, headers, q); }
       catch (e) { if (e instanceof Refuse) return { status: e.status, json: { error: e.code, message: e.message } }; throw e; }
     },
     /** `status` and `account` first, then every event of the account, as the backend's stream does */
     subscribe(url: string, send: (event: string, data: unknown) => void): () => void {
       const id = decodeURIComponent(/\/accounts\/([^/]+)\/stream/.exec(url)?.[1] ?? ''), a = ACCTS.get(id);
       if (!a) return () => {};
-      send('status', { mode: a.mode, halt: effectiveHalt(a), divergence: a.divergence, ts: now() });
+      send('status', { mode: a.mode, modes: mandateInfo(a).modes, halt: a.halt, halted: effectiveHalt(a), divergence: a.divergence, ts: now() });
       send('account', { ...venueState(a), divergence: a.divergence, halt: a.halt, mode: a.mode });
       let set = listeners.get(id); if (!set) { set = new Set(); listeners.set(id, set); }
       set.add(send);

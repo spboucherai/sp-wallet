@@ -137,7 +137,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   bridgeRoutes(app);
   agentRoutes(app, { prices: markets });
   strategyRoutes(app);
-  perpAgentRoutes(app, opts.derivatives); // v6 perp agents: paper only, on the derivatives module's paper accounts
+  perpAgentRoutes(app, opts.derivatives, opts.live); // v6 perp agents on paper accounts; v7: LIVE on a venue account under a signer-enforced mandate
   marketDataRoutes(app);
   derivativesRoutes(app, opts.derivatives);
   liveRoutes(app, opts.live); // controlled live trading: nothing trades until the owner authorizes a venue account with his passkey

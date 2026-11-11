@@ -1,4 +1,4 @@
-// Perp agent engine (V6, PAPER only). Same discipline as the spot engine (engine.ts): deterministic, no LLM, decisions on closed
+// Perp agent engine (V6 PAPER; V7 also LIVE on a venue account — see perp-exec-live.ts and perp-live-cycle.ts). Same discipline as the spot engine (engine.ts): deterministic, no LLM, decisions on closed
 // bars only, a data gate in front of the signal, a strategy pinned by its hash, and "hold" whenever anything is not trustworthy.
 //
 // Per closed bar:  gate → signal (spq.signal --contract 2, a separate process) → weights validated against the META bounds
@@ -7,8 +7,9 @@
 // On every pass, before anything else: risk events of the account (a liquidation stops the agent, a margin warning flags it)
 // and the loss limits (breach → flatten with reduce-only orders, then stop).
 //
-// Execution goes through ONE narrow interface, `PerpExecutor`. Its only implementation today is the paper account
-// (perp-exec.ts). The engine never signs, never calls the signer and never reaches a venue's trading endpoint.
+// Execution goes through ONE narrow interface, `PerpExecutor`: the paper account (perp-exec.ts) or, for a LIVE agent, a venue
+// account whose orders the isolated signer signs under a derivative mandate (perp-exec-live.ts). The engine itself never
+// signs, never calls the signer and never reaches a venue's trading endpoint.
 //
 // Numbers: the strategy's weights are the only floats; each is converted once to an 8-decimal string. Equity, marks, sizes,
 // notionals and prices are `D` decimals from there on.
@@ -51,6 +52,16 @@ export interface PerpBook {
   day?: { date: string; equity: DecStr };
   /** set when a loss limit is breached: the agent closes everything, then stops */
   flatten?: { ts: number; reason: string } | null;
+  /** V7: the agent trades (or traded) a venue account under a derivative mandate — written by perp-live-cycle.ts only */
+  live?: PerpLiveBook | null;
+}
+/** bookkeeping of the LIVE life cycle (perp-live-cycle.ts) */
+export interface PerpLiveBook {
+  accountId: string; network: 'testnet' | 'mainnet'; mandateId: string; strategySha256: string; since: number;
+  /** reference capital of the loss limits and of the absolute caps: the venue's account value when the mandate was prepared */
+  capital: DecStr;
+  /** why the agent left LIVE; `done` once it is STOPPED; `retryAt`: no closing attempt before this time (after a refused one) */
+  exit?: { ts: number; code: string; reason: string; retryAt?: number; done?: number; closed?: number } | null;
 }
 export type PerpAgentRow = Omit<AgentRow, 'risk'> & { kind: 'perp'; risk: PerpRisk; deriv_account_id: string; perp: PerpBook | null };
 
@@ -89,13 +100,16 @@ export interface ExecEvent { id: number; ts: number; kind: string; code: string 
 export interface ExecAccount { state: AccountState; /** the policy in force, with its circuit breaker (`halt`) */ policy: RiskPolicy; /** liquidations and margin warnings recorded after `sinceEventId` */ events: ExecEvent[] }
 export type PlaceResult =
   | { status: 'placed'; order: Order; fills: Fill[]; idempotent: boolean }
-  /** refused by the risk engine (or, later, by the signer's mandate): nothing was sent */
-  | { status: 'refused'; code: string; reason: string };
+  /** refused by the risk engine (or by the signer's mandate): nothing was sent, or the venue refused it — nothing more on this bar */
+  | { status: 'refused'; code: string; reason: string }
+  /** LIVE only: nothing was sent NOW (an earlier order is still being checked on the venue, or the signer still counts the
+   *  last one): the bar stays open and the next pass plans again from the venue's real positions */
+  | { status: 'deferred'; code: string; reason: string };
 
 /**
  * Everything the engine needs from "an account that can hold perpetual positions". PAPER: the derivatives paper account
- * (perp-exec.ts). LIVE (not in this delivery): the same three calls over a venue account whose orders the signer signs under a
- * derivatives mandate — the engine does not change.
+ * (perp-exec.ts). LIVE (V7, perp-exec-live.ts): the same three calls over a venue account whose orders the signer signs under a
+ * derivative mandate; the account state and the positions are then the VENUE's own (`source: 'venue'`).
  *  - `place` takes a complete order: `price` is the worst acceptable price (market orders are IOC with that bound), `clientId`
  *    is the idempotency key (placing it twice returns the first result). A refusal is returned, never thrown; an exception
  *    means "could not be attempted now" and the engine retries the bar on its next pass.
@@ -104,6 +118,18 @@ export interface PerpExecutor {
   account(sinceEventId?: number): Promise<ExecAccount>;
   positions(): Promise<Position[]>;
   place(order: OrderRequest, leverage: DecStr): Promise<PlaceResult>;
+  /** LIVE only: instruments on which an order of the agent is not confirmed by the venue yet — the bar stays open for them */
+  unconfirmed?(): string[];
+}
+
+/** What a LIVE agent adds to an engine step (perp-live-cycle.ts). Absent = PAPER, exactly as before. */
+export interface PerpLiveHooks {
+  /** reference capital of the loss limits and of the absolute caps (the venue's account value at go-live), instead of the simulated capital */
+  capital: DecStr;
+  /** a paused live agent: account events and loss limits only — no signal, no order; its positions are kept */
+  riskOnly?: boolean;
+  /** a loss limit is breached: the live life cycle takes over (revoke the mandate, close with reduce-only orders, stop) */
+  onBreach(reason: string): Promise<string>;
 }
 
 export interface PerpSignal { weights: Record<string, number>; maxLeverage: number; maxGrossExposure: number }
@@ -239,7 +265,12 @@ export function lossBreach(equity: Dec, capital: Dec, dayEquity: Dec, r: PerpRis
 // ------------------------------------------------------------------ one engine step
 
 const log = (a: { id: string }, kind: string, title: string, body = '', data?: unknown) => sql`insert into research_log (agent_id, kind, title, body, data) values (${a.id}, ${kind}, ${title}, ${body}, ${data === undefined ? null : sql.json(data as never)})`;
-const saveBook = (a: { id: string }, book: PerpBook) => sql`update agents set perp = ${sql.json(book as never)}, updated_at = now() where id = ${a.id}`;
+/** The engine's own bookkeeping. The keys of the LIVE life cycle (`live`, `livePending`) are never written from here: they are
+ *  kept as they are in the database, so that a pass that started before the owner stopped the agent cannot undo the stop. */
+const saveBook = (a: { id: string }, book: PerpBook) => {
+  const own: Record<string, unknown> = { ...book }; delete own.live; delete own.livePending;
+  return sql`update agents set perp = jsonb_strip_nulls(jsonb_build_object('live', perp->'live', 'livePending', perp->'livePending')) || ${sql.json(own as never)}, updated_at = now() where id = ${a.id}`;
+};
 const str = (o: Record<string, Dec>): Record<string, DecStr> => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, D.str(v)]));
 
 async function stop(a: PerpAgentRow, reason: string): Promise<void> {
@@ -259,20 +290,26 @@ const leverageFor = (a: PerpAgentRow, inst: Instrument): DecStr => D.str(D.quant
 const symbolOf = (instrument: string): string => instrument.slice(instrument.indexOf(':') + 1);
 
 /** Close every position with reduce-only IOC orders (works under a halt). Returns the positions still open afterwards. */
-export async function flattenPerp(a: PerpAgentRow, d: PerpEngineDeps, ex: PerpExecutor, tag: string): Promise<{ left: Position[]; results: Record<string, unknown>[] }> {
+export async function flattenPerp(a: PerpAgentRow, d: PerpEngineDeps, ex: PerpExecutor, tag: string, only?: (p: Position) => boolean): Promise<{ left: Position[]; results: Record<string, unknown>[] }> {
   const results: Record<string, unknown>[] = [];
   for (const p of await ex.positions()) {
+    if (only && !only(p)) continue;
     const symbol = symbolOf(p.instrument), m = await d.market(symbol), side = p.side === 'long' ? 'sell' as const : 'buy' as const;
     const r = await ex.place(request(m, side, p.size, true, a.risk.slippageBps, `ag-${a.id}-x${tag}-${symbol}`), leverageFor(a, m.inst));
-    results.push(r.status === 'placed' ? { symbol, side, size: p.size, status: r.order.status, filled: r.order.filled, avgFillPrice: r.order.avgFillPrice } : { symbol, side, size: p.size, status: 'refused', code: r.code, reason: r.reason });
+    results.push(r.status === 'placed' ? { symbol, side, size: p.size, status: r.order.status, filled: r.order.filled, avgFillPrice: r.order.avgFillPrice } : { symbol, side, size: p.size, status: r.status, code: r.code, reason: r.reason });
   }
   return { left: await ex.positions(), results };
 }
 
 /** One engine step for one perp agent. Safe to call as often as wanted: it decides at most once per closed bar. */
-export async function tickPerpAgent(a: PerpAgentRow, d: PerpEngineDeps): Promise<string> {
-  if (a.kind !== 'perp' || a.state !== 'PAPER_TRADING') return 'idle';
-  const ex = d.executor(a), book: PerpBook = { ...(a.perp ?? {}) }, now = d.now(), capital = capitalOf(a);
+export async function tickPerpAgent(a: PerpAgentRow, d: PerpEngineDeps, live?: PerpLiveHooks): Promise<string> {
+  // PAPER: state PAPER_TRADING, no hooks. LIVE: only through perp-live-cycle.ts, which passes the hooks (a paused live agent runs `riskOnly`).
+  const runs = live ? a.mode === 'LIVE' && (a.state === 'LIVE' || (a.state === 'PAUSED' && live.riskOnly === true)) : a.state === 'PAPER_TRADING' && a.mode !== 'LIVE';
+  if (a.kind !== 'perp' || !runs) return 'idle';
+  const ex = d.executor(a), book: PerpBook = { ...(a.perp ?? {}) }, now = d.now(), capital = live ? D.from(live.capital) : capitalOf(a);
+  const what = live ? 'venue account' : 'paper account';
+  /** equity: the venue's own account value when the state comes from the venue; the paper account's collateral + PnL at the live marks otherwise */
+  const equityOf = (state: AccountState, pos: Position[]): Dec => (state.source === 'venue' ? D.from(state.equity) : equityAt(state.collateral, pos, marks));
 
   // 1 — what happened to the account since the last pass
   const acct = await ex.account(book.lastEventId ?? 0);
@@ -280,9 +317,9 @@ export async function tickPerpAgent(a: PerpAgentRow, d: PerpEngineDeps): Promise
   for (const e of acct.events) {
     book.lastEventId = Math.max(book.lastEventId ?? 0, e.id);
     if (e.kind === 'liquidation') liquidated = e;
-    else if (e.kind === 'margin_warning') { book.flag = { ts: e.ts, message: e.message }; await log(a, 'flag', 'Margin warning on the paper account', e.message); }
+    else if (e.kind === 'margin_warning') { book.flag = { ts: e.ts, message: e.message }; await log(a, 'flag', `Margin warning on the ${what}`, e.message); }
   }
-  if (liquidated) { await saveBook(a, book); await stop(a, `the paper account was liquidated (simulated): ${liquidated.message}`); return 'stopped: liquidation'; }
+  if (liquidated) { await saveBook(a, book); await stop(a, live ? `the venue account was liquidated: ${liquidated.message}` : `the paper account was liquidated (simulated): ${liquidated.message}`); return 'stopped: liquidation'; }
 
   // 2 — loss limits, on every pass (a gap can carry the loss past them before this runs)
   let positions = await ex.positions();
@@ -290,10 +327,12 @@ export async function tickPerpAgent(a: PerpAgentRow, d: PerpEngineDeps): Promise
   const market = async (symbol: string): Promise<PerpMarket> => { let m = markets.get(symbol); if (!m) { m = await d.market(symbol); markets.set(symbol, m); marks[symbol] = D.from(m.ticker.mark); } return m; };
   let liveMarks = true;
   for (const p of positions) { try { await market(symbolOf(p.instrument)); } catch { liveMarks = false; } }   // no live mark: the account's own last mark is used
-  const equity = equityAt(acct.state.collateral, positions, marks);
+  const equity = equityOf(acct.state, positions);
   const date = new Date(now).toISOString().slice(0, 10);
   if (book.day?.date !== date) book.day = { date, equity: D.str(equity) };
   const breach = book.flatten?.reason ?? lossBreach(equity, capital, D.from(book.day.equity), a.risk) ?? (acct.policy.halt !== null ? `the account's circuit breaker is set: ${acct.policy.halt}` : null);
+  if (breach && live) { await saveBook(a, book); return live.onBreach(breach); }
+  if (live?.riskOnly) { await saveBook(a, book); return 'paused: positions kept, no new exposure (loss limits still watched)'; }
   if (breach) {
     if (!book.flatten) { book.flatten = { ts: now, reason: breach }; await log(a, 'risk', 'Loss limit: closing every position', breach); }
     await saveBook(a, book);
@@ -320,7 +359,7 @@ export async function tickPerpAgent(a: PerpAgentRow, d: PerpEngineDeps): Promise
 
   // 4 — ONE decision per bar: the row is written before any order, and a restart reads it back instead of deciding again
   const complete = async (): Promise<void> => { await sql`update agents set last_bar = ${new Date(bar)}, updated_at = now() where id = ${a.id}`; };
-  let [row] = await sql<{ status: string; weights: Record<string, number> | null; strategy_sha256: string }[]>`select status, weights, strategy_sha256 from perp_agent_signals where agent_id = ${a.id} and bar = ${new Date(bar)}`;
+  let [row] = await sql<{ status: string; weights: Record<string, number> | null; strategy_sha256: string; orders?: { list?: Record<string, unknown>[] } | null }[]>`select status, weights, strategy_sha256, orders from perp_agent_signals where agent_id = ${a.id} and bar = ${new Date(bar)}`;
   if (!row) {
     let sig: PerpSignal | null = null, why = '';
     try { sig = await d.signal({ path: sv.path, sha256: sv.code_sha256 }, gated.data, interval); checkPerpWeights(sig, symbols, sv.meta as PerpMetaBounds); }
@@ -340,7 +379,7 @@ export async function tickPerpAgent(a: PerpAgentRow, d: PerpEngineDeps): Promise
   try { for (const s of symbols) await market(s); liveMarks = true; }
   catch (e) { book.hold = { ts: now, reason: `no live market for the orders: ${(e as Error).message.slice(0, 160)}` }; await saveBook(a, book); return `hold: ${book.hold.reason.slice(0, 120)}`; }  // the bar stays open: retried on the next pass
   void liveMarks;
-  const eq = equityAt(acct.state.collateral, positions, marks);
+  const eq = equityOf(acct.state, positions);
   const { scaled, factor, binding } = scalePerpWeights(weights, eq, capital, a.risk);
   const targets: Record<string, Dec> = {}, current: Record<string, Dec> = {}, minNotional: Record<string, Dec | null> = {};
   for (const s of symbols) {
@@ -353,28 +392,50 @@ export async function tickPerpAgent(a: PerpAgentRow, d: PerpEngineDeps): Promise
   const threshold = D.div(D.mul(eq, numDec(a.risk.minTradePct, 4)), HUNDRED, 8, 'up');
   const plan = planPerpOrders(targets, current, marks, minNotional, threshold);
   const results: Record<string, unknown>[] = [], closed = new Set<string>();
-  let placed = 0;
+  let placed = 0, deferred = 0;
   for (const o of plan) {
     const base = { symbol: o.symbol, side: o.side, size: o.size, reduceOnly: o.reduceOnly, reason: o.reason };
     if (o.afterClose && !closed.has(o.symbol)) { results.push({ ...base, status: 'skipped', why: 'the closing order was not completely filled' }); continue; }
     const m = markets.get(o.symbol)!, clientId = orderClientId(a.id, sv.code_sha256, bar, o.symbol, o.phase);
     const r = await ex.place(request(m, o.side, o.size, o.reduceOnly, a.risk.slippageBps, clientId), leverageFor(a, m.inst));   // throws = not attempted: the bar stays open
     if (r.status === 'refused') { results.push({ ...base, status: 'refused', code: r.code, why: r.reason, clientId }); continue; }
-    placed += 1;
+    if (r.status === 'deferred') { deferred += 1; results.push({ ...base, status: 'deferred', code: r.code, why: r.reason, clientId }); continue; }
+    if (!live || !r.idempotent) placed += 1;
     if (o.closes && r.order.status === 'filled') closed.add(o.symbol);
     results.push({ ...base, status: r.order.status, filled: r.order.filled, avgFillPrice: r.order.avgFillPrice, worstPrice: r.order.price, why: r.order.rejectReason, clientId, idempotent: r.idempotent });
+  }
+
+  // LIVE: an order the venue has not confirmed keeps the bar open, also when nothing is planned on its instrument right now
+  // (the venue's positions may already show it): the bar is complete only once the venue has said what became of it
+  for (const instrument of ex.unconfirmed?.() ?? []) {
+    const symbol = symbolOf(instrument);
+    if (!symbols.includes(symbol) || results.some((x) => x.symbol === symbol && x.status === 'deferred')) continue;
+    deferred += 1; results.push({ symbol, status: 'deferred', code: 'live_unknown_pending', why: `an order on ${instrument} is still being checked on the venue` });
+  }
+  const sentNow = results.length;
+  // LIVE: orders of this bar sent on an earlier pass and no longer planned stay in the log of the bar
+  const earlier = live ? (row!.orders?.list ?? []).filter((x) => typeof x.clientId === 'string' && x.status !== 'deferred' && x.status !== 'skipped' && !results.some((y) => y.clientId === x.clientId)) : [];
+  if (earlier.length) results.unshift(...earlier);
+  if (deferred > 0) {
+    // LIVE: something waits (the venue has not confirmed an order, or the signer still counts the last one). The bar stays
+    // open: the next pass reads the decision back and plans again from the venue's real positions — same client ids, no new signal.
+    await sql`update perp_agent_signals set scaled = ${sql.json(str(scaled) as never)}, scale = ${D.str(factor)}, equity = ${D.str(eq)}, targets = ${sql.json(str(targets) as never)},
+      orders = ${sql.json({ binding, threshold: D.str(threshold), slippageBps: a.risk.slippageBps, list: results } as never)}, updated_at = now() where agent_id = ${a.id} and bar = ${new Date(bar)}`;
+    await saveBook(a, book);
+    if (placed) await audit('agent.perp_orders', 'engine', { agent: a.id, bar: new Date(bar).toISOString(), orders: results.length, placed, deferred, sha256: sv.code_sha256 });
+    return `${placed} order(s), ${deferred} waiting for the next pass`;
   }
 
   // 6 — the bar is complete: signal log, equity point
   positions = await ex.positions();
   const after = await ex.account(book.lastEventId ?? 0);
-  const eqAfter = equityAt(after.state.collateral, positions, marks);
+  const eqAfter = equityOf(after.state, positions);
   await sql`update perp_agent_signals set status = 'done', scaled = ${sql.json(str(scaled) as never)}, scale = ${D.str(factor)}, equity = ${D.str(eq)}, targets = ${sql.json(str(targets) as never)},
     orders = ${sql.json({ binding, threshold: D.str(threshold), slippageBps: a.risk.slippageBps, list: results } as never)}, updated_at = now() where agent_id = ${a.id} and bar = ${new Date(bar)}`;
-  await sql`insert into agent_equity (agent_id, ts, mode, equity_usd, positions) values (${a.id}, ${new Date(bar)}, 'PAPER', ${D.toNumber(eqAfter)}, ${sql.json(Object.fromEntries(positions.map((p) => [symbolOf(p.instrument), D.str(signed(p))])))})
+  await sql`insert into agent_equity (agent_id, ts, mode, equity_usd, positions) values (${a.id}, ${new Date(bar)}, ${live ? 'LIVE' : 'PAPER'}, ${D.toNumber(eqAfter)}, ${sql.json(Object.fromEntries(positions.map((p) => [symbolOf(p.instrument), D.str(signed(p))])))})
     on conflict (agent_id, ts, mode) do update set equity_usd = excluded.equity_usd, positions = excluded.positions`;
   await saveBook(a, book);
   await complete();
   if (placed) await audit('agent.perp_orders', 'engine', { agent: a.id, bar: new Date(bar).toISOString(), orders: results.length, placed, sha256: sv.code_sha256 });
-  return placed ? `${placed} order(s)${results.length > placed ? `, ${results.length - placed} not sent` : ''}` : plan.length ? `${results.length} order(s) not sent` : 'portfolio already at target';
+  return placed ? `${placed} order(s)${sentNow > placed ? `, ${sentNow - placed} not sent` : ''}` : plan.length ? `${sentNow} order(s) not sent` : 'portfolio already at target';
 }

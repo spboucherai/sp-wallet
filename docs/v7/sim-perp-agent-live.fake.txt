@@ -1,0 +1,65 @@
+=== LIVE perp agent — scripted FAKE venue (no network) — real API, real engine, real signer class, throwaway in-memory seed ===
+    wallet account 0xed00f032cc59040eec4a7dea545415f87d16b590 (derived from a seed generated in memory); mainnet settings: SPW_DERIV_LIVE_MAINNET=(unset), SPW_DERIV_MANDATE_MAINNET=(unset)
+
+[1] perp agent created in simulation: 7dc40d53-76c6-450b-85a7-27d5d768e4eb (BTC, 1h, 2× max). state CREATED · mode PAPER · simulation true · execution paper · live.active false
+    checklist: next = strategy | strategy ✗ · account ✗ (no_account) · funded ✗ (no_account) · mandate ✗
+
+[2] strategy version approved through the API (code hash efb23c19afa8…; its signals are scripted in this run).
+    checklist: next = account | strategy ✓ · account ✗ (no_account) · funded ✗ (no_account) · mandate ✗
+
+[3] venue account created (testnet, READ_ONLY): 7d87cf0f-6303-4cfc-8558-4b64e2ad6fb0
+    checklist: next = account | strategy ✓ · account ✗ (read_only) · funded ✗ (unfunded) · mandate ✗
+    authorization approved with the passkey on an UNFUNDED account → 422 venue_rejected: the venue did not register the trading key: hyperliquid: Must deposit before performing actions. User: 0xed00f032cc59040eec4a7dea545415f87d16b590 — the authorization was revoked on the signer, nothing can trade. Fund the venue acc
+    checklist: next = account | strategy ✓ · account ✗ (read_only) · funded ✗ (unfunded) · mandate ✗
+      account step: this venue account is read-only: authorise live trading on it with your passkey in Futures → Accounts
+      funded step: the venue account holds no collateral: deposit USDC to it on the venue (at least 50 USDC for this agent) (minimum 50 USDC = max(50, 5 minimum orders × 10.5 USD on hyperliquid:BTC ÷ 1.5× gross))
+    "go live" now → 409 not_ready: not ready to go live (account): this venue account is read-only: authorise live trading on it with your passkey in Futures → Accounts
+    agent page: state AWAITING_APPROVAL · mode PAPER · simulation true · execution paper · live.active false
+
+[4] the fake venue account is funded with 1 000 USDC; authorization approved with the passkey → 200, mode MANUAL_LIVE, modes ["MANUAL_LIVE"]
+    checklist: next = mandate | strategy ✓ · account ✓ · funded ✓ · mandate ✗
+      capital              1000               ← the venue's account value now: the reference of every limit below and of the loss limits
+      instruments          hyperliquid:BTC    ← the agent's instruments
+      maxLeverage          BTC 2x             ← the agent's leverage limit (2x), never above the authorization's (3x) or the venue's maximum
+      maxPositionNotional  1000               ← position per instrument: 1 × the capital
+      maxOrderNotional     1000               ← one order may be as large as one position (a full close in one order); closes are bounded too
+      maxGrossExposure     1500               ← gross exposure: 1.5 × the capital
+      maxOrdersPerDay      48                 ← 1 instrument(s) × 24 bar(s) a day × 2 orders that can add exposure, at least 12
+      maxOrdersPerHour     4                  ← 1 instrument(s) × 2 orders that can add exposure, at least 4
+      maxDailyTurnover     6000               ← 4 × the gross exposure limit a day (orders that can add exposure)
+      floorEquity          900                ← the total-loss limit: the capital less 10 % — below it the signer signs only cancels and reduce-only orders
+      days                 29                 ← at most 30 days, and ending at least 24 h before the venue authorization expires (2026-12-11T12:00:00.000Z) so that positions can be closed during the wind-down
+    mandate prepared: hash f7837092d0d1d37e…, expires 2026-12-10T12:00:00.000Z, strategy efb23c19afa8…, agent 7dc40d53-76c6-450b-85a7-27d5d768e4eb
+      shown before the passkey: warning "Après cette approbation, les ordres à l'intérieur de ces limites sont placés SAN…", acknowledgement (1989 chars, fr), 7 lines enforced by the signer, 3 trusted, 2 not enforced, wind-down text
+      without the acknowledgement checkbox → 400 bad_request
+    ONE passkey → state LIVE, mode LIVE, network testnet, reference capital 1000 USDC; signer holds 1 mandate (phase active); requests to the venue's exchange endpoint so far: 2 (the two approveAgent of the authorizations: one refused, one accepted — going live sends nothing)
+
+[5] bar 1 — signal BTC +0.5: 1 order(s)
+    state LIVE · mode LIVE · simulation false · execution live/testnet · live.active true · venue equity 999.739373 · positions [long 0.00714 BTC] (source venue) · signer today: 1 order(s) adding exposure, 0 reduce-only, turnover 501.3351; phase active
+    venue leverage setting of BTC: {"type":"cross","value":2} (was the venue's default 20× cross); signer: 1 order signature(s), 1 leverage signature(s), 0 passkey-path signature(s)
+    same bar, a minute later: waiting for the next bar (signals asked: 1; signer: 1 order signature(s), 1 leverage signature(s), 0 passkey-path signature(s))
+
+[6] bar 2 — signal BTC −0.5 (a flip): 1 order(s), 1 waiting for the next pass
+    state LIVE · mode LIVE · simulation false · execution live/testnet · live.active true · venue equity 999.478779 · positions [] (source venue) · signer today: 1 order(s) adding exposure, 1 reduce-only, turnover 501.3351; phase active
+    next pass, a minute later: 1 order(s)
+    state LIVE · mode LIVE · simulation false · execution live/testnet · live.active true · venue equity 999.21855 · positions [short 0.00713 BTC] (source venue) · signer today: 2 order(s) adding exposure, 1 reduce-only, turnover 998.90928; phase active
+
+[7] bar 3 — signal BTC −1 while a foreign sell order of 0.01 BTC rests on the venue account: 1 order(s) not sent
+    refusal shown on the agent page: signer_position_exceeded — worst-case BTC position 1776.5 (venue position + resting and recently signed orders + this order, at the signer's price) is above the mandate's 1000
+    three more passes on that bar: 0 more request(s) to the signer; state LIVE
+
+[8] pause → state PAUSED; a new bar (signal +0.5) while paused: paused: positions kept, no new exposure (loss limits still watched)
+    resume → state LIVE
+
+[9] "Arrêter" (no passkey) with a thin book → state STOPPING: stopping: 1 position(s) still open (short 0.00313 BTC)
+    wind-down until 2026-11-12T12:09:09.000Z; signer mandate: revoked true, phase wind_down
+    next pass (a new bar whose signal wants +1): stopped
+    state STOPPED · mode LIVE · simulation false · execution live/testnet · live.active false · venue equity 998.958288 · positions [] (source venue) · signer today: 2 order(s) adding exposure, 3 reduce-only, turnover 998.90928; phase wind_down · exit owner_stop
+      stop reason: stopped by the owner; every position was closed with reduce-only orders
+
+[10] orders of the venue account (6): buy 0.00714/0.00714 filled (mandate) · sell RO 0.00714/0.00714 filled (mandate) · sell 0.00713/0.00713 filled (mandate) · sell 0/0.00682 rejected (mandate) · buy RO 0.004/0.00713 partially_filled (mandate) · buy RO 0.00313/0.00313 filled (mandate)
+    venue position now: 0 BTC; exchange requests on the fake testnet: approveAgent 2, updateLeverage 1, order 5, cancel 0, cancelByCloid 0; on the fake mainnet: 0
+    signer: 6 order signature(s), 1 leverage signature(s), 0 passkey-path signature(s); signals asked: 3
+    checklist afterwards: next = mandate | strategy ✓ · account ✓ · funded ✓ · mandate ✗
+
+real network requests: none; to api.hyperliquid.xyz (mainnet): 0

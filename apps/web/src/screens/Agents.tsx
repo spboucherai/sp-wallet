@@ -9,6 +9,7 @@ import { Addr, Btn, Card, Coin, CopyBtn, Field, fiat, H, Icon, inputCls, Notice,
 // >>> v6 perp agents (simulation only): their form and their detail page live in PerpAgent.tsx
 import { Seg } from '../derivatives/bits';
 import { PerpAgentDetail, PerpAgentForm } from './PerpAgent';
+import { agentTone, PerpLiveState } from './PerpAgentLive';   // v7 perp live: a live perp agent names the money it moves
 // <<< v6 perp agents
 import { AgentChecklist, ElsewhereFunds, FundSheet, fundingInProgress, WithdrawSheet, type AgentNet } from './AgentFund';
 
@@ -93,7 +94,7 @@ export function Agents({ nav }: { nav: Nav }) {
         <div className="space-y-3">{q.data!.agents.map((a) => <button key={a.id} onClick={() => nav({ tab: 'agent', asset: a.id })} className="card flex w-full items-center gap-3.5 p-4 text-left">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-elev"><Icon n="swap" /></span>
           <span className="min-w-0 flex-1"><span className="block truncate text-[16px] font-semibold">{a.name}</span><span className="block truncate text-[12.5px] text-mute">{a.universe.join(' · ')} · {a.capitalUsdc} {a.cash ?? 'USDC'} · {a.networkName}</span>{(a as { kind?: string }).kind === 'perp' && <span className="mt-0.5 inline-block rounded-md border border-blue/35 bg-blue/8 px-1.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-blue">{t('paListTag')}</span>}</span>
-          <AgentState state={a.state} /><Icon n="chev" className="h-4 w-4 text-mute" /></button>)}</div>}
+          {(a as { kind?: string }).kind === 'perp' && agentTone(a) !== 'paper' ? <PerpLiveState a={a} /> : <AgentState state={a.state} />}<Icon n="chev" className="h-4 w-4 text-mute" /></button>)}</div>}
     </div>
   );
 }
