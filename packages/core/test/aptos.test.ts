@@ -43,7 +43,7 @@ const sdkAccount = () => Account.fromPrivateKey({ privateKey: new Ed25519Private
 
 const now = 1_800_000_000;
 const base: Intent = {
-  v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 2,
+  v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 3,
   network: 'aptos', chainRef: '1', asset: 'native', symbol: 'APT', decimals: 8, amount: '125000000', from: FROM, to: TO, maxFee: '1000000',
   x: { sequence_number: '129', max_gas_amount: '8122', gas_unit_price: '100', expiration_timestamp_secs: String(now + 180) },
 };
@@ -279,7 +279,7 @@ describe('aptos: fail closed', () => {
     const other: Intent[] = [
       { ...base, chainRef: '2' }, { ...base, network: 'solana' }, { ...base, asset: 'other' }, { ...base, symbol: 'APTT' }, { ...base, decimals: 9 },
       { ...base, maxFee: '812199' }, { ...base, createdAt: now + 200 }, { ...base, expiresAt: now + 181 }, { ...base, v: 2 as never }, { ...base, memo: '1' },
-      { ...base, maxFee: '1000001' }, { ...base, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { ...base, keyId: 'spw-0123456789abcdee' }, { ...base, policyVersion: 3 },
+      { ...base, maxFee: '1000001' }, { ...base, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { ...base, keyId: 'spw-0123456789abcdee' }, { ...base, policyVersion: 4 },
     ];
     const h0 = toHex(intentHash(base));
     other.forEach((m, k) => {

@@ -137,7 +137,7 @@ const both = (f: (x: Fake) => void) => { for (const u of [A, B]) f(h[u]!); };
 const prep = (over: Partial<{ to: string; amount: bigint; memo: string; asset: string; from: string }> = {}) => a.prepare({ asset: 'native', from: ME, to: DEST, amount: 250_000_000n, ...over });
 const code = async (p: Promise<unknown>) => { try { await p; } catch (e) { return (e as { code?: string }).code ?? `threw: ${(e as Error).message}`; } return 'ok'; };
 const intentOf = (r: { section: Record<string, unknown>; maxFee: bigint; ttlSec: number }, amount = 250_000_000n, to = DEST): Intent => ({ v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: keys.keyId, network: 'sui', chainRef: n.chainRef,
-  asset: 'native', symbol: 'SUI', decimals: 9, amount: amount.toString(), from: ME, to, maxFee: r.maxFee.toString(), createdAt: NOW, expiresAt: NOW + r.ttlSec, policyVersion: 2, ...(r.section as { x: Record<string, string> }) });
+  asset: 'native', symbol: 'SUI', decimals: 9, amount: amount.toString(), from: ME, to, maxFee: r.maxFee.toString(), createdAt: NOW, expiresAt: NOW + r.ttlSec, policyVersion: 3, ...(r.section as { x: Record<string, string> }) });
 
 describe('sui adapter: health and balances', () => {
   it('ok only when both sources are up, fresh and on the pinned chain', async () => {
@@ -282,7 +282,7 @@ describe('sui adapter: prepare', () => {
 describe('sui adapter: broadcast', () => {
   const x = { payment: suiFormatPayment([{ objectId: oid(1), version: 100n, digest: DIGEST }]), gasPrice: '100', gasBudget: '4152000', expiration: '1308' };
   const intent: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: keys.keyId, network: 'sui', chainRef: n.chainRef, asset: 'native', symbol: 'SUI', decimals: 9, amount: '250000000',
-    from: ME, to: DEST, maxFee: '4152000', createdAt: NOW, expiresAt: NOW + 120, policyVersion: 2, x };
+    from: ME, to: DEST, maxFee: '4152000', createdAt: NOW, expiresAt: NOW + 120, policyVersion: 3, x };
   const signed = pluginFor(n).sign(intent, n, keys.handle(n));
   it('sends the exact bytes and signature to every source', async () => {
     await a.broadcast(signed.raw);

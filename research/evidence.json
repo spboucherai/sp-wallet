@@ -1,0 +1,1619 @@
+{
+ "AAVE@arbitrum": {
+  "address": "0xba5DdD1f9d7F570dc94a51479a000E3BCE967196",
+  "url": "https://aave.com/docs/ecosystem/aave.md",
+  "via": "document",
+  "sha256": "4f785ff551637eafed8134a0c16fee772d32ffb7e83f79a30534ac93c876149c",
+  "at": "2026-11-11"
+ },
+ "AAVE@base": {
+  "address": "0x63706e401c06ac8513145b7687a14804d17f814b",
+  "url": "https://aave.com/docs/ecosystem/aave.md",
+  "via": "document",
+  "sha256": "4f785ff551637eafed8134a0c16fee772d32ffb7e83f79a30534ac93c876149c",
+  "at": "2026-11-11"
+ },
+ "AAVE@bsc": {
+  "address": "0xfb6115445bff7b52feb98650c87f44907e58f802",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "AAVE@ethereum": {
+  "address": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+  "url": "https://aave.com/docs/ecosystem/aave.md",
+  "via": "document",
+  "sha256": "4f785ff551637eafed8134a0c16fee772d32ffb7e83f79a30534ac93c876149c",
+  "at": "2026-11-11"
+ },
+ "AAVE@optimism": {
+  "address": "0x76FB31fb4af56892A25e32cFC43De717950c9278",
+  "url": "https://aave.com/docs/ecosystem/aave.md",
+  "via": "document",
+  "sha256": "4f785ff551637eafed8134a0c16fee772d32ffb7e83f79a30534ac93c876149c",
+  "at": "2026-11-11"
+ },
+ "AAVE@polygon": {
+  "address": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B",
+  "url": "https://aave.com/docs/ecosystem/aave.md",
+  "via": "document",
+  "sha256": "4f785ff551637eafed8134a0c16fee772d32ffb7e83f79a30534ac93c876149c",
+  "at": "2026-11-11"
+ },
+ "ADA@bsc": {
+  "address": "0x3ee2200efb3400fabb9aacf31297cbdd1d435d47",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "AERO@base": {
+  "address": "0x940181a94a35a4569e4529a3cdfb74e38fd98631",
+  "url": "https://raw.githubusercontent.com/aerodrome-finance/contracts/main/README.md",
+  "via": "document",
+  "sha256": "4a27e9c4a346d39b9d196d8d04209a1c38d707bffd7fffb7f90b852b4748417e",
+  "at": "2026-11-11"
+ },
+ "ARB@arbitrum": {
+  "address": "0x912ce59144191c1204e64559fe8253a0e49e6548",
+  "url": "https://docs.arbitrum.foundation/deployment-addresses",
+  "via": "document",
+  "sha256": "891f2be47d7ea12f2ecf2940a6f31d2e313be565298797e0b0ebb55a379f1bd6",
+  "at": "2026-11-11"
+ },
+ "ARB@ethereum": {
+  "address": "0xb50721bcf8d664c30412cfbc6cf7a15145234ad1",
+  "url": "https://docs.arbitrum.foundation/deployment-addresses",
+  "via": "document",
+  "sha256": "891f2be47d7ea12f2ecf2940a6f31d2e313be565298797e0b0ebb55a379f1bd6",
+  "at": "2026-11-11"
+ },
+ "AVAX@bsc": {
+  "address": "0x1ce0c2827e2ef14d5c4f29a091d735a204794041",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "BONK@solana": {
+  "address": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+  "url": "bonkcoin.com (mint appears only as the target of the site's exchange links; not stated as text) + CoinGecko",
+  "via": "manual",
+  "at": "2026-11-10",
+  "note": "already in the registry since wave 1 (2026-11-10): the issuer page was read by hand then; it cannot be fetched without a browser (Cloudflare / client-side rendering), so check-sources.mts could not re-read it"
+ },
+ "BRETT@base": {
+  "address": "0x532f27101965dd16442e59d40670faf5ebb142e4",
+  "url": "https://www.basedbrett.com/assets/index-4a61c05f.js",
+  "via": "document",
+  "sha256": "3ff23eb1a7833076878194ce4e4c6064b037f110c563e2e5107592978be570f4",
+  "at": "2026-11-11"
+ },
+ "bSOL@solana": {
+  "address": "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1",
+  "url": "https://stake-docs.solblaze.org/developers/addresses",
+  "via": "document",
+  "sha256": "b2b79d3fbf6f5b8b103d1f0eb4b93a63be3420ec5584649e7ebc0016eba13849",
+  "at": "2026-11-11"
+ },
+ "BTC.b@avalanche": {
+  "address": "0x152b9d0fdc40c096757f570a51e494bd4b943e50",
+  "url": "https://docs.lombard.finance/learn/transparency/smart-contracts",
+  "via": "document",
+  "sha256": "ec41f18f8d9ecc3db69b5379e74e02fa585b588489f4d21fdb287679aedffd8e",
+  "at": "2026-11-11"
+ },
+ "BTCB@bsc": {
+  "address": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "CAKE@arbitrum": {
+  "address": "0x1b896893dfc86bb67cf57767298b9073d2c1ba2c",
+  "url": "https://developer.pancakeswap.finance/contracts/cake",
+  "via": "document",
+  "sha256": "168c7771be822d59ee7c8d2a6cd9b15b29022a8aad38f4bac09bcd03e6df8c27",
+  "at": "2026-11-11"
+ },
+ "CAKE@base": {
+  "address": "0x3055913c90fcc1a6ce9a358911721eeb942013a1",
+  "url": "https://developer.pancakeswap.finance/contracts/cake",
+  "via": "document",
+  "sha256": "168c7771be822d59ee7c8d2a6cd9b15b29022a8aad38f4bac09bcd03e6df8c27",
+  "at": "2026-11-11"
+ },
+ "CAKE@bsc": {
+  "address": "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
+  "url": "https://docs.pancakeswap.finance/protocol/cake-tokenomics",
+  "via": "document",
+  "sha256": "3a7d148ed5fa99feb6fcb3d5512b4a1ca8830b30273cd70befefc6a105909fe5",
+  "at": "2026-11-11"
+ },
+ "CAKE@ethereum": {
+  "address": "0x152649ea73beab28c5b49b26eb48f7ead6d4c898",
+  "url": "https://developer.pancakeswap.finance/contracts/cake",
+  "via": "document",
+  "sha256": "168c7771be822d59ee7c8d2a6cd9b15b29022a8aad38f4bac09bcd03e6df8c27",
+  "at": "2026-11-11"
+ },
+ "CAKE@solana": {
+  "address": "4qQeZ5LwSz6HuupUu8jCtgXyW1mYQcNbFAW1sWZp89HL",
+  "url": "https://developer.pancakeswap.finance/contracts/cake",
+  "via": "document",
+  "sha256": "168c7771be822d59ee7c8d2a6cd9b15b29022a8aad38f4bac09bcd03e6df8c27",
+  "at": "2026-11-11"
+ },
+ "cbADA@base": {
+  "address": "0xcbada732173e39521cdbe8bf59a6dc85a9fc7b8c",
+  "url": "https://www.coinbase.com/cbbtc",
+  "via": "document",
+  "sha256": "81ccf70a4fff43a89f17c06a6e899a7bbb5af55ca9b593032bdbe49e3dbcf9eb",
+  "at": "2026-11-11"
+ },
+ "cbBTC@arbitrum": {
+  "address": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+  "url": "https://www.coinbase.com/cbbtc",
+  "via": "document",
+  "sha256": "81ccf70a4fff43a89f17c06a6e899a7bbb5af55ca9b593032bdbe49e3dbcf9eb",
+  "at": "2026-11-11"
+ },
+ "cbBTC@base": {
+  "address": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+  "url": "https://www.coinbase.com/cbbtc",
+  "via": "document",
+  "sha256": "81ccf70a4fff43a89f17c06a6e899a7bbb5af55ca9b593032bdbe49e3dbcf9eb",
+  "at": "2026-11-11"
+ },
+ "cbBTC@ethereum": {
+  "address": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+  "url": "https://www.coinbase.com/cbbtc",
+  "via": "document",
+  "sha256": "81ccf70a4fff43a89f17c06a6e899a7bbb5af55ca9b593032bdbe49e3dbcf9eb",
+  "at": "2026-11-11"
+ },
+ "cbBTC@solana": {
+  "address": "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+  "url": "https://www.coinbase.com/cbbtc",
+  "via": "document",
+  "sha256": "81ccf70a4fff43a89f17c06a6e899a7bbb5af55ca9b593032bdbe49e3dbcf9eb",
+  "at": "2026-11-11"
+ },
+ "cbDOGE@base": {
+  "address": "0xcbd06e5a2b0c65597161de254aa074e489deb510",
+  "url": "https://www.coinbase.com/cbbtc",
+  "via": "document",
+  "sha256": "81ccf70a4fff43a89f17c06a6e899a7bbb5af55ca9b593032bdbe49e3dbcf9eb",
+  "at": "2026-11-11"
+ },
+ "cbETH@arbitrum": {
+  "address": "0x1debd73e752beaf79865fd6446b0c970eae7732f",
+  "url": "https://www.coinbase.com/cbeth",
+  "via": "document",
+  "sha256": "afd59bef52ab8cb88d522000d48b3f1806685cdafa4d2128c037000ba007538d",
+  "at": "2026-11-11"
+ },
+ "cbETH@base": {
+  "address": "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+  "url": "https://www.coinbase.com/cbeth",
+  "via": "document",
+  "sha256": "afd59bef52ab8cb88d522000d48b3f1806685cdafa4d2128c037000ba007538d",
+  "at": "2026-11-11"
+ },
+ "cbETH@ethereum": {
+  "address": "0xbe9895146f7af43049ca1c1ae358b0541ea49704",
+  "url": "https://www.coinbase.com/cbeth",
+  "via": "document",
+  "sha256": "afd59bef52ab8cb88d522000d48b3f1806685cdafa4d2128c037000ba007538d",
+  "at": "2026-11-11"
+ },
+ "cbETH@optimism": {
+  "address": "0xaddb6a0412de1ba0f936dcaeb8aaa24578dcf3b2",
+  "url": "https://www.coinbase.com/cbeth",
+  "via": "document",
+  "sha256": "afd59bef52ab8cb88d522000d48b3f1806685cdafa4d2128c037000ba007538d",
+  "at": "2026-11-11"
+ },
+ "cbETH@polygon": {
+  "address": "0x4b4327db1600b8b1440163f667e199cef35385f5",
+  "url": "https://www.coinbase.com/cbeth",
+  "via": "document",
+  "sha256": "afd59bef52ab8cb88d522000d48b3f1806685cdafa4d2128c037000ba007538d",
+  "at": "2026-11-11"
+ },
+ "cbLTC@base": {
+  "address": "0xcb17c9db87b595717c857a08468793f5bab6445f",
+  "url": "https://www.coinbase.com/cbbtc",
+  "via": "document",
+  "sha256": "81ccf70a4fff43a89f17c06a6e899a7bbb5af55ca9b593032bdbe49e3dbcf9eb",
+  "at": "2026-11-11"
+ },
+ "cbXRP@base": {
+  "address": "0xcb585250f852c6c6bf90434ab21a00f02833a4af",
+  "url": "https://www.coinbase.com/cbbtc",
+  "via": "document",
+  "sha256": "81ccf70a4fff43a89f17c06a6e899a7bbb5af55ca9b593032bdbe49e3dbcf9eb",
+  "at": "2026-11-11"
+ },
+ "COMP@arbitrum": {
+  "address": "0x354a6da3fcde098f8389cad84b0182725c6c91de",
+  "url": "https://docs.compound.finance/",
+  "via": "document",
+  "sha256": "fec46c885e61c96c418e406b70903def23426407eae0d7e773ba67b21c75fe5d",
+  "at": "2026-11-11"
+ },
+ "COMP@base": {
+  "address": "0x9e1028f5f1d5ede59748ffcee5532509976840e0",
+  "url": "https://docs.compound.finance/",
+  "via": "document",
+  "sha256": "fec46c885e61c96c418e406b70903def23426407eae0d7e773ba67b21c75fe5d",
+  "at": "2026-11-11"
+ },
+ "COMP@ethereum": {
+  "address": "0xc00e94cb662c3520282e6f5717214004a7f26888",
+  "url": "https://docs.compound.finance/",
+  "via": "document",
+  "sha256": "fec46c885e61c96c418e406b70903def23426407eae0d7e773ba67b21c75fe5d",
+  "at": "2026-11-11"
+ },
+ "COMP@polygon": {
+  "address": "0x8505b9d2254a7ae468c0e9dd10ccea3a837aef5c",
+  "url": "https://docs.compound.finance/",
+  "via": "document",
+  "sha256": "fec46c885e61c96c418e406b70903def23426407eae0d7e773ba67b21c75fe5d",
+  "at": "2026-11-11"
+ },
+ "CRV@arbitrum": {
+  "address": "0x11cdb42b0eb46d95f990bedd4695a6e3fa034978",
+  "url": "https://docs.curve.finance/deployments.json",
+  "via": "document",
+  "sha256": "badf9f660dfdd16c8bbe7a0d67243143b3bc65bec19457c7012b78b8ead80582",
+  "at": "2026-11-11"
+ },
+ "CRV@base": {
+  "address": "0x8ee73c484a26e0a5df2ee2a4960b789967dd0415",
+  "url": "https://docs.curve.finance/deployments.json",
+  "via": "document",
+  "sha256": "badf9f660dfdd16c8bbe7a0d67243143b3bc65bec19457c7012b78b8ead80582",
+  "at": "2026-11-11"
+ },
+ "CRV@ethereum": {
+  "address": "0xd533a949740bb3306d119cc777fa900ba034cd52",
+  "url": "https://docs.curve.finance/deployments.json",
+  "via": "document",
+  "sha256": "badf9f660dfdd16c8bbe7a0d67243143b3bc65bec19457c7012b78b8ead80582",
+  "at": "2026-11-11"
+ },
+ "CRV@optimism": {
+  "address": "0x0994206dfe8de6ec6920ff4d779b0d950605fb53",
+  "url": "https://docs.curve.finance/deployments.json",
+  "via": "document",
+  "sha256": "badf9f660dfdd16c8bbe7a0d67243143b3bc65bec19457c7012b78b8ead80582",
+  "at": "2026-11-11"
+ },
+ "CRV@polygon": {
+  "address": "0x172370d5cd63279efa6d502dab29171933a610af",
+  "url": "https://docs.curve.finance/deployments.json",
+  "via": "document",
+  "sha256": "badf9f660dfdd16c8bbe7a0d67243143b3bc65bec19457c7012b78b8ead80582",
+  "at": "2026-11-11"
+ },
+ "crvUSD@arbitrum": {
+  "address": "0x498bf2b1e120fed3ad3d42ea2165e9b73f99c1e5",
+  "url": "https://docs.curve.finance/deployments.json",
+  "via": "document",
+  "sha256": "badf9f660dfdd16c8bbe7a0d67243143b3bc65bec19457c7012b78b8ead80582",
+  "at": "2026-11-11"
+ },
+ "crvUSD@base": {
+  "address": "0x417ac0e078398c154edfadd9ef675d30be60af93",
+  "url": "https://docs.curve.finance/deployments.json",
+  "via": "document",
+  "sha256": "badf9f660dfdd16c8bbe7a0d67243143b3bc65bec19457c7012b78b8ead80582",
+  "at": "2026-11-11"
+ },
+ "crvUSD@bsc": {
+  "address": "0xe2fb3f127f5450dee44afe054385d74c392bdef4",
+  "url": "https://docs.curve.finance/deployments.json",
+  "via": "document",
+  "sha256": "badf9f660dfdd16c8bbe7a0d67243143b3bc65bec19457c7012b78b8ead80582",
+  "at": "2026-11-11"
+ },
+ "crvUSD@ethereum": {
+  "address": "0xf939e0a03fb07f59a73314e73794be0e57ac1b4e",
+  "url": "https://docs.curve.finance/deployments.json",
+  "via": "document",
+  "sha256": "badf9f660dfdd16c8bbe7a0d67243143b3bc65bec19457c7012b78b8ead80582",
+  "at": "2026-11-11"
+ },
+ "crvUSD@optimism": {
+  "address": "0xc52d7f23a2e460248db6ee192cb23dd12bddcbf6",
+  "url": "https://docs.curve.finance/deployments.json",
+  "via": "document",
+  "sha256": "badf9f660dfdd16c8bbe7a0d67243143b3bc65bec19457c7012b78b8ead80582",
+  "at": "2026-11-11"
+ },
+ "crvUSD@polygon": {
+  "address": "0xc4ce1d6f5d98d65ee25cf85e9f2e9dcfee6cb5d6",
+  "url": "https://docs.curve.finance/deployments.json",
+  "via": "document",
+  "sha256": "badf9f660dfdd16c8bbe7a0d67243143b3bc65bec19457c7012b78b8ead80582",
+  "at": "2026-11-11"
+ },
+ "DAI@arbitrum": {
+  "address": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+  "url": "https://tokenlist.arbitrum.io/ArbTokenLists/arbed_arb_whitelist_era.json",
+  "via": "tokenlist",
+  "sha256": "3735a5c44f7d06ba329ead9e3edb45b85dc9ce997fcb17b6f77188ddc9ff1397",
+  "at": "2026-11-11"
+ },
+ "DAI@base": {
+  "address": "0x50c5725949a6f0c72e6c4a641f24049a917db0cb",
+  "url": "https://static.optimism.io/optimism.tokenlist.json",
+  "via": "tokenlist",
+  "sha256": "a51a12e3f6a59d79b45255e1b728f0dcd0d9f26a78118b7824326416d58f76fa",
+  "at": "2026-11-11"
+ },
+ "DAI@bsc": {
+  "address": "0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "DAI@ethereum": {
+  "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+  "url": "https://chainlog.sky.money/api/mainnet/active.json",
+  "via": "document",
+  "sha256": "651ec7fe837b62e9fde1cae2c8cce7038e1409b8ff163dcf04d1900d711fd7fa",
+  "at": "2026-11-11"
+ },
+ "DAI@optimism": {
+  "address": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+  "url": "https://static.optimism.io/optimism.tokenlist.json",
+  "via": "tokenlist",
+  "sha256": "a51a12e3f6a59d79b45255e1b728f0dcd0d9f26a78118b7824326416d58f76fa",
+  "at": "2026-11-11"
+ },
+ "DAI@polygon": {
+  "address": "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063",
+  "url": "https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json",
+  "via": "document",
+  "sha256": "10b62661a3d27974a8dd3db88c7ce53d3b89117fb2280cd5af6ffbfa4e1978db",
+  "at": "2026-11-11"
+ },
+ "DEGEN@base": {
+  "address": "0x4ed4e862860bed51a9570b96d89af5e1b0efefed",
+  "url": "https://www.degen.tips/",
+  "via": "document",
+  "sha256": "6f188d2de7b3ad1834b8084323d024f4bb36f708271e485a2c68dac90b09563a",
+  "at": "2026-11-11"
+ },
+ "DOGE@bsc": {
+  "address": "0xba2ae424d960c26247dd6c32edc70b295c744c43",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "DOT@bsc": {
+  "address": "0x7083609fce4d1d8dc0c979aab8c869ea2c873402",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "EIGEN@ethereum": {
+  "address": "0xec53bf9167f50cdeb3ae105f56099aaab9061f83",
+  "url": "https://raw.githubusercontent.com/Layr-Labs/eigenlayer-contracts/main/README.md",
+  "via": "document",
+  "sha256": "d3c3ac666da0edce0213bacbab15fad0c244eba59a9ca8142d0d5454e21770b2",
+  "at": "2026-11-11"
+ },
+ "ENA@arbitrum": {
+  "address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses.md",
+  "via": "document",
+  "sha256": "c56a7822a09ae28367a92169bfb093e3c64031c452214d4aa7da3089a3c6dc33",
+  "at": "2026-11-11"
+ },
+ "ENA@avalanche": {
+  "address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses.md",
+  "via": "document",
+  "sha256": "c56a7822a09ae28367a92169bfb093e3c64031c452214d4aa7da3089a3c6dc33",
+  "at": "2026-11-11"
+ },
+ "ENA@base": {
+  "address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses.md",
+  "via": "document",
+  "sha256": "c56a7822a09ae28367a92169bfb093e3c64031c452214d4aa7da3089a3c6dc33",
+  "at": "2026-11-11"
+ },
+ "ENA@ethereum": {
+  "address": "0x57e114b691db790c35207b2e685d4a43181e6061",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses.md",
+  "via": "document",
+  "sha256": "c56a7822a09ae28367a92169bfb093e3c64031c452214d4aa7da3089a3c6dc33",
+  "at": "2026-11-11"
+ },
+ "ENA@optimism": {
+  "address": "0x58538e6a46e07434d7e7375bc268d3cb839c0133",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses.md",
+  "via": "document",
+  "sha256": "c56a7822a09ae28367a92169bfb093e3c64031c452214d4aa7da3089a3c6dc33",
+  "at": "2026-11-11"
+ },
+ "ENA@solana": {
+  "address": "72QvBVwpxqmheEPfaCwWSWqEFsUy3rhWt6JhQBMNTwD1",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses.md",
+  "via": "document",
+  "sha256": "c56a7822a09ae28367a92169bfb093e3c64031c452214d4aa7da3089a3c6dc33",
+  "at": "2026-11-11"
+ },
+ "ETH@bsc": {
+  "address": "0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "EURC@avalanche": {
+  "address": "0xC891EB4cbdEFf6e073e859e987815Ed1505c2ACD",
+  "url": "https://developers.circle.com/stablecoins/eurc-contract-addresses",
+  "via": "document",
+  "sha256": "e1c26905d53d659acd1e20a4ba576fbd9eea8b3018945eb26d205a242b9910fd",
+  "at": "2026-11-11"
+ },
+ "EURC@base": {
+  "address": "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
+  "url": "https://developers.circle.com/stablecoins/eurc-contract-addresses",
+  "via": "document",
+  "sha256": "e1c26905d53d659acd1e20a4ba576fbd9eea8b3018945eb26d205a242b9910fd",
+  "at": "2026-11-11"
+ },
+ "EURC@ethereum": {
+  "address": "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c",
+  "url": "https://developers.circle.com/stablecoins/eurc-contract-addresses",
+  "via": "document",
+  "sha256": "e1c26905d53d659acd1e20a4ba576fbd9eea8b3018945eb26d205a242b9910fd",
+  "at": "2026-11-11"
+ },
+ "EURC@solana": {
+  "address": "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr",
+  "url": "https://developers.circle.com/stablecoins/eurc-contract-addresses",
+  "via": "document",
+  "sha256": "e1c26905d53d659acd1e20a4ba576fbd9eea8b3018945eb26d205a242b9910fd",
+  "at": "2026-11-11"
+ },
+ "FDUSD@arbitrum": {
+  "address": "0x93C9932E4afa59201F0B5E63f7d816516F1669fE",
+  "url": "https://www.firstdigitallabs.com/fdusd (archived copy 2026-04-17)",
+  "via": "manual",
+  "at": "2026-11-10",
+  "note": "already in the registry since wave 1 (2026-11-10): the issuer page was read by hand then; it cannot be fetched without a browser (Cloudflare / client-side rendering), so check-sources.mts could not re-read it"
+ },
+ "FDUSD@bsc": {
+  "address": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+  "url": "https://www.firstdigitallabs.com/fdusd (archived copy 2026-04-17)",
+  "via": "manual",
+  "at": "2026-11-10",
+  "note": "already in the registry since wave 1 (2026-11-10): the issuer page was read by hand then; it cannot be fetched without a browser (Cloudflare / client-side rendering), so check-sources.mts could not re-read it"
+ },
+ "FDUSD@ethereum": {
+  "address": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+  "url": "https://www.firstdigitallabs.com/fdusd (archived copy 2026-04-17)",
+  "via": "manual",
+  "at": "2026-11-10",
+  "note": "already in the registry since wave 1 (2026-11-10): the issuer page was read by hand then; it cannot be fetched without a browser (Cloudflare / client-side rendering), so check-sources.mts could not re-read it"
+ },
+ "FDUSD@solana": {
+  "address": "9zNQRsGLjNKwCUU5Gq5LR8beUCPzQMVMqKAi3SSZh54u",
+  "url": "https://www.firstdigitallabs.com/fdusd (archived copy 2026-04-17)",
+  "via": "manual",
+  "at": "2026-11-10",
+  "note": "already in the registry since wave 1 (2026-11-10): the issuer page was read by hand then; it cannot be fetched without a browser (Cloudflare / client-side rendering), so check-sources.mts could not re-read it"
+ },
+ "frxUSD@arbitrum": {
+  "address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+  "url": "https://docs.frax.com/protocol/crosschain/addresses",
+  "via": "document",
+  "sha256": "c9325b47202c2d5aba786e1560f3ba4407d8cdb4d319ff070dd7142c85b20ddc",
+  "at": "2026-11-11"
+ },
+ "frxUSD@avalanche": {
+  "address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+  "url": "https://docs.frax.com/protocol/crosschain/addresses",
+  "via": "document",
+  "sha256": "c9325b47202c2d5aba786e1560f3ba4407d8cdb4d319ff070dd7142c85b20ddc",
+  "at": "2026-11-11"
+ },
+ "frxUSD@base": {
+  "address": "0xe5020a6d073a794b6e7f05678707de47986fb0b6",
+  "url": "https://docs.frax.com/protocol/crosschain/addresses",
+  "via": "document",
+  "sha256": "c9325b47202c2d5aba786e1560f3ba4407d8cdb4d319ff070dd7142c85b20ddc",
+  "at": "2026-11-11"
+ },
+ "frxUSD@bsc": {
+  "address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+  "url": "https://docs.frax.com/protocol/crosschain/addresses",
+  "via": "document",
+  "sha256": "c9325b47202c2d5aba786e1560f3ba4407d8cdb4d319ff070dd7142c85b20ddc",
+  "at": "2026-11-11"
+ },
+ "frxUSD@ethereum": {
+  "address": "0xcacd6fd266af91b8aed52accc382b4e165586e29",
+  "url": "https://docs.frax.com/protocol/assets/frxusd/addresses",
+  "via": "document",
+  "sha256": "64e4d3d63c1f4caf19b9bd827533056ccaf03eed3622f1e7441d9ee1068955a0",
+  "at": "2026-11-11"
+ },
+ "frxUSD@optimism": {
+  "address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+  "url": "https://docs.frax.com/protocol/crosschain/addresses",
+  "via": "document",
+  "sha256": "c9325b47202c2d5aba786e1560f3ba4407d8cdb4d319ff070dd7142c85b20ddc",
+  "at": "2026-11-11"
+ },
+ "frxUSD@polygon": {
+  "address": "0x80eede496655fb9047dd39d9f418d5483ed600df",
+  "url": "https://docs.frax.com/protocol/crosschain/addresses",
+  "via": "document",
+  "sha256": "c9325b47202c2d5aba786e1560f3ba4407d8cdb4d319ff070dd7142c85b20ddc",
+  "at": "2026-11-11"
+ },
+ "frxUSD@solana": {
+  "address": "GzX1ireZDU865FiMaKrdVB1H6AE8LAqWYCg6chrMrfBw",
+  "url": "https://docs.frax.com/protocol/crosschain/addresses",
+  "via": "document",
+  "sha256": "c9325b47202c2d5aba786e1560f3ba4407d8cdb4d319ff070dd7142c85b20ddc",
+  "at": "2026-11-11"
+ },
+ "GHO@arbitrum": {
+  "address": "0x7dff72693f6a4149b17e7c6314655f6a9f7c8b33",
+  "url": "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/src/GhoArbitrum.sol",
+  "via": "document",
+  "sha256": "acdaf427339efb9980f7803c0c95b46f30dfc18007fd3fab7fa59a4a71cfc2b4",
+  "at": "2026-11-11"
+ },
+ "GHO@avalanche": {
+  "address": "0xfc421ad3c883bf9e7c4f42de845c4e4405799e73",
+  "url": "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/src/GhoAvalanche.sol",
+  "via": "document",
+  "sha256": "cea989e68bb34c85c3889a6b0b73b130a52078ab50e35aabcf500dda714c3681",
+  "at": "2026-11-11"
+ },
+ "GHO@base": {
+  "address": "0x6bb7a212910682dcfdbd5bcbb3e28fb4e8da10ee",
+  "url": "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/src/GhoBase.sol",
+  "via": "document",
+  "sha256": "c1c598c4d6c632940485dec615999106e163139e056491fa168c1ff2614f8353",
+  "at": "2026-11-11"
+ },
+ "GHO@ethereum": {
+  "address": "0x40d16fc0246ad3160ccc09b8d0d3a2cd28ae6c2f",
+  "url": "https://raw.githubusercontent.com/bgd-labs/aave-address-book/main/src/GhoEthereum.sol",
+  "via": "document",
+  "sha256": "1a414ed15d341ac71d5b3be35ab631e6af4c93438892031b6fd0f20cd62c226b",
+  "at": "2026-11-11"
+ },
+ "GMX@arbitrum": {
+  "address": "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a",
+  "url": "https://raw.githubusercontent.com/gmx-io/gmx-interface/master/sdk/src/configs/contracts.ts",
+  "via": "document",
+  "sha256": "173c9ceaa574f5ece16e220b013ce10a475a014d0e86266979c1bdac2b4e2adb",
+  "at": "2026-11-11"
+ },
+ "GMX@avalanche": {
+  "address": "0x62edc0692bd897d2295872a9ffcac5425011c661",
+  "url": "https://raw.githubusercontent.com/gmx-io/gmx-interface/master/sdk/src/configs/contracts.ts",
+  "via": "document",
+  "sha256": "173c9ceaa574f5ece16e220b013ce10a475a014d0e86266979c1bdac2b4e2adb",
+  "at": "2026-11-11"
+ },
+ "HNT@solana": {
+  "address": "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux",
+  "url": "https://docs.helium.com/tokens/hnt-token/",
+  "via": "document",
+  "sha256": "ff854d1639b6a57af161317bccea25ae2fd00d240ee1143c9eeee6000bd44dad",
+  "at": "2026-11-11"
+ },
+ "jitoSOL@solana": {
+  "address": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
+  "url": "https://www.jito.network/docs/jitosol/jitosol-liquid-staking/security/deployed-programs",
+  "via": "document",
+  "sha256": "e644538bd2065a0b17442cd97aeb7a15330285c15e3358161123f8f91f9a368d",
+  "at": "2026-11-11"
+ },
+ "JOE@arbitrum": {
+  "address": "0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07",
+  "url": "https://raw.githubusercontent.com/traderjoe-xyz/joe-sdk/main/src/constants.ts",
+  "via": "document",
+  "sha256": "49c8ac2e73d44aa21bc24bb38b04e3c6700cc8d46420f55bf529bc2805728988",
+  "at": "2026-11-11"
+ },
+ "JOE@avalanche": {
+  "address": "0x6e84a6216ea6dacc71ee8e6b0a5b7322eebc0fdd",
+  "url": "https://raw.githubusercontent.com/traderjoe-xyz/joe-sdk/main/src/constants.ts",
+  "via": "document",
+  "sha256": "49c8ac2e73d44aa21bc24bb38b04e3c6700cc8d46420f55bf529bc2805728988",
+  "at": "2026-11-11"
+ },
+ "JOE@bsc": {
+  "address": "0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07",
+  "url": "https://raw.githubusercontent.com/traderjoe-xyz/joe-sdk/main/src/constants.ts",
+  "via": "document",
+  "sha256": "49c8ac2e73d44aa21bc24bb38b04e3c6700cc8d46420f55bf529bc2805728988",
+  "at": "2026-11-11"
+ },
+ "JTO@solana": {
+  "address": "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
+  "url": "https://www.jito.network/docs/governance/amended-and-restated-memorandum-of-association.md",
+  "via": "document",
+  "sha256": "a4758a3be447ccf056975bd6f8e3e57df19c707eba13b895cfa6a4befad2577e",
+  "at": "2026-11-11"
+ },
+ "JUP@solana": {
+  "address": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+  "url": "https://docs.jup.ag/user-docs/more/jup-token/faq.md",
+  "via": "document",
+  "sha256": "d0a35dc47f3862f7a9a0087036668b64eaed7cdd70796719ba515e18a7fc29f4",
+  "at": "2026-11-11"
+ },
+ "LDO@ethereum": {
+  "address": "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32",
+  "url": "https://docs.lido.fi/deployed-contracts/",
+  "via": "document",
+  "sha256": "25fe2fc0679e1530e2f2ed4e3763bf5f06c083f57ad3b5fddc6268ba48bbffac",
+  "at": "2026-11-11"
+ },
+ "LINK.e@avalanche": {
+  "address": "0x5947bb275c521040051d82396192181b413227a3",
+  "url": "https://docs.chain.link/resources/link-token-contracts",
+  "via": "document",
+  "sha256": "b0432261fa3f4d90548f5b0c7d08785bccf8aa57b7b40d679fcc393f6f4f6686",
+  "at": "2026-11-11"
+ },
+ "LINK@arbitrum": {
+  "address": "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
+  "url": "https://docs.chain.link/resources/link-token-contracts",
+  "via": "document",
+  "sha256": "b0432261fa3f4d90548f5b0c7d08785bccf8aa57b7b40d679fcc393f6f4f6686",
+  "at": "2026-11-11"
+ },
+ "LINK@base": {
+  "address": "0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196",
+  "url": "https://docs.chain.link/resources/link-token-contracts",
+  "via": "document",
+  "sha256": "b0432261fa3f4d90548f5b0c7d08785bccf8aa57b7b40d679fcc393f6f4f6686",
+  "at": "2026-11-11"
+ },
+ "LINK@bsc": {
+  "address": "0xf8a0bf9cf54bb92f17374d9e9a321e6a111a51bd",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "LINK@ethereum": {
+  "address": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+  "url": "https://docs.chain.link/resources/link-token-contracts",
+  "via": "document",
+  "sha256": "b0432261fa3f4d90548f5b0c7d08785bccf8aa57b7b40d679fcc393f6f4f6686",
+  "at": "2026-11-11"
+ },
+ "LINK@optimism": {
+  "address": "0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6",
+  "url": "https://docs.chain.link/resources/link-token-contracts",
+  "via": "document",
+  "sha256": "b0432261fa3f4d90548f5b0c7d08785bccf8aa57b7b40d679fcc393f6f4f6686",
+  "at": "2026-11-11"
+ },
+ "LINK@polygon": {
+  "address": "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39",
+  "url": "https://static.polygon.technology/network/mainnet/v1/index.json",
+  "via": "document",
+  "sha256": "156ba3f51267bd67773ee7d9ea4b16a21d388e2808f4e4176c30e6d1466d3400",
+  "at": "2026-11-11"
+ },
+ "LINK@solana": {
+  "address": "LinkhB3afbBKb2EQQu7s7umdZceV3wcvAUJhQAfQ23L",
+  "url": "https://docs.chain.link/resources/link-token-contracts",
+  "via": "document",
+  "sha256": "b0432261fa3f4d90548f5b0c7d08785bccf8aa57b7b40d679fcc393f6f4f6686",
+  "at": "2026-11-11"
+ },
+ "LTC@bsc": {
+  "address": "0x4338665cbb7b2485a8855a139b75d5e34ab0db94",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "MKR@ethereum": {
+  "address": "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2",
+  "url": "https://chainlog.sky.money/api/mainnet/active.json",
+  "via": "document",
+  "sha256": "651ec7fe837b62e9fde1cae2c8cce7038e1409b8ff163dcf04d1900d711fd7fa",
+  "at": "2026-11-11"
+ },
+ "MNT@ethereum": {
+  "address": "0x3c3a81e81dc49a522a592e7622a7e711c06bf354",
+  "url": "https://token-list.mantle.xyz/mantle.tokenlist.json",
+  "via": "tokenlist",
+  "sha256": "d91d843d772bc5d3d7af36b114640b64fca6714329bd6bd7181a9ec4a614fdb5",
+  "at": "2026-11-11"
+ },
+ "MORPHO@arbitrum": {
+  "address": "0x40bd670a58238e6e230c430bbb5ce6ec0d40df48",
+  "url": "https://docs.morpho.org/get-started/resources/addresses/",
+  "via": "document",
+  "sha256": "1d912220e464fe7057e20b207cfb4418e93d10a9791dc3687142a2024ce33743",
+  "at": "2026-11-11"
+ },
+ "MORPHO@base": {
+  "address": "0xbaa5cc21fd487b8fcc2f632f3f4e8d37262a0842",
+  "url": "https://docs.morpho.org/get-started/resources/addresses/",
+  "via": "document",
+  "sha256": "1d912220e464fe7057e20b207cfb4418e93d10a9791dc3687142a2024ce33743",
+  "at": "2026-11-11"
+ },
+ "MORPHO@ethereum": {
+  "address": "0x58d97b57bb95320f9a05dc918aef65434969c2b2",
+  "url": "https://docs.morpho.org/get-started/resources/addresses/",
+  "via": "document",
+  "sha256": "1d912220e464fe7057e20b207cfb4418e93d10a9791dc3687142a2024ce33743",
+  "at": "2026-11-11"
+ },
+ "mSOL@solana": {
+  "address": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+  "url": "https://docs.marinade.finance/developers/contract-addresses.md",
+  "via": "document",
+  "sha256": "f86b1542032ae26505e23fc368ea64719b7aa3d734b74e2a2782ca1df0b8ad02",
+  "at": "2026-11-11"
+ },
+ "ONDO@ethereum": {
+  "address": "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3",
+  "url": "https://docs.ondo.foundation/ondo-token",
+  "via": "document",
+  "sha256": "b3ebc301e5f6c8c5cab7b03b47d2897096ba976e1a6ee5cf3b16d66537a11592",
+  "at": "2026-11-11"
+ },
+ "OP@optimism": {
+  "address": "0x4200000000000000000000000000000000000042",
+  "url": "https://specs.optimism.io/protocol/predeploys.html",
+  "via": "document",
+  "sha256": "8dfcdf14c884cb5bb363a4f59bd4f69dc619e3ad29e602ac14a8499abcd1a8ac",
+  "at": "2026-11-11"
+ },
+ "ORCA@solana": {
+  "address": "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+  "url": "https://docs.orca.so/governance/treasury.md",
+  "via": "document",
+  "sha256": "aa488223c41117da97ca981d32f1d0b511cd98a98f96bec8efc2759a606d2037",
+  "at": "2026-11-11"
+ },
+ "PAXG@base": {
+  "address": "0xe904AEA5E1b110c9174728fA2efFc8aeD19E98Ef",
+  "url": "https://docs.paxos.com/guides/stablecoin/paxg/mainnet",
+  "via": "document",
+  "sha256": "a683816c30cc012f7e02f01f7fb9b73a2f1d08b73da0a7f0ac375f6b7908fc2f",
+  "at": "2026-11-11"
+ },
+ "PAXG@ethereum": {
+  "address": "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+  "url": "https://docs.paxos.com/guides/stablecoin/paxg/mainnet",
+  "via": "document",
+  "sha256": "a683816c30cc012f7e02f01f7fb9b73a2f1d08b73da0a7f0ac375f6b7908fc2f",
+  "at": "2026-11-11"
+ },
+ "PAXG@solana": {
+  "address": "5GgRAEmv8ZxF2PR5hY72Qs5x1bnQ6UK2RbTPoqJ3wSwW",
+  "url": "https://docs.paxos.com/guides/stablecoin/paxg/mainnet",
+  "via": "document",
+  "sha256": "a683816c30cc012f7e02f01f7fb9b73a2f1d08b73da0a7f0ac375f6b7908fc2f",
+  "at": "2026-11-11"
+ },
+ "PENDLE@arbitrum": {
+  "address": "0x0c880f6761f1af8d9aa9c466984b80dab9a8c9e8",
+  "url": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/42161-core.json",
+  "via": "document",
+  "sha256": "0f63f3ef1bd033137494c604cbf1096389425449862b87a3fdd5052ced9b36e4",
+  "at": "2026-11-11"
+ },
+ "PENDLE@base": {
+  "address": "0xa99f6e6785da0f5d6fb42495fe424bce029eeb3e",
+  "url": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/8453-core.json",
+  "via": "document",
+  "sha256": "8084182730fafec82d68381860a6f6dcff5fbd0f55aee4cbae3748a82ea11bef",
+  "at": "2026-11-11"
+ },
+ "PENDLE@bsc": {
+  "address": "0xb3ed0a426155b79b898849803e3b36552f7ed507",
+  "url": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/56-core.json",
+  "via": "document",
+  "sha256": "53a4aa06689043ef354afbe7b38a4316e23b5b381bcec6e01f51c36271d623b7",
+  "at": "2026-11-11"
+ },
+ "PENDLE@ethereum": {
+  "address": "0x808507121b80c02388fad14726482e061b8da827",
+  "url": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/1-core.json",
+  "via": "document",
+  "sha256": "0484b61bee239d581191ecc474fa2e4eb8ea61993d47e0008a5506b79d8aee4a",
+  "at": "2026-11-11"
+ },
+ "PENDLE@hyperevm": {
+  "address": "0xd6eb81136884713e843936843e286fd2a85a205a",
+  "url": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/999-core.json",
+  "via": "document",
+  "sha256": "db7243a7eb71db0a9dddcf78273dc0cba60679e89aa81676b2b916d6e40bb7b2",
+  "at": "2026-11-11"
+ },
+ "PENDLE@optimism": {
+  "address": "0xbc7b1ff1c6989f006a1185318ed4e7b5796e66e1",
+  "url": "https://raw.githubusercontent.com/pendle-finance/pendle-core-v2-public/main/deployments/10-core.json",
+  "via": "document",
+  "sha256": "4d6485f0d99a5955f3ea6290ff14f137f8477a7e3586cc047c3e48dc0b374c09",
+  "at": "2026-11-11"
+ },
+ "PEPE@ethereum": {
+  "address": "0x6982508145454Ce325dDbE47a25d4ec3d2311933",
+  "url": "https://www.pepe.vip",
+  "via": "document",
+  "sha256": "b6a1273704f1e6188a8434782b38d7b5bf03625fc2bdade2dc612219b74d3941",
+  "at": "2026-11-11"
+ },
+ "POL@ethereum": {
+  "address": "0x455e53cbb86018ac2b8092fdcd39d8444affc3f6",
+  "url": "https://static.polygon.technology/network/mainnet/v1/index.json",
+  "via": "document",
+  "sha256": "156ba3f51267bd67773ee7d9ea4b16a21d388e2808f4e4176c30e6d1466d3400",
+  "at": "2026-11-11"
+ },
+ "PYTH@solana": {
+  "address": "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
+  "url": "https://raw.githubusercontent.com/pyth-network/governance/main/staking/app/constants.ts",
+  "via": "document",
+  "sha256": "cf21a0f751176c52876bc52dfc054443ecfff9d2616769b4de31434ce4cfb040",
+  "at": "2026-11-11"
+ },
+ "PYUSD@arbitrum": {
+  "address": "0x46850aD61C2B7d64d08c9C754F45254596696984",
+  "url": "https://docs.paxos.com/guides/stablecoin/pyusd/mainnet",
+  "via": "document",
+  "sha256": "f5a2ea69e95444f6cd5684a1d2824ee707b394a9fa71776f7e5faccd73e37db4",
+  "at": "2026-11-11"
+ },
+ "PYUSD@ethereum": {
+  "address": "0x6c3ea9036406852006290770BEdFcAbA0e23A0e8",
+  "url": "https://docs.paxos.com/guides/stablecoin/pyusd/mainnet",
+  "via": "document",
+  "sha256": "f5a2ea69e95444f6cd5684a1d2824ee707b394a9fa71776f7e5faccd73e37db4",
+  "at": "2026-11-11"
+ },
+ "PYUSD@polygon": {
+  "address": "0x99aF3EeA856556646C98c8B9b2548Fe815240750",
+  "url": "https://docs.paxos.com/guides/stablecoin/pyusd/mainnet",
+  "via": "document",
+  "sha256": "f5a2ea69e95444f6cd5684a1d2824ee707b394a9fa71776f7e5faccd73e37db4",
+  "at": "2026-11-11"
+ },
+ "PYUSD@solana": {
+  "address": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+  "url": "https://docs.paxos.com/guides/stablecoin/pyusd/mainnet",
+  "via": "document",
+  "sha256": "f5a2ea69e95444f6cd5684a1d2824ee707b394a9fa71776f7e5faccd73e37db4",
+  "at": "2026-11-11"
+ },
+ "RAY@solana": {
+  "address": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+  "url": "https://docs.raydium.io/ray/index",
+  "via": "document",
+  "sha256": "6abac4605da540c9434702ae5239b757e6158e74c95028649ba3fe6b98457e4d",
+  "at": "2026-11-11"
+ },
+ "RENDER@solana": {
+  "address": "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof",
+  "url": "https://know.rendernetwork.com/general-render-network/rndr-to-render-what-you-need-to-know/render-network-upgrade-portal-faq",
+  "via": "document",
+  "sha256": "be7ba497ca7cf428b4a361c5c53c7e9aaec12631ecdee8b3fb6c232e86b1dcf9",
+  "at": "2026-11-11"
+ },
+ "rETH@arbitrum": {
+  "address": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8",
+  "url": "https://raw.githubusercontent.com/rocket-pool/docs.rocketpool.net/main/docs/en/protocol/contracts-integrations.md",
+  "via": "document",
+  "sha256": "a1dde6ebe040cb5414bfc0d5022a7a98695af05a471318989da7b74545a51a4c",
+  "at": "2026-11-11"
+ },
+ "rETH@base": {
+  "address": "0xb6fe221fe9eef5aba221c348ba20a1bf5e73624c",
+  "url": "https://raw.githubusercontent.com/rocket-pool/docs.rocketpool.net/main/docs/en/protocol/contracts-integrations.md",
+  "via": "document",
+  "sha256": "a1dde6ebe040cb5414bfc0d5022a7a98695af05a471318989da7b74545a51a4c",
+  "at": "2026-11-11"
+ },
+ "rETH@ethereum": {
+  "address": "0xae78736cd615f374d3085123a210448e74fc6393",
+  "url": "https://raw.githubusercontent.com/rocket-pool/docs.rocketpool.net/main/docs/en/protocol/contracts-integrations.md",
+  "via": "document",
+  "sha256": "a1dde6ebe040cb5414bfc0d5022a7a98695af05a471318989da7b74545a51a4c",
+  "at": "2026-11-11"
+ },
+ "rETH@optimism": {
+  "address": "0x9bcef72be871e61ed4fbbc7630889bee758eb81d",
+  "url": "https://raw.githubusercontent.com/rocket-pool/docs.rocketpool.net/main/docs/en/protocol/contracts-integrations.md",
+  "via": "document",
+  "sha256": "a1dde6ebe040cb5414bfc0d5022a7a98695af05a471318989da7b74545a51a4c",
+  "at": "2026-11-11"
+ },
+ "rETH@polygon": {
+  "address": "0x0266f4f08d82372cf0fcbccc0ff74309089c74d1",
+  "url": "https://raw.githubusercontent.com/rocket-pool/docs.rocketpool.net/main/docs/en/protocol/contracts-integrations.md",
+  "via": "document",
+  "sha256": "a1dde6ebe040cb5414bfc0d5022a7a98695af05a471318989da7b74545a51a4c",
+  "at": "2026-11-11"
+ },
+ "RLUSD@ethereum": {
+  "address": "0x8292bb45bf1ee4d140127049757c2e0ff06317ed",
+  "url": "https://docs.ripple.com/products/stablecoin/overview/token-addresses",
+  "via": "document",
+  "sha256": "1af415b0aeacc8c4cbcff0760332e3b7f8cc65f455deb596f942bc9936d791aa",
+  "at": "2026-11-11"
+ },
+ "SHIB@ethereum": {
+  "address": "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
+  "url": "https://shib.io/tokens/shib",
+  "via": "manual",
+  "at": "2026-11-10",
+  "note": "already in the registry since wave 1 (2026-11-10): the issuer page was read by hand then; it cannot be fetched without a browser (Cloudflare / client-side rendering), so check-sources.mts could not re-read it"
+ },
+ "SKY@ethereum": {
+  "address": "0x56072c95faa701256059aa122697b133aded9279",
+  "url": "https://chainlog.sky.money/api/mainnet/active.json",
+  "via": "document",
+  "sha256": "651ec7fe837b62e9fde1cae2c8cce7038e1409b8ff163dcf04d1900d711fd7fa",
+  "at": "2026-11-11"
+ },
+ "SNX@base": {
+  "address": "0x22e6966b799c4d5b13be962e1d117b56327fda66",
+  "url": "https://raw.githubusercontent.com/Synthetixio/synthetix-deployments/main/omnibus-base-mainnet-andromeda.toml",
+  "via": "document",
+  "sha256": "d6b74d3a3b4f322257708e195c81381da2e522c60fac553e8504db8e38f6d044",
+  "at": "2026-11-11"
+ },
+ "SNX@ethereum": {
+  "address": "0xc011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f",
+  "url": "https://docs.synthetix.io/about-synthetix/snx-token",
+  "via": "document",
+  "sha256": "2299d27d31b91d572ea3e0b9b86d504d6fb31716a29b737dd3bc035c9d626981",
+  "at": "2026-11-11"
+ },
+ "SNX@optimism": {
+  "address": "0x8700daec35af8ff88c16bdf0418774cb3d7599b4",
+  "url": "https://docs.synthetix.io/about-synthetix/snx-token",
+  "via": "document",
+  "sha256": "2299d27d31b91d572ea3e0b9b86d504d6fb31716a29b737dd3bc035c9d626981",
+  "at": "2026-11-11"
+ },
+ "SOL@bsc": {
+  "address": "0x570a5d26f7765ecb712c0924e4de545b89fd43df",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "tBTC@arbitrum": {
+  "address": "0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40",
+  "url": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+  "via": "document",
+  "sha256": "a3e8d9ba5f8a4ee2100c265f523dd73e449555814eabdaedbcdd714e46ba4db6",
+  "at": "2026-11-11"
+ },
+ "tBTC@base": {
+  "address": "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b",
+  "url": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+  "via": "document",
+  "sha256": "a3e8d9ba5f8a4ee2100c265f523dd73e449555814eabdaedbcdd714e46ba4db6",
+  "at": "2026-11-11"
+ },
+ "tBTC@ethereum": {
+  "address": "0x18084fba666a33d37592fa2633fd49a74dd93a88",
+  "url": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+  "via": "document",
+  "sha256": "a3e8d9ba5f8a4ee2100c265f523dd73e449555814eabdaedbcdd714e46ba4db6",
+  "at": "2026-11-11"
+ },
+ "tBTC@optimism": {
+  "address": "0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40",
+  "url": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+  "via": "document",
+  "sha256": "a3e8d9ba5f8a4ee2100c265f523dd73e449555814eabdaedbcdd714e46ba4db6",
+  "at": "2026-11-11"
+ },
+ "tBTC@polygon": {
+  "address": "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b",
+  "url": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+  "via": "document",
+  "sha256": "a3e8d9ba5f8a4ee2100c265f523dd73e449555814eabdaedbcdd714e46ba4db6",
+  "at": "2026-11-11"
+ },
+ "tBTC@solana": {
+  "address": "6DNSN2BJsaPFdFFc1zP37kkeNe4Usc1Sqkzr9C9vPWcU",
+  "url": "https://docs.threshold.network/resources/contract-addresses/mainnet/tbtc.md",
+  "via": "document",
+  "sha256": "a3e8d9ba5f8a4ee2100c265f523dd73e449555814eabdaedbcdd714e46ba4db6",
+  "at": "2026-11-11"
+ },
+ "TOSHI@base": {
+  "address": "0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4",
+  "url": "https://www.toshithecat.com/",
+  "via": "document",
+  "sha256": "eb4c5635390173cdb6e9583c540d1f54d0cb3880755d3bb4eeecbce039d37566",
+  "at": "2026-11-11"
+ },
+ "UNI@arbitrum": {
+  "address": "0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0",
+  "url": "https://developers.uniswap.org/docs/ecosystem/governance/uni.md",
+  "via": "document",
+  "sha256": "1b52324b3214f072bf3c399b11677af90eed83a6963942306b245097f0f3362e",
+  "at": "2026-11-11"
+ },
+ "UNI@base": {
+  "address": "0xc3De830EA07524a0761646a6a4e4be0e114a3C83",
+  "url": "https://static.optimism.io/optimism.tokenlist.json",
+  "via": "tokenlist",
+  "sha256": "a51a12e3f6a59d79b45255e1b728f0dcd0d9f26a78118b7824326416d58f76fa",
+  "at": "2026-11-11"
+ },
+ "UNI@bsc": {
+  "address": "0xbf5140a22578168fd562dccf235e5d43a02ce9b1",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "UNI@ethereum": {
+  "address": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+  "url": "https://developers.uniswap.org/docs/ecosystem/governance/uni.md",
+  "via": "document",
+  "sha256": "1b52324b3214f072bf3c399b11677af90eed83a6963942306b245097f0f3362e",
+  "at": "2026-11-11"
+ },
+ "UNI@optimism": {
+  "address": "0x6fd9d7AD17242c41f7131d257212c54A0e816691",
+  "url": "https://developers.uniswap.org/docs/ecosystem/governance/uni.md",
+  "via": "document",
+  "sha256": "1b52324b3214f072bf3c399b11677af90eed83a6963942306b245097f0f3362e",
+  "at": "2026-11-11"
+ },
+ "UNI@polygon": {
+  "address": "0xb33eaad8d922b1083446dc23f610c2567fb5180f",
+  "url": "https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json",
+  "via": "document",
+  "sha256": "10b62661a3d27974a8dd3db88c7ce53d3b89117fb2280cd5af6ffbfa4e1978db",
+  "at": "2026-11-11"
+ },
+ "USDC.e@arbitrum": {
+  "address": "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
+  "url": "https://tokenlist.arbitrum.io/ArbTokenLists/arbed_arb_whitelist_era.json",
+  "via": "tokenlist",
+  "sha256": "3735a5c44f7d06ba329ead9e3edb45b85dc9ce997fcb17b6f77188ddc9ff1397",
+  "at": "2026-11-11"
+ },
+ "USDC.e@avalanche": {
+  "address": "0xa7d7079b0fead91f3e65f86e8915cb59c1a4c664",
+  "url": "https://raw.githubusercontent.com/ava-labs/avalanche-bridge-resources/main/avalanche_contract_address.json",
+  "via": "document",
+  "sha256": "4f05182cdcc275b46090b7140328cf6c1b9c1ec7759186d4623efebfc8d23522",
+  "at": "2026-11-11"
+ },
+ "USDC.e@optimism": {
+  "address": "0x7f5c764cbc14f9669b88837ca1490cca17c31607",
+  "url": "https://static.optimism.io/optimism.tokenlist.json",
+  "via": "tokenlist",
+  "sha256": "a51a12e3f6a59d79b45255e1b728f0dcd0d9f26a78118b7824326416d58f76fa",
+  "at": "2026-11-11"
+ },
+ "USDC.e@polygon": {
+  "address": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+  "url": "https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json",
+  "via": "document",
+  "sha256": "10b62661a3d27974a8dd3db88c7ce53d3b89117fb2280cd5af6ffbfa4e1978db",
+  "at": "2026-11-11"
+ },
+ "USDC@arbitrum": {
+  "address": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "url": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "via": "document",
+  "sha256": "ea356d99c5de50d25ba5914b6b4cfec0aa05f98e185012cd1ac45a733ab822c7",
+  "at": "2026-11-11"
+ },
+ "USDC@avalanche": {
+  "address": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+  "url": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "via": "document",
+  "sha256": "ea356d99c5de50d25ba5914b6b4cfec0aa05f98e185012cd1ac45a733ab822c7",
+  "at": "2026-11-11"
+ },
+ "USDC@base": {
+  "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "url": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "via": "document",
+  "sha256": "ea356d99c5de50d25ba5914b6b4cfec0aa05f98e185012cd1ac45a733ab822c7",
+  "at": "2026-11-11"
+ },
+ "USDC@bsc": {
+  "address": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "USDC@ethereum": {
+  "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  "url": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "via": "document",
+  "sha256": "ea356d99c5de50d25ba5914b6b4cfec0aa05f98e185012cd1ac45a733ab822c7",
+  "at": "2026-11-11"
+ },
+ "USDC@hyperevm": {
+  "address": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+  "url": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "via": "document",
+  "sha256": "ea356d99c5de50d25ba5914b6b4cfec0aa05f98e185012cd1ac45a733ab822c7",
+  "at": "2026-11-11"
+ },
+ "USDC@optimism": {
+  "address": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+  "url": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "via": "document",
+  "sha256": "ea356d99c5de50d25ba5914b6b4cfec0aa05f98e185012cd1ac45a733ab822c7",
+  "at": "2026-11-11"
+ },
+ "USDC@polygon": {
+  "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+  "url": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "via": "document",
+  "sha256": "ea356d99c5de50d25ba5914b6b4cfec0aa05f98e185012cd1ac45a733ab822c7",
+  "at": "2026-11-11"
+ },
+ "USDC@solana": {
+  "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "url": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+  "via": "document",
+  "sha256": "ea356d99c5de50d25ba5914b6b4cfec0aa05f98e185012cd1ac45a733ab822c7",
+  "at": "2026-11-11"
+ },
+ "USDD@bsc": {
+  "address": "0x45e51bc23d592eb2dba86da3985299f7895d66ba",
+  "url": "https://docs.usdd.io/developers/deployment-addresses.md",
+  "via": "document",
+  "sha256": "eb4777ef8be6d46f3e7550bed7d03a04e09edeafecc7b8201b98b385c99196e7",
+  "at": "2026-11-11"
+ },
+ "USDD@ethereum": {
+  "address": "0x4f8e5de400de08b164e7421b3ee387f461becd1a",
+  "url": "https://docs.usdd.io/developers/deployment-addresses.md",
+  "via": "document",
+  "sha256": "eb4777ef8be6d46f3e7550bed7d03a04e09edeafecc7b8201b98b385c99196e7",
+  "at": "2026-11-11"
+ },
+ "USDD@tron": {
+  "address": "TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz",
+  "url": "https://docs.usdd.io/developers/deployment-addresses.md",
+  "via": "document",
+  "sha256": "eb4777ef8be6d46f3e7550bed7d03a04e09edeafecc7b8201b98b385c99196e7",
+  "at": "2026-11-11"
+ },
+ "USDe@arbitrum": {
+  "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses",
+  "via": "document",
+  "sha256": "3dd70b9d9f5c97030e4868fcbc206c169a20bfb1a0f7b733182bc084f5d171bd",
+  "at": "2026-11-11"
+ },
+ "USDe@avalanche": {
+  "address": "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses",
+  "via": "document",
+  "sha256": "3dd70b9d9f5c97030e4868fcbc206c169a20bfb1a0f7b733182bc084f5d171bd",
+  "at": "2026-11-11"
+ },
+ "USDe@base": {
+  "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses",
+  "via": "document",
+  "sha256": "3dd70b9d9f5c97030e4868fcbc206c169a20bfb1a0f7b733182bc084f5d171bd",
+  "at": "2026-11-11"
+ },
+ "USDe@bsc": {
+  "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses",
+  "via": "document",
+  "sha256": "3dd70b9d9f5c97030e4868fcbc206c169a20bfb1a0f7b733182bc084f5d171bd",
+  "at": "2026-11-11"
+ },
+ "USDe@ethereum": {
+  "address": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses",
+  "via": "document",
+  "sha256": "3dd70b9d9f5c97030e4868fcbc206c169a20bfb1a0f7b733182bc084f5d171bd",
+  "at": "2026-11-11"
+ },
+ "USDe@hyperevm": {
+  "address": "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses",
+  "via": "document",
+  "sha256": "3dd70b9d9f5c97030e4868fcbc206c169a20bfb1a0f7b733182bc084f5d171bd",
+  "at": "2026-11-11"
+ },
+ "USDe@optimism": {
+  "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses",
+  "via": "document",
+  "sha256": "3dd70b9d9f5c97030e4868fcbc206c169a20bfb1a0f7b733182bc084f5d171bd",
+  "at": "2026-11-11"
+ },
+ "USDe@solana": {
+  "address": "DEkqHyPN7GMRJ5cArtQFAWefqbZb33Hyf6s5iCwjEonT",
+  "url": "https://docs.ethena.fi/solution-design/key-addresses",
+  "via": "document",
+  "sha256": "3dd70b9d9f5c97030e4868fcbc206c169a20bfb1a0f7b733182bc084f5d171bd",
+  "at": "2026-11-11"
+ },
+ "USDG@arbitrum": {
+  "address": "0x004B506865409877C9fA29bfb1ebA929984B9bbC",
+  "url": "https://docs.paxos.com/guides/stablecoin/usdg/mainnet",
+  "via": "document",
+  "sha256": "18f45fcda37691e7525be62ea0b412887b68f64411e4bf52fb0ce4a848b3badb",
+  "at": "2026-11-11"
+ },
+ "USDG@ethereum": {
+  "address": "0xe343167631d89B6Ffc58B88d6b7fB0228795491D",
+  "url": "https://docs.paxos.com/guides/stablecoin/usdg/mainnet",
+  "via": "document",
+  "sha256": "18f45fcda37691e7525be62ea0b412887b68f64411e4bf52fb0ce4a848b3badb",
+  "at": "2026-11-11"
+ },
+ "USDG@solana": {
+  "address": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH",
+  "url": "https://docs.paxos.com/guides/stablecoin/usdg/mainnet",
+  "via": "document",
+  "sha256": "18f45fcda37691e7525be62ea0b412887b68f64411e4bf52fb0ce4a848b3badb",
+  "at": "2026-11-11"
+ },
+ "USDS@arbitrum": {
+  "address": "0x6491c05a82219b8d1479057361ff1654749b876b",
+  "url": "https://docs.spark.fi/dev/savings/cross-chain-tokens",
+  "via": "document",
+  "sha256": "0c89edf57fbc59e8e39b25a7a414b5134a419606bfbcff89583d7d582e0c38e2",
+  "at": "2026-11-11"
+ },
+ "USDS@base": {
+  "address": "0x820C137fa70C8691f0e44Dc420a5e53c168921Dc",
+  "url": "https://docs.spark.fi/dev/savings/cross-chain-tokens",
+  "via": "document",
+  "sha256": "0c89edf57fbc59e8e39b25a7a414b5134a419606bfbcff89583d7d582e0c38e2",
+  "at": "2026-11-11"
+ },
+ "USDS@ethereum": {
+  "address": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+  "url": "https://chainlog.sky.money/api/mainnet/active.json",
+  "via": "document",
+  "sha256": "651ec7fe837b62e9fde1cae2c8cce7038e1409b8ff163dcf04d1900d711fd7fa",
+  "at": "2026-11-11"
+ },
+ "USDS@solana": {
+  "address": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA",
+  "url": "https://developers.sky.money/guides/skylink/usds-ethereum-solana-bridge",
+  "via": "document",
+  "sha256": "0e39dcb479f1cc8b0a9caf69730be09775b1c4c8e8113bb221ea8bf298d6fe31",
+  "at": "2026-11-11"
+ },
+ "USDT@avalanche": {
+  "address": "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7",
+  "url": "https://tether.to/en/supported-protocols/",
+  "via": "document",
+  "sha256": "544c7d5c20c204d957fd4f3a9552d57054951e2e50a688a18dede664fd2945d5",
+  "at": "2026-11-11"
+ },
+ "USDT@base": {
+  "address": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+  "url": "https://static.optimism.io/optimism.tokenlist.json",
+  "via": "tokenlist",
+  "sha256": "a51a12e3f6a59d79b45255e1b728f0dcd0d9f26a78118b7824326416d58f76fa",
+  "at": "2026-11-11"
+ },
+ "USDT@bsc": {
+  "address": "0x55d398326f99059ff775485246999027b3197955",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ },
+ "USDT@ethereum": {
+  "address": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+  "url": "https://tether.to/en/supported-protocols/",
+  "via": "document",
+  "sha256": "544c7d5c20c204d957fd4f3a9552d57054951e2e50a688a18dede664fd2945d5",
+  "at": "2026-11-11"
+ },
+ "USDT@solana": {
+  "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+  "url": "https://tether.to/en/supported-protocols/",
+  "via": "document",
+  "sha256": "544c7d5c20c204d957fd4f3a9552d57054951e2e50a688a18dede664fd2945d5",
+  "at": "2026-11-11"
+ },
+ "USDT@tron": {
+  "address": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+  "url": "https://tether.to/en/supported-protocols/",
+  "via": "document",
+  "sha256": "544c7d5c20c204d957fd4f3a9552d57054951e2e50a688a18dede664fd2945d5",
+  "at": "2026-11-11"
+ },
+ "USDT0@arbitrum": {
+  "address": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+  "url": "https://docs.usdt0.to/technical-documentation/deployments.md",
+  "via": "document",
+  "sha256": "e751aff0041714637b3eaca94cefc703fb145d9f5b8cf21fa39e24fe3dedddf3",
+  "at": "2026-11-11"
+ },
+ "USDT0@hyperevm": {
+  "address": "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb",
+  "url": "https://docs.usdt0.to/technical-documentation/deployments.md",
+  "via": "document",
+  "sha256": "e751aff0041714637b3eaca94cefc703fb145d9f5b8cf21fa39e24fe3dedddf3",
+  "at": "2026-11-11"
+ },
+ "USDT0@optimism": {
+  "address": "0x01bff41798a0bcf287b996046ca68b395dbc1071",
+  "url": "https://docs.usdt0.to/technical-documentation/deployments.md",
+  "via": "document",
+  "sha256": "e751aff0041714637b3eaca94cefc703fb145d9f5b8cf21fa39e24fe3dedddf3",
+  "at": "2026-11-11"
+ },
+ "USDT0@polygon": {
+  "address": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+  "url": "https://docs.usdt0.to/technical-documentation/deployments.md",
+  "via": "document",
+  "sha256": "e751aff0041714637b3eaca94cefc703fb145d9f5b8cf21fa39e24fe3dedddf3",
+  "at": "2026-11-11"
+ },
+ "VELO@optimism": {
+  "address": "0x9560e827af36c94d2ac33a39bce1fe78631088db",
+  "url": "https://raw.githubusercontent.com/velodrome-finance/contracts/main/README.md",
+  "via": "document",
+  "sha256": "8fd34ecdceb342ff88523c2661361780a74a3443a1d556a245fdedf5631b912c",
+  "at": "2026-11-11"
+ },
+ "WAVAX@avalanche": {
+  "address": "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7",
+  "url": "https://build.avax.network/academy/blockchain/x402-payment-infrastructure/04-x402-on-avalanche/02-network-setup",
+  "via": "document",
+  "sha256": "bfbb9c925da3c63aa30bc3604dc85c8f5c7c1768ff79774bfdac770fcafcbee8",
+  "at": "2026-11-11"
+ },
+ "WBNB@bsc": {
+  "address": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+  "url": "https://raw.githubusercontent.com/bnb-chain/bnb-chain.github.io/main/docs/bnb-smart-chain/benchmark/design-reference.md",
+  "via": "document",
+  "sha256": "db28e7fb06c3ad2622f4e267d026d1138d3869e450c38098dc44402f13bf4193",
+  "at": "2026-11-11"
+ },
+ "WBTC@arbitrum": {
+  "address": "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+  "url": "https://tokenlist.arbitrum.io/ArbTokenLists/arbed_arb_whitelist_era.json",
+  "via": "tokenlist",
+  "sha256": "3735a5c44f7d06ba329ead9e3edb45b85dc9ce997fcb17b6f77188ddc9ff1397",
+  "at": "2026-11-11"
+ },
+ "WBTC@avalanche": {
+  "address": "0x0555e30da8f98308edb960aa94c0db47230d2b9c",
+  "url": "https://wbtc.network/ecosystem",
+  "via": "document",
+  "sha256": "76c3dca08374bf91618d7decb05647a48279cc95744214ed47768f348b50f732",
+  "at": "2026-11-11"
+ },
+ "WBTC@base": {
+  "address": "0x0555e30da8f98308edb960aa94c0db47230d2b9c",
+  "url": "https://wbtc.network/ecosystem",
+  "via": "document",
+  "sha256": "76c3dca08374bf91618d7decb05647a48279cc95744214ed47768f348b50f732",
+  "at": "2026-11-11"
+ },
+ "WBTC@bsc": {
+  "address": "0x0555e30da8f98308edb960aa94c0db47230d2b9c",
+  "url": "https://wbtc.network/ecosystem",
+  "via": "document",
+  "sha256": "76c3dca08374bf91618d7decb05647a48279cc95744214ed47768f348b50f732",
+  "at": "2026-11-11"
+ },
+ "WBTC@ethereum": {
+  "address": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+  "url": "https://wbtc.network/ecosystem",
+  "via": "document",
+  "sha256": "76c3dca08374bf91618d7decb05647a48279cc95744214ed47768f348b50f732",
+  "at": "2026-11-11"
+ },
+ "WBTC@optimism": {
+  "address": "0x68f180fcce6836688e9084f035309e29bf0a2095",
+  "url": "https://static.optimism.io/optimism.tokenlist.json",
+  "via": "tokenlist",
+  "sha256": "a51a12e3f6a59d79b45255e1b728f0dcd0d9f26a78118b7824326416d58f76fa",
+  "at": "2026-11-11"
+ },
+ "WBTC@polygon": {
+  "address": "0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6",
+  "url": "https://raw.githubusercontent.com/0xPolygon/polygon-token-list/dev/src/tokens/mappedTokens.json",
+  "via": "document",
+  "sha256": "10b62661a3d27974a8dd3db88c7ce53d3b89117fb2280cd5af6ffbfa4e1978db",
+  "at": "2026-11-11"
+ },
+ "WBTC@solana": {
+  "address": "5XZw2LKTyrfvfiskJ78AMpackRjPcyCif1WhUsPDuVqQ",
+  "url": "https://wbtc.network/ecosystem",
+  "via": "document",
+  "sha256": "76c3dca08374bf91618d7decb05647a48279cc95744214ed47768f348b50f732",
+  "at": "2026-11-11"
+ },
+ "weETH@arbitrum": {
+  "address": "0x35751007a407ca6feffe80b3cb397736d2cf4dbe",
+  "url": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "via": "document",
+  "sha256": "f80642fa31721a99277616f99bd0eec184bd59acf3f0b67eef92276b3e3f5d8e",
+  "at": "2026-11-11"
+ },
+ "weETH@avalanche": {
+  "address": "0xa3d68b74bf0528fdd07263c60d6488749044914b",
+  "url": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "via": "document",
+  "sha256": "f80642fa31721a99277616f99bd0eec184bd59acf3f0b67eef92276b3e3f5d8e",
+  "at": "2026-11-11"
+ },
+ "weETH@base": {
+  "address": "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a",
+  "url": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "via": "document",
+  "sha256": "f80642fa31721a99277616f99bd0eec184bd59acf3f0b67eef92276b3e3f5d8e",
+  "at": "2026-11-11"
+ },
+ "weETH@bsc": {
+  "address": "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a",
+  "url": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "via": "document",
+  "sha256": "f80642fa31721a99277616f99bd0eec184bd59acf3f0b67eef92276b3e3f5d8e",
+  "at": "2026-11-11"
+ },
+ "weETH@ethereum": {
+  "address": "0xcd5fe23c85820f7b72d0926fc9b05b43e359b7ee",
+  "url": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "via": "document",
+  "sha256": "f80642fa31721a99277616f99bd0eec184bd59acf3f0b67eef92276b3e3f5d8e",
+  "at": "2026-11-11"
+ },
+ "weETH@hyperevm": {
+  "address": "0xa3d68b74bf0528fdd07263c60d6488749044914b",
+  "url": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "via": "document",
+  "sha256": "f80642fa31721a99277616f99bd0eec184bd59acf3f0b67eef92276b3e3f5d8e",
+  "at": "2026-11-11"
+ },
+ "weETH@optimism": {
+  "address": "0x5a7facb970d094b6c7ff1df0ea68d99e6e73cbff",
+  "url": "https://etherfi.gitbook.io/etherfi/contracts-and-integrations/deployed-contracts.md",
+  "via": "document",
+  "sha256": "f80642fa31721a99277616f99bd0eec184bd59acf3f0b67eef92276b3e3f5d8e",
+  "at": "2026-11-11"
+ },
+ "WETH.e@avalanche": {
+  "address": "0x49d5c2bdffac6ce2bfdb6640f4f80f226bc10bab",
+  "url": "https://raw.githubusercontent.com/ava-labs/avalanche-bridge-resources/main/avalanche_contract_address.json",
+  "via": "document",
+  "sha256": "4f05182cdcc275b46090b7140328cf6c1b9c1ec7759186d4623efebfc8d23522",
+  "at": "2026-11-11"
+ },
+ "WETH@arbitrum": {
+  "address": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+  "url": "https://docs.arbitrum.io/build-decentralized-apps/reference/contract-addresses",
+  "via": "document",
+  "sha256": "ddfd56d73f1201ed087d4d2ae3273151c339bc5410393ec2c5eb5647dd30ba76",
+  "at": "2026-11-11"
+ },
+ "WETH@base": {
+  "address": "0x4200000000000000000000000000000000000006",
+  "url": "https://specs.optimism.io/protocol/predeploys.html",
+  "via": "document",
+  "sha256": "8dfcdf14c884cb5bb363a4f59bd4f69dc619e3ad29e602ac14a8499abcd1a8ac",
+  "at": "2026-11-11"
+ },
+ "WETH@ethereum": {
+  "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+  "url": "https://docs.arbitrum.io/build-decentralized-apps/reference/contract-addresses",
+  "via": "document",
+  "sha256": "ddfd56d73f1201ed087d4d2ae3273151c339bc5410393ec2c5eb5647dd30ba76",
+  "at": "2026-11-11"
+ },
+ "WETH@optimism": {
+  "address": "0x4200000000000000000000000000000000000006",
+  "url": "https://specs.optimism.io/protocol/predeploys.html",
+  "via": "document",
+  "sha256": "8dfcdf14c884cb5bb363a4f59bd4f69dc619e3ad29e602ac14a8499abcd1a8ac",
+  "at": "2026-11-11"
+ },
+ "WETH@polygon": {
+  "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+  "url": "https://static.polygon.technology/network/mainnet/v1/index.json",
+  "via": "document",
+  "sha256": "156ba3f51267bd67773ee7d9ea4b16a21d388e2808f4e4176c30e6d1466d3400",
+  "at": "2026-11-11"
+ },
+ "WHYPE@hyperevm": {
+  "address": "0x5555555555555555555555555555555555555555",
+  "url": "https://raw.githubusercontent.com/hyperliquid-dex/hyper-evm-sync/main/src/run.rs",
+  "via": "document",
+  "sha256": "dfc383180834aa6a5ebce72020d7ce313403945331a51089c65cec49d522f833",
+  "at": "2026-11-11"
+ },
+ "WPOL@polygon": {
+  "address": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
+  "url": "https://static.polygon.technology/network/mainnet/v1/index.json",
+  "via": "document",
+  "sha256": "156ba3f51267bd67773ee7d9ea4b16a21d388e2808f4e4176c30e6d1466d3400",
+  "at": "2026-11-11"
+ },
+ "wstETH@arbitrum": {
+  "address": "0x5979d7b546e38e414f7e9822514be443a4800529",
+  "url": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+  "via": "document",
+  "sha256": "97e391c7a62170f0297e2e6e8e2f6cab1ef85ae8545d3ad0cfaebed0dcff26b3",
+  "at": "2026-11-11"
+ },
+ "wstETH@base": {
+  "address": "0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452",
+  "url": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+  "via": "document",
+  "sha256": "97e391c7a62170f0297e2e6e8e2f6cab1ef85ae8545d3ad0cfaebed0dcff26b3",
+  "at": "2026-11-11"
+ },
+ "wstETH@bsc": {
+  "address": "0x26c5e01524d2e6280a48f2c50ff6de7e52e9611c",
+  "url": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+  "via": "document",
+  "sha256": "97e391c7a62170f0297e2e6e8e2f6cab1ef85ae8545d3ad0cfaebed0dcff26b3",
+  "at": "2026-11-11"
+ },
+ "wstETH@ethereum": {
+  "address": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+  "url": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+  "via": "document",
+  "sha256": "97e391c7a62170f0297e2e6e8e2f6cab1ef85ae8545d3ad0cfaebed0dcff26b3",
+  "at": "2026-11-11"
+ },
+ "wstETH@optimism": {
+  "address": "0x1f32b1c2345538c0c6f582fcb022739c4a194ebb",
+  "url": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+  "via": "document",
+  "sha256": "97e391c7a62170f0297e2e6e8e2f6cab1ef85ae8545d3ad0cfaebed0dcff26b3",
+  "at": "2026-11-11"
+ },
+ "wstETH@polygon": {
+  "address": "0x03b54a6e9a984069379fae1a4fc4dbae93b3bccd",
+  "url": "https://raw.githubusercontent.com/lidofinance/docs/main/docs/deployed-contracts/index.md",
+  "via": "document",
+  "sha256": "97e391c7a62170f0297e2e6e8e2f6cab1ef85ae8545d3ad0cfaebed0dcff26b3",
+  "at": "2026-11-11"
+ },
+ "XRP@bsc": {
+  "address": "0x1d2f0da169ceb9fc7b3144628db156f3f6c60dbe",
+  "url": "https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll",
+  "via": "document",
+  "sha256": "69352cadfcd46ca40bc2c794bf5baaad0d4f5bb363a9e287b5b6685ffc53cb97",
+  "at": "2026-11-11"
+ }
+}

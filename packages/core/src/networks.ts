@@ -14,6 +14,8 @@ export interface AssetDef {
   decimals: number;
   /** Solana only: which token program owns the mint (classic SPL Token unless stated) */
   program?: 'token' | 'token2022';
+  /** what the contract's own symbol() returns when it is not `symbol` (e.g. "USD₮0", or "USDC" for a bridged USDC.e) */
+  onchainSymbol?: string;
 }
 
 export interface NetworkDef {
@@ -63,7 +65,7 @@ import { TOKENS } from './tokens.ts';
 /** Allowlisted tokens of one network, from the verified table in tokens.ts. */
 const tokensOf = (network: string): AssetDef[] => TOKENS.flatMap((t) => {
   const d = t.deployments[network];
-  return d ? [{ id: d.address, symbol: t.symbol, name: t.name, decimals: d.decimals ?? t.decimals, ...(d.program ? { program: d.program } : {}) }] : [];
+  return d ? [{ id: d.address, symbol: t.symbol, name: d.name ?? t.name, decimals: d.decimals ?? t.decimals, ...(d.program ? { program: d.program } : {}), ...(d.onchainSymbol ? { onchainSymbol: d.onchainSymbol } : {}) }] : [];
 });
 const eth: AssetDef = { id: 'native', symbol: 'ETH', name: 'Ether', decimals: 18 };
 

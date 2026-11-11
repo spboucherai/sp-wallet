@@ -27,7 +27,7 @@ async function setup() {
 }
 let n = 0;
 const xlm = (t: number, over: Partial<Intent> = {}): Intent => ({
-  v: 1, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(++n).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 2,
+  v: 1, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(++n).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 3,
   network: 'stellar', chainRef: NETWORKS.stellar.chainRef, asset: 'native', symbol: 'XLM', decimals: 7, amount: '25000000', from: keys.addresses.stellar!, to: DEST, maxFee: '10112',
   memo: '4242', x: { op: 'payment', sequence: '2390162185806736', fee: '10112', maxTime: String(t + 180), memoType: 'id' }, ...over,
 });

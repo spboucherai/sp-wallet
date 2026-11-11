@@ -100,7 +100,8 @@ describe('asset mapping against the wallet registry', () => {
   it('serves exactly the registry assets that have an Available pool, matched by chain + contract', () => {
     expect(mapped.map((a) => a.notation).sort()).toEqual([
       'AVAX.AVAX', 'AVAX.USDC-0XB97EF9EF8734C71904D8002F8B6BC66DD9C48A6E', 'AVAX.USDT-0X9702230A8EA53601F5CD2DC00FDBC13D4DF4A8C7',
-      'BASE.ETH', 'BASE.USDC-0X833589FCD6EDB6E08F4C7C32D4F71B54BDA02913', 'BCH.BCH', 'BSC.BNB', 'BTC.BTC', 'DOGE.DOGE',
+      'BASE.ETH', 'BASE.USDC-0X833589FCD6EDB6E08F4C7C32D4F71B54BDA02913', 'BCH.BCH', 'BSC.BNB', 'BSC.BTCB-0X7130D2A12B9BCBFAE4F2634D864A1EE1CE3EAD9C',
+      'BSC.ETH-0X2170ED0880AC9A755FD29B2688956BD959F933F8', 'BSC.USDC-0X8AC76A51CC950D9822D68B83FE1AD97B32CD580D', 'BSC.USDT-0X55D398326F99059FF775485246999027B3197955', 'BTC.BTC', 'DOGE.DOGE',
       'ETH.AAVE-0X7FC66500C84A76AD7E9C93437BFC5AC33E2DDAE9', 'ETH.DAI-0X6B175474E89094C44DA98B954EEDEAC495271D0F', 'ETH.ETH',
       'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48', 'ETH.USDT-0XDAC17F958D2EE523A2206206994597C13D831EC7',
       'ETH.WBTC-0X2260FAC5E5542A773AA44FBCFEDF7C193BC2C599', 'GAIA.ATOM', 'LTC.LTC', 'SOL.SOL', 'TRON.TRX',
@@ -125,7 +126,7 @@ describe('asset mapping against the wallet registry', () => {
     for (const a of mapped) { const d = pools.find((x) => x.asset === a.notation)!.decimals; if (d) expect(d, a.notation).toBe(a.decimals); else expect(a.decimals, a.notation).toBeGreaterThanOrEqual(8); }
   });
   it('never maps by ticker: a pool with a known ticker but an unknown contract, or on an unmapped chain, is dropped', () => {
-    const m = mapPools({ chains: THORCHAIN_CONFIG.chains, pools: ['ETH.USDC-0X000000000000000000000000000000000000DEAD', 'ETH.USDC', 'ZEC.ZEC', 'THOR.RUJI', 'ETH.LINK', 'BSC.ETH-0X2170ED0880AC9A755FD29B2688956BD959F933F8', 'ETH.BTC', 'eth.eth', 'ETH.ETH'] });
+    const m = mapPools({ chains: THORCHAIN_CONFIG.chains, pools: ['ETH.USDC-0X000000000000000000000000000000000000DEAD', 'ETH.USDC', 'ZEC.ZEC', 'THOR.RUJI', 'ETH.LINK', 'BSC.ETH-0X000000000000000000000000000000000000DEAD', 'ETH.BTC', 'eth.eth', 'ETH.ETH'] });
     expect([...m.values()].map((a) => a.notation)).toEqual(['ETH.ETH']);
   });
   it('supportsPair is local and strict', () => {

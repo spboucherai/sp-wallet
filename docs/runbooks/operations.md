@@ -27,6 +27,13 @@ On the signer node: `signer.mjs reset-passkeys`, `signer.mjs setup-token`, resta
 ## Changing limits
 Edit `~/sp-wallet-signer-data/policy.json` on the signer node (base units; increment `version`), `pm2 restart sp-wallet-signer`.
 
+## After a release that adds assets (registry v5: policy version 3)
+The signer writes its default limits only when `policy.json` does not exist, so limits for new assets do not appear by themselves:
+a token without a limit cannot be sent or swapped (default deny). On the signer node, either move the file aside and restart
+(`mv policy.json policy.json.v2 && pm2 restart sp-wallet-signer` — the signer regenerates it from the defaults of the release,
+`version: 3`; re-apply any limit you had changed by hand), or add the new `"<network>:<symbol>"` keys to `perTx` and `daily`
+yourself and set `version` to 3. Existing limits are unchanged in the defaults. See `docs/TOKENS.md`.
+
 ## Compromise suspected
 Halt, then sweep funds to a new wallet from a clean device using the recovery phrase. Treat the old keys as burned.
 

@@ -125,8 +125,8 @@ describe('debridge: field mapping', () => {
     expect(q.fees[0]).toEqual({ kind: 'protocol', asset: nat('ethereum'), amount: 1_000_000_000_000_000n, includedInOutput: false, estimated: false });
     const pol = await one('polygon-pol-bsc-bnb');
     expect(pol.amountOut).toBe(12_238_319_658_602_409n); expect(pol.fees[0]!.amount).toBe(500_000_000_000_000_000n); // flat fee on Polygon: 0.5 POL
-    // taker margin and operating expenses are charged in USDC on BNB Chain, which is not in the registry: kept in raw, not invented as FeeItems
-    expect(pol.fees.map((f) => [f.kind, f.asset])).toEqual([['protocol', nat('polygon')], ['network', nat('polygon')], ['protocol', tok('polygon', 'USDC')]]);
+    // taker margin and operating expenses are charged in USDC on BNB Chain (Binance-Peg USDC, in the registry since v5): reported as fee items; the raw answer is kept too
+    expect(pol.fees.map((f) => [f.kind, f.asset])).toEqual([['protocol', nat('polygon')], ['network', nat('polygon')], ['protocol', tok('polygon', 'USDC')], ['provider', tok('bsc', 'USDC')], ['bridge', tok('bsc', 'USDC')]]);
     expect(JSON.stringify(pol.raw)).toMatch(/EstimatedOperatingExpenses/);
   });
   it('Solana source: flat fee and network cost in lamports, programs instead of contracts', async () => {

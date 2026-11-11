@@ -34,7 +34,7 @@ async function setup() {
 }
 let n = 0;
 const near = (t: number, over: Partial<Intent> = {}): Intent => ({
-  v: 1, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(++n).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 2,
+  v: 1, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(++n).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 3,
   network: 'near', chainRef: NETWORKS.near.chainRef, asset: 'native', symbol: 'NEAR', decimals: 24, amount: '2500000000000000000000007', from: keys.addresses.near!, to: 'alice.near',
   maxFee: '2000000000000000000000', x: { nonce: '223991684000002', blockHash: BLOCK }, ...over,
 });

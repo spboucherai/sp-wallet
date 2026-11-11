@@ -100,7 +100,7 @@ beforeEach(() => { h = { [A]: fresh(), [B]: fresh() }; vi.setSystemTime(NOW * 10
 const prep = (over: Partial<{ to: string; amount: bigint; memo: string; asset: string; from: string }> = {}) => a.prepare({ asset: 'native', from: ME, to: DEST, amount: 10_000_000n, ...over });
 const code = async (p: Promise<unknown>) => { try { await p; } catch (e) { return (e as { code?: string }).code ?? `threw: ${(e as Error).message}`; } return 'ok'; };
 const intentOf = (r: Awaited<ReturnType<typeof prep>>, to = DEST, amount = '10000000'): Intent => ({ v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: keys.keyId, network: 'aptos', chainRef: n.chainRef,
-  asset: 'native', symbol: 'APT', decimals: 8, amount, from: ME, to, maxFee: r.maxFee.toString(), createdAt: NOW, expiresAt: NOW + r.ttlSec, policyVersion: 2, ...(r.section as { x: Record<string, string> }) });
+  asset: 'native', symbol: 'APT', decimals: 8, amount, from: ME, to, maxFee: r.maxFee.toString(), createdAt: NOW, expiresAt: NOW + r.ttlSec, policyVersion: 3, ...(r.section as { x: Record<string, string> }) });
 
 describe('aptos adapter: prepare', () => {
   it('agrees on both sources at one ledger version and simulates the exact transaction the signer builds', async () => {
@@ -267,7 +267,7 @@ describe('aptos adapter: track', () => {
 
 describe('aptos adapter: broadcast', () => {
   const intent: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: keys.keyId, network: 'aptos', chainRef: n.chainRef, asset: 'native', symbol: 'APT', decimals: 8, amount: '10000000',
-    from: ME, to: DEST, maxFee: '20000', createdAt: NOW, expiresAt: NOW + 120, policyVersion: 2, x: { sequence_number: '7', max_gas_amount: '200', gas_unit_price: '100', expiration_timestamp_secs: String(NOW + 180) } };
+    from: ME, to: DEST, maxFee: '20000', createdAt: NOW, expiresAt: NOW + 120, policyVersion: 3, x: { sequence_number: '7', max_gas_amount: '200', gas_unit_price: '100', expiration_timestamp_secs: String(NOW + 180) } };
   const signed = pluginFor(n).sign(intent, n, keys.handle(n));
   const accepted = { status: 202, body: { hash: signed.txid, type: 'pending_transaction' } };
   const tooOld = { status: 400, body: { message: 'Invalid transaction: Type: Validation Code: SEQUENCE_NUMBER_TOO_OLD', error_code: 'vm_error', vm_error_code: 3 } };

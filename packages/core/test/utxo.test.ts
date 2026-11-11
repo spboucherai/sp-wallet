@@ -36,7 +36,7 @@ const handleOf = ({ priv, pub }: { priv: Uint8Array; pub: Uint8Array }): KeyHand
 });
 const hash160 = (b: Uint8Array) => ripemd160(sha256(b));
 const now = 1_800_000_000;
-const base = { v: 1 as const, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 2 };
+const base = { v: 1 as const, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 3 };
 
 // ------------------------------------------------------------------------------------------------ Dogecoin
 

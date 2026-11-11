@@ -71,7 +71,7 @@ describe('stellar adapter: prepare', () => {
     expect([r.maxFee, r.feeEstimate, r.ttlSec, r.warnings]).toEqual([10_112n, 10_112n, 120, []]);
     // the prepared section builds with the signer's plugin
     const intent: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: keys.keyId, network: 'stellar', chainRef: n.chainRef, asset: 'native', symbol: 'XLM', decimals: 7, amount: '10000000',
-      from: ME, to: DEST, maxFee: r.maxFee.toString(), createdAt: NOW, expiresAt: NOW + r.ttlSec, policyVersion: 2, ...(r.section as { x: Record<string, string> }) };
+      from: ME, to: DEST, maxFee: r.maxFee.toString(), createdAt: NOW, expiresAt: NOW + r.ttlSec, policyVersion: 3, ...(r.section as { x: Record<string, string> }) };
     expect(() => pluginFor(n).build(intent, n)).not.toThrow();
   });
   it('chooses CreateAccount only when both sources say the destination does not exist', async () => {
@@ -174,7 +174,7 @@ describe('stellar adapter: track', () => {
 
 describe('stellar adapter: broadcast', () => {
   const intent: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: keys.keyId, network: 'stellar', chainRef: n.chainRef, asset: 'native', symbol: 'XLM', decimals: 7, amount: '10000000',
-    from: ME, to: DEST, maxFee: '1000', createdAt: NOW, expiresAt: NOW + 120, policyVersion: 2, x: { op: 'payment', sequence: '1001', fee: '1000', maxTime: String(NOW + 180), memoType: 'none' } };
+    from: ME, to: DEST, maxFee: '1000', createdAt: NOW, expiresAt: NOW + 120, policyVersion: 3, x: { op: 'payment', sequence: '1001', fee: '1000', maxTime: String(NOW + 180), memoType: 'none' } };
   const signed = pluginFor(n).sign(intent, n, keys.handle(n));
   const badSeq = { status: 400, body: { tx_status: 'ERROR', hash: signed.txid, errorResultXdr: 'AAAAAAAAAGT////7AAAAAA==' } }; // txBAD_SEQ
   it('sends the exact envelope to every source; pending or duplicate is accepted', async () => {

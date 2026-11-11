@@ -177,8 +177,8 @@ describe('router', () => {
     const bridge = fake('bridge', { pairs: (a, b) => a.network !== b.network && a.asset !== 'native' && b.asset !== 'native', out: (r) => r.amountIn - 100_000n, patch: { estimatedSeconds: 900 } });
     const { router } = setup([dex, bridge]);
     const s = await router.search(req(ETH_BASE, USDC_SOL, 10n ** 18n));
-    expect(s.reachable).toBe(true); expect(s.routes.length).toBe(1);
-    const r = s.routes[0]!;
+    expect(s.reachable).toBe(true); expect(s.routes.length).toBe(2); // one per stablecoin hub on Base: USDC, and bridged USDT (registry v5)
+    const r = s.routes.find((x) => x.path[1]!.asset === USDC_BASE.asset)!;
     expect(r.providers).toEqual(['dex', 'bridge']);
     expect(r.path.map((p) => `${p.network}:${p.asset === 'native' ? 'native' : 'token'}`)).toEqual(['base:native', 'base:token', 'solana:token']);
     expect(r.legs[1]!.request.amountIn).toBe(r.legs[0]!.minAmountOut);
@@ -209,7 +209,7 @@ describe('router', () => {
     const ms = Date.now() - t0;
     expect(res.every((s) => s.routes.length >= 2)).toBe(true);
     expect(res.every((s) => s.routes.find((r) => r.id === s.best.best_price)!.minAmountOut >= s.routes[s.routes.length - 1]!.minAmountOut)).toBe(true);
-    expect(rts.reduce((n, r) => n + r.stats().calls, 0)).toBe(9000);
+    expect(rts.reduce((n, r) => n + r.stats().calls, 0)).toBe(27000); // per search and provider: the direct pair, plus both legs through the other stablecoin hub on Base (USDT, registry v5)
     expect(ms).toBeLessThan(8000);
     console.log(`3000 concurrent searches over 3 providers: ${ms} ms (${(ms / 3000).toFixed(2)} ms each)`);
   });

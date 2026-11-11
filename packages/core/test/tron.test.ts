@@ -29,7 +29,7 @@ const key: KeyHandle = { curve: 'secp256k1', publicKey: pub, signDigest: (digest
 
 const TS = 1_794_354_657_628, EXP = 1_794_354_717_000;
 const now = Math.floor(TS / 1000);
-const base = { v: 1 as const, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 2,
+const base = { v: 1 as const, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 3,
   network: 'tron', chainRef: net.chainRef, from: ME, to: DEST };
 const X = { ref_block_bytes: '2660', ref_block_hash: 'afad6ef83bbf9b23', expiration: String(EXP), timestamp: String(TS) };
 const trx: Intent = { ...base, asset: 'native', symbol: 'TRX', decimals: 6, amount: '1000000', maxFee: '1100000', x: X };
@@ -77,12 +77,12 @@ describe('TRON address', () => {
 });
 
 describe('TRON registry', () => {
-  it('lists TRX and exactly one token, USDT, with a policy cap and a fee ceiling', () => {
+  it('lists TRX and exactly two tokens, USDT then USDD, with a policy cap and a fee ceiling', () => {
     expect(net.family).toBe('tron');
     expect(net.coinType).toBe(195);
     expect(net.chainRef).toBe('00000000000000001ebf88508a03865c71d452e25f4d51194196a1d22b6653dc');
     expect(net.rpc.length).toBe(2);
-    expect(net.tokens.map((t) => [t.id, t.symbol, t.decimals])).toEqual([[USDT, 'USDT', 6]]);
+    expect(net.tokens.map((t) => [t.id, t.symbol, t.decimals])).toEqual([[USDT, 'USDT', 6], ['TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz', 'USDD', 18]]);
     expect(getAsset('tron', USDT).symbol).toBe('USDT');
     expect(() => getAsset('tron', 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8')).toThrow(); // USDC on TRON: not allowlisted
     expect(DEFAULT_POLICY.perTx['tron:TRX']).toBe('150000000');
@@ -291,7 +291,7 @@ describe('TRON: every intent field that reaches the chain changes the signed byt
     });
   it('same intent, same bytes (deterministic)', () => { expect(sig(usdt)).toBe(sig({ ...usdt, x: { ...usdt.x! } })); });
   it('fields outside the transaction (proposal id, approval window, larger fee ceiling) change the approved hash, not the bytes', () => {
-    for (const j of [{ ...usdt, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { ...usdt, expiresAt: usdt.expiresAt + 1 }, { ...usdt, maxFee: '31000001' }, { ...usdt, policyVersion: 3 }]) {
+    for (const j of [{ ...usdt, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { ...usdt, expiresAt: usdt.expiresAt + 1 }, { ...usdt, maxFee: '31000001' }, { ...usdt, policyVersion: 4 }]) {
       expect(sig(j)).toBe(sig(usdt));
       expect(toHex(intentHash(j))).not.toBe(toHex(intentHash(usdt)));
     }

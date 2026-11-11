@@ -36,7 +36,7 @@ const prepareAndBuild = async (to: string, amount: bigint) => {
   const p = await a.prepare({ asset: 'native', from: FUNDED, to, amount });
   const now = Math.floor(Date.now() / 1000);
   const intent = { v: 1 as const, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-smoke-0000000', network: n.id, chainRef: n.chainRef, asset: 'native', symbol: 'SUI', decimals: 9,
-    amount: amount.toString(), from: FUNDED, to, maxFee: p.maxFee.toString(), createdAt: now, expiresAt: now + p.ttlSec, policyVersion: 2, ...(p.section as { x: Record<string, string> }) };
+    amount: amount.toString(), from: FUNDED, to, maxFee: p.maxFee.toString(), createdAt: now, expiresAt: now + p.ttlSec, policyVersion: 3, ...(p.section as { x: Record<string, string> }) };
   const built = pluginFor(n).build(intent, n);
   return { p, intent, built, tx: buildSuiTx(intent, n).tx };
 };
