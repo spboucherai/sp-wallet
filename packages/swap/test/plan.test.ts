@@ -59,7 +59,25 @@ describe('enumeration: only legs the wallet executes, hub = native USDC', () => 
       const visits = p.flatMap((l) => (l.from.network === l.to.network ? [] : [l.from.network])); expect(new Set(visits).size, shape(p)).toBe(visits.length);
     }
   });
-  it('Solana ↔ EVM has NO plan, and the reason is said — not faked', () => {
+  it('v8 — with the Solana CCTP leg in the capabilities, Solana ↔ EVM plans exist: Jupiter, CCTP, KyberSwap, each an executable leg', () => {
+    const caps: PlanCaps = { ...CAPS, cctp: { ...CAPS.cctp, solana: { usdc: USDC('solana').asset, fast: true } } };
+    const sh = (a: AssetRef, b: AssetRef) => enumeratePlans(a, b, caps).map(shape);
+    expect(sh(USDC('solana'), USDC('base'))).toEqual(['bridge(fast)@solana>base', 'bridge(standard)@solana>base']);
+    expect(sh(USDC('polygon'), USDC('solana'))).toEqual(['bridge(standard)@polygon>solana']);
+    expect(sh(SOL, USDC('base'))).toEqual(['swap@solana → bridge(fast)@solana>base', 'swap@solana → bridge(standard)@solana>base']);
+    expect(sh(SOL, CBBTC_BASE)).toEqual(['swap@solana → bridge(fast)@solana>base → swap@base', 'swap@solana → bridge(standard)@solana>base → swap@base']);
+    expect(sh(LINK_ARB, SOL)).toEqual(['swap@arbitrum → bridge(fast)@arbitrum>solana → swap@solana', 'swap@arbitrum → bridge(standard)@arbitrum>solana → swap@solana']);
+    for (const p of enumeratePlans(SOL, CBBTC_BASE, caps)) { expect(p.map((l) => l.via)).toEqual(['jupiter', 'cctp', 'kyberswap']); expect(p[1]!.from).toEqual(USDC('solana')); expect(p[1]!.to).toEqual(USDC('base')); }
+    // Bitcoin ↔ Solana: THORChain to USDC on Ethereum, CCTP to Solana, Jupiter — and back
+    expect(sh(BTC, USDC('solana'))).toEqual(['xswap@bitcoin>ethereum → bridge(fast)@ethereum>solana', 'xswap@bitcoin>ethereum → bridge(standard)@ethereum>solana']);
+    expect(sh(BTC, SOL)).toEqual(['xswap@bitcoin>ethereum → bridge(fast)@ethereum>solana → swap@solana', 'xswap@bitcoin>ethereum → bridge(standard)@ethereum>solana → swap@solana']);
+    expect(sh(SOL, BTC)).toEqual(['swap@solana → bridge(fast)@solana>ethereum → xswap@ethereum>bitcoin', 'swap@solana → bridge(standard)@solana>ethereum → xswap@ethereum>bitcoin']);
+    // where no path exists the reason is no longer "solana_evm_bridge": the bridge exists, something else is missing
+    expect(sh(nat('bsc'), SOL)).toEqual([]);
+    expect(whyNotExecutable(nat('bsc'), SOL, caps)).toEqual({ code: 'no_executable_path' });
+    expect(whyNotExecutable(nat('tron'), SOL, caps)).toEqual({ code: 'network_without_execution', network: 'tron' });
+  });
+  it('without that leg (capabilities that do not list Solana for CCTP) Solana ↔ EVM has NO plan, and the reason is said — not faked', () => {
     expect(shapes(SOL, USDC('base'))).toEqual([]);
     expect(shapes(nat('ethereum'), SOL)).toEqual([]);
     expect(shapes(tok('solana', 'USDC'), USDC('base'))).toEqual([]);          // CCTP supports Solana; this wallet's signer does not, yet

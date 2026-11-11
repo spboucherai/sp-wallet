@@ -41,6 +41,10 @@ export const IntentSchema = z.strictObject({
   bridge: z.strictObject({
     provider: z.enum(['cctp']), toNetwork: z.string().min(2).max(24).regex(/^[a-z0-9-]+$/), toDomain: z.number().int().min(0).max(0xffffffff),
     maxFee: U, minFinalityThreshold: z.number().int().min(1).max(0xffffffff), messenger: z.string().min(20).max(100), transmitter: z.string().min(20).max(100), approveGas: U,
+    // v8 (Solana ↔ EVM): the wallet's own address on the destination network when it is not the source address (another key
+    // family). Absent between two EVM networks, where the intent hashes exactly as before. The signer requires it to be ITS
+    // OWN address on `toNetwork`; the mint recipient is derived from it (Solana: the associated USDC token account).
+    recipient: z.string().min(20).max(100).optional(),
   }).optional(),
   /**
    * Present when the intent funds the owner's account on a derivatives venue (v6): a plain token transfer from the wallet's own
@@ -122,6 +126,7 @@ function fields(i: Intent): [string, string][] {
   if (i.swap) f.push(['swap.provider', i.swap.provider], ['swap.toAsset', i.swap.toAsset], ['swap.minOut', i.swap.minOut], ['swap.router', i.swap.router], ['swap.dataHash', i.swap.dataHash], ['swap.approveGas', i.swap.approveGas]);
   if (i.bridge) f.push(['bridge.provider', i.bridge.provider], ['bridge.toNetwork', i.bridge.toNetwork], ['bridge.toDomain', String(i.bridge.toDomain)], ['bridge.maxFee', i.bridge.maxFee],
     ['bridge.minFinalityThreshold', String(i.bridge.minFinalityThreshold)], ['bridge.messenger', i.bridge.messenger], ['bridge.transmitter', i.bridge.transmitter], ['bridge.approveGas', i.bridge.approveGas]);
+  if (i.bridge?.recipient !== undefined) f.push(['bridge.recipient', i.bridge.recipient]); // v8: only present for Solana ↔ EVM
   if (i.xswap) f.push(['xswap.provider', i.xswap.provider], ['xswap.toNetwork', i.xswap.toNetwork], ['xswap.toAsset', i.xswap.toAsset], ['xswap.minOut', i.xswap.minOut], ['xswap.limit', i.xswap.limit],
     ['xswap.memo', i.xswap.memo], ['xswap.vault', i.xswap.vault], ['xswap.vaultPubKey', i.xswap.vaultPubKey], ['xswap.router', i.xswap.router], ['xswap.expiry', String(i.xswap.expiry)], ['xswap.approveGas', i.xswap.approveGas]);
   if (i.venueDeposit) f.push(['venueDeposit.venue', i.venueDeposit.venue], ['venueDeposit.venueNetwork', i.venueDeposit.venueNetwork], ['venueDeposit.route', i.venueDeposit.route],
@@ -144,7 +149,9 @@ export function canonicalBytes(intent: Intent): Uint8Array {
   if ((fam === 'evm') !== !!i.evm || (fam === 'btc') !== !!i.btc || (fam === 'sol') !== !!i.sol || plugin !== !!i.x)
     throw new Error('intent chain section does not match network');
   if (i.swap && (i.swap.provider === 'jupiter' ? fam !== 'sol' : fam !== 'evm')) throw new Error('swaps are only defined for EVM networks (KyberSwap) and Solana (Jupiter)');
-  if (i.bridge && (fam !== 'evm' || i.swap)) throw new Error('bridges are only defined for EVM networks and exclude a swap');
+  // v8: a bridge may also start on Solana (CCTP domain 5); there it never carries an EVM section, and always names its recipient
+  if (i.bridge && ((fam !== 'evm' && fam !== 'sol') || i.swap)) throw new Error('bridges are only defined for EVM networks and Solana and exclude a swap');
+  if (i.bridge && fam === 'sol' && i.bridge.recipient === undefined) throw new Error('a bridge from Solana names the wallet\'s address on the destination network');
   if (i.xswap && ((fam !== 'evm' && fam !== 'btc') || i.swap || i.bridge)) throw new Error('cross-chain swaps are only defined for EVM and Bitcoin-style sources and exclude a swap or a bridge');
   if (i.venueDeposit && (fam !== 'evm' || i.swap || i.bridge || i.xswap || i.memo !== undefined)) throw new Error('a venue deposit is a plain EVM transfer: no swap, no bridge, no cross-chain swap, no memo');
   // v8: a GMX order action is an EVM transaction of its own kind

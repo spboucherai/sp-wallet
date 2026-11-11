@@ -61,7 +61,24 @@ function bridgeView(p: ProposalRow, b: BridgeState) {
     approvalTxid: p.pre_txid, approvalState: p.pre_raw ? (p.pre_state ?? 'pending') : null,
     hold: b.hold ?? null, holdDetail: b.holdDetail ?? null, irisStatus: b.irisStatus ?? null, delayReason: b.delayReason ?? null, polls: b.polls, attested: !!b.message,
     mintTxid: b.mintTxid ?? b.mint?.txid ?? null, mintExplorer: (b.mintTxid ?? b.mint?.txid) ? d.explorerTx + (b.mintTxid ?? b.mint!.txid) : null, mintedBy: b.mintedBy ?? null,
-    canFinish: !['failed', 'review', 'done', 'burning'].includes(stage), needsPasskey: b.phase === 'mint_failed' };
+    canFinish: !['failed', 'review', 'done', 'burning'].includes(stage), needsPasskey: b.phase === 'mint_failed',
+    sol: b.sol ? solBridgeView(p, b) : null };
+}
+
+/** v8 — the Solana side of a Solana ↔ EVM transfer: the refundable event-account deposit and its reclaim, or the token account credited. */
+function solBridgeView(p: ProposalRow, b: BridgeState) {
+  const s = b.sol!, sn = getNetwork('solana'), r = s.reclaim, source = getNetwork(p.network).family === 'sol';
+  const burned = ['confirming', 'finalized', 'reorged'].includes(p.state);
+  // when the deposit comes back: five days after the event account was created (before the burn is mined: an estimate from now)
+  const reclaimableAt = s.reclaimableAt ?? (source && !['failed', 'expired', 'rejected', 'replaced'].includes(p.state) ? Math.floor(Date.now() / 1000) + 5 * 86400 : null);
+  const reclaimState = !source || !s.deposit ? null : r?.state === 'done' ? 'done' : r?.state === 'sent' ? 'sent' : !burned || !s.eventAccount ? 'pending'
+    : s.reclaimableAt && Date.now() / 1000 >= s.reclaimableAt && b.message ? (r?.state === 'failed' ? 'failed' : 'available') : 'locked';
+  return { role: source ? 'source' : 'destination', symbol: sn.native.symbol, recipient: s.recipient ?? null, tokenAccount: s.tokenAccount ?? null,
+    nonceRentDisplay: s.nonceRent ? formatUnits(BigInt(s.nonceRent), 9) : null,
+    eventAccount: s.eventAccount ?? null, deposit: s.deposit ?? null, depositDisplay: s.deposit ? formatUnits(BigInt(s.deposit), 9) : null,
+    reclaimableAt: reclaimableAt ? new Date(reclaimableAt * 1000).toISOString() : null, reclaimEstimated: !s.reclaimableAt, reclaimState,
+    reclaimError: r?.state === 'failed' ? (r.error ?? null) : null, reclaimTxid: r?.txid ?? null, reclaimExplorer: r?.txid ? sn.explorerTx + r.txid : null,
+    reclaimedDisplay: r?.received ? formatUnits(BigInt(r.received), 9) : null };
 }
 
 /** Optimistic state change: only succeeds from the expected state and version. */

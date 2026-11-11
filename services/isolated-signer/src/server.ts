@@ -49,6 +49,9 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
       if (route === 'POST /sign') return await signer.sign(json.intent, json.assertion, json.aux && typeof json.aux === 'object' ? json.aux : undefined);
       // second leg of an approved bridge: only the receiveMessage that matches the stored approval (signer.ts)
       if (route === 'POST /bridge/mint') return await signer.signBridgeMint(json);
+      // v8 (Solana ↔ EVM): the event-account deposit of a Solana burn back to the wallet, and the wallet's own USDC token account — passkey each
+      if (route === 'POST /bridge/reclaim') return await signer.signBridgeReclaim(json);
+      if (route === 'POST /sol/token-account') return await signer.signSolTokenAccount(json.request, json.assertion);
       if (route === 'POST /halt') { signer.halt(); return { ok: true, halted: true }; }
       // agent vaults: mandate approval needs the owner's passkey; orders need only to fit the mandate; revoking is always allowed
       if (route === 'POST /vault/address') return { address: signer.vaultAddress(Number(json.index)) };

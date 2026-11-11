@@ -1,5 +1,6 @@
 // Any-to-any planner (V7). A plan is a SEQUENCE OF LEGS THE WALLET CAN ALREADY EXECUTE — a same-network swap (KyberSwap,
-// Jupiter), a USDC transfer between two EVM networks (Circle CCTP), a native swap through THORChain — never a new trust path.
+// Jupiter), a USDC transfer between two CCTP networks (Circle CCTP: seven EVM networks and, since v8, Solana), a native swap
+// through THORChain — never a new trust path.
 // This file is pure: no network, no database. The caller supplies what is executable (`PlanCaps`), a function that returns a
 // REAL quote for one leg, balances and limits. Docs: docs/v7/ANY-TO-ANY.md.
 //
@@ -82,8 +83,10 @@ export type NotExecutable = { code: 'same_asset' | 'solana_evm_bridge' | 'networ
 export function whyNotExecutable(from: AssetRef, to: AssetRef, caps: PlanCaps): NotExecutable {
   if (key(from) === key(to)) return { code: 'same_asset' };
   const fam = (a: AssetRef) => getNetwork(a.network).family;
-  // CCTP supports Solana, but the wallet's signer only builds and verifies the EVM burn and mint (docs/v7/ANY-TO-ANY.md §Solana)
-  if (from.network !== to.network && (fam(from) === 'sol') !== (fam(to) === 'sol')) return { code: 'solana_evm_bridge' };
+  // v8: Solana ↔ EVM is executable through CCTP when the caller's capabilities list Solana among the CCTP networks (the signer
+  // then builds the Solana burn and mint itself, docs/swap/providers/cctp.md §13). Without that leg the pair has no bridge: said so.
+  const sol = [from, to].find((a) => fam(a) === 'sol');
+  if (from.network !== to.network && (fam(from) === 'sol') !== (fam(to) === 'sol') && !(sol && caps.cctp[sol.network])) return { code: 'solana_evm_bridge' };
   const reach = (a: AssetRef) => !!caps.swap[a.network] || !!thorOf(caps, a) || isUsdc(caps, a);
   if (!reach(from)) return { code: 'network_without_execution', network: from.network };
   if (!reach(to)) return { code: 'network_without_execution', network: to.network };

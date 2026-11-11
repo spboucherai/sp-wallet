@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { CCTP_ENABLED, cctpUsdc, formatUnits, fromThorAmount, getAsset, getNetwork, KYBER_ENABLED, parseUnits, THOR_ASSETS } from '@spw/core';
+import { CCTP_SOL_NETWORK, CCTP_SOL_TIMES, cctpSolUsdc } from '@spw/core'; // v8
 import {
   assetKey, checkPlan, createEnabledProviders, GAS_MARGIN, DEFAULT_POLICY, enumeratePlans, httpClient, planId, PlanQuoteError, pricePlan, ProviderRuntime, QuoteAggregator, rankPlans, whyNotExecutable,
   type AssetRef, type LegQuote, type PlanCaps, type PlanContext, type PlanLegSpec, type PricedPlan, type QuoteEvent, type QuoteLeg, type SwapProvider, type SwapQuote,
@@ -38,6 +39,7 @@ export function planCaps(): PlanCaps {
   for (const n of Object.keys(KYBER_ENABLED)) swap[n] = 'kyberswap';
   const cctp: PlanCaps['cctp'] = {};
   for (const [n, pin] of Object.entries(CCTP_ENABLED)) cctp[n] = { usdc: cctpUsdc(n).id, fast: pin.fastSource };
+  cctp[CCTP_SOL_NETWORK] = { usdc: cctpSolUsdc().id, fast: CCTP_SOL_TIMES.fastSource }; // v8: USDC between Solana and the seven EVM networks (services/api/src/bridge-sol.ts)
   return { swap, cctp, thor: THOR_ASSETS.map((a) => ({ network: a.network, asset: a.asset, source: a.source })) };
 }
 

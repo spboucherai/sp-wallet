@@ -5,8 +5,9 @@ live check `scripts/smoke-swap-cctp.mts`. Everything below was read from Circle'
 **2026-11-10** and, where marked *checked*, confirmed on mainnet the same day. The quote adapter itself only quotes.
 
 **Execution status (2026-11-11): USDC between the seven EVM networks is executable by the wallet itself** — burn,
-attestation, mint, always to the wallet's own address — see **§12**. Solana legs and EURC remain quote-only. No real
-transfer has been broadcast yet; the proof is on local forks (§12.7).
+attestation, mint, always to the wallet's own address — see **§12**. **Since v8 (same day) USDC between Solana and each of
+those networks is executable too, in both directions — see §13.** EURC remains quote-only. No real transfer has been
+broadcast yet; the proof is on local forks (§12.7) and, for Solana, by mainnet simulation (§13.9).
 
 CCTP is not a swap: a Circle stablecoin is **burned** on the source chain, Circle's attestation service (Iris) signs the
 burn message, and the same amount is **minted** on the destination chain by whoever submits that signed message. There
@@ -348,9 +349,9 @@ destination_caller [32] ‖ max_fee u64 LE ‖ min_finality_threshold u32 LE` = 
 | 17 | event_authority | `["__event_authority"]` @ TokenMessengerMinterV2 | — |
 | 18 | program | `CCTPV2vPZ…` | — |
 
-The seed spelling of rows 3 and 8 is taken from the V2 source and from the receive-side table in Circle's docs; it has
-**not** been exercised by a built transaction yet and must be confirmed by simulation in the next phase (only
-`message_transmitter` and `local_token` were derived and read on mainnet by the smoke script).
+The seed spelling of rows 3 and 8 is taken from the V2 source and from the receive-side table in Circle's docs.
+*(v8, 2026-11-11: confirmed — every derived address equals the account of real mainnet transactions, and the signer-built
+burn succeeds in mainnet simulation; see §13.)*
 
 Consequences for the signer: (a) no token approval — the owner signs the burn of its own token account; (b) a second,
 ephemeral signature is needed for account 12. The signer should generate that keypair itself, sign, and discard it:
@@ -391,6 +392,9 @@ receiver = TokenMessengerMinterV2, system program, event authority, program; the
 `custody` `["custody", mint]`, SPL Token program, the TokenMessengerMinter event authority and program id. The
 recipient's token account must exist: the transaction is prefixed with an idempotent create-associated-token-account
 instruction when it does not. Same message checks as above, with `mintRecipient` = the signer-derived token account.
+*(v8: two corrections, see §13 — the deployed program also takes the fee recipient's token account, between `token_pair`
+and the user token account; and the wallet creates its token account in a separate, passkey-approved transaction BEFORE
+the burn instead of prefixing the mint.)*
 
 ### 7.4 Path to `executability: verified`
 
@@ -501,7 +505,8 @@ Verified live (smoke script, 2026-11-11): the pinned addresses, domains, version
 (117–334 ms per quote, one round of 2–4 parallel requests); selectors, gas ranges, Solana account sizes and the fee
 rounding against real transactions; the message layout against a real attested message.
 
-Not verified: the Solana account lists and PDA seeds of §7.2–7.3 come from source reading (no Solana transaction was
+Not verified: *(superseded for Solana by §13: account lists and seeds are now checked against real transactions and by
+simulation)* the Solana account lists and PDA seeds of §7.2–7.3 come from source reading (no Solana transaction was
 built); `estimatedSeconds` is Circle's documented average, not a measurement; the behaviour "insufficient `maxFee` ⇒
 attested as Standard" is Circle's statement; the non-USDC message body has not been analysed; rounding was observed on
 one source chain (Arbitrum). For the EVM execution path see §12.8.
@@ -510,7 +515,7 @@ one source chain (Arbitrum). For the EVM execution path see §12.8.
 
 Scope: USDC only; Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, HyperEVM (`CCTP_ENABLED`, 42 ordered pairs);
 sender and recipient are always the wallet's own EVM address (the same on every EVM network). No hooks, no destination
-caller, no swap leg, no Solana, no EURC, no Forwarding Service.
+caller, no swap leg, no EURC, no Forwarding Service. (Solana as one end: §13 — nothing in this section changed for it.)
 
 Code: `packages/core/src/cctp.ts` (pins, intent verification, both transaction builders, message parser),
 `services/isolated-signer/src/signer.ts` (`sign` bridge branch, `signBridgeMint`), `services/api/src/bridge.ts` (routes,
@@ -661,3 +666,454 @@ hyperevm→base (every enabled network once as source and once as destination; r
 - The web screens were type-checked and built, not exercised in a browser (no Playwright run for this feature).
 - Polling stops only at `done`: a burn whose proposal later turns `failed`/`replaced` (deep reorg of the source after the
   burn was seen) is no longer advanced automatically.
+
+## 13. Execution: USDC between Solana and the EVM networks (implemented 2026-11-11, v8)
+
+Scope: USDC only, between Solana (domain 5) and each of the seven EVM networks of §12, **in both directions**, always from
+the wallet's own address to the wallet's own address (on Solana: to its own USDC token account). No hooks, no destination
+caller, no Forwarding Service. Solana ↔ Solana does not exist (one domain). **No real transfer has been broadcast**: the
+proof is mainnet *simulation* for the Solana transactions and a local fork for the EVM ones (§13.9), plus unit tests on
+real recorded transactions.
+
+Code: `packages/core/src/cctp-sol.ts` (pins, program-derived addresses, the three instruction encoders, a multi-signer v1
+message compiler), `packages/core/src/cctp-sol-tx.ts` (the four transactions the signer builds), `packages/core/src/cctp.ts`
+(`cctpEnd`, `cctpSender32`, `cctpRecipient32`; `verifyCctpBridge` and `verifyCctpMint` extended), `services/isolated-signer/src/signer.ts`
+(`sign` Solana-bridge branch, `bridgeMintSol`, `signBridgeReclaim`, `signSolTokenAccount`), `services/api/src/bridge-sol.ts`
+(guards, preparation, simulation, mint, reclaim, token account), `apps/web/src/bridge.tsx` + `screens/Swap.tsx` (strings `sc*`).
+
+### 13.1 Sources read (2026-11-11)
+
+- Circle's documentation: [CCTP Solana programs and interfaces](https://developers.circle.com/cctp/references/solana-programs)
+  (program ids, `depositForBurn` parameters, "MessageSent event storage" and the five-day window, remaining accounts of
+  `receiveMessage`, mint recipient notes), [finality and block confirmations](https://developers.circle.com/cctp/concepts/finality-and-block-confirmations)
+  (Solana: Fast 2–3 blocks ≈ 0.4–0.6 s, Standard 32 blocks ≈ 17 s), [fees](https://developers.circle.com/cctp/concepts/fees),
+  [technical guide](https://developers.circle.com/cctp/references/technical-guide) (message format: `sender` = "address of
+  MessageTransmitterV2 caller on source domain", `messageSender` = "address of caller of depositForBurn" — which account
+  that is on Solana is **not** stated there).
+- Circle's source: `github.com/circlefin/solana-cctp-contracts`, commit `ec16e95d28ee47f7832df4203ae07b5981d146fc`
+  (2026-06-18), `programs/v2/`: `deposit_for_burn.rs`, `send_message.rs`, `reclaim_event_account.rs`, `receive_message.rs`,
+  `handle_receive_finalized_message.rs`, `message.rs`, `burn_message.rs`, the two `state.rs`, `events.rs`.
+- The programs' **on-chain Anchor IDLs** (accounts `DcdWSsAT3RvYGjQzeBHdSJPVmdePNuFGXPn55UUXM9Xd` and
+  `2kCVppn7yBVracH1T3rBPNTxXSds884gEWUvmyKWzjBu`, IDL authority `J97Xq8AxXXYW297VkkPVDsYaxGZn6Wdtv2DUQfg2kees`, version 0.2.0):
+  same discriminators, account lists and argument types as the source.
+- On-chain, on both registry RPC endpoints: the two programs' ProgramData (§13.2), the `token_messenger` state, the seven
+  `remote_token_messenger` accounts, the USDC mint, rent figures.
+- **Real mainnet transactions**, fetched read-only and decoded instruction by instruction, with the attested messages
+  Iris returns for them (`GET /v2/messages/5?transactionHash=<base58 signature>` — the same endpoint as for EVM sources):
+  8 Solana → EVM burns from 7 wallets, 8 EVM → Solana mints, 2 reclaims. Recorded in
+  `packages/core/test/fixtures/cctp-sol/real-transactions.json`; `packages/core/test/cctp-sol.test.ts` asserts everything
+  below on them, and that the wallet's encoders reproduce those instructions **byte for byte** (data and account lists).
+
+One correction to Circle's page: its table of remaining accounts for `receiveMessage` lists ten accounts. The deployed
+program takes **eleven** — `fee_recipient_token_account` sits between `token_pair` and the user token account (source,
+on-chain IDL and all eight real mints agree). §7.3 above predates this.
+
+### 13.2 The programs, their pins and who can upgrade them
+
+| Program | Id | ProgramData | Last deployed (slot) | Executable | SHA-256 | Upgrade authority |
+|---|---|---|---|---|---|---|
+| MessageTransmitterV2 | `CCTPV2Sm4AdWt5296sk4P66VBZ7bEhcARwFaaS9YPbeC` | `2w2zCf9f5iyr7qcuWQH4DFNNahBZHgYkL4UVU3p5T1iS` | 343 321 624 | 493 512 bytes | `abbe67181ec4edcad11f4a0773d8bf658b2e599d6f1365ebfee1ab0f85fe9bb4` | `9SxKDZRge2ianVfwP1MxzwREMHCn28gdGbrvhTNRGWRq` |
+| TokenMessengerMinterV2 | `CCTPV2vPZJS2u2BBsUoscuikbYjnpFmbFsvVuJdgUMQe` | `9ZEnLvCp3weopBnSaoSSjn7hoVk6zMXMpfH3LjNzBFFF` | 343 322 709 | 716 232 bytes | `ccdac46adb68c570556bd15f7caddc52dd16fb96e0bbc8f5a46129555adbeeb2` | `HaxwvTGZFT7K8yvQKaUNZxyD593jr4gXCppu4uqQhyXK` |
+
+Identical on `api.mainnet-beta.solana.com` and `solana-rpc.publicnode.com`. **Both programs are upgradeable.** Each upgrade
+authority is a system-owned address with no data (holding 0.5 SOL): a key from the chain's point of view — whether a
+hardware module or a multi-party scheme stands behind it cannot be seen, and there is no on-chain timelock. Whoever holds it
+can replace the program, and a replaced program could do anything the wallet's signature allows on the accounts named in
+the transaction. Circle is also the issuer of USDC and can freeze it, so this adds no new trusted party; it is said
+because it is the trust statement of this leg.
+
+As for Jupiter (`JUPITER_PIN`), `CCTP_SOL_PINS` holds ProgramData address, last-deploy slot, upgrade authority and
+executable hash. `cctpSolGuards` (API) refuses to prepare a burn, send a mint, reclaim a deposit or create the token account
+unless, **on both endpoints**: the program accounts point at the pinned ProgramData, its header shows the pinned slot and
+authority, and (at first use, then every six hours) the whole executable hashes to the pinned value. It also requires the
+cluster's genesis hash, **USDC to be a classic SPL Token mint** with 6 decimals (owner = the Token program; a Token-2022 mint
+is refused, in the registry accessor `cctpSolUsdc` as well), the `token_messenger.fee_recipient` to be the pinned
+`4BPnUzFDibVcWQ5zzixGodRUHwqDxHYpUPdPYus3Bn56` (the mint instruction names its token account), the wallet to be a plain
+system account, and no `denylist_account` PDA for it. As on the EVM side the pin lives in the API (the signer has no chain
+access) and an upgrade landing between the check and inclusion is not covered. After an upgrade the leg stops, with the
+reason shown, until the new deployment is reviewed; USDC already burned stays mintable by anyone with the public message.
+
+**Not done:** the deployed bytes were not rebuilt from the source. Layouts and behaviour are established by the source,
+the on-chain IDL, real transactions and simulation — not by reproducing the build.
+
+### 13.3 Solana as source: the burn, and the previous engineer's first obstacle (the second signer)
+
+`deposit_for_burn` stores the message in a new account (`message_sent_event_data`) that the program creates with the
+System program; the new account must sign. So the transaction has **two signers**: the wallet (owner of the token account,
+fee payer, rent payer) and that account.
+
+Design, and why:
+
+- **The signer generates the keypair itself**, inside the signing step, after the passkey was verified
+  (`ed25519.utils.randomSecretKey()`); it signs this one transaction and the secret is overwritten. Neither the API nor
+  the owner ever sees or chooses it: a request carrying *any* helper data is refused ("a bridge takes no helper data").
+- **Nothing but the public key is kept**: it is recorded with the bridge (`state.bridges[id].sol.eventAccount`), returned
+  to the API, and written to the signer's journal. This is sound because the program never asks for that key again:
+  `ReclaimEventAccountContext` has one signer, `payee`, constrained to `message_sent_event_data.rent_payer` — the wallet.
+  (Read in the source and the IDL; both real reclaims recorded carry a single signature.) So no derivation path, no stored
+  secret, nothing to back up. A deterministic derivation would only matter if the event key were needed twice; it is not.
+- A key that signed a transaction which never landed is simply lost with it; the next attempt is a new proposal with a
+  new key. Once the account exists it is owned by the MessageTransmitter program: its key has no power over it.
+- What a compromised API can do with this: nothing more than before. It cannot supply the account, the instruction, the
+  recipient or the amount; it can only present the intent the owner approved.
+
+The signer **builds the whole transaction** from the approved intent (`buildCctpSolBurnMessage`): a Solana v1 message (all
+accounts inline, no lookup table, compute budget in the header — as in the Jupiter path), **one instruction**,
+`deposit_for_burn`, with its 18 accounts derived from the pinned program ids and the seeds of Circle's source:
+
+| # | Account | Value |
+|---|---|---|
+| 1, 2 | owner, event_rent_payer | the wallet (signer) |
+| 3 | sender_authority_pda | `["sender_authority"]` @ TokenMessengerMinterV2 |
+| 4 | burn_token_account | the wallet's **own associated USDC account** (`ATA(wallet, USDC, Token program)`) |
+| 5 | denylist_account | `["denylist_account", wallet]` |
+| 6 | message_transmitter | `["message_transmitter"]` @ MessageTransmitterV2 |
+| 7–10 | token_messenger, remote_token_messenger, token_minter, local_token | `["token_messenger"]`, `["remote_token_messenger", "<domain>"]`, `["token_minter"]`, `["local_token", mint]` |
+| 11 | burn_token_mint | the registry USDC mint `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
+| 12 | message_sent_event_data | the one-time account (signer) |
+| 13–18 | the two programs, Token, System, `["__event_authority"]`, the program | constants |
+
+Arguments: `amount`, `destination_domain` (from the signer's table), `mint_recipient` = the wallet's **own EVM address**
+left-padded (the intent names it in `bridge.recipient`; the signer requires it to be its own address on that network),
+`destination_caller` = 32 zero bytes (anyone may submit the mint — the same reasoning as §7.1), `max_fee`,
+`min_finality_threshold` (1000 or 2000; Fast is offered from Solana). Compute budget: limit 30 000–150 000 units (real burns
+used 42–53 k), price ≤ 2 lamports per unit. What the handler does with it (source): checks the amount, the denylist, the
+recipient, `max_fee < amount` and the program's Standard minimum fee (`token_messenger.min_fee`, 0 today — the API reads it);
+burns `amount` from the token account under the authority of `owner` (Anchor requires that account to hold the burn mint
+and to be owned by `owner`); and CPIs `send_message`, which creates the event account (payer = `event_rent_payer`).
+
+Intent: `network: "solana"`, a `sol` section, and the `bridge` section with `messenger`/`transmitter` = the two pinned
+**program ids**, `approveGas: "0"`, and the new optional field **`bridge.recipient`** (hashed only when present, so EVM ↔ EVM
+intents hash exactly as before). Refused: any other mint, recipient, destination, program, a destination caller (none can
+be expressed), an amount above the per-transfer or daily USDC limit *of Solana* (50 / 100 USDC by default), a fee ceiling
+above the policy.
+
+### 13.4 The `messageSender` finding (the previous engineer's fourth obstacle)
+
+The EVM mint check requires the message to have been *burned by this wallet*. For a Solana-sourced message:
+
+- **Source**: `BurnMessage::format_message(.., &ctx.accounts.owner.key(), ..)` in `deposit_for_burn.rs` — `messageSender` is
+  the `owner` signer. And `Message::format_message(.., sender = &ctx.accounts.sender_program.key(), ..)` in `send_message.rs`
+  — the header's `sender` is the TokenMessengerMinterV2 **program id**.
+- **Evidence**: eight real attested messages (signatures and messages in the fixture), from seven wallets, toward Base,
+  Avalanche, Ethereum and two other domains. In all eight `messageSender` = account 1 of the instruction (the owner's
+  public key); it is never the token account (account 4). In three of them the fee and rent payer is a *different* account
+  (`Cc5M6mec…`, a relayer paying for `BvgYWSbx…`, `4CE8sZg1…`, `6bSCaAo6…`): `messageSender` is still the owner, not the
+  payer. `sender` = `a65fc81d…e93893` = the program id in all eight; `burnToken` = the USDC mint; toward the wallet's EVM
+  networks `recipient` = the EVM TokenMessengerV2 left-padded.
+- **Our own burn**: the message read from the simulated event account of the signer-built burn carries the stand-in
+  wallet's public key as `messageSender` (§13.9 [a]).
+- **The other side agrees**: on the Base fork `TokenMessengerV2.remoteTokenMessengers(5)` is that program id, and a
+  message whose `sender` is another Solana program reverts with "Remote TokenMessenger unsupported".
+
+Rule encoded (`cctpSender32`): for a Solana source, `messageSender` = the 32 bytes of **the wallet's Solana public key**;
+`sender` = the 32 bytes of the TokenMessengerMinterV2 program id; `burnToken` = the 32 bytes of the USDC mint. It is
+established with certainty; the leg ships.
+
+The on-chain message equals the attested one with four fields zeroed (nonce, executed finality, executed fee, expiration),
+checked on the eight event accounts — so what Circle attests is what the program stored, and the signer's verifier can be
+run on the message *before* it is attested: the API does exactly that when it prepares a burn (below).
+
+### 13.5 The event-account deposit and its reclaim (second obstacle)
+
+- **Size and cost, measured**: 428 bytes (8 + 32 + 8 + 4 + 376), rent **2 824 480 lamports = 0.00282448 SOL**
+  (`getMinimumBalanceForRentExemption(428)` on 2026-11-11; the same figure in seven of the eight real burns — the eighth
+  account had been pre-funded by its sender).
+- It leaves the wallet in the burn transaction. The signer counts it **inside the approved fee ceiling**
+  (`2 signatures + priority fee + CCTP_SOL_EVENT_RENT ≤ intent.maxFee ≤ policy ceiling for Solana, 0.003 SOL`), so the
+  owner approves, and the policy bounds, everything the transaction takes from the wallet's SOL. The priority fee is
+  lowered when needed to fit. `CCTP_SOL_EVENT_RENT` is the measured figure: the signer cannot see the rent rate; the API
+  reads it live and refuses ("rent_changed") if it is higher.
+- **Shown before approval** as a refundable deposit, with the date it becomes reclaimable (an estimate until the burn is
+  mined, then exact from the event account's own `created_at`).
+- **When**: `reclaim_event_account` requires `now ≥ created_at + 432 000 s` (five days), an attested message with the same
+  source fields, and Circle's signatures on it. The reason is in the source: V2 nonces are assigned off-chain, so the
+  account must stay readable until Circle's service has certainly processed it.
+- **"Récupérer le dépôt"** appears in the transfer's details when the five days have passed. It needs the **passkey every
+  time** (a decision: unlike the mint, nothing is waiting on it, and the owner is present since he pressed the button):
+  the challenge is SHA-256 of (`SPW-BRIDGE-RECLAIM-v1`, bridge id, event account, message hash, blockhash, validity,
+  compute limit and price). The signer signs a reclaim only for **the account recorded with that bridge**, with the
+  bridge's own attested message (same verifier), payee = the wallet, fee ≤ the policy ceiling, not before five days after
+  the approval by its own clock, at most 12 times. The request has no field to name another account.
+- The API simulates before asking, simulates the signed bytes with the signature checked before sending, tracks the
+  transaction and marks the deposit reclaimed; a reclaim not included in time can simply be asked again. The record of a
+  burn whose deposit was never reclaimed is not pruned from the signer.
+- A real reclaim costs 5 000 lamports + priority fee and about 145 000 compute units; 0.00281948 SOL comes back.
+
+### 13.6 Solana as destination (third obstacle: the recipient is a token account, which must exist)
+
+**The recipient.** Circle: "the `mintRecipient` should be a hex encoded USDC token account address. The token account must
+exist at the time `receiveMessage` is called on Solana or else this instruction will revert." Source: the handler requires
+`recipient_token_account.key() == mint_recipient` and deserialises it as a token account of the local mint. Real
+transactions: in the eight recorded mints `mintRecipient` is account 16 of the instruction, a token account whose *owner*
+is another address, credited with `amount − feeExecuted`. So for a burn toward Solana the signer encodes
+`mintRecipient` = **the 32 bytes of `ATA(the wallet's Solana address, USDC, Token program)`**, derived from its own key
+(`cctpRecipient32`), never the wallet address; the intent names the Solana address in `bridge.recipient` and the signer
+requires it to be its own. Otherwise the EVM burn is the existing one, unchanged.
+
+**The account must exist, before the burn.** At preparation the API reads the account on both endpoints (existence, owner
+= Token program, mint = USDC, owner field = the wallet, not frozen). If it does not exist the burn is **refused**
+("token_account_missing: … Nothing was burned") and the Swap screen offers to create it: one `CreateIdempotent`
+instruction of the Associated Token Account program for the wallet's own USDC account, paid by the wallet — a passkey
+approval over a canonical request (`SolTokenAccountSchema`, hash domain `SPW-SOL-TOKEN-ACCOUNT-v1`), which the signer
+accepts only for its own address, the registry USDC mint and the derived account, with fee + deposit (bound 2 039 280
+lamports; 1 488 440 measured) under the policy ceiling. The deposit stays in the wallet's own token account.
+
+**SOL before the burn.** The mint is paid in SOL: 5 000 lamports + priority fee + **695 960 lamports for the used-nonce
+record** (9 bytes; paid by the payer, not refundable). The preparation requires that much SOL beyond the rent-exempt
+minimum of the wallet account, as the EVM path requires destination gas; otherwise "destination_gas … Nothing was burned".
+
+**The mint** (`buildCctpSolMintMessage`): one instruction, `receive_message`, 20 accounts all derived by the signer —
+payer and caller = the wallet; `["message_transmitter_authority", TokenMessengerMinterV2]`; the transmitter state;
+`["used_nonce", nonce]`; the receiver program; then for the token messenger: its state, `["remote_token_messenger",
+"<source domain>"]`, the minter, `["local_token", mint]`, `["token_pair", "<source domain>", source token bytes]`, the fee
+recipient's associated account (pinned owner), **the wallet's own token account**, `["custody", mint]`, the Token
+program. The wallet appears nowhere among the accounts handed on to the receiver (the program forwards signer flags of
+remaining accounts). Compute limit 150 000–400 000 (real mints used 183–207 k).
+
+Before building, the message is checked by **the same verifier as for EVM mints** (`verifyCctpMint`), in its
+Solana-destination variant: version 1 / 1, 376 bytes (no hook), source domain and USDC of the EVM network, destination
+domain 5, `sender` = the pinned EVM TokenMessengerV2, `recipient` = the Solana token-messenger program, `destinationCaller`
+= 0, `mintRecipient` = the wallet's own token account, `messageSender` = the wallet's EVM address, amount, fee ceiling and
+finality as approved, `feeExecuted ≤ maxFee` and `< amount`, all amounts within 64 bits. The only value-bearing effects of
+the transaction are then: USDC from Circle's custody account to the wallet's own token account (and Circle's fee to its
+own), and the wallet's SOL for the fee and the used-nonce record — bounded by the policy ceiling.
+
+**Authorisation: the existing bridge-record rule.** The burn approval covers exactly one mint signature; an identical
+request returns the same bytes; any other needs a passkey assertion (`SPW-BRIDGE-MINT-SOL-v1` …); at most six; one message
+serves one bridge. One practical difference from EVM: a Solana transaction lives about a minute. If the mint is not
+included in time the transfer shows "the receiving transaction was not included in time" and **"approve a new mint"**
+(passkey) — the USDC keeps waiting.
+
+**Double mint.** The program creates the used-nonce record with `init`: a second `receive_message` for the same nonce
+fails at the System program ("already in use"). The API checks that record on both endpoints before signing and when its
+own transaction fails: if it exists the transfer is done ("minted by someone else" when it was not the wallet's
+transaction), and nothing is signed. A Fast message's `expirationBlock` is a Solana slot there; past it the API asks Circle
+for a re-attestation, as on EVM.
+
+### 13.7 What the API does (bridge routes unchanged in shape)
+
+`GET /bridge/quote` and `POST /bridge/proposals` accept `solana` on either side; the quote adds a `solana` object (source:
+the deposit and the fee; destination: the token account, whether it exists, the rents) and `destinationGas` is in SOL for a
+Solana destination. New routes: `POST /bridge/proposals/:id/reclaim/options` and `/reclaim`; `GET` and
+`POST /bridge/solana/token-account[/options]`.
+
+Preparing a burn on Solana (`prepareSolBurn`): guards on both networks; USDC in the wallet's own token account; destination
+gas on the EVM network; Circle's fee from Iris (and the program's minimum for Standard); live rent; then **a simulation of
+the exact transaction the signer will build** — with a throwaway public key standing for the event account — which must
+succeed, debit exactly the amount, cost exactly fee + deposit, touch no other token account of the wallet, create the
+event account with the wallet as rent payer, and store **exactly the message the intent implies; that message, completed
+as Circle completes it, must pass the mint verifier.** A burn whose message our own mint check would refuse is never
+offered. After the passkey the API checks that the signed bytes are, byte for byte, the burn of the approved intent with
+the signer's event account, simulates them with both signatures checked, and relays them.
+
+Standard from Solana is attested in about 17 s, Fast in under a second (Circle's figures); the review sheet shows the
+speed, Circle's fee ceiling, the deposit and its date, the fee ceiling in SOL. Plans (`docs/v7/ANY-TO-ANY.md`) use the same
+route: `planCaps().cctp` now lists Solana, so the planner offers e.g. SOL → [Jupiter] → USDC → [CCTP] → USDC on Base →
+[KyberSwap] → cbBTC, each leg with its own passkey. In a plan the deposit appears among the network fees of the CCTP leg
+(the quote adapter lists it there) and is counted, with the usual margin, in the SOL the plan requires.
+
+### 13.8 Costs of a real transfer (2026-11-11 figures)
+
+| | Solana → EVM | EVM → Solana |
+|---|---|---|
+| Circle's fee | Standard 0; Fast 1 bps | Standard 0; Fast per the source network (§4) |
+| Source network fee | 0.00001 SOL (two signatures) + priority fee (bounded so the total stays ≤ 0.003 SOL) | as §12.6 (approval + burn) |
+| Refundable | **0.00282448 SOL** event-account deposit, back after five days less ≈ 0.000005 SOL | — |
+| Destination | gas of `receiveMessage` on the EVM network (§12.6) | 0.000005 SOL + priority fee + **0.00069596 SOL** used-nonce record (not refundable) |
+| Once | — | 0.00148844 SOL deposit to open the USDC token account, if the wallet has none |
+| Attestation | ≈ 17 s Standard, < 1 s Fast | as the source network (§1) |
+
+### 13.9 Proof (`npx tsx scripts/sim-solana-cctp.mts`, needs anvil)
+
+Nothing is sent to a real network; the keys are fresh random keys and a software passkey. Solana transactions are
+simulated on the public mainnet endpoints; EVM transactions run on a local fork of Base where two **test attesters** are
+enabled through the impersonated attester manager (the technique of §12.7 — a burn that exists only in a simulation or on
+a fork cannot be attested by Circle). Where a transaction must come *from* a funded account, a **public address** stands
+in as the wallet (as in `scripts/sim-jupiter.mts`): the signer signs with its own fresh key, so the bytes are simulated
+with `sigVerify: false`; the signature format itself is proven separately with `sigVerify: true` ([s]).
+
+What each part establishes:
+
+- **[0]** pins and state on both endpoints.
+- **[a]** the burn, prepared by the real API code and signed by the real signer path: success on mainnet, exact debit, event
+  account created with the measured rent and the wallet as rent payer, and the stored message read back from the
+  simulation = the message the intent implies. Standard and Fast.
+- **[c]** those very message bytes, completed as Circle does and signed by the test attesters, are accepted by the signer's
+  verifier and **minted by the real EVM contracts on the fork** to the wallet's EVM address (Fast: fee to Circle's
+  recipient); a message "sent" by another Solana program is refused on-chain.
+- **[s]** the two-signature v1 transaction is accepted by a mainnet node with signature verification on, and rejected with
+  either signature altered.
+- **[d]** the signer-built EVM burn toward Solana runs on the real TokenMessengerV2 (fork) and emits a message naming the
+  Solana token-messenger program as recipient and the wallet's token account as mint recipient; the Solana-side verifier
+  accepts it; the signer-built `receive_message` for it runs on mainnet up to the attestation check.
+- **[b]** with **Circle's real attestations**: a real EVM → Solana message that nobody had minted yet — the signer-built
+  `receive_message` **succeeds** in simulation (token account credited `amount − fee`, payer debited fee + 695 960
+  lamports, used-nonce record created); and a real message already minted fails at "already in use" on exactly the
+  used-nonce address our code derives. For these, the public sender and recipient of the message stand in as the wallet.
+  (Whether an unminted message exists at run time depends on the day; the script says so when it finds none.)
+- **[r]** `reclaim_event_account` as our code builds it: success for a real event account older than five days (its rent
+  payer receives the deposit less the fee, the account is closed), "EventAccountWindowNotExpired" for a young one. These
+  two use the core builder directly: the signer, by design, only reclaims accounts it generated itself.
+- **[e]** the signer's refusals.
+
+Unit tests: `packages/core/test/cctp-sol.test.ts` (real fixtures; builders; verifier), `services/isolated-signer/test/bridge-sol.test.ts`
+(what the signer builds and refuses), `services/api/test/bridge-sol.test.ts` (routes, worker steps and signer boundary
+against a scripted cluster that decodes the transactions and checks every signature).
+
+Output of the run of 2026-11-11 (exit 0):
+
+```
+fresh wallet for this run: EVM 0x47485dd99753da35eBaCB52070544d152de4A514, Solana HPrrWRA1pWLmSKz338UPe2xYyY8uMBrPtUaxdDeL6A7Q (random, never funded); Base fork at block 56168728
+
+[0] the two Circle programs, as pinned, and the state the code relies on (read-only)
+  ok   MessageTransmitterV2 CCTP…PbeC on api.mainnet-beta.solana.com: ProgramData 2w2z…T1iS, last deployed at slot 343321624, upgrade authority 9SxKDZRge2ianVfwP1MxzwREMHCn28gdGbrvhTNRGWRq, executable 493512 bytes sha256 abbe67181ec4edca…
+  ok   MessageTransmitterV2 CCTP…PbeC on solana-rpc.publicnode.com: ProgramData 2w2z…T1iS, last deployed at slot 343321624, upgrade authority 9SxKDZRge2ianVfwP1MxzwREMHCn28gdGbrvhTNRGWRq, executable 493512 bytes sha256 abbe67181ec4edca…
+  ok   TokenMessengerMinterV2 CCTP…UMQe on api.mainnet-beta.solana.com: ProgramData 9ZEn…BFFF, last deployed at slot 343322709, upgrade authority HaxwvTGZFT7K8yvQKaUNZxyD593jr4gXCppu4uqQhyXK, executable 716232 bytes sha256 ccdac46adb68c570…
+  ok   TokenMessengerMinterV2 CCTP…UMQe on solana-rpc.publicnode.com: ProgramData 9ZEn…BFFF, last deployed at slot 343322709, upgrade authority HaxwvTGZFT7K8yvQKaUNZxyD593jr4gXCppu4uqQhyXK, executable 716232 bytes sha256 ccdac46adb68c570…
+  --   upgrade authority 9SxKDZRge2ianVfwP1MxzwREMHCn28gdGbrvhTNRGWRq: owner 11111111111111111111111111111111, 0 bytes of data — a system-owned address (a key, not a visible multisig); it can replace the program at any time
+  --   upgrade authority HaxwvTGZFT7K8yvQKaUNZxyD593jr4gXCppu4uqQhyXK: owner 11111111111111111111111111111111, 0 bytes of data — a system-owned address (a key, not a visible multisig); it can replace the program at any time
+  ok   token_messenger state: fee recipient 4BPnUzFDibVcWQ5zzixGodRUHwqDxHYpUPdPYus3Bn56 (pinned), Standard minimum fee 0 / 10⁷, message body version 1
+  ok   remote_token_messenger PDA of each of the 7 EVM domains holds the pinned EVM TokenMessengerV2 (the "recipient" of a Solana-sourced message)
+  ok   Base: TokenMessengerV2.remoteTokenMessengers(5) = 0xa65fc81d0fefa886… = the Solana TokenMessengerMinterV2 program id (the "sender" a Solana-sourced message must carry)
+  ok   USDC EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: a classic SPL Token mint (owner Toke…Q5DA), 6 decimals; freeze authority 7dGbd2QZcCKcTndnHcTL8q7SMVXAkp688NTQYwrRCrar
+  ok   rent measured now: event account (428 bytes) 0.00282448 SOL — refundable; used-nonce record (9 bytes) 0.00069596 SOL; token account (165 bytes) 0.00148844 SOL; minimum of a wallet account 0.00065024 SOL
+
+[a] Solana → EVM: the burn, prepared by the API code and signed by the signer, for a public address standing in as the wallet
+  --   stand-in wallet GJRs4FwHtemZ5ZE9x3FNvJ8TMwitKTh21yxdRPqn7npE: 25383.177564153 SOL, 935252.209889 USDC in its associated token account DeqZejBFrRwWraY4g4besYmibTY1QcV1Fcg6VfoEvn4T
+  --   [fork only] Base fork: two TEST attesters enabled through the impersonated attester manager 0xdf265e0329f6a08a772b48191b33bdc624499b84 (threshold stays 2); the fresh wallet got 1 ETH and 100 USDC there
+  standard: 25 USDC → Base; Circle fee ceiling 0 USDC; network fee 0.000010337 SOL (2 signatures + priority, limit 67204 CU, 41763 used); refundable deposit 0.00282448 SOL; approved ceiling 0.002834817 SOL (policy: 0.003)
+  ok   API preparation: both program pins, USDC mint, fee recipient, wallet account, balances, destination gas on Base, and a simulation of the exact transaction (with a throwaway key as event account) — all passed
+  ok   signed after the passkey: one instruction (deposit_for_burn, 18 accounts, 16 keys, 816 bytes), two signers — the wallet and the event account 3aGobuR9QmxeegPmTKdBeYMvSkbpmFitJE3UHGuGxHQC generated by the signer for this burn (not the API's throwaway key)
+  ok   simulation on mainnet: SUCCESS (41763 CU); the wallet's USDC token account is debited exactly 25 USDC
+  ok   event account created: 428 bytes, owner CCTP…PbeC, rent 0.00282448 SOL, recorded rent payer = the wallet (so the wallet alone can reclaim it)
+  ok   the wallet pays 0.002834817 SOL = fee 0.000010337 + deposit 0.00282448; nothing else moves
+  ok   the 376-byte message stored by the program is, byte for byte, the one the approved intent implies
+       sourceDomain 5 → destinationDomain 6; sender CCTPV2vPZJS2u2BBsUoscuikbYjnpFmbFsvVuJdgUMQe (TokenMessengerMinterV2); recipient 0x28b5a0e9c621a5badaa536219b3a228c8168cf5d (EVM TokenMessengerV2)
+       burnToken EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v; amount 25000000; mintRecipient 0x47485dd99753da35ebacb52070544d152de4a514 (the wallet's EVM address); messageSender GJRs4FwHtemZ5ZE9x3FNvJ8TMwitKTh21yxdRPqn7npE (the wallet's Solana public key); maxFee 0; minFinality 2000; destinationCaller 0
+  ok   messageSender = the wallet public key, mintRecipient = the wallet's own EVM address, sender = Circle's Solana token messenger
+  fast: 20 USDC → Base; Circle fee ceiling 0.002 USDC; network fee 0.000010337 SOL (2 signatures + priority, limit 67204 CU, 41763 used); refundable deposit 0.00282448 SOL; approved ceiling 0.002834817 SOL (policy: 0.003)
+  ok   API preparation: both program pins, USDC mint, fee recipient, wallet account, balances, destination gas on Base, and a simulation of the exact transaction (with a throwaway key as event account) — all passed
+  ok   signed after the passkey: one instruction (deposit_for_burn, 18 accounts, 16 keys, 816 bytes), two signers — the wallet and the event account 99z9bttjzbm8BYtq3LmvGdddb288tt7bSeBdFL5mgZN2 generated by the signer for this burn (not the API's throwaway key)
+  ok   simulation on mainnet: SUCCESS (41763 CU); the wallet's USDC token account is debited exactly 20 USDC
+  ok   event account created: 428 bytes, owner CCTP…PbeC, rent 0.00282448 SOL, recorded rent payer = the wallet (so the wallet alone can reclaim it)
+  ok   the wallet pays 0.002834817 SOL = fee 0.000010337 + deposit 0.00282448; nothing else moves
+  ok   the 376-byte message stored by the program is, byte for byte, the one the approved intent implies
+       sourceDomain 5 → destinationDomain 6; sender CCTPV2vPZJS2u2BBsUoscuikbYjnpFmbFsvVuJdgUMQe (TokenMessengerMinterV2); recipient 0x28b5a0e9c621a5badaa536219b3a228c8168cf5d (EVM TokenMessengerV2)
+       burnToken EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v; amount 20000000; mintRecipient 0x47485dd99753da35ebacb52070544d152de4a514 (the wallet's EVM address); messageSender GJRs4FwHtemZ5ZE9x3FNvJ8TMwitKTh21yxdRPqn7npE (the wallet's Solana public key); maxFee 2000; minFinality 1000; destinationCaller 0
+  ok   messageSender = the wallet public key, mintRecipient = the wallet's own EVM address, sender = Circle's Solana token messenger
+
+[c] the EVM mint of those Solana-sourced messages on the Base fork (real contracts; attestation by the TEST attesters)
+  ok   standard: the signer accepts the message its own burn produces (verifier: source domain 5, Solana token messenger, USDC mint, wallet key as sender, own EVM address as recipient) and signs the one receiveMessage, no second passkey
+  ok   standard: receiveMessage mined on the fork (gas 154579): the wallet's EVM address received 25 USDC
+  ok   standard: the nonce is marked used on Base
+  ok   a second mint request for the same bridge (new nonce) -> refused: a mint was already signed for this bridge; another signature needs the owner's passkey
+  ok   on-chain: the same message "sent" by another Solana program, attested by the test attesters -> refused: eth_call: execution reverted: Remote TokenMessenger unsupported
+  ok   fast: the signer accepts the message its own burn produces (verifier: source domain 5, Solana token messenger, USDC mint, wallet key as sender, own EVM address as recipient) and signs the one receiveMessage, no second passkey
+  ok   fast: receiveMessage mined on the fork (gas 169214): the wallet's EVM address received 19.998001 USDC, Circle's fee recipient 0.001999 USDC (ceiling 0.002)
+  ok   fast: the nonce is marked used on Base
+
+[s] signature format of the two-signer transaction: the fresh key's own (unfunded) address, simulated with signature verification ON
+       816-byte v1 transaction = message + 2 signatures (wallet, event account)
+  ok   both genuine signatures pass verification; the node then answers "AccountNotFound" (the fee payer has never been funded)
+  ok   one bit flipped in the wallet's signature: "SignatureFailure"
+  ok   one bit flipped in the event account's signature: "SignatureFailure"
+
+[d] EVM → Solana: the burn toward the wallet's Solana token account, mined on the Base fork; the mint simulated on mainnet
+  ok   preparation: the wallet's USDC token account on Solana DeqZejBFrRwWraY4g4besYmibTY1QcV1Fcg6VfoEvn4T exists on both RPC endpoints; receiving needs 0.00070226 SOL (fee + 0.00069596 for the used-nonce record), the wallet has 25382.179872674 available
+  ok   an address without a USDC token account (HPrr…6A7Q): reported missing (AqVZ4ruJfzvDoxUozPGjeGkiShKKXRsp8NXsRay8wb5C); the API refuses to prepare a burn toward it ("token_account_missing") and offers to create it first (deposit 0.00148844 SOL)
+  ok   signer-built depositForBurn: destination domain 5, mintRecipient = DeqZejBFrRwWraY4g4besYmibTY1QcV1Fcg6VfoEvn4T = the wallet's associated USDC token account (not the wallet address GJRs…7npE), destination caller 0
+  ok   approval and burn mined on the fork (gas 55437 + 109235): 20 USDC burned — the real TokenMessengerV2 accepts Solana (domain 5) and this recipient
+  ok   the message emitted by the real contract: domain 6 → 5, recipient = CCTPV2vPZJS2u2BBsUoscuikbYjnpFmbFsvVuJdgUMQe (the Solana token messenger program), mintRecipient = the wallet's token account, messageSender = the wallet's EVM address, 20 USDC, no destination caller, 376 bytes
+  ok   the Solana-side verifier accepts it and the signer builds receive_message (20 accounts, 1244 bytes, no lookup table): payer = caller = the wallet, credited account = its own token account
+  ok   simulated on mainnet, it is refused exactly where expected — at the attestation, which only Circle can sign for a real burn (the test attesters' is not): {"InstructionError":[0,{"Custom":6027}]} — Program log: AnchorError thrown in message-transmitter-v2/src/state.rs:113. Error Code: InvalidAttesterSignature. Error Number: 6027. Error Message: Invalid attester signature. | Program CCTPV2Sm4AdWt5296sk4P66VBZ7bEhcARwFaaS9YPbe
+  --   what ran before that check, on mainnet: the nine accounts of the instruction were validated, the used-nonce record was allocated, the message version matched. The eleven accounts handed on to the token messenger are exercised with a real attestation in [b]
+
+[b] REAL attested EVM → Solana messages (Circle Iris): the signer-built receive_message simulated on mainnet
+  in flight: burn 0x65edb84e5cca3894b032c86491243f8bd58d57e6c47ea1e0b5344d1a28bec74c on Ethereum (10 USDC, fee 0, finality 2000) → token account HJjRRTz7eN78G71fRwDBBVyYC1GAMT5z4hQDspW3FQNx of RevS7rhyy3XSXTyRXBj8Hd35wmzMwFJHGZDsA6d1k64
+  ok   NOT yet minted: the simulation SUCCEEDS (182533 CU) with Circle's real attestation — the token account is credited 10 USDC (amount − fee), the payer spends 0.00070096 SOL (fee + used-nonce record), the record is created
+  already minted: burn 0xceba0cde9466784dfadfb34cb25d0b9f4c17d0d9d82f41772aaf07fd0ffdd1cf on Polygon PoS (6.967864 USDC, fee 0, finality 2000) → token account Bd12E7ad6DsLgeQtMWHAbkbU9YWTaB6e4X13RZJiYc9Z of 8K9KXAFv35omU2SwLQEBq6nPQx92TKKkdD4U5c7P5g7L
+  ok   already minted: the simulation fails where the program records the nonce — "Allocate: account Address { address: HHU6bHdYj6PTKJ7ars8H96DtsBLypWHDAzqk4mKayMpa, base: None } already in use" ({"InstructionError":[0,{"Custom":0}]}); that address is the used-nonce record our code derives
+  ok   the identical request returns the same bytes (no new signature)
+  ok   a second mint for the same bridge without the passkey -> refused: a mint was already signed for this bridge; another signature needs the owner's passkey
+  ok   with a passkey assertion over the exact new parameters a second mint transaction is signed (for a mint that expired or failed)
+  ok   the same real message with the OWNER address as mint recipient instead of the token account -> refused: message mints to another address
+
+[r] reclaim_event_account as our code builds it, simulated for REAL event accounts (public data; the payee is their rent payer)
+  ok   an event account 1 h old (CmJX…twHN): refused by the program — {"InstructionError":[0,{"Custom":6033}]} — Program log: AnchorError thrown in message-transmitter-v2/src/instructions/reclaim_event_account.rs:69. Error Code: EventAccountWindowNotExpired. Error Number: 6033. Error Message: Event account window not expired. | Program CCTPV
+  ok   an event account 5.0 days old (97T4GSWrMksGkKGc6kg9bscY3eE2pzfW1FQM1sELScx2, burn Q4uy…y26t): SUCCESS (145229 CU) — the account is closed and its rent payer receives 0.00281948 SOL (the 0.00282448 deposit less the 0.000005 fee), signed by the payee alone
+
+[e] what the signer refuses (each request carries a valid passkey approval of exactly what is asked, unless said)
+ burn on Solana:
+  ok   another mint recipient (someone else's EVM address) -> refused: the recipient is not this wallet's own address on the destination network
+  ok   a Solana token account as mint recipient of a burn toward an EVM network -> refused: not an EVM address
+  ok   another amount than the one the owner approved -> refused: approval verification failed: Unexpected authentication response challenge "uuDInql1cAlD60448TFMrhgL4jz4rlHYTcRIfruk8T0"
+  ok   an amount above the per-transfer limit -> refused: amount above per-transaction limit for solana:USDC
+  ok   another mint (USDT) -> refused: only the registry USDC can be bridged
+  ok   another destination domain than the destination network's -> refused: destination domain does not match the destination network
+  ok   another payer / owner (a burn "from" another address) -> refused: source address is not controlled by this signer
+  ok   an unpinned program as token messenger -> refused: messenger is not the pinned TokenMessengerMinterV2 program
+  ok   an unpinned program as message transmitter -> refused: transmitter is not the pinned MessageTransmitterV2 program
+  ok   extra instructions handed over as helper data (a transaction message from the API) -> refused: a bridge takes no helper data: the signer builds the transaction itself
+  ok   an event account that the signer did not generate (handed over by the API) -> refused: a bridge takes no helper data: the signer builds the transaction itself
+  ok   a fee ceiling above the policy -> refused: fee ceiling above policy
+  ok   a replay of an approved burn -> refused: proposal already signed
+  ok   nothing was recorded by any of these
+ mint on an EVM network of a Solana-sourced message:
+  ok   mint recipient = another EVM address -> refused: message mints to another address
+  ok   messageSender = the wallet's token account instead of its public key -> refused: message was not burned by this wallet
+  ok   messageSender = another Solana wallet -> refused: message was not burned by this wallet
+  ok   another amount -> refused: message carries another amount
+  ok   another mint -> refused: message burns another token
+  ok   another source domain -> refused: message comes from another source domain
+  ok   a destination caller -> refused: message restricts the destination caller
+  ok   a sender that is not Circle's Solana token messenger -> refused: message is not between the pinned TokenMessengers
+  ok   a mint for a bridge that was never approved -> refused: no approved bridge with this id
+ reclaim of the event-account deposit, and the wallet's token account:
+  ok   a reclaim before five days -> refused: the deposit cannot be reclaimed before five days
+  ok   a reclaim without the passkey -> refused: reclaiming the deposit needs the owner's passkey
+  ok   a reclaim naming another event account (the request has no such field; the approval is bound to the recorded one) -> refused: approval verification failed: Unexpected authentication response challenge "uRjsvm5TsFSQ_OS-dCwbRua47XlKf0ehG0jz0q9d7z8"
+  ok   with the passkey, five days later: one reclaim_event_account for the event account recorded with the burn, payee = the wallet, signed by the wallet alone
+  ok   a token account for someone else -> refused: the token account is not for this wallet
+  ok   a token account of another mint -> refused: only the registry USDC token account can be opened here
+  ok   a token account without the passkey -> refused: opening the token account needs the owner's passkey
+  ok   the wallet's own token account, with the passkey: one CreateIdempotent, simulated on mainnet: success (4338 CU, fee 0.000005 SOL; the account of this stand-in already exists, so nothing is created)
+  ok   for a public address without a USDC token account (9SxK…GWRq): simulation SUCCESS (17917 CU) — the account DA9bDwLiktZ2ABdRWaGmXQu1s6JECbJJEZarCSbqwUXn is created, owned by the Token program, with a deposit of 0.00148844 SOL paid by its owner (fee 0.000005 SOL)
+  ok   the same for the fresh key's own address, signature checked by the node: accepted, then "AccountNotFound" (never funded)
+
+recorded packages/core/test/fixtures/cctp-sol/simulated.json
+
+SOLANA CCTP PROOF OK — nothing was sent to a real network; Solana transactions were simulated on mainnet, EVM transactions ran on a local fork
+```
+
+### 13.10 Verified / not verified (Solana ↔ EVM)
+
+Verified: the pins on two endpoints; the on-chain IDLs; account layouts, seeds and message fields against real
+transactions (byte-for-byte reproduction of real instructions); `messageSender`, `sender`, `burnToken`, `recipient` on
+eight real attested messages; the recipient-is-a-token-account rule on eight real mints; the signer-built burn simulated
+on mainnet; its message minted by the real EVM contracts on a fork; the signer-built `receive_message` simulated on
+mainnet with a real attestation; the reclaim simulated on mainnet; the token-account creation simulated on mainnet; the
+two-signature v1 wire format accepted by a mainnet node; the EVM burn toward Solana on a fork.
+
+**Not verified:**
+
+- **No transaction was sent**, on Solana or elsewhere. Real inclusion, priority-fee adequacy, the worker's confirmation
+  path against a live cluster, and the amount read back from a real confirmed mint are untested outside the scripted
+  cluster of the API tests. `solana-test-validator` is not installed on this machine.
+- **The pairing "our own burn → Circle attests it → our mint"** has never run with Circle's real attestation service: in
+  [c] the attestation of our burn's message is made by test keys on a fork. What is established is each half separately:
+  real attested messages of other wallets have exactly the fields our verifier expects, and our burn stores exactly the
+  message our verifier expects.
+- A real reclaim **through the signer** (its own event account, five days later): only the builder was simulated on
+  mainnet, for other people's accounts; the signer path is covered by unit tests.
+- The deployed programs were not rebuilt from source; who controls the two upgrade authorities and the IDL authority is
+  unknown.
+- Iris behaviours for Solana taken from documentation, not observed for our own messages: timing, Fast → Standard
+  degradation, re-attestation of an expired Fast message whose expiration is a Solana slot.
+- The Standard minimum fee of the Solana program (`min_fee` > 0) was never seen non-zero.
+- Solana's rent rate: the signer's figures are bounds only while the rate stays at or below the 2026-11-11 rate; a rise
+  stops the leg at the API's check rather than at the signer.
+- The plan executor with a Solana CCTP leg was exercised at the planner and route level (unit and API tests), not by a
+  full fork-plus-simulation plan run; the web screens were type-checked and built, not exercised in a browser.
+- USDC on Solana has a freeze authority (Circle): a frozen token account is refused at preparation; a freeze between burn
+  and mint would leave the USDC mintable only once Circle unfreezes — outside the wallet's control, as on EVM.

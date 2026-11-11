@@ -6,6 +6,8 @@ export * from './intent.ts';
 export * from './build-evm.ts';
 export * from './swap-evm.ts';
 export * from './cctp.ts';
+export * from './cctp-sol.ts'; // v8 Solana ↔ EVM CCTP
+export * from './cctp-sol-tx.ts'; // v8 Solana ↔ EVM CCTP
 export * from './thorchain.ts';
 export * from './mandate.ts';
 export * from './market-listings.ts';

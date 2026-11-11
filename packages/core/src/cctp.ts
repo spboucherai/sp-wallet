@@ -20,6 +20,8 @@ import { encodeFunctionData, erc20Abi, keccak256, type Hex, type TransactionSeri
 import { baseUnits } from './amounts.ts';
 import { getAsset, getNetwork } from './networks.ts';
 import type { Intent } from './intent.ts';
+// v8: Solana as one end of a route (constants and encoders only; see cctp-sol.ts)
+import { CCTP_SOL_DOMAIN, CCTP_SOL_NETWORK, CCTP_SOL_TIMES, CCTP_SOL_TOKEN_MESSENGER_MINTER, cctpSolBytes32, cctpSolTokenAccount, cctpSolUsdc } from './cctp-sol.ts';
 
 /** CCTP V2 on EVM: the same addresses on every chain (developers.circle.com/cctp/references/contract-addresses, read 2026-11-11). */
 export const CCTP_TOKEN_MESSENGER = '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d';
@@ -95,20 +97,49 @@ export function cctpUsdc(network: string) {
 }
 
 /** What an approved bridge commits to; the signer keeps this record to authorise the one matching mint later. */
-export interface CctpBridge { fromNetwork: string; toNetwork: string; wallet: string; amount: string; maxFee: string; minFinalityThreshold: number }
+export interface CctpBridge { fromNetwork: string; toNetwork: string; wallet: string; amount: string; maxFee: string; minFinalityThreshold: number;
+  /** v8, Solana ↔ EVM only: the wallet's own address on the destination network (`wallet` is its address on the source). Absent between EVM networks. */
+  recipient?: string }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// v8 — one end of a route, EVM or Solana, as a CCTP message names it. Between two EVM networks every value below is exactly
+// what the code used before (the pinned TokenMessengerV2, the registry USDC and the wallet address, each left-padded).
+export interface CctpEnd { network: string; family: 'evm' | 'sol'; domain: number; /** bytes32 of the token messenger of this side */ messenger: string; /** bytes32 of its USDC */ usdc: string;
+  fastSource: boolean; standardSeconds: number; fastSeconds: number | null }
+export function cctpEnd(network: string): CctpEnd | null {
+  if (network === CCTP_SOL_NETWORK) return { network, family: 'sol', domain: CCTP_SOL_DOMAIN, messenger: cctpSolBytes32(CCTP_SOL_TOKEN_MESSENGER_MINTER), usdc: cctpSolBytes32(cctpSolUsdc().id), ...CCTP_SOL_TIMES };
+  const p = CCTP_ENABLED[network];
+  return p ? { network, family: 'evm', domain: p.domain, messenger: cctpBytes32(CCTP_TOKEN_MESSENGER), usdc: cctpBytes32(cctpUsdc(network).id), fastSource: p.fastSource, standardSeconds: p.standardSeconds, fastSeconds: p.fastSeconds } : null;
+}
+/** Is USDC executable between these two networks? Seven EVM networks among themselves, and each of them with Solana. */
+export const cctpRouteEnabled = (from: string, to: string): boolean => from !== to && !!cctpEnd(from) && !!cctpEnd(to);
+/**
+ * `messageSender` of a burn made by `address` on this side. EVM: msg.sender of depositForBurn. Solana: the `owner` signer of
+ * deposit_for_burn — the wallet's public key itself (source: `BurnMessage::format_message(.., &ctx.accounts.owner.key(), ..)`;
+ * confirmed on eight real attested messages, docs/swap/providers/cctp.md §13.4).
+ */
+export const cctpSender32 = (end: CctpEnd, address: string): string => (end.family === 'sol' ? cctpSolBytes32(address) : cctpBytes32(address));
+/**
+ * `mintRecipient` that credits `address` on this side. EVM: the address. Solana: its associated USDC TOKEN ACCOUNT, never the
+ * wallet address (the program requires the credited token account to equal mintRecipient; a wallet address there could never
+ * be minted to and CCTP V2 cannot redirect a burn).
+ */
+export const cctpRecipient32 = (end: CctpEnd, address: string): string => (end.family === 'sol' ? cctpSolBytes32(cctpSolTokenAccount(address)) : cctpBytes32(address));
+// ---------------------------------------------------------------------------------------------------------------------
 
 export function bridgeOf(i: Intent): CctpBridge {
   if (!i.bridge) throw new Error('not a bridge intent');
-  return { fromNetwork: i.network, toNetwork: i.bridge.toNetwork, wallet: i.from, amount: i.amount, maxFee: i.bridge.maxFee, minFinalityThreshold: i.bridge.minFinalityThreshold };
+  return { fromNetwork: i.network, toNetwork: i.bridge.toNetwork, wallet: i.from, amount: i.amount, maxFee: i.bridge.maxFee, minFinalityThreshold: i.bridge.minFinalityThreshold,
+    ...(i.bridge.recipient !== undefined ? { recipient: i.bridge.recipient } : {}) };
 }
 
 /** Check every field of a bridge intent against the pinned tables. Throws on any mismatch. */
-export function verifyCctpBridge(i: Intent): { src: CctpPin; dst: CctpPin; amount: bigint; maxFee: bigint } {
+export function verifyCctpBridge(i: Intent): { src: CctpPin; dst: CctpEnd; amount: bigint; maxFee: bigint; /** bytes32 the burn names as mint recipient */ mintRecipient: string } {
   const n = getNetwork(i.network), b = i.bridge;
   if (n.family !== 'evm' || !i.evm || !b) throw new Error('not an EVM bridge intent');
   if (i.swap || i.xswap) throw new Error('an intent is a swap or a bridge, not both');
   if (b.provider !== 'cctp') throw new Error('unknown bridge provider');
-  const src = CCTP_ENABLED[i.network], dst = CCTP_ENABLED[b.toNetwork];
+  const src = CCTP_ENABLED[i.network], dst = cctpEnd(b.toNetwork); // v8: the destination may be Solana
   if (!src) throw new Error(`CCTP execution is not enabled on ${n.name}`);
   if (!dst) throw new Error('CCTP execution is not enabled on the destination network');
   if (b.toNetwork === i.network) throw new Error('source and destination are the same network');
@@ -117,7 +148,11 @@ export function verifyCctpBridge(i: Intent): { src: CctpPin; dst: CctpPin; amoun
   if (b.messenger !== CCTP_TOKEN_MESSENGER) throw new Error('messenger is not the pinned TokenMessengerV2');
   if (b.transmitter !== CCTP_MESSAGE_TRANSMITTER) throw new Error('transmitter is not the pinned MessageTransmitterV2');
   if (!/^0x[0-9a-fA-F]{40}$/.test(i.from) || i.to !== i.from) throw new Error('a bridge must deliver to the wallet itself');
-  const usdc = cctpUsdc(i.network); cctpUsdc(b.toNetwork);
+  const usdc = cctpUsdc(i.network);
+  // v8: between EVM networks the recipient is the same address and is not named; toward Solana it is named and must be a Solana address
+  if (dst.family === 'evm') { cctpUsdc(b.toNetwork); if (b.recipient !== undefined) throw new Error('a bridge between EVM networks delivers to the same address and names no other recipient'); }
+  else if (b.recipient === undefined) throw new Error('a bridge to Solana names the wallet\'s Solana address');
+  const mintRecipient = cctpRecipient32(dst, b.recipient ?? i.from); // throws on a malformed Solana address
   if (i.asset !== usdc.id || getAsset(i.network, i.asset).id !== usdc.id) throw new Error('only the registry USDC can be bridged');
   if (i.symbol !== 'USDC' || i.decimals !== usdc.decimals) throw new Error('asset metadata mismatch');
   const amount = baseUnits(i.amount), maxFee = baseUnits(b.maxFee);
@@ -126,13 +161,13 @@ export function verifyCctpBridge(i: Intent): { src: CctpPin; dst: CctpPin; amoun
   if (maxFee * 10_000n > amount * CCTP_MAX_FEE_BPS) throw new Error('CCTP fee ceiling above 1 % of the amount');
   if (b.minFinalityThreshold !== CCTP_FINALITY_FAST && b.minFinalityThreshold !== CCTP_FINALITY_STANDARD) throw new Error('finality threshold must be 1000 (Fast) or 2000 (Standard)');
   if (b.minFinalityThreshold === CCTP_FINALITY_FAST && !src.fastSource) throw new Error('Fast Transfer is not offered from this network');
-  return { src, dst, amount, maxFee };
+  return { src, dst, amount, maxFee, mintRecipient };
 }
 
 /** Calldata of the burn, rebuilt from the intent alone. */
 export function cctpBurnData(i: Intent): Hex {
-  const { dst, amount, maxFee } = verifyCctpBridge(i);
-  return encodeFunctionData({ abi: CCTP_ABI, functionName: 'depositForBurn', args: [amount, dst.domain, `0x${cctpBytes32(i.from)}`, cctpUsdc(i.network).id as Hex, `0x${ZERO32}`, maxFee, i.bridge!.minFinalityThreshold] });
+  const { dst, amount, maxFee, mintRecipient } = verifyCctpBridge(i); // between EVM networks mintRecipient = bytes32(i.from), as before
+  return encodeFunctionData({ abi: CCTP_ABI, functionName: 'depositForBurn', args: [amount, dst.domain, `0x${mintRecipient}`, cctpUsdc(i.network).id as Hex, `0x${ZERO32}`, maxFee, i.bridge!.minFinalityThreshold] });
 }
 
 /** The transactions the signer signs for the first leg: an exact-amount approval when asked, then the burn. */
@@ -196,24 +231,29 @@ export const cctpMessageHash = (message: string): string => keccak256(message as
  * the mint will credit. Throws on any mismatch.
  */
 export function verifyCctpMint(b: CctpBridge, message: string, attestation: string): { msg: CctpMessage; minted: bigint; messageHash: string } {
-  const src = CCTP_ENABLED[b.fromNetwork], dst = CCTP_ENABLED[b.toNetwork];
+  // v8: either end may be Solana. Between EVM networks `src`/`dst` carry the same values as before and `recipient` is absent.
+  const src = cctpEnd(b.fromNetwork), dst = cctpEnd(b.toNetwork);
   if (!src || !dst || b.fromNetwork === b.toNetwork) throw new Error('bridge route is not enabled');
+  if ((src.family !== dst.family) !== (b.recipient !== undefined)) throw new Error('bridge record does not name its recipient as its route requires');
   const m = decodeCctpMessage(message);
-  const messenger = cctpBytes32(CCTP_TOKEN_MESSENGER), wallet = cctpBytes32(b.wallet);
+  const sender = cctpSender32(src, b.wallet), recipient = cctpRecipient32(dst, b.recipient ?? b.wallet);
   if (m.version !== 1 || m.body.version !== 1) throw new Error('message is not CCTP V2');
   if (m.sourceDomain !== src.domain) throw new Error('message comes from another source domain');
   if (m.destinationDomain !== dst.domain) throw new Error('message is for another destination domain');
   if (m.nonce === ZERO32) throw new Error('message has no nonce (not attested)');
-  if (m.sender !== messenger || m.recipient !== messenger) throw new Error('message is not between the pinned TokenMessengers');
+  if (m.sender !== src.messenger || m.recipient !== dst.messenger) throw new Error('message is not between the pinned TokenMessengers');
   if (m.destinationCaller !== ZERO32) throw new Error('message restricts the destination caller');
-  if (m.body.burnToken !== cctpBytes32(cctpUsdc(b.fromNetwork).id)) throw new Error('message burns another token');
-  if (m.body.mintRecipient !== wallet) throw new Error('message mints to another address');
-  if (m.body.messageSender !== wallet) throw new Error('message was not burned by this wallet');
+  if (m.body.burnToken !== src.usdc) throw new Error('message burns another token');
+  if (m.body.mintRecipient !== recipient) throw new Error('message mints to another address');
+  if (m.body.messageSender !== sender) throw new Error('message was not burned by this wallet');
   if (m.body.amount !== baseUnits(b.amount)) throw new Error('message carries another amount');
   if (m.body.maxFee !== baseUnits(b.maxFee)) throw new Error('message carries another fee ceiling');
   if (m.body.feeExecuted > m.body.maxFee) throw new Error('message charges more than the approved fee ceiling');
   if (m.minFinalityThreshold !== b.minFinalityThreshold) throw new Error('message asks for another finality threshold');
   if (m.finalityThresholdExecuted < b.minFinalityThreshold) throw new Error('message was attested below the approved finality');
+  // v8: the Solana programs read amounts as u64 and refuse a fee that takes the whole amount
+  if ((src.family === 'sol' || dst.family === 'sol') && [m.body.amount, m.body.maxFee, m.body.feeExecuted, m.body.expirationBlock].some((v) => v >= 1n << 64n)) throw new Error('message carries a value outside the 64-bit range');
+  if (dst.family === 'sol' && m.body.feeExecuted >= m.body.amount) throw new Error('message charges the whole amount');
   if (!hexOk(attestation)) throw new Error('attestation is not hex');
   const sigBytes = (attestation.length - 2) / 2;
   if (sigBytes < 65 || sigBytes > 65 * 8 || sigBytes % 65 !== 0) throw new Error('attestation is not a list of 65-byte signatures');
@@ -226,6 +266,7 @@ export interface CctpMintGas { nonce: number; gasLimit: string; maxFeePerGas: st
 export function buildCctpMintTx(b: CctpBridge, message: string, attestation: string, g: CctpMintGas, feeCeiling: bigint): TransactionSerializableEIP1559 {
   verifyCctpMint(b, message, attestation);
   const n = getNetwork(b.toNetwork);
+  if (n.family !== 'evm') throw new Error('this mint is not on an EVM network'); // v8: a mint on Solana is built by cctp-sol-tx.ts
   if (!Number.isInteger(g.nonce) || g.nonce < 0) throw new Error('bad nonce');
   const gas = baseUnits(g.gasLimit), maxFeePerGas = baseUnits(g.maxFeePerGas), tip = baseUnits(g.maxPriorityFeePerGas);
   if (tip > maxFeePerGas) throw new Error('priority fee above max fee');

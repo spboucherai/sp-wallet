@@ -8,3 +8,5 @@ if (raw) {
   console.warn(`\n*** SPW_RPC_OVERRIDE is set: ${Object.keys(map).join(', ')} do NOT use their real endpoints. This must never happen in production. ***\n`);
 }
 export const rpcOverridden = !!raw;
+/** v8: which networks are pointed elsewhere (a proof script may fork one EVM network and still read Solana from its real endpoints) */
+export const rpcOverriddenNetworks: ReadonlySet<string> = new Set(raw ? Object.keys(JSON.parse(raw) as Record<string, unknown>) : []);

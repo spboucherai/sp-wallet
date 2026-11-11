@@ -42,7 +42,7 @@ export function swapRoutes(app: FastifyInstance, deps: SwapDeps): void {
     const out = getAsset(r.path[r.path.length - 1]!.network, r.path[r.path.length - 1]!.asset);
     const first = r.path[0]!, last = r.path[r.path.length - 1]!;
     // USDC -> USDC between two EVM networks through CCTP: the signer builds both transactions itself (services/api/src/bridge.ts)
-    const usdcOf = (a: AssetRef) => getNetwork(a.network).family === 'evm' && !!CCTP_ENABLED[a.network] && getAsset(a.network, a.asset).symbol === 'USDC';
+    const usdcOf = (a: AssetRef) => (a.network === 'solana' || (getNetwork(a.network).family === 'evm' && !!CCTP_ENABLED[a.network])) && getAsset(a.network, a.asset).symbol === 'USDC'; // v8: Solana too (services/api/src/bridge-sol.ts)
     const cctp = r.legs.length === 1 && r.providers[0] === 'cctp' && first.network !== last.network && usdcOf(first) && usdcOf(last);
     const cctpSpeed = cctp ? ((r.legs[0]!.raw as { transfer?: string } | undefined)?.transfer === 'fast' ? 'fast' : 'standard') : null;
     // Jupiter on Solana: the signer decodes the v1 transaction itself (services/api/src/swap-exec-sol.ts); whether a given route can be put in the verifiable form is decided when the swap is prepared

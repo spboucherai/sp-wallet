@@ -47,7 +47,11 @@ export interface StoredVenueAuthorization { authorization: import('@spw/derivati
  * request (lost answer, restart) gets the same bytes back instead of a second signature.
  */
 export interface StoredBridge { bridge: CctpBridge; approvedAt: number; burnTxid: string;
-  mint?: { messageHash: string; txid: string; raw: string; params: string; signedAt: number; signatures: number } }
+  mint?: { messageHash: string; txid: string; raw: string; params: string; signedAt: number; signatures: number };
+  /** v8, a burn on Solana: the one-time event account the signer generated for it (public key only; the secret is never stored) */
+  sol?: { eventAccount: string };
+  /** v8: the last reclaim_event_account signature for that account (each one needs the owner's passkey) */
+  reclaim?: { txid: string; signedAt: number; signatures: number } }
 export interface StoredMandate { mandate: Mandate; approvedAt: string; revoked: boolean; revokedAt?: string; usage: Record<string, { sold: Record<string, string>; orders: number }> }
 
 const EMPTY: SignerState = { v: 1, halted: false, setupTokenHash: null, credentials: [], used: {}, spent: {}, journal: [] };
@@ -79,7 +83,8 @@ export class Store {
     for (const k of Object.keys(this.state.spent)) if (k.slice(0, 10) < keep) delete this.state.spent[k];
     for (const m of Object.values(this.state.mandates ?? {})) for (const d of Object.keys(m.usage)) if (d < keep) delete m.usage[d];
     // a bridge whose mint was signed is kept 90 more days (retries); one that was never minted is kept for ever
-    for (const [k, b] of Object.entries(this.state.bridges ?? {})) if (b.mint && b.mint.signedAt + 90 * 86400 < nowSec) delete this.state.bridges![k];
+    // v8: a Solana burn whose event-account deposit was never reclaimed is kept (the record is the only authority for the reclaim)
+    for (const [k, b] of Object.entries(this.state.bridges ?? {})) if (b.mint && b.mint.signedAt + 90 * 86400 < nowSec && !(b.sol && !b.reclaim)) delete this.state.bridges![k];
     // venue authorizations: daily counters and client order ids older than three days go (an order approval is valid two minutes,
     // and the venue nonce only moves forward, so an old client id cannot come back without a new passkey approval)
     for (const v of Object.values(this.state.venues ?? {})) {

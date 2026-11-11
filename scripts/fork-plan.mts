@@ -8,7 +8,7 @@
 // attester keys are enabled through the impersonated attester manager and a local stand-in signs the fork's MessageSent bytes.
 // Balances are given to the throwaway wallet by writing storage slots on the forks.
 //
-//   A  planning: capabilities, Solana ↔ EVM said not executable, limits exceeded on a leg, missing gas named per network
+//   A  planning: capabilities, Solana ↔ EVM planned (v8), a network without execution said so, limits exceeded on a leg, missing gas named per network
 //   B  a full 3-leg plan  LINK (Arbitrum) → USDC → [CCTP] → USDC (Base) → cbBTC (Base), passkey per leg, planned vs actual —
 //      with a process RESTART between legs 1 and 2, the attestation of leg 2 DELAYED, and leg 3 REFUSED at the last gate after
 //      the fork's market moved away from the quote (plan paused, re-planned from USDC on Base, completed)
@@ -123,7 +123,8 @@ try {
   const caps = (await api('GET', '/api/v1/plans/capabilities')).json;
   say(`  executable legs: swap on ${Object.keys(caps.swap).join(', ')}; CCTP (USDC) between ${caps.cctp.join(', ')}; THORChain ${caps.thorchain.map((t: any) => `${t.symbol}@${t.network}${t.source ? '' : ' (destination only)'}`).join(', ')}`);
   const sol = await quote('solana:native', K(USDC_B, DST), '0.1');
-  check(sol.plans.length === 0 && sol.notExecutable?.code === 'solana_evm_bridge', `SOL (Solana) → USDC (Base): no plan, reason "${sol.notExecutable?.code}" — said, not faked`);
+  // v8: Solana ↔ EVM is executable through CCTP (docs/swap/providers/cctp.md §13), so this pair is planned like any other (live Jupiter and Circle quotes; nothing is started here)
+  check(sol.notExecutable === null && caps.cctp.includes('solana'), `SOL (Solana) → USDC (Base): no longer refused — ${sol.plans.length} plan(s) priced${sol.skipped?.length ? `, ${sol.skipped.length} without a quote right now` : ''} (Jupiter, then CCTP from Solana)`);
   const tron = await quote('tron:native', K(USDC_B, DST), '10');
   check(tron.plans.length === 0 && tron.notExecutable?.code === 'network_without_execution', `TRX (Tron) → USDC (Base): no plan, reason "${tron.notExecutable?.code}" (${tron.notExecutable?.network})`);
 

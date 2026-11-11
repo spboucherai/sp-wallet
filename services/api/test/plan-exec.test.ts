@@ -174,12 +174,15 @@ describe('planning through the API', () => {
     expect(q.plans[0].legs.map((l: any) => l.label)).toEqual(['Circle CCTP', 'KyberSwap']);
     expect(q.plans[0].requirements.gas.map((g: any) => [g.networkName, g.symbol, g.needDisplay, g.ok])).toEqual([['Base', 'ETH', '0.00004', true], ['Arbitrum One', 'ETH', '0.00008', true]]);
     expect(q.plans[0].requirements.limits.map((l: any) => [l.leg, l.symbol, l.networkName, l.needDisplay, l.perTransferDisplay, l.ok])).toEqual([[0, 'USDC', 'Base', '10', '50', true], [1, 'USDC', 'Arbitrum One', '10', '50', true]]);
+    // v8: Solana ↔ EVM is a pair like the others — Jupiter, then CCTP from Solana (the leg itself is exercised in bridge-sol.test.ts)
     const sol = await quote({ network: 'solana', asset: 'native' }, USDC_B, '1');
-    expect(sol).toMatchObject({ plans: [], notExecutable: { code: 'solana_evm_bridge' } });
+    expect(sol.notExecutable).toBeNull();
+    expect(sol.plans.map((p: any) => p.legs.map((l: any) => `${l.label}${l.speed ? `:${l.speed}` : ''}`).join('>')).sort()).toEqual(['Jupiter (Metis)>Circle CCTP:fast', 'Jupiter (Metis)>Circle CCTP:standard']);
+    expect((await quote({ network: 'tron', asset: 'native' }, USDC_B, '1'))).toMatchObject({ plans: [], notExecutable: { code: 'network_without_execution', network: 'tron' } });
     expect((await api('POST', '/api/v1/plans/quote', { from: K(USDC_B), to: K(USDC_B), amount: '1' })).json.error).toBe('same_asset');
     expect((await api('POST', '/api/v1/plans/quote', { from: 'base:0x0000000000000000000000000000000000000001', to: K(USDC_B), amount: '1' })).json.error).toBe('unsupported_asset');
     const caps = (await api('GET', '/api/v1/plans/capabilities')).json;
-    expect(caps.swap).toMatchObject({ base: 'kyberswap', solana: 'jupiter' }); expect(caps.cctp).toContain('hyperevm'); expect(caps.hub).toBe('USDC');
+    expect(caps.swap).toMatchObject({ base: 'kyberswap', solana: 'jupiter' }); expect(caps.cctp).toContain('hyperevm'); expect(caps.cctp).toContain('solana'); expect(caps.hub).toBe('USDC');
   });
   it('refuses to START a plan whose leg exceeds the limit of its asset, or that lacks gas somewhere — with the reason, storing nothing', async () => {
     const { r } = await create('60');

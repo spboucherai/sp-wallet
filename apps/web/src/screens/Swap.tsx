@@ -7,13 +7,15 @@ import { errText, I18n, useT, type Key } from '../i18n';
 import { Btn, Card, Coin, fiat, Icon, inputCls, NetDot, Notice, numFmt, StatePill, testNotSent, trimAmt } from '../ui';
 import { issuerOf } from '../issuer';
 import { useQueryClient } from '@tanstack/react-query';
-import { BridgeFacts, BridgePill, BridgeProgress, bridgeDur } from '../bridge';
+import { BridgeFacts, BridgePill, BridgeProgress, bridgeDur, scErrText } from '../bridge';
 import { XswapPill, XswapSheet } from '../xswap';
 import { PlanCards } from '../plan'; // v7 any-to-any plans
 
 interface SAsset { key: string; network: string; networkName: string; asset: string; symbol: string; name: string; decimals: number; native?: boolean }
 interface Fee { kind: string; symbol: string; network: string; display: string; includedInOutput: boolean; estimated: boolean; usd: number | null }
-interface BridgeQuote { options: { speed: 'standard' | 'fast'; available: boolean; feeDisplay: string; minReceiveDisplay: string; seconds: number }[]; destinationGas: { symbol: string; needDisplay: string; balanceDisplay: string; enough: boolean }; toName: string; fromName: string }
+interface BridgeQuote { options: { speed: 'standard' | 'fast'; available: boolean; feeDisplay: string; minReceiveDisplay: string; seconds: number }[]; destinationGas: { symbol: string; needDisplay: string; balanceDisplay: string; enough: boolean }; toName: string; fromName: string;
+  /** v8: Solana as source (refundable deposit) or destination (the wallet's USDC token account, which must exist) */
+  solana?: { role: 'source'; depositDisplay: string; networkFeeDisplay: string } | { role: 'destination'; recipient: string; tokenAccount: string; tokenAccountExists: boolean; tokenAccountRentDisplay: string; nonceRentDisplay: string } }
 interface RouteV { id: string; executable: boolean; exec?: { via: 'kyberswap' | 'cctp' | 'jupiter' | 'thorchain'; speed?: 'standard' | 'fast' | null } | null; providers: string[]; path: SAsset[]; tags: string[]; pareto: boolean; amountOutDisplay: string; minAmountOutDisplay: string; estimatedSeconds: number | null; expiresAt: number;
   executability: { class: 'verified' | 'opaque' | 'quote_only'; reason?: string }; valuation: { inUsd: number | null; outUsd: number | null; minOutUsd: number | null; extraFeesUsd: number; netUsd: number | null };
   risk: { level: 'low' | 'medium' | 'high'; score: number; flags: { code: string; level: string; detail?: string }[] }; atomic: boolean; refundable: boolean | null; priceImpactBps: number | null;
@@ -86,6 +88,19 @@ export function Swap() {
   const [speed, setSpeed] = useState<'standard' | 'fast'>('standard');
   const brQ = useQuery({ queryKey: ['bridge-quote', from?.network, to?.network, amount], enabled: isBridge && amountOk, staleTime: 20_000, retry: false, queryFn: () => get<BridgeQuote>(`/bridge/quote?from=${from!.network}&to=${to!.network}&amount=${encodeURIComponent(amount)}`) });
   const brSpeed = brQ.data?.options.find((o) => o.speed === speed && o.available) ? speed : 'standard';
+  // v8, toward Solana: the wallet's USDC token account must exist before anything is burned; creating it is a small passkey-approved transaction
+  const brSol = brQ.data?.solana, ataMissing = brSol?.role === 'destination' && !brSol.tokenAccountExists;
+  const [ataBusy, setAtaBusy] = useState(false), [ataMsg, setAtaMsg] = useState(''), [ataErr, setAtaErr] = useState('');
+  const createAta = async () => {
+    setAtaBusy(true); setAtaErr(''); setAtaMsg('');
+    try {
+      const o = await post<{ requestId: string; options: any }>('/bridge/solana/token-account/options');
+      const assertion = await startAuthentication({ optionsJSON: o.options });
+      const r = await post<{ sent: boolean }>('/bridge/solana/token-account', { requestId: o.requestId, assertion });
+      setAtaMsg(r.sent ? t('scAtaCreating') : t('scAtaNotSent'));
+      for (const ms of [4000, 9000, 16000, 30000]) setTimeout(() => void qc.invalidateQueries({ queryKey: ['bridge-quote'] }), ms);
+    } catch (e) { const m = scErrText(t, e); if (m) setAtaErr(m); } finally { setAtaBusy(false); }
+  };
   const cur = settings.currency, rate = pf.data?.prices ? (cur === 'USD' ? 1 : (pf.data.prices.USDC?.cad ?? 0) / (pf.data.prices.USDC?.usd || 1)) : null;
   const money = (usd: number | null) => (usd === null || rate === null ? null : fiat(usd * rate, cur, locale));
 
@@ -116,7 +131,7 @@ export function Swap() {
       : thor ? await post('/xswap/proposals', { fromNetwork: from.network, fromAsset: from.asset, toNetwork: to.network, toAsset: to.asset, amount, slippageBps: slip }, { 'idempotency-key': crypto.randomUUID() })
       : await post('/swap/proposals', { network: from.network, fromAsset: from.asset, toAsset: to.asset, amount, slippageBps: slip }, { 'idempotency-key': crypto.randomUUID() })); }
     // an address that never received SOL does not exist on Solana: the server reports it as "not a plain account"
-    catch (e) { setExecErr((e as { code?: string }).code === 'account_not_plain' && from.network === 'solana' && ['0', undefined].includes(balances.get('solana:native')) ? t('qaSolNotFunded') : errText(t, e)); } finally { setBusy(''); }
+    catch (e) { setExecErr((e as { code?: string }).code === 'account_not_plain' && from.network === 'solana' && ['0', undefined].includes(balances.get('solana:native')) ? t('qaSolNotFunded') : scErrText(t, e)); } finally { setBusy(''); }
   };
   const approve = async () => {
     if (!exec) return;
@@ -236,8 +251,14 @@ export function Swap() {
           {brQ.data.destinationGas.enough
             ? <p className="text-mute">{t('brDestGasLine', { net: brQ.data.toName, need: trimAmt(brQ.data.destinationGas.needDisplay, 8), have: trimAmt(brQ.data.destinationGas.balanceDisplay, 8), sym: brQ.data.destinationGas.symbol })}</p>
             : <Notice tone="warn">{t('brDestGasMissing', { sym: brQ.data.destinationGas.symbol, net: brQ.data.toName })} {t('brDestGasLine', { net: brQ.data.toName, need: trimAmt(brQ.data.destinationGas.needDisplay, 8), have: trimAmt(brQ.data.destinationGas.balanceDisplay, 8), sym: brQ.data.destinationGas.symbol })}</Notice>}
+          {brSol?.role === 'source' && <p className="text-mute" data-testid="sc-source">{t('scSrcIntro', { dep: trimAmt(brSol.depositDisplay, 9) })} {t('scSrcFee', { fee: trimAmt(brSol.networkFeeDisplay, 9) })}</p>}
+          {brSol?.role === 'destination' && !ataMissing && <p className="text-mute" data-testid="sc-destination">{t('scDstIntro', { acct: `${brSol.tokenAccount.slice(0, 6)}…${brSol.tokenAccount.slice(-6)}`, rent: trimAmt(brSol.nonceRentDisplay, 9) })}</p>}
+          {brSol?.role === 'destination' && ataMissing && <Notice tone="warn"><span data-testid="sc-ata-missing"><b>{t('scAtaMissingTitle')}</b> {t('scAtaMissing', { rent: trimAmt(brSol.tokenAccountRentDisplay, 9) })}</span>
+            <span className="mt-1 block break-all font-mono text-[11px] text-mute">{brSol.tokenAccount}</span>
+            {ataMsg && <span className="mt-1 block">{ataMsg}</span>}{ataErr && <span className="mt-1 block text-danger">{ataErr}</span>}
+            <div className="mt-2"><Btn full kind="soft" busy={ataBusy} onClick={() => void createAta()}><Icon n="key" className="h-4 w-4" />{t('scAtaCreate')}</Btn></div></Notice>}
           {execErr && <Notice tone="danger">{execErr}</Notice>}
-          <Btn full busy={busy === 'prepare'} disabled={!brQ.data.destinationGas.enough} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('brExecute', { net: brQ.data.toName })}</Btn>
+          <Btn full busy={busy === 'prepare'} disabled={!brQ.data.destinationGas.enough || ataMissing} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('brExecute', { net: brQ.data.toName })}</Btn>
         </div>}
       </Card>}
 
@@ -300,7 +321,7 @@ export function Swap() {
             {prop.txid && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <div><dt className="text-mute">{t('txid')}</dt><dd className="break-all font-mono text-[11px]">{prop.txid}</dd></div>}
           </dl>
           {prop.state === 'pending_approval' && <div className="mt-3 space-y-3">
-            <Notice tone="ok">{t('brGuarantee', { from: prop.networkName, to: prop.bridge.toNetworkName })}</Notice>
+            <Notice tone="ok">{t('brGuarantee', { from: prop.networkName, to: prop.bridge.toNetworkName })}{prop.bridge.sol ? ` ${prop.bridge.sol.role === 'source' ? t('scReviewSrc', { to: prop.bridge.toNetworkName }) : t('scReviewDst')}` : ''}</Notice>
             {prop.bridge.needsApproval && <Notice tone="info">{t('qaBrNeedsApproval', { sym: prop.symbol })}</Notice>}
             <Notice tone="info">{t('brIrreversible', { from: prop.networkName, to: prop.bridge.toNetworkName })} {t('expiresIn')} {left} s.</Notice>
           </div>}
