@@ -95,6 +95,9 @@ importers:
       typescript:
         specifier: 7.0.2
         version: 7.0.2
+      viem:
+        specifier: 2.57.17
+        version: 2.57.17(typescript@7.0.2)(zod@4.6.7)
       vitest:
         specifier: 5.1.0
         version: 5.1.0(@types/node@26.6.6)(vite@8.3.7(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
@@ -3489,7 +3492,7 @@ snapshots:
 
   '@scure/bip32@1.7.0':
     dependencies:
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
 

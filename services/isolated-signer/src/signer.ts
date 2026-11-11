@@ -5,7 +5,7 @@ import { base58 } from '@scure/base';
 import { keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
-  baseUnits, buildBtcTx, buildEvmTx, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash, pluginFor,
+  baseUnits, buildBtcTx, buildEvmSwapTxs, buildEvmTx, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash, pluginFor,
   solWireTransaction, toB64u, type Intent,
 } from '@spw/core';
 import type { Keys } from './keys.ts';
@@ -14,7 +14,7 @@ import type { Store, StoredCredential } from './store.ts';
 export class SignerError extends Error { constructor(public code: string, msg: string) { super(msg); } }
 const sha = (s: string | Uint8Array) => createHash('sha256').update(s).digest();
 export interface SignerConfig { rpId: string; origin: string }
-export interface SignResult { raw: string; txid: string; hash: string }
+export interface SignResult { raw: string; txid: string; hash: string; /** swaps with a token input: the exact-amount approval that must be mined first */ pre?: { raw: string; txid: string } }
 
 export class Signer {
   constructor(private keys: Keys, private store: Store, private cfg: SignerConfig, private now: () => number = () => Math.floor(Date.now() / 1000)) {}
@@ -89,7 +89,7 @@ export class Signer {
     const own = this.keys.addresses[net.id];
     if (!own) deny('wrong_chain', 'no key for this network');
     if (i.from !== own) deny('wrong_source', 'source address is not controlled by this signer');
-    if (i.to === own) deny('self_send', 'destination equals source');
+    if (i.swap ? i.to !== own : i.to === own) deny('self_send', i.swap ? 'a swap must deliver to the wallet itself' : 'destination equals source');
     if (st.state.used[i.proposalId] !== undefined) deny('replay', 'proposal already signed');
 
     const day = new Date(now * 1000).toISOString().slice(0, 10), spendKey = `${day}|${i.network}:${i.symbol}`;
@@ -97,9 +97,19 @@ export class Signer {
     if (!verdict.ok) deny('policy', verdict.reason);
 
     // Rebuild the chain transaction from the intent alone; any unsupported shape throws here.
-    let build: () => Promise<{ raw: string; txid: string }>;
+    let build: () => Promise<{ raw: string; txid: string; pre?: { raw: string; txid: string } }>;
     try {
-      if (net.family === 'evm') {
+      if (i.swap) {
+        // the provider calldata comes as unauthenticated helper data: it must hash to the approved value and pass every check
+        const data = typeof aux?.swapData === 'string' ? aux.swapData : '';
+        const txs = buildEvmSwapTxs(i, data);
+        build = async () => {
+          const acct = privateKeyToAccount(`0x${Buffer.from(this.keys.evmPriv).toString('hex')}`);
+          const raw = await acct.signTransaction(txs.swap);
+          const pre = txs.approve ? await acct.signTransaction(txs.approve) : null;
+          return { raw, txid: keccak256(raw), ...(pre ? { pre: { raw: pre, txid: keccak256(pre) } } : {}) };
+        };
+      } else if (net.family === 'evm') {
         const tx = buildEvmTx(i);
         build = async () => {
           const raw = await privateKeyToAccount(`0x${Buffer.from(this.keys.evmPriv).toString('hex')}`).signTransaction(tx);
@@ -129,7 +139,7 @@ export class Signer {
     st.state.spent[spendKey] = (BigInt(st.state.spent[spendKey] ?? '0') + baseUnits(i.amount)).toString();
     st.prune(now);
     const out = await build!();
-    st.log('sign.ok', { proposalId: i.proposalId, hash: Buffer.from(hash).toString('hex'), network: i.network, symbol: i.symbol, amount: i.amount, to: i.to, txid: out.txid });
+    st.log('sign.ok', { proposalId: i.proposalId, hash: Buffer.from(hash).toString('hex'), network: i.network, symbol: i.symbol, amount: i.amount, to: i.to, txid: out.txid, ...(i.swap ? { swap: i.swap.provider, toAsset: i.swap.toAsset, minOut: i.swap.minOut } : {}) });
     st.save();
     return { ...out, hash: Buffer.from(hash).toString('hex') };
   }

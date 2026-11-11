@@ -25,6 +25,14 @@ export const IntentSchema = z.strictObject({
   memo: z.string().max(120).optional(),
   /** chain parameters for plugin families: flat string map, serialized in key order */
   x: z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9_.]{0,39}$/), z.string().max(20000)).optional(),
+  /**
+   * Present when the intent is a swap instead of a transfer. `asset`/`amount` are the input, `to` must equal `from`
+   * (the output is delivered to the wallet itself). `dataHash` commits to the exact provider calldata the signer will verify.
+   */
+  swap: z.strictObject({
+    provider: z.enum(['kyberswap']), toAsset: z.string().min(1).max(80), minOut: U, router: z.string().min(20).max(100),
+    dataHash: z.string().regex(/^[0-9a-f]{64}$/), approveGas: U,
+  }).optional(),
   evm: z.strictObject({
     nonce: z.number().int().nonnegative(), gasLimit: U, maxFeePerGas: U, maxPriorityFeePerGas: U,
   }).optional(),
@@ -60,6 +68,7 @@ function fields(i: Intent): [string, string][] {
   if (i.sol) f.push(['sol.recentBlockhash', i.sol.recentBlockhash], ['sol.lastValidBlockHeight', String(i.sol.lastValidBlockHeight)],
     ['sol.createAta', i.sol.createAta ? '1' : '0'], ['sol.computeUnitLimit', String(i.sol.computeUnitLimit)],
     ['sol.computeUnitPrice', i.sol.computeUnitPrice]);
+  if (i.swap) f.push(['swap.provider', i.swap.provider], ['swap.toAsset', i.swap.toAsset], ['swap.minOut', i.swap.minOut], ['swap.router', i.swap.router], ['swap.dataHash', i.swap.dataHash], ['swap.approveGas', i.swap.approveGas]);
   if (i.memo !== undefined) f.push(['memo', i.memo]);
   if (i.x) for (const k of Object.keys(i.x).sort()) f.push([`x.${k}`, i.x[k]!]);
   return f;
@@ -72,6 +81,7 @@ export function canonicalBytes(intent: Intent): Uint8Array {
   const plugin = fam !== 'evm' && fam !== 'btc' && fam !== 'sol';
   if ((fam === 'evm') !== !!i.evm || (fam === 'btc') !== !!i.btc || (fam === 'sol') !== !!i.sol || plugin !== !!i.x)
     throw new Error('intent chain section does not match network');
+  if (i.swap && fam !== 'evm') throw new Error('swaps are only defined for EVM networks');
   baseUnits(i.amount);
   const parts: Uint8Array[] = [enc.encode(DOMAIN), new Uint8Array([0])];
   for (const [k, v] of fields(i)) {
