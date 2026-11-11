@@ -1,10 +1,11 @@
 import { createHash, createHmac, randomUUID } from 'node:crypto';
-import type { Policy } from '@spw/core';
+import type { Mandate, Policy } from '@spw/core';
 import { config, UserError } from './config.ts';
 
 export interface SignerStatus {
   keyId: string; addresses: Record<string, string>; halted: boolean; enrollmentOpen: boolean;
   credentials: { id: string; addedAt: string }[]; policy: Policy; spentToday: Record<string, string>; journalHead: string | null; journalLength: number;
+  mandates?: { mandate: Mandate; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; today: { sold: Record<string, string>; orders: number } }[];
 }
 
 async function call<T>(method: 'GET' | 'POST', path: string, payload?: unknown): Promise<T> {
@@ -36,6 +37,12 @@ export const signer = {
   enroll: (p: unknown) => { cached = null; return call<{ ok: true }>('POST', '/enroll', p); },
   sign: (intent: unknown, assertion: unknown, aux?: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string; pre?: { raw: string; txid: string } }>('POST', '/sign', { intent, assertion, ...(aux ? { aux } : {}) }); },
   halt: () => { cached = null; return call<{ ok: true }>('POST', '/halt', {}); },
+  // agent vaults and mandates
+  vaultAddress: (index: number) => call<{ address: string }>('POST', '/vault/address', { index }),
+  mandateApprove: (mandate: unknown, assertion: unknown) => { cached = null; return call<{ mandateId: string; hash: string }>('POST', '/mandate/approve', { mandate, assertion }); },
+  mandateRevoke: (mandateId: string) => { cached = null; return call<{ ok: true }>('POST', '/mandate/revoke', { mandateId }); },
+  mandateSign: (mandateId: string, intent: unknown, aux?: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string; pre?: { raw: string; txid: string } }>('POST', '/mandate/sign', { mandateId, intent, ...(aux ? { aux } : {}) }); },
+  mandateReturn: (mandateId: string, intent: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string }>('POST', '/mandate/return', { mandateId, intent }); },
 };
 
 /** The wallet's address on a network; fails closed when the signer has no key for it. */

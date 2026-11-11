@@ -14,6 +14,7 @@ import { audit, auditList, getSetting, setSetting, sql } from './db.ts';
 import { addressFor, signer } from './signer-client.ts';
 import { swapRoutes } from './swap.ts';
 import { swapExecRoutes } from './swap-exec.ts';
+import { agentRoutes } from './agents/routes.ts';
 import { transferRoutes, view, type ProposalRow } from './transfers.ts';
 import { healthCache } from './worker.ts';
 
@@ -113,6 +114,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   transferRoutes(app);
   swapRoutes(app, { providers: swapProviders, prices: markets });
   swapExecRoutes(app);
+  agentRoutes(app, { prices: markets });
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));
   app.get('/api/v1/health/ready', async () => {

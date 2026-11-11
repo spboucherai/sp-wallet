@@ -47,6 +47,27 @@ create table if not exists swap_quotes (
   from_key text not null, to_key text not null, amount_in numeric(78,0) not null, amount_out numeric(78,0), min_out numeric(78,0),
   ms int not null, ok boolean not null, code text);
 create index if not exists swap_quotes_at on swap_quotes (at);
+create table if not exists agents (
+  id uuid primary key, name text not null, mission text not null default '', state text not null default 'CREATED', mode text not null default 'RESEARCH',
+  network text not null default 'base', universe jsonb not null, interval text not null default '1h', risk jsonb not null,
+  vault_index int unique not null, vault_address text not null, capital_usdc numeric(78,0) not null default 0,
+  strategy_version_id uuid, mandate_id uuid, mandate jsonb, last_bar timestamptz, stop_reason text,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table if not exists strategy_versions (
+  id uuid primary key, agent_id uuid not null references agents(id), name text not null, version text not null, code_sha256 text not null, path text not null,
+  meta jsonb not null default '{}', status text not null default 'draft', report jsonb, notes text not null default '',
+  created_at timestamptz not null default now(), approved_at timestamptz, unique (agent_id, code_sha256));
+create table if not exists agent_orders (
+  id uuid primary key, agent_id uuid not null references agents(id), ts timestamptz not null default now(), mode text not null,
+  from_asset text not null, to_asset text not null, from_symbol text not null, to_symbol text not null,
+  amount_in numeric(78,0) not null, expected_out numeric(78,0), min_out numeric(78,0), received numeric(78,0),
+  state text not null, reason text, txid text, pre_txid text, raw text, pre_raw text, intent jsonb, aux jsonb, bar timestamptz, updated_at timestamptz not null default now());
+create index if not exists agent_orders_agent on agent_orders (agent_id, ts desc);
+create table if not exists agent_equity (
+  agent_id uuid not null references agents(id), ts timestamptz not null, mode text not null, equity_usd double precision not null, positions jsonb not null, primary key (agent_id, ts, mode));
+create table if not exists agent_paper (agent_id uuid not null references agents(id), symbol text not null, units double precision not null, primary key (agent_id, symbol));
+create table if not exists research_log (
+  id bigserial primary key, agent_id uuid references agents(id), ts timestamptz not null default now(), kind text not null, title text not null, body text not null default '', data jsonb);
 create table if not exists settings (key text primary key, value jsonb not null);
 create table if not exists audit_events (
   seq bigint primary key, ts text not null, type text not null, actor text not null, data jsonb not null, prev text not null, hash text not null);
