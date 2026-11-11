@@ -21,7 +21,7 @@ export interface NetworkDef {
   family: Family;
   name: string;
   /**
-   * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id.
+   * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. TON: masterchain zero-state root hash.
    * Bitcoin Cash shares its genesis block with Bitcoin, Bitcoin SV and eCash, so its reference is the hash of block 661648,
    * the first block after the last of those splits (November 2020; a Bitcoin Cash Node checkpoint), which exists on no other chain.
    */
@@ -180,6 +180,18 @@ const DEFS = {
     native: { id: 'native', symbol: 'TRX', name: 'TRON', decimals: 6 }, tokens: [], coinType: 195,
     rpc: ['https://api.trongrid.io', 'https://tron-rpc.publicnode.com'],
     explorerTx: 'https://tronscan.org/#/transaction/', explorerAddr: 'https://tronscan.org/#/address/', minConf: 19,
+  },
+  ton: {
+    // chainRef = root hash of the masterchain zero state (hex), the block every main-network node starts from; testnet has another.
+    // Sources: TON Center (liteserver-backed HTTP API of the TON Foundation) and TonAPI (Tonkeeper's indexer), both keyless and
+    // rate-limited (about one request per second); verified live 2026-11-10. No `activation`: an address can hold any amount
+    // before its wallet contract is deployed (the first outgoing transfer deploys it).
+    id: 'ton', family: 'ton', name: 'TON',
+    chainRef: '17a3a92992aabea785a7a090985a265cd31f323d849da51239737e321fb05569',
+    native: { id: 'native', symbol: 'TON', name: 'Toncoin', decimals: 9 }, tokens: [], coinType: 607,
+    memo: 'text',
+    rpc: ['https://toncenter.com/api/v2', 'https://tonapi.io/v2'],
+    explorerTx: 'https://tonviewer.com/transaction/', explorerAddr: 'https://tonviewer.com/', minConf: 1,
   },
 } satisfies Record<string, NetworkDef>;
 
