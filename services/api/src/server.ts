@@ -24,6 +24,8 @@ import { agentRoutes } from './agents/routes.ts';
 import { strategyRoutes } from './agents/strategies.ts';
 import { transferRoutes, view, type ProposalRow } from './transfers.ts';
 import { healthCache } from './worker.ts';
+import { alertRoutes } from './alerts/routes.ts';     // v6-alerts
+import { monitorRoutes } from './monitor/routes.ts'; // v6-alerts
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
@@ -139,6 +141,8 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   marketDataRoutes(app);
   derivativesRoutes(app, opts.derivatives);
   liveRoutes(app, opts.live); // controlled live trading: nothing trades until the owner authorizes a venue account with his passkey
+  await alertRoutes(app); // v6-alerts: in-app alerts, push subscriptions, webhook — all behind the owner session
+  monitorRoutes(app);     // v6-alerts: read-only monitoring dashboard
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));
   app.get('/api/v1/health/ready', async () => {

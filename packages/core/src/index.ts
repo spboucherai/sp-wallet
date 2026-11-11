@@ -17,3 +17,4 @@ export * from './audit.ts';
 export * from './state.ts';
 export * from './families.ts';
 export * from './plugins/index.ts';
+export * from './alert-catalog.ts';

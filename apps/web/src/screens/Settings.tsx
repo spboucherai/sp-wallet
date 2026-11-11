@@ -22,6 +22,13 @@ export function Settings({ lock, go }: { lock: () => void; go: (t: Tab) => void 
       <button onClick={() => go('security')} className="card flex w-full items-center gap-3.5 p-4 text-left">
         <span className="grid h-11 w-11 place-items-center rounded-full bg-elev"><Icon n="shield" /></span>
         <span className="flex-1 text-[15.5px] font-semibold">{t('securityLink')}</span><Icon n="chev" className="h-5 w-5 text-mute" /></button>
+      {/* v6-alerts: entry points that leave the five phone tabs as they are */}
+      <button onClick={() => go('alerts')} className="card flex w-full items-center gap-3.5 p-4 text-left">
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-elev"><Icon n="bell" /></span>
+        <span className="flex-1 text-[15.5px] font-semibold">{t('alTitle')}</span><Icon n="chev" className="h-5 w-5 text-mute" /></button>
+      <button onClick={() => go('monitor')} className="card flex w-full items-center gap-3.5 p-4 text-left">
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-elev"><Icon n="bars" /></span>
+        <span className="flex-1 text-[15.5px] font-semibold">{t('moTitle')}</span><Icon n="chev" className="h-5 w-5 text-mute" /></button>
       <button onClick={() => go('agents')} className="card flex w-full items-center gap-3.5 p-4 text-left lg:hidden">
         <span className="grid h-11 w-11 place-items-center rounded-full bg-elev"><Icon n="key" /></span>
         <span className="flex-1 text-[15.5px] font-semibold">{t('agents')}</span><Icon n="chev" className="h-5 w-5 text-mute" /></button>
