@@ -1,0 +1,525 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sp-wallet.local/schema/backtest-report.schema.json",
+  "title": "SP Wallet V3 backtest report",
+  "description": "Produced by spq.backtest (research/), stored by the API. Follows docs/v3/ARCHITECTURE.md 'Backtest report'; keys beyond that document are additions of the lab. A report states what was measured, on which data, with which costs; it never says a strategy is profitable.",
+  "type": "object",
+  "required": [
+    "strategy_sha256",
+    "config",
+    "splits",
+    "metrics",
+    "benchmarks",
+    "robustness",
+    "checks",
+    "equity_curve"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "strategy_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "strategy": {
+      "type": "object",
+      "required": [
+        "name",
+        "version",
+        "meta"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "meta": {
+          "type": "object"
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "required": [
+        "symbols",
+        "interval",
+        "start",
+        "end",
+        "fee_bps",
+        "slippage_bps",
+        "initial_cash"
+      ],
+      "properties": {
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]+$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "interval": {
+          "type": "string",
+          "pattern": "^[0-9]+[mhdw]$"
+        },
+        "start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "first bar of the data (bar-open time, UTC)"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time",
+          "description": "last bar of the data (bar-open time, UTC)"
+        },
+        "fee_bps": {
+          "type": "number",
+          "minimum": 0
+        },
+        "slippage_bps": {
+          "type": "number",
+          "minimum": 0
+        },
+        "initial_cash": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "min_order": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rebalance_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "decision_every": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "params": {
+          "type": "object"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bars": {
+          "type": "integer"
+        },
+        "split_fractions": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    },
+    "splits": {
+      "type": "object",
+      "required": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "properties": {
+        "train": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "string",
+              "format": "date-time"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[first bar, last bar] (bar-open times, UTC, both inclusive)"
+        },
+        "validation": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "string",
+              "format": "date-time"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[first bar, last bar] (bar-open times, UTC, both inclusive)"
+        },
+        "test": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "string",
+              "format": "date-time"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[first bar, last bar] (bar-open times, UTC, both inclusive)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "metrics": {
+      "type": "object",
+      "required": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "properties": {
+        "train": {
+          "$ref": "#/$defs/metrics"
+        },
+        "validation": {
+          "$ref": "#/$defs/metrics"
+        },
+        "test": {
+          "$ref": "#/$defs/metrics"
+        }
+      },
+      "additionalProperties": false
+    },
+    "benchmarks": {
+      "type": "object",
+      "description": "Same metrics on the TEST split. buy_and_hold: equal weights bought once, never rebalanced (the single asset when there is one symbol); equal_weight: rebalanced; buy_and_hold_<SYM>: one asset.",
+      "required": [
+        "buy_and_hold"
+      ],
+      "additionalProperties": {
+        "$ref": "#/$defs/metrics"
+      }
+    },
+    "robustness": {
+      "type": "object",
+      "required": [
+        "walk_forward",
+        "bootstrap_sharpe_ci",
+        "parameter_sensitivity",
+        "trials_tested",
+        "deflated_sharpe"
+      ],
+      "properties": {
+        "walk_forward": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "in_sample",
+              "out_of_sample",
+              "params"
+            ]
+          }
+        },
+        "bootstrap_sharpe_ci": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[lo, hi] of the annualised Sharpe ratio on the test split"
+        },
+        "bootstrap": {
+          "type": "object"
+        },
+        "parameter_sensitivity": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "params"
+            ]
+          }
+        },
+        "trials_tested": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "number of distinct configurations evaluated before this result (N of the deflated Sharpe ratio)"
+        },
+        "deflated_sharpe": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Bailey & Lopez de Prado (2014): probability that the true Sharpe ratio is positive given trials_tested trials; null when undefined (e.g. no variance)"
+        },
+        "deflated_sharpe_detail": {
+          "type": "object"
+        },
+        "monte_carlo": {
+          "type": "object"
+        },
+        "stress_windows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "window",
+              "benchmark_return",
+              "strategy_return"
+            ]
+          }
+        },
+        "test_evaluations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "how many times this strategy name was evaluated on a test split according to the ledger"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "required": [
+        "lookahead",
+        "data_quality",
+        "notes"
+      ],
+      "properties": {
+        "lookahead": {
+          "enum": [
+            "pass",
+            "fail"
+          ]
+        },
+        "data_quality": {
+          "enum": [
+            "pass",
+            "fail"
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "data_quality_detail": {
+          "type": "object"
+        }
+      }
+    },
+    "equity_curve": {
+      "type": "array",
+      "minItems": 2,
+      "description": "test split, [bar-open time, equity at that bar's close]",
+      "items": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "type": "number",
+            "minimum": 0
+          }
+        ],
+        "minItems": 2,
+        "maxItems": 2
+      }
+    }
+  },
+  "$defs": {
+    "metrics": {
+      "type": "object",
+      "description": "Metrics of one backtest window. Ratios that are undefined (no variance, no drawdown, no closed lot, no losing lot) are null.",
+      "required": [
+        "total_return",
+        "cagr",
+        "volatility",
+        "sharpe",
+        "sortino",
+        "max_drawdown",
+        "calmar",
+        "turnover",
+        "trades",
+        "win_rate",
+        "profit_factor",
+        "fees_paid",
+        "exposure",
+        "slippage_paid",
+        "returns"
+      ],
+      "properties": {
+        "total_return": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "cagr": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "volatility": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "annualised with the bar interval, 24/7 market"
+        },
+        "sharpe": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "sortino": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "max_drawdown": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "positive fraction: 0.35 means -35 %"
+        },
+        "calmar": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "turnover": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "traded notional / average equity over the window"
+        },
+        "turnover_annual": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "trades": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "number of fills"
+        },
+        "closed_lots": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "win_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "profit_factor": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "fees_paid": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "slippage_paid": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "exposure": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1.000001,
+          "description": "average invested fraction of equity"
+        },
+        "bars": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "final_equity": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "returns": {
+          "type": "object",
+          "description": "per-bar return distribution",
+          "required": [
+            "n"
+          ],
+          "properties": {
+            "n": {
+              "type": "integer"
+            }
+          },
+          "additionalProperties": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

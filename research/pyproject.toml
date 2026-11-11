@@ -1,0 +1,31 @@
+[project]
+name = "spq"
+version = "0.1.0"
+description = "SP Wallet V3 quantitative research and backtesting laboratory (research zone: proposes, never executes)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "arch==8.0.0",
+    "jsonschema==4.26.0",
+    "numpy==2.5.4",
+    "pandas==3.1.1",
+    "psycopg[binary]==3.3.8",
+    "pyarrow==26.0.1",
+    "pytest==9.2.0",
+    "scikit-learn==1.9.1",
+    "scipy==1.18.1",
+    "statsmodels==0.15.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/spq"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "network: needs live exchange endpoints (run with SPQ_NETWORK_TESTS=1)",
+]
