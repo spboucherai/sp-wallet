@@ -1,0 +1,10 @@
+{
+  "recordedAt": "2026-11-11T01:08:25.837Z",
+  "url": "https://gateway.liquify.com/chain/thorchain_api/thorchain/quote/swap?from_asset=BTC.BTC&to_asset=ETH.LINK-0X514910771AF9CA656AF840DFF83E8264ECF986CA&amount=55000&destination=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045&liquidity_tolerance_bps=50",
+  "status": 400,
+  "body": {
+    "code": 3,
+    "message": "failed to simulate swap: failed to simulate handler: pool(ETH.LINK-0X514910771AF9CA656AF840DFF83E8264ECF986CA) is not available: invalid request",
+    "details": []
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "recordedAt": "2026-11-11T01:05:23.293Z",
+  "url": "https://gateway.liquify.com/chain/thorchain_api/thorchain/quote/swap?from_asset=ETH.ETH&to_asset=BTC.BTC&amount=2000000&destination=bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh&liquidity_tolerance_bps=50",
+  "status": 200,
+  "body": {
+    "inbound_address": "0x6b4068070d95d87b321909bb21c8979fba2b8876",
+    "inbound_confirmation_blocks": 2,
+    "inbound_confirmation_seconds": 24,
+    "outbound_delay_blocks": 0,
+    "outbound_delay_seconds": 0,
+    "fees": {
+      "asset": "BTC.BTC",
+      "affiliate": "0",
+      "outbound": "1043",
+      "liquidity": "111",
+      "total": "1154",
+      "slippage_bps": 19,
+      "total_bps": 203
+    },
+    "router": "0xD37BbE5744D730a1d98d8DC97c42F0Ca46aD7146",
+    "expiry": 1794359900,
+    "warning": "Do not cache this response. Do not send funds after the expiry. Rapid streaming time is a best-case estimate. Actual execution may take longer due to direction skipping, swap failures, or queue budget limits.",
+    "notes": "Base Asset: Send the inbound_address the asset with the memo encoded in hex in the data field. Tokens: First approve router to spend tokens from user: asset.approve(router, amount). Then call router.depositWithExpiry(inbound_address, asset, amount, memo, expiry). Asset is the token contract address. Amount should be in native asset decimals (eg 1e18 for most tokens). Do not swap to smart contract addresses.",
+    "dust_threshold": "1000",
+    "recommended_min_amount_in": "220236",
+    "recommended_gas_rate": "15",
+    "gas_rate_units": "gwei",
+    "memo": "=:b:bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh:54230",
+    "expected_amount_out": "54503",
+    "max_streaming_quantity": 1,
+    "streaming_swap_blocks": 1,
+    "streaming_swap_seconds": 6,
+    "total_swap_seconds": 30
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "recordedAt": "2026-11-11T01:08:48.895Z",
+  "url": "https://gateway.liquify.com/chain/thorchain_api/thorchain/quote/swap?from_asset=BTC.BTC&to_asset=ETH.ETH&amount=3000&destination=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045&liquidity_tolerance_bps=50",
+  "status": 200,
+  "body": {
+    "inbound_address": "bc1qup236qj2mr87ml9388ydm33tuhtdckk33j68qx",
+    "inbound_confirmation_blocks": 1,
+    "inbound_confirmation_seconds": 600,
+    "outbound_delay_blocks": 3,
+    "outbound_delay_seconds": 18,
+    "fees": {
+      "asset": "ETH.ETH",
+      "affiliate": "0",
+      "outbound": "12197",
+      "liquidity": "215",
+      "total": "12412",
+      "slippage_bps": 19,
+      "total_bps": 1032
+    },
+    "expiry": 1794360099,
+    "warning": "Do not cache this response. Do not send funds after the expiry. Rapid streaming time is a best-case estimate. Actual execution may take longer due to direction skipping, swap failures, or queue budget limits.",
+    "notes": "First output should be to inbound_address, second output should be change back to self, third output should be OP_RETURN, limited to 80 bytes. Do not send below the dust threshold. Do not use exotic spend scripts, locks or address formats.",
+    "dust_threshold": "1000",
+    "recommended_min_amount_in": "6117",
+    "recommended_gas_rate": "3",
+    "gas_rate_units": "satsperbyte",
+    "memo": "=:e:0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045:95085",
+    "expected_amount_out": "95563",
+    "max_streaming_quantity": 1,
+    "streaming_swap_blocks": 1,
+    "streaming_swap_seconds": 6,
+    "total_swap_seconds": 618
+  }
+}

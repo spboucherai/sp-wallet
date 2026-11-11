@@ -1,0 +1,10 @@
+{
+  "recordedAt": "2026-11-11T01:05:40.542Z",
+  "url": "https://gateway.liquify.com/chain/thorchain_api/thorchain/quote/swap?from_asset=DOGE.DOGE&to_asset=BTC.BTC&amount=60000000000&destination=bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh&liquidity_tolerance_bps=50",
+  "status": 400,
+  "body": {
+    "code": 3,
+    "message": "refusing quote on node with stale state: invalid request",
+    "details": []
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "recordedAt": "2026-11-11T01:08:25.564Z",
+  "url": "https://gateway.liquify.com/chain/thorchain_api/thorchain/quote/swap?from_asset=XRP.XRP&to_asset=GAIA.ATOM&amount=4000000000&destination=cosmos1rqrefwzvtv50r539hn7umufj84gm2xx96cq0jr&liquidity_tolerance_bps=50",
+  "status": 200,
+  "body": {
+    "inbound_address": "rMTwKkK2MjLkFGb6NSnMqcyaNoTvuiZhzs",
+    "outbound_delay_blocks": 1,
+    "outbound_delay_seconds": 6,
+    "fees": {
+      "asset": "GAIA.ATOM",
+      "affiliate": "0",
+      "outbound": "17875100",
+      "liquidity": "5986600",
+      "total": "23861700",
+      "slippage_bps": 20,
+      "total_bps": 79
+    },
+    "expiry": 1794360050,
+    "warning": "Do not cache this response. Do not send funds after the expiry. Rapid streaming time is a best-case estimate. Actual execution may take longer due to direction skipping, swap failures, or queue budget limits.",
+    "notes": "Transfer the inbound_address the asset with the memo. Only a single memo is supported and only MemoData is used.",
+    "dust_threshold": "100000000",
+    "recommended_min_amount_in": "371682900",
+    "recommended_gas_rate": "1650",
+    "gas_rate_units": "drop",
+    "memo": "=:g:cosmos1rqrefwzvtv50r539hn7umufj84gm2xx96cq0jr:2954533896",
+    "expected_amount_out": "2969380800",
+    "max_streaming_quantity": 1,
+    "streaming_swap_blocks": 1,
+    "streaming_swap_seconds": 6,
+    "total_swap_seconds": 6
+  }
+}

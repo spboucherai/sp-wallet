@@ -1,0 +1,8 @@
+{
+  "recordedAt": "2026-11-11T01:13:39.303Z",
+  "url": "https://mayanode.mayachain.info/mayachain/quote/swap?from_asset=ETH.ETH&to_asset=BTC.BTC&amount=20000&destination=bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh&liquidity_tolerance_bps=50&streaming_interval=3&streaming_quantity=0",
+  "status": 200,
+  "body": {
+    "error": "failed to simulate swap: fail to add outbound tx: 2 errors occurred:\n\t* internal error\n\t* not enough asset to pay for fees\n\n [/app/x/mayachain/errors.go:83]"
+  }
+}
