@@ -11,6 +11,7 @@ import type { Fill, FundingPayment, Order, Position, RiskPolicy } from '../deriv
 import { errText, I18n, useT, type Key } from '../i18n';
 import { Btn, Card, Field, H, Icon, inputCls, Notice, Skeleton, when } from '../ui';
 import { AgentState } from './Agents';
+import { AgentModeBand, GoLiveCard, LivePanel, PerpLiveState, Refusal } from './PerpAgentLive';   // v7 perp live: the real mode
 
 interface PerpRisk { maxLeverage: number; maxGrossExposureX: number; maxPositionX: number; maxDailyLossPct: number; maxTotalLossPct: number; slippageBps: number; minTradePct: number }
 interface VenueInst { symbol: string; id: string; maxLeverage: string; lotSize: string; mark: string | null; volume24h: string | null; eligible: boolean; why: string | null }
@@ -89,6 +90,9 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
   const act = async (name: string, fn: () => Promise<unknown>) => { setBusy(name); setErr(''); setNote(''); try { await fn(); await qc.invalidateQueries({ queryKey: ['agent', id] }); await qc.invalidateQueries({ queryKey: ['agents'] }); } catch (e) { const m = errText(t, e); if (m) setErr(m); } finally { setBusy(''); } };
   const acct = a.account as null | { state: any; policy: RiskPolicy; totals: any; positions: Position[]; orders: Order[]; fills: Fill[]; funding: FundingPayment[]; riskEvents: { id: number; ts: number; kind: string; code: string | null; message: string }[]; equity: { ts: number; equity: string }[] };
   const risk = a.risk as PerpRisk, approved = (a.versions as any[]).find((v) => v.id === a.strategyVersionId);
+  // >>> v7 perp live: in real mode the page shows the VENUE account (PerpAgentLive.tsx); the paper account is not shown as if it were it
+  const isLive = a.mode === 'LIVE', liveActive = !!a.live?.active, pol = isLive ? undefined : acct?.policy;
+  // <<< v7 perp live
   const eq = (acct?.equity ?? []).map((e) => ({ t: e.ts, p: Number(e.equity) }));
   const result = acct ? D.sub(D.from(acct.state.equity), D.from(a.capitalUsdc)) : null;
   const pctOf = (x: unknown) => (typeof x === 'number' ? `${(x * 100).toFixed(1)} %` : '—'), n2 = (x: unknown) => (typeof x === 'number' ? x.toFixed(2) : '—');
@@ -141,16 +145,19 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 pt-1"><button onClick={() => nav({ tab: 'agents' })} aria-label={t('back')} className="-ml-2 grid h-11 w-11 place-items-center rounded-full"><Icon n="chev" className="h-6 w-6 rotate-180" /></button>
-        <div className="min-w-0 flex-1"><h1 className="truncate text-[24px] font-semibold tracking-tight">{a.name}</h1><div className="flex flex-wrap items-center gap-2 text-[13px] text-mute"><VenueBadge venue="hyperliquid" />{(a.universe as string[]).join(' · ')} · {a.interval} · {t('paPerps')}</div></div><AgentState state={a.state} /></div>
-      <SimulationBanner />
+        <div className="min-w-0 flex-1"><h1 className="truncate text-[24px] font-semibold tracking-tight">{a.name}</h1><div className="flex flex-wrap items-center gap-2 text-[13px] text-mute"><VenueBadge venue="hyperliquid" />{(a.universe as string[]).join(' · ')} · {a.interval} · {t('paPerps')}</div></div>{!isLive && <AgentState state={a.state} />}</div>
+      {/* v7 perp live: the state and the money it moves, on their own line (the title keeps its width on a phone) */}
+      {isLive && <div className="flex justify-start"><PerpLiveState a={a} /></div>}
+      {isLive ? <AgentModeBand a={a} /> : <SimulationBanner />}
       {a.mission && <p className="text-[14px] text-mute">{a.mission}</p>}
-      {a.stopReason && <Notice tone="warn">{a.stopReason}</Notice>}
+      {a.stopReason && !(isLive && a.live?.exit) && <Notice tone="warn">{a.stopReason}</Notice>}{/* v7: a live agent's stop is said in the screen's language by LivePanel; the server's sentence is its detail */}
       {a.flattening && a.state !== 'STOPPED' && <Notice tone="danger">{t('paFlattening')} {a.flattening.reason}</Notice>}
       {a.flag && <Notice tone="warn">{t('paFlag')} {a.flag.message} ({when(new Date(a.flag.ts), locale)})</Notice>}
-      {a.hold && a.state === 'PAPER_TRADING' && <Notice tone="info">{t('paHold')} {a.hold.reason}</Notice>}
+      {a.hold && (a.state === 'PAPER_TRADING' || a.state === 'LIVE') && <Notice tone="info">{t('paHold')} {a.hold.reason}</Notice>}
       {err && <Notice tone="danger">{err}</Notice>}{note && <Notice tone="ok">{note}</Notice>}
 
-      <Card><H right={<PaperTag />}>{t('paAccount')}</H>
+      {isLive && <LivePanel a={a} id={id} nav={nav} />}
+      {!isLive && <Card><H right={<PaperTag />}>{t('paAccount')}</H>
         {!acct ? <p className="text-[14px] text-mute">{t('paNoAccount')}</p> : <>
           <div className="text-[30px] font-semibold tracking-tight">{usd(acct.state.equity, locale)}</div>
           <div className="text-[13px] text-mute">{t('paAllocated', { capital: a.capitalUsdc })} · {t('paResult')} <Pnl value={result ? D.str(result) : null} locale={locale} /></div>
@@ -165,22 +172,22 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
           <p className="mt-3 text-[12px] text-mute">{t('paSimplifications')}</p>
           {acct.positions.length > 0 && <Btn kind="ghost" full className="mt-3" busy={busy === 'flat'} onClick={() => act('flat', async () => { const r = await post<{ orders: unknown[]; positionsLeft: number }>(`/agents/${id}/perp/flatten`); setNote(t('paFlattened', { n: r.orders.length, left: r.positionsLeft })); })}>{t('paFlatten')}</Btn>}
         </>}
-      </Card>
+      </Card>}
 
-      {eq.length > 1 && <Card><H right={<PaperTag />}>{t('paEquity')}</H><PriceChart points={eq} format={(v) => usd(dec(v.toFixed(2)), locale)} formatTime={(ts) => timeOf(ts, locale, true)} /></Card>}
+      {!isLive && eq.length > 1 && <Card><H right={<PaperTag />}>{t('paEquity')}</H><PriceChart points={eq} format={(v) => usd(dec(v.toFixed(2)), locale)} formatTime={(ts) => timeOf(ts, locale, true)} /></Card>}
 
       <Card><H>{t('paLimits')}</H>
-        <Row label={t('paMaxLev')}>{risk.maxLeverage}× <span className="text-mute">({t('paPolicy')} {acct?.policy.maxLeverage ?? '—'}×)</span></Row>
-        <Row label={t('paMaxGross')}>{risk.maxGrossExposureX}× → {usd(acct?.policy.maxGrossExposure, locale)}</Row>
-        <Row label={t('paMaxPos')}>{risk.maxPositionX}× → {usd(acct?.policy.maxPositionNotional, locale)}</Row>
-        <Row label={t('paDailyLoss')}>{risk.maxDailyLossPct} % → {usd(acct?.policy.maxDailyLoss, locale)}</Row>
-        <Row label={t('paTotalLoss')}>{risk.maxTotalLossPct} % → {usd(acct?.policy.maxTotalLoss, locale)}</Row>
+        <Row label={t('paMaxLev')}>{risk.maxLeverage}× <span className="text-mute">{!isLive && <>({t('paPolicy')} {pol?.maxLeverage ?? '—'}×)</>}</span></Row>
+        <Row label={t('paMaxGross')}>{risk.maxGrossExposureX}×{!isLive && <> → {usd(pol?.maxGrossExposure, locale)}</>}</Row>
+        <Row label={t('paMaxPos')}>{risk.maxPositionX}×{!isLive && <> → {usd(pol?.maxPositionNotional, locale)}</>}</Row>
+        <Row label={t('paDailyLoss')}>{risk.maxDailyLossPct} %{!isLive && <> → {usd(pol?.maxDailyLoss, locale)}</>}</Row>
+        <Row label={t('paTotalLoss')}>{risk.maxTotalLossPct} %{!isLive && <> → {usd(pol?.maxTotalLoss, locale)}</>}</Row>
         <Row label={t('paSlip')}>{risk.slippageBps} bps</Row>
-        {acct?.policy.halt && <div className="mt-2"><Notice tone="danger">{t('paHalt')} {acct.policy.halt}</Notice></div>}
+        {pol?.halt && <div className="mt-2"><Notice tone="danger">{t('paHalt')} {pol.halt}</Notice></div>}
         <p className="mt-2 text-[12px] text-mute">{t('paLimitsNote')}</p>
       </Card>
 
-      <Card><H>{t('agStrategy')}</H>
+      <div id="pl-strategy" className="scroll-mt-24" /><Card><H>{t('agStrategy')}</H>
         {(a.versions as any[]).length === 0 ? <p className="text-[14px] text-mute">{t('paNoStrategy')}</p> : <ul className="space-y-3">{(a.versions as any[]).map((v) => { const s = v.summary; return <li key={v.id} className="rounded-2xl bg-elev/70 p-3.5">
           <div className="flex items-center justify-between gap-2"><span className="font-semibold">{v.name} <span className="font-normal text-mute">v{v.version}</span></span><span className="rounded-full bg-surface px-2 py-0.5 text-[11.5px] font-semibold">{t(`agV_${v.status}` as Key)}</span></div>
           <div className="mt-1 break-all font-mono text-[11px] text-mute">sha256 {v.code_sha256}</div>
@@ -199,7 +206,7 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
               <li>{t('paCavNever')}</li></ul></div>
             {s.problem && <div className="mt-2"><Notice tone="danger">{t('paNotApprovable')} {s.problem}</Notice></div>}
           </> : <p className="mt-2 text-[12.5px] text-mute">{v.status === 'backtesting' ? t('paBacktesting') : v.notes ? v.notes : t('agNoReport')}</p>}
-          {v.status !== 'approved' && s && !s.problem && <Btn kind="soft" full className="mt-3" busy={busy === `a${v.id}`} onClick={() => act(`a${v.id}`, () => post(`/agents/${id}/strategies/${v.id}/approve`))}>{t('agApproveVersion')}</Btn>}
+          {v.status !== 'approved' && s && !s.problem && !liveActive && <Btn kind="soft" full className="mt-3" busy={busy === `a${v.id}`} onClick={() => act(`a${v.id}`, () => post(`/agents/${id}/strategies/${v.id}/approve`))}>{t('agApproveVersion')}</Btn>}
         </li>; })}</ul>}
         <div className="mt-4"><div className="mb-2 text-[13px] font-semibold text-mute">{t('paLibrary')}</div>
           {lib.isLoading ? <Skeleton h="h-16" /> : fit.length === 0 ? <p className="text-[13px] text-mute">{t('paLibNone', { assets: (a.universe as string[]).join(', '), interval: a.interval })}</p> :
@@ -211,19 +218,17 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
 
       <Card><H>{t('agControl')}</H>
         <div className="space-y-2.5">
-          {approved && ['AWAITING_APPROVAL', 'PAUSED', 'STOPPED', 'CREATED'].includes(a.state) && <Btn kind="soft" full busy={busy === 'paper'} onClick={() => act('paper', () => post(`/agents/${id}/mode`, { mode: 'PAPER' }))}>{t('paStart')}</Btn>}
+          {approved && !liveActive && ['AWAITING_APPROVAL', 'PAUSED', 'STOPPED', 'CREATED'].includes(a.state) && <Btn kind="soft" full busy={busy === 'paper'} onClick={() => act('paper', () => post(`/agents/${id}/mode`, { mode: 'PAPER' }))} data-testid="pa-start-paper">{t(isLive ? 'plBackPaper' : 'paStart')}</Btn>}
           {a.state === 'PAPER_TRADING' && <Btn kind="ghost" full busy={busy === 'pause'} onClick={() => act('pause', () => post(`/agents/${id}/mode`, { mode: 'PAUSED' }))}>{t('agPause')}</Btn>}
-          {['PAPER_TRADING', 'PAUSED'].includes(a.state) && <Btn kind="ghost" full busy={busy === 'stop'} onClick={() => act('stop', () => post(`/agents/${id}/mode`, { mode: 'STOPPED' }))}>{t('paStop')}</Btn>}
+          {!liveActive && ['PAPER_TRADING', 'PAUSED'].includes(a.state) && <Btn kind="ghost" full busy={busy === 'stop'} onClick={() => act('stop', () => post(`/agents/${id}/mode`, { mode: 'STOPPED' }))}>{t('paStop')}</Btn>}
           {!approved && <p className="text-[13.5px] text-mute">{t('agNeedsStrategy')}</p>}
         </div>
-        <div className="mt-4 rounded-2xl border border-dashed border-line p-4 opacity-80" aria-disabled="true">
-          <div className="flex items-center justify-between gap-3"><span className="text-[16px] font-semibold">{t('paGoLive')}</span><span className="rounded-full bg-elev px-2 py-0.5 text-[11.5px] font-semibold text-mute">{t('paUnavailable')}</span></div>
-          <p className="mt-2 text-[13px] leading-snug text-mute">{t('paGoLiveText')}</p>
-          <Btn full disabled className="mt-3"><Icon n="key" />{t('paGoLive')}</Btn>
-        </div>
+        {/* >>> v7 perp live: the go-live checklist (the pause / resume / stop of a live agent are in LivePanel) */}
+        {liveActive ? <p className="text-[13.5px] text-mute">{t('plBandLive')}</p> : <div className="mt-4"><GoLiveCard a={a} id={id} nav={nav} /></div>}
+        {/* <<< v7 perp live */}
       </Card>
 
-      {acct && <Card><H right={<PaperTag />}>{t('paActivity')}</H>
+      {acct && !isLive && <Card><H right={<PaperTag />}>{t('paActivity')}</H>
         <Seg<Tab> value={tab} onChange={setTab} label={t('paActivity')} tabs size="sm" className="mb-3" options={[{ id: 'orders', label: `${t('paOrders')} (${acct.orders.length})` }, { id: 'fills', label: `${t('paFills')} (${acct.fills.length})` }, { id: 'funding', label: `${t('paFunding')} (${acct.funding.length})` }, { id: 'events', label: `${t('paEvents')} (${acct.riskEvents.length})` }]} />
         {tab === 'orders' && <DataTable cols={ordCols} rows={acct.orders} rowKey={(o) => o.clientId} empty={t('paNone')} label={t('paOrders')} />}
         {tab === 'fills' && <DataTable cols={fillCols} rows={acct.fills} rowKey={(x) => x.id} empty={t('paNone')} label={t('paFills')} />}
@@ -233,11 +238,11 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
 
       <Card><H>{t('paSignals')}</H>
         {(a.signals as any[]).length === 0 ? <p className="text-[14px] text-mute">{t('paNoSignals')}</p> : <ul className="space-y-2.5 text-[13px]">{(a.signals as any[]).slice(0, 24).map((s) => <li key={s.bar} className="rounded-2xl border border-line p-3">
-          <div className="flex justify-between gap-2"><span className="font-semibold">{when(s.bar, locale)}</span><span className={`rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${s.status === 'done' ? 'bg-emerald/10 text-emerald' : s.status === 'hold' ? 'bg-warn/12 text-warn' : 'bg-elev text-mute'}`}>{t(`paSig_${s.status}` as Key)}</span></div>
+          <div className="flex justify-between gap-2"><span className="font-semibold">{when(s.bar, locale)}</span><span className={`rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${s.status === 'done' ? 'bg-emerald/10 text-emerald' : s.status === 'hold' ? 'bg-warn/12 text-warn' : 'bg-elev text-mute'}`}>{s.status === 'decided' ? t('plSig_decided') : t(`paSig_${s.status}` as Key)}</span></div>
           {s.reason && <div className="mt-1 text-mute">{s.reason}</div>}
           {s.weights && <div className="mt-1 font-mono text-[11.5px] text-mute">{t('paWeights')} {Object.entries(s.weights as Record<string, number>).map(([k, w]) => `${k} ${w >= 0 ? '+' : ''}${w.toFixed(3)}`).join('  ')}{s.scale && s.scale !== '1' ? `  × ${Number(s.scale).toFixed(3)} (${s.orders?.binding})` : ''}</div>}
           {s.targets && <div className="font-mono text-[11.5px] text-mute">{t('paTargets')} {Object.entries(s.targets as Record<string, string>).map(([k, z]) => `${k} ${z}`).join('  ')}</div>}
-          {(s.orders?.list ?? []).length > 0 && <ul className="mt-1.5 space-y-0.5">{(s.orders.list as any[]).map((o, k) => <li key={k} className="text-[12px]"><SideTag side={o.side} /> {o.symbol} {o.size}{o.reduceOnly ? ` · ${t('paReduceOnly')}` : ''} → <span className="font-medium">{o.status}</span>{o.why ? <span className="text-mute"> — {String(o.why).slice(0, 160)}</span> : null}</li>)}</ul>}
+          {(s.orders?.list ?? []).length > 0 && <ul className="mt-1.5 space-y-0.5">{(s.orders.list as any[]).map((o, k) => <li key={k} className="text-[12px]"><SideTag side={o.side} /> {o.symbol} {o.size}{o.reduceOnly ? ` · ${t('paReduceOnly')}` : ''} → <span className="font-medium">{o.status === 'deferred' ? t('plSig_deferred') : o.status}</span>{o.code && isLive ? <span className="mt-0.5 block text-mute"><Refusal code={String(o.code)} reason={o.why ? String(o.why).slice(0, 200) : undefined} /></span> : o.why ? <span className="text-mute"> — {String(o.why).slice(0, 160)}</span> : null}</li>)}</ul>}
         </li>)}</ul>}
       </Card>
 

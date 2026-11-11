@@ -14,6 +14,20 @@ import { D, dec, onTick, parseInput, worstPrice } from './dec';
 import type { AccountState, DecStr, Fill, Instrument, Order, OrderBody, OrderRequest, Position, RiskPolicy, RiskResult } from './types';
 
 export type LiveNetwork = 'testnet' | 'mainnet';
+// >>> v7 perp live: MANDATE_LIVE objects (docs/v4/API-LIVE-NOTES.md, section V6)
+export type LiveLocale = 'fr' | 'en';
+export interface MandateInstrument { instrument: string; maxLeverage: number; maxPositionNotional: DecStr }
+export interface VenueMandate { v: 1; mandateId: string; authorizationId: string; keyId: string; venue: 'hyperliquid'; network: LiveNetwork; account: string; agentAddress: string; strategySha256: string; agentId: string;
+  instruments: MandateInstrument[]; maxOrderNotional: DecStr; maxGrossExposure: DecStr; maxOrdersPerDay: number; maxOrdersPerHour: number; maxDailyTurnover: DecStr; floorEquity: DecStr; maxPriceDeviationBps: number;
+  createdAt: number; /** unix SECONDS */ expiresAt: number; ackSha256: string }
+export type MandatePhase = 'active' | 'wind_down' | 'ended';
+export interface MandateSummary { id: string; hash: string; authorizationId: string; agentId: string; strategySha256: string; limits: VenueMandate; phase: MandatePhase; active: boolean; createdAt: number; expiresAt: number; expired: boolean;
+  approvedAt: number | null; revokedAt: number | null; /** ms */ windDownUntil: number | null; ackSha256: string }
+export interface SignerMandate { mandate: VenueMandate; hash: string; approvedAt: number | string | null; revoked: boolean; revokedAt: number | string | null; expired: boolean; phase: MandatePhase; /** unix SECONDS */ windDownUntil: number | null;
+  today: { orders: number; reduceOnly: number; cancels: number; leverage: number; turnover: DecStr }; ordersLastHour: number; pendingOrders: number }
+export interface MandateBody { instruments: MandateInstrument[]; maxOrderNotional: DecStr; maxGrossExposure: DecStr; maxDailyTurnover: DecStr; floorEquity: DecStr; maxOrdersPerDay: number; maxOrdersPerHour: number; maxPriceDeviationBps?: number;
+  days: number; locale?: LiveLocale; strategySha256: string; agentId: string }
+// <<< v7 perp live
 export interface VenuePolicy { allowedInstruments: string[]; maxLeverage: number; maxOrderNotional: DecStr; maxPositionNotional: DecStr; maxGrossExposure: DecStr; maxOrdersPerDay: number; maxPriceDeviationBps: number }
 export interface VenueAuthorization { v: 1; authorizationId: string; keyId: string; venue: 'hyperliquid'; network: LiveNetwork; account: string; agentAddress: string; agentName: string; mode: 'MANUAL_LIVE'; policy: VenuePolicy;
   createdAt: number; /** unix SECONDS */ expiresAt: number; approveNonce: number; ackSha256: string }
@@ -23,13 +37,14 @@ export interface VenueLeverage { v: 1; authorizationId: string; venue: 'hyperliq
 export interface Ack { venue: string; locale: 'fr' | 'en'; text: string; sha256: string; version: string; source: string }
 export type LiveState = 'proposed' | 'risk_checked' | 'authorized' | 'signed' | 'submitted' | 'unknown' | 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected';
 export interface LiveOrder { clientId: string; cloid: string | null; instrument: string; side: 'buy' | 'sell'; type: string; size: DecStr; price: DecStr | null; triggerPrice: DecStr | null; reduceOnly: boolean; tif: string;
-  state: LiveState; final: boolean; venueOrderId: string | null; filled: DecStr; avgFillPrice: DecStr | null; reason: string | null; origin: 'owner' | 'close'; hash: string | null; nonce: number | null; expiresAt: number | null;
+  state: LiveState; final: boolean; venueOrderId: string | null; filled: DecStr; avgFillPrice: DecStr | null; reason: string | null; origin: 'owner' | 'close' | 'mandate'; hash: string | null; nonce: number | null; expiresAt: number | null;
   canonical: VenueOrder | null; createdAt: number; updatedAt: number; submittedAt: number | null; source: 'venue' | 'local' }
 export interface LiveAction { id: string; kind: 'leverage' | 'cancel'; state: string; request: Record<string, unknown>; hash: string | null; nonce: number; expiresAt: number; error: string | null; createdAt: number; updatedAt: number }
 export interface LiveAuthorization { id: string; hash: string | null; mode: string; agentName: string; policy: VenuePolicy; createdAt: number; expiresAt: number; ackSha256: string; active: boolean; expired: boolean; revokedAt: number | null; authorizedAt: number | null }
 export interface LiveSummary { id: string; venue: 'hyperliquid'; network: LiveNetwork; kind: 'venue'; mode: 'READ_ONLY' | 'MANUAL_LIVE'; label: string; account: string; agentAddress: string; policy: RiskPolicy;
   halt: string | null; divergence: string | null; /** effective reason new orders are refused */ halted: string | null; mainnetEnabled: boolean; tradable: boolean;
-  authorization: LiveAuthorization | null; pendingAuthorization: { authorizationId: string; preparedAt: number } | null; createdAt: number; updatedAt: number }
+  authorization: LiveAuthorization | null; pendingAuthorization: { authorizationId: string; preparedAt: number } | null; createdAt: number; updatedAt: number;
+  /** v7 perp live (V6 server): every mode the account is in, and its derivative mandate */ modes?: string[]; mandate?: MandateSummary | null; pendingMandate?: { mandateId: string; preparedAt: number } | null }
 export interface VenueState { state: AccountState | null; positions: Position[]; openOrders: Order[]; /** non-null = the venue could not be read: never show the account as empty */ error: string | null; ts: number; source: 'venue' }
 export interface LiveRiskEvent { id: string; ts: number; kind: string; code: string | null; message: string; data: Record<string, unknown> }
 export interface LiveFunding { instrument: string; amount: DecStr; rate: DecStr; size: DecStr; ts: number; source: 'venue' }
@@ -41,15 +56,24 @@ export type PasskeyOptions = Parameters<typeof import('@simplewebauthn/browser')
 export interface Proposal { order: LiveOrder; canonical: VenueOrder | null; hash: string | null; expiresAt: number | null; estimate: LiveEstimate | null; idempotent: boolean; /** null = nothing (left) to approve */ options: PasskeyOptions | null;
   worstPrice?: DecStr | null; slippageBoundBps?: number | null; position?: Position }
 export interface LivePreview { risk: RiskResult; estimate: LiveEstimate; request: OrderRequest; venueState: { state: AccountState; positions: Position[]; source: 'venue' }; ts: number }
-export interface LiveConfig { mainnetEnabled: boolean; venues: { venue: string; networks: LiveNetwork[] }[]; modes: string[]; mandateLive: { available: boolean; reason: string };
+export interface LiveConfig { mainnetEnabled: boolean; venues: { venue: string; networks: LiveNetwork[] }[]; modes: string[];
+  // >>> v7 perp live: the V6 shape of GET /config (locale, reasons in both languages, the two mainnet locks)
+  locale?: LiveLocale; mainnet?: { enabled: boolean; code: string | null; reason: string | null }; reasons?: Record<string, { fr: string; en: string }>;
+  mandateLive: { available: boolean; code?: string | null; reason: string | null; mainnet?: { enabled: boolean; code: string | null; reason: string | null };
+    bounds?: { maxDays: number; maxOrdersPerHour: number; maxLeverageChangesPerDay: number; maxInstruments: number; windDownSeconds: number; orderTtlMs: number } };
+  // <<< v7 perp live
   pinnedAssets: { pinnedAt: string; mainnet: { instrument: string; maxLeverage: number }[]; testnet: { instrument: string; maxLeverage: number }[] };
   bounds: { maxLeverage: number; maxOrdersPerDay: number; minPriceBandBps: number; maxPriceBandBps: number; maxInstruments: number; maxAuthorizationDays: number; orderApprovalTtlMs: number }; ts: number }
 export interface Collateral { account: string; network: LiveNetwork; equity: DecStr | null; collateral: DecStr | null; freeCollateral: DecStr | null; marginUsed: DecStr | null; withdrawable: DecStr | null; asset: string; error: string | null; ts: number; source: 'venue';
-  deposits: { supported: boolean; how: string }; withdrawals: { supported: boolean; how: string } }
+  deposits: { supported: boolean; how: string }; withdrawals: { supported: boolean; how: string }; locale?: LiveLocale }
 export interface Prepared { authorization: VenueAuthorization; hash: string; acknowledgement: Ack; agent: { address: string; name: string; wireName: string; validUntil: number; can: string[]; cannot: string[]; note: string };
   whatIsSigned: { byMainKey: string; byPasskey: string }; venueState: VenueState; options: PasskeyOptions; ts: number }
+// >>> v7 perp live
+export interface MandatePrepared { mandate: VenueMandate; hash: string; acknowledgement: Ack; locale: LiveLocale; authorization: { id: string; hash: string | null; expiresAt: number; policy: VenuePolicy }; warning: string;
+  enforcedBySigner: string[]; trustedBySigner: string[]; notEnforced: string[]; windDown: { seconds: number; text: string }; whatIsSigned: { byPasskey: string }; venueState: VenueState; options: PasskeyOptions; ts: number }
+// <<< v7 perp live
 export interface CancelAll { requested: number; accepted: number; failed: { venueOrderId: string | null; instrument: string; error: string }[]; remaining: Order[] | null; source: 'venue'; ts: number }
-export interface Revoked extends LiveDetail { cancelled: CancelAll | null; warning: string | null; venueAgent: string }
+export interface Revoked extends LiveDetail { cancelled: CancelAll | null; warning: string | null; venueAgent: string; cancelError?: { code: string; message: string } | null; locale?: LiveLocale }
 export interface LeverageProposal { action: LiveAction; canonical: VenueLeverage; hash: string; current: { leverage: DecStr; marginMode: 'cross' | 'isolated' } | null; expiresAt: number; options: PasskeyOptions }
 export interface LeverageResult { action: LiveAction; idempotent: boolean; venue: { leverage: { leverage: DecStr; marginMode: string } | null; confirmed: boolean; source: 'venue' } | null }
 /** the order body of a venue account: no `leverage` (a venue setting, changed with its own passkey-approved route), no `clientId` */
@@ -63,15 +87,16 @@ const normDetail = <T extends LiveDetail>(j: any): T => ({ ...j, venueState: { .
   riskEvents: arr<any>(j.riskEvents).map((e) => ({ id: String(e.id ?? `${e.ts}${e.kind}`), ts: Number(e.ts) || 0, kind: String(e.kind ?? 'event'), code: typeof e.code === 'string' ? e.code : null, message: String(e.message ?? ''), data: e.data ?? {} })) });
 
 export const lapi = {
-  config: () => get<LiveConfig>(`${L}/config`),
+  /** `locale` selects the language of the server-authored sentences (codes never change) */
+  config: (locale?: LiveLocale) => get<LiveConfig>(`${L}/config${locale ? `?locale=${locale}` : ''}`),
   accounts: async (): Promise<LiveSummary[]> => arr((await get(`${L}/accounts`)).accounts),
   /** one account per venue and network: a second call answers the same account */
   create: async (network: LiveNetwork, label: string): Promise<LiveDetail> => normDetail(await post(`${L}/accounts`, { venue: 'hyperliquid', network, label })),
   account: async (id: string): Promise<LiveDetail> => normDetail(await get(A(id))),
-  collateral: (id: string) => get<Collateral>(`${A(id)}/collateral`),
+  collateral: (id: string, locale?: LiveLocale) => get<Collateral>(`${A(id)}/collateral${locale ? `?locale=${locale}` : ''}`),
   prepare: (id: string, body: { policy: VenuePolicy; days: number; locale: 'fr' | 'en' }) => post<Prepared>(`${A(id)}/authorization/prepare`, body),
   approveAuthorization: async (id: string, assertion: unknown): Promise<LiveDetail> => normDetail(await post(`${A(id)}/authorization/approve`, { assertion, acknowledged: true })),
-  revoke: async (id: string, cancelOpenOrders: boolean): Promise<Revoked> => normDetail<Revoked>(await post(`${A(id)}/authorization/revoke`, { cancelOpenOrders })),
+  revoke: async (id: string, cancelOpenOrders: boolean, locale?: LiveLocale): Promise<Revoked> => normDetail<Revoked>(await post(`${A(id)}/authorization/revoke`, { cancelOpenOrders, ...(locale ? { locale } : {}) })),
   preview: (id: string, body: LiveOrderBody) => post<LivePreview>(`${A(id)}/orders/preview`, body),
   propose: (id: string, body: LiveOrderBody, key: string) => post<Proposal>(`${A(id)}/orders`, body, { 'idempotency-key': key }),
   approveOrder: (id: string, clientId: string, assertion: unknown) => post<{ order: LiveOrder; idempotent: boolean }>(`${A(id)}/orders/${encodeURIComponent(clientId)}/approve`, { assertion }),

@@ -323,7 +323,7 @@ describe('delivery', () => {
     expect(await d.deliver()).toMatchObject({ sent: 0 });            // claimed: never sent twice
     const [p] = pushes();
     expect(p).toMatchObject({ v: 1, kind: 'transfer.confirmed', sev: 'info', l: 'fr', d: false, p: { network: 'Base', count: 1 }, s: { type: 'proposal', id: 'p1' } });
-    expect(JSON.stringify(p)).not.toMatch(/25|USDC/);
+    expect(JSON.stringify((p as { p: unknown }).p)).not.toMatch(/25|USDC/); // the parameters only: the timestamp may contain "25"
     expect(calls[0]!.headers.get('urgency')).toBe('normal');
     expect((await one('transfer.confirmed'))).toMatchObject({ delivery: 'sent', channels: { push: { sent: 1, failed: 0, removed: 0 } } });
     await settings({ showDetails: true });

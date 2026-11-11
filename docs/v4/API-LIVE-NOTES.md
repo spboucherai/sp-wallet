@@ -187,3 +187,44 @@ Errors: `403 mainnet_disabled | mandate_mainnet_disabled`; `400 bad_policy` (wid
 bounds); `409 bad_state` (a mandate is already active / nothing prepared / no mandate to revoke); `422 mode_read_only |
 authorization_expired | signer_<code>`; `423 halted` (signer emergency halt at prepare); `503 mandate_unavailable |
 asset_table_mismatch`. A refused approval consumes the preparation: prepare again.
+
+## V7 — a perp agent LIVE on a venue account (2026-11-11)
+
+Design and proof: `docs/v7/PERP-AGENT-LIVE.md`. Routes under `/api/v1/agents` (owner session, CSRF header on writes). There
+is still no route that places an order: the engine pass does, through `derivatives/mandate.ts`.
+
+| Route | Body | Answer |
+|---|---|---|
+| `GET /agents/:id/perp/live?account=<uuid>&locale=fr\|en&days=N` | — | `Readiness` |
+| `POST /agents/:id/perp/live/prepare` | `{ accountId, days?: 1…30, locale }` (strict) | the mandate-prepare answer above + `proposal` |
+| `POST /agents/:id/perp/live/approve` | `{ accountId, assertion, acknowledged: true }` | agent detail (`state: "LIVE"`, `mode: "LIVE"`) |
+| `POST /agents/:id/perp/live/pause` · `/resume` | `{}` — no passkey | agent detail (`PAUSED` / `LIVE`) |
+| `POST /agents/:id/perp/live/stop` | `{ locale? }` — no passkey | agent detail (`STOPPING` or `STOPPED`) + `result` + `windDown: { until, text, openPositions, openOrders }` |
+
+```ts
+Readiness { agentId, locale, config /* GET /config?locale= */, accountId: string|null /* the selected venue account */,
+  accounts: [{ id, network, label, account, mode, modes, tradable, authorization: { active, expiresAt }|null, mandate: { id, phase, agentId }|null,
+               usedBy: { agentId, name }|null, equity: DecStr|null, error: string|null /* both for the selected account only */ }],
+  steps: { strategy: { ok, versionId, sha256, name, version, reason },
+           account:  { ok, code, reason, network, authorization: { active, expiresAt, maxMandateDays }|null, instrumentsMissing: string[] },
+           funded:   { ok, code, reason, equity: DecStr|null, minEquity: DecStr, basis: { instruments: [{ instrument, minOrder }], ordersPerPosition, grossX, floor } },
+           mandate:  { ok, phase, mandateId, lock: { code, reason /* server text, in the locale */ }|null } },
+  next: "strategy"|"account"|"fund"|"mandate"|"live"|"locked",
+  proposal: null | { capital: DecStr, days, maxDays, body: MandateBody, derived: [{ field, value, from }], notes: string[] }, ts }
+```
+`steps.account.code`: `no_account | mainnet_disabled | read_only | authorization_expired | used_by_other_agent |
+instruments_not_pinned | instruments_not_allowed | authorization_too_short | mandate_exists | account_not_flat`.
+`steps.funded.code`: `no_account | venue_unreadable | unfunded | below_minimum`. `steps.mandate.lock.code`:
+`mandate_unavailable | mainnet_disabled | mandate_mainnet_disabled`. Errors: `409 not_ready` (the message names the step),
+`409 bad_state`, `409 used_by_other_agent`, and those of the mandate routes (`403 mandate_mainnet_disabled`, `422 signer_<code>` …).
+
+Agent detail (`GET /agents/:id`, perp) — changed and new fields: `mode: "PAPER"|"LIVE"`, `simulation` (false when the mode is
+LIVE), `state` also `LIVE | PAUSED | STOPPING`, `execution: { kind: "paper"|"live", network?, note }`,
+`live: { available, reason, active, accountId, network, mandateId, strategySha256, since, capital, paused, exit: { ts, code,
+reason }|null, account: AccountDetail|null, signer: SignerMandate|null, holds: [{ ts, bar, symbol, code, reason }] }`.
+`live.exit.code`: `owner_stop | mandate_revoked | mandate_expired | mandate_ended | authorization_ended | mainnet_disabled |
+mandate_mainnet_disabled | halted | divergence | manual_order | liquidation | strategy_changed | loss_limit | engine_stop |
+signer_revoked | signer_expired | signer_wind_down | signer_no_authorization | signer_not_found | signer_halted`.
+Signal rows: an item of `orders.list` may be `status: "deferred"` (`code: live_cooldown | live_unknown_pending`).
+While the agent is on a venue account: `POST /agents/:id/perp/risk`, `/perp/flatten` and `mode: "PAPER"` answer `409 bad_state`;
+`POST /agents/:id/mode` with `PAUSED` / `STOPPED` is the live pause / stop. `GET /agents/perp/venues` → `live.available: true`.

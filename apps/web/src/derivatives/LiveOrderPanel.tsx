@@ -7,6 +7,7 @@
  * Sizes are entered in the base asset only: the chart and the book of the terminal are the venue's MAINNET market data, and a
  * testnet account trades at testnet prices — a USD amount converted at the wrong network's price would be the wrong size.
  */
+import { AgentOnAccount } from './LiveAgentNote';   // v7 perp live
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { I18n, useT, type Key } from '../i18n';
@@ -133,6 +134,8 @@ export function LiveOrderPanel({ instrument, account, detail, conn, workerError,
       {expired && <><Notice tone="warn">{t('flE_authorization_expired')}</Notice><Btn full kind="soft" onClick={goAccounts}>{t('flGoAuthorize')}</Btn></>}
       {!mainnetOff && !readOnly && !allowed && <Notice tone="warn"><div data-testid="live-not-allowed">{t(isPinned ? 'flNotInAuthorization' : 'flNotPinned', { symbol: instrument.symbol })}</div></Notice>}
       <HaltBanner account={a} />
+      {/* v7 perp live: an agent trades this account — what a manual order does to it */}
+      {a.mandate && a.mandate.phase !== 'ended' && <AgentOnAccount account={a} />}
       {tone === 'testnet' && canTrade && <p className="rounded-xl border border-line px-3 py-2 text-[11.5px] leading-snug text-mute" data-testid="testnet-note">{t('flTestnetPrices')}{est ? <span className="block font-medium text-ink">{t('flTestnetMark', { price: fmt(est.mark, { dp: pdp, locale }) })} <SourceTag /></span> : null}</p>}
 
       {canTrade && <>

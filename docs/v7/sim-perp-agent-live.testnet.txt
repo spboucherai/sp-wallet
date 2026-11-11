@@ -1,0 +1,22 @@
+=== LIVE perp agent — REAL Hyperliquid TESTNET (unfunded throwaway account) — real API, real engine, real signer class, throwaway in-memory seed ===
+    wallet account 0xd8480c322876022659dcd05433d75f1df5a62196 (derived from a seed generated in memory); mainnet settings: SPW_DERIV_LIVE_MAINNET=(unset), SPW_DERIV_MANDATE_MAINNET=(unset)
+
+[1] perp agent created in simulation: 67cc5bd2-29b6-4e7b-96a2-08976f11c719 (BTC, 1h, 2× max). state CREATED · mode PAPER · simulation true · execution paper · live.active false
+    checklist: next = strategy | strategy ✗ · account ✗ (no_account) · funded ✗ (no_account) · mandate ✗
+
+[2] strategy version approved through the API (code hash 12b65d8a10f5…; its signals are scripted in this run).
+    checklist: next = account | strategy ✓ · account ✗ (no_account) · funded ✗ (no_account) · mandate ✗
+
+[3] venue account created (testnet, READ_ONLY): 5b09c8e5-7e6e-4ed8-8bc6-99ec4282cbe9
+    checklist: next = account | strategy ✓ · account ✗ (read_only) · funded ✗ (unfunded) · mandate ✗
+    authorization approved with the passkey on an UNFUNDED account → 422 venue_rejected: the venue did not register the trading key: hyperliquid: Must deposit before performing actions. User: 0xd8480c322876022659dcd05433d75f1df5a62196 — the authorization was revoked on the signer, nothing can trade. Fund the venue acc
+    checklist: next = account | strategy ✓ · account ✗ (read_only) · funded ✗ (unfunded) · mandate ✗
+      account step: this venue account is read-only: authorise live trading on it with your passkey in Futures → Accounts
+      funded step: the venue account holds no collateral: deposit USDC to it on the venue (at least 50 USDC for this agent) (minimum 50 USDC = max(50, 5 minimum orders × 10.5 USD on hyperliquid:BTC ÷ 1.5× gross))
+    "go live" now → 409 not_ready: not ready to go live (account): this venue account is read-only: authorise live trading on it with your passkey in Futures → Accounts
+    agent page: state AWAITING_APPROVAL · mode PAPER · simulation true · execution paper · live.active false
+
+[4] --testnet: the account is not funded, so the run stops here, at the venue's documented refusal. To go further the owner funds
+    0xd8480c322876022659dcd05433d75f1df5a62196 on the testnet (mock USDC, "USDC (Perps)") — with a seed he keeps — and authorises the account in Futures → Comptes.
+
+real network requests: api.hyperliquid-testnet.xyz/info clearinghouseState ×10, api.hyperliquid-testnet.xyz/info frontendOpenOrders ×5, api.hyperliquid-testnet.xyz/info meta ×2, api.hyperliquid-testnet.xyz/exchange approveAgent ×1; to api.hyperliquid.xyz (mainnet): 0

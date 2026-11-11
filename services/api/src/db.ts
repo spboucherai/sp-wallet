@@ -170,6 +170,10 @@ create table if not exists perp_agent_signals (
   strategy_sha256 text not null, weights jsonb, scaled jsonb, scale text, equity numeric, targets jsonb, orders jsonb,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(), primary key (agent_id, bar));
 -- <<< v6 perp agents
+-- >>> v7 perp agents LIVE: the venue account an agent trades under a derivative mandate; one agent per venue account
+alter table agents add column if not exists live_account_id uuid;
+create unique index if not exists agents_live_account on agents (live_account_id) where live_account_id is not null;
+-- <<< v7 perp agents LIVE
 -- derivative mandates (MANDATE_LIVE): the canonical mandate the owner approved with his passkey; the signer holds its own copy and enforces it
 create table if not exists deriv_mandates (
   id uuid primary key, account_id uuid not null, authorization_id uuid not null, state text not null, mandate jsonb not null, hash text not null, ack jsonb not null,

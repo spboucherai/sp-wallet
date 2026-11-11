@@ -1,4 +1,4 @@
-// Perp agents (V6, paper only). Three layers, no network, no signer:
+// Perp agents in SIMULATION (V6; the LIVE side is perp-agent-live.test.ts). Three layers, no network, no signer:
 //  1. the pure parts of the engine (weights, scaling, targets, order plan, gate checks);
 //  2. the engine step against PostgreSQL (database spw_perp_agent_test, created here if missing) with a FAKE executor, gate and
 //     signal: one decision per bar, holds, restart idempotency, loss limits, account events;
@@ -498,7 +498,8 @@ describe('perp agent through the API (fixture venues, real paper service)', () =
     expect(row.vault_index).toBeLessThan(0);
     const det = (await api('GET', `/agents/${a.id}`)).json;
     expect(det.account).toMatchObject({ id: a.accountId, positions: [], state: { equity: '10000' }, policy: { mode: 'PAPER', allowedInstruments: [BTC], maxLeverage: '2', maxGrossExposure: '15000', maxPositionNotional: '10000', maxDailyLoss: '300', maxTotalLoss: '1000', halt: null } });
-    expect(det.live).toMatchObject({ available: false }); expect(det.live.reason).toMatch(/signer/);
+    expect(det.live).toMatchObject({ available: true, active: false, accountId: null, account: null, exit: null });   // V7: going live exists (perp-agent-live.test.ts); a new agent is in simulation
+    expect(det).toMatchObject({ mode: 'PAPER', simulation: true, execution: { kind: 'paper' } });
     expect((await api('GET', '/agents')).json.agents.find((x: any) => x.id === a.id)).toMatchObject({ kind: 'perp', networkName: 'Hyperliquid' });
     // vault and mandate routes do not exist for it (and would have needed the signer, which is unreachable in this test)
     for (const r of ['mandate/prepare', 'mandate/approve', 'revoke', 'withdraw']) expect((await api('POST', `/agents/${a.id}/${r}`, r === 'withdraw' ? { asset: 'native' } : r === 'mandate/approve' ? { assertion: {} } : {})).json.error).toBe('perp_agent');
@@ -509,7 +510,7 @@ describe('perp agent through the API (fixture venues, real paper service)', () =
     }
     expect((await sql`select count(*)::int as n from deriv_paper_accounts`)[0].n).toBe(1);                                   // no orphan account
     const ven = (await api('GET', '/agents/perp/venues')).json;
-    expect(ven).toMatchObject({ maxInstruments: 8, live: { available: false } });
+    expect(ven).toMatchObject({ maxInstruments: 8, live: { available: true } });
     expect(ven.venues[0].instruments.find((x: any) => x.symbol === 'BTC')).toMatchObject({ id: BTC, eligible: true });
     // approval needs a version-2 report whose integrity checks pass
     const sv = randomUUID();
