@@ -17,6 +17,7 @@ interface Capital {
 interface Exposure { asset: string; spotUsd: number; perpLongUsd: number; perpShortUsd: number; netUsd: number; grossUsd: number; priced: boolean }
 interface Health {
   asOf: number; connectors: { id: string; group: string; name: string; ok: boolean | null; lastSuccessAt: number | null; ageSec: number | null; detail: string }[];
+  loopsNote?: string | null; lab?: { mode: 'sandbox-exec' | 'off' | 'unavailable'; ok: boolean; reason: string | null } | null; capabilities?: { id: string; on: boolean; missing: string[]; why: string }[];
   loops: { name: string; everyMs: number; runs: number; lastOkAt: number | null; lastError: string | null; failures: number; ageSec: number | null; late: boolean }[];
   backup: { visible: boolean; lastAt: number | null; files: number; ageHours: number | null }; disk: { freePct: number; freeGb: number; totalGb: number } | null;
   audit: { intact: boolean; total: number; brokenAt: number | null; checkedAt: number }; signer: { reachable: boolean; halted: boolean | null };
@@ -118,7 +119,14 @@ export function Monitor({ open }: { open: (path: string) => void }) {
           <ul className="space-y-2 text-[13px]" data-testid="monitor-loops">{h.loops.length === 0 ? <li className="text-mute">{t('moNoLoops')}</li> : h.loops.map((l) => <li key={l.name} className="flex items-center justify-between gap-3">
             <span className="min-w-0"><span className="block font-medium">{l.name}</span><span className="block truncate text-xs text-mute">{t('moEvery')} {age(Math.round(l.everyMs / 1000), fr)}{l.lastError && l.failures > 0 ? ` · ${l.lastError}` : ''}</span></span>
             <span className="shrink-0 text-right"><Status ok={l.lastOkAt === null && l.failures === 0 ? null : l.failures === 0 && !l.late}>{l.failures > 0 ? t('moNFailures', { n: l.failures }) : l.late ? t('moLate') : undefined}</Status><span className="block text-xs text-mute">{t('moLastSuccess')} {age(l.ageSec, fr)}</span></span></li>)}</ul>
-          <p className="mt-2 text-xs text-mute">{t('moLoopsNote')}</p>
+          {h.loopsNote && <p className="mt-2 text-xs text-mute">{t('moLoopsNote')}</p>}
+          {/* v8 hardening: the strategy sandbox and the optional capabilities of the server (variable names only) */}
+          {h.lab && <div className="mt-4 border-t border-line pt-4 text-[13px]" data-testid="monitor-lab"><div className="flex items-center justify-between gap-3"><span className="font-medium">{t('hdMoLab')}</span>
+            <Status ok={h.lab.ok}>{h.lab.mode === 'sandbox-exec' ? t('hdMoLabOk') : h.lab.mode === 'off' ? t('hdMoLabOff') : t('hdMoLabDown')}</Status></div>
+            {!h.lab.ok && <p className="mt-1 text-xs text-mute">{h.lab.mode === 'off' ? t('hdMoLabOffNote') : t('hdMoLabDownNote')}{h.lab.reason ? ` (${h.lab.reason})` : ''}</p>}</div>}
+          {h.capabilities && <ul className="mt-4 space-y-2 border-t border-line pt-4 text-[13px]" data-testid="monitor-capabilities">{h.capabilities.map((c) => <li key={c.id} className="flex items-start justify-between gap-3">
+            <span className="min-w-0"><span className="block font-medium">{t(`hdCap_${c.id}` as Key)}</span>{!c.on && c.missing.length > 0 && <span className="block truncate font-mono text-xs text-mute">{c.missing.join(' + ')}</span>}</span>
+            <Status ok={c.on ? true : c.id === 'research_readonly_db' || c.id === 'web_app' || c.id === 'deriv_live_mainnet' || c.id === 'deriv_mandate_mainnet' || c.id === 'research_runner' ? null : false}>{c.on ? t('hdCapOn') : t('hdCapOff')}</Status></li>)}</ul>}
           <dl className="mt-4 space-y-2 border-t border-line pt-4 text-[13px]">
             <div className="flex justify-between gap-3"><dt className="text-mute">{t('moBackup')}</dt><dd className="text-right font-medium">{!h.backup.visible ? t('moBackupInvisible') : h.backup.lastAt === null ? t('moBackupNone') : <><Status ok={(h.backup.ageHours ?? 0) <= 36}>{when(new Date(h.backup.lastAt), locale)}</Status></>}</dd></div>
             <div className="flex justify-between gap-3"><dt className="text-mute">{t('moDisk')}</dt><dd className="font-medium">{h.disk ? `${h.disk.freePct} % · ${h.disk.freeGb} / ${h.disk.totalGb} ${fr ? 'Go' : 'GB'}` : '—'}</dd></div>

@@ -388,3 +388,42 @@ not_authorized`, `503 contract_changed` ("GMX a publié de nouveaux contrats : n
 `409 pending_tx` (another transaction of the wallet on Arbitrum is not confirmed), `409 not_yet_cancellable`, `409 bad_state`,
 `410 expired`, `503 chain_unreadable`. A `created` operation is NOT an executed order: the screen says "en attente d'exécution
 par le réseau GMX" until the chain shows `OrderExecuted`, `OrderCancelled` or `OrderFrozen` for the order key.
+
+## V8 — more server texts follow `locale`; the paper book on the agent detail (hardening D, 2026-11-11)
+
+Additive. The convention is the one of « Locale shape » above: the sentence stays a plain string in the same field, the answer
+carries `locale: "fr"|"en"`, codes / ids / numbers never change, and the default `en` returns the exact strings these routes
+returned before (the only difference in a default answer is the added `locale: "en"` field). An unknown value of `locale` is `en`.
+
+| Route | `locale` | Fields that follow it |
+|---|---|---|
+| `GET /derivatives/compare?base=` | `?locale=` | `rows[].settlement`, `rows[].restriction`, every string of `rows[].notes` (the venue facts and the notes built from live figures — the figures are carried over unchanged); in `rows[].collateral` only the « or » of a two-token collateral (`WBTC or USDC` → `WBTC ou USDC`) |
+| `GET /derivatives/instruments` | `?locale=` | `instruments[].settlement`, `instruments[].markPriceMethod`, the « or » of `instruments[].collateral` |
+| `POST /derivatives/route` | `?locale=` **or** the body's `locale` (removed before the strict intent schema; it is not part of `intent`) | `warnings[]` (the engine messages); `candidates[].terms.<k>.value` and the same values in `differences.fields[].values[].value` for `structure`, `execution`, `settlement`, `quote`, `markPrice`, `fundingInterval`, `fundingRule`, `otherCarry`, `maxLeverage`, `marginModes`, `sizeUnit`, `minOrder`, `maintenance`, `liquidation`, `fees`, and the « or » of `collateral` |
+| `POST /derivatives/live/accounts/:id/authorization/revoke` | body `locale` (already accepted) | `warning` — it was « English only » in V6 |
+
+Implementation: `services/api/src/derivatives/market-texts.ts` translates what the engines wrote (exact match for constants, a
+pattern for sentences with figures); the engines themselves (`packages/derivatives`, `data.ts`, `route.ts`) are unchanged. A
+sentence without a French variant is returned as it is — never dropped. Tests: `derivatives-api.test.ts` (compare,
+instruments), `derivatives-router.test.ts` (route), `derivatives-live.test.ts` (revoke).
+
+**Still English whatever the locale** (the UI shows them as the server's own words, or maps their code):
+- `POST /derivatives/route`: `candidates[].costs[].basis` / `.uncertainty` / `.inputs[].name`, `candidates[].margin.maintenanceRule`,
+  `.margin.liquidationPrice.method`, `candidates[].eligibility.reasons[].message` (the UI maps `code`), `risk.venue.note`,
+  `risk.accounts[].reason` (the UI maps `code`), `ranking.basis` / `.note`, `differences.statement` / `.never`, `exit.note`,
+  `terms.tick` / `lot` (figures).
+- `GET /derivatives/venues`: `capabilities.notes[]`, `restriction`. `GET /derivatives/route/assets`: `restriction`.
+- every `errors[].message` and every error `message` (use the error `code`); order `reject_reason`s; risk-event messages.
+- the `reason` parameter of an alert (`GET /alerts`): stored when the event happened, in English. The web app shows the
+  server's own fixed sentences in French (`apps/web/src/reasonTexts.ts`); a venue's or a network's error text is left as it is.
+
+### `GET /agents/:id` (spot agent) — new field `paper`
+
+`paper: null | { positions: [{ symbol, units: string, usd: number|null }], cashSymbol: string, cashUsd: number, asOf: number }`
+— the agent's SIMULATED holdings (the paper book the engine keeps), read-only: one `select`, nothing is written and the book
+is not seeded by the read. `null` when the agent never ran in simulation (and for a perp agent, whose detail is another
+shape). `positions` lists the non-cash symbols with `units > 0`, in the order of the agent's universe; `units` is a plain
+decimal string (at most 12 decimals); `usd` is `null` when no price is known (never 0). `cashUsd` is the simulated cash leg
+(1 unit = 1 USD, as in the engine). `asOf` is when the book was read and priced (ms). `vault` is unchanged and remains the
+REAL balances: the two are never added. Code: `services/api/src/agents/paper-view.ts`; test: `agent-networks.test.ts`.
+

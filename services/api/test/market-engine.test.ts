@@ -14,7 +14,7 @@ const answer = (status: number, body: unknown): HttpJson => async () => ({ statu
 
 let make: Record<SourceId, (o: { get: HttpJson; spacingMs: number }) => MarketSource>;
 beforeAll(async () => {
-  Object.assign(process.env, { SPW_ORIGIN: 'https://wallet.test', SPW_RP_ID: 'wallet.test', DATABASE_URL: 'postgres:///spw_market_test', SPW_SIGNER_SECRET: 'k'.repeat(48) });
+  Object.assign(process.env, { SPW_ORIGIN: 'https://wallet.test', SPW_RP_ID: 'wallet.test', DATABASE_URL: 'postgres:///unused' /* no query is made here: sources and validation only */, SPW_SIGNER_SECRET: 'k'.repeat(48) });
   const s = await import('../src/market/sources.ts');
   make = { coinbase: s.coinbaseSource, bitstamp: s.bitstampSource, kraken: s.krakenSource };
 });

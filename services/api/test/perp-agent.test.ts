@@ -14,7 +14,7 @@ let sql: any, eng: Eng, pd: typeof import('../src/agents/perp-data.ts'), ps: typ
 let mod: typeof import('../src/derivatives/index.ts'), wk: typeof import('../src/derivatives/worker.ts');
 
 beforeAll(async () => {
-  await useDatabase('spw_perp_agent_test');
+  await useDatabase('perp_agent');
   const db = await import('../src/db.ts');
   sql = db.sql;
   await db.migrate(); await db.migrate();

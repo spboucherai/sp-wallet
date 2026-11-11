@@ -7,7 +7,9 @@ import { PriceChart } from '../chart';
 import { useNetworks } from '../hooks';
 import { issuerOf, LIQUID_HINT } from '../issuer';
 import { errText, I18n, useT, type Key } from '../i18n';
-import { Addr, Btn, Card, Coin, CopyBtn, Field, fiat, H, Icon, inputCls, Notice, numFmt, Skeleton, trimAmt, when } from '../ui';
+import { Addr, Btn, Card, Coin, CopyBtn, Field, fiat, H, Icon, inputCls, Notice, numFmt, Skeleton, trimAmt, usdCapital, when } from '../ui';
+import { amountOf, sanitizeAmountText } from '../amount'; // v8 hardening
+import { AmountProblem } from '../amountUi';
 // >>> v6 perp agents (simulation only): their form and their detail page live in PerpAgent.tsx
 import { Seg } from '../derivatives/bits';
 import { PerpAgentDetail, PerpAgentForm } from './PerpAgent';
@@ -15,6 +17,7 @@ import { agentTone, PerpLiveState } from './PerpAgentLive';   // v7 perp live: a
 // <<< v6 perp agents
 import { AgentChecklist, ElsewhereFunds, FundSheet, fundingInProgress, WithdrawSheet, type AgentNet } from './AgentFund';
 import { ResearchPanel } from './Research'; // v7 research runtime
+import { PaperBookCard, showPaperBook } from './AgentPaper'; // v8 hardening: simulated positions, apart from the real vault
 
 interface AgentV { id: string; name: string; mission: string; state: string; mode: string; network: string; networkName: string; cash: string; universe: string[]; interval: string; capitalUsdc: string; vaultAddress: string;
   risk: { maxExposurePct: number; maxLossPct: number; maxOrderUsd: number; maxDailyUsd: number; maxOrdersPerDay: number; mandateDays: number; slippageBps: number }; strategyVersionId: string | null; mandateId: string | null; stopReason: string | null; lastBar: string | null }
@@ -52,7 +55,7 @@ export function Agents({ nav }: { nav: Nav }) {
   const create = async () => {
     setBusy(true); setErr('');
     try {
-      const a = await post<AgentV>('/agents', { name: f.name.trim(), mission: f.mission.trim(), network: f.network, universe: f.universe, cash, assets: Object.fromEntries(chosen.flatMap((y) => { const r = reprOf(y); return r ? [[y.symbol, r.asset]] : []; })), interval: f.interval, capitalUsdc: f.capital,
+      const a = await post<AgentV>('/agents', { name: f.name.trim(), mission: f.mission.trim(), network: f.network, universe: f.universe, cash, assets: Object.fromEntries(chosen.flatMap((y) => { const r = reprOf(y); return r ? [[y.symbol, r.asset]] : []; })), interval: f.interval, capitalUsdc: amountOf(f.capital, locale) ?? f.capital,
         risk: { maxExposurePct: f.maxExposurePct, maxLossPct: f.maxLossPct, maxOrderUsd: f.maxOrderUsd, maxDailyUsd: f.maxDailyUsd, maxOrdersPerDay: f.maxOrdersPerDay, mandateDays: 30, slippageBps: 50 } });
       await qc.invalidateQueries({ queryKey: ['agents'] }); setOpen(false); nav({ tab: 'agent', asset: a.id });
     } catch (e) { setErr(errText(t, e)); } finally { setBusy(false); }
@@ -102,19 +105,19 @@ export function Agents({ nav }: { nav: Nav }) {
           {paperOnly.length > 0 && <div className="mt-3"><Notice tone="info">{t('agPaperOnlyNote', { assets: paperOnly.join(', ') })}</Notice></div>}
           {net?.gas && <p className="mt-2 text-[12.5px] text-mute">{t('agGasReserve', { amount: trimAmt(net.gas.reserve, 6), sym: net.native })}{net.gas.perOrderUsd != null && ` ${t('agFeeShare', { usd: numFmt(net.gas.perOrderUsd, locale, net.gas.perOrderUsd < 0.1 ? 4 : 2), pct: numFmt((100 * net.gas.perOrderUsd) / Math.max(1, f.maxOrderUsd), locale, 1) })}`}</p>}</div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label={t('agCapital')}><div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" value={f.capital} onChange={(e) => setF({ ...f, capital: e.target.value.replace(',', '.').replace(/[^0-9.]/g, '') })} /><span className="w-12 shrink-0 text-[13px] text-mute">{cash}</span></div></Field>
+          <Field label={t('agCapital')}><div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" value={f.capital} onChange={(e) => setF({ ...f, capital: sanitizeAmountText(e.target.value) })} /><span className="w-12 shrink-0 text-[13px] text-mute" data-testid="capital-unit">USD</span></div><AmountProblem text={f.capital} /></Field>
           <Field label={t('agInterval')}><select className={inputCls} value={f.interval} onChange={(e) => setF({ ...f, interval: e.target.value })}><option value="1h">{t('qaIv_1h')}</option><option value="1d">{t('qaIv_1d')}</option></select></Field>
           {num('maxExposurePct', t('agMaxExposure'), '%', 1, 100)}{num('maxLossPct', t('agMaxLoss'), '%', 1, 100)}
           {num('maxOrderUsd', t('agMaxOrder'), 'USD', 1, 100000)}{num('maxDailyUsd', t('agMaxDaily'), 'USD', 1, 1000000)}
         </div>
         <Notice tone="warn">{t('agLossNote')}</Notice>
         {err && <Notice tone="danger">{err}</Notice>}
-        <Btn full busy={busy} disabled={f.name.trim().length < 2 || !f.universe.length || f.universe.length > maxSym || undecided || !net?.enabled || !(Number(f.capital) > 0)} onClick={() => void create()}>{t('agCreate')}</Btn>
+        <Btn full busy={busy} disabled={f.name.trim().length < 2 || !f.universe.length || f.universe.length > maxSym || undecided || !net?.enabled || !/[1-9]/.test(amountOf(f.capital, locale) ?? '')} onClick={() => void create()}>{t('agCreate')}</Btn>
       </Card>}
       {q.isLoading ? <Skeleton h="h-40" /> : (q.data?.agents.length ?? 0) === 0 ? !open && <Card><p className="py-6 text-center text-[14px] text-mute">{t('agNone')}</p></Card> :
         <div className="space-y-3">{q.data!.agents.map((a) => <button key={a.id} onClick={() => nav({ tab: 'agent', asset: a.id })} className="card flex w-full items-center gap-3.5 p-4 text-left">
           <span className="flex shrink-0 items-center" aria-hidden="true">{a.universe.slice(0, 3).map((s, k) => <span key={s} className={`rounded-full ring-2 ring-surface ${k ? '-ml-3.5' : ''}`}><Coin sym={s} size={36} /></span>)}</span>
-          <span className="min-w-0 flex-1"><span className="block truncate text-[16px] font-semibold">{a.name}</span><span className="block truncate text-[12.5px] text-mute">{a.universe.join(' · ')} · {a.capitalUsdc} {a.cash ?? 'USDC'} · {a.networkName}</span>{(a as { kind?: string }).kind === 'perp' && <span className="mt-0.5 inline-block rounded-md border border-blue/35 bg-blue/8 px-1.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-blue">{t('paListTag')}</span>}</span>
+          <span className="min-w-0 flex-1"><span className="block truncate text-[16px] font-semibold">{a.name}</span><span className="block truncate text-[12.5px] text-mute">{a.universe.join(' · ')} · {usdCapital(a.capitalUsdc, locale)} · {a.networkName}</span>{(a as { kind?: string }).kind === 'perp' && <span className="mt-0.5 inline-block rounded-md border border-blue/35 bg-blue/8 px-1.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-blue">{t('paListTag')}</span>}</span>
           {(a as { kind?: string }).kind === 'perp' && agentTone(a) !== 'paper' ? <PerpLiveState a={a} /> : <AgentState state={a.state} />}<Icon n="chev" className="h-4 w-4 text-mute" /></button>)}</div>}
     </div>
   );
@@ -177,7 +180,7 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
 
       <Card><H>{t('agVault')}</H>
         <div className="text-[30px] font-semibold tracking-tight">{fiat(vaultUsd, 'USD', locale)}</div>
-        <div className="text-[13px] text-mute">{t('agAllocated')} {a.capitalUsdc} {a.cash ?? 'USDC'}</div>
+        <div className="text-[13px] text-mute" data-testid="agent-capital">{t('agAllocated')} {usdCapital(a.capitalUsdc, locale)}</div>
         {a.state === 'PAPER_TRADING' && <div className="mt-3" data-testid="paper-vault-note"><Notice tone="info">{t('qaPaperVaultNote')}</Notice></div>}
         <ul className="mt-3 divide-y divide-line">{(a.vault ?? []).map((x: any) => <li key={x.asset} className="flex items-center gap-3 py-2.5"><Coin sym={x.symbol} size={32} /><span className="flex-1 text-[15px] font-medium">{x.symbol}{x.role === 'gas' ? <span className="block text-[12px] font-normal text-mute">{t('agGasRole')}</span> : (x.assetSymbol && x.assetSymbol !== x.symbol) || iss(x) ? <span className="block text-[12px] font-normal text-mute">{t('agHeldAs', { asset: x.name && x.name !== x.assetSymbol ? `${x.assetSymbol} — ${x.name}` : x.assetSymbol })}{iss(x) ? ` · ${t('agIssuer', { issuer: iss(x)!.text })}` : ''}</span> : null}</span><span className="text-right text-[14.5px] font-semibold">{trimAmt(x.display, 8)}<span className="block text-[12px] font-normal text-mute">{x.usd !== null ? fiat(x.usd, 'USD', locale) : ''}</span></span></li>)}</ul>
         <div className="mt-3 rounded-2xl bg-elev/70 p-3"><div className="mb-1 text-[12px] text-mute">{t('agVaultAddr', { network: a.networkName })}</div><Addr value={a.vaultAddress} /></div>
@@ -189,6 +192,8 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
         {issuers.length > 0 && <div className="mt-3"><Notice tone="warn">{t('agIssuerNote', { assets: issuers.join(' ; ') })}</Notice></div>}
         <ElsewhereFunds a={a} />
       </Card>
+      {/* v8 hardening: the paper book, a card of its own — never mixed with the real vault above */}
+      {showPaperBook(a) && <PaperBookCard paper={a.paper} />}
 
       {eq.length > 1 && <Card><H>{t('agEquity')}</H><PriceChart points={eq} format={(v) => fiat(v, 'USD', locale)} formatTime={(ts) => new Date(ts).toLocaleDateString(locale === 'fr' ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })} /></Card>}
 

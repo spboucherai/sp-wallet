@@ -27,7 +27,7 @@ const codes = (c: any, kind = 'blocker') => c.eligibility.reasons.filter((r: any
 const cost = (c: any, id: string) => c.costs.find((x: any) => x.id === id);
 
 beforeAll(async () => {
-  await useDatabase('spw_deriv_router_test');
+  await useDatabase('deriv_router');
   const db = await import('../src/db.ts');
   sql = db.sql;
   await db.migrate();
@@ -118,6 +118,39 @@ describe('POST /route', () => {
     expect(v.hl.calls.exchange).toBeUndefined();
     expect(Object.keys(v.hl.calls).filter((k) => (v.hl.calls[k] ?? 0) > (before[k] ?? 0)).sort()).toEqual(['fundingHistory', 'l2Book', 'meta', 'metaAndAssetCtxs'].filter((k) => (v.hl.calls[k] ?? 0) > (before[k] ?? 0)));
     expect(await sql`select count(*)::int as n from deriv_orders`).toEqual([{ n: 0 }]);
+  });
+
+  // v8 hardening (D2): the engine messages and the contract terms follow `locale` (query or body); the estimate itself never changes
+  it('follows locale: fr translates the engine messages and the contract terms, en (default) is the engine\'s own answer; locale is not part of the intent', async () => {
+    const { hasFrench } = await import('../src/derivatives/market-texts.ts');
+    const en = (await route()).json, fr = (await api('POST', P + '/route?locale=fr', intent())).json, viaBody = await route({ locale: 'fr' });
+    expect(en.locale).toBe('en'); expect(fr.locale).toBe('fr');
+    expect(viaBody.status).toBe(200); expect(viaBody.json).toEqual(fr);                                    // the body's `locale` is accepted and stripped before the strict intent schema
+    expect(fr.intent).toEqual(en.intent); expect('locale' in fr.intent).toBe(false);
+    expect((await route({ locale: 'en' })).json).toEqual(en);
+    // every engine message has its French sentence
+    expect(fr.warnings.length).toBe(en.warnings.length);
+    for (const [i, w] of en.warnings.entries()) { expect(hasFrench(w), w).toBe(true); expect(fr.warnings[i]).not.toBe(w); }
+    expect(fr.warnings[0]).toMatch(/^Simulation seulement/);
+    // contract terms: sentences are translated, figures and symbols are not
+    const TEXT = ['structure', 'execution', 'settlement', 'quote', 'markPrice', 'fundingInterval', 'fundingRule', 'sizeUnit', 'maintenance', 'liquidation', 'fees'];
+    for (const [i, c] of fr.candidates.entries()) {
+      const e = en.candidates[i];
+      for (const k of TEXT) { expect(hasFrench(e.terms[k].value), `${c.venue} ${k}: ${e.terms[k].value}`).toBe(true); expect(c.terms[k].source).toBe(e.terms[k].source); }
+      for (const k of ['tick', 'lot']) expect(c.terms[k]).toEqual(e.terms[k]);
+      expect(c.terms.collateral).toEqual({ ...e.terms.collateral, value: e.terms.collateral.value.replace(' or ', ' ou ') });
+      // the estimate is the same estimate: costs, fill, margin, eligibility, risk
+      const { terms: _t, ...rest } = c, { terms: _e, ...enRest } = e;
+      expect(rest).toEqual(enRest);
+    }
+    expect(cand(fr, BTC).terms.fundingInterval.value).toBe('toutes les 1 h'); expect(cand(fr, GMX_BTC).terms.fundingInterval.value).toMatch(/^en continu/);
+    expect(cand(fr, GMX_BTC).terms.maxLeverage.value).toMatch(/borne du contrat/);
+    const diff = (j: any, f: string) => j.differences.fields.find((x: any) => x.field === f).values.map((x: any) => x.value);
+    expect(diff(fr, 'structure')).toEqual(fr.candidates.map((c: any) => c.terms.structure.value));          // the differences table shows the same French values
+    expect(fr.ranking).toEqual(en.ranking); expect(fr.chain).toEqual(en.chain); expect(fr.errors).toEqual(en.errors);
+    // messages with a figure or a name
+    const none = (await api('POST', P + '/route?locale=fr', intent({ base: 'ZZZZ' }))).json;
+    expect(none.warnings.join(' ')).toMatch(/Aucune plateforme ne liste de contrat perpétuel sur ZZZZ\./);
   });
 
   it('another base, a size in base units, a limit order, a short, a reduce-only order', async () => {

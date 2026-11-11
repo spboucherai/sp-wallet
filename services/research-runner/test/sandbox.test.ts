@@ -3,6 +3,7 @@
 // and to write down what happened. Each denial below was attempted for real; positive controls show the sandbox is not
 // simply denying everything. Stand-ins: two local TCP servers play the wallet API and the signer, a Unix socket plays a
 // local service, a canary file outside the job directory plays a secret. Skipped where sandbox-exec does not exist.
+import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync, existsSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
@@ -13,6 +14,8 @@ import { jobPaths, runJob, sandboxAvailable } from '../src/job.ts';
 import { hooks, labReady, makeJob, REPO, testConfig } from './helpers.ts';
 
 type Probe = Record<string, { ok: boolean; error?: string; value?: string }> & { python: Record<string, { ok: boolean; error?: string }> };
+const ENV_CANARY = 'CANARY-ENV-7f3a91c2d5e8';
+let envHolder: ChildProcess | undefined;
 let probe: Probe, profile = '', connections = { api: 0, signer: 0, unix: 0 }, servers: Server[] = [], outside = '', log = '';
 
 describe.skipIf(!sandboxAvailable() || !labReady())('sandbox: every forbidden access, attempted from inside the job', () => {
@@ -24,7 +27,11 @@ describe.skipIf(!sandboxAvailable() || !labReady())('sandbox: every forbidden ac
       if (typeof where === 'string') s.listen(where, () => resolve(s)); else s.listen(where, '127.0.0.1', () => resolve(s)); });
     const api = await listen('api', 0), signer = await listen('signer', 0), unixPath = path.join(scratch, 'svc.sock'), unix = await listen('unix', unixPath);
     servers = [api, signer, unix];
-    const cfg = testConfig('probe', { home: homedir(), appDir: REPO, canary, outside, apiPort: (api.address() as { port: number }).port, signerPort: (signer.address() as { port: number }).port,
+    // a process of the same user, outside the sandbox, with a secret in its environment: stands for the runner itself (the
+    // kernel serves the environment a process was STARTED with, so the canary must be there at exec time)
+    envHolder = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 120000)'], { env: { PATH: process.env.PATH ?? '', SPW_TEST_ENV_CANARY: ENV_CANARY }, stdio: 'ignore' });
+    await new Promise((r) => setTimeout(r, 300));
+    const cfg = testConfig('probe', { home: homedir(), appDir: REPO, canary, outside, envCanary: ENV_CANARY, envPid: envHolder.pid, apiPort: (api.address() as { port: number }).port, signerPort: (signer.address() as { port: number }).port,
       unixSocket: unixPath, runnerPid: process.pid, stateDir: '' }, { keepJobs: true });
     const job = makeJob({ bars: 400 }), p = jobPaths(cfg, job.id);
     cfg.agent.argv[3] = JSON.stringify({ ...(JSON.parse(cfg.agent.argv[3]!) as object), stateDir: p.state });
@@ -35,7 +42,7 @@ describe.skipIf(!sandboxAvailable() || !labReady())('sandbox: every forbidden ac
     probe = JSON.parse(readFileSync(path.join(p.work, 'probe.json'), 'utf8')) as Probe;
     profile = readFileSync(p.profile, 'utf8');
   }, 120_000);
-  afterAll(() => { for (const s of servers) s.close(); });
+  afterAll(() => { for (const s of servers) s.close(); envHolder?.kill('SIGKILL'); });
 
   const denied = (k: string, re = /EPERM|EACCES|not permitted|Permission denied/i) => { const r = probe[k]!; expect(r, k).toBeDefined(); expect(r.ok, `${k} must be denied, got ${JSON.stringify(r)}`).toBe(false); expect(r.error ?? '', k).toMatch(re); };
 
@@ -68,6 +75,12 @@ describe.skipIf(!sandboxAvailable() || !labReady())('sandbox: every forbidden ac
     denied('kill_runner');
     expect(probe.curl!.ok, JSON.stringify(probe.curl)).toBe(false);
     expect(probe.ssh!.ok, JSON.stringify(probe.ssh)).toBe(false);
+  });
+  it('v8: the environment of a process outside the sandbox (the runner\'s secrets) cannot be read — ps -E, the process list, sysctl kern.procargs2', () => {
+    // before v8 the profile had a blanket `(allow sysctl-read)` and no process-info rule: all three answered
+    for (const k of ['ps_env', 'ps_list', 'sysctl_env']) denied(k, /EPERM|not permitted|hidden/i);
+    expect(profile).toContain('(deny sysctl-read (sysctl-name-prefix "kern.proc"))');
+    expect(profile).toContain('(deny process-info*)');
   });
   it('the same holds for the laboratory\'s Python (the process that runs strategy code)', () => {
     for (const k of ['py_read_home', 'py_read_canary', 'py_tcp_api', 'py_tcp_internet', 'py_dns', 'py_write_outside']) { const r = probe.python[k]!; expect(r, k).toBeDefined(); expect(r.ok, `${k}: ${JSON.stringify(r)}`).toBe(false); }

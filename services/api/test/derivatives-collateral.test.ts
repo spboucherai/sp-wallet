@@ -29,7 +29,7 @@ type Svc = import('../src/derivatives/collateral.ts').CollateralService;
 type Chain = import('../src/derivatives/collateral.ts').CollateralChain;
 
 beforeAll(async () => {
-  await useDatabase('spw_deriv_collateral_test');
+  await useDatabase('deriv_collateral');
   const db = await import('../src/db.ts');
   sql = db.sql;
   await db.migrate();

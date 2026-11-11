@@ -24,7 +24,7 @@ const get = (path: string) => api('GET', path);
 const q = (o: Record<string, string | number>) => `?${Object.entries(o).map(([k, x]) => `${k}=${encodeURIComponent(String(x))}`).join('&')}`;
 
 beforeAll(async () => {
-  await useDatabase('spw_deriv_test');
+  await useDatabase('deriv_api');
   const db = await import('../src/db.ts');
   sql = db.sql;
   await db.migrate();
@@ -183,6 +183,45 @@ describe('venues and market data', () => {
     expect(r.json.rows.map((x: any) => x.venue)).toEqual([...r.json.rows.map((x: any) => x.venue)].sort((a: string, b: string) => ['hyperliquid', 'gmx', 'dydx'].indexOf(a) - ['hyperliquid', 'gmx', 'dydx'].indexOf(b)));
     expect((await get(P + '/compare?base=ZZZZ')).json).toMatchObject({ rows: [], errors: [] });
     expect((await get(P + '/compare?base=B/TC')).status).toBe(400);
+  });
+
+  // v8 hardening (D2): the server-authored sentences of the read routes follow `?locale=`
+  it('GET /compare and /instruments follow ?locale=: default en is the same strings, fr translates every sentence and nothing else', async () => {
+    const { hasFrench } = await import('../src/derivatives/market-texts.ts');
+    const en = (await get(P + '/compare?base=btc')).json, dflt = (await get(P + '/compare?base=btc&locale=en')).json, fr = (await get(P + '/compare?base=btc&locale=fr')).json;
+    expect(en.locale).toBe('en'); expect(fr.locale).toBe('fr');
+    expect(dflt).toEqual(en);                                                                              // `en` is the default
+    expect((await get(P + '/compare?base=btc&locale=de')).json.locale).toBe('en');                         // an unknown language is English, not an error
+    const { locale: _l, ...enRest } = en;
+    expect(enRest).toEqual(await d.data.compare('btc'));                                                   // default: the service's own answer, untouched
+    expect(fr.rows.length).toBe(en.rows.length);
+    for (const [i, r] of fr.rows.entries()) {
+      const e = en.rows[i];
+      const { settlement: _s, notes: _n, restriction: _r, collateral: _c, ...figures } = r, { settlement: _es, notes: _en, restriction: _er, collateral: _ec, ...enFigures } = e;
+      expect(r.collateral).toBe(e.collateral.replace(' or ', ' ou '));                                     // symbols stay; only the « or » of a two-token collateral is a word
+      expect(figures).toEqual(enFigures);                                                                  // codes, ids and numbers never change with the language
+      expect(r.settlement).not.toBe(e.settlement);
+      expect(r.notes.length).toBe(e.notes.length);
+      for (const [k, n] of e.notes.entries()) { expect(hasFrench(n), n).toBe(true); expect(r.notes[k]).not.toBe(n); }   // every note the table shows has its French sentence
+      if (e.restriction !== null) expect(r.restriction).not.toBe(e.restriction); else expect(r.restriction).toBeNull();
+    }
+    const hl = fr.rows.find((x: any) => x.venue === 'hyperliquid'), dy = fr.rows.find((x: any) => x.venue === 'dydx'), pool = fr.rows.find((x: any) => x.instrument === GMX_BTC);
+    expect(hl.settlement).toMatch(/^Contrat perpétuel linéaire/); expect(hl.notes.join(' ')).toMatch(/borne inférieure/);
+    expect(dy.restriction).toMatch(/exclu.*Canada/);
+    const enPool = en.rows.find((x: any) => x.instrument === GMX_BTC);
+    const figuresOf = (s: string) => (s.match(/\d+(?:[.,]\d+)?/g) ?? []).map((x) => x.replace(',', '.'));
+    expect(pool.notes.join(' ')).toMatch(/Capacité encore ouverte : long \d+ USD/); expect(enPool.collateral).toMatch(/ or /); expect(pool.collateral).toMatch(/^\S+ ou \S+$/);
+    expect(pool.notes.map(figuresOf)).toEqual(enPool.notes.map(figuresOf));                                // the figures inside a sentence are carried over unchanged
+    expect(JSON.stringify(fr)).not.toMatch(/recommand|meilleur|gagnant/i);
+
+    const ie = (await get(P + '/instruments')).json, ifr = (await get(P + '/instruments?locale=fr')).json;
+    expect(ie.locale).toBe('en'); expect(ifr.locale).toBe('fr'); expect(ifr.instruments.length).toBe(ie.instruments.length);
+    for (const [i, x] of ifr.instruments.entries()) {
+      const e = ie.instruments[i];
+      expect({ ...x, settlement: e.settlement, markPriceMethod: e.markPriceMethod, collateral: e.collateral }).toEqual(e); expect(x.collateral).toBe(e.collateral.replace(' or ', ' ou '));
+      expect(x.settlement).not.toBe(e.settlement); expect(x.markPriceMethod).not.toBe(e.markPriceMethod);
+    }
+    expect((await get(P + '/instruments?venue=gmx&locale=fr')).json.instruments[0].markPriceMethod).toMatch(/^pas de carnet d’ordres/);
   });
 
   it('GET /watch: a public address on Hyperliquid or GMX; refused on dYdX with the restriction text, without calling it', async () => {

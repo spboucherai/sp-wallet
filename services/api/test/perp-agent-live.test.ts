@@ -12,7 +12,7 @@ let sql: any, cyc: typeof import('../src/agents/perp-live-cycle.ts'), xl: typeof
   pl: typeof import('../src/agents/perp-live.ts'), pp: typeof import('../src/derivatives/paper.ts');
 
 beforeAll(async () => {
-  await useDatabase('spw_perp_live_test');
+  await useDatabase('perp_live');
   const db = await import('../src/db.ts');
   sql = db.sql;
   await db.migrate(); await db.migrate();

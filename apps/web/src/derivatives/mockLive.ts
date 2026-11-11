@@ -338,7 +338,9 @@ export function createLiveMock(env: LiveMockEnv) {
     for (const o of a.orders) if (!o.final && PRE.includes(o.state)) setOrder(a, o, { state: 'cancelled', final: true, reason: 'withdrawn: the venue authorization was revoked before approval' });
     emit(a.id, 'status', { mode: 'READ_ONLY', ts: now() });
     const v = venueState(a);
-    return { ...detail(a), cancelled, warning: v.openOrders.length ? `${v.openOrders.length} order(s) still rest on the venue. The wallet can no longer cancel them (a revoked authorization signs nothing): cancel them in the venue's own interface, or approve a new authorization and cancel.` : null,
+    return { ...detail(a), cancelled, warning: v.openOrders.length ? (body.locale === 'fr'
+      ? `${v.openOrders.length} ordre(s) restent sur la plateforme. Le portefeuille ne peut plus les annuler (une autorisation révoquée ne signe rien) : annulez-les dans l'interface de la plateforme, ou approuvez une nouvelle autorisation puis annulez-les.`
+      : `${v.openOrders.length} order(s) still rest on the venue. The wallet can no longer cancel them (a revoked authorization signs nothing): cancel them in the venue's own interface, or approve a new authorization and cancel.`) : null,
       cancelError: null, locale: (body.locale === 'fr' ? 'fr' : 'en') as MockLocale, venueAgent: mockLiveTexts(body.locale === 'fr' ? 'fr' : 'en').venueAgent };
   }
   function proposeLeverage(a: LAcct, body: any) {

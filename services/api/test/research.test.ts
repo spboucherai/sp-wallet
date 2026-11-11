@@ -60,7 +60,7 @@ async function runFlow(mode: string, o: { agentId?: string; universe?: string[];
 const stratDir = (name: string) => path.join(LAB, 'strategies', name);
 
 beforeAll(async () => {
-  w = await world('spw_v7_research_test'); sql = w.sql;
+  w = await world('research'); sql = w.sql;
   Object.assign(process.env, { SPW_RESEARCH_RUNNER_SECRET: SECRET, SPW_RESEARCH_LAB_COMMIT: '' });
   // candles: 1 000 closed hourly bars of BTC and ETH from one source (a deterministic random walk)
   const H = 3_600_000, end = Math.floor(Date.now() / H) * H - 2 * H, rows: Record<string, unknown>[] = [];
@@ -237,7 +237,10 @@ describe.skipIf(!labReady())('research jobs — submission pipeline (real runner
     expect(s.metrics).toEqual(okSummary.metrics); expect(s.replication).toEqual(okSummary.replication);
     const [v] = await sql`select report->'metrics'->'train'->>'sharpe' as sharpe from strategy_versions where id = ${detail.version.id}`;
     expect(Number(v.sharpe)).toBe(s.metrics.train.sharpe);
-    expect(JSON.stringify(detail.report)).not.toContain('12.5');
+    // v8: the claimed values are looked for as NUMBERS of the report — a substring search over the JSON ('12.5') also matched
+    // digits inside unrelated values (a timestamp, 0.0125…, 312.5) and failed at random
+    const nums: number[] = []; JSON.stringify(detail.report, (_k, v) => { if (typeof v === 'number') nums.push(v); return v; });
+    for (const lie of [12.5, 9.99, 4.2, 9.1]) expect(nums, String(lie)).not.toContain(lie);
     const log = await sql`select body from research_log where agent_id = ${agentId} and title = 'Research job submitted'`;
     expect(log[0].body).toMatch(/the agent's reported numbers differ from the server's/);
   }, T);

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useState, type ReactNode } from 'react';
 import { ALERT_DEFS, alertPath, renderAlert, type AlertDef, type AlertGroup } from '../../../../packages/core/src/alert-catalog';
+import { localizeAlertParams } from '../reasonTexts';
 import { api, get, post } from '../api';
 import { defaultLabel, disablePush, enablePush, isIos, pushState, thisDevice, type AlertItem, type Device, type PushState, type Unread } from '../alerts';
 import { errText, I18n, useT, type Key } from '../i18n';
@@ -55,7 +56,7 @@ function AlertList({ open }: { open: (path: string) => void }) {
       <span data-testid="alerts-unread">{t('alUnreadCount', { n: q.data?.unread ?? 0 })}</span>
       <button className="font-medium text-blue disabled:opacity-40" disabled={!q.data?.unread} onClick={() => void mark({ all: true })}>{t('alMarkAll')}</button></div>
     {q.isLoading ? <Skeleton h="h-40" /> : items.length === 0 ? <Card><p className="py-6 text-center text-[14.5px] text-mute">{t('alEmpty')}</p></Card> :
-      <ul className="space-y-2.5" data-testid="alerts-list">{items.map((a) => { const text = renderAlert(a.kind, a.params, locale, true), unread = a.readAt === null;
+      <ul className="space-y-2.5" data-testid="alerts-list">{items.map((a) => { const text = renderAlert(a.kind, localizeAlertParams(a.params, locale), locale, true), unread = a.readAt === null;   // v8: known server reasons in French
         return <li key={a.id}>
           <button onClick={() => { if (unread) void mark({ ids: [a.id] }); open(alertPath(a.kind, a.subject as never)); }} data-kind={a.kind} data-unread={unread}
             className={`card flex w-full items-start gap-3 p-4 text-left ${unread ? '' : 'opacity-70'}`}>

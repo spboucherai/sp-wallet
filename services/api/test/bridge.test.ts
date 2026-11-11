@@ -5,6 +5,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createTestDb } from './test-db.ts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { decodeFunctionData, encodeAbiParameters, keccak256, numberToHex, pad, parseTransaction, toFunctionSelector, type Hex } from 'viem';
 import { CCTP_ABI, CCTP_ENABLED, CCTP_MESSAGE_TRANSMITTER, CCTP_TOKEN_MESSENGER, CCTP_TOKEN_MINTER, cctpBytes32, cctpMintRetryBytes, EIP1967_IMPLEMENTATION_SLOT, encodeCctpMessage, NETWORKS, type CctpMessage, type Intent } from '@spw/core';
@@ -126,7 +127,7 @@ beforeAll(async () => {
   store.state.setupTokenHash = createHash('sha256').update('bridge-setup-token').digest('hex');
   signerSrv = createSignerServer(new Signer(keys, store, { rpId: RP, origin: ORIGIN }), SECRET).listen(0, '127.0.0.1');
   await new Promise((r) => signerSrv.once('listening', r));
-  Object.assign(process.env, { SPW_ORIGIN: ORIGIN, SPW_RP_ID: RP, DATABASE_URL: 'postgres:///spw_test_cctp', SPW_SIGNER_SECRET: SECRET, SPW_SIGNER_URL: `http://127.0.0.1:${(signerSrv.address() as { port: number }).port}`,
+  Object.assign(process.env, { SPW_ORIGIN: ORIGIN, SPW_RP_ID: RP, DATABASE_URL: (await createTestDb('bridge')).url, SPW_SIGNER_SECRET: SECRET, SPW_SIGNER_URL: `http://127.0.0.1:${(signerSrv.address() as { port: number }).port}`,
     SPW_BROADCAST: 'on', SPW_WORKERS: 'off', SPW_IRIS_OVERRIDE: base, SPW_RPC_OVERRIDE: JSON.stringify({ base: [`${base}/rpc/base`, `${base}/rpc/base`], arbitrum: [`${base}/rpc/arbitrum`, `${base}/rpc/arbitrum`] }) });
   const db = await import('../src/db.ts'); sql = db.sql;
   await sql.unsafe('drop schema public cascade; create schema public;'); await db.migrate();

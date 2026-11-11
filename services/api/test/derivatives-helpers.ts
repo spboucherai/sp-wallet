@@ -1,8 +1,8 @@
 // Fixture-backed venue adapters for the derivatives tests: the REAL adapters of @spw/derivatives over a replaying fetch
 // (answers recorded from the venues' public endpoints, packages/derivatives/test/fixtures/), wrapped so that a test can script
 // the Hyperliquid BTC ticker, book and funding rates, cut a venue off, and drive a fake stream. No network.
+import { useTestDatabase } from './test-db.ts';
 import { readFileSync } from 'node:fs';
-import postgres from 'postgres';
 import { createDydxAdapter, createGmxAdapter, createHyperliquidAdapter, VenueError, type Book, type DecStr, type Ticker, type VenueAdapter } from '@spw/derivatives';
 import { fx, replay, type Route } from '../../../packages/derivatives/test/venue-helpers.ts';
 
@@ -116,12 +116,9 @@ export function setMarket(v: Venues, mid: number, o: { bids?: [DecStr, DecStr][]
 }
 
 /** creates the database if needed (like the market tests) and points the API's environment at it; call before importing src/ */
-export async function useDatabase(name: string): Promise<void> {
-  const admin = postgres('postgres:///postgres', { max: 1, onnotice: () => {} });
-  const [db] = await admin`select 1 from pg_database where datname = ${name}`;
-  if (!db) await admin.unsafe(`create database ${name}`).catch((e: Error) => { if (!/already exists/.test(e.message)) throw e; });
-  await admin.end();
-  Object.assign(process.env, { SPW_ORIGIN: 'https://wallet.test', SPW_RP_ID: 'wallet.test', DATABASE_URL: `postgres:///${name}`, SPW_SIGNER_SECRET: 'k'.repeat(48),
-    SPW_SIGNER_URL: 'http://127.0.0.1:9', SPW_BROADCAST: 'off', SPW_WORKERS: 'off' });
+export async function useDatabase(label: string): Promise<void> {
+  // v8: `label` names the test file; the database itself is unique per checkout and per run (test-db.ts) and
+  // is dropped by vitest's global teardown — two checkouts running the suite at once no longer share anything
+  await useTestDatabase(label);
 }
 export type { Book };

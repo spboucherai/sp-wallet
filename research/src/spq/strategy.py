@@ -7,22 +7,25 @@ A strategy version is a directory containing `strategy.py` with
 
 Its identity is the SHA-256 of the bytes of `strategy.py`.
 
-Purity ("no network, no clock, no files") is enforced in three layers, none of which is a security sandbox:
+Purity ("no network, no clock, no files") is checked in three layers. NONE OF THEM IS A SECURITY BOUNDARY: they are
+a lint for honest mistakes and research hygiene. The security boundary is the OS sandbox every process that loads a
+strategy runs in (docs/v8/SANDBOX.md) — the tests of that sandbox run with this lint disabled.
 
-1. Static check of the source (AST): imports are limited to an allow-list of numerical libraries, and a short list of
-   names is refused (open, eval, exec, __import__, .now(), .today(), read_csv, ...).
+1. Static check of the source (spq.purity, AST only): allow-listed modules used through a reviewed API, no dunder
+   access of any kind, no module object used as a value, no class / decorator / global state, no string evaluation
+   (eval, .format, pandas' eval/query, string annotations), no clock, file or pickle helper.
 2. Runtime guard around every call: socket creation, name resolution, builtins.open / io.open / os.open, subprocess,
    time.time & co, the `random` module and the numpy global seedless generators raise `PurityError`.
 3. Behavioural checks done by the backtester: the inputs are handed over copy-on-write (mutating them cannot reach the
    engine), and the look-ahead check re-runs the strategy on truncated data and requires identical decisions (this
    proves that the engine leaks no future bar; it cannot see data obtained from outside the inputs).
 
-Known limits: Python cannot confine code running in the same process. C-implemented entry points cannot be patched
-(`datetime.datetime.now()` and `pandas.Timestamp.now()` are only caught by the static check), a determined author can
-reach the originals through `ctypes`, `gc` or object introspection, and module-level code runs at import time before
-the guard is active (it is only covered by the static check). The real protection is the trust-zone design: the
-research zone holds no keys, the engine must run the signal process with an OS-level sandbox and a timeout, and the
-signer enforces the mandate whatever the strategy says.
+Known limits: Python cannot confine code running in the same process. Before v8 the static check was a short
+deny-list and was trivially evaded (`from typing import sys`, `pd.io.common.os`, `np.ctypeslib`, a generator's
+`gi_frame.f_builtins`, a `match` class pattern reading `__globals__`, …: research/tests/evasions.py lists the
+patterns tried, all refused now). A stricter lint narrows the room for accidents; it does not make this layer a
+sandbox, C-implemented entry points cannot be patched by the runtime guard, and module-level code runs before the
+guard is active. What protects the machine is the OS sandbox; what protects the funds is the signer's mandate.
 """
 from __future__ import annotations
 
@@ -92,18 +95,9 @@ def resolve_symbols(meta, symbols) -> list[str]:
         raise StrategyError("symbols must be distinct upper-case tickers (2 to 10 letters or digits)")
     return symbols
 # --- end v5 -------------------------------------------------------------------------------------------------------
-ALLOWED_IMPORTS = {
-    "__future__", "math", "typing", "collections", "itertools", "functools", "dataclasses", "statistics", "warnings",
-    "numpy", "pandas", "scipy", "statsmodels", "arch", "sklearn",
-}
-FORBIDDEN_NAMES = {"open", "eval", "exec", "compile", "__import__", "input", "breakpoint", "globals", "vars",
-                   "getattr", "setattr", "delattr", "__builtins__"}
-FORBIDDEN_ATTRS = {
-    "now", "utcnow", "today", "read_csv", "read_parquet", "read_json", "read_sql", "read_pickle", "read_excel",
-    "read_table", "read_html", "to_csv", "to_parquet", "to_pickle", "to_json", "to_sql", "to_excel", "load", "save",
-    "savez", "loadtxt", "savetxt", "genfromtxt", "fromfile", "tofile", "memmap", "system", "popen", "urlopen",
-    "__globals__", "__builtins__", "__subclasses__", "__code__", "__dict__", "__class__",
-}
+from .purity import ALLOWED_MODULES, FORBIDDEN_ATTRS, FORBIDDEN_NAMES  # noqa: E402  (v8: the policy tables)
+
+ALLOWED_IMPORTS = {m.split(".")[0] for m in ALLOWED_MODULES}
 
 
 class StrategyError(Exception):
@@ -198,27 +192,13 @@ def _validate_perp_meta(meta: dict) -> None:
 
 
 def static_check(source: str) -> list[str]:
-    """Return the list of purity problems found in the source (empty list = nothing found)."""
-    problems: list[str] = []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError as e:
-        return [f"syntax error: {e}"]
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for a in node.names:
-                if a.name.split(".")[0] not in ALLOWED_IMPORTS:
-                    problems.append(f"line {node.lineno}: import of {a.name!r} is not allowed")
-        elif isinstance(node, ast.ImportFrom):
-            if node.level or (node.module or "").split(".")[0] not in ALLOWED_IMPORTS:
-                problems.append(f"line {node.lineno}: import from {node.module!r} is not allowed")
-        elif isinstance(node, ast.Name) and node.id in FORBIDDEN_NAMES:
-            problems.append(f"line {node.lineno}: use of {node.id!r} is not allowed")
-        elif isinstance(node, ast.Attribute) and node.attr in FORBIDDEN_ATTRS:
-            problems.append(f"line {node.lineno}: attribute .{node.attr} is not allowed")
-        elif isinstance(node, (ast.Global, ast.Nonlocal)):
-            problems.append(f"line {node.lineno}: global/nonlocal state is not allowed in a pure function")
-    return problems
+    """Return the list of purity problems found in the source (empty list = nothing found).
+
+    v8: the policy lives in spq.purity (reviewed module API, no dunder, no module objects as values, no class /
+    decorator / string evaluation). It is a lint — the OS sandbox of the process is the security boundary."""
+    from .purity import check
+
+    return check(source)
 
 
 # ------------------------------------------------------------------------------------------------- runtime guard

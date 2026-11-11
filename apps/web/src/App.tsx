@@ -18,6 +18,7 @@ import { Btn, EmptyState, haptic, Icon, Skeleton, usePullToRefresh } from './ui'
 import { useAlertsRuntime, useUnread } from './alerts'; // v6-alerts
 import { Research } from './screens/Research'; // v7 research runtime
 import { PlanScreen } from './plan'; // v7 any-to-any plans
+import { setAmountLocale } from './amount'; // v8 hardening: amounts follow the screen's language
 
 // the Futures terminal is its own chunk: the wallet's first load does not pay for it
 const Futures = lazy(() => import('./screens/Futures').then((m) => ({ default: m.Futures })));
@@ -51,6 +52,7 @@ function routeOf(): Route {
 export function App() {
   const qc = useQueryClient();
   const [locale, setLocaleState] = useState<Locale>(() => (localStorage.getItem('spw-locale') === 'en' ? 'en' : 'fr'));
+  setAmountLocale(locale);   // v8 hardening: before any screen draws (trimAmt and parseInput read it)
   const [route, setRoute] = useState<Route>(routeOf);
   const tab = route.tab;
   const state = useQuery({ queryKey: ['auth'], queryFn: () => get<{ setupRequired: boolean; authenticated: boolean }>('/auth/state'), staleTime: 0 });

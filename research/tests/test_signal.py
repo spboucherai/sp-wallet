@@ -128,9 +128,11 @@ def test_refuses_a_strategy_that_cannot_be_loaded(env, tmp_path):
 def test_refuses_when_the_strategy_raises_or_is_impure(env):
     assert "ZeroDivisionError" in refused(env.run(strategy=env.variant("return {s: 1 / 0 for s in data}\n")), 5)
     assert "KeyError" in refused(env.run(strategy=env.variant("return {'AAA': data['ZZZ']}\n")), 5)
+    # v8: randomness is now refused by the static lint, before any strategy code runs (exit 4 instead of 5: the
+    # runtime guard that used to catch it is still there for a file loaded with strict=False — tests/test_strategy.py)
     err = refused(env.run(strategy=env.variant(
-        "import numpy as np\nreturn {s: float(np.random.rand()) / 2 for s in data}\n")), 5)
-    assert "PurityError" in err
+        "import numpy as np\nreturn {s: float(np.random.rand()) / 2 for s in data}\n")), 4)
+    assert "numpy.random" in err
     refused(env.run(strategy=env.variant("raise SystemExit(0)\n")), 5)   # cannot fake a success by exiting
     refused(env.run(strategy=env.variant("", raw="raise SystemExit(0)\n")), 5)   # nor at import time
 

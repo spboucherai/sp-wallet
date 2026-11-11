@@ -5,21 +5,20 @@
 // Backtest data: PRE-FETCHED HERE and handed to the laboratory as a file. The alternative — letting the laboratory's own
 // downloader reach the venue from the API's Python process — would mean giving a network exception to the process that runs
 // strategy code, with a per-host filter the OS does not offer in a dependable way (macOS has no supported hostname
-// firewall for a child process). Pre-fetching keeps the laboratory process offline (UV_OFFLINE, no socket needed, no database
+// firewall for a child process). Pre-fetching keeps the laboratory process offline (v8: inside the OS sandbox of lab.ts, no socket at all, no database
 // URL either), reuses the adapter that is already validated (zod), read-only (no trading object) and rate-budgeted, and makes
 // the backtest run on exactly the series the engine stores and trades on.
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Instrument } from '@spw/derivatives';
 import { UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
 import type { DerivData } from '../derivatives/data.ts';
-import { RESEARCH_DIR } from './live.ts';
+import { dropScratch, RESEARCH_DIR, scratchDir } from './lab.ts';
 import { VENUE_MAX_BARS, type PerpDataStore, type PerpInterval } from './perp-data.ts';
 import { PERP_VENUE, type PerpAgentRow } from './perp-engine.ts';
-import { py } from './strategies.ts';
+import { py, stageLedger } from './strategies.ts';
 import { z } from 'zod';
 
 const ROOT = path.join(RESEARCH_DIR, 'strategies');
@@ -40,7 +39,7 @@ export async function describePerp(rel: string): Promise<PerpStrategyInfo> {
   Rel.parse(rel);
   const dir = path.join(ROOT, rel);
   if (!existsSync(path.join(dir, 'strategy.py'))) throw new UserError('not_found', 'strategy version not found', 404);
-  const r = await py(['spq.describe', '--strategy', dir, '--contract', '2']);
+  const r = await py(['spq.describe', '--strategy', dir, '--contract', '2'], { timeoutMs: 60_000, strategyDir: dir });
   if (r.code !== 0) throw new UserError('bad_strategy', `the laboratory refused this strategy: ${r.err.trim().split('\n').pop()?.slice(0, 160) ?? ''}`, 422);
   const p = Info.parse(JSON.parse(r.out));
   if (p.kind !== 'perp' || p.contract !== 2 || p.meta.kind !== 'perp') throw new UserError('wrong_kind', 'this is a spot strategy (long-only weights in [0, 1]): it cannot be attached to a perp agent', 422);
@@ -88,7 +87,7 @@ const running = new Set<string>();
 /** Backtest a registered perp version on the venue's own data and attach the version-2 report. Never throws. */
 export async function perpBacktest(versionId: string, info: PerpStrategyInfo, symbols: string[], interval: PerpInterval, d: PerpLabDeps): Promise<void> {
   if (running.has(versionId)) return; running.add(versionId);
-  const tmp = mkdtempSync(path.join(tmpdir(), 'spw-perp-bt-')), out = path.join(tmp, 'report.json'), bundle = path.join(tmp, 'bundle.json'), store = path.join(tmp, 'data');
+  const tmp = scratchDir(), out = path.join(tmp, 'report.json'), bundle = path.join(tmp, 'bundle.json'), store = path.join(tmp, 'data');
   try {
     await sql`update strategy_versions set status = 'backtesting', notes = '' where id = ${versionId} and status in ('draft', 'backtesting')`;
     // 1 — the venue's history, through the read-only adapter and the store's rate budget (as much as the venue serves)
@@ -112,18 +111,20 @@ export async function perpBacktest(versionId: string, info: PerpStrategyInfo, sy
     }
     writeFileSync(bundle, JSON.stringify({ interval, as_of_ms: d.store.now(), meta, candles, funding, ...(spot ? { spot } : {}) }));
     // 2 — the laboratory, offline: file → store, then the perp backtester. No database URL, no network.
-    const imp = await py(['spq.data.hl_import', '--input', bundle, '--out', store], { timeoutMs: 120_000 });
+    const imp = await py(['spq.data.hl_import', '--input', bundle, '--out', store], { timeoutMs: 120_000, scratch: tmp });
     if (imp.code !== 0) return void (await fail(versionId, imp.err.trim().split('\n').pop()?.slice(0, 300) ?? 'import'));
-    const r = await py(['spq.perp_backtest', '--strategy', path.join(RESEARCH_DIR, info.path), '--sha256', info.sha256, '--symbols', symbols.join(','), '--interval', interval, '--data-dir', store, '--out', out,
-      '--ledger', path.join(RESEARCH_DIR, 'results', 'ledger.jsonl')], { timeoutMs: 20 * 60_000 });
+    const ledger = stageLedger(tmp), dir = path.join(RESEARCH_DIR, info.path); // v8: the sandboxed process works on a copy of the ledger
+    const r = await py(['spq.perp_backtest', '--strategy', dir, '--sha256', info.sha256, '--symbols', symbols.join(','), '--interval', interval, '--data-dir', store, '--out', out,
+      '--ledger', ledger.copy], { timeoutMs: 20 * 60_000, strategyDir: dir, scratch: tmp });
     if (r.code !== 0 || !existsSync(out)) return void (await fail(versionId, r.err.trim().split('\n').pop()?.slice(0, 300) ?? 'no report'));
+    ledger.merge();
     const report = JSON.parse(readFileSync(out, 'utf8')) as Record<string, unknown>;
     const r0 = report as { schema_version?: number; kind?: string; strategy_sha256?: string; config?: { symbols?: string[] } };
     if (r0.schema_version !== 2 || r0.kind !== 'perp' || r0.strategy_sha256 !== info.sha256 || !Array.isArray(r0.config?.symbols) || !sameSet(r0.config.symbols, symbols)) return void (await fail(versionId, 'the report is not a version-2 report for this code hash and these instruments'));
     await sql`update strategy_versions set status = 'draft', report = ${sql.json(report as never)}, notes = '' where id = ${versionId} and status = 'backtesting'`;
     await audit('strategy.backtested', 'engine', { version: versionId, sha256: info.sha256, kind: 'perp' });
   } catch (e) { await fail(versionId, (e as Error).message.slice(0, 200)).catch(() => {}); }
-  finally { running.delete(versionId); rmSync(tmp, { recursive: true, force: true }); }
+  finally { running.delete(versionId); dropScratch(tmp); }
 }
 
 /** Pin a perp library version to a perp agent and backtest it; approval stays a separate owner action and needs the report. */

@@ -2,7 +2,7 @@
 // suites reset concurrently) with scripted exchanges (no network): idempotent storage, the pipeline (incremental update,
 // backfill), getSeries, assertFresh in every failing situation, the quality record and the routes.
 import Fastify from 'fastify';
-import postgres from 'postgres';
+import { createTestDb } from './test-db.ts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { INTERVAL_MS, MarketDataError, SourceError, expectedLastTs, isClosed, type Candle, type Interval, type MarketSource, type MarketSymbol, type SourceId } from '../src/market/types.ts';
 
@@ -13,11 +13,7 @@ let sql: any, store: typeof import('../src/market/store.ts'), pipe: typeof impor
 let routes: typeof import('../src/market/routes.ts');
 
 beforeAll(async () => {
-  const admin = postgres('postgres:///postgres', { max: 1, onnotice: () => {} });
-  const [db] = await admin`select 1 from pg_database where datname = 'spw_market_test'`;
-  if (!db) await admin.unsafe('create database spw_market_test').catch((e: Error) => { if (!/already exists/.test(e.message)) throw e; });
-  await admin.end();
-  Object.assign(process.env, { SPW_ORIGIN: 'https://wallet.test', SPW_RP_ID: 'wallet.test', DATABASE_URL: 'postgres:///spw_market_test', SPW_SIGNER_SECRET: 'k'.repeat(48),
+  Object.assign(process.env, { SPW_ORIGIN: 'https://wallet.test', SPW_RP_ID: 'wallet.test', DATABASE_URL: (await createTestDb('market_store')).url, SPW_SIGNER_SECRET: 'k'.repeat(48),
     SPW_BROADCAST: 'off', SPW_WORKERS: 'off' });
   const db2 = await import('../src/db.ts');
   sql = db2.sql;

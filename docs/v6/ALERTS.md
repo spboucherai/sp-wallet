@@ -93,6 +93,8 @@ sentence; FR/EN wording is in `packages/core/src/alert-catalog.ts`.
 | `system.worker_failing` | warning | on | a `loop()` failed 5 passes in a row |
 | `system.backup_missing` | warning | on | newest `sp-wallet-*.sql.gz` older than 36 h |
 | `system.disk_low` | warning | on | free space under 10 % |
+| `system.lab_sandbox_unavailable` / `system.lab_sandbox_back` | **critical** / info | on | v8 condition: the OS sandbox of strategy code does not confine (signals and backtests do not run) |
+| `system.lab_sandbox_off` | **critical** | on | v8 condition: `SPW_LAB_SANDBOX=off` is set; once per day |
 | `conn.down` / `conn.up` | warning / info | on | any connector of the dashboard, debounced 3 min |
 | `system.alerts_capped` | info | fixed | the single "N more alerts" summary |
 | `system.test` | info | fixed | the test button |

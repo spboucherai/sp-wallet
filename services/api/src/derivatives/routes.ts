@@ -8,6 +8,7 @@ import { UserError } from '../config.ts';
 import { CANDLE_INTERVALS, DATA_BOUNDS, FUNDING_MAX_HOURS } from './data.ts';
 import { derivatives, type Derivatives } from './index.ts';
 import { CloseBodySchema, CreateBodySchema, OrderBodySchema } from './paper.ts';
+import { localizeCompare, localizeInstruments, localizeRoute, textLocale } from './market-texts.ts'; // v8 hardening: `locale` on the read routes
 
 const P = '/api/v1/derivatives';
 /** Server-Sent Events connections served at once (one owner, a few tabs) */
@@ -58,9 +59,9 @@ export function derivativesRoutes(app: FastifyInstance, d: Derivatives = derivat
   });
 
   app.get(`${P}/instruments`, async (req) => {
-    const q = z.object({ venue: z.string().max(40).optional() }).parse(req.query);
+    const q = z.object({ venue: z.string().max(40).optional(), locale: z.string().max(8).optional() }).parse(req.query);
     const r = await perVenue(q.venue, (id) => data.instruments(id));
-    return { instruments: r.items, ts: r.ts, errors: r.errors };
+    return localizeInstruments({ instruments: r.items, ts: r.ts, errors: r.errors }, textLocale(q.locale));   // v8: `?locale=fr|en` (default en = the adapters' own strings)
   });
 
   app.get(`${P}/tickers`, async (req) => {
@@ -99,7 +100,10 @@ export function derivativesRoutes(app: FastifyInstance, d: Derivatives = derivat
     req.raw.on('close', end); reply.raw.on('close', end); reply.raw.on('error', end);
   });
 
-  app.get(`${P}/compare`, async (req) => data.compare(z.object({ base: z.string().regex(/^[A-Za-z0-9]{1,15}$/).default('BTC') }).parse(req.query).base));
+  app.get(`${P}/compare`, async (req) => {
+    const q = z.object({ base: z.string().regex(/^[A-Za-z0-9]{1,15}$/).default('BTC'), locale: z.string().max(8).optional() }).parse(req.query);
+    return localizeCompare(await data.compare(q.base), textLocale(q.locale));   // v8: `?locale=fr|en` (default en = the same strings as before)
+  });
 
   app.get(`${P}/watch`, async (req) => {
     const q = z.object({ account: z.string().min(1).max(120), venue: z.string().max(40) }).parse(req.query);
@@ -113,7 +117,12 @@ export function derivativesRoutes(app: FastifyInstance, d: Derivatives = derivat
   // an estimate (`source: 'estimate'`) and its ranking is information, never a selection.
   const router = (): NonNullable<Derivatives['router']> => { if (!d.router) throw new UserError('router_unavailable', 'the router is not configured on this instance', 503); return d.router; };
   app.get(`${P}/route/assets`, async () => router().assets());
-  app.post(`${P}/route`, async (req) => router().route(req.body));
+  app.post(`${P}/route`, async (req) => {
+    // v8: `?locale=fr|en` or the body's `locale` selects the language of the engine messages and contract terms; it is not part of the order intent
+    const body = req.body, own = body !== null && typeof body === 'object' && !Array.isArray(body) && 'locale' in body;
+    const { locale: bodyLocale, ...intent } = own ? (body as Record<string, unknown>) : { locale: undefined };
+    return localizeRoute(await router().route(own ? intent : body), textLocale((req.query as { locale?: unknown } | undefined)?.locale ?? bodyLocale));
+  });
   // ------------------------------------------------------------------ /router
 
   // ------------------------------------------------------------------ paper accounts

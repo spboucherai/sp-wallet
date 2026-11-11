@@ -19,7 +19,7 @@ const calls: { url: string; headers: Headers; body: Buffer }[] = [];
 let pushStatus = 201;
 
 beforeAll(async () => {
-  w = await world('spw_v6_alerts_engine_test'); sql = w.sql; d = w.dispatcher();
+  w = await world('alerts_engine'); sql = w.sql; d = w.dispatcher();
   w.env.fetch = (async (url: unknown, init: RequestInit) => { calls.push({ url: String(url), headers: new Headers(init.headers), body: Buffer.from(init.body as Uint8Array | string) }); return new Response(null, { status: pushStatus }); }) as typeof fetch;
   await d.tail();                                                    // cursors are created at the present
 });
@@ -407,7 +407,9 @@ describe('delivery', () => {
     expect(verifyWebhook('another-secret', c.headers.get('x-spw-timestamp')!, c.headers.get('x-spw-signature')!, body, w.clock.t)).toBe(false);
     expect(verifyWebhook(secret, c.headers.get('x-spw-timestamp')!, c.headers.get('x-spw-signature')!, body, w.clock.t + 10 * 60_000)).toBe(false);   // replayed later
     expect(JSON.parse(body)).toMatchObject({ app: 'sp-wallet', kind: 'transfer.confirmed', severity: 'info', title: 'Transfer confirmed', body: 'On Base.', params: { network: 'Base' } });
-    expect(body).not.toMatch(/25|USDC|0x/);
+    // v8: the amount and the symbol are looked for in the fields that could carry them — over the whole body, "25" also
+    // matched digits of the timestamp and of the alert id (same family as the push test above)
+    { const j = JSON.parse(body) as { title: string; body: string; params: unknown }; expect(JSON.stringify([j.title, j.body, j.params])).not.toMatch(/25|USDC|0x/); expect(Object.keys(j.params as object)).toEqual(['network']); }
     await settings({ webhook: { enabled: true, url: 'https://hooks.example/spw', details: true } });
     await d.raise({ kind: 'transfer.confirmed', params: { network: 'Base', symbol: 'USDC', amount: '25' } }); await d.deliver();
     expect(JSON.parse(calls[1]!.body.toString())).toMatchObject({ body: '25 USDC sent on Base.', params: { amount: '25' } });

@@ -15,6 +15,11 @@ import type { CompareRow, Instrument, VenueId } from './types';
 const ORDER: VenueId[] = ['hyperliquid', 'gmx', 'dydx'];
 const MAJORS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'LINK', 'AVAX', 'ARB'];
 const FIELDS = ['collateral', 'settlement', 'funding', 'leverage', 'fee', 'price'] as const;
+/**
+ * The « open this market » link of a row. A short symbol (« BTC ») is about 28 px wide: the target is padded to 44 × 44 CSS px
+ * (min-h-11 and min-w-11 = 2.75 rem), the text stays left-aligned with the column.
+ */
+export const COMPARE_OPEN_CLS = '-my-2 inline-flex min-h-11 min-w-11 items-center text-left font-semibold underline decoration-line underline-offset-4';
 const intervalText = (sec: number | null) => (sec === null ? '—' : sec % 3600 === 0 ? `${sec / 3600} h` : `${Math.round(sec / 60)} min`);
 
 export function CompareView({ instruments, base, onBase, onOpen }: { instruments: Instrument[]; base: string; onBase: (b: string) => void; onOpen: (id: string) => void }) {
@@ -22,11 +27,11 @@ export function CompareView({ instruments, base, onBase, onOpen }: { instruments
   const bases = useMemo(() => { const m = new Map<string, Set<string>>(); for (const i of instruments) if (i.status !== 'halted') (m.get(i.base) ?? m.set(i.base, new Set()).get(i.base)!).add(i.venue);
     const rank = (b: string) => { const i = MAJORS.indexOf(b); return i < 0 ? MAJORS.length : i; };   // a fixed, familiar order of assets — not a ranking of venues
     return [...m.entries()].filter(([, v]) => v.size > 1).sort((a, b) => rank(a[0]) - rank(b[0]) || b[1].size - a[1].size || a[0].localeCompare(b[0])).map(([b]) => b).slice(0, 8); }, [instruments]);
-  const q = useQuery({ queryKey: ['deriv', 'compare', base], queryFn: () => dapi.compare(base), refetchInterval: 15_000 });
+  const q = useQuery({ queryKey: ['deriv', 'compare', base, locale], queryFn: () => dapi.compare(base, locale), refetchInterval: 15_000 });   // v8: the server's sentences in the screen's language
   const rows = useMemo(() => [...(q.data?.rows ?? [])].sort((a, b) => ORDER.indexOf(a.venue) - ORDER.indexOf(b.venue) || a.instrument.localeCompare(b.instrument)), [q.data]);   // fixed venue order: never by "quality"
   const cols: Col<CompareRow>[] = [
     { id: 'v', label: t('fxVenue'), head: true, cell: (r) => <><VenueBadge venue={r.venue} />{r.restriction ? <span className="mt-1 block text-[11.5px] font-normal text-warn">{t('fxDataOnly')}</span> : null}</> },
-    { id: 'i', label: t('fxInstrument'), head: true, cell: (r) => <button type="button" onClick={() => onOpen(r.instrument)} className="-my-2 inline-flex min-h-11 items-center text-left font-semibold underline decoration-line underline-offset-4" aria-label={t('fxOpenMarket', { symbol: r.instrument })}>{r.instrument.slice(r.instrument.indexOf(':') + 1)}</button> },
+    { id: 'i', label: t('fxInstrument'), head: true, cell: (r) => <button type="button" onClick={() => onOpen(r.instrument)} className={COMPARE_OPEN_CLS} data-testid="compare-open" aria-label={t('fxOpenMarket', { symbol: r.instrument })}>{r.instrument.slice(r.instrument.indexOf(':') + 1)}</button> },
     { id: 'mark', label: t('fxMark'), num: true, cell: (r) => fmt(r.mark, { dp: priceDp('0.01', r.mark), locale }) },
     { id: 'index', label: t('fxIndex'), num: true, cell: (r) => (r.index ? fmt(r.index, { dp: priceDp('0.01', r.index), locale }) : '—') },
     { id: 'fund', label: t('fxFundingPerHour'), num: true, cell: (r) => (r.funding ? <>{pct(r.funding, 5, locale, true)}<span className="block text-[11.5px] text-mute">{r.venue === 'gmx' ? t('fxContinuousShort') : t('fxEveryShort', { interval: intervalText(r.fundingVenue.intervalSec) })}</span></> : '—') },

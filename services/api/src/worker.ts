@@ -10,6 +10,7 @@ import { advanceBridgeBurn, advanceBridges } from './bridge.ts';
 import { broadcastNow, move, type ProposalRow } from './transfers.ts';
 import { advanceXswapSend, advanceXswaps, xswapMayBroadcast } from './xswap.ts';
 import { advancePlans } from './plan-exec.ts'; // v7 any-to-any plans
+import { advanceWithdrawals } from './agents/withdrawals.ts'; // v8
 
 export const healthCache = new Map<string, Health>();
 const log = (m: string) => console.log(`[worker] ${m}`);
@@ -81,8 +82,8 @@ async function refreshHealth(): Promise<void> {
 }
 
 // v6-alerts: heartbeat of every worker loop (read by the monitoring dashboard and the "worker failing" alert) — additive
-export interface LoopStat { name: string; everyMs: number; runs: number; lastStartAt: number | null; lastOkAt: number | null; lastErrorAt: number | null; lastError: string | null; /** failed passes in a row */ failures: number }
-export const loopStats = new Map<string, LoopStat>();
+import { loopStats, type LoopStat } from './loop-stats.ts'; // v8: the map lives in its own module (the agent engines report there too)
+export { loopStats, type LoopStat };
 
 export function loop(name: string, fn: () => Promise<void>, everyMs: number): void {
   let running = false;
@@ -104,5 +105,6 @@ export function startWorkers(): void {
   loop('xswaps', advanceXswaps, 10_000);
   loop('plans', advancePlans, 6_000); // v7: reads the proposals of open plans and moves the plans; never signs
   loop('deposits', scanDeposits, 75_000);
+  loop('withdrawals', () => advanceWithdrawals(), 8_000); // v8: agent-vault withdrawals — receipt and arrival at the owner's address; never signs
 }
 export { refreshHealth, reconcile, expireStale, isTerminal, advanceBridges };

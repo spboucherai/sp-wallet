@@ -33,8 +33,10 @@ export function FundingBox({ network, collateral }: { network: LiveNetwork; coll
       {(network === 'mainnet' ? (['flFundMain1', 'flFundMain2', 'flFundMain3'] as const) : (['flFundTest1', 'flFundTest2'] as const)).map((k) => <Bullet key={k} icon="chev">{t(k)}</Bullet>)}
       <Bullet icon="key">{t('hlcFundBuilt')}</Bullet>
     </ul>
-    {collateral && <p className="mt-2 break-words text-[11.5px] text-mute">{t('fxServerSays')} <span className="font-mono text-[11px]">{collateral.deposits.how}</span></p>}
-    {collateral && <p className="mt-1 break-words text-[11.5px] text-mute">{t('flWithdrawalsServer')} <span className="font-mono text-[11px]">{collateral.withdrawals.how}</span></p>}
+    {/* v8 hardening: the server's note names files and routes — a developer note. It stays available, folded, in the screen's language; the sentences above are the owner's explanation */}
+    {collateral && <details className="mt-2" data-testid="funding-tech-note"><summary className="flex min-h-11 cursor-pointer items-center text-[12px] font-medium text-mute">{t('hdServerTechNote')}</summary>
+      <p className="break-words text-[11.5px] text-mute">{t('hdTechDeposits')} <span className="font-mono text-[11px]">{collateral.deposits.how}</span></p>
+      <p className="mt-1 break-words text-[11.5px] text-mute">{t('flWithdrawalsServer')} <span className="font-mono text-[11px]">{collateral.withdrawals.how}</span></p></details>}
   </div>;
 }
 
@@ -180,7 +182,7 @@ function RevokeSheet({ account, onClose }: { account: LiveSummary; onClose: () =
 function LiveAccountCard({ a, config, selected, onSelect }: { a: LiveSummary; config: LiveConfig; selected: boolean; onSelect: (id: string) => void }) {
   const t = useT(); const { locale } = useContext(I18n);
   const tone = toneOf(a), off = a.network === 'mainnet' && !a.mainnetEnabled, auth = a.authorization, live = a.mode === 'MANUAL_LIVE';
-  const col = useQuery({ queryKey: ['deriv', 'live', 'collateral', a.id], queryFn: () => lapi.collateral(a.id, locale), refetchInterval: 30_000, retry: 0 });
+  const col = useQuery({ queryKey: ['deriv', 'live', 'collateral', a.id, locale], queryFn: () => lapi.collateral(a.id, locale), refetchInterval: 30_000, retry: 0 });
   const [sheet, setSheet] = useState<'authorize' | 'revoke' | null>(null);
   const c = col.data;
   return <li className={`rounded-2xl border p-4 ${selected ? 'border-ink' : 'border-line'}`} data-testid={`live-account-${a.network}`} data-mode={a.mode}>

@@ -6,9 +6,9 @@ import { mkdtempSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createTestDb } from './test-db.ts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { base58 } from '@scure/base';
-import postgres from 'postgres';
 import { BPF_UPGRADEABLE_LOADER, decodeSolV1Message, JUPITER_PIN, JUPITER_PROGRAM, jupiterMinOut, NETWORKS, SYSTEM_PROGRAM, TOKEN_2022_PROGRAM, TOKEN_PROGRAM, verifyJupiterSwap, type Intent } from '@spw/core';
 import { buildFor, jupFixture, solAta, solMint, solToken, type JupFixture } from '../../../tests/helpers/jupiter-fixtures.ts';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
@@ -17,7 +17,7 @@ import { createSignerServer } from '../../isolated-signer/src/server.ts';
 import { Signer } from '../../isolated-signer/src/signer.ts';
 import { Store } from '../../isolated-signer/src/store.ts';
 
-const ORIGIN = 'https://wallet.test', RP = 'wallet.test', SECRET = 'j'.repeat(48), DB = 'spw_test_jupiter';
+const ORIGIN = 'https://wallet.test', RP = 'wallet.test', SECRET = 'j'.repeat(48), DB_LABEL = 'swap_sol';
 const keys = deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'), ME = keys.addresses.solana!;
 const owner = new TestPasskey(RP, ORIGIN);
 const N = NETWORKS.solana!;
@@ -95,9 +95,7 @@ const approve = (prep: any) => api('POST', `/api/v1/transfers/proposals/${prep.j
 const confirm = (id: string, st: 'confirmed' | 'finalized', e: unknown = null) => chain.status.set(id, { confirmations: st === 'finalized' ? null : 3, err: e, confirmationStatus: st, slot: 777 });
 
 beforeAll(async () => {
-  const admin = postgres('postgres:///postgres', { max: 1, onnotice: () => {} });
-  if (!(await admin`select 1 from pg_database where datname = ${DB}`).length) await admin.unsafe(`create database ${DB}`).catch((e: Error) => { if (!/already exists/.test(e.message)) throw e; });
-  await admin.end();
+  const DB = (await createTestDb(DB_LABEL)).name;
   fake = createServer((req, res) => {
     const url = new URL(req.url!, 'http://x'); let body = '';
     req.on('data', (c) => { body += c; }); req.on('end', () => {

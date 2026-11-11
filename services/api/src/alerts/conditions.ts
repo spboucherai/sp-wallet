@@ -7,10 +7,13 @@ import { sql } from '../db.ts';
 import { auditChainStatus, collectConnectors, diskFree, lastBackup, type HealthDeps } from '../monitor/health.ts';
 import { derivAccount, INTERVAL_MS, type Draft } from './rules.ts';
 import { delState, getState, putState, type AlertSettings } from './store.ts';
+import { labStatus, type LabStatus } from '../agents/lab.ts'; // v8
 
 export interface ConditionDeps extends HealthDeps {
   backup(): ReturnType<typeof lastBackup>;
   disk(): ReturnType<typeof diskFree>;
+  /** v8: health of the OS sandbox of strategy code (default: the real one) */
+  lab?(): Promise<LabStatus>;
 }
 const netName = (id: string): string => { try { return getNetwork(id).name; } catch { return id; } };
 const TERMINAL_BAD = ['failed', 'rejected', 'expired', 'replaced', 'draft', 'pending_approval', 'approved'];
@@ -110,5 +113,14 @@ export async function conditionDrafts(d: ConditionDeps, s: AlertSettings): Promi
   const disk = await d.disk();
   if (disk && disk.freePct < th.diskFreePct) out.push({ kind: 'system.disk_low', params: { pct: disk.freePct }, dedupe: `disk:${dayKey}` });
   for (const l of d.loops()) if (l.failures >= 5) out.push({ kind: 'system.worker_failing', params: { loop: l.name, count: l.failures, reason: l.lastError ?? '' }, dedupe: `loop:${l.name}:${Math.floor(now / (6 * 3_600_000))}` });
+  // 10 — v8: the OS sandbox of strategy code. Unavailable = no signal and no backtest runs (fail closed): said once per
+  // episode (on the second poll in a row that finds it broken), and once when it is back; the development switch that turns confinement off is said once per day while it is set.
+  const lab = await (d.lab ?? labStatus)().catch(() => null);
+  if (lab) {
+    const r = await debounce('lab', lab.mode === 'unavailable', now, 0);
+    if (r.edge === 'down') out.push({ kind: 'system.lab_sandbox_unavailable', params: { reason: (lab.reason ?? '').slice(0, 200) }, dedupe: `lab.down:${r.since}` });
+    if (r.edge === 'up') out.push({ kind: 'system.lab_sandbox_back', params: {}, dedupe: `lab.up:${r.since}` });
+    if (lab.mode === 'off') out.push({ kind: 'system.lab_sandbox_off', params: {}, dedupe: `lab.off:${dayKey}` });
+  }
   return out;
 }

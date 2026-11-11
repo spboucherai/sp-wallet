@@ -176,6 +176,8 @@ for (const size of SIZES) {
       await expect(view).toContainText('pas de carnet');
       await expect(view).toContainText('Ce qui diffère d’un contrat à l’autre');
       await expect(view.locator('text=/best|recommand/i')).toHaveCount(0);
+      // v8 hardening (D3): the « open this market » link of a row is a 44 × 44 target, however short the symbol
+      for (const link of await view.getByTestId('compare-open').all()) { const b = await link.boundingBox(); expect(b!.width).toBeGreaterThanOrEqual(43.5); expect(b!.height).toBeGreaterThanOrEqual(43.5); }
       await shot(page, `${size.name}-10-compare`, true);
       await view.getByRole('radio', { name: 'ETH' }).click();
       await expect(view).toContainText('Contrats perpétuels ETH par plateforme');

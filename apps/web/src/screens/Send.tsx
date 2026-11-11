@@ -1,18 +1,20 @@
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { get, post } from '../api';
 import type { Tab } from '../App';
 import { useNetworks, usePortfolio, type Proposal } from '../hooks';
-import { errText, useT, type Key } from '../i18n';
-import { Addr, Btn, Card, Chips, Coin, Field, H, Icon, inputCls, NetworkIcon, Notice, PageTitle, short, StatePill, testNotSent, trimAmt } from '../ui';
+import { amountInputText, amountOf, sanitizeAmountText } from '../amount';
+import { AmountProblem } from '../amountUi';
+import { errText, I18n, useT, type Key } from '../i18n';
+import { Addr, Btn, Card, Chips, Coin, exactAmt, Field, H, Icon, inputCls, NetworkIcon, Notice, PageTitle, short, StatePill, testNotSent, trimAmt } from '../ui';
 import { AgentRecipientNotice } from './AgentFund';
 
 type Step = 'form' | 'review' | 'track';
 const FLOW = ['pending_approval', 'signed', 'broadcast', 'confirming', 'finalized'];
 
 export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { network?: string; asset?: string } }) {
-  const t = useT(); const qc = useQueryClient();
+  const t = useT(); const qc = useQueryClient(); const { locale } = useContext(I18n);
   const nets = useNetworks(), pf = usePortfolio();
   const book = useQuery({ queryKey: ['book'], queryFn: () => get<{ id: string; network: string; address: string; label: string }[]>('/addressbook') });
   const [step, setStep] = useState<Step>('form');
@@ -37,7 +39,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
 
   const review = async () => {
     setBusy('review'); setErr('');
-    try { setP(await post<Proposal>('/transfers/proposals', { network: net, asset, to: to.trim(), amount: amount.trim(), note, ...(n?.memo && memo.trim() ? { memo: memo.trim() } : {}) }, { 'idempotency-key': idem })); setChecked(false); setStep('review'); }
+    try { setP(await post<Proposal>('/transfers/proposals', { network: net, asset, to: to.trim(), amount: amountOf(amount, locale) ?? amount.trim(), note, ...(n?.memo && memo.trim() ? { memo: memo.trim() } : {}) }, { 'idempotency-key': idem })); setChecked(false); setStep('review'); }
     catch (e) { fail(e); setIdem(crypto.randomUUID()); } finally { setBusy(''); }
   };
   const approve = async () => {
@@ -85,9 +87,10 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
           <div className="flex flex-wrap gap-2">{book.data!.filter((b) => b.network === net).map((b) => <button key={b.id} onClick={() => setTo(b.address)} className={`press min-h-11 rounded-full border px-3.5 py-1.5 text-[13px] ${to === b.address ? 'border-emerald bg-emerald/[0.07] text-emerald' : 'border-line'}`}><Icon n="book" className="mr-1 inline h-3.5 w-3.5" />{b.label} · {short(b.address)}</button>)}</div></div>}
         <Field label={`${t('amount')} (${a?.symbol ?? ''})`} hint={bal?.display != null ? <>{t('available')}{t('available') === 'Disponible' ? ' : ' : ': '}{trimAmt(bal.display, 8)} {bal.symbol}</> : bal ? <span className="text-warn">{t('qaBalUnknown')}</span> : undefined}>
           <div className="flex gap-2">
-            <input className={`${inputCls} text-[19px] font-semibold`} inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))} autoComplete="off" />
-            {asset !== 'native' && bal?.display != null && <Btn kind="soft" onClick={() => setAmount(bal.display!)}>{t('max')}</Btn>}
+            <input className={`${inputCls} text-[19px] font-semibold`} inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(sanitizeAmountText(e.target.value))} autoComplete="off" />
+            {asset !== 'native' && bal?.display != null && <Btn kind="soft" onClick={() => setAmount(amountInputText(bal.display!, locale))}>{t('max')}</Btn>}
           </div>
+          <AmountProblem text={amount} />
         </Field>
         {n?.memo && <Field label={t(n.memo === 'uint32' ? 'memoTag' : 'memoText')} hint={t('memoWarn')}>
           <input className={inputCls} value={memo} maxLength={n.memo === 'uint32' ? 10 : n.id === 'stellar' ? 28 : 120} inputMode={n.memo === 'uint32' ? 'numeric' : 'text'} onChange={(e) => setMemo(n.memo === 'uint32' ? e.target.value.replace(/\D/g, '') : e.target.value)} autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} /></Field>}
@@ -96,7 +99,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
         {n?.family === 'cardano' && <Notice tone="info">{t('cdSendHint')}</Notice>}
         {n?.family === 'polkadot' && <Notice tone="info">{t('dtSendHint', { amount: n.activation ?? '0.01' })}</Notice>}
         {err && <Notice tone="danger">{err}</Notice>}
-        <Btn full busy={busy === 'review'} disabled={!to || !amount || pf.data?.halted} onClick={review}>{busy === 'review' ? t('preparing') : t('review')}</Btn>
+        <Btn full busy={busy === 'review'} disabled={!to || !amountOf(amount, locale) || pf.data?.halted} onClick={review}>{busy === 'review' ? t('preparing') : t('review')}</Btn>
       </Card>
     </div>
   );
@@ -111,7 +114,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
       <Card className="receipt space-y-4" >
         <div className="flex items-start gap-3.5"><Coin sym={cur.symbol} net={cur.network} size={48} />
           <div className="min-w-0"><div className="text-[13px] text-mute">{t('youSend')}</div>
-          <div className="t-display break-words text-[clamp(30px,9.5vw,40px)] !leading-[1.08]">{cur.amountDisplay} <span className="text-mute">{cur.symbol}</span></div>
+          <div className="t-display break-words text-[clamp(30px,9.5vw,40px)] !leading-[1.08]">{exactAmt(cur.amountDisplay)} <span className="text-mute">{cur.symbol}</span></div>
           <div className="mt-1 break-all font-mono text-xs text-mute">{cur.amount} {t('baseUnits')} · {cur.networkName}</div></div></div>
         <Row k={t('to')}><Addr value={cur.to} /></Row>
         <AgentRecipientNotice to={cur.to} network={cur.network} networkName={cur.networkName} />
@@ -138,7 +141,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
       <PageTitle>{t('tracking')}</PageTitle>
       {steps}
       <Card className="space-y-4">
-        <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><Coin sym={cur.symbol} net={cur.network} size={40} /><div className="min-w-0"><div className="break-words text-2xl font-semibold tracking-[-0.02em]">{cur.amountDisplay} {cur.symbol}</div><div className="text-xs text-mute">{cur.networkName} → {short(cur.to)}</div></div></div>{testNotSent(cur) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : <StatePill state={cur.state} />}</div>
+        <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><Coin sym={cur.symbol} net={cur.network} size={40} /><div className="min-w-0"><div className="break-words text-2xl font-semibold tracking-[-0.02em]">{exactAmt(cur.amountDisplay)} {cur.symbol}</div><div className="text-xs text-mute">{cur.networkName} → {short(cur.to)}</div></div></div>{testNotSent(cur) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : <StatePill state={cur.state} />}</div>
         {testNotSent(cur) && <Notice tone="warn">{t('qaTestNotSent')}</Notice>}
         {!bad && !testNotSent(cur) && <ol className="space-y-2.5" aria-label={t('status')}>{FLOW.slice(1).map((s, k) => { const done = idx > k + 1 || cur.state === 'finalized', now = idx === k + 1 && cur.state !== 'finalized';
           return <li key={s} className={`flex items-center gap-3 text-[14.5px] ${done ? 'text-emerald' : now ? 'text-ink' : 'text-mute'}`}>

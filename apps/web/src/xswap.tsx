@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { post } from './api';
 import { errText, useT, type Key } from './i18n';
-import { Btn, Icon, Notice, trimAmt } from './ui';
+import { Btn, exactAmt, Icon, Notice, trimAmt } from './ui';
 
 export interface XswapV {
   provider: string; toNetwork: string; toNetworkName: string; toSymbol: string;
@@ -70,7 +70,7 @@ export function XswapSheet({ prop, left, onUpdate }: { prop: any; left: number; 
   return <>
     <div className="rounded-2xl bg-elev/70 p-4">
       <div className="text-[13px] text-mute">{t('swYouPay')}</div>
-      <div className="text-[24px] font-semibold tracking-tight">{prop.amountDisplay} <span className="text-mute">{prop.symbol}</span></div>
+      <div className="text-[24px] font-semibold tracking-tight">{exactAmt(prop.amountDisplay)} <span className="text-mute">{prop.symbol}</span></div>
       <div className="mt-3 text-[13px] text-mute">{x.receivedDisplay ? t('swReceived') : x.refundedDisplay ? t('xsRefunded') : t('swMinGuaranteed')}</div>
       <div className="text-[24px] font-semibold tracking-tight">{x.refundedDisplay && !x.receivedDisplay ? <>{trimAmt(x.refundedDisplay, 10)} <span className="text-mute">{prop.symbol}</span></> : <>{trimAmt(x.receivedDisplay ?? x.minOutDisplay, 10)} <span className="text-mute">{x.toSymbol}</span></>}</div>
     </div>

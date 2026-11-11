@@ -1,6 +1,7 @@
 // Perp agents: the engine's real-world side. Wires the engine (perp-engine.ts) to the derivatives module — venue data through
 // the data service, execution through the paper account — and runs one pass per minute. A PAPER agent never reaches the signer
 // or a trading endpoint. A LIVE agent (V7) goes through perp-live-cycle.ts: a venue account under a signer-enforced mandate.
+import { engineLoop } from '../loop-stats.ts'; // v8
 import { D, type DecStr } from '@spw/derivatives';
 import { sql } from '../db.ts';
 import { derivatives, type Derivatives } from '../derivatives/index.ts';
@@ -82,8 +83,5 @@ export async function perpEnginePass(rt: PerpRuntime = perpRuntime(), now = Date
 }
 
 export function startPerpAgentEngine(everyMs = 60_000): () => void {
-  let busy = false;
-  const t = setInterval(() => { if (busy) return; busy = true; perpEnginePass().catch(() => {}).finally(() => { busy = false; }); }, everyMs);
-  t.unref();
-  return () => clearInterval(t);
+  return engineLoop('perp-agent-engine', everyMs, () => perpEnginePass()); // v8: heartbeat in loopStats
 }

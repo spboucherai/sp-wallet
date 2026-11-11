@@ -31,7 +31,7 @@ let sql: any, lv: typeof import('../src/derivatives/live.ts'), ex: typeof import
 type Svc = import('../src/derivatives/exec.ts').LiveService;
 
 beforeAll(async () => {
-  await useDatabase('spw_deriv_mandate_test');
+  await useDatabase('deriv_mandate');
   const db = await import('../src/db.ts');
   sql = db.sql;
   await db.migrate();

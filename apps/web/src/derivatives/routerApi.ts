@@ -17,8 +17,9 @@ export interface RouteBody { base: string; side: 'long' | 'short'; sizeBase?: st
 
 export const rapi = {
   assets: async (): Promise<RouteAsset[]> => { const j = await get('/derivatives/route/assets'); return Array.isArray(j.assets) ? j.assets : []; },
-  route: async (body: RouteBody): Promise<RouteAnswer> => {
-    const j = await post('/derivatives/route', body);
+  /** v8: `locale` (query) selects the language of the engine messages and of the contract terms; the intent is unchanged */
+  route: async (body: RouteBody, locale?: string): Promise<RouteAnswer> => {
+    const j = await post(`/derivatives/route${locale ? `?locale=${encodeURIComponent(locale)}` : ''}`, body);
     return { intent: j.intent, candidates: Array.isArray(j.candidates) ? j.candidates : [], ranking: j.ranking, differences: j.differences, warnings: Array.isArray(j.warnings) ? j.warnings : [], errors: Array.isArray(j.errors) ? j.errors : [], ts: Number(j.ts) || Date.now() };
   },
 };

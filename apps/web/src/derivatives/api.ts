@@ -49,14 +49,14 @@ function normDetail(j: any): AccountDetail {
 export const dapi = {
   venues: async (): Promise<VenueInfo[]> => arr<any>((await get(`${B}/venues`)).venues).map((v) => ({ ...v, lastOkAt: ms(v.lastOkAt), restriction: v.restriction ?? null })),
   /** all venues when `venue` is absent; a venue that cannot be read is in `errors`, the others are still listed */
-  instruments: async (venue?: VenueId): Promise<{ instruments: Instrument[]; errors: VenueReadError[] }> => { const j = await get(`${B}/instruments${qs({ venue })}`); return { instruments: arr(j.instruments), errors: arr(j.errors) }; },
+  instruments: async (venue?: VenueId, locale?: string): Promise<{ instruments: Instrument[]; errors: VenueReadError[] }> => { const j = await get(`${B}/instruments${qs({ venue, locale })}`); /* v8: `locale` = the language of `settlement` and `markPriceMethod` */ return { instruments: arr(j.instruments), errors: arr(j.errors) }; },
   tickers: async (venue?: VenueId): Promise<{ tickers: Ticker[]; ts: number; errors: VenueReadError[] }> => { const j = await get(`${B}/tickers${qs({ venue })}`); return { tickers: arr(j.tickers), ts: ms(j.ts) ?? Date.now(), errors: arr(j.errors) }; },
   market: async (instrument: string): Promise<Market> => { const j = await get(`${B}/market${qs({ instrument })}`); return { instrument: j.instrument, ticker: j.ticker, book: j.book ?? null, liquidity: j.liquidity ?? null, trades: arr(j.trades), errors: j.errors ?? {} }; },
   candles: async (instrument: string, interval: Interval, limit: number): Promise<Candle[]> => arr((await get(`${B}/candles${qs({ instrument, interval, limit })}`)).candles),
   funding: async (instrument: string, hours: number): Promise<FundingHistory> => { const j = await get(`${B}/funding${qs({ instrument, hours })}`); return { history: arr(j.history), intervalSec: Number(j.intervalSec) || 3600 }; },
   /** Server-Sent Events: `status` `{ status, ts }` (first event), `ticker` (Ticker), `book` (Book), `trades` `{ instrument, trades }`, `error` `{ message, ts }` */
   streamUrl: (instrument: string): string => `/api/v1${B}/stream${qs({ instrument })}`,
-  compare: async (base: string): Promise<{ rows: CompareRow[]; errors: VenueReadError[] }> => { const j = await get(`${B}/compare${qs({ base })}`); return { rows: arr<any>(j.rows).map(normCompare), errors: arr(j.errors) }; },
+  compare: async (base: string, locale?: string): Promise<{ rows: CompareRow[]; errors: VenueReadError[] }> => { const j = await get(`${B}/compare${qs({ base, locale })}`); /* v8: `locale` = the language of `settlement`, `notes`, `restriction` */ return { rows: arr<any>(j.rows).map(normCompare), errors: arr(j.errors) }; },
   accounts: async (): Promise<DerivAccount[]> => arr((await get(`${B}/accounts`)).accounts),
   /** always creates a PAPER account (collateral between 10 and 1 000 000 000); answers the account detail */
   createAccount: async (body: { venue: VenueId; label: string; collateral: string; policy?: Partial<RiskPolicy> }): Promise<DerivAccount> => (await post(`${B}/accounts`, body)) as DerivAccount,

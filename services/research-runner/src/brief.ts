@@ -56,9 +56,13 @@ python -m spq.job evaluate --strategy submission --out report.json --claims subm
 \`strategy.py\` defines \`META\` and \`target_weights(data, params)\`. \`data[symbol]\` is a DataFrame of CLOSED bars
 (open, high, low, close, volume${perp ? ', funding, premium' : ''}), oldest first, at most \`META["lookback"]\` rows, ending at the decision bar; the
 order is filled at the NEXT bar's open, with costs. ${perp ? 'Return signed fractions of equity (negative = short), each within ±max_leverage, sum of absolute values ≤ max_gross_exposure.' : 'Return weights in [0, 1] summing to at most 1.'}
-It must be a **pure function**: no network, no file, no clock, no randomness, no state between calls. Imports are limited to
-math, numpy, pandas, scipy, statsmodels, arch, sklearn and a few stdlib helpers; \`open\`, \`eval\`, \`exec\`, \`getattr\`,
-\`__import__\`, \`.now()\`, \`read_csv\`… are refused statically, on your side AND by the server before it runs anything.
+It must be a **pure function**: no network, no file, no clock, no randomness, no state between calls. A static lint
+(\`python -m spq.lint --strategy <dir>\`, policy in \`spq/purity.py\`) is run on your side AND by the server before
+anything runs, and says line by line what it refuses: imports only of math, statistics, itertools, functools, collections,
+typing, warnings, numpy (+ numpy.linalg), pandas, scipy.*, statsmodels.*, arch, sklearn.*; a module is used only as
+\`np.name(...)\` from its reviewed API (never stored or passed); no dunder (\`__x__\`) or \`_private\` access, no \`class\`, no
+decorator, no \`global\`; no \`open\`, \`eval\`, \`exec\`, \`getattr\`, \`type\`, \`.format\`, \`.eval\`/\`.query\`, \`.now()\`, \`read_*\`,
+\`np.random\`. Plain functions, numpy / pandas arithmetic and f-strings are what a strategy is made of.
 Parameters live in \`META["params"]\`: they are part of the hashed file.
 
 ## Rules of evidence

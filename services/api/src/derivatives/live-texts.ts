@@ -124,3 +124,13 @@ export function liveTexts(locale: LiveLocale = 'en') {
     can: l('can'), cannot: l('cannot'), enforcedBySigner: l('enforcedBySigner'), trustedBySigner: l('trustedBySigner'), notEnforced: l('notEnforced'),
   };
 }
+
+/**
+ * v8 hardening: the `warning` of `POST …/authorization/revoke` when orders still rest on the venue, in the body's `locale`.
+ * `en` is the sentence this route always returned, byte for byte.
+ */
+export function revokeWarning(openOrders: number, locale: LiveLocale = 'en'): string {
+  return locale === 'fr'
+    ? `${openOrders} ordre(s) restent sur la plateforme. Le portefeuille ne peut plus les annuler (une autorisation révoquée ne signe rien) : annulez-les dans l'interface de la plateforme, ou approuvez une nouvelle autorisation puis annulez-les.`
+    : `${openOrders} order(s) still rest on the venue. The wallet can no longer cancel them (a revoked authorization signs nothing): cancel them in the venue's own interface, or approve a new authorization and cancel.`;
+}

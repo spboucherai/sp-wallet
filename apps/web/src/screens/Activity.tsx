@@ -7,7 +7,7 @@ import { BridgeFacts, BridgePill, BridgeProgress, type BridgeV } from '../bridge
 import { XswapFacts, XswapPill, XswapProgress, type XswapV } from '../xswap';
 import { useQueryClient } from '@tanstack/react-query';
 import { PlanList } from '../plan'; // v7 any-to-any plans
-import { Addr, Card, Coin, EmptyState, Icon, inputCls, Money, PageTitle, Seg, short, SkeletonRows, StatePill, testNotSent, trimAmt } from '../ui';
+import { Addr, Card, Coin, EmptyState, exactAmt, Icon, inputCls, Money, PageTitle, Seg, short, SkeletonRows, StatePill, testNotSent, trimAmt } from '../ui';
 
 interface Item { swap?: { toSymbol: string; receivedDisplay: string | null; minOutDisplay: string } | null; bridge?: BridgeV | null; xswap?: XswapV | null; kind: 'send' | 'receive' | 'swap' | 'bridge'; at: string; id: string; network: string; networkName: string; symbol: string; amount: string; amountDisplay: string; state: string; txid: string | null; explorer: string | null;
   to?: string; from?: string; feeDisplay?: string | null; feeSymbol?: string; error?: string | null; note?: string; confirmations?: number }
@@ -44,7 +44,7 @@ export function Activity() {
               <span className="text-right"><span className={`block font-semibold ${i.kind === 'receive' ? 'text-emerald' : ''}`}><Money hidden={settings.hideBalances}>{i.kind === 'receive' ? '+' : '−'}{trimAmt(i.amountDisplay)}</Money></span>{testNotSent(i) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : i.kind === 'bridge' && i.bridge ? <BridgePill b={i.bridge} /> : i.xswap ? <XswapPill x={i.xswap} /> : <StatePill state={i.state} />}</span>
             </button>
             {isOpen && <div className="space-y-2.5 border-t border-line bg-bg/60 px-4 py-3 text-[13px]">
-              <D k={t('amount')}>{i.amountDisplay} {i.symbol} <span className="text-mute">({i.amount} {t('baseUnits')})</span></D>
+              <D k={t('amount')}>{exactAmt(i.amountDisplay)} {i.symbol} <span className="text-mute">({i.amount} {t('baseUnits')})</span></D>
               {i.xswap && <dl className="space-y-1.5"><XswapFacts x={i.xswap} symbol={i.symbol} fromName={i.networkName} /></dl>}
               {i.xswap && <XswapProgress id={i.id} x={i.xswap} symbol={i.symbol} onUpdate={() => void qc.invalidateQueries({ queryKey: ['activity'] })} />}
               {i.kind === 'swap' && i.swap && !i.xswap && <D k={i.swap.receivedDisplay ? t('swReceived') : t('swMinGuaranteed')}>{i.swap.receivedDisplay ?? i.swap.minOutDisplay} {i.swap.toSymbol}</D>}

@@ -24,7 +24,7 @@ async function api(method: string, path: string, body?: unknown, o: { cookie?: s
 }
 
 beforeAll(async () => {
-  w = await world('spw_v6_alerts_api_test'); sql = w.sql;
+  w = await world('alerts_api'); sql = w.sql;
   push = createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => chunks.push(c));
@@ -83,8 +83,10 @@ describe('in-app alerts', () => {
     const before = (await api('GET', '/api/v1/alerts/unread')).json.unread;
     for (let i = 0; i < 3; i++) expect((await api('GET', '/api/v1/__test/router')).status).toBe(503);
     expect((await api('GET', '/api/v1/__test/other')).status).toBe(400);
-    await new Promise((r) => setTimeout(r, 150));
-    const rows = await w.alerts(`kind = 'security.pin_mismatch'`);
+    // v8: wait for the alert itself (the hook runs after the answer), not for a fixed 150 ms of real time
+    let rows: any[] = [];
+    for (let i = 0; i < 100 && rows.length === 0; i++) { rows = await w.alerts(`kind = 'security.pin_mismatch'`); if (!rows.length) await new Promise((r) => setTimeout(r, 20)); }
+    await new Promise((r) => setTimeout(r, 30)); rows = await w.alerts(`kind = 'security.pin_mismatch'`); // …and still exactly one a moment later
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ severity: 'critical', params: { what: '@router' } });
     expect((await api('GET', '/api/v1/alerts/unread')).json.unread).toBe(before + 1);
@@ -202,7 +204,7 @@ describe('web push subscriptions', () => {
     expect(await d.deliver()).toMatchObject({ sent: 1 });
     expect(decrypted('/push/a')[0]).toMatchObject({ kind: 'deposit.received', l: 'en', p: { network: 'Base' } });
     expect(decrypted('/push/b')[0]).toMatchObject({ kind: 'deposit.received', l: 'fr', p: { network: 'Base' } });
-    expect(JSON.stringify(decrypted('/push/a')[0])).not.toMatch(/1\.5|ETH/);
+    expect(JSON.stringify((decrypted('/push/a')[0] as { p: unknown }).p)).not.toMatch(/1\.5|ETH/); // v8: the parameters only, not ids or timestamps
     expect((await api('GET', '/api/v1/push/subscriptions')).json[0].lastOkAt).toBeGreaterThan(0);
 
     expect((await api('PATCH', `/api/v1/push/subscriptions/${b.json.id}`, { label: 'MacBook' })).json.label).toBe('MacBook');
@@ -292,6 +294,10 @@ describe('monitoring dashboard', () => {
     expect(h.versions).toMatchObject({ signerKeyId: null, apiVersion: '1.0.0' });
     expect(h.disk.freePct).toBeGreaterThan(0);
     expect(h.signer).toEqual({ reachable: false, halted: null });
-    expect(JSON.stringify(h)).not.toMatch(/secret|privateKey|k{48}/i);
+    // v8: `capabilities` names the VARIABLES that are missing (SPW_RESEARCH_RUNNER_SECRET is a name, not a secret): the rest of
+    // the answer is checked as before, and the capabilities for values
+    { const { capabilities: caps, ...rest } = h; expect(JSON.stringify(rest)).not.toMatch(/secret|privateKey|k{48}/i);
+      expect(JSON.stringify(caps)).not.toMatch(/privateKey|k{48}|postgres:\/\//i); expect(caps.map((c: any) => c.id)).toContain('research_runner'); }
+    expect(h.loops.every((l: any) => typeof l.name === 'string')).toBe(true); expect(h.loopsNote).toBeNull(); expect(h.lab).toBeDefined();
   });
 });

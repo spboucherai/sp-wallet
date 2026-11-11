@@ -25,7 +25,7 @@ import {
 } from '@spw/derivatives/live';
 import { UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
-import { LIVE_REASONS, liveReason, liveTexts, type LiveLocale } from './live-texts.ts';
+import { LIVE_REASONS, liveReason, liveTexts, revokeWarning, type LiveLocale } from './live-texts.ts';
 import { LIVE_ACTION_TTL_MS, type LiveVenue, type LiveVenues } from './live-venue.ts';
 import { CloseBodySchema, DEFAULT_SLIPPAGE_BPS, OrderBodySchema, worstPrice, type OrderBody } from './paper.ts';
 
@@ -395,7 +395,7 @@ export class LiveService {
     return { ...(await this.get(id)), cancelled,
       /** why cancel-all could not run (`cancelled` is then null); null when it ran or was not asked for */
       cancelError,
-      warning: v.openOrders.length ? `${v.openOrders.length} order(s) still rest on the venue. The wallet can no longer cancel them (a revoked authorization signs nothing): cancel them in the venue's own interface, or approve a new authorization and cancel.` : null,
+      warning: v.openOrders.length ? revokeWarning(v.openOrders.length, body.locale ?? 'en') : null,   // v8: in the body's `locale` (default en = the same sentence as before)
       venueAgent: liveTexts(body.locale ?? 'en').venueAgent, locale: body.locale ?? 'en' };
   }
 
