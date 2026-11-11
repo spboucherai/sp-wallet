@@ -36,7 +36,7 @@ const registry = new Registry(defaultRegistryTypes);
 const DEST = 'cosmos1wnacchusmacys78rxcr640gjpz000f87gnz6zf', DEST2 = 'cosmos1dkaw0wlutmwqfw7dyn4s5mlv7nj6xjax2a73q7';
 const now = 1_800_000_000;
 const X = { account_number: '1425847', sequence: '7', gas_limit: '200000', fee_amount: '1500', timeout_height: '33821256' };
-const base: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 90, policyVersion: 3,
+const base: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 90, policyVersion: 4,
   network: 'cosmos', chainRef: net.chainRef, asset: 'native', symbol: 'ATOM', decimals: 6, amount: '2500000', from: VECTOR_ADDRESS, to: DEST, maxFee: '1500', x: X };
 const withMemo: Intent = { ...base, memo: '104588310' };
 const B64 = (b: Uint8Array) => Buffer.from(b).toString('base64');
@@ -321,7 +321,7 @@ describe('cosmos: fail closed', () => {
     for (const c of [{ from: DEST2 }, { chainRef: 'cosmoshub-5' }, { asset: 'uatom' }, { symbol: 'XLM' }, { decimals: 7 }, { network: 'bitcoin' }, { maxFee: '1499' }] as Partial<Intent>[])
       expect(() => cosmosPlugin.sign({ ...base, ...c }, net, key), JSON.stringify(c)).toThrow();
     // fields that are not part of the chain transaction are still bound by the approval (intent hash)
-    for (const c of [{ proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { keyId: 'spw-fedcba9876543210' }, { expiresAt: now + 46 }, { createdAt: now + 1 }, { policyVersion: 4 }, { maxFee: '1501' }] as Partial<Intent>[])
+    for (const c of [{ proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { keyId: 'spw-fedcba9876543210' }, { expiresAt: now + 46 }, { createdAt: now + 1 }, { policyVersion: 5 }, { maxFee: '1501' }] as Partial<Intent>[])
       expect(toHex(intentHash({ ...base, ...c }))).not.toBe(toHex(intentHash(base)));
   });
 });

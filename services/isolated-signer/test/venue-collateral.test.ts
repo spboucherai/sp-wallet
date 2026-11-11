@@ -49,7 +49,7 @@ const journal = (w: World, type: string) => w.store.state.journal.filter((j) => 
 /** a venue deposit exactly as the API prepares it: 10 USDC on Arbitrum to the pinned bridge */
 function deposit(now: number, over: Partial<Intent> = {}): Intent {
   return { v: 1, proposalId: uuid(), keyId: keys.keyId, network: 'arbitrum', chainRef: '42161', asset: USDC, symbol: 'USDC', decimals: 6, amount: '10000000', from: ME, to: PIN.bridge,
-    maxFee: '100000000000000', createdAt: now, expiresAt: now + 120, policyVersion: 3, venueDeposit: venueDepositSection('mainnet'),
+    maxFee: '100000000000000', createdAt: now, expiresAt: now + 120, policyVersion: 4, venueDeposit: venueDepositSection('mainnet'),
     evm: { nonce: 4, gasLimit: '90000', maxFeePerGas: '1000000000', maxPriorityFeePerGas: '1000000' }, ...over };
 }
 const sign = (w: World, i: Intent, assertion = w.pk.assert(intentHash(i))) => w.signer.sign(i, assertion);
@@ -71,7 +71,7 @@ describe('pinned route', () => {
 });
 
 describe('venue deposit: canonical intent', () => {
-  const fixed = (): Intent => ({ ...deposit(1794370000), proposalId: '8b2c1f0e-8f5f-4b1e-9c56-0000000000aa' });
+  const fixed = (): Intent => ({ ...deposit(1794370000), proposalId: '8b2c1f0e-8f5f-4b1e-9c56-0000000000aa', policyVersion: 3 }); // golden hash recorded under policy version 3: unchanged, the canonical serialization did not move
   it('the section is part of the hash the passkey signs', () => {
     const i = fixed(), { venueDeposit: _s, ...plain } = i;
     expect(hex(intentHash(i))).toBe('e127c8313791b42c4dd7260521c52a95b75e7b349c1cd8770c910431b2c02bd6');

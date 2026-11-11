@@ -123,3 +123,11 @@ Every symbol has a signer limit of about 50 USD per transfer and twice that per 
 prices of 2026-11-10 in the comments). Existing limits were not changed; the default policy is version 3 — see
 `docs/runbooks/operations.md` for what to do on the signer after deploying. Prices come from the symbol → CoinGecko id map in
 `services/api/src/server.ts`; a symbol without an id is shown with its balance and no fiat value.
+
+## Native coins added after registry v5
+
+Cardano (ADA) and Polkadot (DOT, on Polkadot Asset Hub) are native-coin networks added with policy version 4
+(`docs/chains/cardano.md`, `docs/chains/polkadot.md`). They carry **no tokens**: Cardano native assets and Asset Hub assets
+are neither shown nor spendable, and on Cardano an output that carries native assets is never spent. Their limits reuse the
+`ADA` and `DOT` entries that registry v5 already had for the Binance-pegged tokens of the same tickers (285 ADA, 60 DOT per
+transfer — 50.85 USD and 51.70 USD at 0.17841 and 0.86172 USD, DefiLlama, 2026-11-11), unchanged.

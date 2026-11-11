@@ -14,9 +14,9 @@ export const IntentSchema = z.strictObject({
   symbol: z.string().min(1).max(16),
   decimals: z.number().int().min(0).max(36),
   amount: U,
-  from: z.string().min(20).max(100),
+  from: z.string().min(20).max(110), // v8-cardano-polkadot: a Cardano base address has 103 characters
   /** shortest valid destination: a 2-character NEAR account name. Every builder validates the address format of its own chain. */
-  to: z.string().min(2).max(100),
+  to: z.string().min(2).max(110),
   maxFee: U,
   createdAt: z.number().int().positive(),
   expiresAt: z.number().int().positive(),

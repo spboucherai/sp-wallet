@@ -30,7 +30,7 @@ async function setup() {
 }
 let seq = 0;
 const intent = (t: number, over: Partial<Intent> = {}): Intent => ({ v: 1, proposalId: `7a1c1f0e-8f5f-4b1e-9c56-${String(++seq).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 45,
-  policyVersion: 3, network: 'xrpl', chainRef: NETWORKS.xrpl.chainRef, asset: 'native', symbol: 'XRP', decimals: 6, amount: '3000000', from: keys.addresses.xrpl!, to: DEST, maxFee: '12',
+  policyVersion: 4, network: 'xrpl', chainRef: NETWORKS.xrpl.chainRef, asset: 'native', symbol: 'XRP', decimals: 6, amount: '3000000', from: keys.addresses.xrpl!, to: DEST, maxFee: '12',
   memo: '20261110', x: X, ...over });
 
 describe('XRP Ledger through the signer', () => {

@@ -58,7 +58,7 @@ for (const from of senders) {
     const p = await a.prepare({ asset: 'native', from, to: TEST_MNEMONIC_ADDR, amount: 1_000_000n });
     console.log(`prepare ${from} → ${TEST_MNEMONIC_ADDR} (1 XRP): OK`, json(p));
     // the plugin accepts exactly this section (unsigned build only; no key involved)
-    const intent = { v: 1 as const, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: 1, expiresAt: 2, policyVersion: 3, network: n.id, chainRef: n.chainRef,
+    const intent = { v: 1 as const, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: 1, expiresAt: 2, policyVersion: 4, network: n.id, chainRef: n.chainRef,
       asset: 'native', symbol: 'XRP', decimals: 6, amount: '1000000', from, to: TEST_MNEMONIC_ADDR, maxFee: p.maxFee.toString(), ...(p.section as { x: Record<string, string> }) };
     console.log('plugin.build on that section:', json(pluginFor(n).build(intent, n).describe));
     await step('prepare same → genesis, no tag', () => a.prepare({ asset: 'native', from, to: GENESIS, amount: 1_000_000n }));

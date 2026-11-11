@@ -34,6 +34,15 @@ a token without a limit cannot be sent or swapped (default deny). On the signer 
 `version: 3`; re-apply any limit you had changed by hand), or add the new `"<network>:<symbol>"` keys to `perTx` and `daily`
 yourself and set `version` to 3. Existing limits are unchanged in the defaults. See `docs/TOKENS.md`.
 
+## After the release that adds Cardano and Polkadot (policy version 4)
+Same rule as above: an existing `policy.json` does not gain the new entries by itself. Either regenerate it from the defaults
+(`mv policy.json policy.json.v3 && pm2 restart sp-wallet-signer`, then re-apply hand-made changes), or add by hand
+`"cardano:ADA": "285000000"` / `"polkadot:DOT": "600000000000"` to `perTx`, twice those values to `daily`,
+`"cardano": "500000"` / `"polkadot": "500000000"` to `maxFee`, and set `version` to 4. No existing limit changes.
+The two new addresses appear after the signer restarts (same seed; the wallet key id does not change).
+If Polkadot sends stop with `runtime_changed`, or Cardano sends with `protocol_changed`: `docs/chains/polkadot.md`
+("Runtime upgrades") and `docs/chains/cardano.md` ("Data sources and agreement").
+
 ## Compromise suspected
 Halt, then sweep funds to a new wallet from a clean device using the recovery phrase. Treat the old keys as burned.
 

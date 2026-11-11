@@ -106,7 +106,7 @@ export function createCollateralMock(env: CollateralMockEnv) {
       for (const o of mine(a)) if (o.kind === 'deposit' && o.state === 'pending_approval') { o.state = 'cancelled'; o.final = true; }
       const t = Math.floor(now / 1000);
       const intent = { v: 1, proposalId: crypto.randomUUID(), keyId: env.keyId, network: 'arbitrum', chainRef: '42161', asset: pin.usdc, symbol: 'USDC', decimals: 6, amount: amount.toString(), from: a.account, to: pin.bridge, maxFee: '9000000000000',
-        createdAt: t, expiresAt: t + 180, policyVersion: 3, venueDeposit: venueDepositSection('mainnet'), evm: { nonce: 7, gasLimit: '90000', maxFeePerGas: '100000000', maxPriorityFeePerGas: '1000000' } };
+        createdAt: t, expiresAt: t + 180, policyVersion: 4, venueDeposit: venueDepositSection('mainnet'), evm: { nonce: 7, gasLimit: '90000', maxFeePerGas: '100000000', maxPriorityFeePerGas: '1000000' } };
       const before = num(env.balance(a)?.equity ?? null);
       // NOT the wallet's intent hash (see the header): a hash of this mock's own bytes, enough to bind the simulated passkey
       const hash = hex(venueWithdrawalHash({ v: 1, withdrawalId: intent.proposalId, keyId: env.keyId, venue: 'hyperliquid', network: 'mainnet', account: a.account, destination: a.account, amount: u(amount), fee: '1', time: now, createdAt: t, expiresAt: t + 180 }));

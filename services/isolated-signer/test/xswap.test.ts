@@ -46,12 +46,12 @@ let seq = 0;
 const id = () => `7a1c1f0e-8f5f-4b1e-9c56-${String(++seq).padStart(12, '0')}`;
 function btc(now: number, o: Partial<Intent> = {}, x: Partial<NonNullable<Intent['xswap']>> = {}): Intent {
   return { v: 1, proposalId: id(), keyId: keys.keyId, network: 'bitcoin', chainRef: NETWORKS.bitcoin!.chainRef, asset: 'native', symbol: 'BTC', decimals: 8, amount: '60000', from: ME_BTC, to: x.vault ?? V_BTC, maxFee: '1000',
-    createdAt: now, expiresAt: now + 120, policyVersion: 3, btc: { inputs: [{ txid: 'cd'.repeat(32), vout: 0, value: '150000' }], change: '89300', fee: '700' },
+    createdAt: now, expiresAt: now + 120, policyVersion: 4, btc: { inputs: [{ txid: 'cd'.repeat(32), vout: 0, value: '150000' }], change: '89300', fee: '700' },
     xswap: { provider: 'thorchain', toNetwork: 'ethereum', toAsset: 'native', minOut: '20000000000000000', limit: '2000000', memo: `=:e:${ME_EVM}:2000000`, vault: V_BTC, vaultPubKey: KEY, router: '', expiry: now + 900, approveGas: '0', ...x }, ...o };
 }
 function evm(now: number, o: Partial<Intent> = {}, x: Partial<NonNullable<Intent['xswap']>> = {}): Intent {
   return { v: 1, proposalId: id(), keyId: keys.keyId, network: 'ethereum', chainRef: '1', asset: 'native', symbol: 'ETH', decimals: 18, amount: '20000000000000000', from: ME_EVM, to: x.vault ?? V_ETH, maxFee: '2000000000000000',
-    createdAt: now, expiresAt: now + 120, policyVersion: 3, evm: { nonce: 5, gasLimit: '80000', maxFeePerGas: '20000000000', maxPriorityFeePerGas: '1000000000' },
+    createdAt: now, expiresAt: now + 120, policyVersion: 4, evm: { nonce: 5, gasLimit: '80000', maxFeePerGas: '20000000000', maxPriorityFeePerGas: '1000000000' },
     xswap: { provider: 'thorchain', toNetwork: 'bitcoin', toAsset: 'native', minOut: '54000', limit: '54000', memo: `=:b:${ME_BTC}:54000`, vault: V_ETH, vaultPubKey: KEY, router: ROUTER, expiry: now + 900, approveGas: '0', ...x }, ...o };
 }
 const five = (f: (k: number) => ThorView | Error = () => view()) => { const hosts = vaultHosts(); return operators((h) => f(hosts.indexOf(h))); };

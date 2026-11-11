@@ -29,6 +29,7 @@ export interface NetworkDef {
    * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. Sui: genesis checkpoint digest.
    * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. NEAR: genesis block hash.
    * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. TON: masterchain zero-state root hash.
+   * Cardano: network magic. Polkadot: genesis hash of Polkadot Asset Hub.
    * Bitcoin Cash shares its genesis block with Bitcoin, Bitcoin SV and eCash, so its reference is the hash of block 661648,
    * the first block after the last of those splits (November 2020; a Bitcoin Cash Node checkpoint), which exists on no other chain.
    */
@@ -248,6 +249,32 @@ const DEFS = {
     rpc: ['https://toncenter.com/api/v2', 'https://tonapi.io/v2'],
     explorerTx: 'https://tonviewer.com/transaction/', explorerAddr: 'https://tonviewer.com/', minConf: 1,
   },
+  // v8-cardano-polkadot ↓
+  cardano: {
+    // chainRef = network magic of mainnet. A Cardano transaction names no chain: it is bound to mainnet by the UTxOs it spends and
+    // by the network tag of every address. Identity = the magic reported by Koios + a pinned early Shelley block known to both
+    // sources + both agreeing on the current tip. Sources: Koios (community-run query layer, keyless public tier) and EMURGO's
+    // Yoroi backend (keyless), independent operators and code bases; verified live 2026-11-11. Native ADA only (no native assets).
+    // `activation`: every output must carry a minimum of ADA (about 0.97 ADA for a plain payment at 4 310 lovelace per byte).
+    id: 'cardano', family: 'cardano', name: 'Cardano', chainRef: '764824073',
+    native: { id: 'native', symbol: 'ADA', name: 'Cardano', decimals: 6 }, tokens: [], coinType: 1815,
+    activation: '1',
+    rpc: ['https://api.koios.rest/api/v1', 'https://api.yoroiwallet.com/api'],
+    explorerTx: 'https://cardanoscan.io/transaction/', explorerAddr: 'https://cardanoscan.io/address/', minConf: 15,
+  },
+  polkadot: {
+    // DOT lives on Polkadot Asset Hub since the migration of 4 November 2025 (balances, transfers, staking, governance moved off the
+    // relay chain; exchanges deposit and withdraw on Asset Hub). chainRef = genesis hash of Polkadot Asset Hub (no 0x), signed into
+    // every transaction. Sources: Parity (polkadot.io) and OnFinality, independent operators, keyless JSON-RPC over HTTPS, both
+    // archive nodes; verified live 2026-11-11. `activation` = existential deposit of Asset Hub (0.01 DOT; the relay chain's was 1 DOT).
+    id: 'polkadot', family: 'polkadot', name: 'Polkadot (Asset Hub)',
+    chainRef: '68d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2f',
+    native: { id: 'native', symbol: 'DOT', name: 'Polkadot', decimals: 10 }, tokens: [], coinType: 354,
+    activation: '0.01',
+    rpc: ['https://polkadot-asset-hub-rpc.polkadot.io', 'https://statemint.api.onfinality.io/public'],
+    explorerTx: 'https://assethub-polkadot.subscan.io/extrinsic/', explorerAddr: 'https://assethub-polkadot.subscan.io/account/', minConf: 1,
+  },
+  // v8-cardano-polkadot ↑
 } satisfies Record<string, NetworkDef>;
 
 /** Known ids are typed; any other string may be absent. */

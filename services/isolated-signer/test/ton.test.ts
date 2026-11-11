@@ -31,7 +31,7 @@ async function setup() {
 }
 let n = 0;
 const ton = (t: number, over: Partial<Intent> = {}): Intent => ({
-  v: 1, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(++n).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 3,
+  v: 1, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(++n).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 4,
   network: 'ton', chainRef: NETWORKS.ton.chainRef, asset: 'native', symbol: 'TON', decimals: 9, amount: '2500000000', from: keys.addresses.ton!, to: DEST, maxFee: '5000000',
   memo: 'order 4242', x: { seqno: '12', validUntil: String(t + 300), bounce: '1', sendMode: '3', stateInit: '0' }, ...over,
 });

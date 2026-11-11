@@ -47,7 +47,7 @@ const BLOCK = 'bRJrdMWsAoEJdNrSK1KXJFHwGC16Rtth9NhP6ZomSBh'; // a real mainnet b
 
 const now = 1_800_000_000;
 const base: Intent = {
-  v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 3,
+  v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 4,
   network: 'near', chainRef: NEAR_MAINNET_GENESIS, asset: 'native', symbol: 'NEAR', decimals: 24, amount: '1250000000000000000000001', from: FROM, to: 'alice.near',
   maxFee: '2000000000000000000000', x: { nonce: '223991684000002', blockHash: BLOCK },
 };
@@ -293,7 +293,7 @@ describe('near: fail closed', () => {
     const other: Intent[] = [
       { ...base, chainRef: 'FWJ9kR6KFWoyMoNjpLXXGHeuiy7tEY6GmoFeCA5yuc6b' }, { ...base, network: 'solana' }, { ...base, asset: 'other' }, { ...base, symbol: 'NEAT' }, { ...base, decimals: 8 },
       { ...base, maxFee: '1999999999999999999999' }, { ...base, memo: 'x' }, { ...base, v: 2 as never },
-      { ...base, maxFee: '2000000000000000000001' }, { ...base, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { ...base, keyId: 'spw-0123456789abcdee' }, { ...base, policyVersion: 4 },
+      { ...base, maxFee: '2000000000000000000001' }, { ...base, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { ...base, keyId: 'spw-0123456789abcdee' }, { ...base, policyVersion: 5 },
       { ...base, createdAt: now + 1 }, { ...base, expiresAt: now + 121 },
     ];
     const h0 = toHex(intentHash(base));

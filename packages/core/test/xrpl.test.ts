@@ -24,7 +24,7 @@ const key: KeyHandle = { curve: 'secp256k1', publicKey: pub, signDigest: (digest
 } };
 const DEST = 'rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe', DEST2 = 'rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn';
 const now = 1_800_000_000;
-const base: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 45, policyVersion: 3,
+const base: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 45, policyVersion: 4,
   network: 'xrpl', chainRef: net.chainRef, asset: 'native', symbol: 'XRP', decimals: 6, amount: '2500000', from: VECTOR_ADDRESS, to: DEST, maxFee: '12',
   x: { sequence: '210', lastLedgerSequence: '108249099', fee: '12' } };
 const withTag: Intent = { ...base, memo: '4294967295' };
@@ -233,7 +233,7 @@ describe('xrpl: fail closed', () => {
     for (const c of [{ from: DEST2 }, { chainRef: '1' }, { asset: 'USD' }, { symbol: 'XLM' }, { decimals: 7 }, { network: 'bitcoin' }, { maxFee: '11' }] as Partial<Intent>[])
       expect(() => xrplPlugin.sign({ ...base, ...c }, net, key), JSON.stringify(c)).toThrow();
     // fields that are not part of the ledger transaction are still bound by the approval (intent hash)
-    for (const c of [{ proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { keyId: 'spw-fedcba9876543210' }, { expiresAt: now + 46 }, { createdAt: now + 1 }, { policyVersion: 4 }, { maxFee: '13' }] as Partial<Intent>[])
+    for (const c of [{ proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { keyId: 'spw-fedcba9876543210' }, { expiresAt: now + 46 }, { createdAt: now + 1 }, { policyVersion: 5 }, { maxFee: '13' }] as Partial<Intent>[])
       expect(toHex(intentHash({ ...base, ...c }))).not.toBe(toHex(intentHash(base)));
   });
 });

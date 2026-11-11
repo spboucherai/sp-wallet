@@ -244,7 +244,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
 
   app.get('/api/v1/addressbook', async () => sql`select id, network, address, label, created_at from address_book order by label`);
   app.post('/api/v1/addressbook', async (req) => {
-    const b = z.strictObject({ network: z.string().max(20), address: z.string().max(100), label: z.string().min(1).max(40) }).parse(req.body);
+    const b = z.strictObject({ network: z.string().max(20), address: z.string().max(110), label: z.string().min(1).max(40) }).parse(req.body);
     let address: string;
     try { address = normalizeAddress(getNetwork(b.network).id, b.address); } catch (e) { throw new UserError('bad_address', (e as Error).message); }
     const [r] = await sql`insert into address_book (id, network, address, label) values (${crypto.randomUUID()}, ${b.network}, ${address}, ${b.label})

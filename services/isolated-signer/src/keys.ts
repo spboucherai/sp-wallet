@@ -1,5 +1,5 @@
 import { HDKey } from '@scure/bip32';
-import { mnemonicToSeedSync, validateMnemonic } from '@scure/bip39';
+import { mnemonicToEntropy, mnemonicToSeedSync, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { p2pkh, p2wpkh } from '@scure/btc-signer';
 import { ed25519 } from '@noble/curves/ed25519.js';
@@ -8,7 +8,8 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { base58 } from '@scure/base';
 import Slip10 from 'micro-key-producer/slip10.js';
 import { privateKeyToAccount } from 'viem/accounts';
-import { btcParams, NETWORKS, pluginFor, type KeyHandle, type NetworkDef } from '@spw/core';
+import { btcParams, CARDANO_PATHS, NETWORKS, pluginFor, type KeyHandle, type NetworkDef } from '@spw/core';
+import { derivePath, icarusMasterKey, xprvPublicKey, xprvSign } from './bip32-ed25519.ts'; // v8-cardano-polkadot
 
 export const PATHS = { evm: "m/44'/60'/0'/0/0", btc: "m/84'/0'/0'/0/0", sol: "m/44'/501'/0'/0'" } as const;
 /** BIP-84 for native SegWit chains, BIP-44 for legacy P2PKH chains; coin type from the registry. */
@@ -53,6 +54,16 @@ export function deriveKeys(mnemonic: string): Keys {
         const compact = sig.slice(1);
         return { compact, recovery: sig[0]!, der: secp256k1.Signature.fromBytes(compact, 'compact').toBytes('der') };
       } };
+    }
+    // v8-cardano-polkadot: Cardano keys are BIP32-Ed25519 (CIP-1852, Icarus master key from the BIP-39 entropy), not SLIP-0010.
+    // The handle's public key is payment key ‖ stake key (the base address needs both); only the payment key signs.
+    if (p.keyScheme === 'cip1852') {
+      if (p.path(n) !== CARDANO_PATHS.payment) throw new Error('unexpected CIP-1852 path');
+      const master = icarusMasterKey(mnemonicToEntropy(mnemonic, wordlist));
+      const payment = derivePath(master, CARDANO_PATHS.payment), stake = derivePath(master, CARDANO_PATHS.stake);
+      const publicKey = new Uint8Array(64);
+      publicKey.set(xprvPublicKey(payment), 0); publicKey.set(xprvPublicKey(stake), 32);
+      return { curve: 'ed25519', publicKey, signMessage: (m) => xprvSign(payment, m) };
     }
     const { priv, pub } = ed(p.path(n));
     return { curve: 'ed25519', publicKey: pub, signMessage: (m) => ed25519.sign(m, priv) };

@@ -23,13 +23,13 @@ const T0 = 1_794_000_000;
 function btcIntent(o: Partial<Intent> = {}, x: Partial<NonNullable<Intent['xswap']>> = {}): Intent {
   const limit = x.limit ?? '2098152';
   return IntentSchema.parse({ v: 1, proposalId: '7a1c1f0e-8f5f-4b1e-9c56-000000000001', keyId: 'spw-0123456789abcdef', network: 'bitcoin', chainRef: NETWORKS.bitcoin!.chainRef, asset: 'native', symbol: 'BTC', decimals: 8,
-    amount: '60000', from: ME_BTC, to: VAULT.bitcoin, maxFee: '2000', createdAt: T0, expiresAt: T0 + 120, policyVersion: 3,
+    amount: '60000', from: ME_BTC, to: VAULT.bitcoin, maxFee: '2000', createdAt: T0, expiresAt: T0 + 120, policyVersion: 4,
     btc: { inputs: [{ txid: 'ab'.repeat(32), vout: 1, value: '100000' }], change: '39000', fee: '1000' },
     xswap: { provider: 'thorchain', toNetwork: 'ethereum', toAsset: 'native', minOut: '20981520000000000', limit, memo: `=:e:${ME_EVM}:${limit}`, vault: VAULT.bitcoin, vaultPubKey: VAULT_KEY, router: '', expiry: T0 + 900, approveGas: '0', ...x }, ...o });
 }
 function evmIntent(o: Partial<Intent> = {}, x: Partial<NonNullable<Intent['xswap']>> = {}): Intent {
   return IntentSchema.parse({ v: 1, proposalId: '7a1c1f0e-8f5f-4b1e-9c56-000000000002', keyId: 'spw-0123456789abcdef', network: 'ethereum', chainRef: '1', asset: 'native', symbol: 'ETH', decimals: 18,
-    amount: '20000000000000000', from: ME_EVM, to: VAULT.ethereum, maxFee: '3000000000000000', createdAt: T0, expiresAt: T0 + 120, policyVersion: 3,
+    amount: '20000000000000000', from: ME_EVM, to: VAULT.ethereum, maxFee: '3000000000000000', createdAt: T0, expiresAt: T0 + 120, policyVersion: 4,
     evm: { nonce: 7, gasLimit: '80000', maxFeePerGas: '20000000000', maxPriorityFeePerGas: '1000000000' },
     xswap: { provider: 'thorchain', toNetwork: 'bitcoin', toAsset: 'native', minOut: '54436', limit: '54436', memo: `=:b:${ME_BTC}:54436`, vault: VAULT.ethereum, vaultPubKey: VAULT_KEY, router: ROUTER, expiry: T0 + 900, approveGas: '0', ...x }, ...o });
 }

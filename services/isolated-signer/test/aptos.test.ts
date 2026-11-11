@@ -28,7 +28,7 @@ async function setup() {
 }
 let n = 0;
 const apt = (t: number, over: Partial<Intent> = {}): Intent => ({
-  v: 1, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(++n).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 3,
+  v: 1, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(++n).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 4,
   network: 'aptos', chainRef: NETWORKS.aptos.chainRef, asset: 'native', symbol: 'APT', decimals: 8, amount: '250000000', from: keys.addresses.aptos!, to: DEST, maxFee: '812200',
   x: { sequence_number: '7', max_gas_amount: '8122', gas_unit_price: '100', expiration_timestamp_secs: String(t + 180) }, ...over,
 });
