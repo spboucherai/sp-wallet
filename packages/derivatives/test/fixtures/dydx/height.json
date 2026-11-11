@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-11T02:56:02.289Z",
+ "url": "https://indexer.dydx.trade/v4/height",
+ "status": 200,
+ "text": "{\"height\":\"113333416\",\"time\":\"2026-11-11T02:55:59.831Z\"}"
+}

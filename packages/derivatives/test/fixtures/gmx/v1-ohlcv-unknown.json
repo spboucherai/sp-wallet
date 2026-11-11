@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-11T02:56:44.359Z",
+ "url": "https://arbitrum.gmxapi.io/v1/prices/ohlcv?symbol=NOPE&timeframe=1h&limit=2",
+ "status": 400,
+ "text": "{\"message\":\"Unknown symbol: NOPE\"}"
+}

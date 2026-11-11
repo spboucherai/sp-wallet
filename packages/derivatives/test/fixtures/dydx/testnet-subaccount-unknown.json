@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-11T02:56:06.213Z",
+ "url": "https://indexer.v4testnet.dydx.exchange/v4/addresses/dydx1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqd4mhgw/subaccountNumber/0",
+ "status": 404,
+ "text": "{\"errors\":[{\"msg\":\"No subaccount found with address dydx1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqd4mhgw and subaccountNumber 0\"}]}"
+}
