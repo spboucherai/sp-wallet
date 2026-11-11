@@ -1,6 +1,6 @@
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { appendAudit, DEFAULT_POLICY, PolicySchema, type AuditRecord, type Policy } from '@spw/core';
+import { appendAudit, DEFAULT_POLICY, PolicySchema, type AuditRecord, type Mandate, type Policy } from '@spw/core';
 
 export interface StoredCredential { id: string; publicKey: string; counter: number; transports?: string[]; addedAt: string }
 export interface SignerState {
@@ -13,7 +13,10 @@ export interface SignerState {
   /** "<YYYY-MM-DD>|<network>:<symbol>" -> base units signed that UTC day */
   spent: Record<string, string>;
   journal: AuditRecord[];
+  /** agent mandates approved by the owner; usage is counted per UTC day */
+  mandates?: Record<string, StoredMandate>;
 }
+export interface StoredMandate { mandate: Mandate; approvedAt: string; revoked: boolean; revokedAt?: string; usage: Record<string, { sold: Record<string, string>; orders: number }> }
 
 const EMPTY: SignerState = { v: 1, halted: false, setupTokenHash: null, credentials: [], used: {}, spent: {}, journal: [] };
 
@@ -42,5 +45,6 @@ export class Store {
     for (const [k, exp] of Object.entries(this.state.used)) if (exp + 86400 < nowSec) delete this.state.used[k];
     const keep = new Date((nowSec - 3 * 86400) * 1000).toISOString().slice(0, 10);
     for (const k of Object.keys(this.state.spent)) if (k.slice(0, 10) < keep) delete this.state.spent[k];
+    for (const m of Object.values(this.state.mandates ?? {})) for (const d of Object.keys(m.usage)) if (d < keep) delete m.usage[d];
   }
 }

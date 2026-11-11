@@ -5,6 +5,7 @@ export * from './address.ts';
 export * from './intent.ts';
 export * from './build-evm.ts';
 export * from './swap-evm.ts';
+export * from './mandate.ts';
 export * from './build-btc.ts';
 export * from './build-sol.ts';
 export * from './policy.ts';

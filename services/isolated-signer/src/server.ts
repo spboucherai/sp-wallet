@@ -48,6 +48,12 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
       if (route === 'POST /enroll') { await signer.enroll(json); return { ok: true }; }
       if (route === 'POST /sign') return await signer.sign(json.intent, json.assertion, json.aux && typeof json.aux === 'object' ? json.aux : undefined);
       if (route === 'POST /halt') { signer.halt(); return { ok: true, halted: true }; }
+      // agent vaults: mandate approval needs the owner's passkey; orders need only to fit the mandate; revoking is always allowed
+      if (route === 'POST /vault/address') return { address: signer.vaultAddress(Number(json.index)) };
+      if (route === 'POST /mandate/approve') return await signer.approveMandate(json.mandate, json.assertion);
+      if (route === 'POST /mandate/revoke') { signer.revokeMandate(String(json.mandateId)); return { ok: true }; }
+      if (route === 'POST /mandate/sign') return await signer.signDelegated(String(json.mandateId), json.intent, json.aux && typeof json.aux === 'object' ? json.aux : undefined);
+      if (route === 'POST /mandate/return') return await signer.signReturn(String(json.mandateId), json.intent);
       throw new SignerError('not_found', 'no such route');
     };
     queue = queue.then(run).then((r) => send(200, r), (e: unknown) => {

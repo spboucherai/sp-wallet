@@ -21,6 +21,8 @@ export interface Keys {
   evmPriv: Uint8Array; solSeed: Uint8Array;
   /** secp256k1 private key of a Bitcoin-style network */
   utxoPriv(n: NetworkDef): Uint8Array;
+  /** EVM key of an agent vault: HD account `index` ≥ 1 (account 0 is the owner's wallet) */
+  vault(index: number): { priv: Uint8Array; address: string };
   /** signing handle for a plugin family network; the plugin never sees the private key */
   handle(n: NetworkDef): KeyHandle;
 }
@@ -61,5 +63,10 @@ export function deriveKeys(mnemonic: string): Keys {
   if (!addresses.btc) throw new Error('bitcoin address missing');
   // the key id stays bound to the three original addresses so it does not change when networks are added
   const keyId = 'spw-' + Buffer.from(sha256(new TextEncoder().encode(`${evm}|${addresses.btc}|${sol}`))).toString('hex').slice(0, 16);
-  return { keyId, addresses, evmPriv, solSeed, utxoPriv: (n) => secp(utxoPath(n)).priv, handle };
+  const vault = (index: number) => {
+    if (!Number.isInteger(index) || index < 1 || index > 100_000) throw new Error('vault index out of range');
+    const priv = secp(`m/44'/60'/${index}'/0/0`).priv;
+    return { priv, address: privateKeyToAccount(`0x${Buffer.from(priv).toString('hex')}`).address };
+  };
+  return { keyId, addresses, evmPriv, solSeed, utxoPriv: (n) => secp(utxoPath(n)).priv, handle, vault };
 }

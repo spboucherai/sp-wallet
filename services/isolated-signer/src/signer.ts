@@ -5,8 +5,8 @@ import { base58 } from '@scure/base';
 import { keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
-  baseUnits, buildBtcTx, buildEvmSwapTxs, buildEvmTx, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash, pluginFor,
-  solWireTransaction, toB64u, type Intent,
+  baseUnits, buildBtcTx, buildEvmSwapTxs, buildEvmTx, checkMandateOrder, MandateSchema, mandateHash, validateMandate, vaultKeyId, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash, pluginFor,
+  solWireTransaction, toB64u, type Intent, type Mandate,
 } from '@spw/core';
 import type { Keys } from './keys.ts';
 import type { Store, StoredCredential } from './store.ts';
@@ -28,6 +28,8 @@ export class Signer {
       policy: this.store.policy,
       spentToday: Object.fromEntries(Object.entries(s.spent).filter(([k]) => k.startsWith(today)).map(([k, v]) => [k.slice(11), v])),
       journalHead: s.journal[s.journal.length - 1]?.hash ?? null, journalLength: s.journal.length,
+      mandates: Object.values(s.mandates ?? {}).map((m) => ({ mandate: m.mandate, approvedAt: m.approvedAt, revoked: m.revoked, revokedAt: m.revokedAt ?? null,
+        expired: this.now() >= m.mandate.expiresAt, today: m.usage[today] ?? { sold: {}, orders: 0 } })),
     };
   }
 
@@ -63,6 +65,98 @@ export class Signer {
     s.credentials.push({ id: c.id, publicKey: c.publicKey, counter: c.counter, transports: c.transports, addedAt: new Date().toISOString() });
     this.store.log('credential.enrolled', { id: c.id });
     this.store.save();
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Agent vaults and mandates. A vault key signs only (a) swaps that fit a mandate the owner approved with a passkey, and
+  // (b) transfers back to the owner's own address. The owner's key (account 0) is never reachable from these paths.
+
+  vaultAddress(index: number): string { return this.keys.vault(index).address; }
+
+  /** The owner approves a mandate with a passkey assertion over its canonical hash. Limits can only be set here. */
+  async approveMandate(raw: unknown, assertion: AuthenticationResponseJSON): Promise<{ mandateId: string; hash: string }> {
+    const st = this.store, now = this.now();
+    const parsed = MandateSchema.safeParse(raw);
+    if (!parsed.success) throw new SignerError('bad_request', 'malformed mandate');
+    const m: Mandate = parsed.data;
+    const hash = mandateHash(m);
+    const deny = (code: string, msg: string): never => { st.log('mandate.denied', { mandateId: m.mandateId, code, msg }); st.save(); throw new SignerError(code, msg); };
+    if (st.state.halted) deny('policy', 'emergency halt is active');
+    if (m.keyId !== this.keys.keyId) deny('wrong_key', 'mandate targets another key');
+    if (m.vault !== this.vaultAddress(m.vaultIndex)) deny('wrong_vault', 'vault address does not match this signer\'s derivation');
+    if (st.state.mandates?.[m.mandateId]) deny('replay', 'mandate already recorded');
+    try { validateMandate(m, now); } catch (e) { deny('unsupported', (e as Error).message); }
+    try { await this.verifyAssertion(assertion, hash); } catch (e) { deny((e as SignerError).code ?? 'bad_approval', (e as Error).message); }
+    (st.state.mandates ??= {})[m.mandateId] = { mandate: m, approvedAt: new Date(now * 1000).toISOString(), revoked: false, usage: {} };
+    st.log('mandate.approved', { mandateId: m.mandateId, hash: Buffer.from(hash).toString('hex'), vaultIndex: m.vaultIndex, vault: m.vault, network: m.network, assets: m.assets.length, expiresAt: m.expiresAt, strategy: m.strategySha256 });
+    st.save();
+    return { mandateId: m.mandateId, hash: Buffer.from(hash).toString('hex') };
+  }
+
+  /** Stopping is always safe: no passkey needed. A revoked mandate can never be re-activated. */
+  revokeMandate(mandateId: string): void {
+    const sm = this.store.state.mandates?.[mandateId];
+    if (!sm) throw new SignerError('not_found', 'unknown mandate');
+    if (!sm.revoked) { sm.revoked = true; sm.revokedAt = new Date(this.now() * 1000).toISOString(); this.store.log('mandate.revoked', { mandateId }); this.store.save(); }
+  }
+
+  /** Sign one order for an agent vault. No passkey: the mandate is the authorization, and every bound is checked here. */
+  async signDelegated(mandateId: string, rawIntent: unknown, aux?: Record<string, unknown>): Promise<SignResult> {
+    const st = this.store, now = this.now();
+    const sm = st.state.mandates?.[mandateId];
+    if (!sm) throw new SignerError('not_found', 'unknown mandate');
+    const parsed = IntentSchema.safeParse(rawIntent);
+    if (!parsed.success) throw new SignerError('bad_request', 'malformed intent');
+    const i: Intent = parsed.data, m = sm.mandate, hash = intentHash(i);
+    const deny = (code: string, msg: string): never => { st.log('delegated.denied', { mandateId, proposalId: i.proposalId, code, msg }); st.save(); throw new SignerError(code, msg); };
+    if (st.state.used[i.proposalId] !== undefined) deny('replay', 'order already signed');
+    let net; try { net = getNetwork(i.network); } catch { return deny('wrong_chain', 'unknown network'); }
+    if (i.chainRef !== net.chainRef) deny('wrong_chain', 'chain identity mismatch');
+    const vault = this.keys.vault(m.vaultIndex);
+    if (vault.address !== m.vault) deny('wrong_vault', 'vault derivation mismatch');
+    const day = new Date(now * 1000).toISOString().slice(0, 10);
+    const usage = sm.usage[day] ?? { sold: {}, orders: 0 };
+    const verdict = checkMandateOrder(m, i, usage, now, { halted: st.state.halted, revoked: sm.revoked, maxFee: st.policy.maxFee[i.network] });
+    if (!verdict.ok) deny('mandate', verdict.reason);
+    let txs;
+    try { txs = buildEvmSwapTxs(i, typeof aux?.swapData === 'string' ? aux.swapData : ''); } // recipient = vault, minimum output, exact amount: same checks as for the owner
+    catch (e) { return deny('unsupported', (e as Error).message); }
+    // count the order before releasing a signature
+    usage.sold[i.asset] = (BigInt(usage.sold[i.asset] ?? '0') + baseUnits(i.amount)).toString(); usage.orders += 1; sm.usage[day] = usage;
+    st.state.used[i.proposalId] = i.expiresAt; st.prune(now);
+    const acct = privateKeyToAccount(`0x${Buffer.from(vault.priv).toString('hex')}`);
+    const raw = await acct.signTransaction(txs.swap), pre = txs.approve ? await acct.signTransaction(txs.approve) : null;
+    const out: SignResult = { raw, txid: keccak256(raw), hash: Buffer.from(hash).toString('hex'), ...(pre ? { pre: { raw: pre, txid: keccak256(pre) } } : {}) };
+    st.log('delegated.ok', { mandateId, proposalId: i.proposalId, hash: out.hash, symbol: i.symbol, amount: i.amount, toAsset: i.swap!.toAsset, minOut: i.swap!.minOut, txid: out.txid });
+    st.save();
+    return out;
+  }
+
+  /** Move funds out of a vault — only ever to the owner's own address. Works for revoked and expired mandates too. */
+  async signReturn(mandateId: string, rawIntent: unknown): Promise<SignResult> {
+    const st = this.store, now = this.now();
+    const sm = st.state.mandates?.[mandateId];
+    if (!sm) throw new SignerError('not_found', 'unknown mandate');
+    const parsed = IntentSchema.safeParse(rawIntent);
+    if (!parsed.success) throw new SignerError('bad_request', 'malformed intent');
+    const i: Intent = parsed.data, m = sm.mandate, hash = intentHash(i);
+    const deny = (code: string, msg: string): never => { st.log('return.denied', { mandateId, proposalId: i.proposalId, code, msg }); st.save(); throw new SignerError(code, msg); };
+    if (st.state.used[i.proposalId] !== undefined) deny('replay', 'already signed');
+    if (i.swap) deny('unsupported', 'a return is a plain transfer');
+    if (i.keyId !== vaultKeyId(m.keyId, m.vaultIndex) || i.network !== m.network) deny('wrong_key', 'intent is not for this vault');
+    const vault = this.keys.vault(m.vaultIndex);
+    if (i.from !== vault.address) deny('wrong_source', 'source is not the vault');
+    if (i.to !== this.keys.addresses.evm) deny('wrong_destination', 'a vault can only pay the owner\'s own address');
+    if (i.expiresAt <= now || i.expiresAt - i.createdAt > 300) deny('policy', 'validity window is not acceptable');
+    const fee = st.policy.maxFee[i.network];
+    if (fee === undefined || baseUnits(i.maxFee) > baseUnits(fee)) deny('policy', 'fee ceiling above policy');
+    let tx; try { tx = buildEvmTx(i); } catch (e) { return deny('unsupported', (e as Error).message); }
+    st.state.used[i.proposalId] = i.expiresAt; st.prune(now);
+    const raw = await privateKeyToAccount(`0x${Buffer.from(vault.priv).toString('hex')}`).signTransaction(tx);
+    const out = { raw, txid: keccak256(raw), hash: Buffer.from(hash).toString('hex') };
+    st.log('return.ok', { mandateId, proposalId: i.proposalId, symbol: i.symbol, amount: i.amount, txid: out.txid });
+    st.save();
+    return out;
   }
 
   halt(): void {
@@ -143,6 +237,14 @@ export class Signer {
     st.save();
     return { ...out, hash: Buffer.from(hash).toString('hex') };
   }
+}
+
+export interface DelegatedSigner {
+  vaultAddress(index: number): string;
+  approveMandate(raw: unknown, assertion: AuthenticationResponseJSON): Promise<{ mandateId: string; hash: string }>;
+  revokeMandate(mandateId: string): void;
+  signDelegated(mandateId: string, rawIntent: unknown, aux?: Record<string, unknown>): Promise<SignResult>;
+  signReturn(mandateId: string, rawIntent: unknown): Promise<SignResult>;
 }
 
 export function enrollChallenge(credId: string, publicKey: string): Uint8Array {
