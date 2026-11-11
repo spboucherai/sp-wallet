@@ -14,6 +14,8 @@ const POLICY: Record<string, SwapProvider['policy']> = {
   // keyless LI.FI allows 75 route requests per 2 hours per IP: spend them slowly; a key lifts this (LIFI_API_KEY)
   lifi: { ratePerSec: 0.01, burst: 6, timeoutMs: 3500, scarce: true },
   debridge: { timeoutMs: 4500 },
+  // the only keyless THORNode gateway answers in 2–5 s and is sometimes stale: give it time rather than report a timeout
+  thorchain: { timeoutMs: 6500, ratePerSec: 0.5, burst: 4 },
 };
 export function createEnabledProviders(env: ProviderEnv = {}): SwapProvider[] {
   const on = new Set((env.SPW_SWAP_ENABLE ?? '').split(',').map((s) => s.trim()).filter(Boolean));

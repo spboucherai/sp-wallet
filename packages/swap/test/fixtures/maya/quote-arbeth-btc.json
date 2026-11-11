@@ -1,0 +1,30 @@
+{
+  "recordedAt": "2026-11-11T01:13:37.172Z",
+  "url": "https://mayanode.mayachain.info/mayachain/quote/swap?from_asset=ARB.ETH&to_asset=BTC.BTC&amount=2000000&destination=bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh&liquidity_tolerance_bps=50&streaming_interval=3&streaming_quantity=0",
+  "status": 200,
+  "body": {
+    "inbound_address": "0x7df885869ac7933a7c841faf419ed4978d3b4f04",
+    "outbound_delay_blocks": 0,
+    "outbound_delay_seconds": 0,
+    "fees": {
+      "asset": "BTC.BTC",
+      "affiliate": "0",
+      "outbound": "605",
+      "liquidity": "57",
+      "total": "662",
+      "slippage_bps": 10,
+      "total_bps": 117
+    },
+    "router": "0x700E97ef07219440487840Dc472E7120A7FF11F4",
+    "expiry": 1794360517,
+    "warning": "Do not cache this response. Do not send funds after the expiry.",
+    "notes": "Base Asset: Send the inbound_address the asset with the memo encoded in hex in the data field. Tokens: First approve router to spend tokens from user: asset.approve(router, amount). Then call router.depositWithExpiry(inbound_address, asset, amount, memo, expiry). Asset is the token contract address. Amount should be in native asset decimals (eg 1e18 for most tokens). Do not send to or from contract addresses.",
+    "recommended_min_amount_in": "86920",
+    "recommended_gas_rate": "15",
+    "gas_rate_units": "centigwei",
+    "memo": "=:b:bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh:54688/3/0",
+    "expected_amount_out": "54963",
+    "max_streaming_quantity": 1,
+    "streaming_swap_blocks": 0
+  }
+}

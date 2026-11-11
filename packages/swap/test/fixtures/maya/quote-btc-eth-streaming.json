@@ -1,0 +1,34 @@
+{
+  "recordedAt": "2026-11-11T01:13:37.525Z",
+  "url": "https://mayanode.mayachain.info/mayachain/quote/swap?from_asset=BTC.BTC&to_asset=ETH.ETH&amount=200000000&destination=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045&liquidity_tolerance_bps=300&streaming_interval=3&streaming_quantity=0",
+  "status": 200,
+  "body": {
+    "inbound_address": "bc1q0ys0mp5knhhxda5u8ug204ry5vznkr3yhukp6x",
+    "inbound_confirmation_blocks": 1,
+    "inbound_confirmation_seconds": 600,
+    "outbound_delay_blocks": 141,
+    "outbound_delay_seconds": 846,
+    "fees": {
+      "asset": "ETH.ETH",
+      "affiliate": "0",
+      "outbound": "4879",
+      "liquidity": "14325425",
+      "total": "14330304",
+      "slippage_bps": 29,
+      "total_bps": 19
+    },
+    "expiry": 1794360517,
+    "warning": "Do not cache this response. Do not send funds after the expiry.",
+    "notes": "First output should be to inbound_address, second output should be change back to self, third output should be OP_RETURN, limited to 80 bytes. Do not send below the dust threshold. Do not use exotic spend scripts, locks or address formats (P2WSH with Bech32 address format preferred).",
+    "dust_threshold": "10000",
+    "recommended_min_amount_in": "2420",
+    "recommended_gas_rate": "1",
+    "gas_rate_units": "satsperbyte",
+    "memo": "=:e:0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045:6943207522/3/0",
+    "expected_amount_out": "7157945899",
+    "max_streaming_quantity": 193,
+    "streaming_swap_blocks": 576,
+    "streaming_swap_seconds": 3456,
+    "total_swap_seconds": 4056
+  }
+}

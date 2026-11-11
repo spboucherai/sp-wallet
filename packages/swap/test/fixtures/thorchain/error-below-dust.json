@@ -1,0 +1,10 @@
+{
+  "recordedAt": "2026-11-11T01:08:30.408Z",
+  "url": "https://gateway.liquify.com/chain/thorchain_api/thorchain/quote/swap?from_asset=BTC.BTC&to_asset=ETH.ETH&amount=500&destination=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045&liquidity_tolerance_bps=50",
+  "status": 400,
+  "body": {
+    "code": 3,
+    "message": "amount less than dust threshold: invalid request",
+    "details": []
+  }
+}

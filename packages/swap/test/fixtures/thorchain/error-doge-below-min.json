@@ -1,0 +1,10 @@
+{
+  "recordedAt": "2026-11-11T01:10:02.764Z",
+  "url": "https://gateway.liquify.com/chain/thorchain_api/thorchain/quote/swap?from_asset=DOGE.DOGE&to_asset=BTC.BTC&amount=200000000&destination=bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh&liquidity_tolerance_bps=50",
+  "status": 400,
+  "body": {
+    "code": 3,
+    "message": "amount less than min swap amount (recommended_min_amount_in: 6604462965): invalid request",
+    "details": []
+  }
+}

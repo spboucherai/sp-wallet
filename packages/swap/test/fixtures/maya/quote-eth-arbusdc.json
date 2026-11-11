@@ -1,0 +1,34 @@
+{
+  "recordedAt": "2026-11-11T01:13:36.447Z",
+  "url": "https://mayanode.mayachain.info/mayachain/quote/swap?from_asset=ETH.ETH&to_asset=ARB.USDC-0XAF88D065E77C8CC2239327C5EDB3A432268E5831&amount=2000000&destination=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045&liquidity_tolerance_bps=50&streaming_interval=3&streaming_quantity=0",
+  "status": 200,
+  "body": {
+    "inbound_address": "0x7df885869ac7933a7c841faf419ed4978d3b4f04",
+    "inbound_confirmation_blocks": 2,
+    "inbound_confirmation_seconds": 24,
+    "outbound_delay_blocks": 0,
+    "outbound_delay_seconds": 0,
+    "fees": {
+      "asset": "ARB.USDC-0XAF88D065E77C8CC2239327C5EDB3A432268E5831",
+      "affiliate": "0",
+      "outbound": "9909100",
+      "liquidity": "9641800",
+      "total": "19550900",
+      "slippage_bps": 33,
+      "total_bps": 48
+    },
+    "router": "0xe3985E6b61b814F7Cdb188766562ba71b446B46d",
+    "expiry": 1794360516,
+    "warning": "Do not cache this response. Do not send funds after the expiry.",
+    "notes": "Base Asset: Send the inbound_address the asset with the memo encoded in hex in the data field. Tokens: First approve router to spend tokens from user: asset.approve(router, amount). Then call router.depositWithExpiry(inbound_address, asset, amount, memo, expiry). Asset is the token contract address. Amount should be in native asset decimals (eg 1e18 for most tokens). Do not send to or from contract addresses.",
+    "recommended_min_amount_in": "19572",
+    "recommended_gas_rate": "1",
+    "gas_rate_units": "gwei",
+    "memo": "=:ARB.USDC:0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045:4019806069/3/0",
+    "expected_amount_out": "4040006100",
+    "max_streaming_quantity": 2,
+    "streaming_swap_blocks": 3,
+    "streaming_swap_seconds": 18,
+    "total_swap_seconds": 42
+  }
+}

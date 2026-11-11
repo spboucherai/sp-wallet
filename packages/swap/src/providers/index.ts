@@ -6,9 +6,11 @@ import { createDebridgeProvider } from './debridge.ts';
 import { createJupiterProvider } from './jupiter.ts';
 import { createKyberswapProvider } from './kyberswap.ts';
 import { createLifiProvider } from './lifi.ts';
+import { createMayaProvider } from './maya.ts';
+import { createThorchainProvider } from './thorchain.ts';
 
 export interface ProviderEnv { [key: string]: string | undefined }
 /** Every real provider adapter, in a fixed order. A provider that needs a key reports `configured: false` without one. */
 export function createProviders(env: ProviderEnv = {}): SwapProvider[] {
-  return [createCctpProvider(env), createDebridgeProvider(env), createJupiterProvider(env), createKyberswapProvider(env), createLifiProvider(env)];
+  return [createCctpProvider(env), createDebridgeProvider(env), createJupiterProvider(env), createKyberswapProvider(env), createLifiProvider(env), createMayaProvider(env), createThorchainProvider(env)];
 }

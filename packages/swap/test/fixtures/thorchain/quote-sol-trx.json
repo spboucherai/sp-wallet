@@ -1,0 +1,32 @@
+{
+  "recordedAt": "2026-11-11T01:08:20.839Z",
+  "url": "https://gateway.liquify.com/chain/thorchain_api/thorchain/quote/swap?from_asset=SOL.SOL&to_asset=TRON.TRX&amount=50000000&destination=TV6MuMXfmLbBqPZvBHdwFsDnQeVfnmiuSi&liquidity_tolerance_bps=50",
+  "status": 200,
+  "body": {
+    "inbound_address": "4jUDa9gFRtwua6GDHhfnLRZRv7XZr1dLexxEbQ6VeR3M",
+    "outbound_delay_blocks": 1,
+    "outbound_delay_seconds": 6,
+    "fees": {
+      "asset": "TRON.TRX",
+      "affiliate": "0",
+      "outbound": "138448100",
+      "liquidity": "26175200",
+      "total": "164623300",
+      "slippage_bps": 19,
+      "total_bps": 124
+    },
+    "expiry": 1794360034,
+    "warning": "Do not cache this response. Do not send funds after the expiry. Rapid streaming time is a best-case estimate. Actual execution may take longer due to direction skipping, swap failures, or queue budget limits.",
+    "notes": "",
+    "dust_threshold": "100000",
+    "recommended_min_amount_in": "1699359",
+    "recommended_gas_rate": "7800",
+    "gas_rate_units": "lamport",
+    "memo": "=:tr:TV6MuMXfmLbBqPZvBHdwFsDnQeVfnmiuSi:12861696559",
+    "expected_amount_out": "12926328200",
+    "max_streaming_quantity": 1,
+    "streaming_swap_blocks": 1,
+    "streaming_swap_seconds": 6,
+    "total_swap_seconds": 6
+  }
+}
