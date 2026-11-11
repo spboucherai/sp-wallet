@@ -20,7 +20,7 @@ export interface NetworkDef {
   id: NetworkId;
   family: Family;
   name: string;
-  /** EVM: decimal chain id. BTC: genesis block hash. SOL: genesis hash. */
+  /** EVM: decimal chain id. BTC: genesis block hash. SOL: genesis hash. Stellar: network passphrase. */
   chainRef: string;
   native: AssetDef;
   tokens: AssetDef[];
@@ -120,6 +120,16 @@ const DEFS = {
     tokens: [],
     rpc: ['https://api.mainnet-beta.solana.com', 'https://solana-rpc.publicnode.com'],
     explorerTx: 'https://solscan.io/tx/', explorerAddr: 'https://solscan.io/account/', minConf: 1,
+  },
+  // Identity = the network passphrase (its SHA-256 is the network id mixed into every signature). Sources: SDF Horizon and
+  // LOBSTR's public Horizon (independent operator), both keyless; verified live 2026-11-10.
+  stellar: {
+    id: 'stellar', family: 'stellar', name: 'Stellar',
+    chainRef: 'Public Global Stellar Network ; September 2015',
+    native: { id: 'native', symbol: 'XLM', name: 'Stellar Lumens', decimals: 7 }, tokens: [], coinType: 148,
+    memo: 'text', activation: '1',
+    rpc: ['https://horizon.stellar.org', 'https://horizon.stellar.lobstr.co'],
+    explorerTx: 'https://stellar.expert/explorer/public/tx/', explorerAddr: 'https://stellar.expert/explorer/public/account/', minConf: 1,
   },
 } satisfies Record<string, NetworkDef>;
 
