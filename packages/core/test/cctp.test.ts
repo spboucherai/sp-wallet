@@ -11,7 +11,7 @@ const usdc = (n: string) => NETWORKS[n]!.tokens.find((t) => t.symbol === 'USDC')
 const now = 1_800_000_000;
 function intent(o: Partial<Intent> = {}, bridge: Partial<NonNullable<Intent['bridge']>> = {}): Intent {
   return { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a22', keyId: 'spw-0123456789abcdef', network: 'base', chainRef: '8453', asset: usdc('base'), symbol: 'USDC', decimals: 6, amount: '25000000',
-    from: ME, to: ME, maxFee: '400000000000000', createdAt: now, expiresAt: now + 75, policyVersion: 3,
+    from: ME, to: ME, maxFee: '400000000000000', createdAt: now, expiresAt: now + 75, policyVersion: 4,
     bridge: { provider: 'cctp', toNetwork: 'arbitrum', toDomain: 3, maxFee: '0', minFinalityThreshold: 2000, messenger: CCTP_TOKEN_MESSENGER, transmitter: CCTP_MESSAGE_TRANSMITTER, approveGas: '70000', ...bridge },
     evm: { nonce: 5, gasLimit: '200000', maxFeePerGas: '1000000000', maxPriorityFeePerGas: '1000000' }, ...o };
 }

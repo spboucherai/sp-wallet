@@ -35,7 +35,7 @@ function evm(now: number, over: Partial<Intent> = {}): Intent {
   seq += 1;
   return { v: 1, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(seq).padStart(12, '0')}`, keyId: keys.keyId, network: 'base', chainRef: '8453',
     asset: NETWORKS.base.tokens[0]!.id, symbol: 'USDC', decimals: 6, amount: '10000000', from: keys.addresses.evm,
-    to: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', maxFee: '100000000000000', createdAt: now, expiresAt: now + 120, policyVersion: 3,
+    to: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', maxFee: '100000000000000', createdAt: now, expiresAt: now + 120, policyVersion: 4,
     evm: { nonce: 0, gasLimit: '90000', maxFeePerGas: '1000000000', maxPriorityFeePerGas: '1000000' }, ...over };
 }
 
@@ -57,7 +57,7 @@ describe('per-network keys', () => {
     const { signer, pk, nowRef } = setup();
     await signer.enroll({ credential: pk.credential(), setupToken: 'setup-token' });
     const t = nowRef.t;
-    const ltc: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-cccccccccccc', keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 3, network: 'litecoin', chainRef: NETWORKS.litecoin.chainRef,
+    const ltc: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-cccccccccccc', keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 4, network: 'litecoin', chainRef: NETWORKS.litecoin.chainRef,
       asset: 'native', symbol: 'LTC', decimals: 8, amount: '2000000', from: keys.addresses.litecoin!, to: 'ltc1qg42tkwuuxefutzxezdkdel39gfstuap288mfea', maxFee: '100000',
       btc: { inputs: [{ txid: 'cd'.repeat(32), vout: 0, value: '5000000' }], change: '2990000', fee: '10000' } };
     const r = await signer.sign(ltc, pk.assert(intentHash(ltc)));
@@ -77,7 +77,7 @@ describe('per-network keys', () => {
     await signer.enroll({ credential: pk.credential(), setupToken: 'setup-token' });
     const t = nowRef.t, usdt = NETWORKS.tron.tokens[0]!;
     const x = { ref_block_bytes: '2660', ref_block_hash: 'afad6ef83bbf9b23', expiration: String((t + 240) * 1000), timestamp: String(t * 1000), fee_limit: '20000000' };
-    const tron: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-ffffffffff01', keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 3, network: 'tron', chainRef: NETWORKS.tron.chainRef,
+    const tron: Intent = { v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-ffffffffff01', keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 4, network: 'tron', chainRef: NETWORKS.tron.chainRef,
       asset: usdt.id, symbol: 'USDT', decimals: 6, amount: '12500000', from: keys.addresses.tron!, to: 'TKHuVq1oKVruCGLvqVexFs6dawKv6fQgFs', maxFee: '21000000', x };
     const r = await signer.sign(tron, pk.assert(intentHash(tron)));
     // the same transfer built and signed by the official SDK, offline
@@ -214,7 +214,7 @@ describe('signing', () => {
   it('signs Solana and Bitcoin intents verifiably', async () => {
     const { signer, pk, nowRef } = setup();
     await signer.enroll({ credential: pk.credential(), setupToken: 'setup-token' });
-    const t = nowRef.t, common = { v: 1 as const, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 3 };
+    const t = nowRef.t, common = { v: 1 as const, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 4 };
     const sol: Intent = { ...common, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-aaaaaaaaaaaa', network: 'solana', chainRef: NETWORKS.solana.chainRef,
       asset: NETWORKS.solana.tokens[0]!.id, symbol: 'USDC', decimals: 6, amount: '5000000', from: keys.addresses.sol,
       to: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM', maxFee: '100000',

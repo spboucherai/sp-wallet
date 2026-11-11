@@ -68,7 +68,7 @@ in text); dark — CVD 8.4, normal 19.3, all ≥ 3 : 1.
 ## Logos
 
 `AssetIcon` (historical alias `Coin`), `NetworkIcon` (alias `NetDot`), `VenueIcon`, `ProviderIcon` — real logos only,
-self-hosted, sanitised; provenance in `apps/web/src/icons/SOURCES.md`. Every logo sits on a round plate with a hairline
+self-hosted, sanitised; provenance in `apps/web/src/logos/SOURCES.md`. Every logo sits on a round plate with a hairline
 edge: full-bleed discs cover it; a free-form mark keeps the plate (its brand's own background where it has one), so it
 never vanishes on a light or dark surface and is never recoloured. A network badge (bottom-right, ring in the surface
 colour) is shown whenever the asset is not on its home network, and always for a representation without its own mark

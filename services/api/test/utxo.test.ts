@@ -45,7 +45,7 @@ function stub(name: string, o: Opt, asked: number[] = []): Source {
 const intentOf = (network: string, from: string, to: string, amount: bigint, prep: { section: Record<string, unknown>; maxFee: bigint }): Intent => {
   const n = NETWORKS[network]!;
   return IntentSchema.parse({ v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', network, chainRef: n.chainRef, asset: 'native',
-    symbol: n.native.symbol, decimals: n.native.decimals, amount: amount.toString(), from, to, maxFee: prep.maxFee.toString(), createdAt: 1_800_000_000, expiresAt: 1_800_000_120, policyVersion: 3, ...prep.section });
+    symbol: n.native.symbol, decimals: n.native.decimals, amount: amount.toString(), from, to, maxFee: prep.maxFee.toString(), createdAt: 1_800_000_000, expiresAt: 1_800_000_120, policyVersion: 4, ...prep.section });
 };
 
 describe('Dogecoin adapter (two sources must agree)', () => {

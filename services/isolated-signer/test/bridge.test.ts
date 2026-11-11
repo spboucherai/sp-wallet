@@ -28,7 +28,7 @@ let seq = 0;
 function intent(now: number, o: Partial<Intent> = {}, bridge: Partial<NonNullable<Intent['bridge']>> = {}): Intent {
   seq += 1;
   return { v: 1, proposalId: `7a1c1f0e-8f5f-4b1e-9c56-${String(seq).padStart(12, '0')}`, keyId: keys.keyId, network: 'base', chainRef: '8453', asset: usdc('base'), symbol: 'USDC', decimals: 6, amount: '10000000',
-    from: ME, to: ME, maxFee: '270000000000000', createdAt: now, expiresAt: now + 75, policyVersion: 3,
+    from: ME, to: ME, maxFee: '270000000000000', createdAt: now, expiresAt: now + 75, policyVersion: 4,
     bridge: { provider: 'cctp', toNetwork: 'arbitrum', toDomain: 3, maxFee: '0', minFinalityThreshold: 2000, messenger: CCTP_TOKEN_MESSENGER, transmitter: CCTP_MESSAGE_TRANSMITTER, approveGas: '70000', ...bridge },
     evm: { nonce: 3, gasLimit: '200000', maxFeePerGas: '1000000000', maxPriorityFeePerGas: '1000000' }, ...o };
 }

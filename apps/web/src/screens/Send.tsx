@@ -92,6 +92,9 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
         {n?.memo && <Field label={t(n.memo === 'uint32' ? 'memoTag' : 'memoText')} hint={t('memoWarn')}>
           <input className={inputCls} value={memo} maxLength={n.memo === 'uint32' ? 10 : n.id === 'stellar' ? 28 : 120} inputMode={n.memo === 'uint32' ? 'numeric' : 'text'} onChange={(e) => setMemo(n.memo === 'uint32' ? e.target.value.replace(/\D/g, '') : e.target.value)} autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} /></Field>}
         <Field label={t('note')}><input className={inputCls} value={note} maxLength={80} onChange={(e) => setNote(e.target.value)} /></Field>
+        {/* v8-cardano-polkadot: chain rules the amount must respect (the server enforces them and explains a refusal) */}
+        {n?.family === 'cardano' && <Notice tone="info">{t('cdSendHint')}</Notice>}
+        {n?.family === 'polkadot' && <Notice tone="info">{t('dtSendHint', { amount: n.activation ?? '0.01' })}</Notice>}
         {err && <Notice tone="danger">{err}</Notice>}
         <Btn full busy={busy === 'review'} disabled={!to || !amount || pf.data?.halted} onClick={review}>{busy === 'review' ? t('preparing') : t('review')}</Btn>
       </Card>

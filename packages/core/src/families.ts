@@ -7,7 +7,7 @@ import type { NetworkDef } from './networks.ts';
 /** Signing capability handed to a plugin by the signer. The private key itself never leaves the signer's key module. */
 export interface KeyHandle {
   curve: 'secp256k1' | 'ed25519';
-  /** secp256k1: 33-byte compressed key. ed25519: 32-byte key. */
+  /** secp256k1: 33-byte compressed key. ed25519: 32-byte key (Cardano, keyScheme 'cip1852': 64 bytes = payment key ‖ stake key; only the payment key signs). */
   publicKey: Uint8Array;
   /** secp256k1 only: sign a 32-byte digest (deterministic, low-S). */
   signDigest?(digest: Uint8Array): { compact: Uint8Array; recovery: number; der: Uint8Array };
@@ -20,6 +20,11 @@ export interface Signed { raw: string; txid: string }
 export interface FamilyPlugin {
   family: string;
   curve: 'secp256k1' | 'ed25519';
+  /**
+   * v8-cardano-polkadot: how an ed25519 key is derived from the seed. Absent / 'slip10' = SLIP-0010 from the BIP-39 seed (every
+   * family before Cardano). 'cip1852' = BIP32-Ed25519 (Icarus master key from the BIP-39 entropy), which allows soft derivation.
+   */
+  keyScheme?: 'slip10' | 'cip1852';
   /** derivation path for this network (hardened-only for ed25519 / SLIP-0010) */
   path(net: NetworkDef): string;
   /** the wallet's address on this network, from its public key */

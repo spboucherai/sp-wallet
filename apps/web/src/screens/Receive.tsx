@@ -36,7 +36,11 @@ export function Receive({ initial }: { initial?: string }) {
       </Card>
       <Notice tone="warn">{t('onlySend', { assets: assets.length > 4 ? `${assets.slice(0, 3).join(' / ')}… (${assets.length})` : assets.join(' / '), network: n.name })}</Notice>
       {n.family === 'evm' && <Notice tone="info">{t('evmSame')}</Notice>}
-      {n.activation && <Notice tone="info">{t('activationNote', { network: n.name, amount: n.activation, sym: n.native.symbol })}</Notice>}
+      {n.activation && n.family !== 'cardano' && n.family !== 'polkadot' && <Notice tone="info">{t('activationNote', { network: n.name, amount: n.activation, sym: n.native.symbol })}</Notice>}
+      {/* v8-cardano-polkadot ↓ chain-specific receive warnings */}
+      {n.family === 'cardano' && <><Notice tone="info">{t('cdRecvMin')}</Notice><Notice tone="warn">{t('cdRecvTokens')}</Notice><Notice tone="info">{t('cdRecvRecover')}</Notice></>}
+      {n.family === 'polkadot' && <><Notice tone="warn">{t('dtRecvHub')}</Notice><Notice tone="info">{t('dtRecvEd', { amount: n.activation ?? '0.01' })}</Notice><Notice tone="warn">{t('dtRecvKey')}</Notice></>}
+      {/* v8-cardano-polkadot ↑ */}
       <Card><H>{t('addressFromSigner')}</H><ul className="space-y-2 text-[13.5px] text-mute">
         <li>{n.minConf === 1 ? t('qaDepositShown1') : t('depositShown', { n: n.minConf })}</li>
         {n.tokens.length > 0 && <li>{t('gasNote', { sym: n.native.symbol })}</li>}

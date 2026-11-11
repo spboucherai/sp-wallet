@@ -1,6 +1,6 @@
 // One-off importer of the logo set (run by hand, never by the build): downloads each logo from the source named in the table
 // below, sanitises SVGs (svg-sanitize.mts), converts large PNGs to WebP when `cwebp` is installed, and writes
-// apps/web/src/icons/<kind>/<slug>.<ext> plus the manifest apps/web/src/icons/icons.json (symbol → file, source, licence).
+// apps/web/src/logos/<kind>/<slug>.<ext> plus the manifest apps/web/src/logos/icons.json (symbol → file, source, licence).
 //
 //   npx tsx apps/web/scripts/fetch-icons.mts            # everything
 //   npx tsx apps/web/scripts/fetch-icons.mts ADA DOT    # only these ids
@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { TOKENS } from '../../../packages/core/src/tokens.ts';
 import { cleanSvg, rasterSize, unsafeReason } from './svg-sanitize.mts';
 
-const HERE = dirname(fileURLToPath(import.meta.url)), OUT = join(HERE, '../src/icons');
+const HERE = dirname(fileURLToPath(import.meta.url)), OUT = join(HERE, '../src/logos');
 const RAW = 'https://raw.githubusercontent.com/';
 export const LICENCES = {
   w3i: { name: 'Web3Icons (0xa3k5/web3icons)', licence: 'MIT', url: 'https://github.com/0xa3k5/web3icons/blob/main/LICENCE' },

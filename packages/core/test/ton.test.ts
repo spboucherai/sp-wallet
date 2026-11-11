@@ -42,7 +42,7 @@ const TO = tonAddressOf(OTHER_PUB);
 
 const now = 1_800_000_000;
 const base: Intent = {
-  v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 3,
+  v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 4,
   network: 'ton', chainRef: TON_MAINNET_ZEROSTATE, asset: 'native', symbol: 'TON', decimals: 9, amount: '1500000000', from: FROM, to: TO, maxFee: '5000000',
   x: { seqno: '7', validUntil: String(now + 300), bounce: '1', sendMode: '3', stateInit: '0' },
 };

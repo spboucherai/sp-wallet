@@ -1753,6 +1753,28 @@ const D = {
   dsAddrFormatOk: ['Format d’adresse valide (42 caractères). Vérifiez toujours le début et la fin.', 'Valid address format (42 characters). Always check its beginning and end.'],
   dsAddrFormatPartial: ['{n}/42 caractères', '{n}/42 characters'],
   // <<< end of the `ds` block
+  // >>> v8-cardano-polkadot — ONE contiguous block, keys prefixed `cd` (Cardano) and `dt` (Polkadot), plus their `w_cd_` / `w_dt_` transfer warnings: keep additions inside it
+  cdRecvMin: ['Sur Cardano, chaque paiement doit transporter un minimum d’ADA (environ 0,97 ADA) : un dépôt plus petit ne peut pas être émis par l’expéditeur.',
+    'On Cardano every payment must carry a minimum of ADA (about 0.97 ADA): a smaller deposit cannot be made by the sender.'],
+  cdRecvTokens: ['ADA natif uniquement. Les jetons natifs Cardano (actifs, NFT) envoyés à cette adresse ne sont ni affichés ni dépensables par ce portefeuille, et l’ADA qui les accompagne reste immobilisé avec eux.',
+    'Native ADA only. Cardano native tokens (assets, NFTs) sent to this address are neither shown nor spendable by this wallet, and the ADA attached to them stays locked with them.'],
+  cdRecvRecover: ['Adresse de base Shelley standard (addr1q…) : la première adresse du compte 0 (CIP-1852). Les portefeuilles logiciels Cardano (Eternl, Lace, Yoroi, Trust Wallet) la retrouvent à partir de la même phrase de récupération ; un appareil Ledger dérive une autre adresse.',
+    'Standard Shelley base address (addr1q…): the first address of account 0 (CIP-1852). Cardano software wallets (Eternl, Lace, Yoroi, Trust Wallet) restore it from the same recovery phrase; a Ledger device derives another address.'],
+  cdSendHint: ['Cardano : un paiement doit être d’au moins 0,97 ADA environ, et la monnaie rendue aussi — envoyez moins, ou exactement tout le solde (le montant exact est indiqué en cas de refus). Pas de mémo. Les sorties portant des jetons natifs ne sont jamais dépensées.',
+    'Cardano: a payment must be at least about 0.97 ADA, and so must the change — send less, or exactly the whole balance (the exact amount is given if the transfer is refused). No memo. Outputs carrying native tokens are never spent.'],
+  w_cd_token_outputs: ['Certaines sorties de ce portefeuille portent des jetons natifs ou des données de script : elles ne sont jamais dépensées, et leur ADA reste immobilisé avec elles.',
+    'Some outputs of this wallet carry native tokens or script data: they are never spent, and their ADA stays locked with them.'],
+  dtRecvHub: ['Cette adresse est sur Polkadot Asset Hub, où se trouvent les DOT depuis la migration de novembre 2025. Sur une plateforme d’échange, retirez les DOT « via Asset Hub » (et non via la chaîne relais). DOT uniquement : les autres actifs d’Asset Hub ne sont pas pris en charge.',
+    'This address is on Polkadot Asset Hub, where DOT lives since the November 2025 migration. On an exchange, withdraw DOT “via Asset Hub” (not via the relay chain). DOT only: other Asset Hub assets are not supported.'],
+  dtRecvEd: ['Dépôt existentiel : {amount} DOT. Un premier dépôt inférieur à ce montant est refusé par le réseau, et le compte conserve toujours {amount} DOT.',
+    'Existential deposit: {amount} DOT. A first deposit below it is refused by the network, and the account always keeps {amount} DOT.'],
+  dtRecvKey: ['Compte ed25519 dérivé en m/44\'/354\'/0\'/0\'/0\' (la dérivation de Trust Wallet). Ce n’est PAS l’adresse que Polkadot.js, Talisman ou Nova affichent pour la même phrase (ils dérivent en sr25519) : les fonds se récupèrent avec la phrase de ce portefeuille et ce chemin.',
+    'ed25519 account derived at m/44\'/354\'/0\'/0\'/0\' (the derivation Trust Wallet uses). It is NOT the address Polkadot.js, Talisman or Nova show for the same phrase (those derive sr25519): funds are recovered with this wallet’s phrase and this path.'],
+  dtSendHint: ['Polkadot (Asset Hub) : le compte conserve toujours {amount} DOT (pas d’envoi de la totalité) ; un compte destinataire nouveau doit recevoir au moins {amount} DOT. Les frais sont prélevés par la chaîne (estimation affichée à l’étape suivante). Pas de mémo.',
+    'Polkadot (Asset Hub): the account always keeps {amount} DOT (no “send all”); a new destination account must receive at least {amount} DOT. The fee is charged by the chain (estimate shown at the next step). No memo.'],
+  w_dt_new_account: ['Le compte destinataire n’existe pas encore sur Polkadot Asset Hub : ce transfert le crée (il devra toujours conserver au moins 0,01 DOT).',
+    'The destination account does not exist yet on Polkadot Asset Hub: this transfer creates it (it must always keep at least 0.01 DOT).'],
+  // <<< end of the v8-cardano-polkadot block
 } as const;
 export type Key = keyof typeof D;
 export const I18n = createContext<{ locale: Locale; setLocale: (l: Locale) => void }>({ locale: 'fr', setLocale: () => {} });

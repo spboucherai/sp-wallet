@@ -1,6 +1,6 @@
 // v9: the visual sheet of the logo set. Starts the Vite dev server of the web app (the wall exists only in development),
 // opens /__icons at phone and desktop sizes, light and dark, checks that every logo actually loaded from this origin, and
-// writes the four sheets to docs/v9/icons/. LOOK at them after any change to the set.
+// writes the four sheets to docs/v9/logo-wall/. LOOK at them after any change to the set.
 //
 //   npx tsx tests/e2e/v9-icon-wall.mts [port]
 import { execFileSync, spawn } from 'node:child_process';
@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium } from '@playwright/test';
 
-const PORT = Number(process.argv[2] ?? 5239), OUT = resolve('docs/v9/icons'); mkdirSync(OUT, { recursive: true });
+const PORT = Number(process.argv[2] ?? 5239), OUT = resolve('docs/v9/logo-wall'); mkdirSync(OUT, { recursive: true });
 const vite = spawn(resolve('apps/web/node_modules/.bin/vite'), ['--port', String(PORT), '--strictPort'], { cwd: resolve('apps/web'), stdio: 'ignore' });
 let failed = false;
 try {

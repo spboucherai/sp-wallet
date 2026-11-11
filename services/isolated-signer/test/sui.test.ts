@@ -32,7 +32,7 @@ async function setup() {
 }
 let n = 0;
 const sui = (t: number, over: Partial<Intent> = {}): Intent => ({
-  v: 1, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(++n).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 3,
+  v: 1, proposalId: `6f1c1f0e-8f5f-4b1e-9c56-${String(++n).padStart(12, '0')}`, keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 4,
   network: 'sui', chainRef: NETWORKS.sui.chainRef, asset: 'native', symbol: 'SUI', decimals: 9, amount: '2500000000', from: keys.addresses.sui!, to: DEST, maxFee: '4152000',
   x: { payment: COIN, gasPrice: '100', gasBudget: '4152000', expiration: '1308' }, ...over,
 });

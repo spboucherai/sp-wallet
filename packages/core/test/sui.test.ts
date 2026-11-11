@@ -47,7 +47,7 @@ const COIN_A: SuiObjectRef = { objectId: '0x' + '1a'.repeat(32), version: 106591
 const COIN_B: SuiObjectRef = { objectId: '0x' + 'c7'.repeat(32), version: 7n, digest: digestOf(2) };
 const now = 1_800_000_000;
 const base: Intent = {
-  v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 3,
+  v: 1, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a11', keyId: 'spw-0123456789abcdef', createdAt: now, expiresAt: now + 120, policyVersion: 4,
   network: 'sui', chainRef: SUI_MAINNET_GENESIS, asset: 'native', symbol: 'SUI', decimals: 9, amount: '1250000000', from: FROM, to: TO, maxFee: '5000000',
   x: { payment: suiFormatPayment([COIN_A]), gasPrice: '100', gasBudget: '4152000', expiration: '1308' },
 };
@@ -309,7 +309,7 @@ describe('sui: fail closed', () => {
     const other: Intent[] = [
       { ...base, chainRef: '69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD' }, { ...base, network: 'solana' }, { ...base, asset: 'other' }, { ...base, symbol: 'SUL' }, { ...base, decimals: 8 },
       { ...base, maxFee: '4151999' }, { ...base, memo: 'x' }, { ...base, v: 2 as never },
-      { ...base, maxFee: '5000001' }, { ...base, createdAt: now + 1 }, { ...base, expiresAt: now + 121 }, { ...base, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { ...base, keyId: 'spw-0123456789abcdee' }, { ...base, policyVersion: 4 },
+      { ...base, maxFee: '5000001' }, { ...base, createdAt: now + 1 }, { ...base, expiresAt: now + 121 }, { ...base, proposalId: '6f1c1f0e-8f5f-4b1e-9c56-0d6b5f0f1a12' }, { ...base, keyId: 'spw-0123456789abcdee' }, { ...base, policyVersion: 5 },
     ];
     const h0 = toHex(intentHash(base));
     other.forEach((m, k) => {

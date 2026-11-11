@@ -54,6 +54,11 @@ const STABLE_FEE: Record<string, string> = {
   sui: '50000000',  // 0.05 SUI: a plain transfer charges about 0.002 SUI; the gas budget (the most that can be charged) is bounded by this
   near: '20000000000000000000000',  // 0.02 NEAR: worst case of a transfer that creates an implicit account (10 Tgas at the protocol's highest gas price)
   ton: '50000000',  // 0.05 TON: a transfer costs about 0.003 TON, the first one (wallet deployment) about 0.005 TON
+  // v8-cardano-polkadot ↓ (caps: ADA 285 and DOT 60 above, unchanged — 50.85 USD and 51.70 USD at 0.17841 and 0.86172 USD,
+  // DefiLlama price API, 2026-11-11 18:16 UTC)
+  cardano: '500000',     // 0.5 ADA: a payment with one input costs 0.168–0.172 ADA (44 lovelace × ~300 bytes + 155 381); twenty inputs, 0.20 ADA
+  polkadot: '500000000', // 0.05 DOT: a transfer_keep_alive on Asset Hub costs about 0.0009 DOT (payment_queryInfo, 2026-11-11); room for a fiftyfold rise of the fee multiplier
+  // v8-cardano-polkadot ↑
   tron: '40000000', // 40 TRX: a USDT transfer to a first-time holder burns ≈13.5 TRX of energy at 100 sun, plus margin
 };
 function buildDefaultPolicy(): Policy {
@@ -65,7 +70,7 @@ function buildDefaultPolicy(): Policy {
     perTx[`${n.id}:${a.symbol}`] = v.toString();
     daily[`${n.id}:${a.symbol}`] = (v * 2n).toString();
   }
-  return { version: 3, perTx, daily, maxFee: STABLE_FEE, maxApprovalTtlSec: 300, allowlist: [] };
+  return { version: 4, perTx, daily, maxFee: STABLE_FEE, maxApprovalTtlSec: 300, allowlist: [] };
 }
 /** Conservative defaults sized for a wallet holding a few tens of dollars per asset. */
 export const DEFAULT_POLICY: Policy = buildDefaultPolicy();
