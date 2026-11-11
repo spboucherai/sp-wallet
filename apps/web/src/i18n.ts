@@ -47,6 +47,7 @@ const D = {
   w_memo_numeric_id: ['Le mémo ne contient que des chiffres : il est envoyé comme identifiant numérique (MEMO_ID), le format attendu par les plateformes d’échange.', 'The memo is digits only: it is sent as a numeric id (MEMO_ID), the format exchanges expect.'],
   w_network_congested: ['Réseau très chargé : les frais sont plafonnés, le transfert peut expirer sans être inclus (aucun fonds ne bouge dans ce cas).', 'The network is congested: the fee is capped, so the transfer may expire without being included (no funds move in that case).'],
   w_activates_account: ['Cette adresse n’a jamais été utilisée sur ce réseau : son activation est facturée à l’expéditeur (environ 1,1 TRX sur TRON), en plus du montant.', 'This address has never been used on this network: activating it is charged to the sender (about 1.1 TRX on TRON), on top of the amount.'],
+  w_near_creates_account: ['Ce compte NEAR n’existe pas encore : ce transfert le crée, ce qui ajoute environ 0,007 NEAR de frais à la charge de l’expéditeur.', 'This NEAR account does not exist yet: this transfer creates it, which adds about 0.007 NEAR of fees paid by the sender.'],
   iChecked: ['J’ai vérifié l’adresse, le réseau et le montant.', 'I have checked the address, network and amount.'],
   irreversible: ['Un transfert sur chaîne est irréversible.', 'An on-chain transfer is irreversible.'],
   approve: ['Approuver avec la clé d’accès', 'Approve with passkey'], cancel: ['Annuler', 'Cancel'], back: ['Retour', 'Back'],

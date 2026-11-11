@@ -34,6 +34,7 @@ const COINGECKO: Record<string, string> = {
   APT: 'aptos',
   ATOM: 'cosmos',
   SUI: 'sui',
+  NEAR: 'near',
   USDC: 'usd-coin', USDT: 'tether', PYUSD: 'paypal-usd', DAI: 'dai', USDS: 'usds', USDe: 'ethena-usde', FDUSD: 'first-digital-usd', EURC: 'euro-coin', RLUSD: 'ripple-usd', USDG: 'global-dollar',
   LINK: 'chainlink', UNI: 'uniswap', AAVE: 'aave', LDO: 'lido-dao', WBTC: 'wrapped-bitcoin', WETH: 'weth', PAXG: 'pax-gold', ONDO: 'ondo-finance', RENDER: 'render-token',
   JUP: 'jupiter-exchange-solana', RAY: 'raydium', BONK: 'bonk', PEPE: 'pepe', SHIB: 'shiba-inu',

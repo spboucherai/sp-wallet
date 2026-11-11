@@ -25,6 +25,7 @@ export interface NetworkDef {
    * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id.
    * Cosmos SDK: the chain id (it is part of every signed document, so a signature is valid on that chain only).
    * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. Sui: genesis checkpoint digest.
+   * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. NEAR: genesis block hash.
    * Bitcoin Cash shares its genesis block with Bitcoin, Bitcoin SV and eCash, so its reference is the hash of block 661648,
    * the first block after the last of those splits (November 2020; a Bitcoin Cash Node checkpoint), which exists on no other chain.
    */
@@ -219,6 +220,18 @@ const DEFS = {
     native: { id: 'native', symbol: 'SUI', name: 'Sui', decimals: 9 }, tokens: [], coinType: 784,
     rpc: ['https://fullnode.mainnet.sui.io', 'https://mainnet.sui.rpcpool.com'],
     explorerTx: 'https://suiscan.xyz/mainnet/tx/', explorerAddr: 'https://suiscan.xyz/mainnet/account/', minConf: 1,
+  },
+  near: {
+    // chainRef = genesis block hash of mainnet (status.genesis_hash; the chain id string is "mainnet"). A NEAR transaction carries
+    // no chain id: it is bound to the chain by the recent block hash it names, which the API reads from both sources.
+    // The wallet's account is the implicit account of its key (64 hex characters); it exists on-chain once it has received NEAR.
+    // No `activation`: an account this small needs no minimum balance (zero-balance accounts, NEP-448).
+    // Sources: FastNEAR and dRPC (independent operators, different nodes; both keyless; verified live 2026-11-10).
+    id: 'near', family: 'near', name: 'NEAR Protocol',
+    chainRef: 'EPnLgE7iEq9s7yTkos96M3cWymH5avBAPm3qx3NXqR8H',
+    native: { id: 'native', symbol: 'NEAR', name: 'NEAR', decimals: 24 }, tokens: [], coinType: 397,
+    rpc: ['https://free.rpc.fastnear.com', 'https://near.drpc.org'],
+    explorerTx: 'https://nearblocks.io/txns/', explorerAddr: 'https://nearblocks.io/address/', minConf: 3,
   },
 } satisfies Record<string, NetworkDef>;
 

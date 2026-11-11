@@ -26,6 +26,7 @@ export const CAPS: Record<string, string> = {
   APT: '88', // 0.5675 USD on 2026-11-10 (CoinGecko)
   ATOM: '36',
   SUI: '60',
+  NEAR: '14',
   LINK: '5', UNI: '7.5', AAVE: '0.4', LDO: '150', PAXG: '0.0125', ONDO: '135', RENDER: '30', JUP: '200', RAY: '30',
   BONK: '18000000', PEPE: '9000000', SHIB: '11000000',
 };
@@ -36,6 +37,7 @@ const STABLE_FEE: Record<string, string> = {
   aptos: '10000000', // 0.1 APT: a transfer that creates the recipient's store uses ≈ 5 400 gas units (0.0054 APT at the minimum price)
   cosmos: '50000',  // 0.05 ATOM: a send costs about 0.0015 ATOM (200 000 gas at 0.005 uatom + margin); leaves room for a tenfold fee-market rise
   sui: '50000000',  // 0.05 SUI: a plain transfer charges about 0.002 SUI; the gas budget (the most that can be charged) is bounded by this
+  near: '20000000000000000000000',  // 0.02 NEAR: worst case of a transfer that creates an implicit account (10 Tgas at the protocol's highest gas price)
   tron: '40000000', // 40 TRX: a USDT transfer to a first-time holder burns ≈13.5 TRX of energy at 100 sun, plus margin
 };
 function buildDefaultPolicy(): Policy {

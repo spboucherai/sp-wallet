@@ -15,7 +15,8 @@ export const IntentSchema = z.strictObject({
   decimals: z.number().int().min(0).max(36),
   amount: U,
   from: z.string().min(20).max(100),
-  to: z.string().min(20).max(100),
+  /** shortest valid destination: a 2-character NEAR account name. Every builder validates the address format of its own chain. */
+  to: z.string().min(2).max(100),
   maxFee: U,
   createdAt: z.number().int().positive(),
   expiresAt: z.number().int().positive(),
