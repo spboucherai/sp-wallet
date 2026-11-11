@@ -7,7 +7,12 @@
 // Runs after qa-agent-fund.spec.ts on the same stack (file order); the last test here leaves a signed, never-broadcast
 // transfer behind, which blocks the network for anything that would run after it.
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { enter, passkeyFile, probe, virtualPasskey, watch } from './qa-helpers.ts';
+import { NETWORKS } from '@spw/core';
+import { enter, passkeyFile, probe, unexpectedErrors, virtualPasskey, watch } from './qa-helpers.ts';
+
+// every deployment of the registry: one native asset per network plus its tokens. 249 when this spec was written; Cardano and
+// Polkadot (v8) made it 251. Counted from the registry, so that a new network cannot leave a stale number here.
+const DEPLOYMENTS = Object.values(NETWORKS).reduce((n, x) => n + 1 + x.tokens.length, 0);
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:8690', PORT = Number(new URL(BASE).port);
 test.skip(!process.env.QA_REAL, 'needs the real local stack: set QA_REAL=1 (see the header)');
@@ -24,7 +29,7 @@ const api = (page: Page, method: string, path: string, body?: unknown) => page.e
 const clean = async (page: Page) => { const p = await probe(page); expect(p.overflow, p.wide.join(' | ')).toBe(false); return p; };
 const BSC_ETH = '0x2170Ed0880ac9A755fd29B2688956BD959F933F8';
 
-test('registry of 249 deployments: issuer of pegged tokens, ordering, picker above the navigation, French numbers', async ({ page, context }) => {
+test('registry of every deployment (251 since Cardano and Polkadot): issuer of pegged tokens, ordering, picker above the navigation, French numbers', async ({ page, context }) => {
   test.setTimeout(180_000);
   const { pk, w } = await start(page, context);
   await expect(page.getByText(/[+−]\d+,\d{2} % aujourd’hui/)).toBeVisible({ timeout: 60_000 });         // decimal comma in French
@@ -39,11 +44,14 @@ test('registry of 249 deployments: issuer of pegged tokens, ordering, picker abo
   await expect(page.getByTestId('asset-issuer')).toContainText('Binance');
   await clean(page);
 
-  // the full list: balances first, then majors by market rank; smooth with 249 rows
+  // the full list: balances first, then majors by market rank; smooth with every row
   await page.goto('/assets');
   const rows = page.locator('main li');
-  await expect(rows).toHaveCount(249, { timeout: 30_000 });
-  const order = await rows.evaluateAll((els) => els.map((e) => (e as HTMLElement).innerText.replace(/\s+/g, ' ')));
+  expect(DEPLOYMENTS).toBeGreaterThanOrEqual(251);
+  await expect(rows).toHaveCount(DEPLOYMENTS, { timeout: 30_000 });
+  // textContent, not innerText: since the v9 redesign the rows below the fold are `content-visibility: auto` (they are in the
+  // document and in the accessibility tree, but not laid out until scrolled to), and innerText is empty for a row that is not laid out
+  const order = await rows.evaluateAll((els) => els.map((e) => (e.textContent ?? '').replace(/\s+/g, ' ')));
   const at = (s: string) => order.findIndex((x) => x.includes(s));
   expect(at('USDC · Base')).toBeLessThan(3);                                                             // held
   expect(at('BTC · Bitcoin')).toBeGreaterThan(-1);
@@ -69,7 +77,7 @@ test('registry of 249 deployments: issuer of pegged tokens, ordering, picker abo
   const p = await clean(page);
   expect(p.small).toEqual([]);                                                                            // every control on this screen is at least 44 px
   await pk.save();
-  expect(w.errors.filter((e) => !/status of 4\d\d/.test(e))).toEqual([]);
+  expect(unexpectedErrors(w)).toEqual([]);
 });
 
 test('agent creation: BNB Chain cash leg and representations, warnings kept on the agent page', async ({ page, context }) => {
@@ -113,16 +121,17 @@ test('agent creation: BNB Chain cash leg and representations, warnings kept on t
   await expect(warn).toContainText('EUR : le signataire ne peut pas en vérifier le prix', { timeout: 60_000 });
   if ((r.json.warnings as { code: string }[]).some((x) => x.code === 'fees')) await expect(warn).toContainText(/Sur Ethereum, un ordre coûte environ .* \$ US de frais de réseau/);
   await pk.save();
-  expect(w.errors.filter((e) => !/status of 4\d\d/.test(e))).toEqual([]);
+  expect(unexpectedErrors(w)).toEqual([]);
 });
 
-test('security: the 249 limits can be searched, by network name', async ({ page, context }) => {
+test('security: the limits of every deployment can be searched, by network name', async ({ page, context }) => {
+  test.setTimeout(180_000);   // may wait for room in the rate limiter (qa-helpers.ts roomInRateLimit)
   const { pk } = await start(page, context);
   await page.goto('/security');
-  await page.getByRole('button', { name: /Tout afficher \(249\)/ }).click();
-  await expect(page.locator('main [role=progressbar]')).toHaveCount(249);
+  await page.getByRole('button', { name: `Tout afficher (${DEPLOYMENTS})` }).click();
+  await expect(page.locator('main [role=progressbar]')).toHaveCount(DEPLOYMENTS);
   await page.getByRole('searchbox').fill('bnb');
-  await expect(page.getByText(/\d+ sur 249/)).toBeVisible();
+  await expect(page.getByText(new RegExp(`\\d+ sur ${DEPLOYMENTS}`))).toBeVisible();
   expect(await page.locator('main [role=progressbar]').count()).toBeLessThan(40);
   await expect(page.getByText('USDC · BNB Smart Chain')).toBeVisible();
   await expect(page.getByRole('main').getByText('· Bsc')).toHaveCount(0);

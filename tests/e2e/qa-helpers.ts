@@ -17,8 +17,26 @@ export async function virtualPasskey(context: BrowserContext, page: Page, file: 
   const save = async () => { const { credentials } = await cdp.send('WebAuthn.getCredentials', { authenticatorId }); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, JSON.stringify(credentials)); };
   return { cdp, authenticatorId, save };
 }
+/**
+ * v10 — the real cause of the intermittent failures of qa-agent-fund and qa-real. The API limits a client to 240 requests a
+ * minute, static files included. One owner never comes near it (a page load is 10–20 requests, an idle Home one request per
+ * 30 s — measured by tests/e2e/v10-reqcount.mts), but these specs replay seven sessions in a row from one address: 391
+ * requests in 47 s on a warm stack. Around the fourth or fifth test the limiter answered 429 to whatever came next — the
+ * service-worker script, the unlock, a page — and the run failed or passed depending on how fast the machine was that day.
+ * The limiter is left exactly as it is in production; each test simply starts when the window has room for it.
+ */
+const TEST_BUDGET = 120;   // the largest test sends 81 requests
+export async function roomInRateLimit(page: Page, need = TEST_BUDGET): Promise<void> {
+  for (let k = 0; k < 4; k++) {
+    const r = await page.request.get('/api/v1/health/live').catch(() => null);
+    const left = Number(r?.headers()['x-ratelimit-remaining']), reset = Number(r?.headers()['x-ratelimit-reset'] ?? r?.headers()['retry-after']);
+    if (r && r.status() !== 429 && (!Number.isFinite(left) || left >= need)) return;
+    await page.waitForTimeout((Number.isFinite(reset) ? Math.min(60, reset) + 1 : 20) * 1000);
+  }
+}
 /** Open the wallet: first-time setup when the stack is fresh, passkey unlock otherwise. Works in French and English. */
 export async function enter(page: Page, pk: QaPasskey, setupToken: string): Promise<'setup' | 'unlock' | 'open'> {
+  await roomInRateLimit(page);
   await page.goto('/');
   const token = page.getByRole('textbox'), unlock = page.getByRole('button', { name: /Déverrouiller|Unlock/ }), home = page.getByText(/Valeur totale estimée|Estimated total value/);
   await token.or(unlock).or(home).first().waitFor({ timeout: 30_000 });
@@ -44,6 +62,13 @@ export function watch(page: Page): { errors: string[]; failed: string[] } {
   page.on('response', (r) => { if (r.status() >= 400) failed.push(`${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}`); });
   return { errors, failed };
 }
+/** The console errors a QA test must not see. Two kinds are expected on this stack and say nothing about the screens:
+ *  a refused request the test provokes or waits out (« … responded with a status of 4xx »), and — v10 — the same rate
+ *  limiter (240 requests a minute per client, static files included) answering 429 to the browser's periodic check of
+ *  /sw.js, which Chromium words differently (« A bad HTTP response code (429) was received when fetching the script »).
+ *  That second wording was not filtered: a run that happened to reach the limit while the worker was being checked failed,
+ *  another did not — the intermittent failure of qa-agent-fund and qa-real. Only 429 is accepted for the script. */
+export const unexpectedErrors = (w: { errors: string[] }): string[] => w.errors.filter((e) => !/status of 4\d\d/.test(e) && !/bad HTTP response code \(429\) was received when fetching the script/.test(e));
 /** Layout probes run inside the page: horizontal overflow, elements leaving the viewport, interactive elements under 44 px.
  *  (A string, not a function: tsx/esbuild wraps named inner functions with a helper that does not exist in the page.) */
 const PROBE = `(() => {

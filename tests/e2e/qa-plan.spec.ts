@@ -168,7 +168,7 @@ test('USDC on Base → LINK on Arbitrum: "bridge then swap", two approvals, plan
   await cards(page).first().getByTestId('plan-issues').scrollIntoViewIfNeeded();
   await shot(page, '12-gas-missing-phone');
   await noOverflow(page);
-  expect(w.errors.filter((e) => !/Failed to load resource/.test(e)), w.errors.join('\n')).toEqual([]);
+  expect(w.errors.filter((e) => !/Failed to load resource/.test(e) && !/bad HTTP response code \(429\) was received when fetching the script/.test(e)), w.errors.join('\n')).toEqual([]);
 
   // ── desktop ─────────────────────────────────────────────────────────────────────────────────────────────────────────
   const dctx = await browser.newContext({ baseURL: BASE, viewport: { width: 1360, height: 900 } }), d = await dctx.newPage();

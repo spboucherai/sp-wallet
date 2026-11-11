@@ -17,6 +17,9 @@
 // the passkey. They are private chains on 127.0.0.1: nothing on them exists anywhere else, and broadcasting stays off all
 // the same. Fork RPC ports are the web port + 1, + 2…; `anvil_*` methods there are how a test funds an agent's vault.
 //
+// The forks run as `spw-qa-fork` processes (not `anvil`): `pkill -f anvil` between fork proofs does not touch them. If this
+// server is killed with SIGKILL they stay behind: `pkill -f spw-qa-fork`.
+//
 // `--workers on` starts what main.ts starts (health, reconciliation, market data, paper derivatives, agent engine), so
 // backtests find candles and paper agents trade by themselves.
 import { execSync, spawn, type ChildProcess } from 'node:child_process';
@@ -62,7 +65,8 @@ if (TRAFFIC) setInterval(() => { try { writeFileSync(TRAFFIC, JSON.stringify(tra
 const keys = deriveKeys(generateMnemonic(wordlist, 128));                                             // throwaway seed, in memory only
 let signerSrv: Server | undefined, app: { close: () => Promise<void>; listen: (o: { port: number; host: string }) => Promise<string>; server: { closeAllConnections?: () => void } } | undefined;
 const forks: ChildProcess[] = [];
-const stop = async () => { for (const f of forks) f.kill(); signerSrv?.close(); app?.server.closeAllConnections?.(); await app?.close().catch(() => {}); process.exit(0); };
+let stopping = false;
+const stop = async () => { stopping = true; for (const f of forks) f.kill(); signerSrv?.close(); app?.server.closeAllConnections?.(); await app?.close().catch(() => {}); process.exit(0); };
 process.on('SIGTERM', () => void stop()); process.on('SIGINT', () => void stop());
 
 execSync(`dropdb --if-exists ${DB} && createdb ${DB}`);
@@ -78,7 +82,19 @@ if (FORK) {
   for (const [k, id] of FORK.split(',').entries()) {
     const d = DEF[id]; if (!d) throw new Error(`--fork supports ${Object.keys(DEF).join(', ')}`);
     const url = `http://127.0.0.1:${PORT + 1 + k}`;
-    forks.push(spawn('anvil', ['--fork-url', d.rpc, '--port', String(PORT + 1 + k), '--chain-id', String(d.chain), '--silent'], { stdio: 'ignore', detached: true }));
+    // v10 — two faults of this harness made the wallet look EMPTY on the page (no balance, no price change chip) while
+    // /health/live still answered:
+    //  1. the forks were plain `anvil` processes: the `pkill -f anvil` that the fork proofs (scripts/fork-*.mts) need between
+    //     two runs — from this terminal or any other session on the machine — killed them, and nothing noticed. They now run
+    //     under the process name `spw-qa-fork` (argv0), which that cleanup does not match, and if one of them exits while
+    //     the stack is up the stack says so and stops (a test then fails on a refused connection, with the reason here).
+    //  2. the fork followed the head of a public RPC: every first read of a slot went upstream, uncached, and was refused when
+    //     the endpoint throttled. The block is pinned (anvil caches a pinned block on disk) and upstream errors are retried.
+    const head = await realFetch(d.rpc, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] }) }).then((r) => r.json() as Promise<{ result?: string }>).catch(() => ({ result: undefined }));
+    const pin = head.result ? ['--fork-block-number', String(Number(BigInt(head.result)) - 5)] : [];
+    const child = spawn('anvil', ['--fork-url', d.rpc, ...pin, '--port', String(PORT + 1 + k), '--chain-id', String(d.chain), '--retries', '8', '--fork-retry-backoff', '400', '--timeout', '20000', '--silent'], { stdio: 'ignore', detached: true, argv0: 'spw-qa-fork' });
+    child.on('exit', (code, signal) => { if (stopping) return; console.error(`\n*** QA stack: the local fork of ${id} (port ${PORT + 1 + k}) exited (code ${code}, signal ${signal}). Balances can no longer be read: stopping. Start a fresh stack. ***`); process.exit(1); });
+    forks.push(child);
     let rid = 0;
     const rpc = async (method: string, params: unknown[] = []) => { const r = await realFetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rid, method, params }) }); const j = await r.json() as { result?: unknown; error?: { message: string } }; if (j.error) throw new Error(`${method}: ${j.error.message}`); return j.result; };
     for (let n = 0; n < 160; n++) { try { await rpc('eth_chainId'); break; } catch { await new Promise((r) => setTimeout(r, 250)); } }
@@ -88,7 +104,7 @@ if (FORK) {
       await rpc('anvil_stopImpersonatingAccount', [WHALE]); }
     override[id] = [url, url]; maxFee[id] = '5000000000000000';
   }
-  process.on('exit', () => { for (const f of forks) f.kill(); });
+  process.on('exit', () => { stopping = true; for (const f of forks) f.kill(); });
   process.env.SPW_RPC_OVERRIDE = JSON.stringify(override);
   // anvil reports a 1 gwei priority fee (far above the real one on these networks): raise the fee ceiling for the forks only
   store.policy = { ...store.policy, maxFee: { ...store.policy.maxFee, ...maxFee } };
@@ -114,4 +130,14 @@ if (WORKERS) {
   startWorkers(); startMarketWorker(); startDerivativesWorker(); startLiveWorker();
   startAgentEngine({ series: async (s, i, limit) => (await getSeries(s as never, i as never, { limit })).bars, assertFresh: async (s, i) => { await assertFresh(s as never, i as never); } });
 } else startLiveWorker();
+if (FORK) {
+  // v10: the stack is READY only when the API's own chain adapters read the funded balances from the forks (this also warms
+  // anvil's cache with the registry's token reads, so the first page does not start a burst of upstream requests)
+  const { adapters } = await import('../../services/api/src/chains/index.ts');
+  for (const id of FORK.split(',')) {
+    let native = 0n, err = '';
+    for (let n = 0; n < 6 && native === 0n; n++) { try { native = (await adapters[id]!.balances(keys.addresses.evm)).native ?? 0n; } catch (e) { err = e instanceof Error ? e.message : String(e); await new Promise((r) => setTimeout(r, 1500)); } }
+    if (native === 0n) throw new Error(`QA stack: the API cannot read the wallet's balance on the fork of ${id}${err ? ` (${err})` : ''}`);
+  }
+}
 console.log(`READY ${ORIGIN} account ${keys.addresses.evm.toLowerCase()} db ${DB} workers ${WORKERS ? 'on' : 'off'} broadcast OFF${FORK ? ` fork ${FORK} on ports ${PORT + 1}+` : ''}`);

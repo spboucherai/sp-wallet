@@ -11,7 +11,7 @@
 import { execSync } from 'node:child_process';
 import { expect, test, type Page } from '@playwright/test';
 import { encodeAbiParameters, keccak256 } from 'viem';
-import { enter, passkeyFile, probe, virtualPasskey, watch } from './qa-helpers.ts';
+import { enter, passkeyFile, probe, unexpectedErrors, virtualPasskey, watch } from './qa-helpers.ts';
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:8690', DB = process.env.QA_DB ?? 'spw_qa_polish', PORT = Number(new URL(BASE).port);
 const FORK: Record<string, string> = { base: `http://127.0.0.1:${PORT + 1}`, arbitrum: `http://127.0.0.1:${PORT + 2}` };
@@ -132,7 +132,7 @@ test('fund an agent on its own network: fixed network, limits, two transfers one
   await shot(page, '09-withdraw-test');
   await noOverflow(page);
   await pk.save();
-  expect(w.errors.filter((e) => !/status of 4\d\d/.test(e))).toEqual([]);
+  expect(unexpectedErrors(w)).toEqual([]);
 });
 
 test('funds on another network: explained, fee top-up offered, then withdrawal; Send names the agent and warns', async ({ page, context }) => {
@@ -170,7 +170,7 @@ test('funds on another network: explained, fee top-up offered, then withdrawal; 
   await expect(page.getByRole('alert')).toHaveCount(0);
   await noOverflow(page);
   await pk.save();
-  expect(w.errors.filter((e) => !/status of 4\d\d/.test(e))).toEqual([]);
+  expect(unexpectedErrors(w)).toEqual([]);
 });
 
 test('no cash on the agent network: USDC elsewhere is listed and CCTP is offered prefilled; 18-decimal cash leg on BNB Chain', async ({ page, context }) => {
