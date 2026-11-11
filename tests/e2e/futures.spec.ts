@@ -196,7 +196,7 @@ for (const size of SIZES) {
       await expect(view.getByTestId('watch-result')).toContainText('lecture seule');
       const live = view.getByTestId('live-card');
       await expect(live).toContainText('désactivée');
-      await expect(live.getByRole('button')).toHaveCount(0);                 // nothing that pretends
+      await expect(live.getByRole('button', { name: 'Créer le compte réel' })).toBeDisabled();   // mainnet: shown, blocked by the server setting (live flows: futures-live.spec.ts)
       await shot(page, `${size.name}-12-accounts`, true);
       // GMX: no order book → liquidity panel; no paper trading
       await open(page, `/futures/${encodeURIComponent('gmx:BTC/USD [BTC-USDC]')}`);

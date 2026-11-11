@@ -1,13 +1,14 @@
 /**
  * Accounts of the Futures area: venue status, paper accounts (create, choose, reset, edit the risk limits), a read-only look
- * at any public address on a venue, and the honest state of live trading (off, with what it will require). No control here
- * can send a real order: there is no such route.
+ * at any public address on a venue, and controlled live trading (`LiveSection`: venue accounts, authorization, revocation).
+ * Nothing in THIS file can send a real order; the live section sends none either without a passkey approval per order.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useState } from 'react';
 import { errText, I18n, useT, type Key } from '../i18n';
 import { Btn, Card, Field, H, Icon, inputCls, Notice, short, Skeleton } from '../ui';
 import { dapi, paperAllowed } from './api';
+import { LiveSection } from './LiveAccounts';
 import { ageText, DataTable, PaperTag, Pnl, Row, Sheet, SideTag, Stat, VENUE_NAME, VenueBadge, type Col } from './bits';
 import { D, dec, fmt, parseInput, pct, priceDp, usd } from './dec';
 import type { DerivAccount, Instrument, Position, RiskPolicy, VenueId, VenueInfo, Watch } from './types';
@@ -139,12 +140,7 @@ export function AccountsView({ venues, instruments, accounts, loading, selected,
 
       <WatchCard venues={venues} />
 
-      <Card className="border-dashed" ><div data-testid="live-card">
-        <H right={<span className="inline-flex items-center gap-1 rounded-full bg-elev px-2.5 py-1 text-[12px] font-semibold text-mute"><Icon n="lock" className="h-3.5 w-3.5" />{t('fxLiveOff')}</span>}>{t('fxLive')}</H>
-        <p className="text-[13.5px] leading-snug">{t('fxLiveBody')}</p>
-        <ul className="mt-3 space-y-2 text-[13.5px] leading-snug">{(['fxLiveReq1', 'fxLiveReq2', 'fxLiveReq3', 'fxLiveReq4'] as const).map((k) => <li key={k} className="flex gap-2.5"><Icon n="key" className="mt-0.5 h-4 w-4 shrink-0 text-mute" /><span>{t(k)}</span></li>)}</ul>
-        <p className="mt-3 text-[12.5px] leading-snug text-mute">{t('fxLiveNote')}</p></div>
-      </Card>
+      <LiveSection selected={selected} onSelect={onSelect} />
 
       {edit && <Sheet wide title={t('fxEditLimitsTitle', { label: edit.a.label })} onClose={() => !busy && setEdit(null)}><div className="space-y-3">
         <p className="text-[12.5px] leading-snug text-mute">{t('fxLimitsIntro')}</p>

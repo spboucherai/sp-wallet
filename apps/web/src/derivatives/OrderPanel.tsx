@@ -1,10 +1,11 @@
 /**
  * Order panel — PAPER ONLY. It builds an `OrderRequest` with exact decimals (size on the lot, prices on the tick), shows the
  * server's preview (risk verdict + estimates) and, after a confirmation sheet, sends the order to the paper engine. There is no
- * live path in this file. The panel reads the mark from the store when it needs it; it does not re-render on every tick.
+ * live path in this file: a venue account gets `LiveOrderPanel` instead. The panel reads the mark from the store when it needs
+ * it; it does not re-render on every tick.
  */
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { errText, I18n, useT, type Key } from '../i18n';
 import { Btn, Field, inputCls, Notice } from '../ui';
 import { dapi, paperAllowed, riskRefusal } from './api';
@@ -51,7 +52,8 @@ export function RiskVerdict({ code, reason }: { code: string; reason: string }) 
   return <Notice tone="danger"><div data-testid="risk-refusal"><b className="font-semibold">{t('fxRefused')}</b> {text}{reason && <span className="mt-1 block break-words font-mono text-[11.5px] text-mute">{code} — {reason}</span>}</div></Notice>;
 }
 
-export function OrderPanel({ store, instrument, account, accounts, venue, onAccount, goAccounts }: { store: MarketStore; instrument: Instrument; account: DerivAccount | null; accounts: DerivAccount[]; venue: VenueInfo | undefined; onAccount: (id: string) => void; goAccounts: () => void }) {
+export function OrderPanel({ store, instrument, account, accounts, venue, onAccount, goAccounts, switcher }: { store: MarketStore; instrument: Instrument; account: DerivAccount | null; accounts: DerivAccount[]; venue: VenueInfo | undefined; onAccount: (id: string) => void; goAccounts: () => void;
+  /** the terminal's account switcher (paper and venue accounts); without it the panel lists its own paper accounts */ switcher?: ReactNode }) {
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient();
   const maxLev = useMemo(() => { const a = dec(instrument.maxLeverage), b = dec(account?.policy.maxLeverage); const m = a && b ? D.min(a, b) : a ?? b ?? D.one; return Math.max(1, Math.floor(D.toNumber(m))); }, [instrument.maxLeverage, account?.policy.maxLeverage]);
   const [f, setF] = useState<Form>({ side: 'buy', kind: 'market', unit: 'usd', size: '', lev: 3, price: '', trigger: '', reduceOnly: false, postOnly: false, sl: '', tp: '' });
@@ -142,9 +144,9 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
     <div className="space-y-3.5" data-testid="order-panel">
       <div className="flex items-center justify-between gap-2"><h3 className="text-[15px] font-semibold">{t('fxOrder')}</h3><PaperTag /></div>
       <div className="rounded-2xl bg-elev/70 p-3">
-        {accounts.length > 1
+        {switcher ?? (accounts.length > 1
           ? <label className="block text-[12px] text-mute">{t('fxAccount')}<select aria-label={t('fxAccount')} value={account.id} onChange={(e) => onAccount(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-line bg-surface px-3 text-[14px] text-ink">{accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}</select></label>
-          : <div className="truncate text-[13px] font-semibold">{account.label}</div>}
+          : <div className="truncate text-[13px] font-semibold">{account.label}</div>)}
         <div className="mt-1.5 flex items-baseline justify-between text-[12.5px]"><span className="text-mute">{t('fxFreeCollateral')}</span><span className="font-semibold" data-testid="free-collateral">{usd(account.state.freeCollateral, locale)}</span></div>
         <div className="flex items-baseline justify-between text-[12.5px]"><span className="text-mute">{t('fxEquity')}</span><span className="font-medium">{usd(account.state.equity, locale)}</span></div>
       </div>

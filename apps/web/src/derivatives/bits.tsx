@@ -56,6 +56,8 @@ export function Row({ label, children, strong }: { label: ReactNode; children: R
 /** bottom sheet on a phone, centred dialog on a desktop; Escape closes, focus stays inside */
 export function Sheet({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   const t = useT(); const box = useRef<HTMLDivElement>(null);
+  // the second click of a double click on the button that opened the sheet lands on the backdrop: it must not close it
+  const openedAt = useRef(Date.now());
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     box.current?.focus();
@@ -73,7 +75,7 @@ export function Sheet({ title, onClose, children, wide }: { title: string; onClo
     return () => { document.removeEventListener('keydown', key); document.body.style.overflow = o; prev?.focus?.(); };
   }, [onClose]);
   // rendered under <body>: <main> animates with a transform, which would trap a fixed layer under the bottom navigation
-  return createPortal(<div className="fixed inset-0 z-40 flex items-end justify-center bg-[rgba(8,11,18,0.45)] sm:items-center sm:p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+  return createPortal(<div className="fixed inset-0 z-40 flex items-end justify-center bg-[rgba(8,11,18,0.45)] sm:items-center sm:p-6" onMouseDown={(e) => { if (e.target === e.currentTarget && Date.now() - openedAt.current > 500) onClose(); }}>
     <div ref={box} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} className={`safe-b flex max-h-[92dvh] w-full flex-col rounded-t-[26px] bg-surface shadow-2xl outline-none sm:rounded-[26px] ${wide ? 'sm:max-w-2xl' : 'sm:max-w-md'}`}>
       <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-4"><h2 className="text-[17px] font-semibold tracking-tight">{title}</h2>
         <button type="button" onClick={onClose} aria-label={t('fxClose')} className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-mute hover:bg-elev"><Icon n="x" /></button></div>
