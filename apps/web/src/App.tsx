@@ -11,9 +11,10 @@ import { Receive } from './screens/Receive';
 import { Security } from './screens/Security';
 import { Send } from './screens/Send';
 import { Settings } from './screens/Settings';
+import { Swap } from './screens/Swap';
 import { Btn, Icon, Notice } from './ui';
 
-const TABS = [['home', '/', 'home'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
+const TABS = [['home', '/', 'home'], ['swap', '/swap', 'swap'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
 export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets';
 /** Where to go, with optional pre-selection (asset page, or send/receive pre-filled). */
 export interface Route { tab: Tab; network?: string; asset?: string }
@@ -57,7 +58,7 @@ function Offline({ retry }: { retry: () => void }) {
 
 function Shell({ tab, route, nav, go, lock }: { tab: Tab; route: Route; nav: Nav; go: (t: Tab) => void; lock: () => void }) {
   const t = useT();
-  const MOBILE: [Tab, string][] = [['home', 'home'], ['receive', 'down'], ['send', 'up'], ['activity', 'list'], ['settings', 'gear']];
+  const MOBILE: [Tab, string][] = [['home', 'home'], ['swap', 'swap'], ['send', 'up'], ['activity', 'list'], ['settings', 'gear']];
   const side = (id: Tab, icon: string) => { const on = tab === id; return (
     <button key={id} onClick={() => go(id)} aria-current={on ? 'page' : undefined} className={`flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-[15px] font-medium transition ${on ? 'bg-primary text-onprimary' : 'text-mute hover:bg-elev hover:text-ink'}`}><Icon n={icon} />{t(id as Key)}</button>); };
   return (
@@ -83,6 +84,7 @@ function Shell({ tab, route, nav, go, lock }: { tab: Tab; route: Route; nav: Nav
           {tab === 'asset' && <Asset network={route.network ?? ''} asset={route.asset ?? 'native'} nav={nav} />}
           {tab === 'receive' && <Receive initial={route.network} />}
           {tab === 'send' && <Send go={go} initial={route} />}
+          {tab === 'swap' && <Swap />}
           {tab === 'activity' && <Activity />}
           {tab === 'security' && <Security />}
           {tab === 'settings' && <Settings lock={lock} go={go} />}

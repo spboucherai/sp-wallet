@@ -36,6 +36,11 @@ create table if not exists scan_cursor (network text primary key, cursor bigint 
 create table if not exists address_book (
   id uuid primary key, network text not null, address text not null, label text not null, created_at timestamptz not null default now(),
   unique (network, address));
+create table if not exists swap_quotes (
+  id bigserial primary key, at timestamptz not null default now(), search_id uuid not null, provider text not null,
+  from_key text not null, to_key text not null, amount_in numeric(78,0) not null, amount_out numeric(78,0), min_out numeric(78,0),
+  ms int not null, ok boolean not null, code text);
+create index if not exists swap_quotes_at on swap_quotes (at);
 create table if not exists settings (key text primary key, value jsonb not null);
 create table if not exists audit_events (
   seq bigint primary key, ts text not null, type text not null, actor text not null, data jsonb not null, prev text not null, hash text not null);

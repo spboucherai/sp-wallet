@@ -49,7 +49,8 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 30_000 });
 
   // receive: signer-derived address + QR
-  await page.getByRole('navigation').getByRole('button', { name: 'Recevoir' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'Accueil' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'Recevoir' }).click();
   await expect(page.locator('img[alt^="QR 0x"]')).toBeVisible();
   await expect(page.getByText(/Envoyez uniquement ETH \/ USDC \/ .*sur le réseau Base/)).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/04-receive.png`, fullPage: true });
@@ -63,6 +64,13 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   }
   await expect(page.getByText(/un compte doit détenir au moins 1 XLM/)).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/04b-receive-stellar.png`, fullPage: true });
+
+  // swap: route comparison screen (no provider is wired in this build: it must say so, and execution must be visibly disabled)
+  await page.getByRole('navigation').getByRole('button', { name: 'Échanger' }).click();
+  await expect(page.getByText(/Comparaison de routes uniquement/)).toBeVisible();
+  await page.getByLabel('Montant').fill('25');
+  await page.screenshot({ path: `${SHOTS}/04c-swap.png`, fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   // send: invalid address is refused, then an empty wallet cannot draft a transfer (live mainnet balance check)
   await page.getByRole('navigation').getByRole('button', { name: 'Envoyer' }).click();

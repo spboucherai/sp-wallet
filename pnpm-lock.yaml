@@ -195,6 +195,9 @@ importers:
       '@spw/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@spw/swap':
+        specifier: workspace:*
+        version: link:../../packages/swap
       fastify:
         specifier: 5.12.8
         version: 5.12.8

@@ -5,3 +5,4 @@ export * from './risk.ts';
 export * from './aggregator.ts';
 export * from './graph.ts';
 export * from './router.ts';
+export * from './providers/index.ts';

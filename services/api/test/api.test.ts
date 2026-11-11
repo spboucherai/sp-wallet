@@ -16,6 +16,7 @@ const ORIGIN = 'https://wallet.test', RP = 'wallet.test', SECRET = 'k'.repeat(48
 const keys = deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
 const owner = new TestPasskey(RP, ORIGIN), attacker = new TestPasskey(RP, ORIGIN);
 let signerSrv: Server, app: any, sql: any, adapters: any, cookie = '';
+const swapSeen: any[] = [];
 const USDC = NETWORKS.base.tokens[0]!.id, DEST = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
 
 async function api(method: string, path: string, body?: unknown, opts: { cookie?: string | null; origin?: string | null; csrf?: boolean; idem?: string } = {}) {
@@ -43,7 +44,15 @@ beforeAll(async () => {
   adapters = (await import('../src/chains/index.ts')).adapters;
   // Deterministic chain data: the network is never contacted in this suite.
   adapters.base.prepare = async () => ({ section: { evm: { nonce: 7, gasLimit: '90000', maxFeePerGas: '1000000000', maxPriorityFeePerGas: '1000000' } }, maxFee: 90_000_000_000_000n, feeEstimate: 50_000_000_000_000n, warnings: [], ttlSec: 120 });
-  app = await (await import('../src/server.ts')).buildServer();
+  // two scripted swap providers; the second answers for an attacker's address and must be dropped
+  const fake = (id: string, bps: bigint, recipient?: string) => ({ id, name: id,
+    capabilities: () => ({ networks: ['base'], crossChain: false, needsKey: false, configured: true, kinds: ['swap' as const], docs: '' }),
+    supportsPair: (a: any, b: any) => a.network === 'base' && b.network === 'base',
+    quote: async (r: any) => { swapSeen.push(r); const out = (r.amountIn * 2000n * (10_000n - bps)) / 10_000n / 10n ** 12n;
+      return [{ id: `${id}-${swapSeen.length}`, provider: id, request: recipient ? { ...r, recipient } : r, steps: [{ kind: 'swap' as const, provider: id, from: r.from, to: r.to, via: ['pool'], contracts: [] }],
+        amountOut: out, minAmountOut: (out * 995n) / 1000n, fees: [], estimatedSeconds: 12, priceImpactBps: 4, expiresAt: Date.now() + 30_000, firmness: 'indicative' as const,
+        executability: { class: 'opaque' as const, reason: 'test' }, refundable: true, atomic: true }]; } });
+  app = await (await import('../src/server.ts')).buildServer({ swapProviders: [fake('alpha', 10n), fake('beta', 30n), fake('evil', 0n, '0x000000000000000000000000000000000000dEaD')] });
 });
 afterAll(async () => { await app?.close(); signerSrv?.close(); await sql?.end(); });
 
@@ -196,6 +205,34 @@ describe('transfer lifecycle', () => {
     expect(dump).not.toMatch(/abandon/);
     expect(dump).not.toContain(Buffer.from(keys.evmPriv).toString('hex'));
     expect(dump).not.toContain(cookie.split('=')[1]);
+  });
+
+  it('swap: quotes are for the wallet\'s own addresses, hostile answers are dropped, execution is disabled', async () => {
+    expect((await api('POST', '/api/v1/swap/quote', { from: 'base:native', to: `base:${USDC}`, amount: '0.01' }, { cookie: null })).status).toBe(401);
+    expect((await api('GET', '/api/v1/swap/assets', undefined, { cookie: null })).status).toBe(401);
+    const q = await api('POST', '/api/v1/swap/quote', { from: 'base:native', to: `base:${USDC}`, amount: '0.01', recipient: '0x000000000000000000000000000000000000dEaD' });
+    expect(q.status).toBe(200);
+    expect(swapSeen.every((r) => r.sender === keys.addresses.evm && r.recipient === keys.addresses.evm)).toBe(true); // the client cannot choose the recipient
+    expect(q.json.routes.map((r: any) => r.providers[0]).sort()).toEqual(['alpha', 'beta']);
+    expect(q.json.providers.find((p: any) => p.provider === 'evil').code).toBe('invalid_quote');
+    const best = q.json.routes.find((r: any) => r.id === q.json.best.best_price);
+    expect(best.providers).toEqual(['alpha']);
+    expect(best.minAmountOut).toBe('19880100'); // 0.01 ETH × 2000 × 0.999 × 0.995, in USDC base units, as a string
+    expect(best.minAmountOutDisplay).toBe('19.8801');
+    for (const bad of [{ from: 'base:native', to: 'base:native', amount: '1' }, { from: 'base:native', to: 'base:0xdAC17F958D2ee523a2206206994597C13D831ec7', amount: '1' },
+      { from: 'base:native', to: `base:${USDC}`, amount: '0' }, { from: 'base:native', to: `base:${USDC}`, amount: '1e3' }, { from: 'nochain:native', to: `base:${USDC}`, amount: '1' }])
+      expect((await api('POST', '/api/v1/swap/quote', bad)).status, JSON.stringify(bad)).toBe(400);
+    const far = await api('POST', '/api/v1/swap/quote', { from: 'bitcoin:native', to: 'solana:native', amount: '0.001' });
+    expect(far.json.reachable).toBe(false); expect(far.json.routes).toEqual([]);
+    const sse = await app.inject({ method: 'GET', url: `/api/v1/swap/quote/stream?from=base:native&to=base:${USDC}&amount=0.01`, headers: { cookie } });
+    expect(sse.headers['content-type']).toContain('text/event-stream');
+    const events = sse.body.split('\n\n').filter(Boolean).map((b: string) => b.split('\n')[0]!.replace('event: ', ''));
+    expect(events[0]).toBe('start'); expect(events.filter((e: string) => e === 'route').length).toBe(2); expect(events[events.length - 1]).toBe('done');
+    expect((await api('POST', '/api/v1/swap/execute', {})).status).toBe(423);
+    const st = (await api('GET', '/api/v1/swap/providers')).json;
+    expect(st.executionEnabled).toBe(false); expect(st.providers.length).toBe(3);
+    const rows = await sql`select provider, ok, code from swap_quotes`;
+    expect(rows.length).toBeGreaterThanOrEqual(4);
   });
 
   it('logout and revoke-all end access', async () => {

@@ -24,8 +24,9 @@ Updated 2026-11-10. This file records what exists, what is verified, and what is
 | Liquidity graph (E) | done, tested (capability edges select what to quote; only live quotes become routes) | `graph.ts` |
 | Route optimizer (F), three modes, Pareto frontier | done, tested (direct + bounded two-leg routes through a hub on the source or destination network) | `router.ts` |
 | Fee & slippage valuation (G), risk engine (H) | done, tested (net of fees not already in the output; "better than market" and peer outliers are high risk) | `risk.ts` |
-| Database models, REST + streaming API | pending | — |
-| Swap UI (O) | pending | — |
+| REST + streaming API | done, tested: `/api/v1/swap/{assets,providers,stats,quote,quote/stream}`; sender and recipient are always the wallet's own addresses taken from the signer; `/swap/execute` answers 423 | `services/api/src/swap.ts` |
+| Database | `swap_quotes` (every provider answer: latency, output, error code) feeding `/swap/stats` (p50/p95/p99 per provider). Route/intent/execution tables: pending with execution | `services/api/src/db.ts` |
+| Swap UI (O) | done for price discovery (FR/EN, phone-first): asset pickers with search, live streamed routes, three modes, route details (steps, fees, risk flags), execution visibly disabled. Verified in the Playwright run with no provider wired | `apps/web/src/screens/Swap.tsx` |
 
 Measured: 3,000 concurrent route searches over three in-process providers complete in well under 8 s on the laptop (see test output). No real-provider latency has been measured yet.
 
