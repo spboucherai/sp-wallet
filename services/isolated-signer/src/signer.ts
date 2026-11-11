@@ -5,7 +5,7 @@ import { base58 } from '@scure/base';
 import { keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
-  baseUnits, bridgeOf, buildBtcTx, buildCctpBurnTxs, buildCctpMintTx, cctpMintRetryBytes, verifyCctpMint, buildEvmSwapTxs, buildEvmTx, checkMandateOrder, checkOrderPrice, getAsset, MandateSchema, mandateHash, validateMandate, vaultKeyId, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash, pluginFor,
+  baseUnits, bridgeOf, buildBtcTx, buildCctpBurnTxs, buildCctpMintTx, cctpMintRetryBytes, verifyCctpMint, buildEvmSwapTxs, buildEvmTx, checkMandateOrder, checkOrderPrice, getAsset, MandateSchema, mandateHash, priceSymbolOf, validateMandate, vaultKeyId, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash, pluginFor,
   solWireTransaction, toB64u, type CctpMintGas, type Intent, type Mandate,
 } from '@spw/core';
 import type { Keys } from './keys.ts';
@@ -88,6 +88,8 @@ export class Signer {
     if (m.vault !== this.vaultAddress(m.vaultIndex)) deny('wrong_vault', 'vault address does not match this signer\'s derivation');
     if (st.state.mandates?.[m.mandateId]) deny('replay', 'mandate already recorded');
     try { validateMandate(m, now); } catch (e) { deny('unsupported', (e as Error).message); }
+    // v5 (agents on every execution-enabled network): no mandate on a network whose fee ceiling this signer's policy does not set
+    if (st.policy.maxFee[m.network] === undefined) deny('policy', 'no fee ceiling in the policy for the mandate\'s network');
     try { await this.verifyAssertion(assertion, hash); } catch (e) { deny((e as SignerError).code ?? 'bad_approval', (e as Error).message); }
     (st.state.mandates ??= {})[m.mandateId] = { mandate: m, approvedAt: new Date(now * 1000).toISOString(), revoked: false, usage: {} };
     st.log('mandate.approved', { mandateId: m.mandateId, hash: Buffer.from(hash).toString('hex'), vaultIndex: m.vaultIndex, vault: m.vault, network: m.network, assets: m.assets.length, expiresAt: m.expiresAt, strategy: m.strategySha256 });
@@ -124,9 +126,15 @@ export class Signer {
     try { txs = buildEvmSwapTxs(i, typeof aux?.swapData === 'string' ? aux.swapData : ''); } // recipient = vault, minimum output, exact amount: same checks as for the owner
     catch (e) { return deny('unsupported', (e as Error).message); }
     // the signer's own price check: the guaranteed output must be worth close to what is given up, at prices it fetched itself
+    // v5: each asset is valued at the exchange price of the market symbol it TRACKS (WETH as ETH, cbBTC as BTC…): a wrapper
+    // that has lost its peg cannot deliver that value, so the check below refuses the order (fail closed)
     const outAsset = getAsset(i.network, i.swap!.toAsset);
     let px: Record<string, number>;
-    try { px = await this.prices.get([i.symbol, outAsset.symbol]); } catch (e) { return deny('no_price', `market price unavailable (${(e as Error).message.slice(0, 80)}); order refused`); }
+    try {
+      const pIn = priceSymbolOf(getAsset(i.network, i.asset)).symbol, pOut = priceSymbolOf(outAsset).symbol;
+      const got = await this.prices.get([pIn, pOut]);
+      px = { [i.symbol]: got[pIn]!, [outAsset.symbol]: got[pOut]! };
+    } catch (e) { return deny('no_price', `market price unavailable (${(e as Error).message.slice(0, 80)}); order refused`); }
     const fair = checkOrderPrice(m, i, px, outAsset.symbol, outAsset.decimals);
     if (!fair.ok) deny('price', fair.reason);
     // count the order before releasing a signature

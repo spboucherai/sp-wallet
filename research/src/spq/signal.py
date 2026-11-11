@@ -23,7 +23,9 @@ Input (see schema/signal-input.schema.json):
      "interval": "1h"}                   # optional: must equal META['interval']
 
 `ts` is the bar-open time (ISO 8601 UTC string, or epoch seconds). Rows must be CLOSED bars, oldest first, strictly
-increasing, for exactly the symbols of META['universe'], with identical timestamps across symbols and at least
+increasing, for exactly the symbols of META['universe'] (for a universe-generic strategy, META['universe'] ==
+["*"]: for the symbols the engine chose, 1 to 12 of them, within META['min_symbols'] / META['max_symbols'], and
+the weights are validated against that list), with identical timestamps across symbols and at least
 META['lookback'] bars; the last `lookback` bars are passed to the strategy. The runner has no clock: it cannot
 tell whether the last bar is really closed, that is the engine's duty. Parameters always come from META (they are
 part of the hashed file): the input cannot override them, otherwise an approved hash would not pin the behaviour.
@@ -38,7 +40,7 @@ import sys
 import pandas as pd
 
 from .data.core import COLUMNS, DataError, align, normalise, to_utc
-from .strategy import HashMismatch, StrategyError, WeightsError, load_strategy, validate_weights
+from .strategy import HashMismatch, StrategyError, WeightsError, is_generic, load_strategy, resolve_symbols, validate_weights
 
 EXIT_INPUT, EXIT_HASH, EXIT_STRATEGY, EXIT_RUNTIME, EXIT_WEIGHTS = 2, 3, 4, 5, 6
 FAR_FUTURE = "2262-01-01T00:00:00Z"
@@ -67,10 +69,17 @@ def parse_input(payload, meta: dict, *, max_gap_bars: int = 6, max_missing_fract
     if "interval" in payload and payload["interval"] != meta["interval"]:
         raise InputError(f"input interval {payload['interval']!r} differs from META interval {meta['interval']!r}")
     candles = payload["candles"]
-    if sorted(candles) != sorted(meta["universe"]):
-        raise InputError(f"input symbols {sorted(candles)} differ from META universe {sorted(meta['universe'])}")
+    if is_generic(meta):  # v5: a generic strategy takes its symbols from the input, in the order given
+        try:
+            universe = resolve_symbols(meta, list(candles))
+        except StrategyError as e:
+            raise InputError(str(e)) from e
+    else:
+        universe = meta["universe"]
+        if sorted(candles) != sorted(universe):
+            raise InputError(f"input symbols {sorted(candles)} differ from META universe {sorted(universe)}")
     data = {}
-    for sym in meta["universe"]:
+    for sym in universe:
         rows = candles[sym]
         if not isinstance(rows, list) or not rows:
             raise InputError(f"{sym}: candles must be a non-empty array")
@@ -101,10 +110,10 @@ def parse_input(payload, meta: dict, *, max_gap_bars: int = 6, max_missing_fract
             raise InputError(f"{sym}: {q.missing_bars} missing bars in the lookback window "
                              f"(longest gap {q.max_gap_bars}); refusing to compute a signal on a broken series")
         data[sym] = df
-    first = data[meta["universe"][0]].index
+    first = data[universe[0]].index
     for sym, df in data.items():
         if not df.index.equals(first):
-            raise InputError(f"{sym}: timestamps differ from {meta['universe'][0]} (series must be aligned)")
+            raise InputError(f"{sym}: timestamps differ from {universe[0]} (series must be aligned)")
     as_of = first[-1]
     if payload.get("as_of") is not None:
         try:
@@ -121,7 +130,7 @@ def compute_signal(strategy_dir, sha256: str, payload, **limits) -> dict:
     data, as_of = parse_input(payload, strategy.meta, **limits)
     with contextlib.redirect_stdout(sys.stderr):
         raw = strategy.raw(data)
-    weights = validate_weights(raw, strategy.universe)
+    weights = validate_weights(raw, list(data))  # v5: the symbols of the input (== META['universe'] when it is fixed)
     return {"strategy_sha256": strategy.sha256, "as_of": iso_z(as_of), "weights": weights}
 
 

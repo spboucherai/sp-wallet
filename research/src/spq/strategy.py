@@ -48,6 +48,43 @@ from .data.core import interval_seconds
 
 WEIGHT_TOL = 1e-9
 META_KEYS = {"name", "version", "universe", "interval", "lookback", "params"}
+# --- v5: universe-generic strategies ------------------------------------------------------------------------------
+# META["universe"] == ["*"] means "any set of symbols, chosen by the agent": the symbol list then comes from the input
+# (the candles' keys for a signal, --symbols for a backtest), between MIN_SYMBOLS and MAX_SYMBOLS of them, optionally
+# narrowed by META["min_symbols"] / META["max_symbols"]. The code hash still pins the behaviour; the agent's mandate
+# pins the asset list. A fixed universe (a list of symbols) works exactly as before.
+GENERIC = ["*"]
+OPTIONAL_META_KEYS = {"min_symbols", "max_symbols"}
+MIN_SYMBOLS, MAX_SYMBOLS = 1, 12
+
+
+def is_generic(meta) -> bool:
+    return meta.get("universe") == GENERIC
+
+
+def symbol_bounds(meta) -> tuple[int, int]:
+    return int(meta.get("min_symbols", MIN_SYMBOLS)), int(meta.get("max_symbols", MAX_SYMBOLS))
+
+
+def _is_symbol(s) -> bool:
+    return isinstance(s, str) and 2 <= len(s) <= 10 and s.isascii() and s.isalnum() and s == s.upper()
+
+
+def resolve_symbols(meta, symbols) -> list[str]:
+    """The symbols a run uses. Generic: the given list, validated (distinct tickers, count within the bounds).
+    Fixed universe: META['universe'] when nothing is given, else the given list unchanged (as before v5)."""
+    if not is_generic(meta):
+        return list(meta["universe"]) if symbols is None else list(symbols)
+    if symbols is None:
+        raise StrategyError("this strategy is universe-generic (META['universe'] == ['*']): the symbols must be given")
+    symbols = list(symbols)
+    lo, hi = symbol_bounds(meta)
+    if len(symbols) < lo or len(symbols) > hi:
+        raise StrategyError(f"{len(symbols)} symbols given, this strategy takes between {lo} and {hi}")
+    if len(set(symbols)) != len(symbols) or not all(_is_symbol(x) for x in symbols):
+        raise StrategyError("symbols must be distinct upper-case tickers (2 to 10 letters or digits)")
+    return symbols
+# --- end v5 -------------------------------------------------------------------------------------------------------
 ALLOWED_IMPORTS = {
     "__future__", "math", "typing", "collections", "itertools", "functools", "dataclasses", "statistics", "warnings",
     "numpy", "pandas", "scipy", "statsmodels", "arch", "sklearn",
@@ -88,7 +125,7 @@ def validate_meta(meta) -> dict:
     if not isinstance(meta, dict):
         raise StrategyError("META must be a dict")
     missing = META_KEYS - meta.keys()
-    extra = meta.keys() - META_KEYS
+    extra = meta.keys() - META_KEYS - OPTIONAL_META_KEYS
     if missing or extra:
         raise StrategyError(f"META keys: missing {sorted(missing)}, unexpected {sorted(extra)}")
     for k in ("name", "version", "interval"):
@@ -99,9 +136,17 @@ def validate_meta(meta) -> dict:
     except ValueError as e:
         raise StrategyError(str(e)) from e
     u = meta["universe"]
-    if (not isinstance(u, list) or not u or len(set(u)) != len(u)
+    if u == GENERIC:  # v5: any set of symbols, chosen by the agent
+        lo, hi = meta.get("min_symbols", MIN_SYMBOLS), meta.get("max_symbols", MAX_SYMBOLS)
+        if (any(not isinstance(x, int) or isinstance(x, bool) for x in (lo, hi))
+                or not MIN_SYMBOLS <= lo <= hi <= MAX_SYMBOLS):
+            raise StrategyError(f"META['min_symbols'] / META['max_symbols'] must be integers with "
+                                f"{MIN_SYMBOLS} <= min <= max <= {MAX_SYMBOLS}")
+    elif OPTIONAL_META_KEYS & meta.keys():
+        raise StrategyError("META['min_symbols'] / META['max_symbols'] only apply to a generic universe ['*']")
+    elif (not isinstance(u, list) or not u or len(set(u)) != len(u) or "*" in u
             or not all(isinstance(s, str) and s and s == s.upper() for s in u)):
-        raise StrategyError("META['universe'] must be a non-empty list of distinct upper-case symbols")
+        raise StrategyError("META['universe'] must be a non-empty list of distinct upper-case symbols, or ['*']")
     lb = meta["lookback"]
     if not isinstance(lb, int) or isinstance(lb, bool) or lb < 1:
         raise StrategyError("META['lookback'] must be a positive integer (number of closed bars the strategy needs)")
@@ -250,6 +295,15 @@ class Strategy:
     @property
     def universe(self) -> list[str]:
         return list(self.meta["universe"])
+
+    @property
+    def generic(self) -> bool:
+        """v5: True when META['universe'] == ['*'] (the symbols come from the input)."""
+        return is_generic(self.meta)
+
+    def symbols_for(self, symbols=None) -> list[str]:
+        """v5: the symbols of a run, see resolve_symbols."""
+        return resolve_symbols(self.meta, symbols)
 
     @property
     def lookback(self) -> int:

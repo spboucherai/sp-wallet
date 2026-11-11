@@ -1,15 +1,19 @@
 // Market data engine (V3, docs/v3/ARCHITECTURE.md "Market data"): shared types, the time grid and the typed errors.
 // Prices and volumes are floats: this is market data, never a custody amount. Nothing here may feed a transaction amount.
 
-export const SYMBOLS = ['BTC', 'ETH', 'SOL', 'LINK', 'AAVE', 'AVAX', 'BNB', 'DOGE', 'LTC', 'XRP'] as const;
-export type MarketSymbol = (typeof SYMBOLS)[number];
+import { hasMarketData } from '@spw/core';
+
+/** The base set (V3): always ingested, at every interval. The full set is derived from the token registry: see symbols.ts. */
+export const SYMBOLS: readonly string[] = ['BTC', 'ETH', 'SOL', 'LINK', 'AAVE', 'AVAX', 'BNB', 'DOGE', 'LTC', 'XRP'];
+/** A ticker with a USD pair on at least two of the three exchanges (static table packages/core/src/market-listings.ts). */
+export type MarketSymbol = string;
 export const INTERVAL_MS = { '5m': 300_000, '1h': 3_600_000, '1d': 86_400_000 } as const;
 export type Interval = keyof typeof INTERVAL_MS;
 export const INTERVALS = Object.keys(INTERVAL_MS) as Interval[];
 export const SOURCE_IDS = ['coinbase', 'bitstamp', 'kraken'] as const;
 export type SourceId = (typeof SOURCE_IDS)[number];
 
-export const isSymbol = (s: string): s is MarketSymbol => (SYMBOLS as readonly string[]).includes(s);
+export const isSymbol = (s: string): s is MarketSymbol => hasMarketData(s);
 export const isInterval = (s: string): s is Interval => Object.hasOwn(INTERVAL_MS, s);
 
 /** One bar. `ts` is the bar-OPEN time, UTC milliseconds, on the interval grid (1d bars open at 00:00 UTC on every source). */
@@ -40,7 +44,7 @@ export interface MarketSource {
   /** only this many most recent bars can ever be fetched (Kraken: 720); null = full history is pageable */
   historyBars: number | null;
   /** exchange pair for each symbol the exchange really lists against USD */
-  pairs: Partial<Record<MarketSymbol, string>>;
+  pairs: Record<MarketSymbol, string | undefined>;
   /** CLOSED bars whose bar-open time lies in [start, end] (inclusive, ms, at most maxBars slots), oldest first. Not yet validated. */
   candles(symbol: MarketSymbol, interval: Interval, range: { start: number; end: number }, now: number): Promise<Candle[]>;
   /** pause this source (after a rate-limit answer) */

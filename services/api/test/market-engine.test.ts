@@ -94,7 +94,7 @@ describe('adapters against recorded answers', () => {
     await expect(make.kraken({ get: answer(200, { error: [], result: { XXBTZUSD: [[T0 / 1000, '1', '2', '1', '2', '1', '1', 3]] } }), spacingMs: 0 }).candles('BTC', '1h', range, NOW)).rejects.toMatchObject({ kind: 'schema' });
     await expect(make.bitstamp({ get: answer(503, null), spacingMs: 0 }).candles('BTC', '1h', range, NOW)).rejects.toBeInstanceOf(SourceError);
     const never: HttpJson = async () => { throw new Error('must not be called'); };
-    await expect(make.coinbase({ get: never, spacingMs: 0 }).candles('POL' as never, '1h', range, NOW)).rejects.toMatchObject({ kind: 'unsupported' });
+    await expect(make.coinbase({ get: never, spacingMs: 0 }).candles('NOPE' as never, '1h', range, NOW)).rejects.toMatchObject({ kind: 'unsupported' });
     await expect(make.coinbase({ get: never, spacingMs: 0 }).candles('BTC', '1h', { start: T0, end: T0 + 298 * H }, NOW)).rejects.toMatchObject({ kind: 'unsupported' });
     await expect(make.coinbase({ get: never, spacingMs: 0 }).candles('BTC', '1h', { start: T0 + 1000, end: T0 + H }, NOW)).rejects.toMatchObject({ kind: 'unsupported' });
   });

@@ -25,7 +25,7 @@
         "minimum": 0,
         "maximum": 1
       },
-      "description": "one entry per symbol of META['universe']; sum <= 1, the rest is USDC"
+      "description": "one entry per symbol of META['universe'] (per symbol of the input for a universe-generic strategy); sum <= 1, the rest is cash"
     }
   },
   "additionalProperties": false

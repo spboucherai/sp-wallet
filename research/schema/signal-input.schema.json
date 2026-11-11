@@ -9,7 +9,7 @@
   "properties": {
     "candles": {
       "type": "object",
-      "description": "exactly the symbols of META['universe']; closed bars, oldest first, [ts, open, high, low, close, volume]",
+      "description": "exactly the symbols of META['universe'] (for a universe-generic strategy, META['universe'] == ['*']: the 1 to 12 symbols chosen by the engine); closed bars, oldest first, [ts, open, high, low, close, volume]",
       "minProperties": 1,
       "additionalProperties": {
         "type": "array",

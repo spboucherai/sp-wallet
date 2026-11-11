@@ -54,6 +54,9 @@ create table if not exists agents (
   vault_index int unique not null, vault_address text not null, capital_usdc numeric(78,0) not null default 0,
   strategy_version_id uuid, mandate_id uuid, mandate jsonb, last_bar timestamptz, stop_reason text,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+-- V5: agents on every execution-enabled network; cash leg and the registry asset chosen for each market symbol
+alter table agents add column if not exists cash text not null default 'USDC';
+alter table agents add column if not exists assets jsonb not null default '{}';
 create table if not exists strategy_versions (
   id uuid primary key, agent_id uuid not null references agents(id), name text not null, version text not null, code_sha256 text not null, path text not null,
   meta jsonb not null default '{}', status text not null default 'draft', report jsonb, notes text not null default '',

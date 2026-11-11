@@ -14,6 +14,7 @@ import { audit, sql } from '../db.ts';
 import { signer } from '../signer-client.ts';
 import { kyberQuote, prepareKyberSwap } from '../swap-exec.ts';
 import { paperHoldings, tickAgent, type Bar, type EngineDeps, type Holding, type PlannedOrder } from './engine.ts';
+import { gasReserve } from './gas.ts';
 import { vaultBalances, type AgentRow } from './routes.ts';
 
 // the bundled server runs from the repository root (dist/api.mjs); from source the module sits four levels below it
@@ -55,10 +56,13 @@ export function runSignal(strategy: { path: string; sha256: string }, data: Reco
   });
 }
 
-/** Native coin kept out of the strategy's reach so the vault can always pay network fees (also for selling and withdrawing). */
-export const GAS_RESERVE = 0.0015;
+/** The agent's own assets in the vault. The gas reserve of the network (gas.ts: sized from recent gas prices and the signer
+ *  policy's fee ceiling) is kept out of the strategy's reach, so the vault can always pay to sell and to withdraw; the
+ *  native coin held only for gas is not a holding at all. Throws when the reserve cannot be computed (the engine then holds). */
 export async function liveHoldings(a: AgentRow): Promise<Holding[]> {
-  return (await vaultBalances(a)).map((x) => { const units = Number(formatUnits(x.amount, x.decimals)); return { symbol: x.symbol, id: x.id, decimals: x.decimals, units: x.id === 'native' ? Math.max(0, units - GAS_RESERVE) : units }; });
+  const n = getNetwork(a.network), list = (await vaultBalances(a)).filter((x) => x.role !== 'gas');
+  const reserve = list.some((x) => x.id === 'native') ? (await gasReserve(n, (await signer.status()).policy.maxFee[n.id])).reserve : 0n;
+  return list.map((x) => { const amount = x.id === 'native' ? (x.amount > reserve ? x.amount - reserve : 0n) : x.amount; return { symbol: x.symbol, id: x.id, decimals: x.decimals, units: Number(formatUnits(amount, x.decimals)) }; });
 }
 
 const OPEN = ['prepared', 'signed', 'broadcast'];

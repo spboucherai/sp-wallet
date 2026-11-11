@@ -6,8 +6,8 @@ import { baseUnits } from './amounts.ts';
 import { getAsset, getNetwork } from './networks.ts';
 import type { Intent } from './intent.ts';
 import { KYBER_ENABLED } from './swap-evm.ts';
-/** Agents trade on Base only; enabling owner swaps on another network does not extend mandates to it. */
-export const MANDATE_NETWORKS = ['base'];
+/** Agents trade on every network where swap execution is enabled (the router there was reviewed). One network per mandate. */
+export const MANDATE_NETWORKS: readonly string[] = Object.keys(KYBER_ENABLED);
 
 const U = z.string().regex(/^(0|[1-9]\d{0,77})$/);
 export const MAX_MANDATE_DAYS = 90;

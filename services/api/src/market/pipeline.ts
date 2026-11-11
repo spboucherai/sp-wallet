@@ -3,18 +3,35 @@
 import { evaluate, type QualityReport } from './quality.ts';
 import { earliestTs, latestTs, loadBySource, saveQuality, upsertCandles } from './store.ts';
 import { normalise, validateBars, type RejectReason, type Rejected } from './validate.ts';
-import { INTERVAL_MS, SYMBOLS, SourceError, expectedLastTs, type Interval, type MarketSource, type MarketSymbol, type SourceId } from './types.ts';
+import { configuredSymbols } from './symbols.ts';
+import { INTERVAL_MS, SourceError, expectedLastTs, type Interval, type MarketSource, type MarketSymbol, type SourceId } from './types.ts';
 
 const DAY = 86_400_000;
 export interface MarketConfig {
   symbols: readonly MarketSymbol[]; intervals: readonly Interval[];
   /** backfill depth per interval; null = everything the source has */
   depthMs: Record<Interval, number | null>;
+  /** intervals ingested for a subset only (default: every symbol). 5m is kept to the base set: no agent decides on it. */
+  only?: Partial<Record<Interval, readonly MarketSymbol[]>>;
+  /** symbols served before the others in every pass (those an agent trades): their update and backfill never wait */
+  first?: readonly MarketSymbol[];
+  /** left out by the size limit (reported by the status route) */
+  dropped?: readonly MarketSymbol[];
 }
 const days = (k: string, d: number | null): number | null => { const v = process.env[k]; return v === undefined || v === '' ? (d === null ? null : d * DAY) : v === 'all' ? null : Number(v) * DAY; };
-/** Defaults: two years of 1h, all available 1d, 30 days of 5m. Override with SPW_MARKET_DEPTH_{1H,1D,5M}_DAYS (a number of days, or "all"). */
-export const marketConfig = (): MarketConfig => ({ symbols: SYMBOLS, intervals: ['1h', '1d', '5m'],
-  depthMs: { '1h': days('SPW_MARKET_DEPTH_1H_DAYS', 730), '1d': days('SPW_MARKET_DEPTH_1D_DAYS', null), '5m': days('SPW_MARKET_DEPTH_5M_DAYS', 30) } });
+/** Defaults: two years of 1h, all available 1d, 30 days of 5m. Override with SPW_MARKET_DEPTH_{1H,1D,5M}_DAYS (a number of days, or "all").
+ *  The symbol set is the registry-derived one (symbols.ts); the worker uses activeMarketConfig(), which puts the agents' symbols first. */
+export const marketConfig = (agentSymbols: readonly string[] = []): MarketConfig => {
+  const set = configuredSymbols(agentSymbols);
+  return { symbols: set.symbols, intervals: ['1h', '1d', '5m'], only: { '5m': set.fiveMinute }, first: set.first, dropped: set.dropped,
+    depthMs: { '1h': days('SPW_MARKET_DEPTH_1H_DAYS', 730), '1d': days('SPW_MARKET_DEPTH_1D_DAYS', null), '5m': days('SPW_MARKET_DEPTH_5M_DAYS', 30) } };
+};
+/** Series of a configuration in service order: every interval of the `first` symbols, then the rest, interval by interval. */
+export function seriesOrder(cfg: MarketConfig): [Interval, MarketSymbol][] {
+  const first = new Set(cfg.first ?? []);
+  const all = cfg.intervals.flatMap((i) => (cfg.only?.[i] ?? cfg.symbols).map((s): [Interval, MarketSymbol] => [i, s]));
+  return [...all.filter(([, s]) => first.has(s)), ...all.filter(([, s]) => !first.has(s))];
+}
 
 /** bars refused by validation since the process started */
 export const rejectedCount: Partial<Record<RejectReason, number>> = {};
@@ -43,7 +60,7 @@ const add = (s: PassSummary, r: IngestResult) => { s.requests++; s.written += r.
 async function forEachSeries(sources: MarketSource[], cfg: MarketConfig, s: PassSummary, each: (src: MarketSource, symbol: MarketSymbol, interval: Interval) => Promise<boolean | void>): Promise<void> {
   await Promise.all(sources.map(async (src) => {
     let failures = 0;
-    for (const interval of cfg.intervals) for (const symbol of cfg.symbols) {
+    for (const [interval, symbol] of seriesOrder(cfg)) {
       if (!src.pairs[symbol]) continue;
       try { if ((await each(src, symbol, interval)) === false) return; failures = 0; }
       catch (e) {
@@ -111,7 +128,7 @@ export const QUALITY_WINDOW = 720;
 /** Recomputes and stores the quality record of every (symbol, interval): the last 720 bars, history shorter than that tolerated. */
 export async function recomputeQuality(cfg: MarketConfig, priority: readonly SourceId[], now: number = Date.now()): Promise<Record<string, QualityReport>> {
   const out: Record<string, QualityReport> = {};
-  for (const interval of cfg.intervals) for (const symbol of cfg.symbols) {
+  for (const [interval, symbol] of seriesOrder(cfg)) {
     const from = expectedLastTs(interval, now) - (QUALITY_WINDOW + 2) * INTERVAL_MS[interval];
     const report = evaluate(await loadBySource(symbol, interval, from), interval, now, { lookback: QUALITY_WINDOW, requireHistory: false, priority });
     await saveQuality(symbol, report);
