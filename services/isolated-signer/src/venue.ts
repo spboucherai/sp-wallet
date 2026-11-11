@@ -10,16 +10,19 @@ import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { sign } from 'viem/accounts';
 import {
   createHlTrading, D, HL_KIND_L1, hex, hlPinnedAsset, hlPinnedAssets, jurisdictionAckOf, signatureFromHex, typedDataDigest, validateVenueAuthorization, venueAgentWireName,
-  venueAuthorizationHash, VenueAuthorizationSchema, venueLeverageHash, VenueLeverageSchema, venueOrderHash, venueOrderNotional, VenueOrderSchema, venueWindowError, withinBand,
+  venueAuthorizationHash, VenueAuthorizationSchema, VENUE_PENDING_GRACE_MS, venueLeverageHash, VenueLeverageSchema, venueOrderHash, venueOrderNotional, VenueOrderSchema, venueWindowError, withinBand,
   type HlDescription, type HlL1SignPayload, type HlSignature, type HlUserSignPayload, type SignRequest, type VenueAuthorization,
 } from '@spw/derivatives/live';
 import type { Keys } from './keys.ts';
 import type { PriceView } from './prices.ts';
 import type { Store, StoredVenueAuthorization } from './store.ts';
+import type { VenueReader } from './venue-read.ts';
 
 /** what venue.ts needs from the Signer: its keys, its store, its clock (unix seconds), its own prices and its passkey verifier */
 export interface VenueCtx {
   keys: Keys; store: Store; now: () => number; prices: PriceView;
+  /** the signer's own read of a venue account — used only by derivative mandates (venue-mandate.ts) */
+  venueInfo: VenueReader;
   verify(assertion: AuthenticationResponseJSON, challenge: Uint8Array): Promise<unknown>;
   fail(code: string, msg: string): Error;
 }
@@ -184,6 +187,8 @@ export async function venueSign(ctx: VenueCtx, req: VenueSignRequest): Promise<V
     const oh = venueOrderHash(c);
     try { await ctx.verify(req.assertion!, oh); } catch (e) { deny((e as { code?: string }).code ?? 'bad_approval', (e as Error).message); }
     usage.orders += 1; rec.clientIds[c.clientId] = Math.floor(now / 86400); hash = hex(oh);
+    // exposure ledger read by a derivative mandate on the same account (venue-mandate.ts): bookkeeping only, it decides nothing here
+    if (!c.reduceOnly) (rec.pending ??= []).push({ clientId: c.clientId, instrument: c.instrument, side: c.side, size: canon(c.size), price: D.str(c.triggerPrice === null ? D.from(c.price) : D.max(D.from(c.price), D.from(c.triggerPrice))), until: c.expiresAt + VENUE_PENDING_GRACE_MS, signedAt: nowMs });
     summary = { instrument: c.instrument, side: c.side, type: c.type, size: canon(c.size), price: canon(c.price), triggerPrice: c.triggerPrice, reduceOnly: c.reduceOnly, tif: c.tif, clientId: c.clientId, notional, mid };
   } else {
     if (st.state.halted) deny('policy', 'emergency halt is active');

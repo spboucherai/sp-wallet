@@ -169,6 +169,15 @@ create table if not exists perp_agent_signals (
   strategy_sha256 text not null, weights jsonb, scaled jsonb, scale text, equity numeric, targets jsonb, orders jsonb,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(), primary key (agent_id, bar));
 -- <<< v6 perp agents
+-- derivative mandates (MANDATE_LIVE): the canonical mandate the owner approved with his passkey; the signer holds its own copy and enforces it
+create table if not exists deriv_mandates (
+  id uuid primary key, account_id uuid not null, authorization_id uuid not null, state text not null, mandate jsonb not null, hash text not null, ack jsonb not null,
+  prepared_at timestamptz not null, approved_at timestamptz, revoked_at timestamptz, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create index if not exists deriv_mandates_account on deriv_mandates (account_id, approved_at desc);
+-- an order placed under a mandate names it and the agent that asked for it; every proposal keeps the estimate it was shown with
+alter table deriv_orders add column if not exists mandate_id uuid;
+alter table deriv_orders add column if not exists agent jsonb;
+alter table deriv_orders add column if not exists estimate jsonb;
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }

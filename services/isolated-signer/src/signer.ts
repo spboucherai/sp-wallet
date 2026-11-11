@@ -13,6 +13,8 @@ import type { Keys } from './keys.ts';
 import { noPrices, type PriceView } from './prices.ts';
 import type { Store, StoredCredential } from './store.ts';
 import { venueAuthorize, venueKeyAddress, venueRevoke, venueSign, venueStatus, type VenueCtx, type VenueSignRequest } from './venue.ts';
+import { venueMandateApprove, venueMandateRevoke, venueMandateSign, venueMandateStatus, type VenueMandateSignRequest } from './venue-mandate.ts';
+import { noVenueReader, type VenueReader } from './venue-read.ts';
 
 export class SignerError extends Error { constructor(public code: string, msg: string) { super(msg); } }
 const sha = (s: string | Uint8Array) => createHash('sha256').update(s).digest();
@@ -20,7 +22,7 @@ export interface SignerConfig { rpId: string; origin: string }
 export interface SignResult { raw: string; txid: string; hash: string; /** swaps with a token input: the exact-amount approval that must be mined first */ pre?: { raw: string; txid: string } }
 
 export class Signer {
-  constructor(private keys: Keys, private store: Store, private cfg: SignerConfig, private now: () => number = () => Math.floor(Date.now() / 1000), private prices: PriceView = noPrices) {}
+  constructor(private keys: Keys, private store: Store, private cfg: SignerConfig, private now: () => number = () => Math.floor(Date.now() / 1000), private prices: PriceView = noPrices, private venueInfo: VenueReader = noVenueReader) {}
 
   status() {
     const s = this.store.state, today = new Date(this.now() * 1000).toISOString().slice(0, 10);
@@ -35,6 +37,7 @@ export class Signer {
       mandates: Object.values(s.mandates ?? {}).map((m) => ({ mandate: m.mandate, approvedAt: m.approvedAt, revoked: m.revoked, revokedAt: m.revokedAt ?? null,
         expired: this.now() >= m.mandate.expiresAt, today: m.usage[today] ?? { sold: {}, orders: 0 } })),
       venues: venueStatus(this.venueCtx()),
+      venueMandates: venueMandateStatus(this.venueCtx()),
     };
   }
 
@@ -42,12 +45,16 @@ export class Signer {
   // Live derivatives (venue.ts). The trading key is a dedicated key; the main key signs only the venue's agent approval,
   // inside venueAuthorize, after the owner's passkey approved the canonical authorization.
   private venueCtx(): VenueCtx {
-    return { keys: this.keys, store: this.store, now: this.now, prices: this.prices, verify: (a, c) => this.verifyAssertion(a, c), fail: (code, msg) => new SignerError(code, msg) };
+    return { keys: this.keys, store: this.store, now: this.now, prices: this.prices, venueInfo: this.venueInfo, verify: (a, c) => this.verifyAssertion(a, c), fail: (code, msg) => new SignerError(code, msg) };
   }
   venueKey(venue: unknown, network: unknown) { return venueKeyAddress(this.venueCtx(), venue, network); }
   venueAuthorize(authorization: unknown, assertion?: AuthenticationResponseJSON) { return venueAuthorize(this.venueCtx(), authorization, assertion); }
   venueRevoke(authorizationId: string) { return venueRevoke(this.venueCtx(), authorizationId); }
   venueSign(req: VenueSignRequest) { return venueSign(this.venueCtx(), req); }
+  // derivative mandates (venue-mandate.ts): one passkey approval, then orders without a passkey inside limits enforced here
+  venueMandateApprove(mandate: unknown, assertion?: AuthenticationResponseJSON) { return venueMandateApprove(this.venueCtx(), mandate, assertion); }
+  venueMandateSign(req: VenueMandateSignRequest) { return venueMandateSign(this.venueCtx(), req); }
+  venueMandateRevoke(mandateId: string) { return venueMandateRevoke(this.venueCtx(), mandateId); }
 
   private async verifyAssertion(assertion: AuthenticationResponseJSON, challenge: Uint8Array): Promise<StoredCredential> {
     const cred = this.store.state.credentials.find((c) => c.id === assertion.id);
