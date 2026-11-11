@@ -25,6 +25,7 @@ export const CAPS: Record<string, string> = {
   ETH: '0.025', WETH: '0.025', BTC: '0.0007', WBTC: '0.0007', SOL: '0.6', BNB: '0.075', AVAX: '6', HYPE: '0.7', POL: '550', LTC: '1', XLM: '350', XRP: '47', TRX: '150', DOGE: '700', BCH: '0.2',
   APT: '88', // 0.5675 USD on 2026-11-10 (CoinGecko)
   ATOM: '36',
+  SUI: '60',
   LINK: '5', UNI: '7.5', AAVE: '0.4', LDO: '150', PAXG: '0.0125', ONDO: '135', RENDER: '30', JUP: '200', RAY: '30',
   BONK: '18000000', PEPE: '9000000', SHIB: '11000000',
 };
@@ -34,6 +35,7 @@ const STABLE_FEE: Record<string, string> = {
   bitcoin: '5000', litecoin: '100000', dogecoin: '100000000', bitcoincash: '50000', solana: '3000000', stellar: '1000000', xrpl: '100000',
   aptos: '10000000', // 0.1 APT: a transfer that creates the recipient's store uses ≈ 5 400 gas units (0.0054 APT at the minimum price)
   cosmos: '50000',  // 0.05 ATOM: a send costs about 0.0015 ATOM (200 000 gas at 0.005 uatom + margin); leaves room for a tenfold fee-market rise
+  sui: '50000000',  // 0.05 SUI: a plain transfer charges about 0.002 SUI; the gas budget (the most that can be charged) is bounded by this
   tron: '40000000', // 40 TRX: a USDT transfer to a first-time holder burns ≈13.5 TRX of energy at 100 sun, plus margin
 };
 function buildDefaultPolicy(): Policy {

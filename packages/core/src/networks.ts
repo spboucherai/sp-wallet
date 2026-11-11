@@ -24,6 +24,7 @@ export interface NetworkDef {
    * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. Aptos: chain id.
    * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id.
    * Cosmos SDK: the chain id (it is part of every signed document, so a signature is valid on that chain only).
+   * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. Sui: genesis checkpoint digest.
    * Bitcoin Cash shares its genesis block with Bitcoin, Bitcoin SV and eCash, so its reference is the hash of block 661648,
    * the first block after the last of those splits (November 2020; a Bitcoin Cash Node checkpoint), which exists on no other chain.
    */
@@ -207,6 +208,17 @@ const DEFS = {
     cosmos: { bech32: 'cosmos', denom: 'uatom' }, memo: 'text',
     rpc: ['https://cosmos-rest.publicnode.com', 'https://cosmos-api.polkachu.com'],
     explorerTx: 'https://www.mintscan.io/cosmos/tx/', explorerAddr: 'https://www.mintscan.io/cosmos/address/', minConf: 1,
+  },
+  // chainRef = digest of the genesis checkpoint (base58); its first four bytes are the "chain identifier" 35834a8a. Every node
+  // reports it as GetServiceInfo.chain_id. Sources: Mysten Labs full node and Triton One (rpcpool), independent operators, both
+  // keyless, both speaking gRPC over HTTP/2 (sui.rpc.v2) — public Sui full nodes no longer serve JSON-RPC; verified live 2026-11-10.
+  // No `activation`: a Sui address needs no minimum balance to exist.
+  sui: {
+    id: 'sui', family: 'sui', name: 'Sui',
+    chainRef: '4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S',
+    native: { id: 'native', symbol: 'SUI', name: 'Sui', decimals: 9 }, tokens: [], coinType: 784,
+    rpc: ['https://fullnode.mainnet.sui.io', 'https://mainnet.sui.rpcpool.com'],
+    explorerTx: 'https://suiscan.xyz/mainnet/tx/', explorerAddr: 'https://suiscan.xyz/mainnet/account/', minConf: 1,
   },
 } satisfies Record<string, NetworkDef>;
 

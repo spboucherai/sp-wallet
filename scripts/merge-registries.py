@@ -27,6 +27,7 @@ fix('packages/core/src/policy.ts', lambda m: union_entries(m.group(1), m.group(2
 fix('services/api/src/server.ts', lambda m: union_entries(m.group(1), m.group(2)))
 fix('apps/web/src/i18n.ts', lambda m: m.group(1) + m.group(2))
 fix('scripts/smoke-chains.mts', lambda m: m.group(1))
+fix('package.json', lambda m: ''.join(sorted(set((m.group(1) + m.group(2)).splitlines(True)))))  # devDependencies: keep both, sorted
 # registries that are pure functions of the files present: regenerate
 plug = sorted(f[:-3] for f in os.listdir('packages/core/src/plugins') if f.endswith('.ts') and f != 'index.ts')
 open('packages/core/src/plugins/index.ts', 'w').write("// Chain family plugins. Importing this module registers every plugin with the registry in families.ts.\nimport { registerFamily } from '../families.ts';\n"

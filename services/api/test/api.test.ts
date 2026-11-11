@@ -150,6 +150,17 @@ describe('transfer lifecycle', () => {
     expect(JSON.stringify(ok.json)).not.toContain(row.raw);
   });
 
+  it('refuses a second transfer on a network while the first is still unconfirmed', async () => {
+    // the previous test left a proposal in "broadcast" (test mode never confirms it)
+    const d = (await draft('1')).json;
+    const blocked = await api('POST', `/api/v1/transfers/proposals/${d.id}/request-approval`, {});
+    expect(blocked.status).toBe(409);
+    expect(blocked.json.error).toBe('pending_tx');
+    await sql`update proposals set state = 'finalized' where state = 'broadcast'`; // the chain confirmed it
+    expect((await api('POST', `/api/v1/transfers/proposals/${d.id}/request-approval`, {})).status).toBe(200);
+    await api('POST', `/api/v1/transfers/proposals/${d.id}/reject`, {});
+  });
+
   it('reject, tampered stored intent, daily limit and emergency halt all fail closed', async () => {
     const r = (await draft('1')).json;
     expect((await api('POST', `/api/v1/transfers/proposals/${r.id}/reject`, {})).json.state).toBe('rejected');
@@ -166,6 +177,7 @@ describe('transfer lifecycle', () => {
       const d = (await draft(amt)).json;
       const a = (await api('POST', `/api/v1/transfers/proposals/${d.id}/request-approval`, {})).json;
       expect((await api('POST', `/api/v1/transfers/proposals/${d.id}/approve`, { assertion: owner.assert(Buffer.from(a.options.challenge, 'base64url')) })).status).toBe(200);
+      await sql`update proposals set state = 'finalized' where state = 'broadcast'`;
     }
     expect((await draft('0.01')).json.error).toBe('policy');
 

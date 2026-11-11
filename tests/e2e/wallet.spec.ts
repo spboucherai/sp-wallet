@@ -21,7 +21,7 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await page.getByRole('button', { name: /Créer ma clé/ }).click();
   await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('heading', { name: 'Actifs' })).toBeVisible();
-  await expect(page.getByText(/16\/16 réseaux opérationnels/)).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByText(/17\/17 réseaux opérationnels/)).toBeVisible({ timeout: 90_000 });
   await page.waitForTimeout(1500);
   await page.screenshot({ path: `${SHOTS}/02-home.png`, fullPage: true });
 
@@ -57,7 +57,7 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await expect(page.getByText(/Envoyez uniquement SOL \/ USDC \/ .*sur le réseau Solana/)).toBeVisible();
   await page.getByRole('radio', { name: 'Bitcoin', exact: true }).click();
   await expect(page.locator('img[alt^="QR bc1q"]')).toBeVisible();
-  for (const [name, prefix] of [['Bitcoin Cash', 'bitcoincash:q'], ['Dogecoin', 'D'], ['Litecoin', 'ltc1q'], ['TRON', 'T'], ['XRP Ledger', 'r'], ['Stellar', 'G']] as const) {
+  for (const [name, prefix] of [['Bitcoin Cash', 'bitcoincash:q'], ['Dogecoin', 'D'], ['Litecoin', 'ltc1q'], ['TRON', 'T'], ['XRP Ledger', 'r'], ['Stellar', 'G'], ['Sui', '0x']] as const) {
     await page.getByRole('radio', { name, exact: true }).click();
     await expect(page.locator(`img[alt^="QR ${prefix}"]`)).toBeVisible();
   }

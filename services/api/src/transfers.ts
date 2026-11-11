@@ -111,6 +111,10 @@ export function transferRoutes(app: FastifyInstance): void {
     if (p.state !== 'draft' && p.state !== 'pending_approval') throw new UserError('bad_state', `proposal is ${p.state}`, 409);
     const n = getNetwork(p.network), st = await signer.status(true);
     if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
+    // One transfer in flight per network: a second one prepared before the first is confirmed would reuse the same
+    // nonce / sequence / coins, and on some chains (Sui) could even lock those coins until the epoch ends.
+    const [busy] = await sql<{ id: string }[]>`select id from proposals where network = ${p.network} and id <> ${p.id} and state in ('approved', 'signed', 'broadcast') limit 1`;
+    if (busy) throw new UserError('pending_tx', 'a previous transfer on this network is not confirmed yet; wait for it before sending another', 409);
     const prep = await adapterFor(n.id).prepare({ asset: p.asset, from: p.from_addr, to: p.to_addr, amount: BigInt(p.amount), memo: p.memo ?? undefined });
     const now = Math.floor(Date.now() / 1000);
     const intent = IntentSchema.parse({
