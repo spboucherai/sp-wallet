@@ -53,6 +53,9 @@ importers:
       '@spw/core':
         specifier: workspace:*
         version: link:packages/core
+      '@spw/derivatives':
+        specifier: workspace:*
+        version: link:packages/derivatives
       '@spw/swap':
         specifier: workspace:*
         version: link:packages/swap
@@ -162,6 +165,12 @@ importers:
       viem:
         specifier: 2.57.17
         version: 2.57.17(typescript@7.0.2)(zod@4.6.7)
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+
+  packages/derivatives:
+    dependencies:
       zod:
         specifier: 4.6.7
         version: 4.6.7
