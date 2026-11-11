@@ -34,9 +34,11 @@ export function Futures({ instrument: routeId, view = 'terminal', nav }: { instr
   useEffect(() => { if (routeId && routeId !== lastId) setLastId(routeId); }, [routeId]);   // eslint-disable-line react-hooks/exhaustive-deps
   const venues = useQuery({ queryKey: ['deriv', 'venues'], queryFn: dapi.venues, refetchInterval: 30_000 });
   const instruments = useQuery({ queryKey: ['deriv', 'instruments'], queryFn: () => dapi.instruments(), staleTime: 600_000, refetchInterval: 600_000 });
-  const accounts = useQuery({ queryKey: ['deriv', 'accounts'], queryFn: dapi.accounts, refetchInterval: 4000 });
+  const accounts = useQuery({ queryKey: ['deriv', 'accounts'], queryFn: dapi.accounts, refetchInterval: 6000 });
   const go = (v: FuturesView, inst = id) => nav({ tab: 'futures', asset: inst, view: v === 'terminal' ? undefined : v });
+  const phone = !useMedia('(min-width: 768px)');
   const paper = useMemo(() => (accounts.data ?? []).filter((a) => a.kind === 'paper'), [accounts.data]);
+  const list = instruments.data?.instruments ?? [], unread = instruments.data?.errors ?? [];
 
   return (
     <div className="space-y-3">
@@ -45,11 +47,12 @@ export function Futures({ instrument: routeId, view = 'terminal', nav }: { instr
         <Seg tabs size="sm" label={t('fxViews')} value={view} onChange={(v) => go(v)} className="w-full sm:w-auto sm:min-w-[330px]" options={[{ id: 'terminal', label: t('fxViewTerminal') }, { id: 'compare', label: t('fxViewCompare') }, { id: 'accounts', label: t('fxViewAccounts') }]} />
       </div>
       <p className="text-[12.5px] leading-snug text-mute" data-testid="paper-banner">{t('fxBanner')}</p>
-      {venues.isError ? <Notice tone="danger">{t('fxApiDown')} {errText(t, venues.error)}</Notice> : venues.data ? <VenueStrip venues={venues.data} compact /> : null}
-      {view === 'terminal' && <Terminal id={id} instruments={instruments.data ?? []} instrumentsLoading={instruments.isLoading} venues={venues.data ?? []} accounts={paper} accountId={accountId} onAccount={setAccountId}
+      {venues.isError ? <Notice tone="danger">{t('fxApiDown')} {errText(t, venues.error)}</Notice> : venues.data && !(phone && view === 'terminal') ? <VenueStrip venues={venues.data} compact /> : null}
+      {unread.length > 0 && <Notice tone="warn">{t('fxVenueErrors', { venues: unread.map((e) => VENUE_NAME[e.venue as keyof typeof VENUE_NAME] ?? e.venue).join(', ') })}</Notice>}
+      {view === 'terminal' && <Terminal id={id} instruments={list} instrumentsLoading={instruments.isLoading} venues={venues.data ?? []} accounts={paper} accountId={accountId} onAccount={setAccountId}
         onMarket={(m) => go('terminal', m)} goAccounts={() => go('accounts')} />}
-      {view === 'compare' && <CompareView instruments={instruments.data ?? []} base={base} onBase={setBase} onOpen={(m) => go('terminal', m)} />}
-      {view === 'accounts' && <AccountsView venues={venues.data ?? []} accounts={accounts.data ?? []} loading={accounts.isLoading} selected={accountId} onSelect={setAccountId} />}
+      {view === 'compare' && <CompareView instruments={list} base={base} onBase={setBase} onOpen={(m) => go('terminal', m)} />}
+      {view === 'accounts' && <AccountsView venues={venues.data ?? []} instruments={list} accounts={accounts.data ?? []} loading={accounts.isLoading} selected={accountId} onSelect={setAccountId} />}
     </div>
   );
 }
@@ -83,7 +86,7 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, accou
   const venue = venues.find((v) => v.id === instrument?.venue);
   const mine = useMemo(() => accounts.filter((a) => a.venue === instrument?.venue), [accounts, instrument?.venue]);
   const account = mine.find((a) => a.id === accountId) ?? mine[0] ?? null;
-  const detail = useQuery({ queryKey: ['deriv', 'account', account?.id], enabled: !!account, queryFn: () => dapi.account(account!.id), refetchInterval: 3000 });
+  const detail = useQuery({ queryKey: ['deriv', 'account', account?.id], enabled: !!account, queryFn: () => dapi.account(account!.id), refetchInterval: (q) => ((q.state.data?.positions.length ?? 0) + (q.state.data?.openOrders.length ?? 0) > 0 ? 3000 : 10_000) });
   const d = account && detail.data?.id === account.id ? detail.data : undefined;
   const overlays = useMemo(() => overlaysOf(d ?? account, id, t), [d, account, id, locale]);   // eslint-disable-line react-hooks/exhaustive-deps
   const unknown = !instrumentsLoading && instruments.length > 0 && !byId.has(id) && meta.error !== null;

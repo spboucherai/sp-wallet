@@ -8,7 +8,7 @@ import { useContext, useState } from 'react';
 import { PriceChart } from '../chart';
 import { errText, I18n, useT, type Key } from '../i18n';
 import { Notice } from '../ui';
-import { dapi, riskRefusal } from './api';
+import { dapi, RISK_CODES, riskRefusal } from './api';
 import { DataTable, PaperTag, Pnl, Seg, SideTag, Stat, timeOf, type Col } from './bits';
 import { D, dec, dpOf, fmt, pct, priceDp, usd } from './dec';
 import { RiskVerdict } from './OrderPanel';
@@ -16,7 +16,7 @@ import type { AccountDetail, DerivAccount, Fill, FundingPayment, Instrument, Ord
 
 export type BlotterTab = 'positions' | 'orders' | 'history' | 'fills' | 'funding' | 'pnl' | 'risk';
 const sym = (id: string) => id.slice(id.indexOf(':') + 1);
-const mini = 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-line px-2.5 text-[12.5px] font-semibold text-ink transition hover:bg-elev disabled:opacity-45';
+const mini = 'inline-flex min-h-11 min-w-11 shrink-0 whitespace-nowrap items-center justify-center rounded-xl border border-line px-2.5 text-[12.5px] font-semibold text-ink transition hover:bg-elev disabled:opacity-45';
 
 export function Blotter({ account, detail, instruments, onSelect }: { account: DerivAccount | null; detail: AccountDetail | undefined; instruments: Map<string, Instrument>; onSelect: (id: string) => void }) {
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient();
@@ -36,6 +36,9 @@ export function Blotter({ account, detail, instruments, onSelect }: { account: D
   const posCols: Col<Position>[] = [
     { id: 'm', label: t('fxMarket'), head: true, cell: (p) => market(p.instrument) },
     { id: 'side', label: t('fxDirection'), head: true, cell: (p) => <SideTag side={p.side} /> },
+    { id: 'close', label: t('fxClosePos'), full: true, cell: (p) => <span className="inline-flex gap-1.5" role="group" aria-label={t('fxCloseAria', { symbol: sym(p.instrument) })}>
+      {(['0.25', '0.5', '1'] as const).map((fr) => <button key={fr} type="button" disabled={!!busy} className={mini} onClick={() => void run(`c${p.instrument}${fr}`, () => dapi.close(account.id, p.instrument, fr, crypto.randomUUID()))}
+        aria-label={t('fxCloseFrac', { pct: fr === '1' ? 100 : fr === '0.5' ? 50 : 25, symbol: sym(p.instrument) })}>{fr === '1' ? '100' : fr === '0.5' ? '50' : '25'} %</button>)}</span> },
     { id: 'size', label: t('fxSize'), num: true, cell: (p) => <>{sz(p.instrument, p.size)} <span className="text-mute">≈ {usd(D.mul(dec(p.size) ?? D.zero, dec(p.markPrice) ?? D.zero), locale)}</span></> },
     { id: 'entry', label: t('fxEntry'), num: true, cell: (p) => px(p.instrument, p.entryPrice) },
     { id: 'mark', label: t('fxMark'), num: true, cell: (p) => px(p.instrument, p.markPrice) },
@@ -45,9 +48,6 @@ export function Blotter({ account, detail, instruments, onSelect }: { account: D
     { id: 'upnl', label: t('fxUnrealized'), num: true, cell: (p) => <b className="font-semibold"><Pnl value={p.unrealizedPnl} locale={locale} /></b> },
     { id: 'rpnl', label: t('fxRealized'), num: true, cell: (p) => <Pnl value={p.realizedPnl} locale={locale} /> },
     { id: 'fund', label: t('fxFundingPaid'), num: true, cell: (p) => (p.fundingPaid === null ? '—' : usd(p.fundingPaid, locale, true)) },
-    { id: 'close', label: t('fxClosePos'), cell: (p) => <span className="inline-flex gap-1.5" role="group" aria-label={t('fxCloseAria', { symbol: sym(p.instrument) })}>
-      {(['0.25', '0.5', '1'] as const).map((fr) => <button key={fr} type="button" disabled={!!busy} className={mini} onClick={() => void run(`c${p.instrument}${fr}`, () => dapi.close(account.id, p.instrument, fr, crypto.randomUUID()))}
-        aria-label={t('fxCloseFrac', { pct: fr === '1' ? 100 : fr === '0.5' ? 50 : 25, symbol: sym(p.instrument) })}>{fr === '1' ? '100' : fr === '0.5' ? '50' : '25'} %</button>)}</span> },
   ];
   const orderCols = (withCancel: boolean): Col<Order>[] => [
     { id: 'm', label: t('fxMarket'), head: true, cell: (o) => market(o.instrument) },
@@ -80,8 +80,7 @@ export function Blotter({ account, detail, instruments, onSelect }: { account: D
   ];
   const evCols: Col<RiskEvent>[] = [
     { id: 'k', label: t('fxEvent'), head: true, cell: (e) => { const k = t(`fxEv_${e.kind}` as Key); return k.startsWith('fxEv ') ? e.kind : k; } },
-    { id: 'm', label: t('fxMarket'), cell: (e) => (e.instrument ? sym(e.instrument) : '—') },
-    { id: 'd', label: t('fxDetail'), cell: (e) => <span className="whitespace-normal text-mute">{e.detail}</span> },
+    { id: 'd', label: t('fxDetail'), cell: (e) => <span className="block max-w-[560px] whitespace-normal">{e.code && RISK_CODES.has(e.code) ? <span className="block">{t(`rk_${e.code}` as Key)}</span> : null}<span className="block break-words text-[12px] text-mute">{e.code ? `${e.code} — ` : ''}{e.detail}</span></span> },
     { id: 'at', label: t('fxTime'), cell: (e) => <span className="text-mute">{timeOf(e.ts, locale, true)}</span> },
   ];
   const eq = detail?.equityHistory ?? [];
@@ -103,7 +102,7 @@ export function Blotter({ account, detail, instruments, onSelect }: { account: D
         {tab === 'history' && <DataTable label={t('fxOrderHistory')} cols={orderCols(false)} rows={detail?.orders ?? []} rowKey={(o) => o.clientId} empty={t('fxNoHistory')} />}
         {tab === 'fills' && <DataTable label={t('fxFills')} cols={fillCols} rows={detail?.fills ?? []} rowKey={(f) => f.id} empty={t('fxNoFills')} />}
         {tab === 'funding' && <DataTable label={t('fxFunding')} cols={fundCols} rows={detail?.funding ?? []} rowKey={(f) => `${f.instrument}${f.ts}`} empty={t('fxNoFunding')} />}
-        {tab === 'risk' && <DataTable label={t('fxRiskEvents')} cols={evCols} rows={detail?.riskEvents ?? []} rowKey={(e) => `${e.ts}${e.kind}${e.detail}`} empty={t('fxNoRiskEvents')} />}
+        {tab === 'risk' && <DataTable label={t('fxRiskEvents')} cols={evCols} rows={detail?.riskEvents ?? []} rowKey={(e) => e.id} empty={t('fxNoRiskEvents')} />}
         {tab === 'pnl' && <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label={t('fxEquity')}>{usd(account.state.equity, locale)}</Stat>
@@ -113,6 +112,9 @@ export function Blotter({ account, detail, instruments, onSelect }: { account: D
           </div>
           {eq.length >= 2 ? <PriceChart points={eq.map((p) => ({ t: p.ts, p: Number(p.equity) }))} format={(v) => usd(v.toFixed(2), locale)} formatTime={(ts) => timeOf(ts, locale, true)} />
             : <p className="py-8 text-center text-[13.5px] text-mute">{t('fxNoEquity')}</p>}
+          {account.totals && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label={t('fxTotRealized')}><Pnl value={account.totals.realizedPnl} locale={locale} /></Stat><Stat label={t('fxTotFees')}>{usd(account.totals.feesPaid, locale)}</Stat>
+            <Stat label={t('fxTotFunding')}><Pnl value={account.totals.fundingNet} locale={locale} /></Stat><Stat label={t('fxTotLiquidations')}>{account.totals.liquidations}</Stat></div>}
           <p className="text-[12px] leading-snug text-mute">{t('fxPnlNote')}</p>
         </div>}
       </div>

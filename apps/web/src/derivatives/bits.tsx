@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useT, type Key } from '../i18n';
 import { Icon } from '../ui';
 import { D, dec, fmt, usd } from './dec';
@@ -43,7 +44,7 @@ export function Pnl({ value, locale, unit = 'usd', dp = 2 }: { value: string | n
 export function Seg<T extends string>({ value, options, onChange, label, tabs, size = 'md', className = '' }: { value: T; options: { id: T; label: ReactNode; aria?: string }[]; onChange: (v: T) => void; label: string; tabs?: boolean; size?: 'sm' | 'md'; className?: string }) {
   return <div role={tabs ? 'tablist' : 'radiogroup'} aria-label={label} className={`no-scrollbar flex gap-1 overflow-x-auto rounded-2xl bg-elev p-1 ${className}`}>{options.map((o) => { const on = value === o.id; return (
     <button key={o.id} type="button" role={tabs ? 'tab' : 'radio'} aria-selected={tabs ? on : undefined} aria-checked={tabs ? undefined : on} aria-label={o.aria} onClick={() => onChange(o.id)}
-      className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-3 font-semibold transition ${size === 'sm' ? 'min-w-11 text-[13px]' : 'text-[14px]'} ${on ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-mute hover:text-ink'}`}>{o.label}</button>); })}</div>;
+      className={`min-h-11 flex-[1_0_auto] whitespace-nowrap rounded-xl px-3 font-semibold transition ${size === 'sm' ? 'min-w-11 text-[13px]' : 'text-[14px]'} ${on ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-mute hover:text-ink'}`}>{o.label}</button>); })}</div>;
 }
 export function Stat({ label, children, className = '', wrap }: { label: ReactNode; children: ReactNode; className?: string; wrap?: boolean }) {
   return <div className={`min-w-0 ${className}`}><div className="truncate text-[11.5px] text-mute">{label}</div><div className={`text-[13.5px] font-medium ${wrap ? 'whitespace-nowrap' : 'truncate'}`}>{children}</div></div>;
@@ -71,15 +72,16 @@ export function Sheet({ title, onClose, children, wide }: { title: string; onClo
     const o = document.body.style.overflow; document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', key); document.body.style.overflow = o; prev?.focus?.(); };
   }, [onClose]);
-  return <div className="fixed inset-0 z-40 flex items-end justify-center bg-[rgba(8,11,18,0.45)] sm:items-center sm:p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+  // rendered under <body>: <main> animates with a transform, which would trap a fixed layer under the bottom navigation
+  return createPortal(<div className="fixed inset-0 z-40 flex items-end justify-center bg-[rgba(8,11,18,0.45)] sm:items-center sm:p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
     <div ref={box} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} className={`safe-b flex max-h-[92dvh] w-full flex-col rounded-t-[26px] bg-surface shadow-2xl outline-none sm:rounded-[26px] ${wide ? 'sm:max-w-2xl' : 'sm:max-w-md'}`}>
       <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-4"><h2 className="text-[17px] font-semibold tracking-tight">{title}</h2>
         <button type="button" onClick={onClose} aria-label={t('fxClose')} className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-mute hover:bg-elev"><Icon n="x" /></button></div>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">{children}</div>
-    </div></div>;
+    </div></div>, document.body);
 }
 
-export interface Col<T> { id: string; label: ReactNode; cell: (row: T) => ReactNode; num?: boolean; /** on a phone: shown in the card's title line instead of the grid */ head?: boolean }
+export interface Col<T> { id: string; label: ReactNode; cell: (row: T) => ReactNode; num?: boolean; /** on a phone: shown in the card's title line instead of the grid */ head?: boolean; /** on a phone: takes the whole width of the card */ full?: boolean }
 /** a real table on wide screens, one card per row on a phone (never both in the DOM) */
 export function DataTable<T>({ cols, rows, rowKey, empty, label }: { cols: Col<T>[]; rows: T[]; rowKey: (r: T) => string; empty: string; label: string }) {
   const wide = useMedia('(min-width: 768px)');
@@ -89,7 +91,7 @@ export function DataTable<T>({ cols, rows, rowKey, empty, label }: { cols: Col<T
     <tbody>{rows.map((r) => <tr key={rowKey(r)}>{cols.map((c) => <td key={c.id} className={`whitespace-nowrap border-b border-line/70 px-2.5 py-2 align-middle ${c.num ? 'text-right' : 'text-left'}`}>{c.cell(r)}</td>)}</tr>)}</tbody></table></div>;
   return <ul className="space-y-2.5" aria-label={label}>{rows.map((r) => <li key={rowKey(r)} className="rounded-2xl border border-line p-3.5">
     <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">{cols.filter((c) => c.head).map((c) => <span key={c.id} className="text-[14px] font-semibold">{c.cell(r)}</span>)}</div>
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]">{cols.filter((c) => !c.head).map((c) => <div key={c.id} className={c.label === '' ? 'col-span-2' : 'min-w-0'}>{c.label !== '' && <dt className="text-[11.5px] text-mute">{c.label}</dt>}<dd className="min-w-0 break-words font-medium">{c.cell(r)}</dd></div>)}</dl></li>)}</ul>;
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]">{cols.filter((c) => !c.head).map((c) => <div key={c.id} className={c.label === '' || c.full ? 'col-span-2' : 'min-w-0'}>{c.label !== '' && <dt className="text-[11.5px] text-mute">{c.label}</dt>}<dd className="min-w-0 break-words font-medium">{c.cell(r)}</dd></div>)}</dl></li>)}</ul>;
 }
 const p2 = (n: number) => String(n).padStart(2, '0');
 /** 24-hour clock « 14:05:09 »; with the date: « 10 nov. 14:05 » */

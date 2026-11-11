@@ -97,14 +97,14 @@ export function MarketPicker({ instruments, current, onPick, onClose }: { instru
   const t = useT(); const { locale } = useContext(I18n);
   const [q, setQ] = useState(''), [venue, setVenue] = useState<VenueId | 'all' | 'fav'>('all');
   const [favs, setFavs] = useLocalState<string[]>('spw-fut-favs', []);
-  const tk = useQuery({ queryKey: ['deriv', 'tickers'], queryFn: () => dapi.tickers(), refetchInterval: 5000 });
+  const tk = useQuery({ queryKey: ['deriv', 'tickers'], queryFn: () => dapi.tickers(), refetchInterval: 8000 });
   const byId = useMemo(() => new Map((tk.data?.tickers ?? []).map((x) => [x.instrument, x])), [tk.data]);
   const venues = useMemo(() => [...new Set(instruments.map((i) => i.venue))], [instruments]);
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return instruments.filter((i) => (venue === 'all' || (venue === 'fav' ? favs.includes(i.id) : i.venue === venue)) && (!s || i.symbol.toLowerCase().includes(s) || i.base.toLowerCase().includes(s) || VENUE_NAME[i.venue].toLowerCase().includes(s)))
+    return instruments.filter((i) => (i.status !== 'halted' || i.id === current) && (venue === 'all' || (venue === 'fav' ? favs.includes(i.id) : i.venue === venue)) && (!s || i.symbol.toLowerCase().includes(s) || i.base.toLowerCase().includes(s) || VENUE_NAME[i.venue].toLowerCase().includes(s)))
       .sort((a, b) => Number(favs.includes(b.id)) - Number(favs.includes(a.id)) || Number(byId.get(b.id)?.volume24h ?? 0) - Number(byId.get(a.id)?.volume24h ?? 0) || a.symbol.localeCompare(b.symbol)).slice(0, 80);
-  }, [instruments, q, venue, favs, byId]);
+  }, [instruments, q, venue, favs, byId, current]);
   return <Sheet wide title={t('fxPickMarket')} onClose={onClose}>
     <div className="space-y-3">
       <div className="relative"><Icon n="search" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-mute" />

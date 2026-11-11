@@ -1,12 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { get, post, setUnauthHandler } from './api';
 import { I18n, useT, type Key, type Locale } from './i18n';
 import { Activity } from './screens/Activity';
 import { Agent, Agents } from './screens/Agents';
 import { Asset } from './screens/Asset';
 import { Assets } from './screens/Assets';
-import { Futures, type FuturesView } from './screens/Futures';
+import type { FuturesView } from './screens/Futures';
 import { Gate } from './screens/Gate';
 import { Home } from './screens/Home';
 import { Receive } from './screens/Receive';
@@ -14,7 +14,10 @@ import { Security } from './screens/Security';
 import { Send } from './screens/Send';
 import { Settings } from './screens/Settings';
 import { Swap } from './screens/Swap';
-import { Btn, Icon, Notice } from './ui';
+import { Btn, Icon, Notice, Skeleton } from './ui';
+
+// the Futures terminal is its own chunk: the wallet's first load does not pay for it
+const Futures = lazy(() => import('./screens/Futures').then((m) => ({ default: m.Futures })));
 
 const TABS = [['home', '/', 'home'], ['swap', '/swap', 'swap'], ['agents', '/agents', 'key'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
 export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent' | 'futures';
@@ -94,7 +97,7 @@ function Shell({ tab, route, nav, go, lock }: { tab: Tab; route: Route; nav: Nav
           {tab === 'receive' && <Receive initial={route.network} />}
           {tab === 'send' && <Send go={go} initial={route} />}
           {tab === 'swap' && <Swap />}
-          {tab === 'futures' && <Futures instrument={route.asset} view={(['compare', 'accounts'].includes(route.view ?? '') ? route.view : 'terminal') as FuturesView} nav={nav} />}
+          {tab === 'futures' && <Suspense fallback={<Skeleton h="h-72" />}><Futures instrument={route.asset} view={(['compare', 'accounts'].includes(route.view ?? '') ? route.view : 'terminal') as FuturesView} nav={nav} /></Suspense>}
           {tab === 'agents' && <Agents nav={nav} />}
           {tab === 'agent' && <Agent id={route.asset ?? ''} nav={nav} />}
           {tab === 'activity' && <Activity />}

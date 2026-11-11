@@ -13,7 +13,7 @@ import { D, dec, dpOf, fmt, onTick, parseInput, priceDp, usd, usdToSize, worstPr
 import type { MarketStore } from './store';
 import type { DerivAccount, Instrument, OrderBody, Placed, VenueInfo } from './types';
 
-/** protection of market-like orders: the worst acceptable price is this far from the mark (or from the trigger) */
+/** protection of market-like orders: a market order is bounded by the server at this distance from the book (`slippageBps`); a triggered order carries a worst price this far from its trigger */
 export const SLIPPAGE_BPS = 50;
 type Kind = 'market' | 'limit' | 'stop' | 'tp';
 const TYPE: Record<Kind, OrderBody['type']> = { market: 'market', limit: 'limit', stop: 'stop_market', tp: 'take_profit_market' };
@@ -25,21 +25,22 @@ function build(f: Form, inst: Instrument, mark: Dec | null): Built {
   const tick = dec(inst.tickSize), lot = dec(inst.lotSize);
   if (!tick || !lot || !D.isPos(tick) || !D.isPos(lot)) return none('fxErrInstrument');
   if (!mark || !D.isPos(mark)) return none('fxErrNoPrice');
+  const v = inst.venue;
   let price: Dec | null = null, trigger: Dec | null = null, ref = mark;
-  if (f.kind === 'limit') { const p = parseInput(f.price); if (!p) return none(f.price.trim() ? 'fxErrPrice' : null); price = onTick(D.from(p), tick); if (!D.isPos(price)) return none('fxErrPrice'); ref = price; }
-  else if (f.kind === 'market') price = worstPrice(mark, f.side, SLIPPAGE_BPS, tick);
-  else { const p = parseInput(f.trigger); if (!p) return none(f.trigger.trim() ? 'fxErrTrigger' : null); trigger = onTick(D.from(p), tick); if (!D.isPos(trigger)) return none('fxErrTrigger'); price = worstPrice(trigger, f.side, SLIPPAGE_BPS, tick); ref = trigger; }
+  if (f.kind === 'limit') { const p = parseInput(f.price); if (!p) return none(f.price.trim() ? 'fxErrPrice' : null); price = onTick(D.from(p), tick, v); if (!D.isPos(price)) return none('fxErrPrice'); ref = price; }
+  else if (f.kind === 'market') price = null;   // the server derives the worst price from the live book (`slippageBps`)
+  else { const p = parseInput(f.trigger); if (!p) return none(f.trigger.trim() ? 'fxErrTrigger' : null); trigger = onTick(D.from(p), tick, v); if (!D.isPos(trigger)) return none('fxErrTrigger'); price = worstPrice(trigger, f.side, SLIPPAGE_BPS, tick, v); ref = trigger; }
   const raw = parseInput(f.size);
   if (!raw) return none(f.size.trim() ? 'fxErrSize' : null);
   const size = f.unit === 'usd' ? usdToSize(D.from(raw), ref, lot) : D.quantize(D.from(raw), lot, 'down');
   if (!D.isPos(size)) return none('fxErrSizeSmall');
   let sl: Dec | null = null, tp: Dec | null = null;
   if (f.kind === 'market' && !f.reduceOnly) {
-    if (f.sl.trim()) { const p = parseInput(f.sl); if (!p) return none('fxErrSl'); sl = onTick(D.from(p), tick); if (!D.isPos(sl) || (f.side === 'buy' ? D.gte(sl, mark) : D.lte(sl, mark))) return none(f.side === 'buy' ? 'fxErrSlLong' : 'fxErrSlShort'); }
-    if (f.tp.trim()) { const p = parseInput(f.tp); if (!p) return none('fxErrTp'); tp = onTick(D.from(p), tick); if (!D.isPos(tp) || (f.side === 'buy' ? D.lte(tp, mark) : D.gte(tp, mark))) return none(f.side === 'buy' ? 'fxErrTpLong' : 'fxErrTpShort'); }
+    if (f.sl.trim()) { const p = parseInput(f.sl); if (!p) return none('fxErrSl'); sl = onTick(D.from(p), tick, v); if (!D.isPos(sl) || (f.side === 'buy' ? D.gte(sl, mark) : D.lte(sl, mark))) return none(f.side === 'buy' ? 'fxErrSlLong' : 'fxErrSlShort'); }
+    if (f.tp.trim()) { const p = parseInput(f.tp); if (!p) return none('fxErrTp'); tp = onTick(D.from(p), tick, v); if (!D.isPos(tp) || (f.side === 'buy' ? D.lte(tp, mark) : D.gte(tp, mark))) return none(f.side === 'buy' ? 'fxErrTpLong' : 'fxErrTpShort'); }
   }
-  return { body: { instrument: inst.id, side: f.side, type: TYPE[f.kind], size: D.str(size), price: D.str(price), triggerPrice: trigger ? D.str(trigger) : null, reduceOnly: f.reduceOnly,
-    tif: f.kind === 'market' ? 'ioc' : f.kind === 'limit' && f.postOnly ? 'alo' : 'gtc', leverage: String(f.lev) }, problem: null, sl, tp, ref };
+  return { body: { instrument: inst.id, side: f.side, type: TYPE[f.kind], size: D.str(size), price: price ? D.str(price) : null, triggerPrice: trigger ? D.str(trigger) : null, reduceOnly: f.reduceOnly,
+    tif: f.kind === 'market' ? 'ioc' : f.kind === 'limit' && f.postOnly ? 'alo' : 'gtc', leverage: String(f.lev), ...(f.kind === 'market' ? { slippageBps: SLIPPAGE_BPS } : {}) }, problem: null, sl, tp, ref };
 }
 function useDebounced<T>(v: T, ms: number): T { const [d, setD] = useState(v); useEffect(() => { const h = setTimeout(() => setD(v), ms); return () => clearTimeout(h); }, [v, ms]); return d; }
 const num = (s: string) => s.replace(/[^0-9.,\s ]/g, '');
@@ -68,7 +69,8 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
   const marketLike = f.kind !== 'limit';
   const stable = useDebounced(built.body ? JSON.stringify({ ...built.body, price: marketLike ? null : built.body.price, size: f.unit === 'usd' ? `usd:${f.size}` : built.body.size }) : '', 300);
   const pv = useQuery({ queryKey: ['deriv', 'preview', account?.id, stable], enabled: !!account && !!stable && !confirm,
-    queryFn: () => { const b = latest.current.body; if (!b || !account) throw new Error('no order'); return dapi.preview(account.id, b); }, refetchInterval: 3000, placeholderData: keepPreviousData, retry: 0, staleTime: 0, gcTime: 0 });
+    queryFn: () => { const b = latest.current.body; if (!b || !account) throw new Error('no order'); // never leave « Chargement… » on screen for ever: a preview that takes more than 10 s counts as unavailable and is retried
+      return Promise.race([dapi.preview(account.id, b), new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), 10_000))]); }, refetchInterval: 4000, placeholderData: keepPreviousData, retry: 0, staleTime: 0, gcTime: 0 });
   const preview = built.body && stable ? pv.data : undefined;
   const pdp = priceDp(instrument.tickSize, store.ticker?.mark), sdp = dpOf(instrument.lotSize);
 
@@ -83,7 +85,7 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
         const tick = D.from(instrument.tickSize), exit = b.body.side === 'buy' ? 'sell' as const : 'buy' as const;
         for (const [trig, type, name] of [[b.sl, 'stop_market', t('fxStopLoss')], [b.tp, 'take_profit_market', t('fxTakeProfit')]] as const) {
           if (!trig) continue;
-          try { await dapi.placeOrder(account.id, { instrument: instrument.id, side: exit, type, size: D.str(filled), price: D.str(worstPrice(trig, exit, SLIPPAGE_BPS, tick)), triggerPrice: D.str(trig), reduceOnly: true, tif: 'gtc' }, crypto.randomUUID()); }
+          try { await dapi.placeOrder(account.id, { instrument: instrument.id, side: exit, type, size: D.str(filled), price: D.str(worstPrice(trig, exit, SLIPPAGE_BPS, tick, instrument.venue)), triggerPrice: D.str(trig), reduceOnly: true, tif: 'gtc' }, crypto.randomUUID()); }
           catch (e) { const r = riskRefusal(e); extra.push(t('fxAttachedFailed', { name, why: r ? t(`rk_${r.code}` as Key) : errText(t, e) })); }
         }
       }
@@ -107,6 +109,10 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
     </div>);
 
   const est = preview?.estimate ?? null, refused = preview && preview.risk && preview.risk.ok === false ? preview.risk : null;
+  // the paper engine's own answer on a copy of the account: a rejection there is not a risk refusal (post-only would cross, margin at fill…)
+  const wouldReject = !refused && est?.status === 'rejected' ? est.rejectReason ?? '' : null;
+  const allowed = account.policy.allowedInstruments.includes(instrument.id);
+  const allow = async () => { setBusy(true); setErr(null); try { await dapi.setPolicy(account.id, { ...account.policy, allowedInstruments: [...account.policy.allowedInstruments, instrument.id] }); await qc.invalidateQueries({ queryKey: ['deriv', 'accounts'] }); } catch (e) { setErr({ text: errText(t, e) || t('fxErrGeneric') }); } finally { setBusy(false); } };
   const long = f.side === 'buy';
   const sizeNote = built.body ? `${fmt(built.body.size, { dp: sdp, locale, trim: true })} ${instrument.base}${built.ref ? ` ≈ ${usd(D.mul(D.from(built.body.size), built.ref), locale)}` : ''}` : null;
   const sideLabel = (s: 'buy' | 'sell') => <span className="inline-flex items-center gap-1.5"><svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden="true"><path d={s === 'buy' ? 'M6 2l4.5 7h-9z' : 'M6 10L1.5 3h9z'} fill="currentColor" /></svg>{t(s === 'buy' ? 'fxLong' : 'fxShort')}</span>;
@@ -117,7 +123,7 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
     <Row label={t('fxSize')}>{sizeNote}</Row>
     {f.kind === 'limit' && <Row label={t('fxLimitPrice')}>{fmt(built.body.price, { dp: pdp, locale })}</Row>}
     {built.body.triggerPrice && <Row label={t('fxTriggerPrice')}>{fmt(built.body.triggerPrice, { dp: pdp, locale })}</Row>}
-    {marketLike && <Row label={t('fxWorstPrice')}>{fmt(built.body.price, { dp: pdp, locale })}</Row>}
+    {marketLike && <Row label={t('fxWorstPrice')}>{fmt(built.body.price ?? est?.price ?? preview?.request?.price ?? null, { dp: pdp, locale })}</Row>}
     <Row label={t('fxLeverage')}>{lev}×</Row>
     {built.sl && <Row label={t('fxStopLoss')}>{fmt(D.str(built.sl), { dp: pdp, locale })}</Row>}
     {built.tp && <Row label={t('fxTakeProfit')}>{fmt(D.str(built.tp), { dp: pdp, locale })}</Row>}
@@ -126,7 +132,8 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
     <Row label={t('fxNotional')}>{usd(est.notional, locale)}</Row>
     <Row label={t('fxInitialMargin')}>{usd(est.initialMargin, locale)}</Row>
     <Row label={t('fxFee')}>{usd(est.fee, locale)}</Row>
-    <Row label={t('fxAvgPrice')}>{est.avgFillPrice ? fmt(est.avgFillPrice, { dp: pdp, locale }) : '—'}{est.slippageBps ? <span className="text-mute"> · {fmt(est.slippageBps, { dp: 1, locale })} {t('fxBps')}</span> : null}</Row>
+    <Row label={t('fxAvgPrice')}>{est.avgFillPrice ? fmt(est.avgFillPrice, { dp: pdp, locale }) : '—'}</Row>
+    <Row label={t('fxSlippage')}>{est.slippageBps ? `${fmt(est.slippageBps, { dp: 1, locale, sign: true })} ${t('fxBps')}` : '—'}</Row>
     <Row label={<>{t('fxLiqPrice')} <em className="not-italic text-warn">({t('estimate')})</em></>}>{est.liquidationPrice?.value ? fmt(est.liquidationPrice.value, { dp: pdp, locale }) : '—'}</Row>
     <Row label={t('fxFreeAfter')}>{usd(est.freeCollateralAfter, locale)}</Row>
   </>;
@@ -143,6 +150,8 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
       </div>
       {account.policy.halt && <Notice tone="danger">{t('fxHalted')} <span className="font-mono text-[12px]">{account.policy.halt}</span></Notice>}
       {instrument.status !== 'active' && <Notice tone="warn">{t(instrument.status === 'halted' ? 'fxInstHalted' : 'fxInstReduceOnly')}</Notice>}
+      {!allowed && <Notice tone="warn"><div data-testid="not-allowed">{t('fxNotAllowed', { symbol: instrument.symbol })}
+        <button type="button" disabled={busy} onClick={() => void allow()} className="mt-1 block min-h-11 text-left font-semibold underline">{t('fxAllow', { symbol: instrument.symbol })}</button></div></Notice>}
 
       <div role="radiogroup" aria-label={t('fxDirection')} className="grid grid-cols-2 gap-2">
         {(['buy', 'sell'] as const).map((s) => <button key={s} type="button" role="radio" aria-checked={f.side === s} onClick={() => set({ side: s })}
@@ -177,16 +186,17 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
       {built.body && <div className="rounded-2xl border border-line p-3" aria-live="polite" data-testid="preview">
         <div className="mb-1 flex items-center justify-between"><span className="text-[12.5px] font-semibold">{t('fxPreview')}</span><PaperTag /></div>
         {est ? estimates : <p className="py-2 text-[12.5px] text-mute">{pv.isError ? t('fxPreviewError') : t('fxLoading')}</p>}
-        {est && <p className="mt-1 text-[11.5px] leading-snug text-mute">{t('fxEstimateNote')}</p>}
+        {est && <p className="mt-1 text-[11.5px] leading-snug text-mute">{t('fxEstimateNote')}{est.liquidationPrice?.method ? <span className="block">{t('fxMethod')} {est.liquidationPrice.method}</span> : null}</p>}
       </div>}
-      {refused && <RiskVerdict code={refused.code} reason={refused.reason} />}
+      {refused && (allowed || refused.code !== 'instrument_not_allowed') && <RiskVerdict code={refused.code} reason={refused.reason} />}
+      {wouldReject !== null && <Notice tone="warn"><div data-testid="would-reject">{t('fxWouldReject')}{wouldReject && <span className="mt-1 block break-words font-mono text-[11.5px] text-mute">{wouldReject}</span>}</div></Notice>}
       {err && (err.code ? <RiskVerdict code={err.code} reason={err.reason ?? ''} /> : <Notice tone="danger">{err.text}</Notice>)}
       {done && <Notice tone={done.placed.order.status === 'rejected' || done.placed.order.status === 'cancelled' ? 'warn' : 'ok'}><div data-testid="order-result">
         {t(`fxPlaced_${done.placed.order.status}` as Key, { size: fmt(done.placed.order.filled, { dp: sdp, locale, trim: true }), base: instrument.base, price: done.placed.order.avgFillPrice ? fmt(done.placed.order.avgFillPrice, { dp: pdp, locale }) : '—' })}
         {done.placed.order.rejectReason && <span className="mt-1 block font-mono text-[11.5px] text-mute">{done.placed.order.rejectReason}</span>}
         {done.extra.map((x) => <span key={x} className="mt-1 block text-warn">{x}</span>)}</div></Notice>}
 
-      <button type="button" disabled={!built.body || !!refused || !preview || instrument.status === 'halted'} onClick={() => setConfirm(true)}
+      <button type="button" disabled={!built.body || !!refused || wouldReject !== null || !preview || instrument.status === 'halted'} onClick={() => setConfirm(true)}
         className={`inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl px-5 text-[15.5px] font-semibold text-white transition active:scale-[0.98] disabled:opacity-45 ${long ? 'bg-emerald' : 'bg-danger'}`}>
         {sideLabel(f.side)}<span>· {t('fxReview', { base: instrument.base })}</span></button>
       <p className="text-center text-[11.5px] text-mute">{t('fxPaperOnly')}</p>

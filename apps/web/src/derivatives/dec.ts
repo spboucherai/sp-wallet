@@ -111,14 +111,14 @@ export function usdToSize(usdAmount: Dec, price: Dec, lot: Dec): Dec {
  * Worst acceptable price of a market-like order: `ref` moved by `slippageBps` against the taker, kept on the tick and INSIDE the
  * bound (a buy rounds down, a sell rounds up), never below one tick.
  */
-export function worstPrice(ref: Dec, side: 'buy' | 'sell', slippageBps: number, tick: Dec): Dec {
+export function worstPrice(ref: Dec, side: 'buy' | 'sell', slippageBps: number, tick: Dec, venue = ''): Dec {
   const k = D.from(BigInt(Math.round(slippageBps)));
   const moved = side === 'buy' ? D.div(D.mul(ref, D.add(TEN_K, k)), TEN_K, 18, 'down') : D.div(D.mul(ref, D.sub(TEN_K, k)), TEN_K, 18, 'up');
-  const q = D.quantize(moved, tick, side === 'buy' ? 'down' : 'up');
+  const q = quantizePrice(venue, tick, moved, side === 'buy' ? 'down' : 'up');
   return D.isPos(q) ? q : tick;
 }
-/** a price put on the tick (nearest below) */
-export const onTick = (p: Dec, tick: Dec): Dec => D.quantize(p, tick, 'down');
+/** a price put on the venue's grid (nearest below) */
+export const onTick = (p: Dec, tick: Dec, venue = ''): Dec => quantizePrice(venue, tick, p, 'down');
 /** decimals to SHOW for a price: at most the tick's, and about six significant digits (GMX ticks have 22 decimals) */
 export function priceDp(tick: DecStr | null | undefined, ref: DecStr | null | undefined): number {
   const r = dec(ref), max = dpOf(tick);
@@ -137,4 +137,20 @@ export function naturalStep(levels: readonly (readonly [DecStr, DecStr])[][], ti
   }
   if (!best) return tk && D.isPos(tk) ? D.str(tk) : '1';
   return D.str(tk && D.isPos(tk) && D.lt(best, tk) ? tk : best);
+}
+/**
+ * The price increment that applies AT a price. Hyperliquid has no fixed tick: prices have at most 5 significant figures and at
+ * most the tick's decimals, integers always allowed (the backend refuses anything else with `price_not_on_tick`). Other venues
+ * use their tick.
+ */
+export function stepAt(venue: string, tick: Dec, price: Dec): Dec {
+  if (venue !== 'hyperliquid' || !D.isPos(price)) return tick;
+  const s = D.str(price), [int = '0', frac = ''] = s.split('.');
+  const e = int !== '0' ? int.length - 1 : -(frac.length - frac.replace(/^0+/, '').length + 1);
+  const decimals = Math.max(0, Math.min(tick.s, 4 - e));
+  return decimals === 0 ? D.one : D.from(`0.${'0'.repeat(decimals - 1)}1`);
+}
+/** a price put on the venue's grid in an explicit direction */
+export function quantizePrice(venue: string, tick: Dec, price: Dec, mode: 'down' | 'up'): Dec {
+  return D.quantize(price, stepAt(venue, tick, price), mode);
 }

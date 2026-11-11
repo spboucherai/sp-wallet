@@ -15,7 +15,8 @@ export const INTERVAL_MS: Record<Interval, number> = { '1m': 60_000, '5m': 300_0
 
 export type VenueStatus = 'ok' | 'degraded' | 'down';
 export interface VenueInfo { id: VenueId; name: string; network: string; capabilities: Capabilities; status: VenueStatus; lastOkAt: number | null; restriction: string | null;
-  /** optional hint from the server; when absent the client derives it (see `paperAllowed`) */ paper?: boolean }
+  /** can a paper account exist there (the backend sends it; derived when absent, see `paperAllowed`) */ paper?: boolean; /** false on GMX */ orderBook?: boolean; lastError?: string | null }
+export interface VenueReadError { venue: string; message: string }
 
 /** what GMX has instead of a book (packages/derivatives/src/venues/gmx/adapter.ts, `GmxLiquidity`); every field optional here: the panel shows what it gets */
 export interface Liquidity {
@@ -27,24 +28,27 @@ export interface Liquidity {
   positionFeeFactor?: { balanceImproved?: DecStr; balanceNotImproved?: DecStr };
   oracleMin?: DecStr; oracleMax?: DecStr; ts?: number;
 }
-export interface Market { instrument: Instrument; ticker: Ticker; book: Book | null; liquidity: Liquidity | null; trades: PublicTrade[] }
+export interface Market { instrument: Instrument; ticker: Ticker; book: Book | null; liquidity: Liquidity | null; trades: PublicTrade[]; errors: { book?: string; trades?: string; liquidity?: string } }
 export interface FundingHistory { history: { ts: number; rate: DecStr }[]; intervalSec: number }
 
 export interface CompareRow { venue: VenueId; instrument: string; mark: DecStr; index: DecStr | null;
-  /** per hour, normalised */ funding: DecStr | null; /** the venue's own funding interval */ fundingIntervalSec: number | null;
-  spreadBps: DecStr | null; depthUsd1pct: DecStr | null; takerFeeBps: DecStr | null; maxLeverage: DecStr; collateral: string; settlement: string; notes: string[] }
+  /** per hour, normalised: what longs pay (negative = longs receive) */ funding: DecStr | null; /** the venue's own figure and interval */ fundingVenue: { rate: DecStr | null; intervalSec: number | null };
+  spreadBps: DecStr | null; depthUsd1pct: DecStr | null; depthBidUsd1pct: DecStr | null; depthAskUsd1pct: DecStr | null; restriction: string | null; takerFeeBps: DecStr | null; maxLeverage: DecStr; collateral: string; settlement: string; notes: string[] }
 
 export interface DerivAccount { id: string; venue: VenueId; network: string; kind: 'paper' | 'venue'; mode: AccountMode; label: string; policy: RiskPolicy;
-  state: AccountState; positions: Position[]; openOrders: Order[] }
-export interface RiskEvent { ts: number; kind: string; instrument: string | null; detail: string }
+  state: AccountState; positions: Position[]; openOrders: Order[]; initialCollateral?: DecStr;
+  settings?: { leverage: DecStr; leverageByInstrument: Record<string, DecStr>; takerFeeRate: DecStr; makerFeeRate: DecStr; maintenanceMarginFraction: DecStr };
+  totals?: { realizedPnl: DecStr; feesPaid: DecStr; fundingNet: DecStr; liquidations: number } }
+export interface RiskEvent { id: string; ts: number; kind: string; /** risk code of a refusal, when there is one */ code: string | null; instrument: string | null; detail: string }
 export interface EquityPoint { ts: number; equity: DecStr }
 export interface AccountDetail extends DerivAccount { orders: Order[]; fills: Fill[]; funding: FundingPayment[]; riskEvents: RiskEvent[]; equityHistory: EquityPoint[] }
 
 export interface EstimateValue { value: DecStr | null; source: 'estimate'; method: string }
-export interface OrderEstimate { notional: DecStr; initialMargin: DecStr; fee: DecStr; avgFillPrice: DecStr | null; slippageBps: DecStr | null; liquidationPrice: EstimateValue | null; freeCollateralAfter: DecStr }
-export interface Preview { risk: RiskResult; estimate: OrderEstimate | null }
+export interface OrderEstimate { notional: DecStr; initialMargin: DecStr; fee: DecStr; avgFillPrice: DecStr | null; slippageBps: DecStr | null; liquidationPrice: EstimateValue | null; freeCollateralAfter: DecStr;
+  filledSize?: DecStr; restingSize?: DecStr; /** what the paper engine would answer */ status?: Order['status']; rejectReason?: string | null; leverage?: DecStr; /** worst price the server derived */ price?: DecStr | null }
+export interface Preview { risk: RiskResult; estimate: OrderEstimate | null; request: OrderRequest | null }
 /** body of preview / place: an OrderRequest without clientId, plus the leverage to use on this instrument */
-export type OrderBody = Omit<OrderRequest, 'clientId'> & { leverage?: DecStr };
+export type OrderBody = Omit<OrderRequest, 'clientId'> & { leverage?: DecStr; /** market orders with `price: null`: the server derives the worst price from the book (1–500) */ slippageBps?: number };
 export interface Placed { order: Order; fills: Fill[] }
 export interface Watch { state: AccountState; positions: Position[]; openOrders: Order[] }
 

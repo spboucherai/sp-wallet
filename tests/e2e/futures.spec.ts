@@ -46,7 +46,7 @@ for (const size of SIZES) {
   test.describe(`futures terminal — ${size.name}`, () => {
     test.use({ ...size.use, locale: 'fr-CA' });
     /** on a phone the terminal is one panel at a time */
-    const panel = async (page: Page, name: 'Graphique' | 'Carnet' | 'Ordre' | 'Positions') => { if (phone) await page.getByRole('tab', { name: new RegExp(`^${name}`) }).click(); };
+    const panel = async (page: Page, name: 'Graphique' | 'Carnet' | 'Ordre' | 'Positions') => { if (phone) await page.getByRole('tab', { name: new RegExp(`^${name}( \\(\\d+\\))?$`) }).click(); };
     const blotterTab = (page: Page, name: RegExp) => page.getByTestId('blotter').getByRole('tab', { name }).click();
     const fillSize = async (page: Page, v: string) => { await page.getByRole('textbox', { name: 'Taille' }).fill(v); };
 
@@ -58,7 +58,7 @@ for (const size of SIZES) {
       await expect(page.getByTestId('mark-price')).toHaveText(/^\d{2}\s\d{3}/);
       await expect(page.getByTestId('market-picker')).toContainText('BTC-USD');
       await expect(page.getByTestId('ohlc')).toContainText(/O .* H .* B .* C /);
-      await expect(page.getByTestId('venue-strip')).toContainText('dYdX v4');
+      if (!phone) await expect(page.getByTestId('venue-strip')).toContainText('données de marché seulement');   // on a phone the strip is on the Compare and Accounts views
       await shot(page, `${size.name}-01-terminal-chart`);
       await panel(page, 'Carnet');
       await expect(page.getByTestId('spread')).toContainText(/pb/);
@@ -122,7 +122,7 @@ for (const size of SIZES) {
       await open(page);
       await panel(page, 'Ordre');
       await page.getByRole('radio', { name: 'À cours limité' }).click();
-      await page.getByRole('textbox', { name: /Prix limite/ }).fill(String(Math.round((await mark(page)) * 0.98)));
+      await page.getByRole('textbox', { name: /Prix limite/ }).fill(String(Math.round((await mark(page)) * 0.985)));
       await page.getByRole('radio', { name: 'BTC', exact: true }).click();
       await fillSize(page, '0,01');
       await expect(page.getByTestId('preview')).toContainText('Valeur notionnelle');
@@ -200,12 +200,17 @@ for (const size of SIZES) {
       await shot(page, `${size.name}-12-accounts`, true);
       // GMX: no order book → liquidity panel; no paper trading
       await open(page, `/futures/${encodeURIComponent('gmx:BTC/USD [BTC-USDC]')}`);
-      await panel(page, 'Carnet' as never).catch(() => {});
       if (phone) await page.getByRole('tab', { name: 'Liquidité' }).click();
       await expect(page.getByTestId('gmx-liquidity')).toContainText('GMX n’a pas de carnet d’ordres');
       await shot(page, `${size.name}-13-gmx`, phone);
       await panel(page, 'Ordre');
       await expect(page.getByTestId('order-panel')).toContainText('GMX est en lecture seule');
+      // a market outside the account's allowed list says so and offers to allow it (default policy: BTC and ETH only)
+      await open(page, '/futures/hyperliquid%3ASOL');
+      await panel(page, 'Ordre');
+      await expect(page.getByTestId('not-allowed')).toContainText('SOL ne fait pas partie des marchés autorisés');
+      await page.getByRole('button', { name: 'Autoriser SOL sur ce compte simulé' }).click();
+      await expect(page.getByTestId('not-allowed')).toHaveCount(0);
       // dYdX: market data only, with the reason
       await open(page, '/futures/dydx%3ABTC-USD');
       await panel(page, 'Ordre');
@@ -222,7 +227,6 @@ for (const size of SIZES) {
       await page.getByRole('tab', { name: 'Futures' }).click();
       await expect(page.getByTestId('paper-banner')).toContainText('live trading is not enabled');
       await expect(page.getByTestId('freshness')).toHaveText('Live', { timeout: 15_000 });
-      await panel(page, 'Trade' as never).catch(() => {});
       if (phone) await page.getByRole('tab', { name: 'Trade' }).click();
       await expect(page.getByTestId('order-panel')).toContainText('Simulated order');
       await expect(page.getByTestId('order-panel')).toContainText('Paper only: nothing is sent to the venue.');

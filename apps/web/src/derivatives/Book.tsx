@@ -75,7 +75,7 @@ export function LiquidityPanel({ store }: { store: MarketStore }) {
   const t = useT(); const { locale } = useContext(I18n);
   const { liquidity: l } = useSlice(store, 'meta');
   const rate = (x: string | undefined) => (x === undefined ? '—' : `${pct(x, 5, locale, true)} / h`);
-  const two = (a: string | undefined, b: string | undefined, f: (x: string | undefined) => string) => <span><span className="text-mute">{t('fxSide_long')}</span> {f(a)} <span className="mx-1 text-mute">·</span> <span className="text-mute">{t('fxSide_short')}</span> {f(b)}</span>;
+  const two = (a: string | undefined, b: string | undefined, f: (x: string | undefined) => string) => <span className="block whitespace-nowrap"><span className="block"><span className="text-mute">{t('fxSide_long')}</span> {f(a)}</span><span className="block"><span className="text-mute">{t('fxSide_short')}</span> {f(b)}</span></span>;
   const money = (x: string | undefined) => (x === undefined ? '—' : compactUsd(x, locale));
   return (
     <div className="space-y-3" data-testid="gmx-liquidity">
@@ -85,7 +85,7 @@ export function LiquidityPanel({ store }: { store: MarketStore }) {
           <Row label={t('fxOpenInterest')}>{two(l.openInterestLongUsd, l.openInterestShortUsd, money)}</Row>
           <Row label={t('fxGmxAvailable')}>{two(l.availableLiquidityLongUsd, l.availableLiquidityShortUsd, money)}</Row>
           <Row label={t('fxGmxCapacity')}>{two(l.capacityLongUsd, l.capacityShortUsd, money)}</Row>
-          {l.oracleMin && l.oracleMax && <Row label={t('fxGmxOracle')}>{fmt(l.oracleMin, { dp: 2, locale })} – {fmt(l.oracleMax, { dp: 2, locale })}</Row>}</div>
+          {l.oracleMin && l.oracleMax && <Row label={t('fxGmxOracle')}><span className="whitespace-nowrap">{fmt(l.oracleMin, { dp: 2, locale })} – {fmt(l.oracleMax, { dp: 2, locale })}</span></Row>}</div>
         <div><h4 className="mb-1 text-[12.5px] font-semibold">{t('fxGmxRates')}</h4>
           <Row label={t('fxFunding')}>{two(l.fundingRateLongPerHour, l.fundingRateShortPerHour, rate)}</Row>
           <Row label={t('fxGmxBorrow')}>{two(l.borrowingRateLongPerHour, l.borrowingRateShortPerHour, rate)}</Row>

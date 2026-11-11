@@ -88,10 +88,11 @@ export class MarketStore {
     es.addEventListener('open', () => this.setConn('connected'));
     es.addEventListener('ticker', (e) => { const t = parse(e); if (t && t.instrument === this.id) { seen(); this.pTicker = t; this.schedule(); } });
     es.addEventListener('book', (e) => { const b = parse(e); if (b && b.instrument === this.id) { seen(); this.pBook = b; this.schedule(); } });
-    es.addEventListener('trades', (e) => { const t = parse(e); if (t) { seen(); this.pTrades.push(...(Array.isArray(t) ? t : [t])); this.schedule(); } });
+    es.addEventListener('trades', (e) => { const t = parse(e); const list = Array.isArray(t?.trades) ? t.trades : null; if (list && t.instrument === this.id) { seen(); this.pTrades.push(...list); this.schedule(); } });
     es.addEventListener('status', (e) => { const s = parse(e); const v = typeof s === 'string' ? s : s?.status ?? s?.state; if (v === 'connected' || v === 'reconnecting' || v === 'stale') this.setConn(v); });
     // the browser reconnects by itself; until it does, nothing on screen may pass for current
-    es.addEventListener('error', () => this.setConn(es.readyState === EventSource.CLOSED ? 'error' : 'reconnecting'));
+    // (the server also sends a named `error` event with a message: that one carries data and is not a connection failure)
+    es.addEventListener('error', (e) => { if (typeof (e as MessageEvent).data === 'string') return; this.setConn(es.readyState === EventSource.CLOSED ? 'error' : 'reconnecting'); });
   }
   private setConn(conn: Conn) { this.pMeta = { ...(this.pMeta ?? {}), conn }; this.schedule(); }
 

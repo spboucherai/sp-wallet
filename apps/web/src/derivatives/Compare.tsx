@@ -13,28 +13,31 @@ import { compactUsd, fmt, pct, priceDp } from './dec';
 import type { CompareRow, Instrument, VenueId } from './types';
 
 const ORDER: VenueId[] = ['hyperliquid', 'gmx', 'dydx'];
+const MAJORS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'LINK', 'AVAX', 'ARB'];
 const FIELDS = ['collateral', 'settlement', 'funding', 'leverage', 'fee', 'price'] as const;
 const intervalText = (sec: number | null) => (sec === null ? '—' : sec % 3600 === 0 ? `${sec / 3600} h` : `${Math.round(sec / 60)} min`);
 
 export function CompareView({ instruments, base, onBase, onOpen }: { instruments: Instrument[]; base: string; onBase: (b: string) => void; onOpen: (id: string) => void }) {
   const t = useT(); const { locale } = useContext(I18n);
-  const bases = useMemo(() => { const m = new Map<string, Set<string>>(); for (const i of instruments) (m.get(i.base) ?? m.set(i.base, new Set()).get(i.base)!).add(i.venue);
-    return [...m.entries()].filter(([, v]) => v.size > 1).sort((a, b) => b[1].size - a[1].size || Number(b[0] === 'BTC') - Number(a[0] === 'BTC') || Number(b[0] === 'ETH') - Number(a[0] === 'ETH') || a[0].localeCompare(b[0])).map(([b]) => b).slice(0, 8); }, [instruments]);
-  const q = useQuery({ queryKey: ['deriv', 'compare', base], queryFn: () => dapi.compare(base), refetchInterval: 10_000 });
-  const rows = useMemo(() => [...(q.data ?? [])].sort((a, b) => ORDER.indexOf(a.venue) - ORDER.indexOf(b.venue) || a.instrument.localeCompare(b.instrument)), [q.data]);   // fixed venue order: never by "quality"
+  const bases = useMemo(() => { const m = new Map<string, Set<string>>(); for (const i of instruments) if (i.status !== 'halted') (m.get(i.base) ?? m.set(i.base, new Set()).get(i.base)!).add(i.venue);
+    const rank = (b: string) => { const i = MAJORS.indexOf(b); return i < 0 ? MAJORS.length : i; };   // a fixed, familiar order of assets — not a ranking of venues
+    return [...m.entries()].filter(([, v]) => v.size > 1).sort((a, b) => rank(a[0]) - rank(b[0]) || b[1].size - a[1].size || a[0].localeCompare(b[0])).map(([b]) => b).slice(0, 8); }, [instruments]);
+  const q = useQuery({ queryKey: ['deriv', 'compare', base], queryFn: () => dapi.compare(base), refetchInterval: 15_000 });
+  const rows = useMemo(() => [...(q.data?.rows ?? [])].sort((a, b) => ORDER.indexOf(a.venue) - ORDER.indexOf(b.venue) || a.instrument.localeCompare(b.instrument)), [q.data]);   // fixed venue order: never by "quality"
   const cols: Col<CompareRow>[] = [
-    { id: 'v', label: t('fxVenue'), head: true, cell: (r) => <VenueBadge venue={r.venue} /> },
+    { id: 'v', label: t('fxVenue'), head: true, cell: (r) => <><VenueBadge venue={r.venue} />{r.restriction ? <span className="mt-1 block text-[11.5px] font-normal text-warn">{t('fxDataOnly')}</span> : null}</> },
     { id: 'i', label: t('fxInstrument'), head: true, cell: (r) => <button type="button" onClick={() => onOpen(r.instrument)} className="-my-2 inline-flex min-h-11 items-center text-left font-semibold underline decoration-line underline-offset-4" aria-label={t('fxOpenMarket', { symbol: r.instrument })}>{r.instrument.slice(r.instrument.indexOf(':') + 1)}</button> },
     { id: 'mark', label: t('fxMark'), num: true, cell: (r) => fmt(r.mark, { dp: priceDp('0.01', r.mark), locale }) },
     { id: 'index', label: t('fxIndex'), num: true, cell: (r) => (r.index ? fmt(r.index, { dp: priceDp('0.01', r.index), locale }) : '—') },
-    { id: 'fund', label: t('fxFundingPerHour'), num: true, cell: (r) => (r.funding ? <>{pct(r.funding, 5, locale, true)}<span className="block text-[11.5px] text-mute">{r.venue === 'gmx' ? t('fxContinuousShort') : t('fxEveryShort', { interval: intervalText(r.fundingIntervalSec) })}</span></> : '—') },
+    { id: 'fund', label: t('fxFundingPerHour'), num: true, cell: (r) => (r.funding ? <>{pct(r.funding, 5, locale, true)}<span className="block text-[11.5px] text-mute">{r.venue === 'gmx' ? t('fxContinuousShort') : t('fxEveryShort', { interval: intervalText(r.fundingVenue.intervalSec) })}</span></> : '—') },
     { id: 'spread', label: t('fxSpreadBps'), num: true, cell: (r) => (r.spreadBps ? fmt(r.spreadBps, { dp: 2, locale }) : <span className="text-mute">{r.venue === 'gmx' ? t('fxNoBookShort') : '—'}</span>) },
     { id: 'depth', label: t('fxDepth1pct'), num: true, cell: (r) => (r.depthUsd1pct ? compactUsd(r.depthUsd1pct, locale) : <span className="text-mute">{r.venue === 'gmx' ? t('fxNoBookShort') : '—'}</span>) },
     { id: 'fee', label: t('fxTakerFeeBps'), num: true, cell: (r) => (r.takerFeeBps ? fmt(r.takerFeeBps, { dp: 2, locale, trim: true }) : '—') },
     { id: 'lev', label: t('fxMaxLeverage'), num: true, cell: (r) => `${fmt(r.maxLeverage, { dp: 1, locale, trim: true })}×` },
     { id: 'coll', label: t('fxCollateral'), cell: (r) => r.collateral || '—' },
     { id: 'settle', label: t('fxSettlement'), cell: (r) => <span className="block max-w-[320px] whitespace-normal text-[12.5px] leading-snug text-mute md:w-[280px]">{r.settlement || '—'}</span> },
-    { id: 'notes', label: t('fxNotes'), cell: (r) => (r.notes.length ? <ul className="max-w-[320px] list-disc space-y-0.5 whitespace-normal pl-4 text-[12.5px] leading-snug text-mute md:w-[280px]">{r.notes.map((n) => <li key={n}>{n}</li>)}</ul> : '—') },
+    { id: 'notes', label: t('fxNotes'), cell: (r) => (r.notes.length ? <details className="max-w-[360px] whitespace-normal md:w-[320px]"><summary className="flex min-h-11 cursor-pointer items-center text-[12.5px] font-medium text-blue">{t('fxNotesCount', { n: r.notes.length })}</summary>
+      <ul className="list-disc space-y-1 pb-1 pl-4 text-[12.5px] leading-snug text-mute">{r.restriction ? <li>{r.restriction}</li> : null}{r.notes.map((n) => <li key={n}>{n}</li>)}</ul></details> : '—') },
   ];
   const present = ORDER.filter((v) => rows.some((r) => r.venue === v));
   return (
@@ -43,6 +46,7 @@ export function CompareView({ instruments, base, onBase, onOpen }: { instruments
         <H>{t('fxCompareTitle', { base })}</H>
         {bases.length > 0 && <Seg size="sm" label={t('fxBaseAsset')} value={base} onChange={onBase} options={(bases.includes(base) ? bases : [base, ...bases]).map((b) => ({ id: b, label: b }))} className="mb-3 max-w-xl" />}
         <div className="mb-3"><Notice tone="warn"><b className="font-semibold">{t('fxNotInterchangeable')}</b> {t('fxNotInterchangeableBody')}</Notice></div>
+        {(q.data?.errors.length ?? 0) > 0 && <div className="mb-3"><Notice tone="warn">{t('fxVenueErrors', { venues: q.data!.errors.map((e) => VENUE_NAME[e.venue as VenueId] ?? e.venue).join(', ') })}</Notice></div>}
         {q.isLoading ? <Skeleton h="h-40" /> : q.isError ? <Notice tone="danger">{errText(t, q.error) || t('fxErrGeneric')}</Notice>
           : <DataTable label={t('fxCompareTitle', { base })} cols={cols} rows={rows} rowKey={(r) => r.instrument} empty={t('fxCompareEmpty', { base })} />}
         <p className="mt-3 text-[12px] leading-snug text-mute">{t('fxCompareNote')}</p>
