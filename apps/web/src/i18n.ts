@@ -43,6 +43,7 @@ const D = {
     'WARNING: this address looks like a known one (same start and end) but differs. Possible address poisoning.'],
   w_contract_destination: ['La destination est un contrat, pas un portefeuille simple.', 'The destination is a contract, not a plain wallet.'],
   w_creates_token_account: ['Le destinataire n’a pas encore de compte USDC : sa création coûte environ 0,00204 SOL en plus.', 'The recipient has no USDC account yet: creating it costs about 0.00204 SOL extra.'],
+  w_activates_account: ['Cette adresse n’a jamais été utilisée sur ce réseau : son activation est facturée à l’expéditeur (environ 1,1 TRX sur TRON), en plus du montant.', 'This address has never been used on this network: activating it is charged to the sender (about 1.1 TRX on TRON), on top of the amount.'],
   iChecked: ['J’ai vérifié l’adresse, le réseau et le montant.', 'I have checked the address, network and amount.'],
   irreversible: ['Un transfert sur chaîne est irréversible.', 'An on-chain transfer is irreversible.'],
   approve: ['Approuver avec la clé d’accès', 'Approve with passkey'], cancel: ['Annuler', 'Cancel'], back: ['Retour', 'Back'],

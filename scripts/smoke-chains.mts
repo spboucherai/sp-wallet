@@ -1,7 +1,7 @@
 // Live read-only check of every network adapter (identity, token verification, balances, deposit scan) using a public test address.
 import { NETWORKS } from '@spw/core';
 import { adapters } from '../services/api/src/chains/index.ts';
-const addr: Record<string, string> = { litecoin: 'ltc1qjmxnz78nmc8nq77wuxh25n2es7rzm5c2rkk4wh', evm: process.env.EVM_ADDR ?? '0x9858EfFD232B4033E47d90003D41EC34EcaEda94', btc: 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu', sol: 'HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk' };
+const addr: Record<string, string> = { tron: 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH', litecoin: 'ltc1qjmxnz78nmc8nq77wuxh25n2es7rzm5c2rkk4wh', evm: process.env.EVM_ADDR ?? '0x9858EfFD232B4033E47d90003D41EC34EcaEda94', btc: 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu', sol: 'HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk' };
 for (const n of Object.values(NETWORKS).filter((x) => !process.env.ONLY || process.env.ONLY.split(',').includes(x.id))) {
   const a = adapters[n.id]!;
   try {
