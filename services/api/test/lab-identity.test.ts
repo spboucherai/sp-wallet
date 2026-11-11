@@ -94,14 +94,14 @@ describe.skipIf(!READY)('confinement does not change a signal', () => {
     console.log(`[lab-identity] ${spot} spot + ${perp} perp library strategies: sandboxed signal output byte-identical to the pre-v8 invocation`);
   }, 600_000);
 
-  it('latency of one signal call: sandboxed runner vs the pre-v8 `uv run` (measured)', async () => {
+  it('latency of one signal call: sandboxed runner vs the pre-v8 unconfined invocation (measured)', async () => {
     const rel = 'ma_trend/3', dir = path.join(fx.dir, 'strategies', rel), info = await strategies.describe(rel), data = { BTC: bars(info.meta.lookback + 5, 11, 60_000), ETH: bars(info.meta.lookback + 5, 23, 3000) };
     const last = data.BTC.at(-1)!.ts, input = JSON.stringify({ candles: Object.fromEntries(Object.entries(data).map(([s, b]) => [s, b.map((x) => [Math.floor(x.ts / 1000), x.open, x.high, x.low, x.close, x.volume])])), interval: '1h', as_of: new Date(last).toISOString().replace('.000Z', 'Z') });
     const boxed: number[] = [], old: number[] = [];
     for (let i = 0; i < 7; i++) { const t0 = Date.now(); await live.runSignal({ path: info.path, sha256: info.sha256 }, data, '1h'); boxed.push(Date.now() - t0);
-      old.push(legacy(['spq.signal', '--strategy', path.join(REAL_LAB, 'strategies', rel), '--sha256', info.sha256, '--input', '-'], { input, viaUv: true }).ms); }
+      old.push(legacy(['spq.signal', '--strategy', path.join(REAL_LAB, 'strategies', rel), '--sha256', info.sha256, '--input', '-'], { input }).ms); }   // v10: the interpreter directly — a hung `uv run` (another suite or session holding uv's lock) timed this test out; `uv run` only execs this binary
     void dir;
-    console.log(`[lab-identity] one signal call (ma_trend/3, ${info.meta.lookback} bars x 2 symbols), 7 runs: sandboxed median ${median(boxed)} ms (min ${Math.min(...boxed)}, max ${Math.max(...boxed)}); pre-v8 ${UV ? 'uv run' : 'python'} median ${median(old)} ms (min ${Math.min(...old)}, max ${Math.max(...old)})`);
+    console.log(`[lab-identity] one signal call (ma_trend/3, ${info.meta.lookback} bars x 2 symbols), 7 runs: sandboxed median ${median(boxed)} ms (min ${Math.min(...boxed)}, max ${Math.max(...boxed)}); pre-v8 invocation (unconfined interpreter) median ${median(old)} ms (min ${Math.min(...old)}, max ${Math.max(...old)})`);
     expect(median(boxed)).toBeLessThan(5000);                             // 0.14 % of a 1 h bar at the very worst
   }, 120_000);
 });
