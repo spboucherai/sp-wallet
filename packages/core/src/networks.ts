@@ -121,6 +121,17 @@ const DEFS = {
     rpc: ['https://api.mainnet-beta.solana.com', 'https://solana-rpc.publicnode.com'],
     explorerTx: 'https://solscan.io/tx/', explorerAddr: 'https://solscan.io/account/', minConf: 1,
   },
+  xrpl: {
+    // chainRef: hash of ledger 32570, the earliest ledger of the main network that still exists (ledgers 1–32569 were lost);
+    // every full-history server returns it, and no other network (testnet, devnet, sidechains) has it.
+    id: 'xrpl', family: 'xrpl', name: 'XRP Ledger',
+    chainRef: '4109C6F2045FC7EFF4CDE8F9905D19C28820D86304080FF886B299F0206E42B5',
+    native: { id: 'native', symbol: 'XRP', name: 'XRP', decimals: 6 }, tokens: [], coinType: 144,
+    memo: 'uint32', activation: '1', // base reserve 1 XRP (server_state reserve_base = 1000000 drops, read 2026-11-10)
+    // two independent operators and two implementations: XRPL Labs / XRPL Commons cluster (rippled) and Ripple (Clio), both on port 443
+    rpc: ['https://xrplcluster.com', 'https://s1.ripple.com'],
+    explorerTx: 'https://livenet.xrpl.org/transactions/', explorerAddr: 'https://livenet.xrpl.org/accounts/', minConf: 1,
+  },
 } satisfies Record<string, NetworkDef>;
 
 /** Known ids are typed; any other string may be absent. */
