@@ -78,7 +78,7 @@ if (FORK) {
   for (const [k, id] of FORK.split(',').entries()) {
     const d = DEF[id]; if (!d) throw new Error(`--fork supports ${Object.keys(DEF).join(', ')}`);
     const url = `http://127.0.0.1:${PORT + 1 + k}`;
-    forks.push(spawn('anvil', ['--fork-url', d.rpc, '--port', String(PORT + 1 + k), '--chain-id', String(d.chain), '--silent'], { stdio: 'ignore' }));
+    forks.push(spawn('anvil', ['--fork-url', d.rpc, '--port', String(PORT + 1 + k), '--chain-id', String(d.chain), '--silent'], { stdio: 'ignore', detached: true }));
     let rid = 0;
     const rpc = async (method: string, params: unknown[] = []) => { const r = await realFetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rid, method, params }) }); const j = await r.json() as { result?: unknown; error?: { message: string } }; if (j.error) throw new Error(`${method}: ${j.error.message}`); return j.result; };
     for (let n = 0; n < 160; n++) { try { await rpc('eth_chainId'); break; } catch { await new Promise((r) => setTimeout(r, 250)); } }
@@ -97,7 +97,7 @@ const signerCore = new Signer(keys, store, { rpId: RP, origin: ORIGIN }, undefin
 signerSrv = createSignerServer(signerCore, SECRET).listen(0, '127.0.0.1');
 await new Promise((r) => signerSrv!.once('listening', r));
 Object.assign(process.env, { SPW_ORIGIN: ORIGIN, SPW_RP_ID: RP, PORT: String(PORT), HOST: '127.0.0.1', DATABASE_URL: `postgres:///${DB}`, SPW_SIGNER_SECRET: SECRET,
-  SPW_SIGNER_URL: `http://127.0.0.1:${(signerSrv.address() as { port: number }).port}`, SPW_BROADCAST: 'off', SPW_WORKERS: WORKERS ? 'on' : 'off', SPW_WEB_DIR: resolve(ROOT, 'dist/web'), SPW_RESEARCH_DIR: resolve(ROOT, 'research') });
+  SPW_SIGNER_URL: `http://127.0.0.1:${(signerSrv.address() as { port: number }).port}`, SPW_BROADCAST: 'off', SPW_WORKERS: WORKERS ? 'on' : 'off', SPW_WEB_DIR: resolve(ROOT, arg('web', 'dist/web')), SPW_RESEARCH_DIR: resolve(ROOT, 'research') });
 const { config } = await import('../../services/api/src/config.ts');
 if (config.broadcast) throw new Error('refusing to run: broadcasting is on');
 const db = await import('../../services/api/src/db.ts');

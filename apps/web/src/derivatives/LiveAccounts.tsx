@@ -10,7 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { I18n, useT, type Key } from '../i18n';
 import { Addr, Btn, Card, Field, H, Icon, inputCls, Notice, Skeleton, when } from '../ui';
-import { Row, Sheet, Stat, timeOf } from './bits';
+import { Row, ServerSays, Sheet, Stat, timeOf } from './bits';
 import { fmt, usd } from './dec';
 import { Bullet, LiveErrNotice, ModeBand, ModeTag, SourceTag } from './LiveBits';
 import { defaultPolicyForm, isUnfunded, lapi, liveError, policyFromForm, samePolicy, sha256Hex, toneOf, venueWords, type Collateral, type LiveConfig, type LiveErr, type LiveNetwork, type LiveSummary, type PolicyForm, type Prepared, type Revoked, type VenuePolicy } from './live';
@@ -249,7 +249,7 @@ export function LiveSection({ selected, onSelect }: { selected: string | null; o
           <Btn className="mt-3" kind={n === 'testnet' ? 'primary' : 'soft'} busy={busy === n} disabled={off || !!busy} onClick={() => void create(n)}><Icon n="plus" className="h-4 w-4" />{t(n === 'testnet' ? 'flCreateTestnet' : 'flCreateMainnet')}</Btn></li>; })}</ul>
       {err && <div className="mt-3"><LiveErrNotice err={err} /></div>}
       <p className="mt-3 text-[12.5px] leading-snug text-mute">{t('flMandateNote')} {t('fxLiveNote')}</p>
-      {!cfg.mandateLive.available && <p className="mt-1 break-words text-[11.5px] text-mute">{t('fxServerSays')} <span className="font-mono text-[11px]">{cfg.mandateLive.reason}</span></p>}
+      {!cfg.mandateLive.available && <ServerSays mono text={cfg.mandateLive.reason} className="mt-1 break-words text-[11.5px] text-mute" />}
     </>}</div>
   </Card>;
 }

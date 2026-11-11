@@ -3,7 +3,7 @@ import type { Nav, Tab } from '../App';
 import { Spark } from '../chart';
 import { useNetworks, usePortfolio, useSettings, type Bal } from '../hooks';
 import { I18n, useT } from '../i18n';
-import { Card, Change, Coin, fiat, H, Icon, Money, NetDot, Notice, short, Skeleton, StatePill, trimAmt } from '../ui';
+import { Card, Change, Coin, fiat, H, Icon, Money, NetDot, Notice, numFmt, short, Skeleton, StatePill, testNotSent, trimAmt } from '../ui';
 
 const FEATURED = ['USDC', 'BTC', 'ETH', 'SOL', 'USDT'];
 
@@ -40,7 +40,9 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
   const dayPct = total > 0 && prev > 0 ? ((total - prev) / prev) * 100 : null;
   const held = d.balances.filter((b) => b.amount !== null && b.amount !== '0').sort((a, b) => value(b) - value(a));
   // nothing held yet: show a short list of well-known assets (one per symbol) with live prices instead of a wall of zeros
-  const featured = FEATURED.flatMap((s) => { const c = d.balances.filter((b) => b.symbol === s); return c.length ? [c.find((b) => b.asset === 'native') ?? c.find((b) => b.network === 'base') ?? c[0]!] : []; });
+  const featured = FEATURED.flatMap((s) => { const c = d.balances.filter((b) => b.symbol === s); // the native coin; else the original issue rather than a bridged or pegged copy (USDT on Base is "Bridged USDT"); USDC stays on Base, where this wallet lives
+    const orig = (b: Bal) => !/bridged|binance-peg|\(.*bridge.*\)/i.test(b.name);
+    return c.length ? [c.find((b) => b.asset === 'native') ?? (s === 'USDC' ? c.find((b) => b.network === 'base') : undefined) ?? c.find((b) => b.network === 'ethereum' && orig(b)) ?? c.find(orig) ?? c[0]!] : []; });
   const list = nets.data ?? [], checked = list.filter((n) => n.health), up = checked.filter((n) => n.health!.ok).length;
   const netState = checked.length < list.length || list.length === 0 ? 'checking' : up === list.length ? 'ok' : 'partial';
   const action = (id: Tab, icon: string, label: string, main = false, disabled = false) =>
@@ -52,14 +54,14 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
       <section className="hero p-6">
         <div className="flex items-center justify-between">
           <span className="text-[13px] font-medium text-white/65">{t('totalEstimate')}</span>
-          <button onClick={() => void update({ hideBalances: !hidden })} aria-label={hidden ? t('show') : t('hide')} aria-pressed={hidden} className="-mr-2 grid h-10 w-10 place-items-center rounded-full text-white/70"><Icon n={hidden ? 'eyeOff' : 'eye'} /></button>
+          <button onClick={() => void update({ hideBalances: !hidden })} aria-label={hidden ? t('show') : t('hide')} aria-pressed={hidden} className="-mr-2 -mt-1 grid h-11 w-11 place-items-center rounded-full text-white/70"><Icon n={hidden ? 'eyeOff' : 'eye'} /></button>
         </div>
         <div className="mt-2 font-[family-name:var(--font-display)] text-[46px] font-semibold leading-none tracking-[-0.03em]">
           {d.prices ? <Money hidden={hidden}>{fiat(total, cur, locale)}</Money> : <span className="text-2xl text-white/60">{t('noPrices')}</span>}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-white/65">
           {dayPct !== null && !hidden && <span className="inline-flex items-center gap-1 rounded-full bg-white/12 px-2 py-0.5 font-semibold text-white">
-            <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden="true"><path d={dayPct >= 0 ? 'M6 2l4.5 7h-9z' : 'M6 10L1.5 3h9z'} fill="currentColor" /></svg>{dayPct >= 0 ? '+' : '−'}{Math.abs(dayPct).toFixed(2)} % {t('today')}</span>}
+            <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden="true"><path d={dayPct >= 0 ? 'M6 2l4.5 7h-9z' : 'M6 10L1.5 3h9z'} fill="currentColor" /></svg>{dayPct >= 0 ? '+' : '−'}{numFmt(Math.abs(dayPct), locale, 2, 2)} % {t('today')}</span>}
           <span className="inline-flex items-center gap-2"><span className={`inline-block h-2 w-2 rounded-full ${netState === 'ok' ? 'bg-[#35e7ac]' : netState === 'checking' ? 'pulse-dot bg-white/60' : 'bg-[#f4b65b]'}`} />
             {netState === 'checking' ? t('checking') : t('netsUp', { up, n: list.length })}</span>
         </div>
@@ -70,7 +72,7 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
         <ul className="space-y-3.5">{d.pending.map((p) => <li key={p.id} className="flex items-center gap-3">
           <Coin sym={p.symbol} net={p.network} size={40} />
           <div className="min-w-0 flex-1"><div className="font-semibold"><Money hidden={hidden}>{trimAmt(p.amountDisplay)} {p.symbol}</Money></div><div className="truncate text-[12.5px] text-mute">{p.networkName} → {short(p.to)}</div></div>
-          <StatePill state={p.state} /></li>)}</ul></Card>}
+          {testNotSent(p) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : <StatePill state={p.state} />}</li>)}</ul></Card>}
 
       {held.length > 0 && <Card className="!px-0 !pb-1"><div className="px-5"><H>{t('yourAssets')}</H></div>
         <ul>{held.map((b, k) => <AssetRow key={b.network + b.asset} b={b} border={k > 0} {...rowProps} />)}</ul></Card>}

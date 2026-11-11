@@ -9,7 +9,7 @@ import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from
 import { errText, I18n, useT, type Key } from '../i18n';
 import { Btn, Field, inputCls, Notice } from '../ui';
 import { dapi, paperAllowed, riskRefusal } from './api';
-import { PaperTag, Row, Seg, Sheet, SideTag, VENUE_NAME } from './bits';
+import { PaperTag, Row, Seg, ServerSays, Sheet, SideTag, VENUE_NAME } from './bits';
 import { D, dec, dpOf, fmt, onTick, parseInput, priceDp, usd, usdToSize, worstPrice, type Dec } from './dec';
 import type { MarketStore } from './store';
 import type { DerivAccount, Instrument, OrderBody, Placed, VenueInfo } from './types';
@@ -101,7 +101,7 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
     <div className="space-y-3" data-testid="order-panel">
       <h3 className="text-[15px] font-semibold">{t('fxOrder')}</h3>
       <Notice tone="warn">{t(instrument.venue === 'dydx' ? 'fxNoPaper_dydx' : instrument.venue === 'gmx' ? 'fxNoPaper_gmx' : 'fxNoPaper_other', { venue: VENUE_NAME[instrument.venue] ?? instrument.venue })}
-        {venue?.restriction && <span className="mt-1.5 block text-[12px] text-mute">{t('fxServerSays')} {venue.restriction}</span>}</Notice>
+        {venue?.restriction && <ServerSays text={venue.restriction} className="mt-1.5 text-[12px] text-mute" />}</Notice>
     </div>);
   if (!account) return (
     <div className="space-y-3" data-testid="order-panel">

@@ -83,8 +83,8 @@ function Shell({ tab, route, nav, go, lock }: { tab: Tab; route: Route; nav: Nav
           <div className="flex items-center justify-between px-5 py-3">
             <div className="flex items-center gap-2.5"><img src="/icon.svg" alt="" className="h-8 w-8 rounded-[10px]" /><span className="text-[17px] font-semibold tracking-tight">SP Wallet</span></div>
             <div className="flex items-center gap-1">
-              <button onClick={() => go('security')} aria-label={t('security')} aria-current={tab === 'security' ? 'page' : undefined} className={`grid h-10 w-10 place-items-center rounded-full ${tab === 'security' ? 'bg-elev text-ink' : 'text-mute'}`}><Icon n="shield" /></button>
-              <button onClick={lock} aria-label={t('logout')} className="grid h-10 w-10 place-items-center rounded-full text-mute"><Icon n="lock" /></button>
+              <button onClick={() => go('security')} aria-label={t('security')} aria-current={tab === 'security' ? 'page' : undefined} className={`grid h-11 w-11 place-items-center rounded-full ${tab === 'security' ? 'bg-elev text-ink' : 'text-mute'}`}><Icon n="shield" /></button>
+              <button onClick={lock} aria-label={t('logout')} className="grid h-11 w-11 place-items-center rounded-full text-mute"><Icon n="lock" /></button>
             </div>
           </div>
         </header>
