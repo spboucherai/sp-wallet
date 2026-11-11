@@ -6,10 +6,12 @@ import { usePortfolio, useSettings } from '../hooks';
 import { errText, I18n, useT, type Key } from '../i18n';
 import { Btn, Card, Coin, fiat, Icon, inputCls, NetDot, Notice, StatePill, trimAmt } from '../ui';
 import { useQueryClient } from '@tanstack/react-query';
+import { BridgeFacts, BridgePill, BridgeProgress, bridgeDur } from '../bridge';
 
 interface SAsset { key: string; network: string; networkName: string; asset: string; symbol: string; name: string; decimals: number; native?: boolean }
 interface Fee { kind: string; symbol: string; network: string; display: string; includedInOutput: boolean; estimated: boolean; usd: number | null }
-interface RouteV { id: string; executable: boolean; providers: string[]; path: SAsset[]; tags: string[]; pareto: boolean; amountOutDisplay: string; minAmountOutDisplay: string; estimatedSeconds: number | null; expiresAt: number;
+interface BridgeQuote { options: { speed: 'standard' | 'fast'; available: boolean; feeDisplay: string; minReceiveDisplay: string; seconds: number }[]; destinationGas: { symbol: string; needDisplay: string; balanceDisplay: string; enough: boolean }; toName: string; fromName: string }
+interface RouteV { id: string; executable: boolean; exec?: { via: 'kyberswap' | 'cctp'; speed?: 'standard' | 'fast' | null } | null; providers: string[]; path: SAsset[]; tags: string[]; pareto: boolean; amountOutDisplay: string; minAmountOutDisplay: string; estimatedSeconds: number | null; expiresAt: number;
   executability: { class: 'verified' | 'opaque' | 'quote_only'; reason?: string }; valuation: { inUsd: number | null; outUsd: number | null; minOutUsd: number | null; extraFeesUsd: number; netUsd: number | null };
   risk: { level: 'low' | 'medium' | 'high'; score: number; flags: { code: string; level: string; detail?: string }[] }; atomic: boolean; refundable: boolean | null; priceImpactBps: number | null;
   steps: { kind: string; provider: string; from: SAsset; to: SAsset; via: string[]; contracts: { network: string; address: string; role: string }[] }[]; fees: Fee[] }
@@ -56,7 +58,7 @@ export function Swap() {
   const live = useQuery({ queryKey: ['proposal', exec?.proposal.id], enabled: !!exec && !['pending_approval'].includes(exec.proposal.state), refetchInterval: 3000, queryFn: () => get<any>(`/transfers/proposals/${exec!.proposal.id}`) });
   const prop = live.data ?? exec?.proposal;
   useEffect(() => { if (!exec || exec.proposal.state !== 'pending_approval') return; const tick = () => setLeft(Math.max(0, Math.round((new Date(exec.proposal.expiresAt).getTime() - Date.now()) / 1000))); tick(); const h = setInterval(tick, 500); return () => clearInterval(h); }, [exec]);
-  useEffect(() => { if (prop?.state === 'finalized') void qc.invalidateQueries({ queryKey: ['portfolio'] }); }, [prop?.state, qc]);
+  useEffect(() => { if (prop?.state === 'finalized' || prop?.bridge?.stage === 'done') void qc.invalidateQueries({ queryKey: ['portfolio'] }); }, [prop?.state, prop?.bridge?.stage, qc]);
   const balances = useMemo(() => new Map((pf.data?.balances ?? []).map((b) => [`${b.network}:${b.asset === 'native' ? 'native' : b.asset.startsWith('0x') ? b.asset.toLowerCase() : b.asset}`, b.display ?? '0'])), [pf.data]);
   const by = (k: string) => assets.find((a) => a.key === k);
   useEffect(() => { // sensible defaults once the registry is loaded
@@ -65,6 +67,13 @@ export function Swap() {
     if (usdc && eth) { setFromKey(usdc.key); setToKey(eth.key); }
   }, [assets, fromKey]);
   const from = by(fromKey), to = by(toKey);
+  // USDC -> USDC between two networks served by CCTP: executed by the wallet itself (burn, attestation, mint)
+  const brNets = useQuery({ queryKey: ['bridge-exec'], queryFn: () => get<{ networks: string[] }>('/bridge/execution'), staleTime: 600_000 });
+  const isBridge = !!from && !!to && from.symbol === 'USDC' && to.symbol === 'USDC' && from.network !== to.network && !!brNets.data?.networks.includes(from.network) && brNets.data.networks.includes(to.network);
+  const amountOk = /^\d+(\.\d+)?$/.test(amount) && Number(amount) > 0;
+  const [speed, setSpeed] = useState<'standard' | 'fast'>('standard');
+  const brQ = useQuery({ queryKey: ['bridge-quote', from?.network, to?.network, amount], enabled: isBridge && amountOk, staleTime: 20_000, retry: false, queryFn: () => get<BridgeQuote>(`/bridge/quote?from=${from!.network}&to=${to!.network}&amount=${encodeURIComponent(amount)}`) });
+  const brSpeed = brQ.data?.options.find((o) => o.speed === speed && o.available) ? speed : 'standard';
   const cur = settings.currency, rate = pf.data?.prices ? (cur === 'USD' ? 1 : (pf.data.prices.USDC?.cad ?? 0) / (pf.data.prices.USDC?.usd || 1)) : null;
   const money = (usd: number | null) => (usd === null || rate === null ? null : fiat(usd * rate, cur, locale));
 
@@ -89,7 +98,8 @@ export function Swap() {
   const prepare = async () => {
     if (!from || !to) return;
     setBusy('prepare'); setExecErr('');
-    try { setExec(await post('/swap/proposals', { network: from.network, fromAsset: from.asset, toAsset: to.asset, amount, slippageBps: slip }, { 'idempotency-key': crypto.randomUUID() })); }
+    try { setExec(isBridge ? await post('/bridge/proposals', { fromNetwork: from.network, toNetwork: to.network, amount, speed: brSpeed }, { 'idempotency-key': crypto.randomUUID() })
+      : await post('/swap/proposals', { network: from.network, fromAsset: from.asset, toAsset: to.asset, amount, slippageBps: slip }, { 'idempotency-key': crypto.randomUUID() })); }
     catch (e) { setExecErr(errText(t, e)); } finally { setBusy(''); }
   };
   const approve = async () => {
@@ -182,18 +192,37 @@ export function Swap() {
             </div>}
           </section>); })}
         {execErr && <Notice tone="danger">{execErr}</Notice>}
-        {(() => { const ex = sorted.find((r) => r.executable); return ex
+        {isBridge ? null : (() => { const ex = sorted.find((r) => r.executable); return ex
           ? <><Btn full busy={busy === 'prepare'} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('swExecute', { via: ex.providers[0]! })}</Btn>
               {ex.id !== sorted[0]!.id && <p className="px-1 text-[12.5px] text-mute">{t('swExecNotBest')}</p>}</>
           : <><button disabled className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-[15.5px] font-semibold text-onprimary opacity-40"><Icon n="lock" className="h-4 w-4" />{t('swExecuteDisabled')}</button>
               <p className="px-1 text-[12.5px] text-mute">{t('swExecWhere')}</p></>; })()}
       </div>}
 
+      {isBridge && amountOk && <Card>
+        <h2 className="text-[16px] font-semibold">{t('brTitle')}</h2>
+        {brQ.isLoading && <p className="mt-2 flex items-center gap-2 text-[13.5px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('swSearching')}</p>}
+        {brQ.error ? <div className="mt-2"><Notice tone="danger">{errText(t, brQ.error)}</Notice></div> : null}
+        {brQ.data && <div className="mt-2 space-y-3 text-[13.5px]">
+          <p className="text-mute">{t('brIntro', { from: brQ.data.fromName, to: brQ.data.toName, gas: brQ.data.destinationGas.symbol })}</p>
+          <div className="space-y-2" role="radiogroup" aria-label={t('brSpeed')}>{brQ.data.options.map((o) =>
+            <button key={o.speed} role="radio" aria-checked={brSpeed === o.speed} disabled={!o.available} onClick={() => setSpeed(o.speed)} className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left ${brSpeed === o.speed ? 'border-primary bg-elev/70' : 'border-line'} ${o.available ? '' : 'opacity-50'}`}>
+              <span><span className="block font-medium">{o.speed === 'fast' ? t('brOptFast', { fee: trimAmt(o.feeDisplay, 6) }) : t('brOptStandard')}</span>
+                <span className="block text-[12.5px] text-mute">{o.available ? t('brOptTime', { time: bridgeDur(o.seconds) }) : t('brFastUnavailable')}</span></span>
+              <span className="shrink-0 text-right font-semibold">{trimAmt(o.minReceiveDisplay, 6)} <span className="text-mute">USDC</span></span></button>)}</div>
+          {brQ.data.destinationGas.enough
+            ? <p className="text-mute">{t('brDestGasLine', { net: brQ.data.toName, need: trimAmt(brQ.data.destinationGas.needDisplay, 8), have: trimAmt(brQ.data.destinationGas.balanceDisplay, 8), sym: brQ.data.destinationGas.symbol })}</p>
+            : <Notice tone="warn">{t('brDestGasMissing', { sym: brQ.data.destinationGas.symbol, net: brQ.data.toName })} {t('brDestGasLine', { net: brQ.data.toName, need: trimAmt(brQ.data.destinationGas.needDisplay, 8), have: trimAmt(brQ.data.destinationGas.balanceDisplay, 8), sym: brQ.data.destinationGas.symbol })}</Notice>}
+          {execErr && <Notice tone="danger">{execErr}</Notice>}
+          <Btn full busy={busy === 'prepare'} disabled={!brQ.data.destinationGas.enough} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('brExecute', { net: brQ.data.toName })}</Btn>
+        </div>}
+      </Card>}
+
       {(phase === 'done' || provs.length > 0) && <p className="px-1 text-[12px] text-mute">
         {took !== null && <>{t('swTook', { n: provs.length + new Set(routes.flatMap((r) => r.providers)).size, ms: took })}{first !== null ? ` · ${t('swFirst', { ms: first })}` : ''}. </>}
         {provs.filter((p) => p.status !== 'no_route').map((p) => `${p.provider}: ${p.status === 'skipped' ? t('swSkipped') : p.code ?? p.status}`).join(' · ')}</p>}
 
-      {exec && prop && <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={t('swReview')}>
+      {exec && prop && !prop.bridge && <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={t('swReview')}>
         <div className="rise max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-surface p-5 lg:rounded-3xl">
           <div className="mb-3 flex items-center justify-between"><h2 className="text-[20px] font-semibold tracking-tight">{prop.state === 'pending_approval' ? t('swReview') : t('swTracking')}</h2><StatePill state={prop.state} /></div>
           <div className="rounded-2xl bg-elev/70 p-4">
@@ -217,6 +246,35 @@ export function Swap() {
           </div>}
           {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{prop.error}</Notice></div>}
           {['signed', 'broadcast', 'confirming'].includes(prop.state) && <p className="mt-3 flex items-center gap-2 text-[13px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('broadcastNote')}</p>}
+          {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
+          {prop.explorer && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <a className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue" href={prop.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
+          <div className="mt-4 space-y-2.5">
+            {prop.state === 'pending_approval' && <Btn full busy={!!busy} disabled={left === 0} onClick={() => void approve()}><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>}
+            <Btn full kind="ghost" disabled={!!busy} onClick={() => void closeExec()}>{prop.state === 'pending_approval' ? t('cancel') : t('swClose')}</Btn>
+          </div>
+        </div>
+      </div>}
+
+      {exec && prop?.bridge && <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={t('brReview')}>
+        <div className="rise max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-surface p-5 lg:rounded-3xl">
+          <div className="mb-3 flex items-center justify-between"><h2 className="text-[20px] font-semibold tracking-tight">{prop.state === 'pending_approval' ? t('brReview') : t('brTracking')}</h2><BridgePill b={prop.bridge} /></div>
+          <div className="rounded-2xl bg-elev/70 p-4">
+            <div className="text-[13px] text-mute">{prop.networkName} → {prop.bridge.toNetworkName}</div>
+            <div className="text-[24px] font-semibold tracking-tight">{prop.amountDisplay} <span className="text-mute">{prop.symbol}</span></div>
+          </div>
+          <dl className="mt-3 space-y-2 text-[13.5px]">
+            <BridgeFacts b={prop.bridge} symbol={prop.symbol} />
+            <div className="flex justify-between gap-3"><dt className="text-mute">{t('feeMax')} · {prop.networkName}</dt><dd>{prop.maxFeeDisplay ? `${trimAmt(prop.maxFeeDisplay, 9)} ${prop.feeSymbol}` : '—'}</dd></div>
+            {prop.intentHash && <div><dt className="text-mute">{t('fingerprint')}</dt><dd className="break-all font-mono text-[11px] text-mute">{prop.intentHash}</dd></div>}
+            {prop.txid && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <div><dt className="text-mute">{t('txid')}</dt><dd className="break-all font-mono text-[11px]">{prop.txid}</dd></div>}
+          </dl>
+          {prop.state === 'pending_approval' && <div className="mt-3 space-y-3">
+            <Notice tone="ok">{t('brGuarantee', { from: prop.networkName, to: prop.bridge.toNetworkName })}</Notice>
+            {prop.bridge.needsApproval && <Notice tone="info">{t('swNeedsApproval', { sym: prop.symbol })}</Notice>}
+            <Notice tone="info">{t('brIrreversible', { from: prop.networkName, to: prop.bridge.toNetworkName })} {t('expiresIn')} {left} s.</Notice>
+          </div>}
+          {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{prop.error}</Notice></div>}
+          {prop.state !== 'pending_approval' && <div className="mt-4"><BridgeProgress id={prop.id} b={prop.bridge} onUpdate={(p) => { setExec({ ...exec, proposal: p }); void qc.invalidateQueries({ queryKey: ['proposal', p.id] }); }} /></div>}
           {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
           {prop.explorer && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <a className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue" href={prop.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
           <div className="mt-4 space-y-2.5">

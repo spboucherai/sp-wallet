@@ -228,7 +228,7 @@ describe('quality verdict (the logic of assertFresh)', () => {
   it('ok: fresh, complete, sources in agreement', () => {
     const r = evaluate(three(), '1h', NOW, O);
     expect(r).toMatchObject({ status: 'ok', failures: [], fresh: true, lagBars: 0, gaps: 0, bars: 100, missingHistory: 0, lastTs: T0 + 99 * H, expectedTs: T0 + 99 * H, provided: { coinbase: 100 } });
-    expect(r.maxDeviationBps).toBeCloseTo(spreadBps([99.95, 100.1])!, 9);
+    expect(r.maxDeviationBps).toBeCloseTo(spreadBps([99.95, 100])!, 9); // the bar used (coinbase) against its nearest confirming source
     expect(r.agreement).toHaveLength(3);
     expect(r.window.compared).toBe(100);
   });
@@ -272,11 +272,18 @@ describe('quality verdict (the logic of assertFresh)', () => {
 
   it('disagreement: closes further apart than the threshold on any of the last bars', () => {
     const by = three();
-    by.bitstamp = run(100, (i) => (i === 98 ? 100.6 : 100.1));
+    // the bar the series uses (coinbase, first in priority) is the one that is off: no other source confirms it
+    by.coinbase = run(100, (i) => (i === 98 ? 100.9 : 100));
     const r = evaluate(by, '1h', NOW, O);
     expect(r.status).toBe('disagreement');
     expect(r.maxDeviationBps).toBeGreaterThan(50);
-    expect(evaluate(by, '1h', NOW, { ...O, maxDeviationBps: 80 }).status).toBe('ok');
+    expect(evaluate(by, '1h', NOW, { ...O, maxDeviationBps: 100 }).status).toBe('ok');
+    // a third source that is off while the bar used is confirmed by another one does not block
+    const outlier = three(); outlier.bitstamp = run(100, (i) => (i === 98 ? 100.9 : 100.1));
+    expect(evaluate(outlier, '1h', NOW, O).status).toBe('ok');
+    // …but with only two sources there is nothing else to confirm the bar
+    expect(evaluate({ coinbase: outlier.coinbase, bitstamp: outlier.bitstamp }, '1h', NOW, O).status).toBe('disagreement');
+    by.coinbase = run(100);
     // an old disagreement (outside the last bars) is reported in the window statistics but does not block
     by.bitstamp = run(100, (i) => (i === 50 ? 103 : 100.1));
     const old = evaluate(by, '1h', NOW, O);
@@ -319,5 +326,13 @@ describe('quality verdict (the logic of assertFresh)', () => {
     const r = evaluate({ coinbase: run(50, () => 100, T0).filter((_, i) => i !== 20) }, '1h', NOW, O);
     expect(r.failures.map((f) => f.code)).toEqual(['stale', 'gap', 'insufficient_history', 'insufficient_sources']);
     expect(r.status).toBe('stale');
+  });
+});
+
+describe('market configuration defaults', () => {
+  it('default depths are days, not milliseconds: two years of 1h, 30 days of 5m, all of 1d', async () => {
+    const { marketConfig } = await import('../src/market/pipeline.ts');
+    for (const k of ['SPW_MARKET_DEPTH_1H_DAYS', 'SPW_MARKET_DEPTH_1D_DAYS', 'SPW_MARKET_DEPTH_5M_DAYS']) delete process.env[k];
+    expect(marketConfig().depthMs).toEqual({ '1h': 730 * 86_400_000, '1d': null, '5m': 30 * 86_400_000 });
   });
 });

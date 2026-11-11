@@ -1,6 +1,6 @@
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { appendAudit, DEFAULT_POLICY, PolicySchema, type AuditRecord, type Mandate, type Policy } from '@spw/core';
+import { appendAudit, DEFAULT_POLICY, PolicySchema, type AuditRecord, type CctpBridge, type Mandate, type Policy } from '@spw/core';
 
 export interface StoredCredential { id: string; publicKey: string; counter: number; transports?: string[]; addedAt: string }
 export interface SignerState {
@@ -15,7 +15,15 @@ export interface SignerState {
   journal: AuditRecord[];
   /** agent mandates approved by the owner; usage is counted per UTC day */
   mandates?: Record<string, StoredMandate>;
+  /** bridges approved by the owner (proposalId -> record): each authorises the one matching mint on the destination, with no expiry */
+  bridges?: Record<string, StoredBridge>;
 }
+/**
+ * `mint` is set when a receiveMessage transaction has been signed for this bridge. `raw` is kept so that an identical
+ * request (lost answer, restart) gets the same bytes back instead of a second signature.
+ */
+export interface StoredBridge { bridge: CctpBridge; approvedAt: number; burnTxid: string;
+  mint?: { messageHash: string; txid: string; raw: string; params: string; signedAt: number; signatures: number } }
 export interface StoredMandate { mandate: Mandate; approvedAt: string; revoked: boolean; revokedAt?: string; usage: Record<string, { sold: Record<string, string>; orders: number }> }
 
 const EMPTY: SignerState = { v: 1, halted: false, setupTokenHash: null, credentials: [], used: {}, spent: {}, journal: [] };
@@ -46,5 +54,7 @@ export class Store {
     const keep = new Date((nowSec - 3 * 86400) * 1000).toISOString().slice(0, 10);
     for (const k of Object.keys(this.state.spent)) if (k.slice(0, 10) < keep) delete this.state.spent[k];
     for (const m of Object.values(this.state.mandates ?? {})) for (const d of Object.keys(m.usage)) if (d < keep) delete m.usage[d];
+    // a bridge whose mint was signed is kept 90 more days (retries); one that was never minted is kept for ever
+    for (const [k, b] of Object.entries(this.state.bridges ?? {})) if (b.mint && b.mint.signedAt + 90 * 86400 < nowSec) delete this.state.bridges![k];
   }
 }

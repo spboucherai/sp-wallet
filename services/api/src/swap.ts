@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { formatUnits, getAsset, getNetwork, KYBER_ENABLED, parseUnits } from '@spw/core';
+import { CCTP_ENABLED, formatUnits, getAsset, getNetwork, KYBER_ENABLED, parseUnits } from '@spw/core';
 import {
   assetKey, createEnabledProviders, DEFAULT_POLICY, httpClient, LiquidityGraph, ProviderRuntime, QuoteAggregator, SwapRouter,
   type AssetRef, type QuoteEvent, type Route, type RouteSearch, type SwapProvider, type SwapQuoteRequest, type Valuer,
@@ -40,15 +40,20 @@ export function swapRoutes(app: FastifyInstance, deps: SwapDeps): void {
   const viewAsset = (a: AssetRef) => { const d = getAsset(a.network, a.asset), n = getNetwork(a.network); return { key: assetKey(a), network: a.network, networkName: n.name, asset: a.asset, symbol: d.symbol, name: d.name, decimals: d.decimals }; };
   const viewRoute = (r: Route) => {
     const out = getAsset(r.path[r.path.length - 1]!.network, r.path[r.path.length - 1]!.asset);
-    const executable = r.legs.length === 1 && r.providers[0] === 'kyberswap' && !!KYBER_ENABLED[r.path[0]!.network] && r.path[0]!.network === r.path[r.path.length - 1]!.network;
+    const first = r.path[0]!, last = r.path[r.path.length - 1]!;
+    // USDC -> USDC between two EVM networks through CCTP: the signer builds both transactions itself (services/api/src/bridge.ts)
+    const usdcOf = (a: AssetRef) => getNetwork(a.network).family === 'evm' && !!CCTP_ENABLED[a.network] && getAsset(a.network, a.asset).symbol === 'USDC';
+    const cctp = r.legs.length === 1 && r.providers[0] === 'cctp' && first.network !== last.network && usdcOf(first) && usdcOf(last);
+    const cctpSpeed = cctp ? ((r.legs[0]!.raw as { transfer?: string } | undefined)?.transfer === 'fast' ? 'fast' : 'standard') : null;
+    const executable = cctp || (r.legs.length === 1 && r.providers[0] === 'kyberswap' && !!KYBER_ENABLED[first.network] && first.network === last.network);
     // on a reviewed router the signer decodes and enforces recipient and minimum output itself: not an opaque transaction
-    const flags = executable ? r.risk.flags.filter((f) => f.code !== 'opaque_transaction') : r.risk.flags;
+    const flags = executable ? r.risk.flags.filter((f) => f.code !== 'opaque_transaction' && !(cctp && f.code === 'not_executable')) : r.risk.flags;
     const level = flags.some((f) => f.level === 'high') ? 'high' : flags.some((f) => f.level === 'medium') ? 'medium' : 'low';
     const risk = executable ? { level, score: Math.max(0, r.risk.score - 12), flags } : r.risk;
     return {
       id: r.id, providers: r.providers, path: r.path.map(viewAsset), tags: r.tags, pareto: r.pareto,
       // the wallet can execute this route itself today (signer-verified calldata on a reviewed router)
-      executable,
+      executable, exec: executable ? (cctp ? { via: 'cctp' as const, speed: cctpSpeed } : { via: 'kyberswap' as const }) : null,
       amountOut: r.amountOut, minAmountOut: r.minAmountOut, amountOutDisplay: formatUnits(r.amountOut, out.decimals), minAmountOutDisplay: formatUnits(r.minAmountOut, out.decimals),
       estimatedSeconds: r.estimatedSeconds, expiresAt: r.expiresAt, executability: executable ? { class: 'verified' as const } : r.executability, valuation: r.valuation, risk,
       atomic: r.legs.length === 1 && r.legs[0]!.atomic, refundable: r.legs.some((l) => l.refundable === false) ? false : r.legs.some((l) => l.refundable === null) ? null : true,

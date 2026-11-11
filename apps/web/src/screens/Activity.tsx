@@ -3,16 +3,19 @@ import { useContext, useState } from 'react';
 import { get } from '../api';
 import { useNetworks, useSettings } from '../hooks';
 import { I18n, useT } from '../i18n';
+import { BridgeFacts, BridgePill, BridgeProgress, type BridgeV } from '../bridge';
+import { useQueryClient } from '@tanstack/react-query';
 import { Addr, Card, Coin, Icon, inputCls, Money, short, Skeleton, StatePill, trimAmt, when } from '../ui';
 
-interface Item { swap?: { toSymbol: string; receivedDisplay: string | null; minOutDisplay: string } | null; kind: 'send' | 'receive' | 'swap'; at: string; id: string; network: string; networkName: string; symbol: string; amount: string; amountDisplay: string; state: string; txid: string | null; explorer: string | null;
+interface Item { swap?: { toSymbol: string; receivedDisplay: string | null; minOutDisplay: string } | null; bridge?: BridgeV | null; kind: 'send' | 'receive' | 'swap' | 'bridge'; at: string; id: string; network: string; networkName: string; symbol: string; amount: string; amountDisplay: string; state: string; txid: string | null; explorer: string | null;
   to?: string; from?: string; feeDisplay?: string | null; feeSymbol?: string; error?: string | null; note?: string; confirmations?: number }
 
 export function Activity() {
   const t = useT(); const { locale } = useContext(I18n); const { settings } = useSettings(); const nets = useNetworks();
   const q = useQuery({ queryKey: ['activity'], queryFn: () => get<{ items: Item[] }>('/activity?limit=200'), refetchInterval: 20_000 });
+  const qc = useQueryClient();
   const [kind, setKind] = useState<'all' | 'send' | 'receive'>('all'), [net, setNet] = useState(''), [open, setOpen] = useState('');
-  const items = (q.data?.items ?? []).filter((i) => (kind === 'all' || i.kind === kind || (kind === 'send' && i.kind === 'swap')) && (!net || i.network === net));
+  const items = (q.data?.items ?? []).filter((i) => (kind === 'all' || i.kind === kind || (kind === 'send' && (i.kind === 'swap' || i.kind === 'bridge'))) && (!net || i.network === net));
   return (
     <div className="space-y-4">
       <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('activity')}</h1>
@@ -26,14 +29,16 @@ export function Activity() {
           <li key={i.id}>
             <button className="flex w-full items-center gap-3 px-4 py-3.5 text-left" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '' : i.id)}>
               <Coin sym={i.symbol} net={i.network} size={42} />
-              <span className="min-w-0 flex-1"><span className="block font-medium">{i.kind === 'swap' ? `${t('swap')} · ${i.symbol} → ${i.swap?.toSymbol ?? ''}` : `${i.kind === 'receive' ? t('received') : t('sent')} · ${i.symbol}`}</span>
+              <span className="min-w-0 flex-1"><span className="block font-medium">{i.kind === 'bridge' ? `${t('brActivity')} · ${i.symbol} → ${i.bridge?.toNetworkName ?? ''}` : i.kind === 'swap' ? `${t('swap')} · ${i.symbol} → ${i.swap?.toSymbol ?? ''}` : `${i.kind === 'receive' ? t('received') : t('sent')} · ${i.symbol}`}</span>
                 <span className="block truncate text-xs text-mute">{i.networkName} · {when(i.at, locale)}</span></span>
-              <span className="text-right"><span className={`block font-semibold ${i.kind === 'receive' ? 'text-emerald' : ''}`}><Money hidden={settings.hideBalances}>{i.kind === 'receive' ? '+' : '−'}{trimAmt(i.amountDisplay)}</Money></span><StatePill state={i.state} /></span>
+              <span className="text-right"><span className={`block font-semibold ${i.kind === 'receive' ? 'text-emerald' : ''}`}><Money hidden={settings.hideBalances}>{i.kind === 'receive' ? '+' : '−'}{trimAmt(i.amountDisplay)}</Money></span>{i.kind === 'bridge' && i.bridge ? <BridgePill b={i.bridge} /> : <StatePill state={i.state} />}</span>
             </button>
             {isOpen && <div className="space-y-2.5 border-t border-line bg-bg/60 px-4 py-3 text-[13px]">
               <D k={t('amount')}>{i.amountDisplay} {i.symbol} <span className="text-mute">({i.amount} {t('baseUnits')})</span></D>
               {i.kind === 'swap' && i.swap && <D k={i.swap.receivedDisplay ? t('swReceived') : t('swMinGuaranteed')}>{i.swap.receivedDisplay ?? i.swap.minOutDisplay} {i.swap.toSymbol}</D>}
-              {i.to && i.kind !== 'swap' && <D k={t('to')}><Addr value={i.to} /></D>}
+              {i.kind === 'bridge' && i.bridge && <dl className="space-y-1.5"><BridgeFacts b={i.bridge} symbol={i.symbol} /></dl>}
+              {i.kind === 'bridge' && i.bridge && <BridgeProgress id={i.id} b={i.bridge} onUpdate={() => void qc.invalidateQueries({ queryKey: ['activity'] })} />}
+              {i.to && i.kind !== 'swap' && i.kind !== 'bridge' && <D k={t('to')}><Addr value={i.to} /></D>}
               {i.from && i.kind === 'receive' && <D k={t('from')}><span className="font-mono">{short(i.from)}</span></D>}
               {i.feeDisplay && <D k={t('fee')}>≈ {trimAmt(i.feeDisplay, 9)} {i.feeSymbol}</D>}
               <D k={t('time')}>{new Date(i.at).toISOString()}</D>

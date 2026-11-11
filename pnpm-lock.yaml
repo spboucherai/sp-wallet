@@ -213,6 +213,9 @@ importers:
       '@spw/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@spw/derivatives':
+        specifier: workspace:*
+        version: link:../../packages/derivatives
       '@spw/swap':
         specifier: workspace:*
         version: link:../../packages/swap

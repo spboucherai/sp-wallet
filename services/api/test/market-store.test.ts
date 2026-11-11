@@ -229,8 +229,8 @@ describe('assertFresh', () => {
     await fill({ bitstamp: { close: () => 100.2 } });
     const r = await series.assertFresh('BTC', '1h', NOW);
     expect(r).toMatchObject({ status: 'ok', fresh: true, lastTs: LAST, gaps: 0, bars: 200 });
-    expect(r.maxDeviationBps).toBeGreaterThan(19);
-    expect(r.maxDeviationBps).toBeLessThan(21);
+    expect(r.maxDeviationBps).toBe(0); // coinbase is confirmed exactly by kraken; bitstamp's 20 bps are recorded in `agreement`
+    expect(r.agreement.at(-1)!.closes).toMatchObject({ coinbase: 100, bitstamp: 100.2 });
   });
 
   it('stale: the latest bar is missing for more than one bar', async () => {
@@ -265,10 +265,10 @@ describe('assertFresh', () => {
   });
 
   it('disagreement: sources apart by more than 50 bps on one of the last bars', async () => {
-    await fill({ bitstamp: { close: (ts) => (ts === LAST - H ? 100.6 : 100) } });
+    await fill({ coinbase: { close: (ts) => (ts === LAST - H ? 100.6 : 100) } }); // the bar the series uses is the one that is off
     const e = await series.assertFresh('BTC', '1h', NOW).catch((x) => x);
     expect(e).toMatchObject({ code: 'disagreement' });
-    expect(e.report.agreement[1]).toMatchObject({ ts: LAST - H, closes: { coinbase: 100, bitstamp: 100.6, kraken: 100 } });
+    expect(e.report.agreement[1]).toMatchObject({ ts: LAST - H, closes: { coinbase: 100.6, bitstamp: 100, kraken: 100 } });
     expect(await code(series.assertFresh('BTC', '1h', NOW, { maxDeviationBps: 100 }))).toBe('ok');
     expect(await code(series.assertFresh('BTC', '1h', NOW, { agreeBars: 1 }))).toBe('ok');
   });

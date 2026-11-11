@@ -47,6 +47,8 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
       if (route === 'GET /status') return signer.status();
       if (route === 'POST /enroll') { await signer.enroll(json); return { ok: true }; }
       if (route === 'POST /sign') return await signer.sign(json.intent, json.assertion, json.aux && typeof json.aux === 'object' ? json.aux : undefined);
+      // second leg of an approved bridge: only the receiveMessage that matches the stored approval (signer.ts)
+      if (route === 'POST /bridge/mint') return await signer.signBridgeMint(json);
       if (route === 'POST /halt') { signer.halt(); return { ok: true, halted: true }; }
       // agent vaults: mandate approval needs the owner's passkey; orders need only to fit the mandate; revoking is always allowed
       if (route === 'POST /vault/address') return { address: signer.vaultAddress(Number(json.index)) };
