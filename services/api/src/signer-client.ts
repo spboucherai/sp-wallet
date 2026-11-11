@@ -45,6 +45,7 @@ export const signer = {
   mandateApprove: (mandate: unknown, assertion: unknown) => { cached = null; return call<{ mandateId: string; hash: string }>('POST', '/mandate/approve', { mandate, assertion }); },
   mandateRevoke: (mandateId: string) => { cached = null; return call<{ ok: true }>('POST', '/mandate/revoke', { mandateId }); },
   mandateSign: (mandateId: string, intent: unknown, aux?: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string; pre?: { raw: string; txid: string } }>('POST', '/mandate/sign', { mandateId, intent, ...(aux ? { aux } : {}) }); },
+  vaultReturn: (index: number, intent: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string }>('POST', '/vault/return', { index, intent }); },
   mandateReturn: (mandateId: string, intent: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string }>('POST', '/mandate/return', { mandateId, intent }); },  // live derivatives: venue trading key, authorization (passkey), one signature per venue action, revocation
   venueKey: (venue: string, network: string) => call<{ venue: string; network: string; address: string; path: string; account: string }>('POST', '/venue/key', { venue, network }),
   venueAuthorize: (authorization: unknown, assertion: unknown) => { cached = null; return call<{ authorizationId: string; hash: string; agentAddress: string; approve: { action: unknown; signature: { r: string; s: string; v: number }; nonce: number } }>('POST', '/venue/authorize', { authorization, assertion }); },

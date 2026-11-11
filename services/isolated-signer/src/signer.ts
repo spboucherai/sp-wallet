@@ -188,6 +188,38 @@ export class Signer {
     return out;
   }
 
+  /**
+   * Bring funds back from an agent vault to the owner, on any EVM network, with or without a mandate (a vault that never had
+   * one, or funds sent to the vault's address on another network than the agent's). No passkey: the only possible destination
+   * is the owner's own address, so the worst a compromised API can do with this is move the owner's vault funds to the owner.
+   */
+  async signVaultReturn(index: number, rawIntent: unknown): Promise<SignResult> {
+    const st = this.store, now = this.now();
+    if (!Number.isInteger(index) || index < 1) throw new SignerError('bad_request', 'bad vault index');
+    const parsed = IntentSchema.safeParse(rawIntent);
+    if (!parsed.success) throw new SignerError('bad_request', 'malformed intent');
+    const i: Intent = parsed.data, hash = intentHash(i);
+    const deny = (code: string, msg: string): never => { st.log('return.denied', { vaultIndex: index, proposalId: i.proposalId, code, msg }); st.save(); throw new SignerError(code, msg); };
+    if (st.state.used[i.proposalId] !== undefined) deny('replay', 'already signed');
+    if (i.swap || (i as { bridge?: unknown }).bridge) deny('unsupported', 'a return is a plain transfer');
+    let net; try { net = getNetwork(i.network); } catch { return deny('wrong_chain', 'unknown network'); }
+    if (net.family !== 'evm' || i.chainRef !== net.chainRef) deny('wrong_chain', 'vaults exist on EVM networks only');
+    if (i.keyId !== vaultKeyId(this.keys.keyId, index)) deny('wrong_key', 'intent is not for this vault');
+    const vault = this.keys.vault(index);
+    if (i.from !== vault.address) deny('wrong_source', 'source is not the vault');
+    if (i.to !== this.keys.addresses.evm) deny('wrong_destination', 'a vault can only pay the owner\'s own address');
+    if (i.expiresAt <= now || i.expiresAt - i.createdAt > 300) deny('policy', 'validity window is not acceptable');
+    const fee = st.policy.maxFee[i.network];
+    if (fee === undefined || baseUnits(i.maxFee) > baseUnits(fee)) deny('policy', 'fee ceiling above policy');
+    let tx; try { tx = buildEvmTx(i); } catch (e) { return deny('unsupported', (e as Error).message); }
+    st.state.used[i.proposalId] = i.expiresAt; st.prune(now);
+    const raw = await privateKeyToAccount(`0x${Buffer.from(vault.priv).toString('hex')}`).signTransaction(tx);
+    const out = { raw, txid: keccak256(raw), hash: Buffer.from(hash).toString('hex') };
+    st.log('return.ok', { vaultIndex: index, network: i.network, proposalId: i.proposalId, symbol: i.symbol, amount: i.amount, txid: out.txid });
+    st.save();
+    return out;
+  }
+
   // ---------------------------------------------------------------------------------------------------------------------
   // Second leg of a bridge. The owner's passkey approval of the burn committed to the whole transfer (route, amount, fee
   // ceiling, recipient = the wallet). This signs the matching receiveMessage on the destination: it can only mint the

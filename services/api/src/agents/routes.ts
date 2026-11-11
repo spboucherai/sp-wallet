@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { generateAuthenticationOptions } from '@simplewebauthn/server';
 import { hexToBigInt, hexToNumber } from 'viem';
 import { z } from 'zod';
-import { cashLegs, CASH_SYMBOLS, formatUnits, getAsset, getNetwork, hasSignerPrice, IntentSchema, MANDATE_NETWORKS, mandateHash, MandateSchema, MAX_AGENT_SYMBOLS, parseUnits, resolveAgentAssets, toB64u, toHex, tradableSymbols, validateMandate, vaultKeyId, type AgentAsset, type Mandate, type NetworkDef } from '@spw/core';
+import { NETWORKS, cashLegs, CASH_SYMBOLS, formatUnits, getAsset, getNetwork, hasSignerPrice, IntentSchema, MANDATE_NETWORKS, mandateHash, MandateSchema, MAX_AGENT_SYMBOLS, parseUnits, resolveAgentAssets, toB64u, toHex, tradableSymbols, validateMandate, vaultKeyId, type AgentAsset, type Mandate, type NetworkDef } from '@spw/core';
 import { listCreds } from '../auth.ts';
 import { adapterFor } from '../chains/index.ts';
 import { rpcAny, rpcQuorum } from '../chains/rpc.ts';
@@ -246,13 +246,24 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     return view(row!);
   });
 
+  // what the vault's address holds on every EVM network (the same address exists on all of them)
+  app.get('/api/v1/agents/:id/elsewhere', async (req) => {
+    const a = await load((req.params as { id: string }).id);
+    const nets = Object.values(NETWORKS).filter((n) => n.family === 'evm' && n.id !== a.network);
+    const found = (await Promise.all(nets.map(async (n) => { try { const b = await adapterFor(n.id).balances(a.vault_address);
+      return [n.native, ...n.tokens].filter((x) => (b[x.id] ?? 0n) > 0n).map((x) => ({ network: n.id, networkName: n.name, asset: x.id, symbol: x.symbol, display: formatUnits(b[x.id]!, x.decimals), gas: n.native.symbol, hasGas: (b.native ?? 0n) > 0n })); } catch { return []; } }))).flat();
+    return { address: a.vault_address, holdings: found };
+  });
+
   // bring funds back: a vault can only pay the owner's own address (enforced by the signer)
   app.post('/api/v1/agents/:id/withdraw', async (req) => {
     const a = await load((req.params as { id: string }).id);
-    const b = z.strictObject({ asset: z.string().max(80) }).parse(req.body);
-    if (!a.mandate_id) throw new UserError('bad_state', 'this vault has never had a mandate: it cannot hold funds the agent moved', 409);
-    if (a.state === 'LIVE') throw new UserError('bad_state', 'revoke the mandate before withdrawing', 409);
-    const n = getNetwork(a.network), asset = getAsset(n.id, b.asset), st = await signer.status(true);
+    const b = z.strictObject({ asset: z.string().max(80), network: z.string().max(24).optional() }).parse(req.body);
+    // any EVM network: funds sent to the vault's address on another network than the agent's can always come back
+    const n = getNetwork(b.network ?? a.network);
+    if (n.family !== 'evm') throw new UserError('unsupported_network', 'agent wallets exist on EVM networks only', 422);
+    if (a.state === 'LIVE' && n.id === a.network) throw new UserError('bad_state', 'revoke the mandate before withdrawing', 409);
+    const asset = getAsset(n.id, b.asset), st = await signer.status(true);
     const owner = st.addresses[n.id]!;
     const bal = await adapterFor(n.id).balances(a.vault_address);
     const nonce = hexToNumber(await rpcQuorum<`0x${string}`>(n.rpc, 'eth_getTransactionCount', [a.vault_address, 'pending']));
@@ -266,9 +277,9 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     const intent = IntentSchema.parse({ v: 1, proposalId: randomUUID(), keyId: vaultKeyId(st.keyId, a.vault_index), network: n.id, chainRef: n.chainRef, asset: asset.id, symbol: asset.symbol, decimals: asset.decimals, amount: amount.toString(),
       from: a.vault_address, to: owner, maxFee: fee.toString(), createdAt: now, expiresAt: now + 120, policyVersion: st.policy.version,
       evm: { nonce, gasLimit: gas.toString(), maxFeePerGas: maxFeePerGas.toString(), maxPriorityFeePerGas: tip.toString() } });
-    const signed = await signer.mandateReturn(a.mandate_id, intent);
+    const signed = await signer.vaultReturn(a.vault_index, intent); // needs no mandate: the signer only ever pays the owner's own address
     if (config.broadcast) await adapterFor(n.id).broadcast(signed.raw);
-    await audit('agent.withdraw', 'owner', { agent: a.id, symbol: asset.symbol, amount: amount.toString(), txid: signed.txid });
+    await audit('agent.withdraw', 'owner', { agent: a.id, network: n.id, symbol: asset.symbol, amount: amount.toString(), txid: signed.txid });
     return { ok: true, txid: signed.txid, symbol: asset.symbol, amount: formatUnits(amount, asset.decimals), explorer: n.explorerTx + signed.txid };
   });
 }

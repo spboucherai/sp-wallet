@@ -56,6 +56,7 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
       if (route === 'POST /mandate/revoke') { signer.revokeMandate(String(json.mandateId)); return { ok: true }; }
       if (route === 'POST /mandate/sign') return await signer.signDelegated(String(json.mandateId), json.intent, json.aux && typeof json.aux === 'object' ? json.aux : undefined);
       if (route === 'POST /mandate/return') return await signer.signReturn(String(json.mandateId), json.intent);
+      if (route === 'POST /vault/return') return await signer.signVaultReturn(Number(json.index), json.intent);
       // live derivatives: a dedicated trading key per venue and network; the authorization needs the owner's passkey, orders and
       // leverage changes need it too (MANUAL_LIVE), cancels do not, revoking is always allowed (venue.ts)
       if (route === 'POST /venue/key') return signer.venueKey(json.venue, json.network);

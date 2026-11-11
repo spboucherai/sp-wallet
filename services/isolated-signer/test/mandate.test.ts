@@ -160,6 +160,21 @@ describe('the signer\'s own price view', () => {
 });
 
 describe('returning funds', () => {
+  it('without any mandate, on any EVM network: a vault still only pays the owner (funds sent to a vault on another network can come back)', async () => {
+    const { signer, t } = await setup();
+    const ETH_USDC = NETWORKS.ethereum.tokens.find((x) => x.symbol === 'USDC')!.id;
+    const ret = (to: string, o: Partial<Intent> = {}): Intent => ({ v: 1, proposalId: uuid(), keyId: vaultKeyId(keys.keyId, 1), network: 'ethereum', chainRef: '1', asset: ETH_USDC, symbol: 'USDC', decimals: 6, amount: '20000000',
+      from: VAULT, to, maxFee: '2000000000000000', createdAt: t.now, expiresAt: t.now + 90, policyVersion: 2, evm: { nonce: 0, gasLimit: '90000', maxFeePerGas: '2000000000', maxPriorityFeePerGas: '1000000' }, ...o });
+    await expect(signer.signVaultReturn(1, ret('0x70997970C51812dc3A010C7d01b50e0d17dc79C8'))).rejects.toThrow(/owner/);
+    await expect(signer.signVaultReturn(1, ret(keys.addresses.evm, { from: keys.addresses.evm }))).rejects.toThrow(/vault/);
+    await expect(signer.signVaultReturn(2, ret(keys.addresses.evm))).rejects.toThrow(/not for this vault/);          // another vault's key cannot be borrowed
+    await expect(signer.signVaultReturn(0, ret(keys.addresses.evm))).rejects.toThrow(/vault index/);                 // index 0 is the owner's own key
+    await expect(signer.signVaultReturn(1, ret(keys.addresses.evm, { maxFee: '900000000000000000' }))).rejects.toThrow(/fee ceiling/);
+    await expect(signer.signVaultReturn(1, ret(keys.addresses.evm, { network: 'solana', chainRef: 'x' }))).rejects.toThrow();
+    const ok = ret(keys.addresses.evm), r = await signer.signVaultReturn(1, ok);
+    expect(await recoverTransactionAddress({ serializedTransaction: r.raw as never })).toBe(VAULT);
+    await expect(signer.signVaultReturn(1, ok)).rejects.toThrow(/already signed/);
+  });
   it('a vault only ever pays the owner\'s own address, even after revocation', async () => {
     const { signer, pk, t } = await setup();
     const m = mandate(t.now); await signer.approveMandate(m, pk.assert(mandateHash(m)));

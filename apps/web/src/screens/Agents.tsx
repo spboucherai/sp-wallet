@@ -91,6 +91,7 @@ export function Agents({ nav }: { nav: Nav }) {
 export function Agent({ id, nav }: { id: string; nav: Nav }) {
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient();
   const q = useQuery({ queryKey: ['agent', id], queryFn: () => get<any>(`/agents/${id}`), refetchInterval: 15_000 });
+  const else_ = useQuery({ queryKey: ['agent-elsewhere', id], queryFn: () => get<{ holdings: any[] }>(`/agents/${id}/elsewhere`), refetchInterval: 60_000 });
   const lib = useQuery({ queryKey: ['strategies'], queryFn: () => get<{ strategies: any[] }>('/strategies'), staleTime: 300_000 });
   const [busy, setBusy] = useState(''), [err, setErr] = useState(''), [mandate, setMandate] = useState<any>(null), [note, setNote] = useState('');
   if (q.isLoading || !q.data) return <div className="space-y-4"><Skeleton h="h-40" /><Skeleton h="h-56" /></div>;
@@ -120,8 +121,12 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
           <Btn kind="soft" onClick={() => nav({ tab: 'send', network: a.network ?? 'base' })}><Icon n="up" className="h-4 w-4" />{t('agFund')}</Btn></div>
         <p className="mt-2 text-[12.5px] text-mute">{t('agFundNote', { cash: a.cash ?? 'USDC', native: (a.vault ?? []).find((x: any) => x.asset === 'native')?.assetSymbol ?? 'ETH', network: a.networkName })}</p>
         {(a.holdings ?? []).some((h: any) => h.kind === 'wrapped' || h.kind === 'pegged') && <div className="mt-3"><Notice tone="warn">{t('agIssuerNote', { assets: (a.holdings as any[]).filter((h) => h.kind === 'wrapped' || h.kind === 'pegged').map((h) => `${h.assetSymbol} — ${h.issuer}`).join(' ; ') })}</Notice></div>}
-        {a.mandateId && a.state !== 'LIVE' && <div className="mt-3 flex flex-wrap gap-2">{(a.vault ?? []).filter((x: any) => x.amount !== '0').map((x: any) =>
+        {a.state !== 'LIVE' && <div className="mt-3 flex flex-wrap gap-2">{(a.vault ?? []).filter((x: any) => x.amount !== '0').map((x: any) =>
           <Btn key={x.asset} kind="ghost" busy={busy === `w${x.asset}`} onClick={() => act(`w${x.asset}`, async () => { const r = await post<any>(`/agents/${id}/withdraw`, { asset: x.asset }); setNote(`${t('agWithdrawn')} ${r.amount} ${r.symbol}`); })}>{t('agWithdraw')} {x.symbol}</Btn>)}</div>}
+        {(else_.data?.holdings ?? []).length > 0 && <div className="mt-4"><Notice tone="warn">{t('agElsewhere', { network: a.networkName })}</Notice>
+          <ul className="mt-2 space-y-2">{else_.data!.holdings.map((h: any) => <li key={`${h.network}:${h.asset}`} className="flex items-center gap-3 rounded-2xl border border-line p-3">
+            <span className="min-w-0 flex-1"><span className="block font-semibold">{h.display} {h.symbol}</span><span className="block text-[12.5px] text-mute">{h.networkName}{!h.hasGas && h.asset !== 'native' ? ` · ${t('agElsewhereGas', { gas: h.gas })}` : ''}</span></span>
+            <Btn kind="soft" busy={busy === `e${h.network}${h.asset}`} onClick={() => act(`e${h.network}${h.asset}`, async () => { const r = await post<any>(`/agents/${id}/withdraw`, { asset: h.asset, network: h.network }); setNote(`${t('agWithdrawn')} ${r.amount} ${r.symbol}`); await qc.invalidateQueries({ queryKey: ['agent-elsewhere', id] }); })}>{t('agWithdraw')}</Btn></li>)}</ul></div>}
       </Card>
 
       {eq.length > 1 && <Card><H>{t('agEquity')}</H><PriceChart points={eq} format={(v) => fiat(v, 'USD', locale)} formatTime={(ts) => new Date(ts).toLocaleDateString(locale === 'fr' ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })} /></Card>}
