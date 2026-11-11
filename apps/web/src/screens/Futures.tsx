@@ -26,10 +26,12 @@ import { LiveOrderPanel } from '../derivatives/LiveOrderPanel';
 import { useLiveAccount } from '../derivatives/liveStore';
 import { MarketHeader, MarketPicker, MarketStats, StaleBanner, Veil } from '../derivatives/Market';
 import { OrderPanel } from '../derivatives/OrderPanel';
+import { RouterView } from '../derivatives/Router';   // router (simulation)
+import { hasPaperPrefill, setPaperPrefill } from '../derivatives/routerApi';
 import { useMarketStore, useSlice, type MarketStore } from '../derivatives/store';
 import { venueOf, type DerivAccount, type Instrument, type Interval, type Order, type Position, type VenueInfo } from '../derivatives/types';
 
-export type FuturesView = 'terminal' | 'compare' | 'accounts';
+export type FuturesView = 'terminal' | 'compare' | 'accounts' | 'router';
 const DEFAULT_ID = 'hyperliquid:BTC';
 /**
  * The accounts that can trade a venue's markets, paper first, and the one in use: the stored choice when it is among them,
@@ -65,7 +67,7 @@ export function Futures({ instrument: routeId, view = 'terminal', nav }: { instr
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-1">
         <div className="hidden items-center gap-2.5 sm:flex"><h1 className="text-[24px] font-semibold tracking-[-0.02em] lg:text-[28px]">{t('fxTitle')}</h1><ModeTag tone={tone} /></div>
-        <Seg tabs size="sm" label={t('fxViews')} value={view} onChange={(v) => go(v)} className="w-full sm:w-auto sm:min-w-[330px]" options={[{ id: 'terminal', label: t('fxViewTerminal') }, { id: 'compare', label: t('fxViewCompare') }, { id: 'accounts', label: t('fxViewAccounts') }]} />
+        <Seg tabs size="sm" label={t('fxViews')} value={view} onChange={(v) => go(v)} className="w-full sm:w-auto sm:min-w-[330px]" options={[{ id: 'terminal', label: t('fxViewTerminal') }, { id: 'compare', label: t('fxViewCompare') }, { id: 'router', label: t('rxTab') }, { id: 'accounts', label: t('fxViewAccounts') }]} />
       </div>
       <p className="text-[12.5px] leading-snug text-mute" data-testid="paper-banner">{t(tone === 'paper' ? (anyLive ? 'flBannerSimLive' : 'flBannerOff') : tone === 'testnet' ? 'flBannerTestnet' : 'flBannerReal')}</p>
       {venues.isError ? <Notice tone="danger">{t('fxApiDown')} {errText(t, venues.error)}</Notice> : venues.data && !(phone && view === 'terminal') ? <VenueStrip venues={venues.data} compact /> : null}
@@ -73,6 +75,8 @@ export function Futures({ instrument: routeId, view = 'terminal', nav }: { instr
       {view === 'terminal' && <Terminal id={id} instruments={list} instrumentsLoading={instruments.isLoading} venues={venues.data ?? []} accounts={paper} liveAccounts={live} accountId={accountId} onAccount={setAccountId}
         onMarket={(m) => go('terminal', m)} goAccounts={() => go('accounts')} />}
       {view === 'compare' && <CompareView instruments={list} base={base} onBase={setBase} onOpen={(m) => go('terminal', m)} />}
+      {/* router (simulation): the only action is to open the PAPER order panel, pre-filled */}
+      {view === 'router' && <RouterView accounts={paper} onOpenPaper={(p, account) => { setPaperPrefill(p); if (account) setAccountId(account); go('terminal', p.instrument); }} />}
       {view === 'accounts' && <AccountsView venues={venues.data ?? []} instruments={list} accounts={paper} loading={accounts.isLoading} selected={accountId} onSelect={setAccountId} />}
     </div>
   );
@@ -100,7 +104,7 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
   const meta = useSlice(store, 'meta');
   const phone = !useMedia('(min-width: 768px)'), wide = useMedia('(min-width: 1360px)');
   const [interval, setIntervalV] = useLocalState<Interval>('spw-fut-interval', '1h');
-  const [tab, setTab] = useState<'chart' | 'book' | 'trade' | 'positions'>('chart');
+  const [tab, setTab] = useState<'chart' | 'book' | 'trade' | 'positions'>(() => (hasPaperPrefill(id) ? 'trade' : 'chart'));   // coming from the router: the order panel first
   const [pick, setPick] = useState(false);
   const instrument = meta.instrument ?? instruments.find((i) => i.id === id) ?? null;
   const byId = useMemo(() => new Map(instruments.map((i) => [i.id, i])), [instruments]);

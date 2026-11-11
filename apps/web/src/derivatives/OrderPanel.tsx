@@ -11,6 +11,7 @@ import { Btn, Field, inputCls, Notice } from '../ui';
 import { dapi, paperAllowed, riskRefusal } from './api';
 import { PaperTag, Row, Seg, Sheet, SideTag, VENUE_NAME } from './bits';
 import { D, dec, dpOf, fmt, onTick, parseInput, priceDp, usd, usdToSize, worstPrice, type Dec } from './dec';
+import { clearPaperPrefill, peekPaperPrefill } from './routerApi';
 import type { MarketStore } from './store';
 import type { DerivAccount, Instrument, OrderBody, Placed, VenueInfo } from './types';
 
@@ -56,14 +57,22 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
   /** the terminal's account switcher (paper and venue accounts); without it the panel lists its own paper accounts */ switcher?: ReactNode }) {
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient();
   const maxLev = useMemo(() => { const a = dec(instrument.maxLeverage), b = dec(account?.policy.maxLeverage); const m = a && b ? D.min(a, b) : a ?? b ?? D.one; return Math.max(1, Math.floor(D.toNumber(m))); }, [instrument.maxLeverage, account?.policy.maxLeverage]);
-  const [f, setF] = useState<Form>({ side: 'buy', kind: 'market', unit: 'usd', size: '', lev: 3, price: '', trigger: '', reduceOnly: false, postOnly: false, sl: '', tp: '' });
+  const [f, setF] = useState<Form>(() => {
+    const blank: Form = { side: 'buy', kind: 'market', unit: 'usd', size: '', lev: 3, price: '', trigger: '', reduceOnly: false, postOnly: false, sl: '', tp: '' };
+    // hand-over from the router (simulation): the form starts filled with that order — still a form, nothing is sent until the owner confirms
+    const p = peekPaperPrefill(instrument.id);
+    return p ? { ...blank, side: p.side, kind: p.kind, unit: p.unit, size: p.size, lev: Math.max(1, Math.min(p.lev, maxLev)), price: p.price, reduceOnly: p.reduceOnly } : blank;
+  });
+  useEffect(() => { clearPaperPrefill(instrument.id); }, []);   // eslint-disable-line react-hooks/exhaustive-deps — the hand-over fills the form once
   const set = (p: Partial<Form>) => { setF((x) => ({ ...x, ...p })); setDone(null); setErr(null); };
   const [, setPulse] = useState(0);
   const [confirm, setConfirm] = useState(false), [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ placed: Placed; extra: string[] } | null>(null), [err, setErr] = useState<{ code?: string; reason?: string; text?: string } | null>(null);
   const lev = Math.min(f.lev, maxLev);
   useEffect(() => { const h = setInterval(() => setPulse((n) => n + 1), 1000); return () => clearInterval(h); }, []);
-  useEffect(() => { setF((x) => ({ ...x, size: '', price: '', trigger: '', sl: '', tp: '' })); setDone(null); setErr(null); }, [instrument.id]);
+  // another market: the amounts of the previous one are dropped. Not while the market is the one the panel opened on — the form is blank then, or holds the router's hand-over.
+  const shownMarket = useRef(instrument.id);
+  useEffect(() => { if (shownMarket.current === instrument.id) return; shownMarket.current = instrument.id; setF((x) => ({ ...x, size: '', price: '', trigger: '', sl: '', tp: '' })); setDone(null); setErr(null); }, [instrument.id]);
 
   const mark = dec(store.ticker?.mark);
   const built = build({ ...f, lev }, instrument, mark);
