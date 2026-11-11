@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@bitauth/libauth": "3.0.0",
+    "@mysten/sui": "2.39.1",
     "@playwright/test": "1.65.0",
     "@scure/bip32": "2.4.0",
     "@scure/bip39": "2.4.0",

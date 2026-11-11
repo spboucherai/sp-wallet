@@ -21,7 +21,7 @@ export interface NetworkDef {
   family: Family;
   name: string;
   /**
-   * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id.
+   * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. Sui: genesis checkpoint digest.
    * Bitcoin Cash shares its genesis block with Bitcoin, Bitcoin SV and eCash, so its reference is the hash of block 661648,
    * the first block after the last of those splits (November 2020; a Bitcoin Cash Node checkpoint), which exists on no other chain.
    */
@@ -180,6 +180,17 @@ const DEFS = {
     native: { id: 'native', symbol: 'TRX', name: 'TRON', decimals: 6 }, tokens: [], coinType: 195,
     rpc: ['https://api.trongrid.io', 'https://tron-rpc.publicnode.com'],
     explorerTx: 'https://tronscan.org/#/transaction/', explorerAddr: 'https://tronscan.org/#/address/', minConf: 19,
+  },
+  // chainRef = digest of the genesis checkpoint (base58); its first four bytes are the "chain identifier" 35834a8a. Every node
+  // reports it as GetServiceInfo.chain_id. Sources: Mysten Labs full node and Triton One (rpcpool), independent operators, both
+  // keyless, both speaking gRPC over HTTP/2 (sui.rpc.v2) — public Sui full nodes no longer serve JSON-RPC; verified live 2026-11-10.
+  // No `activation`: a Sui address needs no minimum balance to exist.
+  sui: {
+    id: 'sui', family: 'sui', name: 'Sui',
+    chainRef: '4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S',
+    native: { id: 'native', symbol: 'SUI', name: 'Sui', decimals: 9 }, tokens: [], coinType: 784,
+    rpc: ['https://fullnode.mainnet.sui.io', 'https://mainnet.sui.rpcpool.com'],
+    explorerTx: 'https://suiscan.xyz/mainnet/tx/', explorerAddr: 'https://suiscan.xyz/mainnet/account/', minConf: 1,
   },
 } satisfies Record<string, NetworkDef>;
 
