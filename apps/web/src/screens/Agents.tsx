@@ -152,6 +152,7 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
   const stopText = (r: string) => { const loss = /^loss limit reached: equity ([\d.]+) USD against ([\d.]+) USD allocated \(limit ([\d.]+) %\); positions were sold to (\w+)/.exec(r);
     return loss ? t('qaStop_loss', { eq: numFmt(Number(loss[1]), locale, 2), cap: numFmt(Number(loss[2]), locale, 2), lim: loss[3]!, cash: loss[4]! })
       : r === 'stopped by the owner' ? t('qaStop_owner') : r === 'mandate revoked by the owner' ? t('qaStop_revoked') : /^the mandate expired/.test(r) ? t('qaStop_expired') : /no longer matches the mandate/.test(r) ? t('qaStop_mismatch') : r; };
+  const orderReason = (r: string) => { const m = /^target ([\d.]+) %$/.exec(r); return m ? t('qaOrderTarget', { pct: numFmt(Number(m[1]), locale, 1) }) : r; };
   const logTitle = (x: string) => ({ 'No valid signal: holding': t('qaLog_hold'), 'No executable quote: order skipped': t('qaLog_noquote'), 'Agent stopped': t('qaLog_stopped') } as Record<string, string>)[x] ?? x;
   return (
     <div className="space-y-4">
@@ -174,6 +175,7 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
       <Card><H>{t('agVault')}</H>
         <div className="text-[30px] font-semibold tracking-tight">{fiat(vaultUsd, 'USD', locale)}</div>
         <div className="text-[13px] text-mute">{t('agAllocated')} {a.capitalUsdc} {a.cash ?? 'USDC'}</div>
+        {a.state === 'PAPER_TRADING' && <div className="mt-3" data-testid="paper-vault-note"><Notice tone="info">{t('qaPaperVaultNote')}</Notice></div>}
         <ul className="mt-3 divide-y divide-line">{(a.vault ?? []).map((x: any) => <li key={x.asset} className="flex items-center gap-3 py-2.5"><Coin sym={x.symbol} size={32} /><span className="flex-1 text-[15px] font-medium">{x.symbol}{x.role === 'gas' ? <span className="block text-[12px] font-normal text-mute">{t('agGasRole')}</span> : (x.assetSymbol && x.assetSymbol !== x.symbol) || iss(x) ? <span className="block text-[12px] font-normal text-mute">{t('agHeldAs', { asset: x.name && x.name !== x.assetSymbol ? `${x.assetSymbol} — ${x.name}` : x.assetSymbol })}{iss(x) ? ` · ${t('agIssuer', { issuer: iss(x)!.text })}` : ''}</span> : null}</span><span className="text-right text-[14.5px] font-semibold">{trimAmt(x.display, 8)}<span className="block text-[12px] font-normal text-mute">{x.usd !== null ? fiat(x.usd, 'USD', locale) : ''}</span></span></li>)}</ul>
         <div className="mt-3 rounded-2xl bg-elev/70 p-3"><div className="mb-1 text-[12px] text-mute">{t('agVaultAddr', { network: a.networkName })}</div><Addr value={a.vaultAddress} /></div>
         <div className="mt-3 space-y-2.5">
@@ -239,7 +241,7 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
 
       <Card className="!px-0 !pb-1"><div className="px-5"><H>{t('agOrders')}</H></div>
         {(a.orders as any[]).length === 0 ? <p className="px-5 pb-4 text-[14px] text-mute">{t('agNoOrders')}</p> : <ul>{(a.orders as any[]).slice(0, 25).map((o, k) => <li key={o.id} className={`flex items-center gap-3 px-5 py-2.5 ${k ? 'border-t border-line' : ''}`}>
-          <span className="min-w-0 flex-1"><span className="block text-[14px] font-medium">{o.from_symbol} → {o.to_symbol} <span className="font-normal text-mute">· {o.mode === 'LIVE' ? t('agLive') : t('agPaper')}</span></span><span className="block truncate text-[12px] text-mute">{when(o.ts, locale)}{o.reason ? ` · ${o.reason}` : ''}</span></span>
+          <span className="min-w-0 flex-1"><span className="block text-[14px] font-medium">{o.from_symbol} → {o.to_symbol} <span className="font-normal text-mute">· {o.mode === 'LIVE' ? t('agLive') : t('agPaper')}</span></span><span className="block truncate text-[12px] text-mute">{when(o.ts, locale)}{o.reason ? ` · ${orderReason(o.reason)}` : ''}</span></span>
           <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${o.state === 'filled' ? 'bg-emerald/10 text-emerald' : o.state === 'failed' ? 'bg-danger/10 text-danger' : 'bg-elev text-mute'}`}>{t(`agO_${o.state}` as Key)}</span></li>)}</ul>}</Card>
 
       <Card><H>{t('agLog')}</H>

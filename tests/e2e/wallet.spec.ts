@@ -17,7 +17,7 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await page.getByRole('textbox').fill('definitely-wrong-token');
   await page.getByRole('button', { name: /Créer ma clé/ }).click();
   await expect(page.getByRole('alert')).toContainText(/Jeton de configuration invalide/);
-  await page.getByRole('textbox').fill(readFileSync('/tmp/spw-dev/setup-token', 'utf8').trim());
+  await page.getByRole('textbox').fill(readFileSync(`${process.env.SPW_DEV_DIR ?? '/tmp/spw-dev'}/setup-token`, 'utf8').trim());
   await page.getByRole('button', { name: /Créer ma clé/ }).click();
   await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('heading', { name: 'Actifs' })).toBeVisible();
@@ -73,7 +73,7 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await expect(page.getByText('kyberswap').first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/min\. garanti/).first()).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/04c-swap.png`, fullPage: true });
-  await page.getByRole('button', { name: /Échanger via kyberswap/ }).click();
+  await page.getByRole('button', { name: /Échanger via KyberSwap/ }).click();
   await expect(page.getByRole('alert')).toContainText(/Solde insuffisant/, { timeout: 30_000 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
@@ -133,6 +133,6 @@ test('a second browser without the passkey cannot get in', async ({ browser }) =
   await expect(page.getByText('Configuration initiale')).toHaveCount(0); // setup is closed for good
   for (const p of ['/api/v1/portfolio', '/api/v1/accounts', '/api/v1/security/audit', '/api/v1/export/activity.csv'])
     expect((await page.request.get(p)).status()).toBe(401);
-  expect((await page.request.post('/api/v1/auth/setup/options', { headers: { 'x-spw-csrf': '1', origin: 'http://localhost:8650' }, data: {} })).status()).toBe(403);
+  expect((await page.request.post('/api/v1/auth/setup/options', { headers: { 'x-spw-csrf': '1', origin: process.env.SPW_E2E_BASE ?? 'http://localhost:8650' }, data: {} })).status()).toBe(403);
   await ctx.close();
 });

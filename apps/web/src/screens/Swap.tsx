@@ -148,7 +148,7 @@ export function Swap() {
   return (
     <div className="space-y-4">
       <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('swap')}</h1>
-      <Notice tone="info">{t('qaSwIntro')}</Notice>
+      <Notice tone="info">{t('swIntro')}</Notice>
       <Card className="!p-3">
         {side(t('swYouPay'), from, 'from', <>
           <input className="w-full bg-transparent text-[30px] font-semibold tracking-tight outline-none placeholder:text-mute/50" inputMode="decimal" placeholder="0" aria-label={t('amount')} value={amount} onChange={(e) => setAmount(e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))} autoComplete="off" />
@@ -210,7 +210,7 @@ export function Swap() {
           ? <><Btn full busy={busy === 'prepare'} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('swExecute', { via: pname(ex.providers[0]!) })}</Btn>
               {ex.id !== sorted[0]!.id && <p className="px-1 text-[12.5px] text-mute">{t('swExecNotBest')}</p>}</>
           : <><button disabled className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-[15.5px] font-semibold text-onprimary opacity-40"><Icon n="lock" className="h-4 w-4" />{t('swExecuteDisabled')}</button>
-              <p className="px-1 text-[12.5px] text-mute">{t('qaSwExecWhere')}</p></>; })()}
+              <p className="px-1 text-[12.5px] text-mute">{t('swExecWhere')}</p></>; })()}
       </div>}
 
       {isBridge && amountOk && <Card>

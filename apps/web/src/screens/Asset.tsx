@@ -41,7 +41,7 @@ export function Asset({ network, asset, nav }: { network: string; asset: string;
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3 pt-1">
-        <button onClick={() => nav({ tab: 'home' })} aria-label={t('back')} className="-ml-2 grid h-11 w-11 place-items-center rounded-full text-ink"><Icon n="chev" className="h-6 w-6 rotate-180" /></button>
+        <button onClick={() => nav({ tab: 'home' })} aria-label={t('back')} className="-ml-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink"><Icon n="chev" className="h-6 w-6 rotate-180" /></button>
         <Coin sym={b.symbol} net={b.network} size={40} />
         <div className="min-w-0"><h1 className="truncate text-[20px] font-semibold leading-tight tracking-tight">{b.name}</h1><div className="text-[13px] text-mute">{b.symbol} · {b.networkName}</div></div>
       </div>
