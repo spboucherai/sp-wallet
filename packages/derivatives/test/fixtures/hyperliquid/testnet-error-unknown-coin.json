@@ -1,0 +1,10 @@
+{
+ "recordedAt": "2026-11-11T03:06:06.669Z",
+ "network": "testnet",
+ "request": {
+  "type": "l2Book",
+  "coin": "NOT-A-COIN"
+ },
+ "status": 500,
+ "body": null
+}

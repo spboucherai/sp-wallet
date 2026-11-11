@@ -8,3 +8,4 @@ export * from './paper.ts';
 export { canonDec, fixed, jsonNumberToDecStr, parseJsonExact, toRaw, JsonNumber } from './venues/http.ts';
 export * from './venues/dydx/index.ts';
 export * from './venues/gmx/index.ts';
+export * from './venues/hyperliquid/index.ts';

@@ -1,0 +1,27 @@
+{
+ "recordedAt": "2026-11-11T03:05:53.611Z",
+ "network": "mainnet",
+ "request": {
+  "type": "clearinghouseState",
+  "user": "0x00000000000000000000000000000000000000ff"
+ },
+ "status": 200,
+ "body": {
+  "marginSummary": {
+   "accountValue": "0.0",
+   "totalNtlPos": "0.0",
+   "totalRawUsd": "0.0",
+   "totalMarginUsed": "0.0"
+  },
+  "crossMarginSummary": {
+   "accountValue": "0.0",
+   "totalNtlPos": "0.0",
+   "totalRawUsd": "0.0",
+   "totalMarginUsed": "0.0"
+  },
+  "crossMaintenanceMarginUsed": "0.0",
+  "withdrawable": "0.0",
+  "assetPositions": [],
+  "time": 1794366353100
+ }
+}

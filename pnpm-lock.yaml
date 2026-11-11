@@ -171,6 +171,12 @@ importers:
 
   packages/derivatives:
     dependencies:
+      '@noble/hashes':
+        specifier: 2.4.0
+        version: 2.4.0
+      viem:
+        specifier: 2.57.17
+        version: 2.57.17(typescript@7.0.2)(zod@4.6.7)
       zod:
         specifier: 4.6.7
         version: 4.6.7

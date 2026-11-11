@@ -1,0 +1,1135 @@
+{
+ "recordedAt": "2026-11-11T03:06:03.280Z",
+ "network": "mainnet",
+ "subscriptions": [
+  {
+   "type": "l2Book",
+   "coin": "BTC"
+  },
+  {
+   "type": "trades",
+   "coin": "BTC"
+  },
+  {
+   "type": "activeAssetCtx",
+   "coin": "BTC"
+  },
+  {
+   "type": "allMids"
+  },
+  {
+   "type": "userFills",
+   "user": "0x3d62aa392daa9cc4cbe9e11d57681ea1371f3447"
+  },
+  {
+   "type": "orderUpdates",
+   "user": "0x3d62aa392daa9cc4cbe9e11d57681ea1371f3447"
+  },
+  {
+   "type": "userEvents",
+   "user": "0x3d62aa392daa9cc4cbe9e11d57681ea1371f3447"
+  }
+ ],
+ "counts": {
+  "subscriptionResponse": 7,
+  "l2Book": 2,
+  "trades": 13,
+  "activeAssetCtx": 10,
+  "userFills": 1,
+  "pong": 1,
+  "error": 2,
+  "allMids": 2
+ },
+ "messages": [
+  {
+   "channel": "subscriptionResponse",
+   "data": {
+    "method": "subscribe",
+    "subscription": {
+     "type": "l2Book",
+     "coin": "BTC",
+     "nSigFigs": null,
+     "mantissa": null,
+     "fast": false
+    }
+   }
+  },
+  {
+   "channel": "l2Book",
+   "data": {
+    "coin": "BTC",
+    "time": 1794366353905,
+    "levels": [
+     [
+      {
+       "px": "73702.0",
+       "sz": "0.0015",
+       "n": 1
+      },
+      {
+       "px": "73701.0",
+       "sz": "1.09674",
+       "n": 4
+      },
+      {
+       "px": "73700.0",
+       "sz": "0.006",
+       "n": 1
+      },
+      {
+       "px": "73699.0",
+       "sz": "0.006",
+       "n": 1
+      },
+      {
+       "px": "73698.0",
+       "sz": "0.7807",
+       "n": 4
+      },
+      {
+       "px": "73697.0",
+       "sz": "1.47975",
+       "n": 6
+      },
+      {
+       "px": "73696.0",
+       "sz": "0.54877",
+       "n": 2
+      },
+      {
+       "px": "73695.0",
+       "sz": "0.75439",
+       "n": 4
+      },
+      {
+       "px": "73694.0",
+       "sz": "0.00617",
+       "n": 2
+      },
+      {
+       "px": "73693.0",
+       "sz": "0.01485",
+       "n": 2
+      },
+      {
+       "px": "73692.0",
+       "sz": "3.59223",
+       "n": 6
+      },
+      {
+       "px": "73691.0",
+       "sz": "1.54823",
+       "n": 4
+      },
+      {
+       "px": "73690.0",
+       "sz": "4.09807",
+       "n": 4
+      },
+      {
+       "px": "73689.0",
+       "sz": "1.63336",
+       "n": 7
+      },
+      {
+       "px": "73688.0",
+       "sz": "5.12828",
+       "n": 9
+      },
+      {
+       "px": "73687.0",
+       "sz": "2.21179",
+       "n": 8
+      },
+      {
+       "px": "73686.0",
+       "sz": "3.21648",
+       "n": 3
+      },
+      {
+       "px": "73685.0",
+       "sz": "1.61237",
+       "n": 5
+      },
+      {
+       "px": "73684.0",
+       "sz": "8.3215",
+       "n": 12
+      },
+      {
+       "px": "73683.0",
+       "sz": "4.59061",
+       "n": 10
+      }
+     ],
+     [
+      {
+       "px": "73703.0",
+       "sz": "1.14248",
+       "n": 11
+      },
+      {
+       "px": "73704.0",
+       "sz": "0.89161",
+       "n": 6
+      },
+      {
+       "px": "73705.0",
+       "sz": "0.72684",
+       "n": 4
+      },
+      {
+       "px": "73706.0",
+       "sz": "1.34946",
+       "n": 7
+      },
+      {
+       "px": "73707.0",
+       "sz": "0.71872",
+       "n": 8
+      },
+      {
+       "px": "73708.0",
+       "sz": "1.27939",
+       "n": 12
+      },
+      {
+       "px": "73709.0",
+       "sz": "2.13404",
+       "n": 12
+      },
+      {
+       "px": "73710.0",
+       "sz": "13.17366",
+       "n": 52
+      },
+      {
+       "px": "73711.0",
+       "sz": "1.87501",
+       "n": 11
+      },
+      {
+       "px": "73712.0",
+       "sz": "4.13604",
+       "n": 16
+      },
+      {
+       "px": "73713.0",
+       "sz": "1.93841",
+       "n": 10
+      },
+      {
+       "px": "73714.0",
+       "sz": "6.28719",
+       "n": 12
+      },
+      {
+       "px": "73715.0",
+       "sz": "2.66611",
+       "n": 10
+      },
+      {
+       "px": "73716.0",
+       "sz": "2.24576",
+       "n": 10
+      },
+      {
+       "px": "73717.0",
+       "sz": "6.30937",
+       "n": 10
+      },
+      {
+       "px": "73718.0",
+       "sz": "4.37066",
+       "n": 12
+      },
+      {
+       "px": "73719.0",
+       "sz": "1.82669",
+       "n": 9
+      },
+      {
+       "px": "73720.0",
+       "sz": "8.90731",
+       "n": 12
+      },
+      {
+       "px": "73721.0",
+       "sz": "5.32801",
+       "n": 9
+      },
+      {
+       "px": "73722.0",
+       "sz": "1.34467",
+       "n": 10
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "channel": "subscriptionResponse",
+   "data": {
+    "method": "subscribe",
+    "subscription": {
+     "type": "trades",
+     "coin": "BTC"
+    }
+   }
+  },
+  {
+   "channel": "trades",
+   "data": [
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73718.0",
+     "sz": "0.3166",
+     "time": 1794366342250,
+     "hash": "0x00425c0d2521cbd701bc044888135d02026900f2c024eaa9a40b075fe425a5c1",
+     "tid": 1077611453677868,
+     "users": [
+      "0x024df556c8bde3538945a8259cf025881c9e2871",
+      "0xb756c89e73c8711a881c009e10f79b1566f80cdb"
+     ]
+    },
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73718.0",
+     "sz": "0.62755",
+     "time": 1794366342250,
+     "hash": "0x00425c0d2521cbd701bc044888135d02026900f2c024eaa9a40b075fe425a5c1",
+     "tid": 1006015378749304,
+     "users": [
+      "0x024df556c8bde3538945a8259cf025881c9e2871",
+      "0xaf68caebaa151dd592112a07e2344b3950e13561"
+     ]
+    },
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73718.0",
+     "sz": "0.21699",
+     "time": 1794366342250,
+     "hash": "0x00425c0d2521cbd701bc044888135d02026900f2c024eaa9a40b075fe425a5c1",
+     "tid": 9055678051823,
+     "users": [
+      "0x024df556c8bde3538945a8259cf025881c9e2871",
+      "0xe90bf24e807df04f1513d50002d78bfc22ee84d9"
+     ]
+    },
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73719.0",
+     "sz": "0.246",
+     "time": 1794366342250,
+     "hash": "0x00425c0d2521cbd701bc044888135d02026900f2c024eaa9a40b075fe425a5c1",
+     "tid": 527839856607880,
+     "users": [
+      "0x024df556c8bde3538945a8259cf025881c9e2871",
+      "0xeaf35054804ab7ed6b8cb070296dd6bb38abb4b1"
+     ]
+    },
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73719.0",
+     "sz": "0.22599",
+     "time": 1794366342250,
+     "hash": "0x00425c0d2521cbd701bc044888135d02026900f2c024eaa9a40b075fe425a5c1",
+     "tid": 1105716468742841,
+     "users": [
+      "0x024df556c8bde3538945a8259cf025881c9e2871",
+      "0x78dce96236804d6958bf3c4598cf5efbc371629c"
+     ]
+    },
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73719.0",
+     "sz": "0.45198",
+     "time": 1794366342250,
+     "hash": "0x00425c0d2521cbd701bc044888135d02026900f2c024eaa9a40b075fe425a5c1",
+     "tid": 912318318665308,
+     "users": [
+      "0x024df556c8bde3538945a8259cf025881c9e2871",
+      "0x6e8bc7cd0978397b06a14af2a8c31f5daeffea79"
+     ]
+    },
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73719.0",
+     "sz": "0.86546",
+     "time": 1794366342250,
+     "hash": "0x00425c0d2521cbd701bc044888135d02026900f2c024eaa9a40b075fe425a5c1",
+     "tid": 924189238196836,
+     "users": [
+      "0x024df556c8bde3538945a8259cf025881c9e2871",
+      "0x53136b4a7c432585f28903b77c7816a723e0271f"
+     ]
+    },
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73717.0",
+     "sz": "0.10976",
+     "time": 1794366342648,
+     "hash": "0x870410e28b559830887d044888136302052600c82658b7022accbc354a59721b",
+     "tid": 717557621063929,
+     "users": [
+      "0x1fea9113936464ceb3536f6474ff64580815f95a",
+      "0xe90bf24e807df04f1513d50002d78bfc22ee84d9"
+     ]
+    },
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73717.0",
+     "sz": "0.09371",
+     "time": 1794366342648,
+     "hash": "0x870410e28b559830887d044888136302052600c82658b7022accbc354a59721b",
+     "tid": 412752037358861,
+     "users": [
+      "0x1fea9113936464ceb3536f6474ff64580815f95a",
+      "0xbb160cb61e694570f9d570f9fcde7c61dd2143ad"
+     ]
+    },
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73717.0",
+     "sz": "0.00576",
+     "time": 1794366343252,
+     "hash": "0xd62c76e04df1b9cfd7a6044888136b0202b800c5e8f4d8a179f522330cf593ba",
+     "tid": 342013056534474,
+     "users": [
+      "0x1fea9113936464ceb3536f6474ff64580815f95a",
+      "0xbb160cb61e694570f9d570f9fcde7c61dd2143ad"
+     ]
+    },
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73717.0",
+     "sz": "0.10852",
+     "time": 1794366343252,
+     "hash": "0xd62c76e04df1b9cfd7a6044888136b0202b800c5e8f4d8a179f522330cf593ba",
+     "tid": 537231896154827,
+     "users": [
+      "0x1fea9113936464ceb3536f6474ff64580815f95a",
+      "0x25773676902085225ae5751075e4161369334897"
+     ]
+    },
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73717.0",
+     "sz": "0.02826",
+     "time": 1794366343252,
+     "hash": "0xd62c76e04df1b9cfd7a6044888136b0202b800c5e8f4d8a179f522330cf593ba",
+     "tid": 567872313799244,
+     "users": [
+      "0x1fea9113936464ceb3536f6474ff64580815f95a",
+      "0xe90bf24e807df04f1513d50002d78bfc22ee84d9"
+     ]
+    }
+   ]
+  },
+  {
+   "channel": "subscriptionResponse",
+   "data": {
+    "method": "subscribe",
+    "subscription": {
+     "type": "activeAssetCtx",
+     "coin": "BTC"
+    }
+   }
+  },
+  {
+   "channel": "activeAssetCtx",
+   "data": {
+    "coin": "BTC",
+    "ctx": {
+     "funding": "0.0000125",
+     "openInterest": "40299.36372",
+     "prevDayPx": "74746.0",
+     "dayNtlVlm": "3533886062.1726908684",
+     "premium": "-0.0004583871",
+     "oraclePx": "73736.8",
+     "markPx": "73714.0",
+     "midPx": "73702.5",
+     "impactPxs": [
+      "73701.0",
+      "73703.0"
+     ],
+     "dayBaseVlm": "47848.87959"
+    }
+   }
+  },
+  {
+   "channel": "subscriptionResponse",
+   "data": {
+    "method": "subscribe",
+    "subscription": {
+     "type": "allMids"
+    }
+   }
+  },
+  {
+   "channel": "subscriptionResponse",
+   "data": {
+    "method": "subscribe",
+    "subscription": {
+     "type": "userFills",
+     "user": "0x3d62aa392daa9cc4cbe9e11d57681ea1371f3447",
+     "aggregateByTime": false
+    }
+   }
+  },
+  {
+   "channel": "userFills",
+   "data": {
+    "isSnapshot": true,
+    "user": "0x3d62aa392daa9cc4cbe9e11d57681ea1371f3447",
+    "fills": [
+     {
+      "coin": "SOL",
+      "px": "83.572",
+      "sz": "30.97",
+      "side": "A",
+      "time": 1794344880966,
+      "startPosition": "88.11",
+      "dir": "Close Long",
+      "closedPnl": "64.290623",
+      "hash": "0x52ccf350fdb388025446044883834b0203b4003698b6a6d4f6959ea3bcb761ec",
+      "oid": 600853485752,
+      "crossed": true,
+      "fee": "1.118113",
+      "tid": 389362968722109,
+      "feeToken": "USDC",
+      "twapId": null
+     },
+     {
+      "coin": "SOL",
+      "px": "83.571",
+      "sz": "4.79",
+      "side": "A",
+      "time": 1794344880966,
+      "startPosition": "57.14",
+      "dir": "Close Long",
+      "closedPnl": "9.938771",
+      "hash": "0x52ccf350fdb388025446044883834b0203b4003698b6a6d4f6959ea3bcb761ec",
+      "oid": 600853485752,
+      "crossed": true,
+      "fee": "0.172931",
+      "tid": 276352836644137,
+      "feeToken": "USDC",
+      "twapId": null
+     },
+     {
+      "coin": "SOL",
+      "px": "83.57",
+      "sz": "47.46",
+      "side": "A",
+      "time": 1794344880966,
+      "startPosition": "52.35",
+      "dir": "Close Long",
+      "closedPnl": "98.427294",
+      "hash": "0x52ccf350fdb388025446044883834b0203b4003698b6a6d4f6959ea3bcb761ec",
+      "oid": 600853485752,
+      "crossed": true,
+      "fee": "1.713412",
+      "tid": 365752432291064,
+      "feeToken": "USDC",
+      "twapId": null
+     },
+     {
+      "coin": "SOL",
+      "px": "83.57",
+      "sz": "4.89",
+      "side": "A",
+      "time": 1794344880966,
+      "startPosition": "4.89",
+      "dir": "Close Long",
+      "closedPnl": "10.141371",
+      "hash": "0x52ccf350fdb388025446044883834b0203b4003698b6a6d4f6959ea3bcb761ec",
+      "oid": 600853485752,
+      "crossed": true,
+      "fee": "0.176539",
+      "tid": 780277379509289,
+      "feeToken": "USDC",
+      "twapId": null
+     },
+     {
+      "coin": "AVAX",
+      "px": "8.3933",
+      "sz": "13.14",
+      "side": "A",
+      "time": 1794355575898,
+      "startPosition": "1000.0",
+      "dir": "Close Long",
+      "closedPnl": "2.518938",
+      "hash": "0xee4083ae0fb1cdb5efba044885c92f0205600093aab4ec8792092f00ceb5a7a0",
+      "oid": 601154306418,
+      "crossed": true,
+      "fee": "0.047644",
+      "tid": 622457010317931,
+      "feeToken": "USDC",
+      "twapId": null
+     },
+     {
+      "coin": "AVAX",
+      "px": "8.3933",
+      "sz": "714.83",
+      "side": "A",
+      "time": 1794355575898,
+      "startPosition": "986.86",
+      "dir": "Close Long",
+      "closedPnl": "137.032911",
+      "hash": "0xee4083ae0fb1cdb5efba044885c92f0205600093aab4ec8792092f00ceb5a7a0",
+      "oid": 601154306418,
+      "crossed": true,
+      "fee": "2.591906",
+      "tid": 847413558802538,
+      "feeToken": "USDC",
+      "twapId": null
+     },
+     {
+      "coin": "AVAX",
+      "px": "8.3933",
+      "sz": "47.66",
+      "side": "A",
+      "time": 1794355575898,
+      "startPosition": "272.03",
+      "dir": "Close Long",
+      "closedPnl": "9.136422",
+      "hash": "0xee4083ae0fb1cdb5efba044885c92f0205600093aab4ec8792092f00ceb5a7a0",
+      "oid": 601154306418,
+      "crossed": true,
+      "fee": "0.17281",
+      "tid": 436870550283114,
+      "feeToken": "USDC",
+      "twapId": null
+     },
+     {
+      "coin": "AVAX",
+      "px": "8.3932",
+      "sz": "16.0",
+      "side": "A",
+      "time": 1794355575898,
+      "startPosition": "224.37",
+      "dir": "Close Long",
+      "closedPnl": "3.0656",
+      "hash": "0xee4083ae0fb1cdb5efba044885c92f0205600093aab4ec8792092f00ceb5a7a0",
+      "oid": 601154306418,
+      "crossed": true,
+      "fee": "0.058013",
+      "tid": 758778859155459,
+      "feeToken": "USDC",
+      "twapId": null
+     },
+     {
+      "coin": "AVAX",
+      "px": "8.3926",
+      "sz": "47.66",
+      "side": "A",
+      "time": 1794355575898,
+      "startPosition": "208.37",
+      "dir": "Close Long",
+      "closedPnl": "9.10306",
+      "hash": "0xee4083ae0fb1cdb5efba044885c92f0205600093aab4ec8792092f00ceb5a7a0",
+      "oid": 601154306418,
+      "crossed": true,
+      "fee": "0.172796",
+      "tid": 233344774778820,
+      "feeToken": "USDC",
+      "twapId": null
+     },
+     {
+      "coin": "AVAX",
+      "px": "8.3925",
+      "sz": "146.02",
+      "side": "A",
+      "time": 1794355575898,
+      "startPosition": "160.71",
+      "dir": "Close Long",
+      "closedPnl": "27.875218",
+      "hash": "0xee4083ae0fb1cdb5efba044885c92f0205600093aab4ec8792092f00ceb5a7a0",
+      "oid": 601154306418,
+      "crossed": true,
+      "fee": "0.529404",
+      "tid": 15656701411125,
+      "feeToken": "USDC",
+      "twapId": null
+     },
+     {
+      "coin": "AVAX",
+      "px": "8.3925",
+      "sz": "14.69",
+      "side": "A",
+      "time": 1794355575898,
+      "startPosition": "14.69",
+      "dir": "Close Long",
+      "closedPnl": "2.804321",
+      "hash": "0xee4083ae0fb1cdb5efba044885c92f0205600093aab4ec8792092f00ceb5a7a0",
+      "oid": 601154306418,
+      "crossed": true,
+      "fee": "0.053259",
+      "tid": 404655996428315,
+      "feeToken": "USDC",
+      "twapId": null
+     },
+     {
+      "coin": "BTC",
+      "px": "73728.0",
+      "sz": "0.03057",
+      "side": "A",
+      "time": 1794355661653,
+      "startPosition": "0.0",
+      "dir": "Open Short",
+      "closedPnl": "0.0",
+      "hash": "0x6237ddb6dc035a7163b1044885cddf0201fd009c77067943060089099b07345c",
+      "oid": 601155159912,
+      "crossed": true,
+      "fee": "0.973669",
+      "tid": 831118494246700,
+      "feeToken": "USDC",
+      "twapId": null
+     }
+    ]
+   }
+  },
+  {
+   "channel": "subscriptionResponse",
+   "data": {
+    "method": "subscribe",
+    "subscription": {
+     "type": "orderUpdates",
+     "user": "0x3d62aa392daa9cc4cbe9e11d57681ea1371f3447"
+    }
+   }
+  },
+  {
+   "channel": "subscriptionResponse",
+   "data": {
+    "method": "subscribe",
+    "subscription": {
+     "type": "userEvents",
+     "user": "0x3d62aa392daa9cc4cbe9e11d57681ea1371f3447"
+    }
+   }
+  },
+  {
+   "channel": "pong"
+  },
+  {
+   "channel": "error",
+   "data": "Error parsing JSON into valid websocket request: not json"
+  },
+  {
+   "channel": "error",
+   "data": "Already subscribed: {\"type\":\"l2Book\",\"coin\":\"BTC\",\"nSigFigs\":null,\"mantissa\":null,\"fast\":false}"
+  },
+  {
+   "channel": "activeAssetCtx",
+   "data": {
+    "coin": "BTC",
+    "ctx": {
+     "funding": "0.0000125",
+     "openInterest": "40299.36372",
+     "prevDayPx": "74746.0",
+     "dayNtlVlm": "3533886062.1726908684",
+     "premium": "-0.0004583871",
+     "oraclePx": "73736.8",
+     "markPx": "73714.0",
+     "midPx": "73702.5",
+     "impactPxs": [
+      "73701.0",
+      "73703.0"
+     ],
+     "dayBaseVlm": "47848.87959"
+    }
+   }
+  },
+  {
+   "channel": "allMids",
+   "data": {
+    "mids": {
+     "0G": "0.14775",
+     "2Z": "0.019912",
+     "AAVE": "124.435",
+     "ACE": "0.1181",
+     "ADA": "0.175735",
+     "AERO": "0.542295",
+     "AI": "0.12555",
+     "AI16Z": "0.06157",
+     "AIXBT": "0.014622",
+     "ALGO": "0.090103",
+     "ALT": "0.005337",
+     "ANIME": "0.002378",
+     "APE": "0.10018",
+     "APEX": "0.182545",
+     "APT": "0.5717",
+     "AR": "3.2575",
+     "ARB": "0.16659",
+     "ARK": "0.10667",
+     "ASTER": "0.63959",
+     "ATOM": "1.4078",
+     "AVAX": "8.4819",
+     "AVNT": "0.081348",
+     "AXS": "0.80159",
+     "AZTEC": "0.012738",
+     "BABY": "0.010078",
+     "BADGER": "0.88823",
+     "BANANA": "2.88785",
+     "BCH": "230.54",
+     "BERA": "0.10468",
+     "BIGTIME": "0.005213",
+     "BIO": "0.019937",
+     "BLAST": "0.000456",
+     "BLUR": "0.006606",
+     "BLZ": "0.070043",
+     "BNB": "682.43",
+     "BNT": "0.38287",
+     "BOME": "0.000607",
+     "BRETT": "0.003704",
+     "BSV": "16.363",
+     "BTC": "73702.5"
+    }
+   }
+  },
+  {
+   "channel": "trades",
+   "data": [
+    {
+     "coin": "BTC",
+     "side": "B",
+     "px": "73698.0",
+     "sz": "0.00125",
+     "time": 1794366354851,
+     "hash": "0xb3e95a43120b247eb563044888140902040b0028ad0e435057b20595d10efe69",
+     "tid": 995806885624103,
+     "users": [
+      "0xf6d9174125c78eebf3ce880afd704bd1dcc33e13",
+      "0xbb160cb61e694570f9d570f9fcde7c61dd2143ad"
+     ]
+    }
+   ]
+  },
+  {
+   "channel": "activeAssetCtx",
+   "data": {
+    "coin": "BTC",
+    "ctx": {
+     "funding": "0.0000125",
+     "openInterest": "40299.36372",
+     "prevDayPx": "74746.0",
+     "dayNtlVlm": "3533886154.1976909637",
+     "premium": "-0.0005261959",
+     "oraclePx": "73736.8",
+     "markPx": "73714.0",
+     "midPx": "73697.5",
+     "impactPxs": [
+      "73682.5",
+      "73698.0"
+     ],
+     "dayBaseVlm": "47848.88084"
+    }
+   }
+  },
+  {
+   "channel": "trades",
+   "data": [
+    {
+     "coin": "BTC",
+     "side": "A",
+     "px": "73695.0",
+     "sz": "0.00018",
+     "time": 1794366356001,
+     "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+     "tid": 309064073239489,
+     "users": [
+      "0x0f909bac3a41008144012ff1ea209c701567490d",
+      "0x29998ebd5be758fdaa06f0ef48d6c890978b65de"
+     ]
+    },
+    {
+     "coin": "BTC",
+     "side": "A",
+     "px": "73688.0",
+     "sz": "0.00036",
+     "time": 1794366356001,
+     "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+     "tid": 879601587420277,
+     "users": [
+      "0x31dea2516beee92135b96f464eeec3cf292a13f2",
+      "0x29998ebd5be758fdaa06f0ef48d6c890978b65de"
+     ]
+    }
+   ]
+  },
+  {
+   "channel": "l2Book",
+   "data": {
+    "coin": "BTC",
+    "time": 1794366359385,
+    "levels": [
+     [
+      {
+       "px": "73692.0",
+       "sz": "13.15235",
+       "n": 45
+      },
+      {
+       "px": "73691.0",
+       "sz": "0.006",
+       "n": 1
+      },
+      {
+       "px": "73690.0",
+       "sz": "0.03478",
+       "n": 2
+      },
+      {
+       "px": "73689.0",
+       "sz": "0.2955",
+       "n": 3
+      },
+      {
+       "px": "73688.0",
+       "sz": "0.64941",
+       "n": 2
+      },
+      {
+       "px": "73687.0",
+       "sz": "2.10734",
+       "n": 4
+      },
+      {
+       "px": "73686.0",
+       "sz": "3.85517",
+       "n": 7
+      },
+      {
+       "px": "73685.0",
+       "sz": "0.15607",
+       "n": 2
+      },
+      {
+       "px": "73684.0",
+       "sz": "3.62977",
+       "n": 5
+      },
+      {
+       "px": "73683.0",
+       "sz": "2.58563",
+       "n": 6
+      },
+      {
+       "px": "73682.0",
+       "sz": "3.96503",
+       "n": 8
+      },
+      {
+       "px": "73681.0",
+       "sz": "4.07963",
+       "n": 7
+      },
+      {
+       "px": "73680.0",
+       "sz": "2.06521",
+       "n": 7
+      },
+      {
+       "px": "73679.0",
+       "sz": "0.54918",
+       "n": 7
+      },
+      {
+       "px": "73678.0",
+       "sz": "6.62539",
+       "n": 11
+      },
+      {
+       "px": "73677.0",
+       "sz": "4.96041",
+       "n": 8
+      },
+      {
+       "px": "73676.0",
+       "sz": "1.64732",
+       "n": 7
+      },
+      {
+       "px": "73675.0",
+       "sz": "4.12297",
+       "n": 6
+      },
+      {
+       "px": "73674.0",
+       "sz": "4.11415",
+       "n": 7
+      },
+      {
+       "px": "73673.0",
+       "sz": "5.30194",
+       "n": 7
+      }
+     ],
+     [
+      {
+       "px": "73693.0",
+       "sz": "0.61363",
+       "n": 4
+      },
+      {
+       "px": "73694.0",
+       "sz": "1.01076",
+       "n": 3
+      },
+      {
+       "px": "73695.0",
+       "sz": "0.22224",
+       "n": 3
+      },
+      {
+       "px": "73696.0",
+       "sz": "0.79288",
+       "n": 9
+      },
+      {
+       "px": "73697.0",
+       "sz": "1.22809",
+       "n": 5
+      },
+      {
+       "px": "73698.0",
+       "sz": "0.42574",
+       "n": 7
+      },
+      {
+       "px": "73699.0",
+       "sz": "0.36418",
+       "n": 5
+      },
+      {
+       "px": "73700.0",
+       "sz": "1.27865",
+       "n": 6
+      },
+      {
+       "px": "73701.0",
+       "sz": "0.33383",
+       "n": 4
+      },
+      {
+       "px": "73702.0",
+       "sz": "0.33588",
+       "n": 5
+      },
+      {
+       "px": "73703.0",
+       "sz": "1.63599",
+       "n": 8
+      },
+      {
+       "px": "73704.0",
+       "sz": "2.28646",
+       "n": 7
+      },
+      {
+       "px": "73705.0",
+       "sz": "0.61766",
+       "n": 6
+      },
+      {
+       "px": "73706.0",
+       "sz": "5.85278",
+       "n": 12
+      },
+      {
+       "px": "73707.0",
+       "sz": "1.86862",
+       "n": 10
+      },
+      {
+       "px": "73708.0",
+       "sz": "0.4344",
+       "n": 6
+      },
+      {
+       "px": "73709.0",
+       "sz": "2.02221",
+       "n": 9
+      },
+      {
+       "px": "73710.0",
+       "sz": "8.05198",
+       "n": 12
+      },
+      {
+       "px": "73711.0",
+       "sz": "4.343",
+       "n": 9
+      },
+      {
+       "px": "73712.0",
+       "sz": "9.18209",
+       "n": 12
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "channel": "allMids",
+   "data": {
+    "mids": {
+     "0G": "0.147735",
+     "2Z": "0.019911",
+     "AAVE": "124.445",
+     "ACE": "0.1181",
+     "ADA": "0.1757",
+     "AERO": "0.54233",
+     "AI": "0.12555",
+     "AI16Z": "0.06157",
+     "AIXBT": "0.014626",
+     "ALGO": "0.090105",
+     "ALT": "0.005337",
+     "ANIME": "0.002378",
+     "APE": "0.10017",
+     "APEX": "0.182545",
+     "APT": "0.5716",
+     "AR": "3.2564",
+     "ARB": "0.16649",
+     "ARK": "0.10667",
+     "ASTER": "0.639505",
+     "ATOM": "1.4077",
+     "AVAX": "8.4831",
+     "AVNT": "0.081351",
+     "AXS": "0.80102",
+     "AZTEC": "0.012738",
+     "BABY": "0.010078",
+     "BADGER": "0.88823",
+     "BANANA": "2.8875",
+     "BCH": "230.585",
+     "BERA": "0.10465",
+     "BIGTIME": "0.005206",
+     "BIO": "0.019932",
+     "BLAST": "0.000456",
+     "BLUR": "0.006605",
+     "BLZ": "0.070043",
+     "BNB": "682.4",
+     "BNT": "0.38287",
+     "BOME": "0.000607",
+     "BRETT": "0.003706",
+     "BSV": "16.363",
+     "BTC": "73692.5"
+    }
+   }
+  }
+ ]
+}

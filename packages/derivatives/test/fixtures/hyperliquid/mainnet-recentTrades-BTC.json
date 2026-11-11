@@ -1,0 +1,141 @@
+{
+ "recordedAt": "2026-11-11T03:05:20.697Z",
+ "network": "mainnet",
+ "request": {
+  "type": "recentTrades",
+  "coin": "BTC"
+ },
+ "status": 200,
+ "body": [
+  {
+   "coin": "BTC",
+   "side": "A",
+   "px": "73716.0",
+   "sz": "0.03836",
+   "time": 1794366319950,
+   "hash": "0x5c48afea40a83a455dc2044888123302043300cfdbab591700115b3cffac1430",
+   "tid": 618460174066214,
+   "users": [
+    "0xaf68caebaa151dd592112a07e2344b3950e13561",
+    "0xf6d9174125c78eebf3ce880afd704bd1dcc33e13"
+   ]
+  },
+  {
+   "coin": "BTC",
+   "side": "B",
+   "px": "73717.0",
+   "sz": "0.00013",
+   "time": 1794366319816,
+   "hash": "0xd684b6b29161f4bed7fe04488812310204a900982c6513907a4d62055065cea9",
+   "tid": 1118270276656420,
+   "users": [
+    "0xada7a8cbbe58ce1626ae3d2ea94e03836aba092b",
+    "0xd72cfd2424e26ba32e46b7b2aff95eff34247a71"
+   ]
+  },
+  {
+   "coin": "BTC",
+   "side": "B",
+   "px": "73717.0",
+   "sz": "0.00027",
+   "time": 1794366319816,
+   "hash": "0xd684b6b29161f4bed7fe04488812310204a900982c6513907a4d62055065cea9",
+   "tid": 77181067567228,
+   "users": [
+    "0xada7a8cbbe58ce1626ae3d2ea94e03836aba092b",
+    "0x0bb58c23283140c2c4c39bbfbd5aa243c2ef9687"
+   ]
+  },
+  {
+   "coin": "BTC",
+   "side": "B",
+   "px": "73717.0",
+   "sz": "0.06245",
+   "time": 1794366318876,
+   "hash": "0xc9582da38a1a3b9bcad104488812250202a80089251d5a6d6d20d8f6491e1586",
+   "tid": 742293225403876,
+   "users": [
+    "0x249dc7a7145f03849e48b982e89527f9a1e4b304",
+    "0xfeee942a06d2f8012823ccde7bf7bcbcaa29a09f"
+   ]
+  },
+  {
+   "coin": "BTC",
+   "side": "B",
+   "px": "73717.0",
+   "sz": "0.1404",
+   "time": 1794366318876,
+   "hash": "0xc9582da38a1a3b9bcad104488812250202a80089251d5a6d6d20d8f6491e1586",
+   "tid": 942317556348280,
+   "users": [
+    "0x249dc7a7145f03849e48b982e89527f9a1e4b304",
+    "0xe52ec3a0f90c66510ff7892354b1a1337afaac63"
+   ]
+  },
+  {
+   "coin": "BTC",
+   "side": "A",
+   "px": "73716.0",
+   "sz": "0.05562",
+   "time": 1794366318808,
+   "hash": "0xb14c68286c88926bb2c6044888122402022c000e078bb13d5515137b2b8c6c56",
+   "tid": 884803312304134,
+   "users": [
+    "0xaf68caebaa151dd592112a07e2344b3950e13561",
+    "0xf6d9174125c78eebf3ce880afd704bd1dcc33e13"
+   ]
+  },
+  {
+   "coin": "BTC",
+   "side": "A",
+   "px": "73716.0",
+   "sz": "0.06214",
+   "time": 1794366318808,
+   "hash": "0xb14c68286c88926bb2c6044888122402022c000e078bb13d5515137b2b8c6c56",
+   "tid": 885065428135457,
+   "users": [
+    "0xbb160cb61e694570f9d570f9fcde7c61dd2143ad",
+    "0xf6d9174125c78eebf3ce880afd704bd1dcc33e13"
+   ]
+  },
+  {
+   "coin": "BTC",
+   "side": "A",
+   "px": "73716.0",
+   "sz": "0.00027",
+   "time": 1794366318593,
+   "hash": "0xf474f50275213684f5ee04488812220204d000e810245557983da0553425106f",
+   "tid": 789152930908977,
+   "users": [
+    "0xbb160cb61e694570f9d570f9fcde7c61dd2143ad",
+    "0xf0f6457e7fed1dcf4803204732868c93de924d95"
+   ]
+  },
+  {
+   "coin": "BTC",
+   "side": "A",
+   "px": "73716.0",
+   "sz": "0.00027",
+   "time": 1794366318593,
+   "hash": "0x29271a960eec2c962aa004488812220204cc007ba9ef4b68ccefc5e8cde00680",
+   "tid": 747664064564525,
+   "users": [
+    "0xbb160cb61e694570f9d570f9fcde7c61dd2143ad",
+    "0xa3a516de645ca42025cc5183a8bab84f7691aa28"
+   ]
+  },
+  {
+   "coin": "BTC",
+   "side": "A",
+   "px": "73716.0",
+   "sz": "0.02826",
+   "time": 1794366318593,
+   "hash": "0xc3802d5fdbc9a79ec4f904488812220204ca004576ccc6706748d8b29acd8189",
+   "tid": 782548705863267,
+   "users": [
+    "0xbb160cb61e694570f9d570f9fcde7c61dd2143ad",
+    "0x550cc8ea81024e03e5da194e5ae418ac48d21caf"
+   ]
+  }
+ ]
+}
