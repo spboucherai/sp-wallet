@@ -262,7 +262,14 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     const a = await load((req.params as { id: string }).id); spotOnly(a); // v6: vault and mandate routes are for spot agents
     const nets = Object.values(NETWORKS).filter((n) => n.family === 'evm' && n.id !== a.network);
     const found = (await Promise.all(nets.map(async (n) => { try { const b = await adapterFor(n.id).balances(a.vault_address);
-      return [n.native, ...n.tokens].filter((x) => (b[x.id] ?? 0n) > 0n).map((x) => ({ network: n.id, networkName: n.name, asset: x.id, symbol: x.symbol, display: formatUnits(b[x.id]!, x.decimals), gas: n.native.symbol, hasGas: (b.native ?? 0n) > 0n })); } catch { return []; } }))).flat();
+      const held = [n.native, ...n.tokens].filter((x) => (b[x.id] ?? 0n) > 0n);
+      if (!held.length) return [];
+      // display only: what one token withdrawal would cost right now (the arithmetic of the withdraw route below), so the page can say what is missing
+      let need: bigint | null = null;
+      try { const block = await rpcAny<{ baseFeePerGas?: `0x${string}` }>(n.rpc, 'eth_getBlockByNumber', ['latest', false]); let tip = 1_000_000n; try { tip = hexToBigInt(await rpcAny<`0x${string}`>(n.rpc, 'eth_maxPriorityFeePerGas', [])); } catch { /* floor */ }
+        need = 90_000n * (hexToBigInt(block.baseFeePerGas ?? '0x0') * 2n + tip); } catch { /* unknown: the page falls back to hasGas */ }
+      return held.map((x) => ({ network: n.id, networkName: n.name, asset: x.id, symbol: x.symbol, display: formatUnits(b[x.id]!, x.decimals), gas: n.native.symbol, hasGas: (b.native ?? 0n) > 0n,
+        gasHeld: formatUnits(b.native ?? 0n, n.native.decimals), gasNeed: need === null ? null : formatUnits(need, n.native.decimals), gasEnough: need === null ? null : (b.native ?? 0n) >= need })); } catch { return []; } }))).flat();
     return { address: a.vault_address, holdings: found };
   });
 

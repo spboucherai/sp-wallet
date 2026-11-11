@@ -64,7 +64,8 @@ button { cursor: pointer; }
 .mask { filter: blur(10px); user-select: none; }
 .no-scrollbar { scrollbar-width: none; } .no-scrollbar::-webkit-scrollbar { display: none; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-.rise { animation: rise 0.26s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+/* `backwards`, not `both`: a filled transform keeps a stacking context on <main>, which trapped every sheet (position: fixed, z-30) under the bottom navigation */
+.rise { animation: rise 0.26s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
