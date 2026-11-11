@@ -14,6 +14,7 @@ import { PerpAgentDetail, PerpAgentForm } from './PerpAgent';
 import { agentTone, PerpLiveState } from './PerpAgentLive';   // v7 perp live: a live perp agent names the money it moves
 // <<< v6 perp agents
 import { AgentChecklist, ElsewhereFunds, FundSheet, fundingInProgress, WithdrawSheet, type AgentNet } from './AgentFund';
+import { ResearchPanel } from './Research'; // v7 research runtime
 
 interface AgentV { id: string; name: string; mission: string; state: string; mode: string; network: string; networkName: string; cash: string; universe: string[]; interval: string; capitalUsdc: string; vaultAddress: string;
   risk: { maxExposurePct: number; maxLossPct: number; maxOrderUsd: number; maxDailyUsd: number; maxOrdersPerDay: number; mandateDays: number; slippageBps: number }; strategyVersionId: string | null; mandateId: string | null; stopReason: string | null; lastBar: string | null }
@@ -63,6 +64,7 @@ export function Agents({ nav }: { nav: Nav }) {
       <div className="flex items-center justify-between pt-2"><h1 className="text-[30px] font-semibold tracking-[-0.02em]">{t('agents')}</h1>
         <Btn kind="soft" onClick={() => setOpen(!open)}><Icon n={open ? 'x' : 'key'} className="h-4 w-4" />{open ? t('cancel') : t('agNew')}</Btn></div>
       <Notice tone="info">{t('agIntro')}</Notice>
+      {/* v7 research runtime */}<button data-testid="rj-open" onClick={() => nav({ tab: 'research' })} className="card flex w-full items-center gap-3 p-3.5 text-left"><Icon n="list" /><span className="flex-1 text-[14.5px] font-medium">{t('rjTitle')}</span><Icon n="chev" className="h-4 w-4 text-mute" /></button>
       {/* >>> v6 perp agents: the kind of agent; a perp agent has its own form */}
       {open && <Seg<'spot' | 'perp'> value={kind} onChange={setKind} label={t('paKindLabel')} options={[{ id: 'spot', label: t('paKindSpot') }, { id: 'perp', label: t('paKindPerp') }]} />}
       {open && kind === 'perp' && <Card><PerpAgentForm nav={nav} onCreated={async () => { await qc.invalidateQueries({ queryKey: ['agents'] }); setOpen(false); }} /></Card>}
@@ -214,6 +216,8 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
                 <Btn kind="soft" busy={busy === `r${x.sha256}`} onClick={() => act(`r${x.sha256}`, () => post(`/agents/${id}/strategies`, { path: x.path.replace(/^strategies\//, '') }))}>{t('agLibTest')}</Btn></li>)}</ul>}
           </div>; })()}
       </Card>
+
+      {/* v7 research runtime */}<ResearchPanel agent={a} nav={nav} />
 
       <div id="qa-control" className="scroll-mt-20" /><Card><H>{t('agControl')}</H>
         <div className="space-y-2.5">

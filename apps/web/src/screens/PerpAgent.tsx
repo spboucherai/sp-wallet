@@ -12,6 +12,7 @@ import { errText, I18n, useT, type Key } from '../i18n';
 import { Btn, Card, Field, H, Icon, inputCls, Notice, Skeleton, when } from '../ui';
 import { AgentState } from './Agents';
 import { AgentModeBand, GoLiveCard, LivePanel, PerpLiveState, Refusal } from './PerpAgentLive';   // v7 perp live: the real mode
+import { ResearchPanel } from './Research'; // v7 research runtime
 
 interface PerpRisk { maxLeverage: number; maxGrossExposureX: number; maxPositionX: number; maxDailyLossPct: number; maxTotalLossPct: number; slippageBps: number; minTradePct: number }
 interface VenueInst { symbol: string; id: string; maxLeverage: string; lotSize: string; mark: string | null; volume24h: string | null; eligible: boolean; why: string | null }
@@ -215,6 +216,8 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
                 <span className="block truncate text-[12px] text-mute">{x.meta.universe.join(' · ')} · {x.meta.interval} · {t('paBounds', { lev: x.meta.max_leverage, gross: x.meta.max_gross_exposure })}</span></span>
               <Btn kind="soft" busy={busy === `r${x.sha256}`} onClick={() => act(`r${x.sha256}`, () => post(`/agents/${id}/strategies`, { path: x.path.replace(/^strategies\//, '') }))}>{t('agLibTest')}</Btn></li>)}</ul>}</div>
       </Card>
+
+      {/* v7 research runtime */}<ResearchPanel agent={a} nav={nav} />
 
       <Card><H>{t('agControl')}</H>
         <div className="space-y-2.5">

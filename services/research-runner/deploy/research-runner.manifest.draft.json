@@ -1,0 +1,30 @@
+{
+  "_comment": "DRAFT, not deployed. To be adapted to the deployment tool's manifest schema before use. No secret belongs in this file: SPW_RUNNER_SECRET and ANTHROPIC_API_KEY go into the node's own environment file (mode 600).",
+  "app": "sp-wallet-research-runner",
+  "dir": "~/sp-wallet-research",
+  "placement": {
+    "note": "a node that hosts NEITHER the wallet API NOR the signer; macOS (sandbox-exec is required)",
+    "exclude": ["<wallet API node>", "<signer node>"]
+  },
+  "requires": ["node>=24", "uv", "git", "claude (npm -g @anthropic-ai/claude-code)"],
+  "processes": [
+    {
+      "name": "sp-wallet-research-runner",
+      "script": "research-runner.mjs",
+      "interpreter": "node",
+      "instances": 1,
+      "autorestart": true,
+      "max_memory_restart": "1G",
+      "env": {
+        "SPW_RUNNER_API_URL": "https://<wallet domain>",
+        "SPW_RUNNER_LAB_DIR": "~/sp-wallet-lab/research",
+        "SPW_RUNNER_HOME": "~/sp-wallet-research",
+        "SPW_RUNNER_ID": "<node alias>",
+        "SPW_RUNNER_LAB_PIN": "commit"
+      },
+      "env_file": "~/sp-wallet-research/.runner-env  (SPW_RUNNER_SECRET, ANTHROPIC_API_KEY — created by the owner on the node)"
+    }
+  ],
+  "tunnel": null,
+  "healthcheck": { "note": "no listening port: the runner only makes outbound HTTPS calls. Health = GET /api/v1/research/status on the wallet (lastRunnerContact)." }
+}

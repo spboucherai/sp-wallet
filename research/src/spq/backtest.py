@@ -46,6 +46,9 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--ledger", default=None,
                    help="JSONL file recording every trial and test evaluation across runs; the deflated Sharpe "
                         "ratio then counts all the trials in it")
+    p.add_argument("--job-ledger", default=None,
+                   help="v7: the trial ledger of the research job that produced this strategy (the runner's copy); "
+                        "its trials are added to the trial count of the deflated Sharpe ratio")
     p.add_argument("--data-dir", default=None, help="root of local candle files (<root>/<source>/<SYM>_<interval>)")
     p.add_argument("--source", default=None, help="candle source (default: coinbase for files)")
     p.add_argument("--out", required=True, help="report path (JSON)")
@@ -75,7 +78,7 @@ def main(argv=None) -> int:
             notes.append(f"bars per symbol before alignment {raw_bars}, common bars kept: {aligned}")
         source = next(iter(quality.values())).source
         report, _ = build_report(strategy, data, config, quality=quality, fractions=fractions, grid=grid,
-                                 ledger=a.ledger, n_folds=a.folds, n_resamples=a.resamples, seed=a.seed,
+                                 ledger=a.ledger, job_ledger=a.job_ledger, n_folds=a.folds, n_resamples=a.resamples, seed=a.seed,
                                  source=source, notes=notes)
         write_report(report, a.out)
     except (StrategyError, DataError, ValueError) as e:

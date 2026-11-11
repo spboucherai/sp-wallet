@@ -85,3 +85,35 @@ def deflated_sharpe_from_returns(returns, trial_sharpes) -> dict:
         "n_trials": n_trials,
         "var_trial_sharpes": var_trials,
     }
+
+
+# --- v7 research jobs ---------------------------------------------------------------------------------------------
+def deflate_for_job(detail: dict, returns, own_sharpes, job: dict) -> dict:
+    """Recompute a deflated Sharpe detail so that it counts the trials a research job consumed BEFORE this run.
+
+    `job` is spq.research.read_job_trials(): a count and the (untrusted) validation Sharpe ratios the job recorded.
+    The number of trials is this run's own trials plus ALL the job's. The variance of the trial Sharpe ratios is
+    the LARGER of (this run's own trials) and (own + the job's): numbers written by the job can make the
+    correction harsher, never milder. Returns a new detail dict (the input is not modified)."""
+    own = [float(s) for s in own_sharpes if s is not None and math.isfinite(s)]
+    n_own = int(detail.get("n_trials") or max(len(own), 1))  # every own trial counts, also one without a finite Sharpe
+    n_job = int(job.get("count", 0))
+    n_total = n_own + n_job
+    var_own = float(np.var(own, ddof=1)) if len(own) > 1 else 0.0
+    both = own + [float(x) for x in job.get("sharpes", [])]
+    var_both = float(np.var(both, ddof=1)) if len(both) > 1 else 0.0
+    var_trials = max(var_own, var_both)
+    out = dict(detail)
+    out.update({"n_trials": n_total, "n_trials_this_run": n_own, "n_trials_job": n_job,
+                "var_trial_sharpes": var_trials, "var_trial_sharpes_this_run": var_own,
+                "job_ledger_unreadable_lines": int(job.get("unreadable", 0))})
+    r = np.asarray(returns, dtype="float64")
+    sd = r.std(ddof=1) if len(r) > 1 else 0.0
+    if len(r) < 3 or not sd > 0:
+        return out
+    sr = float(r.mean() / sd)
+    sr0 = expected_max_sharpe(n_total, var_trials)
+    dsr = probabilistic_sharpe(sr, sr0, len(r), float(stats.skew(r)), float(stats.kurtosis(r, fisher=False)))
+    out.update({"deflated_sharpe": dsr if math.isfinite(dsr) else None, "expected_max_sharpe_per_bar": sr0})
+    return out
+# --- end v7 -------------------------------------------------------------------------------------------------------

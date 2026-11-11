@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { listingSources, MAX_AGENT_SYMBOLS } from '@spw/core';
+import { JOB_STRATEGY_RE, listingSources, MAX_AGENT_SYMBOLS } from '@spw/core';
 import { config, UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
 import { RESEARCH_DIR } from './live.ts';
@@ -58,6 +58,7 @@ export async function library(): Promise<(StrategyInfo & { readme: string })[]> 
   if (!existsSync(ROOT)) return [];
   const rels: [string, string][] = [];
   for (const name of readdirSync(ROOT).sort()) { if (!/^[a-z0-9_]{1,40}$/.test(name)) continue;
+    if (JOB_STRATEGY_RE.test(name)) continue; // v7: a research job's strategy is listed by the research routes, with its server report
     for (const ver of readdirSync(path.join(ROOT, name)).sort()) if (/^[a-z0-9_]{1,12}$/.test(ver)) rels.push([name, ver]); }
   // LISTING ONLY (the page waited ~20 s: one laboratory process per version, one after the other). A version already described
   // under the same code hash is served from memory, the others are described in parallel. Registration still calls describe().
@@ -125,6 +126,8 @@ export function strategyRoutes(app: FastifyInstance): void {
     const b = z.strictObject({ path: Rel }).parse(req.body);
     const [a] = await sql<AgentRow[]>`select * from agents where id = ${id}`;
     if (!a) throw new UserError('not_found', 'agent not found', 404);
+    // v7: a research job's strategy (rj_*) is attached with the server report of its job — never re-described or re-backtested without the job's trial count
+    if (JOB_STRATEGY_RE.test(b.path.split('/')[0]!)) return (await import('../research/evaluate.ts')).attachJobStrategy(a, b.path);
     // v6: a perp agent takes only contract-2 strategies (described with --contract 2, backtested by spq.perp_backtest)
     if (a.kind === 'perp') { const p = await import('./perp-routes.ts'); return p.registerPerp(a as never, b.path); }
     const info = await describe(b.path);

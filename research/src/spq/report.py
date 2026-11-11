@@ -11,10 +11,10 @@ from pathlib import Path
 import numpy as np
 
 from .data.core import Quality, bars_per_year
-from .dsr import deflated_sharpe_from_returns
+from .dsr import deflate_for_job, deflated_sharpe_from_returns
 from .engine import BacktestConfig
 from .metrics import compute_metrics, equity_points, lot_pnls
-from .research import Experiment, one_at_a_time_grid, read_ledger
+from .research import Experiment, one_at_a_time_grid, read_job_trials, read_ledger
 from .robustness import (bootstrap_sharpe_ci, lookahead_check, monte_carlo, parameter_sensitivity, stress_windows,
                          walk_forward)
 from .strategy import Strategy
@@ -55,6 +55,7 @@ def build_report(
     fractions=(0.6, 0.2, 0.2),
     grid: list[dict] | None = None,
     ledger=None,
+    job_ledger=None,
     n_folds: int = 4,
     n_resamples: int = 2000,
     seed: int = 0,
@@ -102,6 +103,9 @@ def build_report(
     trials = _unique_trials(read_ledger(ledger), config.interval) if ledger else exp.trials
     dsr = deflated_sharpe_from_returns(r, [t.get("validation_sharpe_per_bar") for t in trials])
     dsr["n_trials"] = max(len(trials), 1)
+    if job_ledger:  # v7: a research job's trials count against this strategy (see spq.dsr.deflate_for_job)
+        dsr = deflate_for_job(dsr, r, [t.get("validation_sharpe_per_bar") for t in trials],
+                              read_job_trials(job_ledger))
     dsr["sharpe_split"], dsr["trial_sharpes_split"] = "test", "validation"
     test_looks = (len([t for t in read_ledger(ledger) if t.get("kind") == "test" and t["strategy"] == strategy.name])
                   if ledger else len(exp.test_evaluations))

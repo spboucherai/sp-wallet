@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./research-job": "./src/research-job.ts",
+    "./research-sandbox": "./src/research-sandbox.ts"
   },
   "dependencies": {
     "@noble/hashes": "2.4.0",
