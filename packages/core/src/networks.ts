@@ -26,6 +26,7 @@ export interface NetworkDef {
    * Cosmos SDK: the chain id (it is part of every signed document, so a signature is valid on that chain only).
    * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. Sui: genesis checkpoint digest.
    * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. NEAR: genesis block hash.
+   * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. TON: masterchain zero-state root hash.
    * Bitcoin Cash shares its genesis block with Bitcoin, Bitcoin SV and eCash, so its reference is the hash of block 661648,
    * the first block after the last of those splits (November 2020; a Bitcoin Cash Node checkpoint), which exists on no other chain.
    */
@@ -232,6 +233,18 @@ const DEFS = {
     native: { id: 'native', symbol: 'NEAR', name: 'NEAR', decimals: 24 }, tokens: [], coinType: 397,
     rpc: ['https://free.rpc.fastnear.com', 'https://near.drpc.org'],
     explorerTx: 'https://nearblocks.io/txns/', explorerAddr: 'https://nearblocks.io/address/', minConf: 3,
+  },
+  ton: {
+    // chainRef = root hash of the masterchain zero state (hex), the block every main-network node starts from; testnet has another.
+    // Sources: TON Center (liteserver-backed HTTP API of the TON Foundation) and TonAPI (Tonkeeper's indexer), both keyless and
+    // rate-limited (about one request per second); verified live 2026-11-10. No `activation`: an address can hold any amount
+    // before its wallet contract is deployed (the first outgoing transfer deploys it).
+    id: 'ton', family: 'ton', name: 'TON',
+    chainRef: '17a3a92992aabea785a7a090985a265cd31f323d849da51239737e321fb05569',
+    native: { id: 'native', symbol: 'TON', name: 'Toncoin', decimals: 9 }, tokens: [], coinType: 607,
+    memo: 'text',
+    rpc: ['https://toncenter.com/api/v2', 'https://tonapi.io/v2'],
+    explorerTx: 'https://tonviewer.com/transaction/', explorerAddr: 'https://tonviewer.com/', minConf: 1,
   },
 } satisfies Record<string, NetworkDef>;
 
