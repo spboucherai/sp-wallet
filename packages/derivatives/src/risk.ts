@@ -5,7 +5,7 @@
  *
  * Order of the checks (each has a stable code):
  *   0  inputs well formed                              bad_policy · bad_order · bad_input
- *   1  mode allows trading; circuit breaker            mode_read_only · halted
+ *   1  mode allows trading; circuit breaker            mode_read_only · halted (the halt and the order-rate limits do not block a reduce-only order that reduces)
  *   2  instrument allowed and active                   instrument_mismatch · instrument_not_allowed · instrument_halted
  *   3  data age (ticker.ts, book.ts ≤ maxDataAgeMs)    data_mismatch · stale_ticker · stale_book
  *   4  price sanity                                    price_required · trigger_required · bad_mark · price_deviation · mark_index_divergence
@@ -139,7 +139,7 @@ function run(policy: RiskPolicy, req: OrderRequest, ctx: RiskContext): RiskResul
 
   // 1 — mode and circuit breaker
   if (policy.mode === 'READ_ONLY') return no('mode_read_only', 'the account is read-only: no order may be sent');
-  if (policy.halt !== null) return no('halted', `trading is halted: ${policy.halt}`);
+  if (policy.halt !== null && !req.reduceOnly) return no('halted', `trading is halted: ${policy.halt}`);
 
   // 2 — instrument
   if (req.instrument !== instrument.id) return no('instrument_mismatch', `order is for ${req.instrument}, context is for ${instrument.id}`);
@@ -204,6 +204,8 @@ function run(policy: RiskPolicy, req: OrderRequest, ctx: RiskContext): RiskResul
   }
   if (instrument.status === 'reduce_only' && !reduces) return no('instrument_reduce_only', `${instrument.id} only accepts orders that reduce a position`);
   const exempt = req.reduceOnly && reduces;
+  // a halt stops new risk, not the way out: closing a position stays possible (the brief separates the two)
+  if (policy.halt !== null && !exempt) return no('halted', `trading is halted: ${policy.halt}`);
 
   if (!exempt) {
     const equity = D.from(account.equity);
@@ -266,8 +268,8 @@ function run(policy: RiskPolicy, req: OrderRequest, ctx: RiskContext): RiskResul
 
   // 14 — order rate (counts exclude this order)
   if (!Number.isInteger(usage.ordersLastMinute) || !Number.isInteger(usage.ordersToday)) return no('bad_input', 'order counters must be integers');
-  if (usage.ordersLastMinute >= policy.maxOrdersPerMinute) return no('order_rate_minute', `${usage.ordersLastMinute} orders in the last minute (limit ${policy.maxOrdersPerMinute})`);
-  if (usage.ordersToday >= policy.maxOrdersPerDay) return no('order_rate_day', `${usage.ordersToday} orders today (limit ${policy.maxOrdersPerDay})`);
+  if (!exempt && usage.ordersLastMinute >= policy.maxOrdersPerMinute) return no('order_rate_minute', `${usage.ordersLastMinute} orders in the last minute (limit ${policy.maxOrdersPerMinute})`);
+  if (!exempt && usage.ordersToday >= policy.maxOrdersPerDay) return no('order_rate_day', `${usage.ordersToday} orders today (limit ${policy.maxOrdersPerDay})`);
 
   // 15 — duplicate clientId
   if (ctx.openOrders.some((o) => o.clientId === req.clientId) || (usage.clientIds ?? []).includes(req.clientId)) return no('duplicate_client_id', `client id ${req.clientId} was already used on this account`);

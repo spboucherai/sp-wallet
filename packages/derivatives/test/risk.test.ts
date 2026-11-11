@@ -81,8 +81,9 @@ describe('risk: one test per rule (accepted just inside, refused just outside)',
     refused(checkOrder({ ...policy, halt: 'daily loss breaker' }, order(), ctx()), 'halted');
     const r = checkOrder({ ...policy, halt: 'daily loss breaker' }, order(), ctx());
     expect(!r.ok && r.reason).toMatch(/daily loss breaker/);
-    // a halt stops reduce-only orders too: it is not one of the exemptions
-    refused(checkOrder({ ...policy, halt: 'venue down' }, order({ side: 'sell', reduceOnly: true }), ctx({ positions: [position()] })), 'halted');
+    // a halt stops new risk, not the way out: a reduce-only order that reduces still passes, one that does not is refused
+    expect(checkOrder({ ...policy, halt: 'venue down' }, order({ side: 'sell', reduceOnly: true }), ctx({ positions: [position()] })).ok).toBe(true);
+    expect(checkOrder({ ...policy, halt: 'venue down' }, order({ side: 'sell', reduceOnly: true }), ctx()).ok).toBe(false);
   });
 
   it('2 — instrument allowed and active', () => {
@@ -323,8 +324,8 @@ describe('risk: reduce-only', () => {
     refused(checkOrder(policy, reduce({ price: null }), stressed()), 'price_required');
     refused(checkOrder({ ...policy, mode: 'READ_ONLY' }, reduce(), stressed()), 'mode_read_only');
     refused(checkOrder(policy, reduce(), stressed({ instrument: { ...instrument, status: 'halted' } })), 'instrument_halted');
-    // order rate and duplicate client id are not exposure limits: they still apply
-    refused(checkOrder(policy, reduce(), stressed({ usage: { realizedToday: '0', realizedTotal: '0', ordersLastMinute: 10, ordersToday: 10 } })), 'order_rate_minute');
+    // the order-rate budget does not block the way out; a duplicate client id still does
+    expect(checkOrder(policy, reduce(), stressed({ usage: { realizedToday: '0', realizedTotal: '0', ordersLastMinute: 10, ordersToday: 10 } })).ok).toBe(true);
     refused(checkOrder(policy, reduce(), stressed({ usage: { realizedToday: '0', realizedTotal: '0', ordersLastMinute: 0, ordersToday: 0, clientIds: ['c-1'] } })), 'duplicate_client_id');
   });
 
