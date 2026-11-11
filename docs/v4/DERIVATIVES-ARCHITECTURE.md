@@ -191,3 +191,39 @@ Testnet and mainnet use different trading keys (`<i>` = 0 mainnet, 1 testnet) an
 5. Router (comparison in simulation). 6. `spq` perps backtesting. 7. Agents on derivatives. 8. Controlled live. 9. Hardening.
 
 Live trading stays off until the owner enables it per venue.
+
+## API contract (wave 2: read-only and paper) — `services/api/src/derivatives/`
+
+All routes are behind the existing owner session (like every `/api/v1/*` route). Decimals are strings. Every object that carries
+venue data has `source: 'venue' | 'paper' | 'estimate'` and a `ts`.
+
+Venues served: `hyperliquid` (mainnet, read + paper), `gmx` (Arbitrum, read; no order book), `dydx` (mainnet **market data only**:
+its terms exclude Canada and its indexer geoblocks account reads from the owner's network — no account, no paper account that
+could be mistaken for a tradable venue, and the UI says why).
+
+| Route | Answer |
+|---|---|
+| `GET /api/v1/derivatives/venues` | `{ venues: [{ id, name, network, capabilities, status: 'ok'|'degraded'|'down', lastOkAt, restriction: string|null }] }` |
+| `GET /api/v1/derivatives/instruments?venue=` | `{ instruments: Instrument[] }` (active first; cached 10 min) |
+| `GET /api/v1/derivatives/tickers?venue=` | `{ tickers: Ticker[], ts }` (cached ≤ 3 s) |
+| `GET /api/v1/derivatives/market?instrument=<venue:symbol>` | `{ instrument, ticker, book: Book|null, liquidity: object|null (GMX), trades: PublicTrade[] }` |
+| `GET /api/v1/derivatives/candles?instrument=&interval=&limit=` | `{ candles: Candle[] }` |
+| `GET /api/v1/derivatives/funding?instrument=&hours=` | `{ history: [{ ts, rate }], intervalSec }` |
+| `GET /api/v1/derivatives/stream?instrument=` | Server-Sent Events: `ticker`, `book`, `trades`, `status` (`connected|reconnecting|stale`); one upstream subscription shared by all listeners, closed when the last one leaves |
+| `GET /api/v1/derivatives/compare?base=BTC` | `{ rows: [{ venue, instrument, mark, index, funding (per hour, normalised, with the venue's own interval stated), spreadBps|null, depthUsd1pct|null, takerFeeBps, maxLeverage, collateral, settlement, notes[] }] }` — a table, never a recommendation |
+| `GET /api/v1/derivatives/accounts` | `{ accounts: [{ id, venue, network, kind: 'paper'|'venue', mode, label, policy, state: AccountState, positions: Position[], openOrders: Order[] }] }` |
+| `POST /api/v1/derivatives/accounts` | body `{ venue, label, collateral: DecStr, policy?: Partial<RiskPolicy> }` → creates a **paper** account (`mode: 'PAPER'`) |
+| `GET /api/v1/derivatives/accounts/:id` | account + positions + open orders + last 100 orders, fills, funding, risk events, equity history |
+| `POST /api/v1/derivatives/accounts/:id/policy` | replaces the risk policy (paper accounts only in this wave) |
+| `POST /api/v1/derivatives/accounts/:id/orders/preview` | body `OrderRequest` without `clientId` + optional `leverage` → `{ risk: RiskResult, estimate: { notional, initialMargin, fee, avgFillPrice, slippageBps, liquidationPrice: Estimate|null, freeCollateralAfter } }` — nothing is placed |
+| `POST /api/v1/derivatives/accounts/:id/orders` | header `Idempotency-Key`; body as preview → runs the risk engine, then the paper engine against the live book → `{ order, fills }`; refusals are `422` with the risk `code` |
+| `POST /api/v1/derivatives/accounts/:id/orders/:clientId/cancel` | `{ order }` |
+| `POST /api/v1/derivatives/accounts/:id/close` | body `{ instrument, fraction: DecStr (0–1] }` → a reduce-only market order |
+| `POST /api/v1/derivatives/accounts/:id/reset` | paper only: wipes positions and orders, restores collateral |
+| `GET /api/v1/derivatives/watch?account=<address>&venue=` | read-only view of any public address on a venue (`AccountState`, positions, open orders) — for looking at one's own venue account before any trading key exists |
+
+Paper accounts are driven by a worker: every few seconds, for each instrument with a paper position or resting order, feed the
+latest book and ticker to the paper engine (`onBook`, `onTicker`), apply funding at the venue's funding times with the venue's
+published rate, snapshot equity every minute, write `deriv_risk_events` (liquidation, margin warning at 80 % of maintenance,
+loss-limit breach → `policy.halt`). State is persisted after every change (`deriv_paper_accounts.state jsonb`) so a restart
+continues exactly. Live trading routes do not exist in this wave.
