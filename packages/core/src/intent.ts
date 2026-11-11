@@ -42,6 +42,16 @@ export const IntentSchema = z.strictObject({
     provider: z.enum(['cctp']), toNetwork: z.string().min(2).max(24).regex(/^[a-z0-9-]+$/), toDomain: z.number().int().min(0).max(0xffffffff),
     maxFee: U, minFinalityThreshold: z.number().int().min(1).max(0xffffffff), messenger: z.string().min(20).max(100), transmitter: z.string().min(20).max(100), approveGas: U,
   }).optional(),
+  /**
+   * Present when the intent is a native cross-chain swap through THORChain, from the wallet to itself (packages/core/src/thorchain.ts).
+   * `asset`/`amount` are the input; `to` is the Asgard vault that receives it and must equal `vault`, which must be the address of
+   * `vaultPubKey`. The signer rebuilds `memo` itself (destination = the wallet's own address on `toNetwork`, `limit` in 1e8 units
+   * worth at least `minOut` base units of `toAsset`) and refuses any difference. `router` is '' for a UTXO source.
+   */
+  xswap: z.strictObject({
+    provider: z.enum(['thorchain']), toNetwork: z.string().min(2).max(24).regex(/^[a-z0-9-]+$/), toAsset: z.string().min(1).max(80), minOut: U, limit: U,
+    memo: z.string().min(5).max(250), vault: z.string().min(20).max(100), vaultPubKey: z.string().min(20).max(120), router: z.string().max(100), expiry: z.number().int().positive(), approveGas: U,
+  }).optional(),
   evm: z.strictObject({
     nonce: z.number().int().nonnegative(), gasLimit: U, maxFeePerGas: U, maxPriorityFeePerGas: U,
   }).optional(),
@@ -80,6 +90,8 @@ function fields(i: Intent): [string, string][] {
   if (i.swap) f.push(['swap.provider', i.swap.provider], ['swap.toAsset', i.swap.toAsset], ['swap.minOut', i.swap.minOut], ['swap.router', i.swap.router], ['swap.dataHash', i.swap.dataHash], ['swap.approveGas', i.swap.approveGas]);
   if (i.bridge) f.push(['bridge.provider', i.bridge.provider], ['bridge.toNetwork', i.bridge.toNetwork], ['bridge.toDomain', String(i.bridge.toDomain)], ['bridge.maxFee', i.bridge.maxFee],
     ['bridge.minFinalityThreshold', String(i.bridge.minFinalityThreshold)], ['bridge.messenger', i.bridge.messenger], ['bridge.transmitter', i.bridge.transmitter], ['bridge.approveGas', i.bridge.approveGas]);
+  if (i.xswap) f.push(['xswap.provider', i.xswap.provider], ['xswap.toNetwork', i.xswap.toNetwork], ['xswap.toAsset', i.xswap.toAsset], ['xswap.minOut', i.xswap.minOut], ['xswap.limit', i.xswap.limit],
+    ['xswap.memo', i.xswap.memo], ['xswap.vault', i.xswap.vault], ['xswap.vaultPubKey', i.xswap.vaultPubKey], ['xswap.router', i.xswap.router], ['xswap.expiry', String(i.xswap.expiry)], ['xswap.approveGas', i.xswap.approveGas]);
   if (i.memo !== undefined) f.push(['memo', i.memo]);
   if (i.x) for (const k of Object.keys(i.x).sort()) f.push([`x.${k}`, i.x[k]!]);
   return f;
@@ -94,6 +106,7 @@ export function canonicalBytes(intent: Intent): Uint8Array {
     throw new Error('intent chain section does not match network');
   if (i.swap && (i.swap.provider === 'jupiter' ? fam !== 'sol' : fam !== 'evm')) throw new Error('swaps are only defined for EVM networks (KyberSwap) and Solana (Jupiter)');
   if (i.bridge && (fam !== 'evm' || i.swap)) throw new Error('bridges are only defined for EVM networks and exclude a swap');
+  if (i.xswap && ((fam !== 'evm' && fam !== 'btc') || i.swap || i.bridge)) throw new Error('cross-chain swaps are only defined for EVM and Bitcoin-style sources and exclude a swap or a bridge');
   baseUnits(i.amount);
   const parts: Uint8Array[] = [enc.encode(DOMAIN), new Uint8Array([0])];
   for (const [k, v] of fields(i)) {

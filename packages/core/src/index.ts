@@ -6,6 +6,7 @@ export * from './intent.ts';
 export * from './build-evm.ts';
 export * from './swap-evm.ts';
 export * from './cctp.ts';
+export * from './thorchain.ts';
 export * from './mandate.ts';
 export * from './market-listings.ts';
 export * from './market-symbols.ts';

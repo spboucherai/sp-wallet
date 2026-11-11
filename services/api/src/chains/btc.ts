@@ -167,14 +167,21 @@ export function utxoAdapter(n: NetworkDef, shape: UtxoShape, sources: Source[] =
       // chains with registry bounds (fixed-fee chains) do not depend on the node's estimate being available
       const fr = n.utxo?.feeRate;
       const est = fr ? await any((s) => s.feeRate()).catch(() => 0) : await any((s) => s.feeRate());
-      const rate = fr ? Math.min(fr.max, Math.max(fr.min, est * 1.1)) : Math.min(n.id === 'bitcoin' ? 200 : 5000, Math.max(1.1, est * 1.1));
+      const cap = fr ? fr.max : n.id === 'bitcoin' ? 200 : 5000;
+      let rate = fr ? Math.min(fr.max, Math.max(fr.min, est * 1.1)) : Math.min(cap, Math.max(1.1, est * 1.1));
+      const extra = d.thor?.extraBytes ?? 0;
+      if (d.thor) { // THORChain's recommended rate when it is higher than ours; never above this wallet's own cap
+        if (!(d.thor.minRate >= 0) || d.thor.minRate > cap) throw new UserError('fee_ceiling', `THORChain recommends a fee rate above this wallet's ceiling for ${n.name}; swap refused`, 422);
+        rate = Math.max(rate, d.thor.minRate);
+      }
       const chosen: Utxo[] = []; let total = 0n;
       for (const u of utxos) {
         chosen.push(u); total += BigInt(u.value);
-        const feeWithChange = BigInt(Math.ceil(shape.size(chosen.length, d.to, true) * rate));
-        const feeNoChange = BigInt(Math.ceil(shape.size(chosen.length, d.to, false) * rate));
+        const feeWithChange = BigInt(Math.ceil((shape.size(chosen.length, d.to, true) + extra) * rate));
+        const feeNoChange = BigInt(Math.ceil((shape.size(chosen.length, d.to, false) + extra) * rate));
         if (total >= d.amount + feeNoChange) {
           let change = total - d.amount - feeWithChange, fee = feeWithChange;
+          if (change < DUST && d.thor) { if (chosen.length >= 20) break; continue; } // a vault payment always returns change to the wallet: add a coin
           if (change < DUST) { change = 0n; fee = total - d.amount; } // dust change is added to the fee
           if (fee > feeNoChange * 3n + DUST * 2n) continue; // keep adding inputs rather than overpay
           const s = await shape.section(chosen, change, fee, (txid) => any((x) => x.rawTx(txid)));

@@ -13,6 +13,7 @@ import { initKeystore, loadMnemonic } from './keystore.ts';
 import { createSignerServer } from './server.ts';
 import { Signer } from './signer.ts';
 import { Store } from './store.ts';
+import { thorVaults } from './vaults.ts';
 
 const dir = process.env.SPW_SIGNER_DIR ?? join(homedir(), 'sp-wallet-signer-data');
 const wrapKey = process.env.SPW_SIGNER_WRAP_KEY ?? join(homedir(), '.config', 'sp-wallet-signer', 'wrap.key');
@@ -73,7 +74,8 @@ if (cmd === 'init') {
   // outbound HTTPS is used for one thing only: reading public exchange prices to check agent orders and live venue orders
   // (the signer never talks to a venue: it reads and signs payloads, the API sends them)
   dns.setDefaultResultOrder('ipv4first'); net.setDefaultAutoSelectFamilyAttemptTimeout(2500);
-  const signer = new Signer(keys, store, { rpId: need('SPW_RP_ID'), origin: need('SPW_ORIGIN') }, undefined, exchangePrices());
+  const signer = new Signer(keys, store, { rpId: need('SPW_RP_ID'), origin: need('SPW_ORIGIN') }, undefined, exchangePrices(),
+    thorVaults()); // second outbound use: asking independent THORNode operators whether a vault is genuine before signing a cross-chain swap (vaults.ts)
   const host = process.env.SPW_SIGNER_HOST ?? '127.0.0.1', port = Number(process.env.SPW_SIGNER_PORT ?? 8651);
   const allowed = (process.env.SPW_SIGNER_ALLOW_IPS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   createSignerServer(signer, secret, allowed).listen(port, host, () => console.log(`signer ${keys.keyId} listening on ${host}:${port} halted=${store.state.halted}`));

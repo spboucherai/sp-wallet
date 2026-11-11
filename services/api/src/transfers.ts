@@ -13,11 +13,12 @@ import { audit, sql } from './db.ts';
 import { listCreds } from './auth.ts';
 import { addressFor, signer } from './signer-client.ts';
 import type { BridgeState } from './bridge.ts';
+import { xswapView, type XswapState } from './xswap-state.ts';
 
 export interface ProposalRow {
   id: string; state: ProposalState; version: number; network: string; asset: string; symbol: string; decimals: number; amount: string;
   from_addr: string; to_addr: string; note: string; memo: string | null; aux: Record<string, unknown> | null;
-  kind: 'transfer' | 'swap' | 'bridge'; bridge: BridgeState | null; swap: { provider: string; toAsset: string; toSymbol: string; toDecimals: number; expectedOut: string; minOut: string; slippageBps: number; needsApproval: boolean; simulated: boolean } | null;
+  kind: 'transfer' | 'swap' | 'bridge' | 'xswap'; xswap?: XswapState | null; bridge: BridgeState | null; swap: { provider: string; toAsset: string; toSymbol: string; toDecimals: number; expectedOut: string; minOut: string; slippageBps: number; needsApproval: boolean; simulated: boolean } | null;
   pre_raw: string | null; pre_txid: string | null; pre_state: string | null; out_amount: string | null; fee_estimate: string | null; max_fee: string | null; warnings: string[];
   intent: Intent | null; intent_hash: string | null; raw: string | null; txid: string | null; block_ref: string | null; confirmations: number; error: string | null;
   created_at: Date; updated_at: Date; expires_at: Date | null; broadcast_at: Date | null; last_broadcast_at: Date | null; finalized_at: Date | null;
@@ -42,6 +43,7 @@ export function view(p: ProposalRow) {
       /** provider-specific facts shown on the review sheet (Solana: licence label, venues, priority fee, token-account rent) */
       detail: (p.swap as { detail?: Record<string, unknown> }).detail ?? null } : null,
     bridge: p.bridge ? bridgeView(p, p.bridge) : null,
+    xswap: p.xswap ? xswapView(p, p.xswap) : null,
   };
 }
 
@@ -139,6 +141,7 @@ export function transferRoutes(app: FastifyInstance): void {
     if (p.state !== 'draft' && p.state !== 'pending_approval') throw new UserError('bad_state', `proposal is ${p.state}`, 409);
     if (p.kind === 'swap') throw new UserError('bad_state', 'a swap is prepared once; start a new one', 409);
     if (p.kind === 'bridge') throw new UserError('bad_state', 'a cross-chain transfer is prepared once; start a new one', 409);
+    if (p.kind === 'xswap') throw new UserError('bad_state', 'a cross-chain swap is prepared once; start a new one', 409);
     const n = getNetwork(p.network), st = await signer.status(true);
     if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
     // One transfer in flight per network: a second one prepared before the first is confirmed would reuse the same
@@ -196,6 +199,7 @@ export function transferRoutes(app: FastifyInstance): void {
     p = await move(p, 'signed', { raw: signed.raw, txid: signed.txid, ...(signed.pre ? { pre_raw: signed.pre.raw, pre_txid: signed.pre.txid } : {}) });
     if (p.kind === 'swap') { const { advanceSwap } = await import('./swap-exec.ts'); return view(await advanceSwap(p)); }
     if (p.kind === 'bridge') { const { advanceBridgeBurn } = await import('./bridge.ts'); return view(await advanceBridgeBurn(p)); }
+    if (p.kind === 'xswap') { const { advanceXswapSend } = await import('./xswap.ts'); return view(await advanceXswapSend(p)); }
     return view(await broadcastNow(p));
   });
 
