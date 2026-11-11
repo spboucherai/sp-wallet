@@ -1,0 +1,11 @@
+{
+ "recordedAt": "2026-11-11T01:04:35.720Z",
+ "url": "https://aggregator-api.kyberswap.com/ethereum/api/v1/routes?tokenIn=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&tokenOut=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&amountIn=1000000000000000000000000000000000",
+ "status": 400,
+ "body": {
+  "code": 4009,
+  "message": "amountIn is greater than max allowed",
+  "details": null,
+  "requestId": "a5fe8a1f-17a9-4e80-94b6-dd81085ea8b0"
+ }
+}

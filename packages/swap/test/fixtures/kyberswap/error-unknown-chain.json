@@ -1,0 +1,12 @@
+{
+ "recordedAt": "2026-11-11T01:04:36.905Z",
+ "url": "https://aggregator-api.kyberswap.com/notachain/api/v1/routes?tokenIn=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&tokenOut=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&amountIn=10000000000000000",
+ "status": 404,
+ "body": {
+  "message": "",
+  "path": "/notachain/api/v1/routes?tokenIn=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&tokenOut=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&amountIn=10000000000000000",
+  "request_id": "cd12e411-96e8-4c1e-85bd-2bcbb5487c8e",
+  "request_ip": "10.19.10.118",
+  "status": 404
+ }
+}

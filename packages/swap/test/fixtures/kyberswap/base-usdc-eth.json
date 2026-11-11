@@ -1,0 +1,106 @@
+{
+ "recordedAt": "2026-11-11T01:04:23.279Z",
+ "url": "https://aggregator-api.kyberswap.com/base/api/v1/routes?tokenIn=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913&tokenOut=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&amountIn=25000000",
+ "status": 200,
+ "body": {
+  "code": 0,
+  "message": "successfully",
+  "data": {
+   "routeSummary": {
+    "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+    "amountIn": "25000000",
+    "amountInUsd": "25.011984387929886",
+    "tokenOut": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "amountOut": "12234435864902746",
+    "amountOutUsd": "25.036506975056085",
+    "gas": "700081",
+    "gasPrice": "6000000",
+    "gasUsd": "0.008595859931663584",
+    "l1FeeUsd": "0.000007766891245321637",
+    "extraFee": {
+     "feeAmount": "",
+     "chargeFeeBy": "",
+     "isInBps": false,
+     "feeReceiver": ""
+    },
+    "route": [
+     [
+      {
+       "pool": "kipseli-prop_0x4200000000000000000000000000000000000006_0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+       "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+       "tokenOut": "0x4200000000000000000000000000000000000006",
+       "swapAmount": "25000000",
+       "amountOut": "12234435864902746",
+       "exchange": "kipseli-prop",
+       "poolType": "kipseli-prop",
+       "poolExtra": {
+        "blockNumber": 55843431,
+        "routerAddress": "0x71c2ed90cc288229be59f26b8b3eef3c07d7ab99",
+        "approvalAddress": "0x71c2ed90cc288229be59f26b8b3eef3c07d7ab99"
+       },
+       "extra": {
+        "_ce": {
+         "prCnt": 1,
+         "tgtAmtOut": "12234435864902746",
+         "ces": [
+          {
+           "pool": "0x0000009e5f98cdb4dd1e1d2e15b220217c88b3b8_0x4200000000000000000000000000000000000006_0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+           "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+           "tokenOut": "0x4200000000000000000000000000000000000006",
+           "swapAmount": "25000000",
+           "amountOut": "12234035762723931",
+           "exchange": "biconomy-prop",
+           "poolType": "biconomy-prop",
+           "poolExtra": {
+            "approvalAddress": "0x0000009e5f98cdb4dd1e1d2e15b220217c88b3b8",
+            "blockNumber": 55843430
+           },
+           "extra": {
+            "dirIndex": 1,
+            "takes": [
+             {
+              "member": 0,
+              "amountIn": "25000000"
+             }
+            ],
+            "grossOut": "12235698098956200"
+           }
+          },
+          {
+           "pool": "0x72ab388e2e2f6facef59e3c3fa2c4e29011c2d38",
+           "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+           "tokenOut": "0x4200000000000000000000000000000000000006",
+           "swapAmount": "25000000",
+           "amountOut": "12234133479567775",
+           "exchange": "pancake-v3",
+           "poolType": "pancake-v3",
+           "poolExtra": {
+            "swapFee": 100,
+            "priceLimit": "1461446703485210103287273052203988822378723970341",
+            "blockNumber": 55843424
+           },
+           "extra": {
+            "rAI": "0",
+            "nSqrtRx96": "3581307378819992076253480",
+            "nT": -200098
+           }
+          }
+         ]
+        },
+        "_cs": "849598695788208598",
+        "_ts": "1794359063",
+        "ri": "a150fa25wWlOb54V"
+       }
+      }
+     ]
+    ],
+    "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
+    "routeID": "a150fa25wWlOb54V",
+    "checksum": "849598695788208598",
+    "timestamp": 1794359063
+   },
+   "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"
+  },
+  "requestId": "a150fa25-c169-4e6f-9e15-2cfaf6df4c01"
+ }
+}

@@ -1,0 +1,58 @@
+{
+ "recordedAt": "2026-11-11T01:04:20.910Z",
+ "url": "https://aggregator-api.kyberswap.com/ethereum/api/v1/routes?tokenIn=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&tokenOut=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&amountIn=10000000000000000",
+ "status": 200,
+ "body": {
+  "code": 0,
+  "message": "successfully",
+  "data": {
+   "routeSummary": {
+    "tokenIn": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "amountIn": "10000000000000000",
+    "amountInUsd": "20.443360956023007",
+    "tokenOut": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "amountOut": "20443811",
+    "amountOutUsd": "20.44273786706934",
+    "gas": "289533",
+    "gasPrice": "49057230",
+    "gasUsd": "0.029037109970746235",
+    "l1FeeUsd": "0",
+    "extraFee": {
+     "feeAmount": "",
+     "chargeFeeBy": "",
+     "isInBps": false,
+     "feeReceiver": ""
+    },
+    "route": [
+     [
+      {
+       "pool": "0x2e8135be71230c6b1b4045696d41c09db0414226",
+       "tokenIn": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+       "tokenOut": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+       "swapAmount": "10000000000000000",
+       "amountOut": "20443811",
+       "exchange": "pancake",
+       "poolType": "uniswap-v2",
+       "poolExtra": {
+        "fee": 25,
+        "feePrecision": 10000,
+        "blockNumber": 26388203
+       },
+       "extra": {
+        "_cs": "3309733246281749145",
+        "_ts": "1794359061",
+        "ri": "eae278c9OYtLlpnf"
+       }
+      }
+     ]
+    ],
+    "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
+    "routeID": "eae278c9OYtLlpnf",
+    "checksum": "3309733246281749145",
+    "timestamp": 1794359061
+   },
+   "routerAddress": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"
+  },
+  "requestId": "eae278c9-398b-4b96-99df-a52d751a9504"
+ }
+}
