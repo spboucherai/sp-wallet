@@ -1,0 +1,1 @@
+{"recordedAt":"2026-11-11T01:12:02.030Z","url":"https://api.jup.ag/swap/v2/build?inputMint=DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263&outputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=1&taker=GkwFnmMDvn3HGMpJpWBg8tgJxr3NxNvg3AXxvXVPbRGJ&slippageBps=50","status":400,"body":{"error":"No routes found"}}
