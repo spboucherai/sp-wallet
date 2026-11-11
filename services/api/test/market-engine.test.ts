@@ -328,3 +328,11 @@ describe('quality verdict (the logic of assertFresh)', () => {
     expect(r.status).toBe('stale');
   });
 });
+
+describe('market configuration defaults', () => {
+  it('default depths are days, not milliseconds: two years of 1h, 30 days of 5m, all of 1d', async () => {
+    const { marketConfig } = await import('../src/market/pipeline.ts');
+    for (const k of ['SPW_MARKET_DEPTH_1H_DAYS', 'SPW_MARKET_DEPTH_1D_DAYS', 'SPW_MARKET_DEPTH_5M_DAYS']) delete process.env[k];
+    expect(marketConfig().depthMs).toEqual({ '1h': 730 * 86_400_000, '1d': null, '5m': 30 * 86_400_000 });
+  });
+});

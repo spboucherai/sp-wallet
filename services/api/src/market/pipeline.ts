@@ -11,7 +11,7 @@ export interface MarketConfig {
   /** backfill depth per interval; null = everything the source has */
   depthMs: Record<Interval, number | null>;
 }
-const days = (k: string, d: number | null): number | null => { const v = process.env[k]; return v === undefined || v === '' ? d : v === 'all' ? null : Number(v) * DAY; };
+const days = (k: string, d: number | null): number | null => { const v = process.env[k]; return v === undefined || v === '' ? (d === null ? null : d * DAY) : v === 'all' ? null : Number(v) * DAY; };
 /** Defaults: two years of 1h, all available 1d, 30 days of 5m. Override with SPW_MARKET_DEPTH_{1H,1D,5M}_DAYS (a number of days, or "all"). */
 export const marketConfig = (): MarketConfig => ({ symbols: SYMBOLS, intervals: ['1h', '1d', '5m'],
   depthMs: { '1h': days('SPW_MARKET_DEPTH_1H_DAYS', 730), '1d': days('SPW_MARKET_DEPTH_1D_DAYS', null), '5m': days('SPW_MARKET_DEPTH_5M_DAYS', 30) } });
