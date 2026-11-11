@@ -107,7 +107,7 @@ describe('bridge intent', () => {
     ['a destination that is the source', {}, { toNetwork: 'base', toDomain: 6 }, /same network/],
     ['a domain that is not the destination network\'s', {}, { toDomain: 0 }, /destination domain/],
     ['a network without CCTP USDC (BNB Chain)', {}, { toNetwork: 'bsc', toDomain: 17 }, /not enabled/],
-    ['Solana (not in scope)', {}, { toNetwork: 'solana', toDomain: 5 }, /not enabled/],
+    ['Solana without naming the wallet\'s Solana address (v8: Solana is a destination, see cctp-sol.test.ts)', {}, { toNetwork: 'solana', toDomain: 5 }, /names the wallet's Solana address/],
     ['a fee ceiling equal to the amount', {}, { maxFee: '25000000', minFinalityThreshold: 1000 }, /below the amount/],
     ['a fee ceiling above 1 %', {}, { maxFee: '250001', minFinalityThreshold: 1000 }, /1 %/],
     ['a finality threshold Circle does not define', {}, { minFinalityThreshold: 500 }, /1000 .* or 2000/],

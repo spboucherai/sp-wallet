@@ -157,7 +157,7 @@ describe('preparation', () => {
     expect((await api('GET', '/api/v1/bridge/quote?from=base&to=arbitrum&amount=10')).status).toBe(401);
     cookie = saved;
     expect((await api('POST', '/api/v1/bridge/proposals', { fromNetwork: 'base', toNetwork: 'arbitrum', amount: '10' })).json.error).toBe('idempotency');
-    for (const [b, code] of [[{ fromNetwork: 'base', toNetwork: 'base', amount: '10' }, 'same_network'], [{ fromNetwork: 'base', toNetwork: 'bsc', amount: '10' }, 'bridge_not_enabled'], [{ fromNetwork: 'solana', toNetwork: 'base', amount: '10' }, 'bridge_not_enabled'],
+    for (const [b, code] of [[{ fromNetwork: 'base', toNetwork: 'base', amount: '10' }, 'same_network'], [{ fromNetwork: 'base', toNetwork: 'bsc', amount: '10' }, 'bridge_not_enabled'], [{ fromNetwork: 'tron', toNetwork: 'base', amount: '10' }, 'bridge_not_enabled'], [{ fromNetwork: 'solana', toNetwork: 'solana', amount: '10' }, 'same_network'], // v8: Solana ↔ EVM is enabled (bridge-sol.test.ts)
       [{ fromNetwork: 'base', toNetwork: 'arbitrum', amount: '0' }, 'bad_amount'], [{ fromNetwork: 'base', toNetwork: 'arbitrum', amount: '1000' }, 'insufficient_funds'], [{ fromNetwork: 'base', toNetwork: 'arbitrum', amount: '60' }, 'policy']] as const)
       expect((await api('POST', '/api/v1/bridge/proposals', b, crypto.randomUUID())).json.error, JSON.stringify(b)).toBe(code);
     expect((await api('POST', '/api/v1/bridge/proposals', { fromNetwork: 'base', toNetwork: 'arbitrum', amount: '10', to: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' }, crypto.randomUUID())).status).toBe(400); // no recipient field exists

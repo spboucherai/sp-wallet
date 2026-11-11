@@ -11,6 +11,7 @@ export interface SignerStatus {
   venues?: { authorization: { authorizationId: string; venue: string; network: string }; hash: string; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; today: { orders: number; cancels: number; leverage: number } }[];
 }
 
+interface SolTxParams { recentBlockhash: string; lastValidBlockHeight: number; computeUnitLimit: number; computeUnitPrice: string }
 async function call<T>(method: 'GET' | 'POST', path: string, payload?: unknown): Promise<T> {
   const body = payload === undefined ? '' : JSON.stringify(payload);
   const ts = Math.floor(Date.now() / 1000), nonce = randomUUID();
@@ -38,9 +39,12 @@ export const signer = {
     return v;
   },
   enroll: (p: unknown) => { cached = null; return call<{ ok: true }>('POST', '/enroll', p); },
-  sign: (intent: unknown, assertion: unknown, aux?: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string; pre?: { raw: string; txid: string } }>('POST', '/sign', { intent, assertion, ...(aux ? { aux } : {}) }); },
-  bridgeMint: (p: { proposalId: string; message: string; attestation: string; evm: { nonce: number; gasLimit: string; maxFeePerGas: string; maxPriorityFeePerGas: string }; assertion?: unknown }) => {
+  sign: (intent: unknown, assertion: unknown, aux?: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string; pre?: { raw: string; txid: string }; eventAccount?: string }>('POST', '/sign', { intent, assertion, ...(aux ? { aux } : {}) }); },
+  bridgeMint: (p: { proposalId: string; message: string; attestation: string; evm?: { nonce: number; gasLimit: string; maxFeePerGas: string; maxPriorityFeePerGas: string }; /** v8: a mint on Solana */ sol?: SolTxParams; assertion?: unknown }) => {
     cached = null; return call<{ raw: string; txid: string; messageHash: string; minted: string; replayed: boolean }>('POST', '/bridge/mint', p); },
+  // v8 (Solana ↔ EVM): reclaim of the event-account deposit of a burn made on Solana, and the wallet's own USDC token account — passkey each
+  bridgeReclaim: (p: { proposalId: string; message: string; attestation: string; sol: SolTxParams; assertion: unknown }) => { cached = null; return call<{ raw: string; txid: string; eventAccount: string }>('POST', '/bridge/reclaim', p); },
+  solTokenAccount: (request: unknown, assertion: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string; tokenAccount: string }>('POST', '/sol/token-account', { request, assertion }); },
   halt: () => { cached = null; return call<{ ok: true }>('POST', '/halt', {}); },
   // agent vaults and mandates
   vaultAddress: (index: number) => call<{ address: string }>('POST', '/vault/address', { index }),

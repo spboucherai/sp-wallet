@@ -12,11 +12,12 @@ by hand, with the same signer verification:
 |---|---|---|---|
 | swap (EVM) | KyberSwap, same network, 8 networks | pinned router bytecode, decoded calldata: recipient = wallet, amount, minimum output | `packages/core/src/swap-evm.ts`, `services/api/src/swap-exec.ts` |
 | swap (Solana) | Jupiter (Metis) | decoded v1 transaction: programs, accounts, amounts, minimum output | `packages/core/src/swap-sol.ts`, `services/api/src/swap-exec-sol.ts` |
-| bridge | Circle CCTP V2, native USDC, 7 EVM networks | builds burn and mint itself; wallet → wallet; the mint must match the approved burn | `packages/core/src/cctp.ts`, `services/api/src/bridge.ts` |
+| bridge | Circle CCTP V2, native USDC, 7 EVM networks — and, since v8, Solana ↔ each of them (§5) | builds burn and mint itself; wallet → wallet; the mint must match the approved burn | `packages/core/src/cctp.ts`, `services/api/src/bridge.ts`; Solana: `packages/core/src/cctp-sol.ts`, `cctp-sol-tx.ts`, `services/api/src/bridge-sol.ts` |
 | xswap | THORChain native swap | builds memo and transaction itself; vault confirmed by its own THORNode operators | `packages/core/src/thorchain.ts`, `services/api/src/xswap.ts` |
 
 New code: `packages/swap/src/plan.ts` (pure planner), `services/api/src/plan-state.ts` (pure saga state machine),
-`services/api/src/plan-exec.ts` (routes + worker tick), `apps/web/src/plan.tsx` (UI). Nothing in the signer changed.
+`services/api/src/plan-exec.ts` (routes + worker tick), `apps/web/src/plan.tsx` (UI). Nothing in the signer changed for V7.
+(v8 added the Solana side of the CCTP leg to the signer — a leg, not a plan capability: §5.)
 
 ## 1. What is executable today
 
@@ -30,11 +31,11 @@ Matrix by network family (source in rows, destination in columns):
 
 | from \ to | EVM with CCTP¹ | BNB Chain | Bitcoin / Litecoin | Dogecoin | Solana | other networks² |
 |---|---|---|---|---|---|---|
-| **EVM with CCTP¹** | **yes** — up to swap → CCTP → swap | same network only | **yes** — (swap →) CCTP to Ethereum → THORChain³ | **yes**, same route³ | **no** (§5) | no |
+| **EVM with CCTP¹** | **yes** — up to swap → CCTP → swap | same network only | **yes** — (swap →) CCTP to Ethereum → THORChain³ | **yes**, same route³ | **yes** (v8, §5) — (swap →) CCTP to Solana (→ Jupiter) | no |
 | **BNB Chain** | same network only (no CCTP there) | **yes** — one swap | no | no | no | no |
-| **Bitcoin / Litecoin** | **yes** — THORChain to Ethereum (→ CCTP → swap)³ | no | **yes** — THORChain BTC ↔ LTC | **yes** — THORChain | no | no |
+| **Bitcoin / Litecoin** | **yes** — THORChain to Ethereum (→ CCTP → swap)³ | no | **yes** — THORChain BTC ↔ LTC | **yes** — THORChain | **yes** (v8) — THORChain to USDC on Ethereum → CCTP to Solana (→ Jupiter)³ | no |
 | **Dogecoin** | no — destination only⁴ | no | no | — | no | no |
-| **Solana** | **no** (§5) | no | no | no | **yes** — one Jupiter swap | no |
+| **Solana** | **yes** (v8, §5) — (Jupiter →) CCTP from Solana (→ swap) | no | **yes** (v8) — (Jupiter →) CCTP to Ethereum → THORChain³ | **yes** (v8), same route³ | **yes** — one Jupiter swap | no |
 | **other networks²** | no | no | no | no | no | no |
 
 ¹ Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, HyperEVM: KyberSwap swaps and CCTP between any two of them.
@@ -45,8 +46,10 @@ Each THORChain leg has a minimum amount below which a refund could not pay its o
 (about 50 USD per transfer) and Bitcoin fees, small amounts may be refused at planning with `below_minimum`.
 ⁴ THORChain asks 750 000 koinu per byte for a Dogecoin inbound, far above the wallet's fee ceiling, which is not raised.
 
-A pair without a plan is answered with a reason, never with a faked route: `solana_evm_bridge`,
-`network_without_execution` (which network), `no_executable_path`. `GET /api/v1/plans/capabilities` lists the legs.
+A pair without a plan is answered with a reason, never with a faked route: `network_without_execution` (which network),
+`no_executable_path` — and `solana_evm_bridge` only where the Solana CCTP leg is not among the capabilities (it is, since
+v8: `GET /api/v1/plans/capabilities` lists `solana` under `cctp`). The three-leg limit still applies: BNB Chain ↔ Solana has
+no path (no CCTP on BNB Chain), and Dogecoin stays a destination only.
 
 Quotes from providers the wallet cannot execute (LI.FI, deBridge when enabled, Maya) stay on the Swap screen, each labelled
 **"Comparaison seulement / Comparison only"** — also, and explicitly, when one of them guarantees more than the best plan.
@@ -121,31 +124,38 @@ aggregator, more network fees and more time; in exchange every transaction is on
 catalogued in `packages/core/src/alert-catalog.ts`, derived from the audit chain by `services/api/src/alerts/rules.ts`.
 Tapping one opens `/plan/<id>`.
 
-## 5. Solana ↔ EVM: not executable yet — decision and reason
+## 5. Solana ↔ EVM: executable since v8 (2026-11-11)
 
-Circle's CCTP V2 is live on Solana (domain 5; MessageTransmitterV2 `CCTPV2Sm4AdWt5296sk4P66VBZ7bEhcARwFaaS9YPbeC`,
-TokenMessengerMinterV2 `CCTPV2vPZJS2u2BBsUoscuikbYjnpFmbFsvVuJdgUMQe`; developers.circle.com/cctp/solana-programs, read on
-2026-11-11). A Solana CCTP leg was **not** added in this delivery, because it could not be given the same guarantees as the
-EVM leg within it:
+V7 shipped without this leg and listed why (the list is kept below, with what became of each point). V8 adds it:
+**USDC between Solana and each of the seven EVM networks, in both directions, through Circle CCTP V2** (Solana = domain 5),
+with the guarantees of the EVM leg — the signer builds every transaction itself from the approved intent, wallet to
+wallet, one passkey for the burn and exactly one mint. The dossier, the evidence and the strict "not verified" list are in
+`docs/swap/providers/cctp.md` §13; the proof script is `scripts/sim-solana-cctp.mts` (mainnet simulation + a local fork).
 
-- `deposit_for_burn` on Solana needs a **second signer**: a fresh keypair for the MessageSent event account, generated
-  client-side and co-signing the transaction. The signer today signs with the wallet key only; an ephemeral co-signer is a
-  new signing capability that must be designed and reviewed (who generates it, where it lives, reclaiming its rent — Circle
-  documents a 5-day wait before `reclaim_event_account`).
-- Both directions need **new signer-side builders and verifiers** for two Anchor instructions (about twenty accounts for
-  the burn, eleven remaining accounts for a mint, all program-derived addresses to re-derive and pin), plus pinning the two
-  programs' deployments as was done for Jupiter.
-- With Solana as destination, `mintRecipient` is the wallet's **USDC token account**, which must exist when the message is
-  received: the "own address as recipient" check becomes "own associated token account, derived by the signer", and the
-  account's creation is one more instruction to verify.
-- The EVM mint check (`verifyCctpMint`) requires `messageSender` = the wallet's EVM address; for a Solana-sourced message
-  that field is a Solana account whose exact value Circle's pages do not state. It must be established from mainnet
-  messages before any rule is written.
-- None of this can be proven on a fork: the proof would be mainnet **simulation** of both instructions (as for Jupiter),
-  with the attestation part simulated — work of the size of the Jupiter delivery, not an addition to this one.
+| Obstacle listed in V7 | Answer in V8 |
+|---|---|
+| `deposit_for_burn` needs a second signer: a fresh keypair for the event account | The **signer generates it itself**, at signing time, uses it for that one signature and drops the secret; only the public key is recorded with the bridge. Sound because the program never needs that key again: `reclaim_event_account` is signed by the **rent payer** (the wallet) alone — read in Circle's source and IDL, seen on real reclaims. The API cannot supply the account: any helper data on a bridge is refused. |
+| Its rent can only be reclaimed after five days | Measured: **0.00282448 SOL** (428 bytes). Counted inside the approved fee ceiling (and the policy's 0.003 SOL ceiling), shown before approval as a **refundable deposit with its date**; "Récupérer le dépôt" appears after five days — passkey each time, only for the account recorded with that burn, simulated before and after signing. |
+| New signer-side builders and verifiers for two Anchor instructions; pin the two programs | `cctp-sol.ts` / `cctp-sol-tx.ts`: `deposit_for_burn` (18 accounts), `receive_message` (20 — one more than Circle's page lists), `reclaim_event_account`, all accounts derived from pinned ids and seeds; the encoders reproduce real mainnet instructions **byte for byte**. Both programs pinned like Jupiter's (ProgramData, slot, authority, executable hash, two RPC endpoints). They are upgradeable by a key: said in the dossier. |
+| With Solana as destination, `mintRecipient` is the wallet's USDC token account, which must exist | The signer derives the associated token account from its own key and puts **that** in the burn (never the wallet address). The API **refuses to burn** toward an account that does not exist and offers to create it first (one small passkey-approved transaction, deposit 0.00148844 SOL shown); it also requires the SOL the mint will cost. |
+| `messageSender` of a Solana-sourced message is not stated in Circle's docs | Established: it is the **wallet's Solana public key** — the `owner` signer of the instruction, not the token account and not the fee payer. Source line, eight real attested messages from seven wallets (three paid by a third party), and the message our own simulated burn stores. The header `sender` is the token-messenger **program id**, which is what the EVM contracts have registered for domain 5. |
+| The proof must be a mainnet simulation | Done, both directions, plus the EVM halves on a fork: the signer-built burn succeeds on mainnet and stores exactly the expected message; that message is minted by the real EVM contracts on a fork; the signer-built `receive_message` succeeds on mainnet **with a real Circle attestation**; the reclaim and the token-account creation succeed on mainnet. Nothing was sent. |
 
-So Solana ↔ EVM pairs show **"Pas encore exécutable"** with this reason, the provider quotes remain visible as comparison
-only, and `whyNotExecutable` returns `solana_evm_bridge`. Swaps inside Solana (Jupiter) are unchanged.
+What changes for plans: `planCaps().cctp` lists Solana, so the planner enumerates e.g.
+`SOL → [Jupiter] → USDC → [CCTP] → USDC on Base → [KyberSwap] → cbBTC`, `USDC (Arbitrum) → [CCTP] → USDC (Solana) → [Jupiter] → JUP`,
+or `BTC → [THORChain] → USDC (Ethereum) → [CCTP] → USDC (Solana) → [Jupiter] → SOL`. Each leg is prepared through
+`/bridge/proposals` like any other CCTP leg, so everything of §2 applies. Specific to this leg:
+
+- from Solana, Standard is attested in about 17 s and Fast in under a second (Circle's figures) — far faster than from
+  Ethereum or the L2s;
+- a plan whose CCTP leg starts on Solana needs SOL for the fee **and the refundable deposit**: the plan card lists the
+  deposit among that leg's network fees (as the quote adapter reports it) and counts it, with the usual margin, in the SOL
+  required before starting. Reclaiming it later is done from the transfer's own details, not from the plan;
+- a plan whose CCTP leg ends on Solana needs the wallet's USDC token account to exist: if it does not, preparing that leg
+  pauses the plan with `token_account_missing` (nothing burned); create the account from the Swap screen, then "réessayer".
+
+Not verified for plans: a full plan run with a Solana CCTP leg (the leg itself is proven; the planner and the plan routes
+are covered by tests).
 
 ## 6. Proof
 

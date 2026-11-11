@@ -65,6 +65,8 @@ export async function enableTestAttesters(f: Forks, dst: string): Promise<TestAt
   await f.rpc(dst, 'anvil_stopImpersonatingAccount', [manager]);
   return { keys, manager, threshold: Number(hexToBigInt(await call(encodeFunctionData({ abi: tAbi, functionName: 'signatureThreshold' })))) };
 }
+/** FORK ONLY: the test attesters' signatures over a message (v8: also used for messages that did not start on a fork, scripts/sim-solana-cctp.mts). */
+export const attestMessage = (message: Hex, a: TestAttesters): Promise<Hex> => attest(message, a);
 async function attest(message: Hex, a: TestAttesters): Promise<Hex> {
   const digest = keccak256(message); let out = '0x';
   for (const k of a.keys) out += serializeSignature(await sign({ hash: digest, privateKey: k.key })).slice(2);

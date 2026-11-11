@@ -10,10 +10,12 @@ import {
 } from '@spw/core';
 import { buildSolSwapMessage, solV1Wire } from '@spw/core'; // Jupiter swaps on Solana (kept apart from the shared import line)
 import { buildXswapBtcTx, buildXswapEvmTxs, verifyXswap, type NetworkDef } from '@spw/core'; // THORChain native swaps
+// v8 — Solana ↔ EVM USDC (Circle CCTP on Solana): every transaction is built here from the approved intent or bridge record
+import { buildCctpSolBurnMessage, buildCctpSolMintMessage, buildCctpSolReclaimMessage, buildSolTokenAccountMessage, CCTP_SOL_NETWORK, CCTP_SOL_RECLAIM_WINDOW_SEC, cctpSolMintRetryBytes, cctpSolReclaimBytes, SolTokenAccountSchema, solTokenAccountHash, solV1WireSigned, type SolBudget } from '@spw/core';
 import { noVaults, type VaultView } from './vaults.ts';
 import type { Keys } from './keys.ts';
 import { noPrices, type PriceView } from './prices.ts';
-import type { Store, StoredCredential } from './store.ts';
+import type { Store, StoredBridge, StoredCredential } from './store.ts';
 import { venueAuthorize, venueKeyAddress, venueRevoke, venueSign, venueStatus, type VenueCtx, type VenueSignRequest } from './venue.ts';
 import { venueDepositVerdict, venueWithdraw } from './venue-collateral.ts';
 import { venueMandateApprove, venueMandateRevoke, venueMandateSign, venueMandateStatus, type VenueMandateSignRequest } from './venue-mandate.ts';
@@ -22,7 +24,8 @@ import { noVenueReader, type VenueReader } from './venue-read.ts';
 export class SignerError extends Error { constructor(public code: string, msg: string) { super(msg); } }
 const sha = (s: string | Uint8Array) => createHash('sha256').update(s).digest();
 export interface SignerConfig { rpId: string; origin: string }
-export interface SignResult { raw: string; txid: string; hash: string; /** swaps with a token input: the exact-amount approval that must be mined first */ pre?: { raw: string; txid: string } }
+export interface SignResult { raw: string; txid: string; hash: string; /** swaps with a token input: the exact-amount approval that must be mined first */ pre?: { raw: string; txid: string };
+  /** v8, a burn on Solana: public key of the one-time event account the signer generated and co-signed with */ eventAccount?: string }
 
 export class Signer {
   constructor(private keys: Keys, private store: Store, private cfg: SignerConfig, private now: () => number = () => Math.floor(Date.now() / 1000), private prices: PriceView = noPrices, private venueInfo: VenueReader = noVenueReader, private vaults: VaultView = noVaults) {}
@@ -36,7 +39,8 @@ export class Signer {
       policy: this.store.policy,
       spentToday: Object.fromEntries(Object.entries(s.spent).filter(([k]) => k.startsWith(today)).map(([k, v]) => [k.slice(11), v])),
       journalHead: s.journal[s.journal.length - 1]?.hash ?? null, journalLength: s.journal.length,
-      bridges: Object.entries(s.bridges ?? {}).map(([id, b]) => ({ id, ...b.bridge, approvedAt: b.approvedAt, burnTxid: b.burnTxid, mintTxid: b.mint?.txid ?? null, mintSignatures: b.mint?.signatures ?? 0 })),
+      bridges: Object.entries(s.bridges ?? {}).map(([id, b]) => ({ id, ...b.bridge, approvedAt: b.approvedAt, burnTxid: b.burnTxid, mintTxid: b.mint?.txid ?? null, mintSignatures: b.mint?.signatures ?? 0,
+        ...(b.sol ? { eventAccount: b.sol.eventAccount, reclaimTxid: b.reclaim?.txid ?? null, reclaimSignatures: b.reclaim?.signatures ?? 0 } : {}) })),
       mandates: Object.values(s.mandates ?? {}).map((m) => ({ mandate: m.mandate, approvedAt: m.approvedAt, revoked: m.revoked, revokedAt: m.revokedAt ?? null,
         expired: this.now() >= m.mandate.expiresAt, today: m.usage[today] ?? { sold: {}, orders: 0 } })),
       venues: venueStatus(this.venueCtx()),
@@ -247,11 +251,14 @@ export class Signer {
     const rec = st.state.bridges?.[id];
     if (!rec) throw new SignerError('not_found', 'no approved bridge with this id');
     if (st.state.halted) deny('policy', 'emergency halt is active');
-    const g = req.evm;
+    if (rec.bridge.toNetwork === CCTP_SOL_NETWORK) return this.bridgeMintSol(id, rec, req, deny); // v8: the mint is a Solana transaction
+    const g = req.evm!;
     if (!g || typeof g.nonce !== 'number' || [g.gasLimit, g.maxFeePerGas, g.maxPriorityFeePerGas].some((v) => typeof v !== 'string' || !/^(0|[1-9]\d{0,77})$/.test(v))) deny('bad_request', 'malformed gas parameters');
     if (typeof req.message !== 'string' || typeof req.attestation !== 'string' || req.message.length > 4000 || req.attestation.length > 2000) deny('bad_request', 'malformed message');
     const b = rec.bridge;
-    if (b.wallet !== this.keys.addresses.evm || this.keys.addresses[b.toNetwork] !== b.wallet) deny('wrong_source', 'bridge is not for this wallet');
+    // v8: a bridge from Solana names its EVM recipient; both ends must be this wallet's own addresses. Between EVM networks the rule is the previous one.
+    if (b.recipient === undefined ? (b.wallet !== this.keys.addresses.evm || this.keys.addresses[b.toNetwork] !== b.wallet)
+      : (this.keys.addresses[b.fromNetwork] !== b.wallet || this.keys.addresses[b.toNetwork] !== b.recipient)) deny('wrong_source', 'bridge is not for this wallet');
     const ceiling = st.policy.maxFee[b.toNetwork];
     if (ceiling === undefined) deny('policy', 'no fee ceiling in the policy for the destination network');
     let tx, v;
@@ -274,6 +281,101 @@ export class Signer {
     st.log('bridge.mint.ok', { proposalId: id, messageHash: v.messageHash, fromNetwork: b.fromNetwork, toNetwork: b.toNetwork, amount: b.amount, minted: v.minted.toString(), feeExecuted: v.msg.body.feeExecuted.toString(), txid, signatures, burnTxid: rec.burnTxid });
     st.save(); // durable before the signature leaves
     return { raw, txid, messageHash: v.messageHash, minted: v.minted.toString(), replayed: false };
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  // v8 — Solana ↔ EVM (Circle CCTP V2 on Solana, packages/core/src/cctp-sol-tx.ts). Same rules as the EVM mint above.
+
+  /** The mint of an EVM → Solana bridge: receive_message, payer = the wallet, credited account = the wallet's own USDC token account. */
+  private async bridgeMintSol(id: string, rec: StoredBridge, req: BridgeMintRequest, deny: (code: string, msg: string) => never): Promise<BridgeMintResult> {
+    const st = this.store, now = this.now(), b = rec.bridge, g = req.sol;
+    if (!g || typeof g.recentBlockhash !== 'string' || !Number.isInteger(g.lastValidBlockHeight) || !Number.isInteger(g.computeUnitLimit) || typeof g.computeUnitPrice !== 'string') return deny('bad_request', 'malformed transaction parameters');
+    if (typeof req.message !== 'string' || typeof req.attestation !== 'string' || req.message.length > 4000 || req.attestation.length > 2000) deny('bad_request', 'malformed message');
+    if (b.recipient === undefined || this.keys.addresses[b.fromNetwork] !== b.wallet || this.keys.addresses[b.toNetwork] !== b.recipient) deny('wrong_source', 'bridge is not for this wallet');
+    const ceiling = st.policy.maxFee[b.toNetwork];
+    if (ceiling === undefined) deny('policy', 'no fee ceiling in the policy for the destination network');
+    let built, v;
+    try { v = verifyCctpMint(b, req.message, req.attestation); built = buildCctpSolMintMessage(b, req.message, req.attestation, g, baseUnits(ceiling!)); }
+    catch (e) { return deny('unsupported', (e as Error).message); }
+    for (const [other, r] of Object.entries(st.state.bridges ?? {})) if (other !== id && r.mint?.messageHash === v.messageHash) deny('replay', 'this message already served another bridge');
+    const params = [v.messageHash, req.attestation.toLowerCase(), g.recentBlockhash, g.lastValidBlockHeight, g.computeUnitLimit, g.computeUnitPrice].join('|');
+    let signatures = 1;
+    if (rec.mint) {
+      if (rec.mint.params === params && !req.assertion) return { raw: rec.mint.raw, txid: rec.mint.txid, messageHash: v.messageHash, minted: v.minted.toString(), replayed: true }; // same bytes, no new signature
+      if (!req.assertion) deny('replay', 'a mint was already signed for this bridge; another signature needs the owner\'s passkey');
+      if (rec.mint.signatures >= 6) deny('policy', 'too many mint signatures for this bridge');
+      try { await this.verifyAssertion(req.assertion!, new Uint8Array(sha(cctpSolMintRetryBytes(id, v.messageHash, g)))); } catch (e) { deny((e as SignerError).code ?? 'bad_approval', (e as Error).message); }
+      signatures = rec.mint.signatures + 1;
+    }
+    const sig = ed25519.sign(built.msg, this.keys.solSeed);
+    const raw = Buffer.from(solV1WireSigned([sig], built.msg)).toString('base64'), txid = base58.encode(sig);
+    rec.mint = { messageHash: v.messageHash, txid, raw, params, signedAt: now, signatures };
+    st.prune(now);
+    st.log('bridge.mint.ok', { proposalId: id, messageHash: v.messageHash, fromNetwork: b.fromNetwork, toNetwork: b.toNetwork, amount: b.amount, minted: v.minted.toString(), feeExecuted: v.msg.body.feeExecuted.toString(), txid, signatures, burnTxid: rec.burnTxid, tokenAccount: built.tokenAccount });
+    st.save(); // durable before the signature leaves
+    return { raw, txid, messageHash: v.messageHash, minted: v.minted.toString(), replayed: false };
+  }
+
+  /**
+   * The rent of the event account of a Solana burn, back to the wallet (reclaim_event_account). The program lets only the
+   * recorded rent payer sign for it — the wallet — and pays the wallet; the one-time event key is not needed and no longer
+   * exists. Every reclaim signature needs the owner's passkey over the exact transaction parameters.
+   */
+  async signBridgeReclaim(req: BridgeReclaimRequest): Promise<{ raw: string; txid: string; eventAccount: string }> {
+    const st = this.store, now = this.now();
+    const id = String(req?.proposalId ?? '');
+    const deny = (code: string, msg: string): never => { st.log('bridge.reclaim.denied', { proposalId: id, code, msg }); st.save(); throw new SignerError(code, msg); };
+    const rec = st.state.bridges?.[id];
+    if (!rec) throw new SignerError('not_found', 'no approved bridge with this id');
+    if (st.state.halted) deny('policy', 'emergency halt is active');
+    const b = rec.bridge, g = req.sol, ev = rec.sol?.eventAccount;
+    if (!ev || b.fromNetwork !== CCTP_SOL_NETWORK) return deny('unsupported', 'this bridge has no event account to reclaim');
+    if (!g || typeof g.recentBlockhash !== 'string' || !Number.isInteger(g.lastValidBlockHeight) || !Number.isInteger(g.computeUnitLimit) || typeof g.computeUnitPrice !== 'string') return deny('bad_request', 'malformed transaction parameters');
+    if (typeof req.message !== 'string' || typeof req.attestation !== 'string' || req.message.length > 4000 || req.attestation.length > 2000) deny('bad_request', 'malformed message');
+    if (this.keys.addresses[b.fromNetwork] !== b.wallet) deny('wrong_source', 'bridge is not for this wallet');
+    // the program refuses before the account is five days old; the approval is older than the account, so this only saves a wasted fee
+    if (now < rec.approvedAt + CCTP_SOL_RECLAIM_WINDOW_SEC) deny('policy', 'the deposit cannot be reclaimed before five days');
+    const ceiling = st.policy.maxFee[b.fromNetwork];
+    if (ceiling === undefined) deny('policy', 'no fee ceiling in the policy for Solana');
+    if ((rec.reclaim?.signatures ?? 0) >= 12) deny('policy', 'too many reclaim signatures for this bridge');
+    let built;
+    try { built = buildCctpSolReclaimMessage(b, ev, req.message, req.attestation, g, baseUnits(ceiling!)); } catch (e) { return deny('unsupported', (e as Error).message); }
+    if (!req.assertion) deny('bad_approval', 'reclaiming the deposit needs the owner\'s passkey');
+    try { await this.verifyAssertion(req.assertion!, new Uint8Array(sha(cctpSolReclaimBytes(id, ev, built.messageHash, g)))); } catch (e) { deny((e as SignerError).code ?? 'bad_approval', (e as Error).message); }
+    const sig = ed25519.sign(built.msg, this.keys.solSeed), txid = base58.encode(sig);
+    rec.reclaim = { txid, signedAt: now, signatures: (rec.reclaim?.signatures ?? 0) + 1 };
+    st.log('bridge.reclaim.ok', { proposalId: id, eventAccount: ev, txid, signatures: rec.reclaim.signatures });
+    st.save();
+    return { raw: Buffer.from(solV1WireSigned([sig], built.msg)).toString('base64'), txid, eventAccount: ev };
+  }
+
+  /**
+   * Open the wallet's own USDC token account on Solana (needed before USDC can be burned toward Solana). Passkey over the
+   * canonical request; the only possible effect is that account, owned by the wallet, and its rent deposit paid by the wallet.
+   */
+  async signSolTokenAccount(raw: unknown, assertion?: AuthenticationResponseJSON): Promise<{ raw: string; txid: string; hash: string; tokenAccount: string }> {
+    const st = this.store, now = this.now();
+    const parsed = SolTokenAccountSchema.safeParse(raw);
+    if (!parsed.success) throw new SignerError('bad_request', 'malformed request');
+    const r = parsed.data, hash = solTokenAccountHash(r);
+    const deny = (code: string, msg: string): never => { st.log('sol.token_account.denied', { requestId: r.requestId, code, msg }); st.save(); throw new SignerError(code, msg); };
+    if (r.keyId !== this.keys.keyId) deny('wrong_key', 'request targets another key');
+    if (r.owner !== this.keys.addresses[CCTP_SOL_NETWORK]) deny('wrong_source', 'the token account is not for this wallet');
+    if (st.state.used[r.requestId] !== undefined) deny('replay', 'request already signed');
+    if (st.state.halted) deny('policy', 'emergency halt is active');
+    if (r.policyVersion !== st.policy.version) deny('policy', 'policy version changed');
+    if (r.expiresAt <= now) deny('policy', 'approval window expired');
+    if (r.createdAt > now + 60 || r.expiresAt - r.createdAt > st.policy.maxApprovalTtlSec) deny('policy', 'validity window is not acceptable');
+    if (BigInt(r.maxFee) > baseUnits(st.policy.maxFee[CCTP_SOL_NETWORK] ?? '0')) deny('policy', 'fee ceiling above policy');
+    let built;
+    try { built = buildSolTokenAccountMessage(r); } catch (e) { return deny('unsupported', (e as Error).message); }
+    if (!assertion) deny('bad_approval', 'opening the token account needs the owner\'s passkey');
+    try { await this.verifyAssertion(assertion!, hash); } catch (e) { deny((e as SignerError).code ?? 'bad_approval', (e as Error).message); }
+    st.state.used[r.requestId] = r.expiresAt; st.prune(now);
+    const sig = ed25519.sign(built.msg, this.keys.solSeed), txid = base58.encode(sig);
+    st.log('sol.token_account.ok', { requestId: r.requestId, hash: Buffer.from(hash).toString('hex'), tokenAccount: r.tokenAccount, mint: r.mint, txid });
+    st.save();
+    return { raw: Buffer.from(solV1WireSigned([sig], built.msg)).toString('base64'), txid, hash: Buffer.from(hash).toString('hex'), tokenAccount: r.tokenAccount };
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
@@ -332,17 +434,38 @@ export class Signer {
     if (!verdict.ok) deny('policy', verdict.reason);
 
     // Rebuild the chain transaction from the intent alone; any unsupported shape throws here.
-    let build: () => Promise<{ raw: string; txid: string; pre?: { raw: string; txid: string } }>;
+    let build: () => Promise<{ raw: string; txid: string; pre?: { raw: string; txid: string }; eventAccount?: string }>;
     if (i.xswap) {
       // native cross-chain swap: memo and transaction are rebuilt here, and the vault is confirmed by this signer's own THORNode operators
       try { build = await this.xswapBuild(i, net, aux); } catch (e) { return deny(e instanceof SignerError ? e.code : 'unsupported', (e as Error).message); }
     } else
     try {
-      if (i.bridge) {
+      if (i.bridge && net.family === 'sol') {
+        // v8 — USDC burned on Solana for the wallet's own EVM address. Nothing comes from outside: the single instruction
+        // (deposit_for_burn) and all its accounts are derived here. The program needs a second signer, the account that will
+        // hold the message: its keypair is generated HERE, signs this one transaction and is dropped — the program never asks
+        // for it again (the rent is reclaimed later with the wallet's signature alone). Its public key is recorded.
+        if (aux && Object.keys(aux).length > 0) throw new Error('a bridge takes no helper data: the signer builds the transaction itself');
+        buildCctpSolBurnMessage(i, EVENT_ACCOUNT_PROBE); // every check of the intent, before the approval is looked at
+        if (this.keys.addresses[i.bridge.toNetwork] !== i.bridge.recipient) throw new Error('the recipient is not this wallet\'s own address on the destination network');
+        if (st.policy.maxFee[i.bridge.toNetwork] === undefined) throw new Error('no fee ceiling in the policy for the destination network');
+        if (st.state.bridges?.[i.proposalId]) throw new Error('bridge already recorded');
+        build = async () => {
+          const eventKey = ed25519.utils.randomSecretKey();
+          try {
+            const eventAccount = base58.encode(ed25519.getPublicKey(eventKey));
+            const msg = buildCctpSolBurnMessage(i, eventAccount);
+            const sig = ed25519.sign(msg, this.keys.solSeed), txid = base58.encode(sig);
+            (st.state.bridges ??= {})[i.proposalId] = { bridge: bridgeOf(i), approvedAt: now, burnTxid: txid, sol: { eventAccount } };
+            return { raw: Buffer.from(solV1WireSigned([sig, ed25519.sign(msg, eventKey)], msg)).toString('base64'), txid, eventAccount };
+          } finally { eventKey.fill(0); }
+        };
+      } else if (i.bridge) {
         // nothing provider-built: approval and burn are rebuilt from the intent and the pinned tables
         if (i.swap) throw new Error('an intent is a swap or a bridge, not both');
         const txs = buildCctpBurnTxs(i);
-        if (this.keys.addresses[i.bridge.toNetwork] !== own) throw new Error('the destination network is not served by the same wallet address');
+        // v8: toward Solana the intent names the wallet's Solana address (the mint recipient is its USDC token account); between EVM networks it is `own`, as before
+        if (this.keys.addresses[i.bridge.toNetwork] !== (i.bridge.recipient ?? own)) throw new Error('the destination network is not served by the same wallet address');
         if (st.policy.maxFee[i.bridge.toNetwork] === undefined) throw new Error('no fee ceiling in the policy for the destination network');
         if (st.state.bridges?.[i.proposalId]) throw new Error('bridge already recorded');
         build = async () => {
@@ -403,14 +526,17 @@ export class Signer {
     const out = await build!();
     st.log('sign.ok', { proposalId: i.proposalId, hash: Buffer.from(hash).toString('hex'), network: i.network, symbol: i.symbol, amount: i.amount, to: i.to, txid: out.txid, ...(i.swap ? { swap: i.swap.provider, toAsset: i.swap.toAsset, minOut: i.swap.minOut } : {}),
       ...(i.xswap ? { xswap: i.xswap.provider, toNetwork: i.xswap.toNetwork, toAsset: i.xswap.toAsset, minOut: i.xswap.minOut, vault: i.xswap.vault, vaultPubKey: i.xswap.vaultPubKey, memo: i.xswap.memo } : {}),
-      ...(i.bridge ? { bridge: i.bridge.provider, toNetwork: i.bridge.toNetwork, cctpMaxFee: i.bridge.maxFee, minFinalityThreshold: i.bridge.minFinalityThreshold } : {}),
+      ...(i.bridge ? { bridge: i.bridge.provider, toNetwork: i.bridge.toNetwork, cctpMaxFee: i.bridge.maxFee, minFinalityThreshold: i.bridge.minFinalityThreshold, ...(i.bridge.recipient !== undefined ? { recipient: i.bridge.recipient } : {}), ...(out.eventAccount ? { eventAccount: out.eventAccount } : {}) } : {}),
       ...(i.venueDeposit ? { venueDeposit: i.venueDeposit.venue, venueNetwork: i.venueDeposit.venueNetwork, route: i.venueDeposit.route } : {}) });
     st.save();
     return { ...out, hash: Buffer.from(hash).toString('hex') };
   }
 }
 
-export interface BridgeMintRequest { proposalId: string; message: string; attestation: string; evm: CctpMintGas; assertion?: AuthenticationResponseJSON }
+export interface BridgeMintRequest { proposalId: string; message: string; attestation: string; /** EVM destination */ evm?: CctpMintGas; /** v8: Solana destination */ sol?: SolBudget; assertion?: AuthenticationResponseJSON }
+export interface BridgeReclaimRequest { proposalId: string; message: string; attestation: string; sol: SolBudget; assertion?: AuthenticationResponseJSON }
+/** any valid public key that is not the wallet: lets the intent be checked in full before the one-time event key exists */
+const EVENT_ACCOUNT_PROBE = 'SysvarC1ock11111111111111111111111111111111';
 export interface BridgeMintResult { raw: string; txid: string; messageHash: string; minted: string; replayed: boolean }
 
 export interface DelegatedSigner {

@@ -151,12 +151,13 @@ test('USDC on Base → LINK on Arbitrum: "bridge then swap", two approvals, plan
   await page.getByRole('dialog').getByRole('button', { name: 'Fermer' }).last().click();
 
   // ── what is not executable is said, with the reason; what is missing is named ───────────────────────────────────────
-  await pickTo(page, 'SOL', /SOL\b.*Solana/);
+  // (v8: Solana ↔ EVM became executable through CCTP, so the example of a pair without execution is now Tron)
+  await pickTo(page, 'TRX', /TRX\b.*Tron/i);
   await amount(page).fill('10');
   await expect(page.getByTestId('plan-not-executable')).toContainText('Pas encore exécutable', { timeout: 30_000 });
-  await expect(page.getByTestId('plan-not-executable')).toContainText('Circle CCTP prend en charge Solana');
+  await expect(page.getByTestId('plan-not-executable')).toContainText('n’exécute encore aucun échange ni transfert entre réseaux');
   await expect(cards(page)).toHaveCount(0);
-  await shot(page, '11-solana-not-executable-phone');
+  await shot(page, '11-network-not-executable-phone');
   await pickTo(page, 'OP', /^OP\b.*OP Mainnet|OP.*Optimism/);                       // a network where the throwaway wallet holds no ETH
   await amount(page).fill('12');
   await expect(cards(page).first()).toBeVisible({ timeout: 60_000 });
