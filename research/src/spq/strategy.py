@@ -48,6 +48,13 @@ from .data.core import interval_seconds
 
 WEIGHT_TOL = 1e-9
 META_KEYS = {"name", "version", "universe", "interval", "lookback", "params"}
+# Contract v2 (perpetual futures, docs/v4/quant-perps.md). A META without "kind" (or with "kind": "spot") is the
+# spot contract above, unchanged. "kind": "perp" adds two mandatory keys: the per-symbol bound of a weight and the
+# bound of the sum of absolute weights. A universe symbol ending in ".SPOT" is a spot leg (long-only, fully paid).
+KINDS = ("spot", "perp")
+PERP_META_KEYS = {"max_leverage", "max_gross_exposure"}
+MAX_LEVERAGE_LIMIT = 50.0
+SPOT_LEG_SUFFIX = ".SPOT"
 ALLOWED_IMPORTS = {
     "__future__", "math", "typing", "collections", "itertools", "functools", "dataclasses", "statistics", "warnings",
     "numpy", "pandas", "scipy", "statsmodels", "arch", "sklearn",
@@ -87,8 +94,13 @@ def sha256_file(path) -> str:
 def validate_meta(meta) -> dict:
     if not isinstance(meta, dict):
         raise StrategyError("META must be a dict")
-    missing = META_KEYS - meta.keys()
-    extra = meta.keys() - META_KEYS
+    kind = meta.get("kind", "spot")
+    if kind not in KINDS:
+        raise StrategyError(f"META['kind'] must be one of {list(KINDS)} (absent = spot), got {kind!r}")
+    allowed = META_KEYS | {"kind"} | (PERP_META_KEYS if kind == "perp" else set())
+    required = META_KEYS | (PERP_META_KEYS if kind == "perp" else set())
+    missing = required - meta.keys()
+    extra = meta.keys() - allowed
     if missing or extra:
         raise StrategyError(f"META keys: missing {sorted(missing)}, unexpected {sorted(extra)}")
     for k in ("name", "version", "interval"):
@@ -107,6 +119,10 @@ def validate_meta(meta) -> dict:
         raise StrategyError("META['lookback'] must be a positive integer (number of closed bars the strategy needs)")
     if not isinstance(meta["params"], dict) or not all(isinstance(k, str) for k in meta["params"]):
         raise StrategyError("META['params'] must be a dict with string keys")
+    if kind == "perp":
+        _validate_perp_meta(meta)
+    elif any(s.endswith(SPOT_LEG_SUFFIX) for s in u):
+        raise StrategyError(f"'{SPOT_LEG_SUFFIX}' symbols (spot legs) only exist in META['kind'] = 'perp' strategies")
     try:
         import json
 
@@ -114,6 +130,26 @@ def validate_meta(meta) -> dict:
     except (TypeError, ValueError) as e:
         raise StrategyError(f"META must be JSON-serialisable: {e}") from e
     return meta
+
+
+def _validate_perp_meta(meta: dict) -> None:
+    for k in sorted(PERP_META_KEYS):
+        v = meta[k]
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v <= 0:
+            raise StrategyError(f"META[{k!r}] must be a positive finite number")
+    if meta["max_leverage"] > MAX_LEVERAGE_LIMIT:
+        raise StrategyError(f"META['max_leverage'] above {MAX_LEVERAGE_LIMIT:g} is refused")
+    u = meta["universe"]
+    perps = [s for s in u if not s.endswith(SPOT_LEG_SUFFIX)]
+    if not perps:
+        raise StrategyError("a perp strategy needs at least one perpetual in its universe")
+    for s in u:
+        if s.endswith(SPOT_LEG_SUFFIX) and s[: -len(SPOT_LEG_SUFFIX)] not in perps:
+            raise StrategyError(f"spot leg {s!r} has no perpetual {s[: -len(SPOT_LEG_SUFFIX)]!r} in the universe")
+    n_spot = len(u) - len(perps)
+    if meta["max_gross_exposure"] > meta["max_leverage"] * len(perps) + n_spot + WEIGHT_TOL:
+        raise StrategyError("META['max_gross_exposure'] cannot exceed max_leverage x number of perpetuals "
+                            "(+ 1 per spot leg)")
 
 
 def static_check(source: str) -> list[str]:
@@ -230,6 +266,43 @@ def validate_weights(weights, symbols) -> dict[str, float]:
     return out
 
 
+def is_spot_leg(symbol: str) -> bool:
+    return symbol.endswith(SPOT_LEG_SUFFIX)
+
+
+def validate_perp_weights(weights, symbols, max_leverage: float, max_gross_exposure: float) -> dict[str, float]:
+    """Check a contract-v2 allocation: dict symbol -> finite number, negative = short.
+
+    A perpetual's weight is in [-max_leverage, max_leverage]; a spot leg ('X.SPOT') is in [0, 1]; the sum of
+    absolute weights is at most max_gross_exposure. Weights are fractions of account equity (notional / equity).
+    Symbols that are not returned get weight 0. Values within 1e-9 of a bound are snapped onto it; anything beyond
+    is refused, never scaled down silently.
+    """
+    if not isinstance(weights, dict):
+        raise WeightsError(f"target_weights must return a dict, got {type(weights).__name__}")
+    unknown = [s for s in weights if s not in symbols]
+    if unknown:
+        raise WeightsError(f"weights for symbols outside the universe: {sorted(map(str, unknown))}")
+    lev = float(max_leverage)
+    out: dict[str, float] = {}
+    for s in symbols:
+        w = weights.get(s, 0.0)
+        if isinstance(w, bool) or not isinstance(w, (int, float, np.integer, np.floating)):
+            raise WeightsError(f"weight of {s} is not a number: {w!r}")
+        w = float(w)
+        if not math.isfinite(w):
+            raise WeightsError(f"weight of {s} is not finite: {w!r}")
+        lo, hi = (0.0, 1.0) if is_spot_leg(s) else (-lev, lev)
+        if w < lo - WEIGHT_TOL or w > hi + WEIGHT_TOL:
+            what = "a spot leg is long-only and unlevered" if is_spot_leg(s) else f"max_leverage is {lev:g}"
+            raise WeightsError(f"weight of {s} is outside [{lo:g}, {hi:g}]: {w!r} ({what})")
+        out[s] = min(max(w, lo), hi)
+    gross = math.fsum(abs(w) for w in out.values())
+    if gross > float(max_gross_exposure) + WEIGHT_TOL:
+        raise WeightsError(f"gross exposure {gross!r} exceeds max_gross_exposure {float(max_gross_exposure):g}")
+    return out
+
+
 # ------------------------------------------------------------------------------------------------------- loader
 
 @dataclass
@@ -246,6 +319,10 @@ class Strategy:
     @property
     def name(self) -> str:
         return self.meta["name"]
+
+    @property
+    def kind(self) -> str:
+        return self.meta.get("kind", "spot")
 
     @property
     def universe(self) -> list[str]:
@@ -266,8 +343,15 @@ class Strategy:
         with purity_guard():
             return self.func(data, p)
 
+    def validate(self, raw, symbols) -> dict[str, float]:
+        """Weight validation of this strategy's contract (spot: [0, 1], sum <= 1; perp: signed, leverage caps)."""
+        if self.kind == "perp":
+            return validate_perp_weights(raw, list(symbols), self.meta["max_leverage"],
+                                         self.meta["max_gross_exposure"])
+        return validate_weights(raw, list(symbols))
+
     def __call__(self, data: dict, params: dict | None = None) -> dict[str, float]:
-        return validate_weights(self.raw(data, params), list(data.keys()))
+        return self.validate(self.raw(data, params), list(data.keys()))
 
 
 def load_strategy(directory, expected_sha256: str | None = None, *, strict: bool = True) -> Strategy:

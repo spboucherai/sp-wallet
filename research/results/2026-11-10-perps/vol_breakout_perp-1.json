@@ -1,0 +1,5397 @@
+{
+ "schema_version": 2,
+ "kind": "perp",
+ "generated_at": "2026-11-11T04:39:37+00:00",
+ "strategy_sha256": "aea15314a810a58be158d1a49c66302fa89dabfa66dacf5e4e02470bf1fc09e2",
+ "strategy": {
+  "name": "vol_breakout_perp",
+  "version": "1",
+  "meta": {
+   "name": "vol_breakout_perp",
+   "version": "1",
+   "kind": "perp",
+   "universe": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "HYPE"
+   ],
+   "interval": "1h",
+   "lookback": 500,
+   "max_leverage": 2.0,
+   "max_gross_exposure": 2.0,
+   "params": {
+    "move_window": 24,
+    "vol_window": 168,
+    "k": 2.0,
+    "hold": 48,
+    "gross": 1.0
+   }
+  }
+ },
+ "config": {
+  "symbols": [
+   "BTC",
+   "ETH",
+   "SOL",
+   "HYPE"
+  ],
+  "interval": "1h",
+  "start": "2026-04-16T20:00:00+00:00",
+  "end": "2026-11-11T03:00:00+00:00",
+  "fee_bps": 4.5,
+  "slippage_bps": 2.0,
+  "initial_cash": 1000.0,
+  "min_order": 10.0,
+  "rebalance_threshold": 0.05,
+  "decision_every": 1,
+  "params": {
+   "move_window": 24,
+   "vol_window": 168,
+   "k": 2.0,
+   "hold": 48,
+   "gross": 1.0
+  },
+  "source": "hyperliquid",
+  "bars": 4995,
+  "split_fractions": [
+   0.6,
+   0.2,
+   0.2
+  ],
+  "venue": "hyperliquid",
+  "taker_fee_bps": 4.5,
+  "maker_fee_bps": 1.5,
+  "liquidity": "taker",
+  "leverage": 2.0,
+  "max_leverage": 2.0,
+  "max_gross_exposure": 2.0,
+  "venue_max_leverage": {
+   "BTC": 40.0,
+   "ETH": 25.0,
+   "SOL": 20.0,
+   "HYPE": 10.0
+  },
+  "maintenance_fraction": {
+   "BTC": 0.0125,
+   "ETH": 0.02,
+   "SOL": 0.025,
+   "HYPE": 0.05
+  },
+  "liquidation_penalty_bps": 100.0,
+  "size_decimals": {
+   "BTC": 5,
+   "ETH": 4,
+   "SOL": 2,
+   "HYPE": 2
+  },
+  "spot_fee_bps": 10.0,
+  "spot_slippage_bps": 10.0,
+  "funding_reference_price": "perpetual open at the settlement hour"
+ },
+ "splits": {
+  "train": [
+   "2026-04-16T20:00:00+00:00",
+   "2026-08-19T21:00:00+00:00"
+  ],
+  "validation": [
+   "2026-08-19T22:00:00+00:00",
+   "2026-09-30T12:00:00+00:00"
+  ],
+  "test": [
+   "2026-09-30T13:00:00+00:00",
+   "2026-11-11T03:00:00+00:00"
+  ]
+ },
+ "metrics": {
+  "train": {
+   "total_return": 0.13817277624394952,
+   "cagr": 0.4599804980844864,
+   "volatility": 0.2853299504485399,
+   "sharpe": 1.4683666890481248,
+   "sortino": 2.2967379780751553,
+   "max_drawdown": 0.1439282309436759,
+   "calmar": 3.195901839886385,
+   "turnover": 28.89715199123473,
+   "turnover_annual": 84.4923402680962,
+   "trades": 107,
+   "closed_lots": 59,
+   "win_rate": 0.423728813559322,
+   "profit_factor": 1.6223457804155845,
+   "fees_paid": 13.6557691012791,
+   "slippage_paid": 6.069191114,
+   "exposure": 0.2698021787252398,
+   "bars": 2997,
+   "final_equity": 1138.1727762439496,
+   "returns": {
+    "n": 2996,
+    "mean": 4.782751080209909e-05,
+    "std": 0.0030485639373723636,
+    "skew": 1.9352954675934597,
+    "excess_kurtosis": 33.54265552177177,
+    "min": -0.020868366649181458,
+    "p01": -0.009520721643380452,
+    "p05": -0.0033729750969945793,
+    "median": 0.0,
+    "p95": 0.0032814973990827334,
+    "p99": 0.010613068404371274,
+    "max": 0.04123650478806584,
+    "positive_fraction": 0.2466622162883845
+   },
+   "realised_pnl": 38.34106,
+   "funding_pnl": -1.059463540771271,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 0.11039222369922017,
+   "short_exposure": 0.15940995502601965,
+   "gross_leverage_mean": 0.2698021787252398,
+   "gross_leverage_max": 1.0387309825748883,
+   "net_leverage_mean": -0.049017731326799485,
+   "net_leverage_max": 1.0100987125435723,
+   "net_leverage_min": -1.0322435768909437,
+   "time_in_market": 0.4981648314981648,
+   "avg_holding_bars": 55.20338983050848,
+   "avg_holding_hours": 55.20338983050848,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 0.2707960916408385,
+   "margin_utilisation_max": 0.5193654912874441,
+   "worst_intrabar_drawdown": 0.14415560247043258,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 3253,
+   "funding_missing": 0
+  },
+  "validation": {
+   "total_return": 0.08668424960840482,
+   "cagr": 1.074432659684414,
+   "volatility": 0.2963791869536521,
+   "sharpe": 2.609981508694632,
+   "sortino": 3.899972666832564,
+   "max_drawdown": 0.0971014955866617,
+   "calmar": 11.06504748658066,
+   "turnover": 10.482732789591902,
+   "turnover_annual": 92.01276476635778,
+   "trades": 41,
+   "closed_lots": 21,
+   "win_rate": 0.47619047619047616,
+   "profit_factor": 2.1795116186348196,
+   "fees_paid": 5.0437990185876,
+   "slippage_paid": 2.241692372,
+   "exposure": 0.364060520117927,
+   "bars": 999,
+   "final_equity": 1086.6842496084048,
+   "returns": {
+    "n": 998,
+    "mean": 8.830413213595679e-05,
+    "std": 0.0031666178041046553,
+    "skew": 0.5709311445383753,
+    "excess_kurtosis": 27.314198796645897,
+    "min": -0.029838587305423103,
+    "p01": -0.011102121693061516,
+    "p05": -0.00351775031829632,
+    "median": 0.0,
+    "p95": 0.0041138326389101075,
+    "p99": 0.010331821216072611,
+    "max": 0.03231364789169011,
+    "positive_fraction": 0.2785571142284569
+   },
+   "realised_pnl": 97.98236,
+   "funding_pnl": -4.012619001007504,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 0.28484811630622336,
+   "short_exposure": 0.07921240381170364,
+   "gross_leverage_mean": 0.364060520117927,
+   "gross_leverage_max": 1.0185136307969045,
+   "net_leverage_mean": 0.20563571249451973,
+   "net_leverage_max": 1.0185136307969045,
+   "net_leverage_min": -0.7839442922008965,
+   "time_in_market": 0.5805805805805806,
+   "avg_holding_bars": 68.85714285714286,
+   "avg_holding_hours": 68.85714285714286,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 0.3135314306877664,
+   "margin_utilisation_max": 0.5092568153984521,
+   "worst_intrabar_drawdown": 0.10017310620974784,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 1446,
+   "funding_missing": 0
+  },
+  "test": {
+   "total_return": -0.023190368717953214,
+   "cagr": -0.18612796538359633,
+   "volatility": 0.17712658486895863,
+   "sharpe": -1.0741950803056528,
+   "sortino": -1.4694083598460594,
+   "max_drawdown": 0.055548010749599586,
+   "calmar": -3.3507584317038397,
+   "turnover": 10.967692268805829,
+   "turnover_annual": 96.26952332138183,
+   "trades": 42,
+   "closed_lots": 23,
+   "win_rate": 0.5217391304347826,
+   "profit_factor": 0.6444443994005106,
+   "fees_paid": 4.9107622299615,
+   "slippage_paid": 2.18257977,
+   "exposure": 0.3142399310983856,
+   "bars": 999,
+   "final_equity": 976.8096312820468,
+   "returns": {
+    "n": 998,
+    "mean": -2.172014909333071e-05,
+    "std": 0.001892481732578648,
+    "skew": -0.454230246192899,
+    "excess_kurtosis": 22.11925500818621,
+    "min": -0.016675718921603577,
+    "p01": -0.0059919494082690625,
+    "p05": -0.0024640957704903264,
+    "median": 0.0,
+    "p95": 0.002358140993986523,
+    "p99": 0.005147985282271411,
+    "max": 0.015647366578053212,
+    "positive_fraction": 0.2865731462925852
+   },
+   "realised_pnl": -19.93642,
+   "funding_pnl": 1.237383282008263,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 0.03972912374960546,
+   "short_exposure": 0.2745108073487801,
+   "gross_leverage_mean": 0.3142399310983856,
+   "gross_leverage_max": 1.0210081605653452,
+   "net_leverage_mean": -0.23478168359917467,
+   "net_leverage_max": 0.49965322164384124,
+   "net_leverage_min": -0.8087562947171529,
+   "time_in_market": 0.5695695695695696,
+   "avg_holding_bars": 54.43478260869565,
+   "avg_holding_hours": 54.43478260869564,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 0.2758573736092155,
+   "margin_utilisation_max": 0.5105040802826726,
+   "worst_intrabar_drawdown": 0.06300519775181057,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 1250,
+   "funding_missing": 0
+  }
+ },
+ "benchmarks": {
+  "perp_long_1x": {
+   "total_return": -0.2213473436665384,
+   "cagr": -0.8887592396173908,
+   "volatility": 0.46702600799921073,
+   "sharpe": -4.467796952183205,
+   "sortino": -5.861265356457314,
+   "max_drawdown": 0.2539299076568955,
+   "calmar": -3.5000179688099706,
+   "turnover": 1.0959510366811065,
+   "turnover_annual": 9.619770622571636,
+   "trades": 4,
+   "closed_lots": 4,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.449436559338,
+   "slippage_paid": 0.19970964,
+   "exposure": 1.0032475421230125,
+   "bars": 999,
+   "final_equity": 778.6526563334616,
+   "returns": {
+    "n": 998,
+    "mean": -0.00023819376428415098,
+    "std": 0.004989867497482182,
+    "skew": -0.6030242992468015,
+    "excess_kurtosis": 7.6738401220094,
+    "min": -0.032221899914061214,
+    "p01": -0.014235435155096652,
+    "p05": -0.007635001537081454,
+    "median": -0.00010853188979492723,
+    "p95": 0.006481981990350277,
+    "p99": 0.012752320859532781,
+    "max": 0.028696369434238145,
+    "positive_fraction": 0.48597194388777554
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": -9.048657467200504,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 1.0032475421230125,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 1.0032475421230125,
+   "gross_leverage_max": 1.0106960846301005,
+   "net_leverage_mean": 1.0032475421230125,
+   "net_leverage_max": 1.0106960846301005,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.998998998998999,
+   "avg_holding_bars": 998.0,
+   "avg_holding_hours": 998.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 1.0042528001812518,
+   "margin_utilisation_max": 1.0106960846301003,
+   "worst_intrabar_drawdown": 0.2564006350616894,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 3988,
+   "funding_missing": 0
+  },
+  "perp_long_1x_BTC": {
+   "total_return": -0.13905441831416188,
+   "cagr": -0.7313136291641367,
+   "volatility": 0.3454267734571662,
+   "sharpe": -3.6312867628090815,
+   "sortino": -4.694237893752055,
+   "max_drawdown": 0.1698639064989359,
+   "calmar": -4.305291478556205,
+   "turnover": 1.0503527325657964,
+   "turnover_annual": 9.21952899526691,
+   "trades": 1,
+   "closed_lots": 1,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.44947517706,
+   "slippage_paid": 0.1997268,
+   "exposure": 1.0034453733859645,
+   "bars": 999,
+   "final_equity": 860.9455816858381,
+   "returns": {
+    "n": 998,
+    "mean": -0.00014318991666379668,
+    "std": 0.003690659192660995,
+    "skew": -1.0538897500460471,
+    "excess_kurtosis": 10.032494110175296,
+    "min": -0.028894970953964316,
+    "p01": -0.011686186288702046,
+    "p05": -0.005436902358898571,
+    "median": -1.7214570170842602e-05,
+    "p95": 0.0049945614892300426,
+    "p99": 0.009449029521490966,
+    "max": 0.020897349172080082,
+    "positive_fraction": 0.4969939879759519
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": -9.97401633710194,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 1.0034453733859645,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 1.0034453733859645,
+   "gross_leverage_max": 1.0107576244315606,
+   "net_leverage_mean": 1.0034453733859645,
+   "net_leverage_max": 1.0107576244315606,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.998998998998999,
+   "avg_holding_bars": 998.0,
+   "avg_holding_hours": 998.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 1.0044508296719223,
+   "margin_utilisation_max": 1.0107576244315606,
+   "worst_intrabar_drawdown": 0.17191416669680792,
+   "orders_cut": 1,
+   "orders_refused": 0,
+   "funding_payments": 997,
+   "funding_missing": 0
+  },
+  "perp_long_1x_ETH": {
+   "total_return": -0.24702771885772457,
+   "cagr": -0.9171255259696907,
+   "volatility": 0.48516436293186993,
+   "sharpe": -4.888541805639888,
+   "sortino": -6.093729822407544,
+   "max_drawdown": 0.27469523381023053,
+   "calmar": -3.338701998023287,
+   "turnover": 1.1260801314026057,
+   "turnover_annual": 9.884230411910647,
+   "trades": 1,
+   "closed_lots": 1,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.4497029811117,
+   "slippage_paid": 0.199828026,
+   "exposure": 1.0034810868975008,
+   "bars": 999,
+   "final_equity": 752.9722811422754,
+   "returns": {
+    "n": 998,
+    "mean": -0.00027074729118711067,
+    "std": 0.005183663958891296,
+    "skew": -1.7020993225719485,
+    "excess_kurtosis": 16.16444040469287,
+    "min": -0.045239864774596406,
+    "p01": -0.015483531963503371,
+    "p05": -0.007595807707154806,
+    "median": -9.801279569399135e-06,
+    "p95": 0.006336876859333727,
+    "p99": 0.011179032753689708,
+    "max": 0.026134560228191495,
+    "positive_fraction": 0.4969939879759519
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": -7.460587850612877,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 1.0034810868975008,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 1.0034810868975008,
+   "gross_leverage_max": 1.009745503026879,
+   "net_leverage_mean": 1.0034810868975008,
+   "net_leverage_max": 1.009745503026879,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.998998998998999,
+   "avg_holding_bars": 998.0,
+   "avg_holding_hours": 998.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 1.0044865789685402,
+   "margin_utilisation_max": 1.009745503026879,
+   "worst_intrabar_drawdown": 0.27977979308281775,
+   "orders_cut": 1,
+   "orders_refused": 0,
+   "funding_payments": 997,
+   "funding_missing": 0
+  },
+  "perp_long_1x_SOL": {
+   "total_return": -0.3179673611529351,
+   "cagr": -0.9652291250530821,
+   "volatility": 0.5502794243906834,
+   "sharpe": -5.827188320401482,
+   "sortino": -7.515128573615274,
+   "max_drawdown": 0.34237704140622904,
+   "calmar": -2.8191993279941965,
+   "turnover": 1.168869199222795,
+   "turnover_annual": 10.25981381281732,
+   "trades": 1,
+   "closed_lots": 1,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.4493023425,
+   "slippage_paid": 0.19965,
+   "exposure": 1.0020719627035974,
+   "bars": 999,
+   "final_equity": 682.0326388470648,
+   "returns": {
+    "n": 998,
+    "mean": -0.0003660481546537261,
+    "std": 0.005879375810490013,
+    "skew": -0.7010538975640073,
+    "excess_kurtosis": 7.449783356183723,
+    "min": -0.03687260866849862,
+    "p01": -0.018495486223493837,
+    "p05": -0.009257992058997267,
+    "median": -0.00016966305954208005,
+    "p95": 0.007500231577795501,
+    "p99": 0.01582223915974921,
+    "max": 0.032594216777806384,
+    "positive_fraction": 0.4749498997995992
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": -6.301658810435175,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 1.0020719627035974,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 1.0020719627035974,
+   "gross_leverage_max": 1.0078684648485983,
+   "net_leverage_mean": 1.0020719627035974,
+   "net_leverage_max": 1.0078684648485983,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.998998998998999,
+   "avg_holding_bars": 998.0,
+   "avg_holding_hours": 998.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 1.003076042826547,
+   "margin_utilisation_max": 1.0078684648485983,
+   "worst_intrabar_drawdown": 0.34752153988575374,
+   "orders_cut": 1,
+   "orders_refused": 0,
+   "funding_payments": 997,
+   "funding_missing": 0
+  },
+  "perp_long_1x_HYPE": {
+   "total_return": -0.18165829167202352,
+   "cagr": -0.8279005781007365,
+   "volatility": 0.7196291918846723,
+   "sharpe": -2.0879650595846218,
+   "sortino": -3.1430231776747837,
+   "max_drawdown": 0.2719560551026221,
+   "calmar": -3.0442439598865696,
+   "turnover": 1.0491642191213713,
+   "turnover_annual": 9.20909675300923,
+   "trades": 1,
+   "closed_lots": 1,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.4496883756912,
+   "slippage_paid": 0.199821536,
+   "exposure": 1.0048405879199398,
+   "bars": 999,
+   "final_equity": 818.3417083279764,
+   "returns": {
+    "n": 998,
+    "mean": -0.00017152518362012703,
+    "std": 0.007688767334839226,
+    "skew": 1.4272127214271308,
+    "excess_kurtosis": 13.885138872949597,
+    "min": -0.029794464435547008,
+    "p01": -0.02009446168930989,
+    "p05": -0.011450927805857441,
+    "median": -0.0002498932108661034,
+    "p95": 0.010610682742210118,
+    "p99": 0.022388055930594612,
+    "max": 0.07943696782229437,
+    "positive_fraction": 0.4879759519038076
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": -12.463981760332336,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 1.0048405879199398,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 1.0048405879199398,
+   "gross_leverage_max": 1.0150331812804918,
+   "net_leverage_mean": 1.0048405879199398,
+   "net_leverage_max": 1.0150331812804918,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.998998998998999,
+   "avg_holding_bars": 998.0,
+   "avg_holding_hours": 998.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 1.0058474422164527,
+   "margin_utilisation_max": 1.0150331812804916,
+   "worst_intrabar_drawdown": 0.2774781071985153,
+   "orders_cut": 1,
+   "orders_refused": 0,
+   "funding_payments": 997,
+   "funding_missing": 0
+  },
+  "buy_and_hold": {
+   "total_return": -0.21404073333848017,
+   "cagr": -0.8792553003129503,
+   "volatility": 0.4633494914187109,
+   "sharpe": -4.330051283737055,
+   "sortino": -5.680692822887477,
+   "max_drawdown": 0.24667832941551637,
+   "calmar": -3.5643799858555556,
+   "turnover": 1.093122907703468,
+   "turnover_annual": 9.594946564611604,
+   "trades": 4,
+   "closed_lots": 4,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.999000999000999,
+   "slippage_paid": 0.9980029960049942,
+   "exposure": 0.998998998998999,
+   "bars": 999,
+   "final_equity": 785.9592666615198,
+   "returns": {
+    "n": 998,
+    "mean": -0.000229032769421975,
+    "std": 0.0049505863219699575,
+    "skew": -0.6153557122122388,
+    "excess_kurtosis": 7.742582715471723,
+    "min": -0.031632258547799386,
+    "p01": -0.014458738234697585,
+    "p05": -0.007640524433962398,
+    "median": -9.924607910366534e-05,
+    "p95": 0.006587000181977829,
+    "p99": 0.012783468081855282,
+    "max": 0.02858538769214025,
+    "positive_fraction": 0.48597194388777554
+   }
+  }
+ },
+ "robustness": {
+  "walk_forward": [
+   {
+    "in_sample": [
+     "2026-04-16T20:00:00+00:00",
+     "2026-06-11T13:00:00+00:00"
+    ],
+    "out_of_sample": [
+     "2026-06-11T13:00:00+00:00",
+     "2026-07-09T07:00:00+00:00"
+    ],
+    "params": {
+     "move_window": 24,
+     "vol_window": 168,
+     "k": 2.0,
+     "hold": 96,
+     "gross": 1.0
+    },
+    "in_sample_sharpe": 2.989952750734829,
+    "out_of_sample_sharpe": -2.0494864745295347,
+    "out_of_sample_return": -0.05947391335783914,
+    "out_of_sample_max_drawdown": 0.1285442537799909,
+    "out_of_sample_trades": 21
+   },
+   {
+    "in_sample": [
+     "2026-05-14T19:00:00+00:00",
+     "2026-07-09T07:00:00+00:00"
+    ],
+    "out_of_sample": [
+     "2026-07-09T07:00:00+00:00",
+     "2026-08-06T01:00:00+00:00"
+    ],
+    "params": {
+     "move_window": 24,
+     "vol_window": 168,
+     "k": 1.0,
+     "hold": 48,
+     "gross": 1.0
+    },
+    "in_sample_sharpe": 2.471054998215158,
+    "out_of_sample_sharpe": -3.85278394966042,
+    "out_of_sample_return": -0.08148966334809893,
+    "out_of_sample_max_drawdown": 0.11854626508186139,
+    "out_of_sample_trades": 63
+   },
+   {
+    "in_sample": [
+     "2026-06-11T13:00:00+00:00",
+     "2026-08-06T01:00:00+00:00"
+    ],
+    "out_of_sample": [
+     "2026-08-06T01:00:00+00:00",
+     "2026-09-02T19:00:00+00:00"
+    ],
+    "params": {
+     "move_window": 24,
+     "vol_window": 168,
+     "k": 1.0,
+     "hold": 48,
+     "gross": 1.0
+    },
+    "in_sample_sharpe": -0.31188362314948326,
+    "out_of_sample_sharpe": 4.040210199772409,
+    "out_of_sample_return": 0.11947463954805881,
+    "out_of_sample_max_drawdown": 0.1398355412878295,
+    "out_of_sample_trades": 51
+   },
+   {
+    "in_sample": [
+     "2026-07-09T07:00:00+00:00",
+     "2026-09-02T19:00:00+00:00"
+    ],
+    "out_of_sample": [
+     "2026-09-02T19:00:00+00:00",
+     "2026-09-30T12:00:00+00:00"
+    ],
+    "params": {
+     "move_window": 24,
+     "vol_window": 168,
+     "k": 4.0,
+     "hold": 48,
+     "gross": 1.0
+    },
+    "in_sample_sharpe": 3.982938544767252,
+    "out_of_sample_sharpe": -1.6192393542334078,
+    "out_of_sample_return": -0.004579494213856061,
+    "out_of_sample_max_drawdown": 0.014510642779426042,
+    "out_of_sample_trades": 2
+   }
+  ],
+  "bootstrap_sharpe_ci": [
+   -6.082322344817858,
+   3.4034311462372684
+  ],
+  "bootstrap": {
+   "level": 0.95,
+   "n_samples": 2000,
+   "mean_block": 24,
+   "method": "stationary bootstrap (Politis & Romano 1994), percentile interval",
+   "split": "test",
+   "buy_and_hold_sharpe_ci": [
+    -8.837107871222571,
+    0.41727237757923047
+   ],
+   "perp_long_1x_sharpe_ci": [
+    -8.917806326692983,
+    0.17236082000450878
+   ]
+  },
+  "parameter_sensitivity": [
+   {
+    "params": {
+     "move_window": 24,
+     "vol_window": 168,
+     "k": 2.0,
+     "hold": 48,
+     "gross": 1.0
+    },
+    "train_sharpe": 1.4683666890481248,
+    "train_return": 0.13817277624394242,
+    "validation_sharpe": 2.3120132451821935,
+    "validation_return": 0.07693175732806834,
+    "validation_trades": 37
+   },
+   {
+    "params": {
+     "move_window": 12,
+     "vol_window": 168,
+     "k": 2.0,
+     "hold": 48,
+     "gross": 1.0
+    },
+    "train_sharpe": -0.02652255347822508,
+    "train_return": -0.01883975394425441,
+    "validation_sharpe": 0.8771528974316145,
+    "validation_return": 0.02710948636300281,
+    "validation_trades": 63
+   },
+   {
+    "params": {
+     "move_window": 48,
+     "vol_window": 168,
+     "k": 2.0,
+     "hold": 48,
+     "gross": 1.0
+    },
+    "train_sharpe": 0.6997648336162112,
+    "train_return": 0.051752781376596335,
+    "validation_sharpe": 4.730834215283999,
+    "validation_return": 0.16545710232673239,
+    "validation_trades": 20
+   },
+   {
+    "params": {
+     "move_window": 24,
+     "vol_window": 84,
+     "k": 2.0,
+     "hold": 48,
+     "gross": 1.0
+    },
+    "train_sharpe": 1.3211973959299523,
+    "train_return": 0.13191534359638357,
+    "validation_sharpe": 2.4846050345395767,
+    "validation_return": 0.09090650331525052,
+    "validation_trades": 39
+   },
+   {
+    "params": {
+     "move_window": 24,
+     "vol_window": 336,
+     "k": 2.0,
+     "hold": 48,
+     "gross": 1.0
+    },
+    "train_sharpe": 1.3454113172285074,
+    "train_return": 0.12118319119717391,
+    "validation_sharpe": 3.268377083304479,
+    "validation_return": 0.11273089814777748,
+    "validation_trades": 28
+   },
+   {
+    "params": {
+     "move_window": 24,
+     "vol_window": 168,
+     "k": 1.0,
+     "hold": 48,
+     "gross": 1.0
+    },
+    "train_sharpe": 1.7607595761426753,
+    "train_return": 0.22058678958207367,
+    "validation_sharpe": -3.286004824637896,
+    "validation_return": -0.14061639996772102,
+    "validation_trades": 84
+   },
+   {
+    "params": {
+     "move_window": 24,
+     "vol_window": 168,
+     "k": 4.0,
+     "hold": 48,
+     "gross": 1.0
+    },
+    "train_sharpe": 1.8268669837489726,
+    "train_return": 0.07196897827305437,
+    "validation_sharpe": 3.227828125495613,
+    "validation_return": 0.08078100535554622,
+    "validation_trades": 6
+   },
+   {
+    "params": {
+     "move_window": 24,
+     "vol_window": 168,
+     "k": 2.0,
+     "hold": 24,
+     "gross": 1.0
+    },
+    "train_sharpe": 2.084110686001176,
+    "train_return": 0.18090836059525994,
+    "validation_sharpe": 1.5071787309589975,
+    "validation_return": 0.0409584456073222,
+    "validation_trades": 43
+   },
+   {
+    "params": {
+     "move_window": 24,
+     "vol_window": 168,
+     "k": 2.0,
+     "hold": 96,
+     "gross": 1.0
+    },
+    "train_sharpe": 1.404762490972106,
+    "train_return": 0.14663847770005445,
+    "validation_sharpe": 1.558410406019861,
+    "validation_return": 0.05441455299157605,
+    "validation_trades": 28
+   },
+   {
+    "params": {
+     "move_window": 24,
+     "vol_window": 168,
+     "k": 2.0,
+     "hold": 48,
+     "gross": 0.5
+    },
+    "train_sharpe": 1.5097234187495268,
+    "train_return": 0.07113688322008205,
+    "validation_sharpe": 2.3111976830632193,
+    "validation_return": 0.04106714589889826,
+    "validation_trades": 37
+   },
+   {
+    "params": {
+     "move_window": 24,
+     "vol_window": 168,
+     "k": 2.0,
+     "hold": 48,
+     "gross": 2.0
+    },
+    "train_sharpe": 1.45485403591173,
+    "train_return": 0.26397005498347936,
+    "validation_sharpe": 2.3540586319397883,
+    "validation_return": 0.14760469929116082,
+    "validation_trades": 42
+   }
+  ],
+  "trials_tested": 94,
+  "deflated_sharpe": 0.004488033177289087,
+  "deflated_sharpe_detail": {
+   "deflated_sharpe": 0.004488033177289087,
+   "probabilistic_sharpe_vs_zero": 0.3582294491883997,
+   "sharpe_per_bar": -0.01147707205193241,
+   "expected_max_sharpe_per_bar": 0.07109329467526436,
+   "n_obs": 998,
+   "skew": -0.45423010755571447,
+   "kurtosis": 25.119256627289023,
+   "n_trials": 94,
+   "var_trial_sharpes": 0.0008293583388689883,
+   "sharpe_split": "test",
+   "trial_sharpes_split": "validation",
+   "scope": "all perp strategies and parameter sets of this pipeline run",
+   "own_trials": 11,
+   "own_deflated_sharpe": 0.07076473445442297
+  },
+  "monte_carlo": {
+   "n_samples": 2000,
+   "bar_returns": {
+    "total_return_p05": -0.11614409855551476,
+    "total_return_p50": -0.024888455127935194,
+    "total_return_p95": 0.0809737741253379,
+    "probability_of_loss": 0.6525,
+    "max_drawdown_p50": 0.07182191727736392,
+    "max_drawdown_p95": 0.14072845099390657
+   },
+   "lots": {
+    "n_lots": 23,
+    "pnl_fraction_p05": -0.06921679223975795,
+    "pnl_fraction_p50": -0.020203345263397798,
+    "pnl_fraction_p95": 0.023761020234759758,
+    "probability_of_loss": 0.77
+   }
+  },
+  "stress_windows": [
+   {
+    "window": [
+     "2026-10-06T00:00:00+00:00",
+     "2026-11-10T16:00:00+00:00"
+    ],
+    "benchmark_return": -0.2539299076568955,
+    "strategy_return": -0.008684772820431896,
+    "strategy_max_drawdown": 0.055548010749599586
+   },
+   {
+    "window": [
+     "2026-10-02T12:00:00+00:00",
+     "2026-10-02T20:00:00+00:00"
+    ],
+    "benchmark_return": -0.037606842472463486,
+    "strategy_return": -0.00703548871081916,
+    "strategy_max_drawdown": 0.007576622206819206
+   },
+   {
+    "window": [
+     "2026-09-30T16:00:00+00:00",
+     "2026-10-01T16:00:00+00:00"
+    ],
+    "benchmark_return": -0.018430671000288057,
+    "strategy_return": 0.0,
+    "strategy_max_drawdown": 0.0
+   }
+  ],
+  "funding_stress_windows": [
+   {
+    "regime": "highest funding",
+    "window": [
+     "2026-10-29T10:00:00+00:00",
+     "2026-11-05T09:00:00+00:00"
+    ],
+    "mean_funding_rate_per_bar": 1.4217616517857146e-05,
+    "mean_funding_rate_annualised": 0.1245463206964286,
+    "strategy_return": 0.0058375362361351435,
+    "strategy_max_drawdown": 0.02330985788333728,
+    "strategy_funding_pnl": -0.483204751154448,
+    "benchmark_return": -0.007515669322124441
+   },
+   {
+    "regime": "highest funding",
+    "window": [
+     "2026-09-30T17:00:00+00:00",
+     "2026-10-07T16:00:00+00:00"
+    ],
+    "mean_funding_rate_per_bar": 1.0511811458333334e-05,
+    "mean_funding_rate_annualised": 0.092083468375,
+    "strategy_return": -0.0023218712421744225,
+    "strategy_max_drawdown": 0.007576622206819206,
+    "strategy_funding_pnl": -0.09607504761701,
+    "benchmark_return": -0.023170067840761144
+   },
+   {
+    "regime": "lowest funding",
+    "window": [
+     "2026-10-12T10:00:00+00:00",
+     "2026-10-19T09:00:00+00:00"
+    ],
+    "mean_funding_rate_per_bar": 7.2892897321428575e-06,
+    "mean_funding_rate_annualised": 0.06385417805357144,
+    "strategy_return": -0.007060949729925992,
+    "strategy_max_drawdown": 0.03487388259942581,
+    "strategy_funding_pnl": 0.567720396560669,
+    "benchmark_return": -0.04793008475993665
+   },
+   {
+    "regime": "lowest funding",
+    "window": [
+     "2026-11-04T04:00:00+00:00",
+     "2026-11-11T03:00:00+00:00"
+    ],
+    "mean_funding_rate_per_bar": 8.138735714285715e-06,
+    "mean_funding_rate_annualised": 0.07129532485714286,
+    "strategy_return": -0.027236700169207206,
+    "strategy_max_drawdown": 0.03665864948023967,
+    "strategy_funding_pnl": 0.377853771863175,
+    "benchmark_return": -0.09756310517717282
+   }
+  ],
+  "test_evaluations": 1,
+  "benchmarks_by_split": {
+   "train": {
+    "perp_long_1x": {
+     "total_return": 0.10373427446965366,
+     "sharpe": 0.8015631085114164,
+     "max_drawdown": 0.23441046046374692
+    },
+    "buy_and_hold": {
+     "total_return": 0.12227404924818797,
+     "sharpe": 0.8957071066653247,
+     "max_drawdown": 0.23047182960249368
+    }
+   },
+   "validation": {
+    "perp_long_1x": {
+     "total_return": 0.2609244079097377,
+     "sharpe": 4.293474026567944,
+     "max_drawdown": 0.08879009979526975
+    },
+    "buy_and_hold": {
+     "total_return": 0.2735110342674052,
+     "sharpe": 4.514849720075643,
+     "max_drawdown": 0.08744681467125615
+    }
+   }
+  }
+ },
+ "checks": {
+  "lookahead": "pass",
+  "data_quality": "pass",
+  "ledger": "pass",
+  "funding_alignment": "pass",
+  "notes": [
+   "bars common to every series of the run: BTC, ETH, SOL, HYPE, BTC.SPOT, ETH.SPOT, SOL.SPOT, HYPE.SPOT",
+   "spot benchmark from coinbase: BTC 4995 bars, 5 missing",
+   "spot benchmark from coinbase: ETH 4995 bars, 5 missing",
+   "spot benchmark from coinbase: SOL 4995 bars, 5 missing",
+   "spot benchmark from coinbase: HYPE 4995 bars, 5 missing",
+   "equity_curve is the test split, valued at the close of each bar (timestamps are bar-open times, UTC)",
+   "cross-margin account in USDC; weights are signed fractions of account equity (negative = short)",
+   "decision on the closed bar, fill at the next bar's open; taker fee on traded notional and slippage in bps",
+   "funding: every hourly settlement is charged at the open of the bar that starts at its hour, on the position held coming into that bar: amount = -signed size x perpetual open x rate (Hyperliquid pays on the ORACLE price; historical oracle prices are not served, the perpetual's own price is used instead)",
+   "initial margin = notional / leverage, checked at order time: reducing orders always execute, orders adding exposure are cut pro rata to the free collateral or refused below the minimum order",
+   "maintenance margin = notional x flat fraction (Hyperliquid: half of the initial margin at maximum leverage); NO margin tiers by size",
+   "liquidation is intrabar: with every long at the bar's low and every short at its high together, the account is liquidated where margin equity = maintenance margin, at that price, plus taker fee and a penalty; the WHOLE account is closed (no partial liquidation, no backstop, no auto-deleveraging)",
+   "highs and lows are trade prices of the perpetual, not the venue's mark price (which is smoother): wicks liquidate here that might not on the venue",
+   "equity <= 0 marks the run wiped out: equity stays at 0, the unpaid loss is reported as bad debt",
+   "ledger in exact decimals; average entry price rounded half-even at 18 decimals, sizes truncated to the lot",
+   "max_drawdown and worst_intrabar_drawdown are positive fractions; sharpe/sortino/volatility are annualised with 8760 bars per year (24/7 market), risk-free rate 0",
+   "parameters on the test split are META['params']; the sensitivity grid never selects them",
+   "look-ahead check: truncation test on 999 bars, cuts at [0.5, 0.8], 999 decisions compared"
+  ],
+  "data_quality_detail": {
+   "BTC": {
+    "symbol": "BTC",
+    "interval": "1h",
+    "source": "hyperliquid",
+    "n_bars": 5000,
+    "start": "2026-04-16T20:00:00+00:00",
+    "end": "2026-11-11T03:00:00+00:00",
+    "expected_bars": 5000,
+    "missing_bars": 0,
+    "max_gap_bars": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "unclosed_dropped": 0,
+    "off_grid": 0,
+    "ohlc_violations": 0,
+    "missing_fraction": 0.0
+   },
+   "ETH": {
+    "symbol": "ETH",
+    "interval": "1h",
+    "source": "hyperliquid",
+    "n_bars": 5000,
+    "start": "2026-04-16T20:00:00+00:00",
+    "end": "2026-11-11T03:00:00+00:00",
+    "expected_bars": 5000,
+    "missing_bars": 0,
+    "max_gap_bars": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "unclosed_dropped": 0,
+    "off_grid": 0,
+    "ohlc_violations": 0,
+    "missing_fraction": 0.0
+   },
+   "SOL": {
+    "symbol": "SOL",
+    "interval": "1h",
+    "source": "hyperliquid",
+    "n_bars": 5000,
+    "start": "2026-04-16T20:00:00+00:00",
+    "end": "2026-11-11T03:00:00+00:00",
+    "expected_bars": 5000,
+    "missing_bars": 0,
+    "max_gap_bars": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "unclosed_dropped": 0,
+    "off_grid": 0,
+    "ohlc_violations": 0,
+    "missing_fraction": 0.0
+   },
+   "HYPE": {
+    "symbol": "HYPE",
+    "interval": "1h",
+    "source": "hyperliquid",
+    "n_bars": 5001,
+    "start": "2026-04-16T19:00:00+00:00",
+    "end": "2026-11-11T03:00:00+00:00",
+    "expected_bars": 5001,
+    "missing_bars": 0,
+    "max_gap_bars": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "unclosed_dropped": 0,
+    "off_grid": 0,
+    "ohlc_violations": 0,
+    "missing_fraction": 0.0
+   }
+  },
+  "funding_quality_detail": {
+   "BTC": {
+    "symbol": "BTC",
+    "source": "hyperliquid",
+    "n": 5001,
+    "start": "2026-04-16T20:00:00+00:00",
+    "end": "2026-11-11T04:00:00+00:00",
+    "expected": 5001,
+    "missing": 0,
+    "max_gap": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "off_grid": 0,
+    "max_offset_ms": 139,
+    "non_finite": 0,
+    "unsettled_dropped": 0,
+    "missing_fraction": 0.0
+   },
+   "ETH": {
+    "symbol": "ETH",
+    "source": "hyperliquid",
+    "n": 5001,
+    "start": "2026-04-16T20:00:00+00:00",
+    "end": "2026-11-11T04:00:00+00:00",
+    "expected": 5001,
+    "missing": 0,
+    "max_gap": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "off_grid": 0,
+    "max_offset_ms": 139,
+    "non_finite": 0,
+    "unsettled_dropped": 0,
+    "missing_fraction": 0.0
+   },
+   "SOL": {
+    "symbol": "SOL",
+    "source": "hyperliquid",
+    "n": 5001,
+    "start": "2026-04-16T20:00:00+00:00",
+    "end": "2026-11-11T04:00:00+00:00",
+    "expected": 5001,
+    "missing": 0,
+    "max_gap": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "off_grid": 0,
+    "max_offset_ms": 139,
+    "non_finite": 0,
+    "unsettled_dropped": 0,
+    "missing_fraction": 0.0
+   },
+   "HYPE": {
+    "symbol": "HYPE",
+    "source": "hyperliquid",
+    "n": 5001,
+    "start": "2026-04-16T20:00:00+00:00",
+    "end": "2026-11-11T04:00:00+00:00",
+    "expected": 5001,
+    "missing": 0,
+    "max_gap": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "off_grid": 0,
+    "max_offset_ms": 139,
+    "non_finite": 0,
+    "unsettled_dropped": 0,
+    "missing_fraction": 0.0
+   }
+  },
+  "funding_alignment_detail": {
+   "BTC": {
+    "column_matches_settlements": true,
+    "max_offset_ms": 139,
+    "bars": 4995,
+    "bars_with_funding": 4995,
+    "bars_without_funding": 0
+   },
+   "ETH": {
+    "column_matches_settlements": true,
+    "max_offset_ms": 139,
+    "bars": 4995,
+    "bars_with_funding": 4995,
+    "bars_without_funding": 0
+   },
+   "SOL": {
+    "column_matches_settlements": true,
+    "max_offset_ms": 139,
+    "bars": 4995,
+    "bars_with_funding": 4995,
+    "bars_without_funding": 0
+   },
+   "HYPE": {
+    "column_matches_settlements": true,
+    "max_offset_ms": 139,
+    "bars": 4995,
+    "bars_with_funding": 4995,
+    "bars_without_funding": 0
+   }
+  }
+ },
+ "ledger": {
+  "train": {
+   "initial": "1000",
+   "realised_pnl": "38.34106000000000000349104",
+   "funding": "-1.05946354077127099900396452",
+   "fees": "13.6557691012791",
+   "liquidation_penalties": "0",
+   "slippage": "6.069191114",
+   "unrealised_pnl": "120.61614",
+   "bad_debt_written_off": "0",
+   "collateral": "1017.55663624394962900448707548",
+   "final_equity": "1138.17277624394962900448707548",
+   "from_logs": "1138.17277624394962900448707548",
+   "reconciles": true
+  },
+  "validation": {
+   "initial": "1000",
+   "realised_pnl": "97.98236",
+   "funding": "-4.012619001007504",
+   "fees": "5.0437990185876",
+   "liquidation_penalties": "0",
+   "slippage": "2.241692372",
+   "unrealised_pnl": "0",
+   "bad_debt_written_off": "0",
+   "collateral": "1086.684249608404896",
+   "final_equity": "1086.684249608404896",
+   "from_logs": "1086.684249608404896",
+   "reconciles": true
+  },
+  "test": {
+   "initial": "1000",
+   "realised_pnl": "-19.93642",
+   "funding": "1.237383282008263",
+   "fees": "4.9107622299615",
+   "liquidation_penalties": "0",
+   "slippage": "2.18257977",
+   "unrealised_pnl": "2.60201",
+   "bad_debt_written_off": "0",
+   "collateral": "974.207621282046763",
+   "final_equity": "976.809631282046763",
+   "from_logs": "976.809631282046763",
+   "reconciles": true
+  }
+ },
+ "liquidations": {
+  "train": [],
+  "validation": [],
+  "test": []
+ },
+ "funding": {
+  "train": {
+   "BTC": {
+    "bars": 2997,
+    "bars_with_funding": 2997,
+    "mean_rate_per_bar": 6.168648348348349e-06,
+    "mean_rate_annualised": 0.05403735953153154,
+    "min_rate": -2.71754e-05,
+    "max_rate": 7.500000000000001e-05,
+    "positive_fraction": 0.8024691358024691,
+    "sum_of_rates": 0.018487439100000003,
+    "median_abs_premium": 0.0004276771
+   },
+   "ETH": {
+    "bars": 2997,
+    "bars_with_funding": 2997,
+    "mean_rate_per_bar": 6.7518202869536214e-06,
+    "mean_rate_annualised": 0.059145945713713725,
+    "min_rate": -3.73526e-05,
+    "max_rate": 7.26677e-05,
+    "positive_fraction": 0.8114781448114782,
+    "sum_of_rates": 0.020235205400000005,
+    "median_abs_premium": 0.000399969
+   },
+   "SOL": {
+    "bars": 2997,
+    "bars_with_funding": 2997,
+    "mean_rate_per_bar": 3.1026258925592265e-06,
+    "mean_rate_annualised": 0.027179002818818822,
+    "min_rate": -9.66794e-05,
+    "max_rate": 2.82012e-05,
+    "positive_fraction": 0.685352018685352,
+    "sum_of_rates": 0.009298569800000002,
+    "median_abs_premium": 0.0004459194
+   },
+   "HYPE": {
+    "bars": 2997,
+    "bars_with_funding": 2997,
+    "mean_rate_per_bar": 1.0806563096429764e-05,
+    "mean_rate_annualised": 0.09466549272472473,
+    "min_rate": -9.4772e-05,
+    "max_rate": 0.0001597154,
+    "positive_fraction": 0.8985652318985652,
+    "sum_of_rates": 0.032387269600000004,
+    "median_abs_premium": 0.0002827405
+   }
+  },
+  "validation": {
+   "BTC": {
+    "bars": 999,
+    "bars_with_funding": 999,
+    "mean_rate_per_bar": 1.1043480680680683e-05,
+    "mean_rate_annualised": 0.09674089076276278,
+    "min_rate": -1.59518e-05,
+    "max_rate": 8.97697e-05,
+    "positive_fraction": 0.938938938938939,
+    "sum_of_rates": 0.011032437200000002,
+    "median_abs_premium": 0.0003591417
+   },
+   "ETH": {
+    "bars": 999,
+    "bars_with_funding": 999,
+    "mean_rate_per_bar": 1.1831898298298301e-05,
+    "mean_rate_annualised": 0.10364742909309312,
+    "min_rate": -1.72706e-05,
+    "max_rate": 8.34438e-05,
+    "positive_fraction": 0.9629629629629629,
+    "sum_of_rates": 0.011820066400000002,
+    "median_abs_premium": 0.0002425356
+   },
+   "SOL": {
+    "bars": 999,
+    "bars_with_funding": 999,
+    "mean_rate_per_bar": 9.767975675675678e-06,
+    "mean_rate_annualised": 0.08556746691891895,
+    "min_rate": -2.85282e-05,
+    "max_rate": 9.7525e-05,
+    "positive_fraction": 0.8898898898898899,
+    "sum_of_rates": 0.009758207700000002,
+    "median_abs_premium": 0.0003661324
+   },
+   "HYPE": {
+    "bars": 999,
+    "bars_with_funding": 999,
+    "mean_rate_per_bar": 1.2919523523523526e-05,
+    "mean_rate_annualised": 0.1131750260660661,
+    "min_rate": -4.47254e-05,
+    "max_rate": 0.0001810108,
+    "positive_fraction": 0.9039039039039038,
+    "sum_of_rates": 0.012906604000000002,
+    "median_abs_premium": 0.0003102189
+   }
+  },
+  "test": {
+   "BTC": {
+    "bars": 999,
+    "bars_with_funding": 999,
+    "mean_rate_per_bar": 1.0514394094094096e-05,
+    "mean_rate_annualised": 0.09210609226426428,
+    "min_rate": -1.79021e-05,
+    "max_rate": 1.25e-05,
+    "positive_fraction": 0.9479479479479479,
+    "sum_of_rates": 0.010503879700000001,
+    "median_abs_premium": 0.0003023069
+   },
+   "ETH": {
+    "bars": 999,
+    "bars_with_funding": 999,
+    "mean_rate_per_bar": 8.283206006006006e-06,
+    "mean_rate_annualised": 0.07256088461261262,
+    "min_rate": -7.67115e-05,
+    "max_rate": 1.25e-05,
+    "positive_fraction": 0.8938938938938938,
+    "sum_of_rates": 0.0082749228,
+    "median_abs_premium": 0.0003642488
+   },
+   "SOL": {
+    "bars": 999,
+    "bars_with_funding": 999,
+    "mean_rate_per_bar": 7.219848748748751e-06,
+    "mean_rate_annualised": 0.06324587503903906,
+    "min_rate": -3.49943e-05,
+    "max_rate": 1.25e-05,
+    "positive_fraction": 0.8398398398398398,
+    "sum_of_rates": 0.007212628900000002,
+    "median_abs_premium": 0.0003961496
+   },
+   "HYPE": {
+    "bars": 999,
+    "bars_with_funding": 999,
+    "mean_rate_per_bar": 1.2766849549549549e-05,
+    "mean_rate_annualised": 0.11183760205405405,
+    "min_rate": -4.62956e-05,
+    "max_rate": 0.0002174473,
+    "positive_fraction": 0.9229229229229229,
+    "sum_of_rates": 0.012754082699999999,
+    "median_abs_premium": 0.0002515833
+   }
+  }
+ },
+ "equity_curve": [
+  [
+   "2026-09-30T13:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-09-30T14:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-09-30T15:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-09-30T16:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-09-30T17:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-09-30T18:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-09-30T19:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-09-30T20:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-09-30T21:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-09-30T22:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-09-30T23:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T00:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T01:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T02:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T03:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T04:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T05:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T06:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T07:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T08:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T09:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T10:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T11:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T12:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T13:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T14:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T15:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T16:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T17:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T18:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T19:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T20:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T21:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T22:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-01T23:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T00:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T01:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T02:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T03:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T04:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T05:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T06:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T07:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T08:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T09:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T10:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T11:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T12:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-02T13:00:00+00:00",
+   999.085806
+  ],
+  [
+   "2026-10-02T14:00:00+00:00",
+   996.571331
+  ],
+  [
+   "2026-10-02T15:00:00+00:00",
+   995.557367
+  ],
+  [
+   "2026-10-02T16:00:00+00:00",
+   995.079095
+  ],
+  [
+   "2026-10-02T17:00:00+00:00",
+   993.98739
+  ],
+  [
+   "2026-10-02T18:00:00+00:00",
+   992.423378
+  ],
+  [
+   "2026-10-02T19:00:00+00:00",
+   992.561465
+  ],
+  [
+   "2026-10-02T20:00:00+00:00",
+   992.964511
+  ],
+  [
+   "2026-10-02T21:00:00+00:00",
+   993.108352
+  ],
+  [
+   "2026-10-02T22:00:00+00:00",
+   993.241414
+  ],
+  [
+   "2026-10-02T23:00:00+00:00",
+   993.13169
+  ],
+  [
+   "2026-10-03T00:00:00+00:00",
+   993.507509
+  ],
+  [
+   "2026-10-03T01:00:00+00:00",
+   993.471492
+  ],
+  [
+   "2026-10-03T02:00:00+00:00",
+   993.36002
+  ],
+  [
+   "2026-10-03T03:00:00+00:00",
+   993.628695
+  ],
+  [
+   "2026-10-03T04:00:00+00:00",
+   993.304185
+  ],
+  [
+   "2026-10-03T05:00:00+00:00",
+   993.451654
+  ],
+  [
+   "2026-10-03T06:00:00+00:00",
+   993.282063
+  ],
+  [
+   "2026-10-03T07:00:00+00:00",
+   993.251444
+  ],
+  [
+   "2026-10-03T08:00:00+00:00",
+   993.381989
+  ],
+  [
+   "2026-10-03T09:00:00+00:00",
+   993.306564
+  ],
+  [
+   "2026-10-03T10:00:00+00:00",
+   993.453397
+  ],
+  [
+   "2026-10-03T11:00:00+00:00",
+   993.558401
+  ],
+  [
+   "2026-10-03T12:00:00+00:00",
+   994.178276
+  ],
+  [
+   "2026-10-03T13:00:00+00:00",
+   994.132918
+  ],
+  [
+   "2026-10-03T14:00:00+00:00",
+   994.044286
+  ],
+  [
+   "2026-10-03T15:00:00+00:00",
+   994.105316
+  ],
+  [
+   "2026-10-03T16:00:00+00:00",
+   994.117272
+  ],
+  [
+   "2026-10-03T17:00:00+00:00",
+   994.526058
+  ],
+  [
+   "2026-10-03T18:00:00+00:00",
+   994.321761
+  ],
+  [
+   "2026-10-03T19:00:00+00:00",
+   994.045206
+  ],
+  [
+   "2026-10-03T20:00:00+00:00",
+   993.746244
+  ],
+  [
+   "2026-10-03T21:00:00+00:00",
+   993.649149
+  ],
+  [
+   "2026-10-03T22:00:00+00:00",
+   993.830864
+  ],
+  [
+   "2026-10-03T23:00:00+00:00",
+   993.756425
+  ],
+  [
+   "2026-10-04T00:00:00+00:00",
+   993.883
+  ],
+  [
+   "2026-10-04T01:00:00+00:00",
+   993.927349
+  ],
+  [
+   "2026-10-04T02:00:00+00:00",
+   993.925272
+  ],
+  [
+   "2026-10-04T03:00:00+00:00",
+   993.994292
+  ],
+  [
+   "2026-10-04T04:00:00+00:00",
+   993.950919
+  ],
+  [
+   "2026-10-04T05:00:00+00:00",
+   994.238747
+  ],
+  [
+   "2026-10-04T06:00:00+00:00",
+   994.540971
+  ],
+  [
+   "2026-10-04T07:00:00+00:00",
+   994.776951
+  ],
+  [
+   "2026-10-04T08:00:00+00:00",
+   994.808448
+  ],
+  [
+   "2026-10-04T09:00:00+00:00",
+   995.127945
+  ],
+  [
+   "2026-10-04T10:00:00+00:00",
+   995.257358
+  ],
+  [
+   "2026-10-04T11:00:00+00:00",
+   995.355089
+  ],
+  [
+   "2026-10-04T12:00:00+00:00",
+   994.862419
+  ],
+  [
+   "2026-10-04T13:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-04T14:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-04T15:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-04T16:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-04T17:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-04T18:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-04T19:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-04T20:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-04T21:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-04T22:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-04T23:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T00:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T01:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T02:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T03:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T04:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T05:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T06:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T07:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T08:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T09:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T10:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T11:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T12:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T13:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T14:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T15:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T16:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T17:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T18:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T19:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T20:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T21:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T22:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-05T23:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T00:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T01:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T02:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T03:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T04:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T05:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T06:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T07:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T08:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T09:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T10:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T11:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T12:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T13:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T14:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T15:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T16:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T17:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T18:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T19:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T20:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T21:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T22:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-06T23:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-07T00:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-07T01:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-07T02:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-07T03:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-07T04:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-07T05:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-07T06:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-07T07:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-07T08:00:00+00:00",
+   994.700045
+  ],
+  [
+   "2026-10-07T09:00:00+00:00",
+   995.758318
+  ],
+  [
+   "2026-10-07T10:00:00+00:00",
+   997.377885
+  ],
+  [
+   "2026-10-07T11:00:00+00:00",
+   997.492549
+  ],
+  [
+   "2026-10-07T12:00:00+00:00",
+   998.076421
+  ],
+  [
+   "2026-10-07T13:00:00+00:00",
+   998.308027
+  ],
+  [
+   "2026-10-07T14:00:00+00:00",
+   999.226682
+  ],
+  [
+   "2026-10-07T15:00:00+00:00",
+   997.137567
+  ],
+  [
+   "2026-10-07T16:00:00+00:00",
+   997.678129
+  ],
+  [
+   "2026-10-07T17:00:00+00:00",
+   1000.026534
+  ],
+  [
+   "2026-10-07T18:00:00+00:00",
+   998.10415
+  ],
+  [
+   "2026-10-07T19:00:00+00:00",
+   997.30593
+  ],
+  [
+   "2026-10-07T20:00:00+00:00",
+   997.023219
+  ],
+  [
+   "2026-10-07T21:00:00+00:00",
+   998.513923
+  ],
+  [
+   "2026-10-07T22:00:00+00:00",
+   998.062318
+  ],
+  [
+   "2026-10-07T23:00:00+00:00",
+   997.377769
+  ],
+  [
+   "2026-10-08T00:00:00+00:00",
+   997.128948
+  ],
+  [
+   "2026-10-08T01:00:00+00:00",
+   997.75419
+  ],
+  [
+   "2026-10-08T02:00:00+00:00",
+   997.329595
+  ],
+  [
+   "2026-10-08T03:00:00+00:00",
+   1000.105435
+  ],
+  [
+   "2026-10-08T04:00:00+00:00",
+   1000.599248
+  ],
+  [
+   "2026-10-08T05:00:00+00:00",
+   1000.635969
+  ],
+  [
+   "2026-10-08T06:00:00+00:00",
+   999.530874
+  ],
+  [
+   "2026-10-08T07:00:00+00:00",
+   999.021906
+  ],
+  [
+   "2026-10-08T08:00:00+00:00",
+   1000.230437
+  ],
+  [
+   "2026-10-08T09:00:00+00:00",
+   998.701627
+  ],
+  [
+   "2026-10-08T10:00:00+00:00",
+   1001.505075
+  ],
+  [
+   "2026-10-08T11:00:00+00:00",
+   1003.480464
+  ],
+  [
+   "2026-10-08T12:00:00+00:00",
+   1004.757451
+  ],
+  [
+   "2026-10-08T13:00:00+00:00",
+   1005.878326
+  ],
+  [
+   "2026-10-08T14:00:00+00:00",
+   1003.373723
+  ],
+  [
+   "2026-10-08T15:00:00+00:00",
+   1017.610085
+  ],
+  [
+   "2026-10-08T16:00:00+00:00",
+   1021.358183
+  ],
+  [
+   "2026-10-08T17:00:00+00:00",
+   1025.070177
+  ],
+  [
+   "2026-10-08T18:00:00+00:00",
+   1015.866443
+  ],
+  [
+   "2026-10-08T19:00:00+00:00",
+   1011.057432
+  ],
+  [
+   "2026-10-08T20:00:00+00:00",
+   1008.137846
+  ],
+  [
+   "2026-10-08T21:00:00+00:00",
+   1006.364351
+  ],
+  [
+   "2026-10-08T22:00:00+00:00",
+   1006.795988
+  ],
+  [
+   "2026-10-08T23:00:00+00:00",
+   1009.112429
+  ],
+  [
+   "2026-10-09T00:00:00+00:00",
+   1009.256608
+  ],
+  [
+   "2026-10-09T01:00:00+00:00",
+   1007.996166
+  ],
+  [
+   "2026-10-09T02:00:00+00:00",
+   1004.9168
+  ],
+  [
+   "2026-10-09T03:00:00+00:00",
+   1003.326931
+  ],
+  [
+   "2026-10-09T04:00:00+00:00",
+   1005.688479
+  ],
+  [
+   "2026-10-09T05:00:00+00:00",
+   1004.012378
+  ],
+  [
+   "2026-10-09T06:00:00+00:00",
+   1001.869651
+  ],
+  [
+   "2026-10-09T07:00:00+00:00",
+   1001.059917
+  ],
+  [
+   "2026-10-09T08:00:00+00:00",
+   1000.94608
+  ],
+  [
+   "2026-10-09T09:00:00+00:00",
+   1001.967171
+  ],
+  [
+   "2026-10-09T10:00:00+00:00",
+   1004.663671
+  ],
+  [
+   "2026-10-09T11:00:00+00:00",
+   997.639528
+  ],
+  [
+   "2026-10-09T12:00:00+00:00",
+   1001.125953
+  ],
+  [
+   "2026-10-09T13:00:00+00:00",
+   1005.648216
+  ],
+  [
+   "2026-10-09T14:00:00+00:00",
+   1002.541667
+  ],
+  [
+   "2026-10-09T15:00:00+00:00",
+   1003.487718
+  ],
+  [
+   "2026-10-09T16:00:00+00:00",
+   1003.181949
+  ],
+  [
+   "2026-10-09T17:00:00+00:00",
+   1003.095491
+  ],
+  [
+   "2026-10-09T18:00:00+00:00",
+   1004.658642
+  ],
+  [
+   "2026-10-09T19:00:00+00:00",
+   1007.643711
+  ],
+  [
+   "2026-10-09T20:00:00+00:00",
+   1005.703847
+  ],
+  [
+   "2026-10-09T21:00:00+00:00",
+   1005.522806
+  ],
+  [
+   "2026-10-09T22:00:00+00:00",
+   1004.610227
+  ],
+  [
+   "2026-10-09T23:00:00+00:00",
+   1004.909265
+  ],
+  [
+   "2026-10-10T00:00:00+00:00",
+   1004.197
+  ],
+  [
+   "2026-10-10T01:00:00+00:00",
+   1002.268124
+  ],
+  [
+   "2026-10-10T02:00:00+00:00",
+   1002.696271
+  ],
+  [
+   "2026-10-10T03:00:00+00:00",
+   1003.402664
+  ],
+  [
+   "2026-10-10T04:00:00+00:00",
+   1002.646293
+  ],
+  [
+   "2026-10-10T05:00:00+00:00",
+   1001.674106
+  ],
+  [
+   "2026-10-10T06:00:00+00:00",
+   1002.919472
+  ],
+  [
+   "2026-10-10T07:00:00+00:00",
+   1002.435192
+  ],
+  [
+   "2026-10-10T08:00:00+00:00",
+   1002.243798
+  ],
+  [
+   "2026-10-10T09:00:00+00:00",
+   1002.314147
+  ],
+  [
+   "2026-10-10T10:00:00+00:00",
+   1003.028375
+  ],
+  [
+   "2026-10-10T11:00:00+00:00",
+   1002.395606
+  ],
+  [
+   "2026-10-10T12:00:00+00:00",
+   1002.830263
+  ],
+  [
+   "2026-10-10T13:00:00+00:00",
+   1002.101175
+  ],
+  [
+   "2026-10-10T14:00:00+00:00",
+   999.898892
+  ],
+  [
+   "2026-10-10T15:00:00+00:00",
+   999.62789
+  ],
+  [
+   "2026-10-10T16:00:00+00:00",
+   1001.284012
+  ],
+  [
+   "2026-10-10T17:00:00+00:00",
+   1001.145798
+  ],
+  [
+   "2026-10-10T18:00:00+00:00",
+   1000.089785
+  ],
+  [
+   "2026-10-10T19:00:00+00:00",
+   999.497291
+  ],
+  [
+   "2026-10-10T20:00:00+00:00",
+   1000.360165
+  ],
+  [
+   "2026-10-10T21:00:00+00:00",
+   1000.326739
+  ],
+  [
+   "2026-10-10T22:00:00+00:00",
+   999.790955
+  ],
+  [
+   "2026-10-10T23:00:00+00:00",
+   1001.067316
+  ],
+  [
+   "2026-10-11T00:00:00+00:00",
+   1001.770432
+  ],
+  [
+   "2026-10-11T01:00:00+00:00",
+   1000.787952
+  ],
+  [
+   "2026-10-11T02:00:00+00:00",
+   1000.940288
+  ],
+  [
+   "2026-10-11T03:00:00+00:00",
+   1002.798454
+  ],
+  [
+   "2026-10-11T04:00:00+00:00",
+   1001.72444
+  ],
+  [
+   "2026-10-11T05:00:00+00:00",
+   1002.288172
+  ],
+  [
+   "2026-10-11T06:00:00+00:00",
+   1001.23837
+  ],
+  [
+   "2026-10-11T07:00:00+00:00",
+   1002.247782
+  ],
+  [
+   "2026-10-11T08:00:00+00:00",
+   1001.94678
+  ],
+  [
+   "2026-10-11T09:00:00+00:00",
+   1001.996782
+  ],
+  [
+   "2026-10-11T10:00:00+00:00",
+   1002.421184
+  ],
+  [
+   "2026-10-11T11:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-11T12:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-11T13:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-11T14:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-11T15:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-11T16:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-11T17:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-11T18:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-11T19:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-11T20:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-11T21:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-11T22:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-11T23:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T00:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T01:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T02:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T03:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T04:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T05:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T06:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T07:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T08:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T09:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T10:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T11:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T12:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T13:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T14:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T15:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T16:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T17:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T18:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T19:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T20:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T21:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T22:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-12T23:00:00+00:00",
+   1002.257615
+  ],
+  [
+   "2026-10-13T00:00:00+00:00",
+   1004.10057
+  ],
+  [
+   "2026-10-13T01:00:00+00:00",
+   988.958761
+  ],
+  [
+   "2026-10-13T02:00:00+00:00",
+   980.845839
+  ],
+  [
+   "2026-10-13T03:00:00+00:00",
+   976.48782
+  ],
+  [
+   "2026-10-13T04:00:00+00:00",
+   974.350672
+  ],
+  [
+   "2026-10-13T05:00:00+00:00",
+   970.590439
+  ],
+  [
+   "2026-10-13T06:00:00+00:00",
+   969.083685
+  ],
+  [
+   "2026-10-13T07:00:00+00:00",
+   970.457655
+  ],
+  [
+   "2026-10-13T08:00:00+00:00",
+   974.318356
+  ],
+  [
+   "2026-10-13T09:00:00+00:00",
+   978.082143
+  ],
+  [
+   "2026-10-13T10:00:00+00:00",
+   981.339375
+  ],
+  [
+   "2026-10-13T11:00:00+00:00",
+   982.462588
+  ],
+  [
+   "2026-10-13T12:00:00+00:00",
+   982.546732
+  ],
+  [
+   "2026-10-13T13:00:00+00:00",
+   983.137696
+  ],
+  [
+   "2026-10-13T14:00:00+00:00",
+   979.992022
+  ],
+  [
+   "2026-10-13T15:00:00+00:00",
+   981.618127
+  ],
+  [
+   "2026-10-13T16:00:00+00:00",
+   980.506368
+  ],
+  [
+   "2026-10-13T17:00:00+00:00",
+   982.915135
+  ],
+  [
+   "2026-10-13T18:00:00+00:00",
+   979.680738
+  ],
+  [
+   "2026-10-13T19:00:00+00:00",
+   980.165721
+  ],
+  [
+   "2026-10-13T20:00:00+00:00",
+   979.904351
+  ],
+  [
+   "2026-10-13T21:00:00+00:00",
+   979.344143
+  ],
+  [
+   "2026-10-13T22:00:00+00:00",
+   979.994743
+  ],
+  [
+   "2026-10-13T23:00:00+00:00",
+   982.595974
+  ],
+  [
+   "2026-10-14T00:00:00+00:00",
+   977.783783
+  ],
+  [
+   "2026-10-14T01:00:00+00:00",
+   978.607664
+  ],
+  [
+   "2026-10-14T02:00:00+00:00",
+   975.389183
+  ],
+  [
+   "2026-10-14T03:00:00+00:00",
+   975.993553
+  ],
+  [
+   "2026-10-14T04:00:00+00:00",
+   975.693645
+  ],
+  [
+   "2026-10-14T05:00:00+00:00",
+   980.685691
+  ],
+  [
+   "2026-10-14T06:00:00+00:00",
+   980.021725
+  ],
+  [
+   "2026-10-14T07:00:00+00:00",
+   978.443222
+  ],
+  [
+   "2026-10-14T08:00:00+00:00",
+   982.214285
+  ],
+  [
+   "2026-10-14T09:00:00+00:00",
+   984.72653
+  ],
+  [
+   "2026-10-14T10:00:00+00:00",
+   981.122006
+  ],
+  [
+   "2026-10-14T11:00:00+00:00",
+   980.952879
+  ],
+  [
+   "2026-10-14T12:00:00+00:00",
+   991.185167
+  ],
+  [
+   "2026-10-14T13:00:00+00:00",
+   996.274076
+  ],
+  [
+   "2026-10-14T14:00:00+00:00",
+   998.322569
+  ],
+  [
+   "2026-10-14T15:00:00+00:00",
+   1001.872784
+  ],
+  [
+   "2026-10-14T16:00:00+00:00",
+   996.671313
+  ],
+  [
+   "2026-10-14T17:00:00+00:00",
+   1000.210115
+  ],
+  [
+   "2026-10-14T18:00:00+00:00",
+   999.728619
+  ],
+  [
+   "2026-10-14T19:00:00+00:00",
+   995.927277
+  ],
+  [
+   "2026-10-14T20:00:00+00:00",
+   999.604848
+  ],
+  [
+   "2026-10-14T21:00:00+00:00",
+   997.143417
+  ],
+  [
+   "2026-10-14T22:00:00+00:00",
+   998.863208
+  ],
+  [
+   "2026-10-14T23:00:00+00:00",
+   999.183028
+  ],
+  [
+   "2026-10-15T00:00:00+00:00",
+   999.423378
+  ],
+  [
+   "2026-10-15T01:00:00+00:00",
+   1002.360046
+  ],
+  [
+   "2026-10-15T02:00:00+00:00",
+   1003.6724
+  ],
+  [
+   "2026-10-15T03:00:00+00:00",
+   1009.287776
+  ],
+  [
+   "2026-10-15T04:00:00+00:00",
+   999.90137
+  ],
+  [
+   "2026-10-15T05:00:00+00:00",
+   1006.477436
+  ],
+  [
+   "2026-10-15T06:00:00+00:00",
+   1004.557281
+  ],
+  [
+   "2026-10-15T07:00:00+00:00",
+   1000.313213
+  ],
+  [
+   "2026-10-15T08:00:00+00:00",
+   1001.479236
+  ],
+  [
+   "2026-10-15T09:00:00+00:00",
+   1001.667315
+  ],
+  [
+   "2026-10-15T10:00:00+00:00",
+   1003.186402
+  ],
+  [
+   "2026-10-15T11:00:00+00:00",
+   1003.834447
+  ],
+  [
+   "2026-10-15T12:00:00+00:00",
+   1006.553799
+  ],
+  [
+   "2026-10-15T13:00:00+00:00",
+   1008.601335
+  ],
+  [
+   "2026-10-15T14:00:00+00:00",
+   997.49067
+  ],
+  [
+   "2026-10-15T15:00:00+00:00",
+   991.121627
+  ],
+  [
+   "2026-10-15T16:00:00+00:00",
+   992.805876
+  ],
+  [
+   "2026-10-15T17:00:00+00:00",
+   990.479296
+  ],
+  [
+   "2026-10-15T18:00:00+00:00",
+   990.012802
+  ],
+  [
+   "2026-10-15T19:00:00+00:00",
+   989.971884
+  ],
+  [
+   "2026-10-15T20:00:00+00:00",
+   990.568687
+  ],
+  [
+   "2026-10-15T21:00:00+00:00",
+   988.914162
+  ],
+  [
+   "2026-10-15T22:00:00+00:00",
+   989.446748
+  ],
+  [
+   "2026-10-15T23:00:00+00:00",
+   991.612987
+  ],
+  [
+   "2026-10-16T00:00:00+00:00",
+   991.3592
+  ],
+  [
+   "2026-10-16T01:00:00+00:00",
+   993.001175
+  ],
+  [
+   "2026-10-16T02:00:00+00:00",
+   992.45672
+  ],
+  [
+   "2026-10-16T03:00:00+00:00",
+   992.212762
+  ],
+  [
+   "2026-10-16T04:00:00+00:00",
+   991.540297
+  ],
+  [
+   "2026-10-16T05:00:00+00:00",
+   991.282001
+  ],
+  [
+   "2026-10-16T06:00:00+00:00",
+   991.020948
+  ],
+  [
+   "2026-10-16T07:00:00+00:00",
+   990.095028
+  ],
+  [
+   "2026-10-16T08:00:00+00:00",
+   989.93074
+  ],
+  [
+   "2026-10-16T09:00:00+00:00",
+   991.534374
+  ],
+  [
+   "2026-10-16T10:00:00+00:00",
+   989.268159
+  ],
+  [
+   "2026-10-16T11:00:00+00:00",
+   986.739021
+  ],
+  [
+   "2026-10-16T12:00:00+00:00",
+   990.093145
+  ],
+  [
+   "2026-10-16T13:00:00+00:00",
+   990.535229
+  ],
+  [
+   "2026-10-16T14:00:00+00:00",
+   990.686183
+  ],
+  [
+   "2026-10-16T15:00:00+00:00",
+   995.617278
+  ],
+  [
+   "2026-10-16T16:00:00+00:00",
+   995.38676
+  ],
+  [
+   "2026-10-16T17:00:00+00:00",
+   998.183889
+  ],
+  [
+   "2026-10-16T18:00:00+00:00",
+   998.940006
+  ],
+  [
+   "2026-10-16T19:00:00+00:00",
+   996.863171
+  ],
+  [
+   "2026-10-16T20:00:00+00:00",
+   996.166424
+  ],
+  [
+   "2026-10-16T21:00:00+00:00",
+   996.253907
+  ],
+  [
+   "2026-10-16T22:00:00+00:00",
+   994.9564
+  ],
+  [
+   "2026-10-16T23:00:00+00:00",
+   995.689366
+  ],
+  [
+   "2026-10-17T00:00:00+00:00",
+   995.905032
+  ],
+  [
+   "2026-10-17T01:00:00+00:00",
+   996.30542
+  ],
+  [
+   "2026-10-17T02:00:00+00:00",
+   996.193419
+  ],
+  [
+   "2026-10-17T03:00:00+00:00",
+   995.35007
+  ],
+  [
+   "2026-10-17T04:00:00+00:00",
+   995.693823
+  ],
+  [
+   "2026-10-17T05:00:00+00:00",
+   995.253937
+  ],
+  [
+   "2026-10-17T06:00:00+00:00",
+   994.658406
+  ],
+  [
+   "2026-10-17T07:00:00+00:00",
+   994.427492
+  ],
+  [
+   "2026-10-17T08:00:00+00:00",
+   994.302213
+  ],
+  [
+   "2026-10-17T09:00:00+00:00",
+   994.218629
+  ],
+  [
+   "2026-10-17T10:00:00+00:00",
+   993.997854
+  ],
+  [
+   "2026-10-17T11:00:00+00:00",
+   994.536384
+  ],
+  [
+   "2026-10-17T12:00:00+00:00",
+   995.347756
+  ],
+  [
+   "2026-10-17T13:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-17T14:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-17T15:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-17T16:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-17T17:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-17T18:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-17T19:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-17T20:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-17T21:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-17T22:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-17T23:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T00:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T01:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T02:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T03:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T04:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T05:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T06:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T07:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T08:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T09:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T10:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T11:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T12:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T13:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T14:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T15:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T16:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T17:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T18:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T19:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T20:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T21:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T22:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-18T23:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T00:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T01:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T02:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T03:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T04:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T05:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T06:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T07:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T08:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T09:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T10:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T11:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T12:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T13:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T14:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T15:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T16:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T17:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T18:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T19:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T20:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T21:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T22:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-19T23:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T00:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T01:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T02:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T03:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T04:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T05:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T06:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T07:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T08:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T09:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T10:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T11:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T12:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T13:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T14:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T15:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T16:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T17:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T18:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T19:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T20:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T21:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T22:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-20T23:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T00:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T01:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T02:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T03:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T04:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T05:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T06:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T07:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T08:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T09:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T10:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T11:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T12:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T13:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T14:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T15:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T16:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T17:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T18:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T19:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T20:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T21:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T22:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-21T23:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T00:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T01:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T02:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T03:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T04:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T05:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T06:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T07:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T08:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T09:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T10:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T11:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T12:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T13:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T14:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T15:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T16:00:00+00:00",
+   995.180724
+  ],
+  [
+   "2026-10-22T17:00:00+00:00",
+   995.14254
+  ],
+  [
+   "2026-10-22T18:00:00+00:00",
+   994.046206
+  ],
+  [
+   "2026-10-22T19:00:00+00:00",
+   993.455046
+  ],
+  [
+   "2026-10-22T20:00:00+00:00",
+   994.614259
+  ],
+  [
+   "2026-10-22T21:00:00+00:00",
+   992.889809
+  ],
+  [
+   "2026-10-22T22:00:00+00:00",
+   994.183891
+  ],
+  [
+   "2026-10-22T23:00:00+00:00",
+   993.557032
+  ],
+  [
+   "2026-10-23T00:00:00+00:00",
+   992.79584
+  ],
+  [
+   "2026-10-23T01:00:00+00:00",
+   993.367512
+  ],
+  [
+   "2026-10-23T02:00:00+00:00",
+   989.014158
+  ],
+  [
+   "2026-10-23T03:00:00+00:00",
+   989.812459
+  ],
+  [
+   "2026-10-23T04:00:00+00:00",
+   992.542569
+  ],
+  [
+   "2026-10-23T05:00:00+00:00",
+   990.62429
+  ],
+  [
+   "2026-10-23T06:00:00+00:00",
+   989.930108
+  ],
+  [
+   "2026-10-23T07:00:00+00:00",
+   991.860417
+  ],
+  [
+   "2026-10-23T08:00:00+00:00",
+   990.69357
+  ],
+  [
+   "2026-10-23T09:00:00+00:00",
+   991.822526
+  ],
+  [
+   "2026-10-23T10:00:00+00:00",
+   991.940146
+  ],
+  [
+   "2026-10-23T11:00:00+00:00",
+   991.144204
+  ],
+  [
+   "2026-10-23T12:00:00+00:00",
+   991.035755
+  ],
+  [
+   "2026-10-23T13:00:00+00:00",
+   988.99369
+  ],
+  [
+   "2026-10-23T14:00:00+00:00",
+   990.41923
+  ],
+  [
+   "2026-10-23T15:00:00+00:00",
+   990.806674
+  ],
+  [
+   "2026-10-23T16:00:00+00:00",
+   990.813173
+  ],
+  [
+   "2026-10-23T17:00:00+00:00",
+   990.796352
+  ],
+  [
+   "2026-10-23T18:00:00+00:00",
+   992.217251
+  ],
+  [
+   "2026-10-23T19:00:00+00:00",
+   993.527683
+  ],
+  [
+   "2026-10-23T20:00:00+00:00",
+   992.375819
+  ],
+  [
+   "2026-10-23T21:00:00+00:00",
+   992.704638
+  ],
+  [
+   "2026-10-23T22:00:00+00:00",
+   997.793277
+  ],
+  [
+   "2026-10-23T23:00:00+00:00",
+   994.556976
+  ],
+  [
+   "2026-10-24T00:00:00+00:00",
+   997.726785
+  ],
+  [
+   "2026-10-24T01:00:00+00:00",
+   995.965605
+  ],
+  [
+   "2026-10-24T02:00:00+00:00",
+   995.45525
+  ],
+  [
+   "2026-10-24T03:00:00+00:00",
+   995.741215
+  ],
+  [
+   "2026-10-24T04:00:00+00:00",
+   995.986458
+  ],
+  [
+   "2026-10-24T05:00:00+00:00",
+   996.89964
+  ],
+  [
+   "2026-10-24T06:00:00+00:00",
+   996.749432
+  ],
+  [
+   "2026-10-24T07:00:00+00:00",
+   997.299987
+  ],
+  [
+   "2026-10-24T08:00:00+00:00",
+   997.947916
+  ],
+  [
+   "2026-10-24T09:00:00+00:00",
+   998.434725
+  ],
+  [
+   "2026-10-24T10:00:00+00:00",
+   998.052998
+  ],
+  [
+   "2026-10-24T11:00:00+00:00",
+   998.715077
+  ],
+  [
+   "2026-10-24T12:00:00+00:00",
+   997.772261
+  ],
+  [
+   "2026-10-24T13:00:00+00:00",
+   998.131892
+  ],
+  [
+   "2026-10-24T14:00:00+00:00",
+   1002.362599
+  ],
+  [
+   "2026-10-24T15:00:00+00:00",
+   1007.327067
+  ],
+  [
+   "2026-10-24T16:00:00+00:00",
+   1002.838159
+  ],
+  [
+   "2026-10-24T17:00:00+00:00",
+   1002.090874
+  ],
+  [
+   "2026-10-24T18:00:00+00:00",
+   999.114031
+  ],
+  [
+   "2026-10-24T19:00:00+00:00",
+   999.684961
+  ],
+  [
+   "2026-10-24T20:00:00+00:00",
+   998.514478
+  ],
+  [
+   "2026-10-24T21:00:00+00:00",
+   999.406355
+  ],
+  [
+   "2026-10-24T22:00:00+00:00",
+   998.193602
+  ],
+  [
+   "2026-10-24T23:00:00+00:00",
+   996.124247
+  ],
+  [
+   "2026-10-25T00:00:00+00:00",
+   995.90067
+  ],
+  [
+   "2026-10-25T01:00:00+00:00",
+   995.903897
+  ],
+  [
+   "2026-10-25T02:00:00+00:00",
+   996.007888
+  ],
+  [
+   "2026-10-25T03:00:00+00:00",
+   996.010929
+  ],
+  [
+   "2026-10-25T04:00:00+00:00",
+   995.534239
+  ],
+  [
+   "2026-10-25T05:00:00+00:00",
+   997.25107
+  ],
+  [
+   "2026-10-25T06:00:00+00:00",
+   998.89228
+  ],
+  [
+   "2026-10-25T07:00:00+00:00",
+   998.01347
+  ],
+  [
+   "2026-10-25T08:00:00+00:00",
+   1000.08307
+  ],
+  [
+   "2026-10-25T09:00:00+00:00",
+   999.907799
+  ],
+  [
+   "2026-10-25T10:00:00+00:00",
+   1000.311695
+  ],
+  [
+   "2026-10-25T11:00:00+00:00",
+   998.851166
+  ],
+  [
+   "2026-10-25T12:00:00+00:00",
+   999.559851
+  ],
+  [
+   "2026-10-25T13:00:00+00:00",
+   1000.267835
+  ],
+  [
+   "2026-10-25T14:00:00+00:00",
+   998.733435
+  ],
+  [
+   "2026-10-25T15:00:00+00:00",
+   998.081298
+  ],
+  [
+   "2026-10-25T16:00:00+00:00",
+   997.122965
+  ],
+  [
+   "2026-10-25T17:00:00+00:00",
+   997.149343
+  ],
+  [
+   "2026-10-25T18:00:00+00:00",
+   997.631354
+  ],
+  [
+   "2026-10-25T19:00:00+00:00",
+   997.659413
+  ],
+  [
+   "2026-10-25T20:00:00+00:00",
+   997.965018
+  ],
+  [
+   "2026-10-25T21:00:00+00:00",
+   999.303819
+  ],
+  [
+   "2026-10-25T22:00:00+00:00",
+   998.173004
+  ],
+  [
+   "2026-10-25T23:00:00+00:00",
+   998.729687
+  ],
+  [
+   "2026-10-26T00:00:00+00:00",
+   998.327994
+  ],
+  [
+   "2026-10-26T01:00:00+00:00",
+   999.439992
+  ],
+  [
+   "2026-10-26T02:00:00+00:00",
+   1000.677805
+  ],
+  [
+   "2026-10-26T03:00:00+00:00",
+   1001.638158
+  ],
+  [
+   "2026-10-26T04:00:00+00:00",
+   998.919714
+  ],
+  [
+   "2026-10-26T05:00:00+00:00",
+   998.519704
+  ],
+  [
+   "2026-10-26T06:00:00+00:00",
+   999.5813
+  ],
+  [
+   "2026-10-26T07:00:00+00:00",
+   1000.416081
+  ],
+  [
+   "2026-10-26T08:00:00+00:00",
+   999.411253
+  ],
+  [
+   "2026-10-26T09:00:00+00:00",
+   998.003236
+  ],
+  [
+   "2026-10-26T10:00:00+00:00",
+   998.812837
+  ],
+  [
+   "2026-10-26T11:00:00+00:00",
+   997.883629
+  ],
+  [
+   "2026-10-26T12:00:00+00:00",
+   998.063231
+  ],
+  [
+   "2026-10-26T13:00:00+00:00",
+   1000.006832
+  ],
+  [
+   "2026-10-26T14:00:00+00:00",
+   996.860009
+  ],
+  [
+   "2026-10-26T15:00:00+00:00",
+   997.417624
+  ],
+  [
+   "2026-10-26T16:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-26T17:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-26T18:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-26T19:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-26T20:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-26T21:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-26T22:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-26T23:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T00:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T01:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T02:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T03:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T04:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T05:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T06:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T07:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T08:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T09:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T10:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T11:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T12:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T13:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T14:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T15:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T16:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T17:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T18:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T19:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T20:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T21:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T22:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-27T23:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T00:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T01:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T02:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T03:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T04:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T05:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T06:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T07:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T08:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T09:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T10:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T11:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T12:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T13:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T14:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T15:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T16:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T17:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T18:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T19:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T20:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T21:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T22:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-28T23:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T00:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T01:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T02:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T03:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T04:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T05:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T06:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T07:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T08:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T09:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T10:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T11:00:00+00:00",
+   997.228731
+  ],
+  [
+   "2026-10-29T12:00:00+00:00",
+   1001.858036
+  ],
+  [
+   "2026-10-29T13:00:00+00:00",
+   1006.037032
+  ],
+  [
+   "2026-10-29T14:00:00+00:00",
+   1005.321367
+  ],
+  [
+   "2026-10-29T15:00:00+00:00",
+   1013.938423
+  ],
+  [
+   "2026-10-29T16:00:00+00:00",
+   1020.642199
+  ],
+  [
+   "2026-10-29T17:00:00+00:00",
+   1015.366536
+  ],
+  [
+   "2026-10-29T18:00:00+00:00",
+   1015.629214
+  ],
+  [
+   "2026-10-29T19:00:00+00:00",
+   1013.876928
+  ],
+  [
+   "2026-10-29T20:00:00+00:00",
+   1010.220075
+  ],
+  [
+   "2026-10-29T21:00:00+00:00",
+   1004.093473
+  ],
+  [
+   "2026-10-29T22:00:00+00:00",
+   1001.608595
+  ],
+  [
+   "2026-10-29T23:00:00+00:00",
+   1003.994767
+  ],
+  [
+   "2026-10-30T00:00:00+00:00",
+   1019.704642
+  ],
+  [
+   "2026-10-30T01:00:00+00:00",
+   1019.781881
+  ],
+  [
+   "2026-10-30T02:00:00+00:00",
+   1017.259264
+  ],
+  [
+   "2026-10-30T03:00:00+00:00",
+   1011.166184
+  ],
+  [
+   "2026-10-30T04:00:00+00:00",
+   1009.397496
+  ],
+  [
+   "2026-10-30T05:00:00+00:00",
+   1007.705987
+  ],
+  [
+   "2026-10-30T06:00:00+00:00",
+   1007.863552
+  ],
+  [
+   "2026-10-30T07:00:00+00:00",
+   1007.911279
+  ],
+  [
+   "2026-10-30T08:00:00+00:00",
+   1009.872806
+  ],
+  [
+   "2026-10-30T09:00:00+00:00",
+   1011.488859
+  ],
+  [
+   "2026-10-30T10:00:00+00:00",
+   1012.300999
+  ],
+  [
+   "2026-10-30T11:00:00+00:00",
+   1013.223814
+  ],
+  [
+   "2026-10-30T12:00:00+00:00",
+   1010.778626
+  ],
+  [
+   "2026-10-30T13:00:00+00:00",
+   1016.78433
+  ],
+  [
+   "2026-10-30T14:00:00+00:00",
+   1021.10526
+  ],
+  [
+   "2026-10-30T15:00:00+00:00",
+   1019.145313
+  ],
+  [
+   "2026-10-30T16:00:00+00:00",
+   1017.215394
+  ],
+  [
+   "2026-10-30T17:00:00+00:00",
+   1016.08232
+  ],
+  [
+   "2026-10-30T18:00:00+00:00",
+   1016.159388
+  ],
+  [
+   "2026-10-30T19:00:00+00:00",
+   1015.563288
+  ],
+  [
+   "2026-10-30T20:00:00+00:00",
+   1012.277136
+  ],
+  [
+   "2026-10-30T21:00:00+00:00",
+   1010.420761
+  ],
+  [
+   "2026-10-30T22:00:00+00:00",
+   1008.864383
+  ],
+  [
+   "2026-10-30T23:00:00+00:00",
+   1007.653571
+  ],
+  [
+   "2026-10-31T00:00:00+00:00",
+   1003.938936
+  ],
+  [
+   "2026-10-31T01:00:00+00:00",
+   1005.723866
+  ],
+  [
+   "2026-10-31T02:00:00+00:00",
+   1005.180246
+  ],
+  [
+   "2026-10-31T03:00:00+00:00",
+   1007.448103
+  ],
+  [
+   "2026-10-31T04:00:00+00:00",
+   1006.274845
+  ],
+  [
+   "2026-10-31T05:00:00+00:00",
+   1004.730706
+  ],
+  [
+   "2026-10-31T06:00:00+00:00",
+   1004.753081
+  ],
+  [
+   "2026-10-31T07:00:00+00:00",
+   1004.747928
+  ],
+  [
+   "2026-10-31T08:00:00+00:00",
+   1003.881481
+  ],
+  [
+   "2026-10-31T09:00:00+00:00",
+   1001.487491
+  ],
+  [
+   "2026-10-31T10:00:00+00:00",
+   1003.243974
+  ],
+  [
+   "2026-10-31T11:00:00+00:00",
+   1000.497872
+  ],
+  [
+   "2026-10-31T12:00:00+00:00",
+   1001.395993
+  ],
+  [
+   "2026-10-31T13:00:00+00:00",
+   999.148932
+  ],
+  [
+   "2026-10-31T14:00:00+00:00",
+   999.831411
+  ],
+  [
+   "2026-10-31T15:00:00+00:00",
+   1000.26916
+  ],
+  [
+   "2026-10-31T16:00:00+00:00",
+   999.441086
+  ],
+  [
+   "2026-10-31T17:00:00+00:00",
+   1000.253128
+  ],
+  [
+   "2026-10-31T18:00:00+00:00",
+   1001.026857
+  ],
+  [
+   "2026-10-31T19:00:00+00:00",
+   1001.616417
+  ],
+  [
+   "2026-10-31T20:00:00+00:00",
+   1001.58735
+  ],
+  [
+   "2026-10-31T21:00:00+00:00",
+   1001.141749
+  ],
+  [
+   "2026-10-31T22:00:00+00:00",
+   1001.193228
+  ],
+  [
+   "2026-10-31T23:00:00+00:00",
+   1002.210462
+  ],
+  [
+   "2026-11-01T00:00:00+00:00",
+   1001.355333
+  ],
+  [
+   "2026-11-01T01:00:00+00:00",
+   1000.692888
+  ],
+  [
+   "2026-11-01T02:00:00+00:00",
+   1000.954586
+  ],
+  [
+   "2026-11-01T03:00:00+00:00",
+   998.647016
+  ],
+  [
+   "2026-11-01T04:00:00+00:00",
+   1000.523022
+  ],
+  [
+   "2026-11-01T05:00:00+00:00",
+   999.017779
+  ],
+  [
+   "2026-11-01T06:00:00+00:00",
+   998.771258
+  ],
+  [
+   "2026-11-01T07:00:00+00:00",
+   997.833257
+  ],
+  [
+   "2026-11-01T08:00:00+00:00",
+   997.303441
+  ],
+  [
+   "2026-11-01T09:00:00+00:00",
+   999.383023
+  ],
+  [
+   "2026-11-01T10:00:00+00:00",
+   999.054453
+  ],
+  [
+   "2026-11-01T11:00:00+00:00",
+   999.481363
+  ],
+  [
+   "2026-11-01T12:00:00+00:00",
+   1001.637498
+  ],
+  [
+   "2026-11-01T13:00:00+00:00",
+   1000.265841
+  ],
+  [
+   "2026-11-01T14:00:00+00:00",
+   999.694881
+  ],
+  [
+   "2026-11-01T15:00:00+00:00",
+   1001.052399
+  ],
+  [
+   "2026-11-01T16:00:00+00:00",
+   1000.2573
+  ],
+  [
+   "2026-11-01T17:00:00+00:00",
+   1001.820634
+  ],
+  [
+   "2026-11-01T18:00:00+00:00",
+   1003.011966
+  ],
+  [
+   "2026-11-01T19:00:00+00:00",
+   1004.638061
+  ],
+  [
+   "2026-11-01T20:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-01T21:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-01T22:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-01T23:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T00:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T01:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T02:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T03:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T04:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T05:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T06:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T07:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T08:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T09:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T10:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T11:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T12:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T13:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T14:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T15:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T16:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T17:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T18:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T19:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T20:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T21:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T22:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-02T23:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T00:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T01:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T02:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T03:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T04:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T05:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T06:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T07:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T08:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T09:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T10:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T11:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T12:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T13:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T14:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T15:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T16:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T17:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T18:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T19:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T20:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T21:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T22:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-03T23:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T00:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T01:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T02:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T03:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T04:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T05:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T06:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T07:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T08:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T09:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T10:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T11:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T12:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T13:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T14:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T15:00:00+00:00",
+   1004.159626
+  ],
+  [
+   "2026-11-04T16:00:00+00:00",
+   1004.854779
+  ],
+  [
+   "2026-11-04T17:00:00+00:00",
+   1003.786613
+  ],
+  [
+   "2026-11-04T18:00:00+00:00",
+   1003.6077
+  ],
+  [
+   "2026-11-04T19:00:00+00:00",
+   1001.888129
+  ],
+  [
+   "2026-11-04T20:00:00+00:00",
+   1003.38432
+  ],
+  [
+   "2026-11-04T21:00:00+00:00",
+   1003.153711
+  ],
+  [
+   "2026-11-04T22:00:00+00:00",
+   1004.970426
+  ],
+  [
+   "2026-11-04T23:00:00+00:00",
+   1003.767838
+  ],
+  [
+   "2026-11-05T00:00:00+00:00",
+   1003.375847
+  ],
+  [
+   "2026-11-05T01:00:00+00:00",
+   1004.659008
+  ],
+  [
+   "2026-11-05T02:00:00+00:00",
+   1004.243383
+  ],
+  [
+   "2026-11-05T03:00:00+00:00",
+   1003.672373
+  ],
+  [
+   "2026-11-05T04:00:00+00:00",
+   1003.683601
+  ],
+  [
+   "2026-11-05T05:00:00+00:00",
+   1002.678528
+  ],
+  [
+   "2026-11-05T06:00:00+00:00",
+   1004.591298
+  ],
+  [
+   "2026-11-05T07:00:00+00:00",
+   1002.317393
+  ],
+  [
+   "2026-11-05T08:00:00+00:00",
+   1003.181837
+  ],
+  [
+   "2026-11-05T09:00:00+00:00",
+   1003.05009
+  ],
+  [
+   "2026-11-05T10:00:00+00:00",
+   1002.318675
+  ],
+  [
+   "2026-11-05T11:00:00+00:00",
+   1003.008269
+  ],
+  [
+   "2026-11-05T12:00:00+00:00",
+   997.808524
+  ],
+  [
+   "2026-11-05T13:00:00+00:00",
+   997.127044
+  ],
+  [
+   "2026-11-05T14:00:00+00:00",
+   988.332332
+  ],
+  [
+   "2026-11-05T15:00:00+00:00",
+   971.85118
+  ],
+  [
+   "2026-11-05T16:00:00+00:00",
+   968.129568
+  ],
+  [
+   "2026-11-05T17:00:00+00:00",
+   973.768482
+  ],
+  [
+   "2026-11-05T18:00:00+00:00",
+   972.558422
+  ],
+  [
+   "2026-11-05T19:00:00+00:00",
+   969.180694
+  ],
+  [
+   "2026-11-05T20:00:00+00:00",
+   971.007279
+  ],
+  [
+   "2026-11-05T21:00:00+00:00",
+   974.777757
+  ],
+  [
+   "2026-11-05T22:00:00+00:00",
+   976.159028
+  ],
+  [
+   "2026-11-05T23:00:00+00:00",
+   974.880934
+  ],
+  [
+   "2026-11-06T00:00:00+00:00",
+   970.400681
+  ],
+  [
+   "2026-11-06T01:00:00+00:00",
+   971.9316
+  ],
+  [
+   "2026-11-06T02:00:00+00:00",
+   971.351061
+  ],
+  [
+   "2026-11-06T03:00:00+00:00",
+   974.48273
+  ],
+  [
+   "2026-11-06T04:00:00+00:00",
+   975.854943
+  ],
+  [
+   "2026-11-06T05:00:00+00:00",
+   977.100845
+  ],
+  [
+   "2026-11-06T06:00:00+00:00",
+   976.385675
+  ],
+  [
+   "2026-11-06T07:00:00+00:00",
+   976.440181
+  ],
+  [
+   "2026-11-06T08:00:00+00:00",
+   976.872265
+  ],
+  [
+   "2026-11-06T09:00:00+00:00",
+   972.528467
+  ],
+  [
+   "2026-11-06T10:00:00+00:00",
+   973.191274
+  ],
+  [
+   "2026-11-06T11:00:00+00:00",
+   971.274209
+  ],
+  [
+   "2026-11-06T12:00:00+00:00",
+   972.63073
+  ],
+  [
+   "2026-11-06T13:00:00+00:00",
+   972.965512
+  ],
+  [
+   "2026-11-06T14:00:00+00:00",
+   973.33446
+  ],
+  [
+   "2026-11-06T15:00:00+00:00",
+   972.527
+  ],
+  [
+   "2026-11-06T16:00:00+00:00",
+   971.734593
+  ],
+  [
+   "2026-11-06T17:00:00+00:00",
+   975.127517
+  ],
+  [
+   "2026-11-06T18:00:00+00:00",
+   974.146739
+  ],
+  [
+   "2026-11-06T19:00:00+00:00",
+   973.696661
+  ],
+  [
+   "2026-11-06T20:00:00+00:00",
+   975.128812
+  ],
+  [
+   "2026-11-06T21:00:00+00:00",
+   972.489832
+  ],
+  [
+   "2026-11-06T22:00:00+00:00",
+   973.816636
+  ],
+  [
+   "2026-11-06T23:00:00+00:00",
+   973.590228
+  ],
+  [
+   "2026-11-07T00:00:00+00:00",
+   972.975067
+  ],
+  [
+   "2026-11-07T01:00:00+00:00",
+   970.948892
+  ],
+  [
+   "2026-11-07T02:00:00+00:00",
+   971.331314
+  ],
+  [
+   "2026-11-07T03:00:00+00:00",
+   973.003166
+  ],
+  [
+   "2026-11-07T04:00:00+00:00",
+   973.314481
+  ],
+  [
+   "2026-11-07T05:00:00+00:00",
+   971.513572
+  ],
+  [
+   "2026-11-07T06:00:00+00:00",
+   971.861393
+  ],
+  [
+   "2026-11-07T07:00:00+00:00",
+   971.694801
+  ],
+  [
+   "2026-11-07T08:00:00+00:00",
+   970.892245
+  ],
+  [
+   "2026-11-07T09:00:00+00:00",
+   972.401066
+  ],
+  [
+   "2026-11-07T10:00:00+00:00",
+   972.70284
+  ],
+  [
+   "2026-11-07T11:00:00+00:00",
+   972.963768
+  ],
+  [
+   "2026-11-07T12:00:00+00:00",
+   974.256391
+  ],
+  [
+   "2026-11-07T13:00:00+00:00",
+   973.092526
+  ],
+  [
+   "2026-11-07T14:00:00+00:00",
+   972.966248
+  ],
+  [
+   "2026-11-07T15:00:00+00:00",
+   975.707875
+  ],
+  [
+   "2026-11-07T16:00:00+00:00",
+   976.243143
+  ],
+  [
+   "2026-11-07T17:00:00+00:00",
+   975.087427
+  ],
+  [
+   "2026-11-07T18:00:00+00:00",
+   974.921366
+  ],
+  [
+   "2026-11-07T19:00:00+00:00",
+   975.563126
+  ],
+  [
+   "2026-11-07T20:00:00+00:00",
+   978.122619
+  ],
+  [
+   "2026-11-07T21:00:00+00:00",
+   977.098089
+  ],
+  [
+   "2026-11-07T22:00:00+00:00",
+   976.668526
+  ],
+  [
+   "2026-11-07T23:00:00+00:00",
+   974.361432
+  ],
+  [
+   "2026-11-08T00:00:00+00:00",
+   975.943575
+  ],
+  [
+   "2026-11-08T01:00:00+00:00",
+   977.405304
+  ],
+  [
+   "2026-11-08T02:00:00+00:00",
+   977.096568
+  ],
+  [
+   "2026-11-08T03:00:00+00:00",
+   975.791123
+  ],
+  [
+   "2026-11-08T04:00:00+00:00",
+   976.943462
+  ],
+  [
+   "2026-11-08T05:00:00+00:00",
+   976.796696
+  ],
+  [
+   "2026-11-08T06:00:00+00:00",
+   977.188996
+  ],
+  [
+   "2026-11-08T07:00:00+00:00",
+   975.207363
+  ],
+  [
+   "2026-11-08T08:00:00+00:00",
+   975.745896
+  ],
+  [
+   "2026-11-08T09:00:00+00:00",
+   976.017033
+  ],
+  [
+   "2026-11-08T10:00:00+00:00",
+   976.368511
+  ],
+  [
+   "2026-11-08T11:00:00+00:00",
+   974.403854
+  ],
+  [
+   "2026-11-08T12:00:00+00:00",
+   974.301227
+  ],
+  [
+   "2026-11-08T13:00:00+00:00",
+   974.793666
+  ],
+  [
+   "2026-11-08T14:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-08T15:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-08T16:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-08T17:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-08T18:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-08T19:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-08T20:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-08T21:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-08T22:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-08T23:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-09T00:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-09T01:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-09T02:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-09T03:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-09T04:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-09T05:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-09T06:00:00+00:00",
+   974.493045
+  ],
+  [
+   "2026-11-09T07:00:00+00:00",
+   976.548558
+  ],
+  [
+   "2026-11-09T08:00:00+00:00",
+   973.082103
+  ],
+  [
+   "2026-11-09T09:00:00+00:00",
+   974.766084
+  ],
+  [
+   "2026-11-09T10:00:00+00:00",
+   974.849832
+  ],
+  [
+   "2026-11-09T11:00:00+00:00",
+   974.251593
+  ],
+  [
+   "2026-11-09T12:00:00+00:00",
+   973.216693
+  ],
+  [
+   "2026-11-09T13:00:00+00:00",
+   972.862321
+  ],
+  [
+   "2026-11-09T14:00:00+00:00",
+   972.380413
+  ],
+  [
+   "2026-11-09T15:00:00+00:00",
+   970.29655
+  ],
+  [
+   "2026-11-09T16:00:00+00:00",
+   971.948434
+  ],
+  [
+   "2026-11-09T17:00:00+00:00",
+   972.850848
+  ],
+  [
+   "2026-11-09T18:00:00+00:00",
+   972.807334
+  ],
+  [
+   "2026-11-09T19:00:00+00:00",
+   972.485729
+  ],
+  [
+   "2026-11-09T20:00:00+00:00",
+   972.406238
+  ],
+  [
+   "2026-11-09T21:00:00+00:00",
+   972.419168
+  ],
+  [
+   "2026-11-09T22:00:00+00:00",
+   971.682106
+  ],
+  [
+   "2026-11-09T23:00:00+00:00",
+   971.809964
+  ],
+  [
+   "2026-11-10T00:00:00+00:00",
+   972.836502
+  ],
+  [
+   "2026-11-10T01:00:00+00:00",
+   972.800681
+  ],
+  [
+   "2026-11-10T02:00:00+00:00",
+   973.192335
+  ],
+  [
+   "2026-11-10T03:00:00+00:00",
+   974.138042
+  ],
+  [
+   "2026-11-10T04:00:00+00:00",
+   973.284538
+  ],
+  [
+   "2026-11-10T05:00:00+00:00",
+   972.928867
+  ],
+  [
+   "2026-11-10T06:00:00+00:00",
+   973.806561
+  ],
+  [
+   "2026-11-10T07:00:00+00:00",
+   973.981711
+  ],
+  [
+   "2026-11-10T08:00:00+00:00",
+   973.683237
+  ],
+  [
+   "2026-11-10T09:00:00+00:00",
+   975.311652
+  ],
+  [
+   "2026-11-10T10:00:00+00:00",
+   976.904005
+  ],
+  [
+   "2026-11-10T11:00:00+00:00",
+   976.535296
+  ],
+  [
+   "2026-11-10T12:00:00+00:00",
+   975.912249
+  ],
+  [
+   "2026-11-10T13:00:00+00:00",
+   979.765813
+  ],
+  [
+   "2026-11-10T14:00:00+00:00",
+   977.819159
+  ],
+  [
+   "2026-11-10T15:00:00+00:00",
+   984.646893
+  ],
+  [
+   "2026-11-10T16:00:00+00:00",
+   986.061301
+  ],
+  [
+   "2026-11-10T17:00:00+00:00",
+   983.687429
+  ],
+  [
+   "2026-11-10T18:00:00+00:00",
+   980.072966
+  ],
+  [
+   "2026-11-10T19:00:00+00:00",
+   980.143767
+  ],
+  [
+   "2026-11-10T20:00:00+00:00",
+   977.3252
+  ],
+  [
+   "2026-11-10T21:00:00+00:00",
+   977.532065
+  ],
+  [
+   "2026-11-10T22:00:00+00:00",
+   979.771997
+  ],
+  [
+   "2026-11-10T23:00:00+00:00",
+   977.870516
+  ],
+  [
+   "2026-11-11T00:00:00+00:00",
+   978.918383
+  ],
+  [
+   "2026-11-11T01:00:00+00:00",
+   978.189979
+  ],
+  [
+   "2026-11-11T02:00:00+00:00",
+   977.564914
+  ],
+  [
+   "2026-11-11T03:00:00+00:00",
+   976.809631
+  ]
+ ]
+}

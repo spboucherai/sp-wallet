@@ -115,6 +115,9 @@ def run_backtest(
         raise DataError("the backtest window needs at least two bars")
 
     if isinstance(strategy, Strategy):
+        if strategy.kind != "spot":
+            raise DataError(f"strategy {strategy.name!r} is a {strategy.kind} strategy: the spot backtester cannot "
+                            "run it (use spq.perp_engine.run_perp_backtest / python -m spq.perp_backtest)")
         lb = strategy.lookback if lookback is None else lookback
 
         def decide(view):

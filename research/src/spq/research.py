@@ -80,6 +80,9 @@ def params_key(params: dict) -> str:
 
 
 class Experiment:
+    #: backtest function used for every run; spq.perp_research.PerpExperiment replaces it with the perp backtester
+    _runner = staticmethod(run_backtest)
+
     def __init__(self, data: dict[str, pd.DataFrame], config: BacktestConfig, *, fractions=(0.6, 0.2, 0.2),
                  ledger: str | Path | None = None):
         index = check_aligned(data)
@@ -114,7 +117,7 @@ class Experiment:
         key = (strategy.sha256, params_key(p))
         if key not in self._cache:
             start, end = self.splits.window("development")
-            res = run_backtest(strategy, self._dev, self.config, start=start, end=end, params=p)
+            res = self._runner(strategy, self._dev, self.config, start=start, end=end, params=p)
             self._cache[key] = res
             rec = {"kind": "trial", "strategy": strategy.name, "sha256": strategy.sha256, "params": p,
                    "symbols": self.symbols, "interval": self.config.interval}
@@ -144,14 +147,14 @@ class Experiment:
             )
         self._check_open(strategy)
         start, end = self.splits.window(split)
-        return run_backtest(strategy, self._dev, self.config, start=start, end=end, params=params)
+        return self._runner(strategy, self._dev, self.config, start=start, end=end, params=params)
 
     def run_window(self, strategy: Strategy, start, end, params: dict | None = None) -> BacktestResult:
         """Backtest an arbitrary window that lies entirely inside the development range (walk-forward folds)."""
         self._check_open(strategy)
         if pd.Timestamp(end) > self.splits.test[0]:
             raise TestSplitError("the requested window reaches into the test split")
-        return run_backtest(strategy, self._dev, self.config, start=start, end=end, params=params)
+        return self._runner(strategy, self._dev, self.config, start=start, end=end, params=params)
 
     def trial_sharpes(self, split: str = "validation", strategy_name: str | None = None) -> list[float]:
         return [t[f"{split}_sharpe_per_bar"] for t in self.trials
@@ -169,7 +172,7 @@ class Experiment:
                 "other parameters; a second look is parameter selection on the test split"
             )
         start, end = self.splits.window("test")
-        res = run_backtest(strategy, self.__full, self.config, start=start, end=end, params=p)
+        res = self._runner(strategy, self.__full, self.config, start=start, end=end, params=p)
         if strategy.name not in self._sealed:
             self._sealed[strategy.name] = ident
             rec = {"kind": "test", "strategy": strategy.name, "sha256": strategy.sha256, "params": p,

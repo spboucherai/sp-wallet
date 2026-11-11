@@ -8,7 +8,11 @@ import pandas as pd
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-LIBRARY = sorted(p.parent for p in (ROOT / "strategies").glob("*/*/strategy.py"))
+_ALL = sorted(p.parent for p in (ROOT / "strategies").glob("*/*/strategy.py"))
+# Perpetual-futures strategies (contract v2, directories named <name>_perp) have their own tests
+# (test_perp_library.py); LIBRARY stays the spot library that the version-1 tests were written for.
+PERP_LIBRARY = [d for d in _ALL if d.parent.name.endswith("_perp")]
+LIBRARY = [d for d in _ALL if d not in PERP_LIBRARY]
 
 
 def pytest_collection_modifyitems(config, items):
