@@ -15,6 +15,8 @@
   },
   "devDependencies": {
     "@bitauth/libauth": "3.0.0",
+    "@near-js/crypto": "2.5.1",
+    "@near-js/transactions": "2.5.1",
     "@playwright/test": "1.65.0",
     "@scure/bip32": "2.4.0",
     "@scure/bip39": "2.4.0",
@@ -28,6 +30,7 @@
     "bitcoinjs-lib": "7.0.5",
     "esbuild": "0.28.2",
     "fast-check": "4.10.2",
+    "near-seed-phrase": "0.2.1",
     "tronweb": "6.5.1",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
