@@ -5,7 +5,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { I18n, useT } from '../i18n';
-import { Change, Coin, Icon, inputCls, Notice } from '../ui';
+import { Change, Coin, Icon, inputCls, Notice, VenueIcon } from '../ui';
 import { dapi } from './api';
 import { ageText, Seg, Sheet, Stat, useLocalState, VENUE_NAME, VenueBadge } from './bits';
 import { compactUsd, D, dec, fmt, fundingPerHour, pct, priceDp } from './dec';
@@ -58,7 +58,7 @@ export function MarketHeader({ store, instrument, onPick, compact }: { store: Ma
   const picker = <button type="button" onClick={onPick} aria-haspopup="dialog" aria-label={t('fxPickMarket')} data-testid="market-picker" className="flex min-h-12 min-w-0 items-center gap-2.5 rounded-2xl border border-line bg-surface py-1.5 pl-2 pr-3 text-left transition hover:bg-elev">
     <Coin sym={instrument?.base ?? '…'} size={32} />
     <span className="min-w-0"><span className="block truncate text-[15.5px] font-semibold leading-tight">{instrument ? `${instrument.base}-${instrument.quote}` : '…'} <span className="font-normal text-mute">{t('fxPerp')}</span></span>
-      <span className="block truncate text-[11.5px] leading-tight text-mute">{instrument ? `${VENUE_NAME[instrument.venue]}${instrument.symbol !== instrument.base ? ` · ${instrument.symbol}` : ''}` : ''}</span></span>
+      <span className="mt-0.5 flex items-center gap-1 truncate text-[11.5px] leading-tight text-mute">{instrument && <VenueIcon venue={instrument.venue} size={13} />}{instrument ? `${VENUE_NAME[instrument.venue]}${instrument.symbol !== instrument.base ? ` · ${instrument.symbol}` : ''}` : ''}</span></span>
     <Icon n="chev" className="h-4 w-4 shrink-0 rotate-90 text-mute" /></button>;
   const price = <div className={`min-w-0 text-right ${stale ? 'opacity-50 grayscale' : ''}`}>
     <div className="truncate text-[22px] font-semibold leading-tight tracking-[-0.01em]" data-testid="mark-price" aria-label={t('fxMarkPrice')}>{ticker ? fmt(ticker.mark, { dp: pdp, locale }) : '—'}</div>

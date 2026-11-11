@@ -113,7 +113,7 @@ export function Agents({ nav }: { nav: Nav }) {
       </Card>}
       {q.isLoading ? <Skeleton h="h-40" /> : (q.data?.agents.length ?? 0) === 0 ? !open && <Card><p className="py-6 text-center text-[14px] text-mute">{t('agNone')}</p></Card> :
         <div className="space-y-3">{q.data!.agents.map((a) => <button key={a.id} onClick={() => nav({ tab: 'agent', asset: a.id })} className="card flex w-full items-center gap-3.5 p-4 text-left">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-elev"><Icon n="swap" /></span>
+          <span className="flex shrink-0 items-center" aria-hidden="true">{a.universe.slice(0, 3).map((s, k) => <span key={s} className={`rounded-full ring-2 ring-surface ${k ? '-ml-3.5' : ''}`}><Coin sym={s} size={36} /></span>)}</span>
           <span className="min-w-0 flex-1"><span className="block truncate text-[16px] font-semibold">{a.name}</span><span className="block truncate text-[12.5px] text-mute">{a.universe.join(' · ')} · {a.capitalUsdc} {a.cash ?? 'USDC'} · {a.networkName}</span>{(a as { kind?: string }).kind === 'perp' && <span className="mt-0.5 inline-block rounded-md border border-blue/35 bg-blue/8 px-1.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-blue">{t('paListTag')}</span>}</span>
           {(a as { kind?: string }).kind === 'perp' && agentTone(a) !== 'paper' ? <PerpLiveState a={a} /> : <AgentState state={a.state} />}<Icon n="chev" className="h-4 w-4 text-mute" /></button>)}</div>}
     </div>

@@ -11,10 +11,11 @@
 import { useState, useSyncExternalStore } from 'react';
 import { ASSET_ICONS, NETWORK_ICONS, PROVIDER_ICONS, VENUE_ICONS, type IconDef } from './icons.gen';
 
-// the files arrive once, in their own chunk; until then a logo shows its skeleton (never the generic fallback)
-let dataUrl: ((file: string) => string | null) | null = null; const waiting = new Set<() => void>();
-void import('./icons-data').then((m) => { dataUrl = m.dataUrl; for (const f of waiting) f(); }, () => { dataUrl = () => null; for (const f of waiting) f(); });
-const subscribe = (f: () => void) => { waiting.add(f); return () => { waiting.delete(f); }; };
+// the files arrive once, in their own chunk, requested when the first logo mounts (the lock screen never asks for it);
+// until then a logo shows its skeleton (never the generic fallback)
+let dataUrl: ((file: string) => string | null) | null = null, started = false; const waiting = new Set<() => void>();
+const start = () => { if (started) return; started = true; void import('./icons-data').then((m) => { dataUrl = m.dataUrl; for (const f of waiting) f(); }, () => { dataUrl = () => null; for (const f of waiting) f(); }); };
+const subscribe = (f: () => void) => { start(); waiting.add(f); return () => { waiting.delete(f); }; };
 const useIconsReady = () => useSyncExternalStore(subscribe, () => dataUrl !== null, () => false);
 
 /** Does this asset on this network need the network badge? (exported for tests) */

@@ -99,9 +99,9 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
         <ul className="no-scrollbar flex snap-x gap-3 overflow-x-auto px-5 pb-4">{featured.filter((f) => !held.includes(f)).map((b) => { const m = d.prices?.[b.symbol];
           return <li key={b.network + b.asset} className="snap-start"><button onClick={() => nav({ tab: 'asset', network: b.network, asset: b.asset })} className="press flex h-full w-[148px] flex-col rounded-[18px] border border-line bg-elev/40 p-3.5 text-left">
             <span className="flex items-center gap-2.5"><Coin sym={b.symbol} net={b.network} size={34} /><span className="min-w-0"><span className="block truncate text-[14px] font-semibold leading-tight">{b.name}</span><span className="block truncate text-[11.5px] text-mute">{b.symbol} · {b.networkName}</span></span></span>
-            <span className="mt-3 block h-9">{m && <Spark data={m.spark} w={118} h={36} />}</span>
-            <span className="mt-2 block text-[15px] font-semibold leading-tight">{m ? fiat(m[ck], cur, locale) : '—'}</span>
-            <span className="mt-0.5 block min-h-[20px]">{m && m.change24h !== null && <Change pct={m.change24h} />}</span></button></li>; })}</ul>
+            {m && <><span className="mt-3 block h-9"><Spark data={m.spark} w={118} h={36} /></span>
+            <span className="mt-2 block text-[15px] font-semibold leading-tight">{fiat(m[ck], cur, locale)}</span>
+            <span className="mt-0.5 block min-h-[20px]">{m.change24h !== null && <Change pct={m.change24h} />}</span></>}</button></li>; })}</ul>
         <button onClick={() => nav({ tab: 'assets' })} className="row-press flex min-h-[56px] w-full items-center justify-between rounded-b-[22px] border-t border-line px-5 py-4 text-left text-[15px] font-semibold text-blue">
           <span>{t('allAssets')} <span className="font-normal text-mute">· {t('tokensCount', { n: d.balances.length })}</span></span><Icon n="chev" className="h-5 w-5" /></button></Card>
 

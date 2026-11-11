@@ -4,7 +4,7 @@ import { startAuthentication } from '@simplewebauthn/browser';
 import { get, post } from '../api';
 import { usePortfolio, useSettings } from '../hooks';
 import { errText, I18n, useT, type Key } from '../i18n';
-import { Btn, Card, Coin, fiat, Icon, inputCls, NetDot, Notice, numFmt, StatePill, testNotSent, trimAmt } from '../ui';
+import { Btn, Card, Coin, fiat, Icon, inputCls, NetDot, Notice, numFmt, ProviderIcon, StatePill, testNotSent, trimAmt } from '../ui';
 import { issuerOf } from '../issuer';
 import { useQueryClient } from '@tanstack/react-query';
 import { BridgeFacts, BridgePill, BridgeProgress, bridgeDur, scErrText } from '../bridge';
@@ -200,7 +200,7 @@ export function Swap() {
           <section key={r.id} className={`card overflow-hidden ${sel ? 'ring-2 ring-primary' : ''}`}>
             <button className="w-full p-4 text-left" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '' : r.id)}>
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><div className="text-[13px] text-mute">{r.providers.map(pname).join(' → ')} · <span className={r.executable && !isBridge ? 'font-semibold text-emerald' : ''}>{r.executable && !isBridge ? t('qaSwExecHere') : t('qaSwCompareOnly')}</span></div>
+                <div className="min-w-0"><div className="text-[13px] text-mute"><span className="mr-1.5 inline-flex items-center align-[-4px]">{r.providers.map((x, k) => <ProviderIcon key={x + k} provider={x} size={18} className={k ? '-ml-1 ring-2 ring-surface' : ''} />)}</span>{r.providers.map(pname).join(' → ')} · <span className={r.executable && !isBridge ? 'font-semibold text-emerald' : ''}>{r.executable && !isBridge ? t('qaSwExecHere') : t('qaSwCompareOnly')}</span></div>
                   <div className="mt-0.5 text-[22px] font-semibold leading-tight tracking-tight">{trimAmt(r.amountOutDisplay, 8)} <span className="text-mute">{r.path[r.path.length - 1]!.symbol}</span></div>
                   <div className="text-[12.5px] text-mute">{t('swMin')} {trimAmt(r.minAmountOutDisplay, 8)}{r.valuation.netUsd != null ? ` · ${t('swNet')} ${money(r.valuation.netUsd)}` : ''}</div></div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -220,7 +220,7 @@ export function Swap() {
               <div><div className="mb-1.5 text-[11.5px] uppercase tracking-wide text-mute">{t('swSteps')}</div>
                 <ol className="space-y-2">{r.steps.map((s, i) => <li key={i} className="flex gap-2.5"><span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-semibold text-onprimary">{i + 1}</span>
                   <span className="min-w-0"><span className="font-medium">{t(`swKind_${s.kind}` as Key)}</span> {s.from.symbol} ({s.from.networkName}) → {s.to.symbol} ({s.to.networkName})
-                    <span className="block text-mute">{pname(s.provider)}{s.via.length ? ` · ${s.via.slice(0, 4).join(', ')}` : ''}</span></span></li>)}</ol></div>
+                    <span className="flex items-center gap-1.5 text-mute"><ProviderIcon provider={s.provider} size={14} />{pname(s.provider)}{s.via.length ? ` · ${s.via.slice(0, 4).join(', ')}` : ''}</span></span></li>)}</ol></div>
               {r.fees.length > 0 && <div><div className="mb-1.5 text-[11.5px] uppercase tracking-wide text-mute">{t('swFees')}</div>
                 <ul className="space-y-1">{r.fees.map((f, i) => <li key={i} className="flex justify-between gap-3"><span>{t(`swFee_${f.kind}` as Key)}{f.estimated ? ` (${t('estimate')})` : ''}{f.includedInOutput ? ` · ${t('swIncluded')}` : ''}</span><span className="shrink-0">{trimAmt(f.display, 8)} {f.symbol}{f.usd != null ? ` · ${money(f.usd)}` : ''}</span></li>)}</ul></div>}
               <div><div className="mb-1.5 text-[11.5px] uppercase tracking-wide text-mute">{t('swRisk')}</div>
