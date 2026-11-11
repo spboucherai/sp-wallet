@@ -22,6 +22,8 @@ export interface NetworkDef {
   name: string;
   /**
    * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id. Aptos: chain id.
+   * EVM: decimal chain id. BTC-style: genesis block hash. SOL: genesis hash. Stellar: network passphrase. XRPL: hash of ledger 32570. TRON: genesis block id.
+   * Cosmos SDK: the chain id (it is part of every signed document, so a signature is valid on that chain only).
    * Bitcoin Cash shares its genesis block with Bitcoin, Bitcoin SV and eCash, so its reference is the hash of block 661648,
    * the first block after the last of those splits (November 2020; a Bitcoin Cash Node checkpoint), which exists on no other chain.
    */
@@ -43,6 +45,8 @@ export interface NetworkDef {
     /** height of the block whose hash is `chainRef` (default 0 = genesis) */
     refHeight?: number;
   };
+  /** Cosmos SDK chains: bech32 account prefix and the denom of the native coin (used for the transfer and the fee) */
+  cosmos?: { bech32: string; denom: string };
   /** destination memo / tag support: free text or an unsigned 32-bit number */
   memo?: 'text' | 'uint32';
   /** minimum the account must hold to exist on-chain (shown on the receive screen), in whole units of the native coin */
@@ -192,6 +196,17 @@ const DEFS = {
     native: { id: 'native', symbol: 'APT', name: 'Aptos', decimals: 8 }, tokens: [], coinType: 637,
     rpc: ['https://api.mainnet.aptoslabs.com/v1', 'https://aptos-rest.publicnode.com/v1'],
     explorerTx: 'https://explorer.aptoslabs.com/txn/', explorerAddr: 'https://explorer.aptoslabs.com/account/', minConf: 1,
+  },
+  cosmos: {
+    // chainRef = chain id, signed into every transaction (SignDoc.chain_id). Public REST nodes prune early history, so no
+    // early block hash can be pinned: identity = chain id reported by both sources + both agreeing on a recent block hash.
+    // No `activation`: an account is created by its first incoming transfer and nothing stays locked.
+    // Sources: Allnodes PublicNode and Polkachu, independent operators, keyless LCD/REST; verified live 2026-11-10.
+    id: 'cosmos', family: 'cosmos', name: 'Cosmos Hub', chainRef: 'cosmoshub-4',
+    native: { id: 'native', symbol: 'ATOM', name: 'Cosmos', decimals: 6 }, tokens: [], coinType: 118,
+    cosmos: { bech32: 'cosmos', denom: 'uatom' }, memo: 'text',
+    rpc: ['https://cosmos-rest.publicnode.com', 'https://cosmos-api.polkachu.com'],
+    explorerTx: 'https://www.mintscan.io/cosmos/tx/', explorerAddr: 'https://www.mintscan.io/cosmos/address/', minConf: 1,
   },
 } satisfies Record<string, NetworkDef>;
 

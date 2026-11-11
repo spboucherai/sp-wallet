@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""Resolve the predictable conflicts produced when two chain-family branches both extend the registries.
+Rule: keep both sides. Run after `git merge <branch>` reports conflicts, then `pnpm install`, typecheck and test."""
+import os, re, subprocess
+R = re.compile(r"<<<<<<< HEAD\n(.*?)=======\n(.*?)>>>>>>> [^\n]+\n", re.S)
+ENTRY = re.compile(r"([A-Za-z_][A-Za-z0-9_]*): ('[^']*'|[A-Za-z0-9_]+)")
+def union_entries(a, b):
+    """Two versions of `k: v, k: v, …` lines: HEAD's text plus the entries only the other side has, as extra lines."""
+    have = {k for k, _ in ENTRY.findall(a)}
+    extra = [ln for ln in b.splitlines() if any(k not in have for k, _ in ENTRY.findall(ln.split('//')[0]))]
+    out = a
+    for ln in extra:
+        new = [(k, v) for k, v in ENTRY.findall(ln.split('//')[0]) if k not in have]
+        comment = ('  //' + ln.split('//', 1)[1]) if '//' in ln and len(new) == len(ENTRY.findall(ln.split('//')[0])) else ''
+        out += '  ' + ', '.join(f"{k}: {v}" for k, v in new) + ',' + comment + '\n'
+    return out
+def fix(path, fn):
+    s = open(path).read()
+    if '<<<<<<< HEAD' not in s: return
+    open(path, 'w').write(R.sub(fn, s)); print('resolved', path)
+def networks(m):
+    a, b = m.group(1), m.group(2)
+    if re.search(r"^\s+id: '", a, re.M) and re.search(r"^\s+id: '", b, re.M): return a + "  },\n" + b  # two network entries
+    return a + ''.join(ln + '\n' for ln in b.splitlines() if ln not in a.splitlines())                    # comment lines
+fix('packages/core/src/networks.ts', networks)
+fix('packages/core/src/policy.ts', lambda m: union_entries(m.group(1), m.group(2)))
+fix('services/api/src/server.ts', lambda m: union_entries(m.group(1), m.group(2)))
+fix('apps/web/src/i18n.ts', lambda m: m.group(1) + m.group(2))
+fix('scripts/smoke-chains.mts', lambda m: m.group(1))
+# registries that are pure functions of the files present: regenerate
+plug = sorted(f[:-3] for f in os.listdir('packages/core/src/plugins') if f.endswith('.ts') and f != 'index.ts')
+open('packages/core/src/plugins/index.ts', 'w').write("// Chain family plugins. Importing this module registers every plugin with the registry in families.ts.\nimport { registerFamily } from '../families.ts';\n"
+    + ''.join(f"import {{ {p}Plugin }} from './{p}.ts';\n" for p in plug) + f"\nfor (const p of [{', '.join(p + 'Plugin' for p in plug)}]) registerFamily(p);\n\n" + ''.join(f"export * from './{p}.ts';\n" for p in plug))
+p = 'services/api/src/chains/index.ts'; s = open(p).read()
+fams = sorted(set(plug))
+s = R.sub(lambda m: m.group(1), s)
+s = re.sub(r"(import \{ [a-z]+Adapter \} from '\./[a-z]+\.ts';\n)+", ''.join(f"import {{ {f}Adapter }} from './{f}.ts';\n" for f in sorted(['btc', 'evm', 'sol'] + fams)), s, count=1)
+s = re.sub(r"export const ADAPTER_FACTORIES: Record<string, \(n: NetworkDef\) => Adapter> = \{[^}]*\};",
+    "export const ADAPTER_FACTORIES: Record<string, (n: NetworkDef) => Adapter> = { " + ', '.join(f"{f}: {f}Adapter" for f in ['evm', 'btc', 'sol'] + fams) + " };", s)
+open(p, 'w').write(s)
+subprocess.run(['git', 'checkout', '--theirs', 'pnpm-lock.yaml'], capture_output=True)
+left = subprocess.run("git diff --name-only --diff-filter=U", shell=True, capture_output=True, text=True).stdout.split()
+bad = [f for f in left if f != 'pnpm-lock.yaml' and '<<<<<<<' in open(f).read()]
+print('still conflicted:', bad or 'none')
