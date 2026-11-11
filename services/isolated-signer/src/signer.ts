@@ -5,8 +5,8 @@ import { base58 } from '@scure/base';
 import { keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
-  baseUnits, buildBtcTx, buildEvmSwapTxs, buildEvmTx, checkMandateOrder, checkOrderPrice, getAsset, MandateSchema, mandateHash, validateMandate, vaultKeyId, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash, pluginFor,
-  solWireTransaction, toB64u, type Intent, type Mandate,
+  baseUnits, bridgeOf, buildBtcTx, buildCctpBurnTxs, buildCctpMintTx, cctpMintRetryBytes, verifyCctpMint, buildEvmSwapTxs, buildEvmTx, checkMandateOrder, checkOrderPrice, getAsset, MandateSchema, mandateHash, validateMandate, vaultKeyId, buildSolMessage, checkPolicy, getNetwork, IntentSchema, intentHash, pluginFor,
+  solWireTransaction, toB64u, type CctpMintGas, type Intent, type Mandate,
 } from '@spw/core';
 import type { Keys } from './keys.ts';
 import { noPrices, type PriceView } from './prices.ts';
@@ -29,6 +29,7 @@ export class Signer {
       policy: this.store.policy,
       spentToday: Object.fromEntries(Object.entries(s.spent).filter(([k]) => k.startsWith(today)).map(([k, v]) => [k.slice(11), v])),
       journalHead: s.journal[s.journal.length - 1]?.hash ?? null, journalLength: s.journal.length,
+      bridges: Object.entries(s.bridges ?? {}).map(([id, b]) => ({ id, ...b.bridge, approvedAt: b.approvedAt, burnTxid: b.burnTxid, mintTxid: b.mint?.txid ?? null, mintSignatures: b.mint?.signatures ?? 0 })),
       mandates: Object.values(s.mandates ?? {}).map((m) => ({ mandate: m.mandate, approvedAt: m.approvedAt, revoked: m.revoked, revokedAt: m.revokedAt ?? null,
         expired: this.now() >= m.mandate.expiresAt, today: m.usage[today] ?? { sold: {}, orders: 0 } })),
     };
@@ -166,6 +167,49 @@ export class Signer {
     return out;
   }
 
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Second leg of a bridge. The owner's passkey approval of the burn committed to the whole transfer (route, amount, fee
+  // ceiling, recipient = the wallet). This signs the matching receiveMessage on the destination: it can only mint the
+  // wallet's own burned USDC to the wallet's own address, and costs at most the policy fee ceiling of that network.
+  //   - exactly one signature per bridge without a passkey; an identical request returns the same bytes again;
+  //   - any further signature (stuck or replaced transaction) needs a fresh passkey assertion over the exact new parameters;
+  //   - one message serves one bridge only.
+  async signBridgeMint(req: BridgeMintRequest): Promise<BridgeMintResult> {
+    const st = this.store, now = this.now();
+    const id = String(req?.proposalId ?? '');
+    const deny = (code: string, msg: string): never => { st.log('bridge.mint.denied', { proposalId: id, code, msg }); st.save(); throw new SignerError(code, msg); };
+    const rec = st.state.bridges?.[id];
+    if (!rec) throw new SignerError('not_found', 'no approved bridge with this id');
+    if (st.state.halted) deny('policy', 'emergency halt is active');
+    const g = req.evm;
+    if (!g || typeof g.nonce !== 'number' || [g.gasLimit, g.maxFeePerGas, g.maxPriorityFeePerGas].some((v) => typeof v !== 'string' || !/^(0|[1-9]\d{0,77})$/.test(v))) deny('bad_request', 'malformed gas parameters');
+    if (typeof req.message !== 'string' || typeof req.attestation !== 'string' || req.message.length > 4000 || req.attestation.length > 2000) deny('bad_request', 'malformed message');
+    const b = rec.bridge;
+    if (b.wallet !== this.keys.addresses.evm || this.keys.addresses[b.toNetwork] !== b.wallet) deny('wrong_source', 'bridge is not for this wallet');
+    const ceiling = st.policy.maxFee[b.toNetwork];
+    if (ceiling === undefined) deny('policy', 'no fee ceiling in the policy for the destination network');
+    let tx, v;
+    try { v = verifyCctpMint(b, req.message, req.attestation); tx = buildCctpMintTx(b, req.message, req.attestation, g, baseUnits(ceiling!)); }
+    catch (e) { return deny('unsupported', (e as Error).message); }
+    for (const [other, r] of Object.entries(st.state.bridges ?? {})) if (other !== id && r.mint?.messageHash === v.messageHash) deny('replay', 'this message already served another bridge');
+    const params = [v.messageHash, req.attestation.toLowerCase(), g.nonce, g.gasLimit, g.maxFeePerGas, g.maxPriorityFeePerGas].join('|');
+    let signatures = 1;
+    if (rec.mint) {
+      if (rec.mint.params === params && !req.assertion) return { raw: rec.mint.raw, txid: rec.mint.txid, messageHash: v.messageHash, minted: v.minted.toString(), replayed: true }; // same bytes, no new signature
+      if (!req.assertion) deny('replay', 'a mint was already signed for this bridge; another signature needs the owner\'s passkey');
+      if (rec.mint.signatures >= 6) deny('policy', 'too many mint signatures for this bridge');
+      try { await this.verifyAssertion(req.assertion!, new Uint8Array(sha(cctpMintRetryBytes(id, v.messageHash, g)))); } catch (e) { deny((e as SignerError).code ?? 'bad_approval', (e as Error).message); }
+      signatures = rec.mint.signatures + 1;
+    }
+    const raw = await privateKeyToAccount(`0x${Buffer.from(this.keys.evmPriv).toString('hex')}`).signTransaction(tx!);
+    const txid = keccak256(raw);
+    rec.mint = { messageHash: v.messageHash, txid, raw, params, signedAt: now, signatures };
+    st.prune(now);
+    st.log('bridge.mint.ok', { proposalId: id, messageHash: v.messageHash, fromNetwork: b.fromNetwork, toNetwork: b.toNetwork, amount: b.amount, minted: v.minted.toString(), feeExecuted: v.msg.body.feeExecuted.toString(), txid, signatures, burnTxid: rec.burnTxid });
+    st.save(); // durable before the signature leaves
+    return { raw, txid, messageHash: v.messageHash, minted: v.minted.toString(), replayed: false };
+  }
+
   halt(): void {
     this.store.state.halted = true;
     this.store.log('halt.on', {});
@@ -190,7 +234,7 @@ export class Signer {
     const own = this.keys.addresses[net.id];
     if (!own) deny('wrong_chain', 'no key for this network');
     if (i.from !== own) deny('wrong_source', 'source address is not controlled by this signer');
-    if (i.swap ? i.to !== own : i.to === own) deny('self_send', i.swap ? 'a swap must deliver to the wallet itself' : 'destination equals source');
+    if (i.swap || i.bridge ? i.to !== own : i.to === own) deny('self_send', i.swap ? 'a swap must deliver to the wallet itself' : i.bridge ? 'a bridge must deliver to the wallet itself' : 'destination equals source');
     if (st.state.used[i.proposalId] !== undefined) deny('replay', 'proposal already signed');
 
     const day = new Date(now * 1000).toISOString().slice(0, 10), spendKey = `${day}|${i.network}:${i.symbol}`;
@@ -200,7 +244,22 @@ export class Signer {
     // Rebuild the chain transaction from the intent alone; any unsupported shape throws here.
     let build: () => Promise<{ raw: string; txid: string; pre?: { raw: string; txid: string } }>;
     try {
-      if (i.swap) {
+      if (i.bridge) {
+        // nothing provider-built: approval and burn are rebuilt from the intent and the pinned tables
+        if (i.swap) throw new Error('an intent is a swap or a bridge, not both');
+        const txs = buildCctpBurnTxs(i);
+        if (this.keys.addresses[i.bridge.toNetwork] !== own) throw new Error('the destination network is not served by the same wallet address');
+        if (st.policy.maxFee[i.bridge.toNetwork] === undefined) throw new Error('no fee ceiling in the policy for the destination network');
+        if (st.state.bridges?.[i.proposalId]) throw new Error('bridge already recorded');
+        build = async () => {
+          const acct = privateKeyToAccount(`0x${Buffer.from(this.keys.evmPriv).toString('hex')}`);
+          const raw = await acct.signTransaction(txs.burn);
+          const pre = txs.approve ? await acct.signTransaction(txs.approve) : null;
+          // the approved bridge is recorded with the burn it authorised: it is the only authority for the later mint
+          (st.state.bridges ??= {})[i.proposalId] = { bridge: bridgeOf(i), approvedAt: now, burnTxid: keccak256(raw) };
+          return { raw, txid: keccak256(raw), ...(pre ? { pre: { raw: pre, txid: keccak256(pre) } } : {}) };
+        };
+      } else if (i.swap) {
         // the provider calldata comes as unauthenticated helper data: it must hash to the approved value and pass every check
         const data = typeof aux?.swapData === 'string' ? aux.swapData : '';
         const txs = buildEvmSwapTxs(i, data);
@@ -240,11 +299,15 @@ export class Signer {
     st.state.spent[spendKey] = (BigInt(st.state.spent[spendKey] ?? '0') + baseUnits(i.amount)).toString();
     st.prune(now);
     const out = await build!();
-    st.log('sign.ok', { proposalId: i.proposalId, hash: Buffer.from(hash).toString('hex'), network: i.network, symbol: i.symbol, amount: i.amount, to: i.to, txid: out.txid, ...(i.swap ? { swap: i.swap.provider, toAsset: i.swap.toAsset, minOut: i.swap.minOut } : {}) });
+    st.log('sign.ok', { proposalId: i.proposalId, hash: Buffer.from(hash).toString('hex'), network: i.network, symbol: i.symbol, amount: i.amount, to: i.to, txid: out.txid, ...(i.swap ? { swap: i.swap.provider, toAsset: i.swap.toAsset, minOut: i.swap.minOut } : {}),
+      ...(i.bridge ? { bridge: i.bridge.provider, toNetwork: i.bridge.toNetwork, cctpMaxFee: i.bridge.maxFee, minFinalityThreshold: i.bridge.minFinalityThreshold } : {}) });
     st.save();
     return { ...out, hash: Buffer.from(hash).toString('hex') };
   }
 }
+
+export interface BridgeMintRequest { proposalId: string; message: string; attestation: string; evm: CctpMintGas; assertion?: AuthenticationResponseJSON }
+export interface BridgeMintResult { raw: string; txid: string; messageHash: string; minted: string; replayed: boolean }
 
 export interface DelegatedSigner {
   vaultAddress(index: number): string;

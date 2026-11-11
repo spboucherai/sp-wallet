@@ -12,11 +12,12 @@ import { config, UserError } from './config.ts';
 import { audit, sql } from './db.ts';
 import { listCreds } from './auth.ts';
 import { addressFor, signer } from './signer-client.ts';
+import type { BridgeState } from './bridge.ts';
 
 export interface ProposalRow {
   id: string; state: ProposalState; version: number; network: string; asset: string; symbol: string; decimals: number; amount: string;
   from_addr: string; to_addr: string; note: string; memo: string | null; aux: Record<string, unknown> | null;
-  kind: 'transfer' | 'swap'; swap: { provider: string; toAsset: string; toSymbol: string; toDecimals: number; expectedOut: string; minOut: string; slippageBps: number; needsApproval: boolean; simulated: boolean } | null;
+  kind: 'transfer' | 'swap' | 'bridge'; bridge: BridgeState | null; swap: { provider: string; toAsset: string; toSymbol: string; toDecimals: number; expectedOut: string; minOut: string; slippageBps: number; needsApproval: boolean; simulated: boolean } | null;
   pre_raw: string | null; pre_txid: string | null; pre_state: string | null; out_amount: string | null; fee_estimate: string | null; max_fee: string | null; warnings: string[];
   intent: Intent | null; intent_hash: string | null; raw: string | null; txid: string | null; block_ref: string | null; confirmations: number; error: string | null;
   created_at: Date; updated_at: Date; expires_at: Date | null; broadcast_at: Date | null; last_broadcast_at: Date | null; finalized_at: Date | null;
@@ -38,7 +39,25 @@ export function view(p: ProposalRow) {
       expectedOut: p.swap.expectedOut, expectedOutDisplay: formatUnits(BigInt(p.swap.expectedOut), p.swap.toDecimals), minOut: p.swap.minOut, minOutDisplay: formatUnits(BigInt(p.swap.minOut), p.swap.toDecimals),
       received: p.out_amount, receivedDisplay: p.out_amount ? formatUnits(BigInt(p.out_amount), p.swap.toDecimals) : null,
       approvalTxid: p.pre_txid, approvalState: p.pre_raw ? (p.pre_state ?? 'pending') : null } : null,
+    bridge: p.bridge ? bridgeView(p, p.bridge) : null,
   };
+}
+
+/** A cross-chain transfer as shown to the owner: route, Circle's fee, progress of the second leg. Message bytes stay server-side. */
+function bridgeView(p: ProposalRow, b: BridgeState) {
+  const d = getNetwork(b.toNetwork);
+  // one word for the whole transfer: the burn follows the proposal state, then the mint has its own progress
+  const stage = ['failed', 'expired', 'rejected', 'replaced'].includes(p.state) ? 'failed' : p.state === 'pending_approval' ? 'review'
+    : b.phase === 'burn' ? 'burning' : b.phase === 'attesting' ? 'attesting' : b.phase === 'ready' ? 'ready' : b.phase === 'mint_sent' ? 'minting' : b.phase === 'mint_failed' ? 'mint_failed' : 'done';
+  return { provider: b.provider, toNetwork: b.toNetwork, toNetworkName: d.name, speed: b.speed, expectedSeconds: b.expectedSeconds, stage, phase: b.phase,
+    cctpMaxFee: b.maxFee, cctpMaxFeeDisplay: formatUnits(BigInt(b.maxFee), p.decimals), minReceiveDisplay: formatUnits(BigInt(p.amount) - BigInt(b.maxFee), p.decimals),
+    feeExecutedDisplay: b.feeExecuted !== undefined ? formatUnits(BigInt(b.feeExecuted), p.decimals) : null, received: b.phase === 'done' ? (p.out_amount ?? b.minted ?? null) : null,
+    receivedDisplay: b.phase === 'done' && (p.out_amount ?? b.minted) ? formatUnits(BigInt((p.out_amount ?? b.minted)!), p.decimals) : null,
+    destGasSymbol: d.native.symbol, destGasNeedDisplay: formatUnits(BigInt(b.destGasNeed), d.native.decimals), needsApproval: b.needsApproval, simulated: b.simulated,
+    approvalTxid: p.pre_txid, approvalState: p.pre_raw ? (p.pre_state ?? 'pending') : null,
+    hold: b.hold ?? null, holdDetail: b.holdDetail ?? null, irisStatus: b.irisStatus ?? null, delayReason: b.delayReason ?? null, polls: b.polls, attested: !!b.message,
+    mintTxid: b.mintTxid ?? b.mint?.txid ?? null, mintExplorer: (b.mintTxid ?? b.mint?.txid) ? d.explorerTx + (b.mintTxid ?? b.mint!.txid) : null, mintedBy: b.mintedBy ?? null,
+    canFinish: !['failed', 'review', 'done', 'burning'].includes(stage), needsPasskey: b.phase === 'mint_failed' };
 }
 
 /** Optimistic state change: only succeeds from the expected state and version. */
@@ -117,6 +136,7 @@ export function transferRoutes(app: FastifyInstance): void {
     let p = await load((req.params as { id: string }).id);
     if (p.state !== 'draft' && p.state !== 'pending_approval') throw new UserError('bad_state', `proposal is ${p.state}`, 409);
     if (p.kind === 'swap') throw new UserError('bad_state', 'a swap is prepared once; start a new one', 409);
+    if (p.kind === 'bridge') throw new UserError('bad_state', 'a cross-chain transfer is prepared once; start a new one', 409);
     const n = getNetwork(p.network), st = await signer.status(true);
     if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
     // One transfer in flight per network: a second one prepared before the first is confirmed would reuse the same
@@ -163,6 +183,9 @@ export function transferRoutes(app: FastifyInstance): void {
     // one transfer or swap in flight per network, checked again at the moment of approval
     const [busy] = await sql<{ id: string }[]>`select id from proposals where network = ${p.network} and id <> ${p.id} and state in ('approved', 'signed', 'broadcast') limit 1`;
     if (busy) throw new UserError('pending_tx', 'a previous transfer or swap on this network is not confirmed yet', 409);
+    // a cross-chain mint being signed or sent on this network uses the same nonce space
+    const [minting] = await sql<{ id: string }[]>`select id from proposals where kind = 'bridge' and bridge->>'toNetwork' = ${p.network} and bridge->>'phase' = 'mint_sent' and state in ('confirming', 'finalized', 'reorged') limit 1`;
+    if (minting) throw new UserError('pending_tx', 'a cross-chain transfer is being received on this network; wait for it', 409);
     p = await move(p, 'approved');
     let signed: { raw: string; txid: string; hash: string; pre?: { raw: string; txid: string } };
     try { signed = await signer.sign(p.intent, body.assertion, p.aux ?? undefined); }
@@ -170,6 +193,7 @@ export function transferRoutes(app: FastifyInstance): void {
     if (signed.hash !== p.intent_hash) { await move(p, 'failed', { error: 'signer hash mismatch' }); throw new UserError('hash_mismatch', 'signer returned a different intent hash', 500); }
     p = await move(p, 'signed', { raw: signed.raw, txid: signed.txid, ...(signed.pre ? { pre_raw: signed.pre.raw, pre_txid: signed.pre.txid } : {}) });
     if (p.kind === 'swap') { const { advanceSwap } = await import('./swap-exec.ts'); return view(await advanceSwap(p)); }
+    if (p.kind === 'bridge') { const { advanceBridgeBurn } = await import('./bridge.ts'); return view(await advanceBridgeBurn(p)); }
     return view(await broadcastNow(p));
   });
 

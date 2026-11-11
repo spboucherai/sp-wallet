@@ -2,8 +2,11 @@
 
 Provider id `cctp` · adapter `packages/swap/src/providers/cctp.ts` · tests `packages/swap/test/cctp.test.ts` ·
 live check `scripts/smoke-swap-cctp.mts`. Everything below was read from Circle's documentation and source on
-**2026-11-10** and, where marked *checked*, confirmed on mainnet the same day. In this phase the adapter only quotes
-(`executability: quote_only`). Nothing builds, signs or sends a transaction.
+**2026-11-10** and, where marked *checked*, confirmed on mainnet the same day. The quote adapter itself only quotes.
+
+**Execution status (2026-11-11): USDC between the seven EVM networks is executable by the wallet itself** — burn,
+attestation, mint, always to the wallet's own address — see **§12**. Solana legs and EURC remain quote-only. No real
+transfer has been broadcast yet; the proof is on local forks (§12.7).
 
 CCTP is not a swap: a Circle stablecoin is **burned** on the source chain, Circle's attestation service (Iris) signs the
 burn message, and the same amount is **minted** on the destination chain by whoever submits that signed message. There
@@ -73,12 +76,63 @@ equals the pinned domain; `version()` = 1 and `TokenMessengerV2.messageBodyVersi
 are executable, the `message_transmitter` state account reports `local_domain` 5 / `version` 1, and the `local_token`
 account of the registry mint exists.
 
-**Upgradeability — a trust statement, not a detail.** The EVM TokenMessengerV2 and MessageTransmitterV2 addresses are
-proxies (2 175 bytes of code each) and the Solana programs are owned by the upgradeable BPF loader. Pinning the address
-pins *where* the call goes, not the code behind it: Circle can change the implementation. The same party issues USDC
-and can freeze it, so this adds no new trusted party, but the signer cannot claim more than "the pinned Circle
-contract". A version check at API start (`localDomain`, `version`, `messageBodyVersion`, as in the smoke script) should
-disable the provider if they ever change.
+**Upgradeability — a trust statement, not a detail** (read 2026-11-11 from the verified sources and from both registry
+RPC endpoints of each network with `scripts/cctp-pins.mts`; full hashes in `packages/core/src/cctp.ts`).
+
+- `TokenMessengerV2` and `MessageTransmitterV2` are **`AdminUpgradableProxy`** contracts (Circle's fork of OpenZeppelin's
+  transparent proxy, solc 0.7.6, EIP-1967 slots; `admin()` and `implementation()` are public views). The 2 175-byte proxy
+  runtime code is **identical on all seven networks** (SHA-256 `501b4a60e24ea82032b7442d75995dee3bdbfc17b25caffc3c955eadc8c2a418`).
+  `upgradeTo`, `upgradeToAndCall` and `changeAdmin` are callable **only by the address in the EIP-1967 admin slot, with no
+  timelock or delay in the proxy**. On every network that admin is an address **without code** (an externally owned
+  account from the chain's point of view — whether it is a hardware/MPC key or a plain key cannot be seen on-chain), and
+  it is a different address per network and per contract.
+- `TokenMinterV2` is **not a proxy** (implementation slot empty; 9 295 bytes, identical on all seven networks, SHA-256
+  `ddc1bfebb8465377e23aea86ef3135551130ae35426b759e69c1644735074be6`). Its owner can change the token controller / burn limits.
+- Implementations (explorer-verified sources, solc 0.7.6, 100 000 optimizer runs):
+
+| Network | TokenMessengerV2 implementation | SHA-256 (start) | MessageTransmitterV2 implementation | SHA-256 (start) |
+|---|---|---|---|---|
+| ethereum | `0x555e272506c06e7e559d57418563742afe363ec8` | `81ca2a58e7649564…` | `0xa30c41865729c248067704d4db9f38385cbe1186` | `b7b2a422acb8daa7…` |
+| base | `0x555e272506c06e7e559d57418563742afe363ec8` | `81ca2a58e7649564…` | `0x7db629f6acc20be49a0a7565c21cc178e9ac21e3` | `5814f08b2cfc7399…` |
+| arbitrum | `0x555e272506c06e7e559d57418563742afe363ec8` | `81ca2a58e7649564…` | `0x7b93db2bc72faf642cec0adcac4f91718831a1f4` | `bad293319d77ab3e…` |
+| optimism | `0x555e272506c06e7e559d57418563742afe363ec8` | `81ca2a58e7649564…` | `0x1f33335414afb7305367452d00a0d024b0184ea8` | `1c4986994c9f845d…` |
+| polygon | `0x555e272506c06e7e559d57418563742afe363ec8` | `81ca2a58e7649564…` | `0xd40518c1a3139e8f1f73f83e5de74e05c88f5ad3` | `540cd1aece247c99…` |
+| avalanche | `0x555e272506c06e7e559d57418563742afe363ec8` | `81ca2a58e7649564…` | `0x8689f0a21fe82b30e8f7684902788f65d891dae6` | `6c541f8c79e43368…` |
+| hyperevm | `0x1ccafdffbc1b7b5c499c97322f961b7d929a41b4` | `cff375318c7d5eda…` | `0x17eaec8bb0d05e8da2e96ad69121fee6dd62d313` | `e9423da6e41a7a11…` |
+
+  The messenger implementation is the same contract at the same address on six networks; **HyperEVM runs a newer build**
+  with the Standard-fee switch (`minFee`, `getMinFeeAmount`; `minFee()` = 0 on 2026-11-11). The explorer sources of that
+  build are byte-identical to `circlefin/evm-cctp-contracts` master (`a92a2b4e`, 2026-06-18); the six-network build is the
+  same code without the min-fee feature (no `minFee`, no `getMinFeeAmount`, older `initialize`) and nothing else differs.
+  The transmitter implementation has the same 26 source files on all seven networks; the bytecode differs only by the
+  immutable `localDomain`.
+- Who can change what (addresses on 2026-11-11; none of the proxy admins carries code):
+
+| Network | Messenger proxy admin | Transmitter proxy admin | Messenger owner | Transmitter owner | Attester manager |
+|---|---|---|---|---|---|
+| ethereum | `0xa820a620f638114f3eb45df87382383322ddbc49` | `0xb7569e9eb64eaed5c4166e510b4f6ff54ef42258` | `0x2329BAF15f86023e5B0f5592e230D02a51116CD5` | `0xB43aA882f497c0Ecb395A5a54f8fa29d12289F65` | `0xc16b03F84563C1467017C9F7216F8ad6098dc95a` |
+| base | `0x88acf681fb9a1dfce5ac83391991895c54cf24cc` | `0x19b4b317e6ea4643f1507c372630483092d0abff` | `0x24253f1CA7540CfCb3DdDa890d3b94434786E379` | `0x9c563B7B08C5506C4aae279E1f66658D5f9fD7B8` | `0xDf265e0329F6A08a772B48191b33bDC624499b84` |
+| arbitrum | `0xe825a926c4196878c898ba8b78bc3396570909be` | `0x15fb0197b0b8ae18a5f283ba8b002d4c6abb127f` | `0xe2e39E7D80fD21Fa39eB04BdaD36D0B2C65b818F` | `0x5054056a0d4F3106B7a8Ad33dD3FD2E8c3d1524d` | `0x49420615d90a11cE317eb1eEfBB5C6e2Bf366195` |
+| optimism | `0x14085cbf8634a9d279378eb3bf40240e80647681` | `0x1cc76b72d180f8768a5e3d2ff8b1dfb593c1ecd3` | `0xdf31F6B761d5D47D8Cea36EE33cd11c7b071096A` | `0xb9dC4d38138FD53D645DaEa92D1c2294BBD5Ba50` | `0x4D6C6325998FCE054B4C4420428b86B28BD8db74` |
+| polygon | `0xaf904ead44750e2e970f205e9d1e0c6ca8caa643` | `0xcb37aa4d4be3abdadc9f7a677ba806b7ff4aea15` | `0x97E89576ef93A3072DC73aB05a16951760124bb6` | `0xD7b229FDcdF9dEA893236F23509754FB5C6A0457` | `0x190f7ef6F3502710392439b9C11A6D5B118df46e` |
+| avalanche | `0xe4a786348cf3df7ef5dc9b28f658e22c816f723f` | `0xdd4bfb4b809e68c0973d7eb6d160d680183c8b5c` | `0x548f6CE934755c9b135FBE3FfD2F8D7fa330e5FB` | `0x81Be209E803e5bBE90a17aC13d65510Bf60800Ed` | `0x9d4C65ACa5bF3a0A7012d8CeFEA6fcF9FB6d63B8` |
+| hyperevm | `0xec6c5c1b27e66701e7b79747caa2322127e0d4f2` | `0xe11c4e6efee7205325a2219771c474527210c5ab` | `0x419d9cf7341f571C2F4Be894d73B065f103f3719` | `0x3D1b1E2D06B3F3FB7637bC73b69b6b0B0dFa79C1` | `0x7925e7E92Cfb0b74EF9EBBdBC9E45c3622cf4834` |
+
+- Attesters: 2 enabled on every network, the same two keys everywhere (`0x725b06F73ff761eF5390e39315e2BfbF60d33F96`,
+  `0x52Ed4cBff8DcE6A19748043F3240ec03c834bCeF`), signature threshold 2. The attester manager of a network can enable or
+  disable attesters and change the threshold: **whoever controls it can mint on that network**. This is the trust
+  assumption of CCTP itself, not of the wallet.
+
+**What the wallet pins, and the trade-off.** The API refuses to prepare a transfer, and refuses to send the mint, unless on
+*both* RPC sources of the network: the two proxies hash to the pinned proxy code, each EIP-1967 implementation slot holds
+the pinned implementation address, each implementation hashes to its pinned value, the minter hashes to its pinned value,
+and the wallet address carries no code. Consequence: **the day Circle upgrades a contract, CCTP transfers stop on that
+network until someone reads the new implementation and updates `CCTP_ENABLED`** (run `node scripts/cctp-pins.mts` to see
+the new values). A transfer already burned waits in "ready" with the reason shown; it is not lost — the mint is
+permissionless (`destinationCaller` = 0) and can be submitted from any other tool with the public message and attestation —
+and it resumes by itself once the pins are updated. What the pin does **not** give: the signer has no chain access, so
+the check lives in the API (as for the KyberSwap router); and Circle could upgrade between the check and the inclusion of
+the transaction (seconds). The same party issues and can freeze USDC, so this adds no new trusted party.
 
 ## 3. Circle API (Iris)
 
@@ -440,14 +494,170 @@ mintable — only to `mintRecipient`, by anyone holding the public attestation �
 unlimited re-attestation for Fast. The quote carries this sentence in `raw.ifMintNeverSubmitted`. `atomic: false`: at
 least two transactions on two chains (three with the EVM approval).
 
-## 11. What is verified, and what is not
+## 11. What is verified, and what is not (quote adapter)
 
 Verified live (smoke script, 2026-11-11): the pinned addresses, domains, versions and wiring on all eight networks; the
 10 M burn limit; the fee schedule of the 56 USDC routes; the EURC deployments and resolvers; ten quotes with latency
 (117–334 ms per quote, one round of 2–4 parallel requests); selectors, gas ranges, Solana account sizes and the fee
 rounding against real transactions; the message layout against a real attested message.
 
-Not verified: no transaction was built, simulated or sent. In particular the Solana account lists and PDA seeds of
-§7.2–7.3 come from source reading; the `approve` gas figure is an assumption; `estimatedSeconds` is Circle's documented
-average, not a measurement; the behaviour "insufficient `maxFee` ⇒ attested as Standard" is Circle's statement; the
-non-USDC message body has not been analysed; rounding was observed on one source chain (Arbitrum).
+Not verified: the Solana account lists and PDA seeds of §7.2–7.3 come from source reading (no Solana transaction was
+built); `estimatedSeconds` is Circle's documented average, not a measurement; the behaviour "insufficient `maxFee` ⇒
+attested as Standard" is Circle's statement; the non-USDC message body has not been analysed; rounding was observed on
+one source chain (Arbitrum). For the EVM execution path see §12.8.
+
+## 12. Execution: USDC between EVM networks (implemented 2026-11-11)
+
+Scope: USDC only; Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, HyperEVM (`CCTP_ENABLED`, 42 ordered pairs);
+sender and recipient are always the wallet's own EVM address (the same on every EVM network). No hooks, no destination
+caller, no swap leg, no Solana, no EURC, no Forwarding Service.
+
+Code: `packages/core/src/cctp.ts` (pins, intent verification, both transaction builders, message parser),
+`services/isolated-signer/src/signer.ts` (`sign` bridge branch, `signBridgeMint`), `services/api/src/bridge.ts` (routes,
+guards, state machine), `apps/web/src/bridge.tsx` + `screens/Swap.tsx` + `screens/Activity.tsx`.
+
+### 12.1 Intent
+The intent gains an optional `bridge` section (hashed with fixed field order; intents without it hash exactly as before):
+`provider: 'cctp'`, `toNetwork`, `toDomain`, `maxFee` (Circle's fee ceiling in USDC base units; 0 for Standard),
+`minFinalityThreshold` (1000 or 2000), `messenger`, `transmitter` (must equal the pinned constants), `approveGas`.
+`asset`/`amount` are the USDC burned on `network`; `to` must equal `from`. The owner's passkey signs the SHA-256 of all
+of it: **one approval commits to the whole transfer, both legs**.
+
+### 12.2 First leg (source)
+The signer builds, from the intent and its own tables only — there is no provider calldata at all:
+`USDC.approve(TokenMessengerV2, amount)` (exact amount, omitted when the allowance already covers it) and
+`depositForBurn(amount, domain(toNetwork), bytes32(own address), registry USDC, 0, maxFee, minFinalityThreshold)`.
+Refused: recipient ≠ own address, any token other than the registry USDC of the source, unpinned messenger/transmitter,
+a domain that is not the destination network's, a network outside `CCTP_ENABLED`, `maxFee` ≥ amount or > 1 % of it,
+a threshold other than 1000/2000, Fast from a source where Circle does not offer it, a `swap` section alongside.
+Policy applies as for a send: per-transfer and daily USDC limits of the **source** network, native fee ceiling of the
+source, approval window, halt, allowlist (if the owner uses one, `"<source>:<own address>"` must be in it — a bridge has
+no other destination). The amount counts toward the day's spend on the source.
+
+### 12.3 Second leg (destination) and how it is authorised
+`MessageTransmitterV2.receiveMessage(message, attestation)`, sent from the wallet's own address. It moves no value out of
+the wallet (the caller pays gas only; the mint goes to the message's `mintRecipient` whoever calls).
+
+**Decision: the burn approval covers the mint; no second passkey prompt in the normal case.** When it signs the burn, the
+signer stores the approved bridge (`state.bridges[proposalId]` = route, wallet, amount, fee ceiling, finality, burn tx
+hash) durably, before the signature leaves. Later, `POST /bridge/mint` signs a mint only if:
+
+1. the proposal id is a stored, passkey-approved bridge of this wallet (not expired by time: it must remain mintable);
+2. the message parses as a 376-byte CCTP V2 burn message (no hook) and **every field equals the approved burn**: version 1
+   (header and body), source domain, destination domain, sender and recipient = the pinned TokenMessenger,
+   `destinationCaller` = 0, burn token = registry USDC of the source, `mintRecipient` = the wallet, `messageSender` = the
+   wallet, amount, `maxFee`, `minFinalityThreshold`; and `feeExecuted ≤ maxFee`, `finalityThresholdExecuted ≥` the approved
+   threshold, non-zero nonce; the attestation is 1–8 signatures of 65 bytes;
+3. the target is the pinned MessageTransmitterV2 on the destination chain id, value 0, gas 100 000–450 000, and
+   `gas × maxFeePerGas ≤` the policy's native fee ceiling of the destination network;
+4. no mint was signed for this bridge yet, and this message (keccak256) has not served another bridge.
+
+Why this is safe without a second approval. The worst a compromised API can obtain is **one** signature per approved
+bridge on a transaction that either mints the wallet's own burned USDC to the wallet's own address or reverts; its cost is
+bounded by the destination fee ceiling. It cannot change recipient, amount, token or route (2), cannot aim the signature at
+another contract or chain (3), cannot farm signatures (4), and a forged or foreign message cannot pass the contract's
+attester check anyway. The signer cannot verify the attestation itself (no chain access, attesters can rotate): a bad
+attestation only wastes that one bounded fee. A stolen approval therefore buys strictly less than what the owner approved.
+A second passkey prompt would add nothing to the safety of the funds and would make "finish days later from another
+device" depend on the owner being present for a step that only *delivers* his money.
+
+Exactly once, and resumable:
+- an **identical** request (same message, attestation, nonce, gas) returns the **same signed bytes** again — the API
+  stores the gas parameters before asking, so a crash between the signer's answer and the database write repeats the same
+  request and does not consume a second signature;
+- **any other** request for a bridge that already has a mint signature is refused, unless it carries a passkey assertion
+  over SHA-256(`SPW-BRIDGE-MINT-v1`, proposal id, message hash, nonce, gas limit, fee cap, tip) — the "approve a new mint"
+  action, for a mint transaction that reverted or was replaced (at most 6 signatures per bridge);
+- the bridge record has no expiry; it is pruned 90 days after a mint signature;
+- while the signer is halted it signs no mint (anyone can still submit the public message from another tool).
+
+Binding to the burn: the record holds the burn transaction hash (audit trail) and the mint signature is bound to the
+message hash. The signer cannot check that a message came from *that* transaction (the message does not contain it, and
+the signer has no chain access); two identical transfers (same route and amount) are interchangeable at this level, which
+is harmless: each record signs one mint, each message serves one record, and every message mints only to the wallet.
+
+### 12.4 API life cycle (`kind: 'bridge'` in `proposals`, column `bridge` for the second leg)
+prepare (`POST /api/v1/bridge/proposals`) → passkey approval (existing `/transfers/proposals/:id/approve`) → sign →
+exact approval mined → burn simulated again (`eth_call`) → broadcast → receipt (`confirming`/`finalized` = the burn) →
+phase `attesting` (poll `GET /v2/messages/{domain}?transactionHash=`, 4–15 s at first, slower later, at most every 5 min,
+**never abandoned**; flagged `attestation_late` after 3× the documented time + 30 min) → `ready` → mint signed and sent
+(`mint_sent`) → receipt with the network's confirmation count → `done` (amount read from the USDC `Transfer` event).
+Worker loop every 5 s; `POST /api/v1/bridge/proposals/:id/finish` runs the next step immediately and is safe at any time.
+
+Guards at prepare: both networks' pins (§2), wallet address without code on both, one operation in flight on the source,
+nonce agreement on the source, USDC balance, source gas, signer policy pre-check, **destination gas** (below), Circle's
+fee from Iris (+ on-chain `getMinFeeAmount` for Standard where the messenger has it), Fast allowance ≥ amount.
+At mint time: `usedNonces(nonce)` on both RPC sources (already minted ⇒ success, nothing signed), pins of the destination
+again, Fast expiry (`expirationBlock` passed ⇒ `POST /v2/reattest/{nonce}` and back to `attesting`), no other operation in
+flight on the destination and nonce agreement, `eth_estimateGas` as simulation, fee ceiling, native balance.
+The Iris answer is untrusted: the API keeps only a message that passes the same `verifyCctpMint` as the signer; anything
+else is ignored with the reason shown (`message_mismatch`).
+
+"Nonce already used": the contract mints a message once. If someone else submitted the mint (it is permissionless), the
+API sees `usedNonces = 1` before signing, or sees its own transaction revert and then `usedNonces = 1`; both end as `done`
+with `mintedBy: other` and, when found in the last 2 000 blocks, the third party's transaction hash. The amount recorded in
+that case is the one computed from the attested message (amount − feeExecuted), not read from a receipt.
+
+### 12.5 Destination gas
+The mint is paid in the destination network's coin. **The wallet refuses to burn when the destination cannot pay**: at
+prepare, native balance on the destination must cover 240 000 gas × (2 × base fee + tip) there, and that amount must fit
+under the signer's fee ceiling for that network; otherwise `destination_gas` ("Nothing was burned: add ETH on … first").
+The Swap screen shows the need and the balance before the button and disables it. If the gas disappears between burn and
+mint, the transfer waits in `ready` with the same message and finishes when gas is back. Nothing is ever topped up
+automatically.
+
+### 12.6 Cost and time of a real transfer
+- Circle's fee: **Standard 0**; **Fast** per the live schedule (2026-11-11: 1 bps from Ethereum, 1.3 bps from Base and
+  Optimism, 1.4 bps from Arbitrum; not offered from Avalanche, Polygon, HyperEVM). The approved ceiling is the fee rounded
+  up; what is taken is shown after the mint. 10 USDC Fast from Base: at most 0.0013 USDC.
+- Gas, measured on forks with the real contracts: approval ≈ 55 000, `depositForBurn` ≈ 109 000 (source coin),
+  `receiveMessage` ≈ 171 000 (destination coin). OP-stack L1 data fees come on top (Base, Optimism). In money this is
+  cents on the L2s, Polygon, Avalanche and HyperEVM, and can be a few dollars when Ethereum is the source or the
+  destination at ordinary gas prices — the review sheet shows the ceiling in the source coin, the quote card the estimate
+  for the destination.
+- Time until the attestation exists, per Circle's documentation: Standard ≈ 15–19 min from Ethereum, Base, Arbitrum,
+  Optimism (hard finality on Ethereum, ~65 blocks); ≈ 8 s from Avalanche and Polygon; ≈ 5 s from HyperEVM. Fast ≈ 20 s from
+  Ethereum, ≈ 8 s from Base, Arbitrum, Optimism. Add the inclusion of the burn before, and after it the wallet's polling
+  delay (seconds at first; up to a minute or more late in a 19-minute wait) and the inclusion of the mint.
+- Limits: the signer's per-transfer and daily USDC caps of the source network (50 / 100 USDC by default); Circle's own
+  10 M USDC per burn.
+
+### 12.7 Proof on forks (`npx tsx scripts/fork-cctp.mts <source> <destination>`)
+Two anvil forks, fresh random keys, nothing sent to a real network. Real bytecode throughout. Run on 2026-11-11 for
+base→arbitrum, arbitrum→ethereum, ethereum→optimism, optimism→polygon, polygon→avalanche, avalanche→hyperevm,
+hyperevm→base (every enabled network once as source and once as destination; results in `docs/V2-IMPLEMENTATION-STATUS.md`).
+- Part 0, **the only exercise of Circle's real attestation service, read-only**: recent public messages are fetched
+  from `iris-api.circle.com` and their signatures verified (count = on-chain threshold, recovered signers enabled on-chain,
+  ascending order). Also covered offline by a unit test on a recorded real message.
+- Part 1, signer level: refusals on the first leg (other recipient, other amount, amount over the limit, other token,
+  unpinned messenger/transmitter, wrong domain); real approval + burn (balance −amount, total supply −amount, allowance 0);
+  refusals on the second leg (mintRecipient ≠ wallet, other destination domain, other amount, other token, destination
+  caller, unapproved fee, unknown bridge); on-chain refusal of non-attester and single signatures; mint (+amount);
+  second request refused, identical request replayed, a passkey-approved second mint transaction reverts on-chain; Fast
+  fee split (wallet / Circle's fee recipient) and on-chain refusal of a fee above `maxFee`.
+- Part 2, full stack (API routes, worker steps, signer over HTTP, passkey): destination without gas refused; Standard by
+  the worker alone; Fast with Circle's live fee; attestation withheld then "finish"; mint relayed by a third party.
+- **What is simulated, and only on the destination fork**: Circle cannot attest a burn that exists only on a fork, so two
+  test attester keys are enabled by impersonating the transmitter's attester manager, and a local stand-in signs the
+  fork's own `MessageSent` bytes (nonce, executed finality, executed fee filled in as Circle does). The contract's
+  signature checks run unmodified against those keys. Signer fee ceilings are multiplied by 20 **inside the fork script
+  only** (anvil reports a 1 gwei tip); production limits are unchanged.
+
+### 12.8 Not verified (execution)
+- **No real transfer has been made.** In particular the real pairing "our burn → Iris returns a complete message whose
+  bytes pass `verifyCctpMint`" has never run end to end; the message format is checked against real messages of other
+  senders only.
+- Iris behaviours taken from the documentation, not observed: `pending_confirmations` → `complete`, `delayReason`,
+  Fast → Standard degradation when `maxFee` is too low, `POST /v2/reattest` (the expiry path is implemented and has no
+  fork or unit test of the re-attested message), rate-limit handling (the API polls far below 40 req/s).
+- The Standard fee switch (`getMinFeeAmount` > 0) has never been seen non-zero; the code path is untested on-chain.
+- Contracts were not recompiled from source: "verified" rests on the explorers' verification and on a file-by-file
+  comparison with Circle's repository. Proxy sources were read on Ethereum only (the proxy *bytecode* is identical
+  everywhere). Constructor arguments on HyperEVM come back empty from the explorer API.
+- Who holds the proxy-admin, owner and attester-manager keys is unknown beyond "an address without code".
+- The USDC contract itself (also an upgradeable proxy, with blacklist and pause) is outside these pins, as for sends.
+- Real gas prices: the destination-gas estimate uses 240 000 gas × (2 × base fee + tip); on OP-stack networks the L1 data
+  fee of the mint is not included in the check (the transaction carries ~600 bytes of calldata).
+- The web screens were type-checked and built, not exercised in a browser (no Playwright run for this feature).
+- Polling stops only at `done`: a burn whose proposal later turns `failed`/`replaced` (deep reorg of the source after the
+  burn was seen) is no longer advanced automatically.
