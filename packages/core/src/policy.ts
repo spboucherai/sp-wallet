@@ -22,7 +22,7 @@ export type Policy = z.infer<typeof PolicySchema>;
  */
 export const CAPS: Record<string, string> = {
   USDC: '50', USDT: '50', PYUSD: '50', DAI: '50', USDS: '50', USDe: '50', FDUSD: '50', RLUSD: '50', USDG: '50', EURC: '45',
-  ETH: '0.025', WETH: '0.025', BTC: '0.0007', WBTC: '0.0007', SOL: '0.6', BNB: '0.075', AVAX: '6', HYPE: '0.7', POL: '550', LTC: '1', XLM: '350', XRP: '47', TRX: '150', DOGE: '700', BCH: '0.2',
+  ETH: '0.025', WETH: '0.025', BTC: '0.0007', WBTC: '0.0007', SOL: '0.6', BNB: '0.075', AVAX: '6', HYPE: '0.7', POL: '550', LTC: '1', XLM: '350', XRP: '47', TRX: '150', DOGE: '700', BCH: '0.2', ATOM: '36',
   LINK: '5', UNI: '7.5', AAVE: '0.4', LDO: '150', PAXG: '0.0125', ONDO: '135', RENDER: '30', JUP: '200', RAY: '30',
   BONK: '18000000', PEPE: '9000000', SHIB: '11000000',
 };
@@ -30,6 +30,7 @@ const STABLE_FEE: Record<string, string> = {
   ethereum: '5000000000000000', base: '300000000000000', arbitrum: '300000000000000', optimism: '300000000000000',
   polygon: '500000000000000000', bsc: '1000000000000000', avalanche: '20000000000000000', hyperevm: '20000000000000000',
   bitcoin: '5000', litecoin: '100000', dogecoin: '100000000', bitcoincash: '50000', solana: '3000000', stellar: '1000000', xrpl: '100000',
+  cosmos: '50000', // 0.05 ATOM: a send costs about 0.0015 ATOM (200 000 gas at 0.005 uatom + margin); leaves room for a tenfold fee-market rise
   tron: '40000000', // 40 TRX: a USDT transfer to a first-time holder burns ≈13.5 TRX of energy at 100 sun, plus margin
 };
 function buildDefaultPolicy(): Policy {
