@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { get } from '../api';
+import { startAuthentication } from '@simplewebauthn/browser';
+import { get, post } from '../api';
 import { usePortfolio, useSettings } from '../hooks';
-import { I18n, useT, type Key } from '../i18n';
-import { Card, Coin, fiat, Icon, inputCls, NetDot, Notice, trimAmt } from '../ui';
+import { errText, I18n, useT, type Key } from '../i18n';
+import { Btn, Card, Coin, fiat, Icon, inputCls, NetDot, Notice, StatePill, trimAmt } from '../ui';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface SAsset { key: string; network: string; networkName: string; asset: string; symbol: string; name: string; decimals: number; native?: boolean }
 interface Fee { kind: string; symbol: string; network: string; display: string; includedInOutput: boolean; estimated: boolean; usd: number | null }
-interface RouteV { id: string; providers: string[]; path: SAsset[]; tags: string[]; pareto: boolean; amountOutDisplay: string; minAmountOutDisplay: string; estimatedSeconds: number | null; expiresAt: number;
+interface RouteV { id: string; executable: boolean; providers: string[]; path: SAsset[]; tags: string[]; pareto: boolean; amountOutDisplay: string; minAmountOutDisplay: string; estimatedSeconds: number | null; expiresAt: number;
   executability: { class: 'verified' | 'opaque' | 'quote_only'; reason?: string }; valuation: { inUsd: number | null; outUsd: number | null; minOutUsd: number | null; extraFeesUsd: number; netUsd: number | null };
   risk: { level: 'low' | 'medium' | 'high'; score: number; flags: { code: string; level: string; detail?: string }[] }; atomic: boolean; refundable: boolean | null; priceImpactBps: number | null;
   steps: { kind: string; provider: string; from: SAsset; to: SAsset; via: string[]; contracts: { network: string; address: string; role: string }[] }[]; fees: Fee[] }
@@ -49,6 +51,12 @@ export function Swap() {
   const [routes, setRoutes] = useState<RouteV[]>([]), [best, setBest] = useState<Partial<Record<Mode, string>>>({}), [provs, setProvs] = useState<Prov[]>([]);
   const [phase, setPhase] = useState<'idle' | 'loading' | 'done' | 'error'>('idle'), [reachable, setReachable] = useState(true), [took, setTook] = useState<number | null>(null), [first, setFirst] = useState<number | null>(null);
   const es = useRef<EventSource | null>(null);
+  const qc = useQueryClient();
+  const [exec, setExec] = useState<{ proposal: any; options: any } | null>(null), [busy, setBusy] = useState(''), [execErr, setExecErr] = useState(''), [left, setLeft] = useState(0);
+  const live = useQuery({ queryKey: ['proposal', exec?.proposal.id], enabled: !!exec && !['pending_approval'].includes(exec.proposal.state), refetchInterval: 3000, queryFn: () => get<any>(`/transfers/proposals/${exec!.proposal.id}`) });
+  const prop = live.data ?? exec?.proposal;
+  useEffect(() => { if (!exec || exec.proposal.state !== 'pending_approval') return; const tick = () => setLeft(Math.max(0, Math.round((new Date(exec.proposal.expiresAt).getTime() - Date.now()) / 1000))); tick(); const h = setInterval(tick, 500); return () => clearInterval(h); }, [exec]);
+  useEffect(() => { if (prop?.state === 'finalized') void qc.invalidateQueries({ queryKey: ['portfolio'] }); }, [prop?.state, qc]);
   const balances = useMemo(() => new Map((pf.data?.balances ?? []).map((b) => [`${b.network}:${b.asset === 'native' ? 'native' : b.asset.startsWith('0x') ? b.asset.toLowerCase() : b.asset}`, b.display ?? '0'])), [pf.data]);
   const by = (k: string) => assets.find((a) => a.key === k);
   useEffect(() => { // sensible defaults once the registry is loaded
@@ -78,6 +86,24 @@ export function Swap() {
     return () => { clearTimeout(h); es.current?.close(); };
   }, [from?.key, to?.key, amount, slip]);
 
+  const prepare = async () => {
+    if (!from || !to) return;
+    setBusy('prepare'); setExecErr('');
+    try { setExec(await post('/swap/proposals', { network: from.network, fromAsset: from.asset, toAsset: to.asset, amount, slippageBps: slip }, { 'idempotency-key': crypto.randomUUID() })); }
+    catch (e) { setExecErr(errText(t, e)); } finally { setBusy(''); }
+  };
+  const approve = async () => {
+    if (!exec) return;
+    setBusy('passkey'); setExecErr('');
+    try {
+      const assertion = await startAuthentication({ optionsJSON: exec.options }); // the challenge is the fingerprint of this exact swap
+      setBusy('submit');
+      const p = await post(`/transfers/proposals/${exec.proposal.id}/approve`, { assertion });
+      setExec({ ...exec, proposal: p });
+    } catch (e) { const m = errText(t, e); if (m) setExecErr(m); const fresh = await get<any>(`/transfers/proposals/${exec.proposal.id}`).catch(() => null); if (fresh) setExec({ ...exec, proposal: fresh }); }
+    finally { setBusy(''); }
+  };
+  const closeExec = async () => { if (exec?.proposal.state === 'pending_approval') await post(`/transfers/proposals/${exec.proposal.id}/reject`).catch(() => {}); setExec(null); setExecErr(''); setAmount(''); };
   const net = (r: RouteV) => r.valuation.netUsd ?? Number(r.minAmountOutDisplay);
   const sorted = [...routes].sort((a, b) => Number(b.id === best[mode]) - Number(a.id === best[mode]) || net(b) - net(a));
   const chosen = sorted[0];
@@ -100,7 +126,7 @@ export function Swap() {
   return (
     <div className="space-y-4">
       <h1 className="pt-2 text-[30px] font-semibold tracking-[-0.02em]">{t('swap')}</h1>
-      <Notice tone="info">{t('swQuoteOnly')}</Notice>
+      <Notice tone="info">{t('swIntro')}</Notice>
       <Card className="!p-3">
         {side(t('swYouPay'), from, 'from', <>
           <input className="w-full bg-transparent text-[30px] font-semibold tracking-tight outline-none placeholder:text-mute/50" inputMode="decimal" placeholder="0" aria-label={t('amount')} value={amount} onChange={(e) => setAmount(e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))} autoComplete="off" />
@@ -155,12 +181,50 @@ export function Swap() {
               <div className="text-mute">{t(`swExec_${r.executability.class}` as Key)}{r.executability.reason ? ` — ${r.executability.reason}` : ''}</div>
             </div>}
           </section>); })}
-        <button disabled className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-[15.5px] font-semibold text-onprimary opacity-40"><Icon n="lock" className="h-4 w-4" />{t('swExecuteDisabled')}</button>
+        {execErr && <Notice tone="danger">{execErr}</Notice>}
+        {(() => { const ex = sorted.find((r) => r.executable); return ex
+          ? <><Btn full busy={busy === 'prepare'} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('swExecute', { via: ex.providers[0]! })}</Btn>
+              {ex.id !== sorted[0]!.id && <p className="px-1 text-[12.5px] text-mute">{t('swExecNotBest')}</p>}</>
+          : <><button disabled className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-[15.5px] font-semibold text-onprimary opacity-40"><Icon n="lock" className="h-4 w-4" />{t('swExecuteDisabled')}</button>
+              <p className="px-1 text-[12.5px] text-mute">{t('swExecWhere')}</p></>; })()}
       </div>}
 
       {(phase === 'done' || provs.length > 0) && <p className="px-1 text-[12px] text-mute">
         {took !== null && <>{t('swTook', { n: provs.length + new Set(routes.flatMap((r) => r.providers)).size, ms: took })}{first !== null ? ` · ${t('swFirst', { ms: first })}` : ''}. </>}
         {provs.filter((p) => p.status !== 'no_route').map((p) => `${p.provider}: ${p.status === 'skipped' ? t('swSkipped') : p.code ?? p.status}`).join(' · ')}</p>}
+
+      {exec && prop && <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 lg:items-center" role="dialog" aria-modal="true" aria-label={t('swReview')}>
+        <div className="rise max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-surface p-5 lg:rounded-3xl">
+          <div className="mb-3 flex items-center justify-between"><h2 className="text-[20px] font-semibold tracking-tight">{prop.state === 'pending_approval' ? t('swReview') : t('swTracking')}</h2><StatePill state={prop.state} /></div>
+          <div className="rounded-2xl bg-elev/70 p-4">
+            <div className="text-[13px] text-mute">{t('swYouPay')}</div>
+            <div className="text-[24px] font-semibold tracking-tight">{prop.amountDisplay} <span className="text-mute">{prop.symbol}</span></div>
+            <div className="mt-3 text-[13px] text-mute">{prop.swap.received ? t('swReceived') : t('swMinGuaranteed')}</div>
+            <div className="text-[24px] font-semibold tracking-tight">{trimAmt(prop.swap.receivedDisplay ?? prop.swap.minOutDisplay, 10)} <span className="text-mute">{prop.swap.toSymbol}</span></div>
+            {!prop.swap.received && <div className="text-[13px] text-mute">{t('swExpected')} {trimAmt(prop.swap.expectedOutDisplay, 10)} {prop.swap.toSymbol}</div>}
+          </div>
+          <dl className="mt-3 space-y-2 text-[13.5px]">
+            <div className="flex justify-between gap-3"><dt className="text-mute">{t('network')}</dt><dd>{prop.networkName} · KyberSwap</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-mute">{t('feeMax')}</dt><dd>{prop.maxFeeDisplay ? `${trimAmt(prop.maxFeeDisplay, 9)} ${prop.feeSymbol}` : '—'}</dd></div>
+            {prop.swap.approvalState && <div className="flex justify-between gap-3"><dt className="text-mute">{t('swApproval')}</dt><dd>{t(`swAppr_${prop.swap.approvalState}` as Key)}</dd></div>}
+            {prop.intentHash && <div><dt className="text-mute">{t('fingerprint')}</dt><dd className="break-all font-mono text-[11px] text-mute">{prop.intentHash}</dd></div>}
+            {prop.txid && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <div><dt className="text-mute">{t('txid')}</dt><dd className="break-all font-mono text-[11px]">{prop.txid}</dd></div>}
+          </dl>
+          {prop.state === 'pending_approval' && <div className="mt-3 space-y-3">
+            <Notice tone="ok">{t('swGuarantee')}</Notice>
+            {prop.swap.needsApproval && <Notice tone="info">{t('swNeedsApproval', { sym: prop.symbol })}</Notice>}
+            <Notice tone="info">{t('irreversible')} {t('expiresIn')} {left} s.</Notice>
+          </div>}
+          {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{prop.error}</Notice></div>}
+          {['signed', 'broadcast', 'confirming'].includes(prop.state) && <p className="mt-3 flex items-center gap-2 text-[13px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('broadcastNote')}</p>}
+          {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
+          {prop.explorer && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <a className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue" href={prop.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
+          <div className="mt-4 space-y-2.5">
+            {prop.state === 'pending_approval' && <Btn full busy={!!busy} disabled={left === 0} onClick={() => void approve()}><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>}
+            <Btn full kind="ghost" disabled={!!busy} onClick={() => void closeExec()}>{prop.state === 'pending_approval' ? t('cancel') : t('swClose')}</Btn>
+          </div>
+        </div>
+      </div>}
 
       <Picker open={pick !== null} onClose={() => setPick(null)} assets={assets} balances={balances} exclude={pick === 'from' ? toKey : fromKey} onPick={(a) => { if (pick === 'from') setFromKey(a.key); else setToKey(a.key); }} />
     </div>

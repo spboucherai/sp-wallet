@@ -67,9 +67,14 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
 
   // swap: route comparison screen (no provider is wired in this build: it must say so, and execution must be visibly disabled)
   await page.getByRole('navigation').getByRole('button', { name: 'Échanger' }).click();
-  await expect(page.getByText(/Comparaison de routes uniquement/)).toBeVisible();
+  await expect(page.getByText(/Devis en direct de plusieurs fournisseurs/)).toBeVisible();
   await page.getByLabel('Montant').fill('25');
+  // live quotes from real providers (USDC -> ETH on Base); the empty test wallet cannot execute, and must be told why
+  await expect(page.getByText('kyberswap').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/min\. garanti/).first()).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/04c-swap.png`, fullPage: true });
+  await page.getByRole('button', { name: /Échanger via kyberswap/ }).click();
+  await expect(page.getByRole('alert')).toContainText(/Solde insuffisant/, { timeout: 30_000 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   // send: invalid address is refused, then an empty wallet cannot draft a transfer (live mainnet balance check)

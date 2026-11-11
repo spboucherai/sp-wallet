@@ -30,16 +30,37 @@ Updated 2026-11-10. This file records what exists, what is verified, and what is
 
 Measured: 3,000 concurrent route searches over three in-process providers complete in well under 8 s on the laptop (see test output). No real-provider latency has been measured yet.
 
-## Phase 3 — Provider integrations
-None merged yet. In progress: Odos, KyberSwap, Jupiter, LI.FI, deBridge, THORChain, Maya, Circle CCTP — price discovery only, each with an execution dossier (`docs/swap/providers/`). 0x, 1inch, Rango, Socket require API keys that are not available: not started.
+## Phase 3 — Provider integrations (price discovery, real APIs, recorded fixtures)
+| Provider | State | Notes |
+|---|---|---|
+| KyberSwap | live, 8 EVM networks | keyless "legacy" endpoint, 3 req/s; executable on Base (see below) |
+| Jupiter (Metis) | live, Solana (incl. Token-2022 PYUSD/USDG) | keyless 5 req/10 s; licence: must be labelled "Metis"; quote sends the wallet's Solana address |
+| LI.FI | live, 12 networks incl. Bitcoin, Sui, TRON | keyless quota 75 requests / 2 h: used only for direct cross-chain requests; a key is needed for normal use |
+| Circle CCTP | live, USDC between 8 networks (+ EURC on 3) | quote only; strongest candidate for signer-verified bridging |
+| THORChain | live, 12 networks | single public gateway, slow (2–5 s) and sometimes stale; quote only |
+| Maya | live, 3 networks | quote only |
+| deBridge | adapter present, **disabled** | its API licence forbids "aggregation purposes"; enable only after review (`SPW_SWAP_ENABLE=debridge`) |
+| Odos | not integrated | service shut down 2026-07-30 (`docs/swap/providers/odos.md`) |
+| 0x, 1inch, Rango, Socket | not started | need API keys |
 
-## Phases 5–7 — Execution (not started; blocked on an owner decision)
-Executing a swap means the signer must sign something other than a plain transfer. Three classes, by what the isolated signer can verify on its own:
-1. **Verified** — the signer rebuilds the whole transaction from the approved intent (candidates: Circle CCTP burn to the wallet's own address on the destination chain; native swaps expressed as a transfer with a memo, e.g. THORChain, where the signer can check the memo's destination and minimum output but not that the vault address is genuine).
-2. **Opaque** — aggregator-built calldata / Solana instructions (Odos, KyberSwap, Jupiter, LI.FI…). The signer can only pin the contract, cap the allowance and the amount; whether the output really comes back to the wallet rests on the API's simulation. A compromised API node could then steal up to the per-transfer limit per approval. This is a real weakening of today's guarantee.
-3. **Quote only** — shown for price comparison, not executable.
-
-Open decisions for the owner: whether class 2 is acceptable at all, and under which limits; installing a local fork tool for end-to-end execution tests; testnet funds.
+## Phase 5 — Execution
+**Implemented and deployed: KyberSwap same-chain swaps on Base.**
+- The signer decodes the router calldata (ABI from the verified source) and enforces: pinned router, source and destination
+  token from the registry, exact input amount, recipient = the wallet itself, minimum output ≥ the approved minimum, no fee
+  receivers, no permit, exact-amount approval, exact value. The router (source read on Base) reverts unless the recipient's
+  balance of the output token rises by at least that minimum, so the route bytes in between cannot redirect value.
+- API: fresh on-chain-liquidity route, calldata built for the wallet's own address, router bytecode hash checked on both
+  RPC sources, refusal if the wallet address carries code (EIP-7702 delegation), nonce agreement, node gas estimate as
+  simulation, signer policy pre-check, one swap or transfer in flight per network. Token input: the exact approval is mined
+  first, then the swap is simulated again and only then sent; if that simulation fails the swap is not sent.
+- Evidence: `scripts/fork-swap-kyber.mts` (signer level) and `scripts/fork-swap-api.mts` (full stack) execute real routes on
+  a local anvil fork of Base — ETH→USDC, USDC→ETH (with approval), USDC→LINK — and check balances, leftover allowance (0)
+  and refusals (tampered calldata, other recipient, other token, lower guarantee, unpinned router, disabled network).
+- **Not yet proven: a swap on the real network.** The first real one is the owner's, with a small amount.
+- Other EVM networks: not enabled. The router bytecode differs per chain (and in size on HyperEVM); each needs its verified
+  source read before its hash is pinned in `KYBER_ENABLED`.
+- Not implemented: cross-chain execution (CCTP, LI.FI, THORChain), Solana swaps (Jupiter), refunds/recovery engine,
+  multi-leg routes.
 
 ## Stop conditions in force (from the V2 brief)
-Not done without explicit authorization: deploying V2 to production, enabling swaps on mainnet, changing signer policy, moving real assets.
+The owner authorized on 2026-11-10: deploying V2, real-money execution including provider-built transactions, and installing a local fork tool. Still not done without asking: raising signer limits, moving real assets on the owner's behalf.

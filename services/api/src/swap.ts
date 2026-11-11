@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { formatUnits, getAsset, getNetwork, parseUnits } from '@spw/core';
+import { formatUnits, getAsset, getNetwork, KYBER_ENABLED, parseUnits } from '@spw/core';
 import {
   assetKey, createEnabledProviders, DEFAULT_POLICY, httpClient, LiquidityGraph, ProviderRuntime, QuoteAggregator, SwapRouter,
   type AssetRef, type QuoteEvent, type Route, type RouteSearch, type SwapProvider, type SwapQuoteRequest, type Valuer,
@@ -40,10 +40,17 @@ export function swapRoutes(app: FastifyInstance, deps: SwapDeps): void {
   const viewAsset = (a: AssetRef) => { const d = getAsset(a.network, a.asset), n = getNetwork(a.network); return { key: assetKey(a), network: a.network, networkName: n.name, asset: a.asset, symbol: d.symbol, name: d.name, decimals: d.decimals }; };
   const viewRoute = (r: Route) => {
     const out = getAsset(r.path[r.path.length - 1]!.network, r.path[r.path.length - 1]!.asset);
+    const executable = r.legs.length === 1 && r.providers[0] === 'kyberswap' && !!KYBER_ENABLED[r.path[0]!.network] && r.path[0]!.network === r.path[r.path.length - 1]!.network;
+    // on a reviewed router the signer decodes and enforces recipient and minimum output itself: not an opaque transaction
+    const flags = executable ? r.risk.flags.filter((f) => f.code !== 'opaque_transaction') : r.risk.flags;
+    const level = flags.some((f) => f.level === 'high') ? 'high' : flags.some((f) => f.level === 'medium') ? 'medium' : 'low';
+    const risk = executable ? { level, score: Math.max(0, r.risk.score - 12), flags } : r.risk;
     return {
       id: r.id, providers: r.providers, path: r.path.map(viewAsset), tags: r.tags, pareto: r.pareto,
+      // the wallet can execute this route itself today (signer-verified calldata on a reviewed router)
+      executable,
       amountOut: r.amountOut, minAmountOut: r.minAmountOut, amountOutDisplay: formatUnits(r.amountOut, out.decimals), minAmountOutDisplay: formatUnits(r.minAmountOut, out.decimals),
-      estimatedSeconds: r.estimatedSeconds, expiresAt: r.expiresAt, executability: r.executability, valuation: r.valuation, risk: r.risk,
+      estimatedSeconds: r.estimatedSeconds, expiresAt: r.expiresAt, executability: executable ? { class: 'verified' as const } : r.executability, valuation: r.valuation, risk,
       atomic: r.legs.length === 1 && r.legs[0]!.atomic, refundable: r.legs.some((l) => l.refundable === false) ? false : r.legs.some((l) => l.refundable === null) ? null : true,
       priceImpactBps: r.legs.every((l) => l.priceImpactBps !== null) ? r.legs.reduce((s, l) => s + l.priceImpactBps!, 0) : null,
       steps: r.legs.flatMap((l) => l.steps.map((s) => ({ kind: s.kind, provider: s.provider, from: viewAsset(s.from), to: viewAsset(s.to), via: s.via, contracts: s.contracts }))),

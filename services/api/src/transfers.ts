@@ -160,6 +160,9 @@ export function transferRoutes(app: FastifyInstance): void {
     let p = await load((req.params as { id: string }).id);
     if (p.state !== 'pending_approval' || !p.intent) throw new UserError('bad_state', `proposal is ${p.state}`, 409);
     if (p.expires_at && p.expires_at.getTime() < Date.now()) { await move(p, 'expired', { error: 'approval window expired' }); throw new UserError('expired', 'approval window expired; start again', 410); }
+    // one transfer or swap in flight per network, checked again at the moment of approval
+    const [busy] = await sql<{ id: string }[]>`select id from proposals where network = ${p.network} and id <> ${p.id} and state in ('approved', 'signed', 'broadcast') limit 1`;
+    if (busy) throw new UserError('pending_tx', 'a previous transfer or swap on this network is not confirmed yet', 409);
     p = await move(p, 'approved');
     let signed: { raw: string; txid: string; hash: string; pre?: { raw: string; txid: string } };
     try { signed = await signer.sign(p.intent, body.assertion, p.aux ?? undefined); }
