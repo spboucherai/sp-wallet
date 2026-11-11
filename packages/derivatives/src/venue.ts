@@ -41,3 +41,7 @@ export interface VenueTrading {
   describe(sign: SignRequest): { kind: 'order' | 'cancel' | 'leverage' | 'approve_agent' | 'other'; orders?: OrderRequest[]; detail: Record<string, unknown> };
   submit(action: unknown, signature: unknown, nonce: number): Promise<{ accepted: boolean; venueOrderIds: string[]; error: string | null; raw: unknown }>;
 }
+
+// names used by the venue adapters
+export type StreamSub = { type: 'book' | 'trades' | 'ticker'; symbol: string } | { type: 'account'; account: string };
+export type StreamStatus = 'connected' | 'reconnecting' | 'stale';

@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-11T02:56:07.963Z",
+ "url": "https://indexer.v4testnet.dydx.exchange/v4/orders?address=dydx19ykejm094kzj054wt3lks3fk9kuwfu9h0z8hcs&subaccountNumber=0&status=OPEN,UNTRIGGERED&limit=10",
+ "status": 200,
+ "text": "[{\"id\":\"33914979-282d-535a-a907-bfb90982f4d3\",\"subaccountId\":\"7300080a-6a8e-514d-8af6-4b7a34f384f6\",\"clientId\":\"2147483649\",\"clobPairId\":\"76\",\"side\":\"SELL\",\"size\":\"150.12\",\"totalFilled\":\"0.07\",\"price\":\"220.1\",\"type\":\"LIMIT\",\"status\":\"OPEN\",\"timeInForce\":\"GTT\",\"reduceOnly\":false,\"orderFlags\":\"64\",\"goodTilBlockTime\":\"2026-11-11T02:56:35.000Z\",\"createdAtHeight\":\"35514415\",\"clientMetadata\":\"0\",\"updatedAt\":\"2026-11-11T02:55:51.871Z\",\"updatedAtHeight\":\"92143456\",\"orderRouterAddress\":\"\",\"postOnly\":false,\"ticker\":\"TAO-USD\",\"subaccountNumber\":0}]"
+}

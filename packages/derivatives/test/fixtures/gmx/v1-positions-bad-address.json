@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-11T02:56:50.208Z",
+ "url": "https://arbitrum.gmxapi.io/v1/positions?address=0x123",
+ "status": 400,
+ "text": "{\"message\":\"Invalid address: 0x123\"}"
+}

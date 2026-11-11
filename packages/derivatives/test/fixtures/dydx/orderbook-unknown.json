@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-11T02:55:59.248Z",
+ "url": "https://indexer.dydx.trade/v4/orderbooks/perpetualMarket/NOPE-USD",
+ "status": 404,
+ "text": "{\"errors\":[{\"msg\":\"NOPE-USD not found in markets of type PERPETUAL\"}]}"
+}
