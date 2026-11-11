@@ -1,0 +1,10 @@
+{
+  "name": "@spw/research-runner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@spw/core": "workspace:*",
+    "zod": "4.6.7"
+  }
+}

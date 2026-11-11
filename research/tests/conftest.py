@@ -8,7 +8,8 @@ import pandas as pd
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-_ALL = sorted(p.parent for p in (ROOT / "strategies").glob("*/*/strategy.py"))
+# v7: directories named rj_<job> are strategies installed by research jobs on a deployed node: not the library
+_ALL = sorted(p.parent for p in (ROOT / "strategies").glob("*/*/strategy.py") if not p.parent.parent.name.startswith("rj_"))
 # Perpetual-futures strategies (contract v2, directories named <name>_perp) have their own tests
 # (test_perp_library.py); LIBRARY stays the spot library that the version-1 tests were written for.
 PERP_LIBRARY = [d for d in _ALL if d.parent.name.endswith("_perp")]

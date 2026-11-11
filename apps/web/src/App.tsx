@@ -16,6 +16,7 @@ import { Settings } from './screens/Settings';
 import { Swap } from './screens/Swap';
 import { Btn, Icon, Notice, Skeleton } from './ui';
 import { useAlertsRuntime, useUnread } from './alerts'; // v6-alerts
+import { Research } from './screens/Research'; // v7 research runtime
 
 // the Futures terminal is its own chunk: the wallet's first load does not pay for it
 const Futures = lazy(() => import('./screens/Futures').then((m) => ({ default: m.Futures })));
@@ -24,11 +25,11 @@ const Alerts = lazy(() => import('./screens/Alerts').then((m) => ({ default: m.A
 const Monitor = lazy(() => import('./screens/Monitor').then((m) => ({ default: m.Monitor })));
 
 const TABS = [['home', '/', 'home'], ['swap', '/swap', 'swap'], ['agents', '/agents', 'key'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
-export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent' | 'futures' | 'alerts' | 'monitor';
+export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent' | 'futures' | 'alerts' | 'monitor' | 'research';
 /** Where to go, with optional pre-selection (asset page, or send/receive pre-filled). */
 export interface Route { tab: Tab; network?: string; asset?: string; /** sub-view of a screen (Futures: compare, accounts) */ view?: string }
 export type Nav = (r: Route) => void;
-const pathOf = (r: Route) => r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
+const pathOf = (r: Route) => r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
 function routeOf(): Route {
   const m = /^\/asset\/([a-z0-9-]+)\/(.+)$/.exec(location.pathname);
   if (m) return { tab: 'asset', network: m[1], asset: decodeURIComponent(m[2]!) };
@@ -38,6 +39,7 @@ function routeOf(): Route {
   const q = new URLSearchParams(location.search);
   if (location.pathname === '/alerts') return { tab: 'alerts', view: q.get('v') ?? undefined };   // v6-alerts
   if (location.pathname === '/monitor') return { tab: 'monitor' };
+  if (location.pathname === '/research') return { tab: 'research', asset: q.get('job') ?? undefined }; // v7 research runtime
   const fu = /^\/futures(?:\/(.+))?$/.exec(location.pathname);   // /futures, /futures/<venue:symbol>
   if (fu) return { tab: 'futures', asset: fu[1] ? decodeURIComponent(fu[1]) : undefined, view: q.get('v') ?? undefined };
   return { tab: TABS.find((t) => t[1] === location.pathname)?.[0] ?? 'home', network: q.get('n') ?? undefined, asset: q.get('a') ?? undefined };
@@ -121,6 +123,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
           {tab === 'settings' && <Settings lock={lock} go={go} />}
           {tab === 'alerts' && <Suspense fallback={<Skeleton h="h-72" />}><Alerts view={route.view === 'settings' ? 'settings' : 'list'} open={openPath} setView={(v) => nav({ tab: 'alerts', view: v === 'settings' ? 'settings' : undefined })} /></Suspense>}
           {tab === 'monitor' && <Suspense fallback={<Skeleton h="h-72" />}><Monitor open={openPath} /></Suspense>}
+          {tab === 'research' && <Research nav={nav} job={route.asset} />}{/* v7 research runtime */}
         </main>
         <nav aria-label="Navigation" className="safe-b nav-glass fixed inset-x-0 bottom-0 z-10 border-t border-line lg:hidden">
           <div className="mx-auto flex max-w-xl items-end px-2 pt-2">{MOBILE.map(([id, icon]) => { const on = tab === id || (id === 'home' && (tab === 'asset' || tab === 'assets')) || (id === 'swap' && tab === 'futures');

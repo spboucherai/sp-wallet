@@ -62,6 +62,13 @@ export const ALERT_DEFS: readonly AlertDef[] = [
   d('agent.signal_failures', 'agents', 'warning', true, ['Signal de stratégie en échec', 'Strategy signal failing'],
     ['{agent} : {count} signaux invalides de suite ; l’agent conserve ses positions.', '{agent}: {count} invalid signals in a row; the agent is holding.'],
     ['{agent} : {count} signaux invalides de suite.', '{agent}: {count} invalid signals in a row.']),
+  // >>> v7 research runtime
+  d('agent.research_submitted', 'agents', 'info', true, ['Recherche terminée : stratégie à approuver', 'Research done: strategy awaiting approval'],
+    ['{name} : backtest serveur terminé ({count} essais comptés). À approuver ou à rejeter.', '{name}: server-side backtest done ({count} trials counted). Approve or dismiss it.'],
+    ['{name} : une stratégie attend votre approbation.', '{name}: a strategy awaits your approval.']),
+  d('agent.research_failed', 'agents', 'warning', true, ['Tâche de recherche interrompue', 'Research job stopped'],
+    ['{name} : {state} ({reason})', '{name}: {state} ({reason})'], ['{name} : {state}.', '{name}: {state}.']),
+  // <<< v7 research runtime
   d('mandate.expiring', 'agents', 'warning', true, ['Mandat bientôt expiré', 'Mandate about to expire'],
     ['Le mandat de {agent} expire dans moins de {hours} h.', 'The mandate of {agent} expires in less than {hours} h.'],
     ['Le mandat de {agent} expire dans moins de {hours} h.', 'The mandate of {agent} expires in less than {hours} h.']),
@@ -167,6 +174,7 @@ const VOCAB: Record<string, Pair> = {
   signer: ['Signataire', 'Signer'], derivatives: ['Compte de dérivés', 'Derivatives account'],
   signed: ['signé', 'signed'], broadcast: ['diffusé', 'broadcast'], confirming: ['en confirmation', 'confirming'], attesting: ['en attente d’attestation', 'awaiting attestation'], minting: ['en cours de réception', 'minting'],
   market: ['Données de marché', 'Market data'], rpc: ['RPC', 'RPC'], unknown: ['inconnu', 'unknown'],
+  failed: ['échec', 'failed'], over_budget: ['budget dépassé', 'over budget'], // v7 research runtime
 };
 const word = (v: unknown, l: AlertLocale): string => {
   if (v === null || v === undefined || v === '') return '—';

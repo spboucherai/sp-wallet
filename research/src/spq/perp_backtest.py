@@ -70,6 +70,9 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--resamples", type=int, default=2000)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--ledger", default=None, help="JSONL file recording every trial and test evaluation")
+    p.add_argument("--job-ledger", default=None,
+                   help="v7: the trial ledger of the research job that produced this strategy (the runner's copy); "
+                        "its trials are added to the trial count of the deflated Sharpe ratio")
     p.add_argument("--data-dir", required=True, help="root of the local store (hyperliquid/ and the spot source)")
     p.add_argument("--spot-source", default="coinbase", help="spot candles for the benchmark and for spot legs")
     p.add_argument("--out", required=True, help="report path (JSON)")
@@ -95,7 +98,7 @@ def main(argv=None) -> int:
         notes = [f"spot benchmark from {a.spot_source}: {s} {q.n_bars} bars, {q.missing_bars} missing"
                  for s, q in spot_q.items()]
         report, _ = build_perp_report(strategy, data, config, quality=quality, funding_quality=fq, funding_raw=raw,
-                                      spot_data=spot, fractions=fractions, grid=grid, ledger=a.ledger,
+                                      spot_data=spot, fractions=fractions, grid=grid, ledger=a.ledger, job_ledger=a.job_ledger,
                                       n_folds=a.folds, n_resamples=a.resamples, seed=a.seed, source=SOURCE,
                                       notes=notes)
         write_perp_report(report, a.out)

@@ -28,6 +28,8 @@ import { transferRoutes, view, type ProposalRow } from './transfers.ts';
 import { healthCache } from './worker.ts';
 import { alertRoutes } from './alerts/routes.ts';     // v6-alerts
 import { monitorRoutes } from './monitor/routes.ts'; // v6-alerts
+import { researchRoutes, RUNNER_PREFIX, runnerGate } from './research/routes.ts'; // v7 research runtime
+import { perpRuntime } from './agents/perp-live.ts'; // v7 research runtime (perp data for research jobs)
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
@@ -115,6 +117,10 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     const path = req.url.split('?')[0]!;
     if (!path.startsWith('/api/')) return;
     reply.header('cache-control', 'no-store');
+    // >>> v7 research runtime: the runner's endpoints carry their own shared secret — no owner session, no cookie, no CSRF header;
+    // that secret opens these paths and no other, and the owner session does not open them
+    if (path.startsWith(RUNNER_PREFIX)) { runnerGate(req); return; }
+    // <<< v7 research runtime
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       // CSRF: strict same-origin + custom header (cannot be set cross-site without CORS, which is never enabled)
       if (req.headers.origin !== config.origin || req.headers['x-spw-csrf'] !== '1') throw new UserError('csrf', 'cross-site request refused', 403);
@@ -147,6 +153,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   liveRoutes(app, opts.live); // controlled live trading: nothing trades until the owner authorizes a venue account with his passkey
   await alertRoutes(app); // v6-alerts: in-app alerts, push subscriptions, webhook — all behind the owner session
   monitorRoutes(app);     // v6-alerts: read-only monitoring dashboard
+  await researchRoutes(app, { perp: () => perpRuntime().lab }); // v7 research runtime: jobs for the owner, a narrow endpoint pair for the runner
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));
   app.get('/api/v1/health/ready', async () => {

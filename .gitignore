@@ -9,3 +9,5 @@ test-results/
 playwright-report/
 .DS_Store
 .claude/
+# v7: strategies installed by research jobs on the API node (restorable from the database; see docs/v7/RESEARCH-RUNTIME.md)
+/research/strategies/rj_*/

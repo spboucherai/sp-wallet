@@ -19,6 +19,7 @@ from __future__ import annotations
 import itertools
 import json
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,6 +32,7 @@ from .metrics import sharpe_ratio
 from .strategy import Strategy
 
 SELECTION_SPLITS = ("train", "validation", "development")
+JOB_LEDGER_ENV = "SPQ_JOB_LEDGER"
 
 
 class TestSplitError(PermissionError):
@@ -202,11 +204,18 @@ class Experiment:
 
     # ------------------------------------------------------------------------------------------------------ ledger
     def _append_ledger(self, rec: dict):
-        if self.ledger_path is None:
-            return
-        self.ledger_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.ledger_path.open("a") as fh:
-            fh.write(json.dumps(rec, default=str) + "\n")
+        # v7 research jobs: when SPQ_JOB_LEDGER is set (by the job runner, outside the agent), EVERY trial and test
+        # evaluation of every Experiment of the process is appended there, whatever `ledger=` the caller passed.
+        # The runner copies the lines out of the agent's reach as they appear and counts them against the budget.
+        job = os.environ.get(JOB_LEDGER_ENV)
+        seen = set()
+        for path in (self.ledger_path, Path(job) if job else None):
+            if path is None or str(path.absolute()) in seen:
+                continue
+            seen.add(str(path.absolute()))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a") as fh:
+                fh.write(json.dumps(rec, default=str) + "\n")
 
 
 def read_ledger(path) -> list[dict]:
@@ -214,6 +223,39 @@ def read_ledger(path) -> list[dict]:
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+# --- v7 research jobs ---------------------------------------------------------------------------------------------
+MAX_SANE_SHARPE_PER_BAR = 1.0
+
+
+def read_job_trials(path) -> dict:
+    """Trials consumed by a research job, from the runner's copy of the job ledger. The file was written by an
+    UNTRUSTED process: it is read defensively. Every non-empty line counts as one trial (a line is something the
+    job did, so garbage can only raise the count); only finite validation Sharpe ratios of plausible size, on
+    well-formed "trial" records, are kept as numbers."""
+    out = {"count": 0, "sharpes": [], "unreadable": 0}
+    path = Path(path)
+    if not path.exists():
+        return out
+    for line in path.read_text(errors="replace").splitlines():
+        if not line.strip():
+            continue
+        out["count"] += 1
+        try:
+            rec = json.loads(line)
+        except (ValueError, TypeError):
+            out["unreadable"] += 1
+            continue
+        if not isinstance(rec, dict) or rec.get("kind") not in ("trial", "test"):
+            out["unreadable"] += 1
+            continue
+        v = rec.get("validation_sharpe_per_bar")
+        if (isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+                and abs(v) <= MAX_SANE_SHARPE_PER_BAR):
+            out["sharpes"].append(float(v))
+    return out
+# --- end v7 -------------------------------------------------------------------------------------------------------
 
 
 def _finite(x):

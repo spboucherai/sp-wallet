@@ -376,3 +376,19 @@ above 2.13×). Details and the limits of the run: `results/2026-11-10-perps/summ
 - **The look-ahead check compares decisions at two cut points**: a leak that happens not to change those decisions is not
   detected by it (the unit tests use rules that always react).
 - The version-2 shapes (`--contract 2`, report, signal) have no consumer yet on the TypeScript side: they are proposals.
+
+## Research jobs (V7)
+
+An AI coding agent can develop a strategy in this laboratory as a sandboxed *research job*
+(`docs/v7/RESEARCH-RUNTIME.md`). Additions, all additive:
+
+- `spq.job` — the job's commands: `info`, `trial` (one configuration on train + validation, counted),
+  `evaluate` (the standard report + the claims file; THE look at the inner test split, sealed across processes by the
+  job ledger: another `strategy.py` hash afterwards exits 7), `split` (server side: where the test split starts).
+- `SPQ_JOB_LEDGER` — when set, every `Experiment` appends its trials and test evaluations there, whatever `ledger=`
+  the caller passed.
+- `--job-ledger` (`spq.backtest`, `spq.perp_backtest`) — the trials a job consumed are added to the trial count of the
+  deflated Sharpe ratio; the variance of the trial Sharpe ratios can only grow (`spq.dsr.deflate_for_job`).
+- `spq.lint` — the static purity check of a `strategy.py` without importing it.
+- Directories `strategies/rj_<job>/` are strategies installed by the wallet API from research jobs (git-ignored, not
+  part of the library and its tests).

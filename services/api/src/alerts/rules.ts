@@ -134,6 +134,10 @@ async function fromAudit(e: AlertEvent, c: RuleCtx): Promise<Draft[]> {
     }
     case 'mandate.revoked': return [{ kind: 'agent.mandate_revoked', params: { agent: await agentName(c.q, d.agent) }, subject: { type: 'agent', id: str(d.agent, 40) } }];
     case 'agent.order_refused': return [refusedDigest(e.ts, str(d.reason))];
+    // >>> v7 research runtime: a job handed in a strategy (the server report is attached) / a job stopped without one
+    case 'research.submitted': return [{ kind: 'agent.research_submitted', params: { name: (await agentName(c.q, d.agent)) || str(d.name, 40), count: Number(d.trials ?? 0) }, subject: d.agent ? { type: 'agent', id: str(d.agent, 40) } : { type: 'none' }, dedupe: `research:${str(d.job, 40)}` }];
+    case 'research.failed': return [{ kind: 'agent.research_failed', params: { name: (await agentName(c.q, d.agent)) || str(d.name, 40), state: `@${str(d.state, 20)}`, reason: str(d.reason, 200) }, subject: d.agent ? { type: 'agent', id: str(d.agent, 40) } : { type: 'none' }, dedupe: `research:${str(d.job, 40)}` }];
+    // <<< v7 research runtime
     case 'deriv.paper.fill': {
       const id = str(d.account, 40), acct = await derivAccount(c.q, id), subject: AlertSubject = { type: 'account', id };
       const [f] = await c.q<{ closed_pnl: string | null; ts: Date }[]>`select closed_pnl::text as closed_pnl, ts from deriv_fills where account_id = ${id} and fill_id = ${str(d.fill, 80)}`;
