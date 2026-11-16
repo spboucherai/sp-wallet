@@ -33,7 +33,19 @@ export const requestHash = (req: FastifyRequest): string => sha256Hex(`${req.met
 
 /** Run `fn` at most once per (principal, Idempotency-Key). `fn` returns the JSON body of a 200, or throws a UserError. */
 export async function withIdempotency<T>(req: FastifyRequest, reply: FastifyReply, fn: () => Promise<T>): Promise<T | unknown> {
-  const { key } = replayHeaders(req), who = principalId(requirePrincipal(req)), hash = requestHash(req);
+  const { key } = replayHeaders(req);
+  return storedAnswer(principalId(requirePrincipal(req)), key, requestHash(req), reply, fn);
+}
+/**
+ * The same protection under a key the BODY carries: an order's `clientOrderId`. Needed where the handler derives part of the
+ * order from the market before the order service sees it (a `notional` becomes a size at the price read now): without it, the
+ * same order sent again under another Idempotency-Key header would be sized at another price and look like a different order.
+ * Same clientOrderId + same body → the first answer; another body → 409 `idempotency_conflict`.
+ */
+export function withOrderKey<T>(req: FastifyRequest, reply: FastifyReply, clientOrderId: string, fn: () => Promise<T>): Promise<T | unknown> {
+  return storedAnswer(principalId(requirePrincipal(req)), `order:${clientOrderId}`, requestHash(req), reply, fn);
+}
+async function storedAnswer<T>(who: string, key: string, hash: string, reply: FastifyReply, fn: () => Promise<T>): Promise<T | unknown> {
   const [mine] = await sql`insert into api_idempotency (principal, key, request_hash) values (${who}, ${key}, ${hash}) on conflict (principal, key) do nothing returning key`;
   if (!mine) {
     const [seen] = await sql<{ request_hash: string; state: string; status: number | null; response: unknown }[]>`select request_hash, state, status, response from api_idempotency where principal = ${who} and key = ${key}`;

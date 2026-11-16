@@ -88,6 +88,17 @@ class Harness:
         out = getattr(self.client, name)(*args, **kwargs)
         return asyncio.run(_await(out)) if self.kind == "async" else out
 
+    def collect(self, name: str, /, *args: Any, **kwargs: Any) -> list[Any]:
+        """Every item of a paginating iterator (`iter_orders`, `iter_activity`), for either client."""
+        it = getattr(self.client, name)(*args, **kwargs)
+        if self.kind == "sync":
+            return list(it)
+
+        async def drain() -> list[Any]:
+            return [x async for x in it]
+
+        return asyncio.run(drain())
+
     def error(self, name: str, /, *args: Any, **kwargs: Any) -> Any:
         try:
             self.call(name, *args, **kwargs)

@@ -59,7 +59,7 @@ export async function tradingApi(app: FastifyInstance, o: TradingApiDeps): Promi
   const reads = createReads({
     derivatives: d, live: () => o.live ?? live(),
     gmx: () => o.gmx ?? { status: async (locale) => (await import('../derivatives/gmx-live.ts')).gmx().status(locale) },
-    prices: o.prices, ...(o.library ? { library: o.library } : {}),
+    orders: () => o.execution.orders, prices: o.prices, ...(o.library ? { library: o.library } : {}),
   });
   tradingRoutes(app, reads, o.execution);
   developerRoutes(app, { derivatives: d });

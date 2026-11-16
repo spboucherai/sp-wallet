@@ -9,6 +9,10 @@ Retries (docs/sdk/python.md):
                  serialized ONCE: every retry sends the same key and the same bytes, so the server runs the operation at
                  most once. They are retried for that reason only. When no trustworthy answer was obtained the call
                  raises OutcomeUnknown (with the key): it is not a failure.
+  preview_order, engage_kill_switch
+                 are POSTs the contract declares WITHOUT an Idempotency-Key: a preview creates nothing, and engaging a
+                 switch that is on changes nothing. They are safe to repeat, so they are retried like a GET and fail
+                 with the ordinary typed errors (never OutcomeUnknown).
 """
 
 from __future__ import annotations
@@ -29,7 +33,7 @@ import httpx
 import pydantic
 
 from ._models_base import ApiModel, RateLimit, ResponseMeta
-from ._util import IDEMPOTENCY_KEY_RE, canonical_json, decimal_str, new_idempotency_key, size_from_notional
+from ._util import IDEMPOTENCY_KEY_RE, canonical_json, decimal_str, new_idempotency_key
 from ._version import USER_AGENT
 from .errors import (
     ConfigurationError,
@@ -83,10 +87,13 @@ class Call:
     max_retries: int
     #: a mutating attempt ended without a definite answer: from then on only an answer computed under the key is trusted
     ambiguous: bool = field(default=False)
+    #: `read`: a GET. `safe`: a POST the contract declares without an Idempotency-Key (repeating it changes nothing): retried
+    #: and reported like a read. `write`: one Idempotency-Key per logical call.
+    kind: str = field(default="read")
 
     @property
     def mutating(self) -> bool:
-        return self.method != "GET"
+        return self.kind == "write"
 
 
 @dataclass(frozen=True)
@@ -183,11 +190,15 @@ class BaseClient:
         return c
 
     # ------------------------------------------------------------------------------------------------------- preparation
-    def _prepare(self, method: str, path: str, query: Mapping[str, Any] | None, body: Any, idempotency_key: str | None) -> Call:
+    def _prepare(self, method: str, path: str, query: Mapping[str, Any] | None, body: Any, idempotency_key: str | None, kind: str | None = None) -> Call:
+        kind = kind if kind is not None else ("read" if method == "GET" else "write")
+        if kind not in ("read", "safe", "write") or (kind == "read") != (method == "GET"):
+            raise ConfigurationError("a read is a GET; a write or a safe call is POST or DELETE")
         key: str | None = None
-        if method != "GET":
-            key = idempotency_key if idempotency_key is not None else new_idempotency_key()
-            if not isinstance(key, str) or not IDEMPOTENCY_KEY_RE.match(key):
+        if kind != "read":
+            # a safe call carries a key only when the caller gives one (a preview then shows the order that key would place)
+            key = idempotency_key if idempotency_key is not None else (new_idempotency_key() if kind == "write" else None)
+            if key is not None and (not isinstance(key, str) or not IDEMPOTENCY_KEY_RE.match(key)):
                 raise ConfigurationError("idempotency_key must be 8 to 100 characters: letters, digits, . _ : -")
         params: list[tuple[str, str]] = []
         for k, v in (query or {}).items():
@@ -196,7 +207,7 @@ class BaseClient:
             params.append((k, ("true" if v else "false") if isinstance(v, bool) else str(v)))
         content = None if body is None else canonical_json(body).encode("utf-8")  # serialized once: the same bytes on every attempt
         full = PREFIX + path
-        return Call(method, full, self.base_url + full, params, content, key, self.timeout, self.max_retries)
+        return Call(method, full, self.base_url + full, params, content, key, self.timeout, self.max_retries, kind=kind)
 
     def _headers(self, call: Call) -> dict[str, str]:
         h = {"authorization": f"Bearer {self._key.reveal()}", "accept": "application/json", "user-agent": self.user_agent}
@@ -204,7 +215,7 @@ class BaseClient:
             h["content-type"] = "application/json"
         if call.idempotency_key is not None:
             h["idempotency-key"] = call.idempotency_key
-            if self._send_timestamp:
+            if self._send_timestamp and call.mutating:
                 h["x-spw-timestamp"] = str(int(time.time()))
         return h
 
@@ -286,14 +297,17 @@ class BaseClient:
             raise self._unknown(call, reason, status, request_id) from err
         raise err
 
-    def _parse(self, model: type[M], data: Any, meta: ResponseMeta, call: Call) -> M:
+    def _parse(self, model: Any, data: Any, meta: ResponseMeta, call: Call) -> Any:
         try:
-            out = model.model_validate(data)
+            # a model class, or a union of model classes (an answer with several shapes: the literal members pick the alternative)
+            out = model.model_validate(data) if isinstance(model, type) else pydantic.TypeAdapter(model).validate_python(data)
         except pydantic.ValidationError as e:
             problems = "; ".join(f"{'.'.join(str(x) for x in err['loc'])}: {err['msg']}" for err in e.errors(include_input=False)[:5])
+            # a write that was answered 2xx RAN: say so, and give the key the object can be found (or the call re-sent) with
+            ran = f" — the server answered HTTP {meta.status}: the operation ran; read the object, or re-send with the same key" if call.mutating else ""
             raise ServerError(
-                f"{call.method} {call.path}: the answer does not match the contract ({problems})",
-                code="invalid_response", status=meta.status, request_id=meta.request_id,
+                f"{call.method} {call.path}: the answer does not match the contract ({problems}){ran}",
+                code="invalid_response", status=meta.status, request_id=meta.request_id, idempotency_key=call.idempotency_key,
             ) from None  # fmt: skip
         out._meta = meta
         return out
@@ -301,34 +315,26 @@ class BaseClient:
     # ------------------------------------------------------------------------------------------------------- order bodies
     @staticmethod
     def _order_fields(
-        *, instrument: str | None, exchange: str | None, symbol: str | None, size: Any, notional_usdc: Any, price: Any, trigger_price: Any
+        *, instrument: str | None, exchange: str | None, symbol: str | None, size: Any, notional: Any, notional_usdc: Any, price: Any, trigger_price: Any
     ) -> tuple[str, str | None, str | None, str | None, str | None]:
-        """→ (instrument, size, notional, price, trigger_price), all validated; exactly one of size / notional is set."""
+        """→ (instrument, size, notional, price, trigger_price), all validated; exactly one of size / notional is set.
+        `notional_usdc` is the same field as `notional` under the name of the quick-start examples: it is SENT, and the
+        server computes the size — nothing is computed here."""
         if instrument is not None and (exchange is not None or symbol is not None):
             raise ConfigurationError("give `instrument` or `exchange` + `symbol`, not both")
         inst = instrument or (f"{exchange}:{symbol}" if exchange and symbol else symbol)
         if not inst:
             raise ConfigurationError('an order needs `instrument` ("venue:symbol") or `exchange` + `symbol`')
-        if (size is None) == (notional_usdc is None):
-            raise ConfigurationError("an order needs exactly one of `size` (base units) and `notional_usdc`")
+        if sum(x is not None for x in (size, notional, notional_usdc)) != 1:
+            raise ConfigurationError("an order needs exactly one of `size` (base units) and `notional` (quote currency; `notional_usdc` is the same field)")
+        quote_value = notional if notional is not None else notional_usdc
         return (
             inst,
             None if size is None else decimal_str(size, "size"),
-            None if notional_usdc is None else decimal_str(notional_usdc, "notional_usdc"),
+            None if quote_value is None else decimal_str(quote_value, "notional"),
             None if price is None else decimal_str(price, "price"),
             None if trigger_price is None else decimal_str(trigger_price, "trigger_price"),
         )
-
-    @staticmethod
-    def _size_from_market(instrument: str, notional: str, price: str | None, market: Any) -> str:
-        m = market.market
-        lot = (market.instrument or {}).get("lotSize") if isinstance(market.instrument, dict) else None
-        if m.stale or not m.mark:
-            raise ConfigurationError(f"cannot size {instrument} from a notional: the market has no fresh mark price (stale: {m.stale}); pass `size`")
-        size = size_from_notional(notional, price or m.mark, lot if isinstance(lot, str) and lot else "0.000001")
-        if not any(c in "123456789" for c in size):
-            raise ConfigurationError(f"a notional of {notional} is below one lot of {instrument}")
-        return size
 
     @staticmethod
     def _body(model: type[pydantic.BaseModel], **fields: Any) -> dict[str, Any]:

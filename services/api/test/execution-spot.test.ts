@@ -195,6 +195,17 @@ describe('the owner: a spot order is a swap proposal of the existing flow', () =
     expect(s.json.order).toMatchObject({ status: 'AWAITING_APPROVAL', side: 'sell', size: '0.25' });
     await setProposal((await proposalOf(s.json.order.id)).id, { state: 'expired', error_code: 'approval_expired' });
     expect(await orderRow(s.json.order.id)).toMatchObject({ state: 'CANCELLED', reason: 'APPROVAL_EXPIRED' });
+    // the same BUY through POST /orders: `notional` is the amount of the quote asset to spend (a swap is exact-input). The trading
+    // API resolves it the way the grammar resolves BUY <base> <amount> <quote> and answers in the shapes of the order operations.
+    const body = { mode: 'live', instrument: 'spot:ETH-USDC', side: 'buy', type: 'market', notional: '40' };
+    const rp = await call('POST', `${T}/orders/preview`, { body });
+    expect(rp.status, JSON.stringify(rp.json)).toBe(200);
+    expect(rp.json).toMatchObject({ order: { marketKind: 'spot', side: 'buy', notional: '40', size: null }, approval: { required: true, by: 'owner_passkey' }, engine: { name: 'spot' } });
+    const ro = await call('POST', `${T}/orders`, { headers: idem(), body });
+    expect(ro.status, JSON.stringify(ro.json)).toBe(200);
+    expect(ro.json.order).toMatchObject({ status: 'AWAITING_APPROVAL', venue: 'spot', side: 'buy', instrument: 'spot:ETH-USDC', size: null, notionalUsd: '40' });
+    expect(ro.json.approval).toMatchObject({ by: 'owner_passkey' }); expect(ro.json.idempotent).toBe(false);
+    expect((await call('DELETE', `${T}/orders/${ro.json.order.id}`, { headers: idem() })).json.order.status).toBe('CANCELLED');
   });
 
   it('the kill switch refuses a BUY (new risk) before any proposal exists and lets a sale into the cash leg through; read-only mode refuses both', async () => {

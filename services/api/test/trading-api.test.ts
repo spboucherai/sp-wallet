@@ -87,7 +87,8 @@ function allRoutes(): { method: string; path: string }[] {
     const depth = m[1]!.length / 4;
     stack.length = depth;
     stack[depth] = m[2]!;
-    if (m[3]) for (const method of m[3].split(', ')) if (method !== 'HEAD') out.push({ method, path: stack.join('') });
+    // the only wildcard of the server is the trading API's catch-all (routes.ts), which the tree prints as a bare `*`
+    if (m[3]) for (const method of m[3].split(', ')) if (method !== 'HEAD') out.push({ method, path: m[2] === '*' ? `${T}/*` : stack.join('') });
   }
   return out;
 }
@@ -190,10 +191,11 @@ describe('API keys', () => {
     const mixed = await call('GET', `${T}/markets`, { key: k.secret, cookie });
     expect(mixed.status).toBe(403);
     expect(mixed.json.error).toBe('mixed_credentials');
-    // a POST with the key needs neither Origin nor the CSRF header (it reaches the handler: the wallet has no paper account yet)
+    // a POST with the key needs neither Origin nor the CSRF header: it reaches the handler, which answers that this key has no mandate
+    // (a key previews the order it could place)
     const kw = await newKey({ scopes: ['orders:prepare'] });
     const post = await call('POST', `${T}/orders/preview`, { key: kw.secret, headers: idem(), body: { mode: 'paper', instrument: BTC, side: 'buy', type: 'market', size: '0.01' } });
-    expect([post.status, post.json.error]).toEqual([422, 'no_account']);
+    expect([post.status, post.json.error]).toEqual([403, 'mandate_required']);
     principal.authFailures.reset();
   });
 
@@ -290,9 +292,9 @@ describe('default deny', () => {
     for (const p of ['/api/v1/trading', '/api/v1/tradingx/markets', '/api/v1/trading/../security/overview', '/api/v1//trading/markets']) expect([403, 404], p).toContain((await call('GET', p, { key: k.secret })).status);
     expect((await call('GET', '/api/v1/trading/../security/overview', { key: k.secret })).status).not.toBe(200);
     expect((await call('GET', `${T}/nope`, { key: k.secret })).status).toBe(404);
-    // the routes a key can reach are exactly the declared operations, and each one declares its scope
+    // the routes a key can reach are exactly the declared operations — each one declares its scope — and the catch-all that answers 404 `not_found`
     const inside = routes.filter((r) => r.path.startsWith(`${T}/`)).map((r) => `${r.method} ${r.path.slice(T.length)}`).sort();
-    expect(inside).toEqual(spec.OPERATIONS.map((o) => `${o.method} ${o.path}`).sort());
+    expect(inside).toEqual([...spec.OPERATIONS.map((o) => `${o.method} ${o.path}`), ...['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => `${m} /*`)].sort());
   });
 
   it('a route without a declared scope is closed, to a key and to the owner', async () => {

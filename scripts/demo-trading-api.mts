@@ -1,6 +1,6 @@
 // Drives a LOCAL dev stack (scripts/dev-stack.sh, fresh: the owner is not set up yet) with real `curl` commands and prints
 // the transcript: owner setup with a software passkey, an API key created through the routes (prepare → passkey assertion →
-// create), read calls with the key, a call refused outside /api/v1/trading/, a refused scope, a 501 write, a revoked key.
+// create), read calls with the key, a call refused outside /api/v1/trading/, a refused scope, a preview refused for lack of a mandate, a path that is not an operation, a revoked key.
 // Secrets are redacted in what is printed. Nothing here can sign a transaction or place an order.
 //   SPW_DEV_PORT=8760 SPW_DEV_DB=spw_dev_v11api SPW_DEV_DIR=/tmp/spw-dev-v11api scripts/dev-stack.sh
 //   SPW_DEV_PORT=8760 SPW_DEV_DIR=/tmp/spw-dev-v11api node_modules/.bin/tsx scripts/demo-trading-api.mts
@@ -61,9 +61,9 @@ curl('8. REFUSED outside the prefix: key management itself', 'GET', '/api/v1/dev
 curl('9. REFUSED outside the prefix: the emergency halt', 'POST', '/api/v1/security/emergency-halt', { key: true, body: {} });
 curl('10. REFUSED scope: the key has no wallet:read', 'GET', '/api/v1/trading/portfolio', { key: true });
 curl('11. REFUSED: key and session cookie together', 'GET', '/api/v1/trading/agents', { key: true, headers: [`Cookie: ${cookie}`] });
-curl('12. a write operation: scope held (orders:prepare), validated, replay-checked, then 501 — not a success', 'POST', '/api/v1/trading/orders/preview', { key: true, headers: ['Idempotency-Key: demo-0001-preview'],
+curl('12. an order preview: scope held (orders:prepare), but no trading mandate is bound to this key — 403 mandate_required (a key previews the order it could place)', 'POST', '/api/v1/trading/orders/preview', { key: true,
   body: { mode: 'paper', instrument: 'hyperliquid:BTC', side: 'buy', type: 'market', size: '0.01' } });
-curl('13. the same without an Idempotency-Key', 'POST', '/api/v1/trading/orders/preview', { key: true, body: { mode: 'paper', instrument: 'hyperliquid:BTC', side: 'buy', type: 'market', size: '0.01' } });
+curl('13. a path that is not an operation: 404 not_found, in the API\'s own error model', 'GET', '/api/v1/trading/nope', { key: true });
 curl('14. no key at all', 'GET', '/api/v1/trading/agents');
 
 // ---- revoke, then the key is dead
