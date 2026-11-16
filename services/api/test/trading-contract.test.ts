@@ -70,7 +70,7 @@ async function tradingKey(keyBody: Record<string, unknown> = {}) {
 const ORDER: Record<string, unknown> = { mode: 'paper', instrument: BTC, side: 'buy', type: 'market', size: '0.01' };
 /** the suite shares one paper account: each scenario starts without a BTC position (the owner closes it; paper executes at once) */
 async function flatten(): Promise<void> {
-  clock.advance(1_000);
+  clock.advance(120_000); setMarket(v, 50_000);          // also out of the paper account's orders-per-minute window
   const r = await call('POST', `${T}/positions/${encodeURIComponent(`paper:hyperliquid:${acct}:${BTC}`)}/close`, { body: {}, headers: idem() });
   expect([200, 422], JSON.stringify(r.json)).toContain(r.status);
 }
@@ -630,8 +630,16 @@ describe('8 — a key is bound only to a mandate approved for it', () => {
     expect(r.status, JSON.stringify(r.json)).toBe(200);
     expect(r.json.key).toMatchObject({ mandateId: null, rotatedFrom: k.id }); expect(r.json.key.inertScopes).toContain('orders:execute');
     expect(r.json.mandate).toMatchObject({ carried: false, mandateId: k.mandateId, code: 'mandate_principal_mismatch' });
+    expect(r.json.mandate.rebind).toHaveLength(4); expect(r.json.mandate.rebind.join(' ')).toContain(r.json.key.id); expect(typeof r.json.mandate.note).toBe('string');
     const after = await post('placeOrder', '/orders', r.json.secret, ORDER);
     expect([after.status, after.json.error]).toEqual([403, 'mandate_required']);
+    // the way back, exactly as the answer says it: a mandate approved for the NEW key id, bound with the passkey — and the key trades again
+    const again = await mandateFor(r.json.key.id);
+    const bp = await call('POST', `${DEV}/keys/${r.json.key.id}/update/prepare`, { body: { changes: { mandateId: again } } });
+    expect((await call('POST', `${DEV}/keys/${r.json.key.id}/update`, { body: { intentId: bp.json.intentId, assertion: assertion(bp.json.options) } })).status).toBe(200);
+    clock.advance(120_000); setMarket(v, 50_000);
+    const back = await post('placeOrder', '/orders', r.json.secret, ORDER);
+    expect(back.status, JSON.stringify(back.json).slice(0, 300)).toBe(200);
     expect((await call('GET', `${T}/agents`, { key: k.secret })).status).toBe(401);                                    // the old key is dead
     const plain = await newKey({ scopes: ['markets:read'] });
     const rp2 = await call('POST', `${DEV}/keys/${plain.id}/rotate/prepare`, { body: {} });

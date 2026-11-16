@@ -207,10 +207,9 @@ describe('GMX through the trading API: the owner', () => {
       const pos = (await call('GET', `${T}/positions?mode=live`)).json.positions.find((p: any) => p.venue === 'gmx');
       expect(pos, 'the GMX position').toBeTruthy();
       expect(pos.id.startsWith(`live:gmx:${gw.ME}:`)).toBe(true);
-      // KNOWN LIMIT (not of this change): that id — wallet address + 32-byte position key — is 118 characters, above the HTTP
-      // server's 100-character limit for a path parameter, so it cannot be used in the path as listed (414). The position is
-      // named here by its instrument id, which the order service accepts when the wallet holds one position on the market.
-      expect((await call('POST', `${T}/positions/${encodeURIComponent(pos.id)}/close`, { headers: idem(), body: {} })).status).toBe(414);
+      // GET /positions names a GMX position by its instrument id when the wallet holds one position on that market (read.ts): with the
+      // 32-byte position key the id would be 118 characters, above the HTTP server's 100-character limit for a path parameter.
+      expect(pos.id).toBe(`live:gmx:${gw.ME}:${INST}`); expect(pos.id.length).toBeLessThanOrEqual(100);
       pos.id = `live:gmx:${gw.ME}:${INST}`;
       const c = await call('POST', `${T}/positions/${encodeURIComponent(pos.id)}/close`, { headers: idem(), body: {} });
       expect(c.status, JSON.stringify(c.json)).toBe(200);

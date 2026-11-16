@@ -94,7 +94,8 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution)
     previewOrder: async (p, i, req) => {
       // A key previews the order it could PLACE, and that order names the mandate it would be checked against: without one there is
       // no such order (the order service would answer 400 `invalid_order` about a `mandateId` the caller never sent). Say what is missing.
-      if (p.kind === 'api_key' && !p.mandateId) throw new UserError('mandate_required', 'no trading mandate is bound to this key: there is no order it could place, so nothing to preview', 403);
+      // (a spot order is refused to every key by the order service, with its own precise code: that answer is left to it)
+      if (p.kind === 'api_key' && !p.mandateId && !SPOT_INSTRUMENT.test(String(i.body.instrument))) throw new UserError('mandate_required', 'no trading mandate is bound to this key: there is no order it could place, so nothing to preview', 403);
       if (spotBuy(i.body)) return shapePreview(p, (await runCommand(ex, reads, p, callerOf(p, req), { text: spotBuyText(i.body), mode: i.body.mode, dryRun: true }, previewKey(req, i.body))).preview as never);
       return shapePreview(p, await ex.orders.preview(callerOf(p, req), await orderInput(p, i.body), previewKey(req, i.body)));
     },

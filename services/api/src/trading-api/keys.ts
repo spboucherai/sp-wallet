@@ -174,7 +174,10 @@ export async function rotateKey(id: string, intentId: string, assertion: unknown
   await audit('apikey.rotated', 'owner', { from: old.id, to: row.id, name: old.name, mandateNotCarried: notCarried, ip });
   return { key: keyView(row), secret: token, revoked: old.id,
     /** null: the old key had no mandate. `carried: false`: the mandate named the old key; the new key is unbound */
-    mandate: old.mandate_id === null ? null : notCarried ? { carried: false, mandateId: notCarried.mandateId, code: notCarried.code, note: 'the mandate was approved for the rotated key id: approve a mandate for the new key and bind it; until then its execution scopes are inert' } : { carried: true, mandateId } };
+    mandate: old.mandate_id === null ? null : notCarried ? { carried: false, mandateId: notCarried.mandateId, code: notCarried.code, note: 'the mandate was approved for the rotated key id: approve a mandate for the new key and bind it; until then its execution scopes are inert',
+      /** what the owner does to give the new key a mandate (owner session; the approval of a live mandate and the binding need the passkey) */
+      rebind: [`POST /api/v1/mandates { principal: { kind: "api_key", id: "${row.id}" }, … }`, 'POST /api/v1/mandates/{mandateId}/approve', `POST /api/v1/developer/keys/${row.id}/update/prepare { changes: { mandateId } }`,
+        `POST /api/v1/developer/keys/${row.id}/update { intentId, assertion }`] } : { carried: true, mandateId } };
 }
 async function saveFacts(id: string, f: KeyFacts): Promise<KeyRow> {
   const [row] = await sql<KeyRow[]>`update api_keys set name = ${f.name}, scopes = ${f.scopes}, limits = ${sql.json(f.limits as never)}, restrictions = ${sql.json(f.restrictions as never)},
