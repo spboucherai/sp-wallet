@@ -19,11 +19,14 @@ import { RiskService, type BookKey } from '../risk/service.ts';
 import { signerGuards } from '../signer-client.ts';
 import { emitWebhook } from '../trading-api/webhooks.ts';
 import { loop } from '../worker.ts';
+import { getSetting } from '../db.ts';
+import { agentControl, type AgentControlPort } from './agent-control.ts';
 import { OrderService } from './service.ts';
+import { injectSpotPort, type SpotPort } from './spot.ts';
 import { onTransition } from './store.ts';
 
 export { OrderService, OWNER_CALLER, type Caller, type OrderInput } from './service.ts';
-export interface Execution { risk: RiskService; mandates: MandateService; orders: OrderService }
+export interface Execution { risk: RiskService; mandates: MandateService; orders: OrderService; /** STOP ALL AGENTS (orders/agent-control.ts) */ agents: AgentControlPort }
 declare module 'fastify' { interface FastifyInstance { execution: Execution } }
 export interface ExecutionOpts {
   derivatives?: Derivatives | undefined; live?: LiveService | undefined; gmx?: GmxService | undefined;
@@ -33,6 +36,10 @@ export interface ExecutionOpts {
   /** tests: the re-verification of an approval stored with a live mandate; default: risk/passkey.ts against the credentials table */
   reverifyOwner?: (assertion: unknown, challenge: Uint8Array) => Promise<void>;
   signerStatus?: () => Promise<{ halted: boolean }>;
+  /** tests: the swap proposal flow behind an owner's spot order; default: the routes of this server, called in process (orders/spot.ts) */
+  spot?: SpotPort | undefined;
+  /** tests: the agents runtime behind STOP ALL AGENTS; default: the functions agents/ exports (orders/agent-control.ts) */
+  agents?: AgentControlPort | undefined;
 }
 /** server setting, read at every use: anything but the exact value `on` keeps live execution through the trading API closed */
 export const tradingApiExecutionEnabled = (): boolean => process.env.SPW_TRADING_API_EXECUTION === 'on';
@@ -52,9 +59,13 @@ export function createExecution(o: ExecutionOpts = {}): Execution {
     passkey: { now, rpId: config.rpId, credentials: async () => (await listCreds()).map((c) => ({ id: c.id, transports: c.transports })), verifyOwner },
     reverify: o.reverifyOwner ?? ((assertion, challenge) => verifyStoredAssertion(assertion, challenge, { rpId: config.rpId, origin: config.origin })) };
   const mandates = new MandateService(mdeps);
-  const orders = new OrderService({ now, derivatives: d, live: l, risk, mandates, executionEnabled: tradingApiExecutionEnabled });
+  const orders = new OrderService({ now, derivatives: d, live: l, risk, mandates, executionEnabled: tradingApiExecutionEnabled,
+    gmx: async () => o.gmx ?? (await import('../derivatives/gmx-live.ts')).gmx() });
   mdeps.cancelResting = (id) => orders.cancelResting(id);
-  return { risk, mandates, orders };
+  // spot: the owner's command defaults settle the network and the quote asset of a spot order (the same record as trading-api/commands.ts)
+  orders.deps.spot = o.spot ?? null;
+  orders.deps.spotDefaults = async () => { const v = await getSetting<{ spotNetwork?: string; spotQuote?: string; maxSlippageBps?: number }>('trading.command_defaults', {}); return { spotNetwork: v.spotNetwork, spotQuote: v.spotQuote, maxSlippageBps: v.maxSlippageBps }; };
+  return { risk, mandates, orders, agents: o.agents ?? agentControl() };
 }
 
 /** puts the unified risk engine and the kill switch in front of every engine path, for the instances this server uses */
@@ -123,6 +134,8 @@ export function executionRoutes(app: FastifyInstance, ex: Execution): void {
 /** one call from server.ts: services, gates, webhooks, routes and (with workers on) the supervisor loop */
 export function registerExecution(app: FastifyInstance, o: ExecutionOpts = {}): Execution {
   const ex = createExecution(o);
+  // an owner's spot order is a swap proposal of this server's own swap flow, called in process with the owner's session
+  if (!o.spot) ex.orders.deps.spot = injectSpotPort(app);
   installGates(ex, o);
   // the other workstreams (the agents runtime) and the tests reach the services of THIS server instance through the app
   app.decorate('execution', ex);

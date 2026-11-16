@@ -636,7 +636,7 @@ describe('trading mandates', () => {
     const own = await call('POST', `${T}/orders`, { headers: idem(), body: { ...ORDER, instrument: 'dydx:BTC-USD' } });
     expect([own.status, own.json.error]).toEqual([403, 'venue_restricted']);
     expect((await app.execution.orders.submit({ principal: { kind: 'api_key', id: t.id }, mandateId: t.mandateId }, { ...ORDER, instrument: 'spot:ETH', reduceOnly: false, tif: 'gtc' }, `spot-${randomUUID()}`).catch((e: any) => e.code))).toBe('spot_execution_requires_agent_vault');
-    expect((await app.execution.orders.submit({ principal: { kind: 'owner', id: 'owner' }, mandateId: null }, { ...ORDER, instrument: 'spot:ETH', reduceOnly: false, tif: 'gtc' }, `spot-${randomUUID()}`).catch((e: any) => e.code))).toBe('spot_via_swap_screen');
+    expect((await app.execution.orders.submit({ principal: { kind: 'owner', id: 'owner' }, mandateId: null }, { ...ORDER, instrument: 'spot:ETH', reduceOnly: false, tif: 'gtc' }, `spot-${randomUUID()}`).catch((e: any) => e.code))).toBe('spot_paper_not_available');   // the owner's spot order is a real swap proposal: there is no paper spot engine for him (execution-spot.test.ts)
     // live without a venue account, and the server switch (default off) are told apart
     expect((await place(t.secret, { mode: 'live', accountId: undefined })).json.error).toBe('no_account');
   });
@@ -667,7 +667,7 @@ describe('trading mandates', () => {
     const sl = await cmd(k.secret, 'LONG BTC-PERP 100 SL 45000 TP 60000', { dryRun: true });
     expect(sl.json.attached.map((a: any) => [a.role, a.placed, a.order.reduceOnly])).toEqual([['stop_loss', false, true], ['take_profit', false, true]]);
     expect((await cmd(k.secret, 'BUY ETH 100 USDC')).json.error).toBe('spot_execution_requires_agent_vault');
-    expect((await cmd(null, 'BUY ETH 100 USDC')).json.error).toBe('spot_via_swap_screen');
+    expect((await cmd(null, 'BUY ETH 100 USDC')).json.error).toBe('spot_paper_not_available');   // this suite's commands run in paper mode; the live path is in execution-spot.test.ts
     // scopes: a key that may only prepare cannot execute a command; a reader cannot cancel
     const prep = await newKey({ scopes: ['orders:prepare', 'positions:read'] });
     expect((await cmd(prep.secret, 'LONG BTC-PERP 500')).json.error).toBe('insufficient_scope');

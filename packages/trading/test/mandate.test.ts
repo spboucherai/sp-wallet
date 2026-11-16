@@ -240,7 +240,7 @@ describe('trading mandate — compilation to the derivative mandate', () => {
     const by = Object.fromEntries(c.enforcement.map((e) => [e.field, e.enforcedBy]));
     expect(by).toMatchObject({ instruments: 'signer', maxOrderNotionalUsd: 'signer', maxPositionNotionalUsd: 'signer', maxLeverage: 'signer', floorEquityUsd: 'signer', notAfter: 'signer', accounts: 'signer',
       maxCapitalUsd: 'signer_partial', frequency: 'signer_partial', maxSlippageBps: 'signer_partial', principal: 'signer_partial', strategySha256: 'signer_partial',
-      maxDailyLossUsd: 'api_only', orderTypes: 'api_only', maxFeeUsd: 'api_only', stopConditions: 'api_only', label: 'api_only', notBefore: 'signer' });
+      maxDailyLossUsd: 'api_only', orderTypes: 'api_only', maxFeeUsd: 'api_only', stopConditions: 'api_only', label: 'api_only', notBefore: 'signer_partial', mode: 'not_applicable' });
     expect(c.enforcement.every((e) => e.note.length > 10 && (e.enforcedBy !== 'signer_partial' || e.note.length > 30))).toBe(true);
     // a later start is enforced by the API only, and the report says so
     expect(compileToVenueMandate(mandate({ notBefore: T + 3600 }), binding).enforcement.find((e) => e.field === 'notBefore')).toMatchObject({ enforcedBy: 'api_only', signerField: null });
@@ -300,7 +300,7 @@ describe('trading mandate — compilation to the spot mandate', () => {
   it('reports the enforcement of EVERY field', () => {
     expect(c.enforcement.map((e) => e.field)).toEqual(TRADING_MANDATE_FIELDS);
     const by = Object.fromEntries(c.enforcement.map((e) => [e.field, e.enforcedBy]));
-    expect(by).toMatchObject({ accounts: 'signer', venues: 'signer', notAfter: 'signer', maxSlippageBps: 'signer', label: 'signer', instruments: 'signer_partial', maxOrderNotionalUsd: 'signer_partial', frequency: 'signer_partial',
+    expect(by).toMatchObject({ accounts: 'signer', venues: 'signer', notAfter: 'signer', maxSlippageBps: 'signer', label: 'signer_partial', notBefore: 'signer_partial', mode: 'not_applicable', instruments: 'signer_partial', maxOrderNotionalUsd: 'signer_partial', frequency: 'signer_partial',
       maxCapitalUsd: 'api_only', maxPositionNotionalUsd: 'api_only', maxDailyLossUsd: 'api_only', floorEquityUsd: 'api_only', stopConditions: 'api_only', principal: 'api_only', maxFeeUsd: 'api_only', maxLeverage: 'not_applicable' });
   });
   it('the trading mandate is inside the mandate it compiles to', () => {

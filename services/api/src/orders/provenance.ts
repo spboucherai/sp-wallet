@@ -83,16 +83,22 @@ export async function lotsOf(accountId: string, instrument: string): Promise<Map
 }
 
 /** what `who` has already asked to reduce and that may still execute: the open reduce-only orders of that principal there */
-export async function pendingReduce(who: { kind: string; id: string }, accountId: string, instrument: string, exceptOrderId: string | null): Promise<DecStr> {
+/**
+ * `ocoExcept`: the one-cancels-the-other group of the sibling orders of the order being judged (orders/attached.ts — a stop-loss
+ * and a take-profit protect the SAME quantity, and only one of them can ever execute: the supervisor cancels the other). Orders
+ * of that group are not added to what is already asked.
+ */
+export async function pendingReduce(who: { kind: string; id: string }, accountId: string, instrument: string, exceptOrderId: string | null, ocoExcept: string | null = null): Promise<DecStr> {
   const [r] = await sql<{ n: string }[]>`select coalesce(sum(greatest((record->>'size')::numeric - (record->>'filledSize')::numeric, 0)), 0)::text as n from orders
     where principal_kind = ${who.kind} and principal_id = ${who.id} and account_id = ${accountId} and instrument = ${instrument} and reduce_only
-      and state not in ('FILLED', 'CANCELLED', 'REJECTED', 'FAILED') and record->>'size' is not null and id <> ${exceptOrderId ?? ''}`;
+      and state not in ('FILLED', 'CANCELLED', 'REJECTED', 'FAILED') and record->>'size' is not null and id <> ${exceptOrderId ?? ''}
+      and coalesce(detail->>'ocoGroup', '') <> ${ocoExcept ?? '-'} and (${ocoExcept === '*'} = false or detail->>'ocoGroup' is null)`;
   return D.str(D.from(r!.n));
 }
 
 export interface Provenance { /** signed position the venue reports */ position: DecStr; /** `who`'s part of it, unsigned */ own: DecStr; /** the part that is somebody else's (the owner's, another principal's), unsigned */ foreign: DecStr; /** `who`'s open reduce-only orders */ pending: DecStr; /** own − pending, never negative: what `who` may still ask to reduce */ reducible: DecStr }
-export async function provenance(who: { kind: string; id: string }, accountId: string, instrument: string, position: DecStr, exceptOrderId: string | null = null): Promise<Provenance> {
-  const lots = await lotsOf(accountId, instrument), own = attributable(lots, principalKey(who), position), pending = await pendingReduce(who, accountId, instrument, exceptOrderId);
+export async function provenance(who: { kind: string; id: string }, accountId: string, instrument: string, position: DecStr, exceptOrderId: string | null = null, ocoExcept: string | null = null): Promise<Provenance> {
+  const lots = await lotsOf(accountId, instrument), own = attributable(lots, principalKey(who), position), pending = await pendingReduce(who, accountId, instrument, exceptOrderId, ocoExcept);
   const foreign = D.max(D.sub(D.abs(D.from(position)), D.from(own)), D.zero);
   return { position: D.str(D.from(position)), own, foreign: D.str(foreign), pending, reducible: D.str(D.max(D.sub(D.from(own), D.from(pending)), D.zero)) };
 }

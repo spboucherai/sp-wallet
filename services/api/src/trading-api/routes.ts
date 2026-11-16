@@ -33,20 +33,26 @@ const notWired = (op: OperationSpec): Handler => async (_p, _i, req, reply) =>
   withIdempotency(req, reply, async () => { throw new UserError('execution_not_wired', `${op.method} ${TRADING_PREFIX}${op.path} is declared but not connected to execution yet; nothing was done`, 501); });
 
 /** the principal of the request as the order service takes it: a key's limits and restrictions travel with it */
-export const callerOf = (p: Principal): Caller => (p.kind === 'owner' ? OWNER_CALLER
+const header = (req: FastifyRequest, name: string): string => { const v = req.headers[name]; return typeof v === 'string' ? v : ''; };
+/**
+ * `req` (the owner only): his session as this request carried it — cookie, origin, CSRF header. An owner's spot order hands it,
+ * unchanged, to the existing swap proposal route of this server (orders/spot.ts): the order is then prepared by that flow, under
+ * that flow's own checks. A key has no session and never gets one.
+ */
+export const callerOf = (p: Principal, req?: FastifyRequest): Caller => (p.kind === 'owner' ? (req ? { ...OWNER_CALLER, session: { cookie: header(req, 'cookie'), origin: header(req, 'origin'), csrf: header(req, 'x-spw-csrf') } } : OWNER_CALLER)
   : { principal: { kind: 'api_key', id: p.id }, mandateId: p.mandateId, limits: p.limits, restrictions: { networks: p.restrictions.networks, venues: p.restrictions.venues, instruments: p.restrictions.instruments } });
 
 export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution): void {
   let doc: unknown = null;
   /** `venue:symbol` after the read side resolved a bare symbol (409 `ambiguous_symbol`) and applied the key's restrictions */
   const orderInput = async (p: Principal, b: Input['body']): Promise<OrderInput> => {
-    const r = await reads.resolve(p, b.instrument);
+    // a spot order names its instrument itself (`spot:ETH`, `spot:ETH-USDC`): what it means is settled by the order service, not by the market-data listing
+    const r = /^spot:[A-Za-z0-9.]{1,15}(-[A-Za-z0-9.]{1,15})?$/.test(String(b.instrument)) ? { id: String(b.instrument) } : await reads.resolve(p, b.instrument);
     return { mode: b.mode, accountId: b.accountId, instrument: r.id, side: b.side, type: b.type, size: b.size, price: b.price, triggerPrice: b.triggerPrice, reduceOnly: b.reduceOnly, tif: b.tif, slippageBps: b.slippageBps, leverage: b.leverage, maxFeeUsd: b.maxFeeUsd };
   };
   /** the idempotency key of the ORDER: the body's clientOrderId when given, else the Idempotency-Key header */
   const orderKey = (req: FastifyRequest, b?: { clientOrderId?: string }): string => b?.clientOrderId ?? replayHeaders(req).key;
   const previewKey = (req: FastifyRequest, b: { clientOrderId?: string }): string => { const h = req.headers['idempotency-key']; return b.clientOrderId ?? (typeof h === 'string' && IDEMPOTENCY_RE.test(h) ? h : `preview-${randomUUID()}`); };
-  const AGENT_ID = /^agent:/;
   const handlers: Record<string, Handler> = {
     getOpenApi: async () => (doc ??= buildOpenApi()),
     listMarkets: (p, i) => reads.markets(p, i.query),
@@ -62,23 +68,20 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution)
     getActivity: (p, i) => reads.activity(p, i.query),
     listPositions: (p, i) => reads.positions(p, i.query),
     // orders: the unified table (every principal, mode and venue), plus the spot agents' swaps, which have their own table
-    listOrders: async (p, i) => {
-      const unified = i.query.venue === 'spot' ? [] : await ex.orders.list(callerOf(p), i.query);
-      const agents = (await reads.orders(p, i.query)).orders.filter((o) => AGENT_ID.test(o.id));
-      return { orders: [...unified, ...agents].sort((a, b) => b.createdAt - a.createdAt).slice(0, i.query.limit), ts: reads.now() };
-    },
+    // ONE source: the unified table. The owner's swaps and the spot agents' swaps are projected into it like the venue engines' rows
+    // (orders/spot.ts); `agent:<id>` — the id the read side gave an agent's swap — still names the same order.
+    listOrders: async (p, i) => ({ orders: await ex.orders.list(callerOf(p), i.query), ts: reads.now() }),
     getOrder: async (p, i) => {
-      if (AGENT_ID.test(i.params.id)) return reads.order(p, i.params.id);
       const o = await ex.orders.get(callerOf(p), i.params.id);
       if (!o) throw new UserError('unknown_order', 'unknown order', 404);
       return o;
     },
-    previewOrder: async (p, i, req) => ex.orders.preview(callerOf(p), await orderInput(p, i.body), previewKey(req, i.body)),
-    placeOrder: (p, i, req, reply) => withIdempotency(req, reply, async () => ex.orders.submit(callerOf(p), await orderInput(p, i.body), orderKey(req, i.body))),
-    cancelOrder: (p, i, req, reply) => withIdempotency(req, reply, () => ex.orders.cancel(callerOf(p), i.params.id)),
+    previewOrder: async (p, i, req) => ex.orders.preview(callerOf(p, req), await orderInput(p, i.body), previewKey(req, i.body)),
+    placeOrder: (p, i, req, reply) => withIdempotency(req, reply, async () => ex.orders.submit(callerOf(p, req), await orderInput(p, i.body), orderKey(req, i.body))),
+    cancelOrder: (p, i, req, reply) => withIdempotency(req, reply, () => ex.orders.cancel(callerOf(p, req), i.params.id)),
     closePosition: (p, i, req, reply) => withIdempotency(req, reply, () => ex.orders.reducePosition(callerOf(p), i.params.id, '1', i.body.slippageBps, orderKey(req))),
     reducePosition: (p, i, req, reply) => withIdempotency(req, reply, () => ex.orders.reducePosition(callerOf(p), i.params.id, i.body.fraction, i.body.slippageBps, orderKey(req))),
-    runCommand: (p, i, req, reply) => withIdempotency(req, reply, () => runCommand(ex, reads, p, callerOf(p), i.body, orderKey(req))),
+    runCommand: (p, i, req, reply) => withIdempotency(req, reply, () => runCommand(ex, reads, p, callerOf(p, req), i.body, orderKey(req))),
     engageKillSwitch: async (p, i) => { const s = await ex.risk.engageKillSwitch(p.kind === 'owner' ? { kind: 'owner', id: 'owner' } : { kind: 'api_key', id: p.id }, i.body.reason); return { killSwitch: s.killSwitch, readOnly: s.readOnly }; },
     listStrategies: (p, i) => reads.strategies(p, i.query),
     listAgents: (p) => reads.agents(p),

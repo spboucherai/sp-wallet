@@ -56,7 +56,7 @@ export interface Evaluated {
   /** the accounts of the book as the context saw them (the order's own account carries the venue's name) */
   accounts: { accountId: string; venue: string; equity: DecStr; marginUsed: DecStr; freeCollateral: DecStr }[];
 }
-interface BookView { accounts: { venue: string; label: string; accountId: string; state: AccountState | null }[]; positions: { venue: string; label: string; accountId: string; asset: string; position: Position }[]; errors: string[]; gmxRealized: { today: DecStr; total: DecStr } }
+interface BookView { /** read with an account that is not part of the standing book (see readBook): never recorded as the book's peak */ provisional?: boolean; accounts: { venue: string; label: string; accountId: string; state: AccountState | null }[]; positions: { venue: string; label: string; accountId: string; asset: string; position: Position }[]; errors: string[]; gmxRealized: { today: DecStr; total: DecStr } }
 type Known = PreTradeRequest['known'];
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 200);
 const dayStart = (now: number): number => Math.floor(now / 86_400_000) * 86_400_000;
@@ -104,14 +104,16 @@ export class RiskService {
   invalidate(book?: BookKey): void { if (book) this.books.delete(book); else this.books.clear(); this.signerSeen = null; this.levs.clear(); }
   private async engineSeq(): Promise<string> { const [r] = await sql<{ v: string }[]>`select last_value::text || ':' || is_called::text as v from order_projection_queue_id_seq`; return r?.v ?? '0'; }
   /** the book as read from the venues, shared for CONTEXT_TTL_MS while nothing changed (see above). A read with an error is never kept. */
-  private async bookView(book: BookKey): Promise<BookView> {
+  private async bookView(book: BookKey, wantGmx = false): Promise<BookView> {
     const ttl = contextTtl();
-    if (book === 'paper' || ttl === 0) return this.readBook(book);
+    if (book === 'paper') return this.readBook(book, wantGmx);
+    if (ttl === 0) { this.bookReads.fresh += 1; return this.readBook(book, wantGmx); }
     const seq = await this.engineSeq(), clock = this.clockOf('live'), wall = Date.now(), c = this.books.get(book);
-    if (c && c.seq === seq && wall - c.wall < ttl && Math.abs(clock - c.clock) < ttl) { this.bookReads.shared += 1; return c.view; }
-    const view = await this.readBook(book);
+    // (an order on GMX needs the GMX account in the book: a shared copy read without it is not used for that order)
+    if (c && c.seq === seq && wall - c.wall < ttl && Math.abs(clock - c.clock) < ttl && (!wantGmx || book !== 'live-mainnet' || c.view.accounts.some((a) => a.venue === 'gmx'))) { this.bookReads.shared += 1; return c.view; }
+    const view = await this.readBook(book, wantGmx);
     this.bookReads.fresh += 1;
-    if (view.errors.length === 0) this.books.set(book, { clock, wall, seq, view }); else this.books.delete(book);
+    if (view.errors.length === 0 && view.provisional !== true) this.books.set(book, { clock, wall, seq, view }); else this.books.delete(book);
     return view;
   }
   private async signerState(): Promise<{ reachable: boolean; halted: boolean }> {
@@ -267,7 +269,8 @@ export class RiskService {
   }
 
   // ------------------------------------------------------------------ context
-  private async readBook(book: BookKey): Promise<BookView> {
+  /** `wantGmx`: the order being judged is on GMX — its account is read even when the wallet never used GMX before (the first order) */
+  private async readBook(book: BookKey, wantGmx = false): Promise<BookView> {
     const out: BookView = { accounts: [], positions: [], errors: [], gmxRealized: { today: '0', total: '0' } };
     if (book === 'paper') {
       for (const a of await this.deps.derivatives().paper.list()) {
@@ -291,7 +294,11 @@ export class RiskService {
     if (!testnet) {
       const gmx = this.deps.gmx();
       const [used] = await sql`select 1 as x from deriv_gmx_ops limit 1`;
-      if (gmx && used) {
+      // a wallet that never used GMX has no GMX account in its standing book: one read only because THIS order is on GMX is
+      // provisional — it judges the order, and never becomes the recorded peak equity of the book (the next evaluation of an
+      // order elsewhere would not contain it, and would read the difference as a drawdown)
+      if (gmx && !used && wantGmx) out.provisional = true;
+      if (gmx && (used || wantGmx)) {
         try {
           const s = await gmx.status();
           if (s.positionsError) out.errors.push(`gmx: ${s.positionsError}`);
@@ -303,8 +310,13 @@ export class RiskService {
             out.positions.push({ venue: 'gmx', label: 'gmx', accountId, asset: assetOf(position.instrument), position });
             equity = D.add(equity, D.add(D.from(position.margin), D.from(position.unrealizedPnl)));
           }
-          const eq = D.str(equity);
-          out.accounts.push({ venue: 'gmx', label: 'gmx', accountId, state: { venue: 'gmx', account: accountId, equity: eq, collateral: eq, freeCollateral: '0', marginUsed: eq, maintenanceMargin: null, withdrawable: null, ts: this.clockOf('live'), source: 'venue' } });
+          // GMX has no venue account: the collateral of the next order is the wallet's own USDC on Arbitrum, sent WITH the order.
+          // It is counted as the account's free collateral — the view the GMX engine itself judges an order on (gmx-exec.ts
+          // `compute`: equity = wallet USDC + the collateral of the open positions). Without it the equity of a wallet that holds
+          // no GMX position yet is zero and every first increase is denied (account_leverage, collateral share, drawdown).
+          const margin = D.str(equity), free = (() => { try { const u = (s as { wallet?: { usdc?: string } | null }).wallet?.usdc; return u !== undefined && D.isValid(u) ? D.from(u) : D.zero; } catch { return D.zero; } })();
+          const eq = D.str(D.add(equity, free));
+          out.accounts.push({ venue: 'gmx', label: 'gmx', accountId, state: { venue: 'gmx', account: accountId, equity: eq, collateral: eq, freeCollateral: D.str(free), marginUsed: margin, maintenanceMargin: null, withdrawable: D.str(free), ts: this.clockOf('live'), source: 'venue' } });
           const rows = await sql<{ pnl: string | null; fee: string | null; done_at: Date | null }[]>`select outcome->>'pnlUsd' as pnl, outcome->>'positionFeeUsd' as fee, done_at from deriv_gmx_ops where state = 'executed' and kind <> 'cancel' and outcome is not null`;
           const day = new Date(dayStart(this.clockOf('live')));
           let today = D.zero, total = D.zero;
@@ -352,17 +364,17 @@ export class RiskService {
       from orders where mode = ${mode} and (${mode === 'paper'} or (network = 'testnet') = ${testnet}) and not reduce_only and state not in ('REJECTED', 'FAILED') and id <> ${exceptId ?? ''} and created_at > ${new Date(now - 86_400_000)}`;
     return { ordersLastMinute: c!.minute, ordersLastHour: c!.hour, ordersToday: c!.today, notionalToday: D.str(D.from(c!.notional)) };
   }
-  private async peak(book: BookKey, current: DecStr): Promise<DecStr> {
+  private async peak(book: BookKey, current: DecStr, record = true): Promise<DecStr> {
     const stored = await getSetting<{ equity: DecStr } | null>(peakKey(book), null);
     if (stored && D.gte(D.from(stored.equity), D.from(current))) return stored.equity;
-    if (D.isPos(D.from(current))) await setSetting(peakKey(book), { equity: current, at: this.now() });
+    if (D.isPos(D.from(current)) && record) await setSetting(peakKey(book), { equity: current, at: this.now() });
     return current;
   }
 
   /** the context of one order, and what was read to build it */
   async context(order: CanonicalOrder, o: { accountId: string | null; orderId?: string | null; exceptOrderId?: string | null; known?: Known; instrument?: Instrument } = { accountId: null }) {
     const mode: 'paper' | 'live' = order.mode === 'live' ? 'live' : 'paper', now = this.clockOf(mode), book = bookOf(mode, order.network);
-    const [sw, view, signerSt] = await Promise.all([this.switches(), this.bookView(book), this.signerState()]);
+    const [sw, view, signerSt] = await Promise.all([this.switches(), this.bookView(book, order.venue === 'gmx'), this.signerState()]);
     const m = o.known ? { instrument: o.instrument ?? null, ticker: o.known.ticker, book: o.known.book, hasBook: o.known.book !== null || order.venue === 'hyperliquid', error: null as string | null }
       : await this.market(mode, order.venue, order.network, order.instrument);
     const inst = m.instrument ?? o.instrument ?? null;
@@ -392,7 +404,7 @@ export class RiskService {
       asset: inst ? inst.base.toUpperCase() : null,
       positions: positions.map((p) => ({ venue: p.label, account: p.accountId, asset: p.asset, position: p.position })),
       accounts: readable.map((a) => ({ venue: a.label, account: a.accountId, equity: a.state!.equity, collateral: a.state!.collateral, freeCollateral: a.state!.freeCollateral, marginUsed: a.state!.marginUsed, ts: a.state!.ts })),
-      marks, book: m.book, pnl: await this.pnl(accounts.map((a) => a.accountId), view, now), equity: { current: equity, peak: await this.peak(book, equity) },
+      marks, book: m.book, pnl: await this.pnl(accounts.map((a) => a.accountId), view, now), equity: { current: equity, peak: await this.peak(book, equity, view.provisional !== true) },
       signer: signerSt, connections: { [order.venue]: { connected: m.ticker !== null } }, usage: await this.usage(book, now, o.orderId ?? o.exceptOrderId ?? null),
       ...(leverageSetting !== null ? { leverageSetting } : {}),
       ...(o.known?.maintenanceMarginFraction !== undefined ? { maintenanceMarginFraction: o.known.maintenanceMarginFraction } : {}),
@@ -484,7 +496,9 @@ export class RiskService {
         principal: r.origin === 'mandate' ? { kind: 'agent', id: (r.agentId ?? 'agent').slice(0, 80) } : { kind: 'owner', id: 'owner' }, mandateId: r.origin === 'mandate' ? r.mandateId ?? null : null, createdAt: now, expiresAt: now + 120_000 });
     } catch (e) { return { ok: false, code: 'risk_denied', reason: `the order cannot be expressed as a canonical order (${msg(e)})` }; }
     // an order of the order service that is evaluated again here (its request is not the one that was judged) must not count itself in the usage
-    const ev = await this.evaluateOrder(order, { accountId: r.accountId, known: r.known, instrument: r.instrument, preview: r.preview === true, orderId: null, exceptOrderId: cid });
+    const ev = await this.evaluateOrder(order, { accountId: r.accountId, known: r.known, instrument: r.instrument, preview: r.preview === true, orderId: null,
+      // (the GMX engine hands its idempotency key as `gmx-<key>`; for an order of the order service that key is the order's id)
+      exceptOrderId: r.venue === 'gmx' && cid.startsWith('gmx-') ? cid.slice(4) : cid });
     return ev.decision === 'allow' ? { ok: true } : { ok: false, code: ev.code ?? 'risk_denied', reason: (ev.reason ?? 'denied by the risk engine').slice(0, 400) };
   };
 

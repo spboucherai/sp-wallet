@@ -9,7 +9,9 @@ import { z } from 'zod';
 import type { DecStr } from '@spw/derivatives';
 import { interpret, parseCommand, type Catalog, type CatalogInstrument, type Command, type ResolutionDefaults } from '@spw/trading';
 import { UserError } from '../config.ts';
+import { getNetwork } from '@spw/core';
 import { getSetting, setSetting, sql } from '../db.ts';
+import { assetBySymbol, spotNetworks, spotProvider } from '../orders/spot.ts';
 import type { Caller, Execution } from '../orders/index.ts';
 import type { Principal } from './principal.ts';
 import type { Reads } from './read.ts';
@@ -44,7 +46,11 @@ async function perpCatalog(ex: Execution, mode: 'paper' | 'live', asset: string,
     }
   }
   if (mode === 'paper') { for (const a of await d.paper.list()) if (accounts.some((x) => x.id === a.id)) for (const p of a.positions) positions.push({ instrument: p.instrument, side: p.side, size: p.size }); }
-  else for (const a of accounts) { const s = await ex.orders.deps.live().mandateAccountState(a.id).catch(() => null); for (const p of s?.positions ?? []) positions.push({ instrument: p.instrument, side: p.side, size: p.size }); }
+  else {
+    for (const a of accounts) { const s = await ex.orders.deps.live().mandateAccountState(a.id).catch(() => null); for (const p of s?.positions ?? []) positions.push({ instrument: p.instrument, side: p.side, size: p.size }); }
+    // GMX has no venue account row: its positions are the wallet's own, read on-chain (a command that names a venue account does not see them)
+    if (!accountId) positions.push(...(await ex.orders.gmxPositions()));
+  }
   return { instruments, positions, referencePricesUsd };
 }
 
@@ -100,8 +106,17 @@ const kill: Executor<'kill'> = async (_g, { ex, p, body, base }) => {
   const s = await ex.risk.engageKillSwitch(p.kind === 'owner' ? { kind: 'owner', id: 'owner' } : { kind: 'api_key', id: p.id }, 'KILL command');
   return { ...base, kind: 'control', control: { type: 'kill_switch_on' }, executed: true, killSwitch: s.killSwitch };
 };
-const stopAllAgents: Executor<'stop_all_agents'> = async () => {
-  throw new UserError('execution_not_wired', 'STOP ALL AGENTS is declared but not connected yet (agents runtime); nothing was done. KILL engages the global kill switch, which stops every new risk of every agent.', 501);
+/**
+ * STOP ALL AGENTS, through the narrow port of orders/agent-control.ts. `stopped` are the agents that ARE stopped; `notStopped`
+ * are those the port could not stop with what the agents runtime exports today, each with its reason — never reported as stopped.
+ * When agents run and none could be stopped the answer is 501 with those reasons: the command did not do what it says.
+ */
+const stopAllAgents: Executor<'stop_all_agents'> = async (_g, { ex, p, body, base }) => {
+  if (body.dryRun) return { ...base, kind: 'control', control: { type: 'stop_all_agents' }, executed: false };
+  const r = await ex.agents.stopAll(`asked by ${p.kind === 'owner' ? 'the owner' : `the key ${p.id}`}`);
+  const left = r.notStopped ?? [];
+  if (r.stopped.length === 0 && left.length > 0) throw Object.assign(new UserError('execution_not_wired', `STOP ALL AGENTS stopped no agent: ${left.length} agent(s) run and none could be stopped from here (${left[0]!.reason}). KILL engages the global kill switch, which stops every new risk of every agent.`, 501), { data: { stopped: [], notStopped: left } });
+  return { ...base, kind: 'control', control: { type: 'stop_all_agents' }, executed: true, complete: left.length === 0, stopped: r.stopped, notStopped: left };
 };
 const cancelOrder: Executor<'cancel_order'> = async ({ command }, { ex, caller, body, base }) => {
   if (body.dryRun) return { ...base, kind: 'control', control: { type: 'cancel_order', id: command.id }, executed: false };
@@ -115,9 +130,45 @@ const cancelAll: Executor<'cancel_all'> = async ({ command }, { ex, p, caller, b
   for (const o of open) { try { const r = await ex.orders.cancel(caller, o.orderId); results.push({ id: o.id, ok: true, status: r.order.status }); } catch (e) { results.push({ id: o.id, ok: false, error: e instanceof UserError ? e.code : 'internal' }); } }
   return { ...base, kind: 'control', control: { type: 'cancel_all', venue: command.venue }, executed: true, results };
 };
-const spot: Executor<'spot_buy'> & Executor<'spot_sell'> = async (_g, { p }) => {
+/**
+ * What the wallet itself knows for one spot asset: on each network it executes swaps on (the owner's default network when one is
+ * set), the pairs of that asset with every other registry asset of the network, executed by the provider pinned for that network;
+ * the wallet's balance of the asset (a percentage sell); a USD reference price (the fee cap of a sell).
+ */
+async function spotCatalog(ex: Execution, reads: Reads, p: Principal, asset: string, d: ResolutionDefaults, withBalances: boolean): Promise<Catalog> {
+  const instruments: CatalogInstrument[] = [], referencePricesUsd: Record<string, DecStr> = {}, balances: { network: string; asset: string; amount: DecStr }[] = [];
+  const px = await ex.risk.deps.prices?.().then((m) => m?.[asset]?.usd ?? null, () => null) ?? null;
+  for (const network of d.spotNetwork !== undefined ? [d.spotNetwork] : spotNetworks()) {
+    const provider = spotProvider(network), base = assetBySymbol(network, asset);
+    if (!provider || !base) continue;
+    const n = getNetwork(network);
+    for (const q of new Set([n.native, ...n.tokens].map((a) => a.symbol.toUpperCase()))) {
+      if (q === asset || !assetBySymbol(network, q)) continue;
+      const id = `${provider}:${asset}-${q}`;
+      instruments.push({ id, venue: provider, network, marketKind: 'spot', base: asset, quote: q });
+      if (px !== null && Number.isFinite(px) && px > 0) referencePricesUsd[id] = String(px);
+    }
+    if (withBalances) {
+      const b = (await reads.balances(p, { network }).catch(() => null))?.balances.find((x) => x.asset === base.id);
+      if (b?.display) balances.push({ network, asset, amount: b.display });
+    }
+  }
+  return { instruments, balances, referencePricesUsd };
+}
+/** BUY / SELL spot: the owner's order becomes a swap proposal of the existing flow (orders/spot-orders.ts); a key is refused with its own code */
+const spot: Executor<'spot_buy'> & Executor<'spot_sell'> = async ({ command }, { ex, reads, p, caller, body, idemKey, base }) => {
   if (p.kind !== 'owner') throw new UserError('spot_execution_requires_agent_vault', 'spot execution for an API key exists only through an agent vault under a spot mandate (Agents); it is not offered here', 403);
-  throw new UserError('spot_via_swap_screen', 'a spot order of the owner is a swap proposal approved with the passkey: prepare it in the Swap screen (not wired to commands in this version)', 422);
+  if (body.mode !== 'live') throw new UserError('spot_paper_not_available', 'there is no paper spot engine for the owner: a spot order of the owner is a real swap, prepared and approved with the passkey (mode "live")', 422);
+  const d = await commandDefaults();
+  const catalog = await spotCatalog(ex, reads, p, command.asset, d, command.type === 'spot_sell' && command.amount.kind === 'pct');
+  const r = interpret(body.text, d, catalog, { now: ex.orders.now(), principal: caller.principal, mandateId: null, mode: body.mode, idempotencyKey: idemKey }).resolution!;
+  if (r.kind === 'ambiguous') throw Object.assign(new UserError('ambiguous_command', 'the command and the owner\'s defaults do not settle everything: answer the questions (or set the defaults) and send it again. Nothing was executed.', 409), { data: { questions: r.questions } });
+  if (r.kind === 'unresolvable') throw new UserError(r.code, r.message, 422);
+  if (r.kind !== 'order') throw new UserError('bad_request', 'the command did not resolve to an order', 400);
+  const spec = ex.orders.spot.specOfCanonical(caller, r.order);
+  if (body.dryRun) return { ...base, kind: 'order', order: r.order, hash: r.hash, attached: [], executed: false, preview: await ex.orders.spot.preview(caller, spec) };
+  const out = await ex.orders.spot.submit(caller, spec, idemKey, 'command');
+  return { ...base, kind: 'order', executed: true, ...out, canonical: r.order, hash: r.hash, attached: [] };
 };
 const perp: Executor<'perp_open'> & Executor<'perp_close'> = async ({ command }, { ex, p, caller, body, idemKey, base }) => {
   const now = ex.orders.now();
@@ -126,10 +177,23 @@ const perp: Executor<'perp_open'> & Executor<'perp_close'> = async ({ command },
   if (r.kind === 'ambiguous') throw Object.assign(new UserError('ambiguous_command', 'the command and the owner\'s defaults do not settle everything: answer the questions (or set the defaults) and send it again. Nothing was executed.', 409), { data: { questions: r.questions } });
   if (r.kind === 'unresolvable') throw new UserError(r.code, r.message, 422);
   if (r.kind !== 'order') throw new UserError('bad_request', 'the command did not resolve to an order', 400);
-  const attached = r.attached.map((a) => ({ role: a.role, order: a.order, hash: a.hash, placed: false, note: 'a stop-loss / take-profit is placed only once the entry is filled, sized to what was filled: not placed by this endpoint in this version' }));
-  if (body.dryRun) return { ...base, kind: 'order', order: r.order, hash: r.hash, attached, executed: false };
-  const out = await ex.orders.submitCanonical(caller, r.order, idemKey, { origin: 'command', strictReduce: command.type === 'perp_close', ...(body.accountId ? { accountId: body.accountId } : {}) });
-  return { ...base, kind: 'order', executed: true, ...out, canonical: r.order, hash: r.hash, attached };
+  const templates = r.attached.map((a) => ({ role: a.role, order: a.order, hash: a.hash }));
+  const note = `a stop-loss / take-profit is placed only once the entry has filled, as a reduce-only trigger order sized to what filled${body.mode === 'live' && p.kind === 'owner' ? '; on a venue account each of them then waits AWAITING_APPROVAL for its own passkey approval' : ''}. One cancels the other through the wallet's supervisor (the venue has no native one-cancels-the-other for these orders).`;
+  if (body.dryRun) return { ...base, kind: 'order', order: r.order, hash: r.hash, attached: templates.map((a) => ({ ...a, placed: false, note })), executed: false };
+  let out: Awaited<ReturnType<typeof ex.orders.submitCanonical>>;
+  try { out = await ex.orders.submitCanonical(caller, r.order, idemKey, { origin: 'command', strictReduce: command.type === 'perp_close', ...(body.accountId ? { accountId: body.accountId } : {}) }); }
+  catch (e) {
+    // the entry was refused: its protective orders are recorded closed with that reason, and nothing is placed
+    const refused = (e as { data?: { order?: { orderId?: string } } }).data?.order?.orderId;
+    if (templates.length && refused && e instanceof UserError) await ex.orders.attached.attach(refused, caller, body.accountId ?? null, idemKey, templates, `the entry order was refused (${e.code}): nothing was placed`).catch(() => {});
+    throw e;
+  }
+  const parent = out.order as { orderId: string; accountId?: string | null };
+  if (templates.length) {
+    await ex.orders.attached.attach(parent.orderId, caller, body.accountId ?? parent.accountId ?? null, idemKey, templates);
+    await ex.orders.attached.supervise(parent.orderId);                    // an entry that filled at once is protected now, not at the supervisor's next pass
+  }
+  return { ...base, kind: 'order', executed: true, ...out, canonical: r.order, hash: r.hash, attached: (await ex.orders.attached.view(parent.orderId)).map((a) => ({ ...a, note: `${a.note}. ${note}` })) };
 };
 /** exhaustive: one executor per command kind, each reachable only with a grant */
 const EXECUTORS: { [K in CommandKind]: Executor<K> } = { show, kill, stop_all_agents: stopAllAgents, cancel_order: cancelOrder, cancel_all: cancelAll, spot_buy: spot, spot_sell: spot, perp_open: perp, perp_close: perp };
