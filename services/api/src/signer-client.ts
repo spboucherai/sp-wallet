@@ -8,11 +8,15 @@ export interface SignerStatus {
   mandates?: { mandate: Mandate; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; today: { sold: Record<string, string>; orders: number } }[];
   venueMandates?: { mandate: { mandateId: string; authorizationId: string }; hash: string; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; phase: 'active' | 'wind_down' | 'ended'; windDownUntil: number | null;
     today: { orders: number; reduceOnly: number; cancels: number; leverage: number; turnover: string }; ordersLastHour: number; pendingOrders: number }[];
+  /** V11 market making: the quoting mandates the signer holds, with what it would still sign and the state of the dead man's switch as IT recorded it */
+  venueQuotingMandates?: SignerQuotingMandate[];
   /** v8: GMX venue policies stored by the signer */
   gmx?: import('./derivatives/gmx-exec.ts').GmxSignerAuth[];
   venues?: { authorization: { authorizationId: string; venue: string; network: string }; hash: string; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; today: { orders: number; cancels: number; leverage: number } }[];
 }
 
+export interface SignerQuotingMandate { mandate: import('@spw/derivatives/live').VenueQuotingMandate; hash: string; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; phase: 'active' | 'wind_down' | 'ended'; windDownUntil: number | null;
+  today: { quotes: number; batches: number; reduceOnly: number; cancels: number; heartbeats: number; turnover: string; lapses: number }; quotesThisHour: number; bucketActions: number; deadMan: { armed: boolean; deadline: number | null }; pendingQuotes: number }
 interface SolTxParams { recentBlockhash: string; lastValidBlockHeight: number; computeUnitLimit: number; computeUnitPrice: string }
 async function call<T>(method: 'GET' | 'POST', path: string, payload?: unknown): Promise<T> {
   const body = payload === undefined ? '' : JSON.stringify(payload);
@@ -76,6 +80,13 @@ export const signer = {
   // v8 GMX v2: the venue policy (passkey) and its revocation; orders go through `sign` with an intent carrying a `gmx` section
   gmxAuthorize: (authorization: unknown, assertion: unknown) => { cached = null; return call<{ authorizationId: string; hash: string }>('POST', '/venue/gmx/authorize', { authorization, assertion }); },
   gmxRevoke: (authorizationId: string) => { cached = null; return call<{ revoked: true; revokedAt: string }>('POST', '/venue/gmx/revoke', { authorizationId }); },
+  // V11 quoting mandates (market making): approval with the passkey; then batches of post-only quotes, reduce-only orders, cancels and the
+  // venue's scheduleCancel are signed WITHOUT a passkey inside the limits the signer enforces; revocation never needs a passkey.
+  // A lost answer of the approval is recovered from `status().venueQuotingMandates` (mandates/service.ts `recoverQuoting`): the signer
+  // either holds the mandate with the expected hash (adopted) or it does not (the approval is asked again, or the orphan is revoked).
+  venueQuotingApprove: (mandate: unknown, assertion: unknown) => { cached = null; return call<{ mandateId: string; hash: string; authorizationId: string }>('POST', '/venue/quoting/approve', { mandate, assertion }); },
+  venueQuotingSign: (p: { mandateId: string; sign: unknown }) => { cached = null; return call<{ signature: { r: string; s: string; v: number }; signer: string; kind: string; hash: string; mandateId: string; phase: string; orders: number }>('POST', '/venue/quoting/sign', p); },
+  venueQuotingRevoke: (mandateId: string) => { cached = null; return call<{ revoked: true; revokedAt: string; windDownUntil: number }>('POST', '/venue/quoting/revoke', { mandateId }); },
   venueMandateRevoke: (mandateId: string) => { cached = null; return call<{ revoked: true; revokedAt: string; windDownUntil: number }>('POST', '/venue/mandate/revoke', { mandateId }); },
 };
 

@@ -340,6 +340,32 @@ A compromised API ignores the kill switch.
 
 ## Enforcement points (API / signer)
 
+### Quoting sessions (market making, V11)
+
+A quote is not an order row, and it does not go through the order service. Its enforcement points are:
+
+| Control | API (quoting engine, `services/api/src/mm`) | API (unified risk engine) | Signer (`S/venue-quoting.ts`) |
+|---|---|---|---|
+| Kill switch, read-only mode | read at EVERY engine cycle (an unreadable switch is a pulled one): quotes are cancelled at once, none is placed; reductions pass | the same switch, inside `evaluateOrder` | none (its own emergency halt refuses quotes, not exits) |
+| Pre-trade evaluation of a plan | `RiskPort.evaluate` before every quote batch; a refusal counts towards the consecutive-rejects breaker | `evaluateOrder` (a preview decision, recorded) on the WORST CASE of each side — the side's whole size at its most aggressive price, for the agent's principal. Its venue reads cost IP weight: a decision is reused for the same side, size and inventory (in quote lots) for 30 s; a fill, a size change or a new side is a new evaluation | none |
+| Action kinds, instrument, post-only | the planner only emits them | n/a | yes: four action kinds, `Alo` limit openings, one instrument of the mandate |
+| Quote band around the mid | the rule prices from the venue's book; `withinBand` keeps every live quote inside [min + 0.5 bps, max − 0.5 bps] | slippage / deviation checks of the worst-case order | yes, from the signer's OWN mid (two exchanges): never at or through it |
+| Size, resting count and notional | planner (`maxRestingPerSide`), the section's quote size | order notional | yes |
+| Inventory | soft limit (the increasing side is not quoted), hard limit (pull, reduce-only unwind to the soft limit) | position / gross / net / asset / venue exposure of the worst case | yes: worst case from its own venue read (position + everything resting or still sendable on a side) |
+| Floor equity, leverage setting | — | account leverage, liquidation distance | yes |
+| Rates | the budget (IP weight incl. an estimate of the signer's reads, address requests), thinning before the venue throttles | orders per minute / hour / day of the book do NOT count quotes | yes: persisted token bucket, quotes per hour and per day, daily turnover |
+| Daily and session loss | the drawdown breakers (`maxSessionLossUsd` of the section; `maxDailyLossUsd` of the mandate over the UTC day's sessions) | daily / total loss, drawdown of the book | none (it knows the floor only) |
+| Dead man's switch | armed before the first quote, renewed every `deadManSeconds / 3`, quotes pulled when it cannot be renewed | none | a quote is signed only after a `scheduleCancel` that outlives the batch; fewer than 8 lapses a day |
+| Circuit breakers, session hours and duration, stop before expiry | yes — API only | none | none |
+| Server locks | `mmOpeningLock` at the start and at every quote | `execution_disabled` for orders | none (a lock is the API's) |
+| Reduce-only unwinds | one unified order each (`orders`, principal = the agent, `engine: 'none'`) | reductions always pass | band of its own mid, size per order; never counted |
+
+Position provenance: a fill of a quoting session is attributed to the agent by the session's client-id prefix
+(`orders/provenance.ts` `lotsOf`), since its quotes are not rows of `orders`. Fills of one timestamp are replayed in a
+deterministic order — the fill's time, then the sequence in which the wallet stored it (`deriv_fills.seq`), then the fill id
+(`fillOrder`): the case where an owner's close and a key's open carried the same millisecond no longer depends on the order
+the rows come back in.
+
 "Signer" means: the isolated signer refuses to sign, whatever the API asks. "API" means: only the API
 service refuses; a compromised API process could skip it.
 

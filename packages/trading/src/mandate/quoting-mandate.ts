@@ -7,8 +7,11 @@
  * man's switch, the batch rate). Those are the `QuotingTerms`, chosen by the owner next to the mandate; each is enforced by the
  * signer as approved and is listed in `termsEnforcement`. Design: docs/V11-MARKET-MAKING.md.
  */
+import { sha256 } from '@noble/hashes/sha2.js';
+import { z } from 'zod';
 import { D, type DecStr } from '@spw/derivatives';
-import { QUOTING_MANDATE_BOUNDS, VenueQuotingMandateSchema, type VenueAuthorization, type VenueQuotingMandate } from '@spw/derivatives/live';
+import { canonicalEncode, hex, QUOTING_MANDATE_BOUNDS, VenueQuotingMandateSchema, type VenueAuthorization, type VenueQuotingMandate } from '@spw/derivatives/live';
+import { BREAKER_CODES, type BreakerAction, type BreakerCode } from '../mm/breakers.ts';
 import { TRADING_MANDATE_FIELDS, TradingMandateError, TradingMandateSchema, type Enforcement, type FieldEnforcement, type TradingMandate, type TradingMandateErrorCode } from './trading-mandate.ts';
 
 export interface QuotingTerms {
@@ -160,4 +163,148 @@ export function renderQuotingEnforcementTable(c: Pick<CompiledQuotingMandate, 'e
   return ['| Field | Quoting mandate `SPW-VENUE-QUOTING-MANDATE-v1` |', '|---|---|',
     ...c.enforcement.map((x) => `| \`${x.field}\` | ${cell(x.enforcedBy, x.signerField, x.note)} |`),
     ...c.termsEnforcement.map((x) => `| terms: \`${x.term}\` | ${cell(x.enforcedBy, x.signerField, x.note)} |`)].join('\n');
+}
+
+// ------------------------------------------------------------------------------------------------------------------ the quoting section
+//
+// `SPW-QUOTING-SECTION-v1`: everything the owner chooses for a market-making session that the trading mandate
+// (`SPW-TRADING-MANDATE-v1`) has no field for — a SIBLING record of the trading mandate, bound to it by its hash, and covered by
+// the same passkey-bound approval intent (services/api/src/mandates/service.ts: the intent names the trading mandate hash, THIS
+// record's hash and the hash of the signer's quoting mandate). It is a sibling and not a new field of the trading mandate so
+// that the canonical bytes of `SPW-TRADING-MANDATE-v1` — pinned by tests, mirrored by two SDKs — do not move.
+//
+//   terms    the quote rates and the quote geometry (`QuotingTerms`): compiled ONE TO ONE into the signer's quoting mandate
+//            (`compileToQuotingMandate`), enforced by the signer. This is where the quote rate lives: the trading mandate's
+//            own `frequency` caps at 500 orders a day and applies to the orders that are not quotes (the reduce-only unwinds).
+//   engine   what only the API enforces: the policy and its configuration (by hash), the quote size, the engine's soft and
+//            hard inventory limits, the session's hours and maximum duration, the loss limit of a session, what each circuit
+//            breaker does, and whether a stop flattens. Stated as API-only in the enforced-by table, never as more.
+//
+// Every value is checked against a compiled bound and against the mandate it belongs to; an out-of-bounds value is REFUSED
+// (`TradingMandateError('value_not_expressible')`), never clamped.
+
+export const QUOTING_SECTION_DOMAIN = 'SPW-QUOTING-SECTION-v1';
+export const QUOTING_POLICIES = ['spread_inventory', 'avellaneda_stoikov'] as const;
+export type QuotingPolicyId = (typeof QUOTING_POLICIES)[number];
+/** compiled bounds of the API-only part (the signer-enforced part is bounded by QUOTING_MANDATE_BOUNDS) */
+export const QUOTING_SECTION_BOUNDS = {
+  /** the venue refuses an order under 10 USD */
+  minQuoteSizeUsd: '10',
+  minSessionMinutes: 5, maxSessionMinutes: 1440,
+  /** a session loss limit is mandatory and at most this (USD) */
+  maxSessionLossUsd: '5000',
+  /** the engine stops quoting this long before the mandate expires, at least */
+  minStopBeforeExpiryS: 60, maxStopBeforeExpiryS: 86_400,
+} as const;
+const Sha64 = z.string().regex(/^[0-9a-f]{64}$/);
+const DecSchema = z.string().regex(/^(0|[1-9]\d{0,17})(\.\d{1,18})?$/);
+const BreakerActionSchema = z.enum(['pull', 'flatten', 'halt']);
+export const QuotingTermsSchema = z.strictObject({
+  levelsPerSide: z.number().int(), minHalfSpreadBps: z.number().int(), maxDistanceBps: z.number().int(), burstActions: z.number().int(), actionsPerMinute: z.number().int(),
+  quotesPerHour: z.number().int(), quotesPerDay: z.number().int(), dailyTurnoverUsd: DecSchema, deadManSeconds: z.number().int(),
+});
+export const QuotingSectionSchema = z.strictObject({
+  v: z.literal(1),
+  mandateId: z.uuid(),
+  /** the trading mandate this section belongs to, by its canonical hash */
+  tradingMandateHash: Sha64,
+  terms: QuotingTermsSchema,
+  engine: z.strictObject({
+    policy: z.enum(QUOTING_POLICIES),
+    /** SHA-256 of the canonical JSON of the agent's rule configuration the owner saw: the engine refuses to quote on another */
+    configSha256: Sha64,
+    quoteSizeUsd: DecSchema,
+    /** |inventory| (USD at the mid) at which the increasing side stops being quoted, and at which everything is pulled and unwound */
+    softInventoryUsd: DecSchema, hardInventoryUsd: DecSchema,
+    /** a session never lasts longer; null hours = any time. Hours are minutes of the UTC day, [start, end); start > end wraps midnight */
+    maxSessionMinutes: z.number().int(), hours: z.strictObject({ startUtcMinute: z.number().int().min(0).max(1439), endUtcMinute: z.number().int().min(0).max(1439) }).nullable(),
+    /** positive amount: the session halts when its PnL is below −this */
+    maxSessionLossUsd: DecSchema,
+    stopBeforeExpiryS: z.number().int(),
+    /** what each circuit breaker does; a code that is not listed keeps the compiled default */
+    breakers: z.partialRecord(z.enum(BREAKER_CODES), BreakerActionSchema),
+    flattenOnStop: z.boolean(),
+  }),
+});
+export type QuotingSection = z.infer<typeof QuotingSectionSchema>;
+
+const sortedBreakers = (b: Partial<Record<BreakerCode, BreakerAction>>): string => (Object.keys(b) as BreakerCode[]).sort().map((k) => `${k}=${b[k]}`).join(',');
+/** deterministic, length-prefixed, domain-separated serialization (the encoding of every other canonical object of the wallet) */
+export function quotingSectionBytes(q: QuotingSection): Uint8Array {
+  const x = QuotingSectionSchema.parse(q), t = x.terms, e = x.engine;
+  return canonicalEncode(QUOTING_SECTION_DOMAIN, [
+    ['v', '1'], ['mandateId', x.mandateId], ['tradingMandateHash', x.tradingMandateHash],
+    ['terms.levelsPerSide', String(t.levelsPerSide)], ['terms.minHalfSpreadBps', String(t.minHalfSpreadBps)], ['terms.maxDistanceBps', String(t.maxDistanceBps)], ['terms.burstActions', String(t.burstActions)],
+    ['terms.actionsPerMinute', String(t.actionsPerMinute)], ['terms.quotesPerHour', String(t.quotesPerHour)], ['terms.quotesPerDay', String(t.quotesPerDay)], ['terms.dailyTurnoverUsd', canon(t.dailyTurnoverUsd)],
+    ['terms.deadManSeconds', String(t.deadManSeconds)],
+    ['engine.policy', e.policy], ['engine.configSha256', e.configSha256], ['engine.quoteSizeUsd', canon(e.quoteSizeUsd)], ['engine.softInventoryUsd', canon(e.softInventoryUsd)], ['engine.hardInventoryUsd', canon(e.hardInventoryUsd)],
+    ['engine.maxSessionMinutes', String(e.maxSessionMinutes)], ['engine.hours', e.hours ? `${e.hours.startUtcMinute}-${e.hours.endUtcMinute}` : ''], ['engine.maxSessionLossUsd', canon(e.maxSessionLossUsd)],
+    ['engine.stopBeforeExpiryS', String(e.stopBeforeExpiryS)], ['engine.breakers', sortedBreakers(e.breakers)], ['engine.flattenOnStop', e.flattenOnStop ? '1' : '0'],
+  ]);
+}
+export const quotingSectionHashHex = (q: QuotingSection): string => hex(sha256(quotingSectionBytes(q)));
+
+/** the maximum the owner may choose for each value of the section, given the mandate it belongs to — shown next to every field of the form */
+export function quotingSectionMaxima(m: Pick<TradingMandate, 'maxOrderNotionalUsd' | 'maxPositionNotionalUsd' | 'instruments'>): Record<string, string> {
+  const n = Math.max(1, m.instruments.length), S = QUOTING_SECTION_BOUNDS;
+  return {
+    'terms.levelsPerSide': String(Math.min(B.maxRestingPerSide, Math.floor(B.maxRestingTotal / (2 * n)))), 'terms.minHalfSpreadBps': `≥ ${B.minHalfSpreadBpsFloor}`, 'terms.maxDistanceBps': String(B.maxDistanceBpsCeiling),
+    'terms.burstActions': String(B.maxBurstActions), 'terms.actionsPerMinute': String(B.maxActionsPerMinute), 'terms.quotesPerHour': String(B.maxOrdersPerHour), 'terms.quotesPerDay': String(B.maxOrdersPerDay),
+    'terms.dailyTurnoverUsd': B.maxDailyTurnover, 'terms.deadManSeconds': `${B.minDeadManSeconds}…${B.maxDeadManSeconds}`,
+    'engine.quoteSizeUsd': `${S.minQuoteSizeUsd}…${D.str(D.min(D.from(m.maxOrderNotionalUsd), D.from(B.maxQuoteNotional)))}`,
+    'engine.hardInventoryUsd': D.str(D.min(D.from(m.maxPositionNotionalUsd), D.from(B.maxInventoryNotional))), 'engine.softInventoryUsd': '< hardInventoryUsd',
+    'engine.maxSessionMinutes': `${S.minSessionMinutes}…${S.maxSessionMinutes}`, 'engine.maxSessionLossUsd': S.maxSessionLossUsd, 'engine.stopBeforeExpiryS': `${S.minStopBeforeExpiryS}…${S.maxStopBeforeExpiryS}`,
+    maxDays: String(B.maxDays), maxInstruments: String(B.maxInstruments), maxLeverage: String(B.maxLeverage), maxQuoteNotional: B.maxQuoteNotional, maxInventoryNotional: B.maxInventoryNotional, maxGrossExposure: B.maxGrossExposure,
+  };
+}
+
+/**
+ * Is the section a valid companion of this trading mandate? Throws `TradingMandateError` naming the value (in the message;
+ * `field` is the trading-mandate field it is bounded by, when there is one). The terms themselves are bounded again by
+ * `compileToQuotingMandate` against the signer's compiled ceilings and the venue authorization.
+ */
+export function validateQuotingSection(q: QuotingSection, m: TradingMandate, tradingMandateHash: string): void {
+  const p = QuotingSectionSchema.safeParse(q);
+  if (!p.success) fail('value_not_expressible', `quoting section: ${p.error.issues[0]?.path.join('.') ?? ''} ${p.error.issues[0]?.message ?? ''}`.trim());
+  if (q.mandateId !== m.mandateId || q.tradingMandateHash !== tradingMandateHash) fail('binding_mismatch', 'the quoting section is for another trading mandate (id or hash)');
+  if (m.principal.kind !== 'agent') fail('principal_not_expressible', 'a quoting mandate is approved for a market-making AGENT, never for an API key', 'principal');
+  const e = q.engine, S = QUOTING_SECTION_BOUNDS, pos = (x: DecStr): boolean => D.isPos(D.from(x));
+  if (!pos(e.quoteSizeUsd) || D.lt(D.from(e.quoteSizeUsd), D.from(S.minQuoteSizeUsd))) fail('value_not_expressible', `engine.quoteSizeUsd ${e.quoteSizeUsd} is under the venue's minimum order value (${S.minQuoteSizeUsd} USD)`);
+  if (gt(e.quoteSizeUsd, m.maxOrderNotionalUsd)) fail('value_not_expressible', `engine.quoteSizeUsd ${e.quoteSizeUsd} is above the mandate's maxOrderNotionalUsd (${canon(m.maxOrderNotionalUsd)})`, 'maxOrderNotionalUsd');
+  if (!pos(e.softInventoryUsd) || !pos(e.hardInventoryUsd) || !gt(e.hardInventoryUsd, e.softInventoryUsd)) fail('value_not_expressible', 'engine.softInventoryUsd must be positive and below engine.hardInventoryUsd');
+  if (gt(e.hardInventoryUsd, m.maxPositionNotionalUsd)) fail('value_not_expressible', `engine.hardInventoryUsd ${e.hardInventoryUsd} is above the mandate's maxPositionNotionalUsd (${canon(m.maxPositionNotionalUsd)})`, 'maxPositionNotionalUsd');
+  // what can rest on one side on top of the hard limit must still fit the signer's worst-case inventory bound
+  const worst = D.add(D.from(e.hardInventoryUsd), D.mul(D.from(e.quoteSizeUsd), D.from(BigInt(Math.max(1, q.terms.levelsPerSide)))));
+  if (D.gt(worst, D.from(m.maxPositionNotionalUsd))) fail('value_not_expressible', `engine.hardInventoryUsd + quoteSizeUsd × levelsPerSide (${D.str(worst)}) is above the mandate's maxPositionNotionalUsd (${canon(m.maxPositionNotionalUsd)}): the signer would refuse the quotes that reach the engine's own limit`, 'maxPositionNotionalUsd');
+  intIn(e.maxSessionMinutes, S.minSessionMinutes, S.maxSessionMinutes, null, 'engine.maxSessionMinutes');
+  intIn(e.stopBeforeExpiryS, S.minStopBeforeExpiryS, S.maxStopBeforeExpiryS, null, 'engine.stopBeforeExpiryS');
+  if (e.hours && e.hours.startUtcMinute === e.hours.endUtcMinute) fail('value_not_expressible', 'engine.hours: an empty window (start = end); use null for any time');
+  if (!pos(e.maxSessionLossUsd) || gt(e.maxSessionLossUsd, S.maxSessionLossUsd)) fail('value_not_expressible', `engine.maxSessionLossUsd ${e.maxSessionLossUsd} must be positive and at most ${S.maxSessionLossUsd}`);
+  if (gt(e.maxSessionLossUsd, m.maxDailyLossUsd)) fail('value_not_expressible', `engine.maxSessionLossUsd ${e.maxSessionLossUsd} is above the mandate's maxDailyLossUsd (${canon(m.maxDailyLossUsd)})`, 'maxDailyLossUsd');
+  // a breaker that stops the session by construction cannot be softened to a plain pull
+  for (const c of ['consecutive_rejects', 'drawdown_session', 'drawdown_day'] as const) if (e.breakers[c] === 'pull') fail('value_not_expressible', `engine.breakers.${c}: this breaker always stops the session (halt, or flatten then halt); "pull" is not accepted`);
+}
+
+export interface SectionEnforcement { field: string; enforcedBy: Enforcement; note: string }
+/** the API-only rows of the enforced-by table: said as they are */
+export function quotingSectionEnforcement(q: QuotingSection): SectionEnforcement[] {
+  const api = (field: string, note: string): SectionEnforcement => ({ field, enforcedBy: 'api_only', note });
+  return [
+    api('engine.policy', `the quoting rule the engine runs (${q.engine.policy}); the signer cannot verify what code runs — it bounds every quote whatever the rule asks`),
+    api('engine.configSha256', 'the rule configuration the owner saw; the engine refuses to quote when the agent\'s configuration has another hash'),
+    api('engine.quoteSizeUsd', 'the size the engine quotes; the signer bounds it from above (maxQuoteNotional)'),
+    api('engine.softInventoryUsd', 'the engine stops quoting the increasing side; the signer knows only the worst-case inventory bound'),
+    api('engine.hardInventoryUsd', 'the engine pulls every quote and unwinds reduce-only to the soft limit; the signer knows only the worst-case inventory bound'),
+    api('engine.maxSessionMinutes', 'the engine stops the session; the signer knows only the mandate\'s expiry'),
+    api('engine.hours', 'the engine quotes inside these UTC hours only; the signer would sign at any hour'),
+    api('engine.maxSessionLossUsd', 'the engine\'s session drawdown breaker; the signer knows only the floor on the account value'),
+    api('engine.stopBeforeExpiryS', 'the engine stops quoting this long before the expiry; at the expiry itself the signer refuses every quote'),
+    api('engine.breakers', 'every circuit breaker and what it does (pull, flatten, halt) is API-side; the signer knows none of them'),
+    api('engine.flattenOnStop', 'whether a stop unwinds the inventory reduce-only; the signer signs reduce-only orders at any time'),
+  ];
+}
+/** the whole enforced-by table of a quoting mandate, as Markdown — what the approval sheet shows verbatim */
+export function renderQuotingApprovalTable(c: Pick<CompiledQuotingMandate, 'enforcement' | 'termsEnforcement'>, section: SectionEnforcement[]): string {
+  const label: Record<Enforcement, string> = { signer: 'signer', signer_partial: 'signer (partly)', api_only: 'API only', not_applicable: 'n/a' };
+  return [renderQuotingEnforcementTable(c), ...section.map((x) => `| section: \`${x.field}\` | **${label[x.enforcedBy]}**. ${x.note} |`)].join('\n');
 }

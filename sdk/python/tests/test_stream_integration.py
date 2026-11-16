@@ -1,5 +1,6 @@
-"""INTEGRATION: SPWalletStream against the stream of the REAL local API — packages/trading-sdk/scripts/stream-stack.mts:
-the server on an own per-run database, the real venue adapters, the real websocket server, keys written with the server's own hash.
+"""INTEGRATION: SPWalletStream against the stream of the REAL local API — the stack shared by every SDK integration test
+(packages/trading-sdk/scripts/test-stack.mts): the real API and signer on an own per-run database, the real venue adapters,
+the real websocket server, keys created through the owner routes.
 
 SKIPPED — reported as skipped — when PostgreSQL is not reachable, when the repository's node_modules are not installed, or
 with SPW_SDK_INTEGRATION=off. Live quotes come from the venues' public feeds: the test that needs them is skipped when no
@@ -13,6 +14,7 @@ import json
 import os
 import queue
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Iterator
@@ -39,7 +41,7 @@ def stack() -> Iterator[dict[str, Any]]:
     tsx = ROOT / "node_modules" / ".bin" / "tsx"
     if not tsx.exists():
         pytest.skip("the repository's node_modules are not installed (pnpm install): the real API cannot be started")
-    proc = subprocess.Popen([str(tsx), str(ROOT / "packages/trading-sdk/scripts/stream-stack.mts"), "py"], cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    proc = subprocess.Popen([str(tsx), str(ROOT / "packages/trading-sdk/scripts/test-stack.mts"), "pystream"], cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
     lines: queue.Queue[str] = queue.Queue()
     threading.Thread(target=lambda: lines.put(proc.stdout.readline() if proc.stdout else ""), daemon=True).start()
     try:
@@ -95,7 +97,7 @@ def test_a_key_without_the_scope_and_a_revoked_key_are_refused_with_their_code(s
         return e.value
 
     async def body() -> None:
-        for key, code, status in (("limited", "insufficient_scope", 403), ("revoked", "unauthenticated", 401)):
+        for key, code, status in (("agentsOnly", "insufficient_scope", 403), ("revoked", "unauthenticated", 401)):
             e = await refused(key)
             assert (e.code, e.status) == (code, status)  # refused before the upgrade: the HTTP answer of the handshake says why
             say(f"{key} key: refused before the upgrade — HTTP {e.status} {e.code}")
@@ -161,3 +163,21 @@ def test_live_quotes_and_an_order_book_kept_from_the_stream(stack: dict[str, Any
                 f"{seen} messages in {time.monotonic() - t0:.1f} s; frames {stream.stats['frames']}")
 
     run(body(), 90)
+
+
+def test_the_example_stream_quotes_runs_against_the_real_stream_and_prints_no_secret(stack: dict[str, Any]) -> None:
+    secret = stack["keys"]["narrow"]["secret"]
+    env = {"PATH": os.environ.get("PATH", ""), "SP_WALLET_API_KEY": secret, "SP_WALLET_BASE_URL": stack["baseUrl"], "SP_WALLET_STREAM_QUOTES": "2"}
+    out = subprocess.run([sys.executable, str(ROOT / "sdk/python/examples/stream_quotes.py")], env=env, capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    lines = out.stdout.splitlines()
+    assert lines[0].startswith("connected: connection ") and lines[-1] == "done" and "refused" not in out.stdout
+    assert secret not in out.stdout and secret not in out.stderr
+    if "no more quotes within 20 s" in out.stdout:
+        pytest.skip("the example ran, connected and stopped by itself; no Hyperliquid quote within 20 s (venue unreachable from here)")
+    assert sum(1 for x in lines if x.startswith("quote hyperliquid:BTC: bid ")) == 2
+    say("examples/stream_quotes.py: " + " | ".join(lines))
+    # a key without markets:read: the example says so and still ends cleanly
+    env["SP_WALLET_API_KEY"] = stack["keys"]["agentsOnly"]["secret"]
+    refused = subprocess.run([sys.executable, str(ROOT / "sdk/python/examples/stream_quotes.py")], env=env, capture_output=True, text=True, timeout=60)
+    assert refused.returncode == 0 and "refused: " in refused.stdout and "quote hyperliquid" not in refused.stdout, refused.stdout + refused.stderr

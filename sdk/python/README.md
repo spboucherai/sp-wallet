@@ -44,7 +44,7 @@ Rotating a key unbinds its mandate (the mandate names the old key id): see "Key 
 src/sp_wallet/   _async_client.py (source) → _client.py (generated), _base.py (retry decisions), models.py (generated),
                  errors.py, webhooks.py, _util.py (canonical JSON, decimals, order states), py.typed
 scripts/         gen_models.py (models from the OpenAPI document), gen_sync.py (sync client from the async one)
-examples/        read_only.py, async_read.py, preview_order.py, paper_order.py (executed by the integration test), webhook_receiver.py
+examples/        read_only.py, async_read.py, preview_order.py, paper_order.py, stream_quotes.py (executed by the integration tests), webhook_receiver.py
 tests/           unit tests (mocked transport, both clients) + test_integration.py (the real API, both clients)
 ```
 

@@ -136,6 +136,13 @@ async function fromAudit(e: AlertEvent, c: RuleCtx): Promise<Draft[]> {
     }
     case 'mandate.revoked': return [{ kind: 'agent.mandate_revoked', params: { agent: await agentName(c.q, d.agent) }, subject: { type: 'agent', id: str(d.agent, 40) } }];
     case 'agent.order_refused': return [refusedDigest(e.ts, str(d.reason))];
+    // >>> v11 live market making (services/api/src/mm/runtime.ts writes these audit events)
+    case 'mm.breaker': return [{ kind: d.halted ? 'agent.mm_halted' : 'agent.mm_breaker', params: { agent: await agentName(c.q, d.agent), mode: `@${str(d.mode, 10)}`, what: str(d.code, 60), state: str(d.action, 20) }, subject: { type: 'agent', id: str(d.agent, 40) }, dedupe: `mm.breaker:${str(d.session, 40)}:${str(d.code, 60)}:${Math.floor(e.ts.getTime() / 300_000)}` }];
+    case 'mm.switch_lapse': return [{ kind: 'agent.mm_dead_man_switch', params: { agent: await agentName(c.q, d.agent), count: Number(d.lapses ?? 0) }, subject: { type: 'agent', id: str(d.agent, 40) }, dedupe: `mm.dms:${str(d.agent, 40)}:${str(d.day, 12)}:${Number(d.lapses ?? 0)}` }];
+    case 'mm.signer_refusals': return [{ kind: 'agent.mm_signer_refusals', params: { agent: await agentName(c.q, d.agent), count: Number(d.count ?? 0), reason: str(d.code, 80) }, subject: { type: 'agent', id: str(d.agent, 40) }, dedupe: `mm.signer:${str(d.session, 40)}:${str(d.code, 80)}:${Math.floor(e.ts.getTime() / 900_000)}` }];
+    case 'mm.rate_budget': return [{ kind: 'agent.mm_rate_budget', params: { agent: await agentName(c.q, d.agent), what: str(d.reason, 120) }, subject: { type: 'agent', id: str(d.agent, 40) }, dedupe: `mm.rate:${str(d.session, 40)}:${Math.floor(e.ts.getTime() / 900_000)}` }];
+    case 'mm.session_ended': return [{ kind: 'agent.mm_session_ended', params: { agent: await agentName(c.q, d.agent), mode: `@${str(d.mode, 10)}`, reason: str(d.reason, 200) }, subject: { type: 'agent', id: str(d.agent, 40) }, dedupe: `mm.end:${str(d.session, 40)}` }];
+    // <<< v11 live market making
     // >>> v7 research runtime: a job handed in a strategy (the server report is attached) / a job stopped without one
     case 'research.submitted': return [{ kind: 'agent.research_submitted', params: { name: (await agentName(c.q, d.agent)) || str(d.name, 40), count: Number(d.trials ?? 0) }, subject: d.agent ? { type: 'agent', id: str(d.agent, 40) } : { type: 'none' }, dedupe: `research:${str(d.job, 40)}` }];
     case 'research.failed': return [{ kind: 'agent.research_failed', params: { name: (await agentName(c.q, d.agent)) || str(d.name, 40), state: `@${str(d.state, 20)}`, reason: str(d.reason, 200) }, subject: d.agent ? { type: 'agent', id: str(d.agent, 40) } : { type: 'none' }, dedupe: `research:${str(d.job, 40)}` }];

@@ -198,9 +198,23 @@ const done = await client.waitForJob(job.id, { waitTimeoutMs: 120_000 });      /
 await client.pauseAgent(agent.id); await client.stopAgent(agent.id);           // stop is always allowed
 ```
 
-`startAgent(id, { mode: 'live' })` succeeds only when a mandate the **owner** approved for that agent with the passkey is
-in force at the signer; otherwise `409 mandate_required` (a `Conflict`). A key can never approve one. A spot agent is
-created in the owner's app (`403 owner_required`).
+- **`mode` on the reads.** On the wire `mode` is optional: the server answers the mode the agent is in now (for a stopped
+  agent, the one it last ran in) and says which in `mode`. The SDK makes it a **required** argument, so that code never reads
+  paper figures believing they are live ones; `open` exists on `listAgentOrders` only.
+- **`createAgent({ mode })`** is `'research'` (default: created, not running) or `'paper'`: an agent from a stream or
+  supervisor template starts on paper at once; a bar agent (or `kind: 'perp'`) is created and not started — register and
+  backtest a strategy version, then `startAgent`. `'live'` is refused (`400 bad_request`).
+- **Paper.** Starting a perp agent on paper creates its *paper trading mandate* (nothing is signed): its orders go through
+  the same order service, risk engine and kill switch as every other order. The key needs `agents:manage`, and a key
+  restricted to other venues or instruments gets `403 restricted`; a halted paper account answers `409 halted`.
+- **Live.** `startAgent(id, { mode: 'live' })` succeeds only when a mandate the **owner** approved for that agent with the
+  passkey is in force — for a perp agent a trading mandate, which only the owner activates. Otherwise `409 mandate_required`.
+  A key can never approve one. Families that cannot go live answer `409 live_unavailable`.
+- **Errors.** Every 409 of the agent operations is a `Conflict`; read `e.code` (`mandate_required`, `halted`, `bad_state`,
+  `live_unavailable`, `no_strategy`, `no_report`, `bad_report`). `MandateRequired` (403) is about the *key's* mandate on the
+  order operations, not about an agent's.
+- **One kill switch.** There is no agents-side switch: `engageKillSwitch(reason)` engages the risk engine's, which stops every agent's
+  new risk too. Releasing it is the owner's act, in the app. A spot agent is created in the owner's app (`403 owner_required`).
 
 ### Spot orders (owner session only)
 
@@ -338,6 +352,62 @@ POST /api/v1/developer/keys/<new key id>/update           { "intentId": "…", "
 
 In the app: Developer → the key → *Trading mandate* → *New mandate*.
 
+## Streaming
+
+Live market data over one websocket: quotes, order books, trades, candles and venue statuses. Read-only (scope
+`markets:read`), same key, same restrictions (a channel of a venue or instrument outside the key's restrictions is refused,
+per subscription). `SPWalletStream` is exported by the package next to `SPWallet`; it needs a global `WebSocket` (Node >= 22,
+browsers) or the `WebSocket` option (the `ws` package).
+
+```ts
+import { SPWalletStream, OrderBook, StreamError } from '@sp-wallet/trading-sdk';
+
+const stream = new SPWalletStream({ baseUrl: 'https://wallet.example' });      // the key: SP_WALLET_API_KEY, in the Authorization header
+stream.on('close', (c) => console.log(`closed (${c.code}); ${c.willReconnect ? 'reconnecting' : 'stopped'}`));
+stream.on('error', (e) => console.log(`stream error: ${e.code}`));
+
+await stream.subscribe([{ type: 'quote', id: 'hyperliquid:BTC' }, { type: 'status', id: 'hyperliquid' }]);
+for await (const m of stream) {                                                // or stream.on('quote', …)
+  if (m.type === 'quote') console.log(m.id, m.bid, m.ask, m.mark, m.stale);    // decimal strings; `stale` is the server's verdict
+}
+```
+
+- **Channels**: `quote`, `book` (`depth`), `trades`, `candles` (`interval`), `status` (`id: '<venue>'` or `'*'`). Ids are
+  `<venue>:<instrument>` (`hyperliquid:BTC`, `dydx:BTC-USD`, `spot:BTC`).
+- **Reconnection** is on by default (`reconnect: false` to turn it off): exponential backoff with jitter between
+  `backoffMinMs` (500) and `backoffMaxMs` (30 000); after a reconnection the client subscribes again to everything and the
+  server sends fresh snapshots — a handler never has to do it. `close` events carry `willReconnect`. A refusal that a retry
+  cannot fix (no `markets:read`, revoked key, unknown instrument) is a `StreamError` with the server's `code`, and is not retried.
+- **Order books**: feed every `book` message to an `OrderBook`; `apply()` returns `false` on a sequence hole or a checksum
+  mismatch — call `stream.resync(channel)` and the server restarts the book from a snapshot.
+- **Slow consumers**: quotes are conflated and a `dropped` message says what was skipped; the iterator's own buffer is
+  bounded by `bufferSize`.
+- A stream connection writes **no row in the key's usage log** (the ticket request does).
+
+### Browsers: the ticket flow
+
+A browser cannot set a header on a websocket, and the key must never reach it. Your backend asks for a single-use ticket
+(30 s) with the key; the browser connects with the ticket only:
+
+```ts
+// backend (holds the key) — a route of YOUR server, behind YOUR authentication
+app.post('/stream-ticket', async () => {
+  const r = await fetch(`${WALLET}/api/v1/trading/stream/ticket`, { method: 'POST', headers: { authorization: `Bearer ${process.env.SP_WALLET_API_KEY}`, 'content-type': 'application/json' }, body: '{}' });
+  if (!r.ok) throw new Error(`ticket refused: ${r.status}`);
+  return { ticket: (await r.json()).ticket };          // { ticket, expiresAt, ttlMs, url, protocol }
+});
+
+// browser — no key anywhere; a new ticket is asked at every (re)connection
+const stream = new SPWalletStream({
+  baseUrl: 'https://wallet.example',
+  ticket: async () => (await (await fetch('/stream-ticket', { method: 'POST' })).json()).ticket,
+});
+await stream.subscribe({ type: 'quote', id: 'hyperliquid:BTC' });
+```
+
+The ticket carries the key's scope and restrictions, works once, and is refused when mixed with another credential. In Node,
+`auth: 'ticket'` makes the client ask for the ticket itself with its key (useful behind a proxy that strips headers on upgrade).
+
 ## Webhooks
 
 The wallet signs every delivery: `X-SPW-Timestamp: <unix seconds>` and
@@ -363,9 +433,10 @@ const event = await constructWebhookEvent({
 SP_WALLET_API_KEY=spw_live_… node packages/trading-sdk/examples/read-only.ts       # read-only tour
 SP_WALLET_API_KEY=spw_live_… node packages/trading-sdk/examples/preview-order.ts   # a preview with every outcome handled
 SP_WALLET_API_KEY=spw_live_… node packages/trading-sdk/examples/paper-order.ts     # PAPER: preview → place → wait → position → close
+SP_WALLET_API_KEY=spw_live_… node packages/trading-sdk/examples/stream-quotes.ts   # live quotes over the websocket, with reconnection
 ```
 
-The three are executed against the real API by the integration test.
+The four are executed against the real API by the integration tests.
 
 ## Development
 

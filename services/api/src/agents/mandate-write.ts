@@ -137,7 +137,7 @@ export async function createLiveMandate(a: PerpAgentRow, rt: PerpLiveRuntime, bo
 export async function prepareLive(a: PerpAgentRow, rt: PerpLiveRuntime, body: z.infer<typeof LivePrepareBody>) {
   const { created, proposal } = await createLiveMandate(a, rt, body);
   const p = await execution().mandates.prepareApproval(created.id, body.locale);
-  if (!p.passkey) throw new UserError('bad_state', 'a live mandate is approved with the passkey', 409);
+  if (!p.passkey || p.kind !== 'directional') throw new UserError('bad_state', 'a live directional mandate is approved with the passkey', 409);
   const sg = p.signer;
   return { locale: body.locale, mandate: sg.mandate, hash: sg.hash, options: sg.options, acknowledgement: sg.acknowledgement, warning: sg.warning, enforcedBySigner: sg.enforcedBySigner, trustedBySigner: sg.trustedBySigner, notEnforced: sg.notEnforced, windDown: sg.windDown, proposal, binding: p.binding,
     /** the trading mandate this derivative mandate was compiled from: field by field, what the signer enforces and what only the API enforces */

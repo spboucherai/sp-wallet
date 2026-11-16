@@ -117,8 +117,12 @@ async function main(): Promise<void> {
     unbound: await newKey('sdk unbound', { scopes: ALL, rateLimitPerMin: 600 }),
     /** markets:read only */
     narrow: await newKey('sdk narrow', { scopes: ['markets:read'], rateLimitPerMin: 600 }),
+    /** markets:read, restricted to the venue `hyperliquid` (the stream tests: a channel of another venue is refused) */
+    venues: await newKey('sdk venues', { scopes: ['markets:read'], restrictions: { venues: ['hyperliquid'] }, rateLimitPerMin: 600 }),
     /** orders:prepare and markets:read, bound to a mandate: may preview the orders it could place, may not read the account */
     prepare: await bound('sdk prepare', ['orders:prepare', 'markets:read']),
+    /** agents:read only — no markets:read (the stream refuses it) — at the default rate */
+    agentsOnly: await newKey('sdk agents only', { scopes: ['agents:read'], rateLimitPerMin: 600 }),
     /** 3 calls a minute */
     limited: await newKey('sdk limited', { scopes: ['agents:read'], rateLimitPerMin: 3 }),
     /** revoked below */

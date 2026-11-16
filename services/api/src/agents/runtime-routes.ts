@@ -26,9 +26,16 @@ const currentMode = (a: RuntimeAgentRow): 'research' | 'paper' | 'live' => (a.mo
 
 /** What the owner would have to approve for this agent to go live — the FIELDS, read-only. Nothing is prepared at the signer here. */
 export async function mandateDraft(a: RuntimeAgentRow, locale: 'fr' | 'en' = 'en') {
-  const family = (a.family ?? 'custom') as Family, kind = a.kind ?? 'spot', lv = liveVerdict(family, kind, a.universe);
+  const family = (a.family ?? 'custom') as Family, kind = a.kind ?? 'spot', lv = liveVerdict(family, kind, a.universe, (a.runtime as { venues?: string[] } | null)?.venues);
   const base = { draft: `agent:${a.id}`, agentId: a.id, family, approval: { route: `/risk?mandate=agent:${a.id}`, note: 'the mandate is approved by the owner with the passkey; the signer judges the approval and enforces the mandate on every order' } };
   if (!lv.capable) return { ...base, available: false as const, code: lv.code, reason: lv.reason, fields: null };
+  if (kind === 'stream' && family === 'market_making') {
+    // V11 live market making: a QUOTING mandate, created and approved by the owner in the agent's go-live checklist (never here, never by a key)
+    const [tm] = await sql<{ id: string; state: string }[]>`select id, state from trading_mandates where principal_kind = 'agent' and principal_id = ${a.id} and quoting is not null and state in ('created', 'pending_signer', 'active') order by created_at desc limit 1`;
+    return { ...base, approval: { ...base.approval, route: tm ? `/risk?mandate=${tm.id}` : base.approval.route }, pending: tm ? { mandateId: tm.id, state: tm.state } : null, available: true as const, kind: 'quoting' as const,
+      shape: 'SPW-TRADING-MANDATE-v1 + SPW-QUOTING-SECTION-v1 → SPW-VENUE-QUOTING-MANDATE-v1', fields: null, reason: null, checklist: `/api/v1/mm/agents/${a.id}?mode=live`,
+      existingFlow: 'agent page → Market making → go-live checklist: paper session, the evidence (negative) acknowledged, jurisdiction, testnet (owner-run), the quoting mandate (two passkey prompts), the server settings' };
+  }
   if (kind === 'perp') {
     const { liveReadiness } = await import('./perp-live-cycle.ts'), { perpRuntime } = await import('./perp-live.ts');
     const r = await liveReadiness(a as never, perpRuntime(), { locale }).catch((e: Error) => ({ error: e.message.slice(0, 200) }));

@@ -4,7 +4,7 @@
 // and the last decisions of the engine, and the mandates: a creation form, and an approval sheet that shows every field, who
 // enforces each of them and the full mandate hash — before the passkey prompts.
 // Every figure comes from the server; nothing is computed or assumed here. The forms live in ../risk/.
-import { useContext, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { renderAlert } from '../../../../packages/core/src/alert-catalog';
@@ -27,6 +27,8 @@ interface Mandate { id: string; principal: { kind: string; id: string }; mode: '
   usage: { ordersAccepted: number; ordersRejected: number; ordersToday: number; openOrders: number; notionalTotal: string }; stop: { code: string; detail: string } | null; notAfter: number;
   integrity?: { ok: boolean; reason: string | null } | null; approval?: { hash: string; tradingMandateHash: string; signerMandateHash: string; approvedAt: number } | null }
 
+// V11 market making: the quoting mandates (a chunk of its own, shared with the agent page; the form and the approval sheet live there)
+const QuotingMandatesBlock = lazy(() => import('./mmPanel').then((m) => ({ default: m.QuotingMandatesBlock })));
 const BOOKS = ['paper', 'live', 'liveTestnet'] as const;
 const num = (x: string | null | undefined, d = 2): string => { if (x === null || x === undefined) return '—'; const n = Number(x); return Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: d }) : x; };
 const pct = (bps: string | null | undefined): string => (bps === null || bps === undefined ? '—' : `${num(String(Number(bps) / 100), 1)} %`);
@@ -155,6 +157,9 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
 
       <Section title={t('rkLocks')}><Card><dl>{d.locks.map((l) => <Fact key={l.id} k={<span className="font-mono text-[12.5px]">{l.id}</span>}><Tag tone={l.on ? 'ok' : 'mute'}>{t(l.on ? 'rkOn' : 'rkOff')}</Tag><span className="mt-1 block text-[12.5px] text-mute">{l.why}</span></Fact>)}</dl></Card></Section>
 
+      {/* V11 market making — quoting mandates: listed, revoked and approved through their OWN sheet (the enforced-by table, four hashes); created from the agent's go-live flow */}
+      <Suspense fallback={null}><QuotingMandatesBlock mandates={mandates} onChanged={refresh} /></Suspense>
+
       <Section title={t('rkMandates')} right={<Btn kind="soft" onClick={() => { setFail(''); setCreating(true); }} data-testid="rk-mandate-new"><Icon n="plus" className="h-4 w-4" />{t('rkNew')}</Btn>}>
         {wanted && mq.data && !wantedFound && <Notice tone="warn"><span data-testid="rk-mandate-unknown">{t('v11LoMandateUnknown')}</span></Notice>}
         {mq.isError ? <ErrorState title={t('rkLoadError')} onRetry={() => void mq.refetch()} /> : mandates.length === 0 ? <Card><EmptyState icon="key" title={t('rkNoMandates')}>{t('rkNoMandatesBody')}</EmptyState></Card>
@@ -169,7 +174,7 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
             <Fold summary={t('rkFields')} open={m.id === wanted}><MandateFields mandate={m.mandate} /></Fold>
             <Fold summary={t('rkEnforcement')} open={m.id === wanted}><EnforcementTable rows={m.enforcement} /></Fold>
             <div className="grid grid-cols-2 gap-2.5">
-              {(m.state === 'created' || m.state === 'pending_signer') && <Btn busy={busy === `prep-${m.id}`} onClick={() => void openApproval(m.id)} data-testid={`rk-approve-${m.id}`}>{t('rkReview')}</Btn>}
+              {(m.state === 'created' || m.state === 'pending_signer') && (m as { kind?: string }).kind !== 'quoting' && <Btn busy={busy === `prep-${m.id}`} onClick={() => void openApproval(m.id)} data-testid={`rk-approve-${m.id}`}>{t('rkReview')}</Btn>}
               {(m.state === 'active' || m.state === 'created' || m.state === 'pending_signer') && <Btn kind="ghost" className="!text-danger" busy={busy === `rev-${m.id}`} onClick={() => void run(`rev-${m.id}`, () => post(`/mandates/${m.id}/revoke`, {}))}><Icon n="stop" className="h-4 w-4" />{t('rkRevoke')}</Btn>}
             </div></Card>)}
       </Section>

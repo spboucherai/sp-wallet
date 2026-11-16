@@ -12,11 +12,17 @@ describe('optional capabilities', () => {
     expect(by.deriv_live_mainnet).toMatchObject({ on: false, missing: ['SPW_DERIV_LIVE_MAINNET'] });
     expect(by.deriv_mandate_mainnet).toMatchObject({ on: false, missing: ['SPW_DERIV_LIVE_MAINNET', 'SPW_DERIV_MANDATE_MAINNET'] });
     expect(by.deriv_gmx_live).toMatchObject({ on: false, missing: ['SPW_DERIV_LIVE_MAINNET', 'SPW_DERIV_GMX_LIVE'] });
+    // V11 market making: off unless four settings are on (mainnet) / two (testnet); the summary line says so
+    expect(by.deriv_mm_mainnet).toMatchObject({ on: false, missing: ['SPW_DERIV_LIVE_MAINNET', 'SPW_DERIV_MANDATE_MAINNET', 'SPW_DERIV_MM_MAINNET', 'SPW_TRADING_API_EXECUTION'] });
+    expect(by.deriv_mm_mainnet!.why).toMatch(/^market making: live on Hyperliquid, off unless .* a quoting mandate is approved/);
+    expect(by.deriv_mm_testnet).toMatchObject({ on: false, missing: ['SPW_DERIV_MM_TESTNET', 'SPW_TRADING_API_EXECUTION'] });
+    expect(capabilities({ SPW_DERIV_LIVE_MAINNET: 'on', SPW_DERIV_MANDATE_MAINNET: 'on', SPW_DERIV_MM_MAINNET: 'on', SPW_TRADING_API_EXECUTION: 'on' }).find((c) => c.id === 'deriv_mm_mainnet')!.on).toBe(true);
+    expect(capabilities({ SPW_DERIV_LIVE_MAINNET: 'on', SPW_DERIV_MANDATE_MAINNET: 'on', SPW_DERIV_MM_MAINNET: 'on' }).find((c) => c.id === 'deriv_mm_mainnet')).toMatchObject({ on: false, missing: ['SPW_TRADING_API_EXECUTION'] });
     expect(by.research_runner).toMatchObject({ on: false, missing: ['SPW_RESEARCH_RUNNER_SECRET'] });
     expect(by.research_readonly_db).toMatchObject({ on: false, missing: ['RESEARCH_DATABASE_URL'] });
     expect(by.broadcast!.on).toBe(true); expect(by.workers!.on).toBe(true); expect(by.strategy_sandbox_enforced!.on).toBe(true);
     const line = capabilitiesLine(none);
-    expect(line).toMatch(/^capabilities: deriv_live_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\) deriv_mandate_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\+SPW_DERIV_MANDATE_MAINNET\) deriv_gmx_live=OFF\(missing SPW_DERIV_LIVE_MAINNET\+SPW_DERIV_GMX_LIVE\) research_runner=OFF\(missing SPW_RESEARCH_RUNNER_SECRET\) research_readonly_db=OFF\(missing RESEARCH_DATABASE_URL\) broadcast=on workers=on strategy_sandbox_enforced=on/);
+    expect(line).toMatch(/^capabilities: deriv_live_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\) deriv_mandate_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\+SPW_DERIV_MANDATE_MAINNET\) deriv_gmx_live=OFF\(missing SPW_DERIV_LIVE_MAINNET\+SPW_DERIV_GMX_LIVE\) deriv_mm_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\+SPW_DERIV_MANDATE_MAINNET\+SPW_DERIV_MM_MAINNET\+SPW_TRADING_API_EXECUTION\) deriv_mm_testnet=OFF\(missing SPW_DERIV_MM_TESTNET\+SPW_TRADING_API_EXECUTION\) research_runner=OFF\(missing SPW_RESEARCH_RUNNER_SECRET\) research_readonly_db=OFF\(missing RESEARCH_DATABASE_URL\) broadcast=on workers=on strategy_sandbox_enforced=on/);
     expect(line.split('\n')).toHaveLength(1);
 
     const env = { SPW_DERIV_LIVE_MAINNET: 'on', SPW_DERIV_MANDATE_MAINNET: 'on', SPW_DERIV_GMX_LIVE: 'on', SPW_RESEARCH_RUNNER_SECRET: SECRET, RESEARCH_DATABASE_URL: `postgres://reader:${SECRET}@db/sp_wallet`, SPW_BROADCAST: 'off', SPW_LAB_SANDBOX: 'off', SPW_WEB_DIR: '/srv/web' };

@@ -68,138 +68,147 @@ const journal = (id: string) => sql`select kind, code, mode, severity, title fro
 const MM_CFG = { quoteSizeUsd: '50', minHalfSpreadBps: '0.5', volMultiplier: '0', skewBps: '1', maxInventoryUsd: '250', volWindow: 30, decisionEveryMs: 1000 };
 
 describe('market making on recorded Hyperliquid frames — paper', () => {
+  // V11 live market making: PAPER runs the SAME engine as live (services/api/src/mm) over the paper venue — the rule
+  // `spread_inventory` behind its QuotePolicy interface, the runtime's fill model (`mmFills`), prices on the venue's own grid
+  // (Hyperliquid: 5 significant figures — 73698, not 73698.8). Quotes are NOT order rows: a session row, a row per fill.
   let id = '', engine: import('../src/agent-runtime/stream-engine.ts').StreamEngine, stream: ReturnType<typeof hlFeed>['stream'];
   const pass = async () => (await engine.pass(await rows(id)))[id]!;
+  const session = async () => (await sql`select * from mm_sessions where agent_id = ${id} order by started_at desc limit 1`)[0];
+  const fills = () => sql`select side, price::text as price, size::text as size, fee::float as fee, maker, mode from mm_fills where agent_id = ${id} order by id` as Promise<any[]>;
 
-  it('created from the template: a stream agent, research by default, the rule pinned by name and version — and no live mode', async () => {
+  it('created from the template: a stream agent, research by default, the rule pinned by name and version — live needs a quoting mandate', async () => {
     const r = await tpl.createFromTemplate({ template: 'market-making', name: 'MM BTC', venues: ['hyperliquid'], universe: ['BTC'], capitalUsdc: '1000', config: MM_CFG, risk: { maxDataAgeMs: 5000 } }, 'owner');
     id = r.agent.id;
     expect([r.agent.kind, r.agent.family, r.agent.engine, r.agent.state, r.agent.mode, r.agent.venue, r.agent.configVersion]).toEqual(['stream', 'market_making', 'stream', 'stopped', 'research', 'hyperliquid', 1]);
     expect(r.agent.strategy).toMatchObject({ name: 'spread_inventory', version: '1', kind: 'rule' }); expect(r.agent.strategy!.sha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(r.agent.live.capable).toBe(false); expect(r.warnings[0]!.code).toBe('no_live');
-    await expect(life.startAgent(id, 'live', { kind: 'owner' })).rejects.toMatchObject({ code: 'live_unavailable', status: 409 });
+    expect(r.agent.live.capable).toBe(true); expect(r.warnings).toEqual([]);
+    await expect(life.startAgent(id, 'live', { kind: 'owner' })).rejects.toMatchObject({ code: 'mandate_required', status: 409 });
+    await expect(life.startAgent(id, 'live', { kind: 'api_key', id: 'spk_k' })).rejects.toMatchObject({ code: 'mandate_required', status: 409 });
     expect((await life.startAgent(id, 'paper', { kind: 'owner' })).state).toBe('PAPER_TRADING');
     const f = hlFeed(); stream = f.stream;
-    engine = new se.StreamEngine(f.feed, { snapshotMs: 1000, equityEveryMs: 1000, signalEveryMs: 60_000 });
+    engine = new se.StreamEngine(f.feed, { snapshotMs: 1000, equityEveryMs: 1000, signalEveryMs: 60_000, mm: { saveEveryMs: 0, slowEveryMs: 1000 } });
   });
 
-  it('before the stream is connected there is no decision: a GAP hold, journaled once', async () => {
+  it('before the stream is connected there is no session: a GAP hold, journaled once', async () => {
     expect(await pass()).toMatch(/^hold: hyperliquid:BTC: the stream is idle/);
     clock.advance(1200);
     expect(await pass()).toMatch(/^hold:/);
     expect((await journal(id)).filter((j) => j.code === 'data_gap')).toHaveLength(1);
-    expect((await signals(id)).map((s) => [s.decision, s.reason_code, s.mode, s.kind])).toEqual([['skipped', 'data_gap', 'PAPER', 'stream']]);
+    expect(await session()).toBeUndefined();
     expect(await intents(id)).toEqual([]);
   });
 
-  it('first recorded book: two post-only quotes around the real mid, through the order gateway, resting in the SIMULATED book', async () => {
+  it('first recorded book: the session starts (reconcile → arm the simulated switch → quote) and two post-only quotes rest around the real mid, on the venue\'s grid', async () => {
     clock.t = T1 + 50;
     sock().open(); sock().push(books[0]); sock().push(ctxs[0]);
-    expect(await pass()).toMatch(/^acted: quotes 73698\.8 \/ 73706\.2/);        // recorded book 73702 / 73703: mid 73702.5 ∓ 0.5 bps (3.685 USD), on the venue's 0.1 USD tick — bid down, ask up
-    const q = await intents(id);
-    expect(q.map((x) => [x.side, x.state, x.reason, x.order_json.type, x.order_json.tif, x.order_json.limitPrice, x.order_json.mode])).toEqual([['buy', 'SUBMITTED', 'VENUE_RESTING', 'limit', 'alo', '73698.8', 'paper'], ['sell', 'SUBMITTED', 'VENUE_RESTING', 'limit', 'alo', '73706.2', 'paper']]);
-    expect(q[0].order_json.size).toBe('0.00067');                               // 50 USD / 73 702.5 on the 0.00001 lot
-    const [, s] = await signals(id);
-    expect([s.decision, s.reason_code, s.mode, s.config_version]).toEqual(['acted', 'acted', 'PAPER', 1]); expect(s.inputs_digest).toMatch(/^[0-9a-f]{64}$/);
-    expect(s.weights).toMatchObject({ mid: 73702.5, bid: { price: 73698.8, size: 0.00067 }, ask: { price: 73706.2, size: 0.00067 }, halfSpreadBps: 0.5 });
-    expect((await journal(id)).map((j) => j.code)).toEqual(['started_paper', 'data_gap', 'data_ok', 'SUBMITTED', 'SUBMITTED']);
-    expect((await rows(id))[0].runtime.book.quotes).toHaveLength(2);
+    expect(await pass()).toMatch(/^quoting — 2 quote\(s\), position 0/);       // recorded book 73702 / 73703: mid 73702.5 ∓ 0.5 bps, then the venue's 5 significant figures — bid DOWN to 73698, ask UP to 73707
+    const s = await session();
+    expect([s.mode, s.state, s.instrument, s.policy, s.network]).toEqual(['PAPER', 'running', 'hyperliquid:BTC', 'spread_inventory', 'mainnet']);
+    expect(s.status.quotes.map((q: any) => [q.side, q.price, q.size, q.state]).sort()).toEqual([['buy', '73698', '0.00067', 'resting'], ['sell', '73707', '0.00067', 'resting']]);
+    expect(s.status.simulated).toBe(true); expect(s.status.switch.armed).toBe(true);
+    expect(Number(s.status.quotes[0].distanceBps)).toBeGreaterThan(0.5);
+    // quotes are NOT rows of the order tables
+    expect(await intents(id)).toEqual([]); expect((await sql`select count(*)::int as n from orders where principal_id = ${id}`)[0].n).toBe(0);
+    expect((await journal(id)).map((j) => j.code)).toEqual(['started_paper', 'data_gap', 'start', 'quoting']);
   });
 
   it('second recorded book, 5.5 s later: the market traded THROUGH the bid — a simulated maker fill at OUR price, never better', async () => {
-    clock.t = T2 + 50; sock().push(ctxs[2]); sock().push(books[1]);            // real book now 73692 / 73693: the best ask is below our 73698.8 bid
-    const out = await pass();
-    const all = await intents(id), bid = all[0];
-    expect([bid.state, bid.reason, bid.record.filledSize, bid.record.avgFillPrice]).toEqual(['FILLED', 'VENUE_FILLED', '0.00067', '73698.8']);
-    expect(Number(bid.fills[0].feeUsd)).toBeCloseTo(0.00067 * 73698.8 * 0.00015, 6);   // the venue's maker rate
+    clock.t = T2 + 50; sock().push(ctxs[2]); sock().push(books[1]);            // real book now 73692 / 73693: the best ask is below our 73698 bid
+    await pass(); clock.advance(1100); sock().push({ ...books[1], data: { ...books[1].data, time: clock.now() } }); await pass();
+    const f = await fills();
+    expect(f.map((x) => [x.side, x.price, x.size, x.maker, x.mode])).toEqual([['buy', '73698', '0.00067', true, 'PAPER']]);
+    expect(f[0].fee).toBeCloseTo(0.00067 * 73698 * 0.00015, 6);                 // the venue's maker rate
     const rt = (await rows(id))[0].runtime;
-    expect(rt.book.positions['hyperliquid:BTC']).toEqual({ size: 0.00067, avgPrice: 73698.8 });
-    expect(rt.counters.fills).toBe(1);
-    // the fill is followed, in the same pass, by a decision on the new book: long inventory skews the quotes down
-    expect(out).toMatch(/^acted: quotes/);
-    const last = (await signals(id)).at(-1);
-    expect(last.weights.inventoryUsd).toBeGreaterThan(49); expect(last.weights.skewBps).toBeLessThan(0);
-    expect((await journal(id)).filter((j) => j.kind === 'fill').map((j) => [j.mode, j.title])).toEqual([['PAPER', 'Filled 0.00067 at 73698.8']]);
-    // the ask placed on the first book did not fill (the market went the other way) — it was replaced, not filled
-    expect(all[1].state === 'CANCELLED' || all[1].state === 'SUBMITTED').toBe(true); expect(all[1].record.filledSize).toBe('0');
+    expect(rt.mm.paper.position).toBe('0.00067'); expect(rt.book.positions['hyperliquid:BTC'].size).toBe(0.00067);
+    const s = await session();
+    expect(s.pnl.fills).toBe(1); expect(s.status.position).toBe('0.00067');
+    // attribution: the identity holds on the stored figures (total = spread capture + inventory + fees + funding)
+    expect(Number(s.pnl.totalUsd)).toBeCloseTo(Number(s.pnl.spreadCaptureUsd) + Number(s.pnl.inventoryPnlUsd) + Number(s.pnl.feesUsd) + Number(s.pnl.fundingUsd), 9);
+    // hysteresis: the ask of the first book (73707) is within the requote tolerance of its new target — it is KEPT, not requoted; a new bid rests below the new mid
+    const q = Object.fromEntries(s.status.quotes.map((x: any) => [x.side, x.price]));
+    expect(q.sell).toBe('73707'); expect(Number(q.buy)).toBeLessThan(73692.5);
+    expect((await journal(id)).filter((j) => j.kind === 'fill').map((j) => [j.mode, j.title])).toEqual([['PAPER', 'Fill']]);
+    // the ask placed on the first book did not fill (the market went the other way)
+    expect(f.filter((x) => x.side === 'sell')).toEqual([]);
   });
 
-  it('FRESHNESS: 20 s without a frame — no decision on that book, resting quotes are withdrawn', async () => {
+  it('FRESHNESS: 20 s without a frame — the data breakers pull the quotes', async () => {
     clock.advance(20_000);
-    expect(await pass()).toMatch(/^hold: hyperliquid:BTC: the book is 2\d{4} ms old \(limit 5000\)/);
-    const open = (await intents(id)).filter((x) => ['SUBMITTED', 'PARTIALLY_FILLED'].includes(x.state));
-    expect(open).toEqual([]);
-    expect((await rows(id))[0].runtime.book.quotes).toEqual([]);
-    expect((await signals(id)).at(-1)).toMatchObject({ decision: 'skipped', reason_code: 'data_not_fresh' });
-    expect((await rows(id))[0].runtime.counters.skippedStale).toBe(1);
+    expect(await pass()).toMatch(/^pulled: breaker .*venue_disconnected/);
+    const s = await session();
+    expect(s.status.quotes).toEqual([]); expect(s.status.activeBreakers).toEqual(expect.arrayContaining(['venue_disconnected', 'data_stale']));
+    expect(s.breakers.map((b: any) => b.code)).toEqual(expect.arrayContaining(['venue_disconnected']));
+    expect((await journal(id)).filter((j) => j.kind === 'risk').map((j) => j.code)).toEqual(expect.arrayContaining(['breaker:venue_disconnected']));
   });
 
-  it('GAP and RECONNECT: the socket drops → quoting stays paused; after the reconnect and a fresh book, decisions resume; the gap is recorded', async () => {
-    sock().drop();
-    expect(await pass()).toMatch(/^hold: hyperliquid:BTC: the stream is reconnecting/);
-    expect((await signals(id)).at(-1)).toMatchObject({ decision: 'skipped', reason_code: 'data_gap' });
+  it('GAP and RECONNECT: the socket drops → quoting stays pulled; after the reconnect, a fresh book and the cool-down, quoting resumes; the gap is recorded', async () => {
     const before = FakeSocket.all.length;
+    sock().drop();
+    expect(await pass()).toMatch(/^pulled: breaker/);
     await sleep(40);                                                            // the client's own backoff (5–10 ms here)
     expect(FakeSocket.all.length).toBe(before + 1);
     clock.advance(3000);
     sock().open();
-    // the reconnect alone is not data: the engine waits for the snapshot after the gap
-    expect(await pass()).toMatch(/^hold: hyperliquid:BTC: no two-sided book yet/);
+    expect(await pass()).toMatch(/^pulled: breaker/);                           // the reconnect alone is not data
     clock.advance(1200);
     sock().push({ ...books[1], data: { ...books[1].data, time: clock.now() } }); sock().push(ctxs[2]);     // the venue's snapshot after the reconnect (the recorded book, stamped now)
-    expect(await pass()).toMatch(/^acted: quotes/);
-    const j = await journal(id);
-    expect(j.filter((x) => x.kind === 'hold').map((x) => x.code)).toEqual(['data_gap', 'data_not_fresh', 'data_gap', 'data_not_fresh']);
-    expect(j.filter((x) => x.code === 'data_ok')).toHaveLength(2);
+    expect(await pass()).toMatch(/^pulled: breaker/);                           // fresh data, but the cool-down of the breakers (15 s) has not passed
+    for (let k = 0; k < 17; k++) { clock.advance(1000); sock().push({ ...books[1], data: { ...books[1].data, time: clock.now() } }); await pass(); }
+    expect((await session()).status.phase).toBe('quoting');
     const gaps = await sql`select kind, duration_ms from market_snapshot_gaps where venue = 'hyperliquid' and symbol = 'BTC' order by id`;
-    // two holes in the recording (before the first book; the stale + disconnected stretch), and the stream's own gap
-    expect(gaps.map((g: any) => g.kind).sort()).toEqual(['missing', 'missing', 'stream_gap']);
+    expect(gaps.map((g: any) => g.kind)).toContain('stream_gap');
     expect(Number(gaps.find((g: any) => g.kind === 'stream_gap').duration_ms)).toBe(3000);
     expect(engine.stats.gaps).toBe(1);
   });
 
   it('RECORDING: top of book, mark, index and funding with the venue\'s real interval, one row per cadence slot that had usable data', async () => {
     const snaps = await sql`select ts, bid::text as bid, ask::text as ask, bid_size::text as bid_size, mark::text as mark, index_price::text as idx, funding::text as funding, funding_interval_sec from market_snapshots where venue = 'hyperliquid' and symbol = 'BTC' order by ts`;
-    expect(snaps.map((s: any) => [s.bid, s.ask])).toEqual([['73702.0', '73703.0'].map((x) => String(Number(x))), ['73692', '73693'], ['73692', '73693']].map((p) => p.map(String)));
+    expect(snaps.slice(0, 2).map((s: any) => [s.bid, s.ask])).toEqual([['73702', '73703'], ['73692', '73693']]);
     expect(snaps[0]).toMatchObject({ bid_size: '0.0015', mark: '73714', idx: '73736.8', funding: '0.0000125', funding_interval_sec: 3600 });
     expect(snaps.every((s: any) => s.ts.getTime() % 1000 === 0)).toBe(true);
-    expect(engine.stats.snapshots).toBe(3); expect(engine.stats.missing).toBeGreaterThanOrEqual(2);       // the idle, stale and gap passes recorded nothing — and said so
+    expect(engine.stats.missing).toBeGreaterThanOrEqual(2);                      // the idle, stale and gap passes recorded nothing — and said so
   });
 
-  it('performance of the PAPER mode is computed from the simulation\'s own records; live and research have none', async () => {
-    const a = await store.loadAgent(id);
-    const p = await store.agentPerformance(a, 'paper');
-    expect(p.mode).toBe('paper'); expect(p.label).toMatch(/^PAPER — simulated/);
-    expect(p.points).toBeGreaterThanOrEqual(2); expect(p.orders).toBe(1);
-    expect(p.feesUsd.value).toBeCloseTo(0.00067 * 73698.8 * 0.00015, 6);
-    expect(p.winRate).toEqual({ value: null, reason: expect.stringMatching(/average cost/) });
-    expect(p.warnings.map((w) => w.code)).toContain('small_sample');
+  it('performance of the PAPER mode: the attribution of its sessions and the agents\' performance module on its equity; live and research have none', async () => {
+    const { mmPerformance } = await import('../src/mm/sessions.ts'), a = await store.loadAgent(id);
+    const p = await mmPerformance(id, 'PAPER');
+    expect(p.mode).toBe('paper'); expect(p.label).toMatch(/^PAPER — SIMULATED/); expect(p.fills).toBe(1); expect(p.sessions).toBe(1);
+    expect(Number(p.attribution.feesUsd)).toBeCloseTo(-0.00067 * 73698 * 0.00015, 6);
+    expect(Number(p.attribution.totalUsd)).toBeCloseTo(Number(p.attribution.spreadCaptureUsd) + Number(p.attribution.inventoryPnlUsd) + Number(p.attribution.feesUsd) + Number(p.attribution.fundingUsd), 9);
+    expect(p.performance.points).toBeGreaterThanOrEqual(2);
+    const live = await mmPerformance(id, 'LIVE');
+    expect([live.sessions, live.fills, live.attribution.totalUsd, live.performance.points]).toEqual([0, 0, '0', 0]);
+    expect((await store.agentPerformance(a, 'paper')).points).toBeGreaterThanOrEqual(2);
     expect((await store.agentPerformance(a, 'live')).points).toBe(0);
     expect(await store.agentOrders(a, 'live')).toEqual([]); expect(await store.agentSignals(a.id, 'live')).toEqual([]);
-    expect((await store.agentOrders(a, 'paper')).every((o) => o.mode === 'paper' && o.source === 'gateway')).toBe(true);
   });
 
   it('BACKTEST on the recorded snapshots: the same rule and fill model, labelled a backtest, with its warnings — never a performance', async () => {
     const rt = (await rows(id))[0];
-    const rep = await se.replayRecorded({ rule: 'spread_inventory', config: rt.runtime.config, risk: rt.risk, capital: 1000, instruments: [BTC], fees: () => FEES, from: T1 - 60_000, to: clock.now() + 60_000, snapshotMs: 1000 });
+    const rep = await se.replayRecorded({ rule: 'spread_inventory', config: rt.runtime.config, risk: rt.risk, capital: 1000, instruments: [BTC], fees: () => FEES, from: T1 - 60_000, to: T2 + 2000, snapshotMs: 1000 });
     expect([rep.kind, rep.label, rep.rule, rep.instruments]).toEqual(['recorded_replay', 'backtest', 'spread_inventory', ['hyperliquid:BTC']]);
-    expect(rep.snapshots).toBe(3); expect(rep.missing).toBeGreaterThan(10); expect(rep.gaps).toBe(3);
     expect(rep.fills).toBe(1);                                                  // the same recorded trade-through, found again by the replay
-    expect(rep.warnings.join(' ')).toMatch(/far too few/); expect(rep.warnings.join(' ')).toMatch(/expected snapshots are missing/);
+    expect(rep.warnings.join(' ')).toMatch(/far too few/);
     expect(rep.model[0]).toBe('BACKTEST on recorded top-of-book snapshots — not a track record');
-    expect(rep.performance.points).toBe(3);
   });
 
-  it('pause withdraws the simulated quotes; stop is always allowed; the paused agent is not ticked', async () => {
+  it('pause ends the session (quotes cancelled, the simulated switch removed); resume starts a new one; stop is always allowed', async () => {
     expect((await life.pauseAgent(id, { kind: 'owner' })).state).toBe('PAUSED');
-    expect((await rows(id))[0].runtime.book.quotes).toEqual([]);
-    expect(await engine.tick((await rows(id))[0])).toBe('idle');
+    for (let k = 0; k < 4; k++) { clock.advance(1000); await pass(); }          // the paused agent still gets its passes while its session winds down
+    const s1 = await session();
+    expect([s1.state, s1.end_reason]).toEqual(['stopped', 'the agent was paused']);
+    expect((await rows(id))[0].runtime.mm.paper.orders).toEqual([]); expect((await rows(id))[0].runtime.mm.paper.switchDeadline).toBeNull();
     expect((await life.resumeAgent(id, { kind: 'owner' })).state).toBe('PAPER_TRADING');
     sock().push({ ...books[1], data: { ...books[1].data, time: clock.advance(1500) } });
-    await pass();
-    expect((await intents(id)).filter((x) => x.state === 'SUBMITTED').length).toBe(2);       // the quotes the pause withdrew are settled CANCELLED; two new ones rest
+    const o1 = await pass(); clock.advance(1000); sock().push({ ...books[1], data: { ...books[1].data, time: clock.now() } }); const o2 = await pass();
+    const s2 = await session();
+    expect([o1, o2].join(' | ')).toMatch(/quot/);
+    expect(s2.id).not.toBe(s1.id); expect(s2.state).toBe('running');
+    expect(s2.status.position).toBe('0.00067');                                 // the simulated account survived: the new session reconciled it
     expect((await life.stopAgent(id, { kind: 'api_key', id: 'spk_test' }, 'done')).state).toBe('STOPPED');
     expect((await life.stopAgent(id, { kind: 'owner' })).state).toBe('STOPPED');               // idempotent
+    for (let k = 0; k < 4; k++) { clock.advance(1000); await pass(); }
+    expect((await session()).state).toBe('stopped');
     stream.close();
   });
 });
@@ -239,14 +248,15 @@ describe('research mode and the kill switch', () => {
     engine.close();
   });
 
-  it('kill switch engaged: a paper market maker\'s quotes are refused by the gateway (they add risk); the signal says kill_switch', async () => {
+  it('kill switch engaged: a paper market maker quotes nothing (the engine reads the ONE switch at every cycle); nothing rests', async () => {
     const r = await tpl.createFromTemplate({ template: 'market-making', name: 'MM halted', venues: ['hyperliquid'], universe: ['BTC'], config: MM_CFG }, 'owner');
     await life.startAgent(r.agent.id, 'paper', { kind: 'owner' });
-    const m = manualFeed({ hyperliquid: BTC }), engine = new se.StreamEngine(m.feed, { record: false, killSwitch: { engaged: async () => ({ engaged: true, reason: 'test' }) } });
+    const m = manualFeed({ hyperliquid: BTC }), engine = new se.StreamEngine(m.feed, { record: false, killSwitch: { engaged: async () => ({ engaged: true, reason: 'test' }) }, mm: { saveEveryMs: 0 } });
     await engine.pass(await rows(r.agent.id)); m.emit('hyperliquid:BTC', 73702, 73703);
-    await engine.pass(await rows(r.agent.id));
-    expect((await intents(r.agent.id)).map((x) => [x.state, x.reason])).toEqual([['REJECTED', 'KILL_SWITCH_ACTIVE'], ['REJECTED', 'KILL_SWITCH_ACTIVE']]);
-    expect((await rows(r.agent.id))[0].runtime.book.quotes).toEqual([]);
+    expect((await engine.pass(await rows(r.agent.id)))[r.agent.id]).toMatch(/^pulled: breaker kill_switch/);
+    const [s] = await sql`select status, counters from mm_sessions where agent_id = ${r.agent.id}`;
+    expect(s.status.quotes).toEqual([]); expect(s.status.activeBreakers).toContain('kill_switch'); expect(s.counters.quotesPlaced).toBe(0);
+    expect(await intents(r.agent.id)).toEqual([]);
     engine.close();
   });
 });

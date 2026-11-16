@@ -106,6 +106,7 @@ function ruleConfig(t: AgentTemplate, c: Record<string, unknown> | undefined): R
   for (const [k, v] of Object.entries(c ?? {})) {
     if (!(k in t.defaults.config)) throw new UserError('bad_request', `unknown configuration key ${k} for ${t.id} (known: ${Object.keys(t.defaults.config).join(', ')})`, 400);
     if (typeof t.defaults.config[k] === 'boolean') { out[k] = v === true; continue; }
+    if (k === 'policy') { if (v !== 'spread_inventory' && v !== 'avellaneda_stoikov') throw new UserError('bad_request', 'policy is spread_inventory or avellaneda_stoikov', 400); out[k] = v; continue; }
     const n = NUM(v, 0, 1e9, k);
     if (k === 'decisionEveryMs' && n < 1000) throw new UserError('bad_request', 'decisionEveryMs is at least 1000', 400);
     out[k] = typeof t.defaults.config[k] === 'string' ? String(v) : n;
@@ -150,7 +151,7 @@ export async function createFromTemplate(body: unknown, actor: string, library?:
   const capital = b.capitalUsdc ?? t.defaults.capitalUsdc;
   if (Number(capital) < 50) throw new UserError('bad_request', 'at least 50 USDC of simulated capital', 400);
   const row = await insertRuntimeAgent({ kind: 'stream', family: t.family, template: t.id, name: b.name, mission: b.mission, universe, venues, rule: t.rule!, config: ruleConfig(t, b.config), risk: streamRisk(t, b.risk), capitalUsdc: capital, actor });
-  return { agent: await agentSummary(row), strategy: null, warnings: [{ code: 'no_live', message: FAMILY_MODES[t.family].liveReason ?? '' }] };
+  return { agent: await agentSummary(row), strategy: null, warnings: FAMILY_MODES[t.family].liveReason ? [{ code: 'no_live', message: FAMILY_MODES[t.family].liveReason ?? '' }] : [] };
 }
 
 /** Replace the rule configuration and/or the limits of a stream or supervisor agent: a new configuration version. Not while it runs. */

@@ -1193,9 +1193,19 @@ export class LiveService {
     return { reconciled: live.length, fills: newFills, funding: newFunding, divergence };
   }
 
+  /**
+   * V11 market making: while a quoting session runs on a venue account, its engine reconciles that account from the venue's
+   * user streams (services/api/src/mm/user-stream.ts). This background loop then reads the account at most every `everyMs`
+   * instead of every pass — its reads (account, positions, open orders, fills) cost IP weight the session needs. Orders placed
+   * through this engine are reconciled when they are placed, as before; null removes the pacing.
+   */
+  setStepPacing(accountId: string, everyMs: number | null): void { if (everyMs === null) this.pacing.delete(accountId); else this.pacing.set(accountId, { everyMs, last: this.pacing.get(accountId)?.last ?? -Infinity }); }
+  private readonly pacing = new Map<string, { everyMs: number; last: number }>();
   async step(): Promise<StepSummary> {
     const s: StepSummary = { accounts: 0, reconciled: 0, fills: 0, funding: 0, divergences: 0, errors: [] };
     for (const id of await this.active()) {
+      const pace = this.pacing.get(id);
+      if (pace) { if (this.now() - pace.last < pace.everyMs) continue; pace.last = this.now(); }
       s.accounts += 1;
       try { const r = await this.reconcile(id); s.reconciled += r.reconciled; s.fills += r.fills; s.funding += r.funding; if (r.divergence) s.divergences += 1; }
       catch (e) { s.errors.push(`account ${id}: ${msg(e)}`); this.emit(id, { event: 'status', data: { error: msg(e), ts: this.now() } }); }

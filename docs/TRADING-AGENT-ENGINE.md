@@ -264,7 +264,8 @@ Limits
   mode, with no wallet account a mandate could name): no `evaluate`, no mandate check, no `order.updated` for them.
   They read the one kill switch.
 - `SPW_TRADING_API_EXECUTION` (default off) is applied by the order service to every caller: with it off a live agent
-  only reduces.
+  only reduces. ONE rule for every agent family: a market-making agent's quotes are new live risk, so the same switch gates
+  them in the quoting path (`mmOpeningLock`: `execution_disabled`); its cancels, reductions and dead man's switch pass.
 - A live perp agent's signer mandate is compiled from its trading mandate: 1× leverage with the default limits, daily
   turnover = order limit × orders per day (`docs/TRADING-MANDATES.md`, section "Agents").
 
@@ -324,7 +325,7 @@ inside a snapshot interval.
 | Momentum | `momentum` | bar (perp) | `momentum_xs_perp`, then `ts_momentum_perp`, `ma_trend_perp`, `vol_breakout_perp` | yes | yes | only on a BTC/ETH/SOL variant (today's versions include HYPE → paper) |
 | Mean Reversion | `mean_reversion` | bar (perp) | `mean_reversion_bands_perp`, then `zscore_reversion_perp` | yes | yes | same condition |
 | Funding Arbitrage | `funding_arb` | stream | rule `funding_differential` (lab backtest strategies `funding_arb_cross_venue`, `basis_cash_carry`: optional) | yes | yes | **no** |
-| Market Making | `market_making` | stream | rule `spread_inventory` (`market_making_as`: optional) | yes | yes | **no** |
+| Market Making | `market_making` | stream | rule `spread_inventory` behind the `QuotePolicy` interface, or Avellaneda–Stoikov (`policy` in the configuration); `market_making_as`: the lab study | yes | yes — the SAME engine as live on a simulated venue account | **yes, on Hyperliquid only, ONE pinned instrument (BTC, ETH or SOL)**, under a quoting mandate the owner approved with the passkey, with the server settings on and the go-live checklist complete — `docs/V11-MARKET-MAKING.md` |
 | Cross-Exchange | `cross_exchange` | stream | rule `net_spread` (`cross_exchange_spread`: optional) | yes | yes | **no** |
 | Risk Management | `risk_manager` | supervisor | rule `portfolio_supervisor` (`risk_supervisor`: optional) | proposes only | may pause paper agents | may pause paper and live agents and engage the kill switch (owner only) |
 
@@ -342,8 +343,11 @@ The strategy library itself is now an explicit manifest (`LIBRARY_MANIFEST`, aud
   ETH, SOL. GMX needs the passkey for every order. dYdX and edgeX are read-only.
 - Cross-exchange and funding arbitrage need two venues: there is no second leg to execute. The product says
   « mode réel indisponible : une seule plateforme autorise l'exécution sous mandat ». Nothing is faked.
-- Market making needs resting limit orders and cancel/replace at a rate the mandate does not cover (60 orders per
-  hour), and no live quoting engine is delivered.
+- Market making (V11): live through the quoting sessions of `services/api/src/mm` — the stream engine passes every
+  market-making agent in PAPER or LIVE mode to `MmRuntime.tick()` under the agent's lease (one worker quotes an agent). The
+  directional derivative mandate (60 orders per hour) does not cover quoting: a SEPARATE signer mandate does
+  (`SPW-VENUE-QUOTING-MANDATE-v1`, ADR 0001 row 7). `startAgent` live answers `mandate_required`, `golive_incomplete`, or the
+  code of the server setting that is off (`mm_mainnet_disabled`, `mm_testnet_disabled`, `execution_disabled`, …).
 - Momentum, mean reversion and statistical arbitrage on Hyperliquid go live through the existing perp live cycle, under
   a mandate, when the strategy's exact universe is within the pinned set (audit D1). The refusal is explicit BEFORE any
   approval: per installed strategy in the templates (`liveCapable`, `liveReason`), on the agent (`live.capable`), in

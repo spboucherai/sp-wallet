@@ -70,16 +70,33 @@ export function attributable(lots: Map<string, Dec>, who: string, position: DecS
   return D.str(D.min(mine, D.max(room, D.zero)));
 }
 
+/**
+ * The ORDER fills are replayed in. A venue's timestamp is a millisecond: two fills can carry the same one (an owner's close and
+ * a key's open in the same instant), and the ledger's result depends on which comes first. The order is therefore total and
+ * deterministic: the fill's time, then the sequence in which the wallet STORED it (`deriv_fills.seq`, the causal order on this
+ * side), then the fill id. The same rows always replay to the same lots.
+ */
+export interface OrderedFill { ts: number; seq: number | string | bigint | null; fillId: string }
+export function fillOrder(a: OrderedFill, b: OrderedFill): number {
+  if (a.ts !== b.ts) return a.ts - b.ts;
+  const sa = a.seq === null ? null : BigInt(a.seq), sb = b.seq === null ? null : BigInt(b.seq);
+  if (sa !== null && sb !== null && sa !== sb) return sa < sb ? -1 : 1;
+  if ((sa === null) !== (sb === null)) return sa === null ? 1 : -1;
+  return a.fillId < b.fillId ? -1 : a.fillId > b.fillId ? 1 : 0;
+}
 /** the lots of one account and instrument, from the stored fills and the unified orders they belong to */
 export async function lotsOf(accountId: string, instrument: string): Promise<Map<string, Dec>> {
   if (!/^[0-9a-f-]{36}$/.test(accountId)) return new Map();
-  const rows = await sql<{ side: 'buy' | 'sell'; size: string; kind: string | null; pid: string | null }[]>`
-    select f.side, f.size::text as size, o.principal_kind as kind, o.principal_id as pid
+  // a fill of a market-making session carries the session's client-id prefix: it is the AGENT's (quotes are not rows of `orders`)
+  const rows = await sql<{ side: 'buy' | 'sell'; size: string; kind: string | null; pid: string | null; mm_agent: string | null; ts: Date; seq: string | null; fill_id: string }[]>`
+    select f.side, f.size::text as size, o.principal_kind as kind, o.principal_id as pid, f.ts, f.seq::text as seq, f.fill_id,
+      (select s.agent_id::text from mm_sessions s where s.mode = 'LIVE' and s.account_id = f.account_id and f.client_id is not null and f.client_id like '0x' || s.session_hex || '%' limit 1) as mm_agent
     from deriv_fills f
     left join deriv_orders e on e.account_id = f.account_id and f.client_id is not null and (e.client_id = f.client_id or e.cloid = f.client_id)
     left join orders o on o.engine in ('paper', 'hyperliquid') and o.engine_ref = f.account_id::text || ':' || e.client_id
-    where f.account_id::text = ${accountId} and f.instrument = ${instrument} order by f.ts, f.fill_id`;
-  return replay(rows.map((r) => ({ side: r.side, size: r.size, principal: r.kind && r.pid ? principalKey({ kind: r.kind, id: r.pid }) : null })));
+    where f.account_id::text = ${accountId} and f.instrument = ${instrument}`;
+  rows.sort((a, b) => fillOrder({ ts: a.ts.getTime(), seq: a.seq, fillId: a.fill_id }, { ts: b.ts.getTime(), seq: b.seq, fillId: b.fill_id }));
+  return replay(rows.map((r) => ({ side: r.side, size: r.size, principal: r.kind && r.pid ? principalKey({ kind: r.kind, id: r.pid }) : r.mm_agent ? principalKey({ kind: 'agent', id: r.mm_agent }) : null })));
 }
 
 /** what `who` has already asked to reduce and that may still execute: the open reduce-only orders of that principal there */

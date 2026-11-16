@@ -8,7 +8,7 @@
 //   - a template whose strategy is not installed cannot be created; a family that cannot go live says why, in the server's words.
 //   - nothing here approves a mandate: "request live" shows the draft and hands over to the approval surface.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useContext, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useContext, useEffect, useState, type ReactNode } from 'react';
 import { get, post } from '../api';
 import type { Nav } from '../App';
 import { errText, I18n, useT, type Key } from '../i18n';
@@ -16,6 +16,8 @@ import { Btn, Card, EmptyState, ErrorState, Fact, Field, fiat, Fold, Icon, input
 import { srvText } from '../srvText'; // v11 interface (audit B3): a server sentence without a code is translated when known, quoted as English otherwise
 import { CardHead, EquityCard, FormGroup, LogoStack, UnitInput } from './agentBits';
 import { LabVerdicts, ReportV3, type LabVerdict, type ReportSummary } from './labReport';
+// V11 market making: the session view, the go-live checklist and the quoting mandate — a chunk of its own, loaded for a market-making agent only
+const MmSection = lazy(() => import('./mmPanel').then((m) => ({ default: m.MmSection })));
 
 // ------------------------------------------------------------------------------------------------------------------ types (the server's shapes)
 export type Mode = 'research' | 'paper' | 'live';
@@ -311,6 +313,9 @@ export function AgentPanel({ id, nav, onLegacy }: { id: string; nav: Nav; onLega
   const q = useQuery({ queryKey: ['ag2-overview', id], queryFn: () => get<Overview>(`/agents/${id}/overview`), refetchInterval: 15_000 });
   const [busy, setBusy] = useState(''), [err, setErr] = useState(''), [sheet, setSheet] = useState<'' | 'mandate' | 'risk' | 'kill'>(''), [tab, setTab] = useState<'paper' | 'live' | null>(null), [killReason, setKillReason] = useState('');
   const refresh = () => { void qc.invalidateQueries({ queryKey: ['ag2-overview', id] }); void qc.invalidateQueries({ queryKey: ['agents'] }); void qc.invalidateQueries({ queryKey: ['agent', id] }); };
+  // market making: "request live" (and a refused live start) opens the go-live checklist of the Market making section, never the generic mandate sheet
+  const isMm = q.data?.family === 'market_making'; const [mmFocus, setMmFocus] = useState(0);
+  useEffect(() => { if (isMm && sheet === 'mandate') { setSheet(''); setMmFocus((n) => n + 1); } }, [isMm, sheet]);
   if (q.isLoading) return <div className="space-y-4"><SkeletonCard lines={3} /><SkeletonCard lines={4} /></div>;
   if (q.isError || !q.data) return <ErrorState title={t('ag2LoadErr')} onRetry={() => void q.refetch()} />;
   const o = q.data, acts = actionsOf(o), block = liveBlock(o);
@@ -350,6 +355,8 @@ export function AgentPanel({ id, nav, onLegacy }: { id: string; nav: Nav; onLega
       {o.kind === 'perp' && !o.mandate && <Btn kind="ghost" full onClick={() => setSheet('risk')}>{t('ag2EditLimits')}</Btn>}
       <p className="text-[12.5px] leading-snug text-mute">{t('ag2ActionsNote')}</p></Card></Section>
 
+    {isMm && <Suspense fallback={<SkeletonCard lines={4} />}><MmSection id={id} agent={{ strategySha256: o.strategy?.sha256 ?? '', capitalUsd: o.capitalUsd, mode: o.mode }} focus={mmFocus} onChanged={refresh} /></Suspense>}
+
     <Section title={t('ag2Limits')}><Card><dl>{Object.entries(o.riskLimits).map(([k, v]) => <Fact key={k} k={t(riskKey(k))}>{String(v)} {riskUnit(k)}</Fact>)}</dl>
       {o.kind === 'spot' && <Withdrawals id={id} />}</Card></Section>
 
@@ -378,7 +385,7 @@ export function AgentPanel({ id, nav, onLegacy }: { id: string; nav: Nav; onLega
     </Section>
     <ModeLists key={listMode} id={id} mode={listMode} />
 
-    {sheet === 'mandate' && <MandateSheet o={o} onClose={() => setSheet('')} {...(onLegacy ? { onLegacy: () => { setSheet(''); onLegacy(); } } : {})} />}
+    {sheet === 'mandate' && !isMm && <MandateSheet o={o} onClose={() => setSheet('')} {...(onLegacy ? { onLegacy: () => { setSheet(''); onLegacy(); } } : {})} />}
     {sheet === 'risk' && <PerpRiskSheet o={o} onClose={() => setSheet('')} onSaved={() => { setSheet(''); refresh(); }} />}
     {sheet === 'kill' && <Sheet title={t('ag2KillEngage')} sub={t('ag2KillConfirm')} onClose={() => setSheet('')} busy={busy === 'kill'}
       footer={<Btn kind="danger" full busy={busy === 'kill'} disabled={killReason.trim().length < 3} onClick={() => void act('kill', async () => { await post('/agents/kill-switch/engage', { reason: killReason.trim() }); setSheet(''); })}>{t('ag2KillEngage')}</Btn>}>

@@ -53,6 +53,8 @@ TABLE: list[tuple[int, str, type, type | None]] = [
     (423, "halted", RiskDenied, None), (422, "venue_rejected", ValidationError, None), (422, "below_min_size", ValidationError, None),
     (409, "ambiguous_command", AmbiguousCommand, Conflict), (404, "not_found", NotFound, None), (400, "invalid_cursor", ValidationError, None),
     (409, "idempotency_conflict", IdempotencyConflict, Conflict), (409, "ambiguous_symbol", AmbiguousSymbol, Conflict), (409, "something_else", Conflict, None),
+    # the agent operations: a 409 is a Conflict whatever its code — an agent's `mandate_required` is not the key's 403, its `halted` is not the order's 423
+    (409, "mandate_required", Conflict, None), (409, "halted", Conflict, None), (409, "live_unavailable", Conflict, None), (409, "bad_state", Conflict, None),
     (429, "rate_limited", RateLimited, None), (429, "auth_throttled", RateLimited, None),
     (501, "execution_not_wired", ExecutionNotWired, sp_wallet.NotImplementedError), (501, "other", sp_wallet.NotImplementedError, None),
     (503, "signer_unreachable", ServiceUnavailable, ServerError), (500, "internal", ServerError, None), (418, "teapot", APIError, None),

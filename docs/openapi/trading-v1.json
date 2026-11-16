@@ -3,7 +3,7 @@
   "info": {
     "title": "SP Trading API",
     "version": "1.0.0",
-    "description": "Machine interface of SP Wallet: market data, portfolio, positions, orders, strategies and agents.\n\nAuthentication: `Authorization: Bearer spw_live_…` (an API key created by the owner with his passkey). A key opens nothing outside `/api/v1/trading/`.\n\nEvery operation names the scope it needs (`x-spw-scope`). Scopes are access control inside the API; they are not what bounds execution: an order placed with a key is bounded by a trading mandate that the isolated signer enforces, and execution scopes are inert without one.\n\nNumbers that carry money are decimal strings. Paper and live data always carry a `mode` and are never merged.\n\nErrors are `{ \"error\": \"<code>\", \"message\": \"<sentence>\" }`, with `data` when a refusal has machine-readable detail (the order it is about, the mandate's reasons, the failed risk checks, the questions of an ambiguous command). Every operation lists the codes it can answer, with their status, in `x-spw-errors`. Rate limits are per key: `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (seconds).\n\nA path that is not an operation of this document (or a known path with another method) answers 404 `not_found` in the same error model.\n\nAn order's `status` is one of the twelve states of `x-spw-order-states`; `final` is true for the states marked final. `UNKNOWN` is neither final nor a failure. Lists that can grow without bound (`GET /orders`, `GET /activity`) are paginated with `cursor` / `nextCursor`."
+    "description": "Machine interface of SP Wallet: market data, portfolio, positions, orders, strategies and agents.\n\nAuthentication: `Authorization: Bearer spw_live_…` (an API key created by the owner with his passkey). A key opens nothing outside `/api/v1/trading/`.\n\nEvery operation names the scope it needs (`x-spw-scope`). Scopes are access control inside the API; they are not what bounds execution: an order placed with a key is bounded by a trading mandate that the isolated signer enforces, and execution scopes are inert without one.\n\nNumbers that carry money are decimal strings. Paper and live data always carry a `mode` and are never merged.\n\nErrors are `{ \"error\": \"<code>\", \"message\": \"<sentence>\" }`, with `data` when a refusal has machine-readable detail (the order it is about, the mandate's reasons, the failed risk checks, the questions of an ambiguous command). Every operation lists the codes it can answer, with their status, in `x-spw-errors`. Rate limits are per key: `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (seconds).\n\nA path that is not an operation of this document (or a known path with another method) answers 404 `not_found` in the same error model.\n\nLive market data (quotes, order books, trades, candles, venue statuses) is also served over a websocket, which this document cannot describe: `GET /api/v1/trading/stream` (scope `markets:read`; the key in the `Authorization` header of the handshake, or `?ticket=` with a single-use ticket from `POST /api/v1/trading/stream/ticket`). See `docs/V11-QUOTE-ENGINE.md`. A stream connection writes no row in the key's usage log — it is counted in the stream's own statistics; the ticket request is an ordinary call and is logged like any other.\n\nAn order's `status` is one of the twelve states of `x-spw-order-states`; `final` is true for the states marked final. `UNKNOWN` is neither final nor a failure. Lists that can grow without bound (`GET /orders`, `GET /activity`) are paginated with `cursor` / `nextCursor`."
   },
   "servers": [
     {
@@ -8444,6 +8444,10 @@
           },
           {
             "status": 409,
+            "code": "halted"
+          },
+          {
+            "status": 409,
             "code": "idempotency_conflict"
           },
           {
@@ -8608,12 +8612,11 @@
                   },
                   "mode": {
                     "default": "research",
-                    "description": "research (default: created, not running) or paper (stream and supervisor agents start at once); never live",
+                    "description": "research (default): the agent is created and not running. paper: an agent created from a stream or supervisor template is started on paper at once; a bar agent (momentum, mean reversion, …, or `kind: perp`) is created and NOT started — it needs a backtested strategy version first, then POST /agents/{id}/start. `live` is refused (400 `bad_request`): an agent goes live only through POST /agents/{id}/start, under a mandate the owner approved.",
                     "type": "string",
                     "enum": [
                       "research",
-                      "paper",
-                      "live"
+                      "paper"
                     ]
                   }
                 },
@@ -8704,7 +8707,7 @@
             }
           },
           "409": {
-            "description": "The request conflicts with the state of the object, or needs a choice: `bad_report`, `bad_state`, `exists`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy`, `strategy_not_installed`, `wrong_kind`",
+            "description": "The request conflicts with the state of the object, or needs a choice: `bad_report`, `bad_state`, `exists`, `halted`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy`, `strategy_not_installed`, `wrong_kind`",
             "content": {
               "application/json": {
                 "schema": {
@@ -12780,7 +12783,7 @@
           "Strategies"
         ],
         "summary": "Start the agent a strategy version is pinned to",
-        "description": "research and paper sign nothing. `live` is accepted ONLY when a mandate approved by the owner with the passkey is in force for this agent at the signer; otherwise 409 `mandate_required` (a key, an agent or this API can never approve a mandate). Families that cannot go live answer 409 `live_unavailable` with the reason.",
+        "description": "research and paper sign nothing. Starting a perp agent on `paper` creates its PAPER trading mandate (nothing is signed; its orders go through the unified order service, the risk engine and that mandate): the key needs `agents:manage` and may not be restricted away from the agent's venue or instruments (403 `insufficient_scope` / `restricted`), and a halted paper account answers 409 `halted`. `live` is accepted ONLY when a mandate approved by the owner with the passkey is in force for this agent — for a perp agent a TRADING mandate, which only the owner activates: a key answers 409 `mandate_required` (a key, an agent or this API can never approve a mandate). Families that cannot go live answer 409 `live_unavailable` with the reason.",
         "security": [
           {
             "bearerKey": [
@@ -12842,6 +12845,10 @@
           {
             "status": 409,
             "code": "bad_state"
+          },
+          {
+            "status": 409,
+            "code": "halted"
           },
           {
             "status": 409,
@@ -13035,7 +13042,7 @@
             }
           },
           "409": {
-            "description": "The request conflicts with the state of the object, or needs a choice: `bad_report`, `bad_request`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy`, `other_version`",
+            "description": "The request conflicts with the state of the object, or needs a choice: `bad_report`, `bad_request`, `bad_state`, `halted`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy`, `other_version`",
             "content": {
               "application/json": {
                 "schema": {
@@ -13744,7 +13751,7 @@
             "name": "mode",
             "in": "query",
             "required": false,
-            "description": "default: the mode the agent is in now",
+            "description": "default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it.",
             "schema": {
               "type": "string",
               "enum": [
@@ -13774,18 +13781,6 @@
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
-            }
-          },
-          {
-            "name": "open",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
             }
           }
         ],
@@ -14011,7 +14006,7 @@
             "name": "mode",
             "in": "query",
             "required": false,
-            "description": "default: the mode the agent is in now",
+            "description": "default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it.",
             "schema": {
               "type": "string",
               "enum": [
@@ -14041,18 +14036,6 @@
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
-            }
-          },
-          {
-            "name": "open",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
             }
           }
         ],
@@ -14263,7 +14246,7 @@
             "name": "mode",
             "in": "query",
             "required": false,
-            "description": "default: the mode the agent is in now",
+            "description": "default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it.",
             "schema": {
               "type": "string",
               "enum": [
@@ -14299,6 +14282,7 @@
             "name": "open",
             "in": "query",
             "required": false,
+            "description": "true: only the orders that are not final",
             "schema": {
               "type": "string",
               "enum": [
@@ -14508,7 +14492,7 @@
             "name": "mode",
             "in": "query",
             "required": false,
-            "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.",
+            "description": "default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it.",
             "schema": {
               "type": "string",
               "enum": [
@@ -14832,7 +14816,7 @@
           "Agents"
         ],
         "summary": "Start an agent in research, paper or live mode",
-        "description": "research and paper sign nothing. `live` is accepted ONLY when a mandate approved by the owner with the passkey is in force for this agent at the signer; otherwise 409 `mandate_required` (a key, an agent or this API can never approve a mandate). Families that cannot go live answer 409 `live_unavailable` with the reason.",
+        "description": "research and paper sign nothing. Starting a perp agent on `paper` creates its PAPER trading mandate (nothing is signed; its orders go through the unified order service, the risk engine and that mandate): the key needs `agents:manage` and may not be restricted away from the agent's venue or instruments (403 `insufficient_scope` / `restricted`), and a halted paper account answers 409 `halted`. `live` is accepted ONLY when a mandate approved by the owner with the passkey is in force for this agent — for a perp agent a TRADING mandate, which only the owner activates: a key answers 409 `mandate_required` (a key, an agent or this API can never approve a mandate). Families that cannot go live answer 409 `live_unavailable` with the reason.",
         "security": [
           {
             "bearerKey": [
@@ -14890,6 +14874,10 @@
           {
             "status": 409,
             "code": "bad_state"
+          },
+          {
+            "status": 409,
+            "code": "halted"
           },
           {
             "status": 409,
@@ -15079,7 +15067,7 @@
             }
           },
           "409": {
-            "description": "The request conflicts with the state of the object, or needs a choice: `bad_report`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy`",
+            "description": "The request conflicts with the state of the object, or needs a choice: `bad_report`, `bad_state`, `halted`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy`",
             "content": {
               "application/json": {
                 "schema": {

@@ -1,12 +1,16 @@
-// INTEGRATION: SPWalletStream against the stream of the REAL local API — scripts/stream-stack.mts: buildServer on an own
-// per-run database, the real venue adapters, the real websocket server on a local port, keys written with the server's own hash.
+// INTEGRATION: SPWalletStream against the stream of the REAL local API — the stack shared by every SDK integration test
+// (scripts/test-stack.mts): the real API and signer on an own per-run database, the real venue adapters, the real websocket
+// server on a local port, keys created through the owner routes.
 // Skipped — reported as skipped — when PostgreSQL is not reachable or SPW_SDK_INTEGRATION=off. Live quotes come from the
 // venues' public feeds: the test that needs them is skipped when no venue answers within its delay.
+import { execFile } from 'node:child_process';
+import path from 'node:path';
+import { promisify } from 'node:util';
 import { afterAll, describe, expect, it } from 'vitest';
 import { OrderBook, SPWalletStream, StreamError, type BookMessage, type QuoteMessage, type StatusMessage, type StreamDataMessage } from '../src/stream.ts';
-import { startStreamStack, type StreamStack } from './stream-stack.ts';
+import { startStack, type Stack as StreamStack } from './stack.ts';
 
-const started = await startStreamStack('ts');
+const started = await startStack('tsstream');
 const skip = 'skip' in started ? started.skip : null;
 const stack = started as StreamStack;
 if (skip) console.warn(`[trading-sdk] stream integration tests SKIPPED: ${skip}`);
@@ -28,14 +32,14 @@ describe.skipIf(skip !== null)('integration: the stream of the real API', () => 
   });
 
   it('a key without the scope, a revoked key and a wrong key never get a stream', async () => {
-    for (const [k, why] of [['limited', 'no markets:read'], ['revoked', 'revoked']] as const) {
+    for (const [k, why] of [['agentsOnly', 'no markets:read'], ['revoked', 'revoked']] as const) {
       const s = open(k, { backoffMinMs: 20, backoffMaxMs: 40 });
       const e = await s.connect().then(() => null, (x: unknown) => x);
       expect(e, why).toBeInstanceOf(StreamError); expect(s.state).toBe('closed'); expect(s.stats.frames).toBe(0);
       say(`${k} key (${why}): refused before the upgrade — ${(e as StreamError).code}`);
     }
     // through the ticket endpoint the refusal has its HTTP status and code
-    await expect(open('limited', { auth: 'ticket' }).connect()).rejects.toMatchObject({ code: 'insufficient_scope' });
+    await expect(open('agentsOnly', { auth: 'ticket' }).connect()).rejects.toMatchObject({ code: 'insufficient_scope' });
     await expect(open('revoked', { auth: 'ticket' }).connect()).rejects.toMatchObject({ code: 'unauthenticated' });
   });
 
@@ -77,4 +81,20 @@ describe.skipIf(skip !== null)('integration: the stream of the real API', () => 
     say(`hyperliquid:BTC mark ${q.mark} bid ${q.bid} ask ${q.ask} (seq ${q.seq}, venueTs ${q.venueTs}); book ${books.length} message(s), best ${book.bids[0]![0]} / ${book.asks[0]![0]}; ${seen.length} messages through the iterator in ${Date.now() - t0} ms; frames ${s.stats.frames}`);
     s.close();
   }, 60_000);
+
+  it('examples/stream-quotes.ts runs against the real stream, stops by itself and prints no secret', async (ctx) => {
+    const example = path.join(import.meta.dirname, '../examples/stream-quotes.ts');
+    const env = (k: keyof StreamStack['keys']) => ({ PATH: process.env.PATH ?? '', SP_WALLET_API_KEY: stack.keys[k].secret, SP_WALLET_BASE_URL: stack.baseUrl, SP_WALLET_STREAM_QUOTES: '2' });
+    const run = promisify(execFile);
+    const { stdout, stderr } = await run('node', [example], { encoding: 'utf8', env: env('narrow'), timeout: 60_000 });
+    const lines = stdout.trim().split('\n');
+    expect(lines[0]).toMatch(/^connected: connection /); expect(lines.at(-1)).toBe('done'); expect(stdout).not.toContain('refused');
+    expect(stdout + stderr).not.toContain(stack.keys.narrow.secret);
+    if (stdout.includes('no more quotes within 20 s')) ctx.skip('the example ran, connected and stopped by itself; no Hyperliquid quote within 20 s (venue unreachable from here)');
+    expect(lines.filter((x) => x.startsWith('quote hyperliquid:BTC: bid '))).toHaveLength(2);
+    say(`examples/stream-quotes.ts: ${lines.join(' | ')}`);
+    // a key without markets:read: the example says so and still ends cleanly
+    const refused = await run('node', [example], { encoding: 'utf8', env: env('agentsOnly'), timeout: 60_000 });
+    expect(refused.stdout).toContain('refused: '); expect(refused.stdout).not.toContain('quote hyperliquid');
+  }, 150_000);
 });

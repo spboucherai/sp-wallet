@@ -22,6 +22,11 @@ import { inputsDigest, journal, type ReasonCode } from './journal.ts';
 import { killSwitchRead } from './kill-switch.ts';
 import { RULES, ruleHash, type DbMode } from './model.ts';
 import { computePerformance, type EquityPoint, type Performance } from './performance.ts';
+import type { HlNetwork } from '@spw/derivatives';
+import type { MmLocks } from '../mm/live-adapter.ts';
+import { envMmLocks } from '../mm/live-adapter.ts';
+import type { BookSource } from '../mm/market-data.ts';
+import { MmRuntime, type MmAgentRow, type MmLiveDeps } from '../mm/runtime.ts';
 
 export type FeedEvent = { event: 'status'; data: { status: 'connected' | 'reconnecting' | 'stale'; ts: number } } | { event: 'ticker'; data: Ticker } | { event: 'book'; data: Book } | { event: string; data: unknown };
 /** what the engine needs from the market-data side (the derivatives data service, or a replay of recorded frames in tests) */
@@ -37,7 +42,10 @@ export interface StreamAgentRow { id: string; name: string; state: string; mode:
 export interface StreamRuntime { venues: string[]; rule: string; config: Record<string, unknown>; book?: PaperBook; lastDecisionAt?: number; lastSignalAt?: number; lastEquityAt?: number; lastCode?: string; hold?: { code: string; since: number } | null;
   counters?: { decisions: number; acted: number; skippedStale: number; skippedGap: number; fills: number }; day?: { date: string; equity: number }; backtest?: unknown }
 interface Market { inst: Instrument; status: 'connected' | 'reconnecting' | 'stale' | 'idle'; book: Book | null; bookAt: number; ticker: Ticker | null; tickerAt: number; stop: () => void; lastSnapshotAt: number; gapSince: number | null; missingSince: number | null; refs: number }
-export interface StreamOptions { snapshotMs?: number; retentionDays?: number; signalEveryMs?: number; equityEveryMs?: number; gateway?: (a: StreamAgentRow, seam: OrderSeam) => AgentOrderGateway; killSwitch?: KillSwitchRead; record?: boolean }
+/** V11 market making: what the quoting sessions need beyond the feed. Absent = paper sessions only, on the feed's own books. */
+export interface StreamMmOptions { live?: MmLiveDeps; locks?: () => MmLocks; /** books of a network other than the feed's (testnet); null = none */ books?: (network: HlNetwork) => BookSource | null; worker?: string;
+  saveEveryMs?: number; slowEveryMs?: number; reconcileEveryMs?: number; auditEveryMs?: number }
+export interface StreamOptions { mm?: StreamMmOptions; snapshotMs?: number; retentionDays?: number; signalEveryMs?: number; equityEveryMs?: number; gateway?: (a: StreamAgentRow, seam: OrderSeam) => AgentOrderGateway; killSwitch?: KillSwitchRead; record?: boolean }
 
 const num = (x: string | null | undefined): number | null => (x === null || x === undefined ? null : Number(x));
 const capitalOf = (a: Pick<StreamAgentRow, 'capital_usdc'>): number => Number(a.capital_usdc) / 1e6;
@@ -87,7 +95,26 @@ export class StreamEngine {
   private prunedAt = 0;
   readonly stats = { passes: 0, snapshots: 0, gaps: 0, missing: 0, decisions: 0 };
   private readonly feed: StreamFeed; private readonly o: StreamOptions;
-  constructor(feed: StreamFeed, o: StreamOptions = {}) { this.feed = feed; this.o = o; }
+  /** the quoting sessions of the market-making agents (paper and live): services/api/src/mm/runtime.ts */
+  readonly mm: MmRuntime;
+  constructor(feed: StreamFeed, o: StreamOptions = {}) {
+    this.feed = feed; this.o = o;
+    const ks = o.killSwitch ?? killSwitchRead, m = o.mm ?? {};
+    this.mm = new MmRuntime({ now: () => this.feed.now(), worker: m.worker ?? 'stream', locks: m.locks ?? (() => envMmLocks(process.env)),
+      books: (network) => (network === 'mainnet' ? this.bookSource() : m.books?.(network) ?? { read: () => null }), resolve: (venue, base) => this.instrument(venue, base), fees: (venue) => this.feed.fees(venue),
+      killSwitch: async () => { const k = await ks.engaged(); return k.engaged || k.readOnly === true; }, ...(m.live ? { live: m.live } : {}),
+      ...(m.saveEveryMs !== undefined ? { saveEveryMs: m.saveEveryMs } : {}), ...(m.slowEveryMs !== undefined ? { slowEveryMs: m.slowEveryMs } : {}), ...(m.reconcileEveryMs !== undefined ? { reconcileEveryMs: m.reconcileEveryMs } : {}), ...(m.auditEveryMs !== undefined ? { auditEveryMs: m.auditEveryMs } : {}) });
+  }
+  /** the engine's own market state as the `BookSource` of the quoting sessions (mm/market-data.ts): the venue's stream, its status, when each book was received */
+  bookSource(): BookSource {
+    return { read: (instrument) => {
+      const m = this.markets.get(instrument);
+      if (!m) return null;
+      const b = m.book?.bids[0], a = m.book?.asks[0];
+      return { status: m.status, top: b && a ? { bid: b[0], bidSize: b[1], ask: a[0], askSize: a[1] } : null, venueTs: m.book?.ts ?? 0, receivedAt: m.bookAt,
+        funding: m.ticker?.funding != null && m.ticker.mark != null ? { rate: m.ticker.funding, mark: m.ticker.mark, receivedAt: m.tickerAt } : null };
+    } };
+  }
 
   private async instrument(venue: string, base: string): Promise<Instrument | null> {
     const k = `${venue}|${base}`;
@@ -164,6 +191,13 @@ export class StreamEngine {
   /** One decision step of one stream agent. Safe to call every second: it decides at most every `decisionEveryMs`. */
   async tick(a: StreamAgentRow): Promise<string> {
     const now = this.feed.now(), rt: StreamRuntime = { ...a.runtime }, cfg = rt.config, rule = rt.rule, mode: DbMode = a.mode === 'PAPER' ? 'PAPER' : 'RESEARCH';
+    // market making, PAPER and LIVE: ONE engine (services/api/src/mm), the rule `spread_inventory` behind its QuotePolicy interface.
+    // An agent that is no longer active is still passed on while it has a session: the session's shutdown needs its ticks.
+    if (a.engine === 'stream' && a.family === 'market_making' && RULES[rule] && a.mode !== 'RESEARCH') {
+      const inst = await this.instrument(rt.venues[0]!, a.universe[0]!);
+      if (inst) this.market(inst);                                                                // the feed's stream of that instrument (a testnet session reads its own source on top)
+      return this.mm.tick(a as unknown as MmAgentRow);
+    }
     if (a.engine !== 'stream' || !RULES[rule] || (a.state !== 'PAPER_TRADING' && a.state !== 'RUNNING')) return 'idle';
     const paper = mode === 'PAPER' && a.state === 'PAPER_TRADING', base = a.universe[0]!;
     const counters = rt.counters ?? { decisions: 0, acted: 0, skippedStale: 0, skippedGap: 0, fills: 0 };
@@ -205,11 +239,6 @@ export class StreamEngine {
     // paper bookkeeping that follows the data, not the decision cadence: maker fills and funding settlements
     let filledNow = 0;
     if (paper) {
-      for (const v of views) for (const f of mmFills(book.quotes, v, Number(cfg.minRestMs ?? 1000))) {
-        applyFill(book, f.quote.instrument, f.quote.side, f.size, f.price, feeRate(f.quote.instrument, 'maker'));
-        book.quotes = book.quotes.filter((q) => q.id !== f.quote.id); seam.filled.set(f.quote.id, { size: f.size, price: f.price }); filledNow += 1; counters.fills += 1;
-      }
-      if (filledNow) await gw.reconcile?.().catch(() => []);
       for (const s of accrueFunding(book, views, now)) await journal(a.id, { mode, kind: 'fill', code: 'FUNDING', title: `Funding settlement (simulated): ${s.amount >= 0 ? '+' : ''}${s.amount.toFixed(4)} USD`, body: `${s.instrument} at ${new Date(s.at).toISOString()}`, configVersion: a.config_version });
     }
     const equity = paperEquity(book, marks), capital = capitalOf(a), date = new Date(now).toISOString().slice(0, 10);
@@ -250,21 +279,8 @@ export class StreamEngine {
       book.mids.push(mid(v)); if (book.mids.length > 240) book.mids.splice(0, book.mids.length - 240);
       const q = mmQuotes({ ...c, quoteSizeUsd: Number(c.quoteSizeUsd), minHalfSpreadBps: Number(c.minHalfSpreadBps), volMultiplier: Number(c.volMultiplier), skewBps: Number(c.skewBps), maxInventoryUsd: Math.min(Number(c.maxInventoryUsd), a.risk.maxPositionUsd), volWindow: Number(c.volWindow) }, v, book.mids, inv);
       output = { bid: q.bid, ask: q.ask, mid: q.mid, volBps: q.volBps, halfSpreadBps: q.halfSpreadBps, skewBps: q.skewBps, inventoryUsd: q.inventoryUsd, notes: q.notes };
-      if (!paper) { code = 'research_mode'; reason = 'research mode: the quotes are computed and stored, nothing is placed'; await record('skipped'); }
-      else {
-        const cur = (side: 'buy' | 'sell'): Quote | undefined => book.quotes.find((x) => x.instrument === v.id && x.side === side), rb = Number(c.requoteBps ?? 2);
-        const moves: ['buy' | 'sell', { price: number; size: number } | null][] = [['buy', q.bid], ['sell', q.ask]];
-        const todo = moves.filter(([side, t]) => needsRequote(cur(side), t, rb));
-        code = todo.length ? 'acted' : !q.bid && !q.ask ? 'inventory_limit' : 'at_target';
-        reason = todo.length ? `quotes ${q.bid ? q.bid.price : '—'} / ${q.ask ? q.ask.price : '—'} (half-spread ${q.halfSpreadBps.toFixed(2)} bps, skew ${q.skewBps.toFixed(2)} bps)` : q.notes.join('; ') || 'quotes already in place';
-        const sid = await record(todo.length ? 'acted' : 'skipped');
-        for (const [side, t] of todo) {
-          const old = cur(side);
-          if (old) await gw.cancel({ kind: 'agent', id: a.id }, old.id).catch(() => {});
-          book.quotes = book.quotes.filter((x) => x.id !== old?.id);
-          if (t) { const r = await submit({ instrument: v.id, side, size: t.size, type: 'limit', price: t.price, reduceOnly: false, tag: side === 'buy' ? 'b' : 'a' }, sid); if (r.state === 'REJECTED') { code = r.reason === 'KILL_SWITCH_ACTIVE' ? 'kill_switch' : 'orders_refused'; } else acted = true; }
-        }
-      }
+      // PAPER and LIVE never come here (the quoting sessions above): this is RESEARCH — the same rule, computed and stored, nothing placed
+      code = 'research_mode'; reason = 'research mode: the quotes are computed and stored, nothing is placed'; await record('skipped');
     } else {
       const [va, vb] = [views[0]!, views[1]!];
       const d = rule === 'net_spread'
@@ -318,7 +334,7 @@ export class StreamEngine {
 
   /** release the streams of instruments no agent uses any more */
   retain(instrumentIds: Set<string>): void { for (const [id, m] of this.markets) if (!instrumentIds.has(id)) { m.stop(); this.markets.delete(id); } }
-  close(): void { for (const m of this.markets.values()) m.stop(); this.markets.clear(); }
+  close(): void { this.mm.close(); for (const m of this.markets.values()) m.stop(); this.markets.clear(); }
   marketStatus(): { id: string; status: string; bookAgeMs: number | null; gap: boolean }[] { const now = this.feed.now(); return [...this.markets.values()].map((m) => ({ id: m.inst.id, status: m.status, bookAgeMs: m.bookAt ? now - m.bookAt : null, gap: m.gapSince !== null })); }
 }
 

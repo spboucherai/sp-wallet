@@ -79,6 +79,14 @@ export async function startAgent(id: string, mode: Mode, actor: Actor): Promise<
       if (p.state === 'PAUSED') await resumeLive(p, (await import('./perp-live.ts')).perpRuntime());   // refuses when the mandate is no longer active at the signer
     } else if (kind === 'spot') {
       if (a.state !== 'LIVE') throw new MandateRequired(a.id, kind, a.mode === 'LIVE' ? 'the mandate of this agent was revoked when it left LIVE (pause, stop, loss limit or expiry) — a new one must be approved' : 'no mandate was ever approved for this agent');
+    } else if (kind === 'stream' && family === 'market_making') {
+      // V11 live market making: a quoting mandate the OWNER approved must be in force, every server lock open and the owner's
+      // go-live checklist complete (mm/lifecycle.ts — nothing is created, approved or signed here). The session itself is
+      // started by the worker that holds the agent's lease: cancel-all → reconcile → arm the dead man's switch → quote.
+      const { execution } = await import('./execution-bind.ts'), { assertLiveStart } = await import('../mm/lifecycle.ts');
+      const locks = execution().mandates.deps.mmLocks?.();
+      const ok = await assertLiveStart(a, actor, execution().mandates, { now: execution().risk.now(), ...(locks ? { locks } : {}), mandateRequired: (why) => new MandateRequired(a.id, kind, why) });
+      await sql`update agents set state = 'LIVE', mode = 'LIVE', stop_reason = null, runtime = jsonb_set((coalesce(runtime, '{}'::jsonb) - 'hold' - 'pausedFrom'), '{mm}', coalesce(runtime->'mm', '{}'::jsonb) || ${sql.json({ live: { mandateId: ok.mandateId, network: ok.network, activatedAt: Date.now() } } as never)}, true), updated_at = now() where id = ${a.id}`;
     } else throw new UserError('live_unavailable', fm.liveReason ?? 'live mode is not available for this agent', 409);
     await journal(a.id, { mode: 'LIVE', kind: 'state', code: 'started_live', title: `Live ${a.state === 'PAUSED' ? 'resumed' : 'confirmed'} by ${who}`, body: 'under the mandate in force at the signer' });
     await audit('agent.start', who, { id: a.id, mode });
@@ -131,14 +139,22 @@ export async function resumeAgent(id: string, actor: Actor): Promise<RuntimeAgen
 export async function stopAgent(id: string, actor: Actor, reason = ''): Promise<RuntimeAgentRow & { windDown?: unknown }> {
   const a = await loadAgent(id), kind = kindOf(a), who = actorName(actor);
   let windDown: unknown;
-  if (a.state === 'STOPPED') return a;
+  if (a.state === 'STOPPED' || (a.state === 'STOPPING' && kind === 'stream')) return a;
   if (kind === 'perp') {
     const p = a as unknown as PerpAgentRow;
     if (isLiveActive(p)) { const { stopLive } = await import('./perp-live-cycle.ts'); const r = await stopLive(p, (await import('./perp-live.ts')).perpRuntime(), 'en'); windDown = { ...r.windDown, result: r.result }; }
     else await (await import('./perp-routes.ts')).perpMode(p, 'STOPPED', who);
   } else if (kind === 'spot') await (await import('./routes.ts')).setSpotMode(a as unknown as AgentRow, 'STOPPED', who);
   else {
-    await sql`update agents set state = 'STOPPED', stop_reason = ${`stopped by ${who}${reason ? `: ${reason}` : ''}`.slice(0, 300)}, runtime = jsonb_set(coalesce(runtime, '{}'::jsonb), '{book,quotes}', '[]'::jsonb, false), updated_at = now() where id = ${a.id}`;
+    // a LIVE market-making agent: its quoting mandate is revoked at the signer FIRST (no new quote from that instant); the session
+    // then cancels what rests, unwinds if the mandate says so, removes the dead man's switch — the agent is STOPPING until then
+    const liveMm = kind === 'stream' && a.family === 'market_making' && a.mode === 'LIVE' && ['LIVE', 'PAUSED'].includes(a.state);
+    if (liveMm) {
+      const { executionBound } = await import('./execution-bind.ts'), ex = executionBound(), q = ex ? await ex.mandates.quotingFor(a.id).catch(() => null) : null;
+      if (ex && q && q.row.state === 'active') windDown = await ex.mandates.revoke(q.row.id, { by: actor.kind === 'owner' ? 'owner' : 'system', reason: actor.kind === 'owner' ? 'owner_request' : 'stop_condition', detail: `agent stopped by ${who}`, cancelOpenOrders: false }).then((r) => ({ mandateRevoked: true, signerRevoked: r.signerRevoked, signerError: r.signerError }), (e: Error) => ({ mandateRevoked: false, signerError: e.message.slice(0, 200) }));
+    }
+    const [open] = liveMm ? await sql`select 1 as x from mm_sessions where agent_id = ${a.id} and state = 'running' limit 1` : [];
+    await sql`update agents set state = ${open ? 'STOPPING' : 'STOPPED'}, stop_reason = ${`stopped by ${who}${reason ? `: ${reason}` : ''}`.slice(0, 300)}, runtime = jsonb_set(coalesce(runtime, '{}'::jsonb), '{book,quotes}', '[]'::jsonb, false), updated_at = now() where id = ${a.id}`;
     await audit('agent.mode', who, { id: a.id, state: 'STOPPED' });
   }
   await journal(a.id, { kind: 'state', code: 'stopped', title: `Stop requested by ${who}`, body: reason || (windDown ? 'the mandate is revoked; positions are being closed with reduce-only orders' : '') });

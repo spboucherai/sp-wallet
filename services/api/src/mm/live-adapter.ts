@@ -13,14 +13,49 @@
 // and enforces the mandate), sends it, and reads the venue's answer order by order. An answer that is lost or unreadable AFTER
 // the action was sent is `unknown`, never a rejection.
 import { D, hlPinnedAssets, createHlTrading, type HlL1SignPayload, type HlNetwork, type HlSignature, type SignRequest } from '@spw/derivatives/live';
-import { createHlNonceSource, hlAddressRateLimit, hlBatchAnswer, hlFills, hlFrontendOpenOrders, hlClearinghouseState, hlOrderLookup, hlStep, type HlTrading } from '@spw/derivatives/hyperliquid';
+import { HL_API, HL_WS, createHlNonceSource, hlAddressRateLimit, hlBatchAnswer, hlFills, hlFrontendOpenOrders, hlClearinghouseState, hlOrderLookup, hlStep, type HlTrading } from '@spw/derivatives/hyperliquid';
 import type { Instrument } from '@spw/derivatives';
 import type { AccountRead, BatchOutcome, CancelOutcome, OrderLookup, OrderPort, OrderResult, QuoteOrder, SwitchOutcome, VenueFill, VenueOpenOrder } from './ports.ts';
 
 export const MM_MAINNET_LOCK = 'SPW_DERIV_MM_MAINNET';
-export interface MmLocks { /** SPW_DERIV_LIVE_MAINNET */ liveMainnet(): boolean; /** SPW_DERIV_MANDATE_MAINNET */ mandateMainnet(): boolean; /** SPW_DERIV_MM_MAINNET */ mmMainnet(): boolean }
-/** the three settings from the process environment, each read when asked (never cached): `on` opens, anything else is closed */
-export const envMmLocks = (env: Record<string, string | undefined>): MmLocks => ({ liveMainnet: () => env.SPW_DERIV_LIVE_MAINNET === 'on', mandateMainnet: () => env.SPW_DERIV_MANDATE_MAINNET === 'on', mmMainnet: () => env[MM_MAINNET_LOCK] === 'on' });
+export const MM_TESTNET_LOCK = 'SPW_DERIV_MM_TESTNET';
+/**
+ * The server settings that gate a QUOTE (the only thing a quoting session sends that can add risk). ONE rule, read at every use:
+ *
+ *   mainnet   SPW_DERIV_LIVE_MAINNET (any live order on mainnet)  →  `mainnet_disabled`
+ *             SPW_DERIV_MANDATE_MAINNET (any order without a passkey on mainnet)  →  `mandate_mainnet_disabled`
+ *             SPW_DERIV_MM_MAINNET (quoting on mainnet)  →  `mm_mainnet_disabled`
+ *   testnet   SPW_DERIV_MM_TESTNET (quoting on testnet; the owner's own first step of the go-live checklist)  →  `mm_testnet_disabled`
+ *   both      SPW_TRADING_API_EXECUTION — the switch that already gates every agent's NEW live risk in the order service
+ *             (docs/v11/work/agents-bind.md): a market-making agent is an agent, its quotes are new live risk  →  `execution_disabled`
+ *
+ * Every one defaults to off, and anything but the exact value `on` is off. With any of them off: quotes are refused with the
+ * first code above that applies, BEFORE anything is signed; cancels, reduce-only orders and the dead man's switch pass.
+ * `mmTestnet` and `agentExecution` are optional in the interface for the callers that build their own locks (tests): absent
+ * means "not consulted". `envMmLocks` — the only thing production uses — always provides all five.
+ */
+export interface MmLocks { /** SPW_DERIV_LIVE_MAINNET */ liveMainnet(): boolean; /** SPW_DERIV_MANDATE_MAINNET */ mandateMainnet(): boolean; /** SPW_DERIV_MM_MAINNET */ mmMainnet(): boolean;
+  /** SPW_DERIV_MM_TESTNET */ mmTestnet?(): boolean; /** SPW_TRADING_API_EXECUTION */ agentExecution?(): boolean }
+/** the settings from the process environment, each read when asked (never cached): `on` opens, anything else is closed */
+export const envMmLocks = (env: Record<string, string | undefined>): Required<MmLocks> => ({ liveMainnet: () => env.SPW_DERIV_LIVE_MAINNET === 'on', mandateMainnet: () => env.SPW_DERIV_MANDATE_MAINNET === 'on', mmMainnet: () => env[MM_MAINNET_LOCK] === 'on',
+  mmTestnet: () => env[MM_TESTNET_LOCK] === 'on', agentExecution: () => env.SPW_TRADING_API_EXECUTION === 'on' });
+export interface MmLockRefusal { code: 'mainnet_disabled' | 'mandate_mainnet_disabled' | 'mm_mainnet_disabled' | 'mm_testnet_disabled' | 'execution_disabled'; message: string; setting: string }
+/** why a quote cannot be sent on this network right now; null = every lock is open */
+export function mmOpeningLock(network: HlNetwork, locks: MmLocks): MmLockRefusal | null {
+  if (network === 'mainnet') {
+    if (!locks.liveMainnet()) return { code: 'mainnet_disabled', setting: 'SPW_DERIV_LIVE_MAINNET', message: 'SPW_DERIV_LIVE_MAINNET is not on: no order that can add risk is sent to mainnet' };
+    if (!locks.mandateMainnet()) return { code: 'mandate_mainnet_disabled', setting: 'SPW_DERIV_MANDATE_MAINNET', message: 'SPW_DERIV_MANDATE_MAINNET is not on: no order is placed without a passkey on mainnet' };
+    if (!locks.mmMainnet()) return { code: 'mm_mainnet_disabled', setting: MM_MAINNET_LOCK, message: `${MM_MAINNET_LOCK} is not on: no quote is placed on mainnet` };
+  } else if (locks.mmTestnet && !locks.mmTestnet()) return { code: 'mm_testnet_disabled', setting: MM_TESTNET_LOCK, message: `${MM_TESTNET_LOCK} is not on: no quote is placed on testnet` };
+  if (locks.agentExecution && !locks.agentExecution()) return { code: 'execution_disabled', setting: 'SPW_TRADING_API_EXECUTION', message: 'SPW_TRADING_API_EXECUTION is not on: no agent places new live risk (cancels and reductions still pass)' };
+  return null;
+}
+/** the network a session runs on is the venue account's, never a setting: the hosts, the asset table and the locks follow from it */
+export function mmNetworkSelection(network: string, locks: MmLocks): { network: HlNetwork; restUrl: string; wsUrl: string; lock: MmLockRefusal | null; consulted: string[] } {
+  if (network !== 'mainnet' && network !== 'testnet') throw new Error(`a quoting session runs on Hyperliquid mainnet or testnet, not on '${String(network).slice(0, 20)}'`);
+  return { network, restUrl: HL_API[network], wsUrl: HL_WS[network], lock: mmOpeningLock(network, locks),
+    consulted: network === 'mainnet' ? ['SPW_DERIV_LIVE_MAINNET', 'SPW_DERIV_MANDATE_MAINNET', MM_MAINNET_LOCK, 'SPW_TRADING_API_EXECUTION'] : [MM_TESTNET_LOCK, 'SPW_TRADING_API_EXECUTION'] };
+}
 export interface QuotingSignerPort { venueQuotingSign(p: { mandateId: string; sign: SignRequest }): Promise<{ signature: HlSignature; signer: string; kind: string; hash: string; mandateId: string; phase: string; orders: number }> }
 export interface HlVenuePort { exchange(body: unknown, batchLength: number): Promise<unknown>; info(body: unknown): Promise<unknown> }
 export interface LiveMmAdapterOptions {
@@ -45,13 +80,11 @@ export function createLiveMmAdapter(o: LiveMmAdapterOptions): OrderPort {
   const oidToClient = new Map<string, string>();
   const coinOf = (instrument: string) => instrument.slice(instrument.indexOf(':') + 1);
 
-  /** the mainnet locks: only what can add risk is stopped */
+  /** the server locks: only what can add risk is stopped */
   const lockFor = (opening: boolean): Refused | null => {
-    if (o.network !== 'mainnet' || !opening) return null;
-    if (!o.locks.liveMainnet()) return { kind: 'refused', stage: 'lock', code: 'mainnet_disabled', message: 'SPW_DERIV_LIVE_MAINNET is not on: no order that can add risk is sent to mainnet' };
-    if (!o.locks.mandateMainnet()) return { kind: 'refused', stage: 'lock', code: 'mandate_mainnet_disabled', message: 'SPW_DERIV_MANDATE_MAINNET is not on: no order is placed without a passkey on mainnet' };
-    if (!o.locks.mmMainnet()) return { kind: 'refused', stage: 'lock', code: 'mm_mainnet_disabled', message: `${MM_MAINNET_LOCK} is not on: no quote is placed on mainnet` };
-    return null;
+    if (!opening) return null;
+    const l = mmOpeningLock(o.network, o.locks);
+    return l ? { kind: 'refused', stage: 'lock', code: l.code, message: l.message } : null;
   };
   /** sign (the signer enforces the mandate), then send. `refused` only when it is CERTAIN nothing reached the venue. */
   const send = async (built: { action: unknown; sign: SignRequest }, batch: number): Promise<{ ok: true; raw: unknown } | Refused | { kind: 'unknown'; message: string }> => {

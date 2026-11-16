@@ -47,7 +47,10 @@ export type StreamServerMessage = StreamDataMessage | DroppedMessage | StreamErr
   | { v: 1; type: 'unsubscribed'; channel: StreamChannel; key: string; reqId?: string | number } | { v: 1; type: 'heartbeat'; ts: number; subscriptions: number } | { v: 1; type: 'pong'; t: number | null; ts: number };
 
 export class StreamError extends Error {
-  constructor(readonly code: string, message: string, readonly channel?: StreamChannel) { super(message); this.name = 'StreamError'; }
+  readonly code: string;
+  readonly channel?: StreamChannel;
+  // plain fields, no parameter properties: the file must run under Node's type stripping (the examples are run with `node`)
+  constructor(code: string, message: string, channel?: StreamChannel) { super(message); this.name = 'StreamError'; this.code = code; if (channel !== undefined) this.channel = channel; }
 }
 
 /** the part of a WebSocket the SDK uses (browsers, Node >= 22, the `ws` package) */
