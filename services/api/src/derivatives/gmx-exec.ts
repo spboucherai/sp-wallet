@@ -22,7 +22,8 @@ import {
   type GmxAuthorization, type GmxEvent, type GmxMarketPin, type GmxPolicy, type GmxSection,
 } from '@spw/derivatives/live';
 import { UserError } from '../config.ts';
-import { audit, sql } from '../db.ts';
+import { canonicalIntentHash, RISK_INTENT_TTL_MS } from './exec.ts';
+import { audit, getSetting, sql } from '../db.ts';
 import { move, type ProposalRow } from '../transfers.ts';
 import type { GmxChain, GmxChainOrder, GmxChainPosition, GmxPinCheck, GmxReceipt } from './gmx-chain.ts';
 
@@ -42,7 +43,7 @@ const GMX_ERROR_NAMES: Record<string, string> = { [toFunctionSelector('OrderNotF
 /** a decimal rounded to `dp` places (display of estimates; never feeds a transaction) */
 const rd = (d: Dec, dp = 6): DecStr => D.str(D.div(d, D.one, dp, 'half_even'));
 
-export type GmxBlocker = 'gmx_setting_off' | 'mainnet_setting_off' | 'not_authorized' | 'authorization_expired' | 'authorization_revoked' | 'contracts_changed' | 'signer_halted' | 'chain_unreadable' | 'wallet_unreadable';
+export type GmxBlocker = 'gmx_setting_off' | 'mainnet_setting_off' | 'not_authorized' | 'authorization_expired' | 'authorization_revoked' | 'contracts_changed' | 'signer_halted' | 'gmx_halted' | 'chain_unreadable' | 'wallet_unreadable';
 export const GMX_BLOCKER_TEXT: Record<GmxBlocker, Record<Locale, string>> = {
   gmx_setting_off: { en: 'GMX trading is disabled on this server (SPW_DERIV_GMX_LIVE is not "on"). It is a server setting: it cannot be changed from the app. Reading stays available.', fr: 'La négociation sur GMX est désactivée sur ce serveur (SPW_DERIV_GMX_LIVE n\'est pas « on »). C\'est un réglage du serveur : il ne se modifie pas depuis l\'application. La lecture reste disponible.' },
   mainnet_setting_off: { en: 'Live derivative trading on mainnet is disabled on this server (SPW_DERIV_LIVE_MAINNET is not "on"). It is a server setting.', fr: 'La négociation réelle de dérivés sur le réseau principal est désactivée sur ce serveur (SPW_DERIV_LIVE_MAINNET n\'est pas « on »). C\'est un réglage du serveur.' },
@@ -50,7 +51,8 @@ export const GMX_BLOCKER_TEXT: Record<GmxBlocker, Record<Locale, string>> = {
   authorization_expired: { en: 'The GMX authorization has expired: approve a new one.', fr: 'L\'autorisation GMX a expiré : approuvez-en une nouvelle.' },
   authorization_revoked: { en: 'The GMX authorization was revoked: approve a new one.', fr: 'L\'autorisation GMX a été révoquée : approuvez-en une nouvelle.' },
   contracts_changed: { en: 'GMX has published new contracts: a new review is needed. Nothing is signed for GMX until this wallet\'s pinned table is reviewed again.', fr: 'GMX a publié de nouveaux contrats : nouvelle revue nécessaire. Rien n\'est signé pour GMX tant que la table épinglée de ce portefeuille n\'a pas été revue.' },
-  signer_halted: { en: 'The signer\'s emergency halt is active: nothing is signed.', fr: 'L\'arrêt d\'urgence du signataire est actif : rien n\'est signé.' },
+  signer_halted: { en: 'The signer\'s emergency halt is active: no new position is signed. Closing a position and cancelling a pending order stay possible.', fr: 'L\'arrêt d\'urgence du signataire est actif : aucune nouvelle position n\'est signée. Fermer une position et annuler un ordre en attente restent possibles.' },
+  gmx_halted: { en: 'GMX trading is halted on this wallet: no new position is prepared. Closing a position and cancelling a pending order stay possible.', fr: 'La négociation sur GMX est suspendue sur ce portefeuille : aucune nouvelle position n\'est préparée. Fermer une position et annuler un ordre en attente restent possibles.' },
   chain_unreadable: { en: 'Arbitrum could not be read: the contracts cannot be checked right now.', fr: 'Arbitrum n\'a pas pu être lu : les contrats ne peuvent pas être vérifiés pour le moment.' },
   wallet_unreadable: { en: 'The signer could not be reached: the wallet address and limits are unknown.', fr: 'Le signataire est injoignable : l\'adresse et les limites du portefeuille sont inconnues.' },
 };
@@ -75,6 +77,8 @@ export interface GmxDeps {
   chain: GmxChain; signer: GmxSignerPort; market: GmxMarketPort; now: () => number; rpId: string;
   credentials: () => Promise<{ id: string; transports?: string[] | null }[]>;
   settings: () => { liveMainnet: boolean; gmxLive: boolean };
+  /** V11: verifies a passkey assertion over `challenge` (loosening a loss limit, lifting the halt); absent = those changes are refused */
+  verifyOwner?: (assertion: unknown, challenge: Uint8Array) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -90,6 +94,31 @@ export const GmxAuthBodySchema = z.strictObject({ allowedMarkets: z.array(Addres
   days: z.number().int().min(1).max(GMX_POLICY_BOUNDS.maxDays), locale: z.enum(LOCALES).default('fr') });
 export const GmxApproveAuthSchema = z.strictObject({ authorization: GmxAuthorizationSchema, assertion: z.record(z.string(), z.unknown()) });
 export const GmxAssertionSchema = z.strictObject({ assertion: z.record(z.string(), z.unknown()) });
+export const GmxHaltBodySchema = z.strictObject({ reason: z.string().trim().max(200).default('') });
+export const GmxLimitsBodySchema = z.strictObject({ maxDailyLoss: Dec, maxTotalLoss: Dec });
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// V11 (B-10) — API-side loss limits and kill switch of GMX trading, on the model of a Hyperliquid venue account (exec.ts):
+// a daily and a total loss limit (realised by this wallet's executed orders + unrealised on the open positions), and an owner
+// halt. Both stop NEW risk only: a decrease or a cancellation is never refused by them. Tightening and halting are free;
+// loosening a limit and lifting the halt need the owner's passkey over a canonical intent. Stored in `settings`, bound to
+// the authorization they were set under: a new authorization (passkey) starts from the defaults, without a halt.
+
+/** the gross exposure the GMX risk policy allows, in multiples of the authorized order size (unchanged from v8) */
+const GMX_GROSS_MULTIPLE = '3';
+export interface GmxRiskLimits { maxDailyLoss: DecStr; maxTotalLoss: DecStr }
+interface GmxRisk extends GmxRiskLimits { authorizationId: string; halt: string | null }
+const GMX_RISK_KEY = 'deriv.gmx.risk', GMX_RISK_PENDING = 'deriv.gmx.risk.pending';
+/** defaults: 5 % and 20 % of the allowed gross exposure — the fractions of `liveRiskPolicy` for a Hyperliquid account */
+export function gmxDefaultLimits(pol: Pick<GmxPolicy, 'maxOrderSizeUsd'>): GmxRiskLimits {
+  const gross = D.mul(D.from(pol.maxOrderSizeUsd), D.from(GMX_GROSS_MULTIPLE));
+  return { maxDailyLoss: D.str(D.mul(gross, D.from('0.05'))), maxTotalLoss: D.str(D.mul(gross, D.from('0.2'))) };
+}
+export interface GmxRiskIntent { v: 1; kind: 'gmx-limits' | 'gmx-resume'; authorizationId: string; limits: GmxRiskLimits | null; loosened: string[]; subject: string | null; nonce: string; createdAt: number; expiresAt: number }
+export const gmxRiskIntentHash = (i: GmxRiskIntent): Uint8Array => canonicalIntentHash('SPW-GMX-RISK-INTENT-v1', i);
+
+/** which of the two loss limits `next` raises above `cur` */
+const gmxLoosened = (cur: GmxRiskLimits, next: GmxRiskLimits): string[] => (['maxDailyLoss', 'maxTotalLoss'] as const).filter((k) => D.gt(D.from(next[k]), D.from(cur[k])));
 
 export type GmxOpState = 'pending_approval' | 'signed' | 'sent' | 'created' | 'executed' | 'cancelled' | 'frozen' | 'done' | 'failed' | 'expired' | 'withdrawn' | 'unknown';
 interface Row {
@@ -138,13 +167,17 @@ export class GmxService {
   private explorer = (kind: 'tx' | 'addr', v: string) => { const n = getNetwork(GMX_PINS.network); return (kind === 'tx' ? n.explorerTx : n.explorerAddr) + v; };
 
   /** the gates of everything that prepares or approves: both server settings, the signer, an active authorization, the pins */
-  private async gate(needAuth = true): Promise<{ st: Awaited<ReturnType<GmxSignerPort['status']>>; me: string; auth: GmxSignerAuth | null; pins: GmxPinCheck }> {
+  /**
+   * `exit` (V11, B-01 / B-02): closing an EXISTING position (a decrease) or cancelling a pending order. The two server settings
+   * and the signer's emergency halt stop new risk only; the way out needs the authorization and the pins, nothing else.
+   */
+  private async gate(needAuth = true, exit = false): Promise<{ st: Awaited<ReturnType<GmxSignerPort['status']>>; me: string; auth: GmxSignerAuth | null; pins: GmxPinCheck }> {
     const s = this.deps.settings();
-    if (!s.gmxLive) throw new UserError('gmx_disabled', `${GMX_BLOCKER_TEXT.gmx_setting_off.en} Nothing was built, signed or sent.`, 403);
-    if (!s.liveMainnet) throw new UserError('mainnet_disabled', `${GMX_BLOCKER_TEXT.mainnet_setting_off.en} Nothing was built, signed or sent.`, 403);
+    if (!exit && !s.gmxLive) throw new UserError('gmx_disabled', `${GMX_BLOCKER_TEXT.gmx_setting_off.en} Nothing was built, signed or sent.`, 403);
+    if (!exit && !s.liveMainnet) throw new UserError('mainnet_disabled', `${GMX_BLOCKER_TEXT.mainnet_setting_off.en} Nothing was built, signed or sent.`, 403);
     const st = await this.deps.signer.status(true), me = st.addresses[GMX_PINS.network];
     if (!me) throw new UserError('unsupported_network', 'the signer has no key for Arbitrum', 503);
-    if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
+    if (st.halted && !exit) throw new UserError('halted', 'emergency halt is active', 423);
     const auth = this.authOf(st);
     if (needAuth && (!auth || this.authState(auth) !== 'active')) throw new UserError('not_authorized', auth ? `the GMX authorization is ${this.authState(auth)}: approve a new one` : 'GMX trading is not authorized: approve a venue policy with your passkey first', 409);
     const pins = await this.deps.chain.checkPins(me);
@@ -201,6 +234,8 @@ export class GmxService {
     try { st = await this.deps.signer.status(); } catch (e) { walletError = msg(e); blockers.push('wallet_unreadable'); }
     const me = st?.addresses[GMX_PINS.network] ?? null, auth = st ? this.authOf(st) : null, as = auth ? this.authState(auth) : null;
     if (st?.halted) blockers.push('signer_halted');
+    const risk = await this.riskView(auth).catch(() => null);
+    if (risk?.halt) blockers.push('gmx_halted');
     if (st && (!auth || as === 'stale')) blockers.push(as === 'stale' ? 'contracts_changed' : 'not_authorized'); else if (as === 'expired') blockers.push('authorization_expired'); else if (as === 'revoked') blockers.push('authorization_revoked');
     let pins: { ok: boolean | null; problems: string[]; checkedAt: number | null } = { ok: null, problems: [], checkedAt: null };
     try { pins = await this.deps.chain.checkPins(me); if (!pins.ok && !blockers.includes('contracts_changed')) blockers.push('contracts_changed'); }
@@ -237,6 +272,8 @@ export class GmxService {
       authorization: auth ? { id: auth.authorization.authorizationId, state: as!, policy: auth.authorization.policy, createdAt: auth.authorization.createdAt, expiresAt: auth.authorization.expiresAt, today: auth.today } : null,
       markets: GMX_MARKETS.map((m) => { const d = data.get(m.market); return { market: m.market, name: m.name, instrument: m.instrument, base: m.priceSymbol, indexDecimals: m.indexDecimals, collateral: m.collateral.map((c) => ({ token: c.token, symbol: c.symbol, decimals: c.decimals })),
         allowed: !!auth && as === 'active' && auth.authorization.policy.allowedMarkets.some((x) => lc(x) === lc(m.market)), mark: d?.mark ? rd(d.mark, 2) : null, oracleMin: d?.liq?.oracleMin ?? null, oracleMax: d?.liq?.oracleMax ?? null }; }),
+      /** V11: the API-side loss limits and kill switch (new risk only); null without an authorization */
+      risk,
       positions, positionsSource: 'chain' as const, positionsError, pendingOrders, operations: ops.map((r) => this.opView(r)),
       facts: { requestExpirationSec: GMX_REQUEST_EXPIRATION_SEC, executionGas, twoStep: true as const }, ts: this.now(),
     };
@@ -270,12 +307,111 @@ export class GmxService {
     await this.gate(false);
     const r = await this.deps.signer.gmxAuthorize(body.authorization, body.assertion); // the signer verifies the passkey over the same canonical bytes, the account, the contract set and the acknowledgement hash
     await audit('deriv.gmx.authorized', 'owner', { id: r.authorizationId, hash: r.hash, policy: body.authorization.policy, expiresAt: body.authorization.expiresAt, ackSha256: body.authorization.ackSha256 });
+    // a new authorization, approved with the passkey, starts from the default loss limits and without a halt
+    await this.writeRisk({ authorizationId: r.authorizationId, halt: null, ...gmxDefaultLimits(body.authorization.policy) });
     return this.status(locale);
   }
   /** stopping never needs a passkey, a server setting or a readable chain */
   async revoke(locale: Locale = 'en') {
     const st = await this.deps.signer.status(true);
     for (const a of st.gmx ?? []) if (!a.revoked) { await this.deps.signer.gmxRevoke(a.authorization.authorizationId); await audit('deriv.gmx.revoked', 'owner', { id: a.authorization.authorizationId }); }
+    return this.status(locale);
+  }
+
+  // ------------------------------------------------------------------ V11: loss limits and kill switch (API side, new risk only)
+
+  private async writeRisk(r: GmxRisk): Promise<void> { await sql`insert into settings (key, value) values (${GMX_RISK_KEY}, ${sql.json(r as never)}) on conflict (key) do update set value = excluded.value`; }
+  /** the limits in force under this authorization: what was stored for it, else the defaults derived from its policy */
+  private async risk(auth: GmxSignerAuth): Promise<GmxRisk> {
+    const id = auth.authorization.authorizationId, stored = await getSetting<GmxRisk | null>(GMX_RISK_KEY, null);
+    return stored && stored.authorizationId === id ? stored : { authorizationId: id, halt: null, ...gmxDefaultLimits(auth.authorization.policy) };
+  }
+  /**
+   * Realised PnL of the orders THIS wallet executed (the keeper's own events: base PnL minus the position fee), today (UTC) and
+   * in total. Not in it: a liquidation by GMX's keepers, funding and borrowing settled into collateral, and anything done to the
+   * positions from another interface — the unrealised PnL of the open positions is added by the risk engine.
+   */
+  private async realized(now: number): Promise<{ today: DecStr; total: DecStr }> {
+    const day = new Date(Math.floor(now / 86_400_000) * 86_400_000);
+    const rows = await sql<{ pnl: string | null; fee: string | null; done_at: Date | null }[]>`select outcome->>'pnlUsd' as pnl, outcome->>'positionFeeUsd' as fee, done_at from deriv_gmx_ops where state = 'executed' and kind <> 'cancel' and outcome is not null`;
+    let today = D.zero, total = D.zero;
+    for (const r of rows) {
+      let v: Dec;
+      try { v = D.sub(D.from(r.pnl ?? '0'), D.from(r.fee ?? '0')); } catch { continue; }
+      total = D.add(total, v);
+      if (r.done_at && r.done_at >= day) today = D.add(today, v);
+    }
+    return { today: D.str(today), total: D.str(total) };
+  }
+  private async riskView(auth: GmxSignerAuth | null) {
+    if (!auth) return null;
+    const r = await this.risk(auth), used = await this.realized(this.now());
+    return { halt: r.halt, maxDailyLoss: r.maxDailyLoss, maxTotalLoss: r.maxTotalLoss, defaults: gmxDefaultLimits(auth.authorization.policy), realizedToday: used.today, realizedTotal: used.total,
+      note: 'Stops new positions only; closing and cancelling are never refused by these. Realised PnL counts this wallet\'s executed orders; a liquidation by GMX is not in it.' };
+  }
+  private async currentAuth(): Promise<GmxSignerAuth> {
+    const auth = this.authOf(await this.deps.signer.status(true));
+    if (!auth) throw new UserError('not_authorized', 'GMX trading is not authorized: there is no limit to change and nothing to halt', 409);
+    return auth;
+  }
+
+  /** the kill switch: stops NEW GMX positions on this wallet. No passkey. It cancels nothing and closes nothing. */
+  async halt(body: z.infer<typeof GmxHaltBodySchema>, locale: Locale = 'en') {
+    const auth = await this.currentAuth(), r = await this.risk(auth);
+    const text = `halted by the owner${body.reason ? `: ${body.reason}` : ''} (${new Date(this.now()).toISOString()})`;
+    await this.writeRisk({ ...r, halt: text });
+    for (const old of await sql<Row[]>`select * from deriv_gmx_ops where state = 'pending_approval' and kind = 'increase'`) await this.withdraw(old.id).catch(() => {});   // an increase under review ends here
+    await audit('deriv.gmx.halt', 'owner', { authorizationId: r.authorizationId, reason: body.reason });
+    return this.status(locale);
+  }
+  /** tightening is free; a higher loss limit needs the passkey (prepareRisk → approveRisk) */
+  async setLimits(body: z.infer<typeof GmxLimitsBodySchema>, locale: Locale = 'en') {
+    const auth = await this.currentAuth(), r = await this.risk(auth), next = { maxDailyLoss: D.str(D.from(body.maxDailyLoss)), maxTotalLoss: D.str(D.from(body.maxTotalLoss)) };
+    const loosened = gmxLoosened(r, next);
+    if (loosened.length) throw new UserError('passkey_required', `this change loosens ${loosened.join(', ')}: it needs the owner's passkey (prepare it, then approve). Tightening needs none.`, 403);
+    await this.writeRisk({ ...r, ...next });
+    await audit('deriv.gmx.limits', 'owner', { authorizationId: r.authorizationId, ...next, loosened: [], passkey: false });
+    return this.status(locale);
+  }
+  /** step 1 of lifting the halt or loosening a limit: the canonical intent, stored once, and the WebAuthn request over its hash */
+  async prepareRisk(kind: GmxRiskIntent['kind'], body: z.infer<typeof GmxLimitsBodySchema> | null = null) {
+    const auth = await this.currentAuth(), r = await this.risk(auth);
+    let limits: GmxRiskLimits | null = null, loosened: string[] = [], subject: string | null = null;
+    if (kind === 'gmx-limits') {
+      if (!body) throw new UserError('bad_request', 'the new limits are required', 400);
+      limits = { maxDailyLoss: D.str(D.from(body.maxDailyLoss)), maxTotalLoss: D.str(D.from(body.maxTotalLoss)) };
+      loosened = gmxLoosened(r, limits);
+      if (!loosened.length) return { needed: false as const, kind, loosened, intent: null, hash: null, options: null, expiresAt: null };
+    } else {
+      if (r.halt === null) return { needed: false as const, kind, loosened, intent: null, hash: null, options: null, expiresAt: null };
+      subject = r.halt;
+    }
+    if (!this.deps.verifyOwner) throw new UserError('passkey_unavailable', 'this server cannot verify a passkey approval for a risk change: the change is refused', 503);
+    const now = this.now(), intent: GmxRiskIntent = { v: 1, kind, authorizationId: r.authorizationId, limits, loosened, subject, nonce: randomUUID(), createdAt: now, expiresAt: now + RISK_INTENT_TTL_MS };
+    const hash = gmxRiskIntentHash(intent);
+    await sql`insert into settings (key, value) values (${`${GMX_RISK_PENDING}.${kind}`}, ${sql.json({ intent, hash: hex(hash) } as never)}) on conflict (key) do update set value = excluded.value`;
+    await audit('deriv.gmx.risk_change_prepared', 'owner', { kind, hash: hex(hash), loosened });
+    return { needed: true as const, kind, loosened, intent, hash: hex(hash), options: await this.options(hash, RISK_INTENT_TTL_MS / 1000), expiresAt: intent.expiresAt };
+  }
+  /** step 2: the prepared intent, taken once, must still describe the present state; the assertion must verify over its hash */
+  async approveRisk(kind: GmxRiskIntent['kind'], assertion: unknown, locale: Locale = 'en') {
+    const auth = await this.currentAuth(), r = await this.risk(auth), key = `${GMX_RISK_PENDING}.${kind}`;
+    if (kind === 'gmx-resume' && r.halt === null) return this.status(locale);                 // nothing to lift
+    const verify = this.deps.verifyOwner;
+    if (!verify) throw new UserError('passkey_unavailable', 'this server cannot verify a passkey approval for a risk change: the change is refused', 503);
+    if (assertion === undefined || assertion === null) throw new UserError('passkey_required', 'this change needs the owner\'s passkey: prepare it first, then approve', 403);
+    const stash = await getSetting<{ intent: GmxRiskIntent; hash: string } | null>(key, null);
+    if (!stash) throw new UserError('bad_state', 'prepare this change first', 409);
+    const i = stash.intent;
+    if (hex(gmxRiskIntentHash(i)) !== stash.hash || i.kind !== kind) throw new UserError('bad_state', 'the prepared change is not this one', 409);
+    if (this.now() >= i.expiresAt) { await sql`delete from settings where key = ${key}`; throw new UserError('expired', 'the approval window of this change has expired: prepare it again', 410); }
+    if (i.authorizationId !== r.authorizationId || (kind === 'gmx-resume' && i.subject !== r.halt)) throw new UserError('bad_state', 'the authorization or the halt changed since this change was prepared: prepare it again', 409);
+    try { await verify(assertion, Buffer.from(stash.hash, 'hex')); }
+    catch (e) { await audit('deriv.gmx.risk_change_refused', 'owner', { kind, hash: stash.hash, reason: msg(e) }); throw new UserError('bad_approval', `the passkey approval of this change did not verify (${msg(e)}); nothing changed`, 403); }
+    const taken = await sql`delete from settings where key = ${key} and value->>'hash' = ${stash.hash} returning key`;
+    if (!taken.length) throw new UserError('bad_state', 'this change was already applied or replaced', 409);
+    if (kind === 'gmx-resume') { await this.writeRisk({ ...r, halt: null }); await audit('deriv.gmx.resume', 'owner', { authorizationId: r.authorizationId, passkey: true }); }
+    else { await this.writeRisk({ ...r, ...i.limits! }); await audit('deriv.gmx.limits', 'owner', { authorizationId: r.authorizationId, ...i.limits!, loosened: i.loosened, passkey: true }); }
     return this.status(locale);
   }
 
@@ -351,18 +487,30 @@ export class GmxService {
     if (!auth || this.authState(auth) !== 'active') risk = { ok: false, code: 'not_authorized', reason: 'no active GMX authorization' };
     else {
       const pol = auth.authorization.policy, free = D.from(formatUnits(walletUsdc ?? 0n, 6));
-      const views = positions.map((p) => this.posView(p, lc(p.market) === lc(pin.market) ? mid : null, null, null));
+      // every open position is valued (V11): the loss limits count the unrealised loss of ALL positions, not only this market's.
+      // A market whose price cannot be read is an unknown loss: an increase is then refused rather than assumed fine.
+      const marks = new Map<string, Dec | null>([[lc(pin.market), mid]]);
+      for (const p of positions) {
+        const k = lc(p.market), other = gmxMarket(p.market);
+        if (marks.has(k)) continue;
+        marks.set(k, other ? await this.deps.market.market(other.instrument).then((x) => (x.liquidity ? D.div(D.add(D.from(x.liquidity.oracleMin), D.from(x.liquidity.oracleMax)), D.from('2'), 18, 'half_even') : D.from(x.ticker.mark)), () => null) : null);
+      }
+      const unpriced = increase ? positions.find((p) => marks.get(lc(p.market)) === null) : undefined;
+      const views = positions.map((p) => this.posView(p, marks.get(lc(p.market)) ?? null, null, null));
       const margin = views.reduce((s, v) => D.add(s, D.from(v.collateral)), D.zero);
       const account: AccountState = { venue: 'gmx', account: me ?? '', equity: D.str(D.add(free, margin)), collateral: D.str(D.add(free, margin)), freeCollateral: D.str(free), marginUsed: D.str(margin), maintenanceMargin: null, withdrawable: D.str(free), ts: now, source: 'venue' };
-      const riskPolicy: RiskPolicy = { mode: 'MANUAL_LIVE', allowedInstruments: pol.allowedMarkets.flatMap((m) => (gmxMarket(m) ? [gmxMarket(m)!.instrument] : [])), halt: null, maxDataAgeMs: 30_000, maxDeviationBps: String(pol.maxPriceDeviationBps), maxMarkIndexBps: '100',
-        maxLeverage: String(pol.maxLeverage), maxOrderNotional: D.str(D.mul(D.from(pol.maxOrderSizeUsd), D.from('1.1'))), maxGrossExposure: D.str(D.mul(D.from(pol.maxOrderSizeUsd), D.from('3'))), maxPositionNotional: D.str(D.mul(D.from(pol.maxOrderSizeUsd), D.from('2'))),
-        minFreeCollateral: '0', minLiquidationDistanceBps: '200', maxDailyLoss: '1000000000', maxTotalLoss: '1000000000', maxOrdersPerMinute: 5, maxOrdersPerDay: pol.maxOrdersPerDay };
+      // V11 (B-10): the configured loss limits and the kill switch (they were 1e9 and absent); a decrease is exempt from both (risk.ts)
+      const lim = await this.risk(auth), used = await this.realized(now);
+      const riskPolicy: RiskPolicy = { mode: 'MANUAL_LIVE', allowedInstruments: pol.allowedMarkets.flatMap((m) => (gmxMarket(m) ? [gmxMarket(m)!.instrument] : [])), halt: lim.halt, maxDataAgeMs: 30_000, maxDeviationBps: String(pol.maxPriceDeviationBps), maxMarkIndexBps: '100',
+        maxLeverage: String(pol.maxLeverage), maxOrderNotional: D.str(D.mul(D.from(pol.maxOrderSizeUsd), D.from('1.1'))), maxGrossExposure: D.str(D.mul(D.from(pol.maxOrderSizeUsd), D.from(GMX_GROSS_MULTIPLE))), maxPositionNotional: D.str(D.mul(D.from(pol.maxOrderSizeUsd), D.from('2'))),
+        minFreeCollateral: '0', minLiquidationDistanceBps: '200', maxDailyLoss: lim.maxDailyLoss, maxTotalLoss: lim.maxTotalLoss, maxOrdersPerMinute: 5, maxOrdersPerDay: pol.maxOrdersPerDay };
       const [{ count: lastMinute } = { count: 0 }] = await sql<{ count: number }[]>`select count(*)::int as count from deriv_gmx_ops where kind <> 'cancel' and state not in ('pending_approval', 'withdrawn', 'expired') and created_at > ${new Date(now - 60_000)}`;
       const r = checkOrder(riskPolicy, { instrument: pin.instrument, side: isLong === increase ? 'buy' : 'sell', type: 'market', size: D.str(tokens), price: gmxPriceFromRaw(acceptable, pin.indexDecimals), triggerPrice: null, reduceOnly: !increase, tif: 'ioc', clientId: randomUUID() },
         { instrument: md.instrument, account, positions: views.filter((v) => v.instrument).map((v): Position => ({ instrument: v.instrument!, side: v.side, size: v.sizeTokens, entryPrice: v.entryPrice, markPrice: v.markPrice ?? v.entryPrice, liquidationPrice: null, leverage: v.leverage ?? '1', marginMode: 'isolated', margin: v.collateral, unrealizedPnl: v.pnlUsd ?? '0', realizedPnl: null, fundingPaid: null, source: 'venue' })),
           openOrders: [], book: { instrument: pin.instrument, bids: [[l.oracleMin, '1000000000']], asks: [[l.oracleMax, '1000000000']], ts: l.ts }, ticker: { ...md.ticker, ts: Math.max(md.ticker.ts, l.ts) }, now,
-          usage: { realizedToday: '0', realizedTotal: '0', ordersLastMinute: lastMinute, ordersToday: auth.today.increases }, ...(leverage ? { leverage } : {}), maintenanceMarginFraction: l.minCollateralFactorForLiquidation });
-      risk = r.ok ? { ok: true } : { ok: false, code: r.code, reason: r.reason };
+          usage: { realizedToday: used.today, realizedTotal: used.total, ordersLastMinute: lastMinute, ordersToday: auth.today.increases }, ...(leverage ? { leverage } : {}), maintenanceMarginFraction: l.minCollateralFactorForLiquidation });
+      risk = unpriced ? { ok: false, code: 'position_unpriced', reason: `the open position on ${gmxMarket(unpriced.market)?.name ?? unpriced.market} cannot be valued right now: its loss is unknown, so no new position is prepared (closing stays possible)` }
+        : r.ok ? { ok: true } : { ok: false, code: r.code, reason: r.reason };
       // what the signer would refuse, as far as it can be known here (its own price is not: the oracle mid stands in for it)
       try {
         const plan = { action: body.action, market: pin, collateral: c, amount, sizeDeltaUsd: sizeRaw, acceptablePrice: acceptable, executionFee, isLong, orderKey: null, gas: 0n, approveGas: 0n, maxFeePerGas: 0n, maxPriorityFeePerGas: 0n, nonce: 0, params: null };
@@ -382,6 +530,7 @@ export class GmxService {
     if (!s.gmxLive) blockers.push('gmx_setting_off'); if (!s.liveMainnet) blockers.push('mainnet_setting_off');
     if (!auth) blockers.push('not_authorized'); else if (this.authState(auth) !== 'active') blockers.push(this.authState(auth) === 'stale' ? 'contracts_changed' : this.authState(auth) === 'expired' ? 'authorization_expired' : 'authorization_revoked');
     if (st?.halted) blockers.push('signer_halted');
+    if ((await this.riskView(auth).catch(() => null))?.halt) blockers.push('gmx_halted');
     return { order: { market: c.pin.market, marketName: c.pin.name, side: body.side, action: body.action, collateral: c.estimate.collateral, sizeUsd: c.estimate.sizeUsd, acceptablePrice: c.estimate.acceptablePrice, slippageBps: c.slippageBps, leverage: c.leverage },
       estimate: c.estimate, risk: c.risk, blockers, signerWould: c.signerWould };
   }
@@ -429,7 +578,8 @@ export class GmxService {
       if (est !== null) { const min = o.kind === 'cancel' ? GMX_GAS.cancelMin : GMX_GAS.orderMin, gas = (est * 13n) / 10n; intent = build(gas < min ? min : gas > FIXED_ORDER_GAS * 2n ? FIXED_ORDER_GAS * 2n : gas); try { txs = buildGmxTxs(intent, o.me); } catch (e) { throw new UserError('simulation_failed', msg(e), 422); } }
     }
     const spent = BigInt(o.st.spentToday[`${n.id}:${o.asset.symbol}`] ?? '0');
-    const verdict = o.kind === 'increase' ? checkPolicy(o.st.policy, intent, spent, now, o.st.halted) : checkPolicyNoSpend(o.st.policy, intent, now, o.st.halted);
+    // the signer's halt refuses an increase; a decrease or a cancellation is signed under halt (V11): the same rule is applied here
+    const verdict = o.kind === 'increase' ? checkPolicy(o.st.policy, intent, spent, now, o.st.halted) : checkPolicyNoSpend(o.st.policy, intent, now, false);
     if (!verdict.ok) throw new UserError('policy', verdict.reason, 422);
     const bal = await this.deps.chain.balances(o.me);
     if (bal.eth < BigInt(intent.maxFee)) throw new UserError('insufficient_gas', `the wallet holds ${formatUnits(bal.eth, WEI)} ETH on ${n.name}; gas and the execution fee can take up to ${formatUnits(BigInt(intent.maxFee), WEI)} ETH`, 422);
@@ -462,7 +612,7 @@ export class GmxService {
 
   async prepareOrder(body: GmxOrderBody, idem: string) {
     const dup = await this.again(idem); if (dup) return dup;
-    const { st, me, auth } = await this.gate();
+    const { st, me, auth } = await this.gate(true, body.action === 'decrease');
     await this.busy();
     const bal = await this.deps.chain.balances(me), c = await this.compute(body, me, auth, bal.usdc), col = c.pin.collateral[0]!;
     if (!c.risk.ok) throw new UserError(`risk_${c.risk.code}`, c.risk.reason, 422);
@@ -480,7 +630,7 @@ export class GmxService {
 
   async prepareClose(body: z.infer<typeof GmxCloseBodySchema>, idem: string) {
     const dup = await this.again(idem); if (dup) return dup;
-    const { me } = await this.gate();
+    const { me } = await this.gate(true, true);
     const pin = gmxMarket(body.market), f = D.from(body.fraction);
     if (!pin) throw new UserError('unknown_market', 'this market is not in the wallet\'s pinned GMX market table', 422);
     if (D.isZero(f) || D.cmp(f, D.one) > 0) throw new UserError('bad_order', 'the fraction is above 0 and at most 1', 422);
@@ -495,7 +645,7 @@ export class GmxService {
     let target = await this.row(opId);
     if (!target.final) target = await this.refresh(target).catch(() => target);
     if ((target.state !== 'created' && target.state !== 'frozen') || !target.order_key) throw new UserError('bad_state', `the order is ${target.state}: there is nothing to cancel`, 409);
-    const { st, me, auth } = await this.gate();
+    const { st, me, auth } = await this.gate(true, true);
     await this.busy();
     const o = await this.deps.chain.order(target.order_key);
     if (!o) { await this.refresh(target).catch(() => {}); throw new UserError('bad_state', 'the order is no longer pending on-chain', 409); }
@@ -522,7 +672,7 @@ export class GmxService {
   /** The HTTP call is not the approval: the passkey assertion over the intent hash is, and only the signer judges it. */
   async approve(opId: string, assertion: unknown) {
     let r = await this.row(opId);
-    await this.gate();
+    await this.gate(true, r.kind !== 'increase');                                            // an exit is approved under halt and with the server settings off
     let [p] = await sql<ProposalRow[]>`select * from proposals where id = ${r.proposal_id}`;
     if (r.state !== 'pending_approval' || !p || p.state !== 'pending_approval' || !p.intent) throw new UserError('bad_state', `the operation is ${r.state}`, 409);
     if (p.expires_at && p.expires_at.getTime() < this.now()) { await this.refresh(r); throw new UserError('expired', 'approval window expired; start again', 410); }
@@ -556,7 +706,8 @@ export class GmxService {
     if (p.state !== 'signed' || !p.raw || !p.intent || !p.txid) return p;
     const chain = this.deps.chain, s = this.deps.settings();
     const fail = (error: string) => move(p, 'failed', { error });
-    if (!s.gmxLive || !s.liveMainnet) return fail('GMX trading was switched off on the server before the transaction left; nothing was sent');
+    // V11 (B-02): a signed decrease or cancellation still leaves when the server settings are switched off — only an increase is stopped
+    if (p.intent.gmx?.action === 'increase' && (!s.gmxLive || !s.liveMainnet)) return fail('GMX trading was switched off on the server before the transaction left; nothing was sent');
     if (p.expires_at && this.now() - p.expires_at.getTime() > SEND_WINDOW_MS) return fail('the order could not be sent in time; nothing was sent');
     if (p.pre_raw && p.pre_txid && p.pre_state !== 'confirmed') {
       await chain.broadcast(p.pre_raw).catch(() => {});

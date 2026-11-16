@@ -12,7 +12,7 @@ import { TestPasskey } from '../../../tests/helpers/passkey.ts';
 import { deriveKeys } from '../../isolated-signer/src/keys.ts';
 import { Signer, SignerError } from '../../isolated-signer/src/signer.ts';
 import { Store } from '../../isolated-signer/src/store.ts';
-import { Clock, useDatabase } from './derivatives-helpers.ts';
+import { Clock, passkeyVerifier, useDatabase } from './derivatives-helpers.ts';
 import { FakeHl, routeFetch } from './hl-fake.ts';
 
 const RP = 'wallet.test', ORIGIN = 'https://wallet.test', BTC = 'hyperliquid:BTC', P = '/api/v1/derivatives/live';
@@ -51,14 +51,19 @@ function world() {
   // what services/api/src/signer-client.ts does over HTTP: a signer refusal becomes a 422 `signer_<code>`
   const call = async <T>(fn: () => T | Promise<T>): Promise<T> => { try { return await fn(); } catch (e) { if (e instanceof SignerError) throw new UserError(`signer_${e.code}`, e.message, 422); throw e; } };
   const signs: unknown[] = [];
+  /** V11: `lost` = the signer does its work and stores it, but its answer never reaches the API (timeout, relay drop) */
+  const fault: { authorize: null | 'lost' } = { authorize: null };
   const port: import('../src/derivatives/exec.ts').LiveSignerPort = {
     status: () => call(() => signer.status()), venueKey: (v, n) => call(() => signer.venueKey(v, n)),
-    venueAuthorize: (a, s) => call(() => signer.venueAuthorize(a, s as never)), venueRevoke: (id) => call(() => signer.venueRevoke(id)),
+    venueAuthorize: async (a, s) => { const r = await call(() => signer.venueAuthorize(a, s as never)); if (fault.authorize === 'lost') { fault.authorize = null; throw new UserError('signer_unreachable', 'the signer is unreachable; nothing was signed', 503); } return r; },
+    venueAuthorization: (id) => call(() => signer.venueAuthorization(id)),
+    venueRevoke: (id) => call(() => signer.venueRevoke(id)),
     venueSign: (p) => { signs.push(p); return call(() => signer.venueSign(p as never)); },
   };
   const flags = { mainnet: false };
-  const build = (): Svc => lv.createLive({ fetch: routeFetch([t, m]), signer: port, now: clock.now, rpId: RP, mainnetEnabled: () => flags.mainnet, credentials: async () => [{ id: pk.id, transports: ['internal'] }], confirmDelayMs: 0 });
-  const w = { clock, t, m, signer, store, pk, px, port, flags, signs, svc: build(), restart: () => { w.svc = build(); return w.svc; },
+  const build = (): Svc => lv.createLive({ fetch: routeFetch([t, m]), signer: port, now: clock.now, rpId: RP, mainnetEnabled: () => flags.mainnet, credentials: async () => [{ id: pk.id, transports: ['internal'] }], confirmDelayMs: 0,
+    verifyOwner: passkeyVerifier(pk, RP, ORIGIN) });
+  const w = { clock, t, m, signer, store, pk, px, port, flags, signs, fault, svc: build(), restart: () => { w.svc = build(); return w.svc; },
     /** a minute later (the adapter's local rate budget is a one-minute window on the test clock) */
     next: (ms = 61_000) => clock.advance(ms) };
   return w;
@@ -91,6 +96,10 @@ async function place(w: World, id: string, o: Record<string, unknown> = LIMIT, k
   const r = await w.svc.approveOrder(id, k, w.pk.assert(b64(p.hash!)) as never);
   return { k, p, order: r.order };
 }
+
+/** V11: lifting the owner's halt and re-basing need the passkey over the prepared intent */
+async function resume(w: World, id: string) { const p = await w.svc.prepareRisk(id, 'resume'); return w.svc.resume(id, p.needed ? w.pk.assert(b64(p.hash)) : undefined); }
+async function rebase(w: World, id: string) { const p = await w.svc.prepareRisk(id, 'rebase'); return w.svc.rebase(id, w.pk.assert(b64(p.hash!))); }
 
 describe('pinned asset table and canonical commitments', () => {
   it('the pinned table matches the recorded venue meta of both networks, and a renumbered venue is detected', async () => {
@@ -489,7 +498,7 @@ describe('reconciliation worker and divergence', () => {
     const close = await w.svc.close(id, { instrument: BTC, fraction: '0.5' });
     expect(close).toMatchObject({ order: { state: 'risk_checked', reduceOnly: true, side: 'sell', size: '0.0025' }, slippageBoundBps: 50 });
     w.next();
-    expect((await w.svc.rebase(id)).divergence).toBeNull();                                                               // the owner accepts the venue's positions as the reference
+    expect((await rebase(w, id)).divergence).toBeNull();                                                               // the owner accepts the venue's positions as the reference
     w.next();
     expect((await w.svc.reconcile(id)).divergence).toBeNull();
   });
@@ -538,7 +547,7 @@ describe('kill switch: halt, cancel-all and close are three separate actions', (
     expect(await refusal(w.svc.close(id, { instrument: BTC, fraction: '1' }))).toMatchObject({ code: 'no_position' });
 
     w.next();
-    expect((await w.svc.resume(id)).halt).toBeNull();
+    expect((await resume(w, id)).halt).toBeNull();
     await place(w, id, LIMIT);
     expect(await audits(id)).toEqual(expect.arrayContaining(['deriv.live.halt', 'deriv.live.cancel_all', 'deriv.live.close_proposed', 'deriv.live.resume']));
   });
@@ -626,9 +635,10 @@ describe('asset table and mainnet locks', () => {
     const r = await refusal(w.svc.prepareAuthorization(main, ex.AuthorizationBodySchema.parse({ policy: POLICY, days: 30, locale: 'fr' })));
     expect(r).toMatchObject({ code: 'mainnet_disabled', status: 403 });
     expect(r!.message).toMatch(/SPW_DERIV_LIVE_MAINNET/);
-    for (const p of [() => w.svc.propose(main, body(LIMIT), key()), () => w.svc.preview(main, body(LIMIT)), () => w.svc.close(main, { instrument: BTC, fraction: '1' }),
-      () => w.svc.proposeLeverage(main, { instrument: BTC, leverage: 2, marginMode: 'cross' }), () => w.svc.cancelAll(main)])
+    for (const p of [() => w.svc.propose(main, body(LIMIT), key()), () => w.svc.preview(main, body(LIMIT)), () => w.svc.proposeLeverage(main, { instrument: BTC, leverage: 2, marginMode: 'cross' })])
       expect(await refusal(p())).toMatchObject({ code: 'mainnet_disabled', status: 403 });
+    // V11: the ways out are not behind the mainnet lock — on this account they are refused because it is read-only (nothing to cancel or close)
+    for (const p of [() => w.svc.close(main, { instrument: BTC, fraction: '1' }), () => w.svc.cancelAll(main)]) expect(await refusal(p())).toMatchObject({ code: 'mode_read_only', status: 422 });
     const test = await live(w);                                                                                           // the same wallet on testnet
     expect((await place(w, test, LIMIT)).order.state).toBe('open');
     expect(w.m.exchangeCalls()).toBe(0);
@@ -642,7 +652,7 @@ describe('asset table and mainnet locks', () => {
     expect(await refusal(w.svc.propose(main, body(LIMIT), key()))).toMatchObject({ code: 'mainnet_disabled' });
     const trading = w.svc.deps.venues.get('mainnet').trading(), inst = await w.svc.deps.venues.get('mainnet').instrument(BTC);
     const built = trading.buildOrder({ instrument: BTC, side: 'buy', type: 'limit', size: '0.002', price: '69500', triggerPrice: null, reduceOnly: false, tif: 'gtc', clientId: 'direct' }, { instrument: inst, nonce: w.clock.now() });
-    await expect(trading.submit(built.action, { r: `0x${'1'.repeat(64)}`, s: `0x${'1'.repeat(64)}`, v: 27 }, w.clock.now())).rejects.toThrow(/mainnet exchange endpoint is disabled/);
+    await expect(trading.submit(built.action, { r: `0x${'1'.repeat(64)}`, s: `0x${'1'.repeat(64)}`, v: 27 }, w.clock.now())).rejects.toThrow(/mainnet exchange endpoint is closed to new risk/);
     expect(w.m.exchangeCalls()).toBe(1);                                                                                  // still only the approval made while it was on
     // mainnet and testnet are separate keys and separate authorizations
     const st = w.signer.status().venues;
@@ -673,7 +683,8 @@ describe('routes', () => {
       for (const p of ['/config', '/jurisdiction', '/accounts', `/accounts/${zero}`, `/accounts/${zero}/collateral`, `/accounts/${zero}/stream`]) expect((await api('GET', p, undefined, { cookie: null })).status, p).toBe(401);
       const posts = ['/venue-key', '/accounts', `/accounts/${zero}/authorization/prepare`, `/accounts/${zero}/authorization/approve`, `/accounts/${zero}/authorization/revoke`, `/accounts/${zero}/policy`, `/accounts/${zero}/orders/preview`,
         `/accounts/${zero}/orders`, `/accounts/${zero}/orders/some-client-id/approve`, `/accounts/${zero}/orders/some-client-id/cancel`, `/accounts/${zero}/leverage`, `/accounts/${zero}/leverage/${zero}/approve`, `/accounts/${zero}/halt`,
-        `/accounts/${zero}/resume`, `/accounts/${zero}/cancel-all`, `/accounts/${zero}/close`, `/accounts/${zero}/rebase`, `/accounts/${zero}/reconcile`];
+        `/accounts/${zero}/resume`, `/accounts/${zero}/cancel-all`, `/accounts/${zero}/close`, `/accounts/${zero}/rebase`, `/accounts/${zero}/reconcile`,
+        `/accounts/${zero}/authorization/recover`, `/accounts/${zero}/policy/prepare`, `/accounts/${zero}/policy/approve`, `/accounts/${zero}/resume/prepare`, `/accounts/${zero}/rebase/prepare`];
       for (const p of posts) {
         expect((await api('POST', p, {}, { cookie: null, idem: key() })).status, p).toBe(401);
         expect((await api('POST', p, {}, { csrf: false, idem: key() })).status, p).toBe(403);
@@ -716,5 +727,266 @@ describe('routes', () => {
       expect((await api('GET', `/accounts/${id}/collateral`)).json).toMatchObject({ withdrawable: '1000', source: 'venue' });
       expect((await api('POST', `/accounts/${id}/authorization/revoke`, {})).json.mode).toBe('READ_ONLY');
     } finally { app.server.closeAllConnections?.(); await app.close(); }
+  });
+});
+
+// =========================================================================================================================
+// V11 Phase B — the audited defects of docs/v11/audit-parts/derivatives-exec-signer.md, each with its refusal cases
+
+describe('V11 B-02: the mainnet server lock closes new risk, never the way out', () => {
+  it('with SPW_DERIV_LIVE_MAINNET off after positions exist: cancel, cancel-all and a reduce-only close still work; a new order, a leverage change and a new authorization do not', async () => {
+    const w = world();
+    w.flags.mainnet = true;
+    const main = await live(w, { network: 'mainnet' });
+    const resting = await place(w, main, LIMIT), resting2 = await place(w, main, { ...LIMIT, price: '69400' });
+    w.next();
+    expect((await place(w, main, MARKET)).order.state).toBe('filled');                                                     // a long of 0.002 BTC on the (fake) mainnet venue
+    expect(w.m.openOrders(ACCOUNT)).toHaveLength(2);
+    w.flags.mainnet = false;                                                                                                // the setting is forgotten at a restart
+    w.restart(); w.next();
+    expect(await w.svc.get(main)).toMatchObject({ mode: 'MANUAL_LIVE', mainnetEnabled: false, tradable: false });
+    // new risk: refused, nothing reaches the venue
+    const sent = w.m.exchangeCalls(), signed = w.signs.length;
+    expect(await refusal(w.svc.propose(main, body(LIMIT), key()))).toMatchObject({ code: 'mainnet_disabled', status: 403 });
+    expect(await refusal(w.svc.preview(main, body(MARKET)))).toMatchObject({ code: 'mainnet_disabled' });
+    expect(await refusal(w.svc.proposeLeverage(main, { instrument: BTC, leverage: 2, marginMode: 'cross' }))).toMatchObject({ code: 'mainnet_disabled' });
+    expect(await refusal(w.svc.createAccount({ venue: 'hyperliquid', network: 'mainnet', label: 'again' }))).toMatchObject({ code: 'mainnet_disabled' });
+    // "reduce-only" is not a password: a reduce-only order that would not reduce is refused by the risk engine
+    expect(await refusal(w.svc.propose(main, body({ ...MARKET, reduceOnly: true }), key()))).toMatchObject({ code: 'reduce_only_would_increase' });
+    expect(await refusal(w.svc.propose(main, body({ ...MARKET, side: 'sell', size: '0.005', reduceOnly: true }), key()))).toMatchObject({ code: 'reduce_only_would_flip' });
+    expect(w.m.exchangeCalls()).toBe(sent); expect(w.signs.length).toBe(signed);
+    // the ways out
+    const c1 = await w.svc.cancelOrder(main, resting.k);
+    expect(c1).toMatchObject({ sent: true, venue: { outcome: 'accepted' }, order: { state: 'cancelled', final: true } });
+    w.next();
+    expect(await w.svc.cancelAll(main)).toMatchObject({ requested: 1, accepted: 1, failed: [], remaining: [] });
+    expect(await row(main, resting2.k)).toMatchObject({ state: 'cancelled', final: true });
+    w.next();
+    const k = key(), close = await w.svc.close(main, { instrument: BTC, fraction: '1' }, k);
+    expect(close).toMatchObject({ order: { state: 'risk_checked', reduceOnly: true, side: 'sell', size: '0.002' } });
+    expect((await w.svc.approveOrder(main, k, w.pk.assert(b64(close.hash!)) as never)).order).toMatchObject({ state: 'filled', final: true, filled: '0.002' });
+    expect((await w.svc.get(main)).venueState.positions).toHaveLength(0);
+    expect(w.m.exchangeCalls('cancel') + w.m.exchangeCalls('cancelByCloid')).toBe(2);
+    // the adapter's own lock reads the action: anything that is not all reduce-only is not sent
+    const trading = w.svc.deps.venues.get('mainnet').trading(), inst = await w.svc.deps.venues.get('mainnet').instrument(BTC), sig = { r: `0x${'1'.repeat(64)}`, s: `0x${'1'.repeat(64)}`, v: 27 };
+    const open = trading.buildOrder({ instrument: BTC, side: 'buy', type: 'limit', size: '0.002', price: '69500', triggerPrice: null, reduceOnly: false, tif: 'gtc', clientId: 'direct-open' }, { instrument: inst, nonce: w.clock.now() });
+    const before = w.m.exchangeCalls();
+    await expect(trading.submit(open.action, sig, w.clock.now())).rejects.toThrow(/closed to new risk/);
+    const mixed = { ...(open.action as { orders: object[] }), orders: [{ ...(open.action as { orders: { r: boolean }[] }).orders[0]!, r: true }, (open.action as { orders: object[] }).orders[0]!] };
+    await expect(trading.submit(mixed, sig, w.clock.now())).rejects.toThrow(/closed to new risk/);                          // one reduce-only order does not carry another
+    const lev = trading.buildUpdateLeverage({ instrument: inst, leverage: 2, marginMode: 'cross', nonce: w.clock.now() + 1 });
+    await expect(trading.submit(lev.action, sig, w.clock.now() + 1)).rejects.toThrow(/closed to new risk/);
+    expect(w.m.exchangeCalls()).toBe(before);
+    expect(await audits(main)).toEqual(expect.arrayContaining(['deriv.live.cancel_sent', 'deriv.live.cancel_all', 'deriv.live.close_proposed']));
+  });
+});
+
+describe('V11 B-07: protective orders can rest away from the market, and the refusal comes before the passkey', () => {
+  it('a reduce-only stop-loss far below the mark is proposed and signed; an entry trigger far away, or a "protective" order that would fire at once, is refused at the proposal', async () => {
+    const w = world(), id = await live(w);
+    expect((await place(w, id, MARKET)).order.state).toBe('filled');                                                       // long 0.002 BTC; mark 70 000, band of the authorization 300 bps
+    w.next();
+    const sl = await place(w, id, { side: 'sell', type: 'stop_market', size: '0.002', triggerPrice: '60000', price: '59000', reduceOnly: true });
+    expect(await row(id, sl.k)).toMatchObject({ reduce_only: true });
+    expect((await row(id, sl.k)).signature).not.toBeNull();                                                                 // the signer signed it: 14 % below its own mid
+    expect(['open', 'submitted']).toContain(sl.order.state);
+    w.next();
+    const tp = await place(w, id, { side: 'sell', type: 'take_profit_market', size: '0.002', triggerPrice: '90000', price: '88000', reduceOnly: true });
+    expect((await row(id, tp.k)).signature).not.toBeNull();
+    w.next();
+    const signed = w.signs.length;
+    const refused = async (o: Record<string, unknown>) => refusal(w.svc.propose(id, body(o), key()));
+    // an entry (not reduce-only) trigger outside the band: the signer would refuse it — said here, before any passkey prompt
+    expect(await refused({ side: 'buy', type: 'stop_market', size: '0.002', triggerPrice: '80000', price: '81000' })).toMatchObject({ code: 'price_deviation', status: 422 });
+    expect((await refused({ side: 'buy', type: 'stop_market', size: '0.002', triggerPrice: '80000', price: '81000' }))!.message).toMatch(/the signer applies this rule with its own price and would refuse the order/);
+    // reduce-only, but on the side where it fires at once
+    expect((await refused({ side: 'sell', type: 'stop_market', size: '0.002', triggerPrice: '80000', price: '79000', reduceOnly: true }))!.message).toMatch(/would fire at once/);
+    expect((await refused({ side: 'sell', type: 'take_profit_market', size: '0.002', triggerPrice: '60000', price: '59000', reduceOnly: true }))!.message).toMatch(/would fire at once/);
+    // resting but absurd
+    expect((await refused({ side: 'sell', type: 'stop_market', size: '0.002', triggerPrice: '20000', price: '19800', reduceOnly: true }))!.message).toMatch(/outside the sanity band/);
+    expect(w.signs.length).toBe(signed);                                                                                    // none of these reached the signer
+    for (const r of await sql`select reject_reason from deriv_orders where account_id = ${id} and state = 'rejected'`) expect(r.reject_reason).toMatch(/^price_deviation|^reduce_only/);
+  });
+});
+
+describe('V11 B-04: a lost answer of the signer no longer locks the venue account', () => {
+  it('the authorization the signer stored is adopted: same bytes, no second passkey, the account goes live; nothing is adopted that the API did not hand over', async () => {
+    const w = world(), id = await account(w);
+    const prep = await w.svc.prepareAuthorization(id, ex.AuthorizationBodySchema.parse({ policy: POLICY, days: 30, locale: 'fr' }));
+    w.fault.authorize = 'lost';
+    expect(await refusal(w.svc.approveAuthorization(id, { assertion: w.pk.assert(b64(prep.hash)) as never, acknowledged: true }))).toMatchObject({ code: 'authorization_unknown', status: 503 });
+    // the state the audit described: the signer holds it, the API does not, and a new one is refused for 90 days
+    expect(w.signer.status().venues).toHaveLength(1);
+    expect(await w.svc.get(id)).toMatchObject({ mode: 'READ_ONLY', authorization: null });
+    expect(w.t.exchangeCalls('approveAgent')).toBe(0);
+    expect(await refusal(w.svc.prepareAuthorization(id, ex.AuthorizationBodySchema.parse({ policy: POLICY, days: 30, locale: 'fr' })))).toMatchObject({ code: 'authorization_orphaned', status: 409 });
+    const before = w.store.state.journal.length;
+    const r = await w.svc.recover(id);
+    expect(r).toMatchObject({ mode: 'MANUAL_LIVE', authorization: { id: prep.authorization.authorizationId, active: true }, recovered: [{ what: 'authorization', outcome: 'adopted', id: prep.authorization.authorizationId }] });
+    expect(w.t.exchangeCalls('approveAgent')).toBe(1);                                                                    // the stored approveAgent, sent once
+    expect(w.store.state.journal.slice(before).map((j) => j.type)).toEqual([]);                                           // the signer signed and recorded nothing new
+    expect(w.signer.status().venues).toHaveLength(1);
+    expect((await place(w, id, LIMIT)).order.state).toBe('open');                                                          // and it trades, with the passkey per order
+    expect(await audits(id)).toEqual(expect.arrayContaining(['deriv.live.authorization_unknown', 'deriv.live.authorization_recovered', 'deriv.live.acknowledged', 'deriv.live.authorized']));
+    expect((await w.svc.recover(id)).recovered).toEqual([]);                                                               // nothing left to recover
+  });
+
+  it('an authorization the API has no record of is revoked on the signer (no passkey), and a new one can then be approved', async () => {
+    const w = world(), id = await account(w);
+    const prep = await w.svc.prepareAuthorization(id, ex.AuthorizationBodySchema.parse({ policy: POLICY, days: 30, locale: 'fr' }));
+    w.fault.authorize = 'lost';
+    await refusal(w.svc.approveAuthorization(id, { assertion: w.pk.assert(b64(prep.hash)) as never, acknowledged: true }));
+    await sql`delete from settings where key = ${`deriv.live.submitted.${id}`}`;                                           // the API's own copy is gone too (a restore, another instance)
+    const r = await w.svc.recover(id);
+    expect(r).toMatchObject({ mode: 'READ_ONLY', recovered: [{ what: 'authorization', outcome: 'revoked', id: prep.authorization.authorizationId }] });
+    expect(w.signer.status().venues[0]).toMatchObject({ revoked: true });
+    expect(w.t.exchangeCalls('approveAgent')).toBe(0);                                                                    // nothing was sent to the venue
+    w.next();
+    expect((await authorize(w, id)).done.mode).toBe('MANUAL_LIVE');                                                        // the account is free again
+  });
+
+  it('a stored copy that does not match what the signer holds is never adopted: the signer-side authorization is revoked', async () => {
+    const w2 = world(), id2 = await account(w2);
+    const p2 = await w2.svc.prepareAuthorization(id2, ex.AuthorizationBodySchema.parse({ policy: POLICY, days: 30, locale: 'fr' }));
+    w2.fault.authorize = 'lost';
+    await refusal(w2.svc.approveAuthorization(id2, { assertion: w2.pk.assert(b64(p2.hash)) as never, acknowledged: true }));
+    const [st] = await sql`select value from settings where key = ${`deriv.live.submitted.${id2}`}`;
+    await sql`update settings set value = ${sql.json({ ...st.value, authorization: { ...st.value.authorization, policy: { ...st.value.authorization.policy, maxOrderNotional: '499' } } })} where key = ${`deriv.live.submitted.${id2}`}`;
+    expect((await w2.svc.recover(id2)).recovered).toEqual([expect.objectContaining({ outcome: 'revoked' })]);
+    expect(await w2.svc.get(id2)).toMatchObject({ mode: 'READ_ONLY' });
+  });
+
+  it('a refusal of the signer leaves nothing to recover; adopting on mainnet respects the mainnet lock', async () => {
+    const w = world(), id = await account(w);
+    const prep = await w.svc.prepareAuthorization(id, ex.AuthorizationBodySchema.parse({ policy: POLICY, days: 30, locale: 'fr' }));
+    expect((await refusal(w.svc.approveAuthorization(id, { assertion: w.pk.assert(new Uint8Array(32)) as never, acknowledged: true })))!.code).toBe('signer_bad_approval');
+    expect(await sql`select 1 from settings where key = ${`deriv.live.submitted.${id}`}`).toHaveLength(0);
+    expect((await w.svc.recover(id)).recovered).toEqual([]);
+    void prep;
+    w.flags.mainnet = true;
+    const main = await account(w, { network: 'mainnet' });
+    const pm = await w.svc.prepareAuthorization(main, ex.AuthorizationBodySchema.parse({ policy: POLICY, days: 30, locale: 'fr' }));
+    w.fault.authorize = 'lost';
+    await refusal(w.svc.approveAuthorization(main, { assertion: w.pk.assert(b64(pm.hash)) as never, acknowledged: true }));
+    w.flags.mainnet = false;                                                                                                // the lock is closed meanwhile: live trading is not turned on by a recovery
+    expect((await w.svc.recover(main)).recovered).toEqual([expect.objectContaining({ what: 'authorization', outcome: 'revoked' })]);
+    expect(await w.svc.get(main)).toMatchObject({ mode: 'READ_ONLY' });
+    expect(w.m.exchangeCalls()).toBe(0);
+  });
+});
+
+describe('V11 B-08: loosening an API-side limit or lifting a halt needs the passkey; tightening and halting stay free', () => {
+  it('loosenedFields: which changes allow more', () => {
+    const p = ex.liveRiskPolicy(POLICY as never, 'testnet');
+    expect(ex.loosenedFields(p, p)).toEqual([]);
+    expect(ex.loosenedFields(p, { ...p, maxDailyLoss: '1', maxTotalLoss: '2', maxOrdersPerMinute: 1, maxOrdersPerDay: 1, maxOrderNotional: '1', maxLeverage: '1', minLiquidationDistanceBps: '2000', minFreeCollateral: '50', maxDataAgeMs: 1000, maxDeviationBps: '10', maxMarkIndexBps: '10', allowedInstruments: [] })).toEqual([]);
+    for (const [k, v] of Object.entries({ maxDailyLoss: '75.01', maxTotalLoss: '1000000000', minLiquidationDistanceBps: '999', maxDataAgeMs: 5001, maxMarkIndexBps: '1001', maxDeviationBps: '301', maxOrdersPerMinute: 7, maxOrdersPerDay: 51,
+      maxLeverage: '4', maxOrderNotional: '500.01', maxGrossExposure: '1501', maxPositionNotional: '1001' })) {
+      expect(ex.loosenedFields(p, { ...p, [k]: v } as never), k).toEqual([k]);
+    }
+    expect(ex.loosenedFields({ ...p, minFreeCollateral: '10' }, { ...p, minFreeCollateral: '9.99' })).toEqual(['minFreeCollateral']);
+    expect(ex.loosenedFields({ ...p, allowedInstruments: [] }, p)).toEqual(['allowedInstruments']);
+    expect(ex.loosenedFields({ ...p, halt: 'x' }, p)).toEqual(['halt']);
+    expect(ex.loosenedFields(p, { ...p, somethingNew: 1 } as never)).toEqual(['somethingNew']);                           // an unknown field that changed counts as loosened
+  });
+
+  it('a session alone cannot raise the loss limits; with the passkey over the prepared policy it can — once, and only that policy', async () => {
+    const w = world(), id = await live(w), p0 = (await w.svc.get(id)).policy;
+    expect(p0).toMatchObject({ maxDailyLoss: '75', maxTotalLoss: '300' });
+    // tightening: free
+    const tight = { ...p0, maxDailyLoss: '20', maxTotalLoss: '100', minLiquidationDistanceBps: '1500', maxOrderNotional: '100' };
+    expect((await w.svc.setPolicy(id, tight)).policy).toMatchObject({ maxDailyLoss: '20', maxTotalLoss: '100' });
+    expect(await w.svc.prepareRisk(id, 'policy', { ...tight, maxDailyLoss: '10' })).toMatchObject({ needed: false, options: null });
+    // loosening without the passkey: refused, nothing changes — every API-only limit of the audit
+    for (const loose of [{ maxDailyLoss: '1000000000' }, { maxTotalLoss: '101' }, { minLiquidationDistanceBps: '0' }, { maxDataAgeMs: 600000 }, { maxMarkIndexBps: '100000' }, { maxDeviationBps: '301' }, { maxOrdersPerMinute: 60 }, { maxOrderNotional: '500' }]) {
+      const r = await refusal(w.svc.setPolicy(id, { ...tight, ...loose } as never));
+      expect(r, JSON.stringify(loose)).toMatchObject({ code: 'passkey_required', status: 403 });
+      expect(r!.message).toContain(Object.keys(loose)[0]);
+    }
+    expect((await w.svc.get(id)).policy).toMatchObject(tight);
+    expect(await refusal(w.svc.approvePolicy(id, w.pk.assert(new Uint8Array(32))))).toMatchObject({ code: 'bad_state' });   // nothing was prepared
+    // prepare → the passkey signs the hash of the canonical intent (the whole new policy)
+    const next = { ...tight, maxDailyLoss: '60', maxTotalLoss: '250' };
+    const prep = await w.svc.prepareRisk(id, 'policy', next);
+    expect(prep).toMatchObject({ needed: true, loosened: ['maxDailyLoss', 'maxTotalLoss'], intent: { v: 1, kind: 'policy', accountId: id, policy: next, loosened: ['maxDailyLoss', 'maxTotalLoss'] } });
+    expect(prep.hash).toBe(Buffer.from(ex.riskIntentHash(prep.intent!)).toString('hex'));
+    expect(prep.options!.challenge).toBe(b64(prep.hash!).toString('base64url'));
+    // wrong approvals: none, another passkey, an assertion over something else (an order hash, another policy)
+    expect(await refusal(w.svc.approvePolicy(id, undefined))).toMatchObject({ code: 'passkey_required' });
+    expect(await refusal(w.svc.approvePolicy(id, new TestPasskey(RP, ORIGIN).assert(b64(prep.hash!))))).toMatchObject({ code: 'bad_approval', status: 403 });
+    expect(await refusal(w.svc.approvePolicy(id, w.pk.assert(new Uint8Array(32))))).toMatchObject({ code: 'bad_approval' });
+    const other = ex.riskIntentHash({ ...prep.intent!, policy: { ...next, maxDailyLoss: '1000000000' } });
+    expect(await refusal(w.svc.approvePolicy(id, w.pk.assert(other)))).toMatchObject({ code: 'bad_approval' });
+    expect(await refusal(w.svc.approvePolicy(id, w.pk.assert(b64(prep.hash!), { uv: false })))).toMatchObject({ code: 'bad_approval' });   // no user verification
+    expect((await w.svc.get(id)).policy).toMatchObject(tight);
+    // the right one
+    const good = w.pk.assert(b64(prep.hash!));
+    expect((await w.svc.approvePolicy(id, good)).policy).toMatchObject({ maxDailyLoss: '60', maxTotalLoss: '250', minLiquidationDistanceBps: '1500' });
+    expect(await refusal(w.svc.approvePolicy(id, good))).toMatchObject({ code: 'bad_state' });                              // single use
+    // above what the passkey-approved AUTHORIZATION allows: never, passkey or not
+    expect(await refusal(w.svc.prepareRisk(id, 'policy', { ...next, maxOrderNotional: '501' }))).toMatchObject({ code: 'bad_policy' });
+    // an expired preparation
+    const late = await w.svc.prepareRisk(id, 'policy', { ...next, maxDailyLoss: '70' });
+    w.clock.advance(ex.RISK_INTENT_TTL_MS + 1);
+    expect(await refusal(w.svc.approvePolicy(id, w.pk.assert(b64(late.hash!))))).toMatchObject({ code: 'proposal_expired', status: 410 });
+    expect((await w.svc.get(id)).policy).toMatchObject({ maxDailyLoss: '60' });
+    const types = await audits(id);
+    expect(types).toEqual(expect.arrayContaining(['deriv.live.risk_change_prepared', 'deriv.live.risk_change_refused', 'deriv.live.policy_replaced']));
+    const [last] = await sql`select data from audit_events where type = 'deriv.live.policy_replaced' and data->>'account' = ${id} order by seq desc limit 1`;
+    expect(last.data).toMatchObject({ passkey: true, loosened: ['maxDailyLoss', 'maxTotalLoss'] });
+  });
+
+  it('halting is free; lifting the halt needs the passkey over the intent that names that very halt', async () => {
+    const w = world(), id = await live(w);
+    expect(await w.svc.prepareRisk(id, 'resume')).toMatchObject({ needed: false });                                        // no halt: nothing to approve
+    expect((await w.svc.resume(id)).halt).toBeNull();
+    await w.svc.halt(id, { reason: 'one' });
+    expect(await refusal(w.svc.resume(id))).toMatchObject({ code: 'passkey_required', status: 403 });
+    expect(await refusal(w.svc.resume(id, w.pk.assert(new Uint8Array(32))))).toMatchObject({ code: 'bad_state' });          // not prepared
+    const prep = await w.svc.prepareRisk(id, 'resume');
+    expect(prep).toMatchObject({ needed: true, intent: { kind: 'resume', policy: null, subject: expect.stringMatching(/^halted by the owner: one/) } });
+    expect(await refusal(w.svc.resume(id, w.pk.assert(new Uint8Array(32))))).toMatchObject({ code: 'bad_approval' });
+    expect((await w.svc.get(id)).halt).toMatch(/one/);
+    // the halt is replaced meanwhile: the approval of the first one does not lift the second
+    w.clock.advance(1000); await w.svc.halt(id, { reason: 'two' });
+    expect(await refusal(w.svc.resume(id, w.pk.assert(b64(prep.hash!))))).toMatchObject({ code: 'bad_state' });
+    expect((await w.svc.get(id)).halt).toMatch(/two/);
+    w.next();
+    expect(await refusal(w.svc.propose(id, body(LIMIT), key()))).toMatchObject({ code: 'halted' });
+    expect((await resume(w, id)).halt).toBeNull();
+    expect((await place(w, id, LIMIT)).order.state).toBe('open');
+    // a re-base needs it too
+    expect(await refusal(w.svc.rebase(id))).toMatchObject({ code: 'passkey_required' });
+    // without a verifier on the server the change is refused, not waved through
+    const bare = lv.createLive({ fetch: routeFetch([w.t, w.m]), signer: w.port, now: w.clock.now, rpId: RP, mainnetEnabled: () => false, credentials: async () => [], confirmDelayMs: 0 });
+    await w.svc.halt(id, { reason: 'three' });
+    expect(await refusal(bare.prepareRisk(id, 'resume'))).toMatchObject({ code: 'passkey_unavailable', status: 503 });
+    expect(await refusal(bare.resume(id, w.pk.assert(new Uint8Array(32))))).toMatchObject({ code: 'passkey_unavailable' });
+    expect((await w.svc.get(id)).halt).toMatch(/three/);
+  });
+
+  it('over HTTP: /policy refuses a loosening, /policy/prepare + /policy/approve and /resume/prepare + /resume carry the passkey', async () => {
+    const w = world(), id = await live(w);
+    const token = randomBytes(32).toString('base64url');
+    await sql`insert into sessions (id_hash, expires_at) values (${createHash('sha256').update(token).digest('hex')}, now() + interval '1 hour')`;
+    const cookie = `${(await import('../src/auth.ts')).COOKIE}=${token}`;
+    const app = await (await import('../src/server.ts')).buildServer({ live: w.svc });
+    const api = async (path: string, payload: unknown = {}) => { const r = await app.inject({ method: 'POST', url: `${P}/accounts/${id}${path}`, headers: { cookie, origin: ORIGIN, 'x-spw-csrf': '1', 'content-type': 'application/json' }, payload: JSON.stringify(payload) }); return { status: r.statusCode, json: r.json() }; };
+    try {
+      const p = (await w.svc.get(id)).policy;
+      expect((await api('/policy', { ...p, maxDailyLoss: '10' })).status).toBe(200);
+      expect(await api('/policy', { ...p, maxDailyLoss: '500' })).toMatchObject({ status: 403, json: { error: 'passkey_required' } });
+      const prep = await api('/policy/prepare', { ...p, maxDailyLoss: '500' });
+      expect(prep).toMatchObject({ status: 200, json: { needed: true, loosened: ['maxDailyLoss'] } });
+      expect((await api('/policy/approve', {})).status).toBe(400);
+      expect(await api('/policy/approve', { assertion: w.pk.assert(new Uint8Array(32)) })).toMatchObject({ status: 403, json: { error: 'bad_approval' } });
+      expect((await api('/policy/approve', { assertion: w.pk.assert(b64(prep.json.hash)) })).json.policy).toMatchObject({ maxDailyLoss: '500' });
+      expect((await api('/halt', { reason: 'http' })).status).toBe(200);
+      expect(await api('/resume')).toMatchObject({ status: 403, json: { error: 'passkey_required' } });
+      const rp = await api('/resume/prepare');
+      expect(rp.json).toMatchObject({ needed: true, kind: 'resume' });
+      expect((await api('/resume', { assertion: w.pk.assert(b64(rp.json.hash)) })).json.halt).toBeNull();
+      expect((await api('/authorization/recover')).json.recovered).toEqual([]);
+    } finally { await app.close(); }
   });
 });

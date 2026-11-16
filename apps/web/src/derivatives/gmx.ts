@@ -10,7 +10,7 @@ import { ApiError, get, post } from '../api';
 import { D, dec, parseInput, type DecStr } from './dec';
 import type { Ack, PasskeyOptions } from './live';
 
-export type GmxBlocker = 'gmx_setting_off' | 'mainnet_setting_off' | 'not_authorized' | 'authorization_expired' | 'authorization_revoked' | 'contracts_changed' | 'signer_halted' | 'chain_unreadable' | 'wallet_unreadable';
+export type GmxBlocker = 'gmx_setting_off' | 'mainnet_setting_off' | 'not_authorized' | 'authorization_expired' | 'authorization_revoked' | 'contracts_changed' | 'signer_halted' | 'gmx_halted' | 'chain_unreadable' | 'wallet_unreadable';
 export type GmxSide = 'long' | 'short';
 export type GmxOpState = 'pending_approval' | 'signed' | 'sent' | 'created' | 'executed' | 'cancelled' | 'frozen' | 'done' | 'failed' | 'expired' | 'withdrawn' | 'unknown';
 export interface GmxPolicy { allowedMarkets: string[]; maxLeverage: number; maxOrderSizeUsd: DecStr; maxOrdersPerDay: number; maxPriceDeviationBps: number; maxExecutionFeeWei?: string }
@@ -76,7 +76,7 @@ export function useGmx(locale: string, enabled = true) {
 export const gmxMarketOf = (s: GmxStatus | undefined, instrument: string): GmxMarket | null => s?.markets.find((m) => m.instrument === instrument) ?? null;
 
 /** the blocker to explain first: a server setting before the authorization, the authorization before the rest */
-const ORDER: GmxBlocker[] = ['gmx_setting_off', 'mainnet_setting_off', 'contracts_changed', 'signer_halted', 'chain_unreadable', 'wallet_unreadable', 'authorization_revoked', 'authorization_expired', 'not_authorized'];
+const ORDER: GmxBlocker[] = ['gmx_setting_off', 'mainnet_setting_off', 'contracts_changed', 'signer_halted', 'gmx_halted', 'chain_unreadable', 'wallet_unreadable', 'authorization_revoked', 'authorization_expired', 'not_authorized'];
 export const sortBlockers = (b: GmxBlocker[]): GmxBlocker[] => [...b].sort((x, y) => ORDER.indexOf(x) - ORDER.indexOf(y));
 export const SETTING_OF: Partial<Record<GmxBlocker, string>> = { gmx_setting_off: 'SPW_DERIV_GMX_LIVE', mainnet_setting_off: 'SPW_DERIV_LIVE_MAINNET' };
 /** the owner can lift this blocker himself with the authorization flow (and nothing else stands in the way of it) */

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { jurisdictionAck } from '@spw/derivatives/live';
 import { UserError } from '../config.ts';
 import { venueFailure } from './data.ts';
-import { GmxApproveAuthSchema, GmxAssertionSchema, GmxAuthBodySchema, GmxCloseBodySchema, GmxOrderBodySchema, type GmxService } from './gmx-exec.ts';
+import { GmxApproveAuthSchema, GmxAssertionSchema, GmxAuthBodySchema, GmxCloseBodySchema, GmxHaltBodySchema, GmxLimitsBodySchema, GmxOrderBodySchema, type GmxService } from './gmx-exec.ts';
 import { gmx } from './gmx-live.ts';
 
 const P = '/api/v1/derivatives/gmx';
@@ -33,5 +33,12 @@ export function gmxRoutes(app: FastifyInstance, given?: GmxService): void {
   app.post(`${P}/orders/:opId/cancel`, run(async (s, req) => s.prepareCancel(op(req))));
   app.post(`${P}/operations/:opId/approve`, run(async (s, req) => s.approve(op(req), GmxAssertionSchema.parse(req.body).assertion)));
   app.post(`${P}/operations/:opId/withdraw`, run(async (s, req) => s.withdraw(op(req))));
+  // V11: kill switch and loss limits (new risk only). Halting and tightening are free; lifting the halt and raising a limit need the passkey (prepare → approve)
+  app.post(`${P}/halt`, run(async (s, req) => s.halt(GmxHaltBodySchema.parse(req.body ?? {}), locale(req))));
+  app.post(`${P}/resume/prepare`, run(async (s) => s.prepareRisk('gmx-resume')));
+  app.post(`${P}/resume`, run(async (s, req) => s.approveRisk('gmx-resume', z.strictObject({ assertion: z.record(z.string(), z.unknown()).optional() }).parse(req.body ?? {}).assertion, locale(req))));
+  app.post(`${P}/limits`, run(async (s, req) => s.setLimits(GmxLimitsBodySchema.parse(req.body), locale(req))));
+  app.post(`${P}/limits/prepare`, run(async (s, req) => s.prepareRisk('gmx-limits', GmxLimitsBodySchema.parse(req.body))));
+  app.post(`${P}/limits/approve`, run(async (s, req) => s.approveRisk('gmx-limits', GmxAssertionSchema.parse(req.body).assertion, locale(req))));
   app.get(`${P}/operations/:opId`, run(async (s, req) => s.operation(op(req))));
 }

@@ -202,7 +202,7 @@ describe('GMX market data', () => {
   it('capabilities are honest', () => {
     const { a } = gmx();
     expect(a.capabilities).toBe(GMX_CAPABILITIES);
-    expect(a.capabilities).toMatchObject({ marketData: true, account: true, orders: false, orderTypes: [], tif: [], stream: false, testnet: false, marginModes: ['isolated'], subaccounts: false });
+    expect(a.capabilities).toMatchObject({ marketData: true, account: true, orders: true, orderTypes: ['market'], tif: [], stream: false, testnet: false, marginModes: ['isolated'], subaccounts: false });
     expect(a.stream).toBeUndefined();
     expect(a.trading).toBeUndefined();
     expect(a.capabilities.notes.join(' ')).toMatch(/NO ORDER BOOK/);

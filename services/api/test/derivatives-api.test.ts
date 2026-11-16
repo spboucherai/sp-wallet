@@ -63,7 +63,7 @@ describe('venues and market data', () => {
     const [hl, gmx, dydx] = r.json.venues;
     expect(hl).toMatchObject({ name: 'Hyperliquid', restriction: null, lastOkAt: T0 });
     expect(hl.capabilities).toMatchObject({ marketData: true, account: true, stream: true });
-    expect(gmx.capabilities).toMatchObject({ marketData: true, account: true, stream: false, orders: false });
+    expect(gmx.capabilities).toMatchObject({ marketData: true, account: true, stream: false, orders: true, orderTypes: ['market'] });   // V11 (B-14): GMX orders exist (market increase / decrease)
     expect(dydx.restriction).toContain('Canada'); expect(dydx.restriction).toContain('geoblocks');
     expect(dydx.capabilities).toMatchObject({ marketData: true, account: false, orders: false, orderTypes: [] });
     expect(dydx.capabilities.notes[0]).toBe(dydx.restriction);

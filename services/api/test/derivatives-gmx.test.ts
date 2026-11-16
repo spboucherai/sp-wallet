@@ -18,7 +18,7 @@ import { deriveKeys } from '../../isolated-signer/src/keys.ts';
 import type { PriceView } from '../../isolated-signer/src/prices.ts';
 import { Signer } from '../../isolated-signer/src/signer.ts';
 import { Store } from '../../isolated-signer/src/store.ts';
-import { Clock, fixtureVenues, useDatabase } from './derivatives-helpers.ts';
+import { Clock, fixtureVenues, useDatabase, passkeyVerifier } from './derivatives-helpers.ts';
 
 const RP = 'wallet.test', ORIGIN = 'https://wallet.test';
 const keys = deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
@@ -165,7 +165,7 @@ async function world(o: { settings?: Partial<World['settings']>; authorize?: boo
     estimateGas: () => chain.estimateGas(), simulate: () => chain.simulate(), broadcast: (r) => chain.broadcast(r), receipt: (t) => chain.receipt(t), orderEvents: (k) => chain.orderEvents(k) };
   const settings = { liveMainnet: true, gmxLive: true, ...o.settings };
   const sp = { status: async () => signer.status() as never, sign: (i: unknown, a: unknown) => signer.sign(i, a as never), gmxAuthorize: (a: unknown, as: unknown) => signer.gmxAuthorize(a, as as never), gmxRevoke: async (id: string) => signer.gmxRevoke(id) };
-  const svc = new ex.GmxService({ chain: port, signer: sp, now: clock.now, rpId: RP, credentials: async () => [{ id: pk.id, transports: ['internal'] }], settings: () => settings,
+  const svc = new ex.GmxService({ chain: port, signer: sp, now: clock.now, rpId: RP, credentials: async () => [{ id: pk.id, transports: ['internal'] }], settings: () => settings, verifyOwner: passkeyVerifier(pk, RP, ORIGIN),
     market: { market: async (id) => { const x = await d.data.market(id); return { instrument: x.instrument, ticker: x.ticker, liquidity: x.liquidity }; }, apiPositions: async () => [] } });
   const app = fastify();
   app.setErrorHandler((e: any, _q, reply) => { reply.status(e.status ?? (e.name === 'ZodError' ? 400 : 500)).send({ error: e.code ?? 'bad_request', message: e.message }); });
@@ -512,5 +512,151 @@ describe('routes', () => {
     expect((await post(`/api/v1/derivatives/gmx/orders/${made.body.operation.id}/cancel`, {})).status).toBe(409);
     expect((await get(`/api/v1/derivatives/gmx/operations/${made.body.operation.id}`)).body.operation.id).toBe(made.body.operation.id);
     expect((await post('/api/v1/derivatives/gmx/authorization/revoke', {})).body.tradable).toBe(false);
+  });
+});
+
+// =========================================================================================================================
+// V11 Phase B
+
+describe('V11 B-01 / B-02: the server settings and the signer\'s halt stop new positions, never the way out', () => {
+  it('with both settings off AND the emergency halt on: a pending order is cancelled and a position closed, with the passkey; an increase is refused at every step', async () => {
+    const w = await world(), first = await place(w);
+    w.chain.keeper(first.key, 'execute'); await w.svc.step();                                   // a long ETH position exists on-chain
+    const second = await place(w, { ...LONG, collateral: '10' });                               // and a second order is pending (no keeper yet)
+    expect(second.op.state).toBe('created');
+    w.settings.gmxLive = false; w.settings.liveMainnet = false; w.signer.halt();                // everything that can be switched off is off
+    const s = await w.svc.status();
+    expect(s.tradable).toBe(false);
+    expect(s.blockers).toEqual(expect.arrayContaining(['gmx_setting_off', 'mainnet_setting_off', 'signer_halted']));
+    expect(s.blockerText.signer_halted).toMatch(/Closing a position and cancelling a pending order stay possible/);
+    // new risk: refused, nothing stored, nothing signed
+    const sent = w.chain.broadcasts.length, journal = w.store.state.journal.length;
+    expect(await refusal(w.svc.prepareOrder(LONG as never, key()))).toMatchObject({ code: 'gmx_disabled', status: 403 });
+    w.settings.gmxLive = true;
+    expect(await refusal(w.svc.prepareOrder(LONG as never, key()))).toMatchObject({ code: 'mainnet_disabled', status: 403 });
+    w.settings.liveMainnet = true;
+    expect(await refusal(w.svc.prepareOrder(LONG as never, key()))).toMatchObject({ code: 'halted', status: 423 });
+    expect(await refusal(w.svc.prepareAuthorization({ allowedMarkets: [ETH.market], maxLeverage: 3, maxOrderSizeUsd: '100', maxOrdersPerDay: 5, maxPriceDeviationBps: 100, days: 7, locale: 'fr' }))).toMatchObject({ code: 'halted' });
+    w.settings.gmxLive = false; w.settings.liveMainnet = false;
+    expect(w.chain.broadcasts.length).toBe(sent); expect(w.store.state.journal.length).toBe(journal);
+    // the pending order: cancelled
+    w.clock.advance(301_000);
+    const c = await w.svc.prepareCancel(second.op.id);
+    await w.svc.approve(c.operation.id, w.pk.assert(hashOf(c)));
+    expect(decodeGmxCalldata(parseTransaction(w.chain.broadcasts.at(-1) as Hex).data!)).toMatchObject({ fn: 'cancelOrder' });
+    w.chain.mine(); await w.svc.step();
+    expect((await w.svc.operation(second.op.id)).operation).toMatchObject({ state: 'cancelled', final: true, outcome: { cancelledBy: 'owner', collateralReturned: true } });
+    // the position: closed
+    const close = await w.svc.prepareClose({ market: ETH.market, side: 'long', fraction: '1', slippageBps: 50 }, key());
+    expect(close.intent).toMatchObject({ amount: '0', gmx: { action: 'decrease', orderType: 'MarketDecrease' } });
+    expect(await refusal(w.svc.approve(close.operation.id, w.pk.assert(new Uint8Array(32))))).toMatchObject({ code: 'bad_approval' });   // still the passkey, judged by the signer
+    const again = await w.svc.prepareClose({ market: ETH.market, side: 'long', fraction: '1', slippageBps: 50 }, key());
+    await w.svc.approve(again.operation.id, w.pk.assert(hashOf(again)));
+    const [k2] = w.chain.mine(); await w.svc.step();
+    w.chain.keeper(k2!, 'execute'); await w.svc.step();
+    expect((await w.svc.operation(again.operation.id)).operation).toMatchObject({ state: 'executed', final: true });
+    expect((await w.svc.status()).positions).toEqual([]);
+    expect(w.store.state.journal.filter((j) => j.type === 'gmx.sign.ok').slice(-2).map((j) => j.data.action)).toEqual(['cancel', 'decrease']);
+  });
+});
+
+describe('V11 B-10: real loss limits and a kill switch for GMX (new risk only)', () => {
+  it('the limits are derived from the authorization (5 % / 20 % of the allowed gross exposure), counted on the wallet\'s executed orders, and stop an increase — never a close', async () => {
+    const w = await world(), a = await place(w);
+    w.chain.keeper(a.key, 'execute'); await w.svc.step();
+    const s0 = await w.svc.status();
+    expect(s0.risk).toMatchObject({ halt: null, maxDailyLoss: '15', maxTotalLoss: '60', defaults: { maxDailyLoss: '15', maxTotalLoss: '60' }, realizedToday: expect.any(String) });
+    expect(ex.gmxDefaultLimits({ maxOrderSizeUsd: '100' })).toEqual({ maxDailyLoss: '15', maxTotalLoss: '60' });          // the fractions of a Hyperliquid account
+    expect((await w.svc.preview({ ...LONG, collateral: '10' } as never)).risk).toEqual({ ok: true });                     // before V11 the limits were 1e9: nothing could ever trip
+    // a realised loss of 16 USD today (as the keeper's events would report it on an executed order of this wallet)
+    await sql`update deriv_gmx_ops set outcome = outcome || '{"pnlUsd":"-15.9","positionFeeUsd":"0.1"}'::jsonb where id = ${a.op.id}`;
+    expect((await w.svc.status()).risk).toMatchObject({ realizedToday: '-16', realizedTotal: '-16' });
+    const r = await refusal(w.svc.prepareOrder({ ...LONG, collateral: '10' } as never, key()));
+    expect(r).toMatchObject({ code: 'risk_daily_loss_exceeded', status: 422 });
+    expect(r.message).toMatch(/limit −15/);
+    expect((await w.svc.preview({ ...LONG, collateral: '10' } as never)).risk).toMatchObject({ ok: false, code: 'daily_loss_exceeded' });
+    // closing is never refused by a loss limit
+    const close = await w.svc.prepareClose({ market: ETH.market, side: 'long', fraction: '1', slippageBps: 50 }, key());
+    expect(close.operation).toMatchObject({ kind: 'decrease', state: 'pending_approval' });
+    await w.svc.withdraw(close.operation.id);
+    // the total limit, with a small loss today
+    await sql`update deriv_gmx_ops set outcome = outcome || '{"pnlUsd":"-70"}'::jsonb, done_at = done_at - interval '2 days' where id = ${a.op.id}`;
+    expect((await w.svc.status()).risk).toMatchObject({ realizedToday: '0', realizedTotal: '-70.1' });
+    expect(await refusal(w.svc.prepareOrder({ ...LONG, collateral: '10' } as never, key()))).toMatchObject({ code: 'risk_total_loss_exceeded' });
+  });
+
+  it('tightening is free, raising a limit needs the passkey over the canonical intent — once', async () => {
+    const w = await world();
+    expect((await w.svc.setLimits({ maxDailyLoss: '5', maxTotalLoss: '20' })).risk).toMatchObject({ maxDailyLoss: '5', maxTotalLoss: '20' });
+    expect(await w.svc.prepareRisk('gmx-limits', { maxDailyLoss: '4', maxTotalLoss: '20' })).toMatchObject({ needed: false });
+    for (const up of [{ maxDailyLoss: '5.01', maxTotalLoss: '20' }, { maxDailyLoss: '5', maxTotalLoss: '1000000000' }])
+      expect(await refusal(w.svc.setLimits(up))).toMatchObject({ code: 'passkey_required', status: 403 });
+    expect((await w.svc.status()).risk).toMatchObject({ maxDailyLoss: '5', maxTotalLoss: '20' });
+    const prep = await w.svc.prepareRisk('gmx-limits', { maxDailyLoss: '12', maxTotalLoss: '50' });
+    expect(prep).toMatchObject({ needed: true, loosened: ['maxDailyLoss', 'maxTotalLoss'], intent: { kind: 'gmx-limits', limits: { maxDailyLoss: '12', maxTotalLoss: '50' } } });
+    expect(prep.hash).toBe(Buffer.from(ex.gmxRiskIntentHash(prep.intent!)).toString('hex'));
+    expect(await refusal(w.svc.approveRisk('gmx-limits', undefined))).toMatchObject({ code: 'passkey_required' });
+    expect(await refusal(w.svc.approveRisk('gmx-limits', w.pk.assert(new Uint8Array(32))))).toMatchObject({ code: 'bad_approval', status: 403 });
+    expect(await refusal(w.svc.approveRisk('gmx-limits', new TestPasskey(RP, ORIGIN).assert(Buffer.from(prep.hash!, 'hex'))))).toMatchObject({ code: 'bad_approval' });
+    expect(await refusal(w.svc.approveRisk('gmx-limits', w.pk.assert(ex.gmxRiskIntentHash({ ...prep.intent!, limits: { maxDailyLoss: '1000000000', maxTotalLoss: '1000000000' } }))))).toMatchObject({ code: 'bad_approval' });
+    expect((await w.svc.status()).risk).toMatchObject({ maxDailyLoss: '5' });
+    const ok = w.pk.assert(Buffer.from(prep.hash!, 'hex'));
+    expect((await w.svc.approveRisk('gmx-limits', ok)).risk).toMatchObject({ maxDailyLoss: '12', maxTotalLoss: '50' });
+    expect(await refusal(w.svc.approveRisk('gmx-limits', ok))).toMatchObject({ code: 'bad_state' });                        // single use
+    const late = await w.svc.prepareRisk('gmx-limits', { maxDailyLoss: '13', maxTotalLoss: '50' });
+    w.clock.advance(300_001);
+    expect(await refusal(w.svc.approveRisk('gmx-limits', w.pk.assert(Buffer.from(late.hash!, 'hex'))))).toMatchObject({ code: 'expired', status: 410 });
+    // a new authorization — approved with the passkey — starts from the defaults again
+    await w.svc.revoke();
+    await authorize(w, { maxOrderSizeUsd: '50' });
+    expect((await w.svc.status()).risk).toMatchObject({ halt: null, maxDailyLoss: '7.5', maxTotalLoss: '30' });
+  });
+
+  it('kill switch: halting is free and stops increases only; lifting it needs the passkey', async () => {
+    const w = await world(), a = await place(w);
+    w.chain.keeper(a.key, 'execute'); await w.svc.step();
+    const pending = await w.svc.prepareOrder({ ...LONG, collateral: '10' } as never, key());                               // an increase under review
+    const h = await w.svc.halt({ reason: 'test' });
+    expect(h.risk!.halt).toMatch(/^halted by the owner: test/);
+    expect(h.blockers).toContain('gmx_halted'); expect(h.tradable).toBe(false);
+    expect((await w.svc.operation(pending.operation.id)).operation).toMatchObject({ state: 'withdrawn', final: true });   // it ends with the halt
+    expect(await refusal(w.svc.prepareOrder({ ...LONG, collateral: '10' } as never, key()))).toMatchObject({ code: 'risk_halted', status: 422 });
+    expect((await w.svc.preview({ ...LONG, collateral: '10' } as never)).blockers).toContain('gmx_halted');
+    // the way out
+    const close = await w.svc.prepareClose({ market: ETH.market, side: 'long', fraction: '1', slippageBps: 50 }, key());
+    await w.svc.approve(close.operation.id, w.pk.assert(hashOf(close)));
+    const [k2] = w.chain.mine(); await w.svc.step(); w.chain.keeper(k2!, 'execute'); await w.svc.step();
+    expect((await w.svc.status()).positions).toEqual([]);
+    // lifting
+    expect(await refusal(w.svc.approveRisk('gmx-resume', undefined))).toMatchObject({ code: 'passkey_required' });
+    const prep = await w.svc.prepareRisk('gmx-resume');
+    expect(prep).toMatchObject({ needed: true, intent: { kind: 'gmx-resume', limits: null, subject: h.risk!.halt } });
+    expect(await refusal(w.svc.approveRisk('gmx-resume', w.pk.assert(new Uint8Array(32))))).toMatchObject({ code: 'bad_approval' });
+    await w.svc.halt({ reason: 'again' });                                                                                 // replaced meanwhile: the first approval does not lift the second
+    expect(await refusal(w.svc.approveRisk('gmx-resume', w.pk.assert(Buffer.from(prep.hash!, 'hex'))))).toMatchObject({ code: 'bad_state' });
+    const p2 = await w.svc.prepareRisk('gmx-resume');
+    const s = await w.svc.approveRisk('gmx-resume', w.pk.assert(Buffer.from(p2.hash!, 'hex')));
+    expect(s.risk!.halt).toBeNull(); expect(s.blockers).not.toContain('gmx_halted');
+    expect(await w.svc.prepareRisk('gmx-resume')).toMatchObject({ needed: false });
+    // without a verifier the server refuses rather than waves through
+    const bare = new ex.GmxService({ ...w.svc.deps, verifyOwner: undefined });
+    await bare.halt({ reason: 'bare' });
+    expect(await refusal(bare.prepareRisk('gmx-resume'))).toMatchObject({ code: 'passkey_unavailable', status: 503 });
+    expect(await refusal(bare.approveRisk('gmx-resume', w.pk.assert(new Uint8Array(32))))).toMatchObject({ code: 'passkey_unavailable' });
+  });
+
+  it('routes: /halt, /limits (+ prepare / approve), /resume (+ prepare)', async () => {
+    const w = await world();
+    const post = async (path: string, payload: unknown = {}) => { const r = await w.app.inject({ method: 'POST', url: `/api/v1/derivatives/gmx${path}`, headers: { 'content-type': 'application/json' }, payload: JSON.stringify(payload) }); return { status: r.statusCode, json: r.json() }; };
+    expect((await post('/limits', { maxDailyLoss: '5', maxTotalLoss: '20' })).json.risk).toMatchObject({ maxDailyLoss: '5' });
+    expect(await post('/limits', { maxDailyLoss: '50', maxTotalLoss: '20' })).toMatchObject({ status: 403, json: { error: 'passkey_required' } });
+    expect((await post('/limits', { maxDailyLoss: '-1', maxTotalLoss: '20' })).status).toBe(400);
+    const lp = await post('/limits/prepare', { maxDailyLoss: '50', maxTotalLoss: '20' });
+    expect(lp.json).toMatchObject({ needed: true, loosened: ['maxDailyLoss'] });
+    expect((await post('/limits/approve', { assertion: w.pk.assert(Buffer.from(lp.json.hash, 'hex')) })).json.risk).toMatchObject({ maxDailyLoss: '50' });
+    expect((await post('/halt', { reason: 'http' })).json.blockers).toContain('gmx_halted');
+    expect(await post('/resume')).toMatchObject({ status: 403, json: { error: 'passkey_required' } });
+    const rp = await post('/resume/prepare');
+    expect((await post('/resume', { assertion: w.pk.assert(Buffer.from(rp.json.hash, 'hex')) })).json.risk.halt).toBeNull();
   });
 });

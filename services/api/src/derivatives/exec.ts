@@ -9,7 +9,7 @@
 //
 // What this file can NOT do: it holds no key. It cannot make the signer sign anything but an order, a cancel or a leverage
 // change that the signer has read itself, inside the limits of the authorization the owner approved.
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { generateAuthenticationOptions } from '@simplewebauthn/server';
 import { z } from 'zod';
 import { toB64u } from '@spw/core';
@@ -18,13 +18,13 @@ import {
   type AccountState, type Book, type DecStr, type Fill, type Instrument, type Order, type OrderRequest, type Position, type RiskPolicy, type RiskResult, type RiskUsage, type Ticker,
 } from '@spw/derivatives';
 import {
-  hex, hlCloid, hlPinnedAsset, HL_PINNED_AT, HL_PINNED_ASSETS, jurisdictionAck, validateVenueAuthorization, venueAgentWireName, venueAuthorizationHash, venueLeverageHash, venueOrderHash, venueOrderNotional,
+  hex, hlCloid, hlPinnedAsset, HL_PINNED_AT, HL_PINNED_ASSETS, jurisdictionAck, validateVenueAuthorization, venueAgentWireName, venueAuthorizationHash, venueLeverageHash, venueOrderHash, venueOrderNotional, venueOrderPriceError,
   VenuePolicySchema, VENUE_AUTH_MAX_DAYS, VENUE_POLICY_BOUNDS,
   validateVenueMandate, VENUE_MANDATE_BOUNDS, VENUE_MANDATE_MAX_DAYS, VENUE_MANDATE_WIND_DOWN_S, venueMandateHash, venueMandatePhase, VenueMandateSchema,
   type HlNetwork, type JurisdictionAck, type SignRequest, type VenueAuthorization, type VenueLeverage, type VenueMandate, type VenueMandatePhase, type VenueOrder, type VenuePolicy,
 } from '@spw/derivatives/live';
 import { UserError } from '../config.ts';
-import { audit, sql } from '../db.ts';
+import { audit, getSetting, sql } from '../db.ts';
 import { LIVE_REASONS, liveReason, liveTexts, revokeWarning, type LiveLocale } from './live-texts.ts';
 import { LIVE_ACTION_TTL_MS, type LiveVenue, type LiveVenues } from './live-venue.ts';
 import { CloseBodySchema, DEFAULT_SLIPPAGE_BPS, OrderBodySchema, worstPrice, type OrderBody } from './paper.ts';
@@ -40,8 +40,15 @@ const TAKER_FEE_RATE = '0.00045';
 const PRE_SUBMIT = ['proposed', 'risk_checked'], IN_FLIGHT = ['authorized', 'signed'], AT_VENUE = ['submitted', 'unknown', 'open', 'partially_filled', 'filled'];
 export type LiveState = 'proposed' | 'risk_checked' | 'authorized' | 'signed' | 'submitted' | 'unknown' | 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected';
 
+/** an answer of /venue/authorize, as it is returned — the first time, or again by /venue/authorization */
+export interface VenueAuthorizeAnswer { authorizationId: string; hash: string; agentAddress: string; approve: { action: unknown; signature: { r: string; s: string; v: number }; nonce: number } }
 export interface LiveSignerPort {
-  status(fresh?: boolean): Promise<{ keyId: string; halted: boolean; addresses: Record<string, string> }>;
+  status(fresh?: boolean): Promise<{ keyId: string; halted: boolean; addresses: Record<string, string>;
+    /** the venue authorizations and derivative mandates the signer holds (V11: read to find one whose answer was lost) */
+    venues?: { authorization: { authorizationId: string; venue: string; network: string }; hash: string; revoked: boolean; expired: boolean }[];
+    venueMandates?: { mandate: { mandateId: string; authorizationId: string }; hash: string; phase: 'active' | 'wind_down' | 'ended' }[] }>;
+  /** V11: the stored answer of an active authorization, again; absent on a signer port that cannot give it (the orphan is then revoked) */
+  venueAuthorization?(authorizationId: string): Promise<VenueAuthorizeAnswer>;
   venueKey(venue: string, network: string): Promise<{ venue: string; network: string; address: string; path: string; account: string }>;
   venueAuthorize(authorization: unknown, assertion: unknown): Promise<{ authorizationId: string; hash: string; agentAddress: string; approve: { action: unknown; signature: { r: string; s: string; v: number }; nonce: number } }>;
   venueSign(p: { authorizationId: string; sign: unknown; context?: unknown; assertion?: unknown }): Promise<{ signature: { r: string; s: string; v: number }; signer: string; kind: string; hash: string }>;
@@ -65,6 +72,11 @@ export interface LiveDeps {
   credentials: () => Promise<{ id: string; transports: unknown }[]>;
   /** pause between two reads of the venue when waiting for it to show an approval (tests: 0) */
   confirmDelayMs?: number;
+  /**
+   * V11 (B-08): verifies a WebAuthn assertion of an enrolled passkey over `challenge` (user verification required); throws when
+   * it does not verify. Loosening an API-side limit and lifting an API-side halt need it. Absent = those changes are refused.
+   */
+  verifyOwner?: (assertion: unknown, challenge: Uint8Array) => Promise<void>;
 }
 
 interface Meta { baseline: Record<string, DecStr>; baselineTs: number; fillsCursor: number; fundingCursor: number; fundingReadAt: number; lastEquityMinute: number; pendingDivergence: string | null }
@@ -122,6 +134,44 @@ export function liveRiskPolicy(vp: VenuePolicy, network: HlNetwork): RiskPolicy 
 const READ_ONLY_POLICY: RiskPolicy = { mode: 'READ_ONLY', allowedInstruments: [], halt: null, maxDataAgeMs: 5_000, maxDeviationBps: '0', maxMarkIndexBps: '0', maxLeverage: '1', maxOrderNotional: '0',
   maxGrossExposure: '0', maxPositionNotional: '0', minFreeCollateral: '0', minLiquidationDistanceBps: '0', maxDailyLoss: '0', maxTotalLoss: '0', maxOrdersPerMinute: 0, maxOrdersPerDay: 0 };
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// V11 (B-08) — API-side limits and halts are the only loss limits of a manual account and the outer limits of a mandate. A
+// session cookie alone could loosen them or lift a halt. Tightening stays free; LOOSENING a limit, lifting the owner's halt and
+// re-basing a divergence now need a passkey assertion whose challenge is the hash of the canonical intent below.
+
+export const RISK_INTENT_TTL_MS = 300_000;
+export interface RiskIntent {
+  v: 1; kind: 'policy' | 'resume' | 'rebase'; accountId: string; venue: string; network: string; account: string; authorizationId: string;
+  /** `policy`: the whole policy that will be in force; null for the two others */ policy: RiskPolicy | null;
+  /** `policy`: the fields that become looser, as shown for approval */ loosened: string[];
+  /** `resume`: the halt being lifted; `rebase`: the divergence being accepted */ subject: string | null;
+  nonce: string; createdAt: number; expiresAt: number;
+}
+const stableJson = (v: unknown): string => (v === null || typeof v !== 'object' ? JSON.stringify(v ?? null) : Array.isArray(v) ? `[${v.map(stableJson).join(',')}]`
+  : `{${Object.keys(v as object).sort().map((k) => `${JSON.stringify(k)}:${stableJson((v as Record<string, unknown>)[k])}`).join(',')}}`);
+/** SHA-256 of a domain tag and the object with its keys in sorted order: the passkey's challenge */
+export const canonicalIntentHash = (domain: string, i: unknown): Uint8Array => new Uint8Array(createHash('sha256').update(`${domain}\n${stableJson(i)}`).digest());
+export const riskIntentHash = (i: RiskIntent): Uint8Array => canonicalIntentHash('SPW-RISK-INTENT-v1', i);
+
+const UP_IS_LOOSER = ['maxDataAgeMs', 'maxDeviationBps', 'maxMarkIndexBps', 'maxLeverage', 'maxOrderNotional', 'maxGrossExposure', 'maxPositionNotional', 'maxDailyLoss', 'maxTotalLoss', 'maxOrdersPerMinute', 'maxOrdersPerDay'] as const;
+const DOWN_IS_LOOSER = ['minFreeCollateral', 'minLiquidationDistanceBps'] as const;
+/** which fields of `next` allow more than `cur` does. A field this function does not know and that changed counts as loosened (fail closed). Pure. */
+export function loosenedFields(cur: RiskPolicy, next: RiskPolicy): string[] {
+  const out: string[] = [], num = (x: unknown) => D.from(String(x));
+  if (next.allowedInstruments.some((i) => !cur.allowedInstruments.includes(i))) out.push('allowedInstruments');
+  for (const k of UP_IS_LOOSER) if (D.gt(num(next[k]), num(cur[k]))) out.push(k);
+  for (const k of DOWN_IS_LOOSER) if (D.lt(num(next[k]), num(cur[k]))) out.push(k);
+  if (cur.halt !== null && next.halt === null) out.push('halt');
+  if (cur.mode !== next.mode) out.push('mode');
+  const known = new Set<string>(['mode', 'allowedInstruments', 'halt', ...UP_IS_LOOSER, ...DOWN_IS_LOOSER]);
+  for (const k of new Set([...Object.keys(cur), ...Object.keys(next)])) if (!known.has(k) && stableJson((cur as Record<string, unknown>)[k]) !== stableJson((next as Record<string, unknown>)[k])) out.push(k);
+  return out;
+}
+interface RiskStash { intent: RiskIntent; hash: string }
+const riskKey = (id: string, kind: RiskIntent['kind']) => `deriv.live.risk.${kind}.${id}`;
+/** the authorization handed to the signer whose answer has not been seen yet (V11, B-04) */
+const submittedKey = (id: string) => `deriv.live.submitted.${id}`;
+
 export type LiveEvent = { event: 'account' | 'order' | 'action' | 'risk' | 'status'; data: unknown };
 export interface StepSummary { accounts: number; reconciled: number; fills: number; funding: number; divergences: number; errors: string[] }
 
@@ -175,12 +225,19 @@ export class LiveService {
     return options;
   }
 
-  /** why this account cannot send anything to the venue right now; null = it can */
-  private blocked(a: AccountRow, what: 'trade' | 'stop'): UserError | null {
-    if (a.network === 'mainnet' && !this.deps.mainnetEnabled()) return new UserError('mainnet_disabled', MAINNET_OFF, 403);
+  /**
+   * Why this account cannot send this to the venue right now; null = it can.
+   *  - `trade`: anything that can open or add risk (an order that is not reduce-only, a leverage change, a mandate approval);
+   *  - `reduce`: a reduce-only order on an EXISTING position (the risk engine checks that it really reduces, the venue enforces the flag);
+   *  - `stop`: a cancel.
+   * V11 (B-02): the mainnet server lock closes NEW risk only. Switching SPW_DERIV_LIVE_MAINNET off — or forgetting it at a
+   * restart — must not leave positions and resting orders that the wallet can no longer close or cancel.
+   */
+  private blocked(a: AccountRow, what: 'trade' | 'reduce' | 'stop'): UserError | null {
+    if (what === 'trade' && a.network === 'mainnet' && !this.deps.mainnetEnabled()) return new UserError('mainnet_disabled', MAINNET_OFF, 403);
     if (!a.authorization_id || !a.venue_authorization) return new UserError('mode_read_only', 'this venue account is read-only: live trading has not been authorized with the owner\'s passkey', 422);
     if (a.mode !== 'MANUAL_LIVE') return new UserError('mode_read_only', 'the authorization of this venue account was revoked: it is read-only', 422);
-    if (what === 'trade' && this.now() >= a.venue_authorization.expiresAt * 1000) return new UserError('authorization_expired', 'the venue authorization has expired: approve a new one', 422);
+    if (what !== 'stop' && this.now() >= a.venue_authorization.expiresAt * 1000) return new UserError('authorization_expired', 'the venue authorization has expired: approve a new one', 422);
     return null;
   }
   private effectiveHalt(a: AccountRow): string | null {
@@ -310,6 +367,9 @@ export class LiveService {
     if (a.mode !== 'READ_ONLY') throw new UserError('bad_state', 'an authorization is already active on this venue account: revoke it to change its limits', 409);
     const st = await this.deps.signer.status(true);
     if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
+    // V11 (B-04): the account is READ_ONLY here, so an authorization the signer holds as active for it is one whose answer was lost
+    if ((st.venues ?? []).some((v) => v.authorization.venue === a.venue && v.authorization.network === a.network && !v.revoked && !v.expired))
+      throw new UserError('authorization_orphaned', 'the signer already holds an active authorization for this venue account that this wallet has no record of (its answer was lost). Use "recover" on this venue account first: it adopts that authorization or revokes it.', 409);
     const key = await this.deps.signer.venueKey(a.venue, a.network);
     if (key.address.toLowerCase() !== a.agent_address || key.account.toLowerCase() !== a.account) throw new UserError('wrong_key', 'this venue account belongs to another signer key', 409);
     const venue = this.deps.venues.get(a.network);
@@ -338,15 +398,34 @@ export class LiveService {
     if (a.mode !== 'READ_ONLY') throw new UserError('bad_state', 'an authorization is already active on this venue account', 409);
     const p = a.pending;
     if (!p) throw new UserError('bad_state', 'prepare the authorization first', 409);
-    const auth = p.authorization, venue = this.deps.venues.get(a.network);
+    const auth = p.authorization;
     await sql`update deriv_accounts set pending = null where id = ${id}`;                      // an authorization is approved once
-    const r = await this.deps.signer.venueAuthorize(auth, body.assertion);                    // refusal → UserError signer_*, nothing changed
+    // V11 (B-04): what is handed to the signer is kept until its answer is seen. If the answer is lost — timeout, crash, relay
+    // drop — the signer may hold an authorization this API does not know, and would refuse any other for up to 90 days:
+    // `recover` (below) asks the signer for it again and adopts it, or revokes it.
+    await sql`insert into settings (key, value) values (${submittedKey(id)}, ${sql.json(p as never)}) on conflict (key) do update set value = excluded.value`;
+    let r: VenueAuthorizeAnswer;
+    try { r = await this.deps.signer.venueAuthorize(auth, body.assertion); }
+    catch (e) {
+      // a refusal changed nothing on the signer; "unreachable" or an internal error leaves the outcome unknown
+      const unknown = e instanceof UserError && (e.code === 'signer_unreachable' || e.code === 'signer_internal');
+      if (!unknown) await sql`delete from settings where key = ${submittedKey(id)}`;
+      else await this.audit('deriv.live.authorization_unknown', { account: id, authorizationId: auth.authorizationId, reason: msg(e) });
+      throw unknown ? new UserError('authorization_unknown', `the signer gave no usable answer (${msg(e)}): it may or may not have stored the authorization. Use "recover" on this venue account: it asks the signer, then adopts the authorization or revokes it.`, 503) : e;
+    }
+    return this.finishAuthorization(a, p, r);
+  }
+
+  /** the signer stored the authorization and signed the venue approval (`r`): the venue must now show the API wallet */
+  private async finishAuthorization(a: AccountRow, p: Pending, r: VenueAuthorizeAnswer) {
+    const id = a.id, auth = p.authorization, venue = this.deps.venues.get(a.network);
     // The signer verified the owner's passkey over an authorization that contains the hash of the text that was displayed: that
     // is the owner's confirmation. It is recorded now, whatever the venue answers next.
     await this.audit('deriv.live.acknowledged', { account: id, venue: a.venue, network: a.network, authorizationId: auth.authorizationId, authorizationHash: r.hash, ackSha256: p.ack.sha256, locale: p.ack.locale, version: p.ack.version,
       statement: 'the owner confirmed with his passkey having read the jurisdiction summary; enabling live derivative trading on this venue is his own decision' });
     const undo = async (why: string): Promise<never> => {
       await this.deps.signer.venueRevoke(auth.authorizationId).catch(() => {});
+      await sql`delete from settings where key = ${submittedKey(id)}`;
       await this.audit('deriv.live.authorization_failed', { account: id, authorizationId: auth.authorizationId, reason: why.slice(0, 300) });
       throw new UserError('venue_rejected', `the venue did not register the trading key: ${why.slice(0, 240)} — the authorization was revoked on the signer, nothing can trade. Fund the venue account first if the venue asks for a deposit, then prepare a new authorization.`, 422);
     };
@@ -367,9 +446,65 @@ export class LiveService {
     const now = this.now(), meta: Meta = { ...this.meta(a), baseline: Object.fromEntries(positions.map((x) => [x.instrument, x.side === 'long' ? x.size : `-${x.size}`])), baselineTs: now, fillsCursor: now, fundingCursor: now, pendingDivergence: null };
     await sql`update deriv_accounts set mode = 'MANUAL_LIVE', authorization_id = ${auth.authorizationId}, authorization_hash = ${r.hash}, venue_authorization = ${sql.json(auth as never)}, agent_name = ${auth.agentName},
       policy = ${sql.json(liveRiskPolicy(auth.policy, a.network) as never)}, halt = null, divergence = null, meta = ${sql.json(meta as never)}, authorized_at = ${new Date(now)}, revoked_at = null, updated_at = ${new Date(now)} where id = ${id}`;
+    await sql`delete from settings where key = ${submittedKey(id)}`;
     await this.audit('deriv.live.authorized', { account: id, venue: a.venue, network: a.network, authorizationId: auth.authorizationId, hash: r.hash, agentAddress: a.agent_address, mode: auth.mode, policy: auth.policy, expiresAt: auth.expiresAt, ackSha256: auth.ackSha256 });
     this.emit(id, { event: 'status', data: { mode: 'MANUAL_LIVE', ts: now } });
     return this.get(id);
+  }
+
+  /**
+   * V11 (B-04) — reconciliation with the signer after a lost answer. Reads the signer's own list and, for this venue account:
+   *  - an active authorization that is exactly the one this API handed over (same id, same canonical hash): ADOPTED — the
+   *    signer returns the answer it stored (no new signature, no passkey: the owner's passkey approved these bytes), and the
+   *    normal sequence resumes (venue approval, confirmation, account goes MANUAL_LIVE);
+   *  - any other active authorization the API has no record of: REVOKED on the signer (stopping never needs a passkey). The
+   *    account is then free for a new authorization;
+   *  - a derivative mandate the signer holds as active while the API recorded its approval as failed or unanswered: adopted
+   *    when it is the very mandate that was submitted, revoked otherwise.
+   * Nothing here can create or widen an authority: it only takes what the passkey already approved, or removes.
+   */
+  async recover(id: string) {
+    const a = await this.account(id), actions: { what: 'authorization' | 'mandate'; id: string; outcome: 'adopted' | 'revoked'; detail: string }[] = [];
+    const st = await this.deps.signer.status(true);
+    const sub = await getSetting<Pending | null>(submittedKey(id), null);
+    if (a.mode === 'READ_ONLY') {
+      for (const v of (st.venues ?? []).filter((x) => x.authorization.venue === a.venue && x.authorization.network === a.network && !x.revoked && !x.expired)) {
+        const vid = v.authorization.authorizationId;
+        const mine = sub !== null && sub.authorization.authorizationId === vid && hex(venueAuthorizationHash(sub.authorization)) === v.hash && this.deps.signer.venueAuthorization !== undefined
+          && !(a.network === 'mainnet' && !this.deps.mainnetEnabled());   // adopting turns live trading on: the mainnet lock applies, as for any approval
+        if (!mine) {
+          await this.deps.signer.venueRevoke(vid);
+          await this.audit('deriv.live.authorization_orphan_revoked', { account: id, authorizationId: vid, hash: v.hash, known: sub?.authorization.authorizationId === vid });
+          actions.push({ what: 'authorization', id: vid, outcome: 'revoked', detail: 'the signer held an authorization this wallet has no usable record of: it was revoked on the signer; a new one can be prepared' });
+          continue;
+        }
+        const r = await this.deps.signer.venueAuthorization!(vid);
+        if (r.hash !== v.hash || r.authorizationId !== vid || r.agentAddress.toLowerCase() !== a.agent_address) throw new UserError('hash_mismatch', 'the signer returned another authorization than the one asked for', 500);
+        await this.audit('deriv.live.authorization_recovered', { account: id, authorizationId: vid, hash: v.hash });
+        await this.finishAuthorization(a, sub!, r);                                              // throws venue_rejected (and revokes) when the venue refuses the trading key
+        actions.push({ what: 'authorization', id: vid, outcome: 'adopted', detail: 'the signer held the authorization approved with the passkey; its stored answer was used and live trading is on' });
+      }
+      await sql`delete from settings where key = ${submittedKey(id)}`;
+    } else if (a.authorization_id) {
+      const known = await sql<MandateRow[]>`select * from deriv_mandates where account_id = ${id}`;
+      for (const sm of (st.venueMandates ?? []).filter((x) => x.mandate.authorizationId === a.authorization_id && x.phase === 'active')) {
+        const row = known.find((k) => k.id === sm.mandate.mandateId);
+        if (row && (row.state === 'active' || row.state === 'revoked')) continue;               // nothing lost
+        const other = known.some((k) => k.state === 'active');
+        if (row && row.hash === sm.hash && (row.state === 'consumed' || row.state === 'failed') && !other && this.deps.mandateSigner && this.mandateLock(a) === null) {
+          const now = new Date(this.now());
+          await sql`update deriv_mandates set state = 'active', approved_at = ${now}, updated_at = ${now} where id = ${row.id}`;
+          await this.audit('deriv.live.mandate_recovered', { account: id, mandateId: row.id, hash: row.hash });
+          actions.push({ what: 'mandate', id: row.id, outcome: 'adopted', detail: 'the signer held the mandate approved with the passkey: it is in force' });
+        } else {
+          await this.mandateSigner().venueMandateRevoke(sm.mandate.mandateId);
+          if (row) await sql`update deriv_mandates set state = 'revoked', revoked_at = ${new Date(this.now())}, updated_at = ${new Date(this.now())} where id = ${row.id}`;
+          await this.audit('deriv.live.mandate_orphan_revoked', { account: id, mandateId: sm.mandate.mandateId });
+          actions.push({ what: 'mandate', id: sm.mandate.mandateId, outcome: 'revoked', detail: 'the signer held a mandate this wallet has no usable record of: it was revoked on the signer' });
+        }
+      }
+    }
+    return { ...(await this.get(id)), recovered: actions };
   }
 
   /** stopping never needs a passkey. The signer forgets nothing: a revoked authorization signs nothing, not even a cancel. */
@@ -399,9 +534,9 @@ export class LiveService {
       venueAgent: liveTexts(body.locale ?? 'en').venueAgent, locale: body.locale ?? 'en' };
   }
 
-  /** the API-side risk policy can be tightened freely; it can never exceed what the passkey-approved authorization allows */
-  async setPolicy(id: string, policy: RiskPolicy) {
-    const a = await this.account(id), auth = a.venue_authorization;
+  /** what every API-side policy must respect, whoever asks: it can never exceed what the passkey-approved authorization allows */
+  private checkPolicyBounds(a: AccountRow, policy: RiskPolicy): void {
+    const auth = a.venue_authorization;
     if (a.mode !== 'MANUAL_LIVE' || !auth) throw new UserError('mode_read_only', 'a read-only venue account has no trading policy: authorize it first', 422);
     const vp = auth.policy, bad = (why: string): never => { throw new UserError('bad_policy', `${why}: a wider limit needs a new authorization, approved with the passkey`, 400); };
     if (policy.mode !== 'MANUAL_LIVE') bad('the mode of a venue account is set by its authorization');
@@ -412,9 +547,82 @@ export class LiveService {
     if (D.gt(D.from(policy.maxPositionNotional), D.from(vp.maxPositionNotional))) bad('position notional above the authorization');
     if (D.gt(D.from(policy.maxGrossExposure), D.from(vp.maxGrossExposure))) bad('gross exposure above the authorization');
     if (policy.maxOrdersPerDay > vp.maxOrdersPerDay) bad('orders per day above the authorization');
-    await sql`update deriv_accounts set policy = ${sql.json(policy as never)}, updated_at = ${new Date(this.now())} where id = ${id}`;
-    await this.audit('deriv.live.policy_replaced', { account: id, maxLeverage: policy.maxLeverage, maxOrderNotional: policy.maxOrderNotional, maxGrossExposure: policy.maxGrossExposure });
-    return this.get(id);
+  }
+  private async writePolicy(a: AccountRow, policy: RiskPolicy, loosened: string[], passkey: boolean) {
+    await sql`update deriv_accounts set policy = ${sql.json(policy as never)}, updated_at = ${new Date(this.now())} where id = ${a.id}`;
+    await this.audit('deriv.live.policy_replaced', { account: a.id, maxLeverage: policy.maxLeverage, maxOrderNotional: policy.maxOrderNotional, maxGrossExposure: policy.maxGrossExposure, maxDailyLoss: policy.maxDailyLoss, maxTotalLoss: policy.maxTotalLoss,
+      minLiquidationDistanceBps: policy.minLiquidationDistanceBps, minFreeCollateral: policy.minFreeCollateral, loosened, passkey });
+    return this.get(a.id);
+  }
+
+  /**
+   * The API-side risk policy. TIGHTENING is free (no passkey). A change that loosens any field (V11, B-08) is refused here
+   * with `passkey_required`: it goes through prepareRisk('policy') → approveRisk, where the owner's passkey signs the whole new policy.
+   */
+  async setPolicy(id: string, policy: RiskPolicy) {
+    const a = await this.account(id);
+    this.checkPolicyBounds(a, policy);
+    const loosened = loosenedFields(RiskPolicySchema.parse(a.policy), policy);
+    if (loosened.length) throw new UserError('passkey_required', `this change loosens ${loosened.join(', ')}: it needs the owner's passkey (prepare it, then approve). Tightening needs none.`, 403);
+    return this.writePolicy(a, policy, [], false);
+  }
+
+  /**
+   * Step 1 of a change that needs the passkey: the canonical intent, stored once, and the WebAuthn request over its hash.
+   * `policy`: nothing loosened → `{ needed: false }` (use setPolicy). `resume`: no owner halt → `{ needed: false }`.
+   */
+  async prepareRisk(id: string, kind: RiskIntent['kind'], policy: RiskPolicy | null = null) {
+    const a = await this.account(id);
+    if (a.mode !== 'MANUAL_LIVE' || !a.authorization_id) throw new UserError('mode_read_only', 'a read-only venue account has nothing to change: authorize it first', 422);
+    let loosened: string[] = [], subject: string | null = null;
+    if (kind === 'policy') {
+      if (!policy) throw new UserError('bad_request', 'the new policy is required', 400);
+      this.checkPolicyBounds(a, policy);
+      loosened = loosenedFields(RiskPolicySchema.parse(a.policy), policy);
+      if (!loosened.length) return { needed: false as const, kind, loosened, intent: null, hash: null, options: null, expiresAt: null };
+    } else if (kind === 'resume') {
+      if (a.halt === null) return { needed: false as const, kind, loosened, intent: null, hash: null, options: null, expiresAt: null };
+      subject = a.halt;
+    } else subject = a.divergence;                                                           // null when no divergence is flagged yet: the re-base still moves the reference
+    if (!this.deps.verifyOwner) throw new UserError('passkey_unavailable', 'this server cannot verify a passkey approval for a risk change: the change is refused', 503);
+    const now = this.now();
+    const intent: RiskIntent = { v: 1, kind, accountId: a.id, venue: a.venue, network: a.network, account: a.account, authorizationId: a.authorization_id, policy: kind === 'policy' ? policy : null, loosened, subject,
+      nonce: randomUUID(), createdAt: now, expiresAt: now + RISK_INTENT_TTL_MS };
+    const hash = riskIntentHash(intent), stash: RiskStash = { intent, hash: hex(hash) };
+    await sql`insert into settings (key, value) values (${riskKey(id, kind)}, ${sql.json(stash as never)}) on conflict (key) do update set value = excluded.value`;
+    await this.audit('deriv.live.risk_change_prepared', { account: id, kind, hash: stash.hash, loosened });
+    return { needed: true as const, kind, loosened, intent, hash: stash.hash, options: await this.options(hash), expiresAt: intent.expiresAt };
+  }
+
+  /** Step 2: the prepared intent, taken ONCE, must still describe the account; the assertion must verify over its hash. Returns the intent to apply. */
+  private async takeRisk(a: AccountRow, kind: RiskIntent['kind'], assertion: unknown): Promise<RiskIntent> {
+    const verify = this.deps.verifyOwner;
+    if (!verify) throw new UserError('passkey_unavailable', 'this server cannot verify a passkey approval for a risk change: the change is refused', 503);
+    if (assertion === undefined || assertion === null) throw new UserError('passkey_required', 'this change needs the owner\'s passkey: prepare it first, then approve', 403);
+    const stash = await getSetting<RiskStash | null>(riskKey(a.id, kind), null);
+    if (!stash) throw new UserError('bad_state', 'prepare this change first', 409);
+    const i = stash.intent;
+    if (hex(riskIntentHash(i)) !== stash.hash || i.kind !== kind || i.accountId !== a.id) throw new UserError('bad_state', 'the prepared change is not for this account', 409);
+    if (this.now() >= i.expiresAt) { await sql`delete from settings where key = ${riskKey(a.id, kind)}`; throw new UserError('proposal_expired', 'the approval window of this change has expired: prepare it again', 410); }
+    if (a.mode !== 'MANUAL_LIVE' || a.authorization_id !== i.authorizationId) throw new UserError('bad_state', 'the venue authorization changed since this change was prepared', 409);
+    if (kind === 'resume' && a.halt !== i.subject) throw new UserError('bad_state', 'the halt changed since its lifting was prepared: prepare it again', 409);
+    if (kind === 'rebase' && a.divergence !== i.subject) throw new UserError('bad_state', 'the divergence changed since the re-base was prepared: prepare it again', 409);
+    try { await verify(assertion, Buffer.from(stash.hash, 'hex')); }
+    catch (e) {
+      await this.audit('deriv.live.risk_change_refused', { account: a.id, kind, hash: stash.hash, reason: msg(e) });
+      throw new UserError('bad_approval', `the passkey approval of this change did not verify (${msg(e)}); nothing changed`, 403);
+    }
+    // single use: only the caller that removes the stored intent applies it
+    const taken = await sql`delete from settings where key = ${riskKey(a.id, kind)} and value->>'hash' = ${stash.hash} returning key`;
+    if (!taken.length) throw new UserError('bad_state', 'this change was already applied or replaced', 409);
+    return i;
+  }
+
+  /** a loosened policy, approved with the passkey: exactly the policy that was prepared is written */
+  async approvePolicy(id: string, assertion: unknown) {
+    const a = await this.account(id), i = await this.takeRisk(a, 'policy', assertion);
+    this.checkPolicyBounds(a, i.policy!);
+    return this.writePolicy(a, i.policy!, i.loosened, true);
   }
 
   // ------------------------------------------------------------------ orders: preview, propose, approve, cancel
@@ -445,7 +653,7 @@ export class LiveService {
   }
 
   /** live market + the account's REAL state from the venue, then the risk engine with the account's policy */
-  private async check(a: AccountRow, venue: LiveVenue, body: OrderBody, clientId: string, over: RiskPolicy | null = null) {
+  private async check(a: AccountRow, venue: LiveVenue, body: OrderBody, clientId: string, over: RiskPolicy | null = null, /** price band of the signer's rule; default: the authorization's */ bandBps?: number) {
     const inst = await venue.instrument(body.instrument);
     const read = async <T>(fn: () => Promise<T>): Promise<T> => { try { return await fn(); } catch (e) { if (e instanceof VenueError) throw new UserError('venue_unavailable', msg(e), 503); throw e; } };
     const [m, state, positions, openOrders, lev] = await Promise.all([venue.market(inst), read(() => venue.adapter.account(a.account)), read(() => venue.adapter.positions(a.account)),
@@ -457,6 +665,15 @@ export class LiveService {
     const cap = a.venue_authorization?.policy.maxOrderNotional;
     if (risk.ok && cap && req.price !== null && D.gt(D.from(venueOrderNotional({ size: req.size, price: req.price, triggerPrice: req.triggerPrice })), D.from(cap))) {
       risk = { ok: false, code: 'order_notional_exceeded', reason: `order notional ${venueOrderNotional({ size: req.size, price: req.price, triggerPrice: req.triggerPrice })} exceeds the ${cap} the signer will sign per order (reduce-only orders included: close in smaller parts)` };
+    }
+    // V11 (B-07): the signer's price rule (venueOrderPriceError — the same function), applied here against the venue's mark so
+    // that what the signer will refuse is refused BEFORE the passkey prompt. The signer applies it again with its own
+    // Coinbase + Kraken mid: an order at the very edge of the band can still be refused there.
+    const band = bandBps ?? a.venue_authorization?.policy.maxPriceDeviationBps;
+    if (risk.ok && band !== undefined && req.price !== null) {
+      const type = (req.type === 'market' ? 'limit' : req.type) as VenueOrder['type'];
+      const off = venueOrderPriceError({ side: req.side, type, price: req.price, triggerPrice: req.triggerPrice, reduceOnly: req.reduceOnly }, canon(m.ticker.mark), band);
+      if (off) risk = { ok: false, code: 'price_deviation', reason: `${off.reason} the mark ${canon(m.ticker.mark)} (the signer applies this rule with its own price and would refuse the order)` };
     }
     return { inst, m, state, positions, openOrders, lev, req, risk, now };
   }
@@ -470,7 +687,7 @@ export class LiveService {
   }
 
   async preview(id: string, body: OrderBody) {
-    const a = await this.account(id), stop = this.blocked(a, 'trade');
+    const a = await this.account(id), stop = this.blocked(a, body.reduceOnly ? 'reduce' : 'trade');
     if (stop) throw stop;
     const venue = this.deps.venues.get(a.network);
     await venue.assertPinned();
@@ -510,7 +727,7 @@ export class LiveService {
     const a = await this.account(id);
     const [prior] = await sql`select * from deriv_orders where account_id = ${id} and client_id = ${key}`;
     if (prior) return this.proposalAnswer(await this.settledRow(id, key), true);
-    const stop = this.blocked(a, 'trade');
+    const stop = this.blocked(a, body.reduceOnly ? 'reduce' : 'trade');
     if (stop) throw stop;
     const venue = this.deps.venues.get(a.network);
     await venue.assertPinned();
@@ -569,7 +786,7 @@ export class LiveService {
     const [row] = await sql`select * from deriv_orders where account_id = ${id} and client_id = ${key} and state is not null`;
     if (!row) throw new UserError('unknown_order', 'unknown order', 404);
     if (row.state !== 'risk_checked') return { order: this.orderView(row), idempotent: true };      // already approved, sent, refused or withdrawn: nothing is sent again
-    const stop = this.blocked(a, 'trade');
+    const stop = this.blocked(a, row.reduce_only ? 'reduce' : 'trade');
     if (stop) throw stop;
     const halt = this.effectiveHalt(a);
     if (halt && !row.reduce_only) {
@@ -801,8 +1018,11 @@ export class LiveService {
   }
 
   /** lifts an owner halt. A divergence is not lifted here: it clears when the venue and the records agree again, or when the owner re-bases them. */
-  async resume(id: string) {
+  async resume(id: string, assertion?: unknown) {
     const a = await this.account(id);
+    if (a.halt === null) return this.get(id);                                                // nothing to lift: no passkey asked for nothing
+    // V11 (B-08): halting is free, lifting the halt needs the owner's passkey over the prepared intent (prepareRisk('resume'))
+    await this.takeRisk(a, 'resume', assertion);
     await sql`update deriv_accounts set halt = null, updated_at = ${new Date(this.now())} where id = ${id}`;
     await this.riskEvent(id, 'resume', null, 'owner halt lifted');
     await this.audit('deriv.live.resume', { account: id });
@@ -840,7 +1060,7 @@ export class LiveService {
     const a = await this.account(id);
     const [prior] = await sql`select * from deriv_orders where account_id = ${id} and client_id = ${key}`;
     if (prior) return { ...(await this.proposalAnswer(prior, true)), worstPrice: canonN(prior.price), slippageBoundBps: null };
-    const stop = this.blocked(a, 'trade');
+    const stop = this.blocked(a, 'reduce');
     if (stop) throw stop;
     const venue = this.deps.venues.get(a.network), inst = await venue.instrument(body.instrument);
     const positions = await venue.adapter.positions(a.account).catch((e: unknown) => { throw new UserError('venue_unavailable', msg(e), 503); });
@@ -856,8 +1076,10 @@ export class LiveService {
   }
 
   /** the owner accepts the venue's present positions as the reference (after trading from another interface, a liquidation…) */
-  async rebase(id: string) {
+  async rebase(id: string, assertion?: unknown) {
     const a = await this.account(id), venue = this.deps.venues.get(a.network);
+    // V11 (B-08): accepting the venue's positions lifts the divergence halt — it needs the owner's passkey like lifting his own halt
+    await this.takeRisk(a, 'rebase', assertion);
     const positions = await venue.adapter.positions(a.account).catch((e: unknown) => { throw new UserError('venue_unavailable', msg(e), 503); });
     const now = this.now(), meta: Meta = { ...this.meta(a), baseline: Object.fromEntries(positions.map((x) => [x.instrument, x.side === 'long' ? x.size : `-${x.size}`])), baselineTs: now, pendingDivergence: null };
     await sql`update deriv_accounts set meta = ${sql.json(meta as never)}, divergence = null, updated_at = ${new Date(now)} where id = ${id}`;
@@ -1133,20 +1355,21 @@ export class LiveService {
     const key = c.clientId, prior = await this.placeMandateOrderReplay(id, key);
     if (prior) return prior;
     const a = await this.account(id), ms = this.mandateSigner();
-    const lock = this.mandateLock(a) ?? this.blocked(a, 'trade');
+    const parsed = OrderRequestSchema.safeParse({ ...req, clientId: key });      // the idempotency key is ctx.clientId; req.clientId is ignored
+    // V11 (B-02): the two mainnet locks stop orders that can add exposure; a reduce-only order — the agent's way out — passes them
+    const lock = parsed.success && parsed.data.reduceOnly ? this.blocked(a, 'reduce') : this.mandateLock(a) ?? this.blocked(a, 'trade');
     if (lock) throw lock;
     const cur = await this.currentMandate(a);
     if (!cur || cur.phase === 'ended') throw new UserError('mandate_none', 'no derivative mandate is in force on this venue account: the owner approves one with his passkey', 422);
     const m = cur.row.mandate;
     if (c.strategySha256 !== m.strategySha256 || c.agentId !== m.agentId) throw new UserError('mandate_mismatch', 'the mandate was approved for another strategy version or another agent', 422);
-    const parsed = OrderRequestSchema.safeParse({ ...req, clientId: key });      // the idempotency key is ctx.clientId; req.clientId is ignored
     if (!parsed.success || parsed.data.price === null) throw new UserError('bad_request', 'a mandate order is a complete order request and names its price (limit price, or worst acceptable price for a market order)', 400);
     const r0 = parsed.data;
     if (cur.phase === 'wind_down' && !r0.reduceOnly) throw new UserError('mandate_wind_down', `the mandate ${cur.row.state === 'revoked' ? 'was revoked' : 'has expired'}: only cancels and reduce-only orders are placed until the wind-down ends`, 422);
     const venue = this.deps.venues.get(a.network);
     await venue.assertPinned();
     const body = OrderBodySchema.parse({ instrument: r0.instrument, side: r0.side, type: r0.type, size: r0.size, price: r0.price, triggerPrice: r0.triggerPrice, reduceOnly: r0.reduceOnly, tif: r0.tif });
-    const chk = await this.check(a, venue, body, key, this.mandatePolicy(a, m, r0.instrument)), { req: order, inst, now } = chk, at = new Date(now);
+    const chk = await this.check(a, venue, body, key, this.mandatePolicy(a, m, r0.instrument), m.maxPriceDeviationBps), { req: order, inst, now } = chk, at = new Date(now);
     let refusal: { code: string; reason: string } | null = chk.risk.ok ? null : { code: chk.risk.code, reason: chk.risk.reason };
     const notional = order.price === null ? null : venueOrderNotional({ size: order.size, price: order.price, triggerPrice: order.triggerPrice });
     // what the signer will refuse is said here first, from the venue state the API just read
@@ -1233,11 +1456,11 @@ export class LiveService {
 
   /** what an automated strategy needs to decide: the venue's own account state, positions and open orders, and whether it may trade */
   async mandateAccountState(id: string) {
-    const a = await this.account(id), info = await this.mandateInfo(a), v = await this.venueState(a), halted = this.effectiveHalt(a), lock = this.mandateLock(a) ?? this.blocked(a, 'trade');
+    const a = await this.account(id), info = await this.mandateInfo(a), v = await this.venueState(a), halted = this.effectiveHalt(a), lock = this.mandateLock(a) ?? this.blocked(a, 'trade'), exitLock = this.blocked(a, 'reduce');
     const phase = info.mandate?.phase ?? null;
     return { accountId: a.id, venue: a.venue, network: a.network, account: a.account, mode: a.mode, modes: info.modes, mandate: info.mandate,
       /** may an order that ADDS exposure be placed right now? (reduce-only orders also pass while halted and during the wind-down) */
-      canOpen: lock === null && phase === 'active' && halted === null && v.error === null, canReduce: lock === null && (phase === 'active' || phase === 'wind_down'),
+      canOpen: lock === null && phase === 'active' && halted === null && v.error === null, canReduce: exitLock === null && (phase === 'active' || phase === 'wind_down'),
       blocked: lock ? { code: lock.code, message: lock.message } : null, halted, divergence: a.divergence,
       state: v.state, positions: v.positions, openOrders: v.openOrders, error: v.error, ts: v.ts, source: 'venue' as const };
   }
