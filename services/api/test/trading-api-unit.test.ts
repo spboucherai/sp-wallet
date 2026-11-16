@@ -13,7 +13,7 @@ describe('key tokens', () => {
     expect(id).toMatch(/^spk_[0-9a-f]{12}$/);
     expect(Buffer.from(secret, 'base64url')).toHaveLength(32);
     expect(parseToken(token)).toEqual({ id, secret });
-    for (const bad of ['', 'spw_live_', token.slice(0, -1), `${token}x`, token.replace('spw_live_', 'spw_test_'), `spw_live_spk_XYZ_${secret}`, ` ${token}`, `spw_live_${id}_${'a'.repeat(200)}`]) expect(parseToken(bad), bad).toBeNull();
+    for (const bad of ['', 'spw_live_', token.slice(0, -1), `${token}x`, token.replace('spw_live_', 'spw_demo_'), `spw_live_spk_XYZ_${secret}`, ` ${token}`, `spw_live_${id}_${'a'.repeat(200)}`]) expect(parseToken(bad), bad).toBeNull();
   });
   it('the stored value is an HMAC under the pepper: it depends on the id, the secret and the pepper, and never contains the secret', () => {
     const id = newKeyId(), secret = newKeySecret(), h = hashSecret('p'.repeat(40), id, secret);

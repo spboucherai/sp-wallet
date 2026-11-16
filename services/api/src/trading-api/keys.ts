@@ -179,7 +179,7 @@ export async function updateKey(id: string, intentId: string, assertion: unknown
 /** Revocation only removes authority: the session is enough. Idempotent. */
 export async function revokeKey(id: string, reason: string, ip: string): Promise<{ key: ReturnType<typeof keyView>; changed: boolean }> {
   const k = await getKey(id);
-  const [row] = await sql<KeyRow[]>`update api_keys set revoked_at = now(), revoked_reason = ${reason.slice(0, 200) || 'revoked by the owner'} where id = ${id} and revoked_at is null returning *`;
+  const [row] = await sql<KeyRow[]>`update api_keys set revoked_at = now(), revoked_reason = ${reason.slice(0, 200) || null} where id = ${id} and revoked_at is null returning *`;
   if (row) await audit('apikey.revoked', 'owner', { key: id, name: k.name, reason: row.revoked_reason, ip });
   return { key: keyView(row ? norm(row) : k), changed: !!row };
 }
