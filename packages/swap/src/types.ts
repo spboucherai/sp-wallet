@@ -46,12 +46,13 @@ export type Executability =
   /** the isolated signer can rebuild/verify every value-moving field itself */
   | { class: 'verified' }
   /** provider-built calldata/instructions the signer can only constrain structurally (allowlisted contract, exact allowance) */
-  | { class: 'opaque'; reason: string }
+  | { class: 'opaque'; reason: string; /** v11: machine code of `reason` (the UI translates it; `reason` stays the English sentence) */ code?: string }
   /** price discovery only: the wallet cannot execute this route */
-  | { class: 'quote_only'; reason: string };
+  | { class: 'quote_only'; reason: string; code?: string };
 
 export type RiskLevel = 'low' | 'medium' | 'high';
-export interface RiskFlag { code: string; level: RiskLevel; detail?: string }
+export interface RiskFlag { code: string; level: RiskLevel; detail?: string;
+  /** v11: the figures of `detail` as parameters (the UI builds its own sentence from `code` + `params`) */ params?: Record<string, string | number> }
 export interface RiskAssessment { level: RiskLevel; score: number; flags: RiskFlag[] }
 
 export interface SwapQuote {
@@ -66,6 +67,8 @@ export interface SwapQuote {
   /** provider's own estimate; null when it gives none (never invented) */
   estimatedSeconds: number | null;
   priceImpactBps: number | null;
+  /** unix ms at which the adapter received this answer from the provider (v11: the age shown on the route card) */
+  quotedAt: number;
   /** unix ms after which this quote must not be used to build a transaction */
   expiresAt: number;
   /** indicative = fast price discovery; firm = fetched for execution with the real addresses */
@@ -79,6 +82,36 @@ export interface SwapQuote {
   atomic: boolean;
   /** opaque provider payload needed to build the transaction later; never shown, never trusted */
   raw?: unknown;
+}
+
+/** One fee line of a route card: what the provider reported, valued at the caller's price reference when there is one. */
+export interface RouteCardFee { kind: FeeKind; asset: AssetRef; amount: bigint; estimated: boolean; includedInOutput: boolean; usd: number | null }
+/**
+ * The normalized route card (v11): the same object for every route of a quote response, whatever the provider.
+ * Rule: REAL VALUES ONLY. A figure the provider does not give is `null`; nothing is estimated silently (card.ts).
+ */
+export interface RouteCard {
+  routeId: string; providers: string[];
+  /** stable fingerprint of what the route promises (pair, amount in, tolerance, amounts out); sent back when the route is prepared */
+  fingerprint: string;
+  /** amount sent, estimated amount received, minimum received after the tolerance — base units */
+  amountIn: bigint; estimatedOut: bigint; minimumOut: bigint;
+  /** network fees (native coins) the providers reported, with their USD total; null = none reported */
+  networkFee: { items: RouteCardFee[]; usd: number | null; estimated: boolean; includedInOutput: boolean } | null;
+  /** protocol / provider / bridge / affiliate fees reported, USD total and basis points of the amount sent; null = none reported */
+  protocolFee: { items: RouteCardFee[]; usd: number | null; bps: number | null; includedInOutput: boolean } | null;
+  /** the tolerance the quote was asked with */
+  toleranceBps: number;
+  /** cost of the estimated output against the amount sent at the reference price, basis points; null without a price for both sides */
+  effectiveSlippageBps: number | null;
+  /** provider's own estimate; null when it gives none */
+  etaSeconds: number | null;
+  riskLevel: RiskLevel; /** risk flag codes */ riskFlags: string[];
+  steps: { kind: StepKind; /** where the step starts and ends */ network: string; toNetwork: string; provider: string; /** `step_<kind>`: the UI's sentence for it */ descriptionCode: string }[];
+  /** unix ms: when the (oldest leg of the) quote was received, and when it must no longer be used */
+  quotedAt: number; expiresAt: number;
+  /** can the wallet execute this route itself, through which executor, and if not, why (code) */
+  executable: boolean; executor: string | null; reasonCode: string | null;
 }
 
 export interface ProviderCapabilities {

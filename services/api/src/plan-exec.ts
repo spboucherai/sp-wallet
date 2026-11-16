@@ -22,11 +22,15 @@ import { view, type ProposalRow } from './transfers.ts';
 import { JUPITER_LABEL } from './swap-exec-sol.ts';
 import {
   floorHolds, legAmount, legOutcome, planAdvance, planAttach, planCreate, planOpen, planPause, planReplan, planRetry, planStop, TRANSIENT,
-  type PlanDoc, type PlanEvent, type PlanLeg, type Step,
+  type PlanDoc, type PlanEvent, type PlanLeg, type Reason, type Step,
 } from './plan-state.ts';
+import { svText, type SvCode, type SvParams } from './sv-texts.ts';
+import { executionOf, pendingExecution } from './exec-status.ts';
 
 export interface PlanDeps {
   providers?: SwapProvider[]; prices: () => Promise<Record<string, { usd: number }> | null>;
+  /** v11: the swap router's own provider runtimes — plan pricing spends the SAME token buckets and trips the SAME circuit breakers */
+  runtimes?: ProviderRuntime[];
   /** tests: a scripted quote source instead of the real providers */
   quoteLeg?: (slippageBps: number, st: SignerStatus) => QuoteLeg;
   /** tests: scripted balances instead of the chain adapters */
@@ -80,9 +84,11 @@ function locked<T>(id: string, fn: () => Promise<T>): Promise<T> {
 
 export function planRoutes(app: FastifyInstance, deps: PlanDeps): void {
   const caps = planCaps();
-  const providers = deps.providers ?? createEnabledProviders(process.env);
-  // own runtimes: a plan asks several quotes in a row from the same provider (leg 3 on two amounts)
-  const agg = new QuoteAggregator(providers.map((p) => new ProviderRuntime(p, { ...DEFAULT_POLICY, timeoutMs: 7000, ratePerSec: 3, burst: 12, ...(p.id === 'thorchain' ? { timeoutMs: 8000 } : {}) }, httpClient(p.id))));
+  // v11: one set of provider runtimes for the whole API. Before, plans had their own with a looser policy (3 req/s, burst 12), so
+  // plan pricing was not counted against the keyless quotas the swap router protects. A plan still waits longer per call (below).
+  const agg = new QuoteAggregator(deps.runtimes && !deps.providers ? deps.runtimes
+    : (deps.providers ?? createEnabledProviders(process.env)).map((p) => new ProviderRuntime(p, { ...DEFAULT_POLICY, ...p.policy }, httpClient(p.id))));
+  const planTimeout = (provider: string) => (provider === 'thorchain' ? 8000 : 7000);
   let priceMap: Record<string, { usd: number }> = {};
   const refresh = async () => { const p = await deps.prices().catch(() => null); if (p) priceMap = p; };
   const usd = (a: AssetRef, amount: bigint): number | null => { try { const d = getAsset(a.network, a.asset), p = priceMap[d.symbol]?.usd; return p === undefined ? null : Number(formatUnits(amount, d.decimals)) * p; } catch { return null; } };
@@ -96,9 +102,9 @@ export function planRoutes(app: FastifyInstance, deps: PlanDeps): void {
     const req = { from: leg.from, to: leg.to, amountIn, sender: addressFor(st, leg.from.network), recipient: addressFor(st, leg.to.network), slippageBps };
     // a plan asks the same keyless provider several times in a row: space the calls, and wait once or twice when it says "too many"
     let quotes: SwapQuote[] = [], events: QuoteEvent[] = [];
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 4; attempt++) { // the shared rate limit may say "not now": wait and ask again
       await pace(leg.via);
-      ({ quotes, events } = await agg.collect(req, { only: [leg.via], deadlineMs: 9000, role: 'direct' }));
+      ({ quotes, events } = await agg.collect(req, { only: [leg.via], deadlineMs: 9000, role: 'direct', timeoutMs: planTimeout }));
       if (quotes.length || !events.some((e) => e.type === 'provider' && e.status === 'error' && e.code === 'rate_limited')) break;
       await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
     }
@@ -189,6 +195,10 @@ export function planRoutes(app: FastifyInstance, deps: PlanDeps): void {
     const cur = p.legs[p.current], dstA = p.to;
     const [row] = cur?.proposalId ? await sql<ProposalRow[]>`select * from proposals where id = ${cur.proposalId}` : [];
     const done = p.state === 'done', hold = { network: p.holding.network, asset: p.holding.asset };
+    // the proposal behind every leg that has one (the last attempt of a settled leg included)
+    const ids = p.legs.map((l) => l.proposalId ?? l.attempts[l.attempts.length - 1]?.proposalId ?? null);
+    const rows = ids.some(Boolean) ? await sql<ProposalRow[]>`select * from proposals where id in ${sql(ids.filter((x): x is string => !!x))}` : [];
+    const legRows = new Map<number, ProposalRow>(); ids.forEach((id, k) => { const r = id && rows.find((x) => x.id === id); if (r) legRows.set(k, r); });
     const next = done ? 'done' : p.state === 'stopped' ? 'stopped' : p.state === 'paused' ? 'paused' : !cur ? 'done' : cur.state === 'ready' ? 'prepare' : cur.state === 'proposed' && row?.state === 'pending_approval' ? 'approve' : 'wait';
     return plain({
       id: p.id, state: p.state, next, current: p.current, steps: p.legs.length, replans: p.replans, createdAt: new Date(p.createdAt).toISOString(), updatedAt: new Date(p.updatedAt).toISOString(),
@@ -203,7 +213,9 @@ export function planRoutes(app: FastifyInstance, deps: PlanDeps): void {
       legs: p.legs.map((l, k) => ({ index: k, state: l.state, kind: l.spec.kind, via: l.spec.via, label: LABEL[l.spec.via], speed: l.spec.speed ?? null, from: assetView(l.spec.from), to: assetView(l.spec.to), seconds: l.planned.seconds,
         planned: { expectedInDisplay: disp(l.spec.from, l.planned.expectedIn), worstInDisplay: disp(l.spec.from, l.planned.worstIn), expectedOutDisplay: disp(l.spec.to, l.planned.expectedOut), worstOutDisplay: disp(l.spec.to, l.planned.worstOut) },
         actual: { inDisplay: l.actualIn !== undefined ? disp(l.spec.from, l.actualIn) : null, outDisplay: l.actualOut !== undefined ? disp(l.spec.to, l.actualOut) : null },
-        proposalId: l.proposalId ?? null, attempts: l.attempts.map((a) => ({ proposalId: a.proposalId, outcome: a.outcome ?? null, error: a.error ?? null, at: new Date(a.at).toISOString() })) })),
+        proposalId: l.proposalId ?? null, attempts: l.attempts.map((a) => ({ proposalId: a.proposalId, outcome: a.outcome ?? null, error: a.error ?? null, errorCode: a.errorCode ?? null, errorParams: a.errorParams ?? null, at: new Date(a.at).toISOString() })),
+        // v11: the same execution status as a single swap / transfer / native swap (exec-status.ts)
+        execution: legRows.get(k) ? executionOf(legRows.get(k)!) : pendingExecution(l.spec.kind, l.spec.from.network, l.state === 'settled') })),
       proposal: row ? view(row) : null,
     });
   }
@@ -213,8 +225,8 @@ export function planRoutes(app: FastifyInstance, deps: PlanDeps): void {
     const l = p.legs[p.current];
     if (p.state !== 'active' || !l?.proposalId || (l.state !== 'proposed' && l.state !== 'in_flight')) return p;
     const [row] = await sql<ProposalRow[]>`select * from proposals where id = ${l.proposalId}`;
-    if (!row) return savePlan(planAdvance(p, { kind: 'failed', outcome: 'failed', reason: 'the proposal of this step no longer exists' }, Date.now()), describe);
-    const s = planAdvance(p, legOutcome({ state: row.state, kind: row.kind, confirmations: row.confirmations, minConf: getNetwork(row.network).minConf, error: row.error, out_amount: row.out_amount, bridge: row.bridge, xswap: row.xswap }), Date.now());
+    if (!row) return savePlan(planAdvance(p, { kind: 'failed', outcome: 'failed', reason: svText('plan_proposal_gone'), why: { code: 'plan_proposal_gone' } }, Date.now()), describe);
+    const s = planAdvance(p, legOutcome({ state: row.state, kind: row.kind, confirmations: row.confirmations, minConf: getNetwork(row.network).minConf, error: row.error, error_code: row.error_code, error_params: row.error_params, out_amount: row.out_amount, bridge: row.bridge, xswap: row.xswap }), Date.now());
     return s.events.length || s.plan !== p ? savePlan(s, describe) : p;
   }
   advanceOne = advance;
@@ -284,15 +296,16 @@ export function planRoutes(app: FastifyInstance, deps: PlanDeps): void {
         const [row] = await sql<ProposalRow[]>`select * from proposals where id = ${leg.proposalId}`;
         if (row?.state !== 'pending_approval') throw new UserError('bad_state', 'this step is already approved and on its way', 409);
         await inject(req, `/api/v1/transfers/proposals/${leg.proposalId}/reject`, {});
-        p = await savePlan(planAdvance(p, { kind: 'failed', outcome: 'expired', reason: 'replaced by a fresh preparation' }, Date.now()), describe);
+        p = await savePlan(planAdvance(p, { kind: 'failed', outcome: 'expired', reason: svText('plan_replaced'), why: { code: 'plan_replaced' } }, Date.now()), describe);
         leg = p.legs[p.current]!;
       }
       if (leg.state !== 'ready') throw new UserError('bad_state', 'this step is in progress', 409);
       const st = await signer.status(true);
       if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
       const amount = legAmount(p, await balanceOf(leg.spec.from, st));
-      const pause = async (code: string, message: string) => ({ plan: await docView(await savePlan(planPause(p, code, message, Date.now()), describe)), proposal: null, options: null });
-      if (amount <= 0n) return pause('no_funds', `the wallet no longer holds the ${assetView(leg.spec.from).symbol} of this plan on ${getNetwork(leg.spec.from.network).name}`);
+      const pause = async (code: string, message: string, extra: { params?: SvParams; reason?: Reason } = {}) => ({ plan: await docView(await savePlan(planPause(p, code, message, Date.now(), extra), describe)), proposal: null, options: null });
+      const pauseSv = (code: string, sv: SvCode, params: SvParams) => pause(code, svText(sv, params), { params });
+      if (amount <= 0n) return pauseSv('no_funds', 'plan_no_funds', { sym: assetView(leg.spec.from).symbol, net: getNetwork(leg.spec.from.network).name });
       // the final result estimated from what is really held now, through the legs that remain (real quotes)
       const rest = p.legs.slice(p.current).map((l) => l.spec);
       let est: PricedPlan | null = null;
@@ -300,7 +313,7 @@ export function planRoutes(app: FastifyInstance, deps: PlanDeps): void {
       catch (e) { if (p.floor !== null) throw new UserError('provider_unavailable', `the final result could not be estimated, so the floor could not be checked: ${(e as Error).message.slice(0, 120)}. Nothing was prepared`, 503); }
       if (est) {
         p = await savePlan({ plan: { ...p, estimate: { expectedOut: est.expectedOut.toString(), worstOut: est.worstOut.toString(), at: Date.now() }, updatedAt: Date.now() }, events: [] }, describe);
-        if (!floorHolds(p, est.expectedOut)) return pause('floor', `the final result estimated now is ${disp(p.to, est.expectedOut)} ${assetView(p.to).symbol}, below the floor of ${disp(p.to, p.floor!)}. Nothing was prepared; the funds are where they were`);
+        if (!floorHolds(p, est.expectedOut)) return pauseSv('floor', 'plan_floor', { estimate: disp(p.to, est.expectedOut), sym: assetView(p.to).symbol, floor: disp(p.to, p.floor!) });
       }
       const amt = formatUnits(amount, getAsset(leg.spec.from.network, leg.spec.from.asset).decimals), s = leg.spec;
       const idem = `pl-${p.id.replace(/-/g, '').slice(0, 24)}-${p.replans}-${p.current}-${leg.attempts.length}`;
@@ -311,7 +324,7 @@ export function planRoutes(app: FastifyInstance, deps: PlanDeps): void {
         const code = String(r.json.error ?? 'error'), message = String(r.json.message ?? 'the step could not be prepared');
         // "not now": the step stays ready and the plan active; anything else is a refusal of this step — the plan pauses
         if (TRANSIENT.has(code) || r.status === 401 || r.status === 429 || r.status >= 500 && code === 'internal') throw new UserError(code, message, r.status);
-        return pause(code, message);
+        return pause(code, message, { reason: { code } }); // the refusal of the preparation route, with its own code
       }
       const proposal = r.json.proposal as { id: string; amount: string };
       p = await savePlan(planAttach(p, proposal.id, BigInt(proposal.amount), Date.now()), describe);
@@ -335,7 +348,7 @@ export function planRoutes(app: FastifyInstance, deps: PlanDeps): void {
       const leg = p.legs[p.current];
       if (p.state === 'active' && leg?.state === 'proposed' && leg.proposalId) { // an unused challenge is withdrawn first
         const [row] = await sql<ProposalRow[]>`select state from proposals where id = ${leg.proposalId}`;
-        if (row?.state === 'pending_approval') { await inject(req, `/api/v1/transfers/proposals/${leg.proposalId}/reject`, {}); p = await savePlan(planAdvance(p, { kind: 'failed', outcome: 'expired', reason: 'withdrawn: the plan was stopped' }, Date.now()), describe); }
+        if (row?.state === 'pending_approval') { await inject(req, `/api/v1/transfers/proposals/${leg.proposalId}/reject`, {}); p = await savePlan(planAdvance(p, { kind: 'failed', outcome: 'expired', reason: svText('plan_withdrawn'), why: { code: 'plan_withdrawn' } }, Date.now()), describe); }
       }
       try { return docView(await savePlan(planStop(p, Date.now()), describe)); } catch (e) { throw new UserError('bad_state', (e as Error).message, 409); }
     });

@@ -18,7 +18,7 @@ const req = (from: AssetRef, to: AssetRef, amountIn: bigint): SwapQuoteRequest =
 let qn = 0;
 function quoteOf(provider: string, r: SwapQuoteRequest, out: bigint, o: Partial<SwapQuote> = {}): SwapQuote {
   return { id: `${provider}-${++qn}`, provider, request: r, steps: [{ kind: r.from.network === r.to.network ? 'swap' : 'bridge', provider, from: r.from, to: r.to, via: ['pool'], contracts: [] }],
-    amountOut: out, minAmountOut: (out * 995n) / 1000n, fees: [], estimatedSeconds: 20, priceImpactBps: 5, expiresAt: Date.now() + 30_000, firmness: 'indicative',
+    amountOut: out, minAmountOut: (out * 995n) / 1000n, fees: [], estimatedSeconds: 20, priceImpactBps: 5, quotedAt: Date.now(), expiresAt: Date.now() + 30_000, firmness: 'indicative',
     executability: { class: 'opaque', reason: 'test' }, refundable: true, atomic: true, ...o };
 }
 /** A scripted provider: `rate(from,to)` gives output per unit input (in base units ratio) or null for "no route". */

@@ -30,7 +30,7 @@ export class QuoteAggregator {
   runtime(id: string): ProviderRuntime | undefined { return this.runtimes.find((r) => r.provider.id === id); }
 
   /** Query every compatible provider concurrently and yield results as they arrive (fastest first). */
-  async *stream(req: SwapQuoteRequest, opts: { deadlineMs?: number; signal?: AbortSignal; only?: string[]; role?: 'direct' | 'leg' } = {}): AsyncGenerator<QuoteEvent> {
+  async *stream(req: SwapQuoteRequest, opts: { deadlineMs?: number; signal?: AbortSignal; only?: string[]; role?: 'direct' | 'leg'; timeoutMs?: number | ((provider: string) => number | undefined) } = {}): AsyncGenerator<QuoteEvent> {
     const t0 = this.now();
     const ac = new AbortController();
     const kill = setTimeout(() => ac.abort(), opts.deadlineMs ?? 4000);
@@ -46,7 +46,7 @@ export class QuoteAggregator {
       if (!rt.provider.supportsPair(req.from, req.to)) continue;
       if (rt.provider.policy?.scarce && (opts.role === 'leg' || req.from.network === req.to.network)) continue; // keep a small quota for what only it can do
       pending += 1;
-      rt.quote(req, ac.signal).then((quotes) => {
+      rt.quote(req, ac.signal, typeof opts.timeoutMs === 'function' ? opts.timeoutMs(id) : opts.timeoutMs).then((quotes) => {
         const ms = this.now() - t0; let ok = 0;
         for (const q of quotes) { const bad = checkQuote(q, req, this.now()); if (bad) push({ type: 'provider', provider: id, status: 'error', code: 'invalid_quote', detail: bad, ms }); else { ok += 1; push({ type: 'quote', quote: q, ms }); } }
         if (quotes.length === 0) push({ type: 'provider', provider: id, status: 'no_route', ms });
@@ -66,7 +66,7 @@ export class QuoteAggregator {
       yield { type: 'done', ms: this.now() - t0 };
     } finally { clearTimeout(kill); ac.abort(); }
   }
-  async collect(req: SwapQuoteRequest, opts?: { deadlineMs?: number; signal?: AbortSignal; only?: string[]; role?: 'direct' | 'leg' }): Promise<{ quotes: SwapQuote[]; events: QuoteEvent[] }> {
+  async collect(req: SwapQuoteRequest, opts?: { deadlineMs?: number; signal?: AbortSignal; only?: string[]; role?: 'direct' | 'leg'; timeoutMs?: number | ((provider: string) => number | undefined) }): Promise<{ quotes: SwapQuote[]; events: QuoteEvent[] }> {
     const quotes: SwapQuote[] = [], events: QuoteEvent[] = [];
     for await (const e of this.stream(req, opts)) { events.push(e); if (e.type === 'quote') quotes.push(e.quote); }
     return { quotes, events };

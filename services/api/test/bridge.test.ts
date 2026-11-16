@@ -6,7 +6,7 @@ import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTestDb } from './test-db.ts';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decodeFunctionData, encodeAbiParameters, keccak256, numberToHex, pad, parseTransaction, toFunctionSelector, type Hex } from 'viem';
 import { CCTP_ABI, CCTP_ENABLED, CCTP_MESSAGE_TRANSMITTER, CCTP_TOKEN_MESSENGER, CCTP_TOKEN_MINTER, cctpBytes32, cctpMintRetryBytes, EIP1967_IMPLEMENTATION_SLOT, encodeCctpMessage, NETWORKS, type CctpMessage, type Intent } from '@spw/core';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
@@ -343,5 +343,115 @@ describe('life cycle', () => {
     const prep = await api('POST', '/api/v1/bridge/proposals', { fromNetwork: 'base', toNetwork: 'arbitrum', amount: '10' }, crypto.randomUUID());
     await api('POST', `/api/v1/transfers/proposals/${prep.json.proposal.id}/approve`, { assertion: owner.assert(Buffer.from(prep.json.options.challenge, 'base64url')) });
     expect((await api('POST', '/api/v1/bridge/proposals', { fromNetwork: 'base', toNetwork: 'arbitrum', amount: '10' }, crypto.randomUUID())).json.error).toBe('pending_tx');
+  });
+});
+
+// ── v11 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+describe('v11 — idempotent preparation, the option the owner selected, restart of the API', () => {
+  const BODY = { fromNetwork: 'base', toNetwork: 'arbitrum', amount: '10', speed: 'standard' as const };
+  const steps = (e: any) => e.steps.map((s: any) => `${s.kind}:${s.state}`);
+
+  it('B4: the same key and body answer the same transfer with its challenge and ask Circle nothing again; another body is refused; the replayed challenge approves', async () => {
+    const key = crypto.randomUUID();
+    const a = await api('POST', '/api/v1/bridge/proposals', BODY, key); expect(a.status, JSON.stringify(a.json)).toBe(200);
+    iris.calls = [];
+    const b = await api('POST', '/api/v1/bridge/proposals', BODY, key);
+    expect(b.status).toBe(200); expect(b.json).toMatchObject({ replayed: true, proposal: { id: a.json.proposal.id, state: 'pending_approval', kind: 'bridge' } });
+    expect(b.json.options.challenge).toBe(a.json.options.challenge);
+    expect(iris.calls).toEqual([]);                                                                       // no fee schedule read, no preparation
+    expect(await sql`select 1 from proposals where idempotency_key = ${key}`).toHaveLength(1);
+    const other = await api('POST', '/api/v1/bridge/proposals', { ...BODY, amount: '11' }, key);
+    expect(other.status).toBe(409); expect(other.json.error).toBe('idempotency_mismatch');
+    expect((await api('POST', '/api/v1/bridge/proposals', { ...BODY, speed: 'fast' }, key)).json.error).toBe('idempotency_mismatch');
+    const ap = await api('POST', `/api/v1/transfers/proposals/${a.json.proposal.id}/approve`, { assertion: owner.assert(Buffer.from(b.json.options.challenge, 'base64url')) });
+    expect(ap.status, JSON.stringify(ap.json)).toBe(200);
+    // once approved, the same request still answers the same transfer — without a challenge, and without a second burn
+    const c = await api('POST', '/api/v1/bridge/proposals', BODY, key);
+    expect(c.json).toMatchObject({ replayed: true, options: null, proposal: { id: a.json.proposal.id } }); expect(c.json.proposal.state).not.toBe('pending_approval');
+    expect(await sql`select 1 from proposals where idempotency_key = ${key}`).toHaveLength(1);
+  });
+
+  it('B6: the option that was displayed is the one prepared — recorded when Circle\'s fee is unchanged, refused with the fresh figures when it rose', async () => {
+    const q = (await api('GET', '/api/v1/bridge/quote?from=base&to=arbitrum&amount=10')).json;
+    const [std, fast] = q.options;
+    expect(std.quote).toMatchObject({ provider: 'cctp', amountOut: '10000000', minAmountOut: '10000000' }); expect(std.quote.fingerprint).toMatch(/^[0-9a-f]{32}$/);
+    expect(fast.quote).toMatchObject({ provider: 'cctp', amountOut: '9998700', minAmountOut: '9998700' }); expect(fast.quote.fingerprint).not.toBe(std.quote.fingerprint);
+    const ok = await api('POST', '/api/v1/bridge/proposals', { ...BODY, quote: std.quote }, crypto.randomUUID());
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    expect(ok.json.proposal.quote).toMatchObject({ provider: 'cctp', quotedOut: '10000000', firmOut: '10000000', deviationBps: 0, quotedOutDisplay: '10', firmOutDisplay: '10' });
+    await api('POST', `/api/v1/transfers/proposals/${ok.json.proposal.id}/reject`, {});
+    // Circle now asks 5 bps for Standard: the owner was shown 10 USDC, he would receive 9.995
+    const before = (await sql`select count(*)::int as n from proposals`)[0].n, fees = iris.fees;
+    iris.fees = [{ finalityThreshold: 1000, minimumFee: 1.3 }, { finalityThreshold: 2000, minimumFee: 5 }];
+    try {
+      const moved = await api('POST', '/api/v1/bridge/proposals', { ...BODY, quote: std.quote }, crypto.randomUUID());
+      expect(moved.status).toBe(409);
+      expect(moved.json).toMatchObject({ error: 'quote_moved', data: { deviationBps: -5, quoted: { amountOutDisplay: '10' }, fresh: { provider: 'cctp', amountOut: '9995000', amountOutDisplay: '9.995', symbol: 'USDC' } } });
+      expect(moved.json.message).toMatch(/price moved/);
+      expect((await sql`select count(*)::int as n from proposals`)[0].n).toBe(before);                    // nothing was prepared
+      // the fresh figures are themselves a valid reference: accepting them prepares the transfer
+      const f = moved.json.data.fresh, again = await api('POST', '/api/v1/bridge/proposals', { ...BODY, quote: { id: 'fresh', provider: f.provider, fingerprint: f.fingerprint, amountOut: f.amountOut, minAmountOut: f.minAmountOut, quotedAt: f.quotedAt } }, crypto.randomUUID());
+      expect(again.status, JSON.stringify(again.json)).toBe(200); expect(again.json.proposal.bridge.minReceiveDisplay).toBe('9.995');
+      await api('POST', `/api/v1/transfers/proposals/${again.json.proposal.id}/reject`, {});
+    } finally { iris.fees = fees; }
+    // the reference of the other speed, or of a provider this wallet does not execute, is not accepted for this preparation
+    expect((await api('POST', '/api/v1/bridge/proposals', { ...BODY, quote: { ...std.quote, provider: 'lifi' } }, crypto.randomUUID())).json.error).toBe('quote_not_executable');
+    expect((await api('POST', '/api/v1/bridge/proposals', { ...BODY, amount: '12', quote: std.quote }, crypto.randomUUID())).json.error).toBe('quote_mismatch');
+  });
+
+  it('B3: a hold carries a code and its parameters next to the English sentence; a failure carries an error code', async () => {
+    const { id, intent } = await burn('10');
+    iris.messages.set((await getP(id)).txid, attested(intent));
+    chains.arbitrum!.native = 0n;                                                                         // no gas on the destination at mint time
+    const p = await finish(id);
+    expect(p.bridge).toMatchObject({ hold: 'destination_gas', holdCode: 'hold_destination_gas', holdParams: { sym: 'ETH', net: 'Arbitrum One', have: '0' } });
+    expect(p.bridge.holdDetail).toBe(`add ETH on Arbitrum One: ${p.bridge.holdParams.need} is needed to receive the USDC, the wallet holds 0`);
+    expect(p.execution.steps.find((s: any) => s.kind === 'mint')).toMatchObject({ state: 'pending', code: 'destination_gas' });
+    chains.arbitrum!.native = 10n ** 17n; await finish(id);
+    expect((await getP(id)).bridge).toMatchObject({ hold: null, holdCode: null, holdParams: null, holdDetail: null });   // cleared together
+    chains.arbitrum!.mine(); await finish(id);
+    chains.base!.allowance = 0n;                                                                          // the next transfer needs its own exact-amount approval
+    const prep = await api('POST', '/api/v1/bridge/proposals', BODY, crypto.randomUUID());
+    await api('POST', `/api/v1/transfers/proposals/${prep.json.proposal.id}/approve`, { assertion: owner.assert(Buffer.from(prep.json.options.challenge, 'base64url')) });
+    chains.base!.burnReverts = true; chains.base!.mine(); await worker.reconcile();
+    const failed = await getP(prep.json.proposal.id);
+    expect(failed).toMatchObject({ state: 'failed', errorCode: 'burn_would_revert_approved', errorParams: { detail: expect.stringContaining('execution reverted') } });
+    expect(failed.execution).toMatchObject({ state: 'failed', steps: [{ kind: 'approval', state: 'confirmed' }, { kind: 'burn', state: 'failed', code: 'burn_would_revert_approved' }, { kind: 'attestation', state: 'pending' }, { kind: 'mint', state: 'pending' }] });
+  });
+
+  // LAST in this file: it replaces the module instances (vi.resetModules), as a new API process would
+  it('restart of the API between burn and mint, and again with the mint in flight: a fresh process (new modules, only the database and the signer\'s file) resumes and reconciles; the unified status is the same before and after', async () => {
+    const { id, intent } = await burn('10');
+    await bridge.advanceBridges();                                                                        // burn mined; Circle has not attested yet
+    const before = (await getP(id)).execution;
+    expect(steps(before)).toEqual(['approval:confirmed', 'burn:confirmed', 'attestation:confirming', 'mint:pending']);
+    expect(before).toMatchObject({ kind: 'bridge', state: 'confirming', steps: [{ network: 'base' }, { network: 'base', txid: expect.stringMatching(/^0x/), explorer: expect.stringContaining('basescan') }, { network: 'circle', startedAt: expect.any(String) }, { network: 'arbitrum', txid: null }] });
+    const boot = async () => { vi.resetModules(); const db = await import('../src/db.ts'), b = await import('../src/bridge.ts'), t = await import('../src/transfers.ts');
+      return { sql: db.sql, b, view: async () => t.view((await db.sql`select * from proposals where id = ${id}`)[0] as never), poke: () => db.sql`update proposals set bridge = jsonb_set(bridge, '{nextAt}', '0') where id = ${id}` }; };
+
+    // ── process 2: knows nothing but the row ──
+    const p2 = await boot();
+    expect(p2.b).not.toBe(bridge);                                                                        // really other module instances: nothing carried over in memory
+    expect((await p2.view()).execution).toEqual(before);
+    iris.messages.set((await getP(id)).txid, attested(intent));
+    await p2.poke(); await p2.b.advanceBridges();                                                         // its worker alone: attestation verified, mint signed by the signer, relayed
+    expect(chains.arbitrum!.sent).toHaveLength(1);
+    const mintTxid = keccak256(chains.arbitrum!.sent[0] as Hex), mid = (await p2.view()).execution;
+    expect(steps(mid)).toEqual(['approval:confirmed', 'burn:confirmed', 'attestation:confirmed', 'mint:broadcast']);
+    expect(mid.steps[3]).toMatchObject({ txid: mintTxid, startedAt: expect.any(String), endedAt: null }); expect(mid.steps[3]!.explorer).toContain(mintTxid);
+    await p2.sql.end();
+
+    // ── process 3: starts with the mint still unconfirmed ──
+    const p3 = await boot();
+    await p3.poke(); await p3.b.advanceBridges();                                                         // not mined yet: nothing changes, nothing is signed again
+    expect(steps((await p3.view()).execution)).toEqual(steps(mid)); expect(chains.arbitrum!.sent).toHaveLength(1);
+    chains.arbitrum!.mine(); await p3.poke(); await p3.b.advanceBridges();
+    const done = await p3.view();
+    expect(done.bridge).toMatchObject({ stage: 'done', mintedBy: 'wallet', mintTxid, receivedDisplay: '10' });
+    expect(done.execution).toMatchObject({ state: 'confirmed', steps: [{ state: 'confirmed' }, { state: 'confirmed' }, { state: 'confirmed' }, { kind: 'mint', state: 'confirmed', txid: mintTxid, endedAt: expect.any(String) }] });
+    await p3.b.advanceBridges(); expect(chains.arbitrum!.sent).toHaveLength(1);                            // reconciled once: a later tick does nothing
+    expect(store.state.bridges![id]!.mint!.signatures).toBe(1);                                           // one mint signature across three processes
+    await p3.sql.end();
+    expect((await getP(id)).execution).toEqual(done.execution);                                           // and the first process reads the same thing from the row
   });
 });

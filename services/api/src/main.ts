@@ -15,11 +15,15 @@ import { startGmxWorker } from './derivatives/gmx-live.ts'; // v8
 import { startAlerts } from './alerts/dispatcher.ts'; // v6-alerts
 import { capabilitiesLine } from './capabilities.ts'; // v8
 import { labStatus } from './agents/lab.ts'; // v8
+import { applyRpcExtra } from './rpc-extra.ts'; // v11
 
 // Node's default happy-eyeballs gives each address only 250 ms: on this network that makes public RPC connections fail at random.
 dns.setDefaultResultOrder('ipv4first');
 net.setDefaultAutoSelectFamilyAttemptTimeout(2500);
 
+// v11: operator-supplied additional RPC endpoints (rpc-extra.ts) — a third endpoint lets a network survive one degraded source
+const rpcExtra = applyRpcExtra();
+if (Object.keys(rpcExtra).length) console.log(`[startup] SPW_RPC_EXTRA: ${Object.entries(rpcExtra).map(([n, u]) => `${n}+${u.length}`).join(' ')}`);
 await migrate();
 const app = await buildServer();
 await app.listen({ port: config.port, host: config.host });
