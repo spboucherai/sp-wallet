@@ -12,8 +12,13 @@ ROOT = Path(__file__).resolve().parents[1]
 _ALL = sorted(p.parent for p in (ROOT / "strategies").glob("*/*/strategy.py") if not p.parent.parent.name.startswith("rj_"))
 # Perpetual-futures strategies (contract v2, directories named <name>_perp) have their own tests
 # (test_perp_library.py); LIBRARY stays the spot library that the version-1 tests were written for.
-PERP_LIBRARY = [d for d in _ALL if d.parent.name.endswith("_perp")]
-LIBRARY = [d for d in _ALL if d not in PERP_LIBRARY]
+# V11 strategies (generic perp universes, spot legs with venue accounts, cross-venue legs) have their own tests
+# (test_v11_strategies.py); the V4 perp library and the spot library keep the tests they were written for.
+V11_NAMES = {"momentum_xs_perp", "mean_reversion_bands_perp", "statarb_basket_perp", "basis_cash_carry"}
+V11_LIBRARY = [d for d in _ALL if d.parent.name in V11_NAMES] + sorted(
+    p.parent for p in (ROOT / "strategies_xvenue").glob("*/*/strategy.py"))
+PERP_LIBRARY = [d for d in _ALL if d.parent.name.endswith("_perp") and d.parent.name not in V11_NAMES]
+LIBRARY = [d for d in _ALL if d not in PERP_LIBRARY and d.parent.name not in V11_NAMES]
 
 
 def pytest_collection_modifyitems(config, items):

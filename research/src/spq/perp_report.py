@@ -106,6 +106,10 @@ def build_perp_report(
     source: str | None = None,
     notes: list[str] | None = None,
     extra: dict | None = None,
+    funding_intervals: dict | None = None,
+    generated_at: str | None = None,
+    validate: bool = True,
+    capture: dict | None = None,
 ) -> tuple[dict, PerpExperiment]:
     """Full pipeline for ONE perp strategy version with the parameters of its META (same order as build_report:
     selection analyses on train + validation, then the single look at the test split, then benchmarks and checks)."""
@@ -170,7 +174,7 @@ def build_perp_report(
     look = lookahead_check(strategy, full, config, start=t0, runner=run_perp_backtest)
     ledger_ok = all(res.ledger["reconciles"] for res in runs.values()) and all(
         res.ledger["reconciles"] for res in bench.values() if isinstance(res, PerpResult))
-    align = (check_funding_alignment(full, funding_raw) if funding_raw
+    align = (check_funding_alignment(full, funding_raw, funding_intervals) if funding_raw
              else {"status": "fail", "detail": "no funding settlement series was supplied"})
     quality = quality or {}
     funding_quality = funding_quality or {}
@@ -205,7 +209,7 @@ def build_perp_report(
     report = {
         "schema_version": SCHEMA_VERSION,
         "kind": "perp",
-        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at": generated_at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "strategy_sha256": strategy.sha256,
         "strategy": {"name": strategy.name, "version": strategy.meta["version"], "meta": strategy.meta},
         "config": {
@@ -265,7 +269,10 @@ def build_perp_report(
     }
     if extra:
         report.update(extra)
-    validate_report_v2(report)
+    if capture is not None:                 # v11: the version-3 builder needs the runs themselves
+        capture.update(runs=runs, bench=bench, full=full, lookahead=look)
+    if validate:
+        validate_report_v2(report)
     return report, exp
 
 

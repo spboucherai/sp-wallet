@@ -27,7 +27,7 @@ research/
 ```bash
 cd research
 uv sync
-uv run pytest                                   # 136 tests (+1 live-network test: SPQ_NETWORK_TESTS=1)
+uv run pytest                                   # 406 tests: 404 pass, 2 live-network tests need SPQ_NETWORK_TESTS=1
 
 # public, keyless data into ./data (ignored by git)
 uv run python -m spq.data.fetch --symbols ETH,BTC,LINK,SOL --interval 1h --start 2024-11-10 --end 2026-11-10 --out data
@@ -401,3 +401,53 @@ An AI coding agent can develop a strategy in this laboratory as a sandboxed *res
 - `spq.lint` — the static purity check of a `strategy.py` without importing it.
 - Directories `strategies/rj_<job>/` are strategies installed by the wallet API from research jobs (git-ignored, not
   part of the library and its tests).
+
+## V11 — execution realism, engine parity, multi-venue data, new strategy families
+
+Reference: **`docs/TRADING-BACKTESTING.md`** (engine, cost models with sources, splits, bias controls, metric
+definitions, reproducibility, what is not modelled). Work note with the results: `docs/v11/work/quant-lab.md`.
+Everything is additive: without an `ExecutionModel` / parity object in the config the engines, the version-1 and
+version-2 reports and the 335 earlier tests are unchanged.
+
+```
+src/spq/
+  execution.py        ExecutionModel (latency bound, square-root / order-book slippage, venue fees, one account per
+                      venue), PerpParity / SpotParity read from src/spq/params/engine-parity.json
+  data/venues.py      fee table with source and date, funding interval per venue, reviewed symbol map
+  data/multivenue.py  loaders (Hyperliquid, edgeX, dYdX, GMX, Coinbase), common clock with masks, quality, manifest
+  data/books.py       order-book snapshot recorder and depth profiles
+  report_v3.py        version-3 report (schema/backtest-report-v3.schema.json): gross -> net, execution model,
+                      engine parity, data bias, journal; byte-for-byte reproducible
+  v11_pipeline.py     the V11 run and its `verify`          studies.py   market making, cross-exchange, forecasts
+  vol_forecast.py     HAR-RV / GARCH evaluation (QLIKE, MSE)  risk_supervisor.py   pure policy that only PROPOSES
+  __main__.py         `python -m spq data|v11|study ...` (script `spq`)
+src/spq/params/       engine-parity.json (the live engines' rules, with path:line), book_calibration.json —
+                      inside the package, so that the sandboxed lab processes of the API can read them
+strategies/           momentum_xs_perp/{1,2}, mean_reversion_bands_perp/{1,2}, statarb_basket_perp/1, basis_cash_carry/1
+strategies_xvenue/    funding_arb_cross_venue/1 — needs two venues: NOT in the library the API lists
+studies/              market_making_as, cross_exchange_spread, vol_forecast, risk_supervisor (READMEs)
+data-manifests/       hashes, ranges and row counts of the data a run used (the raw data stay in ./data, git-ignored)
+results/2026-11-15-v11/   reports, trials.jsonl, summary, manifest.json (SHA-256 of every file), studies, data quality
+```
+
+```bash
+uv run python -m spq data pull --venues hyperliquid,edgex,dydx,gmx,coinbase --symbols BTC,ETH,SOL --days 180 --out data
+uv run python -m spq data record-books --venues hyperliquid,edgex,dydx --symbols BTC,ETH,SOL --cadence 5 --minutes 60
+uv run python -m spq data manifest --root data --start 2026-05-19T00:00:00Z --end 2026-11-15T00:00:00Z \
+    --out data-manifests/2026-11-15-v11.json
+uv run python -m spq v11 run    --data-dir data --manifest data-manifests/2026-11-15-v11.json --out results/2026-11-15-v11
+uv run python -m spq v11 verify --data-dir data --manifest data-manifests/2026-11-15-v11.json --out results/2026-11-15-v11
+uv run python -m spq.backtest --strategy strategies/ma_trend/3 --symbols BTC,ETH --engine-parity ...   # spot, engine caps
+```
+
+**Symbols.** `BTC` = the perpetual on Hyperliquid (the only venue the live engine trades), `BTC@EDGEX` = the same
+underlying on another venue, `BTC.SPOT` = a spot leg. A perp universe may be generic (`["*"]`, with
+`min_symbols` / `max_symbols`); `spq.signal --contract 2` then takes its symbols from the input.
+
+**Live-capable versions.** `momentum_xs_perp/2` and `mean_reversion_bands_perp/2` trade exactly BTC, ETH, SOL — the
+instruments pinned for live perps — so they can be attached to an agent that can go live (audit defect D1).
+Generic universes, spot legs and cross-venue legs need the TypeScript follow-ups listed in the work note.
+
+**Results (2026-11-15-v11).** `results/2026-11-15-v11/summary.md`. **No V11 strategy shows an edge out of sample**
+after the V11 costs and the engine's default limits; several are stopped by the engine's own loss limits. Each
+strategy README states its result and a one-line verdict.

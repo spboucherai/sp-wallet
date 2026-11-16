@@ -194,7 +194,7 @@ def parse_perp_input(payload, meta: dict, *, max_gap_bars: int = 6, max_missing_
         raise InputError(f"unexpected input keys {sorted(unknown_keys)} (parameters cannot be overridden)")
     data, as_of = parse_input({k: payload[k] for k in ("candles", "as_of", "interval") if k in payload}, meta,
                               max_gap_bars=max_gap_bars, max_missing_fraction=max_missing_fraction)
-    perps = [s for s in meta["universe"] if not is_spot_leg(s)]
+    perps = [s for s in data if not is_spot_leg(s)]   # v11: the input's symbols (== META['universe'] when it is fixed)
     funding = payload.get("funding")
     if not isinstance(funding, dict) or sorted(funding) != sorted(perps):
         raise InputError(f'"funding" must be an object with exactly the perpetuals {sorted(perps)}')
@@ -248,7 +248,7 @@ def compute_signal(strategy_dir, sha256: str, payload, contract: int = 1, **limi
         data, as_of = parse_perp_input(payload, strategy.meta, **limits)
         with contextlib.redirect_stdout(sys.stderr):
             raw = strategy.raw(data)
-        weights = validate_perp_weights(raw, strategy.universe, strategy.meta["max_leverage"],
+        weights = validate_perp_weights(raw, list(data), strategy.meta["max_leverage"],
                                         strategy.meta["max_gross_exposure"])
         return {"schema_version": 2, "kind": "perp", "strategy_sha256": strategy.sha256, "as_of": iso_z(as_of),
                 "weights": weights, "max_leverage": float(strategy.meta["max_leverage"]),

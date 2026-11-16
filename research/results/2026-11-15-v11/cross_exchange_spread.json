@@ -1,0 +1,407 @@
+{
+ "interval": "1h",
+ "level_window_bars": 168,
+ "bars": {
+  "BTC: edgex vs hyperliquid": {
+   "common_bars": 4320,
+   "evaluated_bars": 4152,
+   "level_bps_median": -8.386774124237718,
+   "deviation_abs_bps_median": 1.8650454198523847,
+   "deviation_abs_bps_p95": 5.972340268556002,
+   "deviation_abs_bps_max": 38.86048731686187,
+   "deviation_half_life_bars": 4.166335445248981,
+   "round_trip_cost": {
+    "taker_fees_bps": 18.0,
+    "half_spreads_bps": 2.0,
+    "latency_allowance_bps": 4.0,
+    "total_bps": 24.0
+   },
+   "bars_with_estimated_net_edge_above_zero": 1,
+   "share_of_bars_with_estimated_net_edge_above_zero": 0.00024084778420038535,
+   "estimated_net_edge_bps_when_positive_median": 14.860487316861871,
+   "estimated_net_edge_bps_max": 14.860487316861871,
+   "funding": {
+    "mean_rate_per_hour_a": 9.158670023148149e-06,
+    "mean_rate_per_hour_b": 6.404916666666668e-06,
+    "abs_differential_bps_per_day": 0.6609008055555554
+   }
+  },
+  "BTC: dydx vs hyperliquid": {
+   "common_bars": 4320,
+   "evaluated_bars": 4152,
+   "level_bps_median": -4.178304061583371,
+   "deviation_abs_bps_median": 3.0876608112900827,
+   "deviation_abs_bps_p95": 10.737674650785623,
+   "deviation_abs_bps_max": 184.5290380118525,
+   "deviation_half_life_bars": 0.4444144837370377,
+   "round_trip_cost": {
+    "taker_fees_bps": 19.0,
+    "half_spreads_bps": 4.0,
+    "latency_allowance_bps": 4.0,
+    "total_bps": 27.0
+   },
+   "bars_with_estimated_net_edge_above_zero": 10,
+   "share_of_bars_with_estimated_net_edge_above_zero": 0.0024084778420038534,
+   "estimated_net_edge_bps_when_positive_median": 7.26949771297344,
+   "estimated_net_edge_bps_max": 157.5290380118525,
+   "funding": {
+    "mean_rate_per_hour_a": 9.158670023148149e-06,
+    "mean_rate_per_hour_b": 7.250000000000002e-07,
+    "abs_differential_bps_per_day": 2.0240808055555557
+   }
+  },
+  "BTC: dydx vs edgex": {
+   "common_bars": 4320,
+   "evaluated_bars": 4152,
+   "level_bps_median": 4.234396325143441,
+   "deviation_abs_bps_median": 2.7092329734301757,
+   "deviation_abs_bps_p95": 9.75626560313436,
+   "deviation_abs_bps_max": 182.64465798124795,
+   "deviation_half_life_bars": 0.28289917174923984,
+   "round_trip_cost": {
+    "taker_fees_bps": 19.0,
+    "half_spreads_bps": 4.0,
+    "latency_allowance_bps": 4.0,
+    "total_bps": 27.0
+   },
+   "bars_with_estimated_net_edge_above_zero": 14,
+   "share_of_bars_with_estimated_net_edge_above_zero": 0.003371868978805395,
+   "estimated_net_edge_bps_when_positive_median": 3.5443414584538626,
+   "estimated_net_edge_bps_max": 155.64465798124795,
+   "funding": {
+    "mean_rate_per_hour_a": 6.404916666666668e-06,
+    "mean_rate_per_hour_b": 7.250000000000002e-07,
+    "abs_differential_bps_per_day": 1.3631800000000003
+   }
+  },
+  "BTC: gmx vs hyperliquid": {
+   "common_bars": 4295,
+   "evaluated_bars": 4127,
+   "level_bps_median": -5.9429098777996625,
+   "deviation_abs_bps_median": 2.1488822802995244,
+   "deviation_abs_bps_p95": 6.730432634023121,
+   "deviation_abs_bps_max": 19.336872777263594,
+   "deviation_half_life_bars": 4.740205547756836,
+   "round_trip_cost": {
+    "taker_fees_bps": 21.0,
+    "half_spreads_bps": 7.0,
+    "latency_allowance_bps": 4.0,
+    "total_bps": 32.0
+   },
+   "bars_with_estimated_net_edge_above_zero": 0,
+   "share_of_bars_with_estimated_net_edge_above_zero": 0.0,
+   "estimated_net_edge_bps_when_positive_median": null,
+   "estimated_net_edge_bps_max": -12.663127222736406,
+   "funding": null
+  },
+  "ETH: edgex vs hyperliquid": {
+   "common_bars": 4320,
+   "evaluated_bars": 4152,
+   "level_bps_median": -8.956793263605324,
+   "deviation_abs_bps_median": 2.0249847777539802,
+   "deviation_abs_bps_p95": 6.378835688241213,
+   "deviation_abs_bps_max": 27.20519390125853,
+   "deviation_half_life_bars": 3.139180663519415,
+   "round_trip_cost": {
+    "taker_fees_bps": 18.0,
+    "half_spreads_bps": 2.0,
+    "latency_allowance_bps": 4.0,
+    "total_bps": 24.0
+   },
+   "bars_with_estimated_net_edge_above_zero": 1,
+   "share_of_bars_with_estimated_net_edge_above_zero": 0.00024084778420038535,
+   "estimated_net_edge_bps_when_positive_median": 3.2051939012585287,
+   "estimated_net_edge_bps_max": 3.2051939012585287,
+   "funding": {
+    "mean_rate_per_hour_a": 8.785009305555558e-06,
+    "mean_rate_per_hour_b": 9.334900462962965e-06,
+    "abs_differential_bps_per_day": 0.13197387777777772
+   }
+  },
+  "ETH: dydx vs hyperliquid": {
+   "common_bars": 4320,
+   "evaluated_bars": 4152,
+   "level_bps_median": -4.767755654099259,
+   "deviation_abs_bps_median": 4.8515186600966995,
+   "deviation_abs_bps_p95": 16.730412695900558,
+   "deviation_abs_bps_max": 108.21681390381976,
+   "deviation_half_life_bars": 0.5030662200002488,
+   "round_trip_cost": {
+    "taker_fees_bps": 19.0,
+    "half_spreads_bps": 4.0,
+    "latency_allowance_bps": 4.0,
+    "total_bps": 27.0
+   },
+   "bars_with_estimated_net_edge_above_zero": 32,
+   "share_of_bars_with_estimated_net_edge_above_zero": 0.007707129094412331,
+   "estimated_net_edge_bps_when_positive_median": 7.59969333036328,
+   "estimated_net_edge_bps_max": 81.21681390381976,
+   "funding": {
+    "mean_rate_per_hour_a": 8.785009305555558e-06,
+    "mean_rate_per_hour_b": -5.753472222222226e-07,
+    "abs_differential_bps_per_day": 2.246485566666667
+   }
+  },
+  "ETH: dydx vs edgex": {
+   "common_bars": 4320,
+   "evaluated_bars": 4152,
+   "level_bps_median": 3.7460622208729255,
+   "deviation_abs_bps_median": 4.324306985128423,
+   "deviation_abs_bps_p95": 16.29560988780315,
+   "deviation_abs_bps_max": 103.7291632696269,
+   "deviation_half_life_bars": 0.39828244193096823,
+   "round_trip_cost": {
+    "taker_fees_bps": 19.0,
+    "half_spreads_bps": 4.0,
+    "latency_allowance_bps": 4.0,
+    "total_bps": 27.0
+   },
+   "bars_with_estimated_net_edge_above_zero": 31,
+   "share_of_bars_with_estimated_net_edge_above_zero": 0.007466281310211946,
+   "estimated_net_edge_bps_when_positive_median": 6.299010185497963,
+   "estimated_net_edge_bps_max": 76.7291632696269,
+   "funding": {
+    "mean_rate_per_hour_a": 9.334900462962965e-06,
+    "mean_rate_per_hour_b": -5.753472222222226e-07,
+    "abs_differential_bps_per_day": 2.378459444444445
+   }
+  },
+  "ETH: gmx vs hyperliquid": {
+   "common_bars": 4295,
+   "evaluated_bars": 4127,
+   "level_bps_median": -6.079351535837052,
+   "deviation_abs_bps_median": 2.1546925017229546,
+   "deviation_abs_bps_p95": 7.0764010742024315,
+   "deviation_abs_bps_max": 18.01175788269216,
+   "deviation_half_life_bars": 3.7098251095538655,
+   "round_trip_cost": {
+    "taker_fees_bps": 21.0,
+    "half_spreads_bps": 7.0,
+    "latency_allowance_bps": 4.0,
+    "total_bps": 32.0
+   },
+   "bars_with_estimated_net_edge_above_zero": 0,
+   "share_of_bars_with_estimated_net_edge_above_zero": 0.0,
+   "estimated_net_edge_bps_when_positive_median": null,
+   "estimated_net_edge_bps_max": -13.988242117307841,
+   "funding": null
+  },
+  "SOL: edgex vs hyperliquid": {
+   "common_bars": 4320,
+   "evaluated_bars": 4152,
+   "level_bps_median": -8.579443466605884,
+   "deviation_abs_bps_median": 2.1648676136062917,
+   "deviation_abs_bps_p95": 7.308758909492282,
+   "deviation_abs_bps_max": 32.148969115224915,
+   "deviation_half_life_bars": 1.2716041712324764,
+   "round_trip_cost": {
+    "taker_fees_bps": 18.0,
+    "half_spreads_bps": 2.0,
+    "latency_allowance_bps": 4.0,
+    "total_bps": 24.0
+   },
+   "bars_with_estimated_net_edge_above_zero": 4,
+   "share_of_bars_with_estimated_net_edge_above_zero": 0.0009633911368015414,
+   "estimated_net_edge_bps_when_positive_median": 5.31459329925945,
+   "estimated_net_edge_bps_max": 8.148969115224915,
+   "funding": {
+    "mean_rate_per_hour_a": 5.8012018055555555e-06,
+    "mean_rate_per_hour_b": 1.0466770833333335e-05,
+    "abs_differential_bps_per_day": 1.1197365666666672
+   }
+  },
+  "SOL: dydx vs hyperliquid": {
+   "common_bars": 4320,
+   "evaluated_bars": 4152,
+   "level_bps_median": -5.57302125258452,
+   "deviation_abs_bps_median": 6.499119985091395,
+   "deviation_abs_bps_p95": 29.113852523298476,
+   "deviation_abs_bps_max": 126.10475615016826,
+   "deviation_half_life_bars": 0.29387249889820416,
+   "round_trip_cost": {
+    "taker_fees_bps": 19.0,
+    "half_spreads_bps": 4.0,
+    "latency_allowance_bps": 4.0,
+    "total_bps": 27.0
+   },
+   "bars_with_estimated_net_edge_above_zero": 249,
+   "share_of_bars_with_estimated_net_edge_above_zero": 0.05997109826589595,
+   "estimated_net_edge_bps_when_positive_median": 7.806755692163847,
+   "estimated_net_edge_bps_max": 99.10475615016826,
+   "funding": {
+    "mean_rate_per_hour_a": 5.8012018055555555e-06,
+    "mean_rate_per_hour_b": -4.893055555555556e-06,
+    "abs_differential_bps_per_day": 2.5666217666666666
+   }
+  },
+  "SOL: dydx vs edgex": {
+   "common_bars": 4320,
+   "evaluated_bars": 4152,
+   "level_bps_median": 2.718129976816419,
+   "deviation_abs_bps_median": 6.416220326684874,
+   "deviation_abs_bps_p95": 28.93707940505979,
+   "deviation_abs_bps_max": 123.99569121318454,
+   "deviation_half_life_bars": 0.2686275197502968,
+   "round_trip_cost": {
+    "taker_fees_bps": 19.0,
+    "half_spreads_bps": 4.0,
+    "latency_allowance_bps": 4.0,
+    "total_bps": 27.0
+   },
+   "bars_with_estimated_net_edge_above_zero": 256,
+   "share_of_bars_with_estimated_net_edge_above_zero": 0.06165703275529865,
+   "estimated_net_edge_bps_when_positive_median": 6.71470503567453,
+   "estimated_net_edge_bps_max": 96.99569121318454,
+   "funding": {
+    "mean_rate_per_hour_a": 1.0466770833333335e-05,
+    "mean_rate_per_hour_b": -4.893055555555556e-06,
+    "abs_differential_bps_per_day": 3.686358333333334
+   }
+  },
+  "SOL: gmx vs hyperliquid": {
+   "common_bars": 4295,
+   "evaluated_bars": 4127,
+   "level_bps_median": -5.387017391483839,
+   "deviation_abs_bps_median": 2.0733217932766834,
+   "deviation_abs_bps_p95": 7.460708862345733,
+   "deviation_abs_bps_max": 31.49617266296756,
+   "deviation_half_life_bars": 2.6419525706488924,
+   "round_trip_cost": {
+    "taker_fees_bps": 21.0,
+    "half_spreads_bps": 7.0,
+    "latency_allowance_bps": 4.0,
+    "total_bps": 32.0
+   },
+   "bars_with_estimated_net_edge_above_zero": 0,
+   "share_of_bars_with_estimated_net_edge_above_zero": 0.0,
+   "estimated_net_edge_bps_when_positive_median": null,
+   "estimated_net_edge_bps_max": -0.5038273370324404,
+   "funding": null
+  }
+ },
+ "books": {
+  "BTC: edgex vs hyperliquid": {
+   "paired_snapshots": 699,
+   "max_capture_gap_ms": 1983,
+   "mid_level_bps_median": -4.246071805621421,
+   "executable_entry_edge_bps_after_taker_fees": {
+    "median": -8.237538749302656,
+    "p95": -5.940635385888729,
+    "max": -2.915158284168987,
+    "share_above_zero": 0.0,
+    "share_above_exit_cost": 0.0
+   },
+   "statement": "entry edge = bid on the rich venue / ask on the cheap venue - 1, minus the median mid difference (permanent level) and one taker fee per venue. A positive value still has to pay the exit (another taker fee and spread per venue): see share_above_exit_cost"
+  },
+  "BTC: dydx vs hyperliquid": {
+   "paired_snapshots": 577,
+   "max_capture_gap_ms": 2000,
+   "mid_level_bps_median": 2.0816789125932544,
+   "executable_entry_edge_bps_after_taker_fees": {
+    "median": -10.039611308350008,
+    "p95": -7.6951269190441165,
+    "max": -3.714617383703203,
+    "share_above_zero": 0.0,
+    "share_above_exit_cost": 0.0
+   },
+   "statement": "entry edge = bid on the rich venue / ask on the cheap venue - 1, minus the median mid difference (permanent level) and one taker fee per venue. A positive value still has to pay the exit (another taker fee and spread per venue): see share_above_exit_cost"
+  },
+  "BTC: dydx vs edgex": {
+   "paired_snapshots": 661,
+   "max_capture_gap_ms": 1988,
+   "mid_level_bps_median": 6.204932343114589,
+   "executable_entry_edge_bps_after_taker_fees": {
+    "median": -10.27414586270641,
+    "p95": -8.189913399758655,
+    "max": -5.778523618988832,
+    "share_above_zero": 0.0,
+    "share_above_exit_cost": 0.0
+   },
+   "statement": "entry edge = bid on the rich venue / ask on the cheap venue - 1, minus the median mid difference (permanent level) and one taker fee per venue. A positive value still has to pay the exit (another taker fee and spread per venue): see share_above_exit_cost"
+  },
+  "ETH: edgex vs hyperliquid": {
+   "paired_snapshots": 684,
+   "max_capture_gap_ms": 1978,
+   "mid_level_bps_median": -3.5195583166564015,
+   "executable_entry_edge_bps_after_taker_fees": {
+    "median": -8.32839312502264,
+    "p95": -5.3609432345053,
+    "max": -2.8742307888911443,
+    "share_above_zero": 0.0,
+    "share_above_exit_cost": 0.0
+   },
+   "statement": "entry edge = bid on the rich venue / ask on the cheap venue - 1, minus the median mid difference (permanent level) and one taker fee per venue. A positive value still has to pay the exit (another taker fee and spread per venue): see share_above_exit_cost"
+  },
+  "ETH: dydx vs hyperliquid": {
+   "paired_snapshots": 530,
+   "max_capture_gap_ms": 2000,
+   "mid_level_bps_median": -4.427350008582298,
+   "executable_entry_edge_bps_after_taker_fees": {
+    "median": -10.071238071160884,
+    "p95": -3.973401581957628,
+    "max": 1.5135190535887162,
+    "share_above_zero": 0.0037735849056603774,
+    "share_above_exit_cost": 0.0
+   },
+   "statement": "entry edge = bid on the rich venue / ask on the cheap venue - 1, minus the median mid difference (permanent level) and one taker fee per venue. A positive value still has to pay the exit (another taker fee and spread per venue): see share_above_exit_cost"
+  },
+  "ETH: dydx vs edgex": {
+   "paired_snapshots": 657,
+   "max_capture_gap_ms": 1985,
+   "mid_level_bps_median": -1.2162961570572062,
+   "executable_entry_edge_bps_after_taker_fees": {
+    "median": -9.999845344160699,
+    "p95": -4.142550423379348,
+    "max": 1.4883546576494684,
+    "share_above_zero": 0.0030441400304414,
+    "share_above_exit_cost": 0.0
+   },
+   "statement": "entry edge = bid on the rich venue / ask on the cheap venue - 1, minus the median mid difference (permanent level) and one taker fee per venue. A positive value still has to pay the exit (another taker fee and spread per venue): see share_above_exit_cost"
+  },
+  "SOL: edgex vs hyperliquid": {
+   "paired_snapshots": 673,
+   "max_capture_gap_ms": 1979,
+   "mid_level_bps_median": -4.660318431907173,
+   "executable_entry_edge_bps_after_taker_fees": {
+    "median": -10.598809943178514,
+    "p95": -7.522925644777183,
+    "max": 0.7654518762146925,
+    "share_above_zero": 0.0014858841010401188,
+    "share_above_exit_cost": 0.0
+   },
+   "statement": "entry edge = bid on the rich venue / ask on the cheap venue - 1, minus the median mid difference (permanent level) and one taker fee per venue. A positive value still has to pay the exit (another taker fee and spread per venue): see share_above_exit_cost"
+  },
+  "SOL: dydx vs hyperliquid": {
+   "paired_snapshots": 492,
+   "max_capture_gap_ms": 1999,
+   "mid_level_bps_median": -1.324327903589051,
+   "executable_entry_edge_bps_after_taker_fees": {
+    "median": -10.824327903589051,
+    "p95": -8.113162546341805,
+    "max": -4.395906441882971,
+    "share_above_zero": 0.0,
+    "share_above_exit_cost": 0.0
+   },
+   "statement": "entry edge = bid on the rich venue / ask on the cheap venue - 1, minus the median mid difference (permanent level) and one taker fee per venue. A positive value still has to pay the exit (another taker fee and spread per venue): see share_above_exit_cost"
+  },
+  "SOL: dydx vs edgex": {
+   "paired_snapshots": 641,
+   "max_capture_gap_ms": 1999,
+   "mid_level_bps_median": 3.4950370473940673,
+   "executable_entry_edge_bps_after_taker_fees": {
+    "median": -14.333669226897985,
+    "p95": -10.212234765496422,
+    "max": -6.004962952605933,
+    "share_above_zero": 0.0,
+    "share_above_exit_cost": 0.0
+   },
+   "statement": "entry edge = bid on the rich venue / ask on the cheap venue - 1, minus the median mid difference (permanent level) and one taker fee per venue. A positive value still has to pay the exit (another taker fee and spread per venue): see share_above_exit_cost"
+  }
+ },
+ "assumptions": [
+  "capital is ALREADY on both venues (no transfer during the trade; a transfer between venues takes minutes to hours and costs gas and bridge fees that are not modelled)",
+  "the trade is a convergence trade: buy the cheap venue, sell the rich one, close both when the deviation is gone; the PERMANENT part of the price difference (rolling median: quote currency, index composition) is not capturable and is removed",
+  "costs: taker fee on 2 fills per venue, half spread on each fill (venue table defaults), and 1 bps per fill of latency allowance; funding differential over the holding time is reported separately and is NOT netted (its sign depends on the direction held)",
+  "bar closes are the LAST TRADE of each venue inside the same hour, not simultaneous prices: a deviation between two closes is partly asynchrony and is NOT executable; GMX candles are oracle prices, not quotes. The book section uses near-simultaneous recorded quotes (bid on one venue, ask on the other) and is the only executable-price evidence here \u2014 on one short recording"
+ ]
+}

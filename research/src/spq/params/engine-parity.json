@@ -1,0 +1,34 @@
+{
+ "schema": "spq-engine-parity/1",
+ "description": "The sizing and stop rules of the two LIVE agent engines, as the backtester applies them when engine parity is on. ONE file, read by spq.execution.load_parity. Every value states where the engine defines it (path:line in this repository at the commit below) and tests/test_v11_engine.py re-reads those lines: when the engine changes, the test fails until this file is reviewed. These are the DEFAULTS an agent gets when its owner changes nothing; an owner who sets other limits gets another agent than the one the report describes.",
+ "checked_against_commit": "ad52bec",
+ "checked": "2026-11-15",
+ "perp": {
+  "max_leverage": {"value": 2, "source": "services/api/src/agents/perp-engine.ts:29", "expect": "default(2)", "rule": "account leverage and leverage setting of every order: min(this, venue maximum)"},
+  "max_gross_exposure_x": {"value": 1.5, "source": "services/api/src/agents/perp-engine.ts:31", "expect": "default(1.5)", "rule": "sum of |notional| <= this x capital x (1 - cap_headroom - slippage bound)"},
+  "max_position_x": {"value": 1, "source": "services/api/src/agents/perp-engine.ts:33", "expect": "default(1)", "rule": "largest |notional| <= this x capital x (1 - cap_headroom - slippage bound)"},
+  "max_daily_loss_pct": {"value": 3, "source": "services/api/src/agents/perp-engine.ts:35", "expect": "default(3)", "rule": "equity at the start of the UTC day - equity >= this % of the capital: flatten, then stop"},
+  "max_total_loss_pct": {"value": 10, "source": "services/api/src/agents/perp-engine.ts:36", "expect": "default(10)", "rule": "capital - equity >= this % of the capital: flatten, then stop"},
+  "slippage_bps": {"value": 30, "source": "services/api/src/agents/perp-engine.ts:38", "expect": "default(30)", "rule": "worst price of an IOC order beyond the best opposite price; also enters the cap headroom"},
+  "min_trade_pct": {"value": 2, "source": "services/api/src/agents/perp-engine.ts:40", "expect": "default(2)", "rule": "a rebalance smaller than this % of equity is not traded (a full exit always is)"},
+  "leverage_headroom": {"value": 0.9, "source": "services/api/src/agents/perp-engine.ts:70", "expect": "'0.9'", "rule": "gross <= max_leverage x equity x this"},
+  "cap_headroom": {"value": 0.02, "source": "services/api/src/agents/perp-engine.ts:72", "expect": "'0.02'", "rule": "the absolute caps are approached to within this share plus the slippage bound"},
+  "min_notional_factor": {"value": 1.05, "source": "services/api/src/agents/perp-engine.ts:74", "expect": "'1.05'", "rule": "an order must clear the venue minimum notional by this factor"},
+  "loop_period_s": {"value": 60, "source": "services/api/src/agents/perp-live.ts:85", "expect": "everyMs = 60_000", "rule": "one engine pass per minute: a decision taken on a closed bar reaches the venue up to this long after the close"},
+  "live_cooldown_s": {"value": 45, "source": "services/api/src/agents/perp-exec-live.ts:36", "expect": "45_000", "rule": "LIVE: an exposure-adding order waits until the previous one is this old, i.e. ONE exposure-adding order per pass (per minute); reduce-only orders are not delayed"},
+  "max_orders_per_minute": {"value": 40, "source": "services/api/src/agents/perp-engine.ts:93", "expect": "maxOrdersPerMinute: 40", "rule": "risk-engine policy of the agent account"},
+  "max_orders_per_day": {"value": 400, "source": "services/api/src/agents/perp-engine.ts:93", "expect": "maxOrdersPerDay: 400", "rule": "risk-engine policy of the agent account"}
+ },
+ "spot": {
+  "max_exposure_pct": {"value": 50, "source": "services/api/src/agents/routes.ts:35", "expect": "default(50)", "rule": "all weights are scaled down together when their sum exceeds this share of equity"},
+  "max_loss_pct": {"value": 5, "source": "services/api/src/agents/routes.ts:37", "expect": "default(5)", "rule": "equity < capital x (1 - this %): sell everything to cash, then stop"},
+  "max_order_usd": {"value": 25, "source": "services/api/src/agents/routes.ts:38", "expect": "default(25)", "rule": "one order moves at most this many USD"},
+  "max_daily_usd": {"value": 100, "source": "services/api/src/agents/routes.ts:39", "expect": "default(100)", "rule": "traded USD per UTC day"},
+  "max_orders_per_day": {"value": 12, "source": "services/api/src/agents/routes.ts:40", "expect": "default(12)", "rule": "orders per UTC day"},
+  "slippage_bps": {"value": 50, "source": "services/api/src/agents/routes.ts:42", "expect": "default(50)", "rule": "swap slippage tolerance (not a cost model)"},
+  "min_trade_usd": {"value": 2, "source": "services/api/src/agents/engine.ts:31", "expect": "MIN_TRADE_USD = 2", "rule": "a delta below max(this, min_trade_fraction x equity) is not traded"},
+  "min_trade_fraction": {"value": 0.02, "source": "services/api/src/agents/engine.ts:31", "expect": "MIN_TRADE_FRACTION = 0.02", "rule": "see min_trade_usd"},
+  "live_orders_per_pass": {"value": 1, "source": "services/api/src/agents/engine.ts:122", "expect": "mode === 'LIVE' ? 1", "rule": "LIVE places ONE order per pass, sells first (largest), then buys (largest)"},
+  "loop_period_s": {"value": 60, "source": "services/api/src/agents/live.ts:156", "expect": "everyMs = 60_000", "rule": "one engine pass per minute"}
+ }
+}

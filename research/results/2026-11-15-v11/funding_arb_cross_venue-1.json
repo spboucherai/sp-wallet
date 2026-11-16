@@ -1,0 +1,5652 @@
+{
+ "schema_version": 3,
+ "kind": "perp",
+ "generated_at": "2026-11-16T00:38:24+00:00",
+ "strategy_sha256": "cd0842111005652cd540b6156d472931b3d434b8f1ba5f48a257f26835313a08",
+ "strategy": {
+  "name": "funding_arb_cross_venue",
+  "version": "1",
+  "meta": {
+   "name": "funding_arb_cross_venue",
+   "version": "1",
+   "kind": "perp",
+   "universe": [
+    "BTC",
+    "BTC@EDGEX",
+    "ETH",
+    "ETH@EDGEX",
+    "SOL",
+    "SOL@EDGEX"
+   ],
+   "interval": "1h",
+   "lookback": 720,
+   "max_leverage": 1.0,
+   "max_gross_exposure": 1.0,
+   "params": {
+    "window": 168,
+    "enter_net_apr": 0.04,
+    "exit_apr": 0.01,
+    "round_trip_cost_bps": 40.0,
+    "holding_days": 30.0,
+    "max_adverse_spread_bps": 10.0,
+    "state_bars": 336,
+    "gross": 0.9
+   }
+  }
+ },
+ "config": {
+  "symbols": [
+   "BTC",
+   "BTC@EDGEX",
+   "ETH",
+   "ETH@EDGEX",
+   "SOL",
+   "SOL@EDGEX"
+  ],
+  "interval": "1h",
+  "start": "2026-05-19T00:00:00+00:00",
+  "end": "2026-11-14T23:00:00+00:00",
+  "fee_bps": 4.5,
+  "slippage_bps": 2.0,
+  "initial_cash": 1000.0,
+  "min_order": 10.0,
+  "rebalance_threshold": 0.02,
+  "decision_every": 1,
+  "params": {
+   "window": 168,
+   "enter_net_apr": 0.04,
+   "exit_apr": 0.01,
+   "round_trip_cost_bps": 40.0,
+   "holding_days": 30.0,
+   "max_adverse_spread_bps": 10.0,
+   "state_bars": 336,
+   "gross": 0.9
+  },
+  "source": "multi-venue (see config.symbols)",
+  "bars": 4320,
+  "split_fractions": [
+   0.6,
+   0.2,
+   0.2
+  ],
+  "venue": "multi-venue (see config.symbols)",
+  "taker_fee_bps": 4.5,
+  "maker_fee_bps": 1.5,
+  "liquidity": "taker",
+  "leverage": 2.0,
+  "max_leverage": 1.0,
+  "max_gross_exposure": 1.0,
+  "venue_max_leverage": {
+   "BTC": 40.0,
+   "BTC@EDGEX": 40.0,
+   "ETH": 25.0,
+   "ETH@EDGEX": 25.0,
+   "SOL": 20.0,
+   "SOL@EDGEX": 20.0
+  },
+  "maintenance_fraction": {
+   "BTC": 0.0125,
+   "BTC@EDGEX": 0.0125,
+   "ETH": 0.02,
+   "ETH@EDGEX": 0.02,
+   "SOL": 0.025,
+   "SOL@EDGEX": 0.025
+  },
+  "liquidation_penalty_bps": 100.0,
+  "size_decimals": {
+   "BTC": 5,
+   "BTC@EDGEX": 3,
+   "ETH": 4,
+   "ETH@EDGEX": 2,
+   "SOL": 2,
+   "SOL@EDGEX": 1
+  },
+  "spot_fee_bps": 10.0,
+  "spot_slippage_bps": 10.0,
+  "funding_reference_price": "perpetual open at the settlement hour"
+ },
+ "splits": {
+  "train": [
+   "2026-05-19T00:00:00+00:00",
+   "2026-09-03T23:00:00+00:00"
+  ],
+  "validation": [
+   "2026-09-04T00:00:00+00:00",
+   "2026-10-09T23:00:00+00:00"
+  ],
+  "test": [
+   "2026-10-10T00:00:00+00:00",
+   "2026-11-14T23:00:00+00:00"
+  ]
+ },
+ "metrics": {
+  "train": {
+   "total_return": 0.00019935273984406088,
+   "cagr": 0.0006741584265121947,
+   "volatility": 0.01049768962847341,
+   "sharpe": 0.06944524285095328,
+   "sortino": 0.09707524895700083,
+   "max_drawdown": 0.0047392902838065964,
+   "calmar": 0.14224881493663455,
+   "turnover": 3.3559366720365467,
+   "turnover_annual": 11.34620040410658,
+   "trades": 30,
+   "closed_lots": 19,
+   "win_rate": 0.631578947368421,
+   "profit_factor": 1.033431646923641,
+   "fees_paid": 1.512269259854651,
+   "slippage_paid": 0.3608747297428,
+   "exposure": 0.16956487628999495,
+   "bars": 2592,
+   "final_equity": 1000.1993527398441,
+   "returns": {
+    "n": 2591,
+    "mean": 8.322084539078418e-08,
+    "std": 0.00011216094902334389,
+    "skew": -0.9248164235200534,
+    "excess_kurtosis": 40.17289290255268,
+    "min": -0.001757027684085033,
+    "p01": -0.00034666335003339375,
+    "p05": -0.00012911278835570084,
+    "median": 0.0,
+    "p95": 0.0001219985515887867,
+    "p99": 0.00039413130588365937,
+    "max": 0.0011128086367373502,
+    "positive_fraction": 0.18409880355075262
+   },
+   "realised_pnl": 5.988096111111111,
+   "funding_pnl": 1.317093773071736,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 0.08314797833679236,
+   "short_exposure": 0.08641689795320258,
+   "gross_leverage_mean": 0.16956487628999495,
+   "gross_leverage_max": 0.9131918755175997,
+   "net_leverage_mean": -0.0032689196164102465,
+   "net_leverage_max": 0.04603468196219607,
+   "net_leverage_min": -0.10699812060325659,
+   "time_in_market": 0.36226851851851855,
+   "avg_holding_bars": 222.0,
+   "avg_holding_hours": 222.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 0.2340320337293221,
+   "margin_utilisation_max": 0.4565959377587999,
+   "worst_intrabar_drawdown": 0.01467248169109614,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 1937,
+   "funding_missing": 0,
+   "gross_to_net": {
+    "price_pnl": 2.44258,
+    "funding": 1.317093773071736,
+    "trading_fees": 1.512269259854651,
+    "liquidation_penalties": 0.0,
+    "slippage": 0.3608747297428,
+    "latency": 1.687177043630158,
+    "bad_debt_written_off": 0.0,
+    "net_pnl": 0.19935273984413016,
+    "return_gross": 0.00244258,
+    "return_after_funding": 0.003759673773071736,
+    "return_net": 0.00019935273984413016,
+    "sharpe_gross": 0.8004200912194842,
+    "sharpe_net": 0.06944524285095328,
+    "cost_drag_bps_of_mean_equity": 35.55411032395797,
+    "costs_over_gross_profit": 1.457606724540285
+   }
+  },
+  "validation": {
+   "total_return": -0.00509074797541087,
+   "cagr": -0.05048724454897702,
+   "volatility": 0.019296473859308914,
+   "sharpe": -2.6751099854971483,
+   "sortino": -3.6245544337755105,
+   "max_drawdown": 0.011073812305183894,
+   "calmar": -4.559156608184774,
+   "turnover": 2.7560046722906164,
+   "turnover_annual": 27.97520385778192,
+   "trades": 24,
+   "closed_lots": 13,
+   "win_rate": 0.46153846153846156,
+   "profit_factor": 0.9338785927095524,
+   "fees_paid": 1.2371927206185058,
+   "slippage_paid": 0.2981922509433,
+   "exposure": 0.22192392822560356,
+   "bars": 864,
+   "final_equity": 994.9092520245891,
+   "returns": {
+    "n": 863,
+    "mean": -5.8927157426851565e-06,
+    "std": 0.00020617020482238931,
+    "skew": -0.3678044502162762,
+    "excess_kurtosis": 36.04791406611685,
+    "min": -0.001946465915171114,
+    "p01": -0.000516875321639707,
+    "p05": -0.0002598735135207142,
+    "median": 0.0,
+    "p95": 0.00024620530197778646,
+    "p99": 0.0005196976689549659,
+    "max": 0.0022535603721818287,
+    "positive_fraction": 0.29779837775202783
+   },
+   "realised_pnl": -2.44173,
+   "funding_pnl": 0.605226011717971,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 0.09144868109280752,
+   "short_exposure": 0.130475247132796,
+   "gross_leverage_mean": 0.22192392822560356,
+   "gross_leverage_max": 0.8105540323643143,
+   "net_leverage_mean": -0.0390265660399885,
+   "net_leverage_max": 0.00011977529209178384,
+   "net_leverage_min": -0.09843623628247006,
+   "time_in_market": 0.6203703703703703,
+   "avg_holding_bars": 151.4,
+   "avg_holding_hours": 151.4,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 0.17886406155496407,
+   "margin_utilisation_max": 0.40527701618215717,
+   "worst_intrabar_drawdown": 0.016409858615339945,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 946,
+   "funding_missing": 0,
+   "gross_to_net": {
+    "price_pnl": -2.44173,
+    "funding": 0.605226011717971,
+    "trading_fees": 1.2371927206185058,
+    "liquidation_penalties": 0.0,
+    "slippage": 0.2981922509433,
+    "latency": 1.718859015566992,
+    "bad_debt_written_off": 0.0,
+    "net_pnl": -5.0907479754108635,
+    "return_gross": -0.00244173,
+    "return_after_funding": -0.001836503988282029,
+    "return_net": -0.005090747975410864,
+    "sharpe_gross": -1.3196033186890033,
+    "sharpe_net": -2.6751099854971483,
+    "cost_drag_bps_of_mean_equity": 32.62166733047758,
+    "costs_over_gross_profit": null
+   }
+  },
+  "test": {
+   "total_return": -0.0021374308085660987,
+   "cagr": -0.021485335128415217,
+   "volatility": 0.005471829670564842,
+   "sharpe": -3.9665935183423664,
+   "sortino": -4.958150900684755,
+   "max_drawdown": 0.002471871642865775,
+   "calmar": -8.691929935126446,
+   "turnover": 2.1167877899633454,
+   "turnover_annual": 21.486745121760027,
+   "trades": 18,
+   "closed_lots": 9,
+   "win_rate": 0.5555555555555556,
+   "profit_factor": 0.9854962614522089,
+   "fees_paid": 0.9516960182629245,
+   "slippage_paid": 0.2846733697014,
+   "exposure": 0.22182766389756262,
+   "bars": 864,
+   "final_equity": 997.8625691914339,
+   "returns": {
+    "n": 863,
+    "mean": -2.477685400084012e-06,
+    "std": 5.846292188711743e-05,
+    "skew": -1.6884374436863776,
+    "excess_kurtosis": 12.480415103002425,
+    "min": -0.000494778342978397,
+    "p01": -0.00020918967706875288,
+    "p05": -9.098205953128602e-05,
+    "median": 0.0,
+    "p95": 8.76399635327374e-05,
+    "p99": 0.0001404241344990087,
+    "max": 0.0002660105283276426,
+    "positive_fraction": 0.3348783314020857
+   },
+   "realised_pnl": 0.23896,
+   "funding_pnl": 0.123282121250119,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 0.11043404008103669,
+   "short_exposure": 0.11139362381652591,
+   "gross_leverage_mean": 0.22182766389756262,
+   "gross_leverage_max": 0.612402459624162,
+   "net_leverage_mean": -0.0009595837354892182,
+   "net_leverage_max": 0.01961485968819121,
+   "net_leverage_min": -0.02565145851040035,
+   "time_in_market": 0.6678240740740741,
+   "avg_holding_bars": 166.0,
+   "avg_holding_hours": 166.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 0.16608241040510754,
+   "margin_utilisation_max": 0.306201229812081,
+   "worst_intrabar_drawdown": 0.009541606075488818,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 828,
+   "funding_missing": 0,
+   "gross_to_net": {
+    "price_pnl": -0.17247,
+    "funding": 0.123282121250119,
+    "trading_fees": 0.9516960182629245,
+    "liquidation_penalties": 0.0,
+    "slippage": 0.2846733697014,
+    "latency": 0.8518735418519,
+    "bad_debt_written_off": 0.0,
+    "net_pnl": -2.137430808566137,
+    "return_gross": -0.00017247,
+    "return_after_funding": -4.918787874988101e-05,
+    "return_net": -0.002137430808566137,
+    "sharpe_gross": -0.35658153862688585,
+    "sharpe_net": -3.9665935183423664,
+    "cost_drag_bps_of_mean_equity": 20.9008828656068,
+    "costs_over_gross_profit": null
+   }
+  }
+ },
+ "benchmarks": {
+  "perp_long_1x": {
+   "total_return": -0.29141524952878295,
+   "cagr": -0.9697042687761431,
+   "volatility": 0.45901521298595577,
+   "sharpe": -7.386318896169942,
+   "sortino": -9.29461778876327,
+   "max_drawdown": 0.31805238982556305,
+   "calmar": -3.0488821961312125,
+   "turnover": 1.0587816582824041,
+   "turnover_annual": 10.747308605508527,
+   "trades": 6,
+   "closed_lots": 6,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.43950439169571837,
+   "slippage_paid": 0.0936759904853,
+   "exposure": 0.9785712753059044,
+   "bars": 864,
+   "final_equity": 708.584750471217,
+   "returns": {
+    "n": 863,
+    "mean": -0.0003870357010625154,
+    "std": 0.004904277391190498,
+    "skew": -0.9797403120938865,
+    "excess_kurtosis": 8.90411922350682,
+    "min": -0.03282252598617208,
+    "p01": -0.01629656324738011,
+    "p05": -0.00745778711760654,
+    "median": -0.0002728784401866413,
+    "p95": 0.006034721169916211,
+    "p99": 0.012819033307867746,
+    "max": 0.025157498694191816,
+    "positive_fraction": 0.473928157589803
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": -6.848064258385485,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 0.9785712753059044,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 0.9785712753059044,
+   "gross_leverage_max": 0.9819717655481829,
+   "net_leverage_mean": 0.9785712753059044,
+   "net_leverage_max": 0.9819717655481829,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.9988425925925926,
+   "avg_holding_bars": 863.0,
+   "avg_holding_hours": 863.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 0.9797051933537675,
+   "margin_utilisation_max": 0.9819717655481828,
+   "worst_intrabar_drawdown": 0.3224591627807343,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 3231,
+   "funding_missing": 0
+  },
+  "perp_long_1x_BTC": {
+   "total_return": -0.23207223372858587,
+   "cagr": -0.931462433973181,
+   "volatility": 0.37272846777095947,
+   "sharpe": -7.003407339916137,
+   "sortino": -8.823076184318001,
+   "max_drawdown": 0.2574499017316769,
+   "calmar": -3.618033752228746,
+   "turnover": 1.0507194637154949,
+   "turnover_annual": 10.665472192523447,
+   "trades": 1,
+   "closed_lots": 1,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.44974319079782327,
+   "slippage_paid": 0.1000028840517,
+   "exposure": 1.0034683565639826,
+   "bars": 864,
+   "final_equity": 767.9277662714142,
+   "returns": {
+    "n": 863,
+    "mean": -0.0002979873615277206,
+    "std": 0.003982359943259924,
+    "skew": -1.0017413780771283,
+    "excess_kurtosis": 8.26158112457057,
+    "min": -0.028848174946840777,
+    "p01": -0.013957606213593347,
+    "p05": -0.006058479486748314,
+    "median": -0.00013210957095488585,
+    "p95": 0.005211147871594556,
+    "p99": 0.009944638548226267,
+    "max": 0.020864495811331096,
+    "positive_fraction": 0.4797219003476246
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": -8.374467884091422,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 1.0034683565639826,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 1.0034683565639826,
+   "gross_leverage_max": 1.0112926222154477,
+   "net_leverage_mean": 1.0034683565639826,
+   "net_leverage_max": 1.0112926222154477,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.9988425925925926,
+   "avg_holding_bars": 863.0,
+   "avg_holding_hours": 863.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 1.0046311240686918,
+   "margin_utilisation_max": 1.011292622215448,
+   "worst_intrabar_drawdown": 0.2603352462902394,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 862,
+   "funding_missing": 0
+  },
+  "perp_long_1x_BTC@EDGEX": {
+   "total_return": -0.23019566096743194,
+   "cagr": -0.9297432284888154,
+   "volatility": 0.36889531074102283,
+   "sharpe": -7.012898816270588,
+   "sortino": -8.83838506167452,
+   "max_drawdown": 0.2554063786430636,
+   "calmar": -3.640250621101963,
+   "turnover": 1.0406957018927943,
+   "turnover_annual": 10.563724621762315,
+   "trades": 1,
+   "closed_lots": 1,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.44533866582,
+   "slippage_paid": 0.0494796,
+   "exposure": 0.9933874775614895,
+   "bars": 864,
+   "final_equity": 769.804339032568,
+   "returns": {
+    "n": 863,
+    "mean": -0.00029532254429491886,
+    "std": 0.003941405166975905,
+    "skew": -1.0167880886436538,
+    "excess_kurtosis": 8.598300562180217,
+    "min": -0.029095142674156582,
+    "p01": -0.013760025854557587,
+    "p05": -0.005936621121991603,
+    "median": -0.00016118191987457564,
+    "p95": 0.005119304506942801,
+    "p99": 0.0098539721293089,
+    "max": 0.020843609393085716,
+    "positive_fraction": 0.473928157589803
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": -9.047515644636,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 0.9933874775614895,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 0.9933874775614895,
+   "gross_leverage_max": 0.9992638325696496,
+   "net_leverage_mean": 0.9933874775614895,
+   "net_leverage_max": 0.9992638325696496,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.9988425925925926,
+   "avg_holding_bars": 863.0,
+   "avg_holding_hours": 863.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 0.9945385638622559,
+   "margin_utilisation_max": 0.9992638325696496,
+   "worst_intrabar_drawdown": 0.25790602319255473,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 215,
+   "funding_missing": 0
+  },
+  "perp_long_1x_ETH": {
+   "total_return": -0.29604591224539956,
+   "cagr": -0.9716549100136866,
+   "volatility": 0.5234958222943797,
+   "sharpe": -6.5423389678500214,
+   "sortino": -8.121896710516868,
+   "max_drawdown": 0.32726336982277116,
+   "calmar": -2.969030449511916,
+   "turnover": 1.0815582325984152,
+   "turnover_annual": 10.978505350593416,
+   "trades": 1,
+   "closed_lots": 1,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.44977638282947713,
+   "slippage_paid": 0.0813129543936,
+   "exposure": 1.0025313724789202,
+   "bars": 864,
+   "final_equity": 703.9540877546004,
+   "returns": {
+    "n": 863,
+    "mean": -0.0003909688490528779,
+    "std": 0.005593210536443718,
+    "skew": -1.4466056282965245,
+    "excess_kurtosis": 12.40373074221522,
+    "min": -0.04513312811317072,
+    "p01": -0.017123937249041175,
+    "p05": -0.008567494280659437,
+    "median": -0.00014065828015386028,
+    "p95": 0.006902203254791605,
+    "p99": 0.014112007595321116,
+    "max": 0.026075457395098534,
+    "positive_fraction": 0.47856315179606024
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": -5.774492449847328,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 1.0025313724789202,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 1.0025313724789202,
+   "gross_leverage_max": 1.008791038521929,
+   "net_leverage_mean": 1.0025313724789202,
+   "net_leverage_max": 1.008791038521929,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.9988425925925926,
+   "avg_holding_bars": 863.0,
+   "avg_holding_hours": 863.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 1.003693054254678,
+   "margin_utilisation_max": 1.008791038521929,
+   "worst_intrabar_drawdown": 0.33329737750878474,
+   "orders_cut": 1,
+   "orders_refused": 0,
+   "funding_payments": 862,
+   "funding_missing": 0
+  },
+  "perp_long_1x_ETH@EDGEX": {
+   "total_return": -0.2939905590271149,
+   "cagr": -0.9708035326011937,
+   "volatility": 0.5187611897837903,
+   "sharpe": -6.549818749990272,
+   "sortino": -8.130817743318724,
+   "max_drawdown": 0.3246057789864515,
+   "calmar": -2.990715493828942,
+   "turnover": 1.0746226392885236,
+   "turnover_annual": 10.90810465836323,
+   "trades": 1,
+   "closed_lots": 1,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.447517309354992,
+   "slippage_paid": 0.05890967776,
+   "exposure": 0.9960022238734779,
+   "bars": 864,
+   "final_equity": 706.009440972885,
+   "returns": {
+    "n": 863,
+    "mean": -0.0003878757725585766,
+    "std": 0.00554262408414243,
+    "skew": -1.4469067511132132,
+    "excess_kurtosis": 12.493744734182501,
+    "min": -0.0447371082281558,
+    "p01": -0.016827603034729223,
+    "p05": -0.00843160831141233,
+    "median": -0.00013620373001610453,
+    "p95": 0.006937827108665193,
+    "p99": 0.01374517220203575,
+    "max": 0.026075782768355094,
+    "positive_fraction": 0.4820393974507532
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": -5.67116999212,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 0.9960022238734779,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 0.9960022238734779,
+   "gross_leverage_max": 1.0013820469963226,
+   "net_leverage_mean": 0.9960022238734779,
+   "net_leverage_max": 1.0013820469963226,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.9988425925925926,
+   "avg_holding_bars": 863.0,
+   "avg_holding_hours": 863.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 0.997156340007746,
+   "margin_utilisation_max": 1.0013820469963226,
+   "worst_intrabar_drawdown": 0.3309400837741515,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 215,
+   "funding_missing": 0
+  },
+  "perp_long_1x_SOL": {
+   "total_return": -0.36385265516156207,
+   "cagr": -0.9898612211218667,
+   "volatility": 0.5809053264002685,
+   "sharpe": -7.610788017443166,
+   "sortino": -9.729506099893836,
+   "max_drawdown": 0.39416236388794,
+   "calmar": -2.5113032389953984,
+   "turnover": 1.124391889011471,
+   "turnover_annual": 11.41329426157646,
+   "trades": 1,
+   "closed_lots": 1,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.4494268536957738,
+   "slippage_paid": 0.086941546164,
+   "exposure": 1.0022591803462124,
+   "bars": 864,
+   "final_equity": 636.1473448384379,
+   "returns": {
+    "n": 863,
+    "mean": -0.0005046971800726113,
+    "std": 0.006206593546550145,
+    "skew": -0.5655789250811895,
+    "excess_kurtosis": 5.963992570640148,
+    "min": -0.03683399905693119,
+    "p01": -0.020752685212220522,
+    "p05": -0.009729704707205866,
+    "median": -0.00019972215382801917,
+    "p95": 0.007704335118053729,
+    "p99": 0.016603475650472748,
+    "max": 0.03256073847557661,
+    "positive_fraction": 0.46929316338354576
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": -5.214070340434318,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 1.0022591803462124,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 1.0022591803462124,
+   "gross_leverage_max": 1.008076076532821,
+   "net_leverage_mean": 1.0022591803462124,
+   "net_leverage_max": 1.008076076532821,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.9988425925925926,
+   "avg_holding_bars": 863.0,
+   "avg_holding_hours": 863.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 1.0034205467197308,
+   "margin_utilisation_max": 1.008076076532821,
+   "worst_intrabar_drawdown": 0.39877638656737513,
+   "orders_cut": 1,
+   "orders_refused": 0,
+   "funding_payments": 862,
+   "funding_missing": 0
+  },
+  "perp_long_1x_SOL@EDGEX": {
+   "total_return": -0.3647729019635906,
+   "cagr": -0.9900091159254029,
+   "volatility": 0.5772755274096483,
+   "sharpe": -7.687712822583145,
+   "sortino": -9.810608613906023,
+   "max_drawdown": 0.3951090652083452,
+   "calmar": -2.5056603431848887,
+   "turnover": 1.1195285207731447,
+   "turnover_annual": 11.363927974475953,
+   "trades": 1,
+   "closed_lots": 1,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.447504382900575,
+   "slippage_paid": 0.2791842235,
+   "exposure": 0.9980657562605484,
+   "bars": 864,
+   "final_equity": 635.2270980364094,
+   "returns": {
+    "n": 863,
+    "mean": -0.0005066128395240411,
+    "std": 0.006167811517936183,
+    "skew": -0.5855869386269492,
+    "excess_kurtosis": 6.029423301618241,
+    "min": -0.036850267617792865,
+    "p01": -0.021044879054795355,
+    "p05": -0.009757729096383028,
+    "median": -0.00027107234887524534,
+    "p95": 0.007768172360672221,
+    "p99": 0.016311109536609684,
+    "max": 0.03230385528363611,
+    "positive_fraction": 0.4704519119351101
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": -7.70158233845,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 0.9980657562605484,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 0.9980657562605484,
+   "gross_leverage_max": 1.0053115448620729,
+   "net_leverage_mean": 0.9980657562605484,
+   "net_leverage_max": 1.0053115448620729,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.9988425925925926,
+   "avg_holding_bars": 863.0,
+   "avg_holding_hours": 863.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 0.9992222635099812,
+   "margin_utilisation_max": 1.005311544862073,
+   "worst_intrabar_drawdown": 0.39986469263295576,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 215,
+   "funding_missing": 0
+  },
+  "buy_and_hold": {
+   "total_return": -0.2845671852703976,
+   "cagr": -0.9665973283970704,
+   "volatility": 0.45696003267237256,
+   "sharpe": -7.208051452321726,
+   "sortino": -9.083343774115555,
+   "max_drawdown": 0.31142933039498,
+   "calmar": -3.10374532537174,
+   "turnover": 1.0550756938481571,
+   "turnover_annual": 10.709690704646416,
+   "trades": 6,
+   "closed_lots": 6,
+   "win_rate": 0.0,
+   "profit_factor": 0.0,
+   "fees_paid": 0.43950439169571837,
+   "slippage_paid": 0.0936759904853,
+   "exposure": 0.9749649003401094,
+   "bars": 864,
+   "final_equity": 715.4328147296025,
+   "returns": {
+    "n": 863,
+    "mean": -0.0003760035875750089,
+    "std": 0.004882319133464878,
+    "skew": -0.9713711411024294,
+    "excess_kurtosis": 8.871650911644702,
+    "min": -0.03259597825708194,
+    "p01": -0.016263349297926704,
+    "p05": -0.007422045022602653,
+    "median": -0.0002495126318772245,
+    "p95": 0.006027840506326829,
+    "p99": 0.012755072170470196,
+    "max": 0.0251419100819934,
+    "positive_fraction": 0.473928157589803
+   },
+   "realised_pnl": 0.0,
+   "funding_pnl": 0.0,
+   "liquidation_penalties": 0.0,
+   "long_exposure": 0.9749649003401094,
+   "short_exposure": 0.0,
+   "gross_leverage_mean": 0.9749649003401094,
+   "gross_leverage_max": 0.9785474692545318,
+   "net_leverage_mean": 0.9749649003401094,
+   "net_leverage_max": 0.9785474692545318,
+   "net_leverage_min": 0.0,
+   "time_in_market": 0.9988425925925926,
+   "avg_holding_bars": 863.0,
+   "avg_holding_hours": 863.0,
+   "liquidations": 0,
+   "wiped_out": false,
+   "margin_utilisation_mean": 0.9760946395062046,
+   "margin_utilisation_max": 0.9785474692545317,
+   "worst_intrabar_drawdown": 0.31583575355111215,
+   "orders_cut": 0,
+   "orders_refused": 0,
+   "funding_payments": 0,
+   "funding_missing": 5172
+  }
+ },
+ "robustness": {
+  "walk_forward": [
+   {
+    "in_sample": [
+     "2026-05-19T00:00:00+00:00",
+     "2026-07-06T00:00:00+00:00"
+    ],
+    "out_of_sample": [
+     "2026-07-06T00:00:00+00:00",
+     "2026-07-30T00:00:00+00:00"
+    ],
+    "params": {
+     "window": 168,
+     "enter_net_apr": 0.08,
+     "exit_apr": 0.01,
+     "round_trip_cost_bps": 40.0,
+     "holding_days": 30.0,
+     "max_adverse_spread_bps": 10.0,
+     "state_bars": 336,
+     "gross": 0.9
+    },
+    "in_sample_sharpe": 2.6805800622503697,
+    "out_of_sample_sharpe": -6.326054967561634,
+    "out_of_sample_return": -0.001260816217173888,
+    "out_of_sample_max_drawdown": 0.0012820567701207208,
+    "out_of_sample_trades": 6
+   },
+   {
+    "in_sample": [
+     "2026-06-12T00:00:00+00:00",
+     "2026-07-30T00:00:00+00:00"
+    ],
+    "out_of_sample": [
+     "2026-07-30T00:00:00+00:00",
+     "2026-08-23T00:00:00+00:00"
+    ],
+    "params": {
+     "window": 168,
+     "enter_net_apr": 0.04,
+     "exit_apr": 0.01,
+     "round_trip_cost_bps": 40.0,
+     "holding_days": 30.0,
+     "max_adverse_spread_bps": 10.0,
+     "state_bars": 336,
+     "gross": 0.9
+    },
+    "in_sample_sharpe": 2.095952176814285,
+    "out_of_sample_sharpe": -4.6327568438542475,
+    "out_of_sample_return": -0.0008316651848413459,
+    "out_of_sample_max_drawdown": 0.0008316651848413459,
+    "out_of_sample_trades": 4
+   },
+   {
+    "in_sample": [
+     "2026-07-06T00:00:00+00:00",
+     "2026-08-23T00:00:00+00:00"
+    ],
+    "out_of_sample": [
+     "2026-08-23T00:00:00+00:00",
+     "2026-09-16T00:00:00+00:00"
+    ],
+    "params": {
+     "window": 168,
+     "enter_net_apr": 0.04,
+     "exit_apr": 0.01,
+     "round_trip_cost_bps": 40.0,
+     "holding_days": 30.0,
+     "max_adverse_spread_bps": 10.0,
+     "state_bars": 336,
+     "gross": 0.9
+    },
+    "in_sample_sharpe": -2.0968941631269717,
+    "out_of_sample_sharpe": 1.2612444180899518,
+    "out_of_sample_return": 0.001963913160752506,
+    "out_of_sample_max_drawdown": 0.004805697782324092,
+    "out_of_sample_trades": 24
+   },
+   {
+    "in_sample": [
+     "2026-07-30T00:00:00+00:00",
+     "2026-09-16T00:00:00+00:00"
+    ],
+    "out_of_sample": [
+     "2026-09-16T00:00:00+00:00",
+     "2026-10-09T23:00:00+00:00"
+    ],
+    "params": {
+     "window": 168,
+     "enter_net_apr": 0.08,
+     "exit_apr": 0.01,
+     "round_trip_cost_bps": 40.0,
+     "holding_days": 30.0,
+     "max_adverse_spread_bps": 10.0,
+     "state_bars": 336,
+     "gross": 0.9
+    },
+    "in_sample_sharpe": 1.0893438906660922,
+    "out_of_sample_sharpe": -1.5009993745768373,
+    "out_of_sample_return": -0.0015408197479196417,
+    "out_of_sample_max_drawdown": 0.005728021077146761,
+    "out_of_sample_trades": 4
+   }
+  ],
+  "bootstrap_sharpe_ci": [
+   -7.62586221044981,
+   -0.4526730246482026
+  ],
+  "bootstrap": {
+   "level": 0.95,
+   "n_samples": 2000,
+   "mean_block": 24,
+   "method": "stationary bootstrap (Politis & Romano 1994), percentile interval",
+   "split": "test",
+   "buy_and_hold_sharpe_ci": [
+    -12.36505863881006,
+    -1.8735153669394222
+   ],
+   "perp_long_1x_sharpe_ci": [
+    -12.544957008411847,
+    -2.0631884241916953
+   ]
+  },
+  "parameter_sensitivity": [
+   {
+    "params": {
+     "window": 168,
+     "enter_net_apr": 0.04,
+     "exit_apr": 0.01,
+     "round_trip_cost_bps": 40.0,
+     "holding_days": 30.0,
+     "max_adverse_spread_bps": 10.0,
+     "state_bars": 336,
+     "gross": 0.9
+    },
+    "train_sharpe": 0.06944524285095328,
+    "train_return": 0.0001993527398467254,
+    "validation_sharpe": -1.630074120894707,
+    "validation_return": -0.0031508125749519778,
+    "validation_trades": 21
+   },
+   {
+    "params": {
+     "window": 168,
+     "enter_net_apr": 0.02,
+     "exit_apr": 0.01,
+     "round_trip_cost_bps": 40.0,
+     "holding_days": 30.0,
+     "max_adverse_spread_bps": 10.0,
+     "state_bars": 336,
+     "gross": 0.9
+    },
+    "train_sharpe": -0.17735690073593682,
+    "train_return": -0.0006174621044855444,
+    "validation_sharpe": -0.17946862195487578,
+    "validation_return": -0.0003816662980598018,
+    "validation_trades": 18
+   },
+   {
+    "params": {
+     "window": 168,
+     "enter_net_apr": 0.08,
+     "exit_apr": 0.01,
+     "round_trip_cost_bps": 40.0,
+     "holding_days": 30.0,
+     "max_adverse_spread_bps": 10.0,
+     "state_bars": 336,
+     "gross": 0.9
+    },
+    "train_sharpe": -0.1558964493191604,
+    "train_return": -0.00035347084332881806,
+    "validation_sharpe": 1.1898834454786533,
+    "validation_return": 0.001845600115028878,
+    "validation_trades": 6
+   },
+   {
+    "params": {
+     "window": 72,
+     "enter_net_apr": 0.04,
+     "exit_apr": 0.01,
+     "round_trip_cost_bps": 40.0,
+     "holding_days": 30.0,
+     "max_adverse_spread_bps": 10.0,
+     "state_bars": 336,
+     "gross": 0.9
+    },
+    "train_sharpe": -1.7970252270105744,
+    "train_return": -0.006235699864841848,
+    "validation_sharpe": -2.562970775633505,
+    "validation_return": -0.004215002414749813,
+    "validation_trades": 23
+   }
+  ],
+  "trials_tested": 31,
+  "deflated_sharpe": 0.0031506180752261226,
+  "deflated_sharpe_detail": {
+   "deflated_sharpe": 0.0031506180752261226,
+   "probabilistic_sharpe_vs_zero": 0.09907418349599967,
+   "sharpe_per_bar": -0.04238045802977341,
+   "expected_max_sharpe_per_bar": 0.04758364070523516,
+   "n_obs": 863,
+   "skew": -1.6884397925656787,
+   "kurtosis": 15.480430552023467,
+   "n_trials": 31,
+   "var_trial_sharpes": 0.0008604117922700581,
+   "sharpe_split": "test",
+   "trial_sharpes_split": "validation",
+   "scope": "every strategy and parameter set of this V11 run",
+   "own_trials": 4,
+   "own_deflated_sharpe": 0.03221808119501683
+  },
+  "monte_carlo": {
+   "n_samples": 2000,
+   "bar_returns": {
+    "total_return_p05": -0.004922672075406559,
+    "total_return_p50": -0.0020673438286601398,
+    "total_return_p95": 0.0005617892405127776,
+    "probability_of_loss": 0.902,
+    "max_drawdown_p50": 0.002987819658709978,
+    "max_drawdown_p95": 0.005417853815724193
+   },
+   "lots": {
+    "n_lots": 9,
+    "pnl_fraction_p05": -0.061456019584928905,
+    "pnl_fraction_p50": 0.0017032573251506088,
+    "pnl_fraction_p95": 0.06360766769055122,
+    "probability_of_loss": 0.4835
+   }
+  },
+  "stress_windows": [
+   {
+    "window": [
+     "2026-10-12T04:00:00+00:00",
+     "2026-11-14T22:00:00+00:00"
+    ],
+    "benchmark_return": -0.31805238982556305,
+    "strategy_return": -0.0015950903425999696,
+    "strategy_max_drawdown": 0.0024716744192387896
+   },
+   {
+    "window": [
+     "2026-10-11T16:00:00+00:00",
+     "2026-10-11T21:00:00+00:00"
+    ],
+    "benchmark_return": -0.008715811173430121,
+    "strategy_return": 0.00016589189922555647,
+    "strategy_max_drawdown": 9.497028981009237e-06
+   },
+   {
+    "window": [
+     "2026-10-10T19:00:00+00:00",
+     "2026-10-11T03:00:00+00:00"
+    ],
+    "benchmark_return": -0.006827628275385966,
+    "strategy_return": 0.0,
+    "strategy_max_drawdown": 0.0
+   }
+  ],
+  "funding_stress_windows": [
+   {
+    "regime": "highest funding",
+    "window": [
+     "2026-10-22T02:00:00+00:00",
+     "2026-10-29T01:00:00+00:00"
+    ],
+    "mean_funding_rate_per_bar": 1.1409317063492064e-05,
+    "mean_funding_rate_annualised": 0.09994561747619048,
+    "strategy_return": -0.00032455315276802565,
+    "strategy_max_drawdown": 0.0005622881038980232,
+    "strategy_funding_pnl": 0.015427420459281,
+    "benchmark_return": -0.04775454681434388
+   },
+   {
+    "regime": "highest funding",
+    "window": [
+     "2026-10-30T21:00:00+00:00",
+     "2026-11-06T20:00:00+00:00"
+    ],
+    "mean_funding_rate_per_bar": 1.0311334523809525e-05,
+    "mean_funding_rate_annualised": 0.09032729042857145,
+    "strategy_return": -0.00024952442426595667,
+    "strategy_max_drawdown": 0.00028513845382582836,
+    "strategy_funding_pnl": 0.006202627164418,
+    "benchmark_return": -0.024489285293168073
+   },
+   {
+    "regime": "lowest funding",
+    "window": [
+     "2026-10-10T00:00:00+00:00",
+     "2026-10-16T23:00:00+00:00"
+    ],
+    "mean_funding_rate_per_bar": 4.306724107142857e-06,
+    "mean_funding_rate_annualised": 0.03772690317857143,
+    "strategy_return": 4.603353844645497e-05,
+    "strategy_max_drawdown": 0.0005431383901466358,
+    "strategy_funding_pnl": -0.03428645698023,
+    "benchmark_return": -0.029465835661725448
+   },
+   {
+    "regime": "lowest funding",
+    "window": [
+     "2026-11-08T00:00:00+00:00",
+     "2026-11-14T23:00:00+00:00"
+    ],
+    "mean_funding_rate_per_bar": 8.724093551587302e-06,
+    "mean_funding_rate_annualised": 0.07642305951190477,
+    "strategy_return": -0.0008199289692236711,
+    "strategy_max_drawdown": 0.0008199289692236711,
+    "strategy_funding_pnl": 0.109173611316755,
+    "benchmark_return": -0.18879720277476952
+   }
+  ],
+  "test_evaluations": 1,
+  "benchmarks_by_split": {
+   "train": {
+    "perp_long_1x": {
+     "total_return": 0.12449639355086228,
+     "sharpe": 1.0677605120059495,
+     "max_drawdown": 0.2672296843769718
+    },
+    "buy_and_hold": {
+     "total_return": 0.14231834421381806,
+     "sharpe": 1.1840478822270286,
+     "max_drawdown": 0.2657638276128276
+    }
+   },
+   "validation": {
+    "perp_long_1x": {
+     "total_return": 0.013237233774564539,
+     "sharpe": 0.5286266497436918,
+     "max_drawdown": 0.10995363340090303
+    },
+    "buy_and_hold": {
+     "total_return": 0.021313335409495204,
+     "sharpe": 0.7232814939895919,
+     "max_drawdown": 0.10796482908055971
+    }
+   }
+  },
+  "execution_sensitivity": {
+   "split": "validation",
+   "runs": {
+    "as_reported": {
+     "total_return": -0.00509074797541087,
+     "sharpe": -2.6751099854971483,
+     "max_drawdown": 0.011073812305183894
+    },
+    "latency_300s": {
+     "total_return": -0.006545002070194483,
+     "sharpe": -3.350265132547196,
+     "max_drawdown": 0.01204128086293621
+    },
+    "impact_coefficient_x3": {
+     "total_return": -0.00509074797541087,
+     "sharpe": -2.6751099854971483,
+     "max_drawdown": 0.011073812305183894
+    }
+   }
+  }
+ },
+ "checks": {
+  "lookahead": "pass",
+  "data_quality": "pass",
+  "ledger": "pass",
+  "funding_alignment": "pass",
+  "notes": [
+   "V11 run on BTC, BTC@EDGEX, ETH, ETH@EDGEX, SOL, SOL@EDGEX; data snapshot 469830a143cdd618 (manifest 2026-11-15-v11.json)",
+   "maximum leverage and maintenance fraction of an instrument on another venue are taken from the same underlying on Hyperliquid (a simplification: edgeX allows more leverage and a lower maintenance margin)",
+   "no spot candles were supplied: benchmarks.buy_and_hold is the perpetual's own price held at 1x WITHOUT funding, not a spot position",
+   "equity_curve is the test split, valued at the close of each bar (timestamps are bar-open times, UTC)",
+   "cross-margin account in USDC; weights are signed fractions of account equity (negative = short)",
+   "funding: every hourly settlement is charged at the open of the bar that starts at its hour, on the position held coming into that bar: amount = -signed size x perpetual open x rate (Hyperliquid pays on the ORACLE price; historical oracle prices are not served, the perpetual's own price is used instead)",
+   "initial margin = notional / leverage, checked at order time: reducing orders always execute, orders adding exposure are cut pro rata to the free collateral or refused below the minimum order",
+   "maintenance margin = notional x flat fraction (Hyperliquid: half of the initial margin at maximum leverage); NO margin tiers by size",
+   "liquidation is intrabar: with every long at the bar's low and every short at its high together, the account is liquidated where margin equity = maintenance margin, at that price, plus taker fee and a penalty; the WHOLE account is closed (no partial liquidation, no backstop, no auto-deleveraging)",
+   "highs and lows are trade prices of the perpetual, not the venue's mark price (which is smoother): wicks liquidate here that might not on the venue",
+   "equity <= 0 marks the run wiped out: equity stays at 0, the unpaid loss is reported as bad debt",
+   "ledger in exact decimals; average entry price rounded half-even at 18 decimals, sizes truncated to the lot",
+   "max_drawdown and worst_intrabar_drawdown are positive fractions; sharpe/sortino/volatility are annualised with 8760 bars per year (24/7 market), risk-free rate 0",
+   "parameters on the test split are META['params']; the sensitivity grid never selects them",
+   "look-ahead check: truncation test on 864 bars, cuts at [0.5, 0.8], 864 decisions compared",
+   "v11 execution model: see execution_model (latency bound, size-dependent slippage, fees per venue, one account per venue); engine rules: see engine_parity"
+  ],
+  "data_quality_detail": {
+   "BTC": {
+    "symbol": "BTC",
+    "interval": "1h",
+    "source": "hyperliquid",
+    "n_bars": 4320,
+    "start": "2026-05-19T00:00:00+00:00",
+    "end": "2026-11-14T23:00:00+00:00",
+    "expected_bars": 4320,
+    "missing_bars": 0,
+    "max_gap_bars": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "unclosed_dropped": 0,
+    "off_grid": 0,
+    "ohlc_violations": 0,
+    "missing_fraction": 0.0
+   },
+   "BTC@EDGEX": {
+    "symbol": "BTC@EDGEX",
+    "interval": "1h",
+    "source": "edgex",
+    "n_bars": 4320,
+    "start": "2026-05-19T00:00:00+00:00",
+    "end": "2026-11-14T23:00:00+00:00",
+    "expected_bars": 4320,
+    "missing_bars": 0,
+    "max_gap_bars": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "unclosed_dropped": 0,
+    "off_grid": 0,
+    "ohlc_violations": 0,
+    "missing_fraction": 0.0
+   },
+   "ETH": {
+    "symbol": "ETH",
+    "interval": "1h",
+    "source": "hyperliquid",
+    "n_bars": 4320,
+    "start": "2026-05-19T00:00:00+00:00",
+    "end": "2026-11-14T23:00:00+00:00",
+    "expected_bars": 4320,
+    "missing_bars": 0,
+    "max_gap_bars": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "unclosed_dropped": 0,
+    "off_grid": 0,
+    "ohlc_violations": 0,
+    "missing_fraction": 0.0
+   },
+   "ETH@EDGEX": {
+    "symbol": "ETH@EDGEX",
+    "interval": "1h",
+    "source": "edgex",
+    "n_bars": 4320,
+    "start": "2026-05-19T00:00:00+00:00",
+    "end": "2026-11-14T23:00:00+00:00",
+    "expected_bars": 4320,
+    "missing_bars": 0,
+    "max_gap_bars": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "unclosed_dropped": 0,
+    "off_grid": 0,
+    "ohlc_violations": 0,
+    "missing_fraction": 0.0
+   },
+   "SOL": {
+    "symbol": "SOL",
+    "interval": "1h",
+    "source": "hyperliquid",
+    "n_bars": 4320,
+    "start": "2026-05-19T00:00:00+00:00",
+    "end": "2026-11-14T23:00:00+00:00",
+    "expected_bars": 4320,
+    "missing_bars": 0,
+    "max_gap_bars": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "unclosed_dropped": 0,
+    "off_grid": 0,
+    "ohlc_violations": 0,
+    "missing_fraction": 0.0
+   },
+   "SOL@EDGEX": {
+    "symbol": "SOL@EDGEX",
+    "interval": "1h",
+    "source": "edgex",
+    "n_bars": 4320,
+    "start": "2026-05-19T00:00:00+00:00",
+    "end": "2026-11-14T23:00:00+00:00",
+    "expected_bars": 4320,
+    "missing_bars": 0,
+    "max_gap_bars": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "unclosed_dropped": 0,
+    "off_grid": 0,
+    "ohlc_violations": 0,
+    "missing_fraction": 0.0
+   }
+  },
+  "funding_quality_detail": {
+   "BTC": {
+    "symbol": "BTC",
+    "source": "hyperliquid",
+    "n": 4320,
+    "start": "2026-05-19T00:00:00+00:00",
+    "end": "2026-11-14T23:00:00+00:00",
+    "expected": 4320,
+    "missing": 0,
+    "max_gap": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "off_grid": 0,
+    "max_offset_ms": 147,
+    "non_finite": 0,
+    "unsettled_dropped": 0,
+    "missing_fraction": 0.0
+   },
+   "BTC@EDGEX": {
+    "symbol": "BTC@EDGEX",
+    "source": "edgex",
+    "n": 1080,
+    "start": "2026-05-19T00:00:00+00:00",
+    "end": "2026-11-14T20:00:00+00:00",
+    "expected": 1080,
+    "missing": 0,
+    "max_gap": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "off_grid": 0,
+    "max_offset_ms": 0,
+    "non_finite": 0,
+    "unsettled_dropped": 0,
+    "missing_fraction": 0.0
+   },
+   "ETH": {
+    "symbol": "ETH",
+    "source": "hyperliquid",
+    "n": 4320,
+    "start": "2026-05-19T00:00:00+00:00",
+    "end": "2026-11-14T23:00:00+00:00",
+    "expected": 4320,
+    "missing": 0,
+    "max_gap": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "off_grid": 0,
+    "max_offset_ms": 147,
+    "non_finite": 0,
+    "unsettled_dropped": 0,
+    "missing_fraction": 0.0
+   },
+   "ETH@EDGEX": {
+    "symbol": "ETH@EDGEX",
+    "source": "edgex",
+    "n": 1080,
+    "start": "2026-05-19T00:00:00+00:00",
+    "end": "2026-11-14T20:00:00+00:00",
+    "expected": 1080,
+    "missing": 0,
+    "max_gap": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "off_grid": 0,
+    "max_offset_ms": 0,
+    "non_finite": 0,
+    "unsettled_dropped": 0,
+    "missing_fraction": 0.0
+   },
+   "SOL": {
+    "symbol": "SOL",
+    "source": "hyperliquid",
+    "n": 4320,
+    "start": "2026-05-19T00:00:00+00:00",
+    "end": "2026-11-14T23:00:00+00:00",
+    "expected": 4320,
+    "missing": 0,
+    "max_gap": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "off_grid": 0,
+    "max_offset_ms": 147,
+    "non_finite": 0,
+    "unsettled_dropped": 0,
+    "missing_fraction": 0.0
+   },
+   "SOL@EDGEX": {
+    "symbol": "SOL@EDGEX",
+    "source": "edgex",
+    "n": 1080,
+    "start": "2026-05-19T00:00:00+00:00",
+    "end": "2026-11-14T20:00:00+00:00",
+    "expected": 1080,
+    "missing": 0,
+    "max_gap": 0,
+    "gaps": [],
+    "duplicates_dropped": 0,
+    "off_grid": 0,
+    "max_offset_ms": 0,
+    "non_finite": 0,
+    "unsettled_dropped": 0,
+    "missing_fraction": 0.0
+   }
+  },
+  "funding_alignment_detail": {
+   "BTC": {
+    "column_matches_settlements": true,
+    "max_offset_ms": 147,
+    "bars": 4320,
+    "bars_with_funding": 4320,
+    "bars_without_funding": 0
+   },
+   "BTC@EDGEX": {
+    "column_matches_settlements": true,
+    "max_offset_ms": 0,
+    "bars": 4320,
+    "bars_with_funding": 4320,
+    "bars_without_funding": 0
+   },
+   "ETH": {
+    "column_matches_settlements": true,
+    "max_offset_ms": 147,
+    "bars": 4320,
+    "bars_with_funding": 4320,
+    "bars_without_funding": 0
+   },
+   "ETH@EDGEX": {
+    "column_matches_settlements": true,
+    "max_offset_ms": 0,
+    "bars": 4320,
+    "bars_with_funding": 4320,
+    "bars_without_funding": 0
+   },
+   "SOL": {
+    "column_matches_settlements": true,
+    "max_offset_ms": 147,
+    "bars": 4320,
+    "bars_with_funding": 4320,
+    "bars_without_funding": 0
+   },
+   "SOL@EDGEX": {
+    "column_matches_settlements": true,
+    "max_offset_ms": 0,
+    "bars": 4320,
+    "bars_with_funding": 4320,
+    "bars_without_funding": 0
+   }
+  }
+ },
+ "ledger": {
+  "train": {
+   "initial": "1000",
+   "realised_pnl": "5.98809611111111111111",
+   "funding": "1.317093773071736",
+   "fees": "1.5122692598546511",
+   "liquidation_penalties": "0",
+   "slippage": "0.3608747297428",
+   "unrealised_pnl": "-3.54551611111111111112",
+   "bad_debt_written_off": "0",
+   "collateral": "1003.74486885095523801111",
+   "final_equity": "1000.19935273984412689999",
+   "from_logs": "1000.19935273984412689999",
+   "reconciles": true,
+   "latency": "1.687177043630158"
+  },
+  "validation": {
+   "initial": "1000",
+   "realised_pnl": "-2.44172999999999999998",
+   "funding": "0.605226011717971",
+   "fees": "1.237192720618505805",
+   "liquidation_penalties": "0",
+   "slippage": "0.2981922509433",
+   "unrealised_pnl": "0",
+   "bad_debt_written_off": "0",
+   "collateral": "994.90925202458917319502",
+   "final_equity": "994.90925202458917319502",
+   "from_logs": "994.90925202458917319502",
+   "reconciles": true,
+   "latency": "1.718859015566992"
+  },
+  "test": {
+   "initial": "1000",
+   "realised_pnl": "0.23896",
+   "funding": "0.123282121250119",
+   "fees": "0.95169601826292447",
+   "liquidation_penalties": "0",
+   "slippage": "0.2846733697014",
+   "unrealised_pnl": "-0.4114299999999999996",
+   "bad_debt_written_off": "0",
+   "collateral": "998.27399919143389453",
+   "final_equity": "997.8625691914338945304",
+   "from_logs": "997.8625691914338945304",
+   "reconciles": true,
+   "latency": "0.8518735418519"
+  }
+ },
+ "liquidations": {
+  "train": [],
+  "validation": [],
+  "test": []
+ },
+ "funding": {
+  "train": {
+   "BTC": {
+    "bars": 2592,
+    "bars_with_funding": 2592,
+    "mean_rate_per_bar": 8.534542091049383e-06,
+    "mean_rate_annualised": 0.0747625887175926,
+    "min_rate": -2.71754e-05,
+    "max_rate": 3.7785e-05,
+    "positive_fraction": 0.8834876543209876,
+    "sum_of_rates": 0.022121533100000004,
+    "median_abs_premium": 0.00038520730000000003
+   },
+   "BTC@EDGEX": {
+    "bars": 2592,
+    "bars_with_funding": 2592,
+    "mean_rate_per_bar": 5.725189043209879e-06,
+    "mean_rate_annualised": 0.05015265601851854,
+    "min_rate": -5.995e-05,
+    "max_rate": 5e-05,
+    "positive_fraction": 0.18518518518518517,
+    "sum_of_rates": 0.014839690000000006,
+    "median_abs_premium": 0.000130895
+   },
+   "ETH": {
+    "bars": 2592,
+    "bars_with_funding": 2592,
+    "mean_rate_per_bar": 8.495913734567904e-06,
+    "mean_rate_annualised": 0.07442420431481483,
+    "min_rate": -3.48251e-05,
+    "max_rate": 8.34438e-05,
+    "positive_fraction": 0.871141975308642,
+    "sum_of_rates": 0.022021408400000005,
+    "median_abs_premium": 0.00035913555
+   },
+   "ETH@EDGEX": {
+    "bars": 2592,
+    "bars_with_funding": 2592,
+    "mean_rate_per_bar": 9.518638117283952e-06,
+    "mean_rate_annualised": 0.08338326990740742,
+    "min_rate": -0.002,
+    "max_rate": 5.429e-05,
+    "positive_fraction": 0.22916666666666666,
+    "sum_of_rates": 0.024672310000000006,
+    "median_abs_premium": 0.00013639000000000001
+   },
+   "SOL": {
+    "bars": 2592,
+    "bars_with_funding": 2592,
+    "mean_rate_per_bar": 4.653851273148149e-06,
+    "mean_rate_annualised": 0.04076773715277778,
+    "min_rate": -9.66794e-05,
+    "max_rate": 9.7525e-05,
+    "positive_fraction": 0.7465277777777778,
+    "sum_of_rates": 0.012062782500000003,
+    "median_abs_premium": 0.00042635255000000004
+   },
+   "SOL@EDGEX": {
+    "bars": 2592,
+    "bars_with_funding": 2592,
+    "mean_rate_per_bar": 1.0526006944444447e-05,
+    "mean_rate_annualised": 0.09220782083333336,
+    "min_rate": -0.002,
+    "max_rate": 5.104e-05,
+    "positive_fraction": 0.23958333333333334,
+    "sum_of_rates": 0.027283410000000004,
+    "median_abs_premium": 6.5895e-05
+   }
+  },
+  "validation": {
+   "BTC": {
+    "bars": 864,
+    "bars_with_funding": 864,
+    "mean_rate_per_bar": 1.0038558333333336e-05,
+    "mean_rate_annualised": 0.08793777100000003,
+    "min_rate": -1.59518e-05,
+    "max_rate": 8.97697e-05,
+    "positive_fraction": 0.9212962962962963,
+    "sum_of_rates": 0.008673314400000002,
+    "median_abs_premium": 0.00037679555
+   },
+   "BTC@EDGEX": {
+    "bars": 864,
+    "bars_with_funding": 864,
+    "mean_rate_per_bar": 3.6790046296296314e-06,
+    "mean_rate_annualised": 0.03222808055555557,
+    "min_rate": -5.976e-05,
+    "max_rate": 5e-05,
+    "positive_fraction": 0.16550925925925927,
+    "sum_of_rates": 0.0031786600000000016,
+    "median_abs_premium": 0.00012579
+   },
+   "ETH": {
+    "bars": 864,
+    "bars_with_funding": 864,
+    "mean_rate_per_bar": 1.1329531597222225e-05,
+    "mean_rate_annualised": 0.09924669679166669,
+    "min_rate": -1.72706e-05,
+    "max_rate": 5.12319e-05,
+    "positive_fraction": 0.9548611111111112,
+    "sum_of_rates": 0.009788715300000002,
+    "median_abs_premium": 0.00025841704999999995
+   },
+   "ETH@EDGEX": {
+    "bars": 864,
+    "bars_with_funding": 864,
+    "mean_rate_per_bar": 1.0721770833333337e-05,
+    "mean_rate_annualised": 0.09392271250000003,
+    "min_rate": -5.343e-05,
+    "max_rate": 5e-05,
+    "positive_fraction": 0.2326388888888889,
+    "sum_of_rates": 0.009263610000000004,
+    "median_abs_premium": 0.0001231
+   },
+   "SOL": {
+    "bars": 864,
+    "bars_with_funding": 864,
+    "mean_rate_per_bar": 8.479882175925927e-06,
+    "mean_rate_annualised": 0.07428376786111111,
+    "min_rate": -2.85282e-05,
+    "max_rate": 3.34341e-05,
+    "positive_fraction": 0.875,
+    "sum_of_rates": 0.0073266182,
+    "median_abs_premium": 0.00039084745
+   },
+   "SOL@EDGEX": {
+    "bars": 864,
+    "bars_with_funding": 864,
+    "mean_rate_per_bar": 1.0569699074074079e-05,
+    "mean_rate_annualised": 0.09259056388888892,
+    "min_rate": -0.00017628,
+    "max_rate": 5e-05,
+    "positive_fraction": 0.2326388888888889,
+    "sum_of_rates": 0.009132220000000003,
+    "median_abs_premium": 5.494e-05
+   }
+  },
+  "test": {
+   "BTC": {
+    "bars": 864,
+    "bars_with_funding": 864,
+    "mean_rate_per_bar": 1.015116550925926e-05,
+    "mean_rate_annualised": 0.08892420986111112,
+    "min_rate": -1.79021e-05,
+    "max_rate": 1.25e-05,
+    "positive_fraction": 0.9375,
+    "sum_of_rates": 0.008770607000000001,
+    "median_abs_premium": 0.00030924245
+   },
+   "BTC@EDGEX": {
+    "bars": 864,
+    "bars_with_funding": 864,
+    "mean_rate_per_bar": 1.1170011574074076e-05,
+    "mean_rate_annualised": 0.0978493013888889,
+    "min_rate": -5.733e-05,
+    "max_rate": 5e-05,
+    "positive_fraction": 0.23726851851851852,
+    "sum_of_rates": 0.009650890000000002,
+    "median_abs_premium": 0.00017088500000000001
+   },
+   "ETH": {
+    "bars": 864,
+    "bars_with_funding": 864,
+    "mean_rate_per_bar": 7.107773726851852e-06,
+    "mean_rate_annualised": 0.06226409784722223,
+    "min_rate": -7.67115e-05,
+    "max_rate": 1.25e-05,
+    "positive_fraction": 0.8553240740740741,
+    "sum_of_rates": 0.0061411165,
+    "median_abs_premium": 0.0004002189
+   },
+   "ETH@EDGEX": {
+    "bars": 864,
+    "bars_with_funding": 864,
+    "mean_rate_per_bar": 7.396817129629632e-06,
+    "mean_rate_annualised": 0.06479611805555557,
+    "min_rate": -5.47e-05,
+    "max_rate": 5e-05,
+    "positive_fraction": 0.20023148148148148,
+    "sum_of_rates": 0.006390850000000002,
+    "median_abs_premium": 0.000173125
+   },
+   "SOL": {
+    "bars": 864,
+    "bars_with_funding": 864,
+    "mean_rate_per_bar": 6.564573032407409e-06,
+    "mean_rate_annualised": 0.0575056597638889,
+    "min_rate": -3.49943e-05,
+    "max_rate": 1.25e-05,
+    "positive_fraction": 0.8194444444444444,
+    "sum_of_rates": 0.005671791100000001,
+    "median_abs_premium": 0.00040757475
+   },
+   "SOL@EDGEX": {
+    "bars": 864,
+    "bars_with_funding": 864,
+    "mean_rate_per_bar": 1.0186134259259262e-05,
+    "mean_rate_annualised": 0.08923053611111113,
+    "min_rate": -5.919e-05,
+    "max_rate": 5e-05,
+    "positive_fraction": 0.22800925925925927,
+    "sum_of_rates": 0.008800820000000003,
+    "median_abs_premium": 0.00010074
+   }
+  }
+ },
+ "equity_curve": [
+  [
+   "2026-10-10T00:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T01:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T02:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T03:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T04:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T05:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T06:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T07:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T08:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T09:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T10:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T11:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T12:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T13:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T14:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T15:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T16:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T17:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T18:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T19:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T20:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T21:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T22:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-10T23:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T00:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T01:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T02:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T03:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T04:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T05:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T06:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T07:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T08:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T09:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T10:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T11:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T12:00:00+00:00",
+   1000.0
+  ],
+  [
+   "2026-10-11T13:00:00+00:00",
+   999.74192
+  ],
+  [
+   "2026-10-11T14:00:00+00:00",
+   999.761278
+  ],
+  [
+   "2026-10-11T15:00:00+00:00",
+   999.579659
+  ],
+  [
+   "2026-10-11T16:00:00+00:00",
+   999.486411
+  ],
+  [
+   "2026-10-11T17:00:00+00:00",
+   999.567334
+  ],
+  [
+   "2026-10-11T18:00:00+00:00",
+   999.596853
+  ],
+  [
+   "2026-10-11T19:00:00+00:00",
+   999.610663
+  ],
+  [
+   "2026-10-11T20:00:00+00:00",
+   999.661712
+  ],
+  [
+   "2026-10-11T21:00:00+00:00",
+   999.652218
+  ],
+  [
+   "2026-10-11T22:00:00+00:00",
+   999.619414
+  ],
+  [
+   "2026-10-11T23:00:00+00:00",
+   999.602416
+  ],
+  [
+   "2026-10-12T00:00:00+00:00",
+   999.630258
+  ],
+  [
+   "2026-10-12T01:00:00+00:00",
+   999.59387
+  ],
+  [
+   "2026-10-12T02:00:00+00:00",
+   999.538981
+  ],
+  [
+   "2026-10-12T03:00:00+00:00",
+   999.523599
+  ],
+  [
+   "2026-10-12T04:00:00+00:00",
+   999.456991
+  ],
+  [
+   "2026-10-12T05:00:00+00:00",
+   999.481329
+  ],
+  [
+   "2026-10-12T06:00:00+00:00",
+   999.456862
+  ],
+  [
+   "2026-10-12T07:00:00+00:00",
+   999.555391
+  ],
+  [
+   "2026-10-12T08:00:00+00:00",
+   999.58924
+  ],
+  [
+   "2026-10-12T09:00:00+00:00",
+   999.576053
+  ],
+  [
+   "2026-10-12T10:00:00+00:00",
+   999.623267
+  ],
+  [
+   "2026-10-12T11:00:00+00:00",
+   999.776779
+  ],
+  [
+   "2026-10-12T12:00:00+00:00",
+   999.757571
+  ],
+  [
+   "2026-10-12T13:00:00+00:00",
+   999.663259
+  ],
+  [
+   "2026-10-12T14:00:00+00:00",
+   999.839651
+  ],
+  [
+   "2026-10-12T15:00:00+00:00",
+   999.885813
+  ],
+  [
+   "2026-10-12T16:00:00+00:00",
+   999.969908
+  ],
+  [
+   "2026-10-12T17:00:00+00:00",
+   999.934855
+  ],
+  [
+   "2026-10-12T18:00:00+00:00",
+   999.937353
+  ],
+  [
+   "2026-10-12T19:00:00+00:00",
+   999.833995
+  ],
+  [
+   "2026-10-12T20:00:00+00:00",
+   999.857321
+  ],
+  [
+   "2026-10-12T21:00:00+00:00",
+   999.987779
+  ],
+  [
+   "2026-10-12T22:00:00+00:00",
+   1000.045614
+  ],
+  [
+   "2026-10-12T23:00:00+00:00",
+   1000.054105
+  ],
+  [
+   "2026-10-13T00:00:00+00:00",
+   1000.32013
+  ],
+  [
+   "2026-10-13T01:00:00+00:00",
+   1000.096692
+  ],
+  [
+   "2026-10-13T02:00:00+00:00",
+   1000.01433
+  ],
+  [
+   "2026-10-13T03:00:00+00:00",
+   999.896458
+  ],
+  [
+   "2026-10-13T04:00:00+00:00",
+   999.900178
+  ],
+  [
+   "2026-10-13T05:00:00+00:00",
+   999.940703
+  ],
+  [
+   "2026-10-13T06:00:00+00:00",
+   999.850955
+  ],
+  [
+   "2026-10-13T07:00:00+00:00",
+   999.843475
+  ],
+  [
+   "2026-10-13T08:00:00+00:00",
+   999.939743
+  ],
+  [
+   "2026-10-13T09:00:00+00:00",
+   999.973784
+  ],
+  [
+   "2026-10-13T10:00:00+00:00",
+   1000.033295
+  ],
+  [
+   "2026-10-13T11:00:00+00:00",
+   1000.056438
+  ],
+  [
+   "2026-10-13T12:00:00+00:00",
+   1000.003266
+  ],
+  [
+   "2026-10-13T13:00:00+00:00",
+   1000.007994
+  ],
+  [
+   "2026-10-13T14:00:00+00:00",
+   999.890922
+  ],
+  [
+   "2026-10-13T15:00:00+00:00",
+   1000.008663
+  ],
+  [
+   "2026-10-13T16:00:00+00:00",
+   999.97752
+  ],
+  [
+   "2026-10-13T17:00:00+00:00",
+   1000.021061
+  ],
+  [
+   "2026-10-13T18:00:00+00:00",
+   999.892033
+  ],
+  [
+   "2026-10-13T19:00:00+00:00",
+   999.955279
+  ],
+  [
+   "2026-10-13T20:00:00+00:00",
+   999.952839
+  ],
+  [
+   "2026-10-13T21:00:00+00:00",
+   999.953973
+  ],
+  [
+   "2026-10-13T22:00:00+00:00",
+   1000.002507
+  ],
+  [
+   "2026-10-13T23:00:00+00:00",
+   1000.031339
+  ],
+  [
+   "2026-10-14T00:00:00+00:00",
+   999.943831
+  ],
+  [
+   "2026-10-14T01:00:00+00:00",
+   999.987471
+  ],
+  [
+   "2026-10-14T02:00:00+00:00",
+   999.93881
+  ],
+  [
+   "2026-10-14T03:00:00+00:00",
+   999.909755
+  ],
+  [
+   "2026-10-14T04:00:00+00:00",
+   999.922902
+  ],
+  [
+   "2026-10-14T05:00:00+00:00",
+   1000.00535
+  ],
+  [
+   "2026-10-14T06:00:00+00:00",
+   999.966085
+  ],
+  [
+   "2026-10-14T07:00:00+00:00",
+   999.89282
+  ],
+  [
+   "2026-10-14T08:00:00+00:00",
+   999.986984
+  ],
+  [
+   "2026-10-14T09:00:00+00:00",
+   1000.044916
+  ],
+  [
+   "2026-10-14T10:00:00+00:00",
+   999.966441
+  ],
+  [
+   "2026-10-14T11:00:00+00:00",
+   999.970609
+  ],
+  [
+   "2026-10-14T12:00:00+00:00",
+   1000.140688
+  ],
+  [
+   "2026-10-14T13:00:00+00:00",
+   1000.194074
+  ],
+  [
+   "2026-10-14T14:00:00+00:00",
+   1000.19731
+  ],
+  [
+   "2026-10-14T15:00:00+00:00",
+   1000.311669
+  ],
+  [
+   "2026-10-14T16:00:00+00:00",
+   1000.130478
+  ],
+  [
+   "2026-10-14T17:00:00+00:00",
+   1000.235981
+  ],
+  [
+   "2026-10-14T18:00:00+00:00",
+   1000.183697
+  ],
+  [
+   "2026-10-14T19:00:00+00:00",
+   1000.231069
+  ],
+  [
+   "2026-10-14T20:00:00+00:00",
+   1000.178734
+  ],
+  [
+   "2026-10-14T21:00:00+00:00",
+   1000.134769
+  ],
+  [
+   "2026-10-14T22:00:00+00:00",
+   1000.188862
+  ],
+  [
+   "2026-10-14T23:00:00+00:00",
+   1000.129703
+  ],
+  [
+   "2026-10-15T00:00:00+00:00",
+   1000.128838
+  ],
+  [
+   "2026-10-15T01:00:00+00:00",
+   1000.165713
+  ],
+  [
+   "2026-10-15T02:00:00+00:00",
+   1000.174546
+  ],
+  [
+   "2026-10-15T03:00:00+00:00",
+   1000.285183
+  ],
+  [
+   "2026-10-15T04:00:00+00:00",
+   1000.169985
+  ],
+  [
+   "2026-10-15T05:00:00+00:00",
+   1000.327463
+  ],
+  [
+   "2026-10-15T06:00:00+00:00",
+   1000.307979
+  ],
+  [
+   "2026-10-15T07:00:00+00:00",
+   1000.200446
+  ],
+  [
+   "2026-10-15T08:00:00+00:00",
+   1000.217789
+  ],
+  [
+   "2026-10-15T09:00:00+00:00",
+   1000.199321
+  ],
+  [
+   "2026-10-15T10:00:00+00:00",
+   1000.24001
+  ],
+  [
+   "2026-10-15T11:00:00+00:00",
+   1000.33527
+  ],
+  [
+   "2026-10-15T12:00:00+00:00",
+   1000.322432
+  ],
+  [
+   "2026-10-15T13:00:00+00:00",
+   1000.332771
+  ],
+  [
+   "2026-10-15T14:00:00+00:00",
+   1000.087038
+  ],
+  [
+   "2026-10-15T15:00:00+00:00",
+   1000.05083
+  ],
+  [
+   "2026-10-15T16:00:00+00:00",
+   1000.028057
+  ],
+  [
+   "2026-10-15T17:00:00+00:00",
+   1000.045504
+  ],
+  [
+   "2026-10-15T18:00:00+00:00",
+   999.991116
+  ],
+  [
+   "2026-10-15T19:00:00+00:00",
+   999.98873
+  ],
+  [
+   "2026-10-15T20:00:00+00:00",
+   1000.076377
+  ],
+  [
+   "2026-10-15T21:00:00+00:00",
+   1000.009848
+  ],
+  [
+   "2026-10-15T22:00:00+00:00",
+   999.997478
+  ],
+  [
+   "2026-10-15T23:00:00+00:00",
+   1000.027289
+  ],
+  [
+   "2026-10-16T00:00:00+00:00",
+   1000.068563
+  ],
+  [
+   "2026-10-16T01:00:00+00:00",
+   1000.072628
+  ],
+  [
+   "2026-10-16T02:00:00+00:00",
+   999.993127
+  ],
+  [
+   "2026-10-16T03:00:00+00:00",
+   1000.07234
+  ],
+  [
+   "2026-10-16T04:00:00+00:00",
+   999.970993
+  ],
+  [
+   "2026-10-16T05:00:00+00:00",
+   1000.009802
+  ],
+  [
+   "2026-10-16T06:00:00+00:00",
+   999.904799
+  ],
+  [
+   "2026-10-16T07:00:00+00:00",
+   999.930519
+  ],
+  [
+   "2026-10-16T08:00:00+00:00",
+   999.908338
+  ],
+  [
+   "2026-10-16T09:00:00+00:00",
+   999.959566
+  ],
+  [
+   "2026-10-16T10:00:00+00:00",
+   999.873543
+  ],
+  [
+   "2026-10-16T11:00:00+00:00",
+   999.915371
+  ],
+  [
+   "2026-10-16T12:00:00+00:00",
+   1000.056878
+  ],
+  [
+   "2026-10-16T13:00:00+00:00",
+   999.986447
+  ],
+  [
+   "2026-10-16T14:00:00+00:00",
+   1000.042325
+  ],
+  [
+   "2026-10-16T15:00:00+00:00",
+   1000.160103
+  ],
+  [
+   "2026-10-16T16:00:00+00:00",
+   1000.150141
+  ],
+  [
+   "2026-10-16T17:00:00+00:00",
+   1000.108622
+  ],
+  [
+   "2026-10-16T18:00:00+00:00",
+   1000.234401
+  ],
+  [
+   "2026-10-16T19:00:00+00:00",
+   1000.163293
+  ],
+  [
+   "2026-10-16T20:00:00+00:00",
+   1000.043916
+  ],
+  [
+   "2026-10-16T21:00:00+00:00",
+   1000.061374
+  ],
+  [
+   "2026-10-16T22:00:00+00:00",
+   1000.060178
+  ],
+  [
+   "2026-10-16T23:00:00+00:00",
+   1000.046034
+  ],
+  [
+   "2026-10-17T00:00:00+00:00",
+   1000.044115
+  ],
+  [
+   "2026-10-17T01:00:00+00:00",
+   1000.038016
+  ],
+  [
+   "2026-10-17T02:00:00+00:00",
+   1000.069289
+  ],
+  [
+   "2026-10-17T03:00:00+00:00",
+   999.962191
+  ],
+  [
+   "2026-10-17T04:00:00+00:00",
+   999.983478
+  ],
+  [
+   "2026-10-17T05:00:00+00:00",
+   1000.050809
+  ],
+  [
+   "2026-10-17T06:00:00+00:00",
+   1000.013854
+  ],
+  [
+   "2026-10-17T07:00:00+00:00",
+   1000.002187
+  ],
+  [
+   "2026-10-17T08:00:00+00:00",
+   1000.000265
+  ],
+  [
+   "2026-10-17T09:00:00+00:00",
+   999.799764
+  ],
+  [
+   "2026-10-17T10:00:00+00:00",
+   999.816137
+  ],
+  [
+   "2026-10-17T11:00:00+00:00",
+   999.818494
+  ],
+  [
+   "2026-10-17T12:00:00+00:00",
+   999.918998
+  ],
+  [
+   "2026-10-17T13:00:00+00:00",
+   999.610511
+  ],
+  [
+   "2026-10-17T14:00:00+00:00",
+   999.642202
+  ],
+  [
+   "2026-10-17T15:00:00+00:00",
+   999.687531
+  ],
+  [
+   "2026-10-17T16:00:00+00:00",
+   999.694102
+  ],
+  [
+   "2026-10-17T17:00:00+00:00",
+   999.675142
+  ],
+  [
+   "2026-10-17T18:00:00+00:00",
+   999.67966
+  ],
+  [
+   "2026-10-17T19:00:00+00:00",
+   999.69355
+  ],
+  [
+   "2026-10-17T20:00:00+00:00",
+   999.661332
+  ],
+  [
+   "2026-10-17T21:00:00+00:00",
+   999.751393
+  ],
+  [
+   "2026-10-17T22:00:00+00:00",
+   999.719198
+  ],
+  [
+   "2026-10-17T23:00:00+00:00",
+   999.694211
+  ],
+  [
+   "2026-10-18T00:00:00+00:00",
+   999.702589
+  ],
+  [
+   "2026-10-18T01:00:00+00:00",
+   999.728743
+  ],
+  [
+   "2026-10-18T02:00:00+00:00",
+   999.682592
+  ],
+  [
+   "2026-10-18T03:00:00+00:00",
+   999.654244
+  ],
+  [
+   "2026-10-18T04:00:00+00:00",
+   999.677044
+  ],
+  [
+   "2026-10-18T05:00:00+00:00",
+   999.698677
+  ],
+  [
+   "2026-10-18T06:00:00+00:00",
+   999.700324
+  ],
+  [
+   "2026-10-18T07:00:00+00:00",
+   999.68674
+  ],
+  [
+   "2026-10-18T08:00:00+00:00",
+   999.650027
+  ],
+  [
+   "2026-10-18T09:00:00+00:00",
+   999.64438
+  ],
+  [
+   "2026-10-18T10:00:00+00:00",
+   999.655093
+  ],
+  [
+   "2026-10-18T11:00:00+00:00",
+   999.672552
+  ],
+  [
+   "2026-10-18T12:00:00+00:00",
+   999.669568
+  ],
+  [
+   "2026-10-18T13:00:00+00:00",
+   999.688826
+  ],
+  [
+   "2026-10-18T14:00:00+00:00",
+   999.769975
+  ],
+  [
+   "2026-10-18T15:00:00+00:00",
+   999.75408
+  ],
+  [
+   "2026-10-18T16:00:00+00:00",
+   999.772826
+  ],
+  [
+   "2026-10-18T17:00:00+00:00",
+   999.789881
+  ],
+  [
+   "2026-10-18T18:00:00+00:00",
+   999.75969
+  ],
+  [
+   "2026-10-18T19:00:00+00:00",
+   999.85431
+  ],
+  [
+   "2026-10-18T20:00:00+00:00",
+   999.775844
+  ],
+  [
+   "2026-10-18T21:00:00+00:00",
+   999.768502
+  ],
+  [
+   "2026-10-18T22:00:00+00:00",
+   999.696662
+  ],
+  [
+   "2026-10-18T23:00:00+00:00",
+   999.664033
+  ],
+  [
+   "2026-10-19T00:00:00+00:00",
+   999.68683
+  ],
+  [
+   "2026-10-19T01:00:00+00:00",
+   999.661535
+  ],
+  [
+   "2026-10-19T02:00:00+00:00",
+   999.662499
+  ],
+  [
+   "2026-10-19T03:00:00+00:00",
+   999.689114
+  ],
+  [
+   "2026-10-19T04:00:00+00:00",
+   999.689264
+  ],
+  [
+   "2026-10-19T05:00:00+00:00",
+   999.66533
+  ],
+  [
+   "2026-10-19T06:00:00+00:00",
+   999.679229
+  ],
+  [
+   "2026-10-19T07:00:00+00:00",
+   999.664447
+  ],
+  [
+   "2026-10-19T08:00:00+00:00",
+   999.640133
+  ],
+  [
+   "2026-10-19T09:00:00+00:00",
+   999.654605
+  ],
+  [
+   "2026-10-19T10:00:00+00:00",
+   999.674778
+  ],
+  [
+   "2026-10-19T11:00:00+00:00",
+   999.680543
+  ],
+  [
+   "2026-10-19T12:00:00+00:00",
+   999.732153
+  ],
+  [
+   "2026-10-19T13:00:00+00:00",
+   999.717215
+  ],
+  [
+   "2026-10-19T14:00:00+00:00",
+   999.67148
+  ],
+  [
+   "2026-10-19T15:00:00+00:00",
+   999.712884
+  ],
+  [
+   "2026-10-19T16:00:00+00:00",
+   999.747902
+  ],
+  [
+   "2026-10-19T17:00:00+00:00",
+   999.735649
+  ],
+  [
+   "2026-10-19T18:00:00+00:00",
+   999.720678
+  ],
+  [
+   "2026-10-19T19:00:00+00:00",
+   999.722448
+  ],
+  [
+   "2026-10-19T20:00:00+00:00",
+   999.692963
+  ],
+  [
+   "2026-10-19T21:00:00+00:00",
+   999.713517
+  ],
+  [
+   "2026-10-19T22:00:00+00:00",
+   999.456117
+  ],
+  [
+   "2026-10-19T23:00:00+00:00",
+   999.259038
+  ],
+  [
+   "2026-10-20T00:00:00+00:00",
+   999.348766
+  ],
+  [
+   "2026-10-20T01:00:00+00:00",
+   999.297727
+  ],
+  [
+   "2026-10-20T02:00:00+00:00",
+   999.361869
+  ],
+  [
+   "2026-10-20T03:00:00+00:00",
+   999.307051
+  ],
+  [
+   "2026-10-20T04:00:00+00:00",
+   999.286734
+  ],
+  [
+   "2026-10-20T05:00:00+00:00",
+   999.333899
+  ],
+  [
+   "2026-10-20T06:00:00+00:00",
+   999.30938
+  ],
+  [
+   "2026-10-20T07:00:00+00:00",
+   999.24945
+  ],
+  [
+   "2026-10-20T08:00:00+00:00",
+   999.277568
+  ],
+  [
+   "2026-10-20T09:00:00+00:00",
+   999.350455
+  ],
+  [
+   "2026-10-20T10:00:00+00:00",
+   999.308856
+  ],
+  [
+   "2026-10-20T11:00:00+00:00",
+   999.309541
+  ],
+  [
+   "2026-10-20T12:00:00+00:00",
+   999.283293
+  ],
+  [
+   "2026-10-20T13:00:00+00:00",
+   999.407124
+  ],
+  [
+   "2026-10-20T14:00:00+00:00",
+   999.323164
+  ],
+  [
+   "2026-10-20T15:00:00+00:00",
+   999.299739
+  ],
+  [
+   "2026-10-20T16:00:00+00:00",
+   999.293267
+  ],
+  [
+   "2026-10-20T17:00:00+00:00",
+   999.353388
+  ],
+  [
+   "2026-10-20T18:00:00+00:00",
+   999.314731
+  ],
+  [
+   "2026-10-20T19:00:00+00:00",
+   999.250021
+  ],
+  [
+   "2026-10-20T20:00:00+00:00",
+   999.342539
+  ],
+  [
+   "2026-10-20T21:00:00+00:00",
+   999.305614
+  ],
+  [
+   "2026-10-20T22:00:00+00:00",
+   999.290325
+  ],
+  [
+   "2026-10-20T23:00:00+00:00",
+   999.320453
+  ],
+  [
+   "2026-10-21T00:00:00+00:00",
+   999.27659
+  ],
+  [
+   "2026-10-21T01:00:00+00:00",
+   999.305671
+  ],
+  [
+   "2026-10-21T02:00:00+00:00",
+   999.269251
+  ],
+  [
+   "2026-10-21T03:00:00+00:00",
+   999.295135
+  ],
+  [
+   "2026-10-21T04:00:00+00:00",
+   999.235033
+  ],
+  [
+   "2026-10-21T05:00:00+00:00",
+   999.279336
+  ],
+  [
+   "2026-10-21T06:00:00+00:00",
+   999.317148
+  ],
+  [
+   "2026-10-21T07:00:00+00:00",
+   999.257979
+  ],
+  [
+   "2026-10-21T08:00:00+00:00",
+   999.238418
+  ],
+  [
+   "2026-10-21T09:00:00+00:00",
+   999.227849
+  ],
+  [
+   "2026-10-21T10:00:00+00:00",
+   999.317532
+  ],
+  [
+   "2026-10-21T11:00:00+00:00",
+   999.234513
+  ],
+  [
+   "2026-10-21T12:00:00+00:00",
+   999.229574
+  ],
+  [
+   "2026-10-21T13:00:00+00:00",
+   999.287836
+  ],
+  [
+   "2026-10-21T14:00:00+00:00",
+   999.19233
+  ],
+  [
+   "2026-10-21T15:00:00+00:00",
+   999.22035
+  ],
+  [
+   "2026-10-21T16:00:00+00:00",
+   999.252891
+  ],
+  [
+   "2026-10-21T17:00:00+00:00",
+   999.221935
+  ],
+  [
+   "2026-10-21T18:00:00+00:00",
+   999.378477
+  ],
+  [
+   "2026-10-21T19:00:00+00:00",
+   999.400424
+  ],
+  [
+   "2026-10-21T20:00:00+00:00",
+   999.417955
+  ],
+  [
+   "2026-10-21T21:00:00+00:00",
+   999.37254
+  ],
+  [
+   "2026-10-21T22:00:00+00:00",
+   999.395326
+  ],
+  [
+   "2026-10-21T23:00:00+00:00",
+   999.435565
+  ],
+  [
+   "2026-10-22T00:00:00+00:00",
+   999.424969
+  ],
+  [
+   "2026-10-22T01:00:00+00:00",
+   999.433654
+  ],
+  [
+   "2026-10-22T02:00:00+00:00",
+   999.388541
+  ],
+  [
+   "2026-10-22T03:00:00+00:00",
+   999.343982
+  ],
+  [
+   "2026-10-22T04:00:00+00:00",
+   999.388829
+  ],
+  [
+   "2026-10-22T05:00:00+00:00",
+   999.364523
+  ],
+  [
+   "2026-10-22T06:00:00+00:00",
+   999.37312
+  ],
+  [
+   "2026-10-22T07:00:00+00:00",
+   999.34059
+  ],
+  [
+   "2026-10-22T08:00:00+00:00",
+   999.441588
+  ],
+  [
+   "2026-10-22T09:00:00+00:00",
+   999.353521
+  ],
+  [
+   "2026-10-22T10:00:00+00:00",
+   999.385314
+  ],
+  [
+   "2026-10-22T11:00:00+00:00",
+   999.385243
+  ],
+  [
+   "2026-10-22T12:00:00+00:00",
+   999.404082
+  ],
+  [
+   "2026-10-22T13:00:00+00:00",
+   999.463661
+  ],
+  [
+   "2026-10-22T14:00:00+00:00",
+   999.413286
+  ],
+  [
+   "2026-10-22T15:00:00+00:00",
+   999.377919
+  ],
+  [
+   "2026-10-22T16:00:00+00:00",
+   999.450772
+  ],
+  [
+   "2026-10-22T17:00:00+00:00",
+   999.475447
+  ],
+  [
+   "2026-10-22T18:00:00+00:00",
+   999.41481
+  ],
+  [
+   "2026-10-22T19:00:00+00:00",
+   999.50978
+  ],
+  [
+   "2026-10-22T20:00:00+00:00",
+   999.44669
+  ],
+  [
+   "2026-10-22T21:00:00+00:00",
+   999.419625
+  ],
+  [
+   "2026-10-22T22:00:00+00:00",
+   999.428482
+  ],
+  [
+   "2026-10-22T23:00:00+00:00",
+   999.458848
+  ],
+  [
+   "2026-10-23T00:00:00+00:00",
+   999.485021
+  ],
+  [
+   "2026-10-23T01:00:00+00:00",
+   999.467666
+  ],
+  [
+   "2026-10-23T02:00:00+00:00",
+   999.376596
+  ],
+  [
+   "2026-10-23T03:00:00+00:00",
+   999.489133
+  ],
+  [
+   "2026-10-23T04:00:00+00:00",
+   999.436335
+  ],
+  [
+   "2026-10-23T05:00:00+00:00",
+   999.350061
+  ],
+  [
+   "2026-10-23T06:00:00+00:00",
+   999.43395
+  ],
+  [
+   "2026-10-23T07:00:00+00:00",
+   999.41408
+  ],
+  [
+   "2026-10-23T08:00:00+00:00",
+   999.432732
+  ],
+  [
+   "2026-10-23T09:00:00+00:00",
+   999.136891
+  ],
+  [
+   "2026-10-23T10:00:00+00:00",
+   999.101028
+  ],
+  [
+   "2026-10-23T11:00:00+00:00",
+   999.142169
+  ],
+  [
+   "2026-10-23T12:00:00+00:00",
+   999.160108
+  ],
+  [
+   "2026-10-23T13:00:00+00:00",
+   999.119341
+  ],
+  [
+   "2026-10-23T14:00:00+00:00",
+   999.137064
+  ],
+  [
+   "2026-10-23T15:00:00+00:00",
+   999.136091
+  ],
+  [
+   "2026-10-23T16:00:00+00:00",
+   999.123044
+  ],
+  [
+   "2026-10-23T17:00:00+00:00",
+   999.117874
+  ],
+  [
+   "2026-10-23T18:00:00+00:00",
+   999.031006
+  ],
+  [
+   "2026-10-23T19:00:00+00:00",
+   999.041846
+  ],
+  [
+   "2026-10-23T20:00:00+00:00",
+   999.072335
+  ],
+  [
+   "2026-10-23T21:00:00+00:00",
+   999.076379
+  ],
+  [
+   "2026-10-23T22:00:00+00:00",
+   999.020926
+  ],
+  [
+   "2026-10-23T23:00:00+00:00",
+   999.076317
+  ],
+  [
+   "2026-10-24T00:00:00+00:00",
+   999.08352
+  ],
+  [
+   "2026-10-24T01:00:00+00:00",
+   999.024717
+  ],
+  [
+   "2026-10-24T02:00:00+00:00",
+   999.000958
+  ],
+  [
+   "2026-10-24T03:00:00+00:00",
+   999.096886
+  ],
+  [
+   "2026-10-24T04:00:00+00:00",
+   999.075648
+  ],
+  [
+   "2026-10-24T05:00:00+00:00",
+   998.993783
+  ],
+  [
+   "2026-10-24T06:00:00+00:00",
+   999.043782
+  ],
+  [
+   "2026-10-24T07:00:00+00:00",
+   999.063233
+  ],
+  [
+   "2026-10-24T08:00:00+00:00",
+   999.001059
+  ],
+  [
+   "2026-10-24T09:00:00+00:00",
+   999.053918
+  ],
+  [
+   "2026-10-24T10:00:00+00:00",
+   998.981224
+  ],
+  [
+   "2026-10-24T11:00:00+00:00",
+   999.016909
+  ],
+  [
+   "2026-10-24T12:00:00+00:00",
+   998.997998
+  ],
+  [
+   "2026-10-24T13:00:00+00:00",
+   999.005246
+  ],
+  [
+   "2026-10-24T14:00:00+00:00",
+   999.00289
+  ],
+  [
+   "2026-10-24T15:00:00+00:00",
+   999.0529
+  ],
+  [
+   "2026-10-24T16:00:00+00:00",
+   999.024584
+  ],
+  [
+   "2026-10-24T17:00:00+00:00",
+   999.094331
+  ],
+  [
+   "2026-10-24T18:00:00+00:00",
+   999.116236
+  ],
+  [
+   "2026-10-24T19:00:00+00:00",
+   999.039925
+  ],
+  [
+   "2026-10-24T20:00:00+00:00",
+   999.127412
+  ],
+  [
+   "2026-10-24T21:00:00+00:00",
+   999.034697
+  ],
+  [
+   "2026-10-24T22:00:00+00:00",
+   999.097128
+  ],
+  [
+   "2026-10-24T23:00:00+00:00",
+   999.048202
+  ],
+  [
+   "2026-10-25T00:00:00+00:00",
+   999.112229
+  ],
+  [
+   "2026-10-25T01:00:00+00:00",
+   999.082398
+  ],
+  [
+   "2026-10-25T02:00:00+00:00",
+   999.023388
+  ],
+  [
+   "2026-10-25T03:00:00+00:00",
+   999.091662
+  ],
+  [
+   "2026-10-25T04:00:00+00:00",
+   999.019322
+  ],
+  [
+   "2026-10-25T05:00:00+00:00",
+   999.039089
+  ],
+  [
+   "2026-10-25T06:00:00+00:00",
+   998.947767
+  ],
+  [
+   "2026-10-25T07:00:00+00:00",
+   999.054457
+  ],
+  [
+   "2026-10-25T08:00:00+00:00",
+   998.965144
+  ],
+  [
+   "2026-10-25T09:00:00+00:00",
+   998.994603
+  ],
+  [
+   "2026-10-25T10:00:00+00:00",
+   999.087408
+  ],
+  [
+   "2026-10-25T11:00:00+00:00",
+   999.006201
+  ],
+  [
+   "2026-10-25T12:00:00+00:00",
+   999.087132
+  ],
+  [
+   "2026-10-25T13:00:00+00:00",
+   999.063379
+  ],
+  [
+   "2026-10-25T14:00:00+00:00",
+   999.02409
+  ],
+  [
+   "2026-10-25T15:00:00+00:00",
+   999.072152
+  ],
+  [
+   "2026-10-25T16:00:00+00:00",
+   999.063069
+  ],
+  [
+   "2026-10-25T17:00:00+00:00",
+   999.104101
+  ],
+  [
+   "2026-10-25T18:00:00+00:00",
+   998.984578
+  ],
+  [
+   "2026-10-25T19:00:00+00:00",
+   998.996656
+  ],
+  [
+   "2026-10-25T20:00:00+00:00",
+   999.082354
+  ],
+  [
+   "2026-10-25T21:00:00+00:00",
+   999.064637
+  ],
+  [
+   "2026-10-25T22:00:00+00:00",
+   999.06233
+  ],
+  [
+   "2026-10-25T23:00:00+00:00",
+   999.054435
+  ],
+  [
+   "2026-10-26T00:00:00+00:00",
+   998.981463
+  ],
+  [
+   "2026-10-26T01:00:00+00:00",
+   999.036449
+  ],
+  [
+   "2026-10-26T02:00:00+00:00",
+   999.006039
+  ],
+  [
+   "2026-10-26T03:00:00+00:00",
+   998.951077
+  ],
+  [
+   "2026-10-26T04:00:00+00:00",
+   999.016693
+  ],
+  [
+   "2026-10-26T05:00:00+00:00",
+   999.033683
+  ],
+  [
+   "2026-10-26T06:00:00+00:00",
+   999.089269
+  ],
+  [
+   "2026-10-26T07:00:00+00:00",
+   999.007564
+  ],
+  [
+   "2026-10-26T08:00:00+00:00",
+   999.038803
+  ],
+  [
+   "2026-10-26T09:00:00+00:00",
+   999.025797
+  ],
+  [
+   "2026-10-26T10:00:00+00:00",
+   999.02838
+  ],
+  [
+   "2026-10-26T11:00:00+00:00",
+   999.121669
+  ],
+  [
+   "2026-10-26T12:00:00+00:00",
+   999.082858
+  ],
+  [
+   "2026-10-26T13:00:00+00:00",
+   999.085941
+  ],
+  [
+   "2026-10-26T14:00:00+00:00",
+   999.093639
+  ],
+  [
+   "2026-10-26T15:00:00+00:00",
+   999.043214
+  ],
+  [
+   "2026-10-26T16:00:00+00:00",
+   999.129716
+  ],
+  [
+   "2026-10-26T17:00:00+00:00",
+   999.045705
+  ],
+  [
+   "2026-10-26T18:00:00+00:00",
+   999.042794
+  ],
+  [
+   "2026-10-26T19:00:00+00:00",
+   999.069899
+  ],
+  [
+   "2026-10-26T20:00:00+00:00",
+   999.070922
+  ],
+  [
+   "2026-10-26T21:00:00+00:00",
+   999.061429
+  ],
+  [
+   "2026-10-26T22:00:00+00:00",
+   999.013133
+  ],
+  [
+   "2026-10-26T23:00:00+00:00",
+   999.04274
+  ],
+  [
+   "2026-10-27T00:00:00+00:00",
+   999.044692
+  ],
+  [
+   "2026-10-27T01:00:00+00:00",
+   999.09289
+  ],
+  [
+   "2026-10-27T02:00:00+00:00",
+   999.023392
+  ],
+  [
+   "2026-10-27T03:00:00+00:00",
+   999.061201
+  ],
+  [
+   "2026-10-27T04:00:00+00:00",
+   999.09351
+  ],
+  [
+   "2026-10-27T05:00:00+00:00",
+   999.13582
+  ],
+  [
+   "2026-10-27T06:00:00+00:00",
+   999.03053
+  ],
+  [
+   "2026-10-27T07:00:00+00:00",
+   999.043451
+  ],
+  [
+   "2026-10-27T08:00:00+00:00",
+   999.029002
+  ],
+  [
+   "2026-10-27T09:00:00+00:00",
+   999.043706
+  ],
+  [
+   "2026-10-27T10:00:00+00:00",
+   999.04709
+  ],
+  [
+   "2026-10-27T11:00:00+00:00",
+   999.073901
+  ],
+  [
+   "2026-10-27T12:00:00+00:00",
+   999.102207
+  ],
+  [
+   "2026-10-27T13:00:00+00:00",
+   999.021604
+  ],
+  [
+   "2026-10-27T14:00:00+00:00",
+   999.079215
+  ],
+  [
+   "2026-10-27T15:00:00+00:00",
+   999.000315
+  ],
+  [
+   "2026-10-27T16:00:00+00:00",
+   999.023168
+  ],
+  [
+   "2026-10-27T17:00:00+00:00",
+   999.055262
+  ],
+  [
+   "2026-10-27T18:00:00+00:00",
+   999.071661
+  ],
+  [
+   "2026-10-27T19:00:00+00:00",
+   999.091057
+  ],
+  [
+   "2026-10-27T20:00:00+00:00",
+   998.979819
+  ],
+  [
+   "2026-10-27T21:00:00+00:00",
+   999.030514
+  ],
+  [
+   "2026-10-27T22:00:00+00:00",
+   999.026602
+  ],
+  [
+   "2026-10-27T23:00:00+00:00",
+   999.096592
+  ],
+  [
+   "2026-10-28T00:00:00+00:00",
+   999.071463
+  ],
+  [
+   "2026-10-28T01:00:00+00:00",
+   999.066753
+  ],
+  [
+   "2026-10-28T02:00:00+00:00",
+   999.051537
+  ],
+  [
+   "2026-10-28T03:00:00+00:00",
+   999.08762
+  ],
+  [
+   "2026-10-28T04:00:00+00:00",
+   999.107225
+  ],
+  [
+   "2026-10-28T05:00:00+00:00",
+   999.015102
+  ],
+  [
+   "2026-10-28T06:00:00+00:00",
+   999.087483
+  ],
+  [
+   "2026-10-28T07:00:00+00:00",
+   999.083361
+  ],
+  [
+   "2026-10-28T08:00:00+00:00",
+   999.056884
+  ],
+  [
+   "2026-10-28T09:00:00+00:00",
+   999.09265
+  ],
+  [
+   "2026-10-28T10:00:00+00:00",
+   999.075909
+  ],
+  [
+   "2026-10-28T11:00:00+00:00",
+   999.137769
+  ],
+  [
+   "2026-10-28T12:00:00+00:00",
+   999.079113
+  ],
+  [
+   "2026-10-28T13:00:00+00:00",
+   999.050698
+  ],
+  [
+   "2026-10-28T14:00:00+00:00",
+   998.98599
+  ],
+  [
+   "2026-10-28T15:00:00+00:00",
+   999.016686
+  ],
+  [
+   "2026-10-28T16:00:00+00:00",
+   998.998745
+  ],
+  [
+   "2026-10-28T17:00:00+00:00",
+   999.038437
+  ],
+  [
+   "2026-10-28T18:00:00+00:00",
+   999.008721
+  ],
+  [
+   "2026-10-28T19:00:00+00:00",
+   998.949896
+  ],
+  [
+   "2026-10-28T20:00:00+00:00",
+   999.010264
+  ],
+  [
+   "2026-10-28T21:00:00+00:00",
+   999.043631
+  ],
+  [
+   "2026-10-28T22:00:00+00:00",
+   999.075996
+  ],
+  [
+   "2026-10-28T23:00:00+00:00",
+   999.015165
+  ],
+  [
+   "2026-10-29T00:00:00+00:00",
+   999.017096
+  ],
+  [
+   "2026-10-29T01:00:00+00:00",
+   999.064186
+  ],
+  [
+   "2026-10-29T02:00:00+00:00",
+   999.030197
+  ],
+  [
+   "2026-10-29T03:00:00+00:00",
+   998.936361
+  ],
+  [
+   "2026-10-29T04:00:00+00:00",
+   999.012476
+  ],
+  [
+   "2026-10-29T05:00:00+00:00",
+   999.000886
+  ],
+  [
+   "2026-10-29T06:00:00+00:00",
+   998.964194
+  ],
+  [
+   "2026-10-29T07:00:00+00:00",
+   999.037706
+  ],
+  [
+   "2026-10-29T08:00:00+00:00",
+   998.972094
+  ],
+  [
+   "2026-10-29T09:00:00+00:00",
+   998.971803
+  ],
+  [
+   "2026-10-29T10:00:00+00:00",
+   999.009112
+  ],
+  [
+   "2026-10-29T11:00:00+00:00",
+   999.027514
+  ],
+  [
+   "2026-10-29T12:00:00+00:00",
+   999.023834
+  ],
+  [
+   "2026-10-29T13:00:00+00:00",
+   998.997938
+  ],
+  [
+   "2026-10-29T14:00:00+00:00",
+   998.987438
+  ],
+  [
+   "2026-10-29T15:00:00+00:00",
+   999.111219
+  ],
+  [
+   "2026-10-29T16:00:00+00:00",
+   999.008861
+  ],
+  [
+   "2026-10-29T17:00:00+00:00",
+   999.025039
+  ],
+  [
+   "2026-10-29T18:00:00+00:00",
+   999.023132
+  ],
+  [
+   "2026-10-29T19:00:00+00:00",
+   999.014494
+  ],
+  [
+   "2026-10-29T20:00:00+00:00",
+   998.921028
+  ],
+  [
+   "2026-10-29T21:00:00+00:00",
+   998.991269
+  ],
+  [
+   "2026-10-29T22:00:00+00:00",
+   998.971966
+  ],
+  [
+   "2026-10-29T23:00:00+00:00",
+   998.928761
+  ],
+  [
+   "2026-10-30T00:00:00+00:00",
+   998.928624
+  ],
+  [
+   "2026-10-30T01:00:00+00:00",
+   998.810209
+  ],
+  [
+   "2026-10-30T02:00:00+00:00",
+   998.946887
+  ],
+  [
+   "2026-10-30T03:00:00+00:00",
+   998.961445
+  ],
+  [
+   "2026-10-30T04:00:00+00:00",
+   998.95626
+  ],
+  [
+   "2026-10-30T05:00:00+00:00",
+   998.950496
+  ],
+  [
+   "2026-10-30T06:00:00+00:00",
+   998.958257
+  ],
+  [
+   "2026-10-30T07:00:00+00:00",
+   998.902594
+  ],
+  [
+   "2026-10-30T08:00:00+00:00",
+   998.921981
+  ],
+  [
+   "2026-10-30T09:00:00+00:00",
+   998.900678
+  ],
+  [
+   "2026-10-30T10:00:00+00:00",
+   998.916208
+  ],
+  [
+   "2026-10-30T11:00:00+00:00",
+   998.902209
+  ],
+  [
+   "2026-10-30T12:00:00+00:00",
+   998.875131
+  ],
+  [
+   "2026-10-30T13:00:00+00:00",
+   998.944321
+  ],
+  [
+   "2026-10-30T14:00:00+00:00",
+   998.914398
+  ],
+  [
+   "2026-10-30T15:00:00+00:00",
+   998.93841
+  ],
+  [
+   "2026-10-30T16:00:00+00:00",
+   998.879962
+  ],
+  [
+   "2026-10-30T17:00:00+00:00",
+   998.921137
+  ],
+  [
+   "2026-10-30T18:00:00+00:00",
+   998.875139
+  ],
+  [
+   "2026-10-30T19:00:00+00:00",
+   998.993647
+  ],
+  [
+   "2026-10-30T20:00:00+00:00",
+   998.843004
+  ],
+  [
+   "2026-10-30T21:00:00+00:00",
+   998.930675
+  ],
+  [
+   "2026-10-30T22:00:00+00:00",
+   998.879462
+  ],
+  [
+   "2026-10-30T23:00:00+00:00",
+   998.958362
+  ],
+  [
+   "2026-10-31T00:00:00+00:00",
+   998.966261
+  ],
+  [
+   "2026-10-31T01:00:00+00:00",
+   998.894633
+  ],
+  [
+   "2026-10-31T02:00:00+00:00",
+   998.933092
+  ],
+  [
+   "2026-10-31T03:00:00+00:00",
+   998.899674
+  ],
+  [
+   "2026-10-31T04:00:00+00:00",
+   998.896377
+  ],
+  [
+   "2026-10-31T05:00:00+00:00",
+   998.908947
+  ],
+  [
+   "2026-10-31T06:00:00+00:00",
+   998.905874
+  ],
+  [
+   "2026-10-31T07:00:00+00:00",
+   998.854449
+  ],
+  [
+   "2026-10-31T08:00:00+00:00",
+   998.821661
+  ],
+  [
+   "2026-10-31T09:00:00+00:00",
+   998.822798
+  ],
+  [
+   "2026-10-31T10:00:00+00:00",
+   998.840351
+  ],
+  [
+   "2026-10-31T11:00:00+00:00",
+   998.881064
+  ],
+  [
+   "2026-10-31T12:00:00+00:00",
+   998.883772
+  ],
+  [
+   "2026-10-31T13:00:00+00:00",
+   998.902185
+  ],
+  [
+   "2026-10-31T14:00:00+00:00",
+   998.849224
+  ],
+  [
+   "2026-10-31T15:00:00+00:00",
+   998.865854
+  ],
+  [
+   "2026-10-31T16:00:00+00:00",
+   998.841346
+  ],
+  [
+   "2026-10-31T17:00:00+00:00",
+   998.909013
+  ],
+  [
+   "2026-10-31T18:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-10-31T19:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-10-31T20:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-10-31T21:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-10-31T22:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-10-31T23:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T00:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T01:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T02:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T03:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T04:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T05:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T06:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T07:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T08:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T09:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T10:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T11:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T12:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T13:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T14:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T15:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T16:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T17:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T18:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T19:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T20:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T21:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T22:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-01T23:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T00:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T01:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T02:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T03:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T04:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T05:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T06:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T07:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T08:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T09:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T10:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T11:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T12:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T13:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T14:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T15:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T16:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T17:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T18:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T19:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T20:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T21:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T22:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-02T23:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T00:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T01:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T02:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T03:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T04:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T05:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T06:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T07:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T08:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T09:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T10:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T11:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T12:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T13:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T14:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T15:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T16:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T17:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T18:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T19:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T20:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T21:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T22:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-03T23:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T00:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T01:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T02:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T03:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T04:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T05:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T06:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T07:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T08:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T09:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T10:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T11:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T12:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T13:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T14:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T15:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T16:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T17:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T18:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T19:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T20:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T21:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T22:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-04T23:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T00:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T01:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T02:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T03:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T04:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T05:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T06:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T07:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T08:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T09:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T10:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T11:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T12:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T13:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T14:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T15:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T16:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T17:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T18:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T19:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T20:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T21:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T22:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-05T23:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T00:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T01:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T02:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T03:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T04:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T05:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T06:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T07:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T08:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T09:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T10:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T11:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T12:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T13:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T14:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T15:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T16:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T17:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T18:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T19:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T20:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T21:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T22:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-06T23:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T00:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T01:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T02:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T03:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T04:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T05:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T06:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T07:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T08:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T09:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T10:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T11:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T12:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T13:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T14:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T15:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T16:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T17:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T18:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T19:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T20:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T21:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T22:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-07T23:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T00:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T01:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T02:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T03:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T04:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T05:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T06:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T07:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T08:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T09:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T10:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T11:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T12:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T13:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T14:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T15:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T16:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T17:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T18:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T19:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T20:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T21:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T22:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-08T23:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T00:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T01:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T02:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T03:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T04:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T05:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T06:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T07:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T08:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T09:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T10:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T11:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T12:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T13:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T14:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T15:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T16:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T17:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T18:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T19:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T20:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T21:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T22:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-09T23:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T00:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T01:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T02:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T03:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T04:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T05:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T06:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T07:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T08:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T09:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T10:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T11:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T12:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T13:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T14:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T15:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T16:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T17:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T18:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T19:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T20:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T21:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T22:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-10T23:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-11T00:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-11T01:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-11T02:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-11T03:00:00+00:00",
+   998.681417
+  ],
+  [
+   "2026-11-11T04:00:00+00:00",
+   998.187291
+  ],
+  [
+   "2026-11-11T05:00:00+00:00",
+   998.253864
+  ],
+  [
+   "2026-11-11T06:00:00+00:00",
+   998.308362
+  ],
+  [
+   "2026-11-11T07:00:00+00:00",
+   998.234368
+  ],
+  [
+   "2026-11-11T08:00:00+00:00",
+   998.243694
+  ],
+  [
+   "2026-11-11T09:00:00+00:00",
+   998.228278
+  ],
+  [
+   "2026-11-11T10:00:00+00:00",
+   998.159068
+  ],
+  [
+   "2026-11-11T11:00:00+00:00",
+   998.221232
+  ],
+  [
+   "2026-11-11T12:00:00+00:00",
+   998.163949
+  ],
+  [
+   "2026-11-11T13:00:00+00:00",
+   998.171882
+  ],
+  [
+   "2026-11-11T14:00:00+00:00",
+   998.27046
+  ],
+  [
+   "2026-11-11T15:00:00+00:00",
+   998.234044
+  ],
+  [
+   "2026-11-11T16:00:00+00:00",
+   998.24106
+  ],
+  [
+   "2026-11-11T17:00:00+00:00",
+   998.231276
+  ],
+  [
+   "2026-11-11T18:00:00+00:00",
+   998.26277
+  ],
+  [
+   "2026-11-11T19:00:00+00:00",
+   998.241728
+  ],
+  [
+   "2026-11-11T20:00:00+00:00",
+   998.221809
+  ],
+  [
+   "2026-11-11T21:00:00+00:00",
+   998.228645
+  ],
+  [
+   "2026-11-11T22:00:00+00:00",
+   998.26927
+  ],
+  [
+   "2026-11-11T23:00:00+00:00",
+   998.251478
+  ],
+  [
+   "2026-11-12T00:00:00+00:00",
+   998.286501
+  ],
+  [
+   "2026-11-12T01:00:00+00:00",
+   998.26203
+  ],
+  [
+   "2026-11-12T02:00:00+00:00",
+   998.23229
+  ],
+  [
+   "2026-11-12T03:00:00+00:00",
+   998.227024
+  ],
+  [
+   "2026-11-12T04:00:00+00:00",
+   998.253044
+  ],
+  [
+   "2026-11-12T05:00:00+00:00",
+   998.278645
+  ],
+  [
+   "2026-11-12T06:00:00+00:00",
+   998.29922
+  ],
+  [
+   "2026-11-12T07:00:00+00:00",
+   998.230983
+  ],
+  [
+   "2026-11-12T08:00:00+00:00",
+   998.229722
+  ],
+  [
+   "2026-11-12T09:00:00+00:00",
+   998.258243
+  ],
+  [
+   "2026-11-12T10:00:00+00:00",
+   998.293402
+  ],
+  [
+   "2026-11-12T11:00:00+00:00",
+   998.276257
+  ],
+  [
+   "2026-11-12T12:00:00+00:00",
+   998.266825
+  ],
+  [
+   "2026-11-12T13:00:00+00:00",
+   998.219692
+  ],
+  [
+   "2026-11-12T14:00:00+00:00",
+   998.359238
+  ],
+  [
+   "2026-11-12T15:00:00+00:00",
+   998.392614
+  ],
+  [
+   "2026-11-12T16:00:00+00:00",
+   998.222314
+  ],
+  [
+   "2026-11-12T17:00:00+00:00",
+   998.244933
+  ],
+  [
+   "2026-11-12T18:00:00+00:00",
+   998.277464
+  ],
+  [
+   "2026-11-12T19:00:00+00:00",
+   998.276364
+  ],
+  [
+   "2026-11-12T20:00:00+00:00",
+   998.241803
+  ],
+  [
+   "2026-11-12T21:00:00+00:00",
+   998.219777
+  ],
+  [
+   "2026-11-12T22:00:00+00:00",
+   998.323367
+  ],
+  [
+   "2026-11-12T23:00:00+00:00",
+   998.256028
+  ],
+  [
+   "2026-11-13T00:00:00+00:00",
+   998.198307
+  ],
+  [
+   "2026-11-13T01:00:00+00:00",
+   998.339502
+  ],
+  [
+   "2026-11-13T02:00:00+00:00",
+   998.240684
+  ],
+  [
+   "2026-11-13T03:00:00+00:00",
+   998.34808
+  ],
+  [
+   "2026-11-13T04:00:00+00:00",
+   998.368127
+  ],
+  [
+   "2026-11-13T05:00:00+00:00",
+   998.340554
+  ],
+  [
+   "2026-11-13T06:00:00+00:00",
+   998.369703
+  ],
+  [
+   "2026-11-13T07:00:00+00:00",
+   998.290413
+  ],
+  [
+   "2026-11-13T08:00:00+00:00",
+   998.284019
+  ],
+  [
+   "2026-11-13T09:00:00+00:00",
+   998.218016
+  ],
+  [
+   "2026-11-13T10:00:00+00:00",
+   998.236986
+  ],
+  [
+   "2026-11-13T11:00:00+00:00",
+   998.254445
+  ],
+  [
+   "2026-11-13T12:00:00+00:00",
+   998.228818
+  ],
+  [
+   "2026-11-13T13:00:00+00:00",
+   998.285949
+  ],
+  [
+   "2026-11-13T14:00:00+00:00",
+   998.218265
+  ],
+  [
+   "2026-11-13T15:00:00+00:00",
+   998.332865
+  ],
+  [
+   "2026-11-13T16:00:00+00:00",
+   998.238439
+  ],
+  [
+   "2026-11-13T17:00:00+00:00",
+   998.233549
+  ],
+  [
+   "2026-11-13T18:00:00+00:00",
+   998.273454
+  ],
+  [
+   "2026-11-13T19:00:00+00:00",
+   998.290396
+  ],
+  [
+   "2026-11-13T20:00:00+00:00",
+   998.256476
+  ],
+  [
+   "2026-11-13T21:00:00+00:00",
+   998.41308
+  ],
+  [
+   "2026-11-13T22:00:00+00:00",
+   998.340539
+  ],
+  [
+   "2026-11-13T23:00:00+00:00",
+   998.242112
+  ],
+  [
+   "2026-11-14T00:00:00+00:00",
+   998.294926
+  ],
+  [
+   "2026-11-14T01:00:00+00:00",
+   998.368695
+  ],
+  [
+   "2026-11-14T02:00:00+00:00",
+   998.376458
+  ],
+  [
+   "2026-11-14T03:00:00+00:00",
+   998.366336
+  ],
+  [
+   "2026-11-14T04:00:00+00:00",
+   998.339058
+  ],
+  [
+   "2026-11-14T05:00:00+00:00",
+   998.397365
+  ],
+  [
+   "2026-11-14T06:00:00+00:00",
+   998.381845
+  ],
+  [
+   "2026-11-14T07:00:00+00:00",
+   998.434701
+  ],
+  [
+   "2026-11-14T08:00:00+00:00",
+   998.320147
+  ],
+  [
+   "2026-11-14T09:00:00+00:00",
+   998.404944
+  ],
+  [
+   "2026-11-14T10:00:00+00:00",
+   998.384066
+  ],
+  [
+   "2026-11-14T11:00:00+00:00",
+   998.385215
+  ],
+  [
+   "2026-11-14T12:00:00+00:00",
+   998.305634
+  ],
+  [
+   "2026-11-14T13:00:00+00:00",
+   998.368361
+  ],
+  [
+   "2026-11-14T14:00:00+00:00",
+   998.384947
+  ],
+  [
+   "2026-11-14T15:00:00+00:00",
+   998.330155
+  ],
+  [
+   "2026-11-14T16:00:00+00:00",
+   998.366478
+  ],
+  [
+   "2026-11-14T17:00:00+00:00",
+   998.394537
+  ],
+  [
+   "2026-11-14T18:00:00+00:00",
+   998.460049
+  ],
+  [
+   "2026-11-14T19:00:00+00:00",
+   998.362482
+  ],
+  [
+   "2026-11-14T20:00:00+00:00",
+   997.928626
+  ],
+  [
+   "2026-11-14T21:00:00+00:00",
+   997.886245
+  ],
+  [
+   "2026-11-14T22:00:00+00:00",
+   997.862766
+  ],
+  [
+   "2026-11-14T23:00:00+00:00",
+   997.862569
+  ]
+ ],
+ "execution_model": {
+  "latency": {
+   "model": "adverse_bound",
+   "latency_s": 60.0,
+   "order_spacing_s": 60.0,
+   "statement": "decision on the bar's close; a buy fills at open + f x (high - open), a sell at open - f x (open - low) of the NEXT bar, f = min(1, sqrt(delay / bar length)); the k-th exposure-adding order of a decision is delayed by k x order_spacing_s more. A bound, always against the order; booked as the cost line `latency`"
+  },
+  "slippage": {
+   "model": "sqrt_impact",
+   "impact_coefficient": 1.0,
+   "impact_window_bars": 24,
+   "max_impact_bps": 100.0,
+   "half_spread_bps": {
+    "BTC": 0.5,
+    "BTC@EDGEX": 0.5,
+    "ETH": 0.5,
+    "ETH@EDGEX": 0.5,
+    "SOL": 0.5,
+    "SOL@EDGEX": 2.8082
+   },
+   "book_based": {
+    "BTC": {
+     "n_snapshots": 757,
+     "quantile": "p90_bps"
+    },
+    "BTC@EDGEX": {
+     "n_snapshots": 756,
+     "quantile": "p90_bps"
+    },
+    "ETH": {
+     "n_snapshots": 757,
+     "quantile": "p90_bps"
+    },
+    "ETH@EDGEX": {
+     "n_snapshots": 756,
+     "quantile": "p90_bps"
+    },
+    "SOL": {
+     "n_snapshots": 757,
+     "quantile": "p90_bps"
+    },
+    "SOL@EDGEX": {
+     "n_snapshots": 756,
+     "quantile": "p90_bps"
+    }
+   },
+   "calibration": "research/src/spq/params/book_calibration.json: order books recorded 2026-11-16T00:32:07.790000+00:00 to 2026-11-16T01:39:44.180000+00:00, 6 of 6 symbols",
+   "statement": "cost_bps = half spread + Y x sigma_bar x sqrt(order notional / mean USD volume per bar), sigma and volume on the bars before the fill; where a recorded depth profile is supplied the cost is read on it instead (never below the half spread)"
+  },
+  "fees": {
+   "liquidity": "taker",
+   "per_venue": true,
+   "fee_table": {
+    "edgex": {
+     "name": "edgex",
+     "taker_bps": 4.5,
+     "maker_bps": 4.0,
+     "funding_interval_s": 14400,
+     "funding_model": "settlement",
+     "min_order_usd": 10.0,
+     "default_half_spread_bps": 0.5,
+     "source": "live getMetaData 2026-11-15: defaultTakerFeeRate 0.00045, defaultMakerFeeRate 0.0004, fundingRateIntervalMin 240; GET /api/v2/public/vip/config/list level 0 (docs/v11/research/edgex-api.md sections 1.2, 1.6, 1.10)",
+     "checked": "2026-11-15",
+     "notes": "settlements are 4 h apart (verified on the funding history); the per-contract minimum is a SIZE (minOrderSize), 10 USD is the lab's floor; trading is NOT available to the wallet (terms exclude Canada): this row exists for research on public data only"
+    },
+    "hyperliquid": {
+     "name": "hyperliquid",
+     "taker_bps": 4.5,
+     "maker_bps": 1.5,
+     "funding_interval_s": 3600,
+     "funding_model": "settlement",
+     "min_order_usd": 10.0,
+     "default_half_spread_bps": 0.5,
+     "source": "https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees (tier 0, perps); funding: https://hyperliquid.gitbook.io/hyperliquid-docs/trading/funding (hourly); docs/v4/venues/contract-differences.md",
+     "checked": "2026-11-10",
+     "notes": "minimum order 10 USD notional; funding paid every hour on the oracle price"
+    }
+   }
+  },
+  "funding": {
+   "edgex": {
+    "interval_s": 14400,
+    "model": "settlement"
+   },
+   "hyperliquid": {
+    "interval_s": 3600,
+    "model": "settlement"
+   }
+  },
+  "accounts": {
+   "model": "per_venue",
+   "capital_split": "equal shares",
+   "statement": "one cross-margin account per venue with its own collateral, margin check and liquidation; no transfer between venues; a liquidated account's loss beyond its collateral is written off (it cannot reach another venue)"
+  },
+  "liquidation": "perpetuals: exact intrabar model of version 2, per account; spot legs: not applicable (unlevered, never liquidated)"
+ },
+ "venue_accounts": {
+  "train": {
+   "hyperliquid": {
+    "symbols": [
+     "BTC",
+     "ETH",
+     "SOL"
+    ],
+    "margin_equity_min": 483.59718492072903,
+    "margin_equity_last": 533.9431030150931,
+    "margin_utilisation_mean": 0.2361485421040239,
+    "margin_utilisation_max": 0.45290834649439055,
+    "funding_pnl": 0.151914120898736,
+    "fees": 0.7616092910058351,
+    "slippage": 0.1052921656628,
+    "latency": 0.751189649136958,
+    "traded_notional": 1692.4958,
+    "fills": 13,
+    "liquidations": 0
+   },
+   "edgex": {
+    "symbols": [
+     "BTC@EDGEX",
+     "ETH@EDGEX",
+     "SOL@EDGEX"
+    ],
+    "margin_equity_min": 444.75346152451425,
+    "margin_equity_last": 466.256249724751,
+    "margin_utilisation_mean": 0.23217507174685373,
+    "margin_utilisation_max": 0.4730458322540013,
+    "funding_pnl": 1.165179652173,
+    "fees": 0.750659968848816,
+    "slippage": 0.25558256408,
+    "latency": 0.9359873944932,
+    "traded_notional": 1668.0754,
+    "fills": 17,
+    "liquidations": 0
+   }
+  },
+  "validation": {
+   "hyperliquid": {
+    "symbols": [
+     "BTC",
+     "ETH",
+     "SOL"
+    ],
+    "margin_equity_min": 496.3899101498465,
+    "margin_equity_last": 523.9206164921935,
+    "margin_utilisation_mean": 0.20463868979523403,
+    "margin_utilisation_max": 0.45503692839327514,
+    "funding_pnl": 0.552355128012971,
+    "fees": 0.6856575895775038,
+    "slippage": 0.0957617611033,
+    "latency": 0.833989285138692,
+    "traded_notional": 1523.68543,
+    "fills": 12,
+    "liquidations": 0
+   },
+   "edgex": {
+    "symbols": [
+     "BTC@EDGEX",
+     "ETH@EDGEX",
+     "SOL@EDGEX"
+    ],
+    "margin_equity_min": 470.6091348012795,
+    "margin_equity_last": 470.9886355323957,
+    "margin_utilisation_mean": 0.15146793594800206,
+    "margin_utilisation_max": 0.3743310127438104,
+    "funding_pnl": 0.052870883705,
+    "fees": 0.551535131041002,
+    "slippage": 0.20243048984,
+    "latency": 0.8848697304283,
+    "traded_notional": 1225.6258,
+    "fills": 12,
+    "liquidations": 0
+   }
+  },
+  "test": {
+   "hyperliquid": {
+    "symbols": [
+     "BTC",
+     "ETH",
+     "SOL"
+    ],
+    "margin_equity_min": 469.7359984116056,
+    "margin_equity_last": 472.08780112185553,
+    "margin_utilisation_mean": 0.16713934799528968,
+    "margin_utilisation_max": 0.3050415924851041,
+    "funding_pnl": -0.150087765021881,
+    "fees": 0.47083778904526047,
+    "slippage": 0.0630847666614,
+    "latency": 0.3406185574159,
+    "traded_notional": 1046.29576,
+    "fills": 8,
+    "liquidations": 0
+   },
+   "edgex": {
+    "symbols": [
+     "BTC@EDGEX",
+     "ETH@EDGEX",
+     "SOL@EDGEX"
+    ],
+    "margin_equity_min": 486.2907726819773,
+    "margin_equity_last": 525.7747680695784,
+    "margin_utilisation_mean": 0.1650579701470382,
+    "margin_utilisation_max": 0.30763822040477323,
+    "funding_pnl": 0.273369886272,
+    "fees": 0.480858229217664,
+    "slippage": 0.22158860304,
+    "latency": 0.511254984436,
+    "traded_notional": 1068.6231,
+    "fills": 10,
+    "liquidations": 0
+   }
+  }
+ },
+ "engine_parity": {
+  "applied": true,
+  "file": "research/src/spq/params/engine-parity.json",
+  "checked_against_commit": "ad52bec",
+  "checked": "2026-11-15",
+  "parameters": {
+   "max_leverage": {
+    "value": 2,
+    "source": "services/api/src/agents/perp-engine.ts:29",
+    "rule": "account leverage and leverage setting of every order: min(this, venue maximum)"
+   },
+   "max_gross_exposure_x": {
+    "value": 1.5,
+    "source": "services/api/src/agents/perp-engine.ts:31",
+    "rule": "sum of |notional| <= this x capital x (1 - cap_headroom - slippage bound)"
+   },
+   "max_position_x": {
+    "value": 1,
+    "source": "services/api/src/agents/perp-engine.ts:33",
+    "rule": "largest |notional| <= this x capital x (1 - cap_headroom - slippage bound)"
+   },
+   "max_daily_loss_pct": {
+    "value": 3,
+    "source": "services/api/src/agents/perp-engine.ts:35",
+    "rule": "equity at the start of the UTC day - equity >= this % of the capital: flatten, then stop"
+   },
+   "max_total_loss_pct": {
+    "value": 10,
+    "source": "services/api/src/agents/perp-engine.ts:36",
+    "rule": "capital - equity >= this % of the capital: flatten, then stop"
+   },
+   "slippage_bps": {
+    "value": 30,
+    "source": "services/api/src/agents/perp-engine.ts:38",
+    "rule": "worst price of an IOC order beyond the best opposite price; also enters the cap headroom"
+   },
+   "min_trade_pct": {
+    "value": 2,
+    "source": "services/api/src/agents/perp-engine.ts:40",
+    "rule": "a rebalance smaller than this % of equity is not traded (a full exit always is)"
+   },
+   "leverage_headroom": {
+    "value": 0.9,
+    "source": "services/api/src/agents/perp-engine.ts:70",
+    "rule": "gross <= max_leverage x equity x this"
+   },
+   "cap_headroom": {
+    "value": 0.02,
+    "source": "services/api/src/agents/perp-engine.ts:72",
+    "rule": "the absolute caps are approached to within this share plus the slippage bound"
+   },
+   "min_notional_factor": {
+    "value": 1.05,
+    "source": "services/api/src/agents/perp-engine.ts:74",
+    "rule": "an order must clear the venue minimum notional by this factor"
+   },
+   "loop_period_s": {
+    "value": 60,
+    "source": "services/api/src/agents/perp-live.ts:85",
+    "rule": "one engine pass per minute: a decision taken on a closed bar reaches the venue up to this long after the close"
+   },
+   "live_cooldown_s": {
+    "value": 45,
+    "source": "services/api/src/agents/perp-exec-live.ts:36",
+    "rule": "LIVE: an exposure-adding order waits until the previous one is this old, i.e. ONE exposure-adding order per pass (per minute); reduce-only orders are not delayed"
+   },
+   "max_orders_per_minute": {
+    "value": 40,
+    "source": "services/api/src/agents/perp-engine.ts:93",
+    "rule": "risk-engine policy of the agent account"
+   },
+   "max_orders_per_day": {
+    "value": 400,
+    "source": "services/api/src/agents/perp-engine.ts:93",
+    "rule": "risk-engine policy of the agent account"
+   }
+  },
+  "observed": {
+   "train": {
+    "decisions_scaled_down": 0,
+    "smallest_scale_factor": 1.0,
+    "orders_below_minimum_trade": 1799,
+    "orders_cut_by_margin": 0,
+    "orders_refused_by_margin": 0,
+    "orders_over_daily_cap": 0,
+    "orders_delayed_beyond_one_bar": 0,
+    "stop": null
+   },
+   "validation": {
+    "decisions_scaled_down": 0,
+    "smallest_scale_factor": 1.0,
+    "orders_below_minimum_trade": 780,
+    "orders_cut_by_margin": 0,
+    "orders_refused_by_margin": 0,
+    "orders_over_daily_cap": 0,
+    "orders_delayed_beyond_one_bar": 0,
+    "stop": null
+   },
+   "test": {
+    "decisions_scaled_down": 0,
+    "smallest_scale_factor": 1.0,
+    "orders_below_minimum_trade": 819,
+    "orders_cut_by_margin": 0,
+    "orders_refused_by_margin": 0,
+    "orders_over_daily_cap": 0,
+    "orders_delayed_beyond_one_bar": 0,
+    "stop": null
+   }
+  },
+  "statement": "the owner's DEFAULT limits: weights scaled by one factor to the leverage, gross and position caps; minimum trade; venue minimum x factor; one exposure-adding order per engine pass; loss limits and liquidation stop the agent (flatten at the next open, no further decision). config.rebalance_threshold is replaced by min_trade_pct"
+ },
+ "data_bias": {
+  "survivorship": {
+   "universe_fixed_ex_post": true,
+   "statement": "the universe was chosen on the run date among instruments that are listed and liquid today; an instrument that was delisted or lost its liquidity during the window cannot be in it. Results are conditional on having picked survivors."
+  },
+  "listing_date_truncation": {
+   "requested_start": "2026-05-19T00:00:00+00:00",
+   "common_start": "2026-05-19T00:00:00+00:00",
+   "first_bar_per_symbol": {
+    "BTC": "2026-05-19T00:00:00+00:00",
+    "BTC@EDGEX": "2026-05-19T00:00:00+00:00",
+    "ETH": "2026-05-19T00:00:00+00:00",
+    "ETH@EDGEX": "2026-05-19T00:00:00+00:00",
+    "SOL": "2026-05-19T00:00:00+00:00",
+    "SOL@EDGEX": "2026-05-19T00:00:00+00:00"
+   },
+   "symbols_setting_the_start": [
+    "BTC",
+    "BTC@EDGEX",
+    "ETH",
+    "ETH@EDGEX",
+    "SOL",
+    "SOL@EDGEX"
+   ],
+   "statement": "the common window starts at the latest first bar among the symbols (a venue's history depth or a listing date); earlier bars of the other symbols are not used"
+  },
+  "common_clock": {
+   "union_bars": 4320,
+   "common_bars": 4320,
+   "dropped_fraction": 0.0,
+   "statement": "bars missing on any symbol are dropped for all (no filling); the mask of each symbol on the union grid is summarised in per_symbol"
+  },
+  "per_symbol": {
+   "BTC": {
+    "bars": 4320,
+    "first_bar": "2026-05-19T00:00:00+00:00",
+    "last_bar": "2026-11-14T23:00:00+00:00",
+    "expected_bars": 4320,
+    "missing_bars": 0,
+    "missing_bar_ratio": 0.0,
+    "longest_gap_bars": 0,
+    "outage_gaps": [],
+    "stale_bars": 0,
+    "stale_price_ratio": 0.0,
+    "zero_volume_ratio": 0.0,
+    "volume_served": true,
+    "venue": "hyperliquid",
+    "present_on_union_grid": 1.0
+   },
+   "BTC@EDGEX": {
+    "bars": 4320,
+    "first_bar": "2026-05-19T00:00:00+00:00",
+    "last_bar": "2026-11-14T23:00:00+00:00",
+    "expected_bars": 4320,
+    "missing_bars": 0,
+    "missing_bar_ratio": 0.0,
+    "longest_gap_bars": 0,
+    "outage_gaps": [],
+    "stale_bars": 1,
+    "stale_price_ratio": 0.0002314814814814815,
+    "zero_volume_ratio": 0.0002314814814814815,
+    "volume_served": true,
+    "venue": "edgex",
+    "present_on_union_grid": 1.0
+   },
+   "ETH": {
+    "bars": 4320,
+    "first_bar": "2026-05-19T00:00:00+00:00",
+    "last_bar": "2026-11-14T23:00:00+00:00",
+    "expected_bars": 4320,
+    "missing_bars": 0,
+    "missing_bar_ratio": 0.0,
+    "longest_gap_bars": 0,
+    "outage_gaps": [],
+    "stale_bars": 0,
+    "stale_price_ratio": 0.0,
+    "zero_volume_ratio": 0.0,
+    "volume_served": true,
+    "venue": "hyperliquid",
+    "present_on_union_grid": 1.0
+   },
+   "ETH@EDGEX": {
+    "bars": 4320,
+    "first_bar": "2026-05-19T00:00:00+00:00",
+    "last_bar": "2026-11-14T23:00:00+00:00",
+    "expected_bars": 4320,
+    "missing_bars": 0,
+    "missing_bar_ratio": 0.0,
+    "longest_gap_bars": 0,
+    "outage_gaps": [],
+    "stale_bars": 1,
+    "stale_price_ratio": 0.0002314814814814815,
+    "zero_volume_ratio": 0.0002314814814814815,
+    "volume_served": true,
+    "venue": "edgex",
+    "present_on_union_grid": 1.0
+   },
+   "SOL": {
+    "bars": 4320,
+    "first_bar": "2026-05-19T00:00:00+00:00",
+    "last_bar": "2026-11-14T23:00:00+00:00",
+    "expected_bars": 4320,
+    "missing_bars": 0,
+    "missing_bar_ratio": 0.0,
+    "longest_gap_bars": 0,
+    "outage_gaps": [],
+    "stale_bars": 0,
+    "stale_price_ratio": 0.0,
+    "zero_volume_ratio": 0.0,
+    "volume_served": true,
+    "venue": "hyperliquid",
+    "present_on_union_grid": 1.0
+   },
+   "SOL@EDGEX": {
+    "bars": 4320,
+    "first_bar": "2026-05-19T00:00:00+00:00",
+    "last_bar": "2026-11-14T23:00:00+00:00",
+    "expected_bars": 4320,
+    "missing_bars": 0,
+    "missing_bar_ratio": 0.0,
+    "longest_gap_bars": 0,
+    "outage_gaps": [],
+    "stale_bars": 2,
+    "stale_price_ratio": 0.000462962962962963,
+    "zero_volume_ratio": 0.000462962962962963,
+    "volume_served": true,
+    "venue": "edgex",
+    "present_on_union_grid": 1.0
+   }
+  }
+ },
+ "journal": {
+  "strategy": {
+   "name": "funding_arb_cross_venue",
+   "version": "1",
+   "sha256": "cd0842111005652cd540b6156d472931b3d434b8f1ba5f48a257f26835313a08"
+  },
+  "code": {
+   "spq_version": "0.1.0",
+   "code_sha256": "6ea1cf4df5ceb8b33c0a763ca1c8724c76de60b861714597b73295ec89507356",
+   "python": "3.12.13",
+   "numpy": "2.5.4",
+   "pandas": "3.1.1"
+  },
+  "data": {
+   "sha256": "469830a143cdd618f832ca61a161114df702ae53067bb0a8018a987e352558c6",
+   "manifest": "2026-11-15-v11.json",
+   "manifest_snapshot_sha256": "25eb8fa4b9e22c3fe439445494dcabe6c18fb6afe866cb26b7043c93e2282764",
+   "captured_at": "2026-11-16T00:38:24+00:00",
+   "range": [
+    "2026-05-19T00:00:00+00:00",
+    "2026-11-14T23:00:00+00:00"
+   ],
+   "bars": 4320
+  },
+  "parameters": {
+   "window": 168,
+   "enter_net_apr": 0.04,
+   "exit_apr": 0.01,
+   "round_trip_cost_bps": 40.0,
+   "holding_days": 30.0,
+   "max_adverse_spread_bps": 10.0,
+   "state_bars": 336,
+   "gross": 0.9
+  },
+  "seed": 0,
+  "n_resamples": 2000,
+  "split_fractions": [
+   0.6,
+   0.2,
+   0.2
+  ],
+  "reproducibility": "no wall-clock value is in this report: generated_at is the capture time of the data snapshot. Same strategy file, lab source, data snapshot, seed and starting ledger reproduce it byte for byte"
+ }
+}

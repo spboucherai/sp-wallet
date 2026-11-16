@@ -1,0 +1,386 @@
+{
+ "source": "hyperliquid",
+ "interval": "1h",
+ "target": "next UTC day's realised variance (sum of squared hourly log returns)",
+ "symbols": {
+  "BTC": {
+   "forecast_days": 120,
+   "first": "2026-07-18T00:00:00+00:00",
+   "last": "2026-11-14T00:00:00+00:00",
+   "min_train_days": 60,
+   "splits": {
+    "train": {
+     "days": 72,
+     "random_walk": {
+      "qlike": 1.2172756009128516,
+      "mse": 3.161690923068008e-07,
+      "n": 72,
+      "mean_forecast_over_mean_rv": 1.0051711499435436
+     },
+     "ewma": {
+      "qlike": 0.6280474773333634,
+      "mse": 2.1053510625807782e-07,
+      "n": 72,
+      "mean_forecast_over_mean_rv": 1.0783753445763373
+     },
+     "har": {
+      "qlike": 0.6338080493100847,
+      "mse": 2.322519234923488e-07,
+      "n": 72,
+      "mean_forecast_over_mean_rv": 1.059220186076372
+     },
+     "garch": {
+      "qlike": 0.5298876251126179,
+      "mse": 2.4392452237793786e-07,
+      "n": 72,
+      "mean_forecast_over_mean_rv": 1.3037628535454913
+     },
+     "best_qlike": "garch"
+    },
+    "validation": {
+     "days": 24,
+     "random_walk": {
+      "qlike": 0.7154951278887722,
+      "mse": 9.187667830406564e-08,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.9917539628911811
+     },
+     "ewma": {
+      "qlike": 0.32713800625557904,
+      "mse": 4.6829092574372325e-08,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 1.1164077044483587
+     },
+     "har": {
+      "qlike": 0.33430438278941615,
+      "mse": 5.315827419871995e-08,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 1.1704540865700677
+     },
+     "garch": {
+      "qlike": 0.300176098131786,
+      "mse": 4.09852763637324e-08,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 1.145897025878434
+     },
+     "best_qlike": "garch"
+    },
+    "test": {
+     "days": 24,
+     "random_walk": {
+      "qlike": 1.1323143017904667,
+      "mse": 2.2530116548804837e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.8965596594039414
+     },
+     "ewma": {
+      "qlike": 0.4941058986640363,
+      "mse": 1.7659991304868802e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.7403106420894499
+     },
+     "har": {
+      "qlike": 0.43338613994448055,
+      "mse": 1.6174358186676128e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.8366396506814386
+     },
+     "garch": {
+      "qlike": 0.44489434946539425,
+      "mse": 1.7042830174139582e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.9565204215381576
+     },
+     "best_qlike": "har"
+    },
+    "all": {
+     "days": 120,
+     "random_walk": {
+      "qlike": 1.0999272464835588,
+      "mse": 2.5313702414250324e-07,
+      "n": 120,
+      "mean_forecast_over_mean_rv": 0.9755289112770728,
+      "mincer_zarnowitz_r2": 0.047704797773489786
+     },
+     "ewma": {
+      "qlike": 0.541077267383941,
+      "mse": 1.7100686487945877e-07,
+      "n": 120,
+      "mean_forecast_over_mean_rv": 0.9994104357175236,
+      "mincer_zarnowitz_r2": 0.00016740907063465729
+     },
+     "har": {
+      "qlike": 0.5338229341328303,
+      "mse": 1.8233152530850556e-07,
+      "n": 120,
+      "mean_forecast_over_mean_rv": 1.0215961720986357,
+      "mincer_zarnowitz_r2": 0.024787993510007683
+     },
+     "garch": {
+      "qlike": 0.4669466645870068,
+      "mse": 1.8863742904778835e-07,
+      "n": 120,
+      "mean_forecast_over_mean_rv": 1.1898310723261818,
+      "mincer_zarnowitz_r2": 0.1042343527285281
+     },
+     "best_qlike": "garch"
+    }
+   },
+   "days_of_realised_variance": 180,
+   "annualised_volatility_mean": 0.3890779237852873
+  },
+  "ETH": {
+   "forecast_days": 120,
+   "first": "2026-07-18T00:00:00+00:00",
+   "last": "2026-11-14T00:00:00+00:00",
+   "min_train_days": 60,
+   "splits": {
+    "train": {
+     "days": 72,
+     "random_walk": {
+      "qlike": 1.4359013716733302,
+      "mse": 1.9584097429023787e-06,
+      "n": 72,
+      "mean_forecast_over_mean_rv": 1.0049017591348235
+     },
+     "ewma": {
+      "qlike": 0.7026564318503876,
+      "mse": 1.0946930535814728e-06,
+      "n": 72,
+      "mean_forecast_over_mean_rv": 1.0835728389621166
+     },
+     "har": {
+      "qlike": 0.9238394802908714,
+      "mse": 1.262822375771625e-06,
+      "n": 72,
+      "mean_forecast_over_mean_rv": 1.0215784367389353
+     },
+     "garch": {
+      "qlike": 0.6516897938649923,
+      "mse": 1.1010603790942838e-06,
+      "n": 72,
+      "mean_forecast_over_mean_rv": 1.292888883119553
+     },
+     "best_qlike": "garch"
+    },
+    "validation": {
+     "days": 24,
+     "random_walk": {
+      "qlike": 0.6734213634587233,
+      "mse": 4.395043754500317e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.9885589248857374
+     },
+     "ewma": {
+      "qlike": 0.374055004660419,
+      "mse": 2.26604970716237e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.9994121737702553
+     },
+     "har": {
+      "qlike": 0.3687868691178175,
+      "mse": 2.3329649421685475e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 1.1361123888770746
+     },
+     "garch": {
+      "qlike": 0.39237533521883955,
+      "mse": 2.5024358951809834e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 1.3861884080327966
+     },
+     "best_qlike": "har"
+    },
+    "test": {
+     "days": 24,
+     "random_walk": {
+      "qlike": 1.851434536905441,
+      "mse": 9.836800686593896e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.8880989715279142
+     },
+     "ewma": {
+      "qlike": 0.5495115553053211,
+      "mse": 6.551514746386818e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.7474727034470564
+     },
+     "har": {
+      "qlike": 0.5346779431422557,
+      "mse": 6.448484178975564e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.7928742080327541
+     },
+     "garch": {
+      "qlike": 0.5146678565868318,
+      "mse": 6.482401710246718e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.9434081578080418
+     },
+     "best_qlike": "garch"
+    },
+    "all": {
+     "days": 120,
+     "random_walk": {
+      "qlike": 1.366512003076831,
+      "mse": 1.4596827345633112e-06,
+      "n": 120,
+      "mean_forecast_over_mean_rv": 0.9720498211406299,
+      "mincer_zarnowitz_r2": 0.005766279612054081
+     },
+     "ewma": {
+      "qlike": 0.6063071711033806,
+      "mse": 8.331671212198675e-07,
+      "n": 120,
+      "mean_forecast_over_mean_rv": 0.9827314075376798,
+      "mincer_zarnowitz_r2": 0.0018049910261112624
+     },
+     "har": {
+      "qlike": 0.7349966506265375,
+      "mse": 9.333224078858571e-07,
+      "n": 120,
+      "mean_forecast_over_mean_rv": 0.9821525918188257,
+      "mincer_zarnowitz_r2": 0.0006161083258461741
+     },
+     "garch": {
+      "qlike": 0.5724225146801296,
+      "mse": 8.403329795651243e-07,
+      "n": 120,
+      "mean_forecast_over_mean_rv": 1.218756737024197,
+      "mincer_zarnowitz_r2": 0.003568901638358587
+     },
+     "best_qlike": "garch"
+    }
+   },
+   "days_of_realised_variance": 180,
+   "annualised_volatility_mean": 0.5224030908846506
+  },
+  "SOL": {
+   "forecast_days": 120,
+   "first": "2026-07-18T00:00:00+00:00",
+   "last": "2026-11-14T00:00:00+00:00",
+   "min_train_days": 60,
+   "splits": {
+    "train": {
+     "days": 72,
+     "random_walk": {
+      "qlike": 0.5998324992551647,
+      "mse": 8.120647451954603e-07,
+      "n": 72,
+      "mean_forecast_over_mean_rv": 0.9857603829403296
+     },
+     "ewma": {
+      "qlike": 0.41737135407479503,
+      "mse": 6.361501875910064e-07,
+      "n": 72,
+      "mean_forecast_over_mean_rv": 1.0103136537410105
+     },
+     "har": {
+      "qlike": 0.37210462921975057,
+      "mse": 6.170404509878861e-07,
+      "n": 72,
+      "mean_forecast_over_mean_rv": 1.0414324448743606
+     },
+     "garch": {
+      "qlike": 0.4252389055693356,
+      "mse": 6.021724694013448e-07,
+      "n": 72,
+      "mean_forecast_over_mean_rv": 1.1178653638885296
+     },
+     "best_qlike": "har"
+    },
+    "validation": {
+     "days": 24,
+     "random_walk": {
+      "qlike": 0.5630506802551937,
+      "mse": 7.948897058714195e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 1.0356923647198737
+     },
+     "ewma": {
+      "qlike": 0.3199575423926198,
+      "mse": 4.0711073737838505e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 1.0249894705146354
+     },
+     "har": {
+      "qlike": 0.33736022148026623,
+      "mse": 4.66351918581799e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 1.0331741699386048
+     },
+     "garch": {
+      "qlike": 0.2765923025959041,
+      "mse": 3.575248045066701e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.9283144603481936
+     },
+     "best_qlike": "garch"
+    },
+    "test": {
+     "days": 24,
+     "random_walk": {
+      "qlike": 0.8373868829587648,
+      "mse": 8.577068966444889e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.8997701761452529
+     },
+     "ewma": {
+      "qlike": 0.3701890395657614,
+      "mse": 6.488448995734052e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.8854385644225912
+     },
+     "har": {
+      "qlike": 0.37108812361424226,
+      "mse": 6.134357861919735e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.8994380077739852
+     },
+     "garch": {
+      "qlike": 0.39154840047220335,
+      "mse": 6.735410846493383e-07,
+      "n": 24,
+      "mean_forecast_over_mean_rv": 0.8597876029922167
+     },
+     "best_qlike": "ewma"
+    },
+    "all": {
+     "days": 120,
+     "random_walk": {
+      "qlike": 0.6399870121958905,
+      "mse": 8.177581676204579e-07,
+      "n": 120,
+      "mean_forecast_over_mean_rv": 0.976546773920037,
+      "mincer_zarnowitz_r2": 0.08661332598719856
+     },
+     "ewma": {
+      "qlike": 0.3884521288365532,
+      "mse": 5.928812399449618e-07,
+      "n": 120,
+      "mean_forecast_over_mean_rv": 0.9850814700673947,
+      "mincer_zarnowitz_r2": 0.01234619706896184
+     },
+     "har": {
+      "qlike": 0.36495244655075204,
+      "mse": 5.861818115474862e-07,
+      "n": 120,
+      "mean_forecast_over_mean_rv": 1.007628970803553,
+      "mincer_zarnowitz_r2": 0.0925425710927135
+     },
+     "garch": {
+      "qlike": 0.3887714839552229,
+      "mse": 5.675166594720084e-07,
+      "n": 120,
+      "mean_forecast_over_mean_rv": 1.020658277388967,
+      "mincer_zarnowitz_r2": 0.06623842775244661
+     },
+     "best_qlike": "har"
+    }
+   },
+   "days_of_realised_variance": 180,
+   "annualised_volatility_mean": 0.5923192733298865
+  }
+ },
+ "statement": "one-day-ahead forecasts on an expanding window; about six months of data, so a few dozen forecast days per split: differences between models are indicative only. QLIKE and MSE are computed against realised variance from hourly returns, itself a noisy proxy."
+}

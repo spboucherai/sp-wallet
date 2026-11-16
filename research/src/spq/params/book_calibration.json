@@ -1,0 +1,666 @@
+{
+ "cadence_s": 5.0,
+ "instruments": {
+  "BTC@DYDX": {
+   "venue": "dydx",
+   "snapshots": 756,
+   "errors": 0,
+   "minutes": 67.54475,
+   "first": "2026-11-16T00:32:09.478000+00:00",
+   "last": "2026-11-16T01:39:42.163000+00:00",
+   "half_spread_bps_median": 1.384,
+   "half_spread_bps_p90": 3.7051,
+   "depth_profile": {
+    "n_snapshots": 756,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     1.4681,
+     1.4681,
+     1.5423,
+     6.8427,
+     10.8164
+    ],
+    "p90_bps": [
+     4.39,
+     4.394,
+     4.4386,
+     8.8598,
+     13.1348
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   }
+  },
+  "ETH@DYDX": {
+   "venue": "dydx",
+   "snapshots": 756,
+   "errors": 0,
+   "minutes": 67.55638333333333,
+   "first": "2026-11-16T00:32:09.565000+00:00",
+   "last": "2026-11-16T01:39:42.948000+00:00",
+   "half_spread_bps_median": 1.9368,
+   "half_spread_bps_p90": 3.8716,
+   "depth_profile": {
+    "n_snapshots": 756,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     2.1129,
+     2.1933,
+     2.2017,
+     7.0355,
+     11.1952
+    ],
+    "p90_bps": [
+     4.1242,
+     4.1407,
+     4.1446,
+     9.276,
+     15.9168
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   }
+  },
+  "SOL@DYDX": {
+   "venue": "dydx",
+   "snapshots": 756,
+   "errors": 0,
+   "minutes": 67.56226666666667,
+   "first": "2026-11-16T00:32:09.739000+00:00",
+   "last": "2026-11-16T01:39:43.475000+00:00",
+   "half_spread_bps_median": 2.7811,
+   "half_spread_bps_p90": 4.2108,
+   "depth_profile": {
+    "n_snapshots": 756,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     2.7811,
+     2.7813,
+     2.8492,
+     9.718,
+     21.0605
+    ],
+    "p90_bps": [
+     4.2108,
+     4.3894,
+     4.8753,
+     12.8709,
+     28.7411
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   }
+  },
+  "BTC@EDGEX": {
+   "venue": "edgex",
+   "snapshots": 756,
+   "errors": 0,
+   "minutes": 67.54828333333333,
+   "first": "2026-11-16T00:32:08.350000+00:00",
+   "last": "2026-11-16T01:39:41.247000+00:00",
+   "half_spread_bps_median": 0.0695,
+   "half_spread_bps_p90": 0.0773,
+   "depth_profile": {
+    "n_snapshots": 756,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     0.0695,
+     0.0695,
+     0.0695,
+     0.0776,
+     0.3135
+    ],
+    "p90_bps": [
+     0.0773,
+     0.1105,
+     0.1236,
+     0.1302,
+     0.5037
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0146
+    ]
+   }
+  },
+  "ETH@EDGEX": {
+   "venue": "edgex",
+   "snapshots": 756,
+   "errors": 0,
+   "minutes": 67.54825,
+   "first": "2026-11-16T00:32:08.645000+00:00",
+   "last": "2026-11-16T01:39:41.540000+00:00",
+   "half_spread_bps_median": 0.1658,
+   "half_spread_bps_p90": 0.2213,
+   "depth_profile": {
+    "n_snapshots": 756,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     0.1659,
+     0.3548,
+     0.7802,
+     0.8243,
+     1.1114
+    ],
+    "p90_bps": [
+     0.2384,
+     0.5933,
+     1.1986,
+     1.283,
+     1.8077
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   }
+  },
+  "SOL@EDGEX": {
+   "venue": "edgex",
+   "snapshots": 756,
+   "errors": 0,
+   "minutes": 67.54398333333333,
+   "first": "2026-11-16T00:32:09.170000+00:00",
+   "last": "2026-11-16T01:39:41.809000+00:00",
+   "half_spread_bps_median": 2.7873,
+   "half_spread_bps_p90": 2.8082,
+   "depth_profile": {
+    "n_snapshots": 756,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     2.7873,
+     2.7875,
+     2.7875,
+     2.7875,
+     2.955
+    ],
+    "p90_bps": [
+     2.8082,
+     2.8082,
+     2.8082,
+     2.8082,
+     3.8374
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   }
+  },
+  "AAVE": {
+   "venue": "hyperliquid",
+   "snapshots": 540,
+   "errors": 0,
+   "minutes": 44.91865,
+   "first": "2026-11-16T00:54:34.554000+00:00",
+   "last": "2026-11-16T01:39:29.673000+00:00",
+   "half_spread_bps_median": 0.9202,
+   "half_spread_bps_p90": 1.3822,
+   "depth_profile": {
+    "n_snapshots": 540,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     0.9209,
+     1.2815,
+     3.7847,
+     10.3792,
+     null
+    ],
+    "p90_bps": [
+     1.3835,
+     2.0364,
+     4.6481,
+     11.5969,
+     null
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.0296,
+     1.0
+    ]
+   }
+  },
+  "AVAX": {
+   "venue": "hyperliquid",
+   "snapshots": 540,
+   "errors": 0,
+   "minutes": 44.91973333333333,
+   "first": "2026-11-16T00:54:35.300000+00:00",
+   "last": "2026-11-16T01:39:30.484000+00:00",
+   "half_spread_bps_median": 0.8328,
+   "half_spread_bps_p90": 1.4628,
+   "depth_profile": {
+    "n_snapshots": 540,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     0.909,
+     1.3334,
+     2.9848,
+     null,
+     null
+    ],
+    "p90_bps": [
+     1.6042,
+     2.3408,
+     4.3129,
+     null,
+     null
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.9963,
+     1.0
+    ]
+   }
+  },
+  "BNB": {
+   "venue": "hyperliquid",
+   "snapshots": 540,
+   "errors": 0,
+   "minutes": 44.91943333333333,
+   "first": "2026-11-16T00:54:35.556000+00:00",
+   "last": "2026-11-16T01:39:30.722000+00:00",
+   "half_spread_bps_median": 0.5056,
+   "half_spread_bps_p90": 0.7603,
+   "depth_profile": {
+    "n_snapshots": 540,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     0.5056,
+     0.6405,
+     1.6417,
+     null,
+     null
+    ],
+    "p90_bps": [
+     0.7606,
+     1.012,
+     2.5267,
+     null,
+     null
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.4537,
+     1.0
+    ]
+   }
+  },
+  "BTC": {
+   "venue": "hyperliquid",
+   "snapshots": 757,
+   "errors": 0,
+   "minutes": 67.59915,
+   "first": "2026-11-16T00:32:07.790000+00:00",
+   "last": "2026-11-16T01:39:43.739000+00:00",
+   "half_spread_bps_median": 0.0771,
+   "half_spread_bps_p90": 0.0773,
+   "depth_profile": {
+    "n_snapshots": 757,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     0.0772,
+     0.0772,
+     0.0772,
+     0.3509,
+     1.4858
+    ],
+    "p90_bps": [
+     0.6,
+     1.0008,
+     1.3018,
+     1.6809,
+     2.5673
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0106
+    ]
+   }
+  },
+  "DOGE": {
+   "venue": "hyperliquid",
+   "snapshots": 540,
+   "errors": 0,
+   "minutes": 44.91856666666666,
+   "first": "2026-11-16T00:54:35.113000+00:00",
+   "last": "2026-11-16T01:39:30.227000+00:00",
+   "half_spread_bps_median": 0.2544,
+   "half_spread_bps_p90": 0.7685,
+   "depth_profile": {
+    "n_snapshots": 540,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     0.3929,
+     0.5839,
+     1.376,
+     null,
+     null
+    ],
+    "p90_bps": [
+     1.014,
+     1.5962,
+     2.5429,
+     null,
+     null
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.3333,
+     1.0
+    ]
+   }
+  },
+  "ETH": {
+   "venue": "hyperliquid",
+   "snapshots": 757,
+   "errors": 0,
+   "minutes": 67.60031666666667,
+   "first": "2026-11-16T00:32:07.977000+00:00",
+   "last": "2026-11-16T01:39:43.996000+00:00",
+   "half_spread_bps_median": 0.2761,
+   "half_spread_bps_p90": 0.2768,
+   "depth_profile": {
+    "n_snapshots": 757,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     0.2761,
+     0.2762,
+     0.2764,
+     0.7989,
+     2.6034
+    ],
+    "p90_bps": [
+     0.5519,
+     0.8136,
+     1.1903,
+     2.1525,
+     3.9621
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.004
+    ]
+   }
+  },
+  "HYPE": {
+   "venue": "hyperliquid",
+   "snapshots": 540,
+   "errors": 0,
+   "minutes": 44.91843333333333,
+   "first": "2026-11-16T00:54:34.746000+00:00",
+   "last": "2026-11-16T01:39:29.852000+00:00",
+   "half_spread_bps_median": 0.0753,
+   "half_spread_bps_p90": 0.4504,
+   "depth_profile": {
+    "n_snapshots": 540,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     0.0753,
+     0.2999,
+     1.0573,
+     null,
+     null
+    ],
+    "p90_bps": [
+     0.6776,
+     1.2927,
+     2.3864,
+     null,
+     null
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.013,
+     0.7852,
+     1.0
+    ]
+   }
+  },
+  "LINK": {
+   "venue": "hyperliquid",
+   "snapshots": 540,
+   "errors": 0,
+   "minutes": 44.91683333333334,
+   "first": "2026-11-16T00:54:34.366000+00:00",
+   "last": "2026-11-16T01:39:29.376000+00:00",
+   "half_spread_bps_median": 0.7621,
+   "half_spread_bps_p90": 1.3642,
+   "depth_profile": {
+    "n_snapshots": 540,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     0.9628,
+     1.8755,
+     3.4379,
+     null,
+     null
+    ],
+    "p90_bps": [
+     1.7768,
+     2.9045,
+     5.015,
+     null,
+     null
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.987,
+     1.0
+    ]
+   }
+  },
+  "SOL": {
+   "venue": "hyperliquid",
+   "snapshots": 757,
+   "errors": 0,
+   "minutes": 67.60033333333334,
+   "first": "2026-11-16T00:32:08.160000+00:00",
+   "last": "2026-11-16T01:39:44.180000+00:00",
+   "half_spread_bps_median": 0.0699,
+   "half_spread_bps_p90": 0.3487,
+   "depth_profile": {
+    "n_snapshots": 757,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     0.07,
+     0.0702,
+     0.3227,
+     1.5408,
+     null
+    ],
+    "p90_bps": [
+     0.555,
+     0.8706,
+     1.3798,
+     2.6302,
+     null
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.033,
+     1.0
+    ]
+   }
+  },
+  "XRP": {
+   "venue": "hyperliquid",
+   "snapshots": 540,
+   "errors": 0,
+   "minutes": 44.91846666666667,
+   "first": "2026-11-16T00:54:34.931000+00:00",
+   "last": "2026-11-16T01:39:30.039000+00:00",
+   "half_spread_bps_median": 0.0521,
+   "half_spread_bps_p90": 0.4166,
+   "depth_profile": {
+    "n_snapshots": 540,
+    "notionals": [
+     100.0,
+     1000.0,
+     10000.0,
+     100000.0,
+     1000000.0
+    ],
+    "median_bps": [
+     0.0522,
+     0.2083,
+     0.502,
+     1.8981,
+     null
+    ],
+    "p90_bps": [
+     0.5204,
+     0.8803,
+     1.4395,
+     2.8362,
+     null
+    ],
+    "unfillable_fraction": [
+     0.0,
+     0.0,
+     0.0,
+     0.0741,
+     1.0
+    ]
+   }
+  }
+ },
+ "recorded": [
+  "2026-11-16T00:32:07.790000+00:00",
+  "2026-11-16T01:39:44.180000+00:00"
+ ],
+ "statement": "measured on ONE short recording of the visible book (see `recorded`): one time of day, no hidden liquidity, no trade. The backtester uses, per symbol, max(venue default half spread, measured 90th percentile) as the half spread and the 90th-percentile depth curve as the cost of an order; an order larger than the visible depth falls back to the square-root formula."
+}

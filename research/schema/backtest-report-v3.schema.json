@@ -1,0 +1,1504 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://sp-wallet.local/schema/backtest-report-v3.schema.json",
+ "title": "SP Wallet quantitative lab: backtest report, version 3 (V11: execution realism, engine parity, data bias, journal)",
+ "description": "Additive over version 2: every version-2 key keeps its meaning. New: execution_model, engine_parity, venue_accounts, data_bias, journal, metrics.<split>.gross_to_net, robustness.execution_sensitivity. Symbols may carry a venue: BTC (primary venue), BTC@EDGEX (another venue), BTC.SPOT (spot leg). generated_at is the capture time of the data snapshot (no wall clock: the report is reproducible byte for byte).",
+ "type": "object",
+ "required": [
+  "strategy_sha256",
+  "config",
+  "splits",
+  "metrics",
+  "benchmarks",
+  "robustness",
+  "checks",
+  "equity_curve",
+  "schema_version",
+  "kind",
+  "ledger",
+  "liquidations",
+  "funding",
+  "generated_at",
+  "execution_model",
+  "engine_parity",
+  "venue_accounts",
+  "data_bias",
+  "journal"
+ ],
+ "properties": {
+  "schema_version": {
+   "const": 3
+  },
+  "generated_at": {
+   "type": "string",
+   "format": "date-time"
+  },
+  "strategy_sha256": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{64}$"
+  },
+  "strategy": {
+   "type": "object",
+   "required": [
+    "name",
+    "version",
+    "meta"
+   ],
+   "properties": {
+    "name": {
+     "type": "string"
+    },
+    "version": {
+     "type": "string"
+    },
+    "meta": {
+     "type": "object"
+    }
+   }
+  },
+  "config": {
+   "type": "object",
+   "required": [
+    "symbols",
+    "interval",
+    "start",
+    "end",
+    "fee_bps",
+    "slippage_bps",
+    "initial_cash",
+    "taker_fee_bps",
+    "leverage",
+    "max_leverage",
+    "max_gross_exposure",
+    "maintenance_fraction",
+    "liquidation_penalty_bps"
+   ],
+   "properties": {
+    "symbols": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9]+(\\.SPOT|@[A-Z0-9]+)?$"
+     },
+     "minItems": 1,
+     "uniqueItems": true,
+     "description": "perpetuals, and spot legs written <SYMBOL>.SPOT"
+    },
+    "interval": {
+     "type": "string",
+     "pattern": "^[0-9]+[mhdw]$"
+    },
+    "start": {
+     "type": "string",
+     "format": "date-time",
+     "description": "first bar of the data (bar-open time, UTC)"
+    },
+    "end": {
+     "type": "string",
+     "format": "date-time",
+     "description": "last bar of the data (bar-open time, UTC)"
+    },
+    "fee_bps": {
+     "type": "number",
+     "minimum": 0
+    },
+    "slippage_bps": {
+     "type": "number",
+     "minimum": 0
+    },
+    "initial_cash": {
+     "type": "number",
+     "exclusiveMinimum": 0
+    },
+    "min_order": {
+     "type": "number",
+     "minimum": 0
+    },
+    "rebalance_threshold": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 1
+    },
+    "decision_every": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "params": {
+     "type": "object"
+    },
+    "source": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "bars": {
+     "type": "integer"
+    },
+    "split_fractions": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 3,
+     "maxItems": 3
+    },
+    "venue": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "taker_fee_bps": {
+     "type": "number",
+     "minimum": 0
+    },
+    "maker_fee_bps": {
+     "type": "number"
+    },
+    "liquidity": {
+     "enum": [
+      "taker",
+      "maker"
+     ],
+     "description": "which fee the fills paid; fee_bps is that fee"
+    },
+    "leverage": {
+     "type": "number",
+     "exclusiveMinimum": 0,
+     "description": "account leverage setting used for the initial margin (capped per symbol by venue_max_leverage)"
+    },
+    "max_leverage": {
+     "type": "number",
+     "exclusiveMinimum": 0,
+     "description": "META['max_leverage']: bound of one weight"
+    },
+    "max_gross_exposure": {
+     "type": "number",
+     "exclusiveMinimum": 0,
+     "description": "META['max_gross_exposure']: bound of the sum of absolute weights"
+    },
+    "venue_max_leverage": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "number"
+     }
+    },
+    "maintenance_fraction": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "number",
+      "minimum": 0,
+      "exclusiveMaximum": 1
+     }
+    },
+    "liquidation_penalty_bps": {
+     "type": "number",
+     "minimum": 0
+    },
+    "size_decimals": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "integer",
+      "minimum": 0
+     }
+    },
+    "spot_fee_bps": {
+     "type": "number",
+     "minimum": 0
+    },
+    "spot_slippage_bps": {
+     "type": "number",
+     "minimum": 0
+    },
+    "funding_reference_price": {
+     "type": "string"
+    }
+   }
+  },
+  "splits": {
+   "type": "object",
+   "required": [
+    "train",
+    "validation",
+    "test"
+   ],
+   "properties": {
+    "train": {
+     "type": "array",
+     "prefixItems": [
+      {
+       "type": "string",
+       "format": "date-time"
+      },
+      {
+       "type": "string",
+       "format": "date-time"
+      }
+     ],
+     "minItems": 2,
+     "maxItems": 2,
+     "description": "[first bar, last bar] (bar-open times, UTC, both inclusive)"
+    },
+    "validation": {
+     "type": "array",
+     "prefixItems": [
+      {
+       "type": "string",
+       "format": "date-time"
+      },
+      {
+       "type": "string",
+       "format": "date-time"
+      }
+     ],
+     "minItems": 2,
+     "maxItems": 2,
+     "description": "[first bar, last bar] (bar-open times, UTC, both inclusive)"
+    },
+    "test": {
+     "type": "array",
+     "prefixItems": [
+      {
+       "type": "string",
+       "format": "date-time"
+      },
+      {
+       "type": "string",
+       "format": "date-time"
+      }
+     ],
+     "minItems": 2,
+     "maxItems": 2,
+     "description": "[first bar, last bar] (bar-open times, UTC, both inclusive)"
+    }
+   },
+   "additionalProperties": false
+  },
+  "metrics": {
+   "type": "object",
+   "required": [
+    "train",
+    "validation",
+    "test"
+   ],
+   "properties": {
+    "train": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/perp_metrics"
+      },
+      {
+       "required": [
+        "gross_to_net"
+       ]
+      }
+     ]
+    },
+    "validation": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/perp_metrics"
+      },
+      {
+       "required": [
+        "gross_to_net"
+       ]
+      }
+     ]
+    },
+    "test": {
+     "allOf": [
+      {
+       "$ref": "#/$defs/perp_metrics"
+      },
+      {
+       "required": [
+        "gross_to_net"
+       ]
+      }
+     ]
+    }
+   },
+   "additionalProperties": false
+  },
+  "benchmarks": {
+   "type": "object",
+   "description": "Same metrics on the TEST split. buy_and_hold: equal weights bought once, never rebalanced (the single asset when there is one symbol); equal_weight: rebalanced; buy_and_hold_<SYM>: one asset.",
+   "required": [
+    "buy_and_hold",
+    "perp_long_1x"
+   ],
+   "additionalProperties": {
+    "anyOf": [
+     {
+      "$ref": "#/$defs/perp_metrics"
+     },
+     {
+      "$ref": "#/$defs/metrics"
+     }
+    ]
+   },
+   "properties": {
+    "buy_and_hold": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/perp_metrics"
+      },
+      {
+       "$ref": "#/$defs/metrics"
+      }
+     ],
+     "description": "the same assets bought once on the spot market and held (spot engine and costs); the perpetual price without funding when no spot data were supplied (see checks.notes)"
+    },
+    "perp_long_1x": {
+     "$ref": "#/$defs/perp_metrics",
+     "description": "perpetuals bought once at 1x, equal weights, held: price PnL and funding, same costs"
+    }
+   }
+  },
+  "robustness": {
+   "type": "object",
+   "required": [
+    "walk_forward",
+    "bootstrap_sharpe_ci",
+    "parameter_sensitivity",
+    "trials_tested",
+    "deflated_sharpe"
+   ],
+   "properties": {
+    "walk_forward": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "in_sample",
+       "out_of_sample",
+       "params"
+      ]
+     }
+    },
+    "bootstrap_sharpe_ci": {
+     "type": "array",
+     "prefixItems": [
+      {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      {
+       "type": [
+        "number",
+        "null"
+       ]
+      }
+     ],
+     "minItems": 2,
+     "maxItems": 2,
+     "description": "[lo, hi] of the annualised Sharpe ratio on the test split"
+    },
+    "bootstrap": {
+     "type": "object"
+    },
+    "parameter_sensitivity": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "params"
+      ]
+     }
+    },
+    "trials_tested": {
+     "type": "integer",
+     "minimum": 1,
+     "description": "number of distinct configurations evaluated before this result (N of the deflated Sharpe ratio)"
+    },
+    "deflated_sharpe": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "maximum": 1,
+     "description": "Bailey & Lopez de Prado (2014): probability that the true Sharpe ratio is positive given trials_tested trials; null when undefined (e.g. no variance)"
+    },
+    "deflated_sharpe_detail": {
+     "type": "object"
+    },
+    "monte_carlo": {
+     "type": "object"
+    },
+    "stress_windows": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "window",
+       "benchmark_return",
+       "strategy_return"
+      ]
+     }
+    },
+    "test_evaluations": {
+     "type": "integer",
+     "minimum": 1,
+     "description": "how many times this strategy name was evaluated on a test split according to the ledger"
+    },
+    "funding_stress_windows": {
+     "type": "array",
+     "description": "strategy vs perp_long_1x in the week-long windows of the test split with the highest and the lowest mean funding",
+     "items": {
+      "type": "object",
+      "required": [
+       "regime",
+       "window",
+       "strategy_return"
+      ]
+     }
+    },
+    "benchmarks_by_split": {
+     "type": "object",
+     "description": "total_return / sharpe / max_drawdown of the benchmarks on train and validation"
+    }
+   }
+  },
+  "checks": {
+   "type": "object",
+   "required": [
+    "lookahead",
+    "data_quality",
+    "notes",
+    "ledger",
+    "funding_alignment"
+   ],
+   "properties": {
+    "lookahead": {
+     "enum": [
+      "pass",
+      "fail"
+     ]
+    },
+    "data_quality": {
+     "enum": [
+      "pass",
+      "fail"
+     ]
+    },
+    "notes": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "data_quality_detail": {
+     "type": "object"
+    },
+    "ledger": {
+     "enum": [
+      "pass",
+      "fail"
+     ],
+     "description": "pass when, for every run of the report, final equity = initial + realised PnL + funding - fees - slippage + unrealised PnL + debt written off, exactly, both from the running balance and from the trade and funding logs"
+    },
+    "funding_alignment": {
+     "enum": [
+      "pass",
+      "fail"
+     ],
+     "description": "pass when the funding column of every perpetual equals the settlement series re-attached by time (settlement at the bar's open hour, none from the future) and settlement instants are on the hour grid"
+    },
+    "funding_quality_detail": {
+     "type": "object"
+    },
+    "funding_alignment_detail": {}
+   }
+  },
+  "equity_curve": {
+   "type": "array",
+   "minItems": 2,
+   "description": "test split, [bar-open time, equity at that bar's close]",
+   "items": {
+    "type": "array",
+    "prefixItems": [
+     {
+      "type": "string",
+      "format": "date-time"
+     },
+     {
+      "type": "number",
+      "minimum": 0
+     }
+    ],
+    "minItems": 2,
+    "maxItems": 2
+   }
+  },
+  "kind": {
+   "const": "perp"
+  },
+  "ledger": {
+   "type": "object",
+   "required": [
+    "train",
+    "validation",
+    "test"
+   ],
+   "additionalProperties": {
+    "type": "object",
+    "description": "exact decimal strings (USDC)",
+    "required": [
+     "initial",
+     "realised_pnl",
+     "funding",
+     "fees",
+     "slippage",
+     "unrealised_pnl",
+     "bad_debt_written_off",
+     "final_equity",
+     "reconciles"
+    ],
+    "properties": {
+     "initial": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+     },
+     "realised_pnl": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+     },
+     "funding": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+     },
+     "fees": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+     },
+     "liquidation_penalties": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+     },
+     "slippage": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+     },
+     "unrealised_pnl": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+     },
+     "bad_debt_written_off": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+     },
+     "collateral": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+     },
+     "final_equity": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+     },
+     "from_logs": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+     },
+     "reconciles": {
+      "type": "boolean"
+     }
+    }
+   }
+  },
+  "liquidations": {
+   "type": "object",
+   "required": [
+    "train",
+    "validation",
+    "test"
+   ],
+   "additionalProperties": {
+    "type": "array",
+    "items": {
+     "type": "object",
+     "required": [
+      "ts",
+      "reason",
+      "positions"
+     ]
+    }
+   }
+  },
+  "funding": {
+   "type": "object",
+   "description": "per split and perpetual: funding rates seen by the run",
+   "required": [
+    "train",
+    "validation",
+    "test"
+   ]
+  },
+  "execution_model": {
+   "type": "object",
+   "required": [
+    "latency",
+    "slippage",
+    "fees",
+    "funding",
+    "accounts",
+    "liquidation"
+   ],
+   "properties": {
+    "latency": {
+     "type": "object",
+     "required": [
+      "model",
+      "latency_s",
+      "order_spacing_s"
+     ],
+     "properties": {
+      "model": {
+       "enum": [
+        "adverse_bound",
+        "next_open"
+       ]
+      },
+      "latency_s": {
+       "type": "number",
+       "minimum": 0
+      },
+      "order_spacing_s": {
+       "type": "number",
+       "minimum": 0
+      },
+      "statement": {
+       "type": "string"
+      }
+     }
+    },
+    "slippage": {
+     "type": "object",
+     "required": [
+      "model",
+      "half_spread_bps"
+     ],
+     "properties": {
+      "model": {
+       "enum": [
+        "sqrt_impact",
+        "constant"
+       ]
+      }
+     }
+    },
+    "fees": {
+     "type": "object",
+     "required": [
+      "liquidity",
+      "fee_table"
+     ],
+     "properties": {
+      "fee_table": {
+       "type": "object",
+       "additionalProperties": {
+        "type": "object",
+        "required": [
+         "taker_bps",
+         "maker_bps",
+         "funding_interval_s",
+         "source",
+         "checked"
+        ]
+       }
+      }
+     }
+    },
+    "funding": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "interval_s",
+       "model"
+      ]
+     }
+    },
+    "accounts": {
+     "type": "object",
+     "required": [
+      "model"
+     ]
+    },
+    "liquidation": {
+     "type": "string"
+    }
+   }
+  },
+  "engine_parity": {
+   "type": "object",
+   "required": [
+    "applied",
+    "statement"
+   ],
+   "properties": {
+    "applied": {
+     "type": "boolean"
+    },
+    "file": {
+     "type": "string"
+    },
+    "parameters": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "value",
+       "source",
+       "rule"
+      ],
+      "properties": {
+       "source": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_./-]+:[0-9]+$"
+       }
+      }
+     }
+    },
+    "observed": {
+     "type": "object",
+     "required": [
+      "train",
+      "validation",
+      "test"
+     ],
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "decisions_scaled_down",
+       "stop"
+      ]
+     }
+    }
+   }
+  },
+  "venue_accounts": {
+   "type": "object",
+   "required": [
+    "train",
+    "validation",
+    "test"
+   ],
+   "additionalProperties": {
+    "type": "object",
+    "additionalProperties": {
+     "type": "object",
+     "required": [
+      "symbols",
+      "margin_utilisation_mean",
+      "margin_utilisation_max",
+      "funding_pnl"
+     ]
+    }
+   }
+  },
+  "data_bias": {
+   "type": "object",
+   "required": [
+    "survivorship",
+    "listing_date_truncation",
+    "common_clock",
+    "per_symbol"
+   ],
+   "properties": {
+    "survivorship": {
+     "type": "object",
+     "required": [
+      "universe_fixed_ex_post",
+      "statement"
+     ]
+    },
+    "listing_date_truncation": {
+     "type": "object",
+     "required": [
+      "common_start",
+      "first_bar_per_symbol"
+     ]
+    },
+    "common_clock": {
+     "type": "object",
+     "required": [
+      "union_bars",
+      "common_bars",
+      "dropped_fraction"
+     ]
+    },
+    "per_symbol": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "missing_bar_ratio",
+       "stale_price_ratio",
+       "outage_gaps",
+       "first_bar",
+       "last_bar"
+      ]
+     }
+    }
+   }
+  },
+  "journal": {
+   "type": "object",
+   "required": [
+    "strategy",
+    "code",
+    "data",
+    "parameters",
+    "seed"
+   ],
+   "properties": {
+    "strategy": {
+     "type": "object",
+     "required": [
+      "name",
+      "version",
+      "sha256"
+     ],
+     "properties": {
+      "sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      }
+     }
+    },
+    "code": {
+     "type": "object",
+     "required": [
+      "spq_version",
+      "code_sha256"
+     ],
+     "properties": {
+      "code_sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      }
+     }
+    },
+    "data": {
+     "type": "object",
+     "required": [
+      "sha256"
+     ],
+     "properties": {
+      "sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      }
+     }
+    },
+    "parameters": {
+     "type": "object"
+    },
+    "seed": {
+     "type": "integer"
+    }
+   }
+  }
+ },
+ "$defs": {
+  "metrics": {
+   "type": "object",
+   "description": "Metrics of one backtest window. Ratios that are undefined (no variance, no drawdown, no closed lot, no losing lot) are null.",
+   "required": [
+    "total_return",
+    "cagr",
+    "volatility",
+    "sharpe",
+    "sortino",
+    "max_drawdown",
+    "calmar",
+    "turnover",
+    "trades",
+    "win_rate",
+    "profit_factor",
+    "fees_paid",
+    "exposure",
+    "slippage_paid",
+    "returns"
+   ],
+   "properties": {
+    "total_return": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "cagr": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "volatility": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "description": "annualised with the bar interval, 24/7 market"
+    },
+    "sharpe": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "sortino": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "max_drawdown": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "maximum": 1,
+     "description": "positive fraction: 0.35 means -35 %"
+    },
+    "calmar": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "turnover": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "description": "traded notional / average equity over the window"
+    },
+    "turnover_annual": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0
+    },
+    "trades": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "number of fills"
+    },
+    "closed_lots": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "win_rate": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "maximum": 1
+    },
+    "profit_factor": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0
+    },
+    "fees_paid": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0
+    },
+    "slippage_paid": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0
+    },
+    "exposure": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "maximum": 1.000001,
+     "description": "average invested fraction of equity"
+    },
+    "bars": {
+     "type": "integer",
+     "minimum": 2
+    },
+    "final_equity": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "returns": {
+     "type": "object",
+     "description": "per-bar return distribution",
+     "required": [
+      "n"
+     ],
+     "properties": {
+      "n": {
+       "type": "integer"
+      }
+     },
+     "additionalProperties": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    }
+   },
+   "additionalProperties": false
+  },
+  "perp_metrics": {
+   "type": "object",
+   "description": "Metrics of one backtest window. Ratios that are undefined (no variance, no drawdown, no closed lot, no losing lot) are null.",
+   "required": [
+    "total_return",
+    "cagr",
+    "volatility",
+    "sharpe",
+    "sortino",
+    "max_drawdown",
+    "calmar",
+    "turnover",
+    "trades",
+    "win_rate",
+    "profit_factor",
+    "fees_paid",
+    "exposure",
+    "slippage_paid",
+    "returns",
+    "realised_pnl",
+    "funding_pnl",
+    "liquidation_penalties",
+    "long_exposure",
+    "short_exposure",
+    "gross_leverage_mean",
+    "gross_leverage_max",
+    "net_leverage_mean",
+    "net_leverage_max",
+    "net_leverage_min",
+    "time_in_market",
+    "avg_holding_bars",
+    "avg_holding_hours",
+    "liquidations",
+    "wiped_out",
+    "margin_utilisation_mean",
+    "margin_utilisation_max",
+    "worst_intrabar_drawdown",
+    "orders_cut",
+    "orders_refused",
+    "funding_payments",
+    "funding_missing"
+   ],
+   "properties": {
+    "total_return": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "cagr": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "volatility": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "description": "annualised with the bar interval, 24/7 market"
+    },
+    "sharpe": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "sortino": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "max_drawdown": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "maximum": 1,
+     "description": "positive fraction: 0.35 means -35 %"
+    },
+    "calmar": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "turnover": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "description": "traded notional / average equity over the window"
+    },
+    "turnover_annual": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0
+    },
+    "trades": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "number of fills"
+    },
+    "closed_lots": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "win_rate": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "maximum": 1
+    },
+    "profit_factor": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0
+    },
+    "fees_paid": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "description": "USD, trading fees + liquidation penalties"
+    },
+    "slippage_paid": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0
+    },
+    "exposure": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "description": "mean gross exposure / equity (for a long-only spot run: the invested fraction)"
+    },
+    "bars": {
+     "type": "integer",
+     "minimum": 2
+    },
+    "final_equity": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "returns": {
+     "type": "object",
+     "description": "per-bar return distribution",
+     "required": [
+      "n"
+     ],
+     "properties": {
+      "n": {
+       "type": "integer"
+      }
+     },
+     "additionalProperties": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "realised_pnl": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "USD, sum of the realised PnL of closing fills (fees excluded)"
+    },
+    "funding_pnl": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "USD, sum of funding payments; negative = paid"
+    },
+    "liquidation_penalties": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "USD, part of fees_paid"
+    },
+    "long_exposure": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "mean long notional / equity"
+    },
+    "short_exposure": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "mean short notional / equity (positive)"
+    },
+    "gross_leverage_mean": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "mean (long + short notional) / equity"
+    },
+    "gross_leverage_max": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "maximum of the same at bar closes"
+    },
+    "net_leverage_mean": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "mean (long - short notional) / equity"
+    },
+    "net_leverage_max": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "largest net long"
+    },
+    "net_leverage_min": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "largest net short (negative)"
+    },
+    "time_in_market": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "share of bars ending with a position"
+    },
+    "avg_holding_bars": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "mean run of bars with a same-sign position in one symbol"
+    },
+    "avg_holding_hours": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "same in hours"
+    },
+    "liquidations": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "account liquidations (each closes every perpetual position)"
+    },
+    "wiped_out": {
+     "type": "boolean",
+     "description": "equity reached zero; the run stopped there"
+    },
+    "margin_utilisation_mean": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "initial margin in use / margin equity, bars with a perpetual position"
+    },
+    "margin_utilisation_max": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "maximum of the same"
+    },
+    "worst_intrabar_drawdown": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "positive fraction; uses each bar's adverse extreme against the previous closing peak"
+    },
+    "orders_cut": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "orders_refused": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "funding_payments": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "funding_missing": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "gross_to_net": {
+     "$ref": "#/$defs/gross_to_net"
+    }
+   },
+   "additionalProperties": false
+  },
+  "gross_to_net": {
+   "type": "object",
+   "additionalProperties": false,
+   "description": "USD and fractions of the initial collateral; net_pnl = price_pnl + funding - trading_fees - liquidation_penalties - slippage - latency + bad_debt_written_off (the engine's exact ledger)",
+   "required": [
+    "price_pnl",
+    "funding",
+    "trading_fees",
+    "liquidation_penalties",
+    "slippage",
+    "latency",
+    "net_pnl",
+    "return_gross",
+    "return_net",
+    "sharpe_gross",
+    "sharpe_net"
+   ],
+   "properties": {
+    "price_pnl": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "funding": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "trading_fees": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "liquidation_penalties": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "slippage": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "latency": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "bad_debt_written_off": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "net_pnl": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "return_gross": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "return_after_funding": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "return_net": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "sharpe_gross": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "sharpe_net": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "cost_drag_bps_of_mean_equity": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "costs_over_gross_profit": {
+     "type": [
+      "number",
+      "null"
+     ]
+    }
+   }
+  }
+ }
+}

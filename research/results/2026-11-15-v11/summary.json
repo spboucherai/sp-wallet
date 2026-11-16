@@ -1,0 +1,855 @@
+{
+ "rows": [
+  {
+   "strategy": "momentum_xs_perp/1",
+   "sha256": "d3bfb5c58a9416a85e7f4fa8ae1cf177a3f27da7b26b053e26876d5c3f3b9b4b",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "LINK",
+    "AAVE",
+    "HYPE",
+    "XRP",
+    "DOGE",
+    "AVAX",
+    "BNB"
+   ],
+   "train": {
+    "return_net": -0.013310985330565406,
+    "sharpe_net": -0.37619437722305543,
+    "sharpe_gross": 0.5272332661145867,
+    "max_drawdown": 0.06726907701270057,
+    "trades": 416,
+    "gross_to_net": {
+     "price_pnl": 14.692536,
+     "funding": -1.3650712817752615,
+     "trading_fees": 9.868657207185377,
+     "liquidation_penalties": 0.0,
+     "slippage": 2.10535450381548,
+     "latency": 14.66443833778922,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -13.310985330565359,
+     "return_gross": 0.014692536,
+     "return_after_funding": 0.013327464718224739,
+     "return_net": -0.013310985330565359,
+     "sharpe_gross": 0.5272332661145867,
+     "sharpe_net": -0.37619437722305543,
+     "cost_drag_bps_of_mean_equity": 262.4989030405384,
+     "costs_over_gross_profit": 1.8130600495918523
+    },
+    "stop": {
+     "code": "daily_loss",
+     "reason": "daily loss limit reached (3 % of the capital)",
+     "ts": "2026-08-20T16:00:00+00:00",
+     "equity": 988.8071232024241
+    }
+   },
+   "validation": {
+    "return_net": -0.05300514928280298,
+    "sharpe_net": -5.143233179264645,
+    "sharpe_gross": -3.87323450776306,
+    "max_drawdown": 0.05762010129470263,
+    "trades": 147,
+    "gross_to_net": {
+     "price_pnl": -39.622976,
+     "funding": 0.4521384286055577,
+     "trading_fees": 4.692161546214457,
+     "liquidation_penalties": 0.0,
+     "slippage": 0.97343603533274,
+     "latency": 8.168714129861366,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -53.00514928280302,
+     "return_gross": -0.039622976000000004,
+     "return_after_funding": -0.039170837571394446,
+     "return_net": -0.05300514928280302,
+     "sharpe_gross": -3.87323450776306,
+     "sharpe_net": -5.143233179264645,
+     "cost_drag_bps_of_mean_equity": 144.22784728264472,
+     "costs_over_gross_profit": null
+    },
+    "stop": {
+     "code": "daily_loss",
+     "reason": "daily loss limit reached (3 % of the capital)",
+     "ts": "2026-09-21T15:00:00+00:00",
+     "equity": 948.2800425196217
+    }
+   },
+   "test": {
+    "return_net": -0.030871785768149862,
+    "sharpe_net": -2.270299886850783,
+    "sharpe_gross": -0.6983534678940844,
+    "max_drawdown": 0.06899365080711295,
+    "trades": 262,
+    "gross_to_net": {
+     "price_pnl": -10.069277,
+     "funding": -0.5483061856119505,
+     "trading_fees": 7.051588551624867,
+     "liquidation_penalties": 0.0,
+     "slippage": 1.48097539332839,
+     "latency": 11.7216386375846,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -30.871785768149834,
+     "return_gross": -0.010069277,
+     "return_after_funding": -0.010617583185611951,
+     "return_net": -0.030871785768149834,
+     "sharpe_gross": -0.6983534678940844,
+     "sharpe_net": -2.270299886850783,
+     "cost_drag_bps_of_mean_equity": 206.04178949505132,
+     "costs_over_gross_profit": null
+    },
+    "stop": null
+   },
+   "test_sharpe_ci": [
+    -7.909145494892701,
+    3.3998202244473767
+   ],
+   "deflated_sharpe": 0.01774450468574451,
+   "trials_tested": 31,
+   "own_trials": 4,
+   "benchmarks_test": {
+    "perp_long_1x": {
+     "total_return": -0.3094700063514726,
+     "sharpe": -6.788731437862093,
+     "max_drawdown": 0.3402533759375129
+    },
+    "buy_and_hold": {
+     "total_return": -0.3035230050260268,
+     "sharpe": -6.65591663286509,
+     "max_drawdown": 0.33476754773714745
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   },
+   "time_in_market_test": 0.9988425925925926,
+   "gross_leverage_mean_test": 0.9766184803486225
+  },
+  {
+   "strategy": "momentum_xs_perp/2",
+   "sha256": "75cd4dfae65f6d55667bfaf3fe2eee2b5c98c18edbe8b43dcd8480d88262e272",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL"
+   ],
+   "train": {
+    "return_net": 0.013154448806256935,
+    "sharpe_net": 0.45668498971382065,
+    "sharpe_gross": 1.1882853501217738,
+    "max_drawdown": 0.06919151973870397,
+    "trades": 195,
+    "gross_to_net": {
+     "price_pnl": 36.92765,
+     "funding": -0.902215504657507,
+     "trading_fees": 10.304808098721638,
+     "liquidation_penalties": 0.0,
+     "slippage": 1.5913109397727,
+     "latency": 10.974866650591165,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": 13.154448806256937,
+     "return_gross": 0.03692765,
+     "return_after_funding": 0.0360254344953425,
+     "return_net": 0.013154448806256937,
+     "sharpe_gross": 1.1882853501217738,
+     "sharpe_net": 0.45668498971382065,
+     "cost_drag_bps_of_mean_equity": 225.20137555047944,
+     "costs_over_gross_profit": 0.6193458205189202
+    },
+    "stop": null
+   },
+   "validation": {
+    "return_net": -0.04812950210004141,
+    "sharpe_net": -4.310965585919186,
+    "sharpe_gross": -3.118813597333439,
+    "max_drawdown": 0.06542805015277597,
+    "trades": 102,
+    "gross_to_net": {
+     "price_pnl": -34.62236,
+     "funding": 1.457533250616508,
+     "trading_fees": 7.0263076423720445,
+     "liquidation_penalties": 0.0,
+     "slippage": 1.1177014956851,
+     "latency": 6.820666212600882,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -48.129502100041464,
+     "return_gross": -0.03462236,
+     "return_after_funding": -0.033164826749383494,
+     "return_net": -0.048129502100041466,
+     "sharpe_gross": -3.118813597333439,
+     "sharpe_net": -4.310965585919186,
+     "cost_drag_bps_of_mean_equity": 153.840551894874,
+     "costs_over_gross_profit": null
+    },
+    "stop": null
+   },
+   "test": {
+    "return_net": -0.001982078048845981,
+    "sharpe_net": -0.15557905087472912,
+    "sharpe_gross": 1.1512809700917683,
+    "max_drawdown": 0.036594504161732044,
+    "trades": 92,
+    "gross_to_net": {
+     "price_pnl": 10.656669999999998,
+     "funding": -2.545607309716165,
+     "trading_fees": 4.426280435320813,
+     "liquidation_penalties": 0.0,
+     "slippage": 0.6616845091174,
+     "latency": 5.005175794691674,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -1.982078048846006,
+     "return_gross": 0.010656669999999998,
+     "return_after_funding": 0.008111062690283834,
+     "return_net": -0.0019820780488460058,
+     "sharpe_gross": 1.1512809700917683,
+     "sharpe_net": -0.15557905087472912,
+     "cost_drag_bps_of_mean_equity": 100.43711335363821,
+     "costs_over_gross_profit": 0.9471195729181713
+    },
+    "stop": null
+   },
+   "test_sharpe_ci": [
+    -5.606009365868199,
+    5.394919821915101
+   ],
+   "deflated_sharpe": 0.07410457997966707,
+   "trials_tested": 31,
+   "own_trials": 4,
+   "benchmarks_test": {
+    "perp_long_1x": {
+     "total_return": -0.2972837542610042,
+     "sharpe": -7.35883468583736,
+     "max_drawdown": 0.32464497132002634
+    },
+    "buy_and_hold": {
+     "total_return": -0.2910375307035792,
+     "sharpe": -7.214852942764087,
+     "max_drawdown": 0.3179760650162361
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   },
+   "time_in_market_test": 0.9988425925925926,
+   "gross_leverage_mean_test": 0.9494468763367705
+  },
+  {
+   "strategy": "mean_reversion_bands_perp/1",
+   "sha256": "cfc5344e9abc67aed9a09e47c4b0c23cfd132b1b71f851800faa4b451023a897",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "LINK",
+    "AAVE",
+    "HYPE",
+    "XRP",
+    "DOGE",
+    "AVAX",
+    "BNB"
+   ],
+   "train": {
+    "return_net": -0.03566784804796608,
+    "sharpe_net": -3.3898676469174376,
+    "sharpe_gross": -2.844001948196318,
+    "max_drawdown": 0.04169589161998,
+    "trades": 40,
+    "gross_to_net": {
+     "price_pnl": -29.707516,
+     "funding": 0.2162325467111535,
+     "trading_fees": 1.8105543742725427,
+     "liquidation_penalties": 0.0,
+     "slippage": 0.39237251767744,
+     "latency": 3.97363770272731,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -35.66784804796612,
+     "return_gross": -0.029707516,
+     "return_after_funding": -0.029491283453288844,
+     "return_net": -0.03566784804796612,
+     "sharpe_gross": -2.844001948196318,
+     "sharpe_net": -3.3898676469174376,
+     "cost_drag_bps_of_mean_equity": 63.454628903508976,
+     "costs_over_gross_profit": null
+    },
+    "stop": {
+     "code": "daily_loss",
+     "reason": "daily loss limit reached (3 % of the capital)",
+     "ts": "2026-06-15T12:00:00+00:00",
+     "equity": 966.7174021577215
+    }
+   },
+   "validation": {
+    "return_net": -0.013254597370471521,
+    "sharpe_net": -0.7187378364251641,
+    "sharpe_gross": 0.6921906139540677,
+    "max_drawdown": 0.04824973713514902,
+    "trades": 172,
+    "gross_to_net": {
+     "price_pnl": 10.089523,
+     "funding": 0.3291575517684103,
+     "trading_fees": 7.807721665928395,
+     "liquidation_penalties": 0.0,
+     "slippage": 1.56236095886865,
+     "latency": 14.30319529744284,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -13.254597370471515,
+     "return_gross": 0.010089523,
+     "return_after_funding": 0.01041868055176841,
+     "return_net": -0.013254597370471514,
+     "sharpe_gross": 0.6921906139540677,
+     "sharpe_net": -0.7187378364251641,
+     "cost_drag_bps_of_mean_equity": 237.50659608516685,
+     "costs_over_gross_profit": 2.3463228065627963
+    },
+    "stop": {
+     "code": "daily_loss",
+     "reason": "daily loss limit reached (3 % of the capital)",
+     "ts": "2026-09-18T10:00:00+00:00",
+     "equity": 987.5071161732367
+    }
+   },
+   "test": {
+    "return_net": -0.023064166430278532,
+    "sharpe_net": -1.7218000126017177,
+    "sharpe_gross": -1.181870159616019,
+    "max_drawdown": 0.03811107955568693,
+    "trades": 64,
+    "gross_to_net": {
+     "price_pnl": -16.108265,
+     "funding": 0.0068838231359188,
+     "trading_fees": 2.8648466396339494,
+     "liquidation_penalties": 0.0,
+     "slippage": 0.59110076637931,
+     "latency": 3.506837847401231,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -23.064166430278533,
+     "return_gross": -0.016108265,
+     "return_after_funding": -0.01610138117686408,
+     "return_net": -0.023064166430278532,
+     "sharpe_gross": -1.181870159616019,
+     "sharpe_net": -1.7218000126017177,
+     "cost_drag_bps_of_mean_equity": 70.95932564737107,
+     "costs_over_gross_profit": null
+    },
+    "stop": {
+     "code": "daily_loss",
+     "reason": "daily loss limit reached (3 % of the capital)",
+     "ts": "2026-10-15T13:00:00+00:00",
+     "equity": 977.7099181221553
+    }
+   },
+   "test_sharpe_ci": [
+    -5.86067511964064,
+    4.012240883797454
+   ],
+   "deflated_sharpe": 0.026540876822442994,
+   "trials_tested": 31,
+   "own_trials": 5,
+   "benchmarks_test": {
+    "perp_long_1x": {
+     "total_return": -0.3094700063514726,
+     "sharpe": -6.788731437862093,
+     "max_drawdown": 0.3402533759375129
+    },
+    "buy_and_hold": {
+     "total_return": -0.3035230050260268,
+     "sharpe": -6.65591663286509,
+     "max_drawdown": 0.33476754773714745
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   },
+   "time_in_market_test": 0.11226851851851852,
+   "gross_leverage_mean_test": 0.06243211183705372
+  },
+  {
+   "strategy": "mean_reversion_bands_perp/2",
+   "sha256": "3e0c39c667db61c5b0567c4cc76bde5fbac1b2479bfddbfc6de382852171580a",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL"
+   ],
+   "train": {
+    "return_net": -0.0381794313365158,
+    "sharpe_net": -3.143294183871462,
+    "sharpe_gross": -2.881773057521599,
+    "max_drawdown": 0.041096143722155976,
+    "trades": 13,
+    "gross_to_net": {
+     "price_pnl": -34.87141,
+     "funding": 0.396219132037648,
+     "trading_fees": 1.8122107340097884,
+     "liquidation_penalties": 0.0,
+     "slippage": 0.2975234832856,
+     "latency": 1.594506251258081,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -38.17943133651579,
+     "return_gross": -0.03487141,
+     "return_after_funding": -0.034475190867962344,
+     "return_net": -0.03817943133651579,
+     "sharpe_gross": -2.881773057521599,
+     "sharpe_net": -3.143294183871462,
+     "cost_drag_bps_of_mean_equity": 38.12854099321025,
+     "costs_over_gross_profit": null
+    },
+    "stop": {
+     "code": "daily_loss",
+     "reason": "daily loss limit reached (3 % of the capital)",
+     "ts": "2026-06-15T13:00:00+00:00",
+     "equity": 962.7729046157357
+    }
+   },
+   "validation": {
+    "return_net": -0.004113846091153062,
+    "sharpe_net": -0.13367694647342937,
+    "sharpe_gross": 1.3577018288944027,
+    "max_drawdown": 0.06624579947042297,
+    "trades": 65,
+    "gross_to_net": {
+     "price_pnl": 23.05321,
+     "funding": 0.259261128979788,
+     "trading_fees": 9.895385919750318,
+     "liquidation_penalties": 0.0,
+     "slippage": 1.6275024970431,
+     "latency": 15.903428803339416,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -4.11384609115305,
+     "return_gross": 0.02305321,
+     "return_after_funding": 0.023312471128979786,
+     "return_net": -0.00411384609115305,
+     "sharpe_gross": 1.3577018288944027,
+     "sharpe_net": -0.13367694647342937,
+     "cost_drag_bps_of_mean_equity": 271.605290214728,
+     "costs_over_gross_profit": 1.1896962384037986
+    },
+    "stop": {
+     "code": "daily_loss",
+     "reason": "daily loss limit reached (3 % of the capital)",
+     "ts": "2026-09-18T13:00:00+00:00",
+     "equity": 998.5550394903127
+    }
+   },
+   "test": {
+    "return_net": 0.005574595897807955,
+    "sharpe_net": 0.3454867752866121,
+    "sharpe_gross": 2.210827008393998,
+    "max_drawdown": 0.06561256194875364,
+    "trades": 116,
+    "gross_to_net": {
+     "price_pnl": 54.885720000000006,
+     "funding": -0.090985441657991,
+     "trading_fees": 17.909396707071586,
+     "liquidation_penalties": 0.0,
+     "slippage": 2.9775713668184,
+     "latency": 28.333170586644183,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": 5.574595897807853,
+     "return_gross": 0.054885720000000006,
+     "return_after_funding": 0.054794734558342016,
+     "return_net": 0.005574595897807853,
+     "sharpe_gross": 2.210827008393998,
+     "sharpe_net": 0.3454867752866121,
+     "cost_drag_bps_of_mean_equity": 475.81985102551425,
+     "costs_over_gross_profit": 0.8967749473002115
+    },
+    "stop": null
+   },
+   "test_sharpe_ci": [
+    -4.0868898130169065,
+    4.8791688616272015
+   ],
+   "deflated_sharpe": 0.09867588121264526,
+   "trials_tested": 31,
+   "own_trials": 5,
+   "benchmarks_test": {
+    "perp_long_1x": {
+     "total_return": -0.2972837542610042,
+     "sharpe": -7.35883468583736,
+     "max_drawdown": 0.32464497132002634
+    },
+    "buy_and_hold": {
+     "total_return": -0.2910375307035792,
+     "sharpe": -7.214852942764087,
+     "max_drawdown": 0.3179760650162361
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   },
+   "time_in_market_test": 0.59375,
+   "gross_leverage_mean_test": 0.3783610952130815
+  },
+  {
+   "strategy": "statarb_basket_perp/1",
+   "sha256": "2cca1c2fac270ccb078f39699637ce600292459b29fe591427ef4d33aa7438e1",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "LINK",
+    "AAVE",
+    "HYPE"
+   ],
+   "train": {
+    "return_net": -0.10170708254821714,
+    "sharpe_net": -7.182497476407538,
+    "sharpe_gross": -2.942848775728168,
+    "max_drawdown": 0.10170708254821714,
+    "trades": 384,
+    "gross_to_net": {
+     "price_pnl": -42.47637,
+     "funding": 0.286722681079791,
+     "trading_fees": 17.985133225783834,
+     "liquidation_penalties": 0.0,
+     "slippage": 4.3453824145459,
+     "latency": 37.186919588967264,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -101.70708254821716,
+     "return_gross": -0.04247637,
+     "return_after_funding": -0.042189647318920206,
+     "return_net": -0.10170708254821716,
+     "sharpe_gross": -2.942848775728168,
+     "sharpe_net": -7.182497476407538,
+     "cost_drag_bps_of_mean_equity": 637.297564669936,
+     "costs_over_gross_profit": null
+    },
+    "stop": {
+     "code": "total_loss",
+     "reason": "total loss limit reached (10 % of the capital)",
+     "ts": "2026-06-29T18:00:00+00:00",
+     "equity": 899.0752576713677
+    }
+   },
+   "validation": {
+    "return_net": -0.10328278271158842,
+    "sharpe_net": -10.506726964730408,
+    "sharpe_gross": 0.2656999138474378,
+    "max_drawdown": 0.10328278271158842,
+    "trades": 870,
+    "gross_to_net": {
+     "price_pnl": 2.05459,
+     "funding": 0.294203640074876,
+     "trading_fees": 34.364870451549976,
+     "liquidation_penalties": 0.0,
+     "slippage": 8.0428194421408,
+     "latency": 63.22388645797256,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -103.28278271158842,
+     "return_gross": 0.0020545900000000002,
+     "return_after_funding": 0.0023487936400748764,
+     "return_net": -0.10328278271158843,
+     "sharpe_gross": 0.2656999138474378,
+     "sharpe_net": -10.506726964730408,
+     "cost_drag_bps_of_mean_equity": 1143.0259934647943,
+     "costs_over_gross_profit": 51.412484413758136
+    },
+    "stop": {
+     "code": "total_loss",
+     "reason": "total loss limit reached (10 % of the capital)",
+     "ts": "2026-09-25T08:00:00+00:00",
+     "equity": 897.8395871610574
+    }
+   },
+   "test": {
+    "return_net": -0.10165090743737748,
+    "sharpe_net": -11.067904972523419,
+    "sharpe_gross": 0.7338473369539557,
+    "max_drawdown": 0.1024842740501597,
+    "trades": 851,
+    "gross_to_net": {
+     "price_pnl": 6.1472,
+     "funding": -0.381330817681965,
+     "trading_fees": 37.63228249889594,
+     "liquidation_penalties": 0.0,
+     "slippage": 8.9354844276773,
+     "latency": 60.84900969312219,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -101.65090743737744,
+     "return_gross": 0.006147199999999999,
+     "return_after_funding": 0.005765869182318035,
+     "return_net": -0.10165090743737744,
+     "sharpe_gross": 0.7338473369539557,
+     "sharpe_net": -11.067904972523419,
+     "cost_drag_bps_of_mean_equity": 1136.853765995809,
+     "costs_over_gross_profit": 17.474098226785436
+    },
+    "stop": {
+     "code": "total_loss",
+     "reason": "total loss limit reached (10 % of the capital)",
+     "ts": "2026-11-04T16:00:00+00:00",
+     "equity": 899.0876760345582
+    }
+   },
+   "test_sharpe_ci": [
+    -18.476770725759938,
+    -4.907056685302634
+   ],
+   "deflated_sharpe": 2.855202061682034e-06,
+   "trials_tested": 31,
+   "own_trials": 5,
+   "benchmarks_test": {
+    "perp_long_1x": {
+     "total_return": -0.3105816274910803,
+     "sharpe": -6.654549000209843,
+     "max_drawdown": 0.3427970178167308
+    },
+    "buy_and_hold": {
+     "total_return": -0.3036071988316411,
+     "sharpe": -6.500790811514911,
+     "max_drawdown": 0.3362919362627763
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   },
+   "time_in_market_test": 0.6006944444444444,
+   "gross_leverage_mean_test": 0.4093013833673715
+  },
+  {
+   "strategy": "basis_cash_carry/1",
+   "sha256": "344831f2ea276d1b3935164287a3e81e5dcc2940841622a88fb3ca218a0a790b",
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "BTC.SPOT",
+    "ETH.SPOT",
+    "SOL.SPOT"
+   ],
+   "train": {
+    "return_net": -0.0004983172457997398,
+    "sharpe_net": -0.6701310352600259,
+    "sharpe_gross": 0.49032068786783084,
+    "max_drawdown": 0.0014090780313834594,
+    "trades": 4,
+    "gross_to_net": {
+     "price_pnl": 0.22931639,
+     "funding": 0.707439093833748,
+     "trading_fees": 0.4345511465298421,
+     "liquidation_penalties": 0.0,
+     "slippage": 0.3258657561304092,
+     "latency": 0.6746558269732684,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -0.4983172457997398,
+     "return_gross": 0.00022931639,
+     "return_after_funding": 0.0009367554838337481,
+     "return_net": -0.0004983172457997398,
+     "sharpe_gross": 0.49032068786783084,
+     "sharpe_net": -0.6701310352600259,
+     "cost_drag_bps_of_mean_equity": 14.35184187878842,
+     "costs_over_gross_profit": 6.258046926491036
+    },
+    "stop": null
+   },
+   "validation": {
+    "return_net": -0.0015917861187199067,
+    "sharpe_net": -3.2722767024069777,
+    "sharpe_gross": -0.5290451850150111,
+    "max_drawdown": 0.002134070363450591,
+    "trades": 10,
+    "gross_to_net": {
+     "price_pnl": -0.13276418,
+     "funding": 1.001368443753022,
+     "trading_fees": 1.0735941437334688,
+     "liquidation_penalties": 0.0,
+     "slippage": 0.806725521182311,
+     "latency": 0.5800707175571777,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -1.5917861187199378,
+     "return_gross": -0.00013276418000000002,
+     "return_after_funding": 0.000868604263753022,
+     "return_net": -0.0015917861187199377,
+     "sharpe_gross": -0.5290451850150111,
+     "sharpe_net": -3.2722767024069777,
+     "cost_drag_bps_of_mean_equity": 24.642109383036733,
+     "costs_over_gross_profit": null
+    },
+    "stop": null
+   },
+   "test": {
+    "return_net": -0.0009566342084380564,
+    "sharpe_net": -4.201347432311369,
+    "sharpe_gross": -0.03110830438329715,
+    "max_drawdown": 0.0009566342084380564,
+    "trades": 4,
+    "gross_to_net": {
+     "price_pnl": -0.00165814,
+     "funding": 0.023291469483688,
+     "trading_fees": 0.4419284646912743,
+     "liquidation_penalties": 0.0,
+     "slippage": 0.3274109693700992,
+     "latency": 0.2089281038602631,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -0.956634208438004,
+     "return_gross": -1.65814e-06,
+     "return_after_funding": 2.1633329483688e-05,
+     "return_net": -0.000956634208438004,
+     "sharpe_gross": -0.03110830438329715,
+     "sharpe_net": -4.201347432311369,
+     "cost_drag_bps_of_mean_equity": 9.791709886447931,
+     "costs_over_gross_profit": null
+    },
+    "stop": null
+   },
+   "test_sharpe_ci": [
+    -6.748079165866879,
+    0.6992982839199366
+   ],
+   "deflated_sharpe": 1.5802835926891044e-06,
+   "trials_tested": 31,
+   "own_trials": 4,
+   "benchmarks_test": {
+    "perp_long_1x": {
+     "total_return": -0.2972837542610042,
+     "sharpe": -7.35883468583736,
+     "max_drawdown": 0.32464497132002634
+    },
+    "buy_and_hold": {
+     "total_return": -0.2910375307035792,
+     "sharpe": -7.214852942764087,
+     "max_drawdown": 0.3179760650162361
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   },
+   "time_in_market_test": 0.0625,
+   "gross_leverage_mean_test": 0.018939970711415864
+  },
+  {
+   "strategy": "funding_arb_cross_venue/1",
+   "sha256": "cd0842111005652cd540b6156d472931b3d434b8f1ba5f48a257f26835313a08",
+   "symbols": [
+    "BTC",
+    "BTC@EDGEX",
+    "ETH",
+    "ETH@EDGEX",
+    "SOL",
+    "SOL@EDGEX"
+   ],
+   "train": {
+    "return_net": 0.00019935273984406088,
+    "sharpe_net": 0.06944524285095328,
+    "sharpe_gross": 0.8004200912194842,
+    "max_drawdown": 0.0047392902838065964,
+    "trades": 30,
+    "gross_to_net": {
+     "price_pnl": 2.44258,
+     "funding": 1.317093773071736,
+     "trading_fees": 1.512269259854651,
+     "liquidation_penalties": 0.0,
+     "slippage": 0.3608747297428,
+     "latency": 1.687177043630158,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": 0.19935273984413016,
+     "return_gross": 0.00244258,
+     "return_after_funding": 0.003759673773071736,
+     "return_net": 0.00019935273984413016,
+     "sharpe_gross": 0.8004200912194842,
+     "sharpe_net": 0.06944524285095328,
+     "cost_drag_bps_of_mean_equity": 35.55411032395797,
+     "costs_over_gross_profit": 1.457606724540285
+    },
+    "stop": null
+   },
+   "validation": {
+    "return_net": -0.00509074797541087,
+    "sharpe_net": -2.6751099854971483,
+    "sharpe_gross": -1.3196033186890033,
+    "max_drawdown": 0.011073812305183894,
+    "trades": 24,
+    "gross_to_net": {
+     "price_pnl": -2.44173,
+     "funding": 0.605226011717971,
+     "trading_fees": 1.2371927206185058,
+     "liquidation_penalties": 0.0,
+     "slippage": 0.2981922509433,
+     "latency": 1.718859015566992,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -5.0907479754108635,
+     "return_gross": -0.00244173,
+     "return_after_funding": -0.001836503988282029,
+     "return_net": -0.005090747975410864,
+     "sharpe_gross": -1.3196033186890033,
+     "sharpe_net": -2.6751099854971483,
+     "cost_drag_bps_of_mean_equity": 32.62166733047758,
+     "costs_over_gross_profit": null
+    },
+    "stop": null
+   },
+   "test": {
+    "return_net": -0.0021374308085660987,
+    "sharpe_net": -3.9665935183423664,
+    "sharpe_gross": -0.35658153862688585,
+    "max_drawdown": 0.002471871642865775,
+    "trades": 18,
+    "gross_to_net": {
+     "price_pnl": -0.17247,
+     "funding": 0.123282121250119,
+     "trading_fees": 0.9516960182629245,
+     "liquidation_penalties": 0.0,
+     "slippage": 0.2846733697014,
+     "latency": 0.8518735418519,
+     "bad_debt_written_off": 0.0,
+     "net_pnl": -2.137430808566137,
+     "return_gross": -0.00017247,
+     "return_after_funding": -4.918787874988101e-05,
+     "return_net": -0.002137430808566137,
+     "sharpe_gross": -0.35658153862688585,
+     "sharpe_net": -3.9665935183423664,
+     "cost_drag_bps_of_mean_equity": 20.9008828656068,
+     "costs_over_gross_profit": null
+    },
+    "stop": null
+   },
+   "test_sharpe_ci": [
+    -7.62586221044981,
+    -0.4526730246482026
+   ],
+   "deflated_sharpe": 0.0031506180752261226,
+   "trials_tested": 31,
+   "own_trials": 4,
+   "benchmarks_test": {
+    "perp_long_1x": {
+     "total_return": -0.29141524952878295,
+     "sharpe": -7.386318896169942,
+     "max_drawdown": 0.31805238982556305
+    },
+    "buy_and_hold": {
+     "total_return": -0.2845671852703976,
+     "sharpe": -7.208051452321726,
+     "max_drawdown": 0.31142933039498
+    }
+   },
+   "checks": {
+    "lookahead": "pass",
+    "data_quality": "pass",
+    "ledger": "pass",
+    "funding_alignment": "pass"
+   },
+   "time_in_market_test": 0.6678240740740741,
+   "gross_leverage_mean_test": 0.22182766389756262
+  }
+ ],
+ "n_trials": 31
+}

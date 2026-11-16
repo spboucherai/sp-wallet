@@ -38,6 +38,8 @@ class BacktestConfig:
     min_order: float = 0.0            # USD; smaller orders are not sent
     rebalance_threshold: float = 0.0  # do not trade a symbol whose weight is within this distance of its target
     decision_every: int = 1           # ask the strategy every N bars (anchored on the UTC epoch)
+    # v11 engine parity (spq.execution.SpotParity, research/src/spq/params/engine-parity.json). None = as before.
+    parity: object | None = None
 
     def __post_init__(self):
         interval_seconds(self.interval)
@@ -49,7 +51,10 @@ class BacktestConfig:
             raise ValueError("decision_every must be a positive integer")
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        d = asdict(self)
+        if self.parity is None:
+            d.pop("parity")
+        return d
 
 
 @dataclass
@@ -64,6 +69,8 @@ class BacktestResult:
     decisions: pd.DataFrame  # target weights, indexed by the decision bar
     trades: pd.DataFrame     # one row per fill
     open_positions: list[dict]
+    stop: dict | None = None           # v11 engine parity: why and when the agent was stopped
+    counters: dict | None = None       # v11 engine parity: orders held back by the engine's caps
 
     @property
     def returns(self) -> pd.Series:
@@ -153,9 +160,82 @@ def run_backtest(
     decision_w: list = []
     pending = None
     pending_at = None
+    par = config.parity
+    stop = None
+    counters = {"exposure_scaled": 0, "orders_capped": 0, "daily_usd_cap": 0, "daily_order_cap": 0}
+    day_state = {"day": None, "usd": 0.0, "orders": 0}
+
+    def parity_fill(i, w):
+        """services/api/src/agents/engine.ts planOrder, LIVE: ONE order per engine pass (one pass per minute, so
+        at most bar / loop period orders per bar), sells first (largest), then the largest buy; weights scaled to
+        the exposure cap; each order capped in USD; USD and order count capped per UTC day. All the orders of a bar
+        are filled at that bar's open (the spot engine has no intrabar path): later passes are NOT priced later."""
+        nonlocal cash
+        px, ts = opens[i], index[i]
+        day = ts.strftime("%Y-%m-%d")
+        if day_state["day"] != day:
+            day_state.update(day=day, usd=0.0, orders=0)
+        tw = np.array([w[s] for s in symbols], dtype="float64")
+        cap = par.max_exposure_pct / 100.0
+        if tw.sum() > cap:
+            tw = tw * (cap / tw.sum())
+            counters["exposure_scaled"] += 1
+        for _ in range(max(1, int(step // par.loop_period_s)) * int(par.live_orders_per_pass)):
+            value = units * px
+            total = cash + value.sum()
+            if not total > 0:
+                return
+            delta = tw * total - value
+            cand = np.nonzero(np.abs(delta) >= max(par.min_trade_usd, total * par.min_trade_fraction))[0]
+            if not len(cand):
+                return
+            if day_state["orders"] >= par.max_orders_per_day:
+                counters["daily_order_cap"] += 1
+                return
+            room = par.max_daily_usd - day_state["usd"]
+            if room < par.min_trade_usd:
+                counters["daily_usd_cap"] += 1
+                return
+            sells = cand[delta[cand] < 0]
+            m = int(sells[np.argmin(delta[sells])]) if len(sells) else int(cand[np.argmax(delta[cand])])
+            usd = min(abs(delta[m]), par.max_order_usd, room)
+            if usd < abs(delta[m]):
+                counters["orders_capped"] += 1
+            if delta[m] < 0:
+                q = min(units[m], usd / px[m])
+                if not q > 0:
+                    return
+                gross = q * px[m] * (1 - slip)
+                f = gross * fee
+                basis = cost[m] * (q / units[m])
+                cash += gross - f
+                units[m] -= q
+                cost[m] -= basis
+                if units[m] < 1e-12:
+                    units[m], cost[m] = 0.0, 0.0
+                trades.append((ts, pending_at, symbols[m], "sell", q, px[m] * (1 - slip), gross, f, q * px[m] * slip,
+                               gross - f - basis))
+                traded = q * px[m]
+            else:
+                spend = min(usd, cash)
+                if spend < par.min_trade_usd:
+                    return
+                gross = spend / (1 + fee)
+                q = gross / (px[m] * (1 + slip))
+                cash -= spend
+                units[m] += q
+                cost[m] += spend
+                trades.append((ts, pending_at, symbols[m], "buy", q, px[m] * (1 + slip), gross, gross * fee,
+                               q * px[m] * slip, 0.0))
+                traded = spend
+            day_state["usd"] += traded
+            day_state["orders"] += 1
 
     for j in range(n):
         i = a + j
+        if pending is not None and par is not None:
+            parity_fill(i, pending)
+            pending = None                        # after a stop: the liquidation orders the caps allowed were sent
         if pending is not None:
             px = opens[i]
             value = units * px
@@ -202,7 +282,12 @@ def run_backtest(
         equity[j], cash_curve[j] = eq, cash
         exposure[j] = held.sum() / eq if eq > 0 else 0.0
 
-        if due[i] and i + 1 >= lb:  # also on the last bar: recorded as the current signal, never filled
+        if par is not None and stop is None and eq < config.initial_cash * (1 - par.max_loss_pct / 100.0):
+            stop = {"code": "loss_limit", "ts": index[i].isoformat(), "equity": float(eq),
+                    "reason": f"loss limit reached ({par.max_loss_pct:g} % of the capital): sell to cash under the "
+                              "same order caps, then stop"}
+            pending, pending_at = {s: 0.0 for s in symbols}, index[i]
+        if stop is None and due[i] and i + 1 >= lb:  # also on the last bar: recorded as the current signal, never filled
             lo = i + 1 - lb
             view = {s: df.iloc[lo:i + 1] for s, df in zip(symbols, frames)}
             w = decide(view)
@@ -225,6 +310,7 @@ def run_backtest(
         decisions=pd.DataFrame(decision_w, index=pd.DatetimeIndex(decision_ts, name="ts"), columns=symbols),
         trades=pd.DataFrame(trades, columns=TRADE_COLUMNS),
         open_positions=open_positions,
+        stop=stop, counters=counters if par is not None else None,
     )
 
 
@@ -242,7 +328,7 @@ def buy_and_hold(data, config: BacktestConfig, *, start=None, end=None, weights:
         state["done"] = True
         return w
 
-    cfg = BacktestConfig(**{**config.to_dict(), "decision_every": 1, "rebalance_threshold": 0.0, "min_order": 0.0})
+    cfg = BacktestConfig(**{**config.to_dict(), "decision_every": 1, "rebalance_threshold": 0.0, "min_order": 0.0, "parity": None})
     return run_backtest(decide, data, cfg, start=start, end=end)
 
 
@@ -250,4 +336,5 @@ def equal_weight(data, config: BacktestConfig, *, start=None, end=None) -> Backt
     """Equal weights, rebalanced under the same costs, threshold and minimum order as the strategy."""
     symbols = list(data.keys())
     w = {s: 1.0 / len(symbols) for s in symbols}
-    return run_backtest(lambda _view: w, data, config, start=start, end=end)
+    cfg = BacktestConfig(**{**config.to_dict(), "parity": None})   # a benchmark is not an agent
+    return run_backtest(lambda _view: w, data, cfg, start=start, end=end)

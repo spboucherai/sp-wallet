@@ -215,13 +215,16 @@ class FundingQuality:
 
 
 def normalise_funding(raw: pd.DataFrame, *, symbol: str, source: str = SOURCE, start=None, end=None, as_of=None,
-                      on_duplicate: str = "raise") -> tuple[pd.DataFrame, FundingQuality]:
+                      on_duplicate: str = "raise", interval_s: int = FUNDING_INTERVAL_S,
+                      ) -> tuple[pd.DataFrame, FundingQuality]:
     """Raw settlements (time_ms, rate[, premium]) -> frame indexed by settlement HOUR (UTC), oldest first.
 
     Each instant is attached to the nearest hour; an instant further than FUNDING_TOLERANCE_MS from it is
     counted off-grid and dropped (it cannot be attributed to a settlement). Two rows on the same hour raise,
     unless on_duplicate='drop_identical' and they carry the same rate. Missing hours are counted, never filled.
     start is inclusive, end exclusive, on the settlement hour; rows dated after `as_of` (default: now) are dropped.
+    v11: `interval_s` is the venue's settlement interval (Hyperliquid and dYdX 3600, edgeX 14400): instants are
+    attached to the nearest multiple of it and the missing count is on that grid. Default: hourly, as before.
     """
     q = FundingQuality(symbol=symbol, source=source)
     if "time_ms" not in raw.columns or "rate" not in raw.columns:
@@ -230,7 +233,7 @@ def normalise_funding(raw: pd.DataFrame, *, symbol: str, source: str = SOURCE, s
     if "premium" not in df.columns:
         df["premium"] = np.nan
     t = df["time_ms"].to_numpy(dtype="int64")
-    hour_ms = FUNDING_INTERVAL_S * 1000
+    hour_ms = int(interval_s) * 1000
     nearest = (t + hour_ms // 2) // hour_ms * hour_ms
     offset = np.abs(t - nearest)
     q.max_offset_ms = int(offset.max()) if len(offset) else 0
@@ -262,23 +265,26 @@ def normalise_funding(raw: pd.DataFrame, *, symbol: str, source: str = SOURCE, s
     if len(df):
         epoch = df.index.asi8 // 10**9
         q.start, q.end = df.index[0].isoformat(), df.index[-1].isoformat()
-        q.expected = int((epoch[-1] - epoch[0]) // FUNDING_INTERVAL_S) + 1
-        jumps = np.diff(epoch) // FUNDING_INTERVAL_S - 1
+        q.expected = int((epoch[-1] - epoch[0]) // int(interval_s)) + 1
+        jumps = np.diff(epoch) // int(interval_s) - 1
         where = np.nonzero(jumps > 0)[0]
         q.missing = int(jumps[where].sum())
         q.max_gap = int(jumps.max()) if len(jumps) else 0
         for i in where[:50]:
-            q.gaps.append([(df.index[i] + pd.Timedelta(hours=1)).isoformat(),
-                           (df.index[i + 1] - pd.Timedelta(hours=1)).isoformat(), int(jumps[i])])
+            q.gaps.append([(df.index[i] + pd.Timedelta(seconds=int(interval_s))).isoformat(),
+                           (df.index[i + 1] - pd.Timedelta(seconds=int(interval_s))).isoformat(), int(jumps[i])])
     return df, q
 
 
-def attach_funding(candles: pd.DataFrame, funding: pd.DataFrame) -> pd.DataFrame:
+def attach_funding(candles: pd.DataFrame, funding: pd.DataFrame, interval_s: int | None = None) -> pd.DataFrame:
     """Candles + `funding` and `premium` columns, aligned on settlement time.
 
     funding[i] = sum of the rates settled in (ts[i-1], ts[i]]; for the first bar, the rate settled at ts[0].
     NaN when no settlement of that window is in `funding` (the engine then charges nothing and counts it).
     premium[i] = the premium of the last settlement of the window. Nothing dated after ts[i] can enter row i.
+    v11: with `interval_s` (the venue's settlement interval, e.g. 14400 for edgeX on 1h bars) a bar whose window
+    contains NO SCHEDULED settlement gets 0.0 instead of NaN: nothing was due, so nothing is missing. NaN then
+    still means "a settlement was due and the data do not have it". Without it: exactly as before.
     """
     out = candles.copy()
     idx = out.index
@@ -293,10 +299,16 @@ def attach_funding(candles: pd.DataFrame, funding: pd.DataFrame) -> pd.DataFrame
     prem = np.full(len(idx), np.nan)
     rate[agg.index.to_numpy()] = agg["rate"].to_numpy()
     prem[agg.index.to_numpy()] = agg["premium"].to_numpy()
+    if interval_s:
+        epoch = idx.as_unit("s").asi8
+        prev = np.concatenate([[epoch[0] - 1], epoch[:-1]])            # window of bar i is (prev[i], epoch[i]]
+        due = (epoch // int(interval_s)) > (prev // int(interval_s))   # a multiple of interval_s lies in it
+        rate = np.where(~due & np.isnan(rate), 0.0, rate)
     return out.assign(funding=rate, premium=prem)
 
 
-def check_funding_alignment(frames: dict[str, pd.DataFrame], funding: dict[str, pd.DataFrame]) -> dict:
+def check_funding_alignment(frames: dict[str, pd.DataFrame], funding: dict[str, pd.DataFrame],
+                            intervals: dict[str, int] | None = None) -> dict:
     """Rebuild the `funding` column of every perpetual from the settlement series and compare.
 
     'pass' only if, for every symbol that has a settlement series, the column equals attach_funding() exactly
@@ -312,7 +324,7 @@ def check_funding_alignment(frames: dict[str, pd.DataFrame], funding: dict[str, 
             detail[sym] = "no funding column"
             ok = False
             continue
-        want = attach_funding(df[COLUMNS], raw)["funding"].to_numpy()
+        want = attach_funding(df[COLUMNS], raw, (intervals or {}).get(sym))["funding"].to_numpy()
         have = df["funding"].to_numpy(dtype="float64")
         same = bool(np.array_equal(np.isnan(want), np.isnan(have))
                     and np.allclose(want[~np.isnan(want)], have[~np.isnan(want)], rtol=0, atol=1e-15))
