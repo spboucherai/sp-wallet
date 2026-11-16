@@ -1,6 +1,6 @@
 {
  "schema": "spq-engine-parity/1",
- "description": "The sizing and stop rules of the two LIVE agent engines, as the backtester applies them when engine parity is on. ONE file, read by spq.execution.load_parity. Every value states where the engine defines it (path:line in this repository at the commit below) and tests/test_parity.py re-reads those lines: when the engine changes, the test fails until this file is reviewed. These are the DEFAULTS an agent gets when its owner changes nothing; an owner who sets other limits gets another agent than the one the report describes.",
+ "description": "The sizing and stop rules of the two LIVE agent engines, as the backtester applies them when engine parity is on. ONE file, read by spq.execution.load_parity. Every value states where the engine defines it (path:line in this repository at the commit below) and tests/test_v11_engine.py re-reads those lines: when the engine changes, the test fails until this file is reviewed. These are the DEFAULTS an agent gets when its owner changes nothing; an owner who sets other limits gets another agent than the one the report describes.",
  "checked_against_commit": "ad52bec",
  "checked": "2026-11-15",
  "perp": {

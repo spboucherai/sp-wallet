@@ -78,9 +78,10 @@ depth where available); taker fees per venue; one account per venue; engine pari
 report passes its four checks (look-ahead, ledger, funding alignment, data quality).
 
 Disclosure on looks at the test split: the committed ledger starts empty and records ONE test evaluation per
-strategy, but during development the whole pipeline was executed three times on these data (a first complete run
-when the code was finished, the committed run after the order-book recording ended and the calibration file was
-rebuilt, and `verify`), and `momentum_xs_perp/2` once more while the report builder was being written. No strategy
+strategy, but during development the whole pipeline was executed several times on these data (a first complete
+run when the code was finished; a second after the order-book recording ended and the calibration file was
+rebuilt; the committed one after a wording fix in the parity file's description changed the code hash; and
+`verify` after each of the last two), and `momentum_xs_perp/2` once more while the report builder was being written. No strategy
 file and no parameter was changed between those runs — the strategy hashes of the first run are the committed
 ones — and the figures moved only in the second decimal (the slippage calibration). The results did not need
 protecting from selection: nothing was selected.

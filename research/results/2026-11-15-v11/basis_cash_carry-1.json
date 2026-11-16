@@ -5226,7 +5226,7 @@
   },
   "code": {
    "spq_version": "0.1.0",
-   "code_sha256": "a8a3aaf89ba2b399acb6d3a2548c1b2abfa78bc35937f26022cc960fb0affebe",
+   "code_sha256": "6ea1cf4df5ceb8b33c0a763ca1c8724c76de60b861714597b73295ec89507356",
    "python": "3.12.13",
    "numpy": "2.5.4",
    "pandas": "3.1.1"
