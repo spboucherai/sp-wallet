@@ -9,7 +9,9 @@ import { verifyWebhook as serverVerify, webhookSignature as serverSignature } fr
 import { canonicalJson as serverCanonicalJson } from '../../../services/api/src/trading-api/key-model.ts';
 import { openApiJson } from '../../../services/api/src/trading-api/openapi.ts';
 import { generate, OPENAPI_PATH, OUTPUT_PATH, tsType } from '../scripts/gen-types.mts';
-import { API_VERSION, constructWebhookEvent, EXECUTION_SCOPES, IDEMPOTENCY_KEY_RE, OPERATIONS, SCOPES, verifyWebhook, WEBHOOK_EVENTS, WEBHOOK_TOLERANCE_SECONDS, webhookSignature, WebhookVerificationError } from '../src/index.ts';
+import { ORDER_STATES as SERVER_STATES } from '../../../services/api/src/trading-api/spec.ts';
+import { API_VERSION, constructWebhookEvent, EXECUTION_SCOPES, FINAL_ORDER_STATES, IDEMPOTENCY_KEY_RE, MANDATE_DENY_REASONS, OPERATION_ERRORS, OPERATIONS, ORDER_STATES, RISK_CHECK_IDS, SCOPES, verifyWebhook, WEBHOOK_EVENTS,
+  WEBHOOK_TOLERANCE_SECONDS, webhookSignature, WebhookVerificationError, type OperationId } from '../src/index.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)), ROOT = path.resolve(HERE, '../../..');
 const doc = JSON.parse(readFileSync(OPENAPI_PATH, 'utf8'));
@@ -24,9 +26,20 @@ describe('generated types', () => {
   it('the operation table, the scopes and the events are the document\'s', () => {
     const ids = Object.values(doc.paths as Record<string, Record<string, { operationId: string }>>).flatMap((p) => Object.values(p).map((o) => o.operationId));
     expect(Object.keys(OPERATIONS).sort()).toEqual(ids.sort());
-    expect(ids).toHaveLength(26);
-    expect(Object.values(OPERATIONS).filter((o) => o.idempotent).length).toBe(12);
-    expect(Object.values(OPERATIONS).filter((o) => o.idempotent).every((o) => !o.implemented)).toBe(true); // today: every write answers 501
+    expect(ids).toHaveLength(32);
+    const writes = (Object.keys(OPERATIONS) as OperationId[]).filter((id) => OPERATIONS[id].method !== 'GET');
+    expect(writes.filter((id) => OPERATIONS[id].implemented).sort()).toEqual(['cancelOrder', 'closePosition', 'engageKillSwitch', 'placeOrder', 'previewOrder', 'reducePosition', 'runCommand']);
+    // the strategy and agent writes answer 501; a preview and the kill switch take no Idempotency-Key, every other write requires one
+    expect(writes.filter((id) => !OPERATIONS[id].implemented)).toHaveLength(7);
+    expect(writes.filter((id) => !OPERATIONS[id].idempotent).sort()).toEqual(['engageKillSwitch', 'previewOrder']);
+    expect((Object.keys(OPERATIONS) as OperationId[]).filter((id) => OPERATIONS[id].requiresMandate && OPERATIONS[id].implemented).sort()).toEqual(['closePosition', 'placeOrder', 'reducePosition']);
+    expect([...ORDER_STATES]).toEqual([...SERVER_STATES]); expect([...FINAL_ORDER_STATES]).toEqual(['FILLED', 'CANCELLED', 'REJECTED', 'FAILED']);
+    expect([...MANDATE_DENY_REASONS]).toEqual(doc['x-spw-mandate-deny-reasons']); expect([...RISK_CHECK_IDS]).toEqual(doc['x-spw-risk-checks']);
+    for (const [p, item] of Object.entries(doc.paths as Record<string, Record<string, { operationId: OperationId; 'x-spw-errors': { status: number; code: string }[] }>>)) for (const o of Object.values(item)) {
+      expect(OPERATION_ERRORS[o.operationId], p).toEqual(o['x-spw-errors'].map((e) => [e.status, e.code]));
+      expect([...OPERATIONS[o.operationId].statuses].filter((s) => s !== 200), p).toEqual([...new Set(o['x-spw-errors'].map((e) => e.status))].sort());
+    }
+    expect(OPERATION_ERRORS.placeOrder).toContainEqual([403, 'execution_disabled']); expect(OPERATION_ERRORS.getOrderbook).toContainEqual([422, 'no_orderbook']);
     expect([...SCOPES]).toEqual(doc['x-spw-scopes'].map((s: { scope: string }) => s.scope));
     expect([...EXECUTION_SCOPES]).toEqual(['orders:execute', 'orders:cancel', 'positions:manage', 'strategies:manage', 'agents:manage']);
     expect([...WEBHOOK_EVENTS]).toEqual(doc['x-spw-webhook-events'].map((e: { event: string }) => e.event));
@@ -39,6 +52,11 @@ describe('generated types', () => {
     expect(tsType({ anyOf: [{ type: 'string' }, { type: 'null' }] })).toBe('string | null');
     expect(tsType({ type: ['number', 'null'] })).toBe('number | null');
     expect(tsType({})).toBe('unknown');
+    expect(tsType({ const: true })).toBe('true'); expect(tsType({ type: 'string', const: 'perpetual' })).toBe('"perpetual"'); expect(tsType({ const: null })).toBe('null');
+    expect(tsType({ $ref: '#/components/schemas/Order' })).toBe('Order'); expect(tsType({ $ref: '#/components/schemas/Error' })).toBe('ApiErrorBody');
+    expect(tsType({ anyOf: [{ $ref: '#/components/schemas/Order', description: 'x' }, { type: 'null' }] })).toBe('Order | null');
+    expect(() => tsType({ $ref: 'https://elsewhere.example/schema.json' })).toThrow(/unsupported \$ref/);
+    expect(() => tsType({ $ref: '#/paths/x' })).toThrow(/unsupported \$ref/);
   });
   it('local constants are the server\'s', () => {
     // read from the source text: importing idempotency.ts would load the server's configuration and database modules

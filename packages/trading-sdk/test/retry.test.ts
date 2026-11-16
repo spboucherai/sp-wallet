@@ -1,7 +1,7 @@
 // Error mapping, retries and idempotency with a mocked transport.
 import { describe, expect, it } from 'vitest';
-import { AmbiguousSymbol, APIError, AuthenticationError, canonicalJson, Conflict, ConfigurationError, errorFromResponse, ExecutionNotWired, IdempotencyConflict, MandateRequired, NetworkError, NotFound,
-  NotImplementedError, OutcomeUnknown, PermissionDenied, RateLimited, responseMeta, ScopeDenied, ServerError, ServiceUnavailable, SPWalletError, TimeoutError, ValidationError } from '../src/index.ts';
+import { AmbiguousCommand, AmbiguousSymbol, APIError, AuthenticationError, canonicalJson, Conflict, ConfigurationError, errorFromResponse, ExecutionDisabled, ExecutionNotWired, IdempotencyConflict, MandateDenied, MandateRequired, NetworkError, NotFound,
+  NotImplementedError, OutcomeUnknown, PermissionDenied, RateLimited, responseMeta, RiskDenied, ScopeDenied, ServerError, ServiceUnavailable, SPWalletError, TimeoutError, ValidationError } from '../src/index.ts';
 import { canonicalJson as serverCanonicalJson } from '../../../services/api/src/trading-api/key-model.ts';
 import { fail, mock, ok, type Step } from './helpers.ts';
 
@@ -15,6 +15,9 @@ describe('error mapping: HTTP status + code → typed error', () => {
     [401, 'unauthenticated', AuthenticationError],
     [403, 'insufficient_scope', ScopeDenied, PermissionDenied], [403, 'scope_denied', ScopeDenied, PermissionDenied], [403, 'mandate_required', MandateRequired, PermissionDenied],
     [403, 'restricted', PermissionDenied], [403, 'ip_not_allowed', PermissionDenied], [403, 'key_path_forbidden', PermissionDenied],
+    [403, 'execution_disabled', ExecutionDisabled, PermissionDenied], [403, 'mandate_denied', MandateDenied, PermissionDenied], [403, 'mandate_not_approved', MandateDenied, PermissionDenied], [403, 'key_limit_exceeded', PermissionDenied],
+    [422, 'risk_denied', RiskDenied], [423, 'kill_switch_active', RiskDenied], [423, 'read_only_mode', RiskDenied], [423, 'halted', RiskDenied], [422, 'venue_rejected', ValidationError], [422, 'below_min_size', ValidationError],
+    [409, 'ambiguous_command', AmbiguousCommand, Conflict], [404, 'not_found', NotFound], [400, 'invalid_cursor', ValidationError],
     [404, 'unknown_order', NotFound], [404, 'unknown_instrument', NotFound],
     [409, 'idempotency_conflict', IdempotencyConflict, Conflict], [409, 'ambiguous_symbol', AmbiguousSymbol, Conflict], [409, 'something_else', Conflict],
     [429, 'rate_limited', RateLimited], [429, 'auth_throttled', RateLimited],
@@ -33,6 +36,28 @@ describe('error mapping: HTTP status + code → typed error', () => {
       if (e instanceof AmbiguousSymbol) expect(e.candidates).toEqual(['hyperliquid:BTC', 'spot:BTC']);
     });
   }
+  it('a refusal about an order: the order, the mandate\'s reasons, the failed risk checks and the questions are on the error', async () => {
+    const order = { id: 'o-1', mode: 'paper', venue: 'hyperliquid', network: 'mainnet', accountId: 'a', instrument: 'hyperliquid:BTC', side: 'buy', type: 'market', status: 'REJECTED', engineStatus: null, final: true, createdAt: 1, updatedAt: 2 };
+    const md = errorFromResponse(403, { error: 'mandate_denied', message: 'outside the mandate', data: { reasons: ['ORDER_NOTIONAL_EXCEEDED', 'LEVERAGE_EXCEEDED'], order } }) as MandateDenied;
+    expect(md).toBeInstanceOf(MandateDenied); expect(md.reasons).toEqual(['ORDER_NOTIONAL_EXCEEDED', 'LEVERAGE_EXCEEDED']); expect(md.order).toEqual(order); expect(md.order!.status).toBe('REJECTED');
+    const checks = [{ id: 'kill_switch', ok: false, observed: 'on', limit: 'off', detail: 'the kill switch is on', exempt: false }];
+    const rd = errorFromResponse(423, { error: 'kill_switch_active', message: 'no new risk', data: { failed: ['kill_switch'], checks, decisionId: 7, order } }) as RiskDenied;
+    expect(rd).toBeInstanceOf(RiskDenied); expect(rd.killSwitch).toBe(true); expect(rd.failed).toEqual(['kill_switch']); expect(rd.checks).toEqual(checks); expect(rd.order!.id).toBe('o-1');
+    const r2 = errorFromResponse(422, { error: 'risk_denied', message: 'order_notional: above', data: { failed: ['order_notional'], checks: [], order } }) as RiskDenied;
+    expect(r2.killSwitch).toBe(false); expect(r2.failed).toEqual(['order_notional']);
+    const q = [{ field: 'venue', options: ['hyperliquid', 'gmx'], message: 'which venue?' }];
+    const ac = errorFromResponse(409, { error: 'ambiguous_command', message: 'answer the questions', data: { questions: q } }) as AmbiguousCommand;
+    expect(ac).toBeInstanceOf(AmbiguousCommand); expect(ac.questions).toEqual(q); expect(ac.order).toBeNull();
+    // an engine refusal after the order existed: a ValidationError that still carries the order
+    const ve = errorFromResponse(422, { error: 'price_deviation', message: 'too far from the mark', data: { order } });
+    expect(ve).toBeInstanceOf(ValidationError); expect(ve.order).toEqual(order);
+    // malformed or absent detail never throws: empty lists, null order
+    for (const body of [{ error: 'mandate_denied', message: 'm' }, { error: 'mandate_denied', message: 'm', data: { reasons: 'x', order: 'y' } }, { error: 'mandate_denied', message: 'm', data: null }]) {
+      const e = errorFromResponse(403, body) as MandateDenied; expect(e.reasons).toEqual([]); expect(e.order).toBeNull();
+    }
+    expect((errorFromResponse(422, { error: 'risk_denied', message: 'm', data: { checks: [1, null, { id: 'x' }] } }) as RiskDenied).checks).toEqual([{ id: 'x' }]);
+    expect(errorFromResponse(403, { error: 'execution_disabled', message: 'm' }).order).toBeNull();
+  });
   it('answers that are not the API\'s own: Fastify\'s 404 has no stable code; an HTML page is not parsed', async () => {
     const e = await caught(mock([{ status: 404, json: { message: 'Route GET:/x not found', error: 'Not Found', statusCode: 404 } }]).client.getRisk());
     expect(e).toBeInstanceOf(NotFound); expect(e.code).toBe('http_404');
@@ -190,7 +215,7 @@ describe('writes: retried only because of the Idempotency-Key', () => {
   it('501 execution_not_wired is an error on every write method — never a success', async () => {
     const O = { side: 'buy', type: 'market', size: '1', instrument: 'hyperliquid:BTC' } as const;
     const writes: ((c: ReturnType<typeof mock>['client']) => Promise<unknown>)[] = [
-      (c) => c.previewOrder(O), (c) => c.createOrder(O), (c) => c.cancelOrder('o'), (c) => c.closePosition('p'), (c) => c.reducePosition('p', { fraction: '0.5' }),
+      (c) => c.runCommand('STOP ALL AGENTS'), (c) => c.createOrder(O), (c) => c.cancelOrder('o'), (c) => c.closePosition('p'), (c) => c.reducePosition('p', { fraction: '0.5' }),
       (c) => c.createStrategy({ kind: 'spot', path: 'x' }), (c) => c.backtestStrategy('s'), (c) => c.startStrategy('s', { mode: 'paper' }), (c) => c.stopStrategy('s'),
       (c) => c.createAgent({ kind: 'spot', name: 'ab', universe: ['BTC'] }), (c) => c.startAgent('a', { mode: 'paper' }), (c) => c.stopAgent('a'),
     ];
@@ -201,6 +226,21 @@ describe('writes: retried only because of the Idempotency-Key', () => {
       expect(e).toBeInstanceOf(ExecutionNotWired); expect(e).toBeInstanceOf(NotImplementedError);
       expect(e.status).toBe(501); expect(e.idempotencyKey).toBe(m.calls[0]!.headers['idempotency-key']);
       expect(m.calls).toHaveLength(1); // 501 is not retried
+    }
+  });
+  it('previewOrder and engageKillSwitch are safe to repeat: retried like a read, typed errors, never OutcomeUnknown', async () => {
+    for (const run of [(c: ReturnType<typeof mock>['client']) => c.previewOrder(ORDER), (c: ReturnType<typeof mock>['client']) => c.engageKillSwitch('x')]) {
+      const m = mock([net(), fail(503, 'venue_unavailable'), { status: 502, text: '' }, ok({ fine: true })], { maxRetries: 3 });
+      expect(await run(m.client)).toEqual({ fine: true });
+      expect(m.calls).toHaveLength(4); expect(new Set(m.calls.map((c) => c.body)).size).toBe(1);
+      for (const c of m.calls) expect(c.headers['idempotency-key']).toBeUndefined();
+      const n = mock([net()], { maxRetries: 1 });
+      const e = await caught(run(n.client));
+      expect(e).toBeInstanceOf(NetworkError); expect(e).not.toBeInstanceOf(OutcomeUnknown); expect(n.calls).toHaveLength(2);
+      const t = mock([{ hang: true }], { maxRetries: 0, timeoutMs: 20 });
+      expect(await caught(run(t.client))).toBeInstanceOf(TimeoutError);
+      const s = mock([{ status: 500, text: 'oops' }], { maxRetries: 2 });
+      expect(await caught(run(s.client))).toBeInstanceOf(ServerError); expect(s.calls).toHaveLength(1);
     }
   });
   it('an aborted write is OutcomeUnknown (the request may have left)', async () => {

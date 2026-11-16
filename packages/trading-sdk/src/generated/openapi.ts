@@ -12,12 +12,136 @@ export const EXECUTION_SCOPES = ["orders:execute", "orders:cancel", "positions:m
 export const WEBHOOK_EVENTS = ["key.revoked", "risk.kill_switch", "agent.updated", "order.updated"] as const;
 export type WebhookEventName = (typeof WEBHOOK_EVENTS)[number];
 
-export interface ApiErrorBody {
-  /** stable machine code */
+/** the states of the unified order state machine — the closed set of `status` */
+export const ORDER_STATES = ["CREATED", "VALIDATED", "AWAITING_APPROVAL", "APPROVED", "SUBMITTING", "SUBMITTED", "PARTIALLY_FILLED", "FILLED", "CANCELLED", "REJECTED", "FAILED", "UNKNOWN"] as const;
+export type OrderState = (typeof ORDER_STATES)[number];
+/** UNKNOWN is not among them: it is neither final nor a failure */
+export const FINAL_ORDER_STATES = ["FILLED", "CANCELLED", "REJECTED", "FAILED"] as const;
+/** `data.reasons` of a `mandate_denied` refusal */
+export const MANDATE_DENY_REASONS = ["INVALID_INPUT", "MANDATE_NOT_YET_VALID", "MANDATE_ENDED", "MANDATE_REVOKED", "WIND_DOWN_REDUCING_ONLY", "PRINCIPAL_MISMATCH", "MANDATE_ID_MISMATCH", "MODE_MISMATCH", "ACCOUNT_NOT_ALLOWED", "VENUE_NOT_ALLOWED", "NETWORK_NOT_ALLOWED", "INSTRUMENT_NOT_ALLOWED", "MARKET_KIND_NOT_ALLOWED", "ORDER_TYPE_NOT_ALLOWED", "NOTIONAL_UNKNOWN", "ORDER_NOTIONAL_EXCEEDED", "POSITION_NOTIONAL_EXCEEDED", "CAPITAL_EXCEEDED", "LEVERAGE_EXCEEDED", "LEVERAGE_UNKNOWN", "DAILY_LOSS_REACHED", "BELOW_FLOOR_EQUITY", "RATE_PER_MINUTE", "RATE_PER_HOUR", "RATE_PER_DAY", "SLIPPAGE_ABOVE_MANDATE", "FEE_ABOVE_MANDATE", "ORDER_OUTLIVES_MANDATE", "STOP_LOSS_GTE", "STOP_DRAWDOWN_GTE", "STOP_CONSECUTIVE_REJECTS_GTE", "STOP_DATA_STALE_GTE", "STOP_SIGNER_UNREACHABLE_GTE"] as const;
+/** ids of the risk checks (`data.failed`, `data.checks[].id`, `risk.checks[].id` of a preview) */
+export const RISK_CHECK_IDS = ["input_valid", "read_only", "kill_switch", "reduce_only_valid", "venue_allowed", "instrument_allowed", "instrument_status", "signer_status", "venue_connection", "price_freshness", "price_consistency", "order_notional", "daily_notional", "order_rate_minute", "order_rate_hour", "order_rate_day", "position_size", "order_leverage", "account_leverage", "gross_exposure", "net_exposure", "asset_exposure", "venue_exposure", "collateral_concentration", "daily_loss", "total_loss", "drawdown", "liquidation_distance", "slippage", "min_liquidity", "context_complete"] as const;
+
+// ---------------------------------------------------------------------------------------------------- components
+export type ApiErrorBody = {
+  /** stable machine code: one of the operation's `x-spw-errors` */
   error: string;
   /** human-readable sentence (English) */
   message: string;
-}
+  /** `ambiguous_symbol`: the `venue:symbol` ids the bare symbol could mean */
+  candidates?: string[];
+  /** machine-readable detail of a refusal */
+  data?: {
+    /** the order the refusal is about, when one exists (state REJECTED or FAILED) */
+    order?: Order;
+    /** `mandate_denied`: codes of `x-spw-mandate-deny-reasons`; a mandate that cannot be used: the error code in upper case */
+    reasons?: string[];
+    /** `risk_denied`, `kill_switch_active`, `read_only_mode`: ids of the failed risk checks */
+    failed?: string[];
+    /** the failed risk checks, each with what was observed and its limit */
+    checks?: RiskCheck[];
+    decisionId?: number;
+    /** `ambiguous_command`: what the command and the owner's defaults leave open */
+    questions?: {
+      field: string;
+      /** the known candidates; empty = a free value is needed */
+      options: string[];
+      message: string;
+      [extra: string]: unknown;
+    }[];
+    /** `parse_error`: the grammar's own code */
+    code?: string;
+    /** `parse_error`: index of the offending token */
+    token?: number;
+    [extra: string]: unknown;
+  };
+  [extra: string]: unknown;
+};
+export type Order = {
+  /** the id every order operation takes */
+  id: string;
+  /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. */
+  mode: "paper" | "live";
+  venue: string;
+  network: string;
+  accountId: string | null;
+  instrument: string | null;
+  side: string | null;
+  type: string;
+  /** unified order state. Final: FILLED, CANCELLED, REJECTED, FAILED. UNKNOWN means the outcome at the venue is not known yet: it is not final and it is not a failure */
+  status: "CREATED" | "VALIDATED" | "AWAITING_APPROVAL" | "APPROVED" | "SUBMITTING" | "SUBMITTED" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED" | "REJECTED" | "FAILED" | "UNKNOWN";
+  /** the word of the engine that executes the order (paper engine, Hyperliquid engine, GMX operation, agent swap) for the same moment; null before an engine holds it. Informative: decide on `status` */
+  engineStatus: string | null;
+  /** true exactly when `status` is FILLED, CANCELLED, REJECTED or FAILED */
+  final: boolean;
+  size?: string | null;
+  price?: string | null;
+  triggerPrice?: string | null;
+  reduceOnly?: boolean;
+  tif?: string;
+  /** cumulative filled size, base units */
+  filled?: string;
+  avgFillPrice?: string | null;
+  /** closed reason code of the current state (state machine) */
+  reasonCode?: string | null;
+  /** sentence for people */
+  reason?: string | null;
+  /** API error code of the refusal, when the order was refused */
+  rejectCode?: string | null;
+  clientOrderId?: string | null;
+  orderId?: string;
+  origin?: string;
+  mandateId?: string | null;
+  notionalUsd?: string | null;
+  /** milliseconds since the Unix epoch */
+  createdAt: number;
+  /** milliseconds since the Unix epoch */
+  updatedAt: number;
+  [extra: string]: unknown;
+};
+/** the canonical order SPW-ORDER-INTENT-v1: what is hashed, checked by the mandate and the risk engine, and handed to the engine */
+export type CanonicalOrder = {
+  v: 1;
+  venue: string;
+  network: string;
+  instrument: string;
+  marketKind: "spot" | "perp";
+  side: "buy" | "sell";
+  type: "market" | "limit" | "stop" | "take_profit";
+  size: string | null;
+  notional: string | null;
+  limitPrice: string | null;
+  triggerPrice: string | null;
+  reduceOnly: boolean;
+  tif: string;
+  maxSlippageBps: number;
+  /** decimal number as a string (never a float) */
+  maxFeeUsd: string;
+  leverage: string | null;
+  clientOrderId: string;
+  mode: "research" | "paper" | "live";
+  principal: {
+    kind: "owner" | "agent" | "api_key";
+    id: string;
+    [extra: string]: unknown;
+  };
+  mandateId: string | null;
+  /** milliseconds since the Unix epoch */
+  createdAt: number;
+  /** milliseconds since the Unix epoch */
+  expiresAt: number;
+  [extra: string]: unknown;
+};
+export type RiskCheck = {
+  /** one of `x-spw-risk-checks` */
+  id: string;
+  ok: boolean;
+  observed: string | null;
+  limit: string | null;
+  detail: string;
+  exempt: boolean;
+  [extra: string]: unknown;
+};
 
 // ---------------------------------------------------------------------------------------------------- getOpenApi: GET /api/v1/trading/openapi.json
 export type GetOpenApiResponse = {
@@ -62,6 +186,72 @@ export type ListMarketsResponse = {
   ts: number;
 };
 
+// ---------------------------------------------------------------------------------------------------- compareMarkets: GET /api/v1/trading/markets/compare
+export interface CompareMarketsQuery {
+  /** common underlying, e.g. BTC (see GET /markets-hub/underlyings) — pattern: ^[A-Za-z0-9]{1,15}$ — default: "BTC" */
+  underlying?: string;
+  /** default: "long" */
+  side?: "long" | "short";
+  /** position notional in USD (not the collateral) — pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ — default: "1000" */
+  notional?: string;
+  /** pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ — default: "1" */
+  leverage?: string;
+  /** expected holding period; funding is the current rate held constant over it — pattern: ^(0|[1-9]\d{0,3})(\.\d{1,4})?$ — default: "24" */
+  horizonHours?: string;
+  /** how the entry and the exit are executed, for the fee — default: "taker" */
+  liquidity?: "taker" | "maker";
+  /** a discrepancy estimate above this is flagged — pattern: ^(0|[1-9]\d{0,4})(\.\d{1,4})?$ — default: "0" */
+  minNetEdgeBps?: string;
+}
+export type CompareMarketsResponse = {
+  underlying: string;
+  category: string | null;
+  request: Record<string, unknown>;
+  rows: {
+    venue: string;
+    instrument: string;
+    /** false: the wallet cannot trade this venue or instrument; the row is shown for information */
+    tradable: boolean;
+    tradableReason: string | null;
+    /** itemised estimate: every component is { value, reason, basis } — value null WITH the reason when an input is missing */
+    cost: Record<string, unknown> | null;
+    priceOutlier: boolean;
+    ageMs: number | null;
+    stale: boolean;
+    [extra: string]: unknown;
+  }[];
+  discrepancies: {
+    longVenue: string;
+    shortVenue: string;
+    /** an ESTIMATE under `assumptions`, with `risks` */
+    netEdgeEstimateBps: string | null;
+    flagged: boolean;
+    actionableFromWallet: boolean;
+    assumptions: {
+      code: string;
+      text: string;
+    }[];
+    risks: {
+      code: string;
+      text: string;
+    }[];
+    [extra: string]: unknown;
+  }[];
+  texts: {
+    disclaimer: string;
+    [extra: string]: unknown;
+  };
+  warnings: string[];
+  errors: {
+    source: string;
+    message: string;
+  }[];
+  /** milliseconds since the Unix epoch */
+  ts: number;
+  source: string;
+  [extra: string]: unknown;
+};
+
 // ---------------------------------------------------------------------------------------------------- getMarket: GET /api/v1/trading/markets/{symbol}
 export type GetMarketResponse = {
   market: {
@@ -79,8 +269,51 @@ export type GetMarketResponse = {
     stale: boolean;
     [extra: string]: unknown;
   };
-  instrument: Record<string, unknown> | null;
-  ticker: Record<string, unknown> | null;
+  /** null for a spot market-data symbol */
+  instrument: {
+    /** `venue:symbol` */
+    id: string;
+    venue: string;
+    symbol: string;
+    base: string;
+    quote: string;
+    kind: "perpetual";
+    collateral: string;
+    settlement: string;
+    /** price increment: a limit or trigger price is a multiple of it */
+    tickSize: string;
+    /** size increment: an order size is a multiple of it */
+    lotSize: string;
+    /** smallest order size, base units; null when the venue states none */
+    minOrderSize: string | null;
+    /** smallest order value, quote currency; null when the venue states none */
+    minNotional: string | null;
+    /** decimal number as a string (never a float) */
+    maxLeverage: string;
+    marginModes: Array<"cross" | "isolated">;
+    fundingIntervalSec: number;
+    markPriceMethod: string;
+    status: "active" | "reduce_only" | "halted";
+    /** what the underlying is, when the venue's own metadata says it */
+    category?: "crypto" | "equity" | "pre_ipo" | "commodity" | "fx";
+    [extra: string]: unknown;
+  } | null;
+  ticker: {
+    instrument: string;
+    /** decimal number as a string (never a float) */
+    mark: string;
+    index: string | null;
+    mid: string | null;
+    /** per funding interval */
+    funding: string | null;
+    openInterest: string | null;
+    volume24h: string | null;
+    change24h: string | null;
+    /** milliseconds since the Unix epoch */
+    ts: number;
+    [extra: string]: unknown;
+  } | null;
+  /** spot only: data quality per interval */
   quality: Record<string, unknown> | null;
   /** milliseconds since the Unix epoch */
   ts: number;
@@ -126,17 +359,532 @@ export type GetCandlesResponse = {
     close: string;
     /** decimal number as a string (never a float) */
     volume: string;
+    [extra: string]: unknown;
   }[];
   ts: number | null;
   stale: boolean;
   source: string;
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- listPrivateMarkets: GET /api/v1/trading/private-markets
+export interface ListPrivateMarketsQuery {
+  /** true: only delisted markets (frozen prices) */
+  delisted?: "true" | "false";
+  /** hypothetical position size, contracts (default 1) — pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ */
+  size?: string;
+  side?: "long" | "short";
+}
+export type ListPrivateMarketsResponse = {
+  markets: {
+    id: string;
+    venue: string;
+    platform: string;
+    symbol: string;
+    company: {
+      slug: string;
+      name: string;
+    } | null;
+    status: "live" | "delisted" | "halted" | "reduce_only";
+    review: {
+      state: "reviewed" | "under_review" | "not_reviewed";
+      reasons: string[];
+      [extra: string]: unknown;
+    };
+    contract: {
+      nature: string;
+      unit: {
+        kind: "usd_per_share" | "valuation_usd_billions" | "unknown";
+        label: string;
+      };
+      quoteCurrency: string;
+      settlement: string;
+      oracle: string;
+      liquidation: string;
+      [extra: string]: unknown;
+    };
+    market: {
+      /** one figure with where it comes from, when it was read, and whether it is older than its freshness bound */
+      price: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+      };
+      funding: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+        intervalSec: number | null;
+      };
+      /** one figure with where it comes from, when it was read, and whether it is older than its freshness bound */
+      openInterest: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+      };
+      /** one figure with where it comes from, when it was read, and whether it is older than its freshness bound */
+      volume24h: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+      };
+      [extra: string]: unknown;
+    };
+    valuation: {
+      syntheticPrice: {
+        value: string | null;
+        [extra: string]: unknown;
+      };
+      contractMarketValue: {
+        value: string | null;
+        reason: string | null;
+        [extra: string]: unknown;
+      };
+      notionalExposure: {
+        value: string | null;
+        hypothetical: true;
+        [extra: string]: unknown;
+      };
+      /** null + reason unless the reviewed definition gives the formula */
+      impliedValuation: {
+        value: string | null;
+        formula: string | null;
+        reason: string | null;
+        reasonCode: string | null;
+        [extra: string]: unknown;
+      };
+      lastPrivateValuation: {
+        /** decimal number as a string (never a float) */
+        value: string;
+        kind: string;
+        date: string;
+        sourceUrl: string;
+        [extra: string]: unknown;
+      } | null;
+      premiumDiscount: {
+        premiumBps: string | null;
+        [extra: string]: unknown;
+      };
+      caveats: {
+        code: string;
+        text: string;
+        [extra: string]: unknown;
+      }[];
+      [extra: string]: unknown;
+    };
+    tradable: false;
+    notTradable: {
+      code: string;
+      reasons: string[];
+    };
+    error: string | null;
+    [extra: string]: unknown;
+  }[];
+  companies: {
+    slug: string;
+    name: string;
+    contracts: string[];
+    [extra: string]: unknown;
+  }[];
+  excluded: {
+    id: string;
+    reason: string;
+    [extra: string]: unknown;
+  }[];
+  venues: {
+    venue: string;
+    status: "ok" | "stale" | "error";
+    error: string | null;
+    [extra: string]: unknown;
+  }[];
+  notice: {
+    tradable: false;
+    code: string;
+    text: string;
+  };
+  /** milliseconds since the Unix epoch */
+  ts: number;
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- getPrivateMarketCompany: GET /api/v1/trading/private-markets/companies/{slug}
+export interface GetPrivateMarketCompanyQuery {
+  /** pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ */
+  size?: string;
+  side?: "long" | "short";
+  interval?: "1h" | "1d";
+  limit?: number;
+}
+export type GetPrivateMarketCompanyResponse = {
+  company: {
+    slug: string;
+    name: string;
+    [extra: string]: unknown;
+  };
+  contracts: {
+    id: string;
+    venue: string;
+    platform: string;
+    symbol: string;
+    company: {
+      slug: string;
+      name: string;
+    } | null;
+    status: "live" | "delisted" | "halted" | "reduce_only";
+    review: {
+      state: "reviewed" | "under_review" | "not_reviewed";
+      reasons: string[];
+      [extra: string]: unknown;
+    };
+    contract: {
+      nature: string;
+      unit: {
+        kind: "usd_per_share" | "valuation_usd_billions" | "unknown";
+        label: string;
+      };
+      quoteCurrency: string;
+      settlement: string;
+      oracle: string;
+      liquidation: string;
+      [extra: string]: unknown;
+    };
+    market: {
+      /** one figure with where it comes from, when it was read, and whether it is older than its freshness bound */
+      price: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+      };
+      funding: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+        intervalSec: number | null;
+      };
+      /** one figure with where it comes from, when it was read, and whether it is older than its freshness bound */
+      openInterest: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+      };
+      /** one figure with where it comes from, when it was read, and whether it is older than its freshness bound */
+      volume24h: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+      };
+      [extra: string]: unknown;
+    };
+    valuation: {
+      syntheticPrice: {
+        value: string | null;
+        [extra: string]: unknown;
+      };
+      contractMarketValue: {
+        value: string | null;
+        reason: string | null;
+        [extra: string]: unknown;
+      };
+      notionalExposure: {
+        value: string | null;
+        hypothetical: true;
+        [extra: string]: unknown;
+      };
+      /** null + reason unless the reviewed definition gives the formula */
+      impliedValuation: {
+        value: string | null;
+        formula: string | null;
+        reason: string | null;
+        reasonCode: string | null;
+        [extra: string]: unknown;
+      };
+      lastPrivateValuation: {
+        /** decimal number as a string (never a float) */
+        value: string;
+        kind: string;
+        date: string;
+        sourceUrl: string;
+        [extra: string]: unknown;
+      } | null;
+      premiumDiscount: {
+        premiumBps: string | null;
+        [extra: string]: unknown;
+      };
+      caveats: {
+        code: string;
+        text: string;
+        [extra: string]: unknown;
+      }[];
+      [extra: string]: unknown;
+    };
+    tradable: false;
+    notTradable: {
+      code: string;
+      reasons: string[];
+    };
+    error: string | null;
+    [extra: string]: unknown;
+  }[];
+  delisted: {
+    id: string;
+    venue: string;
+    platform: string;
+    symbol: string;
+    company: {
+      slug: string;
+      name: string;
+    } | null;
+    status: "live" | "delisted" | "halted" | "reduce_only";
+    review: {
+      state: "reviewed" | "under_review" | "not_reviewed";
+      reasons: string[];
+      [extra: string]: unknown;
+    };
+    contract: {
+      nature: string;
+      unit: {
+        kind: "usd_per_share" | "valuation_usd_billions" | "unknown";
+        label: string;
+      };
+      quoteCurrency: string;
+      settlement: string;
+      oracle: string;
+      liquidation: string;
+      [extra: string]: unknown;
+    };
+    market: {
+      /** one figure with where it comes from, when it was read, and whether it is older than its freshness bound */
+      price: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+      };
+      funding: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+        intervalSec: number | null;
+      };
+      /** one figure with where it comes from, when it was read, and whether it is older than its freshness bound */
+      openInterest: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+      };
+      /** one figure with where it comes from, when it was read, and whether it is older than its freshness bound */
+      volume24h: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+      };
+      [extra: string]: unknown;
+    };
+    valuation: {
+      syntheticPrice: {
+        value: string | null;
+        [extra: string]: unknown;
+      };
+      contractMarketValue: {
+        value: string | null;
+        reason: string | null;
+        [extra: string]: unknown;
+      };
+      notionalExposure: {
+        value: string | null;
+        hypothetical: true;
+        [extra: string]: unknown;
+      };
+      /** null + reason unless the reviewed definition gives the formula */
+      impliedValuation: {
+        value: string | null;
+        formula: string | null;
+        reason: string | null;
+        reasonCode: string | null;
+        [extra: string]: unknown;
+      };
+      lastPrivateValuation: {
+        /** decimal number as a string (never a float) */
+        value: string;
+        kind: string;
+        date: string;
+        sourceUrl: string;
+        [extra: string]: unknown;
+      } | null;
+      premiumDiscount: {
+        premiumBps: string | null;
+        [extra: string]: unknown;
+      };
+      caveats: {
+        code: string;
+        text: string;
+        [extra: string]: unknown;
+      }[];
+      [extra: string]: unknown;
+    };
+    tradable: false;
+    notTradable: {
+      code: string;
+      reasons: string[];
+    };
+    error: string | null;
+    [extra: string]: unknown;
+  }[];
+  references: Record<string, unknown>[];
+  /** always null: venues are never merged */
+  merged: null;
+  /** milliseconds since the Unix epoch */
+  ts: number;
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- getPrivateMarket: GET /api/v1/trading/private-markets/{id}
+export interface GetPrivateMarketQuery {
+  /** pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ */
+  size?: string;
+  side?: "long" | "short";
+  interval?: "1h" | "1d";
+  limit?: number;
+}
+export type GetPrivateMarketResponse = {
+  market: {
+    id: string;
+    venue: string;
+    platform: string;
+    symbol: string;
+    company: {
+      slug: string;
+      name: string;
+    } | null;
+    status: "live" | "delisted" | "halted" | "reduce_only";
+    review: {
+      state: "reviewed" | "under_review" | "not_reviewed";
+      reasons: string[];
+      [extra: string]: unknown;
+    };
+    contract: {
+      nature: string;
+      unit: {
+        kind: "usd_per_share" | "valuation_usd_billions" | "unknown";
+        label: string;
+      };
+      quoteCurrency: string;
+      settlement: string;
+      oracle: string;
+      liquidation: string;
+      [extra: string]: unknown;
+    };
+    market: {
+      /** one figure with where it comes from, when it was read, and whether it is older than its freshness bound */
+      price: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+      };
+      funding: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+        intervalSec: number | null;
+      };
+      /** one figure with where it comes from, when it was read, and whether it is older than its freshness bound */
+      openInterest: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+      };
+      /** one figure with where it comes from, when it was read, and whether it is older than its freshness bound */
+      volume24h: {
+        value: string | null;
+        source: string;
+        ts: number | null;
+        stale: boolean;
+      };
+      [extra: string]: unknown;
+    };
+    valuation: {
+      syntheticPrice: {
+        value: string | null;
+        [extra: string]: unknown;
+      };
+      contractMarketValue: {
+        value: string | null;
+        reason: string | null;
+        [extra: string]: unknown;
+      };
+      notionalExposure: {
+        value: string | null;
+        hypothetical: true;
+        [extra: string]: unknown;
+      };
+      /** null + reason unless the reviewed definition gives the formula */
+      impliedValuation: {
+        value: string | null;
+        formula: string | null;
+        reason: string | null;
+        reasonCode: string | null;
+        [extra: string]: unknown;
+      };
+      lastPrivateValuation: {
+        /** decimal number as a string (never a float) */
+        value: string;
+        kind: string;
+        date: string;
+        sourceUrl: string;
+        [extra: string]: unknown;
+      } | null;
+      premiumDiscount: {
+        premiumBps: string | null;
+        [extra: string]: unknown;
+      };
+      caveats: {
+        code: string;
+        text: string;
+        [extra: string]: unknown;
+      }[];
+      [extra: string]: unknown;
+    };
+    tradable: false;
+    notTradable: {
+      code: string;
+      reasons: string[];
+    };
+    error: string | null;
+    [extra: string]: unknown;
+  };
+  book: Record<string, unknown>;
+  candles: Record<string, unknown>;
+  references: {
+    kind: string;
+    date: string;
+    sourceUrl: string;
+    [extra: string]: unknown;
+  }[];
+  /** milliseconds since the Unix epoch */
+  ts: number;
+  [extra: string]: unknown;
 };
 
 // ---------------------------------------------------------------------------------------------------- getPortfolio: GET /api/v1/trading/portfolio
 export type GetPortfolioResponse = {
   asOf: string;
   wallet: {
-    valueUsd: number | null;
+    /** USD, a decimal string; null when the price feed is unavailable */
+    valueUsd: string | null;
     priced: number;
     unpriced: number;
     pricesAsOf: string | null;
@@ -144,7 +892,8 @@ export type GetPortfolioResponse = {
       network: string;
       symbol: string;
       display: string | null;
-      valueUsd: number | null;
+      /** USD, a decimal string; null when the asset has no price or no readable balance */
+      valueUsd: string | null;
       [extra: string]: unknown;
     }[];
   };
@@ -159,11 +908,14 @@ export type GetPortfolioResponse = {
   }[];
   /** three separate figures; there is no sum across modes */
   totals: {
-    walletUsd: number | null;
+    walletUsd: string | null;
     liveVenueEquity: string | null;
     paperEquity: string | null;
+    /** what the three figures are, in a sentence */
+    note: string;
   };
-  halted: boolean;
+  /** emergency halt of the signer; null when the signer does not say */
+  halted: boolean | null;
   errors: {
     source: string;
     message: string;
@@ -190,12 +942,16 @@ export type GetBalancesResponse = {
     source: string;
     message: string;
   }[];
+  /** emergency halt of the signer; null when the signer does not say */
+  halted: boolean | null;
 };
 
 // ---------------------------------------------------------------------------------------------------- getActivity: GET /api/v1/trading/activity
 export interface GetActivityQuery {
   /** default: 100 */
   limit?: number;
+  /** opaque position returned as `nextCursor` by the previous page; send it with the same filters — pattern: ^[A-Za-z0-9_-]+$ */
+  cursor?: string;
 }
 export type GetActivityResponse = {
   items: {
@@ -205,6 +961,8 @@ export type GetActivityResponse = {
     mode: "paper" | "live";
     [extra: string]: unknown;
   }[];
+  /** pass it as `cursor` to read the next (older) page; null when there is none */
+  nextCursor: string | null;
 };
 
 // ---------------------------------------------------------------------------------------------------- listPositions: GET /api/v1/trading/positions
@@ -246,29 +1004,17 @@ export interface ListOrdersQuery {
   mode?: "paper" | "live";
   /** venue id: hyperliquid, gmx, dydx, spot */
   venue?: string;
-  /** true: only orders that are not final */
+  /** true: only orders that are not final; false: only final orders */
   open?: "true" | "false";
   /** default: 100 */
   limit?: number;
+  /** opaque position returned as `nextCursor` by the previous page; send it with the same filters — pattern: ^[A-Za-z0-9_-]+$ */
+  cursor?: string;
 }
 export type ListOrdersResponse = {
-  orders: {
-    id: string;
-    /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. */
-    mode: "paper" | "live";
-    venue: string;
-    accountId: string | null;
-    instrument: string | null;
-    side: string | null;
-    type: string;
-    status: string;
-    final: boolean | null;
-    /** milliseconds since the Unix epoch */
-    createdAt: number;
-    /** milliseconds since the Unix epoch */
-    updatedAt: number;
-    [extra: string]: unknown;
-  }[];
+  orders: Order[];
+  /** pass it as `cursor` to read the next (older) page; null when there is none */
+  nextCursor: string | null;
   /** milliseconds since the Unix epoch */
   ts: number;
 };
@@ -283,8 +1029,10 @@ export type PlaceOrderBody = {
   instrument: string;
   side: "buy" | "sell";
   type: "limit" | "market" | "stop_market" | "stop_limit" | "take_profit_market" | "take_profit_limit";
-  /** decimal number as a string (never a float) — pattern: ^\d+(\.\d+)?$ */
-  size: string;
+  /** quantity of the base asset. Exactly one of `size` and `notional` is required — pattern: ^\d+(\.\d+)?$ */
+  size?: string;
+  /** value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required — pattern: ^\d+(\.\d+)?$ */
+  notional?: string;
   /** decimal number as a string (never a float) — pattern: ^\d+(\.\d+)?$ */
   price?: string;
   /** decimal number as a string (never a float) — pattern: ^\d+(\.\d+)?$ */
@@ -294,25 +1042,70 @@ export type PlaceOrderBody = {
   /** default: "gtc" */
   tif?: "gtc" | "ioc" | "alo";
   slippageBps?: number;
-  /** pattern: ^[A-Za-z0-9._:-]{8,100}$ */
+  /** paper only: leverage setting of the instrument on the account. On a venue account the leverage is a venue setting — pattern: ^\d+(\.\d+)?$ */
+  leverage?: string;
+  /** highest fee accepted, USD; default: 10 bps of the notional — pattern: ^\d+(\.\d+)?$ */
+  maxFeeUsd?: string;
+  /** idempotency key of the ORDER; default: the Idempotency-Key header. The order id is derived from it and from the principal — pattern: ^[A-Za-z0-9._:-]{8,100}$ */
   clientOrderId?: string;
+};
+export type PlaceOrderResponse = {
+  order: Order;
+  /** true: this Idempotency-Key (or clientOrderId) already placed this order; nothing was sent again */
+  idempotent: boolean;
+  /** set while an owner order waits AWAITING_APPROVAL: where the owner approves it with the passkey. Always null for an API key */
+  approval: {
+    by: string;
+    engine: string;
+    accountId: string;
+    clientId: string;
+    hash: string | null;
+    expiresAt: number | null;
+    approve: {
+      method: string;
+      path: string;
+      [extra: string]: unknown;
+    };
+    [extra: string]: unknown;
+  } | null;
+  [extra: string]: unknown;
 };
 
 // ---------------------------------------------------------------------------------------------------- getOrder: GET /api/v1/trading/orders/{id}
 export type GetOrderResponse = {
-  order: {
+  order: Order;
+  fills: {
     id: string;
-    /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. */
-    mode: "paper" | "live";
-    venue: string;
-    status: string;
+    instrument: string;
+    side: string;
+    /** decimal number as a string (never a float) */
+    price: string;
+    /** decimal number as a string (never a float) */
+    size: string;
+    /** decimal number as a string (never a float) */
+    fee: string;
+    feeAsset: string;
+    closedPnl: string | null;
+    liquidation: boolean;
+    /** milliseconds since the Unix epoch */
+    ts: number;
     [extra: string]: unknown;
-  };
-  fills: Record<string, unknown>[];
+  }[];
+  /** the transitions of the order, oldest first (absent for `agent:` rows) */
+  history?: Record<string, unknown>[];
   [extra: string]: unknown;
 };
 
 // ---------------------------------------------------------------------------------------------------- cancelOrder: DELETE /api/v1/trading/orders/{id}
+export type CancelOrderResponse = {
+  order: Order;
+  /** true: a cancel request went to a venue */
+  sent: boolean;
+  /** false: the order was already final */
+  changed: boolean;
+  venue?: unknown;
+  [extra: string]: unknown;
+};
 
 // ---------------------------------------------------------------------------------------------------- listStrategies: GET /api/v1/trading/strategies
 export interface ListStrategiesQuery {
@@ -406,6 +1199,33 @@ export type GetRiskResponse = {
   }[];
   /** milliseconds since the Unix epoch */
   ts: number;
+  /** the global switches of the risk engine: `killSwitch.on` blocks every new risk; `readOnly.on` lets only cancels pass */
+  engine: {
+    killSwitch: {
+      on: boolean;
+      at: number | null;
+      by: {
+        kind: string;
+        id: string;
+        [extra: string]: unknown;
+      } | null;
+      reason: string | null;
+      [extra: string]: unknown;
+    };
+    readOnly: {
+      on: boolean;
+      at: number | null;
+      by: {
+        kind: string;
+        id: string;
+        [extra: string]: unknown;
+      } | null;
+      reason: string | null;
+      [extra: string]: unknown;
+    };
+    note: string;
+    [extra: string]: unknown;
+  };
   [extra: string]: unknown;
 };
 
@@ -419,8 +1239,10 @@ export type PreviewOrderBody = {
   instrument: string;
   side: "buy" | "sell";
   type: "limit" | "market" | "stop_market" | "stop_limit" | "take_profit_market" | "take_profit_limit";
-  /** decimal number as a string (never a float) — pattern: ^\d+(\.\d+)?$ */
-  size: string;
+  /** quantity of the base asset. Exactly one of `size` and `notional` is required — pattern: ^\d+(\.\d+)?$ */
+  size?: string;
+  /** value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required — pattern: ^\d+(\.\d+)?$ */
+  notional?: string;
   /** decimal number as a string (never a float) — pattern: ^\d+(\.\d+)?$ */
   price?: string;
   /** decimal number as a string (never a float) — pattern: ^\d+(\.\d+)?$ */
@@ -430,13 +1252,110 @@ export type PreviewOrderBody = {
   /** default: "gtc" */
   tif?: "gtc" | "ioc" | "alo";
   slippageBps?: number;
-  /** pattern: ^[A-Za-z0-9._:-]{8,100}$ */
+  /** paper only: leverage setting of the instrument on the account. On a venue account the leverage is a venue setting — pattern: ^\d+(\.\d+)?$ */
+  leverage?: string;
+  /** highest fee accepted, USD; default: 10 bps of the notional — pattern: ^\d+(\.\d+)?$ */
+  maxFeeUsd?: string;
+  /** idempotency key of the ORDER; default: the Idempotency-Key header. The order id is derived from it and from the principal — pattern: ^[A-Za-z0-9._:-]{8,100}$ */
   clientOrderId?: string;
+};
+export type PreviewOrderResponse = {
+  order: CanonicalOrder;
+  /** SHA-256 of the canonical bytes, hex */
+  hash: string;
+  /** what the canonical order leaves open; null when it could not be resolved (see `refusals`) */
+  resolved: {
+    /** base units */
+    size: string;
+    worstPrice: string | null;
+    notionalUsd: string | null;
+    [extra: string]: unknown;
+  } | null;
+  /** true exactly when `refusals` is empty */
+  wouldExecute: boolean;
+  refusals: {
+    stage: "key" | "lock" | "mandate" | "risk" | "engine";
+    code: string;
+    message: string;
+    reasons?: string[];
+    [extra: string]: unknown;
+  }[];
+  approval: {
+    required: boolean;
+    by: "owner_passkey" | "mandate" | "none";
+    [extra: string]: unknown;
+  };
+  risk: {
+    decision: "allow" | "deny";
+    reducing: boolean;
+    checks: RiskCheck[];
+    derived: {
+      size: string | null;
+      notional: string | null;
+      referencePrice: string | null;
+      /** decimal number as a string (never a float) */
+      positionBefore?: string;
+      positionAfter?: string | null;
+      [extra: string]: unknown;
+    };
+    [extra: string]: unknown;
+  };
+  /** null for the owner session, and when the key's mandate cannot be used (a `mandate` refusal then says why) */
+  mandate: {
+    id: string;
+    decision: "allow" | "deny";
+    reasons: string[];
+    [extra: string]: unknown;
+  } | null;
+  engine: {
+    name: string;
+    risk: {
+      ok: boolean;
+      [extra: string]: unknown;
+    } | null;
+    /** fees, slippage against the real book, liquidation price: an estimate */
+    estimate: Record<string, unknown> | null;
+    [extra: string]: unknown;
+  };
+  account: {
+    id: string;
+    venue: string;
+    network: string;
+    equity?: string | null;
+    freeCollateral?: string | null;
+    /** true: the key holds neither `wallet:read` nor `positions:read`, so `equity`, `freeCollateral`, the position figures of `risk.derived`, and the account figures of the risk checks, of the refusal sentences and of the estimate are omitted */
+    withheld: boolean;
+    [extra: string]: unknown;
+  };
+  /** milliseconds since the Unix epoch */
+  ts: number;
+  [extra: string]: unknown;
 };
 
 // ---------------------------------------------------------------------------------------------------- closePosition: POST /api/v1/trading/positions/{id}/close
 export type ClosePositionBody = {
   slippageBps?: number;
+};
+export type ClosePositionResponse = {
+  order: Order;
+  /** true: this Idempotency-Key (or clientOrderId) already placed this order; nothing was sent again */
+  idempotent: boolean;
+  /** set while an owner order waits AWAITING_APPROVAL: where the owner approves it with the passkey. Always null for an API key */
+  approval: {
+    by: string;
+    engine: string;
+    accountId: string;
+    clientId: string;
+    hash: string | null;
+    expiresAt: number | null;
+    approve: {
+      method: string;
+      path: string;
+      [extra: string]: unknown;
+    };
+    [extra: string]: unknown;
+  } | null;
+  [extra: string]: unknown;
 };
 
 // ---------------------------------------------------------------------------------------------------- reducePosition: POST /api/v1/trading/positions/{id}/reduce
@@ -444,6 +1363,123 @@ export type ReducePositionBody = {
   /** share of the position to close, in (0, 1] — pattern: ^(0(\.\d+)?|1(\.0+)?)$ */
   fraction: string;
   slippageBps?: number;
+};
+export type ReducePositionResponse = {
+  order: Order;
+  /** true: this Idempotency-Key (or clientOrderId) already placed this order; nothing was sent again */
+  idempotent: boolean;
+  /** set while an owner order waits AWAITING_APPROVAL: where the owner approves it with the passkey. Always null for an API key */
+  approval: {
+    by: string;
+    engine: string;
+    accountId: string;
+    clientId: string;
+    hash: string | null;
+    expiresAt: number | null;
+    approve: {
+      method: string;
+      path: string;
+      [extra: string]: unknown;
+    };
+    [extra: string]: unknown;
+  } | null;
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- runCommand: POST /api/v1/trading/commands
+export type RunCommandBody = {
+  /** one line of the trading command grammar, English or French: LONG BTC-PERP 500 x2, CLOSE BTC-PERP 50%, CANCEL ORDER <id>, SHOW POSITIONS, KILL … */
+  text: string;
+  /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. — default: "paper" */
+  mode?: "paper" | "live";
+  /** paper account or venue account; required when the wallet has several on the venue — pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  accountId?: string;
+  /** true: answer the canonical order (or the control) the command resolves to, and do nothing — default: false */
+  dryRun?: boolean;
+};
+export type RunCommandResponse = {
+  /** what the command resolved to */
+  kind: "query" | "control" | "order";
+  /** the parsed command type */
+  command: string;
+  /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. */
+  mode: "paper" | "live";
+  dryRun: boolean;
+  /** absent for a query; false for a dry run */
+  executed?: boolean;
+  query?: string;
+  /** query: the answer of the matching read operation */
+  data?: Record<string, unknown>;
+  control?: {
+    type: "cancel_order" | "cancel_all" | "kill_switch_on";
+    [extra: string]: unknown;
+  };
+  /** kind `order`. Dry run: the canonical order the command resolves to. Executed: the order as POST /orders answers it (`id`, `status`, `final`, …) */
+  order?: Record<string, unknown>;
+  /** executed order: the canonical order that was placed */
+  canonical?: CanonicalOrder;
+  hash?: string;
+  idempotent?: boolean;
+  approval?: Record<string, unknown> | null;
+  attached?: {
+    role: "stop_loss" | "take_profit";
+    placed: boolean;
+    note: string;
+    [extra: string]: unknown;
+  }[];
+  /** CANCEL ORDER: the answer of the cancel */
+  result?: Record<string, unknown>;
+  /** CANCEL ALL: one row per order */
+  results?: {
+    id: string;
+    ok: boolean;
+    [extra: string]: unknown;
+  }[];
+  /** CANCEL ALL dry run: the ids that would be cancelled */
+  orders?: string[];
+  killSwitch?: {
+    on: boolean;
+    at: number | null;
+    by: {
+      kind: string;
+      id: string;
+      [extra: string]: unknown;
+    } | null;
+    reason: string | null;
+    [extra: string]: unknown;
+  };
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- engageKillSwitch: POST /api/v1/trading/risk/kill-switch
+export type EngageKillSwitchBody = {
+  /** default: "" */
+  reason?: string;
+};
+export type EngageKillSwitchResponse = {
+  killSwitch: {
+    on: boolean;
+    at: number | null;
+    by: {
+      kind: string;
+      id: string;
+      [extra: string]: unknown;
+    } | null;
+    reason: string | null;
+    [extra: string]: unknown;
+  };
+  readOnly: {
+    on: boolean;
+    at: number | null;
+    by: {
+      kind: string;
+      id: string;
+      [extra: string]: unknown;
+    } | null;
+    reason: string | null;
+    [extra: string]: unknown;
+  };
+  [extra: string]: unknown;
 };
 
 // ---------------------------------------------------------------------------------------------------- backtestStrategy: POST /api/v1/trading/strategies/{id}/backtest
@@ -482,31 +1518,73 @@ export type StopAgentBody = {
 
 /** every operation of the document: method, path template, scope, whether the server implements it, and whether it is a mutating (idempotent-keyed) call */
 export const OPERATIONS = {
-  getOpenApi: { method: "GET", path: "/api/v1/trading/openapi.json", scope: "any valid key", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429] },
-  listMarkets: { method: "GET", path: "/api/v1/trading/markets", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 503] },
-  getMarket: { method: "GET", path: "/api/v1/trading/markets/{symbol}", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 429, 503] },
-  getOrderbook: { method: "GET", path: "/api/v1/trading/markets/{symbol}/orderbook", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 503] },
-  getCandles: { method: "GET", path: "/api/v1/trading/markets/{symbol}/candles", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 503] },
-  getPortfolio: { method: "GET", path: "/api/v1/trading/portfolio", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 503] },
-  getBalances: { method: "GET", path: "/api/v1/trading/balances", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 503] },
-  getActivity: { method: "GET", path: "/api/v1/trading/activity", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 503] },
-  listPositions: { method: "GET", path: "/api/v1/trading/positions", scope: "positions:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 503] },
-  listOrders: { method: "GET", path: "/api/v1/trading/orders", scope: "orders:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 503] },
-  placeOrder: { method: "POST", path: "/api/v1/trading/orders", scope: "orders:execute", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 501] },
-  getOrder: { method: "GET", path: "/api/v1/trading/orders/{id}", scope: "orders:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 503] },
-  cancelOrder: { method: "DELETE", path: "/api/v1/trading/orders/{id}", scope: "orders:cancel", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 404, 409, 429, 501] },
-  listStrategies: { method: "GET", path: "/api/v1/trading/strategies", scope: "strategies:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 503] },
-  createStrategy: { method: "POST", path: "/api/v1/trading/strategies", scope: "strategies:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 501] },
-  listAgents: { method: "GET", path: "/api/v1/trading/agents", scope: "agents:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 503] },
-  createAgent: { method: "POST", path: "/api/v1/trading/agents", scope: "agents:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 501] },
-  getRisk: { method: "GET", path: "/api/v1/trading/risk", scope: "positions:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 503] },
-  previewOrder: { method: "POST", path: "/api/v1/trading/orders/preview", scope: "orders:prepare", implemented: false, idempotent: true, requiresMandate: false, statuses: [400, 401, 403, 409, 429, 501] },
-  closePosition: { method: "POST", path: "/api/v1/trading/positions/{id}/close", scope: "positions:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 404, 409, 429, 501] },
-  reducePosition: { method: "POST", path: "/api/v1/trading/positions/{id}/reduce", scope: "positions:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 404, 409, 429, 501] },
-  backtestStrategy: { method: "POST", path: "/api/v1/trading/strategies/{id}/backtest", scope: "strategies:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 404, 409, 429, 501] },
-  startStrategy: { method: "POST", path: "/api/v1/trading/strategies/{id}/start", scope: "strategies:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 404, 409, 429, 501] },
-  stopStrategy: { method: "POST", path: "/api/v1/trading/strategies/{id}/stop", scope: "strategies:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 404, 409, 429, 501] },
-  startAgent: { method: "POST", path: "/api/v1/trading/agents/{id}/start", scope: "agents:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 404, 409, 429, 501] },
-  stopAgent: { method: "POST", path: "/api/v1/trading/agents/{id}/stop", scope: "agents:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 404, 409, 429, 501] },
+  getOpenApi: { method: "GET", path: "/api/v1/trading/openapi.json", scope: "any valid key", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 401, 403, 429, 500], errorsOpen: false },
+  listMarkets: { method: "GET", path: "/api/v1/trading/markets", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500, 503], errorsOpen: false },
+  compareMarkets: { method: "GET", path: "/api/v1/trading/markets/compare", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500, 503], errorsOpen: false },
+  getMarket: { method: "GET", path: "/api/v1/trading/markets/{symbol}", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 422, 429, 500, 503], errorsOpen: false },
+  getOrderbook: { method: "GET", path: "/api/v1/trading/markets/{symbol}/orderbook", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 422, 429, 500, 503], errorsOpen: false },
+  getCandles: { method: "GET", path: "/api/v1/trading/markets/{symbol}/candles", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 422, 429, 500, 503], errorsOpen: false },
+  listPrivateMarkets: { method: "GET", path: "/api/v1/trading/private-markets", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500, 503], errorsOpen: false },
+  getPrivateMarketCompany: { method: "GET", path: "/api/v1/trading/private-markets/companies/{slug}", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500, 503], errorsOpen: false },
+  getPrivateMarket: { method: "GET", path: "/api/v1/trading/private-markets/{id}", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500, 503], errorsOpen: false },
+  getPortfolio: { method: "GET", path: "/api/v1/trading/portfolio", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 401, 403, 429, 500, 503], errorsOpen: false },
+  getBalances: { method: "GET", path: "/api/v1/trading/balances", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500, 503], errorsOpen: false },
+  getActivity: { method: "GET", path: "/api/v1/trading/activity", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500], errorsOpen: false },
+  listPositions: { method: "GET", path: "/api/v1/trading/positions", scope: "positions:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500, 503], errorsOpen: false },
+  listOrders: { method: "GET", path: "/api/v1/trading/orders", scope: "orders:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500], errorsOpen: false },
+  placeOrder: { method: "POST", path: "/api/v1/trading/orders", scope: "orders:execute", implemented: true, idempotent: true, requiresMandate: true, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 503], errorsOpen: true },
+  getOrder: { method: "GET", path: "/api/v1/trading/orders/{id}", scope: "orders:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500], errorsOpen: false },
+  cancelOrder: { method: "DELETE", path: "/api/v1/trading/orders/{id}", scope: "orders:cancel", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 422, 429, 500, 503], errorsOpen: false },
+  listStrategies: { method: "GET", path: "/api/v1/trading/strategies", scope: "strategies:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500], errorsOpen: false },
+  createStrategy: { method: "POST", path: "/api/v1/trading/strategies", scope: "strategies:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
+  listAgents: { method: "GET", path: "/api/v1/trading/agents", scope: "agents:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 401, 403, 429, 500], errorsOpen: false },
+  createAgent: { method: "POST", path: "/api/v1/trading/agents", scope: "agents:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
+  getRisk: { method: "GET", path: "/api/v1/trading/risk", scope: "positions:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 401, 403, 429, 500], errorsOpen: false },
+  previewOrder: { method: "POST", path: "/api/v1/trading/orders/preview", scope: "orders:prepare", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 422, 429, 500, 503], errorsOpen: false },
+  closePosition: { method: "POST", path: "/api/v1/trading/positions/{id}/close", scope: "positions:manage", implemented: true, idempotent: true, requiresMandate: true, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 503], errorsOpen: true },
+  reducePosition: { method: "POST", path: "/api/v1/trading/positions/{id}/reduce", scope: "positions:manage", implemented: true, idempotent: true, requiresMandate: true, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 503], errorsOpen: true },
+  runCommand: { method: "POST", path: "/api/v1/trading/commands", scope: "orders:prepare", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 501, 503], errorsOpen: true },
+  engageKillSwitch: { method: "POST", path: "/api/v1/trading/risk/kill-switch", scope: "positions:manage", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500], errorsOpen: false },
+  backtestStrategy: { method: "POST", path: "/api/v1/trading/strategies/{id}/backtest", scope: "strategies:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
+  startStrategy: { method: "POST", path: "/api/v1/trading/strategies/{id}/start", scope: "strategies:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
+  stopStrategy: { method: "POST", path: "/api/v1/trading/strategies/{id}/stop", scope: "strategies:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
+  startAgent: { method: "POST", path: "/api/v1/trading/agents/{id}/start", scope: "agents:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
+  stopAgent: { method: "POST", path: "/api/v1/trading/agents/{id}/stop", scope: "agents:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
 } as const;
 export type OperationId = keyof typeof OPERATIONS;
+
+/** every error answer an operation can give: `[HTTP status, code]` (the document's `x-spw-errors`) */
+export const OPERATION_ERRORS: Record<OperationId, readonly (readonly [number, string])[]> = {
+  getOpenApi: [[401, "unauthenticated"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  listMarkets: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "unknown_venue"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "markets_unavailable"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  compareMarkets: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "unknown_underlying"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  getMarket: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "unknown_instrument"], [404, "unknown_market"], [404, "unknown_venue"], [409, "ambiguous_symbol"], [422, "venue_rejected"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  getOrderbook: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "unknown_instrument"], [404, "unknown_market"], [404, "unknown_venue"], [409, "ambiguous_symbol"], [422, "no_orderbook"], [422, "venue_rejected"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "stale_data"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  getCandles: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "unknown_instrument"], [404, "unknown_market"], [404, "unknown_venue"], [409, "ambiguous_symbol"], [422, "unsupported_interval"], [422, "venue_rejected"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  listPrivateMarkets: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  getPrivateMarketCompany: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [404, "unknown_company"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  getPrivateMarket: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_a_private_market"], [404, "unknown_private_market"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  getPortfolio: [[401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "service_unavailable"], [503, "signer_unreachable"]],
+  getBalances: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "unknown_network"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "service_unavailable"], [503, "signer_unreachable"]],
+  getActivity: [[400, "bad_request"], [400, "invalid_cursor"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  listPositions: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "service_unavailable"]],
+  listOrders: [[400, "bad_request"], [400, "invalid_cursor"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  placeOrder: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_market"], [404, "unknown_venue"], [409, "account_required"], [409, "ambiguous_symbol"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "mode_read_only"], [422, "no_account"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "venue_not_wired"], [422, "venue_rejected"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  getOrder: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "unknown_order"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  cancelOrder: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "not_your_order"], [404, "unknown_order"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "cancel_in_app"], [422, "venue_rejected"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "signer_unreachable"], [503, "venue_unavailable"]],
+  listStrategies: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  createStrategy: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
+  listAgents: [[401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  createAgent: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
+  getRisk: [[401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  previewOrder: [[400, "bad_request"], [400, "invalid_order"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_market"], [404, "unknown_venue"], [409, "account_required"], [409, "ambiguous_symbol"], [422, "below_min_size"], [422, "no_account"], [422, "spot_via_swap_screen"], [422, "venue_not_wired"], [422, "venue_rejected"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  closePosition: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_position"], [404, "unknown_venue"], [409, "account_required"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "close_in_app"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "mode_read_only"], [422, "no_account"], [422, "no_position"], [422, "not_reducing"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "venue_not_wired"], [422, "venue_rejected"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  reducePosition: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_position"], [404, "unknown_venue"], [409, "account_required"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "close_in_app"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "mode_read_only"], [422, "no_account"], [422, "no_position"], [422, "not_reducing"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "venue_not_wired"], [422, "venue_rejected"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  runCommand: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "parse_error"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "not_your_order"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_order"], [404, "unknown_venue"], [409, "account_required"], [409, "ambiguous_command"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "cancel_in_app"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "fee_cap_not_expressible"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "inconsistent_prices"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "invalid_order"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "missing_balance"], [422, "missing_reference_price"], [422, "mode_read_only"], [422, "no_account"], [422, "no_client_id_format"], [422, "no_instrument"], [422, "no_position"], [422, "not_reducing"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "venue_not_wired"], [422, "venue_rejected"], [422, "zero_size"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "service_unavailable"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  engageKillSwitch: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  backtestStrategy: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
+  startStrategy: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
+  stopStrategy: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
+  startAgent: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
+  stopAgent: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
+};

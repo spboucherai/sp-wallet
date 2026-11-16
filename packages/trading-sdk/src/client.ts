@@ -6,9 +6,13 @@
 //                  serialized ONCE: every retry sends the same key and the same bytes, so the server runs the operation at
 //                  most once. They are retried for that reason only. When no trustworthy answer was obtained the call
 //                  throws OutcomeUnknown (with the key): it is not a failure.
+//   previewOrder, engageKillSwitch
+//                  are POSTs the contract declares WITHOUT an Idempotency-Key: a preview creates nothing, and engaging a
+//                  switch that is on changes nothing. They are safe to repeat, so they are retried like a GET and fail
+//                  with the ordinary typed errors (never OutcomeUnknown).
 import { ConfigurationError, errorFromResponse, NetworkError, OutcomeUnknown, redactSecrets, ServerError, SPWalletError, TimeoutError, WaitTimeout } from './errors.ts';
 import type * as T from './generated/openapi.ts';
-import { canonicalJson, decimalString, IDEMPOTENCY_KEY_RE, isTerminalOrder, newIdempotencyKey, sizeFromNotional } from './util.ts';
+import { canonicalJson, decimalString, IDEMPOTENCY_KEY_RE, isTerminalOrder, newIdempotencyKey } from './util.ts';
 import { USER_AGENT } from './version.ts';
 
 export const DEFAULT_BASE_URL = 'https://wallet.spboucher.ai';
@@ -66,21 +70,46 @@ const META = new WeakMap<object, ResponseMeta>();
 /** status, request id, idempotency key, rate-limit headers and number of attempts of the call that produced `result` */
 export const responseMeta = (result: object): ResponseMeta | undefined => META.get(result);
 
-/** answer of a write operation: the OpenAPI document does not declare a success schema for them yet */
+/** answer of an operation the server does not implement yet (the strategy and agent writes answer 501): no success schema exists */
 export type WriteResult = Record<string, unknown>;
+/** POST /orders/preview: the canonical order, every check, the refusals it would meet, an estimate */
+export type OrderPreview = T.PreviewOrderResponse;
+/** POST /orders, /positions/{id}/close, /positions/{id}/reduce: the order, whether it is a replay, and the owner approval it waits for */
+export type PlacedOrder = T.PlaceOrderResponse;
+/** DELETE /orders/{id} */
+export type CancelledOrder = T.CancelOrderResponse;
+/** POST /commands: `kind` says what the command resolved to (`query`, `control`, `order`) */
+export type CommandResult = T.RunCommandResponse;
+/** POST /risk/kill-switch */
+export type KillSwitchResult = T.EngageKillSwitchResponse;
+export type ActivityItem = T.GetActivityResponse['items'][number];
 
 type OrderBody = T.PlaceOrderBody;
-/** An order. `instrument` is `venue:symbol`; `exchange` + `symbol` is the same thing in two parts. Size the order with
- *  `size` (base units, a decimal string) or with `notionalUsdc` (the SDK reads the market and computes the size, rounded
- *  down to the lot size). `mode` defaults to `paper`. */
-export interface OrderInput extends Omit<OrderBody, 'mode' | 'instrument' | 'size'> {
+/** An order. `instrument` is `venue:symbol`; `exchange` + `symbol` is the same thing in two parts. Size it with exactly one
+ *  of `size` (base units) and `notional` (quote currency: the SERVER converts it at the order's own price, else at the mark
+ *  it reads, rounded down to the lot — the answer carries the size used). Both are decimal strings. `mode` defaults to `paper`. */
+export interface OrderInput extends Omit<OrderBody, 'mode' | 'instrument' | 'size' | 'notional'> {
   mode?: OrderBody['mode'];
   instrument?: string;
   exchange?: string;
   symbol?: string;
   size?: string;
-  /** client-side convenience — not a field of the API: size = floor(notional / mark price, lot size) */
+  /** a decimal string, or a whole number of quote units */
+  notional?: string | number;
+  /** the same field under the name of the quick-start examples: sent as `notional`, nothing is computed here */
   notionalUsdc?: string | number;
+}
+export interface CommandOptions {
+  /** default `paper` */
+  mode?: 'paper' | 'live';
+  /** paper account or venue account; required when the wallet has several on the venue */
+  accountId?: string;
+  /** true: answer what the command resolves to and do nothing */
+  dryRun?: boolean;
+}
+export interface PageOptions extends RequestOptions {
+  /** stop after this many items in total (default: no bound — the whole list) */
+  maxItems?: number;
 }
 export interface WaitOptions extends RequestOptions {
   /** total time, milliseconds (default 60 000) */
@@ -88,7 +117,7 @@ export interface WaitOptions extends RequestOptions {
   /** between two reads, milliseconds (default 1 000) */
   pollIntervalMs?: number;
   /** stop condition; default: the order is final (FILLED, CANCELLED, REJECTED, FAILED — never UNKNOWN) */
-  until?: (order: T.GetOrderResponse['order']) => boolean;
+  until?: (order: T.Order) => boolean;
 }
 
 const env = (name: string): string | undefined => (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[name] || undefined;
@@ -157,6 +186,18 @@ export class SPWallet {
   getOrderbook(symbol: string, query: T.GetOrderbookQuery = {}, o?: RequestOptions): Promise<T.GetOrderbookResponse> { return this.#get(`/markets/${seg(symbol, 'symbol')}/orderbook`, query, o); }
   /** GET /markets/{symbol}/candles — closed bars */
   getCandles(symbol: string, query: T.GetCandlesQuery = {}, o?: RequestOptions): Promise<T.GetCandlesResponse> { return this.#get(`/markets/${seg(symbol, 'symbol')}/candles`, query, o); }
+  /** GET /markets/compare — the estimated cost of one position on every venue that lists the underlying. Estimates, never a recommendation. */
+  compareMarkets(query: T.CompareMarketsQuery = {}, o?: RequestOptions): Promise<T.CompareMarketsResponse> { return this.#get('/markets/compare', query, o); }
+  /** GET /private-markets — synthetic contracts on private companies, venue by venue. Display only: none is tradable. */
+  listPrivateMarkets(query: Omit<T.ListPrivateMarketsQuery, 'delisted'> & { delisted?: boolean | 'true' | 'false' } = {}, o?: RequestOptions): Promise<T.ListPrivateMarketsResponse> {
+    return this.#get('/private-markets', { ...query, delisted: query.delisted === undefined ? undefined : String(query.delisted) }, o);
+  }
+  /** GET /private-markets/{id} — one contract (`venue:symbol`): definition, valuation breakdown, candles, top of book */
+  getPrivateMarket(id: string, query: T.GetPrivateMarketQuery = {}, o?: RequestOptions): Promise<T.GetPrivateMarketResponse> { return this.#get(`/private-markets/${seg(id, 'private market id')}`, query, o); }
+  /** GET /private-markets/companies/{slug} — every contract on one company, side by side (never merged) */
+  getPrivateMarketCompany(slug: string, query: T.GetPrivateMarketCompanyQuery = {}, o?: RequestOptions): Promise<T.GetPrivateMarketCompanyResponse> {
+    return this.#get(`/private-markets/companies/${seg(slug, 'company slug')}`, query, o);
+  }
 
   // ============================================================================================================== portfolio
   /** GET /portfolio — wallet value and derivative accounts; paper and live are never added together */
@@ -165,24 +206,46 @@ export class SPWallet {
   getBalances(query: T.GetBalancesQuery = {}, o?: RequestOptions): Promise<T.GetBalancesResponse> { return this.#get('/balances', query, o); }
   /** GET /positions — open positions, each with its `mode` */
   getPositions(query: T.ListPositionsQuery = {}, o?: RequestOptions): Promise<T.ListPositionsResponse> { return this.#get('/positions', query, o); }
-  /** GET /activity — wallet activity and fills, newest first */
+  /** GET /activity — one page of wallet activity and fills, newest first; `nextCursor` is the `cursor` of the next page */
   getActivity(query: T.GetActivityQuery = {}, o?: RequestOptions): Promise<T.GetActivityResponse> { return this.#get('/activity', query, o); }
+  /** Every activity item, newest first, page after page (`limit` is the page size). `for await (const item of client.iterateActivity())` */
+  async *iterateActivity(query: Omit<T.GetActivityQuery, 'cursor'> = {}, o: PageOptions = {}): AsyncGenerator<ActivityItem, void, undefined> {
+    yield* this.#pages((cursor) => this.getActivity({ ...query, cursor }, o).then((r) => ({ items: r.items, nextCursor: r.nextCursor })), o.maxItems);
+  }
   /** GET /risk — kill switch, signer limits, capability locks, account policies */
   getRisk(o?: RequestOptions): Promise<T.GetRiskResponse> { return this.#get('/risk', undefined, o); }
+  /** POST /risk/kill-switch — blocks every NEW risk, for every principal, venue and mode. Cancels and strictly reducing orders
+   *  still pass. Needs `positions:manage`, no mandate. A key cannot release it: only the owner can, with the passkey. */
+  engageKillSwitch(reason = '', o?: RequestOptions): Promise<KillSwitchResult> { return this.#request<KillSwitchResult>('POST', '/risk/kill-switch', undefined, { reason }, o, 'safe'); }
 
   // ============================================================================================================== orders
-  /** GET /orders — newest first; `open: true` keeps the orders that are not final */
+  /** GET /orders — one page, newest first; `open: true` keeps the orders that are not final; `nextCursor` is the `cursor` of the next page */
   listOrders(query: Omit<T.ListOrdersQuery, 'open'> & { open?: boolean | 'true' | 'false' } = {}, o?: RequestOptions): Promise<T.ListOrdersResponse> {
     return this.#get('/orders', { ...query, open: query.open === undefined ? undefined : String(query.open) }, o);
   }
-  /** GET /orders/{id} — one order and its fills */
+  /** Every order, newest first, page after page (`limit` is the page size). `for await (const order of client.iterateOrders({ open: true }))` */
+  async *iterateOrders(query: Omit<T.ListOrdersQuery, 'open' | 'cursor'> & { open?: boolean | 'true' | 'false' } = {}, o: PageOptions = {}): AsyncGenerator<T.Order, void, undefined> {
+    yield* this.#pages((cursor) => this.listOrders({ ...query, cursor }, o).then((r) => ({ items: r.orders, nextCursor: r.nextCursor })), o.maxItems);
+  }
+  /** GET /orders/{id} — one order, its fills and its history */
   getOrder(id: string, o?: RequestOptions): Promise<T.GetOrderResponse> { return this.#get(`/orders/${seg(id, 'order id')}`, undefined, o); }
-  /** POST /orders/preview — risk check and estimate; places nothing. Scope `orders:prepare`. */
-  async previewOrder(order: OrderInput, o?: WriteOptions): Promise<WriteResult> { return this.#write('POST', '/orders/preview', await this.#orderBody(order, o), o); }
-  /** POST /orders — place an order. Scope `orders:execute` AND a key bound to an owner-approved trading mandate (else MandateRequired). */
-  async createOrder(order: OrderInput, o?: WriteOptions): Promise<WriteResult> { return this.#write('POST', '/orders', await this.#orderBody(order, o), o); }
-  /** DELETE /orders/{id} — cancel an order */
-  cancelOrder(id: string, o?: WriteOptions): Promise<WriteResult> { return this.#write('DELETE', `/orders/${seg(id, 'order id')}`, undefined, o); }
+  /** POST /orders/preview — every check the order would meet and an estimate; creates nothing. Scope `orders:prepare`.
+   *  What would refuse the order is in `refusals` (`wouldExecute` false), not an exception. Pass `idempotencyKey` to see the
+   *  exact order (`order.clientOrderId`, `hash`) that `createOrder` with the same key would place. */
+  async previewOrder(order: OrderInput, o?: WriteOptions): Promise<OrderPreview> { return this.#request<OrderPreview>('POST', '/orders/preview', undefined, this.#orderBody(order), o, 'safe'); }
+  /** POST /orders — place an order. Scope `orders:execute` AND a key bound to an owner-approved trading mandate that covers it
+   *  (MandateRequired / MandateDenied otherwise). Read `order.status`: paper orders are usually FILLED at once; a resting
+   *  order is SUBMITTED; UNKNOWN is not a failure. A refusal after the order was created throws with `error.order`. */
+  async createOrder(order: OrderInput, o?: WriteOptions): Promise<PlacedOrder> { return this.#write<PlacedOrder>('POST', '/orders', this.#orderBody(order), o); }
+  /** DELETE /orders/{id} — cancel. A key cancels its own orders only; no mandate is needed and the kill switch never stops a cancel. */
+  cancelOrder(id: string, o?: WriteOptions): Promise<CancelledOrder> { return this.#write<CancelledOrder>('DELETE', `/orders/${seg(id, 'order id')}`, undefined, o); }
+  /** POST /commands — one line of the deterministic command grammar (`LONG BTC-PERP 500 x2`, `CLOSE BTC-PERP 50%`,
+   *  `CANCEL ORDER <id>`, `SHOW POSITIONS`, `KILL`). `dryRun: true` answers what it resolves to and does nothing.
+   *  A command the owner's defaults do not settle throws AmbiguousCommand (with `questions`): nothing was executed. */
+  async runCommand(text: string, options: CommandOptions = {}, o?: WriteOptions): Promise<CommandResult> {
+    if (typeof text !== 'string' || text.trim() === '') throw new ConfigurationError('a command is one non-empty line of text');
+    return this.#write<CommandResult>('POST', '/commands', { text, mode: options.mode ?? 'paper', accountId: options.accountId, dryRun: options.dryRun ?? false }, o);
+  }
   /** Reads the order until it is final (or `until` says so). Throws WaitTimeout — which is not an order failure — when
    *  `waitTimeoutMs` elapses first. UNKNOWN is not final: the wait continues. */
   async waitForOrder(id: string, o: WaitOptions = {}): Promise<T.GetOrderResponse> {
@@ -198,11 +261,11 @@ export class SPWallet {
   }
 
   // ============================================================================================================== positions
-  /** POST /positions/{id}/close */
-  closePosition(id: string, body: T.ClosePositionBody = {}, o?: WriteOptions): Promise<WriteResult> { return this.#write('POST', `/positions/${seg(id, 'position id')}/close`, body, o); }
+  /** POST /positions/{id}/close — a strictly reduce-only market order on the whole position (`id` from getPositions). Passes the kill switch. */
+  closePosition(id: string, body: T.ClosePositionBody = {}, o?: WriteOptions): Promise<PlacedOrder> { return this.#write<PlacedOrder>('POST', `/positions/${seg(id, 'position id')}/close`, body, o); }
   /** POST /positions/{id}/reduce — `fraction` in (0, 1], a decimal string */
-  reducePosition(id: string, body: T.ReducePositionBody, o?: WriteOptions): Promise<WriteResult> {
-    return this.#write('POST', `/positions/${seg(id, 'position id')}/reduce`, { ...body, fraction: decimalString(body.fraction, 'fraction') }, o);
+  reducePosition(id: string, body: T.ReducePositionBody, o?: WriteOptions): Promise<PlacedOrder> {
+    return this.#write<PlacedOrder>('POST', `/positions/${seg(id, 'position id')}/reduce`, { ...body, fraction: decimalString(body.fraction, 'fraction') }, o);
   }
 
   // ============================================================================================================== strategies
@@ -232,35 +295,43 @@ export class SPWallet {
   openapi(o?: RequestOptions): Promise<T.GetOpenApiResponse> { return this.#get('/openapi.json', undefined, o); }
 
   // ============================================================================================================== internals
-  async #orderBody(i: OrderInput, o?: WriteOptions): Promise<OrderBody> {
-    const { exchange, symbol, notionalUsdc, instrument: given, size: givenSize, mode, ...rest } = i;
+  #orderBody(i: OrderInput): OrderBody {
+    const { exchange, symbol, notional, notionalUsdc, instrument: given, size, mode, ...rest } = i;
     if (given !== undefined && (exchange !== undefined || symbol !== undefined)) throw new ConfigurationError('give `instrument` or `exchange` + `symbol`, not both');
     const instrument = given ?? (exchange !== undefined && symbol !== undefined ? `${exchange}:${symbol}` : symbol);
     if (!instrument) throw new ConfigurationError('an order needs `instrument` ("venue:symbol") or `exchange` + `symbol`');
-    if ((givenSize === undefined) === (notionalUsdc === undefined)) throw new ConfigurationError('an order needs exactly one of `size` (base units) and `notionalUsdc`');
-    for (const k of ['price', 'triggerPrice'] as const) if (rest[k] !== undefined) decimalString(rest[k], k);
-    let size: string;
-    if (givenSize !== undefined) {
-      if (typeof givenSize !== 'string') throw new ConfigurationError('size: pass a decimal string (e.g. "0.01"), not a float');
-      size = decimalString(givenSize, 'size');
-    } else {
-      const notional = decimalString(notionalUsdc!, 'notionalUsdc');
-      const m = await this.getMarket(instrument, o);
-      const lot = (m.instrument as { lotSize?: unknown } | null)?.lotSize;
-      if (m.market.stale || !m.market.mark) throw new ConfigurationError(`cannot size ${instrument} from a notional: the market has no fresh mark price (stale: ${String(m.market.stale)}); pass \`size\``);
-      size = sizeFromNotional(notional, rest.price ?? m.market.mark, typeof lot === 'string' && lot ? lot : undefined);
-      if (!/[1-9]/.test(size)) throw new ConfigurationError(`a notional of ${notional} is below one lot of ${instrument}`);
+    if ([size, notional, notionalUsdc].filter((x) => x !== undefined).length !== 1) throw new ConfigurationError('an order needs exactly one of `size` (base units) and `notional` (quote currency; `notionalUsdc` is the same field)');
+    for (const k of ['price', 'triggerPrice', 'leverage', 'maxFeeUsd'] as const) if (rest[k] !== undefined) decimalString(rest[k], k);
+    if (size !== undefined) {
+      if (typeof size !== 'string') throw new ConfigurationError('size: pass a decimal string (e.g. "0.01"), not a float');
+      return { ...rest, mode: mode ?? 'paper', instrument, size: decimalString(size, 'size') };
     }
-    return { ...rest, mode: mode ?? 'paper', instrument, size };
+    // the notional travels as it is: the server reads the price and computes the size
+    return { ...rest, mode: mode ?? 'paper', instrument, notional: decimalString((notional ?? notionalUsdc)!, 'notional') };
   }
-  #get<R extends object>(path: string, query: object | undefined, o?: RequestOptions): Promise<R> { return this.#request<R>('GET', path, query, undefined, o); }
-  #write(method: 'POST' | 'DELETE', path: string, body: unknown, o?: WriteOptions): Promise<WriteResult> { return this.#request<WriteResult>(method, path, undefined, body, o); }
+  #get<R extends object>(path: string, query: object | undefined, o?: RequestOptions): Promise<R> { return this.#request<R>('GET', path, query, undefined, o, 'read'); }
+  #write<R extends object = WriteResult>(method: 'POST' | 'DELETE', path: string, body: unknown, o?: WriteOptions): Promise<R> { return this.#request<R>(method, path, undefined, body, o, 'write'); }
+  /** follows `nextCursor` until the list ends (or `maxItems` were yielded) */
+  async *#pages<I>(page: (cursor: string | undefined) => Promise<{ items: I[]; nextCursor: string | null }>, maxItems: number | undefined): AsyncGenerator<I, void, undefined> {
+    if (maxItems !== undefined && (!Number.isInteger(maxItems) || maxItems < 0)) throw new ConfigurationError('maxItems must be a non-negative integer');
+    let cursor: string | undefined, n = 0;
+    for (;;) {
+      if (maxItems !== undefined && n >= maxItems) return;
+      const r = await page(cursor);
+      for (const item of r.items) { if (maxItems !== undefined && n >= maxItems) return; n += 1; yield item; }
+      if (r.nextCursor === null || r.nextCursor === undefined) return;
+      if (r.nextCursor === cursor) throw new ServerError('the server returned the cursor it was given: the list would never end', { code: 'invalid_response', status: 200 });
+      cursor = r.nextCursor;
+    }
+  }
 
   #backoffMs(attempt: number): number { const cap = Math.min(8_000, 500 * 2 ** attempt); return Math.min(this.#maxRetryDelayMs, cap / 2 + this.#random() * (cap / 2)); }
 
-  async #request<R extends object>(method: 'GET' | 'POST' | 'DELETE', path: string, query: object | undefined, body: unknown, o: WriteOptions = {}): Promise<R> {
-    const mutating = method !== 'GET';
-    const key = mutating ? (o.idempotencyKey ?? newIdempotencyKey()) : null;
+  /** `read`: a GET. `safe`: a POST the contract declares without an Idempotency-Key (repeating it changes nothing): retried and
+   *  reported like a read; a key is sent only when the caller gives one. `write`: one Idempotency-Key per logical call. */
+  async #request<R extends object>(method: 'GET' | 'POST' | 'DELETE', path: string, query: object | undefined, body: unknown, o: WriteOptions = {}, kind: 'read' | 'safe' | 'write'): Promise<R> {
+    const mutating = kind === 'write';
+    const key = mutating ? (o.idempotencyKey ?? newIdempotencyKey()) : kind === 'safe' ? (o.idempotencyKey ?? null) : null;
     if (key !== null && !IDEMPOTENCY_KEY_RE.test(key)) throw new ConfigurationError('idempotencyKey must be 8 to 100 characters: letters, digits, . _ : -');
     const payload = body === undefined ? undefined : canonicalJson(body); // serialized once: the same bytes on every attempt
     const qs = new URLSearchParams();
@@ -275,7 +346,7 @@ export class SPWallet {
     for (let attempt = 0; ; attempt++) {
       const headers: Record<string, string> = { authorization: `Bearer ${this.#apiKey}`, accept: 'application/json', 'user-agent': this.userAgent };
       if (payload !== undefined) headers['content-type'] = 'application/json';
-      if (key !== null) { headers['idempotency-key'] = key; if (this.#sendTimestamp) headers['x-spw-timestamp'] = String(Math.floor(Date.now() / 1000)); }
+      if (key !== null) { headers['idempotency-key'] = key; if (mutating && this.#sendTimestamp) headers['x-spw-timestamp'] = String(Math.floor(Date.now() / 1000)); }
       const ctl = new AbortController();
       let timedOut = false;
       const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, timeoutMs);
