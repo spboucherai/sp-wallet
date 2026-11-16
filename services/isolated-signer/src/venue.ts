@@ -149,7 +149,7 @@ export async function venueSign(ctx: VenueCtx, req: VenueSignRequest): Promise<V
   let d: HlDescription;
   try { d = trading.describe(s); } catch (e) { return deny('rejected', `payload refused: ${(e as Error).message}`); }
   if (d.kind === 'approve_agent') deny('unsupported', 'an agent approval can only be signed through /venue/authorize, by the main key, with the owner\'s passkey');
-  if (d.kind === 'other' || s.kind !== HL_KIND_L1) deny('unsupported', `this payload is not an order, a cancel or a leverage change (${String(d.detail.type ?? d.detail.primaryType ?? s.kind).slice(0, 60)}): the trading key signs nothing else`);
+  if (d.kind === 'other' || d.kind === 'schedule_cancel' || s.kind !== HL_KIND_L1) deny('unsupported', `this payload is not an order, a cancel or a leverage change (${String(d.detail.type ?? d.detail.primaryType ?? s.kind).slice(0, 60)}): the trading key signs nothing else`);
   const p = d.detail as { nonce: number; vaultAddress: string | null; expiresAfter: number | null; connectionId: string };
   if (p.vaultAddress !== null) deny('unsupported', 'sub-accounts and vaults are not traded');
   if (p.expiresAfter === null) deny('policy', 'the action carries no venue expiry: a signature that never expires is not released');
