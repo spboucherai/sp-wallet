@@ -4,7 +4,7 @@
 // and the last decisions of the engine, and the mandates: a creation form, and an approval sheet that shows every field, who
 // enforces each of them and the full mandate hash — before the passkey prompts.
 // Every figure comes from the server; nothing is computed or assumed here. The forms live in ../risk/.
-import { lazy, Suspense, useContext, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { renderAlert } from '../../../../packages/core/src/alert-catalog';
@@ -40,7 +40,7 @@ function useErr() {
 }
 const Names = ({ fields }: { fields: string[] }) => { const t = useT(); return <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px]">{fields.map((f) => <li key={f} data-field={f}>{t(`rkL_${f}` as Key)} <span className="font-mono text-[11.5px] text-mute">{f}</span></li>)}</ul>; };
 
-export function Risk({ onBack }: { onBack: () => void }) {
+export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 interface: `/risk?mandate=<id>` — the mandate to scroll to and open */ mandate?: string }) {
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient(); const err = useErr();
   const q = useQuery({ queryKey: ['risk', 'state'], queryFn: () => get<State>('/risk/state'), refetchInterval: 20_000 });
   const mq = useQuery({ queryKey: ['risk', 'mandates'], queryFn: () => get<{ mandates: Mandate[] }>('/mandates'), refetchInterval: 30_000 });
@@ -49,6 +49,11 @@ export function Risk({ onBack }: { onBack: () => void }) {
   const [book, setBook] = useState<(typeof BOOKS)[number]>('live'); const [mode, setMode] = useState<'paper' | 'live'>('live');
   const [editing, setEditing] = useState(false); const [sheet, setSheet] = useState<ApprovalSheet | null>(null); const [creating, setCreating] = useState(false);
   const refresh = () => { void qc.invalidateQueries({ queryKey: ['risk'] }); };
+  // v11 interface — `/risk?mandate=<id>`: once the mandates and the page are there, that mandate's card is scrolled into view and focused, and its
+  // details are open (below). Nothing is approved from a link: the approval sheet opens on a tap only.
+  const wantedFound = !!wanted && (mq.data?.mandates ?? []).some((m) => m.id === wanted), pageReady = !!q.data;
+  useEffect(() => { if (!wantedFound || !pageReady) return; const el = document.querySelector<HTMLElement>(`[data-mandate-card="${CSS.escape(wanted!)}"]`); if (!el) return;
+    el.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); el.focus({ preventScroll: true }); }, [wanted, wantedFound, pageReady]);
   const run = async (id: string, fn: () => Promise<unknown>): Promise<boolean> => { setBusy(id); setFail(''); try { await fn(); refresh(); return true; } catch (e) { setFail(err(e)); return false; } finally { setBusy(''); } };
 
   /** releasing a switch: the server prepares the intent, the passkey signs its hash */
@@ -156,17 +161,18 @@ export function Risk({ onBack }: { onBack: () => void }) {
       <Suspense fallback={null}><QuotingMandatesBlock mandates={mandates} onChanged={refresh} /></Suspense>
 
       <Section title={t('rkMandates')} right={<Btn kind="soft" onClick={() => { setFail(''); setCreating(true); }} data-testid="rk-mandate-new"><Icon n="plus" className="h-4 w-4" />{t('rkNew')}</Btn>}>
+        {wanted && mq.data && !wantedFound && <Notice tone="warn"><span data-testid="rk-mandate-unknown">{t('v11LoMandateUnknown')}</span></Notice>}
         {mq.isError ? <ErrorState title={t('rkLoadError')} onRetry={() => void mq.refetch()} /> : mandates.length === 0 ? <Card><EmptyState icon="key" title={t('rkNoMandates')}>{t('rkNoMandatesBody')}</EmptyState></Card>
-          : mandates.map((m) => <Card key={m.id} className="space-y-3">
-            <div className="flex flex-wrap items-start justify-between gap-2" data-testid={`rk-mandate-${m.id}`}><div className="min-w-0"><h3 className="break-words text-[15.5px] font-semibold">{m.label}</h3><p className="break-all font-mono text-[12px] text-mute">{m.principal.kind}:{m.principal.id}</p></div>
+          : mandates.map((m) => <Card key={m.id} className={`space-y-3 ${m.id === wanted ? 'ring-2 ring-blue' : ''}`}>
+            <div className="flex scroll-mt-24 flex-wrap items-start justify-between gap-2 outline-none" data-testid={`rk-mandate-${m.id}`} data-mandate-card={m.id} data-wanted={String(m.id === wanted)} tabIndex={-1}><div className="min-w-0"><h3 className="break-words text-[15.5px] font-semibold">{m.label}</h3><p className="break-all font-mono text-[12px] text-mute">{m.principal.kind}:{m.principal.id}</p></div>
               <Tag tone={m.phase === 'active' ? 'ok' : m.phase === 'wind_down' ? 'warn' : m.state === 'created' || m.state === 'pending_signer' ? 'info' : 'mute'}>{m.mode} · {t(`rkPhase_${m.phase}` as Key)}</Tag></div>
             {m.integrity && !m.integrity.ok && <Notice tone="danger"><b>{t('rkIntegrityBad')}</b> {m.integrity.reason}</Notice>}
             <dl><Fact k={t('rkUsage')}>{t('rkUsageBody', { accepted: m.usage.ordersAccepted, rejected: m.usage.ordersRejected, today: m.usage.ordersToday, open: m.usage.openOrders })}</Fact>
               <Fact k={t('rkUntil')}>{when(new Date(m.notAfter), locale)}</Fact>{m.stop && <Fact k={t('rkStopped')}>{m.stop.detail}</Fact>}
               <Fact k={t('rkHashFull')}><span className="break-all font-mono text-[12px]">{m.hash}</span></Fact>
               {m.approval && <Fact k={t('rkApprovedHash')}><Tag tone={m.integrity?.ok ? 'ok' : 'danger'} icon={m.integrity?.ok ? 'check' : 'x'}>{t(m.integrity?.ok ? 'rkIntegrityOk' : 'rkIntegrityBad')}</Tag><span className="mt-0.5 block text-[12.5px] text-mute">{when(new Date(m.approval.approvedAt), locale)}</span></Fact>}</dl>
-            <Fold summary={t('rkFields')}><MandateFields mandate={m.mandate} /></Fold>
-            <Fold summary={t('rkEnforcement')}><EnforcementTable rows={m.enforcement} /></Fold>
+            <Fold summary={t('rkFields')} open={m.id === wanted}><MandateFields mandate={m.mandate} /></Fold>
+            <Fold summary={t('rkEnforcement')} open={m.id === wanted}><EnforcementTable rows={m.enforcement} /></Fold>
             <div className="grid grid-cols-2 gap-2.5">
               {(m.state === 'created' || m.state === 'pending_signer') && (m as { kind?: string }).kind !== 'quoting' && <Btn busy={busy === `prep-${m.id}`} onClick={() => void openApproval(m.id)} data-testid={`rk-approve-${m.id}`}>{t('rkReview')}</Btn>}
               {(m.state === 'active' || m.state === 'created' || m.state === 'pending_signer') && <Btn kind="ghost" className="!text-danger" busy={busy === `rev-${m.id}`} onClick={() => void run(`rev-${m.id}`, () => post(`/mandates/${m.id}/revoke`, {}))}><Icon n="stop" className="h-4 w-4" />{t('rkRevoke')}</Btn>}

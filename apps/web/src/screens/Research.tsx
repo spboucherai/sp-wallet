@@ -8,6 +8,7 @@ import { get, post } from '../api';
 import type { Nav } from '../App';
 import { errText, I18n, useT, type Key } from '../i18n';
 import { AssetIcon, Btn, Card, ErrorState, Field, Fold, H, Icon, inputCls, Notice, PageTitle, Section, Skeleton, SkeletonCard, Stat, Tag, when, type Tone } from '../ui';
+import { srvText } from '../srvText'; // v11 interface (audit B3): a server sentence without a code is translated when known, quoted as English otherwise
 import { amountLocale, amountOf, sanitizeAmountText } from '../amount'; // v8 hardening
 import { AmountProblem } from '../amountUi';
 
@@ -134,7 +135,7 @@ export function ResearchJob({ id, nav }: { id: string; nav: Nav }) {
       <div className="space-y-2"><div className="flex"><JobState state={j.state} /></div>
         <p className="whitespace-pre-wrap break-words text-[15px] leading-snug">{j.mission}</p>
         <div className="break-words text-[12.5px] text-mute">{j.kind === 'perp' ? t('rjKindPerp') : t('rjKindSpot')} · {j.universe.join(' · ')} · {j.interval} · {when(j.createdAt, locale)}{j.agent ? ` · ${j.agent.name}` : ` · ${t('rjLibraryDraft')}`}</div></div>
-      {j.reason && <Notice tone={j.state === 'cancelled' ? 'info' : 'warn'}>{j.reason}</Notice>}
+      {j.reason && <Notice tone={j.state === 'cancelled' ? 'info' : 'warn'}>{srvText(t, locale, j.reason)}</Notice>}
       {j.dataError && <Notice tone="danger">{j.dataError}</Notice>}
       {/* 2 · the budgets, used / allowed */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4" data-testid="rj-usage">
@@ -162,7 +163,7 @@ export function ResearchJob({ id, nav }: { id: string; nav: Nav }) {
       </Panel>}
 
       {/* 5 · what the server measured, and the agent's numbers next to the server's */}
-      {s && s.status === 'failed' && <Notice tone="danger"><span data-testid="rj-refused">{t('rjRefused')} {s.reason}</span></Notice>}
+      {s && s.status === 'failed' && <Notice tone="danger"><span data-testid="rj-refused">{t('rjRefused')} {srvText(t, locale, s.reason)}</span></Notice>}
       {s && s.status === 'ok' && <Panel tone="ok" tag={t('rjMeasuredTag')} title={t('rjMeasuredTitle')} testid="rj-measured">
         <p className="text-[12.5px] leading-snug text-mute">{t('rjMeasuredNote', { from: s.holdout ? when(s.holdout.testStart, locale) : '?', to: s.holdout ? when(s.holdout.testEnd, locale) : '?', bars: s.holdout?.bars ?? '?' })}</p>
         <div className="grid grid-cols-2 gap-2.5"><Stat label={t('agRet')} value={pct(s.metrics?.test.total_return)} sub={`${t('agVs')} ${pct(s.benchmark?.total_return)}`} /><Stat label={t('agDD')} value={pct(s.metrics?.test.max_drawdown)} sub={`${t('agVs')} ${pct(s.benchmark?.max_drawdown)}`} />

@@ -37,10 +37,10 @@ describe('errText', () => {
   it('a translated code speaks for itself; the English detail is kept only when it carries a figure', () => {
     expect(errText(t, e('bad_address', 'invalid Base address: invalid EVM address'))).toBe('e_bad_address');
     expect(errText(t, e('bad_address', 'invalid Solana address: Unknown letter "0". Allowed: 123456789ABC'))).toBe('e_bad_address');
-    expect(errText(t, e('insufficient_funds', 'balance 3.5 USDC, needed 5'))).toBe('e_insufficient_funds (balance 3.5 USDC, needed 5)');
+    expect(errText(t, e('insufficient_funds', 'balance 3.5 USDC, needed 5'))).toBe('e_insufficient_funds (v11LoSrvDetail(detail=balance 3.5 USDC, needed 5))');   // v11 interface: the server's English detail is a marked quotation (v11-leftovers.test.ts reads the real sentences)
     expect(errText(t, e('insufficient_funds', 'insufficient balance'))).toBe('e_insufficient_funds');
   });
-  it('an unknown code still shows what the server said', () => expect(errText(t, e('never_heard_of_it', 'something specific'))).toBe('something specific'));
+  it('an unknown code still shows what the server said — as a quotation of the server (v11)', () => expect(errText(t, e('never_heard_of_it', 'something specific'))).toBe('v11LoSrvRefused(detail=something specific)'));
   it('a generic server failure is not shown as "internal error"', () => expect(errText(t, e('internal', 'internal error'))).toBe('e_internal'));
   it('an account that is not activated yet is explained', () => expect(errText(t, e('insufficient_funds', "this wallet's XRP account is not activated yet: it must first receive at least 1 XRP"))).toBe('qaErrNotActivated'));
   it('a cancelled passkey prompt is silent', () => expect(errText(t, { name: 'NotAllowedError' })).toBe(''));

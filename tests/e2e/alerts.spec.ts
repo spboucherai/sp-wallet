@@ -1,3 +1,4 @@
+import { navTo } from './v11-helpers.ts';   // v11 interface: the shell's navigation (five areas, header menu)
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -77,7 +78,7 @@ for (const size of SIZES) {
       await expect(badge).toHaveText(String(u0.unread));
       await expect(bell).toHaveAttribute('aria-label', `Alertes (${u0.unread})`);
       // the five phone tabs are untouched
-      if (phone) await expect(page.getByRole('navigation').getByRole('button')).toHaveText(['Accueil', 'Échanger', 'Envoyer', 'Activité', 'Réglages']);
+      if (phone) await expect(page.getByTestId('nav-tabbar').getByRole('button')).toHaveText(['Accueil', 'Marchés', 'Négocier', 'Agents', 'Activité']);   // v11 interface: five areas
       await shot(page, 'home-bell', false);
 
       // ---- the list
@@ -177,7 +178,7 @@ for (const size of SIZES) {
       expect(await call(page, 'GET', '/push/subscriptions')).toEqual([]);
 
       // ---- system status
-      if (phone) { await page.getByRole('navigation').getByRole('button', { name: 'Réglages' }).click(); await page.getByRole('button', { name: 'État du système' }).click(); }
+      if (phone) await navTo(page, 'monitor');   // v11 interface: the header menu
       else await page.getByRole('button', { name: 'État du système' }).click();
       await expect(page).toHaveURL(/\/monitor$/);
       const mon = page.getByTestId('monitor-screen');

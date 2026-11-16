@@ -1,3 +1,4 @@
+import { navTo } from './v11-helpers.ts';   // v11 interface: the shell's navigation (five areas, header menu)
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -322,9 +323,9 @@ for (const size of [
       await expect(op.getByTestId('gmx-size')).not.toHaveValue('');
       await expect(op.getByTestId('gmx-collateral')).not.toHaveValue('');
       // English
-      await page.getByRole('navigation').getByRole('button', { name: 'Réglages' }).click();
+      await navTo(page, 'settings');
       await page.getByRole('radio', { name: 'English' }).click();
-      await page.getByRole('navigation').getByRole('button', { name: 'Swap' }).click();
+      await navTo(page, 'swap');
       await page.getByRole('tab', { name: 'Futures' }).click();
       if (phone) await page.getByRole('tab', { name: /^Trade/ }).click();
       const en = page.getByTestId('gmx-order-panel');

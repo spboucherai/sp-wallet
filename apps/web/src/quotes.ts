@@ -183,6 +183,12 @@ export class QuoteClient {
     this.attempt += 1;
     this.retry = setTimeout(() => { this.retry = null; this.open(); }, delay);
   }
+  /**
+   * v11 interface: the owner's session ended (lock, or the server answered « unauthenticated »). The socket is closed and no
+   * reconnection is attempted — a subscription that lingers for a moment after its screen left would otherwise knock once at a
+   * door that now answers 401. The next subscription (after the unlock) opens it again.
+   */
+  sessionEnded(): void { this.stop(); }
   /** nobody is subscribed any more: everything is released */
   private stop(): void {
     if (this.retry) { clearTimeout(this.retry); this.retry = null; }
@@ -270,7 +276,9 @@ export class QuoteClient {
 
 // ---------------------------------------------------------------------------------------------------------------- the tab's client
 let shared: QuoteClient | null = null;
+let sessionHook = false;
 export function quoteClient(): QuoteClient {
+  if (!sessionHook && typeof addEventListener === 'function') { sessionHook = true; addEventListener('spw-session-end', () => shared?.sessionEnded()); }   // dispatched by the shell (App.tsx), which does not import this module
   return (shared ??= new QuoteClient({
     WebSocket: WebSocket as unknown as Env['WebSocket'], now: Date.now, random: Math.random, raf: (f) => { requestAnimationFrame(f); },
     url: () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/v1/stream`,

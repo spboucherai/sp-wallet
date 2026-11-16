@@ -13,6 +13,7 @@ import { get, post } from '../api';
 import type { Nav } from '../App';
 import { errText, I18n, useT, type Key } from '../i18n';
 import { Btn, Card, EmptyState, ErrorState, Fact, Field, fiat, Fold, Icon, inputCls, Notice, numFmt, PageTitle, Section, Seg, Sheet, SkeletonCard, SkeletonRows, Stat, StatGrid, Tag, Timeline, usdCapital, when, type StepState, type Tone } from '../ui';
+import { srvText } from '../srvText'; // v11 interface (audit B3): a server sentence without a code is translated when known, quoted as English otherwise
 import { CardHead, EquityCard, FormGroup, LogoStack, UnitInput } from './agentBits';
 import { LabVerdicts, ReportV3, type LabVerdict, type ReportSummary } from './labReport';
 // V11 market making: the session view, the go-live checklist and the quoting mandate — a chunk of its own, loaded for a market-making agent only
@@ -202,7 +203,7 @@ function PerfView({ id, mode }: { id: string; mode: 'paper' | 'live' }) {
   return <div className="space-y-3" data-testid={`ag2-perf-${p.mode}`} data-mode={p.mode}>
     <EquityCard title={t(mode === 'paper' ? 'ag2EqPaper' : 'ag2EqLive')} right={<ModeTag mode={p.mode} />} points={p.equityCurve.map((e) => ({ t: e.ts, p: e.equity }))} format={(v) => fiat(v, 'USD', locale)} formatTime={(x) => when(new Date(x), locale)} />
     <p className="px-1 text-[12.5px] leading-snug text-mute">{p.label}</p>
-    {p.warnings.map((w) => <Notice key={w.code} tone="warn">{w.message}</Notice>)}
+    {p.warnings.map((w) => <Notice key={w.code} tone="warn">{srvText(t, locale, w.message)}</Notice>)}
     <StatGrid>{rows.map((r) => <Stat key={r.key} label={t(r.key)} value={fmtPerf(r, locale)} sub={r.reason ?? undefined} />)}
       <Stat label={t('ag2PfTrades')} value={String(p.closedTrades)} /><Stat label={t('ag2PfOrders')} value={String(p.orders)} /></StatGrid>
   </div>;
@@ -257,7 +258,7 @@ function BacktestCard({ o, id, refresh }: { o: Overview; id: string; refresh: ()
         {rec.warnings.map((w) => <Notice key={w} tone="warn">{w}</Notice>)}
         <Fold summary={t('ag2BtModel')}><ul className="list-disc space-y-1 pl-5 text-[12.5px] text-mute">{rec.model.map((m) => <li key={m}>{m}</li>)}</ul></Fold></div>}
       {!rec && !o.backtests.versions.some((v) => v.hasReport) && <p className="text-[13.5px] text-mute">{t('ag2BtNone')}</p>}
-      {job && <Notice tone={job.status === 'failed' ? 'danger' : job.status === 'done' ? 'ok' : 'info'}>{t(`ag2Job_${job.status === 'cancelled' ? 'failed' : job.status}` as Key)}{job.error ? ` — ${job.error}` : ''}</Notice>}
+      {job && <Notice tone={job.status === 'failed' ? 'danger' : job.status === 'done' ? 'ok' : 'info'}>{t(`ag2Job_${job.status === 'cancelled' ? 'failed' : job.status}` as Key)}{job.error ? ` — ${srvText(t, locale, job.error)}` : ''}</Notice>}
       {err && <Notice tone="danger">{err}</Notice>}
       <Btn kind="ghost" full busy={running} disabled={running} onClick={() => void run()}><Icon n="chart" className="h-4 w-4" />{t('ag2BtRun')}</Btn>
     </div></div></Card>;
@@ -274,7 +275,7 @@ function MandateSheet({ o, onClose, onLegacy }: { o: Overview; onClose: () => vo
   const flat = (v: unknown): string => (v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
   return <Sheet title={t('ag2MandateTitle')} sub={t('ag2MandateSub')} onClose={onClose} wide testid="ag2-mandate-sheet">
     {block !== null ? <Notice tone="warn"><span data-testid="ag2-live-reason">{block || t('ag2LiveUnavailable')}</span></Notice> : q.isLoading ? <SkeletonRows n={4} /> : !d ? <ErrorState title={t('ag2LoadErr')} onRetry={() => void q.refetch()} /> : <div className="space-y-4">
-      {!d.available && d.reason && <Notice tone="warn">{d.reason}</Notice>}
+      {!d.available && d.reason && <Notice tone="warn">{srvText(t, locale, d.reason)}</Notice>}
       {o.pausedFrom === 'LIVE' && <Notice tone="info">{t('ag2ResumeNewMandate')}</Notice>}
       <Notice tone="info">{t('ag2MandateNote')}</Notice>
       {d.fields && <dl className="receipt">{Object.entries(d.fields).filter(([, v]) => typeof v !== 'object' || v === null || Array.isArray(v)).map(([k, v]) => <Fact key={k} k={k} mono>{Array.isArray(v) ? v.map(flat).join(', ') : flat(v)}</Fact>)}</dl>}
@@ -333,7 +334,7 @@ export function AgentPanel({ id, nav, onLegacy }: { id: string; nav: Nav; onLega
       <dl className="mt-3">
         <Fact k={t('ag2Strategy')} mono>{o.strategy ? `${o.strategy.name}@${o.strategy.version} · ${shortSha(o.strategy.sha256)}…` : t('ag2NoStrategy')}</Fact>
         {o.engine !== 'supervisor' && <Fact k={t('ag2Capital')}>{usdCapital(o.capitalUsd, locale)}</Fact>}
-        {o.stopReason && o.state === 'stopped' && <Fact k={t('ag2StopReason')}>{o.stopReason}</Fact>}
+        {o.stopReason && o.state === 'stopped' && <Fact k={t('ag2StopReason')}>{srvText(t, locale, o.stopReason)}</Fact>}
         {o.worker.tick?.last_error && <Fact k={t('ag2LastError')}>{o.worker.tick.last_error}</Fact>}
       </dl>
       {block !== null && <p className="mt-2 text-[12.5px] leading-snug text-mute" data-testid="ag2-live-reason">{block}</p>}

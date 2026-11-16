@@ -10,6 +10,7 @@ import { I18n, useT, type Key } from '../i18n';
 import {
   ageText, caveatKey, compactUsd, freshness, fundingText, groupByCompany, hostOf, noValuationKey, orderCaveats, pmDetailQuery, pmListQuery, premiumText, priceText, quantities, referenceKindKey, sizeParam, unitBadge,
   type Datum, type PmCompany, type PmDetail, type PmList, type PmMarket, type PmPosition, type PmReference, type PmValuation, type PmVenue,
+  notTradableKey,
 } from '../privateMarkets';
 import { useConn, useQuoteSubscriptions } from '../quotes';   // v11 live quotes: the price, bid and ask tick from the venue streams; the derived figures keep the server's cadence
 import { LiveCell, QuoteDot } from '../quotes-ui';
@@ -20,6 +21,16 @@ const useLocale = () => useContext(I18n).locale;
 /** an external source: host shown, opens in a new tab, never passes the referrer */
 function Src({ url, children }: { url: string; children?: ReactNode }) {
   return <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-blue underline decoration-blue/30 underline-offset-2">{children ?? hostOf(url)}<Icon n="ext" className="h-3 w-3 shrink-0" /></a>;
+}
+/**
+ * v11 interface (audit B3): a sentence the server or a venue's documentation wrote in English. On a French screen it is marked
+ * as a quotation in its original language (a visible tag + `lang="en"`), so that it is never taken for an untranslated part of
+ * the interface; on an English screen it is shown as it is. The STANDARD reasons (codes) are translated beside it.
+ */
+function En({ children }: { children: ReactNode }) {
+  const t = useT(), fr = useLocale() === 'fr';
+  if (!fr) return <>{children}</>;
+  return <span data-testid="pm-en"><span className="mr-1.5 inline-block rounded bg-elev px-1.5 py-px align-[1px] text-[10.5px] font-semibold uppercase not-italic tracking-wide text-mute">{t('v11LoEnTag')}</span><span lang="en">{children}</span></span>;
 }
 /** where a figure comes from and when it was read */
 function Provenance({ d, now }: { d: Pick<Datum, 'source' | 'ts' | 'stale'>; now: number }) {
@@ -72,7 +83,7 @@ function CompanyHead({ c }: { c: PmCompany | null }) {
     {c && <p className="mt-0.5 text-[13px] text-mute" data-testid="pm-company-ref">{ref
       ? <>{t('pmQ5')} : <span className="font-semibold text-ink">{compactUsd(ref.value, locale)}</span> · {t(referenceKindKey(ref.kind))} · {ref.date} · <Src url={ref.sourceUrl} /></>
       : t('pmNoReference')}</p>}
-    {c?.note && <p className="mt-1 text-[12.5px] leading-snug text-warn">{c.note}</p>}
+    {c?.note && <p className="mt-1 text-[12.5px] leading-snug text-warn"><En>{c.note}</En></p>}
     {c && c.contracts.length > 1 && <p className="mt-1 text-[12.5px] leading-snug text-mute">{t('pmNeverAveraged')}</p>}
   </div>;
 }
@@ -93,10 +104,10 @@ export function PmListView({ data, onOpen }: { data: PmList; onOpen: (id: string
     {groups.map((g) => <section key={g.company?.slug ?? '_'} className="card overflow-hidden" data-testid={`pm-company-${g.company?.slug ?? 'none'}`}>
       <CompanyHead c={g.company} /><div className="divide-y divide-line border-t border-line">{g.markets.map((m) => <ContractRow key={m.id} m={m} now={data.ts} onOpen={onOpen} />)}</div></section>)}
     <Section title={t('pmVenues')}><Card className="!py-3">{data.venues.map((v) => <VenueLine key={v.venue} v={v} now={data.ts} />)}
-      <Fold summary={t('pmNoAdapter')} testid="pm-no-adapter"><ul className="space-y-1.5 text-[13px] text-mute">{data.venuesWithoutAdapter.map((v) => <li key={v.venue}><span className="font-semibold text-ink">{v.venue}</span> — {v.note}</li>)}</ul>
+      <Fold summary={t('pmNoAdapter')} testid="pm-no-adapter"><ul className="space-y-1.5 text-[13px] text-mute">{data.venuesWithoutAdapter.map((v) => <li key={v.venue}><span className="font-semibold text-ink">{v.venue}</span> — <En>{v.note}</En></li>)}</ul>
         <p className="mt-2 text-[12.5px] text-mute">{t('pmNoAdapterBody')}</p></Fold></Card></Section>
     {data.excluded.length > 0 && <Fold summary={`${t('pmExcluded')} (${data.excluded.length})`} testid="pm-excluded"><ul className="space-y-2 text-[13px]">{data.excluded.map((e) =>
-      <li key={e.id}><span className="font-semibold">{e.company}</span> <span className="break-all font-mono text-[12px] text-mute">{e.id}</span><p className="text-mute">{e.reason}</p></li>)}</ul></Fold>}
+      <li key={e.id}><span className="font-semibold">{e.company}</span> <span className="break-all font-mono text-[12px] text-mute">{e.id}</span><p className="text-mute"><En>{e.reason}</En></p></li>)}</ul></Fold>}
   </div>;
 }
 
@@ -109,7 +120,7 @@ function Row({ n, label, children, testid }: { n: number; label: string; childre
     <div className="min-w-0 flex-1"><h3 className="text-[13px] font-medium text-mute">{label}</h3>{children}</div></li>;
 }
 const Null = ({ t, reason, why }: { t: T; reason: string | null; why?: Key }) => <><p className="text-[16px] font-semibold" data-testid="pm-null">{t('pmNotDeducible')}</p>
-  {why && <p className="text-[13.5px] leading-snug">{t(why)}</p>}{reason && <p className="mt-0.5 text-[12.5px] leading-snug text-mute"><span className="sr-only">{t('pmSourceText')} : </span>{reason}</p>}</>;
+  {why && <p className="text-[13.5px] leading-snug">{t(why)}</p>}{reason && <p className="mt-0.5 text-[12.5px] leading-snug text-mute"><span className="sr-only">{t('pmSourceText')} : </span><En>{reason}</En></p>}</>;
 
 /** The valuation panel: five distinct quantities, each with its value or the reason it cannot be derived, its formula and its sources. */
 export function ValuationPanel({ v, now, quote }: { v: PmValuation; now: number; quote: string }) {
@@ -120,7 +131,7 @@ export function ValuationPanel({ v, now, quote }: { v: PmValuation; now: number;
       <Row n={1} label={t('pmQ1')} testid="pm-q-price"><p className="t-num text-[22px]">{priceText(v.syntheticPrice.value, locale, 6)} <span className="text-[13px] font-medium text-mute">{quote}</span></p>
         <p className="text-[13px] leading-snug">{v.syntheticPrice.unitLabel}{v.syntheticPrice.priceKind === 'frozen mark' ? ` — ${t('pmFrozenPrice')}` : ''}</p><Provenance d={v.syntheticPrice} now={now} /></Row>
       <Row n={2} label={t('pmQ2')} testid="pm-q-contract">{has('contract')
-        ? <><p className="text-[16px] font-semibold">{compactUsd(v.contractMarketValue.value, locale)} <span className="text-[13px] font-medium text-mute">{t('pmPerContract')}</span></p><p className="text-[12.5px] leading-snug text-mute">{v.contractMarketValue.formula}</p></>
+        ? <><p className="text-[16px] font-semibold">{compactUsd(v.contractMarketValue.value, locale)} <span className="text-[13px] font-medium text-mute">{t('pmPerContract')}</span></p><p className="text-[12.5px] leading-snug text-mute" lang="en">{v.contractMarketValue.formula}</p></>
         : <Null t={t} reason={v.contractMarketValue.reason} />}</Row>
       <Row n={3} label={t('pmQ3')} testid="pm-q-exposure">{has('exposure')
         ? <><p className="text-[16px] font-semibold">{compactUsd(v.notionalExposure.value, locale)}</p><p className="text-[12.5px] leading-snug text-mute">{t('pmHypothetical', { side: t(pos.side === 'long' ? 'pmLong' : 'pmShort'), size: priceText(pos.size, locale, 8) })} — {v.notionalExposure.formula}</p></>
@@ -146,7 +157,7 @@ export function ValuationPanel({ v, now, quote }: { v: PmValuation; now: number;
 export function Caveats({ v }: { v: PmValuation }) {
   const t = useT();
   return <Section title={t('pmCaveats')}><ul className="space-y-2" data-testid="pm-caveats">{orderCaveats(v.caveats).map((c, k) => <li key={`${c.code}${k}`}>
-    <Notice tone={['frozen', 'stale', 'thin_market', 'unit_mismatch', 'unconfirmed_convention', 'company_note'].includes(c.code) ? 'warn' : 'info'}><p className="font-semibold">{t(caveatKey(c.code))}</p><p className="mt-0.5 text-[12.5px] text-mute">{c.text}</p>
+    <Notice tone={['frozen', 'stale', 'thin_market', 'unit_mismatch', 'unconfirmed_convention', 'company_note'].includes(c.code) ? 'warn' : 'info'}><p className="font-semibold">{t(caveatKey(c.code))}</p><p className="mt-0.5 text-[12.5px] text-mute"><En>{c.text}</En></p>
       {typeof c.data?.url === 'string' && <p className="mt-0.5 text-[12.5px]"><Src url={c.data.url} /></p>}</Notice></li>)}</ul></Section>;
 }
 
@@ -179,7 +190,7 @@ function Detail({ id, nav, delisted }: { id: string; nav: Nav; delisted: boolean
       <p className="t-num mt-3 text-[34px]"><LiveCell id={lid} flash={(x) => x.mark} render={(x) => (x.mark ? priceText(x.mark, locale, 6) : null)}>{priceText(m.market.price.value, locale, 6)}</LiveCell> <span className="text-[14px] font-medium text-mute">{c.quoteCurrency}</span></p>
       <div className="mt-2 flex flex-wrap gap-1.5"><UnitTag m={m} /><FreshTag m={m} now={now} />{m.status === 'delisted' && <Tag tone="mute" icon="stop">{t('pmDelisted')}</Tag>}
         <Tag tone={m.review.state === 'reviewed' ? 'ok' : 'warn'} icon={m.review.state === 'reviewed' ? 'check' : 'warn'} testid="pm-review">{t(`pmReview_${m.review.state}` as Key)}</Tag></div>
-      {m.review.reasons.length > 0 && <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[12.5px] leading-snug text-mute">{m.review.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+      {m.review.reasons.length > 0 && <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[12.5px] leading-snug text-mute">{m.review.reasons.map((r) => <li key={r}><En>{r}</En></li>)}</ul>}
       {m.error && <p className="mt-2 text-[13px] text-danger" role="status">{t('pmVenueError')} — {m.error}</p>}
       {d.candles.candles && <p className="mt-2 text-[12px] text-mute">{t('pmCandles', { n: d.candles.candles.length, interval: d.candles.interval ?? '' })} · {d.candles.source}</p>}</Card>
 
@@ -198,7 +209,7 @@ function Detail({ id, nav, delisted }: { id: string; nav: Nav; delisted: boolean
       <Stat label={t('pmAsk')} value={<LiveCell id={lid} render={(x) => (x.ask ? priceText(x.ask, locale, 6) : null)}>{d.book.asks?.[0] ? priceText(d.book.asks[0][0], locale, 6) : '—'}</LiveCell>} sub={d.book.asks?.[0] ? `× ${priceText(d.book.asks[0][1], locale, 4)}` : d.book.error ?? t('pmEmptyBook')} />
     </StatGrid><div className="mt-1.5 px-1"><Provenance d={m.market.price} now={now} /></div></Section>
 
-    <Section title={t('pmContract')}><Card className="!py-2"><p className="pb-1 pt-2 text-[12px] text-mute">{t('pmSourceTextNote')}</p><dl>
+    <Section title={t('pmContract')}><Card className="!py-2"><p className="pb-1 pt-2 text-[12px] text-mute">{t('pmSourceTextNote')}</p><dl lang="en" data-testid="pm-contract-terms">
       <Long k={t('pmNature')}>{c.nature}</Long><Fact k={t('pmUnderlying')}>{c.underlying ?? t('pmUnidentified')}</Fact><Fact k={t('pmUnit')}>{c.unit.label}</Fact>
       <Fact k={t('pmQuote')}>{c.quoteCurrency}{c.collateral ? ` · ${t('pmCollateral')} ${c.collateral}` : ''}</Fact><Long k={t('pmContractSize')}>{c.contractSize}</Long>
       <Long k={t('pmMultiplier')}>{c.multiplier ? `${c.multiplier.value} — ${c.multiplier.source}` : t('pmNotPublished')}</Long>
@@ -216,7 +227,8 @@ function Detail({ id, nav, delisted }: { id: string; nav: Nav; delisted: boolean
     <References list={d.references} />
 
     <Section title={t('pmTrading')}><Card><Btn full disabled aria-disabled="true" data-testid="pm-trade-disabled"><Icon n="lock" className="h-4 w-4" />{t('pmTradingDisabled')}</Btn>
-      <ul className="mt-3 list-disc space-y-1 pl-4 text-[12.5px] leading-snug text-mute" data-testid="pm-not-tradable">{m.notTradable.reasons.map((r) => <li key={r}>{r}</li>)}</ul></Card></Section>
+      <p className="mt-3 text-[13.5px] leading-snug" data-testid="pm-not-tradable-why" data-code={m.notTradable.code}>{t(notTradableKey(m.notTradable.code))}</p>
+      <ul className="mt-2 list-disc space-y-1 pl-4 text-[12.5px] leading-snug text-mute" data-testid="pm-not-tradable">{m.notTradable.reasons.map((r) => <li key={r}><En>{r}</En></li>)}</ul></Card></Section>
   </div>;
 }
 

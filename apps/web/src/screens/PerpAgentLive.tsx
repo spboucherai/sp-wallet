@@ -20,6 +20,7 @@ import { Bullet, LiveErrNotice, LiveStatePill, ModeBand, ModeTag, SourceTag } fr
 import type { Fill } from '../derivatives/types';
 import { I18n, useT, type Key } from '../i18n';
 import { Btn, Card, Fact, Field, H, Icon, inputCls, Notice, ProgressRing, Sheet, Stat, StatGrid, Tag, when, type Tone as PillTone } from '../ui';
+import { srvText } from '../srvText'; // v11 interface (audit B3): a server sentence without a code is translated when known, quoted as English otherwise
 import { CardHead, EquityCard, PnlArrow, PositionRows } from './agentBits'; // v10 design pass
 
 // ------------------------------------------------------------------------------------------------ shapes of the server's answers
@@ -109,7 +110,7 @@ export function GoLiveCard({ a, id, nav }: { a: any; id: string; nav: Nav }) {
   const q = useQuery({ queryKey: ['agent', id, 'live-ready', accountId, locale], enabled: !!L?.available, retry: 0, refetchInterval: sheet ? false : 15_000,
     queryFn: () => get<Readiness>(`/agents/${id}/perp/live?locale=${locale}${accountId ? `&account=${encodeURIComponent(accountId)}` : ''}`) });
   if (!L?.available) return <div data-testid="pl-golive" data-next="unavailable"><div className="flex items-center gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-elev text-mute"><Icon n="lock" /></span><span className="text-[16.5px] font-semibold">{t('plTitle')}</span></div>
-    <p className="mt-2.5 text-[13.5px] leading-snug text-mute">{t('plUnavailable')}</p>{L?.reason && <p className="mt-1.5 break-words rounded-lg bg-elev/60 px-2.5 py-2 font-mono text-[11.5px] text-mute">{L.reason}</p>}</div>;
+    <p className="mt-2.5 text-[13.5px] leading-snug text-mute">{t('plUnavailable')}</p>{L?.reason && <p className="mt-1.5 break-words rounded-lg bg-elev/60 px-2.5 py-2 font-mono text-[11.5px] text-mute">{srvText(t, locale, L.reason)}</p>}</div>;
   const r = q.data, s = r?.steps, sel = r?.accounts.find((x) => x.id === r.accountId) ?? null;
   const order = ['strategy', 'account', 'fund', 'mandate'] as const, at = r ? (r.next === 'locked' || r.next === 'live' ? 3 : order.indexOf(r.next)) : -1;
   const st = (k: number, ok: boolean): StepState => (ok ? 'done' : k === at ? (r?.next === 'locked' ? 'locked' : 'next') : 'later');

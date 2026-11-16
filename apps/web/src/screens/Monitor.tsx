@@ -4,6 +4,8 @@ import { get } from '../api';
 import { useSettings } from '../hooks';
 import { I18n, useT, type Key } from '../i18n';
 import { AssetIcon, Card, ErrorState, Fact, fiat, Fold, Icon, NetworkIcon, PageTitle, ProviderIcon, Section, SkeletonCard, SkeletonRows, SkeletonStats, Stat, StatGrid, Tag, VenueIcon, when } from '../ui';
+import { reasonText } from '../reasonTexts';
+import { srvText } from '../srvText'; // v11 interface (audit B3): a server sentence without a code is translated when known, quoted as English otherwise
 
 interface Pnl { abs: number; pct: number | null; partial: boolean; from: number }
 interface PnlRow { id: string; name?: string; label?: string; real: boolean; kind?: string; mode?: string; today: Pnl | null; d7: Pnl | null; d30: Pnl | null; equity: number | null; asOf: number | null }
@@ -99,10 +101,10 @@ export function Monitor({ open }: { open: (path: string) => void }) {
                 <NetworkIcon net={x.id.slice(4)} size={30} />
                 <span className="min-w-0 flex-1"><span className="block break-words text-[13.5px] font-semibold leading-tight">{x.name}</span>
                   <span className="mt-0.5 block"><Status ok={x.ok} /></span>
-                  {x.ok === false && <span className="mt-0.5 block break-words text-[11.5px] leading-snug text-ink/85">{x.detail}</span>}</span></li>)}</ul>
+                  {x.ok === false && <span className="mt-0.5 block break-words text-[11.5px] leading-snug text-ink/85">{srvText(t, locale, x.detail)}</span>}</span></li>)}</ul>
             {/* every measurement, as before: what was checked and when it last answered (open when a network is down) */}
             <Fold className="mt-1 px-1.5" summary={t('dzMoNetDetail')} open={nets.some((x) => x.ok === false)}><ul className="divide-y divide-line">{nets.map((x) => <li key={x.id} className="flex items-baseline justify-between gap-3 py-2 text-[12.5px]">
-              <span className="min-w-0"><span className="font-medium">{x.name}</span> <span className="break-words text-mute">· {x.detail}</span></span><span className="shrink-0 whitespace-nowrap text-mute">{x.ageSec === null ? t('moUnknown') : `${t('moLastSuccess')} ${age(x.ageSec, fr)}`}</span></li>)}</ul></Fold>
+              <span className="min-w-0"><span className="font-medium">{x.name}</span> <span className="break-words text-mute">· {srvText(t, locale, x.detail)}</span></span><span className="shrink-0 whitespace-nowrap text-mute">{x.ageSec === null ? t('moUnknown') : `${t('moLastSuccess')} ${age(x.ageSec, fr)}`}</span></li>)}</ul></Fold>
           </Card>}
         </Section>
 
@@ -113,7 +115,7 @@ export function Monitor({ open }: { open: (path: string) => void }) {
               <div className="flex min-h-7 items-center justify-between gap-3"><span className="text-[12.5px] font-semibold text-mute">{t(`moGroup_${g}` as Key)}{rows.length > 1 ? ` (${rows.length})` : ''}</span>
                 {rows.length > 1 && <Status ok={bad > 0 ? false : unknown === rows.length ? null : true}>{bad > 0 ? t('moNDown', { n: bad }) : unknown === rows.length ? t('moUnknown') : t('moOk')}</Status>}</div>
               <ul>{rows.map((x) => <li key={x.id} className="flex min-h-[52px] items-center gap-3 py-1.5" data-ok={String(x.ok)}>{logo(x)}
-                <span className="min-w-0 flex-1"><span className="block break-words text-[14.5px] font-medium leading-snug">{x.name}</span><span className="block break-words text-xs text-mute">{x.detail}{x.ageSec !== null ? ` · ${t('moLastSuccess')} ${age(x.ageSec, fr)}` : ''}</span></span>
+                <span className="min-w-0 flex-1"><span className="block break-words text-[14.5px] font-medium leading-snug">{reasonText(x.name, locale)}</span><span className="block break-words text-xs text-mute">{srvText(t, locale, x.detail)}{x.ageSec !== null ? ` · ${t('moLastSuccess')} ${age(x.ageSec, fr)}` : ''}</span></span>
                 <span className="shrink-0"><Status ok={x.ok} /></span></li>)}</ul></div>; })}</div></Card>}
         </Section>
       </div>
@@ -127,7 +129,7 @@ export function Monitor({ open }: { open: (path: string) => void }) {
                 <span className={`grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full ${bad ? 'bg-danger/12 text-danger' : 'bg-elev text-mute'}`} aria-hidden="true"><Icon n={bad ? 'warn' : 'refresh'} className="h-4 w-4" /></span>
                 <span className="min-w-0 flex-1"><span className="block break-words font-mono text-[13.5px] font-semibold">{l.name}</span><span className="block text-xs text-mute">{t('moEvery')} {age(Math.round(l.everyMs / 1000), fr)} · {t('moLastSuccess')} {age(l.ageSec, fr)}</span></span>
                 <span className="shrink-0"><Status ok={l.lastOkAt === null && l.failures === 0 ? null : l.failures === 0 && !l.late}>{l.failures > 0 ? t('moNFailures', { n: l.failures }) : l.late ? t('moLate') : undefined}</Status></span></div>
-              {l.lastError && l.failures > 0 && <p className="mt-1.5 break-words pl-[42px] font-mono text-[12px] leading-snug text-danger">{l.lastError}</p>}</li>; })}</ul>
+              {l.lastError && l.failures > 0 && <p className="mt-1.5 break-words pl-[42px] font-mono text-[12px] leading-snug text-danger" lang="en">{srvText(t, locale, l.lastError)}</p>}</li>; })}</ul>
           {h.loopsNote && <p className="border-t border-line py-3 text-xs leading-snug text-mute">{t('moLoopsNote')}</p>}</Card>}
       </Section>
 
@@ -137,7 +139,7 @@ export function Monitor({ open }: { open: (path: string) => void }) {
           <Tile icon="key" label={t('moSigner')} ok={signerOk} state={!h.signer.reachable ? t('moDown') : h.signer.halted ? t('moHalted') : t('moOk')} testid="monitor-signer" />
           {/* v8 hardening: the strategy sandbox — off means strategy code runs unconfined, unavailable means agents hold */}
           {h.lab && <Tile icon="shield" label={t('hdMoLab')} ok={h.lab.ok} state={h.lab.mode === 'sandbox-exec' ? t('hdMoLabOk') : h.lab.mode === 'off' ? t('hdMoLabOff') : t('hdMoLabDown')} testid="monitor-lab">
-            {!h.lab.ok && <>{h.lab.mode === 'off' ? t('hdMoLabOffNote') : t('hdMoLabDownNote')}{h.lab.reason ? ` (${h.lab.reason})` : ''}</>}</Tile>}
+            {!h.lab.ok && <>{h.lab.mode === 'off' ? t('hdMoLabOffNote') : t('hdMoLabDownNote')}{h.lab.reason ? ` (${srvText(t, locale, h.lab.reason)})` : ''}</>}</Tile>}
           <Tile icon="list" label={t('moAudit')} ok={h.audit.intact} state={h.audit.intact ? t('moAuditOk', { n: h.audit.total }) : t('moAuditBroken')} />
           <Tile icon="clock" label={t('moBackup')} ok={!h.backup.visible || h.backup.lastAt === null ? null : (h.backup.ageHours ?? 0) <= 36} state={!h.backup.visible ? t('moBackupInvisible') : h.backup.lastAt === null ? t('moBackupNone') : when(new Date(h.backup.lastAt), locale)} />
           <Tile icon="bars" label={t('moDisk')} ok={null} state={h.disk ? `${h.disk.freePct} %` : '—'}>{h.disk && `${h.disk.freeGb} / ${h.disk.totalGb} ${fr ? 'Go' : 'GB'}`}</Tile>
@@ -177,7 +179,7 @@ export function Monitor({ open }: { open: (path: string) => void }) {
         <ul className="divide-y divide-line">{c.agents.map((a) => <li key={a.id}><button className="row-press flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-left" onClick={() => open(`/agents/${a.id}`)}>
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-elev text-mute" aria-hidden="true"><Icon n="robot" className="h-[18px] w-[18px]" /></span>
           <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="min-w-0 break-words text-[14.5px] font-semibold">{a.name}</span><RealTag real={a.real} /></span>
-            <span className="mt-0.5 block break-words text-xs text-mute">{t('moAgent')} · {a.state}{a.lastBar ? ` · ${t('moLastBar')} ${when(new Date(a.lastBar), locale)}` : ''}{a.stopReason && a.state === 'STOPPED' ? ` · ${a.stopReason}` : ''}</span></span>
+            <span className="mt-0.5 block break-words text-xs text-mute">{t('moAgent')} · {a.state}{a.lastBar ? ` · ${t('moLastBar')} ${when(new Date(a.lastBar), locale)}` : ''}{a.stopReason && a.state === 'STOPPED' ? ` · ${srvText(t, locale, a.stopReason)}` : ''}</span></span>
           <span className="shrink-0 text-right text-[14.5px] font-semibold">{usd(a.equityUsd)}<span className="block text-xs font-normal text-mute">{t('moAllocated')} {usd(a.capitalUsd)}</span></span></button></li>)}
         {c.derivatives.map((a) => <li key={a.id}><button className="row-press flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-left" onClick={() => open('/futures?v=accounts')}>
           <VenueIcon venue={a.venue} size={36} />

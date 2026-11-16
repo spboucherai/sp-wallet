@@ -1,7 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
-import { useContext, useMemo } from 'react';
-import { useUnread } from '../alerts';
-import { get } from '../api';
+import { lazy, Suspense, useContext, useMemo } from 'react';
 import type { Nav, Tab } from '../App';
 import { AllocationBar, Spark } from '../chart';
 import { useNetworks, usePortfolio, useSettings, type Bal } from '../hooks';
@@ -10,6 +7,10 @@ import { AnimatedNumber, Card, Change, Coin, fiat, H, haptic, Icon, Money, NetDo
 import { PriceFreshness } from '../freshness'; // v11
 import { LiveSpotTag, overlaySpot, useLiveSpot } from '../quotes-spot'; // v11 live quotes (the quote client itself is fetched on demand)
 
+// v11 interface: Home is the Dashboard. The wallet (total, assets) is the first chunk as before; the consolidated panels —
+// derivative accounts and positions per mode, agents, P&L, risk, system status — are a chunk of their own, fetched once the
+// wallet is drawn (it brings the quote client with it), so the first screen costs what it cost before.
+const DashboardPanels = lazy(() => import('./Dashboard').then((m) => ({ default: m.DashboardPanels })));
 const FEATURED = ['USDC', 'BTC', 'ETH', 'SOL', 'USDT'];
 
 export function AssetRow({ b, nav, cur, ck, hidden, prices, locale, border }: { b: Bal; nav: Nav; cur: string; ck: 'usd' | 'cad'; hidden: boolean; prices: Record<string, any> | null; locale: string; border: boolean }) {
@@ -33,8 +34,6 @@ export function AssetRow({ b, nav, cur, ck, hidden, prices, locale, border }: { 
 export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
   const t = useT(); const { locale } = useContext(I18n);
   const pf = usePortfolio(), nets = useNetworks(); const { settings, update } = useSettings();
-  const unread = useUnread();
-  const ag = useQuery({ queryKey: ['agents'], queryFn: () => get<{ agents: { id: string; state: string }[] }>('/agents'), staleTime: 30_000 });
   const cur = settings.currency, ck = cur === 'USD' ? 'usd' : 'cad';
   const hidden = settings.hideBalances;
   // v11 live quotes: streamed USD prices on top of the polled ones (held assets first, 40 symbols at most). Without the stream nothing changes.
@@ -64,16 +63,12 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
     <button onClick={() => { haptic(); go(id); }} disabled={disabled} className="press group flex min-w-0 flex-1 flex-col items-center gap-2 text-[12.5px] font-semibold disabled:opacity-40">
       <span className={`grid h-[52px] w-[52px] place-items-center rounded-full ${main ? 'hero-btn-main' : 'hero-btn'}`}><Icon n={icon} className="h-[21px] w-[21px]" /></span><span className="max-w-full truncate">{label}</span></button>;
   const rowProps = { nav, cur, ck: ck as 'usd' | 'cad', hidden, prices: d.prices, locale };
-  const agents = ag.data?.agents ?? [];
-  const shortcut = (onClick: () => void, icon: string, title: string, sub: string, badge?: boolean) =>
-    <button onClick={onClick} className="card flex min-h-[112px] flex-col items-start justify-between gap-3 p-4 text-left">
-      <span className="flex w-full items-center justify-between"><span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-elev"><Icon n={icon} className="h-[19px] w-[19px]" />{badge && <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-surface" />}</span><Icon n="chev" className="h-4 w-4 text-mute" /></span>
-      <span className="block"><span className="block text-[14.5px] font-semibold leading-tight">{title}</span><span className="mt-0.5 block text-[12px] leading-snug text-mute">{sub}</span></span></button>;
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-testid="home">
       {d.halted && <Notice tone="danger">{t('haltedBanner')}</Notice>}
       {/* v11: the signer node is unreachable — the page still renders from the server's own balance reads, and says what that means */}
       {d.signer && !d.signer.reachable && <Notice tone="warn"><span data-testid="signer-down">{t('svSignerDown', { date: when(d.signer.addressesAsOf, locale) })}</span></Notice>}
+      <div className="space-y-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-5 lg:space-y-0"><div className="space-y-5">
       <section className="hero px-6 pb-6 pt-5" data-mood={mood}>
         <span className="hero-edge" aria-hidden="true" />
         <div className="flex items-center justify-between">
@@ -97,9 +92,10 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
       {d.pending.length > 0 && <Card><H>{t('pending')}</H>
         <ul className="space-y-3.5">{d.pending.map((p) => <li key={p.id} className="flex items-center gap-3">
           <Coin sym={p.symbol} net={p.network} size={40} />
-          <div className="min-w-0 flex-1"><div className="font-semibold"><Money hidden={hidden}>{trimAmt(p.amountDisplay)} {p.symbol}</Money></div><div className="truncate text-[12.5px] text-mute">{p.networkName} → {short(p.to)}</div></div>
+          <div className="min-w-0 flex-1"><div className="font-semibold"><Money hidden={hidden}>{trimAmt(p.amountDisplay)} {p.symbol}</Money></div><div className="truncate text-[12.5px] text-mute">{/* v11: a GMX order transaction is not a transfer to the router's address */ (p as { kind?: string }).kind === 'gmx' ? `${t('svKind_gmx')} · ${p.networkName}` : `${p.networkName} → ${short(p.to)}`}</div></div>
           {testNotSent(p) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : <StatePill state={p.state} />}</li>)}</ul></Card>}
 
+      </div><div className="space-y-5">
       {held.length > 0 && <Card className="!px-0 !pb-1"><div className="px-5"><H>{t('yourAssets')}</H>
           {parts.length > 1 && !hidden && <div className="mb-4"><AllocationBar parts={parts} label={t('dsAllocation')} otherLabel={t('dsOther')} pct={(s) => `${numFmt(s * 100, locale, s < 0.1 ? 1 : 0)} %`} /></div>}</div>
         <ul>{held.map((b, k) => <AssetRow key={b.network + b.asset} b={b} border={k > 0 || (parts.length > 1 && !hidden)} {...rowProps} />)}</ul></Card>}
@@ -115,12 +111,10 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
         <button onClick={() => nav({ tab: 'assets' })} className="row-press flex min-h-[56px] w-full items-center justify-between rounded-b-[22px] border-t border-line px-5 py-4 text-left text-[15px] font-semibold text-blue">
           <span>{t('allAssets')} <span className="font-normal text-mute">· {t('tokensCount', { n: d.balances.length })}</span></span><Icon n="chev" className="h-5 w-5" /></button></Card>
 
-      <div className="grid grid-cols-2 gap-3" data-testid="home-shortcuts">
-        {shortcut(() => go('agents'), 'robot', t('agents'), agents.length === 0 ? t('dsAgentsNone') : agents.length === 1 ? t('dsAgents1') : t('dsAgentsN', { n: agents.length }))}
-        {shortcut(() => go('futures'), 'chart', t('fxFutures'), t('dsFuturesSub'))}
-        {shortcut(() => go('alerts'), 'bell', t('alTitle'), unread.unread > 0 ? t('dsAlertsUnread', { n: unread.unread }) : t('dsAlertsNone'), unread.unread > 0)}
-        {shortcut(() => go('security'), 'shield', t('security'), t('dsSecuritySub'))}
-      </div>
+      </div></div>
+
+      {/* v11: the consolidated view — each panel loads, fails and refreshes on its own */}
+      <Suspense fallback={<div className="grid gap-4 lg:grid-cols-2" aria-busy="true"><SkeletonRows n={3} /><SkeletonRows n={3} /></div>}><DashboardPanels nav={nav} /></Suspense>
 
       {netState === 'partial' && <Card><H>{t('networks')}</H>
         <ul className="space-y-2.5">{list.filter((n) => n.health && !n.health.ok).map((n) => <li key={n.id} className="flex items-center justify-between text-[14px]">

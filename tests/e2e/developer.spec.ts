@@ -1,3 +1,4 @@
+import { navTo } from './v11-helpers.ts';   // v11 interface: the shell's navigation (five areas, header menu)
 import { readFileSync } from 'node:fs';
 import { expect, request as playwrightRequest, test } from '@playwright/test';
 
@@ -21,8 +22,7 @@ test('Developer / API: create a key with the passkey, use it without a session, 
   await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 30_000 });
 
   // Settings → Developer / API
-  await page.getByRole('navigation').getByRole('button', { name: 'Réglages' }).click();
-  await page.getByRole('button', { name: 'Développeur / API' }).click();
+  await navTo(page, 'developer');   // v11 interface: Developer / API is in the header menu
   await expect(page).toHaveURL(/\/developer$/);
   await expect(page.getByRole('heading', { name: 'Développeur / API' })).toBeVisible();
   await expect(page.getByText('Aucune clé d’API')).toBeVisible();
@@ -78,14 +78,14 @@ test('Developer / API: create a key with the passkey, use it without a session, 
   await expect(page.getByTestId('dev-op-listMarkets')).toBeVisible({ timeout: 20_000 });
   await page.getByTestId('dev-op-placeOrder').locator('summary').click();
   await expect(page.getByTestId('dev-op-placeOrder')).toContainText('orders:execute');
-  await expect(page.getByTestId('dev-op-placeOrder')).toContainText('non branchée');
+  await expect(page.getByTestId('dev-op-placeOrder')).toContainText(/(?<!non )branchée/);   // placeOrder is implemented since the V11 execution work (this line still said « non branchée »)
   await expect(page.getByText('import os, uuid, requests')).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/dev-05-docs.png`, fullPage: true });
 
-  // status: execution is reported as not wired
+  // status: what the server says of execution
   await page.getByRole('tab', { name: 'État' }).click();
   await expect(page.getByTestId('dev-svc-database')).toContainText('opérationnel');
-  await expect(page.getByTestId('dev-svc-execution')).toContainText('non branchée');
+  await expect(page.getByTestId('dev-svc-execution')).toContainText('SPW_TRADING_API_EXECUTION');   // since the V11 execution work: orders are wired, live execution through the API is off unless that setting is on
   await page.screenshot({ path: `${SHOTS}/dev-06-status.png`, fullPage: true });
 
   // webhooks tab renders its events and the empty state

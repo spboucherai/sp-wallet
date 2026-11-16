@@ -37,7 +37,7 @@ describe('one language at a time', () => {
     i18n.setLocaleTable('fr', t.fr);
     expect(i18n.hasLocaleTable('fr')).toBe(true);
     expect([i18n.stateKey('finalized'), i18n.stateKey('nope'), i18n.errText(tr as never, { code: 'bad_address', message: 'x' }), i18n.errText(tr as never, { code: 'zz_unknown', message: 'server words' })]).toEqual(before);
-    expect(before).toEqual(['s_finalized', 's_draft', 'e_bad_address', 'server words']);
+    expect(before).toEqual(['s_finalized', 's_draft', 'e_bad_address', 'v11LoSrvRefused']);   // v11 interface: an unknown code's sentence is a quotation of the server (`v11LoSrvRefused`: « {detail} » in English)
   });
   it('the app waits for the table before it draws, and before a change of language takes effect', () => {
     expect(src('../src/main.tsx')).toMatch(/await loadLocale\(localStorage\.getItem\('spw-locale'\) === 'en' \? 'en' : 'fr'\);[\s\S]*createRoot/);

@@ -88,8 +88,7 @@ export function Markets({ view, underlying, nav }: { view: MarketsView; underlyi
   return (
     <div className="space-y-4" data-testid="markets">
       <PageTitle>{t('mkTitle')}</PageTitle>
-      <Seg tabs label={t('mkTitle')} value={view} onChange={(v) => nav({ tab: 'markets', view: v === 'compare' ? 'compare' : undefined, asset: v === 'compare' ? base : undefined })} className="max-w-sm"
-        options={[{ id: 'explorer', label: t('mkViewExplorer') }, { id: 'compare', label: t('mkViewCompare') }]} />
+      {/* v11 interface: Explorer · Compare · Private markets are the sub-views of the Markets area — the shell lists them above this title (App.tsx) */}
       {view === 'compare' ? <CompareView instruments={instruments.data?.instruments ?? []} base={base} onBase={(b) => nav({ tab: 'markets', view: 'compare', asset: b })} onOpen={(m) => nav({ tab: 'futures', asset: m })} />
         : <>
           <Card>
@@ -127,7 +126,7 @@ export function Markets({ view, underlying, nav }: { view: MarketsView; underlyi
 }
 
 /** Read-only view of a market the wallet cannot trade: what it is, why it cannot be traded here, its chart, book and funding. No order form. */
-function MarketSheet({ row: r, onClose, onCompare }: { row: HubRow; onClose: () => void; onCompare?: (() => void) | undefined }) {
+export function MarketSheet({ row: r, onClose, onCompare }: { row: HubRow; onClose: () => void; onCompare?: (() => void) | undefined }) {
   const t = useT(); const { locale } = useContext(I18n);
   const [mode, setMode] = useState<'price' | 'funding'>('price');
   const perp = r.kind === 'perp';

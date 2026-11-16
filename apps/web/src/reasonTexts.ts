@@ -29,6 +29,22 @@ const EXACT: Record<string, string> = {
   'the signer reports the mandate as expired': 'le signataire indique que le mandat est arrivé à échéance',
   'the signer only signs reduce-only orders for this mandate (wind-down)': 'le signataire ne signe plus que des ordres de réduction pour ce mandat (liquidation ordonnée)',
   'the signer no longer holds the venue authorization': 'le signataire ne détient plus l’autorisation de la plateforme',
+  // v11 interface (audit B3 remainder) — an agent's withdrawal (services/api/src/agents/withdrawals.ts)
+  'interrupted during signing; nothing was sent': 'interrompu pendant la signature ; rien n’a été envoyé',
+  'incomplete withdrawal; nothing was sent': 'retrait incomplet ; rien n’a été envoyé',
+  'broadcast is disabled on this server; nothing was sent': 'la diffusion est désactivée sur ce serveur ; rien n’a été envoyé',
+  'the transaction could not be relayed in time; nothing was sent': 'la transaction n’a pas pu être relayée à temps ; rien n’a été envoyé',
+  'the transaction reverted on-chain; only the network fee was spent': 'la transaction a été annulée sur la chaîne ; seuls les frais de réseau ont été dépensés',
+  'mined, but the payment to your address was not found in the transaction: check the explorer': 'minée, mais le paiement vers votre adresse n’a pas été trouvé dans la transaction : vérifiez dans l’explorateur',
+  'another transaction of the vault used the same nonce; this withdrawal was not executed': 'une autre transaction du coffre a utilisé le même nonce ; ce retrait n’a pas été exécuté',
+  // research jobs (services/api/src/research/routes.ts)
+  'cancelled by the owner': 'annulé par le propriétaire',
+  'the runner stopped reporting (no log line or heartbeat for 5 minutes)': 'l’exécuteur a cessé de répondre (aucune ligne de journal ni signal de vie depuis 5 minutes)',
+  // system status: what a connector measured (services/api/src/monitor/health.ts)
+  'Signer': 'Signataire', 'Market data · quality': 'Données de marché · qualité',
+  'answering': 'répond', 'no answer': 'aucune réponse', 'halted': 'à l’arrêt', 'not checked yet': 'pas encore vérifié', 'newest BTC bar': 'dernière barre BTC',
+  'last equity snapshot': 'dernier relevé de valeur', 'no active account: not measured': 'aucun compte actif : non mesuré', 'last quote asked': 'dernière cotation demandée',
+  'no recent quote: not measured': 'aucune cotation récente : non mesuré', 'no transfer in flight: not measured': 'aucun transfert en cours : non mesuré',
 };
 const PATTERNS: [RegExp, (m: RegExpExecArray) => string][] = [
   [new RegExp(`^loss limit reached: equity ${NUM} USD against ${NUM} USD allocated \\(limit ${NUM} %\\); positions were sold to (\\S+)$`),
@@ -37,7 +53,19 @@ const PATTERNS: [RegExp, (m: RegExpExecArray) => string][] = [
     (m) => `limite de perte totale atteinte : valeur de ${fr(m[1]!)} USDC pour ${fr(m[2]!)} alloués (limite de ${fr(m[3]!)} %)`],
   [new RegExp(`^daily loss limit reached: equity ${NUM} USDC against ${NUM} at the start of the day \\(limit ${NUM} % of the capital\\)$`),
     (m) => `limite de perte quotidienne atteinte : valeur de ${fr(m[1]!)} USDC pour ${fr(m[2]!)} en début de journée (limite de ${fr(m[3]!)} % du capital)`],
+  // v11 interface (audit B3 remainder)
+  [/^refused by the signer: (.+)$/, (m) => `refusé par le signataire — message d’origine, en anglais : « ${m[1]} »`],
+  [/^not relayed yet: (.+)$/, (m) => `pas encore relayée — message d’origine, en anglais : « ${m[1]} »`],
+  [/^no data set: (.+)$/, (m) => `aucun jeu de données — message d’origine, en anglais : « ${m[1]} »`],
+  [/^the account holds (.+), which this agent does not manage$/, (m) => `le compte détient ${m[1]}, que cet agent ne gère pas`],
+  [/^(\d+)\/(\d+) endpoints(, degraded)?(, identity not verified)?$/, (m) => `${m[1]}/${m[2]} points d’accès${m[3] ? ', dégradé' : ''}${m[4] ? ', identité non vérifiée' : ''}`],
+  [/^Market data · (.+)$/, (m) => `Données de marché · ${m[1]}`],
+  [/^(\d+)\/(\d+) series fresh$/, (m) => `${m[1]}/${m[2]} séries à jour`],
+  [/^(\d+) transfer\(s\) awaiting attestation$/, (m) => `${m[1]} transfert(s) en attente d’attestation`],
 ];
+
+/** is the server's own wording known here (so that a French screen can show it in French)? */
+export function reasonKnown(reason: string): boolean { return EXACT[reason] !== undefined || PATTERNS.some(([re]) => re.test(reason)); }
 
 /** a server reason in the screen's language when the server's own wording is known; otherwise unchanged */
 export function reasonText(reason: string, locale: string): string {
