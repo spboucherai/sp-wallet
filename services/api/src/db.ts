@@ -261,6 +261,102 @@ create table if not exists api_webhook_deliveries (
 create index if not exists api_webhook_deliveries_due on api_webhook_deliveries (next_attempt_at) where state = 'pending';
 create index if not exists api_webhook_deliveries_recent on api_webhook_deliveries (webhook_id, id desc);
 -- <<< v11 trading API
+-- >>> v11 trading agents runtime (services/api/src/agent-runtime): additive. An agent gets a family, a template, an engine
+-- ('bar' = the two bar engines, 'stream' = the sub-bar engine, 'supervisor' = the risk manager), a versioned configuration and a
+-- persistent runtime state. Every record that paper and live share carries its MODE; nothing reads them without it.
+alter table agents add column if not exists family text;
+alter table agents add column if not exists template text;
+alter table agents add column if not exists engine text not null default 'bar';
+alter table agents add column if not exists config_version int not null default 1;
+alter table agents add column if not exists runtime jsonb not null default '{}';
+update agents a set family = coalesce((select case
+    when v.name ~ '(momentum|trend|breakout|donchian)' then 'momentum' when v.name ~ 'reversion' then 'mean_reversion'
+    when v.name ~ '(pairs|coint|statarb)' then 'stat_arb' when v.name ~ '(funding|carry|basis)' then 'funding_arb' else 'custom' end
+  from strategy_versions v where v.id = a.strategy_version_id), 'custom') where a.family is null;
+-- who approved a strategy version: only an approval by the owner can be pinned by a LIVE mandate (a key may start paper trading)
+alter table strategy_versions add column if not exists approved_by text;
+update strategy_versions set approved_by = 'owner' where approved_by is null and status in ('approved', 'retired') and approved_at is not null;
+-- every configuration an agent ever ran with: a change creates a version, the running version is written on each signal and order
+create table if not exists agent_config_versions (
+  agent_id uuid not null references agents(id) on delete cascade, version int not null, config jsonb not null, config_sha256 text not null,
+  actor text not null default 'migration', reason text not null default '', created_at timestamptz not null default now(), primary key (agent_id, version));
+insert into agent_config_versions (agent_id, version, config, config_sha256, actor, reason)
+  select a.id, 1, c.config, encode(sha256(convert_to(c.config::text, 'UTF8')), 'hex'), 'migration', 'configuration at the V11 migration'
+  from agents a cross join lateral (select jsonb_build_object('kind', a.kind, 'family', a.family, 'network', a.network, 'universe', a.universe, 'interval', a.interval, 'cash', a.cash,
+    'capitalUsdc', a.capital_usdc::text, 'risk', a.risk, 'strategyVersionId', a.strategy_version_id) as config) c
+  on conflict (agent_id, version) do nothing;
+-- the trading mode an agent was in at a given time, from the audit chain (go-live and paper-start events): the backfill of the mode columns
+create or replace function spw_agent_mode_at(p_agent uuid, p_at timestamptz) returns text language sql stable as $$
+  select coalesce((select case when e.type in ('mandate.approved', 'agent.perp_live') then 'LIVE' else 'PAPER' end from audit_events e
+    where ((e.type = 'mandate.approved' and e.data->>'agent' = p_agent::text) or (e.type = 'agent.perp_live' and e.data->>'id' = p_agent::text)
+        or (e.type = 'agent.mode' and e.data->>'id' = p_agent::text and e.data->>'state' = 'PAPER_TRADING'))
+      and e.ts::timestamptz <= p_at order by e.seq desc limit 1), 'RESEARCH') $$;
+-- the journal: research_log + mode, severity, a structured code, the configuration version and a reference (signal, order, job)
+alter table research_log add column if not exists mode text;
+alter table research_log add column if not exists severity text not null default 'info';
+alter table research_log add column if not exists code text;
+alter table research_log add column if not exists config_version int;
+alter table research_log add column if not exists ref jsonb;
+update research_log l set mode = spw_agent_mode_at(l.agent_id, l.ts) where l.mode is null and l.agent_id is not null;
+create index if not exists research_log_agent_mode on research_log (agent_id, mode, id desc);
+-- a writer that does not name the mode (older call sites) gets the agent's current one: no journal line is ever mode-less
+create or replace function spw_research_log_defaults() returns trigger language plpgsql as $$
+begin
+  if new.agent_id is not null and (new.mode is null or new.config_version is null) then
+    select coalesce(new.mode, upper(a.mode)), coalesce(new.config_version, a.config_version) into new.mode, new.config_version from agents a where a.id = new.agent_id;
+  end if;
+  return new;
+end $$;
+drop trigger if exists research_log_defaults on research_log;
+create trigger research_log_defaults before insert on research_log for each row execute function spw_research_log_defaults();
+-- signals of every agent kind (perp_agent_signals generalised; that table is kept and no longer written): one decision per agent, mode and bar
+create table if not exists agent_signals (
+  id bigserial primary key, agent_id uuid not null references agents(id) on delete cascade, bar timestamptz not null, mode text not null, kind text not null default 'perp',
+  config_version int not null default 1, strategy_sha256 text not null, inputs_digest text, status text not null, reason text not null default '',
+  decision text not null default 'pending', reason_code text, weights jsonb, scaled jsonb, scale text, equity numeric, targets jsonb, orders jsonb,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), unique (agent_id, mode, bar));
+create index if not exists agent_signals_recent on agent_signals (agent_id, mode, bar desc);
+insert into agent_signals (agent_id, bar, mode, kind, strategy_sha256, status, reason, decision, reason_code, weights, scaled, scale, equity, targets, orders, created_at, updated_at)
+  select s.agent_id, s.bar, case spw_agent_mode_at(s.agent_id, s.created_at) when 'LIVE' then 'LIVE' else 'PAPER' end, 'perp', s.strategy_sha256, s.status, s.reason,
+    case when s.status = 'hold' then 'skipped' when s.status = 'done' and jsonb_array_length(coalesce(s.orders->'list', '[]'::jsonb)) > 0 then 'acted' when s.status = 'done' then 'skipped' else 'pending' end,
+    case when s.status = 'hold' then 'no_valid_signal' when s.status = 'done' and jsonb_array_length(coalesce(s.orders->'list', '[]'::jsonb)) = 0 then 'at_target' else null end,
+    s.weights, s.scaled, s.scale, s.equity, s.targets, s.orders, s.created_at, s.updated_at
+  from perp_agent_signals s on conflict (agent_id, mode, bar) do nothing;
+-- spot orders name the signal, the configuration version and the code that produced them; a client id makes a paper order unrepeatable
+alter table agent_orders add column if not exists config_version int;
+alter table agent_orders add column if not exists signal_id bigint;
+alter table agent_orders add column if not exists strategy_sha256 text;
+alter table agent_orders add column if not exists client_order_id text;
+create unique index if not exists agent_orders_client on agent_orders (agent_id, client_order_id) where client_order_id is not null;
+create index if not exists agent_orders_mode on agent_orders (agent_id, mode, ts desc);
+-- the order gateway's ledger (agent-runtime/gateway.ts): one row per order an agent asked for, in the unified states of @spw/trading,
+-- written BEFORE the executor is called, so that an order whose outcome is not known is reconciled and never sent again
+create table if not exists agent_order_intents (
+  id text primary key, client_order_id text not null, attempt int not null default 1, agent_id uuid not null references agents(id) on delete cascade, mode text not null, idempotency_key text not null, body_hash text not null,
+  venue text not null, instrument text not null, side text not null, reduce_only boolean not null default false, order_json jsonb not null, record jsonb not null,
+  state text not null, reason text not null, history jsonb not null default '[]', fills jsonb not null default '[]', signal_id bigint, config_version int, strategy_sha256 text, venue_status text,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), unique (agent_id, idempotency_key, attempt));
+create index if not exists agent_order_intents_agent on agent_order_intents (agent_id, mode, created_at desc);
+create index if not exists agent_order_intents_open on agent_order_intents (agent_id) where state in ('SUBMITTING', 'SUBMITTED', 'PARTIALLY_FILLED', 'UNKNOWN');
+-- one worker at a time per agent: a lease row with a heartbeat and a fencing token (agent-runtime/leases.ts)
+create table if not exists agent_leases (
+  agent_id uuid primary key references agents(id) on delete cascade, owner text not null, token bigint not null default 1, acquired_at timestamptz not null, heartbeat_at timestamptz not null, expires_at timestamptz not null);
+-- durable tasks of the agents: tick, backtest, wind_down — retries with backoff, then dead-letter (agent-runtime/queue.ts)
+create table if not exists agent_jobs (
+  id uuid primary key, agent_id uuid references agents(id) on delete cascade, kind text not null, payload jsonb not null default '{}', state text not null default 'queued',
+  attempts int not null default 0, max_attempts int not null default 5, run_at timestamptz not null default now(), locked_by text, locked_until timestamptz,
+  last_error text, result jsonb, dedupe_key text, created_at timestamptz not null default now(), updated_at timestamptz not null default now(), finished_at timestamptz);
+create unique index if not exists agent_jobs_dedupe on agent_jobs (dedupe_key) where dedupe_key is not null and state in ('queued', 'running');
+create index if not exists agent_jobs_due on agent_jobs (run_at) where state = 'queued';
+create index if not exists agent_jobs_agent on agent_jobs (agent_id, created_at desc);
+-- what the stream engine consumed, compact: top of book + mark + funding at a fixed cadence, pruned; and every hole in it
+create table if not exists market_snapshots (
+  venue text not null, symbol text not null, ts timestamptz not null, bid numeric, bid_size numeric, ask numeric, ask_size numeric, mark numeric, index_price numeric,
+  funding numeric, funding_interval_sec int, source_ts timestamptz, primary key (venue, symbol, ts));
+create table if not exists market_snapshot_gaps (
+  id bigserial primary key, venue text not null, symbol text not null, ts timestamptz not null, kind text not null, detail text not null default '', duration_ms bigint);
+create index if not exists market_snapshot_gaps_recent on market_snapshot_gaps (venue, symbol, ts desc);
+-- <<< v11 trading agents runtime
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }

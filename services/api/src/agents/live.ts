@@ -12,7 +12,8 @@ import { config } from '../config.ts';
 import { audit, sql } from '../db.ts';
 import { signer } from '../signer-client.ts';
 import { kyberQuote, prepareKyberSwap } from '../swap-exec.ts';
-import { paperHoldings, tickAgent, type Bar, type EngineDeps, type Holding, type PlannedOrder } from './engine.ts';
+import { paperHoldings, tickAgent, type Bar, type EngineDeps, type Holding, type OrderRef, type PlannedOrder } from './engine.ts';
+import { uuidFrom } from './spot-seam.ts';
 import { gasReserve } from './gas.ts';
 import { labExec, RESEARCH_DIR, SIGNAL_MAX_RSS_MB } from './lab.ts';
 import { engineLoop } from '../loop-stats.ts';
@@ -64,14 +65,15 @@ interface OrderRow { id: string; agent_id: string; ts: Date; state: string; from
 const setState = (id: string, state: string, reason?: string) => sql`update agent_orders set state = ${state}, reason = coalesce(${reason ?? null}, reason), updated_at = now() where id = ${id}`;
 
 /** Prepare one live order for the vault and obtain the delegated signature. The order row exists before anything is signed. */
-export async function placeLive(a: AgentRow, o: PlannedOrder, bar: number): Promise<void> {
+export async function placeLive(a: AgentRow, o: PlannedOrder, bar: number, ref?: OrderRef): Promise<void> {
   if (!a.mandate_id || !a.mandate) throw new Error('no mandate');
   const n = getNetwork(a.network), st = await signer.status(true);
   if (st.halted) throw new Error('emergency halt is active');
-  const id = randomUUID();
+  const id = ref ? uuidFrom(ref.clientOrderId) : randomUUID();   // V11: derived from the client order id — the same order cannot be recorded twice
   const ps = await prepareKyberSwap({ n, me: a.vault_address, keyId: vaultKeyId(st.keyId, a.vault_index), fromAsset: o.fromId, toAsset: o.toId, amount: o.amountIn, slippageBps: a.risk.slippageBps, policyVersion: st.policy.version, proposalId: id, ttlSec: 120 });
-  await sql`insert into agent_orders (id, agent_id, mode, from_asset, to_asset, from_symbol, to_symbol, amount_in, expected_out, min_out, state, reason, bar, intent, aux)
-    values (${id}, ${a.id}, 'LIVE', ${o.fromId}, ${o.toId}, ${o.fromSymbol}, ${o.toSymbol}, ${o.amountIn.toString()}, ${ps.expected.toString()}, ${ps.minOut.toString()}, 'prepared', ${o.reason}, ${new Date(bar)}, ${sql.json(ps.intent as never)}, ${sql.json({ swapData: ps.data, usd: o.usd })})`;
+  await sql`insert into agent_orders (id, agent_id, mode, from_asset, to_asset, from_symbol, to_symbol, amount_in, expected_out, min_out, state, reason, bar, intent, aux, client_order_id, signal_id, config_version, strategy_sha256)
+    values (${id}, ${a.id}, 'LIVE', ${o.fromId}, ${o.toId}, ${o.fromSymbol}, ${o.toSymbol}, ${o.amountIn.toString()}, ${ps.expected.toString()}, ${ps.minOut.toString()}, 'prepared', ${o.reason}, ${new Date(bar)}, ${sql.json(ps.intent as never)}, ${sql.json({ swapData: ps.data, usd: o.usd })},
+      ${ref?.clientOrderId ?? null}, ${ref?.signalId ?? null}, ${ref?.configVersion ?? null}, ${ref?.strategySha256 ?? null})`;
   let signed;
   try { signed = await signer.mandateSign(a.mandate_id, ps.intent, { swapData: ps.data }); }
   catch (e) { await setState(id, 'failed', `refused by the signer: ${(e as Error).message.slice(0, 200)}`); await audit('agent.order_refused', 'signer', { agent: a.id, id, reason: (e as Error).message.slice(0, 200) }); throw e; }
@@ -183,24 +185,33 @@ export async function revokeStaleMandates(port: MandatePort = signer, now = Date
 }
 
 const backoff = new Map<string, number>();
-/** One pass over every active agent: settle open orders, then let the engine decide. Errors never cross agents. */
+/** One agent, one pass: settle its open orders, then let the engine decide. Throws on an error (the caller records it and backs off). */
+export async function tickSpotAgentOnce(a: AgentRow, m: MarketDeps, now = Date.now(), port: MandatePort = signer, o: { backingOff?: boolean } = {}): Promise<string> {
+  for (const r of await sql<OrderRow[]>`select * from agent_orders where agent_id = ${a.id} and mode = 'LIVE' and state in ${sql(OPEN)} order by ts`) await advanceOrder(a, r, now);
+  if (a.state === 'LIVE' && a.mandate && a.mandate.expiresAt * 1000 <= now) {
+    await sql`update agents set state = 'STOPPED', stop_reason = 'the mandate expired; approve a new one to continue', updated_at = now() where id = ${a.id}`;
+    await revokeAgentMandate(a, 'mandate expired', port);                                   // the signer refuses an expired mandate by itself; revoked as well, so that its record says so
+    await audit('agent.stopped', 'engine', { id: a.id, reason: 'mandate expired' }); return 'stopped: mandate expired';
+  }
+  if (o.backingOff) return 'backing off after an error';             // open orders are still settled and an expired mandate still stops the agent
+  return tickAgent(a, engineDeps(m, a));
+}
+/** the agents the spot engine runs */
+export const spotAgentsToTick = (): Promise<AgentRow[]> => sql<AgentRow[]>`select * from agents where state in ('PAPER_TRADING', 'LIVE') and kind = 'spot' order by created_at` as unknown as Promise<AgentRow[]>; // v6: perp agents have their own engine (perp-live.ts)
+export const recordSpotTickError = (a: Pick<AgentRow, 'id'>, e: unknown): Promise<unknown> =>
+  sql`insert into research_log (agent_id, kind, title, body, severity, code) values (${a.id}, 'hold', 'Order not placed', ${(e as Error).message.slice(0, 300)}, 'error', 'tick_error')`.catch(() => {});
+
+/** One SEQUENTIAL pass over every active agent (the pre-V11 loop, kept for scripts and tests; the server runs the scheduler of
+ *  agent-runtime/scheduler.ts, which ticks each agent under its lease, in isolation). Errors never cross agents. */
 export async function enginePass(m: MarketDeps, now = Date.now(), port: MandatePort = signer): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   await revokeStaleMandates(port, now).catch(() => []);                                       // V11 (D2): before anything is decided
-  const agents = await sql<AgentRow[]>`select * from agents where state in ('PAPER_TRADING', 'LIVE') and kind = 'spot' order by created_at`; // v6: perp agents have their own engine (perp-live.ts)
-  for (const a of agents) {
+  for (const a of await spotAgentsToTick()) {
     try {
-      for (const r of await sql<OrderRow[]>`select * from agent_orders where agent_id = ${a.id} and mode = 'LIVE' and state in ${sql(OPEN)} order by ts`) await advanceOrder(a, r, now);
-      if (a.state === 'LIVE' && a.mandate && a.mandate.expiresAt * 1000 <= now) {
-        await sql`update agents set state = 'STOPPED', stop_reason = 'the mandate expired; approve a new one to continue', updated_at = now() where id = ${a.id}`;
-        await revokeAgentMandate(a, 'mandate expired', port);                                   // the signer refuses an expired mandate by itself; revoked as well, so that its record says so
-        await audit('agent.stopped', 'engine', { id: a.id, reason: 'mandate expired' }); out[a.id] = 'stopped: mandate expired'; continue;
-      }
-      if ((backoff.get(a.id) ?? 0) > now) { out[a.id] = 'backing off after an error'; continue; }
-      out[a.id] = await tickAgent(a, engineDeps(m, a));
+      out[a.id] = await tickSpotAgentOnce(a, m, now, port, { backingOff: (backoff.get(a.id) ?? 0) > now });
     } catch (e) {
       backoff.set(a.id, now + 5 * 60_000); out[a.id] = `error: ${(e as Error).message.slice(0, 160)}`;
-      await sql`insert into research_log (agent_id, kind, title, body) values (${a.id}, 'hold', 'Order not placed', ${(e as Error).message.slice(0, 300)})`.catch(() => {});
+      await recordSpotTickError(a, e);
     }
   }
   return out;

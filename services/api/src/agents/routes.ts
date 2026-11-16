@@ -30,6 +30,8 @@ export interface AgentRow {
   last_bar: Date | null; stop_reason: string | null; created_at: Date; updated_at: Date;
   /** v6: 'spot' (default) or 'perp'; a perp agent has no vault and no mandate, its paper account is `deriv_account_id` (perp-engine.ts) */
   kind?: string; deriv_account_id?: string | null; perp?: unknown;
+  /** V11 (agent-runtime/model.ts): family, template, engine ('bar' | 'stream' | 'supervisor'), the running configuration version and the persistent runtime state */
+  family?: string | null; template?: string | null; engine?: string; config_version?: number; runtime?: Record<string, unknown> | null;
 }
 const Risk = z.strictObject({
   /** share of the vault that may be invested in non-USDC assets, percent */
@@ -232,34 +234,12 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
   // mandate: prepared from the agent's limits, approved with a passkey whose challenge is the mandate hash
   app.post('/api/v1/agents/:id/mandate/prepare', async (req) => {
     const a = await load((req.params as { id: string }).id); spotOnly(a); // v6: vault and mandate routes are for spot agents
-    if (!a.strategy_version_id) throw new UserError('no_strategy', 'approve a strategy version first', 409);
-    if (a.state === 'LIVE') throw new UserError('bad_state', 'a mandate is already active; revoke it to change limits', 409);
-    const [v] = await sql`select code_sha256 from strategy_versions where id = ${a.strategy_version_id}`;
-    const st = await signer.status(true);
-    if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
-    const px = await symbolPrices(agentSymbols(a), await deps.prices().catch(() => null));
-    const mandate = mandateFor(a, st.keyId, v!.code_sha256, px, Math.floor(Date.now() / 1000));
-    const gas = await requireGasReserve(a, st.policy.maxFee[a.network]); // no reserve, no live trading
-    const hash = mandateHash(mandate);
-    await sql`update agents set mandate = ${sql.json(mandate as never)}, updated_at = now() where id = ${a.id}`;
-    const creds = await listCreds();
-    const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge: new Uint8Array(hash), timeout: 120_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
-    if (options.challenge !== toB64u(hash)) throw new Error('challenge binding mismatch');
-    const n = getNetwork(a.network);
-    const human = agentAssets(a, n).map((x) => ({ symbol: x.assetSymbol === x.symbol ? x.symbol : `${x.assetSymbol} (${x.symbol})`, tracks: x.symbol, assetSymbol: x.assetSymbol, kind: x.kind, issuer: x.issuer, maxOrder: formatUnits(BigInt(mandate.maxOrder[x.id]!), x.decimals), maxDaily: formatUnits(BigInt(mandate.maxDaily[x.id]!), x.decimals) }));
-    return { mandate, hash: toHex(hash), limits: human, options, network: n.id, networkName: n.name, gasReserve: { required: formatUnits(gas.reserve, n.native.decimals), held: formatUnits(gas.held, n.native.decimals), symbol: n.native.symbol } };
+    return (await import('./mandate-write.ts')).prepareSpotMandate(a, deps);  // V11: the mandate-writing module (never imported by the engines)
   });
   app.post('/api/v1/agents/:id/mandate/approve', async (req) => {
     const a = await load((req.params as { id: string }).id); spotOnly(a); // v6: vault and mandate routes are for spot agents
     const b = z.object({ assertion: z.record(z.string(), z.unknown()) }).parse(req.body);
-    if (!a.mandate) throw new UserError('bad_state', 'prepare the mandate first', 409);
-    await requireGasReserve(a, (await signer.status(true)).policy.maxFee[a.network]);
-    // V11 (D2): the signer holds ONE active mandate per vault. The previous one of this agent ends before the new one is asked for.
-    if (a.mandate_id && a.mandate_id !== a.mandate.mandateId && !(await revokeAgentMandate(a, 'replaced by a new mandate'))) throw new UserError('signer_unreachable', 'the previous mandate could not be revoked on the signer; nothing was approved', 503);
-    const r = await signer.mandateApprove(a.mandate, b.assertion); // only the signer judges the passkey and stores the limits
-    const [row] = await sql<AgentRow[]>`update agents set mandate_id = ${r.mandateId}, state = 'LIVE', mode = 'LIVE', stop_reason = null, updated_at = now() where id = ${a.id} returning *`;
-    await audit('mandate.approved', 'owner', { agent: a.id, mandateId: r.mandateId, hash: r.hash });
-    return view(row!);
+    return view(await (await import('./mandate-write.ts')).approveSpotMandate(a, b.assertion));
   });
   // stopping never needs a passkey
   app.post('/api/v1/agents/:id/revoke', async (req) => {

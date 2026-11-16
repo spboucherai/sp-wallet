@@ -14,7 +14,7 @@ import { audit, sql } from '../db.ts';
 import type { LiveService } from '../derivatives/exec.ts';
 import { derivatives, type Derivatives } from '../derivatives/index.ts';
 import { liveLocale } from '../derivatives/live-texts.ts';
-import { approveLive, isLiveActive, LiveApproveBody, liveBlock, LivePrepareBody, liveReadiness, pauseLive, prepareLive, resumeLive, stopLive } from './perp-live-cycle.ts';
+import { isLiveActive, LiveApproveBody, liveBlock, LivePrepareBody, liveReadiness, pauseLive, resumeLive, stopLive } from './perp-live-cycle.ts';
 import { GATE, PERP_INTERVALS } from './perp-data.ts';
 import { CAP_HEADROOM, flattenPerp, instrumentId, LEVERAGE_HEADROOM, PERP_VENUE, perpPolicy, PerpRisk, type PerpAgentRow, type PerpBook } from './perp-engine.ts';
 import { createPerpRuntime, perpRuntime, setPerpRuntime } from './perp-live.ts';
@@ -112,9 +112,11 @@ export async function perpDetail(a: PerpAgentRow) {
   const rows = await sql`select id, name, version, code_sha256, status, notes, created_at, approved_at, meta, report from strategy_versions where agent_id = ${a.id} order by created_at desc`;
   const versions = rows.map((v) => ({ id: v.id, name: v.name, version: v.version, code_sha256: v.code_sha256, status: v.status, notes: v.notes, created_at: v.created_at, approved_at: v.approved_at,
     meta: v.meta, summary: perpReportSummary(v.report, v.code_sha256, a.universe) }));
-  const signals = await sql`select bar, status, reason, strategy_sha256, weights, scaled, scale, equity::text as equity, targets, orders, updated_at from perp_agent_signals where agent_id = ${a.id} order by bar desc limit 60`;
-  const equity = await sql`select ts, mode, equity_usd from agent_equity where agent_id = ${a.id} order by ts desc limit 500`;
-  const log = await sql`select ts, kind, title, body from research_log where agent_id = ${a.id} order by ts desc limit 40`;
+  // V11 (D5): the page of an agent shows the records of the mode it is in NOW — paper and live are never one list or one curve
+  const mode = a.mode === 'LIVE' ? 'LIVE' : 'PAPER';
+  const signals = await sql`select bar, status, reason, strategy_sha256, weights, scaled, scale, equity::text as equity, targets, orders, updated_at, mode, decision, reason_code, config_version from agent_signals where agent_id = ${a.id} and mode = ${mode} order by bar desc limit 60`;
+  const equity = await sql`select ts, mode, equity_usd from agent_equity where agent_id = ${a.id} and mode = ${mode} order by ts desc limit 500`;
+  const log = await sql`select ts, kind, title, body, mode, severity, code from research_log where agent_id = ${a.id} and mode = ${mode} order by id desc limit 40`;
   return { ...perpView(a),
     account: account ? { id: account.id, label: account.label, state: account.state, policy: account.policy, settings: account.settings, totals: account.totals, initialCollateral: account.initialCollateral,
       positions: account.positions, openOrders: account.openOrders, orders: account.orders.slice(0, 60), fills: account.fills.slice(0, 60), funding: account.funding.slice(0, 60),
@@ -215,8 +217,9 @@ export function perpAgentRoutes(app: FastifyInstance, d?: Derivatives, l?: LiveS
     const q = z.object({ account: z.uuid().optional(), locale: z.string().max(5).optional(), days: z.coerce.number().int().min(1).max(30).optional() }).parse(req.query);
     return liveReadiness(await param(req), rt(), { account: q.account, locale: liveLocale(q.locale), days: q.days });
   });
-  app.post('/api/v1/agents/:id/perp/live/prepare', async (req) => prepareLive(await param(req), rt(), LivePrepareBody.parse(req.body)));
-  app.post('/api/v1/agents/:id/perp/live/approve', async (req) => perpDetail(await approveLive(await param(req), rt(), LiveApproveBody.parse(req.body))));
+  // V11: the two mandate-writing functions live in mandate-write.ts, which only these owner routes import
+  app.post('/api/v1/agents/:id/perp/live/prepare', async (req) => (await import('./mandate-write.ts')).prepareLive(await param(req), rt(), LivePrepareBody.parse(req.body)));
+  app.post('/api/v1/agents/:id/perp/live/approve', async (req) => perpDetail(await (await import('./mandate-write.ts')).approveLive(await param(req), rt(), LiveApproveBody.parse(req.body))));
   app.post('/api/v1/agents/:id/perp/live/pause', async (req) => perpDetail(await pauseLive(await param(req))));
   app.post('/api/v1/agents/:id/perp/live/resume', async (req) => perpDetail(await resumeLive(await param(req), rt())));
   app.post('/api/v1/agents/:id/perp/live/stop', async (req) => {
