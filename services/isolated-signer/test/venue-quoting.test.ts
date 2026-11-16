@@ -38,6 +38,7 @@ const trading = tradingOf(TTL);
 interface FakeVenue {
   accountValue: string; positions: { coin: string; szi: string; mark: string; lev?: { type: 'cross' | 'isolated'; value: number } }[]; orders: Record<string, unknown>[];
   lev: Record<string, { type: 'cross' | 'isolated'; value: number }>; fail: string; ageMs: number; calls: { url: string; type: string }[];
+  /** orderStatus answers by client id (the venue's shape); absent = unknownOid */ statuses: Record<string, unknown>;
 }
 const openOrder = (o: { coin?: string; side?: 'B' | 'A'; px: string; sz: string; reduceOnly?: boolean; cloid?: string | null; timestamp?: number }) => ({ coin: o.coin ?? 'BTC', side: o.side ?? 'B', limitPx: o.px, sz: o.sz, oid: 1,
   timestamp: o.timestamp ?? 1, origSz: o.sz, isTrigger: false, triggerPx: '0.0', reduceOnly: o.reduceOnly ?? false, orderType: 'Limit', tif: 'Alo', cloid: o.cloid ?? null });
@@ -50,7 +51,7 @@ async function setup(o: { prices?: (now: () => number) => PriceView } = {}) {
   store.state.setupTokenHash = createHash('sha256').update('tok').digest('hex');
   const px: Record<string, number> = { BTC: 70_000, ETH: 2_000, SOL: 100 }, pxFail = { why: '' };
   const prices: PriceView = o.prices ? o.prices(() => t.now * 1000) : { get: async (syms: string[]) => { if (pxFail.why) throw new Error(pxFail.why); return Object.fromEntries(syms.map((s) => [s, px[s]!])); } };
-  const venue: FakeVenue = { accountValue: '1000', positions: [], orders: [], lev: { BTC: { type: 'cross', value: 3 }, ETH: { type: 'cross', value: 3 }, SOL: { type: 'cross', value: 3 } }, fail: '', ageMs: 0, calls: [] };
+  const venue: FakeVenue = { accountValue: '1000', positions: [], orders: [], lev: { BTC: { type: 'cross', value: 3 }, ETH: { type: 'cross', value: 3 }, SOL: { type: 'cross', value: 3 } }, fail: '', ageMs: 0, calls: [], statuses: {} };
   const value = (p: { szi: string; mark: string }) => D.mul(D.abs(D.from(p.szi)), D.from(p.mark));
   const post = async (url: string, body: any): Promise<unknown> => {
     venue.calls.push({ url, type: body.type });
@@ -63,6 +64,7 @@ async function setup(o: { prices?: (now: () => number) => PriceView } = {}) {
       return { marginSummary: summary, crossMarginSummary: summary, crossMaintenanceMarginUsed: '0.0', withdrawable: '0.0', assetPositions, time: t.now * 1000 - venue.ageMs };
     }
     if (body.type === 'frontendOpenOrders') return venue.orders;
+    if (body.type === 'orderStatus') return venue.statuses[body.oid] ?? { status: 'unknownOid' };
     if (body.type === 'activeAssetData') return { user: body.user, coin: body.coin, leverage: venue.lev[body.coin] ?? { type: 'cross', value: 20 }, markPx: '0' };
     throw new Error(`fake venue: no answer for ${body.type}`);
   };
@@ -759,6 +761,35 @@ describe('replay: nonces, expiries and client ids', () => {
     await w.signer.venueSign({ authorizationId: a.authorizationId, sign: built.sign, context: { order: c }, assertion: w.pk.assert(venueOrderHash(c)) });
     expect(await quote(w, m, [BID, { ...BID, price: '69800' }])).toMatch(/^resting_count: 3 buy/);
     expect(await quote(w, m, [BID])).toBe('ok');
+  });
+});
+
+describe('the ledger and the venue\'s own word on one order (orderStatus by client id)', () => {
+  const status = (w: World, cloid: string, o: { status: string; px?: string; side?: 'B' | 'A'; reduceOnly?: boolean; timestamp?: number; statusTimestamp?: number }) => ({ status: 'order', order: { order: { ...openOrder({ px: o.px ?? '69900', sz: '0.0', side: o.side, reduceOnly: o.reduceOnly, cloid, timestamp: o.timestamp ?? w.t.now * 1000 }) },
+    status: o.status, statusTimestamp: o.statusTimestamp ?? w.t.now * 1000 } });
+  const two = async () => { const w = await setup(), { m } = await ready(w), b1 = batch(w, [BID]); expect(await code(send(w, m, b1))).toBe('ok'); expect(await quote(w, m, [{ ...BID, price: '69800' }])).toBe('ok'); w.t.now += 2; return { w, m, id: b1.cloids[0]! }; };
+  const third: Q = { ...BID, price: '69700', size: '0.0002' };
+  it('a quote the venue says is cancelled, filled or refused leaves the ledger at once: requoting is not throttled by quotes that no longer exist', async () => {
+    for (const s of ['canceled', 'filled', 'badAloPxRejected', 'scheduledCancel', 'marginCanceled']) {
+      const { w, m, id } = await two();
+      expect(await quote(w, m, [third])).toMatch(/^resting_count: 3 buy/);                              // the venue knows nothing yet: both quotes are counted
+      w.venue.statuses[id] = status(w, id, { status: s, statusTimestamp: w.t.now * 1000 - 500 });
+      expect(await quote(w, m, [third]), s).toBe('ok');
+      expect(st(w, m).pendingQuotes).toBe(2);                                                           // the second quote and the new one
+    }
+  });
+  it('anything short of a final status of THAT order keeps it counted: open, unknown, another price or side, reduce-only, an older order, a status newer than the account read, an unreadable answer', async () => {
+    const keeps: [string, (w: World, id: string) => unknown][] = [
+      ['open', (w, id) => status(w, id, { status: 'open' })], ['triggered', (w, id) => status(w, id, { status: 'triggered' })], ['unknown to the venue', () => ({ status: 'unknownOid' })],
+      ['another price', (w, id) => status(w, id, { status: 'canceled', px: '69901' })], ['another side', (w, id) => status(w, id, { status: 'canceled', side: 'A' })], ['a reduce-only order', (w, id) => status(w, id, { status: 'canceled', reduceOnly: true })],
+      ['an order from long ago', (w, id) => status(w, id, { status: 'canceled', timestamp: (w.t.now - 86400) * 1000 })], ['a status newer than the account state', (w, id) => status(w, id, { status: 'filled', statusTimestamp: w.t.now * 1000 + 5 })],
+      ['a status this signer does not know', (w, id) => status(w, id, { status: 'somethingNew' })], ['an unreadable answer', () => ({ nonsense: true })], ['another client id in the answer', (w) => status(w, `0x${'77'.repeat(16)}`, { status: 'canceled' })],
+    ];
+    for (const [what, make] of keeps) {
+      const { w, m, id } = await two();
+      w.venue.statuses[id] = make(w, id);
+      expect(await quote(w, m, [third]), what).toMatch(/^resting_count: 3 buy/);
+    }
   });
 });
 

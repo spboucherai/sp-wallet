@@ -138,6 +138,34 @@ async function ownAccount(ctx: VenueCtx, deny: (code: string, msg: string) => ne
 }
 
 /**
+ * The ledger of signed quotes against the venue. A quote of ours that the venue now LISTS is counted through the venue's list
+ * from now on, and leaves the ledger for good (the same signed action cannot land twice). The match is strict — client id,
+ * coin, side, price, not reduce-only, taken by the venue after the signature — so that no other order can pass for a pending
+ * quote. A quote that the venue no longer lists may already be finished (cancelled, filled, refused): the signer asks the venue
+ * about that very client id; a FINAL status of the same order (same strict match) removes it too. "Not known", "open", an
+ * unreadable answer or a reader without this request leave it counted until its expiry + grace. The status must be OLDER than
+ * the account state that was read: if the order filled, that fill is then inside the position the signer counts.
+ */
+async function settleLedger(ctx: VenueCtx, a: VenueAuthorization, ledgers: StoredVenueAuthorization[], view: VenueAccountView, nowMs: number): Promise<void> {
+  const isIt = (x: VenuePendingOrder, o: VenueOpenOrderView) => o.cloid === x.clientId && inst(o.coin) === x.instrument && o.side === x.side && !o.reduceOnly && canon(o.price) === canon(x.price) && x.signedAt !== undefined && o.timestamp >= x.signedAt - LANDED_SKEW_MS;
+  for (const r of ledgers) if (r.pending) r.pending = r.pending.filter((x) => !(x.q === 1 && view.openOrders.some((o) => isIt(x, o))));
+  if (!ctx.venueInfo.order) return;
+  for (const r of ledgers) {
+    if (!r.pending) continue;
+    const keep: VenuePendingOrder[] = [];
+    for (const x of r.pending) {
+      let finished = false;
+      if (x.q === 1 && x.until > nowMs) {
+        try { const v = await ctx.venueInfo.order(a.network, a.account, x.clientId); finished = v !== null && v.state === 'closed' && inst(v.coin) === x.instrument && v.side === x.side && !v.reduceOnly && canon(v.price) === canon(x.price) && x.signedAt !== undefined && v.timestamp >= x.signedAt - LANDED_SKEW_MS && v.statusTimestamp < view.time; }
+        catch { finished = false; }
+      }
+      if (!finished) keep.push(x);
+    }
+    r.pending = keep;
+  }
+}
+
+/**
  * Sign ONE venue action under a quoting mandate, without a passkey. Counters, the bucket, the ledger, the switch's deadline
  * and the nonce are durable before the signature is returned.
  */
@@ -194,6 +222,7 @@ export async function venueQuotingSign(ctx: VenueCtx, req: VenueQuotingSignReque
       // removing the switch is only harmless when nothing rests and nothing can still land
       const view = await ownAccount(ctx, deny, a, nowMs);
       if (view.openOrders.length > 0) deny('switch_needed', `the account has ${view.openOrders.length} open order(s): the dead man's switch is not removed`);
+      await settleLedger(ctx, a, ledgers, view, nowMs);                                         // quotes the venue says are finished no longer count
       if (ledgers.some((r) => (r.pending ?? []).some(live))) deny('switch_needed', 'an order signed a moment ago can still reach the venue: the dead man\'s switch is not removed');
       dms = null;
     } else {
@@ -270,12 +299,8 @@ export async function venueQuotingSign(ctx: VenueCtx, req: VenueQuotingSignReque
       try { setting = held ? held.leverage : await ctx.venueInfo.leverage(a.network, a.account, symbol); }
       catch (e) { return deny('venue_unreachable', `the signer could not read the leverage setting of ${symbol} itself (${(e as Error).message.slice(0, 100)})`); }
       if (setting.value > mi!.maxLeverage) deny('leverage_setting', `${symbol} is set to ${setting.value}× on the venue, above the mandate's ${mi!.maxLeverage}×: lower it first (a quoting mandate does not change leverage)`);
-      // ledger: a quote of ours that the venue now lists is counted through the venue's list from now on, and leaves the ledger
-      // for good (the same signed action cannot land twice). The match is strict — client id, coin, side, price, not reduce-only,
-      // taken by the venue after the signature — so that no other order can pass for a pending quote.
-      const isIt = (x: VenuePendingOrder, o: VenueOpenOrderView) => o.cloid === x.clientId && inst(o.coin) === x.instrument && o.side === x.side && !o.reduceOnly && canon(o.price) === canon(x.price) && x.signedAt !== undefined && o.timestamp >= x.signedAt - LANDED_SKEW_MS;
+      await settleLedger(ctx, a, ledgers, view, nowMs);
       const landedLoose = (x: VenuePendingOrder) => x.signedAt !== undefined && view.openOrders.some((o) => o.cloid === x.clientId && o.timestamp >= x.signedAt! - LANDED_SKEW_MS);
-      for (const r of ledgers) if (r.pending) r.pending = r.pending.filter((x) => !(x.q === 1 && view.openOrders.some((o) => isIt(x, o))));
       const resting: ExposureOrder[] = [
         ...view.openOrders.filter((o) => !o.reduceOnly && !D.isZero(D.from(o.size))).map((o) => ({ instrument: inst(o.coin), side: o.side, size: o.size, price: o.price, reduceOnly: false })),
         // quotes still in the ledger are counted in full; manual / directional entries keep the rule of venue-mandate.ts
