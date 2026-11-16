@@ -34,6 +34,7 @@ import { monitorRoutes } from './monitor/routes.ts'; // v6-alerts
 import { researchRoutes, RUNNER_PREFIX, runnerGate } from './research/routes.ts'; // v7 research runtime
 import { perpRuntime } from './agents/perp-live.ts'; // v7 research runtime (perp data for research jobs)
 import { planRoutes, type PlanDeps } from './plan-exec.ts'; // v7 any-to-any plans
+import { apiKeyGate, OWNER, tradingApi } from './trading-api/index.ts'; // v11 trading API (machine authentication)
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
@@ -112,13 +113,19 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     reply.header('cache-control', 'no-store');
     // >>> v7 research runtime: the runner's endpoints carry their own shared secret — no owner session, no cookie, no CSRF header;
     // that secret opens these paths and no other, and the owner session does not open them
+    // >>> v11 trading API: `Authorization: Bearer spw_live_…` is an API key — accepted under /api/v1/trading/ only, never with a
+    // cookie, and exempt from the CSRF check below because it carries no ambient credential (trading-api/principal.ts)
+    if (await apiKeyGate(req, reply, path)) return;
+    // <<< v11 trading API
     if (path.startsWith(RUNNER_PREFIX)) { runnerGate(req); return; }
     // <<< v7 research runtime
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       // CSRF: strict same-origin + custom header (cannot be set cross-site without CORS, which is never enabled)
       if (req.headers.origin !== config.origin || req.headers['x-spw-csrf'] !== '1') throw new UserError('csrf', 'cross-site request refused', 403);
     }
-    if (!PUBLIC.has(path) && !(await isAuthed(req))) throw new UserError('unauthenticated', 'authentication required', 401);
+    if (PUBLIC.has(path)) return;
+    if (!(await isAuthed(req))) throw new UserError('unauthenticated', 'authentication required', 401);
+    req.principal = OWNER; // v11: the owner session is a principal like the others (scope guard, audit actor)
   });
 
   app.setErrorHandler((err, req, reply) => {
@@ -150,6 +157,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   await alertRoutes(app); // v6-alerts: in-app alerts, push subscriptions, webhook — all behind the owner session
   monitorRoutes(app);     // v6-alerts: read-only monitoring dashboard
   await researchRoutes(app, { perp: () => perpRuntime().lab }); // v7 research runtime: jobs for the owner, a narrow endpoint pair for the runner
+  await tradingApi(app, { derivatives: opts.derivatives, live: opts.live, gmx: opts.gmx, prices: markets }); // v11: /api/v1/trading (scoped API keys or the owner) and /api/v1/developer (owner only)
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));
   app.get('/api/v1/health/ready', async () => {

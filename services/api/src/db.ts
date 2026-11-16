@@ -218,6 +218,38 @@ create table if not exists agent_withdrawals (
 create unique index if not exists agent_withdrawals_one_open on agent_withdrawals (agent_id, network, asset) where state in ('requested', 'signed', 'broadcast');
 create unique index if not exists agent_withdrawals_idem on agent_withdrawals (agent_id, idempotency_key) where idempotency_key is not null;
 create index if not exists agent_withdrawals_agent on agent_withdrawals (agent_id, created_at desc);
+-- >>> v11 trading API (services/api/src/trading-api): machine authentication. A key row never holds the secret: secret_hash is
+-- HMAC-SHA-256 under a pepper that lives outside the database. Scopes are a closed list (spec.ts); limits are recorded now and
+-- enforced when execution lands; mandate_id binds the key to a signer-enforced trading mandate (execution scopes are inert without one).
+create table if not exists api_keys (
+  id text primary key, name text not null, secret_hash text not null, scopes text[] not null, limits jsonb not null default '{}', restrictions jsonb not null default '{}',
+  rate_limit_per_min int not null default 120, mandate_id uuid, rotated_from text, created_at timestamptz not null default now(), expires_at timestamptz not null,
+  revoked_at timestamptz, revoked_reason text, last_used_at timestamptz, last_used_ip text);
+-- one row per call made with a key (and per refused call that named a real key): no body, no header, no secret
+create table if not exists api_key_usage (
+  id bigserial primary key, key_id text not null, ts timestamptz not null default now(), method text not null, route text not null,
+  status int not null, latency_ms int not null, request_id text not null, ip text not null default '');
+create index if not exists api_key_usage_key on api_key_usage (key_id, ts desc);
+create index if not exists api_key_usage_ts on api_key_usage (ts);
+-- a key-management request waiting for the owner's passkey: the WebAuthn challenge is the SHA-256 of canonical; single use
+create table if not exists api_key_intents (
+  id uuid primary key, action text not null, canonical text not null, hash text not null, created_at timestamptz not null default now(), expires_at timestamptz not null);
+-- replay protection of mutating calls: the first answer of (principal, Idempotency-Key) is stored with the hash of the request
+create table if not exists api_idempotency (
+  principal text not null, key text not null, request_hash text not null, state text not null default 'in_progress', status int, response jsonb,
+  created_at timestamptz not null default now(), primary key (principal, key));
+create index if not exists api_idempotency_at on api_idempotency (created_at);
+-- outgoing webhooks of API clients (the signing secret of an endpoint is NOT here: it is in the secrets file of the API user)
+create table if not exists api_webhooks (
+  id text primary key, url text not null, events text[] not null, enabled boolean not null default true, label text not null default '',
+  created_at timestamptz not null default now(), last_ok_at timestamptz, last_error text, failures int not null default 0);
+create table if not exists api_webhook_deliveries (
+  id bigserial primary key, webhook_id text not null references api_webhooks(id) on delete cascade, event_id uuid not null, event text not null, payload jsonb not null,
+  state text not null default 'pending', attempts int not null default 0, next_attempt_at timestamptz not null default now(), last_status int, last_error text,
+  created_at timestamptz not null default now(), delivered_at timestamptz);
+create index if not exists api_webhook_deliveries_due on api_webhook_deliveries (next_attempt_at) where state = 'pending';
+create index if not exists api_webhook_deliveries_recent on api_webhook_deliveries (webhook_id, id desc);
+-- <<< v11 trading API
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }

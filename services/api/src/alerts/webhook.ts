@@ -23,12 +23,16 @@ export function verifyWebhook(secret: string, timestamp: string, signature: stri
 export function webhookUrlOk(url: string): boolean {
   try { const u = new URL(url); return u.protocol === 'https:' && !u.username && !u.password; } catch { return false; }
 }
-export async function sendWebhook(url: string, secret: string, a: WebhookAlert, details: boolean, o: { now?: number; fetch?: typeof fetch; allowHttp?: boolean } = {}): Promise<{ ok: boolean; status: number; error?: string }> {
+/** One signed HTTPS POST of an already serialized body (the transport shared by the alert webhook and the trading-API webhooks
+ *  of trading-api/webhooks.ts): https only, no redirect, 8 s, `X-SPW-Timestamp` + `X-SPW-Signature` over "<timestamp>.<body>". */
+export async function postSigned(url: string, secret: string, body: string, o: { now?: number; fetch?: typeof fetch; allowHttp?: boolean; userAgent?: string; headers?: Record<string, string> } = {}): Promise<{ ok: boolean; status: number; error?: string }> {
   if (!o.allowHttp && !webhookUrlOk(url)) return { ok: false, status: 0, error: 'the webhook URL must be https' };
-  const body = webhookBody(a, details), ts = Math.floor((o.now ?? Date.now()) / 1000);
+  const ts = Math.floor((o.now ?? Date.now()) / 1000);
   try {
     const r = await (o.fetch ?? fetch)(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(8000), body,
-      headers: { 'content-type': 'application/json', 'user-agent': 'sp-wallet-alerts/1', 'x-spw-timestamp': String(ts), 'x-spw-signature': webhookSignature(secret, ts, body) } });
+      headers: { ...o.headers, 'content-type': 'application/json', 'user-agent': o.userAgent ?? 'sp-wallet-alerts/1', 'x-spw-timestamp': String(ts), 'x-spw-signature': webhookSignature(secret, ts, body) } });
     return r.ok ? { ok: true, status: r.status } : { ok: false, status: r.status, error: `receiver answered ${r.status}` };
   } catch (e) { return { ok: false, status: 0, error: (e as Error).message.slice(0, 160) }; }
 }
+export const sendWebhook = (url: string, secret: string, a: WebhookAlert, details: boolean, o: { now?: number; fetch?: typeof fetch; allowHttp?: boolean } = {}): Promise<{ ok: boolean; status: number; error?: string }> =>
+  postSigned(url, secret, webhookBody(a, details), o);
