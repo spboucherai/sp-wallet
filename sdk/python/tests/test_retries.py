@@ -306,13 +306,14 @@ def test_a_definite_answer_stays_a_typed_error(mock: Any, steps: list[Any], cls:
 
 WRITES: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = [
     ("run_command", ("STOP ALL AGENTS",), {}), ("create_order", (), ORDER), ("cancel_order", ("o",), {}), ("close_position", ("p",), {}), ("reduce_position", ("p",), {"fraction": "0.5"}),
-    ("create_strategy", (), {"kind": "spot", "path": "x"}), ("backtest_strategy", ("s",), {}), ("start_strategy", ("s",), {"mode": "paper"}), ("stop_strategy", ("s",), {}),
-    ("create_agent", (), {"kind": "spot", "name": "ab", "universe": ["BTC"]}), ("start_agent", ("a",), {"mode": "paper"}), ("stop_agent", ("a",), {}),
+    ("create_strategy", (), {"kind": "spot", "path": "x", "agent_id": "00000000-0000-4000-8000-000000000000"}), ("backtest_strategy", ("s",), {}), ("start_strategy", ("s",), {"mode": "paper"}),
+    ("stop_strategy", ("s",), {}), ("create_agent", (), {"kind": "perp", "name": "ab", "universe": ["BTC"]}), ("start_agent", ("a",), {"mode": "paper"}), ("stop_agent", ("a",), {}),
+    ("pause_agent", ("a",), {}), ("backtest_agent", ("a",), {}),
 ]  # fmt: skip
 
 
-def test_there_are_twelve_write_methods() -> None:
-    assert len(WRITES) == 12 == sum(1 for o in sp_wallet.OPERATIONS.values() if o[4])
+def test_every_idempotency_keyed_operation_has_its_write_method_here() -> None:
+    assert len(WRITES) == 14 == sum(1 for o in sp_wallet.OPERATIONS.values() if o[4])
 
 
 @pytest.mark.parametrize(("name", "args", "kwargs"), WRITES, ids=[w[0] for w in WRITES])

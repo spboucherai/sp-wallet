@@ -9,17 +9,19 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from decimal import Decimal
 from typing import Any, Literal
 
 import httpx
 
 from . import models as m
 from ._base import BaseClient, Call, M, Retry, seg
-from ._models_base import WriteResult
 from ._util import decimal_str, is_terminal_order
 from .errors import ConfigurationError, ServerError, WaitTimeout
 
 Mode = Literal["paper", "live"]
+#: research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate
+AgentMode = Literal["research", "paper", "live"]
 Decimalish = Any  # str | int | decimal.Decimal — never a float (refused at call time)
 
 
@@ -308,10 +310,11 @@ class AsyncSPWallet(BaseClient):
 
     async def run_command(
         self, text: str, *, mode: Mode = "paper", account_id: str | None = None, dry_run: bool = False, idempotency_key: str | None = None
-    ) -> m.CommandResult:
+    ) -> m.CommandResult:  # CommandQuery | CommandControl | CommandDryRun | CommandExecuted
         """POST /commands — one line of the deterministic command grammar (`LONG BTC-PERP 500 x2`, `CLOSE BTC-PERP 50%`,
         `CANCEL ORDER <id>`, `SHOW POSITIONS`, `KILL`). `dry_run=True` answers what it resolves to and does nothing.
-        `result.kind` is "query", "control" or "order". A command the owner's defaults do not settle raises
+        The result is one of four models — `CommandQuery`, `CommandControl`, `CommandDryRun` (its `order` is the canonical
+        order) and `CommandExecuted` (its `order` is the placed order): narrow with isinstance. A command the owner's defaults do not settle raises
         AmbiguousCommand (with `questions`): nothing was executed."""
         if not isinstance(text, str) or not text.strip():
             raise ConfigurationError("a command is one non-empty line of text")
@@ -356,59 +359,129 @@ class AsyncSPWallet(BaseClient):
         """GET /strategies — strategy library and the versions pinned to agents."""
         return await self._get(m.Strategies, "/strategies", {"kind": kind})
 
-    async def create_strategy(
-        self, *, kind: Literal["spot", "perp"], path: str, agent_id: str | None = None, idempotency_key: str | None = None
-    ) -> WriteResult:
-        """POST /strategies — register a strategy version (`path`: library path of the strategy)."""
+    async def create_strategy(self, *, kind: Literal["spot", "perp"], path: str, agent_id: str, idempotency_key: str | None = None) -> m.StrategyResult:
+        """POST /strategies — pin a library strategy version (`path`) to ONE agent and queue its backtest. Approves nothing."""
         body = self._body(m.CreateStrategyRequest, kind=kind, path=path, agent_id=agent_id)
-        return await self._write(WriteResult, "POST", "/strategies", body, idempotency_key)
+        return await self._write(m.StrategyResult, "POST", "/strategies", body, idempotency_key)
 
     async def backtest_strategy(
         self, strategy_id: str, *, symbols: list[str] | None = None, interval: Literal["1h", "1d"] | None = None, idempotency_key: str | None = None
-    ) -> WriteResult:
-        """POST /strategies/{id}/backtest."""
+    ) -> m.JobResult:
+        """POST /strategies/{id}/backtest — an asynchronous job: read it with `get_job(result.job.id)` or `wait_for_job`."""
         body = self._body(m.BacktestRequest, symbols=symbols, interval=interval)
-        return await self._write(WriteResult, "POST", f"/strategies/{seg(strategy_id, 'strategy_id')}/backtest", body, idempotency_key)
+        return await self._write(m.JobResult, "POST", f"/strategies/{seg(strategy_id, 'strategy_id')}/backtest", body, idempotency_key)
 
-    async def start_strategy(self, strategy_id: str, *, mode: Mode, agent_id: str | None = None, idempotency_key: str | None = None) -> WriteResult:
-        """POST /strategies/{id}/start — `mode` is required: "paper" or "live"."""
+    async def start_strategy(self, strategy_id: str, *, mode: AgentMode, agent_id: str | None = None, idempotency_key: str | None = None) -> m.AgentResult:
+        """POST /strategies/{id}/start — starts the agent the version is pinned to, in `mode`."""
         body = self._body(m.StartRequest, mode=mode, agent_id=agent_id)
-        return await self._write(WriteResult, "POST", f"/strategies/{seg(strategy_id, 'strategy_id')}/start", body, idempotency_key)
+        return await self._write(m.AgentResult, "POST", f"/strategies/{seg(strategy_id, 'strategy_id')}/start", body, idempotency_key)
 
-    async def stop_strategy(self, strategy_id: str, *, reason: str | None = None, idempotency_key: str | None = None) -> WriteResult:
+    async def stop_strategy(self, strategy_id: str, *, reason: str | None = None, idempotency_key: str | None = None) -> m.AgentResult:
         """POST /strategies/{id}/stop."""
         body = self._body(m.StopRequest, reason=reason)
-        return await self._write(WriteResult, "POST", f"/strategies/{seg(strategy_id, 'strategy_id')}/stop", body, idempotency_key)
+        return await self._write(m.AgentResult, "POST", f"/strategies/{seg(strategy_id, 'strategy_id')}/stop", body, idempotency_key)
 
     # ============================================================================================================ agents
+    # Managing agents needs `agents:manage` and NO trading mandate on the key: research and paper sign nothing. Starting an agent
+    # LIVE needs a mandate the OWNER approved for that agent with the passkey (409 `mandate_required` otherwise).
     async def list_agents(self) -> m.Agents:
         """GET /agents."""
         return await self._get(m.Agents, "/agents")
 
+    async def list_agent_templates(self) -> m.AgentTemplates:
+        """GET /agents/templates — the built-in agents: family, engine, the modes each can run in."""
+        return await self._get(m.AgentTemplates, "/agents/templates")
+
+    async def get_agent(self, agent_id: str) -> m.AgentDetail:
+        """GET /agents/{id} — one agent: model, strategy, limits, mandate reference, backtest reports (labelled), worker state."""
+        return await self._get(m.AgentDetail, f"/agents/{seg(agent_id, 'agent_id')}")
+
+    async def list_agent_signals(self, agent_id: str, *, mode: AgentMode, limit: int | None = None, before: int | None = None) -> m.AgentSignals:
+        """GET /agents/{id}/signals — the signal history of one agent in ONE mode (`mode` is required; `before`: unix ms)."""
+        query = {"mode": self._agent_mode(mode), "limit": limit, "before": before}
+        return await self._get(m.AgentSignals, f"/agents/{seg(agent_id, 'agent_id')}/signals", query)
+
+    async def list_agent_journal(self, agent_id: str, *, mode: AgentMode, limit: int | None = None, before: int | None = None) -> m.AgentJournal:
+        """GET /agents/{id}/journal — decisions, orders, fills, errors, risk denials and state changes of one agent in ONE mode."""
+        query = {"mode": self._agent_mode(mode), "limit": limit, "before": before}
+        return await self._get(m.AgentJournal, f"/agents/{seg(agent_id, 'agent_id')}/journal", query)
+
+    async def list_agent_orders(
+        self, agent_id: str, *, mode: AgentMode, limit: int | None = None, before: int | None = None, open: bool | None = None
+    ) -> m.AgentOrders:
+        """GET /agents/{id}/orders — the orders of one agent in ONE mode, in the unified order states."""
+        query = {"mode": self._agent_mode(mode), "limit": limit, "before": before, "open": open}
+        return await self._get(m.AgentOrders, f"/agents/{seg(agent_id, 'agent_id')}/orders", query)
+
+    async def get_agent_performance(self, agent_id: str, *, mode: AgentMode) -> m.AgentPerformance:
+        """GET /agents/{id}/performance — computed from the records of ONE mode; paper and live are never added; a backtest is never here."""
+        return await self._get(m.AgentPerformance, f"/agents/{seg(agent_id, 'agent_id')}/performance", {"mode": self._agent_mode(mode)})
+
+    async def get_job(self, job_id: str) -> m.JobResult:
+        """GET /jobs/{id} — one agent job (a backtest, a wind-down): status and result."""
+        return await self._get(m.JobResult, f"/jobs/{seg(job_id, 'job_id')}")
+
+    async def wait_for_job(self, job_id: str, *, timeout: float = 60.0, poll_interval: float = 1.0) -> m.JobResult:
+        """Reads a job until it is `done`, `failed` or `cancelled`. Raises WaitTimeout — which is not a job failure — when
+        `timeout` seconds elapse first; `error.last` is the last answer."""
+        started = time.monotonic()
+        while True:
+            last = await self.get_job(job_id)
+            if last.job.status in ("done", "failed", "cancelled"):
+                return last
+            left = timeout - (time.monotonic() - started)
+            if left <= 0:
+                raise WaitTimeout(f"job {job_id} is not finished after {timeout:g} s (status: {last.job.status}); it has not failed — keep reading it", last)
+            await self._sleep(min(poll_interval, left))
+
     async def create_agent(
         self,
         *,
-        kind: Literal["spot", "perp"],
         name: str,
-        universe: list[str],
+        template: str | None = None,
+        kind: Literal["spot", "perp"] | None = None,
+        universe: list[str] | None = None,
+        venues: list[str] | None = None,
         mission: str | None = None,
-        interval: Literal["1h", "1d"] | None = None,
-        mode: Mode | None = None,
+        strategy_path: str | None = None,
+        interval: Literal["1h", "4h", "1d"] | None = None,
+        capital_usdc: Decimalish = None,
+        risk: dict[str, Any] | None = None,
+        config: dict[str, Any] | None = None,
+        mode: Literal["research", "paper"] | None = None,
         idempotency_key: str | None = None,
-    ) -> WriteResult:
-        """POST /agents."""
-        body = self._body(m.CreateAgentRequest, kind=kind, name=name, universe=universe, mission=mission, interval=interval, mode=mode)
-        return await self._write(WriteResult, "POST", "/agents", body, idempotency_key)
+    ) -> m.AgentResult:
+        """POST /agents — from a `template` (see `list_agent_templates`), or a perp agent (`kind="perp"` + `universe`).
+        `mode` is "research" (default: created, not running) or "paper"; never live. Nothing is signed."""
+        body = self._body(
+            m.CreateAgentRequest, name=name, template=template, kind=kind, universe=universe, venues=venues, mission=mission, strategy_path=strategy_path,
+            interval=interval, capital_usdc=None if capital_usdc is None else decimal_str(capital_usdc, "capital_usdc"), risk=risk, config=config, mode=mode,
+        )  # fmt: skip
+        if risk is not None:
+            body["risk"] = self._limits(risk)
+        return await self._write(m.AgentResult, "POST", "/agents", body, idempotency_key)
 
-    async def start_agent(self, agent_id: str, *, mode: Mode, idempotency_key: str | None = None) -> WriteResult:
-        """POST /agents/{id}/start — `mode` is required: "paper" or "live"."""
+    async def start_agent(self, agent_id: str, *, mode: AgentMode, idempotency_key: str | None = None) -> m.AgentResult:
+        """POST /agents/{id}/start — `mode`: "research", "paper" or "live" (live only under an owner-approved mandate for this agent)."""
         body = self._body(m.StartRequest, mode=mode)
-        return await self._write(WriteResult, "POST", f"/agents/{seg(agent_id, 'agent_id')}/start", body, idempotency_key)
+        return await self._write(m.AgentResult, "POST", f"/agents/{seg(agent_id, 'agent_id')}/start", body, idempotency_key)
 
-    async def stop_agent(self, agent_id: str, *, reason: str | None = None, idempotency_key: str | None = None) -> WriteResult:
-        """POST /agents/{id}/stop."""
+    async def pause_agent(self, agent_id: str, *, reason: str | None = None, idempotency_key: str | None = None) -> m.AgentResult:
+        """POST /agents/{id}/pause — no new exposure."""
         body = self._body(m.StopRequest, reason=reason)
-        return await self._write(WriteResult, "POST", f"/agents/{seg(agent_id, 'agent_id')}/stop", body, idempotency_key)
+        return await self._write(m.AgentResult, "POST", f"/agents/{seg(agent_id, 'agent_id')}/pause", body, idempotency_key)
+
+    async def stop_agent(self, agent_id: str, *, reason: str | None = None, idempotency_key: str | None = None) -> m.AgentResult:
+        """POST /agents/{id}/stop — always allowed; the safe wind-down."""
+        body = self._body(m.StopRequest, reason=reason)
+        return await self._write(m.AgentResult, "POST", f"/agents/{seg(agent_id, 'agent_id')}/stop", body, idempotency_key)
+
+    async def backtest_agent(
+        self, agent_id: str, *, version_id: str | None = None, hours: int | None = None, idempotency_key: str | None = None
+    ) -> m.JobResult:
+        """POST /agents/{id}/backtest — an asynchronous job (always a BACKTEST, labelled as such): read it with `get_job` / `wait_for_job`."""
+        body = self._body(m.AgentBacktestRequest, version_id=version_id, hours=hours)
+        return await self._write(m.JobResult, "POST", f"/agents/{seg(agent_id, 'agent_id')}/backtest", body, idempotency_key)
 
     # ============================================================================================================ meta
     async def openapi(self) -> m.OpenApiDocument:
@@ -439,6 +512,27 @@ class AsyncSPWallet(BaseClient):
             leverage=None if leverage is None else decimal_str(leverage, "leverage"),
             max_fee_usd=None if max_fee_usd is None else decimal_str(max_fee_usd, "max_fee_usd"), client_order_id=client_order_id,
         )  # fmt: skip
+
+    @staticmethod
+    def _limits(risk: dict[str, Any]) -> dict[str, Any]:
+        """An agent's limits are JSON numbers, strings or booleans (not amounts of money): whole numbers go as numbers, anything
+        fractional as a decimal string — never a binary float."""
+        out: dict[str, Any] = {}
+        for k, v in risk.items():
+            if isinstance(v, (bool, str, int)):
+                out[k] = v
+            elif isinstance(v, Decimal) and v.is_finite():
+                out[k] = int(v) if v == v.to_integral_value() else format(v, "f")
+            else:
+                raise ConfigurationError(f"risk.{k}: pass an int, a bool, a Decimal or a decimal string — not a float")
+        return out
+
+    @staticmethod
+    def _agent_mode(mode: Any) -> str:
+        """The per-agent reads are ONE mode per call: required here, although the API would fall back on the agent's current one."""
+        if mode not in ("research", "paper", "live"):
+            raise ConfigurationError('`mode` is required: "research", "paper" or "live" — one mode per call, an answer never mixes two')
+        return str(mode)
 
     @staticmethod
     def _check_max_items(max_items: int | None) -> None:

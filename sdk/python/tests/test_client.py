@@ -6,14 +6,15 @@ from __future__ import annotations
 import json
 import re
 from decimal import Decimal
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 
 import sp_wallet
 from conftest import KEY, OPENAPI, ROOT, P, ok
-from sp_wallet import OPERATIONS, AsyncSPWallet, ConfigurationError, ServerError, SPWallet, WaitTimeout, WriteResult, models
+from sp_wallet import OPERATIONS, AsyncSPWallet, ConfigurationError, ServerError, SPWallet, WaitTimeout, models
 
+UUID = "00000000-0000-4000-8000-000000000000"
 ORDER = {"mode": "paper", "instrument": "hyperliquid:BTC", "side": "buy", "type": "market", "size": "0.01"}
 ORDER_KW: dict[str, Any] = {"instrument": "hyperliquid:BTC", "side": "buy", "order_type": "market", "size": "0.01"}
 MARKET = {"id": "hyperliquid:BTC", "venue": "hyperliquid", "kind": "perpetual", "symbol": "BTC", "base": "BTC", "quote": "USD", "status": "active", "mark": "64907", "ts": 1, "stale": False}
@@ -49,11 +50,23 @@ CASES: dict[str, tuple[str, tuple[Any, ...], dict[str, Any], str, dict[str, str]
     "reducePosition": ("reduce_position", ("pos-1",), {"fraction": Decimal("0.5")}, "/positions/pos-1/reduce", {}, {"fraction": "0.5"}),
     "runCommand": ("run_command", ("LONG BTC-PERP 500 x2",), {"dry_run": True}, "/commands", {}, {"text": "LONG BTC-PERP 500 x2", "mode": "paper", "dryRun": True}),
     "engageKillSwitch": ("engage_kill_switch", ("drill",), {}, "/risk/kill-switch", {}, {"reason": "drill"}),
-    "createStrategy": ("create_strategy", (), {"kind": "perp", "path": "momentum/v1"}, "/strategies", {}, {"kind": "perp", "path": "momentum/v1"}),
+    "createStrategy": ("create_strategy", (), {"kind": "perp", "path": "momentum/v1", "agent_id": UUID}, "/strategies", {}, {"kind": "perp", "path": "momentum/v1", "agentId": UUID}),
     "backtestStrategy": ("backtest_strategy", ("s1",), {"symbols": ["BTC"], "interval": "1h"}, "/strategies/s1/backtest", {}, {"symbols": ["BTC"], "interval": "1h"}),
     "startStrategy": ("start_strategy", ("s1",), {"mode": "paper"}, "/strategies/s1/start", {}, {"mode": "paper"}),
     "stopStrategy": ("stop_strategy", ("s1",), {"reason": "done"}, "/strategies/s1/stop", {}, {"reason": "done"}),
-    "createAgent": ("create_agent", (), {"kind": "perp", "name": "alpha", "universe": ["BTC", "ETH"]}, "/agents", {}, {"kind": "perp", "name": "alpha", "universe": ["BTC", "ETH"]}),
+    "createAgent": (
+        "create_agent", (), {"template": "market-making", "name": "alpha", "venues": ["hyperliquid"], "universe": ["BTC"], "capital_usdc": 1000, "risk": {"maxDataAgeMs": 5000, "pct": Decimal("1.5"), "on": True}, "mode": "paper"},
+        "/agents", {}, {"template": "market-making", "name": "alpha", "venues": ["hyperliquid"], "universe": ["BTC"], "capitalUsdc": "1000", "risk": {"maxDataAgeMs": 5000, "pct": "1.5", "on": True}, "mode": "paper"},
+    ),
+    "pauseAgent": ("pause_agent", ("a1",), {"reason": "lunch"}, "/agents/a1/pause", {}, {"reason": "lunch"}),
+    "backtestAgent": ("backtest_agent", ("a1",), {"hours": 6}, "/agents/a1/backtest", {}, {"hours": 6}),
+    "listAgentTemplates": ("list_agent_templates", (), {}, "/agents/templates", {}, None),
+    "getAgent": ("get_agent", ("a1",), {}, "/agents/a1", {}, None),
+    "listAgentSignals": ("list_agent_signals", ("a1",), {"mode": "paper", "limit": 10, "before": 1794790800000}, "/agents/a1/signals", {"mode": "paper", "limit": "10", "before": "1794790800000"}, None),
+    "listAgentJournal": ("list_agent_journal", ("a1",), {"mode": "live"}, "/agents/a1/journal", {"mode": "live"}, None),
+    "listAgentOrders": ("list_agent_orders", ("a1",), {"mode": "paper", "open": True}, "/agents/a1/orders", {"mode": "paper", "open": "true"}, None),
+    "getAgentPerformance": ("get_agent_performance", ("a1",), {"mode": "research"}, "/agents/a1/performance", {"mode": "research"}, None),
+    "getJob": ("get_job", ("j1",), {}, "/jobs/j1", {}, None),
     "startAgent": ("start_agent", ("a1",), {"mode": "paper"}, "/agents/a1/start", {}, {"mode": "paper"}),
     "stopAgent": ("stop_agent", ("a1",), {}, "/agents/a1/stop", {}, {}),
 }  # fmt: skip
@@ -87,6 +100,9 @@ PM_ROW = {
     "tradable": False, "notTradable": {"code": "display_only", "reasons": []}, "error": None,
 }  # fmt: skip
 
+AGENT = {"id": "a", "state": "active", "mode": "paper"}
+JOB = {"job": {"id": "j", "kind": "backtest", "status": "queued", "attempts": 0}, "label": "backtest"}
+
 #: a minimal valid answer per operation that has a success schema (the typed model must accept it)
 SAMPLES: dict[str, Any] = {
     "getOpenApi": {"openapi": "3.1.0", "paths": {}},
@@ -110,7 +126,7 @@ SAMPLES: dict[str, Any] = {
     "listOrders": {"orders": [ORDER_ROW], "nextCursor": "abc", "ts": 1},
     "getOrder": {"order": ORDER_ROW, "fills": [{"id": "f", "instrument": "hyperliquid:BTC", "side": "buy", "price": "1", "size": "1", "fee": "0", "feeAsset": "USDC", "closedPnl": None, "liquidation": False, "ts": 1}]},
     "listStrategies": {"library": [{"kind": "perp", "path": "p", "sha256": "s"}], "versions": [], "errors": []},
-    "listAgents": {"agents": [{"id": "a", "kind": "perp", "name": "n", "state": "CREATED", "mode": "PAPER", "tradingMode": None, "venue": "hyperliquid", "universe": ["BTC"], "interval": "1h"}]},
+    "listAgents": {"agents": [{"id": "a", "kind": "stream", "name": "n", "family": "market_making", "state": "PAPER_TRADING", "mode": "PAPER", "lifecycle": "active", "tradingMode": "paper", "venue": "hyperliquid", "universe": ["BTC"], "interval": "1h", "configVersion": 1}]},
     "getRisk": {"killSwitch": {"signerReachable": True, "signerHalted": False, "note": "n"}, "signerPolicy": None, "capabilityLocks": [{"id": "x", "on": True, "why": "y"}], "accounts": [], "errors": [], "ts": 1,
                 "engine": {"killSwitch": SWITCH_OFF, "readOnly": SWITCH_OFF, "note": "n"}},
     "previewOrder": {
@@ -124,6 +140,15 @@ SAMPLES: dict[str, Any] = {
     "cancelOrder": {"order": {**ORDER_ROW, "status": "CANCELLED", "engineStatus": "cancelled"}, "sent": False, "changed": True},
     "runCommand": {"kind": "order", "command": "perp_open", "mode": "paper", "dryRun": True, "executed": False, "order": CANONICAL, "hash": "ab" * 32, "attached": []},
     "engageKillSwitch": {"killSwitch": SWITCH, "readOnly": SWITCH_OFF},
+    "listAgentTemplates": {"templates": [{"id": "market-making", "family": "market_making", "engine": "stream", "modes": ["research", "paper"], "liveReason": "r", "strategyInstalled": True}]},
+    "getAgent": {"agent": {**AGENT, "family": "market_making"}, "mandateDraft": None},
+    "listAgentSignals": {"mode": "paper", "signals": [{"id": "s", "ts": 1, "mode": "paper", "configVersion": 1, "strategySha256": "h", "decision": "skipped", "reasonCode": "stale"}]},
+    "listAgentJournal": {"mode": "paper", "entries": [{"id": "e", "ts": 1, "mode": "paper", "kind": "state", "severity": "info", "title": "Paper trading started"}]},
+    "listAgentOrders": {"mode": "paper", "orders": [{"id": "o", "mode": "paper", "instrument": "hyperliquid:BTC", "side": "buy", "state": "FILLED"}]},
+    "getAgentPerformance": {"mode": "paper", "label": "paper trading", "points": 0, "warnings": [{"code": "small_sample", "message": "m"}]},
+    "getJob": JOB, "backtestStrategy": JOB, "backtestAgent": JOB,
+    "createStrategy": {"strategy": {"id": "v", "agentId": "a", "sha256": "h", "status": "draft"}},
+    "startStrategy": {"agent": AGENT}, "stopStrategy": {"agent": AGENT}, "createAgent": {"agent": AGENT}, "startAgent": {"agent": AGENT}, "pauseAgent": {"agent": AGENT}, "stopAgent": {"agent": AGENT},
 }  # fmt: skip
 
 
@@ -132,7 +157,7 @@ def test_every_operation_of_the_document_has_a_case() -> None:
     ids = sorted(o["operationId"] for item in OPENAPI["paths"].values() for o in item.values())
     assert sorted(CASES) == ids == sorted(OPERATIONS)
     assert sorted(SAMPLES) == sorted(models.RESPONSE_MODELS) == sorted(k for k, o in OPERATIONS.items() if o[3])
-    for name in {c[0] for c in CASES.values()} | {"wait_for_order", "iter_orders", "iter_activity"}:
+    for name in {c[0] for c in CASES.values()} | {"wait_for_order", "wait_for_job", "iter_orders", "iter_activity"}:
         assert callable(getattr(SPWallet, name)), name
         assert callable(getattr(AsyncSPWallet, name)), name
 
@@ -158,16 +183,11 @@ def test_operation_sends_the_documented_request(mock: Any, op_id: str) -> None:
     else:
         assert "idempotency-key" not in c.headers  # a read, or a POST the contract declares without a key (preview, kill switch)
         assert out.meta.idempotency_key is None
-    if op_id in models.RESPONSE_MODELS:
-        assert _implemented
-        assert type(out) is models.RESPONSE_MODELS[op_id]
-        assert set(SAMPLES[op_id]) <= set(out.to_dict())  # the API's own member names, nothing lost
-    else:
-        # not implemented by the server (501): no success schema exists, so no typed result either
-        assert not _implemented
-        assert isinstance(out, WriteResult)
-        assert out.to_dict() == {"fine": True}
-        assert out.fine is True
+    # every operation of the contract is implemented and has a typed answer (a model, or one of the models of a union)
+    assert _implemented
+    model = models.RESPONSE_MODELS[op_id]
+    assert type(out) is model if isinstance(model, type) else type(out) in get_args(model)
+    assert set(SAMPLES[op_id]) <= set(out.to_dict())  # the API's own member names, nothing lost
     if body is None:
         assert c.body is None
         assert "content-type" not in c.headers
@@ -345,10 +365,48 @@ def test_run_command(mock: Any) -> None:
     r = h.call("run_command", "SHOW POSITIONS", mode="live", account_id="00000000-0000-4000-8000-000000000000", idempotency_key="cmd-key-0001")
     assert json.loads(h.calls[0].body) == {"text": "SHOW POSITIONS", "mode": "live", "accountId": "00000000-0000-4000-8000-000000000000", "dryRun": False}
     assert h.calls[0].headers["idempotency-key"] == "cmd-key-0001"
-    assert (r.kind, r.dry_run, r.executed, r.order["instrument"]) == ("order", True, False, "hyperliquid:BTC")
+    # a dry run: the CANONICAL order; an executed command: the placed order — two models, told apart by `kind` and `executed`
+    assert type(r) is models.CommandDryRun and type(r.order) is models.CanonicalOrder
+    assert (r.kind, r.dry_run, r.executed, r.order.instrument) == ("order", True, False, "hyperliquid:BTC")
+    done = {"kind": "order", "command": "perp_open", "mode": "paper", "dryRun": False, "executed": True, "order": ORDER_ROW, "canonical": CANONICAL, "hash": "h", "idempotent": False, "approval": None, "attached": []}
+    x = mock([ok(done)]).call("run_command", "LONG BTC-PERP 100")
+    assert type(x) is models.CommandExecuted and type(x.order) is models.Order and (x.order.status, x.canonical.instrument) == ("FILLED", "hyperliquid:BTC")
+    q = mock([ok({"kind": "query", "command": "show", "mode": "paper", "dryRun": False, "query": "positions", "data": {"positions": []}})]).call("run_command", "SHOW POSITIONS")
+    assert type(q) is models.CommandQuery and q.query == "positions"
+    c = mock([ok({"kind": "control", "command": "kill", "mode": "paper", "dryRun": True, "executed": False, "control": {"type": "kill_switch_on"}})]).call("run_command", "KILL", dry_run=True)
+    assert type(c) is models.CommandControl and c.control.type == "kill_switch_on"
+    assert isinstance(mock([ok({"kind": "order", "command": "x", "mode": "paper", "dryRun": True, "executed": False})]).error("run_command", "LONG BTC-PERP 1"), ServerError)
     for bad in ("", "   ", "x" * 301):
         assert isinstance(h.error("run_command", bad), ConfigurationError)
     assert len(h.calls) == 1
+
+
+# ---------------------------------------------------------------------------------------------------------------- agents
+def test_agent_reads_are_one_mode_per_call_and_the_mode_is_required(mock: Any) -> None:
+    h = mock([ok()])
+    for name, kw in (("list_agent_signals", {}), ("list_agent_journal", {"mode": "all"}), ("list_agent_orders", {"mode": None}), ("get_agent_performance", {"mode": "PAPER"})):
+        try:
+            e: Any = h.error(name, "a1", **kw)
+        except TypeError as missing:  # `mode` is a required keyword argument
+            e = missing
+        assert isinstance(e, (ConfigurationError, TypeError)), name
+    assert h.calls == []
+    for bad in ({"risk": {"x": 1.5}}, {"mode": "now"}, {"capital_usdc": 0.5}, {"venues": ["binance"]}):
+        assert isinstance(h.error("create_agent", name="alpha", template="market-making", **bad), ConfigurationError), bad
+    assert h.calls == []
+
+
+def test_wait_for_job_polls_until_finished_and_a_timeout_is_not_a_failure(mock: Any) -> None:
+    def job(status: str) -> dict[str, Any]:
+        return ok({"job": {"id": "j1", "kind": "backtest", "status": status, "attempts": 1}})
+
+    h = mock([job("queued"), job("running"), job("done")])
+    assert h.call("wait_for_job", "j1", poll_interval=0.01).job.status == "done"
+    assert len(h.calls) == 3 and h.sleeps == [0.01, 0.01]
+    for s in ("failed", "cancelled"):
+        assert mock([job(s)]).call("wait_for_job", "j1").job.status == s
+    e = mock([job("running")]).error("wait_for_job", "j1", timeout=0)
+    assert isinstance(e, WaitTimeout) and "not failed" in str(e) and e.last.job.status == "running"
 
 
 # ---------------------------------------------------------------------------------------------------------------- pagination
@@ -394,6 +452,7 @@ def test_other_write_arguments_are_validated_locally_with_the_contract(mock: Any
         ("reduce_position", ("p",), {"fraction": "1.5"}), ("reduce_position", ("p",), {"fraction": 0.5}), ("close_position", ("p",), {"slippage_bps": 0}),
         ("create_agent", (), {"kind": "perp", "name": "x", "universe": ["BTC"]}), ("create_agent", (), {"kind": "perp", "name": "ok", "universe": []}),
         ("backtest_strategy", ("s",), {"symbols": ["btc"]}), ("start_strategy", ("s",), {"mode": "real"}), ("start_strategy", ("s",), {"mode": "paper", "agent_id": "x"}),
+        ("backtest_agent", ("a",), {"hours": 0}), ("pause_agent", ("a",), {"reason": "x" * 201}), ("create_strategy", (), {"kind": "perp", "path": "p", "agent_id": "x"}),
         ("stop_agent", ("a",), {"reason": "x" * 201}), ("cancel_order", ("",), {}), ("get_order", ("",), {}), ("cancel_order", ("o",), {"idempotency_key": "short"}),
         ("cancel_order", ("o",), {"idempotency_key": "bad key with spaces"}),
     ):  # fmt: skip

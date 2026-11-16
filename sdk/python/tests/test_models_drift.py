@@ -59,6 +59,9 @@ def test_the_generator_refuses_what_it_does_not_understand() -> None:
     assert g.type_of({"const": True}, "X", False) == "Literal[True]"
     assert g.type_of({"type": "string", "const": "perpetual"}, "X", False) == "Literal['perpetual']"
     assert g.type_of({"const": None}, "X", False) == "Literal[None]"
+    assert g.type_of({"type": "object", "propertyNames": {"type": "string"}, "additionalProperties": {"anyOf": [{"type": "number"}, {"type": "string"}]}}, "X", False) == "dict[str, Decimal | str]"
+    assert g.type_of({"type": "object", "propertyNames": {"type": "string"}, "additionalProperties": {}}, "X", False) == "dict[str, Any]"
+    assert g.type_of({"type": "integer", "exclusiveMinimum": 0}, "X", True) == "Annotated[int, Field(gt=0)]"
     assert g.type_of({"type": ["number", "null"]}, "X", False) == "Decimal | None"
     assert g.type_of({"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "items": False}, "X", False) == "tuple[str, str]"
 
@@ -85,7 +88,7 @@ def _constraints(meta: list[Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for m in meta:
         for item in m.metadata if isinstance(m, FieldInfo) else [m]:
-            for attr, key in (("pattern", "pattern"), ("min_length", "min"), ("max_length", "max"), ("ge", "ge"), ("le", "le")):
+            for attr, key in (("pattern", "pattern"), ("min_length", "min"), ("max_length", "max"), ("ge", "ge"), ("le", "le"), ("gt", "gt"), ("lt", "lt")):
                 if getattr(item, attr, None) is not None:
                     out[key] = getattr(item, attr)
     return out
@@ -131,7 +134,7 @@ def check(schema: Any, ann: Any, where: str, request: bool, problems: list[str])
         if t is not want:
             problems.append(f"{where}: {kind} in the document, {t} in the model (a JSON number must be Decimal, never float)")
         if request:
-            doc = {k: s[j] for j, k in (("pattern", "pattern"), ("minLength", "min"), ("maxLength", "max"), ("minimum", "ge"), ("maximum", "le")) if j in s}
+            doc = {k: s[j] for j, k in (("pattern", "pattern"), ("minLength", "min"), ("maxLength", "max"), ("minimum", "ge"), ("maximum", "le"), ("exclusiveMinimum", "gt"), ("exclusiveMaximum", "lt")) if j in s}
             if doc != cons:
                 problems.append(f"{where}: constraints {doc} in the document, {cons} in the model")
     elif kind == "array":
@@ -192,7 +195,13 @@ def test_every_schema_of_the_document_matches_its_model() -> None:
     seen_resp, seen_req = set(), set()
     for op_id, o in _operations():
         ok = o["responses"].get("200", {}).get("content", {}).get("application/json")
-        if ok:
+        if ok and "anyOf" in ok["schema"]:  # an answer with several shapes: each alternative against its own model, in order
+            seen_resp.add(op_id)
+            alts = get_args(models.RESPONSE_MODELS[op_id])
+            assert len(alts) == len(ok["schema"]["anyOf"]), op_id
+            for i, (alt, cls) in enumerate(zip(ok["schema"]["anyOf"], alts, strict=True)):
+                check_model(alt, cls, f"{op_id}[{i}]", False, problems)
+        elif ok:
             seen_resp.add(op_id)
             check_model(ok["schema"], models.RESPONSE_MODELS[op_id], op_id, False, problems)
         body = o.get("requestBody", {}).get("content", {}).get("application/json")
@@ -202,14 +211,17 @@ def test_every_schema_of_the_document_matches_its_model() -> None:
     assert not problems, "\n".join(problems)
     assert seen_resp == set(models.RESPONSE_MODELS)
     assert seen_req == set(models.REQUEST_MODELS)
-    assert len(seen_resp) == 25  # every implemented operation has a success schema; the 7 that answer 501 have none
-    assert len(seen_req) == 13  # cancelOrder has no body
+    assert len(seen_resp) == 41  # every operation has a success schema
+    assert len(seen_req) == 15  # cancelOrder has no body
     # the components are walked too, and are the classes the answers use
     comp: list[str] = []
-    for name, cls in (("Order", models.Order), ("CanonicalOrder", models.CanonicalOrder), ("RiskCheck", models.RiskCheck), ("Error", models.ApiErrorBody)):
+    for name, cls in (("Order", models.Order), ("CanonicalOrder", models.CanonicalOrder), ("RiskCheck", models.RiskCheck), ("Switch", models.Switch), ("Error", models.ApiErrorBody)):
         check_model(OPENAPI["components"]["schemas"][name], cls, name, False, comp)
     assert not comp, "\n".join(comp)
-    assert set(OPENAPI["components"]["schemas"]) == {"Order", "CanonicalOrder", "RiskCheck", "Error"}
+    assert set(OPENAPI["components"]["schemas"]) == {"Order", "CanonicalOrder", "RiskCheck", "Switch", "Error"}
+    assert get_args(models.CommandResult) == (models.CommandQuery, models.CommandControl, models.CommandDryRun, models.CommandExecuted)
+    assert models.CommandDryRun.model_fields["order"].annotation is models.CanonicalOrder
+    assert models.CommandExecuted.model_fields["order"].annotation is models.Order
     assert models.PlacedOrder.model_fields["order"].annotation is models.Order
     assert models.StopRequest is not models.KillSwitchRequest  # the same shape, two operations, two names
 
@@ -260,7 +272,10 @@ def test_constants_follow_the_document() -> None:
     assert list(models.WEBHOOK_EVENTS) == [e["event"] for e in OPENAPI["x-spw-webhook-events"]]
     ops = dict(_operations())
     assert set(models.OPERATIONS) == set(ops)
-    assert len(ops) == 32
+    assert len(ops) == 41
+    assert all(o[3] for o in models.OPERATIONS.values())  # every operation is implemented
+    assert sorted(k for k, o in models.OPERATIONS.items() if o[5]) == ["closePosition", "placeOrder", "reducePosition"]  # a mandate on the KEY
+    assert list(models.EXECUTION_SCOPES) == ["orders:execute", "orders:cancel", "positions:manage"]
     assert list(models.ORDER_STATES) == [x["state"] for x in OPENAPI["x-spw-order-states"]]
     assert list(models.FINAL_ORDER_STATES) == [x["state"] for x in OPENAPI["x-spw-order-states"] if x["final"]] == ["FILLED", "CANCELLED", "REJECTED", "FAILED"]
     assert list(models.MANDATE_DENY_REASONS) == OPENAPI["x-spw-mandate-deny-reasons"]
@@ -286,9 +301,10 @@ def test_the_query_parameters_of_each_read_are_the_methods_keyword_arguments() -
         if not query:
             continue
         for cls in (SPWallet, AsyncSPWallet):
-            params = set(inspect.signature(getattr(cls, CASES[op_id][0])).parameters) - {"self", "symbol", "market_id", "slug"}
+            params = set(inspect.signature(getattr(cls, CASES[op_id][0])).parameters) - {"self", "symbol", "market_id", "slug", "agent_id"}
             camel = {p.split("_")[0] + "".join(w.title() for w in p.split("_")[1:]) for p in params}
-            assert camel == query, (op_id, cls.__name__)
+            # the document's shared page query declares `open` on the signals and the journal too; only the ORDERS have open ones
+            assert camel == query - ({"open"} if op_id in ("listAgentSignals", "listAgentJournal") else set()), (op_id, cls.__name__)
 
 
 def test_python_sources_exist() -> None:

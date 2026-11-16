@@ -20,8 +20,8 @@ from ._models_base import ApiModel, RequestModel
 API_VERSION = '1.0.0'
 SCOPES: tuple[str, ...] = ('wallet:read', 'markets:read', 'orders:read', 'orders:prepare', 'orders:execute', 'orders:cancel', 'positions:read', 'positions:manage', 'strategies:read', 'strategies:manage', 'agents:read', 'agents:manage',)
 #: inert on a key that is not bound to a trading mandate (403 `mandate_required`)
-EXECUTION_SCOPES: tuple[str, ...] = ('orders:execute', 'orders:cancel', 'positions:manage', 'strategies:manage', 'agents:manage',)
-WEBHOOK_EVENTS: tuple[str, ...] = ('key.revoked', 'risk.kill_switch', 'agent.updated', 'order.updated',)
+EXECUTION_SCOPES: tuple[str, ...] = ('orders:execute', 'orders:cancel', 'positions:manage',)
+WEBHOOK_EVENTS: tuple[str, ...] = ('key.revoked', 'risk.kill_switch', 'agent.updated', 'risk.proposal', 'order.updated',)
 #: the states of the unified order state machine — the closed set of `Order.status`
 ORDER_STATES: tuple[str, ...] = ('CREATED', 'VALIDATED', 'AWAITING_APPROVAL', 'APPROVED', 'SUBMITTING', 'SUBMITTED', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED', 'REJECTED', 'FAILED', 'UNKNOWN',)
 #: UNKNOWN is not among them: it is neither final nor a failure
@@ -138,6 +138,22 @@ class CanonicalOrder(ApiModel):
     mandate_id: str | None = Field(alias='mandateId')
     created_at: int = Field(alias='createdAt', description='milliseconds since the Unix epoch')
     expires_at: int = Field(alias='expiresAt', description='milliseconds since the Unix epoch')
+
+
+class SwitchBy(ApiModel):
+    """extra members are allowed by the contract"""
+
+    kind: str
+    id: str
+
+
+class Switch(ApiModel):
+    """extra members are allowed by the contract"""
+
+    on: bool
+    at: int | None
+    by: SwitchBy | None
+    reason: str | None
 
 
 class OpenApiDocument(ApiModel):
@@ -691,7 +707,7 @@ class OrderRequest(RequestModel):
     side: Literal["buy", "sell"]
     type: Literal["limit", "market", "stop_market", "stop_limit", "take_profit_market", "take_profit_limit"]
     size: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description='quantity of the base asset. Exactly one of `size` and `notional` is required')
-    notional: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description='value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required')
+    notional: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description='value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required. A SPOT order: a SELL names `size` (the quantity sold); a BUY names `notional` — the amount of the quote asset to spend — because a swap is exact-input')
     price: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description='decimal number as a string (never a float)')
     trigger_price: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, alias='triggerPrice', description='decimal number as a string (never a float)')
     reduce_only: bool | None = Field(default=None, alias='reduceOnly', description='server default: false')
@@ -761,6 +777,21 @@ class Strategies(ApiModel):
     errors: list[PartialError]
 
 
+class StrategyResultStrategy(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    agent_id: str = Field(alias='agentId')
+    sha256: str
+    status: str
+
+
+class StrategyResult(ApiModel):
+    """extra members are allowed by the contract"""
+
+    strategy: StrategyResultStrategy
+
+
 class CreateStrategyRequest(RequestModel):
     """closed object in the contract"""
 
@@ -773,14 +804,17 @@ class Agent(ApiModel):
     """extra members are allowed by the contract"""
 
     id: str
-    kind: Literal["spot", "perp"]
+    kind: Literal["spot", "perp", "stream", "supervisor"]
     name: str
-    state: str
-    mode: str
+    family: str
+    state: str = Field(description='historical raw state')
+    mode: str = Field(description='historical raw mode')
+    lifecycle: Literal["active", "paused", "stopped"]
     trading_mode: Literal["research", "paper", "live"] | None = Field(alias='tradingMode')
     venue: str
     universe: list[str]
     interval: str
+    config_version: int = Field(alias='configVersion')
 
 
 class Agents(ApiModel):
@@ -789,15 +823,35 @@ class Agents(ApiModel):
     agents: list[Agent]
 
 
+class AgentResultAgent(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    state: Literal["active", "paused", "stopped"]
+    mode: Literal["research", "paper", "live"] = Field(description='research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.')
+
+
+class AgentResult(ApiModel):
+    """extra members are allowed by the contract"""
+
+    agent: AgentResultAgent
+
+
 class CreateAgentRequest(RequestModel):
     """closed object in the contract"""
 
-    kind: Literal["spot", "perp"]
+    kind: Literal["spot", "perp"] | None = Field(default=None, description='without a template: perp (a spot agent needs a vault from the signer: owner only)')
+    template: Annotated[str, Field(max_length=40)] | None = Field(default=None, description='one of GET /agents/templates')
     name: Annotated[str, Field(min_length=2, max_length=40)]
     mission: Annotated[str, Field(max_length=400)] | None = Field(default=None, description='server default: ""')
-    universe: Annotated[list[Annotated[str, Field(pattern='^[A-Z0-9]{2,15}$')]], Field(min_length=1, max_length=12)]
-    interval: Literal["1h", "1d"] | None = Field(default=None, description='server default: "1h"')
-    mode: Literal["paper", "live"] | None = Field(default=None, description='paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. — server default: "paper"')
+    universe: Annotated[list[Annotated[str, Field(pattern='^[A-Z0-9]{2,15}$')]], Field(min_length=1, max_length=12)] | None = Field(default=None)
+    venues: Annotated[list[Literal["hyperliquid", "edgex", "dydx", "gmx"]], Field(min_length=1, max_length=2)] | None = Field(default=None)
+    strategy_path: Annotated[str, Field(max_length=60)] | None = Field(default=None, alias='strategyPath')
+    interval: Literal["1h", "4h", "1d"] | None = Field(default=None)
+    capital_usdc: Annotated[str, Field(pattern='^\\d{1,7}(\\.\\d{1,6})?$')] | None = Field(default=None, alias='capitalUsdc')
+    risk: dict[str, Decimal | str | bool] | None = Field(default=None)
+    config: dict[str, Any] | None = Field(default=None)
+    mode: Literal["research", "paper", "live"] | None = Field(default=None, description='research (default: created, not running) or paper (stream and supervisor agents start at once); never live — server default: "research"')
 
 
 class KillSwitch(ApiModel):
@@ -826,22 +880,6 @@ class RiskAccount(ApiModel):
     halted: bool | None
 
 
-class SwitchBy(ApiModel):
-    """extra members are allowed by the contract"""
-
-    kind: str
-    id: str
-
-
-class Switch(ApiModel):
-    """extra members are allowed by the contract"""
-
-    on: bool
-    at: int | None
-    by: SwitchBy | None
-    reason: str | None
-
-
 class RiskEngine(ApiModel):
     """the global switches of the risk engine: `killSwitch.on` blocks every new risk; `readOnly.on` lets only cancels pass — extra members are allowed by the contract"""
 
@@ -865,7 +903,7 @@ class Risk(ApiModel):
 class OrderPreviewResolved(ApiModel):
     """extra members are allowed by the contract"""
 
-    size: str = Field(description='base units')
+    size: str | None = Field(description='base units; null when the order is sized by a quote amount the venue converts (a GMX increase)')
     worst_price: str | None = Field(alias='worstPrice')
     notional_usd: str | None = Field(alias='notionalUsd')
 
@@ -902,7 +940,7 @@ class PreviewRisk(ApiModel):
     decision: Literal["allow", "deny"]
     reducing: bool
     checks: list[RiskCheck]
-    derived: PreviewRiskDerived
+    derived: PreviewRiskDerived | None = Field(description='null for a spot order: of the risk engine only the kill switch and read-only mode apply to it')
 
 
 class OrderPreviewMandate(ApiModel):
@@ -930,7 +968,7 @@ class OrderPreviewEngine(ApiModel):
 class PreviewAccount(ApiModel):
     """extra members are allowed by the contract"""
 
-    id: str
+    id: str | None = Field(description='null for a spot order (the wallet itself)')
     venue: str
     network: str
     equity: str | None = Field(default=None)
@@ -967,13 +1005,46 @@ class ReducePositionRequest(RequestModel):
     slippage_bps: Annotated[int, Field(ge=1, le=500)] | None = Field(default=None, alias='slippageBps')
 
 
-class CommandResultControl(ApiModel):
+class CommandQuery(ApiModel):
+    """SHOW … — extra members are allowed by the contract"""
+
+    kind: Literal['query']
+    command: str = Field(description='the parsed command type')
+    mode: Literal["paper", "live"] = Field(description='paper = simulated, live = a venue or on-chain account. The two are never merged in one figure.')
+    dry_run: bool = Field(alias='dryRun')
+    query: str
+    data: dict[str, Any] = Field(description='the answer of the matching read operation')
+
+
+class CommandControlControl(ApiModel):
     """extra members are allowed by the contract"""
 
-    type: Literal["cancel_order", "cancel_all", "kill_switch_on"]
+    type: Literal["cancel_order", "cancel_all", "kill_switch_on", "stop_all_agents"]
 
 
-class CommandResultAttachedItem(ApiModel):
+class CommandControlResultsItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    ok: bool
+
+
+class CommandControl(ApiModel):
+    """CANCEL, KILL, STOP ALL AGENTS — extra members are allowed by the contract"""
+
+    kind: Literal['control']
+    command: str = Field(description='the parsed command type')
+    mode: Literal["paper", "live"] = Field(description='paper = simulated, live = a venue or on-chain account. The two are never merged in one figure.')
+    dry_run: bool = Field(alias='dryRun')
+    executed: bool
+    control: CommandControlControl
+    result: dict[str, Any] | None = Field(default=None, description='CANCEL ORDER, executed: the answer of the cancel')
+    results: list[CommandControlResultsItem] | None = Field(default=None, description='CANCEL ALL, executed: one row per order')
+    orders: list[str] | None = Field(default=None, description='CANCEL ALL, dry run: the ids that would be cancelled')
+    kill_switch: Switch | None = Field(default=None, alias='killSwitch')
+
+
+class CommandDryRunAttachedItem(ApiModel):
     """extra members are allowed by the contract"""
 
     role: Literal["stop_loss", "take_profit"]
@@ -981,34 +1052,34 @@ class CommandResultAttachedItem(ApiModel):
     note: str
 
 
-class CommandResultResultsItem(ApiModel):
-    """extra members are allowed by the contract"""
+class CommandDryRun(ApiModel):
+    """an order command with `dryRun` — extra members are allowed by the contract"""
 
-    id: str
-    ok: bool
-
-
-class CommandResult(ApiModel):
-    """extra members are allowed by the contract"""
-
-    kind: Literal["query", "control", "order"] = Field(description='what the command resolved to')
+    kind: Literal['order']
     command: str = Field(description='the parsed command type')
     mode: Literal["paper", "live"] = Field(description='paper = simulated, live = a venue or on-chain account. The two are never merged in one figure.')
     dry_run: bool = Field(alias='dryRun')
-    executed: bool | None = Field(default=None, description='absent for a query; false for a dry run')
-    query: str | None = Field(default=None)
-    data: dict[str, Any] | None = Field(default=None, description='query: the answer of the matching read operation')
-    control: CommandResultControl | None = Field(default=None)
-    order: dict[str, Any] | None = Field(default=None, description='kind `order`. Dry run: the canonical order the command resolves to. Executed: the order as POST /orders answers it (`id`, `status`, `final`, …)')
-    canonical: CanonicalOrder | None = Field(default=None, description='executed order: the canonical order that was placed')
-    hash: str | None = Field(default=None)
-    idempotent: bool | None = Field(default=None)
-    approval: dict[str, Any] | None = Field(default=None)
-    attached: list[CommandResultAttachedItem] | None = Field(default=None)
-    result: dict[str, Any] | None = Field(default=None, description='CANCEL ORDER: the answer of the cancel')
-    results: list[CommandResultResultsItem] | None = Field(default=None, description='CANCEL ALL: one row per order')
-    orders: list[str] | None = Field(default=None, description='CANCEL ALL dry run: the ids that would be cancelled')
-    kill_switch: Switch | None = Field(default=None, alias='killSwitch')
+    executed: Literal[False]
+    order: CanonicalOrder = Field(description='the canonical order the command resolves to; nothing was created')
+    hash: str
+    attached: list[CommandDryRunAttachedItem]
+    preview: dict[str, Any] | None = Field(default=None, description='spot: the preview of the swap the order would become')
+
+
+class CommandExecuted(ApiModel):
+    """an order command, executed — extra members are allowed by the contract"""
+
+    kind: Literal['order']
+    command: str = Field(description='the parsed command type')
+    mode: Literal["paper", "live"] = Field(description='paper = simulated, live = a venue or on-chain account. The two are never merged in one figure.')
+    dry_run: bool = Field(alias='dryRun')
+    executed: Literal[True]
+    order: Order = Field(description='the order that was placed, as POST /orders answers it')
+    canonical: CanonicalOrder = Field(description='the canonical order that was placed')
+    hash: str
+    idempotent: bool
+    approval: dict[str, Any] | None
+    attached: list[CommandDryRunAttachedItem]
 
 
 class CommandRequest(RequestModel):
@@ -1033,6 +1104,22 @@ class KillSwitchRequest(RequestModel):
     reason: Annotated[str, Field(max_length=200)] | None = Field(default=None, description='server default: ""')
 
 
+class JobResultJob(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    kind: str
+    status: Literal["queued", "running", "done", "failed", "cancelled"]
+    attempts: int
+
+
+class JobResult(ApiModel):
+    """closed object in the contract"""
+
+    job: JobResultJob
+    label: str | None = Field(default=None)
+
+
 class BacktestRequest(RequestModel):
     """closed object in the contract"""
 
@@ -1043,7 +1130,7 @@ class BacktestRequest(RequestModel):
 class StartRequest(RequestModel):
     """closed object in the contract"""
 
-    mode: Literal["paper", "live"] = Field(description='paper = simulated, live = a venue or on-chain account. The two are never merged in one figure.')
+    mode: Literal["research", "paper", "live"] = Field(description='research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.')
     agent_id: Annotated[str, Field(pattern='^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$')] | None = Field(default=None, alias='agentId')
 
 
@@ -1051,6 +1138,120 @@ class StopRequest(RequestModel):
     """closed object in the contract"""
 
     reason: Annotated[str, Field(max_length=200)] | None = Field(default=None, description='server default: ""')
+
+
+class AgentTemplatesTemplatesItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    family: str
+    engine: str
+    modes: list[Literal["research", "paper", "live"]]
+    live_reason: str | None = Field(alias='liveReason')
+    strategy_installed: bool = Field(alias='strategyInstalled')
+
+
+class AgentTemplates(ApiModel):
+    """closed object in the contract"""
+
+    templates: list[AgentTemplatesTemplatesItem]
+
+
+class AgentDetailAgent(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    family: str
+    state: Literal["active", "paused", "stopped"]
+    mode: Literal["research", "paper", "live"] = Field(description='research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.')
+
+
+class AgentDetail(ApiModel):
+    """extra members are allowed by the contract"""
+
+    agent: AgentDetailAgent
+    mandate_draft: dict[str, Any] | None = Field(alias='mandateDraft')
+
+
+class AgentSignalsSignalsItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    ts: int = Field(description='milliseconds since the Unix epoch')
+    mode: Literal["research", "paper", "live"] = Field(description='research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.')
+    config_version: int = Field(alias='configVersion')
+    strategy_sha256: str = Field(alias='strategySha256')
+    decision: Literal["pending", "acted", "skipped"]
+    reason_code: str | None = Field(alias='reasonCode')
+
+
+class AgentSignals(ApiModel):
+    """closed object in the contract"""
+
+    mode: Literal["research", "paper", "live"] = Field(description='research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.')
+    signals: list[AgentSignalsSignalsItem]
+
+
+class AgentJournalEntriesItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    ts: int = Field(description='milliseconds since the Unix epoch')
+    mode: Literal["research", "paper", "live"] = Field(description='research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.')
+    kind: str
+    severity: str
+    title: str
+
+
+class AgentJournal(ApiModel):
+    """closed object in the contract"""
+
+    mode: Literal["research", "paper", "live"] = Field(description='research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.')
+    entries: list[AgentJournalEntriesItem]
+
+
+class AgentOrdersOrdersItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    mode: Literal["paper", "live"]
+    instrument: str
+    side: str
+    state: str = Field(description='unified order state (CREATED … FILLED, CANCELLED, REJECTED, FAILED, UNKNOWN)')
+
+
+class AgentOrders(ApiModel):
+    """closed object in the contract"""
+
+    mode: Literal["research", "paper", "live"] = Field(description='research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.')
+    orders: list[AgentOrdersOrdersItem]
+
+
+class AgentPerformanceWarningsItem(ApiModel):
+    """closed object in the contract"""
+
+    code: str
+    message: str
+
+
+class AgentPerformance(ApiModel):
+    """extra members are allowed by the contract"""
+
+    mode: Literal["research", "paper", "live"] = Field(description='research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.')
+    label: str = Field(description='says which mode the figures are for; a backtest is never in this answer')
+    points: int
+    warnings: list[AgentPerformanceWarningsItem]
+
+
+class AgentBacktestRequest(RequestModel):
+    """closed object in the contract"""
+
+    version_id: Annotated[str, Field(pattern='^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$')] | None = Field(default=None, alias='versionId')
+    hours: Annotated[int, Field(ge=1, le=168)] | None = Field(default=None, description='stream agents: how many hours of recorded snapshots to replay')
+
+
+#: one of several shapes: narrow with isinstance (or on the members `kind` and `executed`)
+CommandResult = CommandQuery | CommandControl | CommandDryRun | CommandExecuted
 
 
 #: operationId -> (method, path template, scope, implemented by the server, mutating/idempotency-keyed, needs a mandate)
@@ -1073,20 +1274,29 @@ OPERATIONS: dict[str, tuple[str, str, str, bool, bool, bool]] = {
     'getOrder': ('GET', '/api/v1/trading/orders/{id}', 'orders:read', True, False, False),
     'cancelOrder': ('DELETE', '/api/v1/trading/orders/{id}', 'orders:cancel', True, True, False),
     'listStrategies': ('GET', '/api/v1/trading/strategies', 'strategies:read', True, False, False),
-    'createStrategy': ('POST', '/api/v1/trading/strategies', 'strategies:manage', False, True, True),
+    'createStrategy': ('POST', '/api/v1/trading/strategies', 'strategies:manage', True, True, False),
     'listAgents': ('GET', '/api/v1/trading/agents', 'agents:read', True, False, False),
-    'createAgent': ('POST', '/api/v1/trading/agents', 'agents:manage', False, True, True),
+    'createAgent': ('POST', '/api/v1/trading/agents', 'agents:manage', True, True, False),
     'getRisk': ('GET', '/api/v1/trading/risk', 'positions:read', True, False, False),
     'previewOrder': ('POST', '/api/v1/trading/orders/preview', 'orders:prepare', True, False, False),
     'closePosition': ('POST', '/api/v1/trading/positions/{id}/close', 'positions:manage', True, True, True),
     'reducePosition': ('POST', '/api/v1/trading/positions/{id}/reduce', 'positions:manage', True, True, True),
     'runCommand': ('POST', '/api/v1/trading/commands', 'orders:prepare', True, True, False),
     'engageKillSwitch': ('POST', '/api/v1/trading/risk/kill-switch', 'positions:manage', True, False, False),
-    'backtestStrategy': ('POST', '/api/v1/trading/strategies/{id}/backtest', 'strategies:manage', False, True, True),
-    'startStrategy': ('POST', '/api/v1/trading/strategies/{id}/start', 'strategies:manage', False, True, True),
-    'stopStrategy': ('POST', '/api/v1/trading/strategies/{id}/stop', 'strategies:manage', False, True, True),
-    'startAgent': ('POST', '/api/v1/trading/agents/{id}/start', 'agents:manage', False, True, True),
-    'stopAgent': ('POST', '/api/v1/trading/agents/{id}/stop', 'agents:manage', False, True, True),
+    'backtestStrategy': ('POST', '/api/v1/trading/strategies/{id}/backtest', 'strategies:manage', True, True, False),
+    'startStrategy': ('POST', '/api/v1/trading/strategies/{id}/start', 'strategies:manage', True, True, False),
+    'stopStrategy': ('POST', '/api/v1/trading/strategies/{id}/stop', 'strategies:manage', True, True, False),
+    'listAgentTemplates': ('GET', '/api/v1/trading/agents/templates', 'agents:read', True, False, False),
+    'getAgent': ('GET', '/api/v1/trading/agents/{id}', 'agents:read', True, False, False),
+    'listAgentSignals': ('GET', '/api/v1/trading/agents/{id}/signals', 'agents:read', True, False, False),
+    'listAgentJournal': ('GET', '/api/v1/trading/agents/{id}/journal', 'agents:read', True, False, False),
+    'listAgentOrders': ('GET', '/api/v1/trading/agents/{id}/orders', 'agents:read', True, False, False),
+    'getAgentPerformance': ('GET', '/api/v1/trading/agents/{id}/performance', 'agents:read', True, False, False),
+    'getJob': ('GET', '/api/v1/trading/jobs/{id}', 'agents:read', True, False, False),
+    'startAgent': ('POST', '/api/v1/trading/agents/{id}/start', 'agents:manage', True, True, False),
+    'pauseAgent': ('POST', '/api/v1/trading/agents/{id}/pause', 'agents:manage', True, True, False),
+    'stopAgent': ('POST', '/api/v1/trading/agents/{id}/stop', 'agents:manage', True, True, False),
+    'backtestAgent': ('POST', '/api/v1/trading/agents/{id}/backtest', 'agents:manage', True, True, False),
 }
 #: operationId -> every error answer the operation can give: (HTTP status, code) — the document's `x-spw-errors`
 OPERATION_ERRORS: dict[str, tuple[tuple[int, str], ...]] = {
@@ -1104,28 +1314,38 @@ OPERATION_ERRORS: dict[str, tuple[tuple[int, str], ...]] = {
     'getActivity': ((400, 'bad_request'), (400, 'invalid_cursor'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
     'listPositions': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'service_unavailable'),),
     'listOrders': ((400, 'bad_request'), (400, 'invalid_cursor'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
-    'placeOrder': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_market'), (404, 'unknown_venue'), (409, 'account_required'), (409, 'ambiguous_symbol'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'placeOrder': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'gmx_disabled'), (403, 'gmx_requires_owner_passkey'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_integrity'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'owner_session_required'), (403, 'position_not_attributable'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_market'), (404, 'unknown_venue'), (409, 'account_has_active_mandate'), (409, 'account_required'), (409, 'ambiguous_command'), (409, 'ambiguous_order'), (409, 'ambiguous_symbol'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'fee_cap_not_expressible'), (422, 'gmx_leverage_required'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'inconsistent_prices'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'invalid_order'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'missing_balance'), (422, 'missing_reference_price'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'no_client_id_format'), (422, 'no_instrument'), (422, 'no_position'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_buy_needs_quote_amount'), (422, 'spot_market_only'), (422, 'spot_paper_not_available'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'swap_not_enabled'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'unknown_instrument'), (422, 'unsupported_asset'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (422, 'zero_size'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'), (502, 'swap_flow_failed'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
     'getOrder': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'unknown_order'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
-    'cancelOrder': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'not_your_order'), (404, 'unknown_order'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'cancel_in_app'), (422, 'venue_rejected'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'signer_unreachable'), (503, 'venue_unavailable'),),
+    'cancelOrder': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'gmx_requires_owner_passkey'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'not_your_order'), (403, 'owner_session_required'), (404, 'unknown_order'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'cancel_in_app'), (422, 'venue_rejected'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'signer_unreachable'), (503, 'venue_unavailable'),),
     'listStrategies': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
-    'createStrategy': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
+    'createStrategy': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_found'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (409, 'wrong_kind'), (422, 'bad_strategy'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
     'listAgents': ((401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
-    'createAgent': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
+    'createAgent': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'owner_required'), (409, 'bad_report'), (409, 'bad_state'), (409, 'exists'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (409, 'live_unavailable'), (409, 'mandate_required'), (409, 'no_report'), (409, 'no_strategy'), (409, 'strategy_not_installed'), (409, 'wrong_kind'), (422, 'bad_request'), (422, 'universe_mismatch'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
     'getRisk': ((401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
-    'previewOrder': ((400, 'bad_request'), (400, 'invalid_order'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_market'), (404, 'unknown_venue'), (409, 'account_required'), (409, 'ambiguous_symbol'), (422, 'below_min_size'), (422, 'no_account'), (422, 'spot_via_swap_screen'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
-    'closePosition': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_position'), (404, 'unknown_venue'), (409, 'account_required'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'close_in_app'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'no_position'), (422, 'not_reducing'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
-    'reducePosition': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_position'), (404, 'unknown_venue'), (409, 'account_required'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'close_in_app'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'no_position'), (422, 'not_reducing'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
-    'runCommand': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'parse_error'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'not_your_order'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_order'), (404, 'unknown_venue'), (409, 'account_required'), (409, 'ambiguous_command'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'cancel_in_app'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'fee_cap_not_expressible'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'inconsistent_prices'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'invalid_order'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'missing_balance'), (422, 'missing_reference_price'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'no_client_id_format'), (422, 'no_instrument'), (422, 'no_position'), (422, 'not_reducing'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (422, 'zero_size'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'service_unavailable'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'previewOrder': ((400, 'bad_request'), (400, 'invalid_order'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'owner_session_required'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_market'), (404, 'unknown_venue'), (409, 'account_required'), (409, 'ambiguous_command'), (409, 'ambiguous_order'), (409, 'ambiguous_symbol'), (422, 'below_min_size'), (422, 'fee_cap_not_expressible'), (422, 'gmx_leverage_required'), (422, 'inconsistent_prices'), (422, 'invalid_order'), (422, 'missing_balance'), (422, 'missing_reference_price'), (422, 'no_account'), (422, 'no_client_id_format'), (422, 'no_instrument'), (422, 'no_position'), (422, 'spot_buy_needs_quote_amount'), (422, 'spot_market_only'), (422, 'spot_paper_not_available'), (422, 'spot_via_swap_screen'), (422, 'swap_not_enabled'), (422, 'unknown_instrument'), (422, 'unsupported_asset'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (422, 'zero_size'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'), (502, 'swap_flow_failed'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'closePosition': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'gmx_disabled'), (403, 'gmx_requires_owner_passkey'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_integrity'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'owner_session_required'), (403, 'position_not_attributable'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_position'), (404, 'unknown_venue'), (409, 'account_has_active_mandate'), (409, 'account_required'), (409, 'ambiguous_command'), (409, 'ambiguous_order'), (409, 'ambiguous_position'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'close_in_app'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'fee_cap_not_expressible'), (422, 'gmx_leverage_required'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'inconsistent_prices'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'invalid_order'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'missing_balance'), (422, 'missing_reference_price'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'no_client_id_format'), (422, 'no_instrument'), (422, 'no_position'), (422, 'not_reducing'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_buy_needs_quote_amount'), (422, 'spot_market_only'), (422, 'spot_paper_not_available'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'swap_not_enabled'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'unknown_instrument'), (422, 'unsupported_asset'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (422, 'zero_size'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'), (502, 'swap_flow_failed'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'reducePosition': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'gmx_disabled'), (403, 'gmx_requires_owner_passkey'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_integrity'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'owner_session_required'), (403, 'position_not_attributable'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_position'), (404, 'unknown_venue'), (409, 'account_has_active_mandate'), (409, 'account_required'), (409, 'ambiguous_command'), (409, 'ambiguous_order'), (409, 'ambiguous_position'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'close_in_app'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'fee_cap_not_expressible'), (422, 'gmx_leverage_required'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'inconsistent_prices'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'invalid_order'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'missing_balance'), (422, 'missing_reference_price'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'no_client_id_format'), (422, 'no_instrument'), (422, 'no_position'), (422, 'not_reducing'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_buy_needs_quote_amount'), (422, 'spot_market_only'), (422, 'spot_paper_not_available'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'swap_not_enabled'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'unknown_instrument'), (422, 'unsupported_asset'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (422, 'zero_size'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'), (502, 'swap_flow_failed'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'runCommand': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'parse_error'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'gmx_disabled'), (403, 'gmx_requires_owner_passkey'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_integrity'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'not_your_order'), (403, 'owner_session_required'), (403, 'position_not_attributable'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_order'), (404, 'unknown_venue'), (409, 'account_has_active_mandate'), (409, 'account_required'), (409, 'ambiguous_command'), (409, 'ambiguous_order'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'cancel_in_app'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'fee_cap_not_expressible'), (422, 'gmx_leverage_required'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'inconsistent_prices'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'invalid_order'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'missing_balance'), (422, 'missing_reference_price'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'no_client_id_format'), (422, 'no_instrument'), (422, 'no_position'), (422, 'not_reducing'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_buy_needs_quote_amount'), (422, 'spot_market_only'), (422, 'spot_paper_not_available'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'swap_not_enabled'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'unknown_instrument'), (422, 'unsupported_asset'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (422, 'zero_size'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'), (502, 'swap_flow_failed'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'service_unavailable'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
     'engageKillSwitch': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
-    'backtestStrategy': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
-    'startStrategy': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
-    'stopStrategy': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
-    'startAgent': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
-    'stopAgent': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
+    'backtestStrategy': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_found'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'startStrategy': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'owner_required'), (403, 'restricted'), (404, 'not_found'), (409, 'bad_report'), (409, 'bad_request'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (409, 'live_unavailable'), (409, 'mandate_required'), (409, 'no_report'), (409, 'no_strategy'), (409, 'other_version'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'stopStrategy': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_found'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'listAgentTemplates': ((401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'getAgent': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_found'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'listAgentSignals': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_found'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'listAgentJournal': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_found'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'listAgentOrders': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_found'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'getAgentPerformance': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_found'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'getJob': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_found'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'startAgent': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'owner_required'), (403, 'restricted'), (404, 'not_found'), (409, 'bad_report'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (409, 'live_unavailable'), (409, 'mandate_required'), (409, 'no_report'), (409, 'no_strategy'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'pauseAgent': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_found'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'stopAgent': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_found'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'backtestAgent': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_found'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (409, 'no_strategy'), (409, 'wrong_kind'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
 }
 #: operationId -> response model
-RESPONSE_MODELS: dict[str, type[ApiModel]] = {'getOpenApi': OpenApiDocument, 'listMarkets': MarketList, 'compareMarkets': MarketComparison, 'getMarket': MarketDetail, 'getOrderbook': Orderbook, 'getCandles': Candles, 'listPrivateMarkets': PrivateMarkets, 'getPrivateMarketCompany': PrivateMarketCompanyDetail, 'getPrivateMarket': PrivateMarketDetail, 'getPortfolio': Portfolio, 'getBalances': Balances, 'getActivity': Activity, 'listPositions': Positions, 'listOrders': Orders, 'placeOrder': PlacedOrder, 'getOrder': OrderDetail, 'cancelOrder': CancelledOrder, 'listStrategies': Strategies, 'listAgents': Agents, 'getRisk': Risk, 'previewOrder': OrderPreview, 'closePosition': PlacedOrder, 'reducePosition': PlacedOrder, 'runCommand': CommandResult, 'engageKillSwitch': KillSwitchResult}
+#: (a model class, or a union of model classes for an answer that has several shapes)
+RESPONSE_MODELS: dict[str, Any] = {'getOpenApi': OpenApiDocument, 'listMarkets': MarketList, 'compareMarkets': MarketComparison, 'getMarket': MarketDetail, 'getOrderbook': Orderbook, 'getCandles': Candles, 'listPrivateMarkets': PrivateMarkets, 'getPrivateMarketCompany': PrivateMarketCompanyDetail, 'getPrivateMarket': PrivateMarketDetail, 'getPortfolio': Portfolio, 'getBalances': Balances, 'getActivity': Activity, 'listPositions': Positions, 'listOrders': Orders, 'placeOrder': PlacedOrder, 'getOrder': OrderDetail, 'cancelOrder': CancelledOrder, 'listStrategies': Strategies, 'createStrategy': StrategyResult, 'listAgents': Agents, 'createAgent': AgentResult, 'getRisk': Risk, 'previewOrder': OrderPreview, 'closePosition': PlacedOrder, 'reducePosition': PlacedOrder, 'runCommand': CommandResult, 'engageKillSwitch': KillSwitchResult, 'backtestStrategy': JobResult, 'startStrategy': AgentResult, 'stopStrategy': AgentResult, 'listAgentTemplates': AgentTemplates, 'getAgent': AgentDetail, 'listAgentSignals': AgentSignals, 'listAgentJournal': AgentJournal, 'listAgentOrders': AgentOrders, 'getAgentPerformance': AgentPerformance, 'getJob': JobResult, 'startAgent': AgentResult, 'pauseAgent': AgentResult, 'stopAgent': AgentResult, 'backtestAgent': JobResult}
 #: operationId -> request-body model
-REQUEST_MODELS: dict[str, type[RequestModel]] = {'placeOrder': OrderRequest, 'createStrategy': CreateStrategyRequest, 'createAgent': CreateAgentRequest, 'previewOrder': OrderRequest, 'closePosition': ClosePositionRequest, 'reducePosition': ReducePositionRequest, 'runCommand': CommandRequest, 'engageKillSwitch': KillSwitchRequest, 'backtestStrategy': BacktestRequest, 'startStrategy': StartRequest, 'stopStrategy': StopRequest, 'startAgent': StartRequest, 'stopAgent': StopRequest}
+REQUEST_MODELS: dict[str, type[RequestModel]] = {'placeOrder': OrderRequest, 'createStrategy': CreateStrategyRequest, 'createAgent': CreateAgentRequest, 'previewOrder': OrderRequest, 'closePosition': ClosePositionRequest, 'reducePosition': ReducePositionRequest, 'runCommand': CommandRequest, 'engageKillSwitch': KillSwitchRequest, 'backtestStrategy': BacktestRequest, 'startStrategy': StartRequest, 'stopStrategy': StopRequest, 'startAgent': StartRequest, 'pauseAgent': StopRequest, 'stopAgent': StopRequest, 'backtestAgent': AgentBacktestRequest}
 
-__all__ = ['API_VERSION', 'Activity', 'ActivityItem', 'Agent', 'Agents', 'ApiErrorBody', 'BacktestRequest', 'Balance', 'Balances', 'CancelledOrder', 'Candle', 'Candles', 'CanonicalOrder', 'CanonicalOrderPrincipal', 'CapabilityLock', 'ClosePositionRequest', 'CommandRequest', 'CommandResult', 'CommandResultAttachedItem', 'CommandResultControl', 'CommandResultResultsItem', 'ComparisonRow', 'CreateAgentRequest', 'CreateStrategyRequest', 'EXECUTION_SCOPES', 'ErrorData', 'ErrorDataQuestionsItem', 'FINAL_ORDER_STATES', 'Fill', 'Instrument', 'KillSwitch', 'KillSwitchRequest', 'KillSwitchResult', 'MANDATE_DENY_REASONS', 'Market', 'MarketComparison', 'MarketComparisonDiscrepanciesItem', 'MarketComparisonDiscrepanciesItemAssumptionsItem', 'MarketComparisonTexts', 'MarketDetail', 'MarketList', 'OPERATIONS', 'OPERATION_ERRORS', 'ORDER_STATES', 'OpenApiDocument', 'Order', 'OrderDetail', 'OrderPreview', 'OrderPreviewApproval', 'OrderPreviewEngine', 'OrderPreviewEngineRisk', 'OrderPreviewMandate', 'OrderPreviewResolved', 'OrderRequest', 'Orderbook', 'Orders', 'OwnerApproval', 'OwnerApprovalApprove', 'PartialError', 'PlacedOrder', 'Portfolio', 'PortfolioAccount', 'PortfolioBalance', 'PortfolioTotals', 'PortfolioWallet', 'Position', 'Positions', 'PreviewAccount', 'PreviewRisk', 'PreviewRiskDerived', 'PrivateCompany', 'PrivateMarket', 'PrivateMarketCompany', 'PrivateMarketCompanyDetail', 'PrivateMarketCompanyDetailCompany', 'PrivateMarketContract', 'PrivateMarketContractUnit', 'PrivateMarketDetail', 'PrivateMarketDetailReferencesItem', 'PrivateMarketMarket', 'PrivateMarketMarketFunding', 'PrivateMarketMarketPrice', 'PrivateMarketNotTradable', 'PrivateMarketReview', 'PrivateMarketValuation', 'PrivateMarketValuationCaveatsItem', 'PrivateMarketValuationContractMarketValue', 'PrivateMarketValuationImpliedValuation', 'PrivateMarketValuationLastPrivateValuation', 'PrivateMarketValuationNotionalExposure', 'PrivateMarketValuationPremiumDiscount', 'PrivateMarketValuationSyntheticPrice', 'PrivateMarkets', 'PrivateMarketsExcludedItem', 'PrivateMarketsNotice', 'PrivateMarketsVenuesItem', 'REQUEST_MODELS', 'RESPONSE_MODELS', 'RISK_CHECK_IDS', 'ReducePositionRequest', 'Refusal', 'Risk', 'RiskAccount', 'RiskCheck', 'RiskEngine', 'SCOPES', 'StartRequest', 'StopRequest', 'Strategies', 'StrategyLibraryEntry', 'StrategyVersion', 'Switch', 'SwitchBy', 'Ticker', 'WEBHOOK_EVENTS']
+__all__ = ['API_VERSION', 'Activity', 'ActivityItem', 'Agent', 'AgentBacktestRequest', 'AgentDetail', 'AgentDetailAgent', 'AgentJournal', 'AgentJournalEntriesItem', 'AgentOrders', 'AgentOrdersOrdersItem', 'AgentPerformance', 'AgentPerformanceWarningsItem', 'AgentResult', 'AgentResultAgent', 'AgentSignals', 'AgentSignalsSignalsItem', 'AgentTemplates', 'AgentTemplatesTemplatesItem', 'Agents', 'ApiErrorBody', 'BacktestRequest', 'Balance', 'Balances', 'CancelledOrder', 'Candle', 'Candles', 'CanonicalOrder', 'CanonicalOrderPrincipal', 'CapabilityLock', 'ClosePositionRequest', 'CommandControl', 'CommandControlControl', 'CommandControlResultsItem', 'CommandDryRun', 'CommandDryRunAttachedItem', 'CommandExecuted', 'CommandQuery', 'CommandRequest', 'CommandResult', 'ComparisonRow', 'CreateAgentRequest', 'CreateStrategyRequest', 'EXECUTION_SCOPES', 'ErrorData', 'ErrorDataQuestionsItem', 'FINAL_ORDER_STATES', 'Fill', 'Instrument', 'JobResult', 'JobResultJob', 'KillSwitch', 'KillSwitchRequest', 'KillSwitchResult', 'MANDATE_DENY_REASONS', 'Market', 'MarketComparison', 'MarketComparisonDiscrepanciesItem', 'MarketComparisonDiscrepanciesItemAssumptionsItem', 'MarketComparisonTexts', 'MarketDetail', 'MarketList', 'OPERATIONS', 'OPERATION_ERRORS', 'ORDER_STATES', 'OpenApiDocument', 'Order', 'OrderDetail', 'OrderPreview', 'OrderPreviewApproval', 'OrderPreviewEngine', 'OrderPreviewEngineRisk', 'OrderPreviewMandate', 'OrderPreviewResolved', 'OrderRequest', 'Orderbook', 'Orders', 'OwnerApproval', 'OwnerApprovalApprove', 'PartialError', 'PlacedOrder', 'Portfolio', 'PortfolioAccount', 'PortfolioBalance', 'PortfolioTotals', 'PortfolioWallet', 'Position', 'Positions', 'PreviewAccount', 'PreviewRisk', 'PreviewRiskDerived', 'PrivateCompany', 'PrivateMarket', 'PrivateMarketCompany', 'PrivateMarketCompanyDetail', 'PrivateMarketCompanyDetailCompany', 'PrivateMarketContract', 'PrivateMarketContractUnit', 'PrivateMarketDetail', 'PrivateMarketDetailReferencesItem', 'PrivateMarketMarket', 'PrivateMarketMarketFunding', 'PrivateMarketMarketPrice', 'PrivateMarketNotTradable', 'PrivateMarketReview', 'PrivateMarketValuation', 'PrivateMarketValuationCaveatsItem', 'PrivateMarketValuationContractMarketValue', 'PrivateMarketValuationImpliedValuation', 'PrivateMarketValuationLastPrivateValuation', 'PrivateMarketValuationNotionalExposure', 'PrivateMarketValuationPremiumDiscount', 'PrivateMarketValuationSyntheticPrice', 'PrivateMarkets', 'PrivateMarketsExcludedItem', 'PrivateMarketsNotice', 'PrivateMarketsVenuesItem', 'REQUEST_MODELS', 'RESPONSE_MODELS', 'RISK_CHECK_IDS', 'ReducePositionRequest', 'Refusal', 'Risk', 'RiskAccount', 'RiskCheck', 'RiskEngine', 'SCOPES', 'StartRequest', 'StopRequest', 'Strategies', 'StrategyLibraryEntry', 'StrategyResult', 'StrategyResultStrategy', 'StrategyVersion', 'Switch', 'SwitchBy', 'Ticker', 'WEBHOOK_EVENTS']

@@ -297,9 +297,10 @@ class BaseClient:
             raise self._unknown(call, reason, status, request_id) from err
         raise err
 
-    def _parse(self, model: type[M], data: Any, meta: ResponseMeta, call: Call) -> M:
+    def _parse(self, model: Any, data: Any, meta: ResponseMeta, call: Call) -> Any:
         try:
-            out = model.model_validate(data)
+            # a model class, or a union of model classes (an answer with several shapes: the literal members pick the alternative)
+            out = model.model_validate(data) if isinstance(model, type) else pydantic.TypeAdapter(model).validate_python(data)
         except pydantic.ValidationError as e:
             problems = "; ".join(f"{'.'.join(str(x) for x in err['loc'])}: {err['msg']}" for err in e.errors(include_input=False)[:5])
             # a write that was answered 2xx RAN: say so, and give the key the object can be found (or the call re-sent) with

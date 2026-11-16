@@ -23,8 +23,9 @@ OPENAPI_PATH = HERE.parents[2] / "docs" / "openapi" / "trading-v1.json"
 OUTPUT_PATH = HERE.parent / "src" / "sp_wallet" / "models.py"
 
 KNOWN = {
-    "type", "properties", "required", "additionalProperties", "items", "prefixItems", "enum", "const", "anyOf", "$ref", "description", "default",
-    "pattern", "format", "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems",
+    "type", "properties", "required", "additionalProperties", "items", "prefixItems", "enum", "const", "anyOf", "$ref", "propertyNames", "description",
+    "default",
+    "pattern", "format", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems",
 }  # fmt: skip
 
 #: operationId -> name of the response model
@@ -35,16 +36,22 @@ RESPONSE_NAMES = {
     "listAgents": "Agents", "getRisk": "Risk", "compareMarkets": "MarketComparison", "listPrivateMarkets": "PrivateMarkets",
     "getPrivateMarketCompany": "PrivateMarketCompanyDetail", "getPrivateMarket": "PrivateMarketDetail", "previewOrder": "OrderPreview",
     "placeOrder": "PlacedOrder", "closePosition": "PlacedOrder", "reducePosition": "PlacedOrder", "cancelOrder": "CancelledOrder",
-    "runCommand": "CommandResult", "engageKillSwitch": "KillSwitchResult",
+    "runCommand": "CommandResult", "engageKillSwitch": "KillSwitchResult", "listAgentTemplates": "AgentTemplates", "getAgent": "AgentDetail",
+    "listAgentSignals": "AgentSignals", "listAgentJournal": "AgentJournal", "listAgentOrders": "AgentOrders", "getAgentPerformance": "AgentPerformance",
+    "getJob": "JobResult", "backtestStrategy": "JobResult", "backtestAgent": "JobResult", "createStrategy": "StrategyResult", "startStrategy": "AgentResult",
+    "stopStrategy": "AgentResult", "createAgent": "AgentResult", "startAgent": "AgentResult", "pauseAgent": "AgentResult", "stopAgent": "AgentResult",
 }  # fmt: skip
+#: an answer that is one of several shapes (`anyOf` of objects): operationId -> the model name of each alternative, in the document's order
+UNION_NAMES = {"runCommand": ["CommandQuery", "CommandControl", "CommandDryRun", "CommandExecuted"]}
 #: name of a component schema (`#/components/schemas/<name>`) -> name of its model
-COMPONENT_NAMES = {"Error": "ApiErrorBody", "Order": "Order", "CanonicalOrder": "CanonicalOrder", "RiskCheck": "RiskCheck"}
+COMPONENT_NAMES = {"Error": "ApiErrorBody", "Order": "Order", "CanonicalOrder": "CanonicalOrder", "RiskCheck": "RiskCheck", "Switch": "Switch"}
 #: operationId -> name of the request-body model (identical schemas share one class: the first name wins)
 REQUEST_NAMES = {
     "placeOrder": "OrderRequest", "previewOrder": "OrderRequest", "closePosition": "ClosePositionRequest",
     "reducePosition": "ReducePositionRequest", "createStrategy": "CreateStrategyRequest", "backtestStrategy": "BacktestRequest",
     "startStrategy": "StartRequest", "startAgent": "StartRequest", "stopStrategy": "StopRequest", "stopAgent": "StopRequest",
-    "createAgent": "CreateAgentRequest", "runCommand": "CommandRequest", "engageKillSwitch": "KillSwitchRequest",
+    "createAgent": "CreateAgentRequest", "runCommand": "CommandRequest", "engageKillSwitch": "KillSwitchRequest", "pauseAgent": "StopRequest",
+    "backtestAgent": "AgentBacktestRequest",
 }  # fmt: skip
 #: mechanical name of a nested object (Parent + Property [+ Item]) -> the name used
 NESTED_NAMES = {
@@ -53,7 +60,7 @@ NESTED_NAMES = {
     "ActivityItemsItem": "ActivityItem", "PositionsPositionsItem": "Position",
     "StrategiesLibraryItem": "StrategyLibraryEntry", "StrategiesVersionsItem": "StrategyVersion",
     "AgentsAgentsItem": "Agent", "RiskKillSwitch": "KillSwitch", "RiskCapabilityLocksItem": "CapabilityLock", "RiskAccountsItem": "RiskAccount",
-    "MarketDetailInstrument": "Instrument", "MarketDetailTicker": "Ticker", "OrderDetailFillsItem": "Fill", "RiskEngineKillSwitch": "Switch",
+    "MarketDetailInstrument": "Instrument", "MarketDetailTicker": "Ticker", "OrderDetailFillsItem": "Fill",
     "RiskEngine": "RiskEngine", "OrderPreviewRefusalsItem": "Refusal", "OrderPreviewAccount": "PreviewAccount", "OrderPreviewRisk": "PreviewRisk",
     "PlacedOrderApproval": "OwnerApproval", "ApiErrorBodyData": "ErrorData", "ApiErrorBodyDataQuestionsItem": "CommandQuestion",
     "MarketComparisonRowsItem": "ComparisonRow", "PrivateMarketsMarketsItem": "PrivateMarket", "PrivateMarketsCompaniesItem": "PrivateCompany",
@@ -129,6 +136,10 @@ class Generator:
                 c.append(f"ge={s['minimum']}")
             if "maximum" in s:
                 c.append(f"le={s['maximum']}")
+            if "exclusiveMinimum" in s:
+                c.append(f"gt={s['exclusiveMinimum']}")
+            if "exclusiveMaximum" in s:
+                c.append(f"lt={s['exclusiveMaximum']}")
             return f"Annotated[{base}, Field({', '.join(c)})]" if c else base
         if t == "array":
             if "prefixItems" in s:
@@ -143,8 +154,12 @@ class Generator:
                 c.append(f"max_length={s['maxItems']}")
             return f"Annotated[{inner}, Field({', '.join(c)})]" if c else inner
         if t == "object":
+            if s.get("propertyNames") not in (None, {"type": "string"}):
+                raise ValueError("only string property names are supported")
             if not s.get("properties"):
-                return "dict[str, Any]"
+                ap = s.get("additionalProperties")
+                # a map (zod's z.record): no named member, every value of one schema
+                return f"dict[str, {self.type_of(ap, hint + 'Value', request)}]" if isinstance(ap, dict) and ap else "dict[str, Any]"
             return self.model(s, hint, request)
         raise ValueError(f"unsupported type {t!r}")
 
@@ -202,9 +217,14 @@ def generate(document: dict[str, Any]) -> str:
     ops = [(o["operationId"], method.upper(), path, o) for path, item in document["paths"].items() for method, o in item.items()]
     responses: dict[str, str] = {}
     requests: dict[str, str] = {}
+    unions: dict[str, list[str]] = {}
     for op_id, _method, _path, o in ops:
         ok = o["responses"].get("200", {}).get("content", {}).get("application/json")
-        if ok:
+        if ok and "anyOf" in ok["schema"]:
+            alts = [g.model(alt, name, request=False, top=True) for alt, name in zip(ok["schema"]["anyOf"], UNION_NAMES[op_id], strict=True)]
+            unions[RESPONSE_NAMES[op_id]] = alts
+            responses[op_id] = RESPONSE_NAMES[op_id]
+        elif ok:
             responses[op_id] = g.model(ok["schema"], RESPONSE_NAMES[op_id], request=False, top=True)
         body = o.get("requestBody", {}).get("content", {}).get("application/json")
         if body:
@@ -247,6 +267,8 @@ def generate(document: dict[str, Any]) -> str:
     ]
     for src in g.classes.values():
         out += ["", src, ""]
+    for name, alts in unions.items():
+        out += ["", "#: one of several shapes: narrow with isinstance (or on the members `kind` and `executed`)", f"{name} = {' | '.join(alts)}", ""]
     out += ["", "#: operationId -> (method, path template, scope, implemented by the server, mutating/idempotency-keyed, needs a mandate)"]
     out.append("OPERATIONS: dict[str, tuple[str, str, str, bool, bool, bool]] = {")
     for op_id, method, path, o in ops:
@@ -262,12 +284,14 @@ def generate(document: dict[str, Any]) -> str:
         out.append(f"    {op_id!r}: ({', '.join(repr((e['status'], e['code'])) for e in o['x-spw-errors'])},),")
     out.append("}")
     out.append("#: operationId -> response model")
-    out.append("RESPONSE_MODELS: dict[str, type[ApiModel]] = {" + ", ".join(f"{k!r}: {v}" for k, v in responses.items()) + "}")
+    out.append("#: (a model class, or a union of model classes for an answer that has several shapes)")
+    out.append("RESPONSE_MODELS: dict[str, Any] = {" + ", ".join(f"{k!r}: {v}" for k, v in responses.items()) + "}")
     out.append("#: operationId -> request-body model")
     out.append("REQUEST_MODELS: dict[str, type[RequestModel]] = {" + ", ".join(f"{k!r}: {v}" for k, v in requests.items()) + "}")
     out.append("")
     names = sorted([
-        *g.classes, "API_VERSION", "SCOPES", "EXECUTION_SCOPES", "WEBHOOK_EVENTS", "OPERATIONS", "OPERATION_ERRORS", "RESPONSE_MODELS", "REQUEST_MODELS",
+        *g.classes, *unions, "API_VERSION", "SCOPES", "EXECUTION_SCOPES", "WEBHOOK_EVENTS", "OPERATIONS", "OPERATION_ERRORS", "RESPONSE_MODELS",
+        "REQUEST_MODELS",
         "ORDER_STATES", "FINAL_ORDER_STATES", "MANDATE_DENY_REASONS", "RISK_CHECK_IDS",
     ])  # fmt: skip
     out.append("__all__ = [" + ", ".join(repr(n) for n in names) + "]")

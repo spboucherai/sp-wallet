@@ -231,9 +231,9 @@ describe.skipIf(skip !== null)('integration: the PAPER write path, end to end, a
     const cid = `sdk-ts-${Date.now()}`;
     const first = await c.createOrder({ ...order, notional: '150', clientOrderId: cid });
     const sameCid = await c.createOrder({ ...order, notional: '150', clientOrderId: cid });
-    expect(sameCid.order.id).toBe(first.order.id); expect(sameCid.idempotent).toBe(true);
+    expect(sameCid.order.id).toBe(first.order.id); expect(responseMeta(sameCid)!.idempotentReplay).toBe(true);        // the stored answer of that clientOrderId: no price is read again
     expect(declared('placeOrder', await caught(c.createOrder({ ...order, notional: '160', clientOrderId: cid })))).toBeInstanceOf(IdempotencyConflict);
-    say(`createOrder(clientOrderId) twice → same order=${sameCid.order.id === first.order.id} idempotent=${sameCid.idempotent}; another body → IdempotencyConflict`);
+    say(`createOrder(clientOrderId) twice → same order=${sameCid.order.id === first.order.id} Idempotent-Replay=${responseMeta(sameCid)!.idempotentReplay}; another body → IdempotencyConflict`);
 
     // --- the position, reduced by half, then closed
     const pos = (await c.getPositions({ mode: 'paper' })).positions.find((p) => p.instrument === I())!;

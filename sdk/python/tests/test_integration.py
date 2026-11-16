@@ -43,8 +43,9 @@ from sp_wallet import (
     AmbiguousSymbol,
     AsyncSPWallet,
     AuthenticationError,
+    ConfigurationError,
+    Conflict,
     ExecutionDisabled,
-    ExecutionNotWired,
     IdempotencyConflict,
     MandateDenied,
     MandateRequired,
@@ -68,18 +69,6 @@ UUID = "00000000-0000-4000-8000-000000000000"
 DEC = re.compile(r"^\d+(\.\d+)?$")
 REQ = re.compile(r"^[0-9a-f-]{36}$")
 ORDER: dict[str, Any] = {"instrument": "hyperliquid:BTC", "side": "buy", "order_type": "market", "size": "0.001"}
-#: the operations the server does not implement yet: each answers 501
-NOT_WIRED: dict[str, tuple[str, tuple[Any, ...], dict[str, Any]]] = {
-    "createStrategy": ("create_strategy", (), {"kind": "perp", "path": "momentum/v1"}),
-    "backtestStrategy": ("backtest_strategy", (UUID,), {"symbols": ["BTC"], "interval": "1h"}),
-    "startStrategy": ("start_strategy", (UUID,), {"mode": "paper"}),
-    "stopStrategy": ("stop_strategy", (UUID,), {"reason": "sdk test"}),
-    "createAgent": ("create_agent", (), {"kind": "perp", "name": "sdk agent", "universe": ["BTC", "ETH"], "interval": "1h", "mode": "paper"}),
-    "startAgent": ("start_agent", (UUID,), {"mode": "paper"}),
-    "stopAgent": ("stop_agent", (UUID,), {}),
-}
-
-
 def declared(op_id: str, e: Any) -> Any:
     """Every error this file receives from the server is one the document declares for the operation (`x-spw-errors`)."""
     assert (e.status, e.code) in OPERATION_ERRORS[op_id], f"{op_id} answered {e.status} {e.code}: not in x-spw-errors ({e})"
@@ -406,8 +395,9 @@ def test_compare_markets_and_private_markets(run: Runner) -> None:
 
 def test_every_read_operation_of_the_document_is_exercised_in_this_file() -> None:
     reads = sorted(k for k, v in OPERATIONS.items() if v[0] == "GET")
-    assert reads == ["compareMarkets", "getActivity", "getBalances", "getCandles", "getMarket", "getOpenApi", "getOrder", "getOrderbook", "getPortfolio", "getPrivateMarket",
-                     "getPrivateMarketCompany", "getRisk", "listAgents", "listMarkets", "listOrders", "listPositions", "listPrivateMarkets", "listStrategies"]  # fmt: skip
+    assert reads == ["compareMarkets", "getActivity", "getAgent", "getAgentPerformance", "getBalances", "getCandles", "getJob", "getMarket", "getOpenApi", "getOrder", "getOrderbook",
+                     "getPortfolio", "getPrivateMarket", "getPrivateMarketCompany", "getRisk", "listAgentJournal", "listAgentOrders", "listAgentSignals", "listAgentTemplates", "listAgents",
+                     "listMarkets", "listOrders", "listPositions", "listPrivateMarkets", "listStrategies"]  # fmt: skip
 
 
 def test_rate_limit_headers_and_request_ids(run: Runner) -> None:
@@ -490,9 +480,10 @@ def test_paper_preview_create_wait_positions_reduce_close_resting_cancel_replay_
     cid = f"sdk-py-{run.kind}-{new_idempotency_key()[:8]}"
     first = run.call(c, "create_order", **{**order, "notional": "150"}, client_order_id=cid)
     same = run.call(c, "create_order", **{**order, "notional": "150"}, client_order_id=cid)
-    assert (same.order.id, same.idempotent) == (first.order.id, True)
+    assert same.order.id == first.order.id
+    assert same.meta.idempotent_replay is True  # the stored answer of that clientOrderId: no price is read again
     assert type(declared("placeOrder", run.error(c, "create_order", **{**order, "notional": "160"}, client_order_id=cid))) is IdempotencyConflict
-    say(f"[{run.kind}] create_order(client_order_id) twice → same order={same.order.id == first.order.id} idempotent={same.idempotent}; another body → IdempotencyConflict")
+    say(f"[{run.kind}] create_order(client_order_id) twice → same order={same.order.id == first.order.id} Idempotent-Replay={same.meta.idempotent_replay}; another body → IdempotencyConflict")
 
     # --- the position, reduced by half, then closed
     positions = run.call(c, "get_positions", mode="paper")
@@ -659,17 +650,20 @@ def test_commands_ambiguous_dry_run_query(run: Runner) -> None:
     n = len(run.call(c, "list_orders", limit=500).orders)
     dry = run.call(c, "run_command", "LONG BTC-PERP 100", account_id=acct, dry_run=True)
     conforms("runCommand", dry)
+    assert type(dry) is models.CommandDryRun  # a dry run carries the CANONICAL order
     assert (dry.kind, dry.command, dry.mode, dry.dry_run, dry.executed) == ("order", "perp_open", "paper", True, False)
-    assert (dry.order["instrument"], dry.order["side"]) == (inst, "buy")
+    assert (dry.order.instrument, dry.order.side) == (inst, "buy")
     assert re.fullmatch(r"[0-9a-f]{64}", dry.hash)
     assert len(run.call(c, "list_orders", limit=500).orders) == n
     say(f"[{run.kind}] run_command('LONG BTC-PERP 100', dry_run=True) → {meta(dry)} kind={dry.kind} executed={dry.executed} "
-        f"order={{instrument: {dry.order['instrument']}, side: {dry.order['side']}, notional: {dry.order['notional']}}}; orders created: 0")  # fmt: skip
+        f"order={{instrument: {dry.order.instrument}, side: {dry.order.side}, notional: {dry.order.notional}}} (the canonical order); orders created: 0")  # fmt: skip
     show = run.call(c, "run_command", "SHOW POSITIONS", account_id=acct)
     conforms("runCommand", show)
+    assert type(show) is models.CommandQuery
     assert (show.kind, show.query) == ("query", "positions")
     assert isinstance(show.data["positions"], list)
     kill = run.call(c, "run_command", "KILL", dry_run=True)
+    assert type(kill) is models.CommandControl
     assert (kill.kind, kill.control.type, kill.executed) == ("control", "kill_switch_on", False)
     assert run.call(c, "get_risk").engine.kill_switch.on is False
     bad = declared("runCommand", run.error(c, "run_command", "FROBNICATE THE MARKET"))
@@ -690,34 +684,92 @@ def test_a_preview_withholds_the_account_from_a_key_that_may_not_read_it(run: Ru
     say(f"[{run.kind}] preview_order with a key holding orders:prepare + markets:read only → account={{venue: {p.account.venue}, withheld: {p.account.withheld}}} would_execute={p.would_execute}")
 
 
+# ================================================================================================================ agents on paper
+def test_agents_on_paper_create_start_read_one_mode_pause_backtest_stop(run: Runner) -> None:
+    c = run.client("unbound", timeout=60)  # every scope and NO trading mandate: managing agents needs none (research and paper sign nothing)
+    t = run.call(c, "list_agent_templates")
+    conforms("listAgentTemplates", t)
+    mm = next(x for x in t.templates if x.id == "market-making")
+    assert mm.engine == "stream" and "paper" in mm.modes
+    say(f"[{run.kind}] list_agent_templates() → {meta(t)} {[f'{x.id}({x.engine}: {chr(47).join(x.modes)})' for x in t.templates]}")
+    created = run.venue(c, "create_agent", template="market-making", name=f"SDK MM {run.kind} {new_idempotency_key()[:6]}", venues=["hyperliquid"], universe=["BTC"], capital_usdc=1000)
+    conforms("createAgent", created)
+    agent_id = created.agent.id
+    assert (created.agent.state, created.agent.mode) == ("stopped", "research")
+    say(f"[{run.kind}] create_agent(template='market-making', venues=['hyperliquid'], universe=['BTC']) → {meta(created)} agent={short(agent_id)} state={created.agent.state} mode={created.agent.mode}")
+    started = run.call(c, "start_agent", agent_id, mode="paper")
+    conforms("startAgent", started)
+    assert (started.agent.id, started.agent.state, started.agent.mode) == (agent_id, "active", "paper")
+    say(f"[{run.kind}] start_agent(id, mode='paper') → {meta(started)} state={started.agent.state} mode={started.agent.mode}")
+    one = run.call(c, "get_agent", agent_id)
+    conforms("getAgent", one)
+    assert (one.agent.id, one.agent.family, one.agent.state, one.agent.mode) == (agent_id, mm.family, "active", "paper")
+    listed = run.call(c, "list_agents")
+    conforms("listAgents", listed)
+    mine = next(a for a in listed.agents if a.id == agent_id)
+    assert (mine.kind, mine.lifecycle, mine.trading_mode) == ("stream", "active", "paper")
+    signals = run.call(c, "list_agent_signals", agent_id, mode="paper", limit=20)
+    journal = run.call(c, "list_agent_journal", agent_id, mode="paper")
+    orders = run.call(c, "list_agent_orders", agent_id, mode="paper", open=False)
+    perf = run.call(c, "get_agent_performance", agent_id, mode="paper")
+    for op_id, r in (("listAgentSignals", signals), ("listAgentJournal", journal), ("listAgentOrders", orders), ("getAgentPerformance", perf)):
+        conforms(op_id, r)
+        assert r.mode == "paper"
+    assert journal.entries and all(e.mode == "paper" for e in journal.entries)
+    assert run.call(c, "list_agent_journal", agent_id, mode="live").entries == []  # another mode is another answer: nothing of paper in it
+    say(f"[{run.kind}] list_agent_signals/journal/orders(id, mode='paper'), get_agent_performance(id, mode='paper') → signals={len(signals.signals)} journal={len(journal.entries)} "
+        f"({journal.entries[0].title!r}) orders={len(orders.orders)} performance: {perf.label!r} points={perf.points}")  # fmt: skip
+    # one mode per call: required by the SDK, and `all` is a 400 of the API
+    assert isinstance(run.error(c, "list_agent_signals", agent_id, mode="all"), ConfigurationError)
+    req = urllib.request.Request(f"{run.stack['baseUrl']}/api/v1/trading/agents/{agent_id}/signals?mode=all", headers={"authorization": f"Bearer {run.stack['keys']['unbound']['secret']}"})  # noqa: S310
+    with pytest.raises(urllib.error.HTTPError) as http:
+        urllib.request.urlopen(req, timeout=30)  # noqa: S310
+    assert (http.value.code, json.loads(http.value.read())["error"]) == (400, "bad_request")
+    paused = run.call(c, "pause_agent", agent_id, reason="sdk test")
+    conforms("pauseAgent", paused)
+    assert paused.agent.state == "paused"
+    bt = run.call(c, "backtest_agent", agent_id, hours=1)
+    conforms("backtestAgent", bt)
+    assert (bt.job.kind, bt.label) == ("backtest", "backtest")
+    job = run.call(c, "get_job", bt.job.id)
+    conforms("getJob", job)
+    assert job.job.id == bt.job.id and job.job.status in ("queued", "running", "done", "failed", "cancelled")
+    try:
+        waited = run.call(c, "wait_for_job", bt.job.id, timeout=20, poll_interval=0.5).job.status
+    except WaitTimeout as w:
+        waited = f"WaitTimeout (not a failure: the job is still {w.last.job.status})"
+    say(f"[{run.kind}] pause_agent(id) → state={paused.agent.state}; backtest_agent(id, hours=1) → job={short(bt.job.id)} status={bt.job.status}; get_job → {job.job.status}; wait_for_job(20 s) → {waited}")
+    stopped = run.call(c, "stop_agent", agent_id, reason="sdk test")
+    conforms("stopAgent", stopped)
+    assert stopped.agent.state == "stopped"
+    say(f"[{run.kind}] stop_agent(id) → {meta(stopped)} state={stopped.agent.state}")
+    # the refusals: live without an owner-approved mandate for the agent; an unknown agent; a spot agent (the owner's app)
+    live = declared("startAgent", run.error(c, "start_agent", agent_id, mode="live"))
+    assert isinstance(live, Conflict) and live.code in ("mandate_required", "live_unavailable")
+    ghost = declared("getAgent", run.error(c, "get_agent", UUID))
+    assert (type(ghost), ghost.code) == (NotFound, "not_found")
+    assert type(declared("getJob", run.error(c, "get_job", UUID))) is NotFound
+    assert declared("createAgent", run.error(c, "create_agent", kind="spot", name="spot via key", universe=["BTC"])).code == "owner_required"
+    for name, kw in (("backtest_strategy", {}), ("start_strategy", {"mode": "paper"}), ("stop_strategy", {})):
+        assert type(run.error(c, name, UUID, **kw)) is NotFound, name
+    assert type(declared("createStrategy", run.error(c, "create_strategy", kind="perp", path="momentum/v1", agent_id=UUID))) is NotFound
+    say(f"[{run.kind}] start_agent(id, mode='live') without an owner-approved mandate → {type(live).__name__} HTTP {live.status} {live.code}; get_agent(unknown) → {type(ghost).__name__} {ghost.code}")
+
+
 # ================================================================================================================ the write surface and the refusals
 def test_this_file_calls_every_write_operation_of_the_document() -> None:
     writes = sorted(k for k, v in OPERATIONS.items() if v[0] != "GET")
-    assert writes == sorted([*NOT_WIRED, "cancelOrder", "closePosition", "engageKillSwitch", "placeOrder", "previewOrder", "reducePosition", "runCommand"])
+    assert writes == sorted(["backtestAgent", "backtestStrategy", "cancelOrder", "closePosition", "createAgent", "createStrategy", "engageKillSwitch", "pauseAgent", "placeOrder", "previewOrder",
+                             "reducePosition", "runCommand", "startAgent", "startStrategy", "stopAgent", "stopStrategy"])  # fmt: skip
     assert sorted(k for k, v in OPERATIONS.items() if v[0] != "GET" and not v[4]) == ["engageKillSwitch", "previewOrder"]  # no Idempotency-Key
-
-
-def test_strategy_and_agent_writes_answer_501_never_a_success(run: Runner) -> None:
-    c = run.client("trader", send_timestamp=True)
-    for op_id, (name, args, kwargs) in NOT_WIRED.items():
-        e = declared(op_id, run.error(c, name, *args, **kwargs))
-        assert type(e) is ExecutionNotWired, op_id
-        assert isinstance(e, sp_wallet.NotImplementedError)
-        assert (e.status, e.code) == (501, "execution_not_wired")
-        assert REQ.match(e.idempotency_key)
-        assert REQ.match(e.request_id)
-        say(f"[{run.kind}] {name} (key bound to a mandate) → {type(e).__name__} HTTP {e.status} {e.code} idempotency_key={e.idempotency_key[:8]}…")
-    key = f"sdk-it-resume-{run.kind}-0001"  # a 501 is not stored: the same key can be sent again
-    for _ in range(2):
-        e = run.error(c, "stop_agent", UUID, idempotency_key=key)
-        assert (e.status, e.idempotency_key) == (501, key)
+    assert all(v[3] for v in OPERATIONS.values())  # every operation is implemented: nothing answers 501 by declaration
 
 
 def test_key_without_a_mandate_execution_is_refused_a_preview_included(run: Runner) -> None:
     c = run.client("unbound")
-    gated = {**NOT_WIRED, "placeOrder": ("create_order", (), ORDER), "closePosition": ("close_position", ("pos-1",), {}), "reducePosition": ("reduce_position", ("pos-1",), {"fraction": "0.5"})}
+    gated = {"placeOrder": ("create_order", (), ORDER), "closePosition": ("close_position", ("pos-1",), {}), "reducePosition": ("reduce_position", ("pos-1",), {"fraction": "0.5"})}
+    assert sorted(gated) == sorted(k for k, v in OPERATIONS.items() if v[5])  # what needs a mandate on the KEY
     for op_id, (name, args, kwargs) in gated.items():
-        assert OPERATIONS[op_id][5], op_id
         e = declared(op_id, run.error(c, name, *args, **kwargs))
         assert type(e) is MandateRequired, op_id
         assert (e.status, e.code) == (403, "mandate_required")
@@ -834,7 +886,7 @@ def test_example_read_only_runs_against_the_real_api(stack: dict[str, Any]) -> N
 
 def test_example_async_read_runs_against_the_real_api(stack: dict[str, Any]) -> None:
     out = _example("async_read.py", stack)
-    assert re.search(r"agents: 0; orders: \d+; signer halted: False", out)
+    assert re.search(r"agents: \d+; orders: \d+; signer halted: False", out)
     assert out.rstrip().endswith("done")
 
 
