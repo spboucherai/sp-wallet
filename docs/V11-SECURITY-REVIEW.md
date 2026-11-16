@@ -84,3 +84,123 @@ bundle, requires agreement and a recent block, values them at its own prices, an
 the cash leg while the value is below the floor (orders that reduce risk stay signable, as for derivative mandates). It adds
 RPC providers to the signer's trust base and to its egress, and it must be reviewed as such — which is why it is a design
 decision for the owner and not a fix slipped into a stabilisation phase.
+
+## Execution through the trading API (Phase F)
+
+Scope of the change: `services/api/src/{orders,risk,mandates}/`, the write handlers of
+`services/api/src/trading-api/`, and three hooks in the venue engines (`derivatives/gate.ts`). **No file of
+`services/isolated-signer` was changed.** The signer signs what it signed before, under the same rules.
+
+### New attack surface
+
+Before this phase no API key could make anything execute: the write operations answered 501. Now a key can,
+with `SPW_TRADING_API_EXECUTION=on`:
+
+- place live orders on Hyperliquid, without a passkey, when a trading mandate approved by the owner is bound
+  to it;
+- cancel its own orders;
+- close or reduce positions on the accounts and instruments of its mandate;
+- engage the global kill switch (`positions:manage`).
+
+A key cannot, with any scope: reach a route outside `/api/v1/trading`; create, read, approve, alter or revoke
+a mandate; change a limit; release the kill switch or read-only mode; approve an owner order; move
+collateral; trade spot.
+
+### What bounds a stolen key
+
+**Without a mandate bound to it.** It can read what its scopes allow, cancel orders it placed itself (it has
+placed none), and engage the kill switch if it holds `positions:manage`. Engaging stops new risk and nothing
+else; the owner releases it with the passkey. It can execute nothing.
+
+**With a paper mandate.** It trades the paper account, inside the mandate. No funds.
+
+**With a live mandate.** It trades one Hyperliquid venue account. The bounds, from the strongest:
+
+1. The isolated signer applies the derivative mandate it stores, from its own read of the venue account and
+   its own prices: instruments, notional per order, position per instrument, gross exposure, leverage, orders
+   per day and per hour, daily turnover, the floor on the account value, the price band, the expiry. A stolen
+   key cannot change any of these and cannot exceed them, whatever the API does.
+2. The trading key of the venue account signs orders, cancels and leverage changes only. It cannot withdraw.
+   The worst outcome is a trading loss on that account down to the floor, plus what open positions lose before
+   they are closed.
+3. API-side: the key's own notional limits and restrictions, the full trading mandate (order types, daily
+   loss, per-minute rate, stop conditions, fees), the owner's risk limits, the kill switch.
+4. The key's expiry, its source-address list, its rate limit; revocation of the key or of the mandate by the
+   owner's session, without a passkey.
+
+A stolen key can make the account lose money inside the mandate. The mandate is the size of that risk, and
+the owner chose it at the approval.
+
+### Confused deputy
+
+The order service acts for several principals with one set of engines and one signer secret. Points checked:
+
+- **The principal comes from authentication**, never from the request: the body of an order has no principal
+  field, and the canonical order is built server-side from `req.principal`.
+- **The mandate id comes from the key row**, never from the request, and the mandate is loaded and matched
+  to the principal at every order. A key bound to a mandate approved for another principal is refused.
+- **Client order ids are derived from (principal, key)**: one principal cannot collide with, replay or
+  overwrite another's order. A replay by another principal is `idempotency_conflict`.
+- **Cancel** checks that the order's principal is the caller. **Close and reduce** are judged by the mandate
+  check: account, venue, network and instrument must be the mandate's.
+- **The approval of an owner order** is not reachable by a key: it is the existing route outside the trading
+  prefix, and the signer verifies the passkey over the order hash.
+- **The signer mandate records the principal** (`agentId`, `strategySha256`), and the Hyperliquid engine
+  refuses a caller that presents another one. The signer itself cannot verify who calls.
+- **One derivative mandate per venue account.** Two principals cannot share an account's mandate. The owner's
+  own positions on that account are not distinguishable at the venue: a key may close a position the owner
+  opened manually on the mandated account and instrument. A close only reduces.
+- **`runCommand` is declared with the scope `orders:prepare`** and checks the scope of the operation the
+  command resolves to in its handler. A mistake there would let a key with `orders:prepare` do more. The test
+  "commands … the scope is the resolved operation's" covers each command type.
+
+### A compromised API process
+
+Unchanged from V10, and stated plainly: the API holds the single HMAC secret that authenticates it to the
+signer. A compromised API process can call every signer endpoint that needs no passkey. For this phase that
+means: it can place any order the stored derivative mandates allow, for any principal, whatever the trading
+mandate's API-only fields, the owner's risk limits, the kill switch or read-only mode say — all of those are
+enforced by the process that is compromised. It cannot exceed a derivative mandate, sign a manual order
+without a passkey, withdraw collateral, or approve a mandate.
+
+Phase F adds no signer endpoint and no signing power. It adds reasons for a derivative mandate to exist (an
+API key can now have one), so more of them may be active.
+
+### Items for human review before `SPW_TRADING_API_EXECUTION` is enabled
+
+1. **The API-only fields of a live mandate are not covered by the passkey.** The passkey signs the hash of
+   the compiled derivative mandate. Order types, the daily-loss limit, the per-minute rate, the fee cap, the
+   stop conditions and the label are bound only by the API's immutable row and its audit event. A session
+   thief cannot alter an approved mandate, but nothing cryptographic ties these fields to the approval.
+   *Proposal, not implemented (it needs a signer change):* add `tradingMandateSha256` to
+   `SPW-VENUE-MANDATE-v1`, part of its hash, recorded by the signer for the audit trail like `strategySha256`.
+   The signer would still not enforce those fields.
+2. **The `strategySha256` convention for API keys.** The field now carries a principal descriptor hash for a
+   key. Confirm that nothing downstream reads it as a code hash (the perp-agent engine compares it with its
+   own strategy hash; a key's mandate and an agent's mandate cannot be confused because `agentId` differs and
+   one account holds one mandate).
+3. **Default-deny of live limits changes existing behaviour.** After deployment, manual live orders and live
+   perp agents open no new risk until the owner sets the live limits. Reductions and cancels are not
+   affected. Decide whether to set the limits before or right after the deployment.
+4. **The kill switch is API-side.** It does not replace the signer's halt. A release needs the passkey, but
+   it is verified by the API (`verifyOwnerAssertion`), as in Phase B.
+5. **Exits pass `SPW_TRADING_API_EXECUTION=off`.** A cancel and a strictly reducing order are not stopped by
+   the switch, by design (a lock must not strand a position). With the switch never turned on, no key has a
+   live position or order of its own to act on; the owner's exits go through the passkey as before.
+6. **Reads at evaluation time.** One live order makes the API read every authorized venue account of the
+   book, twice (once before the order exists, once on the stored order). Check the venue's rate budget with
+   several accounts or a busy key.
+7. **Projection by database trigger.** The triggers on `deriv_orders` and `deriv_gmx_ops` add one insert per
+   engine write. `order_events` refuses updates and deletes: a restore or a manual repair of that table needs
+   the trigger dropped first.
+8. **Two principals, one venue account.** A live API-key mandate takes the account's single mandate slot. A
+   perp agent cannot be live on the same account at the same time.
+9. **A preview shows whether funds suffice.** `POST /orders/preview` (scope `orders:prepare`) returns the
+   equity and free collateral of the account the order names and the engine's estimate. A key that may
+   prepare orders therefore learns those two figures without `wallet:read`.
+10. **Reuse of a decision by the engines' gate.** An order the order service has just evaluated is not
+    evaluated again by the engine's gate: the gate finds the decision by client order id, within 60 s, and only
+    when it is for the same mode, venue, account, instrument, side, size and reduce-only flag
+    (`risk_decisions.fingerprint`). An order given as a notional is evaluated twice.
+11. **Not verified here:** behaviour against the real Hyperliquid testnet or mainnet. Every live test runs
+   against the scripted venue of the test suite and the real signer class in process.

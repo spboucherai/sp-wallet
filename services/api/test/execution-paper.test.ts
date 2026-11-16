@@ -143,7 +143,16 @@ describe('paper, end to end over HTTP with a real key', () => {
     expect(eng).toMatchObject({ status: 'filled' });
     expect((await sql`select count(*)::int as n from deriv_fills where account_id = ${acct} and client_id = ${id}`)[0].n).toBe(1);
     expect((await orderRow(id)).engine_ref).toBe(`${acct}:${id}`);
-    expect((await sql`select decision, order_id from risk_decisions where order_id = ${id} and not preview`)).toEqual([{ decision: 'allow', order_id: id }]);
+    expect((await sql`select decision, order_id from risk_decisions where order_id = ${id} and not preview`)).toEqual([{ decision: 'allow', order_id: id }]);   // ONE decision: the engine's gate reused it
+    // …and only for that very order: the same client id on another order is evaluated on its own
+    const gate = app.execution.risk.gate, inst = await app.execution.orders.deps.derivatives().data.instrument(BTC), tk = await app.execution.orders.deps.derivatives().data.ticker(inst);
+    const asked = (size: string) => gate({ mode: 'paper', venue: 'hyperliquid', network: 'mainnet', accountId: acct, instrument: inst, origin: 'owner', known: { ticker: tk, book: null, account: null, positions: null, leverage: '3' },
+      req: { instrument: BTC, side: 'buy', type: 'market', size, price: '50255', triggerPrice: null, reduceOnly: false, tif: 'ioc', clientId: id } });
+    const n0 = (await sql`select count(*)::int as n from risk_decisions where client_order_id = ${id}`)[0].n;
+    expect(await asked('0.02')).toEqual({ ok: true });
+    expect((await sql`select count(*)::int as n from risk_decisions where client_order_id = ${id}`)[0].n).toBe(n0);          // reused
+    await asked('5');
+    expect((await sql`select count(*)::int as n from risk_decisions where client_order_id = ${id}`)[0].n).toBe(n0 + 1);      // evaluated
 
     // the same Idempotency-Key again: the same order, no second request to the engine
     const again = await call('POST', `${T}/orders`, { key: k.secret, headers: h, body: ORDER, log: 'replay: same order, Idempotent-Replay: true' });
@@ -195,7 +204,8 @@ describe('paper, end to end over HTTP with a real key', () => {
     transcript.push(`    ${list.json.orders.length} orders: ${list.json.orders.map((x: any) => `${x.side} ${x.type} ${x.status}`).join(' | ')}`);
 
     // webhooks: one order.updated per transition, signed and delivered
-    for (let n = 0; n < 40 && received.filter((e) => e.event === 'order.updated' && e.data.orderId === id).length < 4; n++) { await hooks.deliverDue(); await new Promise((r) => setTimeout(r, 20)); }
+    const cancelledSeen = () => received.some((e) => e.event === 'order.updated' && e.data.orderId === rest.json.order.id && e.data.status === 'CANCELLED');
+    for (let n = 0; n < 100 && (received.filter((e) => e.event === 'order.updated' && e.data.orderId === id).length < 4 || !cancelledSeen()); n++) { await hooks.deliverDue(); await new Promise((r) => setTimeout(r, 20)); }
     expect(received.filter((e) => e.event === 'order.updated' && e.data.orderId === id).map((e) => e.data.status)).toEqual(['VALIDATED', 'APPROVED', 'SUBMITTING', 'FILLED']);
     expect(received.find((e) => e.event === 'order.updated' && e.data.orderId === rest.json.order.id && e.data.status === 'CANCELLED')?.data).toMatchObject({ mode: 'paper', venue: 'hyperliquid', instrument: BTC, principal: `api_key:${k.id}`, mandateId: k.mandateId });
   });

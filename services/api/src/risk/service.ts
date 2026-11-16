@@ -61,6 +61,13 @@ const dayStart = (now: number): number => Math.floor(now / 86_400_000) * 86_400_
 /** the asset of an instrument id under one normalization for every venue: `hyperliquid:BTC` and `gmx:BTC/USD [BTC-USDC]` are both BTC */
 export const assetOf = (instrument: string): string => (instrument.slice(instrument.indexOf(':') + 1).split(/[-/ ]/)[0] ?? '').toUpperCase() || instrument;
 const sumDec = (xs: DecStr[]): DecStr => D.str(xs.reduce((a, x) => D.add(a, D.from(x)), D.zero));
+/**
+ * What a stored decision is about. The engines' gate reuses the decision the order service has just made for a client order id
+ * ONLY when it is for the same account, instrument, side, size and reduce-only flag: a client id used again for another order
+ * is evaluated on its own.
+ */
+const fingerprint = (o: { mode: string; venue: string; accountId: string | null; instrument: string; side: string; size: DecStr | null; reduceOnly: boolean }): string =>
+  createHash('sha256').update([o.mode, o.venue, o.accountId ?? '', o.instrument, o.side, o.size === null ? '' : D.str(D.from(o.size)), o.reduceOnly ? '1' : '0'].join('|')).digest('hex');
 
 export class RiskService {
   readonly deps: RiskDeps;
@@ -325,10 +332,10 @@ export class RiskService {
   }
 
   // ------------------------------------------------------------------ evaluation
-  private async record(e: Omit<Evaluated, 'decisionId'>, r: { kind: 'order' | 'cancel'; preview: boolean; orderId: string | null; clientOrderId: string | null; principal: { kind: string; id: string }; mode: string; venue: string; instrument: string | null; limits: unknown; context: unknown }): Promise<number> {
-    const [row] = await sql<{ id: string }[]>`insert into risk_decisions (at, order_id, client_order_id, kind, preview, principal_kind, principal_id, mode, venue, instrument, decision, reducing, failed, checks, derived, limits, context)
+  private async record(e: Omit<Evaluated, 'decisionId'>, r: { kind: 'order' | 'cancel'; preview: boolean; orderId: string | null; clientOrderId: string | null; principal: { kind: string; id: string }; mode: string; venue: string; instrument: string | null; limits: unknown; context: unknown; fingerprint?: string }): Promise<number> {
+    const [row] = await sql<{ id: string }[]>`insert into risk_decisions (at, order_id, client_order_id, kind, preview, principal_kind, principal_id, mode, venue, instrument, decision, reducing, failed, checks, derived, limits, context, fingerprint)
       values (${new Date(this.clockOf(r.mode))}, ${r.orderId}, ${r.clientOrderId}, ${r.kind}, ${r.preview}, ${r.principal.kind}, ${r.principal.id}, ${r.mode}, ${r.venue}, ${r.instrument}, ${e.decision}, ${e.reducing}, ${e.failed},
-        ${sql.json(e.checks as never)}, ${sql.json(e.derived as never)}, ${sql.json(r.limits as never)}, ${sql.json(r.context as never)}) returning id`;
+        ${sql.json(e.checks as never)}, ${sql.json(e.derived as never)}, ${sql.json(r.limits as never)}, ${sql.json(r.context as never)}, ${r.fingerprint ?? null}) returning id`;
     return Number(row!.id);
   }
 
@@ -353,6 +360,7 @@ export class RiskService {
     const e: Omit<Evaluated, 'decisionId'> = { decision, reducing: ev.reducing, checks, failed, derived: ev.derived, code, reason: pick ? `${pick.id}: ${pick.detail}` : null, market: c.market, leverage: c.leverage, equity: c.equity, book: c.book,
       accounts: c.ctx.accounts.map((a) => ({ accountId: a.account, venue: a.venue, equity: a.equity, marginUsed: a.marginUsed, freeCollateral: a.freeCollateral })) };
     const decisionId = await this.record(e, { kind: 'order', preview: o.preview === true, orderId: o.orderId ?? null, clientOrderId: order.clientOrderId, principal: order.principal, mode: order.mode, venue: order.venue, instrument: order.instrument, limits,
+      fingerprint: fingerprint({ mode: order.mode, venue: order.venue, accountId: o.accountId, instrument: order.instrument, side: order.side, size: order.size, reduceOnly: order.reduceOnly }),
       context: { book: c.book, equity: c.ctx.equity, pnl: c.ctx.pnl, usage: c.ctx.usage, marks: c.ctx.marks, positions: c.ctx.positions.length, accounts: c.ctx.accounts.length, signer: c.ctx.signer, killSwitch: c.ctx.killSwitch, readOnly: c.ctx.readOnly, incomplete: c.incomplete, marketError: c.marketError } });
     return { ...e, decisionId };
   }
@@ -372,8 +380,9 @@ export class RiskService {
   gate: PreTradeGate = async (r) => {
     const now = this.clockOf(r.mode), req = r.req;
     const cid = /^[A-Za-z0-9._:-]{8,128}$/.test(req.clientId) ? req.clientId : `legacy-${createHash('sha256').update(req.clientId).digest('hex').slice(0, 32)}`;
-    const [seen] = await sql<{ decision: string }[]>`select decision from risk_decisions where client_order_id = ${cid} and not preview and kind = 'order' and mode = ${r.mode} and at > ${new Date(now - 60_000)} order by id desc limit 1`;
-    if (seen?.decision === 'allow') return { ok: true };
+    const fp = fingerprint({ mode: r.mode, venue: r.venue, accountId: r.accountId, instrument: req.instrument, side: req.side, size: req.size, reduceOnly: req.reduceOnly });
+    const [seen] = r.preview ? [] : await sql<{ decision: string; fingerprint: string | null }[]>`select decision, fingerprint from risk_decisions where client_order_id = ${cid} and not preview and kind = 'order' and mode = ${r.mode} and at > ${new Date(now - 60_000)} order by id desc limit 1`;
+    if (seen?.decision === 'allow' && seen.fingerprint === fp) return { ok: true };
     const triggered = req.type !== 'market' && req.type !== 'limit', limited = req.type === 'limit' || req.type === 'stop_limit' || req.type === 'take_profit_limit';
     const ref = triggered && req.triggerPrice ? req.triggerPrice : r.known.ticker.mid ?? r.known.ticker.mark;
     let slip = 500;
@@ -386,7 +395,7 @@ export class RiskService {
         maxFeeUsd: D.str(D.div(notional, D.from(1000n), 6, 'up')), leverage: null, marginMode: null, clientOrderId: cid, mode: r.mode,
         principal: r.origin === 'mandate' ? { kind: 'agent', id: (r.agentId ?? 'agent').slice(0, 80) } : { kind: 'owner', id: 'owner' }, mandateId: r.origin === 'mandate' ? r.mandateId ?? null : null, createdAt: now, expiresAt: now + 120_000 });
     } catch (e) { return { ok: false, code: 'risk_denied', reason: `the order cannot be expressed as a canonical order (${msg(e)})` }; }
-    const ev = await this.evaluateOrder(order, { accountId: r.accountId, known: r.known, instrument: r.instrument });
+    const ev = await this.evaluateOrder(order, { accountId: r.accountId, known: r.known, instrument: r.instrument, preview: r.preview === true });
     return ev.decision === 'allow' ? { ok: true } : { ok: false, code: ev.code ?? 'risk_denied', reason: (ev.reason ?? 'denied by the risk engine').slice(0, 400) };
   };
 

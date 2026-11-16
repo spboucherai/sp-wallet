@@ -296,7 +296,8 @@ create trigger deriv_gmx_ops_projection after insert or update on deriv_gmx_ops 
 create table if not exists risk_decisions (
   id bigserial primary key, at timestamptz not null, order_id text, client_order_id text, kind text not null, preview boolean not null default false,
   principal_kind text not null, principal_id text not null, mode text not null, venue text not null, instrument text,
-  decision text not null, reducing boolean not null, failed text[] not null default '{}', checks jsonb not null, derived jsonb, limits jsonb, context jsonb);
+  decision text not null, reducing boolean not null, failed text[] not null default '{}', checks jsonb not null, derived jsonb, limits jsonb, context jsonb,
+  fingerprint text);
 create index if not exists risk_decisions_recent on risk_decisions (id desc);
 create index if not exists risk_decisions_order on risk_decisions (client_order_id);
 -- trading mandates SPW-TRADING-MANDATE-v1: immutable once created; state and the usage counters are the only things that change
