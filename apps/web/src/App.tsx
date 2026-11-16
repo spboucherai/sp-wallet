@@ -120,7 +120,7 @@ export function App() {
   // v6-alerts: open an in-app path (a tapped alert or notification)
   const openPath = useCallback((path: string) => { history.pushState(null, '', path); setRoute(routeOf()); window.scrollTo(0, 0); }, []);
   useEffect(() => { const f = () => setRoute(routeOf()); addEventListener('popstate', f); return () => removeEventListener('popstate', f); }, []);
-  useEffect(() => { setUnauthHandler(() => { qc.clear(); void qc.invalidateQueries({ queryKey: ['auth'] }); }); }, [qc]);
+  useEffect(() => { setUnauthHandler(() => { dispatchEvent(new Event('spw-session-end')); qc.clear(); void qc.invalidateQueries({ queryKey: ['auth'] }); }); }, [qc]);   // v11: the live-quote socket stops knocking once the session is gone (quotes.ts)
   useEffect(() => { document.documentElement.lang = locale; }, [locale]);
   // lock when the app has been in the background for a while (server also enforces a 30-minute idle timeout)
   useEffect(() => { const f = () => { if (document.visibilityState === 'visible') void qc.invalidateQueries({ queryKey: ['auth'] }); }; document.addEventListener('visibilitychange', f); return () => document.removeEventListener('visibilitychange', f); }, [qc]);
@@ -129,7 +129,7 @@ export function App() {
   if (state.isLoading) body = <div className="grid h-full place-items-center text-mute" role="status" aria-label="SP Wallet"><div className="flex flex-col items-center gap-5"><img src="/icon.svg" alt="" width={64} height={64} className="h-16 w-16 rounded-[20px] shadow-e2" /><Icon n="spin" className="h-5 w-5" /></div></div>;
   else if (state.isError || !state.data) body = <Offline retry={() => void state.refetch()} />;
   else if (!state.data.authenticated) body = <Gate setup={state.data.setupRequired} onDone={() => void state.refetch()} />;
-  else body = <Shell tab={tab} route={route} nav={nav} go={go} openPath={openPath} locale={locale} lock={async () => { await post('/auth/logout').catch(() => {}); qc.clear(); void state.refetch(); }} />;
+  else body = <Shell tab={tab} route={route} nav={nav} go={go} openPath={openPath} locale={locale} lock={async () => { dispatchEvent(new Event('spw-session-end')); await post('/auth/logout').catch(() => {}); qc.clear(); void state.refetch(); }} />;
   return <I18n.Provider value={{ locale, setLocale }}>{body}</I18n.Provider>;
 }
 
@@ -170,7 +170,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
   const width = wide ? `max-w-none ${tab === 'futures' ? 'lg:pt-6' : 'lg:pt-8'}` : `lg:pt-10 max-w-xl ${tab === 'home' ? 'lg:max-w-5xl' : tab === 'activity' || tab === 'agents' || tab === 'agent' || tab === 'research' || tab === 'monitor' || tab === 'private' || tab === 'risk' || tab === 'developer' || tab === 'alerts' ? 'lg:max-w-4xl' : 'lg:max-w-2xl'}`;
   return (
     <div className={`safe-x mx-auto flex min-h-full ${tab === 'futures' ? 'max-w-[1680px]' : 'max-w-7xl'}`}>{ptr}
-      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-40 focus:rounded-xl focus:bg-surface focus:px-4 focus:py-3 focus:shadow-e2">{t('v11NavSkip')}</a>
+      <a href="#main" className="absolute left-0 top-0 h-0 w-0 overflow-hidden focus:fixed focus:left-3 focus:top-3 focus:z-40 focus:h-auto focus:min-h-11 focus:w-auto focus:rounded-xl focus:bg-surface focus:px-4 focus:py-3 focus:shadow-e2">{t('v11NavSkip')}</a>
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto p-5 lg:flex">
         <div className="mb-7 flex items-center gap-3 px-2 pt-2"><img src="/icon.svg" alt="" width={36} height={36} className="h-9 w-9 rounded-xl shadow-e1" /><span className="text-[19px] font-semibold tracking-[-0.02em]">SP Wallet</span></div>
         <Suspense fallback={null}><Sidebar tab={tab} area={area} go={go} toArea={toArea} lock={lock} bell={bell(`${sideCls} ${tab === 'alerts' ? 'bg-primary text-onprimary shadow-e1' : 'text-mute hover:bg-elev hover:text-ink'}`)} /></Suspense>

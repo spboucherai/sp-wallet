@@ -84,6 +84,7 @@ export function v11Route(method: string, path: string, q: URLSearchParams, ctx: 
   if (path === '/trading/orders' && get) return ok({ orders: [], nextCursor: null, ts: ctx.now });
   if (path === '/trading/positions' && get) return ok({ positions: [], errors: [], ts: ctx.now });
   if (path.startsWith('/trading/')) return refuse();
+  if (path === '/developer/command-defaults' && get) return ok({ defaults: {} });   // the terminal's command line reads the owner's defaults when it mounts
   if (path === '/dashboard/status') return ok({ ts: ctx.now, switches: unavailable, liveLimits: unavailable });
   if (path === '/dashboard/summary') return ok({ ts: ctx.now, books: { paper: unavailable, live: unavailable, liveTestnet: unavailable }, risk: unavailable, agents: unavailable, agentsPnl: unavailable, health: unavailable, audit: unavailable });
   if (path === '/dashboard/activity') return ok({ items: [], nextCursor: null, errors: [], audit: null, bounds: { perSource: 0, plans: 0 }, kinds: [], ts: ctx.now });

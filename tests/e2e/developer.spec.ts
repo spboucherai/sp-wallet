@@ -78,14 +78,14 @@ test('Developer / API: create a key with the passkey, use it without a session, 
   await expect(page.getByTestId('dev-op-listMarkets')).toBeVisible({ timeout: 20_000 });
   await page.getByTestId('dev-op-placeOrder').locator('summary').click();
   await expect(page.getByTestId('dev-op-placeOrder')).toContainText('orders:execute');
-  await expect(page.getByTestId('dev-op-placeOrder')).toContainText('non branchée');
+  await expect(page.getByTestId('dev-op-placeOrder')).toContainText(/(?<!non )branchée/);   // placeOrder is implemented since the V11 execution work (this line still said « non branchée »)
   await expect(page.getByText('import os, uuid, requests')).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/dev-05-docs.png`, fullPage: true });
 
-  // status: execution is reported as not wired
+  // status: what the server says of execution
   await page.getByRole('tab', { name: 'État' }).click();
   await expect(page.getByTestId('dev-svc-database')).toContainText('opérationnel');
-  await expect(page.getByTestId('dev-svc-execution')).toContainText('non branchée');
+  await expect(page.getByTestId('dev-svc-execution')).toContainText('SPW_TRADING_API_EXECUTION');   // since the V11 execution work: orders are wired, live execution through the API is off unless that setting is on
   await page.screenshot({ path: `${SHOTS}/dev-06-status.png`, fullPage: true });
 
   // webhooks tab renders its events and the empty state

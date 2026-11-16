@@ -91,7 +91,9 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await page.screenshot({ path: `${SHOTS}/05-send.png`, fullPage: true });
 
   await navTo(page, 'activity');
-  await expect(page.getByText('Aucune activité')).toBeVisible();
+  // v11 interface: Activity is the timeline of every operation — a new wallet already has its setup in it, and the audit chain is intact
+  await expect(page.getByTestId('activity')).toBeVisible();
+  await expect(page.getByTestId('ac-audit')).toContainText('Chaîne d’audit intacte', { timeout: 20_000 });
   await navTo(page, 'security');
   await expect(page.getByText('Signature active')).toBeVisible();
   await expect(page.getByText('Chaîne d’empreintes intacte')).toBeVisible();

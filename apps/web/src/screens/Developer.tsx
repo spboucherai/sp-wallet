@@ -9,6 +9,7 @@ import { api, get, post, type ApiError } from '../api';
 import { codeExamples, daysLeft, docOps, docTags, draftBody, emptyDraft, errKey, SCOPE_GROUPS, scopeKey, type ApiKey, type DocOp, type DraftError, type KeyDraft, type KeysAnswer, type StatusAnswer, type UsageAnswer, type WebhooksAnswer } from '../developer';
 import { I18n, useT, type Key } from '../i18n';
 import { Btn, Card, CopyBtn, EmptyState, ErrorState, Fact, Field, Fold, H, Icon, inputCls, Notice, PageTitle, Section, Seg, Sheet, SkeletonCard, SkeletonRows, Stat, StatGrid, Tag, Timeline, when, type Tone } from '../ui';
+import { srvText } from '../srvText';
 
 type View = 'keys' | 'usage' | 'webhooks' | 'docs' | 'status';
 const VIEWS: View[] = ['keys', 'usage', 'webhooks', 'docs', 'status'];
@@ -312,7 +313,7 @@ function Status() {
       </StatGrid>
       <Card><H>{t('dvServices')}</H>
         <ul className="divide-y divide-line">{d.services.map((s) => <li key={s.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2.5" data-testid={`dev-svc-${s.id}`}>
-          <span className="min-w-0"><span className="block text-[14.5px] font-medium">{svcName(s.id)}</span><span className="block break-words text-xs text-mute">{s.detail}</span></span>
+          <span className="min-w-0"><span className="block text-[14.5px] font-medium">{svcName(s.id)}</span><span className="block break-words text-xs text-mute">{/* v11 interface (audit B3): the server's own sentence — translated when known, a marked English quotation otherwise */ srvText(t, locale, s.detail)}</span></span>
           <Tag tone={s.ok ? 'ok' : s.id === 'execution' ? 'warn' : 'danger'} icon={s.ok ? 'check' : 'warn'}>{t(s.ok ? 'dvSvcOk' : s.id === 'execution' ? 'dvOpNotWired' : 'dvSvcKo')}</Tag></li>)}</ul>
         <p className="mt-2 text-xs text-mute">{when(new Date(d.ts), locale)}</p></Card>
       <Card><H>{t('dvRateLimits')}</H>
