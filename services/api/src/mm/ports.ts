@@ -68,6 +68,8 @@ export interface MandateView {
   deadManSeconds: number;
   /** what the signer would still sign: quote batches right now (its token bucket), quotes left this hour and today */
   bucketActions: number; quotesLeftHour: number; quotesLeftDay: number;
+  /** the signer's own record of the dead man's switch, when it gives one: armed until, and the deadlines that lapsed today (the venue allows 10 triggers a day; the signer stops opening at 8) */
+  switch?: { armed: boolean; deadline: number | null; lapsesToday: number };
 }
 export interface MandatePort { /** null: no quoting mandate (or the signer cannot be asked) → no quote */ current(): Promise<MandateView | null> }
 export interface ClockPort { now(): number }

@@ -53,17 +53,26 @@ export const FAMILY_MODES: Readonly<Record<Family, { engine: EngineKind; modes: 
   stat_arb: { engine: 'bar', modes: ['research', 'paper', 'live'], liveReason: null },
   funding_arb: { engine: 'stream', modes: ['research', 'paper'], liveReason: NO_LIVE_ONE_VENUE },
   cross_exchange: { engine: 'stream', modes: ['research', 'paper'], liveReason: NO_LIVE_ONE_VENUE },
-  market_making: { engine: 'stream', modes: ['research', 'paper'], liveReason: 'mode réel indisponible : la tenue de marché exige des ordres à cours limité et des annulations à une fréquence que le mandat (60 ordres par heure) ne couvre pas, et aucun moteur de cotation réel n\'est livré dans cette version' },
+  // V11 market making: live on Hyperliquid for the pinned instruments, under a QUOTING mandate (SPW-VENUE-QUOTING-MANDATE-v1) the
+  // owner approved with the passkey — services/api/src/mm. `liveVerdict` says which agents of the family qualify.
+  market_making: { engine: 'stream', modes: ['research', 'paper', 'live'], liveReason: null },
   // research = observes and proposes only; paper = may pause PAPER agents; live = may also pause LIVE agents and engage the kill switch
   risk_manager: { engine: 'supervisor', modes: ['research', 'paper', 'live'], liveReason: null },
   custom: { engine: 'bar', modes: ['research', 'paper', 'live'], liveReason: null },
 };
 
 /** A bar agent on Hyperliquid may go live only when every instrument is pinned (audit D1). */
-export function liveVerdict(family: Family, kind: string, universe: readonly string[]): LiveVerdict {
+export function liveVerdict(family: Family, kind: string, universe: readonly string[], venues?: readonly string[]): LiveVerdict {
   const f = FAMILY_MODES[family];
   if (!f.modes.includes('live')) return { capable: false, code: 'family_not_live', reason: f.liveReason ?? NO_LIVE_ONE_VENUE };
   if (family === 'risk_manager') return { capable: true };
+  if (family === 'market_making') {
+    // one venue signs under a quoting mandate, for the instruments of its pinned table only; `venues` is given by the callers that know it
+    if (venues && (venues.length !== 1 || venues[0] !== LIVE_VENUE)) return { capable: false, code: 'venue_not_live', reason: `live market making runs on ${LIVE_VENUE} only (the one venue with a signer-enforced quoting mandate); this agent quotes on ${venues.join(', ') || 'no venue'}` };
+    const off = universe.filter((s) => !(LIVE_PINNED as readonly string[]).includes(s));
+    if (off.length || universe.length !== 1) return { capable: false, code: 'universe_not_pinned', reason: `a live market-making agent quotes ONE instrument among ${LIVE_PINNED.join(', ')} (the signer's pinned asset table)${off.length ? `; ${off.join(', ')} is not` : ''}` };
+    return { capable: true };
+  }
   if (kind === 'perp') {
     const off = universe.filter((s) => !(LIVE_PINNED as readonly string[]).includes(s));
     if (off.length) return { capable: false, code: 'universe_not_pinned', reason: `the instruments of a live perp agent must all be among ${LIVE_PINNED.join(', ')} (the signer's pinned asset table); ${off.join(', ')} ${off.length > 1 ? 'are' : 'is'} not. A fixed-universe strategy runs only on its exact universe, and a generic one on the agent's instruments: with these instruments this agent cannot go live.` };
@@ -114,7 +123,8 @@ export const TEMPLATES: readonly AgentTemplate[] = [
     summary: { fr: 'Cote un prix acheteur et un prix vendeur autour du milieu du carnet ; l\'écart s\'élargit avec la volatilité et se décale contre l\'inventaire.', en: 'Quotes a bid and an ask around the mid; the spread widens with volatility and skews against the inventory.' },
     strategies: [],
     defaults: { universe: ['BTC'], venues: ['hyperliquid'], interval: 'stream', capitalUsdc: '1000',
-      config: { quoteSizeUsd: '50', minHalfSpreadBps: '2', volMultiplier: '1.5', skewBps: '4', maxInventoryUsd: '250', volWindow: 30, decisionEveryMs: 5_000 }, risk: STREAM_RISK } },
+      // `policy`: spread_inventory (the family's rule) or avellaneda_stoikov (the lab study's formulas; as* and maxHalfSpreadBps are its parameters)
+      config: { quoteSizeUsd: '50', minHalfSpreadBps: '2', volMultiplier: '1.5', skewBps: '4', maxInventoryUsd: '250', volWindow: 30, decisionEveryMs: 5_000, policy: 'spread_inventory', asGamma: '0.1', asTauIntervals: 12, asKappa: '0.69', maxHalfSpreadBps: '150' }, risk: STREAM_RISK } },
   { id: 'momentum', family: 'momentum', engine: 'bar', kind: 'perp', rule: null, backtestStrategies: [], labStudies: [],
     name: { fr: 'Momentum', en: 'Momentum' },
     summary: { fr: 'Suit la tendance : acheteur quand le rendement passé est positif, vendeur quand il est négatif.', en: 'Follows the trend: long when the past return is positive, short when it is negative.' },

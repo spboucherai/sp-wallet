@@ -482,6 +482,32 @@ do $$ declare old jsonb; cur jsonb; begin
   end if;
 end $$;
 -- <<< v11 trading agents runtime
+-- >>> v11 live market making (services/api/src/mm): additive. A QUOTING mandate is a trading_mandates row with a quoting
+-- section (the sibling record SPW-QUOTING-SECTION-v1, its hash and its enforcement rows). Quotes are NOT rows of orders:
+-- one mm_sessions row per session (counters, attribution, the last status of the engine), one mm_fills row per fill with its
+-- markouts, one unified order per reduce-only unwind. mm_tape is the 1 s mid tape markouts are computed from afterwards.
+alter table trading_mandates add column if not exists quoting jsonb;
+create table if not exists mm_sessions (
+  id uuid primary key, agent_id uuid not null references agents(id) on delete cascade, mode text not null check (mode in ('PAPER', 'LIVE')),
+  instrument text not null, network text not null default 'mainnet', account_id uuid, mandate_id uuid, session_hex text not null, policy text not null, config_version int not null default 1,
+  worker text, state text not null default 'running' check (state in ('running', 'stopped', 'abandoned')),
+  started_at timestamptz not null, ended_at timestamptz, end_reason text, heartbeat_at timestamptz not null,
+  counters jsonb not null default '{}', pnl jsonb not null default '{}', markouts jsonb not null default '[]', status jsonb not null default '{}', refusals jsonb not null default '{}',
+  budget jsonb not null default '{}', breakers jsonb not null default '[]', command jsonb, command_ack jsonb);
+create index if not exists mm_sessions_agent on mm_sessions (agent_id, started_at desc);
+create index if not exists mm_sessions_running on mm_sessions (agent_id) where state = 'running';
+create table if not exists mm_fills (
+  id bigserial primary key, session_id uuid not null references mm_sessions(id) on delete cascade, agent_id uuid not null, mode text not null check (mode in ('PAPER', 'LIVE')),
+  instrument text not null, account_id uuid, fill_id text not null, client_id text, venue_order_id text, side text not null, price numeric not null, size numeric not null, fee numeric not null,
+  maker boolean not null, reduce boolean not null default false, mid numeric, ts timestamptz not null,
+  markout_1s numeric, markout_10s numeric, markout_60s numeric, markouts_done boolean not null default false, created_at timestamptz not null default now(),
+  unique (session_id, fill_id));
+create index if not exists mm_fills_agent on mm_fills (agent_id, mode, ts desc);
+create index if not exists mm_fills_pending on mm_fills (ts) where not markouts_done;
+create table if not exists mm_tape (instrument text not null, network text not null default 'mainnet', ts timestamptz not null, mid numeric not null, primary key (instrument, network, ts));
+-- position provenance: fills of one timestamp are replayed in the order the wallet stored them (orders/provenance.ts)
+alter table deriv_fills add column if not exists seq bigserial;
+-- <<< v11 live market making
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }

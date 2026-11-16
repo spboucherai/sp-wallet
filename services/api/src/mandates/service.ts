@@ -31,6 +31,10 @@ import { canonicalIntentHash, type LiveService } from '../derivatives/exec.ts';
 import { DYDX_RESTRICTION, EDGEX_RESTRICTION } from '../derivatives/venues.ts';
 import { prepareIntent, takeIntent, type PasskeyDeps, type Stamped } from '../risk/passkey.ts';
 import type { Evaluated } from '../risk/service.ts';
+import { webauthnOptions } from '../risk/passkey.ts';
+import { venueQuotingMandateHash, type VenueQuotingMandate } from '@spw/derivatives/live';
+import { buildQuotingSection, compileQuoting, QuotingCreateSchema, QUOTING_SHAPE, quotingAgent, quotingNetworkLock, sectionHash, type QuotingSignerPort, type StoredQuoting } from '../mm/quoting-mandate.ts';
+import type { MmLocks } from '../mm/live-adapter.ts';
 
 /** the convention of an API-key principal in the signer's `strategySha256` field */
 export const principalDescriptor = (p: { kind: 'api_key' | 'agent'; id: string }): string => `spw-principal-v1|${p.kind}|${p.id}`;
@@ -51,6 +55,9 @@ export const MandateCreateSchema = z.strictObject({
   /** agents only: the strategy version the mandate is approved for */
   strategySha256: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   label: z.string().trim().min(1).max(60), locale: z.enum(['fr', 'en']).default('en'),
+  /** V11 market making: present = a QUOTING mandate (live, for a market-making agent). The quote rates, the quote geometry and the
+   *  session settings live here — a sibling record of the trading mandate, covered by the same passkey-bound approval. */
+  quoting: QuotingCreateSchema.optional(),
 });
 export type MandateCreate = z.infer<typeof MandateCreateSchema>;
 
@@ -62,12 +69,14 @@ export type MandateState = 'created' | 'pending_signer' | 'active' | 'revoked' |
  * the row is loaded for enforcement (`integrity`).
  */
 export const MANDATE_APPROVAL_DOMAIN = 'SPW-TRADING-MANDATE-APPROVAL-v1';
-export interface MandateApprovalIntent { [k: string]: unknown; v: 1; kind: 'trading_mandate_approval'; mandateId: string; tradingMandateHash: string; principal: string; mode: 'live'; signer: { shape: string; mandateHash: string } }
+export interface MandateApprovalIntent { [k: string]: unknown; v: 1; kind: 'trading_mandate_approval'; mandateId: string; tradingMandateHash: string; principal: string; mode: 'live'; signer: { shape: string; mandateHash: string };
+  /** quoting mandates only: the hash of the sibling record SPW-QUOTING-SECTION-v1 (quote rates, geometry, session settings) */ quotingSectionHash?: string }
 export interface MandateApproval { v: 1; domain: typeof MANDATE_APPROVAL_DOMAIN; intent: Stamped<MandateApprovalIntent>; hash: string; assertion: unknown; credentialId: string | null; approvedAt: number }
 const approvalKey = (id: string): string => `mandate.intent.approve.${id}`;
 interface Row {
   id: string; principal_kind: 'agent' | 'api_key'; principal_id: string; mode: 'paper' | 'live'; mandate: TradingMandate; hash: string; state: MandateState; enforcement: FieldEnforcement[];
-  compiled: { accounts: { accountId: string; account: MandateAccount }[]; venue?: { accountId: string; mandate: VenueMandate; hash?: string; derived: { field: string; value: string; from: string }[] } } | null;
+  compiled: { accounts: { accountId: string; account: MandateAccount }[]; venue?: { accountId: string; mandate: VenueMandate | VenueQuotingMandate; hash?: string; derived: { field: string; value: string; from: string }[] } } | null;
+  /** V11 market making: non-null = a quoting mandate */ quoting: StoredQuoting | null;
   signer: { shape: string; accountId: string; mandateId: string; hash: string } | null; approval: MandateApproval | null; revocation: Record<string, unknown> | null; stop: { code: string; at: number; detail: string } | null;
   created_at: Date; approved_at: Date | null; revoked_at: Date | null; updated_at: Date;
 }
@@ -83,6 +92,10 @@ export interface MandateDeps {
   passkey?: PasskeyDeps;
   /** verifies again an assertion stored at approval (signature of an enrolled passkey over the challenge; no counter) */
   reverify?: (assertion: unknown, challenge: Uint8Array) => Promise<void>;
+  /** V11 market making: the signer's quoting endpoints; absent = quoting mandates are unavailable (503 quoting_unavailable) */
+  quotingSigner?: QuotingSignerPort;
+  /** the server locks of quoting, read at every use (default: the process environment) */
+  mmLocks?: () => MmLocks;
 }
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 300);
 const dayStart = (now: number): number => Math.floor(now / 86_400_000) * 86_400_000;
@@ -93,6 +106,7 @@ const PAPER_ENFORCEMENT_NOTE = 'paper: nothing is signed; every field is enforce
 export class MandateService {
   readonly deps: MandateDeps;
   readonly now: () => number;
+  private readonly quotingEquity = new Map<string, { at: number; equity: DecStr | null }>();
   constructor(deps: MandateDeps) { this.deps = deps; this.now = deps.now; }
 
   // ------------------------------------------------------------------ storage and views
@@ -115,11 +129,12 @@ export class MandateService {
       count(*) filter (where created_at >= ${new Date(dayStart(now))})::int as today, count(*) filter (where state not in ('FILLED', 'CANCELLED', 'REJECTED', 'FAILED'))::int as open
       from orders where mandate_id = ${r.id} and not reduce_only and state not in ('REJECTED', 'FAILED')`;
     return {
-      id: r.id, principal: { kind: r.principal_kind, id: r.principal_id }, mode: r.mode, state: r.state, phase: this.phase(r), hash: r.hash, mandate: r.mandate, label: r.mandate.label,
+      id: r.id, kind: r.quoting ? 'quoting' as const : 'directional' as const, quoting: r.quoting ? { section: r.quoting.section, hash: r.quoting.hash, termsEnforcement: r.quoting.termsEnforcement, sectionEnforcement: r.quoting.sectionEnforcement, maxima: r.quoting.maxima, agent: r.quoting.agent } : null,
+      principal: { kind: r.principal_kind, id: r.principal_id }, mode: r.mode, state: r.state, phase: this.phase(r), hash: r.hash, mandate: r.mandate, label: r.mandate.label,
       /** field by field: enforced by the isolated signer, partly, or by the API only (a compromised API could ignore an API-only field) */
       enforcement: r.enforcement, derived: r.compiled?.venue?.derived ?? [], signer: r.signer, stop: r.stop, revocation: r.revocation,
       /** live: the passkey approval of the FULL mandate hash, as stored (never the assertion itself), and whether the row still verifies against it */
-      approval: r.approval ? { domain: r.approval.domain, hash: r.approval.hash, tradingMandateHash: r.approval.intent.tradingMandateHash, signerMandateHash: r.approval.intent.signer.mandateHash, credentialId: r.approval.credentialId, approvedAt: r.approval.approvedAt } : null,
+      approval: r.approval ? { domain: r.approval.domain, hash: r.approval.hash, tradingMandateHash: r.approval.intent.tradingMandateHash, signerMandateHash: r.approval.intent.signer.mandateHash, quotingSectionHash: r.approval.intent.quotingSectionHash ?? null, credentialId: r.approval.credentialId, approvedAt: r.approval.approvedAt } : null,
       integrity: r.state === 'active' || r.state === 'revoked' ? await this.integrity(r).then((reason) => ({ ok: reason === null, reason })) : null,
       usage: { ordersAccepted: u.orders_accepted, ordersRejected: u.orders_rejected, consecutiveRejects: u.consecutive_rejects, notionalTotal: D.str(D.from(u.notional_total)), peakEquity: u.peak_equity, startEquity: u.start_equity,
         lastOrderAt: u.last_order_at?.getTime() ?? null, ordersLastMinute: c!.minute, ordersLastHour: c!.hour, ordersToday: c!.today, openOrders: c!.open },
@@ -139,11 +154,20 @@ export class MandateService {
     if (r.mandate.mandateId !== r.id || r.mandate.principal.kind !== r.principal_kind || r.mandate.principal.id !== r.principal_id || r.mandate.mode !== r.mode) return 'the row names another id, principal or mode than the mandate it stores';
     const named = new Set(r.mandate.accounts.map((a) => JSON.stringify(a, Object.keys(a).sort())));
     for (const a of r.compiled?.accounts ?? []) if (!named.has(JSON.stringify(a.account, Object.keys(a.account).sort()))) return 'the row maps the mandate to an account the mandate does not name';
+    if (r.quoting) {
+      let qh: string;
+      try { qh = sectionHash(r.quoting.section); } catch (e) { return `the stored quoting section is not valid (${msg(e)})`; }
+      if (qh !== r.quoting.hash) return 'the stored quoting section does not hash to its recorded hash';
+      if (r.quoting.section.mandateId !== r.id || r.quoting.section.tradingMandateHash !== r.hash) return 'the stored quoting section belongs to another mandate';
+      if (r.mode !== 'live' || r.principal_kind !== 'agent') return 'a quoting mandate is a live mandate of an agent';
+    }
     if (r.mode !== 'live') return null;
     const a = r.approval;
     if (!a || a.domain !== MANDATE_APPROVAL_DOMAIN) return 'no passkey approval of the full mandate hash is stored with this live mandate';
     if (a.intent.kind !== 'trading_mandate_approval' || a.intent.mandateId !== r.id || a.intent.tradingMandateHash !== r.hash) return 'the stored passkey approval is for another mandate or another hash';
     if (!r.signer || a.intent.signer.mandateHash !== r.signer.hash || a.intent.signer.shape !== r.signer.shape) return 'the stored passkey approval names another signer mandate than the one recorded';
+    if ((r.quoting?.hash ?? undefined) !== a.intent.quotingSectionHash) return 'the stored passkey approval does not name this mandate\'s quoting section';
+    if ((r.signer.shape === QUOTING_SHAPE) !== (r.quoting !== null && r.quoting !== undefined)) return 'the signer shape recorded does not match the kind of the mandate';
     if (hex(canonicalIntentHash(MANDATE_APPROVAL_DOMAIN, a.intent)) !== a.hash) return 'the stored approval intent is not intact';
     if (!this.deps.reverify) return 'this server cannot verify a stored passkey approval';
     try { await this.deps.reverify(a.assertion, Buffer.from(a.hash, 'hex')); } catch (e) { return `the stored passkey approval does not verify (${msg(e)})`; }
@@ -160,6 +184,32 @@ export class MandateService {
     const [dm] = await sql<{ id: string; mandate: VenueMandate }[]>`select id, mandate from deriv_mandates where account_id::text = ${accountId} and state = 'active' and id::text <> ${except.mandateId ?? ''} order by approved_at desc limit 1`;
     if (dm && dm.mandate.expiresAt > nowSec) return { via: 'derivative_mandate', mandateId: dm.id, principal: `agent:${dm.mandate.agentId}` };
     return null;
+  }
+  /**
+   * V11 market making — a venue account carries ONE standing authority: a directional mandate or a quoting mandate, never both
+   * (the signer refuses the second with `conflict`). Said here first, with a code that names the direction of the conflict.
+   */
+  private async refuseOtherKind(accountId: string, mandateId: string | null, quoting: boolean): Promise<void> {
+    const nowSec = Math.floor(this.now() / 1000);
+    if (quoting) {
+      const [dm] = await sql<{ id: string; mandate: VenueMandate }[]>`select id, mandate from deriv_mandates where account_id::text = ${accountId} and state = 'active' and id::text <> ${mandateId ?? ''} order by approved_at desc limit 1`;
+      if (dm && dm.mandate.expiresAt > nowSec) throw Object.assign(new UserError('quoting_excludes_directional', `this venue account carries the active directional mandate ${dm.id}: a quoting mandate and a directional mandate exclude each other on a venue account (the signer refuses the second). Revoke the directional mandate first.`, 409), { data: { holder: { via: 'derivative_mandate', mandateId: dm.id } } });
+      return;
+    }
+    for (const o of await sql<Row[]>`select * from trading_mandates where mode = 'live' and state = 'active' and quoting is not null and id::text <> ${mandateId ?? ''}`) {
+      if (!(o.compiled?.accounts ?? []).some((a) => a.accountId === accountId) || this.phase(o) !== 'active') continue;
+      throw Object.assign(new UserError('directional_excludes_quoting', `this venue account carries the active quoting mandate ${o.id} (market making): a directional mandate and a quoting mandate exclude each other on a venue account (the signer refuses the second). Revoke the quoting mandate first.`, 409), { data: { holder: { via: 'quoting_mandate', mandateId: o.id } } });
+    }
+  }
+  private quotingSigner(): QuotingSignerPort {
+    if (!this.deps.quotingSigner) throw new UserError('quoting_unavailable', 'quoting mandates are not available on this server (no signer port)', 503);
+    return this.deps.quotingSigner;
+  }
+  /** the last approved quoting mandate of a market-making agent with its phase and integrity, or null. The one a live session runs under. */
+  async quotingFor(agentId: string): Promise<{ row: Row; phase: TradingMandatePhase | 'not_approved'; integrity: string | null } | null> {
+    const [r] = await sql<Row[]>`select * from trading_mandates where principal_kind = 'agent' and principal_id = ${agentId} and mode = 'live' and quoting is not null and state in ('active', 'revoked') order by approved_at desc nulls last limit 1`;
+    if (!r) return null;
+    return { row: r, phase: this.phase(r), integrity: await this.integrity(r) };
   }
   private async refuseSecondPrincipal(accountId: string, mandateId: string | null, principal: { kind: string; id: string }): Promise<void> {
     const h = await this.accountHolder(accountId, { mandateId, principal });
@@ -222,17 +272,29 @@ export class MandateService {
     };
     try { validateTradingMandate(mandate, nowSec); } catch (e) { if (e instanceof TradingMandateError) throw new UserError(e.code, `${e.field ? `${e.field}: ` : ''}${e.message}`, 400); throw e; }
     let enforcement: FieldEnforcement[], compiled: Row['compiled'] = { accounts };
-    if (b.mode === 'live') {
+    let quoting: StoredQuoting | null = null;
+    if (b.quoting) {
+      // a QUOTING mandate: live, for a market-making agent, one instrument; every value inside a compiled bound or refused
+      if (b.principal.kind !== 'agent') throw new UserError('quoting_requires_agent', 'a quoting mandate is approved for a market-making AGENT, never for an API key', 422);
+      if (b.mode !== 'live') throw new UserError('quoting_requires_live', 'a quoting mandate is a live mandate: paper market making needs no mandate of this kind', 422);
+      this.quotingSigner();
+      const agent = await quotingAgent(b.principal.id), mh = tradingMandateHashHex(mandate);
+      const section = buildQuotingSection(mandate, mh, b.quoting, agent);
+      const c = await this.compileQuotingFor(mandate, section, accounts, b.locale);
+      for (const a of accounts) { await this.refuseOtherKind(a.accountId, null, true); await this.refuseSecondPrincipal(a.accountId, null, b.principal); }
+      enforcement = c.enforcement; compiled = { accounts, venue: { accountId: c.accountId, mandate: c.mandate, derived: c.derived } };
+      quoting = { section, hash: sectionHash(section), termsEnforcement: c.termsEnforcement, sectionEnforcement: c.sectionEnforcement, maxima: c.maxima, agent: { id: agent.id, rule: agent.rule, configVersion: agent.configVersion, instrument: agent.instrument } };
+    } else if (b.mode === 'live') {
       // refused NOW if it cannot be compiled for the signer: a live mandate never exists in a form the signer does not bound
       const c = await this.compile(mandate, accounts, b.locale);
       // one venue account serves one principal at a time: a second principal is refused before anything is stored
-      for (const a of accounts) await this.refuseSecondPrincipal(a.accountId, null, b.principal);
+      for (const a of accounts) { await this.refuseOtherKind(a.accountId, null, false); await this.refuseSecondPrincipal(a.accountId, null, b.principal); }
       enforcement = c.enforcement; compiled = { accounts, venue: { accountId: c.accountId, mandate: c.mandate, derived: c.derived } };
     } else enforcement = (Object.keys(TradingMandateSchema.shape) as (keyof TradingMandate)[]).map((field) => ({ field, enforcedBy: 'api_only' as const, signerField: null, note: PAPER_ENFORCEMENT_NOTE }));
     const hash = tradingMandateHashHex(mandate);
-    await sql`insert into trading_mandates (id, principal_kind, principal_id, mode, mandate, hash, state, enforcement, compiled) values (${mandate.mandateId}, ${b.principal.kind}, ${b.principal.id}, ${b.mode}, ${sql.json(mandate as never)}, ${hash},
-      'created', ${sql.json(enforcement as never)}, ${sql.json(compiled as never)})`;
-    await audit('mandate.created', 'owner', { mandateId: mandate.mandateId, hash, principal: `${b.principal.kind}:${b.principal.id}`, mode: b.mode, venues, instruments: b.instruments, maxCapitalUsd: b.maxCapitalUsd, maxOrderNotionalUsd: b.maxOrderNotionalUsd, notAfter: mandate.notAfter }).catch(() => {});
+    await sql`insert into trading_mandates (id, principal_kind, principal_id, mode, mandate, hash, state, enforcement, compiled, quoting) values (${mandate.mandateId}, ${b.principal.kind}, ${b.principal.id}, ${b.mode}, ${sql.json(mandate as never)}, ${hash},
+      'created', ${sql.json(enforcement as never)}, ${sql.json(compiled as never)}, ${quoting ? sql.json(quoting as never) : null})`;
+    await audit('mandate.created', 'owner', { mandateId: mandate.mandateId, hash, kind: quoting ? 'quoting' : 'directional', ...(quoting ? { quotingSectionHash: quoting.hash } : {}), principal: `${b.principal.kind}:${b.principal.id}`, mode: b.mode, venues, instruments: b.instruments, maxCapitalUsd: b.maxCapitalUsd, maxOrderNotionalUsd: b.maxOrderNotionalUsd, notAfter: mandate.notAfter }).catch(() => {});
     return this.get(mandate.mandateId);
   }
 
@@ -249,6 +311,16 @@ export class MandateService {
     }
   }
 
+  /** quoting: the binding of the venue account (the two mainnet locks of the live engine apply), the lock of quoting on that network, then the compilation */
+  private async compileQuotingFor(mandate: TradingMandate, section: StoredQuoting['section'], accounts: { accountId: string; account: MandateAccount }[], locale: 'fr' | 'en') {
+    const hl = accounts.filter((a) => a.account.kind === 'venue_account' && a.account.venue === 'hyperliquid');
+    if (hl.length !== 1 || accounts.length !== 1) throw new UserError(hl.length ? 'ambiguous_account' : 'account_not_in_mandate', 'a quoting mandate covers exactly one Hyperliquid venue account', 422);
+    const binding = await this.deps.live().mandateBinding(hl[0]!.accountId, locale);      // mainnet_disabled, mandate_mainnet_disabled, mode_read_only, …
+    const lock = quotingNetworkLock(binding.network, this.deps.mmLocks?.());
+    if (lock) throw lock;
+    return { accountId: hl[0]!.accountId, binding, ...compileQuoting(mandate, section, { authorization: binding.authorization, ackSha256: binding.ack.sha256 }) };
+  }
+
   // ------------------------------------------------------------------ approval
   /**
    * What the approval sheet shows before the passkey prompt: every field of the mandate, its hash, and the table that says, field
@@ -261,8 +333,9 @@ export class MandateService {
     const base = { mandateId: r.id, mandate: r.mandate, hash: r.hash, mode: r.mode, enforcement: r.enforcement, derived: r.compiled?.venue?.derived ?? [], principalDescriptor: r.principal_kind === 'api_key' ? principalDescriptor({ kind: 'api_key', id: r.principal_id }) : null };
     if (r.mode === 'paper') return { ...base, passkey: false as const, signer: null, note: 'a paper mandate needs no signer and no passkey: nothing is signed in paper mode' };
     if (tradingMandateHashHex(r.mandate) !== r.hash) throw new UserError('mandate_integrity', 'the stored mandate does not hash to its recorded hash: create it again', 409);
-    for (const a of r.compiled!.accounts) await this.refuseSecondPrincipal(a.accountId, r.id, { kind: r.principal_kind, id: r.principal_id });
+    for (const a of r.compiled!.accounts) { await this.refuseOtherKind(a.accountId, r.id, r.quoting !== null && r.quoting !== undefined); await this.refuseSecondPrincipal(a.accountId, r.id, { kind: r.principal_kind, id: r.principal_id }); }
     if (!this.deps.passkey?.verifyOwner) throw new UserError('passkey_unavailable', 'this server cannot verify a passkey approval: a live mandate cannot be approved', 503);
+    if (r.quoting) return this.prepareQuotingApproval(r, base, locale);
     // compiled again against the authorization as it is now: the stored compilation must still be exactly what the signer will be asked to approve
     const c = await this.compile(r.mandate, r.compiled!.accounts, locale);
     const p = await this.deps.live().prepareCompiledMandate(c.accountId, c.mandate, locale);
@@ -270,12 +343,92 @@ export class MandateService {
     // the API's own passkey step: ONE intent that names the full trading mandate hash and the hash of the derivative mandate compiled from it
     const b = await prepareIntent<MandateApprovalIntent>(this.deps.passkey, MANDATE_APPROVAL_DOMAIN, approvalKey(r.id), { v: 1, kind: 'trading_mandate_approval', mandateId: r.id, tradingMandateHash: r.hash,
       principal: `${r.principal_kind}:${r.principal_id}`, mode: 'live', signer: { shape: 'SPW-VENUE-MANDATE-v1', mandateHash: p.hash } });
-    return { ...base, enforcement: c.enforcement, derived: c.derived, passkey: true as const,
+    return { ...base, kind: 'directional' as const, enforcement: c.enforcement, derived: c.derived, passkey: true as const,
       signer: { shape: 'SPW-VENUE-MANDATE-v1', accountId: c.accountId, mandate: p.mandate, hash: p.hash, acknowledgement: p.acknowledgement, warning: p.warning, enforcedBySigner: p.enforcedBySigner, trustedBySigner: p.trustedBySigner, notEnforced: p.notEnforced,
         windDown: p.windDown, options: p.options },
       /** the second passkey prompt: its challenge is the hash of `intent`, which names the FULL mandate hash shown on the sheet */
       binding: { domain: MANDATE_APPROVAL_DOMAIN, intent: b.intent, hash: b.hash, options: b.options, expiresAt: b.expiresAt },
       note: 'two passkey prompts. (1) The isolated signer verifies the passkey over the hash of the compiled derivative mandate — what it stores and enforces. (2) The API verifies the passkey over an intent that names the FULL trading mandate hash (every field, the "API only" ones included) and that derivative mandate; the assertion is stored and verified again each time the mandate is used. (2) is checked by the API: it protects the record against alteration, not against a compromised API.' };
+  }
+
+  /** the approval sheet of a QUOTING mandate: the enforced-by table verbatim, the hashes, the acknowledgement, and the two WebAuthn requests */
+  private async prepareQuotingApproval<B extends object>(r: Row, base: B, locale: 'fr' | 'en') {
+    const q = r.quoting!, qs = this.quotingSigner();
+    if (sectionHash(q.section) !== q.hash) throw new UserError('mandate_integrity', 'the stored quoting section does not hash to its recorded hash: create the mandate again', 409);
+    // the agent's configuration must still be the one the section names: a change since the creation makes the mandate stale
+    const agent = await quotingAgent(r.principal_id);
+    if (agent.configSha256 !== q.section.engine.configSha256) throw new UserError('quoting_config_changed', 'the agent\'s configuration changed since this mandate was created: create a new mandate for the current configuration', 409);
+    const c = await this.compileQuotingFor(r.mandate, q.section, r.compiled!.accounts, locale);
+    const st = await qs.status(true);
+    if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
+    await this.deps.live().deps.venues.get(c.binding.network).assertPinned();
+    const signerHash = hex(venueQuotingMandateHash(c.mandate));
+    await sql`update trading_mandates set state = 'pending_signer', compiled = ${sql.json({ accounts: r.compiled!.accounts, venue: { accountId: c.accountId, mandate: c.mandate, hash: signerHash, derived: c.derived } } as never)}, enforcement = ${sql.json(c.enforcement as never)}, updated_at = now() where id = ${r.id}`;
+    const b = await prepareIntent<MandateApprovalIntent>(this.deps.passkey!, MANDATE_APPROVAL_DOMAIN, approvalKey(r.id), { v: 1, kind: 'trading_mandate_approval', mandateId: r.id, tradingMandateHash: r.hash,
+      principal: `${r.principal_kind}:${r.principal_id}`, mode: 'live', signer: { shape: QUOTING_SHAPE, mandateHash: signerHash }, quotingSectionHash: q.hash });
+    return { ...base, kind: 'quoting' as const, enforcement: c.enforcement, derived: c.derived, passkey: true as const,
+      quoting: { section: q.section, hash: q.hash, termsEnforcement: c.termsEnforcement, sectionEnforcement: c.sectionEnforcement, maxima: c.maxima,
+        /** the whole enforced-by table as Markdown: the sheet shows it VERBATIM */ table: c.table },
+      signer: { shape: QUOTING_SHAPE, accountId: c.accountId, mandate: c.mandate, hash: signerHash, acknowledgement: c.binding.ack, options: await webauthnOptions(this.deps.passkey!, Buffer.from(signerHash, 'hex')),
+        windDown: { seconds: TRADING_MANDATE_WIND_DOWN_S }, exclusivity: 'no directional mandate can be active on this venue account while this quoting mandate is, and vice versa' },
+      binding: { domain: MANDATE_APPROVAL_DOMAIN, intent: b.intent, hash: b.hash, options: b.options, expiresAt: b.expiresAt },
+      hashes: { tradingMandate: r.hash, quotingSection: q.hash, signerMandate: signerHash, approvalIntent: b.hash },
+      note: 'two passkey prompts. (1) The isolated signer verifies the passkey over the hash of the quoting mandate — what it stores and enforces on every quote. (2) The API verifies the passkey over an intent that names the FULL trading mandate hash, the hash of the quoting section (quote rates, geometry, session settings) and that quoting mandate; the assertion is stored and verified again each time the mandate is used.' };
+  }
+  /** V11 market making: step 2 at the signer. An answer that never came back is NOT a refusal: the row stays `pending_signer` and `recoverQuoting` settles it. */
+  private async approveQuotingAtSigner(r: Row, assertion: unknown): Promise<{ hash: string }> {
+    const v = r.compiled!.venue!, qs = this.quotingSigner();
+    let out: Awaited<ReturnType<QuotingSignerPort['venueQuotingApprove']>>;
+    try { out = await qs.venueQuotingApprove(v.mandate, assertion); }
+    catch (e) {
+      const code = e instanceof UserError ? e.code : 'internal';
+      if (code === 'signer_unreachable' || code === 'signer_error' || code === 'internal') {
+        await audit('mandate.approval_unknown', 'owner', { mandateId: r.id, reason: msg(e) }).catch(() => {});
+        throw new UserError('quoting_approval_unknown', `the signer gave no usable answer (${msg(e)}): it may or may not have stored the quoting mandate. Use "recover" on this mandate: it asks the signer, then activates the mandate or leaves it to be approved again.`, 503);
+      }
+      await sql`update trading_mandates set state = 'failed', updated_at = now() where id = ${r.id} and state = 'pending_signer'`;
+      await audit('mandate.approval_refused', 'owner', { mandateId: r.id, reason: msg(e) }).catch(() => {});
+      throw e;
+    }
+    if (out.mandateId !== r.id || (v.hash && out.hash !== v.hash)) {
+      await qs.venueQuotingRevoke(out.mandateId).catch(() => {});
+      await sql`update trading_mandates set state = 'failed', updated_at = now() where id = ${r.id}`;
+      throw new UserError('bad_state', 'the mandate the signer approved is not the one compiled from this trading mandate; it was revoked and not activated', 409);
+    }
+    return { hash: out.hash };
+  }
+  private async activate(r: Row): Promise<void> {
+    const at = new Date(this.now());
+    const done = await sql`update trading_mandates set state = 'active', approved_at = ${at}, updated_at = ${at} where id = ${r.id} and state in ('created', 'pending_signer') returning id`;
+    if (!done.length) throw new UserError('bad_state', 'the mandate changed concurrently', 409);
+    const equity = await this.equityOf(r).catch(() => null);
+    await sql`insert into trading_mandate_usage (mandate_id, start_equity, peak_equity) values (${r.id}, ${equity}, ${equity}) on conflict (mandate_id) do update set start_equity = excluded.start_equity, peak_equity = excluded.peak_equity`;
+    await audit('mandate.approved', 'owner', { mandateId: r.id, hash: r.hash, kind: r.quoting ? 'quoting' : 'directional', principal: `${r.principal_kind}:${r.principal_id}`, mode: r.mode, passkey: r.mode === 'live', enforcement: Object.fromEntries(r.enforcement.map((e) => [e.field, e.enforcedBy])) }).catch(() => {});
+  }
+  /**
+   * V11 market making — the lost answer of a quoting approval, and orphans. Asks the signer what it holds:
+   *  - a `pending_signer` quoting row whose stored passkey approval verifies and whose compiled mandate the signer holds ACTIVE
+   *    with the same hash → activated (the owner did approve it; only the answer was lost);
+   *  - a quoting mandate the signer holds active that no active or pending row of this wallet accounts for, or whose stored
+   *    approval does not verify → revoked at the signer (stopping never needs a passkey).
+   */
+  async recoverQuoting(): Promise<{ adopted: string[]; revoked: string[]; pending: string[] }> {
+    const qs = this.quotingSigner(), st = await qs.status(true), held = (st.venueQuotingMandates ?? []).filter((x) => x.phase === 'active' && !x.revoked);
+    const out = { adopted: [] as string[], revoked: [] as string[], pending: [] as string[] };
+    const rows = await sql<Row[]>`select * from trading_mandates where quoting is not null and state in ('pending_signer', 'active')`;
+    for (const r of rows.filter((x) => x.state === 'pending_signer')) {
+      const h = held.find((x) => x.mandate.mandateId === r.id), v = r.compiled?.venue, a = r.approval;
+      if (!h) { out.pending.push(r.id); continue; }
+      const sound = v?.hash === h.hash && !!a && a.intent.mandateId === r.id && a.intent.tradingMandateHash === r.hash && a.intent.signer.mandateHash === h.hash && a.intent.quotingSectionHash === r.quoting!.hash
+        && hex(canonicalIntentHash(MANDATE_APPROVAL_DOMAIN, a.intent)) === a.hash && !!this.deps.reverify && await this.deps.reverify(a.assertion, Buffer.from(a.hash, 'hex')).then(() => true, () => false);
+      if (!sound) { await qs.venueQuotingRevoke(r.id); await sql`update trading_mandates set state = 'failed', updated_at = now() where id = ${r.id}`; out.revoked.push(r.id); await audit('mandate.quoting_orphan_revoked', 'system', { mandateId: r.id, reason: 'the signer held it, the stored approval did not verify' }).catch(() => {}); continue; }
+      await sql`update trading_mandates set signer = ${sql.json({ shape: QUOTING_SHAPE, accountId: v!.accountId, mandateId: r.id, hash: h.hash } as never)} where id = ${r.id}`;
+      await this.activate(r); out.adopted.push(r.id);
+      await audit('mandate.quoting_recovered', 'owner', { mandateId: r.id, hash: h.hash }).catch(() => {});
+    }
+    const known = new Set(rows.map((r) => r.id));
+    for (const h of held) if (!known.has(h.mandate.mandateId)) { await qs.venueQuotingRevoke(h.mandate.mandateId); out.revoked.push(h.mandate.mandateId); await audit('mandate.quoting_orphan_revoked', 'system', { mandateId: h.mandate.mandateId, reason: 'no record of this wallet accounts for it' }).catch(() => {}); }
+    return out;
   }
 
   async approve(id: string, body: { assertion?: Record<string, unknown>; bindingAssertion?: Record<string, unknown>; acknowledged?: boolean }) {
@@ -290,14 +443,24 @@ export class MandateService {
       if (!body.assertion || !body.bindingAssertion || body.acknowledged !== true) throw new UserError('passkey_required', 'a live mandate is approved with the owner\'s passkey, twice — once for the isolated signer (the derivative mandate), once for the full mandate hash (`bindingAssertion`) — after the acknowledgement was displayed', 403);
       if (!this.deps.passkey?.verifyOwner) throw new UserError('passkey_unavailable', 'this server cannot verify a passkey approval: a live mandate cannot be approved', 503);
       const v = r.compiled.venue, live = this.deps.live();
-      for (const a of r.compiled.accounts) await this.refuseSecondPrincipal(a.accountId, r.id, { kind: r.principal_kind, id: r.principal_id });
+      for (const a of r.compiled.accounts) { await this.refuseOtherKind(a.accountId, r.id, r.quoting !== null && r.quoting !== undefined); await this.refuseSecondPrincipal(a.accountId, r.id, { kind: r.principal_kind, id: r.principal_id }); }
+      if (r.quoting) { const lock = quotingNetworkLock((r.compiled.venue.mandate as VenueQuotingMandate).network, this.deps.mmLocks?.()); if (lock) throw lock; }
       // (2) first: the full-hash approval is verified, taken once, and stored BEFORE the signer is asked — a mandate can reach the
       // signer only together with the owner's commitment to every one of its fields
       const intent = await takeIntent<MandateApprovalIntent>(this.deps.passkey, MANDATE_APPROVAL_DOMAIN, approvalKey(r.id), body.bindingAssertion, 'mandate.binding_refused');
-      if (intent.kind !== 'trading_mandate_approval' || intent.mandateId !== r.id || intent.tradingMandateHash !== r.hash || intent.signer.mandateHash !== v.hash) throw new UserError('bad_state', 'the prepared approval is not for this mandate as it is stored: prepare it again', 409);
+      if (intent.kind !== 'trading_mandate_approval' || intent.mandateId !== r.id || intent.tradingMandateHash !== r.hash || intent.signer.mandateHash !== v.hash || intent.quotingSectionHash !== (r.quoting?.hash ?? undefined)
+        || intent.signer.shape !== (r.quoting ? QUOTING_SHAPE : 'SPW-VENUE-MANDATE-v1')) throw new UserError('bad_state', 'the prepared approval is not for this mandate as it is stored: prepare it again', 409);
       const approval: MandateApproval = { v: 1, domain: MANDATE_APPROVAL_DOMAIN, intent, hash: hex(canonicalIntentHash(MANDATE_APPROVAL_DOMAIN, intent)), assertion: body.bindingAssertion,
         credentialId: typeof body.bindingAssertion.id === 'string' ? body.bindingAssertion.id.slice(0, 1024) : null, approvedAt: this.now() };
       await sql`update trading_mandates set approval = ${sql.json(approval as never)}, updated_at = now() where id = ${r.id} and state = 'pending_signer'`;
+      if (r.quoting) {
+        const out = await this.approveQuotingAtSigner(r, body.assertion);
+        await sql`update trading_mandates set signer = ${sql.json({ shape: QUOTING_SHAPE, accountId: v.accountId, mandateId: r.id, hash: out.hash } as never)} where id = ${r.id}`;
+        await audit('mandate.quoting_acknowledged', 'owner', { mandateId: r.id, signerMandateHash: out.hash, ackSha256: (v.mandate as VenueQuotingMandate).ackSha256,
+          statement: 'the owner confirmed again with his passkey having read the jurisdiction summary; letting an automated strategy QUOTE derivatives on this venue inside the mandate is his own decision' }).catch(() => {});
+        await this.activate(r);
+        return this.get(r.id);
+      }
       try { await live.approveMandate(v.accountId, { assertion: body.assertion, acknowledged: true }); }
       catch (e) {
         await sql`update trading_mandates set state = 'failed', updated_at = now() where id = ${r.id} and state = 'pending_signer'`;
@@ -346,6 +509,11 @@ export class MandateService {
   /** null = nothing to revoke at the signer (paper, or never approved there) */
   private async revokeAtSigner(r: Row): Promise<{ revoked: boolean | null; error: string | null }> {
     if (r.mode !== 'live' || !r.signer) return { revoked: null, error: null };
+    if (r.signer.shape === QUOTING_SHAPE) {
+      // quoting: revoked at the signer by its id; a signer that never stored it has nothing to revoke
+      try { await this.quotingSigner().venueQuotingRevoke(r.signer.mandateId); return { revoked: true, error: null }; }
+      catch (e) { return e instanceof UserError && e.code === 'signer_not_found' ? { revoked: true, error: null } : { revoked: false, error: msg(e) }; }
+    }
     const [dm] = await sql<{ state: string }[]>`select state from deriv_mandates where id = ${r.signer.mandateId}`;
     if (dm?.state !== 'active') return { revoked: true, error: null };
     try { await this.deps.live().revokeMandate(r.signer.accountId, { cancelOpenOrders: false }); return { revoked: true, error: null }; }
@@ -449,7 +617,10 @@ export class MandateService {
         if (signerUp && u.signer_unreachable_since) await sql`update trading_mandate_usage set signer_unreachable_since = null where mandate_id = ${r.id}`;
         if (!signerUp && !u.signer_unreachable_since) await sql`update trading_mandate_usage set signer_unreachable_since = ${new Date(now)} where mandate_id = ${r.id}`;
       }
-      const equity = await this.equityOf(r).catch(() => null);
+      // a quoting mandate's account is followed by its session from the venue's streams: this loop reads its equity once a minute, not at every pass (IP weight)
+      const seen = this.quotingEquity.get(r.id), reuse = !!r.quoting && !!seen && now - seen.at < 60_000;
+      const equity = reuse ? seen!.equity : await this.equityOf(r).catch(() => null);
+      if (r.quoting && !reuse) this.quotingEquity.set(r.id, { at: now, equity });
       if (equity !== null && (u.peak_equity === null || D.gt(D.from(equity), D.from(u.peak_equity)))) await sql`update trading_mandate_usage set peak_equity = ${equity} where mandate_id = ${r.id}`;
       const peak = equity === null ? null : u.peak_equity === null ? D.from(equity) : D.max(D.from(u.peak_equity), D.from(equity));
       let why: string | null = null;

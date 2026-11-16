@@ -106,6 +106,7 @@ function ruleConfig(t: AgentTemplate, c: Record<string, unknown> | undefined): R
   for (const [k, v] of Object.entries(c ?? {})) {
     if (!(k in t.defaults.config)) throw new UserError('bad_request', `unknown configuration key ${k} for ${t.id} (known: ${Object.keys(t.defaults.config).join(', ')})`, 400);
     if (typeof t.defaults.config[k] === 'boolean') { out[k] = v === true; continue; }
+    if (k === 'policy') { if (v !== 'spread_inventory' && v !== 'avellaneda_stoikov') throw new UserError('bad_request', 'policy is spread_inventory or avellaneda_stoikov', 400); out[k] = v; continue; }
     const n = NUM(v, 0, 1e9, k);
     if (k === 'decisionEveryMs' && n < 1000) throw new UserError('bad_request', 'decisionEveryMs is at least 1000', 400);
     out[k] = typeof t.defaults.config[k] === 'string' ? String(v) : n;
