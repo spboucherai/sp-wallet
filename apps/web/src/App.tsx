@@ -23,6 +23,7 @@ const screens = {
   agents: () => import('./screens/Agents'), research: () => import('./screens/Research'), plan: () => import('./plan'),
   security: () => import('./screens/Security'), settings: () => import('./screens/Settings'),
   developer: () => import('./screens/Developer'),   // v11 Developer / API: opened from Settings, never preloaded
+  private: () => import('./screens/PrivateMarkets'), // v11 private markets (display only): opened from the trade area, never preloaded
 };
 const Futures = lazy(() => screens.futures().then((m) => ({ default: m.Futures })));
 const Alerts = lazy(() => screens.alerts().then((m) => ({ default: m.Alerts })));
@@ -38,6 +39,7 @@ const PlanScreen = lazy(() => screens.plan().then((m) => ({ default: m.PlanScree
 const Security = lazy(() => screens.security().then((m) => ({ default: m.Security })));
 const Settings = lazy(() => screens.settings().then((m) => ({ default: m.Settings })));
 const Developer = lazy(() => screens.developer().then((m) => ({ default: m.Developer })));
+const PrivateMarkets = lazy(() => screens.private().then((m) => ({ default: m.PrivateMarkets })));
 /** After the first screen is drawn: the logo set, then the tab-bar screens, one at a time, each when the browser is idle. A failure is silent (the screen asks again when opened). */
 let preloaded = false;
 function preloadScreens(): void {
@@ -51,11 +53,11 @@ function preloadScreens(): void {
 const ScreenSkeleton = () => <div className="space-y-4" aria-busy="true"><Skeleton h="h-9" className="!mt-2 !w-44 !rounded-xl" /><SkeletonRows n={5} /></div>;
 
 const TABS = [['home', '/', 'home'], ['swap', '/swap', 'swap'], ['agents', '/agents', 'key'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
-export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent' | 'futures' | 'alerts' | 'monitor' | 'research' | 'plan' | 'developer';
+export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent' | 'futures' | 'alerts' | 'monitor' | 'research' | 'plan' | 'developer' | 'private';
 /** Where to go, with optional pre-selection (asset page, or send/receive pre-filled). */
 export interface Route { tab: Tab; network?: string; asset?: string; /** sub-view of a screen (Futures: compare, accounts) */ view?: string }
 export type Nav = (r: Route) => void;
-const pathOf = (r: Route) => r.tab === 'developer' ? `/developer${r.view ? `?v=${r.view}` : ''}` : r.tab === 'plan' ? `/plan/${r.asset}` : r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
+const pathOf = (r: Route) => r.tab === 'private' ? `/private-markets${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'developer' ? `/developer${r.view ? `?v=${r.view}` : ''}` : r.tab === 'plan' ? `/plan/${r.asset}` : r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
 function routeOf(): Route {
   const m = /^\/asset\/([a-z0-9-]+)\/(.+)$/.exec(location.pathname);
   if (m) return { tab: 'asset', network: m[1], asset: decodeURIComponent(m[2]!) };
@@ -69,6 +71,8 @@ function routeOf(): Route {
   if (location.pathname === '/monitor') return { tab: 'monitor' };
   if (location.pathname === '/developer') return { tab: 'developer', view: q.get('v') ?? undefined };   // v11 Developer / API
   if (location.pathname === '/research') return { tab: 'research', asset: q.get('job') ?? undefined }; // v7 research runtime
+  const pm = /^\/private-markets(?:\/(.+))?$/.exec(location.pathname);   // v11: /private-markets, /private-markets/<venue:symbol>
+  if (pm) return { tab: 'private', asset: pm[1] ? decodeURIComponent(pm[1]) : undefined, view: q.get('v') ?? undefined };
   const fu = /^\/futures(?:\/(.+))?$/.exec(location.pathname);   // /futures, /futures/<venue:symbol>
   if (fu) return { tab: 'futures', asset: fu[1] ? decodeURIComponent(fu[1]) : undefined, view: q.get('v') ?? undefined };
   return { tab: TABS.find((t) => t[1] === location.pathname)?.[0] ?? 'home', network: q.get('n') ?? undefined, asset: q.get('a') ?? undefined };
@@ -123,8 +127,8 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
   const bell = (cls: string) => <button onClick={() => go('alerts')} data-testid="alerts-bell" aria-label={`${t('alBell')}${unread.unread ? ` (${unread.unread})` : ''}`} aria-current={tab === 'alerts' ? 'page' : undefined} className={cls}>
     <span className="relative"><Icon n="bell" />{unread.unread > 0 && <span data-testid="alerts-badge" className={`absolute -right-2 -top-2 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[10.5px] font-bold leading-none text-white ${unread.critical ? 'bg-danger' : 'bg-blue'}`}>{unread.unread > 99 ? '99+' : unread.unread}</span>}</span>{cls.includes('w-full') && t('alTitle')}</button>;
   const MOBILE: [Tab, string][] = [['home', 'home'], ['swap', 'swap'], ['send', 'up'], ['activity', 'list'], ['settings', 'gear']];
-  const trade = tab === 'swap' || tab === 'futures';   // Futures lives inside the trade area: the five phone tabs stay as they are
-  const side = (id: Tab, icon: string) => { const on = tab === id || (id === 'swap' && tab === 'futures'); return (
+  const trade = tab === 'swap' || tab === 'futures' || tab === 'private';   // Futures and Private markets live inside the trade area: the five phone tabs stay as they are
+  const side = (id: Tab, icon: string) => { const on = tab === id || (id === 'swap' && (tab === 'futures' || tab === 'private')); return (
     <button key={id} onClick={() => go(id)} aria-current={on ? 'page' : undefined} className={`press flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-[15px] font-medium ${on ? 'bg-primary text-onprimary shadow-e1' : 'text-mute hover:bg-elev hover:text-ink'}`}><Icon n={icon} />{t(id as Key)}</button>); };
   return (
     <div className={`safe-x mx-auto flex min-h-full ${tab === 'futures' ? 'max-w-[1680px]' : 'max-w-6xl'}`}>{ptr}
@@ -150,7 +154,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
           </div>
         </header>
         <main key={tab === 'futures' ? 'futures' : tab + (route.network ?? '') + (route.asset ?? '')} className={`rise mx-auto w-full px-5 pb-[calc(env(safe-area-inset-bottom)+8rem)] pt-2 lg:pb-12 ${tab === 'futures' ? 'max-w-none lg:pt-6' : 'max-w-xl lg:max-w-2xl lg:pt-10'}`}>
-          {trade && <div role="tablist" aria-label={t('fxTradeArea')} className={`mb-3 mt-1 flex gap-1 rounded-2xl bg-elev p-1 ${tab === 'futures' ? 'max-w-sm' : ''}`}>{([['swap', 'fxSpot'], ['futures', 'fxFutures']] as const).map(([id, k]) =>
+          {trade && <div role="tablist" aria-label={t('fxTradeArea')} className={`mb-3 mt-1 flex gap-1 rounded-2xl bg-elev p-1 ${tab === 'futures' ? 'max-w-sm' : ''}`}>{([['swap', 'fxSpot'], ['futures', 'fxFutures'], ['private', 'pmTab']] as const).map(([id, k]) =>
             <button key={id} role="tab" aria-selected={tab === id} onClick={() => { if (tab !== id) go(id); }} className={`min-h-11 flex-1 rounded-xl px-3 text-[14px] font-semibold transition ${tab === id ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-mute hover:text-ink'}`}>{t(k)}</button>)}</div>}
           {tab === 'home' && <Home go={go} nav={nav} />}
           {tab === 'assets' && <Assets nav={nav} />}
@@ -168,12 +172,13 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
           {tab === 'settings' && <Settings lock={lock} go={go} />}
           {tab === 'developer' && <Developer view={route.view} setView={(v) => nav({ tab: 'developer', view: v === 'keys' ? undefined : v })} onBack={() => go('settings')} />}{/* v11 Developer / API */}
           {tab === 'research' && <Research nav={nav} job={route.asset} />}{/* v7 research runtime */}
+          {tab === 'private' && <PrivateMarkets instrument={route.asset} view={route.view} nav={nav} />}{/* v11 private markets: display only */}
           </Suspense>
           {tab === 'alerts' && <Suspense fallback={<Skeleton h="h-72" />}><Alerts view={route.view === 'settings' ? 'settings' : 'list'} open={openPath} setView={(v) => nav({ tab: 'alerts', view: v === 'settings' ? 'settings' : undefined })} /></Suspense>}
           {tab === 'monitor' && <Suspense fallback={<Skeleton h="h-72" />}><Monitor open={openPath} /></Suspense>}
         </main>
         <nav aria-label="Navigation" className="tabbar safe-b nav-glass fixed inset-x-0 bottom-0 z-10 lg:hidden">
-          <div className="mx-auto flex max-w-xl items-end px-2 pt-1.5">{MOBILE.map(([id, icon]) => { const on = tab === id || (id === 'home' && (tab === 'asset' || tab === 'assets')) || (id === 'swap' && tab === 'futures');
+          <div className="mx-auto flex max-w-xl items-end px-2 pt-1.5">{MOBILE.map(([id, icon]) => { const on = tab === id || (id === 'home' && (tab === 'asset' || tab === 'assets')) || (id === 'swap' && (tab === 'futures' || tab === 'private'));
             return id === 'send'
               ? <button key={id} onClick={() => { haptic(); go(id); }} aria-current={on ? 'page' : undefined} aria-label={t('send')} className="flex flex-1 flex-col items-center gap-1 text-[11px] font-semibold text-ink">
                   <span className="tab-fab -mt-6 grid h-[56px] w-[56px] place-items-center rounded-full bg-primary text-onprimary ring-4 ring-bg"><Icon n="up" className="h-6 w-6" /></span><span>{t('send')}</span></button>

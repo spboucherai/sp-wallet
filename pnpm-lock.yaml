@@ -248,6 +248,9 @@ importers:
       '@spw/swap':
         specifier: workspace:*
         version: link:../../packages/swap
+      '@spw/trading':
+        specifier: workspace:*
+        version: link:../../packages/trading
       fastify:
         specifier: 5.12.8
         version: 5.12.8

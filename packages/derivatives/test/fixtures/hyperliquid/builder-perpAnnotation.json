@@ -1,0 +1,132 @@
+{
+ "recordedAt": "2026-11-16T00:42:43.150Z",
+ "network": "mainnet",
+ "request": {
+  "type": "perpAnnotation",
+  "coin": "<each key>"
+ },
+ "status": 200,
+ "body": {
+  "io:ANTH": {
+   "attempts": [
+    {
+     "category": "preipo",
+     "description": "",
+     "displayName": "ANT",
+     "keywords": [
+      "anthropic"
+     ]
+    }
+   ]
+  },
+  "io:OAI": {
+   "attempts": [
+    {
+     "category": "preipo",
+     "description": "",
+     "displayName": "OPENAI",
+     "keywords": [
+      "openai",
+      "oai"
+     ]
+    }
+   ]
+  },
+  "para:ANTH": {
+   "attempts": [
+    {
+     "category": "preipo",
+     "description": "ANTH tracks the value of one share of Anthropic. Anthropic develops artificial intelligence models and platforms, including the Claude family of AI systems, used by consumers and businesses for coding, research, analysis, automation, and other knowledge-work applications.",
+     "displayName": "ANT",
+     "keywords": [
+      "claude",
+      "anthropic"
+     ]
+    }
+   ]
+  },
+  "vntl:ANTHROPIC": {
+   "attempts": [
+    {
+     "category": "preipo",
+     "description": "ANTHROPIC tracks the total valuation of Anthropic, in billions. E.g. if 1 ANTHROPIC = $500, then the implied total valuation of the company is $500B.",
+     "keywords": [
+      "ai",
+      "claude"
+     ]
+    }
+   ]
+  },
+  "vntl:OPENAI": {
+   "attempts": [
+    {
+     "category": "preipo",
+     "description": "OPENAI tracks the total valuation of OpenAI, in billions. E.g. if 1 OPENAI = $500, then the implied total valuation of the company is $500B.",
+     "keywords": [
+      "ai",
+      "chatgpt"
+     ]
+    }
+   ]
+  },
+  "vntl:SPACEX": {
+   "attempts": [
+    {
+     "category": "preipo",
+     "description": "SPACEX tracks the total valuation of SpaceX, in billions. E.g. if 1 SPACEX = $500, then the implied total valuation of the company is $500B.",
+     "keywords": [
+      "elon",
+      "preipo"
+     ]
+    }
+   ]
+  },
+  "xyz:ANT": {
+   "attempts": [
+    {
+     "category": "preipo",
+     "description": "ANT references 1 share of Anthropic, PBC Class A common stock (expected Nasdaq: ANT), quoted in USD. ANT is a pre-IPO market: the referenced security has not yet listed, and upon listing the market is intended to convert to a standard perpetual. Anthropic develops the Claude family of AI models.",
+     "displayName": "ANT",
+     "keywords": [
+      "anthropic",
+      "claude"
+     ]
+    }
+   ]
+  },
+  "xyz:OURA": {
+   "attempts": [
+    {
+     "category": "preipo",
+     "description": "OURA references 1 share of Oura Inc. common stock (Nasdaq: OURA), quoted in USD. OURA is currently a pre-IPO market reflecting the anticipated share price; it is expected to convert to a standard XYZ perpetual upon the IPO. Oura designs the Oura Ring, a smart ring that measures sleep, activity, stress, and heart-health signals, and sells a subscription membership for health insights.",
+     "displayName": "OURA",
+     "keywords": [
+      "consumer",
+      "health"
+     ]
+    }
+   ]
+  },
+  "xyz:SPCX": {
+   "attempts": [
+    {
+     "category": "stocks",
+     "description": "SPCX references 1 share of Space Exploration Technologies Corp. Class A common stock (Nasdaq: SPCX), quoted in USD. SpaceX develops launch vehicles, spacecraft, satellite communications, and AI technology.",
+     "displayName": "SPCX",
+     "keywords": [
+      "spacex",
+      "ai"
+     ]
+    }
+   ]
+  },
+  "io:MOONSHOT": {
+   "attempts": [
+    null,
+    null,
+    null
+   ]
+  }
+ },
+ "note": "io:MOONSHOT (delisted) answered null on every attempt (three bursts on 2026-11-16T00:43:49Z): the real null body of the endpoint. No transient null was observed for a live coin during this capture; the dossier observed 46 of 223 on 2026-11-15."
+}

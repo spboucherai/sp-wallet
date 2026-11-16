@@ -1,0 +1,981 @@
+{
+ "recordedAt": "2026-11-16T01:06:06.552Z",
+ "answer": {
+  "market": {
+   "id": "hyperliquid:xyz:ANT",
+   "venue": "hyperliquid",
+   "platform": "Hyperliquid · trade.xyz (dex xyz)",
+   "operator": "trade.xyz (XYZ Ltd)",
+   "symbol": "xyz:ANT",
+   "company": {
+    "slug": "anthropic",
+    "name": "Anthropic, PBC"
+   },
+   "status": "live",
+   "review": {
+    "state": "reviewed",
+    "reasons": [],
+    "reviewedAt": "2026-11-15",
+    "validUntil": "2026-11-18T00:00:00Z",
+    "fingerprintChecked": true
+   },
+   "contract": {
+    "nature": "cash-settled linear perpetual, pure synthetic, no ownership (\"Pre-IPO Perpetuals are not shares. They are not IPO allocations. They are not tokenized equity\")",
+    "unit": {
+     "kind": "usd_per_share",
+     "label": "USD per 1 share of Class A common stock"
+    },
+    "quoteCurrency": "USD",
+    "collateral": "USDC",
+    "underlying": "Anthropic, PBC",
+    "contractSize": "1 contract = 1 unit of ANT; smallest size 0.01",
+    "multiplier": {
+     "value": "1",
+     "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)"
+    },
+    "settlement": "If no IPO: TWAP of the market from launch to the settlement date; a transaction price may be used for an acquisition or take-private, another fair-value price for an adverse event. Anticipated listing date 20 Nov 2026, grace period to 19 Jan 2027.",
+    "ipoConversion": "Converts in place to a standard equity perpetual with external pricing (funding multiplier 0.5), typically the first regular session after listing; \"the transition from internal to external pricing may produce a step change in mark price\".",
+    "oracle": "Internal only: \"a 30-minute exponentially-weighted moving average which advances via the market's impact price difference\". No external private-market data. Discovery bounds ±50 %.",
+    "liquidation": "Hyperliquid margining of the builder dex: liquidation when account or isolated-position equity falls below the maintenance margin (half of the initial margin at maximum leverage); the deployer may halt the market and settle every position at the mark price (HIP-3 haltTrading). Cross margin allowed; maximum leverage 10x.",
+    "maxLeverage": "10",
+    "margin": "cross_allowed",
+    "lotSize": "0.01",
+    "szDecimals": 2,
+    "fundingIntervalSec": 3600,
+    "assetId": 110138,
+    "dex": "xyz",
+    "oiCapUsd": "150000000",
+    "fundingMultiplier": "0.005",
+    "onChainDescription": "ANT references 1 share of Anthropic, PBC Class A common stock (expected Nasdaq: ANT), quoted in USD. ANT is a pre-IPO market: the referenced security has not yet listed, and upon listing the market is intended to convert to a standard perpetual. Anthropic develops the Claude family of AI models.",
+    "unconfirmedConvention": null,
+    "sources": [
+     "https://docs.trade.xyz/perpetuals/markets/pre-ipo-perpetuals",
+     "https://docs.trade.xyz/perpetuals/specifications-and-schedules/pre-ipo-specification-index",
+     "https://docs.trade.xyz/perpetuals/markets/pre-ipo-perpetuals/alternative-settlement-events"
+    ]
+   },
+   "market": {
+    "price": {
+     "value": "101.72",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — mark price",
+     "ts": 1794791164624,
+     "stale": false
+    },
+    "oracle": {
+     "value": "101.89",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — oracle price",
+     "ts": 1794791164624,
+     "stale": false
+    },
+    "mid": {
+     "value": "101.725",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — book mid",
+     "ts": 1794791164624,
+     "stale": false
+    },
+    "funding": {
+     "value": "-0.0000009725",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — funding rate per interval",
+     "ts": 1794791164624,
+     "stale": false,
+     "intervalSec": 3600
+    },
+    "openInterest": {
+     "value": "1089179.6800000002",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — open interest, contracts",
+     "ts": 1794791164624,
+     "stale": false
+    },
+    "openInterestUsd": {
+     "value": "110791357.049600020344",
+     "source": "wallet arithmetic: open interest × mark × contract multiplier (not a venue field)",
+     "ts": 1794791164624,
+     "stale": false
+    },
+    "volume24h": {
+     "value": "8965028.739699997",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — 24 h notional volume, USD",
+     "ts": 1794791164624,
+     "stale": false
+    },
+    "volumeBase24h": {
+     "value": "88206.73",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — 24 h volume, contracts",
+     "ts": 1794791164624,
+     "stale": false
+    },
+    "frozen": false
+   },
+   "valuation": {
+    "syntheticPrice": {
+     "value": "101.72",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — mark price",
+     "ts": 1794791164624,
+     "stale": false,
+     "unit": "usd_per_share",
+     "unitLabel": "USD per 1 share of Class A common stock",
+     "priceKind": "mark"
+    },
+    "contractMarketValue": {
+     "value": "101.72",
+     "formula": "contract value = price × 1 (contract size defined by the venue: Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16))",
+     "reason": null,
+     "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)",
+     "ts": 1794791164624
+    },
+    "notionalExposure": {
+     "value": "1017.2",
+     "formula": "size × contract value, negative for a short",
+     "reason": null,
+     "position": {
+      "side": "long",
+      "size": "10"
+     },
+     "hypothetical": true,
+     "ts": 1794791164624
+    },
+    "impliedValuation": {
+     "value": null,
+     "formula": null,
+     "formulaId": null,
+     "formulaSource": {
+      "url": "https://docs.trade.xyz/perpetuals/markets/pre-ipo-perpetuals",
+      "quote": "ANT references 1 share of Anthropic, PBC Class A common stock (Nasdaq: ANT), quoted in USD. ANT is currently a pre-IPO market reflecting the anticipated share price.",
+      "readAt": "2026-11-15"
+     },
+     "asOf": null,
+     "label": null,
+     "reason": "quoted per share, and the operator publishes no share count: \"Any displayed reference share count or implied initial reference market cap is indicative only. It is not guaranteed. It is not a fair value reference.\" No fully diluted share count is publishable before the 424(b) is filed.",
+     "reasonCode": "per_share_no_share_count"
+    },
+    "lastPrivateValuation": {
+     "value": "965000000000",
+     "kind": "primary_round",
+     "detail": "Series H, $65B raised, post-money",
+     "date": "2026-05-28",
+     "sourceUrl": "https://www.anthropic.com/news/series-h",
+     "confidence": "high"
+    },
+    "lastPrivateValuationReason": null,
+    "premiumDiscount": {
+     "premiumBps": null,
+     "reason": "no implied valuation: quoted per share, and the operator publishes no share count: \"Any displayed reference share count or implied initial reference market cap is indicative only. It is not guaranteed. It is not a fair value reference.\" No fully diluted share count is publishable before the 424(b) is filed.",
+     "caveat": null
+    },
+    "caveats": [
+     {
+      "code": "synthetic",
+      "text": "a synthetic price is the price of a derivative contract: it gives no claim on shares and can trade far from any share transaction"
+     },
+     {
+      "code": "arithmetic",
+      "text": "an implied valuation is arithmetic on that price, not an appraisal of the company"
+     },
+     {
+      "code": "company_note",
+      "text": "IPO reported for pricing on 18 Nov 2026 and first trade on 19 Nov 2026 (press; the SEC filing states no date). Every Anthropic contract changes methodology, unit or oracle around that date."
+     },
+     {
+      "code": "cross_venue",
+      "text": "Other contracts on Anthropic, PBC, each a different contract on its own venue: hyperliquid:io:ANTH 1770.7 (USD billions of fully diluted company valuation (1.00 = $1B)); hyperliquid:para:ANTH 101.41 (USD per 1 share (share class not specified by the operator)); edgex:ANTHROPICUSDC 1338.923121435860836647 (unit not published by the venue). Spread within this unit: 30.57 bps. Prices are never averaged across venues and never used to fill another venue's gap.",
+      "data": {
+       "others": [
+        {
+         "id": "hyperliquid:io:ANTH",
+         "price": "1770.7",
+         "unit": "valuation_usd_billions"
+        },
+        {
+         "id": "hyperliquid:para:ANTH",
+         "price": "101.41",
+         "unit": "usd_per_share"
+        },
+        {
+         "id": "edgex:ANTHROPICUSDC",
+         "price": "1338.923121435860836647",
+         "unit": "unknown"
+        }
+       ],
+       "spreadBps": "30.57"
+      }
+     },
+     {
+      "code": "unit_mismatch",
+      "text": "The contracts on Anthropic, PBC are quoted in different units (USD billions of fully diluted company valuation (1.00 = $1B) | USD per 1 share (share class not specified by the operator) | USD per 1 share of Class A common stock | unit not published by the venue): their prices are not comparable with each other."
+     }
+    ]
+   },
+   "tradable": false,
+   "notTradable": {
+    "code": "builder_dex_read_only",
+    "reasons": [
+     "Builder-deployed (HIP-3) Hyperliquid markets are served for market data only: the wallet's trading path covers the validator-operated dex alone (pinned asset table, signer policy), each builder dex has its own collateral balance, deployer-set oracle and settlement powers, and the deployers' terms restrict some jurisdictions. No order, transfer or signed action is built for them.",
+     "trade.xyz Terms of Use §2.2 (updated 6 Sep 2026) name Canada among the restricted jurisdictions of its interface (https://trade.xyz/terms)."
+    ]
+   },
+   "error": null
+  },
+  "book": {
+   "bids": [
+    [
+     "101.74",
+     "2.6"
+    ],
+    [
+     "101.73",
+     "11.9"
+    ],
+    [
+     "101.72",
+     "8.9"
+    ],
+    [
+     "101.71",
+     "13.56"
+    ],
+    [
+     "101.7",
+     "8.82"
+    ]
+   ],
+   "asks": [
+    [
+     "101.77",
+     "2.95"
+    ],
+    [
+     "101.78",
+     "6"
+    ],
+    [
+     "101.79",
+     "4"
+    ],
+    [
+     "101.8",
+     "4.83"
+    ],
+    [
+     "101.81",
+     "10.88"
+    ]
+   ],
+   "ts": 1794791165782,
+   "stale": false,
+   "source": "Hyperliquid info l2Book"
+  },
+  "candles": {
+   "interval": "1h",
+   "candles": [
+    {
+     "ts": 1794535200000,
+     "open": "103.38",
+     "high": "103.6",
+     "low": "102.53",
+     "close": "102.66",
+     "volume": "8592.18"
+    },
+    {
+     "ts": 1794538800000,
+     "open": "102.64",
+     "high": "102.85",
+     "low": "102.3",
+     "close": "102.64",
+     "volume": "13139.01"
+    },
+    {
+     "ts": 1794542400000,
+     "open": "102.64",
+     "high": "103.02",
+     "low": "102.28",
+     "close": "102.9",
+     "volume": "11321.61"
+    },
+    {
+     "ts": 1794546000000,
+     "open": "102.9",
+     "high": "103.11",
+     "low": "102.44",
+     "close": "102.81",
+     "volume": "11057.87"
+    },
+    {
+     "ts": 1794549600000,
+     "open": "102.87",
+     "high": "103.44",
+     "low": "102.44",
+     "close": "102.98",
+     "volume": "9355.86"
+    },
+    {
+     "ts": 1794553200000,
+     "open": "102.97",
+     "high": "103.44",
+     "low": "102.84",
+     "close": "103.08",
+     "volume": "5421.35"
+    },
+    {
+     "ts": 1794556800000,
+     "open": "103.04",
+     "high": "103.11",
+     "low": "102.63",
+     "close": "102.9",
+     "volume": "7354.67"
+    },
+    {
+     "ts": 1794560400000,
+     "open": "102.86",
+     "high": "103.43",
+     "low": "102.64",
+     "close": "102.74",
+     "volume": "7120.19"
+    },
+    {
+     "ts": 1794564000000,
+     "open": "102.74",
+     "high": "103.13",
+     "low": "102.39",
+     "close": "102.46",
+     "volume": "9773.29"
+    },
+    {
+     "ts": 1794567600000,
+     "open": "102.44",
+     "high": "102.83",
+     "low": "101.13",
+     "close": "101.48",
+     "volume": "37988.34"
+    },
+    {
+     "ts": 1794571200000,
+     "open": "101.48",
+     "high": "102.15",
+     "low": "101.35",
+     "close": "101.9",
+     "volume": "14450.8"
+    },
+    {
+     "ts": 1794574800000,
+     "open": "101.92",
+     "high": "102.98",
+     "low": "101.07",
+     "close": "101.28",
+     "volume": "19836.38"
+    },
+    {
+     "ts": 1794578400000,
+     "open": "101.29",
+     "high": "101.93",
+     "low": "100.7",
+     "close": "101.26",
+     "volume": "9041.54"
+    },
+    {
+     "ts": 1794582000000,
+     "open": "101.31",
+     "high": "102.1",
+     "low": "101.08",
+     "close": "101.5",
+     "volume": "17477.7"
+    },
+    {
+     "ts": 1794585600000,
+     "open": "101.51",
+     "high": "102.46",
+     "low": "101.45",
+     "close": "102.16",
+     "volume": "16159.68"
+    },
+    {
+     "ts": 1794589200000,
+     "open": "102.17",
+     "high": "102.61",
+     "low": "101.18",
+     "close": "101.58",
+     "volume": "19816.01"
+    },
+    {
+     "ts": 1794592800000,
+     "open": "101.56",
+     "high": "102.17",
+     "low": "101.42",
+     "close": "102.1",
+     "volume": "11926.91"
+    },
+    {
+     "ts": 1794596400000,
+     "open": "102.1",
+     "high": "102.29",
+     "low": "102.08",
+     "close": "102.29",
+     "volume": "6133.68"
+    },
+    {
+     "ts": 1794600000000,
+     "open": "102.3",
+     "high": "102.58",
+     "low": "102.11",
+     "close": "102.38",
+     "volume": "4935.29"
+    },
+    {
+     "ts": 1794603600000,
+     "open": "102.39",
+     "high": "102.67",
+     "low": "102",
+     "close": "102.24",
+     "volume": "12375.72"
+    },
+    {
+     "ts": 1794607200000,
+     "open": "102.2",
+     "high": "102.47",
+     "low": "101.65",
+     "close": "101.83",
+     "volume": "12057.68"
+    },
+    {
+     "ts": 1794610800000,
+     "open": "101.83",
+     "high": "102.19",
+     "low": "101.61",
+     "close": "102.14",
+     "volume": "4744.66"
+    },
+    {
+     "ts": 1794614400000,
+     "open": "102.13",
+     "high": "102.58",
+     "low": "102.13",
+     "close": "102.44",
+     "volume": "3261.62"
+    },
+    {
+     "ts": 1794618000000,
+     "open": "102.44",
+     "high": "102.45",
+     "low": "101.73",
+     "close": "101.9",
+     "volume": "6029.17"
+    },
+    {
+     "ts": 1794621600000,
+     "open": "101.9",
+     "high": "101.9",
+     "low": "100.99",
+     "close": "101.52",
+     "volume": "6320.91"
+    },
+    {
+     "ts": 1794625200000,
+     "open": "101.52",
+     "high": "101.63",
+     "low": "100.72",
+     "close": "101",
+     "volume": "9457.22"
+    },
+    {
+     "ts": 1794628800000,
+     "open": "101.05",
+     "high": "101.28",
+     "low": "100.94",
+     "close": "101.14",
+     "volume": "2604.44"
+    },
+    {
+     "ts": 1794632400000,
+     "open": "101.15",
+     "high": "101.76",
+     "low": "100.86",
+     "close": "101.74",
+     "volume": "5182.33"
+    },
+    {
+     "ts": 1794636000000,
+     "open": "101.77",
+     "high": "101.94",
+     "low": "101.01",
+     "close": "101.13",
+     "volume": "2314.33"
+    },
+    {
+     "ts": 1794639600000,
+     "open": "101.15",
+     "high": "101.4",
+     "low": "101.04",
+     "close": "101.27",
+     "volume": "1175.95"
+    },
+    {
+     "ts": 1794643200000,
+     "open": "101.26",
+     "high": "102.12",
+     "low": "101.21",
+     "close": "101.89",
+     "volume": "1736.9"
+    },
+    {
+     "ts": 1794646800000,
+     "open": "101.89",
+     "high": "102.49",
+     "low": "101.53",
+     "close": "102.45",
+     "volume": "1901.94"
+    },
+    {
+     "ts": 1794650400000,
+     "open": "102.47",
+     "high": "102.99",
+     "low": "102.19",
+     "close": "102.8",
+     "volume": "5813.8"
+    },
+    {
+     "ts": 1794654000000,
+     "open": "102.79",
+     "high": "103.12",
+     "low": "102.29",
+     "close": "102.47",
+     "volume": "3563.37"
+    },
+    {
+     "ts": 1794657600000,
+     "open": "102.43",
+     "high": "102.98",
+     "low": "102.43",
+     "close": "102.73",
+     "volume": "3183.74"
+    },
+    {
+     "ts": 1794661200000,
+     "open": "102.73",
+     "high": "102.73",
+     "low": "102.31",
+     "close": "102.36",
+     "volume": "1030.74"
+    },
+    {
+     "ts": 1794664800000,
+     "open": "102.36",
+     "high": "102.63",
+     "low": "101.53",
+     "close": "101.95",
+     "volume": "5934.37"
+    },
+    {
+     "ts": 1794668400000,
+     "open": "101.96",
+     "high": "102.15",
+     "low": "101.2",
+     "close": "101.8",
+     "volume": "6082.65"
+    },
+    {
+     "ts": 1794672000000,
+     "open": "101.79",
+     "high": "101.95",
+     "low": "101.08",
+     "close": "101.26",
+     "volume": "3999.38"
+    },
+    {
+     "ts": 1794675600000,
+     "open": "101.28",
+     "high": "102.03",
+     "low": "101.15",
+     "close": "101.9",
+     "volume": "7995"
+    },
+    {
+     "ts": 1794679200000,
+     "open": "101.89",
+     "high": "102.25",
+     "low": "101.74",
+     "close": "101.79",
+     "volume": "2373.21"
+    },
+    {
+     "ts": 1794682800000,
+     "open": "101.83",
+     "high": "102.04",
+     "low": "101.52",
+     "close": "101.74",
+     "volume": "2008.34"
+    },
+    {
+     "ts": 1794686400000,
+     "open": "101.77",
+     "high": "102.38",
+     "low": "101.31",
+     "close": "101.44",
+     "volume": "6753.33"
+    },
+    {
+     "ts": 1794690000000,
+     "open": "101.44",
+     "high": "102.22",
+     "low": "101.01",
+     "close": "102.1",
+     "volume": "9406.81"
+    },
+    {
+     "ts": 1794693600000,
+     "open": "102.09",
+     "high": "102.28",
+     "low": "101.5",
+     "close": "101.98",
+     "volume": "5577.99"
+    },
+    {
+     "ts": 1794697200000,
+     "open": "101.95",
+     "high": "102.24",
+     "low": "101.62",
+     "close": "102.11",
+     "volume": "2435.09"
+    },
+    {
+     "ts": 1794700800000,
+     "open": "102.18",
+     "high": "102.61",
+     "low": "101.86",
+     "close": "101.97",
+     "volume": "3539.54"
+    },
+    {
+     "ts": 1794704400000,
+     "open": "101.96",
+     "high": "102.05",
+     "low": "100.67",
+     "close": "100.9",
+     "volume": "8591.6"
+    },
+    {
+     "ts": 1794708000000,
+     "open": "100.88",
+     "high": "102",
+     "low": "100.71",
+     "close": "101.79",
+     "volume": "9671.61"
+    },
+    {
+     "ts": 1794711600000,
+     "open": "101.78",
+     "high": "102",
+     "low": "101.48",
+     "close": "101.95",
+     "volume": "3881.08"
+    },
+    {
+     "ts": 1794715200000,
+     "open": "101.94",
+     "high": "101.99",
+     "low": "100.87",
+     "close": "100.94",
+     "volume": "3805.99"
+    },
+    {
+     "ts": 1794718800000,
+     "open": "100.94",
+     "high": "101.39",
+     "low": "100.89",
+     "close": "101.29",
+     "volume": "901.04"
+    },
+    {
+     "ts": 1794722400000,
+     "open": "101.27",
+     "high": "101.53",
+     "low": "101.27",
+     "close": "101.46",
+     "volume": "809.15"
+    },
+    {
+     "ts": 1794726000000,
+     "open": "101.46",
+     "high": "101.6",
+     "low": "101.34",
+     "close": "101.35",
+     "volume": "1389.7"
+    },
+    {
+     "ts": 1794729600000,
+     "open": "101.35",
+     "high": "101.77",
+     "low": "101.2",
+     "close": "101.68",
+     "volume": "4445.25"
+    },
+    {
+     "ts": 1794733200000,
+     "open": "101.66",
+     "high": "101.69",
+     "low": "101.52",
+     "close": "101.65",
+     "volume": "2682.16"
+    },
+    {
+     "ts": 1794736800000,
+     "open": "101.64",
+     "high": "101.69",
+     "low": "101.43",
+     "close": "101.62",
+     "volume": "1805.07"
+    },
+    {
+     "ts": 1794740400000,
+     "open": "101.61",
+     "high": "101.71",
+     "low": "101.51",
+     "close": "101.68",
+     "volume": "1334.34"
+    },
+    {
+     "ts": 1794744000000,
+     "open": "101.67",
+     "high": "101.67",
+     "low": "101.51",
+     "close": "101.61",
+     "volume": "1512.11"
+    },
+    {
+     "ts": 1794747600000,
+     "open": "101.65",
+     "high": "101.78",
+     "low": "101.6",
+     "close": "101.72",
+     "volume": "1943.24"
+    },
+    {
+     "ts": 1794751200000,
+     "open": "101.78",
+     "high": "101.88",
+     "low": "101.27",
+     "close": "101.51",
+     "volume": "5593.1"
+    },
+    {
+     "ts": 1794754800000,
+     "open": "101.51",
+     "high": "101.61",
+     "low": "101.27",
+     "close": "101.38",
+     "volume": "2187.23"
+    },
+    {
+     "ts": 1794758400000,
+     "open": "101.37",
+     "high": "101.89",
+     "low": "101.34",
+     "close": "101.85",
+     "volume": "5000.24"
+    },
+    {
+     "ts": 1794762000000,
+     "open": "101.87",
+     "high": "101.88",
+     "low": "101.7",
+     "close": "101.74",
+     "volume": "2237.36"
+    },
+    {
+     "ts": 1794765600000,
+     "open": "101.75",
+     "high": "101.75",
+     "low": "101.42",
+     "close": "101.43",
+     "volume": "1167.03"
+    },
+    {
+     "ts": 1794769200000,
+     "open": "101.42",
+     "high": "101.69",
+     "low": "101.42",
+     "close": "101.51",
+     "volume": "2459.13"
+    },
+    {
+     "ts": 1794772800000,
+     "open": "101.52",
+     "high": "101.82",
+     "low": "101.45",
+     "close": "101.79",
+     "volume": "2009.12"
+    },
+    {
+     "ts": 1794776400000,
+     "open": "101.79",
+     "high": "102.13",
+     "low": "101.65",
+     "close": "102.07",
+     "volume": "4116.44"
+    },
+    {
+     "ts": 1794780000000,
+     "open": "102.07",
+     "high": "102.07",
+     "low": "101.98",
+     "close": "102.03",
+     "volume": "760.38"
+    },
+    {
+     "ts": 1794783600000,
+     "open": "102.02",
+     "high": "102.42",
+     "low": "101.41",
+     "close": "102.07",
+     "volume": "10632.77"
+    },
+    {
+     "ts": 1794787200000,
+     "open": "102.05",
+     "high": "102.47",
+     "low": "101.64",
+     "close": "101.8",
+     "volume": "9655.86"
+    },
+    {
+     "ts": 1794790800000,
+     "open": "101.82",
+     "high": "101.82",
+     "low": "101.61",
+     "close": "101.72",
+     "volume": "533.62"
+    }
+   ],
+   "ts": 1794791166524,
+   "stale": false,
+   "source": "Hyperliquid info candleSnapshot"
+  },
+  "references": [
+   {
+    "company": "anthropic",
+    "valueUsd": "965000000000",
+    "kind": "primary_round",
+    "detail": "Series H, $65B raised, post-money",
+    "date": "2026-05-28",
+    "sourceUrl": "https://www.anthropic.com/news/series-h",
+    "confidence": "high",
+    "postMoney": true
+   },
+   {
+    "company": "anthropic",
+    "valueUsd": null,
+    "kind": "ipo_range",
+    "detail": "IPO price range (not final, not a valuation): $70.00–$78.00 per share; 825,000,000 Class A shares offered; Nasdaq ANT; S-1/A Amendment No. 2",
+    "date": "2026-11-10",
+    "sourceUrl": "https://www.sec.gov/Archives/edgar/data/2130357/000162828026072484/anthropicpbc-sx1ax2.htm",
+    "confidence": "high",
+    "postMoney": false
+   },
+   {
+    "company": "anthropic",
+    "valueUsd": "1405000000000",
+    "kind": "press_estimate",
+    "detail": "CNBC: \"up to $1.405 trillion on a fully diluted basis\" at the top of the IPO range (a press computation, not a company statement)",
+    "date": "2026-11-10",
+    "sourceUrl": "https://www.cnbc.com/2026/11/10/anthropic-sets-price-range-of-70-to-78-in-upcoming-ipo.html",
+    "confidence": "medium",
+    "postMoney": false
+   }
+  ],
+  "company": {
+   "slug": "anthropic",
+   "name": "Anthropic, PBC",
+   "note": "IPO reported for pricing on 18 Nov 2026 and first trade on 19 Nov 2026 (press; the SEC filing states no date). Every Anthropic contract changes methodology, unit or oracle around that date.",
+   "contracts": [
+    "edgex:ANTHROPICUSDC",
+    "hyperliquid:io:ANTH",
+    "hyperliquid:para:ANTH",
+    "hyperliquid:xyz:ANT"
+   ],
+   "lastPrivateValuation": {
+    "value": "965000000000",
+    "kind": "primary_round",
+    "detail": "Series H, $65B raised, post-money",
+    "date": "2026-05-28",
+    "sourceUrl": "https://www.anthropic.com/news/series-h",
+    "confidence": "high"
+   },
+   "divergence": [
+    {
+     "unit": "usd_per_share",
+     "unitLabel": "USD per 1 share (share class not specified by the operator)",
+     "contracts": [
+      {
+       "id": "hyperliquid:para:ANTH",
+       "price": "101.41",
+       "ts": 1794791164594
+      },
+      {
+       "id": "hyperliquid:xyz:ANT",
+       "price": "101.72",
+       "ts": 1794791164624
+      }
+     ],
+     "spreadBps": "30.57",
+     "note": "spread between the highest and the lowest mark of contracts quoted in the same unit; different contracts with different settlement rules — shown side by side, never averaged"
+    }
+   ]
+  },
+  "sameCompany": [
+   {
+    "id": "edgex:ANTHROPICUSDC",
+    "platform": "edgeX",
+    "price": {
+     "value": "1338.923121435860836647",
+     "source": "edgeX public quote API (ticker) — mark price",
+     "ts": 1794791165055,
+     "stale": false
+    },
+    "unit": {
+     "kind": "unknown",
+     "label": "unit not published by the venue"
+    },
+    "review": "reviewed"
+   },
+   {
+    "id": "hyperliquid:io:ANTH",
+    "platform": "Hyperliquid · EntropyIO (dex io)",
+    "price": {
+     "value": "1770.7",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex io) — mark price",
+     "ts": 1794791164590,
+     "stale": false
+    },
+    "unit": {
+     "kind": "valuation_usd_billions",
+     "label": "USD billions of fully diluted company valuation (1.00 = $1B)"
+    },
+    "review": "reviewed"
+   },
+   {
+    "id": "hyperliquid:para:ANTH",
+    "platform": "Hyperliquid · Paragon (dex para)",
+    "price": {
+     "value": "101.41",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex para) — mark price",
+     "ts": 1794791164594,
+     "stale": false
+    },
+    "unit": {
+     "kind": "usd_per_share",
+     "label": "USD per 1 share (share class not specified by the operator)"
+    },
+    "review": "reviewed"
+   }
+  ],
+  "notice": {
+   "tradable": false,
+   "code": "private_markets_display_only",
+   "text": "Displayed for information only — not tradable from this wallet. These are synthetic derivative contracts: they give no claim on any share. Trading is disabled for two reasons: jurisdiction (trade.xyz's terms name Canada as a restricted jurisdiction for its interface, EntropyIO names Ontario, edgeX excludes Canada) and contract definition (units differ between venues, some are not published, and the Anthropic contracts change oracle or unit around its IPO)."
+  },
+  "position": {
+   "side": "long",
+   "size": "10"
+  },
+  "ts": 1794791166552,
+  "source": "venue"
+ }
+}

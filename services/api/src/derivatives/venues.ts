@@ -4,13 +4,14 @@
 // sign or send an order to a venue.
 import {
   createDydxAdapter, createEdgeXAdapter, createGmxAdapter, createHyperliquidAdapter, VenueError,
-  type Capabilities, type DecStr, type GmxLiquidity, type VenueAdapter, type VenueId,
+  type Capabilities, type DecStr, type GmxLiquidity, type HlBuilderDexes, type VenueAdapter, type VenueId,
 } from '@spw/derivatives';
 import { UserError } from '../config.ts';
 
 /** what the service may call on a venue: reads and the public stream — never `trading`, never a raw HTTP client */
 export type ReadAdapter = Pick<VenueAdapter, 'id' | 'network' | 'capabilities' | 'instruments' | 'tickers' | 'book' | 'trades' | 'candles' | 'fundingHistory'
-  | 'account' | 'positions' | 'openOrders'> & { stream?: VenueAdapter['stream']; liquidity?: (symbol?: string) => Promise<GmxLiquidity[]> };
+  | 'account' | 'positions' | 'openOrders'> & { stream?: VenueAdapter['stream']; liquidity?: (symbol?: string) => Promise<GmxLiquidity[]>;
+  /** v11 private markets: Hyperliquid builder-deployed dexes — market data only (no trading object exists for them) */ builder?: HlBuilderDexes };
 
 /** facts of docs/v4/venues/contract-differences.md used by the comparison table (base fee tier, checked 2026-11-10) */
 export interface VenueFacts {
@@ -42,7 +43,7 @@ export const DOWN_AFTER = 3;
 /** VenueError codes that say something about the venue's availability (a refused or unsupported request does not) */
 const HEALTH_CODES = new Set(['unavailable', 'bad_answer', 'stale', 'rate_limited']);
 
-function readOnly(a: VenueAdapter & { liquidity?: ReadAdapter['liquidity'] }, restriction: string | null): ReadAdapter {
+function readOnly(a: VenueAdapter & { liquidity?: ReadAdapter['liquidity']; builder?: HlBuilderDexes }, restriction: string | null): ReadAdapter {
   const refuse = async (): Promise<never> => { throw new UserError('venue_restricted', restriction ?? 'account reads are not available on this venue', 403); };
   const accountOk = restriction === null && a.capabilities.account;
   const capabilities: Capabilities = restriction === null ? a.capabilities
@@ -62,6 +63,7 @@ function readOnly(a: VenueAdapter & { liquidity?: ReadAdapter['liquidity'] }, re
     };
   }
   if (a.liquidity) view.liquidity = (s) => a.liquidity!(s);
+  if (a.builder) view.builder = a.builder;   // v11 private markets: a read-only object by construction (builder.ts)
   return view;
 }
 
@@ -177,7 +179,7 @@ export function createDefaultRegistry(o: { fetch?: typeof fetch; now?: () => num
 }
 
 /** registry over arbitrary adapters (tests: fixture-backed fakes). The same narrowing and the same dYdX restriction apply. */
-export function createRegistry(adapters: Partial<Record<VenueId, VenueAdapter & { liquidity?: ReadAdapter['liquidity'] }>>, now: () => number = Date.now): VenueRegistry {
+export function createRegistry(adapters: Partial<Record<VenueId, VenueAdapter & { liquidity?: ReadAdapter['liquidity']; builder?: HlBuilderDexes }>>, now: () => number = Date.now): VenueRegistry {
   const out: VenueEntry[] = [];
   if (adapters.hyperliquid) out.push({ id: 'hyperliquid', name: 'Hyperliquid', adapter: readOnly(adapters.hyperliquid, null), restriction: null, facts: HYPERLIQUID_FACTS });
   if (adapters.gmx) out.push({ id: 'gmx', name: 'GMX v2 (Arbitrum)', adapter: readOnly(adapters.gmx, null), restriction: null, facts: GMX_FACTS });

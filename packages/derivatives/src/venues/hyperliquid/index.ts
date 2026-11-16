@@ -1,5 +1,6 @@
 // Hyperliquid venue adapter — public surface. Dossier: docs/v4/venues/hyperliquid.md
 export * from './adapter.ts';
+export * from './builder.ts';
 export * from './format.ts';
 export * from './http.ts';
 export * from './mappers.ts';

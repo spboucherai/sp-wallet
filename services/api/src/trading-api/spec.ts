@@ -139,6 +139,32 @@ const StartBody = z.strictObject({ mode: Mode, agentId: z.uuid().optional() });
 const StopBody = z.strictObject({ reason: z.string().max(200).default('') });
 const AgentBody = z.strictObject({ kind: z.enum(['spot', 'perp']), name: z.string().min(2).max(40), mission: z.string().max(400).default(''), universe: z.array(z.string().regex(/^[A-Z0-9]{2,15}$/)).min(1).max(12), interval: z.enum(['1h', '1d']).default('1h'), mode: Mode.default('paper') });
 
+// ---------------------------------------------------------------------------------------------------------------- private markets (v11)
+const PmDatum = z.object({ value: Dec.nullable(), source: z.string(), ts: Ms.nullable(), stale: z.boolean() }).describe('one figure with where it comes from, when it was read, and whether it is older than its freshness bound');
+const PmSize = z.string().regex(/^(0|[1-9]\d{0,11})(\.\d{1,8})?$/);
+const PmRow = z.looseObject({
+  id: z.string(), venue: z.string(), platform: z.string(), symbol: z.string(), company: z.object({ slug: z.string(), name: z.string() }).nullable(), status: z.enum(['live', 'delisted', 'halted', 'reduce_only']),
+  review: z.looseObject({ state: z.enum(['reviewed', 'under_review', 'not_reviewed']), reasons: z.array(z.string()) }),
+  contract: z.looseObject({ nature: z.string(), unit: z.object({ kind: z.enum(['usd_per_share', 'valuation_usd_billions', 'unknown']), label: z.string() }), quoteCurrency: z.string(), settlement: z.string(), oracle: z.string(), liquidation: z.string() }),
+  market: z.looseObject({ price: PmDatum, funding: PmDatum.extend({ intervalSec: z.number().int().nullable() }), openInterest: PmDatum, volume24h: PmDatum }),
+  valuation: z.looseObject({
+    syntheticPrice: z.looseObject({ value: Dec.nullable() }), contractMarketValue: z.looseObject({ value: Dec.nullable(), reason: z.string().nullable() }), notionalExposure: z.looseObject({ value: Dec.nullable(), hypothetical: z.literal(true) }),
+    impliedValuation: z.looseObject({ value: Dec.nullable(), formula: z.string().nullable(), reason: z.string().nullable(), reasonCode: z.string().nullable() }).describe('null + reason unless the reviewed definition gives the formula'),
+    lastPrivateValuation: z.looseObject({ value: Dec, kind: z.string(), date: z.string(), sourceUrl: z.string() }).nullable(), premiumDiscount: z.looseObject({ premiumBps: Dec.nullable() }), caveats: z.array(z.looseObject({ code: z.string(), text: z.string() })),
+  }),
+  tradable: z.literal(false), notTradable: z.object({ code: z.string(), reasons: z.array(z.string()) }), error: z.string().nullable(),
+});
+const PM = {
+  list: z.object({ delisted: z.enum(['true', 'false']).optional().describe('true: only delisted markets (frozen prices)'), size: PmSize.optional().describe('hypothetical position size, contracts (default 1)'), side: z.enum(['long', 'short']).optional() }),
+  detail: z.object({ size: PmSize.optional(), side: z.enum(['long', 'short']).optional(), interval: z.enum(['1h', '1d']).optional(), limit: z.coerce.number().int().min(1).max(500).optional() }),
+  id: z.string().min(3).max(120).regex(/^[a-z]+:[A-Za-z0-9:._-]+$/).describe('`venue:symbol`, e.g. `hyperliquid:io:ANTH`, `edgex:ANTHROPICUSDC`'),
+  slug: z.string().regex(/^[a-z0-9-]{1,40}$/),
+  listAnswer: z.looseObject({ markets: z.array(PmRow), companies: z.array(z.looseObject({ slug: z.string(), name: z.string(), contracts: z.array(z.string()) })), excluded: z.array(z.looseObject({ id: z.string(), reason: z.string() })),
+    venues: z.array(z.looseObject({ venue: z.string(), status: z.enum(['ok', 'stale', 'error']), error: z.string().nullable() })), notice: z.object({ tradable: z.literal(false), code: z.string(), text: z.string() }), ts: Ms }),
+  detailAnswer: z.looseObject({ market: PmRow, book: z.looseObject({}), candles: z.looseObject({}), references: z.array(z.looseObject({ kind: z.string(), date: z.string(), sourceUrl: z.string() })), ts: Ms }),
+  companyAnswer: z.looseObject({ company: z.looseObject({ slug: z.string(), name: z.string() }), contracts: z.array(PmRow), delisted: z.array(PmRow), references: z.array(z.looseObject({})), merged: z.null().describe('always null: venues are never merged'), ts: Ms }),
+};
+
 // ---------------------------------------------------------------------------------------------------------------- operations
 export interface OperationSpec {
   /** operationId, and the key of the handler in routes.ts */
@@ -168,6 +194,12 @@ export const OPERATIONS: readonly OperationSpec[] = [
     { params: SymbolParam, query: z.object({ depth: z.coerce.number().int().min(1).max(50).default(20) }), response: R.orderbook, description: 'Venues without an order book (GMX, spot data) answer 422 `no_orderbook`.' }),
   read('getCandles', '/markets/:symbol/candles', 'Markets', 'markets:read', 'Closed bars of one market',
     { params: SymbolParam, query: z.object({ interval: z.enum(CANDLE_INTERVALS).default('1h'), limit: Limit(200, 1000) }), response: R.candles }),
+  // --- v11 private markets (services/api/src/private-markets): read-only, display only — none of these instruments is tradable
+  read('listPrivateMarkets', '/private-markets', 'Markets', 'markets:read', 'Synthetic contracts on private companies, venue by venue, with sourced valuations',
+    { query: PM.list, response: PM.listAnswer, description: 'Live discovery (Hyperliquid builder dexes categorised `preipo`, edgeX `pre_ipo`) joined with a reviewed contract table. Five quantities are separate fields: synthetic price, contract market value, notional exposure, implied valuation estimate (or null + reason), last known private valuation. A venue that cannot be read gives rows with `error`; the others answer. Venues are never averaged.' }),
+  read('getPrivateMarketCompany', '/private-markets/companies/:slug', 'Markets', 'markets:read', 'Every contract on one private company, side by side (never merged)', { params: z.object({ slug: PM.slug }), query: PM.detail, response: PM.companyAnswer }),
+  read('getPrivateMarket', '/private-markets/:id', 'Markets', 'markets:read', 'One private-company contract: definition, valuation breakdown, candles, top of book', { params: z.object({ id: PM.id }), query: PM.detail, response: PM.detailAnswer }),
+  // --- /v11 private markets
   read('getPortfolio', '/portfolio', 'Portfolio', 'wallet:read', 'Wallet value and derivative accounts, per mode', { response: R.portfolio,
     description: 'Wallet balances valued in USD, then every derivatives account with its `mode`. Paper and live are never added together.' }),
   read('getBalances', '/balances', 'Portfolio', 'wallet:read', 'On-chain balances of the wallet', { query: z.object({ network: z.string().max(24).optional() }), response: R.balances }),

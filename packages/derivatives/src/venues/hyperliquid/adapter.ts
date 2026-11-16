@@ -1,9 +1,11 @@
 // Hyperliquid venue adapter — read side (dossier: docs/v4/venues/hyperliquid.md). Perpetuals of the first perp dex only
-// (the validator-operated USDC dex; builder-deployed HIP-3 dexes and spot are out of scope).
+// (the validator-operated USDC dex; spot is out of scope). v11: builder-deployed HIP-3 dexes are READ through `adapter.builder`
+// (builder.ts) — market data only; the VenueAdapter methods, the asset table and the trading object stay on the first dex.
 // Every answer goes through zod (schemas.ts); every amount stays a decimal string.
 import { D } from '../../decimal.ts';
 import type { AccountState, Candle, FundingPayment, Position } from '../../models.ts';
 import type { Capabilities, VenueAdapter } from '../../venue.ts';
+import { createHlBuilderDexes, type HlBuilderDexes } from './builder.ts';
 import { createHlHttp, type HlHttp, type HlHttpOptions } from './http.ts';
 import {
   hlCandles, hlClearinghouseState, hlFills, hlFrontendOpenOrders, hlFundingHistory, hlHistoricalOrders, hlL2Book, hlMeta, hlMetaAndAssetCtxs, hlTrades, hlUserFunding,
@@ -27,6 +29,8 @@ export interface HyperliquidOptions extends Omit<HlHttpOptions, 'budget'> {
   trading?: Pick<HlTradingOptions, 'allowMainnetExchange' | 'vaultAddress' | 'expiresAfterMs'>;
   /** a known asset table (e.g. pinned by the signer): `adapter.trading` is then available synchronously */
   assets?: HlAsset[];
+  /** wait between the retries of a builder-dex annotation that answered null (tests pass a no-op) */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface HyperliquidAdapter extends VenueAdapter {
@@ -37,6 +41,8 @@ export interface HyperliquidAdapter extends VenueAdapter {
   /** trading object bound to the asset table read from the venue (buildOrder / describe need the asset indices) */
   loadTrading(): Promise<HlTrading>;
   stream: NonNullable<VenueAdapter['stream']>;
+  /** v11: builder-deployed (HIP-3) perp dexes, read side only — market data, never an order (builder.ts) */
+  readonly builder: HlBuilderDexes;
   /** closes the websocket and stops every timer */
   close(): void;
 }
@@ -75,14 +81,15 @@ export function createHyperliquidAdapter(o: HyperliquidOptions): HyperliquidAdap
       'Market orders are sent as immediate-or-cancel limit orders at the worst acceptable price (price is required).',
       'Stop and take-profit orders need both triggerPrice and price (the limit after triggering; for the *_market types it is the slippage bound).',
       'Trading goes through an API wallet approved by the account; this adapter builds and verifies actions and never holds a key.',
-      'First perp dex only: no spot, no builder-deployed (HIP-3) dexes, no sub-accounts or vaults (vaultAddress is not used).',
+      'First perp dex only: no spot, no sub-accounts or vaults (vaultAddress is not used).',
+      'Builder-deployed (HIP-3) dexes are read-only (`adapter.builder`: instruments, tickers, book, candles) and NOT tradable through the wallet — reason code builder_dex_read_only: they are absent from instruments(), from the asset table and from the trading object.',
       'Order modification (modify / batchModify) is not implemented: cancel and place again.',
       'Ticker.volume24h is USD notional; Ticker.ts is the time of receipt (the venue gives none); funding is the hourly rate.',
     ],
   };
 
   return {
-    id: ID, network, capabilities, http, assets, trading: o.assets ? createHlTrading({ network, assets: o.assets, http, now, ...o.trading }) : undefined, close: () => stream.close(),
+    id: ID, network, capabilities, http, assets, builder: createHlBuilderDexes({ http, now, ...(o.sleep ? { sleep: o.sleep } : {}) }), trading: o.assets ? createHlTrading({ network, assets: o.assets, http, now, ...o.trading }) : undefined, close: () => stream.close(),
     stream(sub, on, onStatus) {
       if (sub.type === 'account') return stream.subscribe(sub, on, onStatus);
       // The server DROPS the connection on a subscription to an unknown coin (close 1006, no message — observed 2026-11-10),

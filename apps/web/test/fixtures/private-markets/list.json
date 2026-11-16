@@ -1,0 +1,1901 @@
+{
+ "recordedAt": "2026-11-16T01:06:06.334Z",
+ "answer": {
+  "markets": [
+   {
+    "id": "edgex:ANTHROPICUSDC",
+    "venue": "edgex",
+    "platform": "edgeX",
+    "operator": "edgeX",
+    "symbol": "ANTHROPICUSDC",
+    "company": {
+     "slug": "anthropic",
+     "name": "Anthropic, PBC"
+    },
+    "status": "live",
+    "review": {
+     "state": "reviewed",
+     "reasons": [],
+     "reviewedAt": "2026-11-15",
+     "validUntil": "2026-11-18T00:00:00Z",
+     "fingerprintChecked": true
+    },
+    "contract": {
+     "nature": "USDC-margined linear perpetual, cash-settled, pure synthetic: no claim on any share (venue metadata; edgeX publishes no specification for it)",
+     "unit": {
+      "kind": "unknown",
+      "label": "unit not published by the venue"
+     },
+     "quoteCurrency": "USDC",
+     "collateral": "USDC",
+     "underlying": "Anthropic, PBC",
+     "contractSize": "1 contract = 1 unit of ANTHROPIC; smallest size 0.01",
+     "multiplier": {
+      "value": "1",
+      "source": "edgeX metadata: USDC-margined linear contract — value = price × size (ticker value ÷ size = price, docs/v11/research/edgex-api.md §2.1)"
+     },
+     "settlement": "not published by the venue (generic rule: PnL and funding settle in USDC in the venue account; no expiry)",
+     "ipoConversion": "not published by the venue",
+     "oracle": "not published per instrument: a single oracle signer for stock-type contracts (venue metadata); the general price pages name Binance, OKX, Bybit and Coinbase (index) and Stork or a \"Multi-CEX Oracle\", without saying which applies",
+     "liquidation": "Per-contract risk tiers of the venue metadata (maintenance margin by position value); liquidation fee 1 %; funding every 4 h, capped at ±2 % per interval.",
+     "maxLeverage": "5",
+     "margin": "cross / isolated",
+     "lotSize": "0.01",
+     "szDecimals": null,
+     "fundingIntervalSec": 14400,
+     "assetId": null,
+     "dex": null,
+     "oiCapUsd": null,
+     "fundingMultiplier": null,
+     "onChainDescription": null,
+     "unconfirmedConvention": {
+      "text": "Unconfirmed convention: press coverage of the centralised-exchange pre-IPO perpetuals that edgeX's index tracks says they assume about one billion shares, so that price × 1e9 would approximate a valuation. edgeX itself states nothing; the wallet does not apply it.",
+      "url": "https://cryptobriefing.com/anthropic-pre-ipo-perps-1-8t-valuation/"
+     },
+     "sources": [
+      "https://edgex-1.gitbook.io/edgeX-documentation",
+      "https://edgex-1.gitbook.io/edgeX-documentation/about/terms-of-use"
+     ]
+    },
+    "market": {
+     "price": {
+      "value": "1338.923121435860836647",
+      "source": "edgeX public quote API (ticker) — mark price",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "oracle": {
+      "value": "1342.3357153475105841",
+      "source": "edgeX public quote API (ticker) — index price",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "mid": {
+      "value": "1339.0215",
+      "source": "edgeX public quote API (ticker) — book mid",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "funding": {
+      "value": "0.00038228",
+      "source": "edgeX public quote API (ticker) — funding rate per interval",
+      "ts": 1794791165055,
+      "stale": false,
+      "intervalSec": 14400
+     },
+     "openInterest": {
+      "value": "5.04",
+      "source": "edgeX public quote API (ticker) — open interest, contracts",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "openInterestUsd": {
+      "value": "6748.17253203673861670088",
+      "source": "wallet arithmetic: open interest × mark × contract multiplier (not a venue field)",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "volume24h": {
+      "value": "219306.81817",
+      "source": "edgeX public quote API (ticker) — 24 h notional volume, USDC",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "volumeBase24h": {
+      "value": "164",
+      "source": "edgeX public quote API (ticker) — 24 h volume, contracts",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "frozen": false
+    },
+    "valuation": {
+     "syntheticPrice": {
+      "value": "1338.923121435860836647",
+      "source": "edgeX public quote API (ticker) — mark price",
+      "ts": 1794791165055,
+      "stale": false,
+      "unit": "unknown",
+      "unitLabel": "unit not published by the venue",
+      "priceKind": "mark"
+     },
+     "contractMarketValue": {
+      "value": "1338.923121435860836647",
+      "formula": "contract value = price × 1 (contract size defined by the venue: edgeX metadata: USDC-margined linear contract — value = price × size (ticker value ÷ size = price, docs/v11/research/edgex-api.md §2.1))",
+      "reason": null,
+      "source": "edgeX metadata: USDC-margined linear contract — value = price × size (ticker value ÷ size = price, docs/v11/research/edgex-api.md §2.1)",
+      "ts": 1794791165055
+     },
+     "notionalExposure": {
+      "value": "13389.23121435860836647",
+      "formula": "size × contract value, negative for a short",
+      "reason": null,
+      "position": {
+       "side": "long",
+       "size": "10"
+      },
+      "hypothetical": true,
+      "ts": 1794791165055
+     },
+     "impliedValuation": {
+      "value": null,
+      "formula": null,
+      "formulaId": null,
+      "formulaSource": null,
+      "asOf": null,
+      "label": null,
+      "reason": "unit not published by the venue: edgeX publishes no contract specification for its pre-IPO perpetuals (no statement of what one contract represents, of the index constituents, or of what happens at an IPO) — searched in its documentation, help center and app on 2026-11-15",
+      "reasonCode": "unit_not_published"
+     },
+     "lastPrivateValuation": {
+      "value": "965000000000",
+      "kind": "primary_round",
+      "detail": "Series H, $65B raised, post-money",
+      "date": "2026-05-28",
+      "sourceUrl": "https://www.anthropic.com/news/series-h",
+      "confidence": "high"
+     },
+     "lastPrivateValuationReason": null,
+     "premiumDiscount": {
+      "premiumBps": null,
+      "reason": "no implied valuation: unit not published by the venue: edgeX publishes no contract specification for its pre-IPO perpetuals (no statement of what one contract represents, of the index constituents, or of what happens at an IPO) — searched in its documentation, help center and app on 2026-11-15",
+      "caveat": null
+     },
+     "caveats": [
+      {
+       "code": "synthetic",
+       "text": "a synthetic price is the price of a derivative contract: it gives no claim on shares and can trade far from any share transaction"
+      },
+      {
+       "code": "arithmetic",
+       "text": "an implied valuation is arithmetic on that price, not an appraisal of the company"
+      },
+      {
+       "code": "unconfirmed_convention",
+       "text": "Unconfirmed convention: press coverage of the centralised-exchange pre-IPO perpetuals that edgeX's index tracks says they assume about one billion shares, so that price × 1e9 would approximate a valuation. edgeX itself states nothing; the wallet does not apply it.",
+       "data": {
+        "url": "https://cryptobriefing.com/anthropic-pre-ipo-perps-1-8t-valuation/"
+       }
+      },
+      {
+       "code": "company_note",
+       "text": "IPO reported for pricing on 18 Nov 2026 and first trade on 19 Nov 2026 (press; the SEC filing states no date). Every Anthropic contract changes methodology, unit or oracle around that date."
+      },
+      {
+       "code": "thin_market",
+       "text": "Thin market: open interest ≈ $6.7k, 24 h volume ≈ $219.3k. A small order moves this price.",
+       "data": {
+        "openInterestUsd": "6748.17253203673861670088",
+        "volume24hUsd": "219306.81817",
+        "thresholds": {
+         "openInterestUsd": "1000000",
+         "volume24hUsd": "100000"
+        }
+       }
+      },
+      {
+       "code": "cross_venue",
+       "text": "Other contracts on Anthropic, PBC, each a different contract on its own venue: hyperliquid:io:ANTH 1770.7 (USD billions of fully diluted company valuation (1.00 = $1B)); hyperliquid:para:ANTH 101.41 (USD per 1 share (share class not specified by the operator)); hyperliquid:xyz:ANT 101.72 (USD per 1 share of Class A common stock). Prices are never averaged across venues and never used to fill another venue's gap.",
+       "data": {
+        "others": [
+         {
+          "id": "hyperliquid:io:ANTH",
+          "price": "1770.7",
+          "unit": "valuation_usd_billions"
+         },
+         {
+          "id": "hyperliquid:para:ANTH",
+          "price": "101.41",
+          "unit": "usd_per_share"
+         },
+         {
+          "id": "hyperliquid:xyz:ANT",
+          "price": "101.72",
+          "unit": "usd_per_share"
+         }
+        ],
+        "spreadBps": null
+       }
+      },
+      {
+       "code": "unit_mismatch",
+       "text": "The contracts on Anthropic, PBC are quoted in different units (USD billions of fully diluted company valuation (1.00 = $1B) | USD per 1 share (share class not specified by the operator) | USD per 1 share of Class A common stock | unit not published by the venue): their prices are not comparable with each other."
+      }
+     ]
+    },
+    "tradable": false,
+    "notTradable": {
+     "code": "venue_restricted",
+     "reasons": [
+      "Trading unavailable: edgeX's terms exclude Canada. edgeX is served for market data only: its Terms of Use name the United States of America and Canada as blocked jurisdictions, for its interface and for perpetual contracts, and forbid getting around it with a VPN (https://edgex-1.gitbook.io/edgeX-documentation/about/terms-of-use, read 2026-11-15). No account view, no order and no paper account are offered on this venue, so that it cannot be mistaken for a venue the owner may trade on.",
+      "edgeX publishes no contract specification for its pre-IPO perpetuals."
+     ]
+    },
+    "error": null
+   },
+   {
+    "id": "hyperliquid:io:ANTH",
+    "venue": "hyperliquid",
+    "platform": "Hyperliquid · EntropyIO (dex io)",
+    "operator": "EntropyIO",
+    "symbol": "io:ANTH",
+    "company": {
+     "slug": "anthropic",
+     "name": "Anthropic, PBC"
+    },
+    "status": "live",
+    "review": {
+     "state": "reviewed",
+     "reasons": [],
+     "reviewedAt": "2026-11-15",
+     "validUntil": "2026-11-18T00:00:00Z",
+     "fingerprintChecked": true
+    },
+    "contract": {
+     "nature": "cash-settled perpetual quoted in market cap, pure synthetic, no ownership",
+     "unit": {
+      "kind": "valuation_usd_billions",
+      "label": "USD billions of fully diluted company valuation (1.00 = $1B)"
+     },
+     "quoteCurrency": "USD",
+     "collateral": "USDC",
+     "underlying": "Anthropic, PBC",
+     "contractSize": "1 contract = 1 unit of ANTH; smallest size 0.001",
+     "multiplier": {
+      "value": "1",
+      "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)"
+     },
+     "settlement": "If unlisted at 18 Aug 2028: cash-settled to the 6-month trailing TWAP of the mark. Early-settlement notice: 30-day TWAP. M&A: the confirmed deal market cap, else 30-day TWAP.",
+     "ipoConversion": "Stays a market-cap perpetual: \"The oracle switches to Share price × Fully diluted share count ÷ 1,000,000,000 at the first official opening trade.\" The share count is fixed once from the final prospectus; Entropy's estimated multiplier (17.498334025) is pending the 424(b) and is not verified against the filing. Three days before an announced listing the oracle becomes a 1-hour EMA of the mark.",
+     "oracle": "Blend of an internal price (5-minute-half-life EMA of the book mid, weight up to 0.95 by executable depth) and an undisclosed aggregate of external sources (\"other derivative instruments, private market marking sources, funding rounds, or secondary transactions\"), delivered by RedStone; clipped to [300, 4200]. The mark is the internal EMA only.",
+     "liquidation": "Hyperliquid margining of the builder dex: liquidation when account or isolated-position equity falls below the maintenance margin (half of the initial margin at maximum leverage); the deployer may halt the market and settle every position at the mark price (HIP-3 haltTrading). Cross margin allowed; maximum leverage 15x; auto-deleveraging exists.",
+     "maxLeverage": "15",
+     "margin": "cross_allowed",
+     "lotSize": "0.001",
+     "szDecimals": 3,
+     "fundingIntervalSec": 3600,
+     "assetId": 200001,
+     "dex": "io",
+     "oiCapUsd": "275000000",
+     "fundingMultiplier": "0.125",
+     "onChainDescription": "",
+     "unconfirmedConvention": null,
+     "sources": [
+      "https://docs.entropy.io/market-types/pre-ipo-perpetuals",
+      "https://docs.entropy.io/asset-directory/pre-ipo-assets",
+      "https://docs.entropy.io/pre-ipo-perp-mechanics/oracle-price",
+      "https://docs.entropy.io/pre-ipo-perp-mechanics/no-ipo-resolution"
+     ]
+    },
+    "market": {
+     "price": {
+      "value": "1770.7",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — mark price",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "oracle": {
+      "value": "1770.9",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — oracle price",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "mid": {
+      "value": "1769.85",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — book mid",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "funding": {
+      "value": "-0.0000115768",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — funding rate per interval",
+      "ts": 1794791164590,
+      "stale": false,
+      "intervalSec": 3600
+     },
+     "openInterest": {
+      "value": "113667.386",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — open interest, contracts",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "openInterestUsd": {
+      "value": "201270840.3902",
+      "source": "wallet arithmetic: open interest × mark × contract multiplier (not a venue field)",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "volume24h": {
+      "value": "8241854.9339000005",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — 24 h notional volume, USD",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "volumeBase24h": {
+      "value": "4660.858",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — 24 h volume, contracts",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "frozen": false
+    },
+    "valuation": {
+     "syntheticPrice": {
+      "value": "1770.7",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — mark price",
+      "ts": 1794791164590,
+      "stale": false,
+      "unit": "valuation_usd_billions",
+      "unitLabel": "USD billions of fully diluted company valuation (1.00 = $1B)",
+      "priceKind": "mark"
+     },
+     "contractMarketValue": {
+      "value": "1770.7",
+      "formula": "contract value = price × 1 (contract size defined by the venue: Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16))",
+      "reason": null,
+      "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)",
+      "ts": 1794791164590
+     },
+     "notionalExposure": {
+      "value": "17707",
+      "formula": "size × contract value, negative for a short",
+      "reason": null,
+      "position": {
+       "side": "long",
+       "size": "10"
+      },
+      "hypothetical": true,
+      "ts": 1794791164590
+     },
+     "impliedValuation": {
+      "value": "1770700000000",
+      "formula": "implied fully diluted valuation (USD) = price × 1 000 000 000",
+      "formulaId": "price_x_1e9",
+      "formulaSource": {
+       "url": "https://docs.entropy.io/market-types/pre-ipo-perpetuals",
+       "quote": "pre-IPO perpetuals are quoted in market cap: a price of $1 represents $1B of the company's fully diluted valuation.",
+       "readAt": "2026-11-15"
+      },
+      "asOf": 1794791164590,
+      "label": "market-implied, from the price of a derivative on Hyperliquid · EntropyIO (dex io) — not a company figure",
+      "reason": null,
+      "reasonCode": null
+     },
+     "lastPrivateValuation": {
+      "value": "965000000000",
+      "kind": "primary_round",
+      "detail": "Series H, $65B raised, post-money",
+      "date": "2026-05-28",
+      "sourceUrl": "https://www.anthropic.com/news/series-h",
+      "confidence": "high"
+     },
+     "lastPrivateValuationReason": null,
+     "premiumDiscount": {
+      "premiumBps": "8349.2228",
+      "reason": null,
+      "caveat": "the reference is a priced round post money dated 2026-05-28; the contract price is dated 2026-11-16. The two figures are of different kinds and dates"
+     },
+     "caveats": [
+      {
+       "code": "synthetic",
+       "text": "a synthetic price is the price of a derivative contract: it gives no claim on shares and can trade far from any share transaction"
+      },
+      {
+       "code": "arithmetic",
+       "text": "an implied valuation is arithmetic on that price, not an appraisal of the company"
+      },
+      {
+       "code": "company_note",
+       "text": "IPO reported for pricing on 18 Nov 2026 and first trade on 19 Nov 2026 (press; the SEC filing states no date). Every Anthropic contract changes methodology, unit or oracle around that date."
+      },
+      {
+       "code": "reference_kind",
+       "text": "the reference is a priced round post money dated 2026-05-28; the contract price is dated 2026-11-16. The two figures are of different kinds and dates"
+      },
+      {
+       "code": "cross_venue",
+       "text": "Other contracts on Anthropic, PBC, each a different contract on its own venue: hyperliquid:para:ANTH 101.41 (USD per 1 share (share class not specified by the operator)); hyperliquid:xyz:ANT 101.72 (USD per 1 share of Class A common stock); edgex:ANTHROPICUSDC 1338.923121435860836647 (unit not published by the venue). Prices are never averaged across venues and never used to fill another venue's gap.",
+       "data": {
+        "others": [
+         {
+          "id": "hyperliquid:para:ANTH",
+          "price": "101.41",
+          "unit": "usd_per_share"
+         },
+         {
+          "id": "hyperliquid:xyz:ANT",
+          "price": "101.72",
+          "unit": "usd_per_share"
+         },
+         {
+          "id": "edgex:ANTHROPICUSDC",
+          "price": "1338.923121435860836647",
+          "unit": "unknown"
+         }
+        ],
+        "spreadBps": null
+       }
+      },
+      {
+       "code": "unit_mismatch",
+       "text": "The contracts on Anthropic, PBC are quoted in different units (USD billions of fully diluted company valuation (1.00 = $1B) | USD per 1 share (share class not specified by the operator) | USD per 1 share of Class A common stock | unit not published by the venue): their prices are not comparable with each other."
+      }
+     ]
+    },
+    "tradable": false,
+    "notTradable": {
+     "code": "builder_dex_read_only",
+     "reasons": [
+      "Builder-deployed (HIP-3) Hyperliquid markets are served for market data only: the wallet's trading path covers the validator-operated dex alone (pinned asset table, signer policy), each builder dex has its own collateral balance, deployer-set oracle and settlement powers, and the deployers' terms restrict some jurisdictions. No order, transfer or signed action is built for them.",
+      "EntropyIO lists Ontario among its restricted jurisdictions (https://docs.entropy.io/legal-and-disclaimers/restricted-jurisdictions); whether offering this market in Québec is lawful is not established."
+     ]
+    },
+    "error": null
+   },
+   {
+    "id": "hyperliquid:para:ANTH",
+    "venue": "hyperliquid",
+    "platform": "Hyperliquid · Paragon (dex para)",
+    "operator": "Paragon (Inactionable Inc.)",
+    "symbol": "para:ANTH",
+    "company": {
+     "slug": "anthropic",
+     "name": "Anthropic, PBC"
+    },
+    "status": "live",
+    "review": {
+     "state": "reviewed",
+     "reasons": [],
+     "reviewedAt": "2026-11-15",
+     "validUntil": "2026-11-18T00:00:00Z",
+     "fingerprintChecked": true
+    },
+    "contract": {
+     "nature": "cash-settled perpetual, pure synthetic, no ownership",
+     "unit": {
+      "kind": "usd_per_share",
+      "label": "USD per 1 share (share class not specified by the operator)"
+     },
+     "quoteCurrency": "USD",
+     "collateral": "USDC",
+     "underlying": "Anthropic, PBC",
+     "contractSize": "1 contract = 1 unit of ANTH; smallest size 0.001",
+     "multiplier": {
+      "value": "1",
+      "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)"
+     },
+     "settlement": "If no IPO: TWAP from launch to the determination cutoff, unless another method is announced. Listing buffer 60 days.",
+     "ipoConversion": "Transitions to the Listed methodology after a qualifying listing; the operator \"reserves the right to set the oracle price directly\" to the offering price, which \"can move the oracle price by a large amount in a single step\".",
+     "oracle": "Internal: continuous-time EMA of the impact price, τ = 30 min (3 min from 24 h before the first expected public trades). Bounds ±10 %.",
+     "liquidation": "Hyperliquid margining of the builder dex: liquidation when account or isolated-position equity falls below the maintenance margin (half of the initial margin at maximum leverage); the deployer may halt the market and settle every position at the mark price (HIP-3 haltTrading). Strict isolated margin (margin can be added, not removed); maximum leverage 10x.",
+     "maxLeverage": "10",
+     "margin": "strict_isolated",
+     "lotSize": "0.001",
+     "szDecimals": 3,
+     "fundingIntervalSec": 3600,
+     "assetId": 180031,
+     "dex": "para",
+     "oiCapUsd": "25000000",
+     "fundingMultiplier": "0.006",
+     "onChainDescription": "ANTH tracks the value of one share of Anthropic. Anthropic develops artificial intelligence models and platforms, including the Claude family of AI systems, used by consumers and businesses for coding, research, analysis, automation, and other knowledge-work applications.",
+     "unconfirmedConvention": null,
+     "sources": [
+      "https://docs.paragon.trade/markets/equities/pre-listing-pricing",
+      "https://docs.paragon.trade/resources/specifications"
+     ]
+    },
+    "market": {
+     "price": {
+      "value": "101.41",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex para) — mark price",
+      "ts": 1794791164594,
+      "stale": false
+     },
+     "oracle": {
+      "value": "101.75",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex para) — oracle price",
+      "ts": 1794791164594,
+      "stale": false
+     },
+     "mid": {
+      "value": "101.405",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex para) — book mid",
+      "ts": 1794791164594,
+      "stale": false
+     },
+     "funding": {
+      "value": "0.0000019997",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex para) — funding rate per interval",
+      "ts": 1794791164594,
+      "stale": false,
+      "intervalSec": 3600
+     },
+     "openInterest": {
+      "value": "875.456",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex para) — open interest, contracts",
+      "ts": 1794791164594,
+      "stale": false
+     },
+     "openInterestUsd": {
+      "value": "88779.99296",
+      "source": "wallet arithmetic: open interest × mark × contract multiplier (not a venue field)",
+      "ts": 1794791164594,
+      "stale": false
+     },
+     "volume24h": {
+      "value": "7654.77277",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex para) — 24 h notional volume, USD",
+      "ts": 1794791164594,
+      "stale": false
+     },
+     "volumeBase24h": {
+      "value": "75.956",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex para) — 24 h volume, contracts",
+      "ts": 1794791164594,
+      "stale": false
+     },
+     "frozen": false
+    },
+    "valuation": {
+     "syntheticPrice": {
+      "value": "101.41",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex para) — mark price",
+      "ts": 1794791164594,
+      "stale": false,
+      "unit": "usd_per_share",
+      "unitLabel": "USD per 1 share (share class not specified by the operator)",
+      "priceKind": "mark"
+     },
+     "contractMarketValue": {
+      "value": "101.41",
+      "formula": "contract value = price × 1 (contract size defined by the venue: Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16))",
+      "reason": null,
+      "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)",
+      "ts": 1794791164594
+     },
+     "notionalExposure": {
+      "value": "1014.1",
+      "formula": "size × contract value, negative for a short",
+      "reason": null,
+      "position": {
+       "side": "long",
+       "size": "10"
+      },
+      "hypothetical": true,
+      "ts": 1794791164594
+     },
+     "impliedValuation": {
+      "value": null,
+      "formula": null,
+      "formulaId": null,
+      "formulaSource": {
+       "url": "https://docs.paragon.trade/markets/equities/pre-listing-pricing",
+       "quote": "Tracks the expected value of one share of Anthropic, PBC ahead of a potential public listing.",
+       "readAt": "2026-11-15"
+      },
+      "asOf": null,
+      "label": null,
+      "reason": "quoted per share, and the operator gives no share count to rely on: \"Any displayed share count or implied market capitalization is contextual only. Neither figure is guaranteed.\"",
+      "reasonCode": "per_share_no_share_count"
+     },
+     "lastPrivateValuation": {
+      "value": "965000000000",
+      "kind": "primary_round",
+      "detail": "Series H, $65B raised, post-money",
+      "date": "2026-05-28",
+      "sourceUrl": "https://www.anthropic.com/news/series-h",
+      "confidence": "high"
+     },
+     "lastPrivateValuationReason": null,
+     "premiumDiscount": {
+      "premiumBps": null,
+      "reason": "no implied valuation: quoted per share, and the operator gives no share count to rely on: \"Any displayed share count or implied market capitalization is contextual only. Neither figure is guaranteed.\"",
+      "caveat": null
+     },
+     "caveats": [
+      {
+       "code": "synthetic",
+       "text": "a synthetic price is the price of a derivative contract: it gives no claim on shares and can trade far from any share transaction"
+      },
+      {
+       "code": "arithmetic",
+       "text": "an implied valuation is arithmetic on that price, not an appraisal of the company"
+      },
+      {
+       "code": "company_note",
+       "text": "IPO reported for pricing on 18 Nov 2026 and first trade on 19 Nov 2026 (press; the SEC filing states no date). Every Anthropic contract changes methodology, unit or oracle around that date."
+      },
+      {
+       "code": "thin_market",
+       "text": "Thin market: open interest ≈ $88.8k, 24 h volume ≈ $7.7k. A small order moves this price.",
+       "data": {
+        "openInterestUsd": "88779.99296",
+        "volume24hUsd": "7654.77277",
+        "thresholds": {
+         "openInterestUsd": "1000000",
+         "volume24hUsd": "100000"
+        }
+       }
+      },
+      {
+       "code": "cross_venue",
+       "text": "Other contracts on Anthropic, PBC, each a different contract on its own venue: hyperliquid:io:ANTH 1770.7 (USD billions of fully diluted company valuation (1.00 = $1B)); hyperliquid:xyz:ANT 101.72 (USD per 1 share of Class A common stock); edgex:ANTHROPICUSDC 1338.923121435860836647 (unit not published by the venue). Spread within this unit: 30.57 bps. Prices are never averaged across venues and never used to fill another venue's gap.",
+       "data": {
+        "others": [
+         {
+          "id": "hyperliquid:io:ANTH",
+          "price": "1770.7",
+          "unit": "valuation_usd_billions"
+         },
+         {
+          "id": "hyperliquid:xyz:ANT",
+          "price": "101.72",
+          "unit": "usd_per_share"
+         },
+         {
+          "id": "edgex:ANTHROPICUSDC",
+          "price": "1338.923121435860836647",
+          "unit": "unknown"
+         }
+        ],
+        "spreadBps": "30.57"
+       }
+      },
+      {
+       "code": "unit_mismatch",
+       "text": "The contracts on Anthropic, PBC are quoted in different units (USD billions of fully diluted company valuation (1.00 = $1B) | USD per 1 share (share class not specified by the operator) | USD per 1 share of Class A common stock | unit not published by the venue): their prices are not comparable with each other."
+      }
+     ]
+    },
+    "tradable": false,
+    "notTradable": {
+     "code": "builder_dex_read_only",
+     "reasons": [
+      "Builder-deployed (HIP-3) Hyperliquid markets are served for market data only: the wallet's trading path covers the validator-operated dex alone (pinned asset table, signer policy), each builder dex has its own collateral balance, deployer-set oracle and settlement powers, and the deployers' terms restrict some jurisdictions. No order, transfer or signed action is built for them.",
+      "Paragon's restricted list does not name Canada, but its terms require that access not violate local law (https://docs.paragon.trade/legal/terms_of_use); whether offering this market in Québec is lawful is not established."
+     ]
+    },
+    "error": null
+   },
+   {
+    "id": "hyperliquid:xyz:ANT",
+    "venue": "hyperliquid",
+    "platform": "Hyperliquid · trade.xyz (dex xyz)",
+    "operator": "trade.xyz (XYZ Ltd)",
+    "symbol": "xyz:ANT",
+    "company": {
+     "slug": "anthropic",
+     "name": "Anthropic, PBC"
+    },
+    "status": "live",
+    "review": {
+     "state": "reviewed",
+     "reasons": [],
+     "reviewedAt": "2026-11-15",
+     "validUntil": "2026-11-18T00:00:00Z",
+     "fingerprintChecked": true
+    },
+    "contract": {
+     "nature": "cash-settled linear perpetual, pure synthetic, no ownership (\"Pre-IPO Perpetuals are not shares. They are not IPO allocations. They are not tokenized equity\")",
+     "unit": {
+      "kind": "usd_per_share",
+      "label": "USD per 1 share of Class A common stock"
+     },
+     "quoteCurrency": "USD",
+     "collateral": "USDC",
+     "underlying": "Anthropic, PBC",
+     "contractSize": "1 contract = 1 unit of ANT; smallest size 0.01",
+     "multiplier": {
+      "value": "1",
+      "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)"
+     },
+     "settlement": "If no IPO: TWAP of the market from launch to the settlement date; a transaction price may be used for an acquisition or take-private, another fair-value price for an adverse event. Anticipated listing date 20 Nov 2026, grace period to 19 Jan 2027.",
+     "ipoConversion": "Converts in place to a standard equity perpetual with external pricing (funding multiplier 0.5), typically the first regular session after listing; \"the transition from internal to external pricing may produce a step change in mark price\".",
+     "oracle": "Internal only: \"a 30-minute exponentially-weighted moving average which advances via the market's impact price difference\". No external private-market data. Discovery bounds ±50 %.",
+     "liquidation": "Hyperliquid margining of the builder dex: liquidation when account or isolated-position equity falls below the maintenance margin (half of the initial margin at maximum leverage); the deployer may halt the market and settle every position at the mark price (HIP-3 haltTrading). Cross margin allowed; maximum leverage 10x.",
+     "maxLeverage": "10",
+     "margin": "cross_allowed",
+     "lotSize": "0.01",
+     "szDecimals": 2,
+     "fundingIntervalSec": 3600,
+     "assetId": 110138,
+     "dex": "xyz",
+     "oiCapUsd": "150000000",
+     "fundingMultiplier": "0.005",
+     "onChainDescription": "ANT references 1 share of Anthropic, PBC Class A common stock (expected Nasdaq: ANT), quoted in USD. ANT is a pre-IPO market: the referenced security has not yet listed, and upon listing the market is intended to convert to a standard perpetual. Anthropic develops the Claude family of AI models.",
+     "unconfirmedConvention": null,
+     "sources": [
+      "https://docs.trade.xyz/perpetuals/markets/pre-ipo-perpetuals",
+      "https://docs.trade.xyz/perpetuals/specifications-and-schedules/pre-ipo-specification-index",
+      "https://docs.trade.xyz/perpetuals/markets/pre-ipo-perpetuals/alternative-settlement-events"
+     ]
+    },
+    "market": {
+     "price": {
+      "value": "101.72",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — mark price",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "oracle": {
+      "value": "101.89",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — oracle price",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "mid": {
+      "value": "101.725",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — book mid",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "funding": {
+      "value": "-0.0000009725",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — funding rate per interval",
+      "ts": 1794791164624,
+      "stale": false,
+      "intervalSec": 3600
+     },
+     "openInterest": {
+      "value": "1089179.6800000002",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — open interest, contracts",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "openInterestUsd": {
+      "value": "110791357.049600020344",
+      "source": "wallet arithmetic: open interest × mark × contract multiplier (not a venue field)",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "volume24h": {
+      "value": "8965028.739699997",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — 24 h notional volume, USD",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "volumeBase24h": {
+      "value": "88206.73",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — 24 h volume, contracts",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "frozen": false
+    },
+    "valuation": {
+     "syntheticPrice": {
+      "value": "101.72",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — mark price",
+      "ts": 1794791164624,
+      "stale": false,
+      "unit": "usd_per_share",
+      "unitLabel": "USD per 1 share of Class A common stock",
+      "priceKind": "mark"
+     },
+     "contractMarketValue": {
+      "value": "101.72",
+      "formula": "contract value = price × 1 (contract size defined by the venue: Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16))",
+      "reason": null,
+      "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)",
+      "ts": 1794791164624
+     },
+     "notionalExposure": {
+      "value": "1017.2",
+      "formula": "size × contract value, negative for a short",
+      "reason": null,
+      "position": {
+       "side": "long",
+       "size": "10"
+      },
+      "hypothetical": true,
+      "ts": 1794791164624
+     },
+     "impliedValuation": {
+      "value": null,
+      "formula": null,
+      "formulaId": null,
+      "formulaSource": {
+       "url": "https://docs.trade.xyz/perpetuals/markets/pre-ipo-perpetuals",
+       "quote": "ANT references 1 share of Anthropic, PBC Class A common stock (Nasdaq: ANT), quoted in USD. ANT is currently a pre-IPO market reflecting the anticipated share price.",
+       "readAt": "2026-11-15"
+      },
+      "asOf": null,
+      "label": null,
+      "reason": "quoted per share, and the operator publishes no share count: \"Any displayed reference share count or implied initial reference market cap is indicative only. It is not guaranteed. It is not a fair value reference.\" No fully diluted share count is publishable before the 424(b) is filed.",
+      "reasonCode": "per_share_no_share_count"
+     },
+     "lastPrivateValuation": {
+      "value": "965000000000",
+      "kind": "primary_round",
+      "detail": "Series H, $65B raised, post-money",
+      "date": "2026-05-28",
+      "sourceUrl": "https://www.anthropic.com/news/series-h",
+      "confidence": "high"
+     },
+     "lastPrivateValuationReason": null,
+     "premiumDiscount": {
+      "premiumBps": null,
+      "reason": "no implied valuation: quoted per share, and the operator publishes no share count: \"Any displayed reference share count or implied initial reference market cap is indicative only. It is not guaranteed. It is not a fair value reference.\" No fully diluted share count is publishable before the 424(b) is filed.",
+      "caveat": null
+     },
+     "caveats": [
+      {
+       "code": "synthetic",
+       "text": "a synthetic price is the price of a derivative contract: it gives no claim on shares and can trade far from any share transaction"
+      },
+      {
+       "code": "arithmetic",
+       "text": "an implied valuation is arithmetic on that price, not an appraisal of the company"
+      },
+      {
+       "code": "company_note",
+       "text": "IPO reported for pricing on 18 Nov 2026 and first trade on 19 Nov 2026 (press; the SEC filing states no date). Every Anthropic contract changes methodology, unit or oracle around that date."
+      },
+      {
+       "code": "cross_venue",
+       "text": "Other contracts on Anthropic, PBC, each a different contract on its own venue: hyperliquid:io:ANTH 1770.7 (USD billions of fully diluted company valuation (1.00 = $1B)); hyperliquid:para:ANTH 101.41 (USD per 1 share (share class not specified by the operator)); edgex:ANTHROPICUSDC 1338.923121435860836647 (unit not published by the venue). Spread within this unit: 30.57 bps. Prices are never averaged across venues and never used to fill another venue's gap.",
+       "data": {
+        "others": [
+         {
+          "id": "hyperliquid:io:ANTH",
+          "price": "1770.7",
+          "unit": "valuation_usd_billions"
+         },
+         {
+          "id": "hyperliquid:para:ANTH",
+          "price": "101.41",
+          "unit": "usd_per_share"
+         },
+         {
+          "id": "edgex:ANTHROPICUSDC",
+          "price": "1338.923121435860836647",
+          "unit": "unknown"
+         }
+        ],
+        "spreadBps": "30.57"
+       }
+      },
+      {
+       "code": "unit_mismatch",
+       "text": "The contracts on Anthropic, PBC are quoted in different units (USD billions of fully diluted company valuation (1.00 = $1B) | USD per 1 share (share class not specified by the operator) | USD per 1 share of Class A common stock | unit not published by the venue): their prices are not comparable with each other."
+      }
+     ]
+    },
+    "tradable": false,
+    "notTradable": {
+     "code": "builder_dex_read_only",
+     "reasons": [
+      "Builder-deployed (HIP-3) Hyperliquid markets are served for market data only: the wallet's trading path covers the validator-operated dex alone (pinned asset table, signer policy), each builder dex has its own collateral balance, deployer-set oracle and settlement powers, and the deployers' terms restrict some jurisdictions. No order, transfer or signed action is built for them.",
+      "trade.xyz Terms of Use §2.2 (updated 6 Sep 2026) name Canada among the restricted jurisdictions of its interface (https://trade.xyz/terms)."
+     ]
+    },
+    "error": null
+   },
+   {
+    "id": "hyperliquid:io:OAI",
+    "venue": "hyperliquid",
+    "platform": "Hyperliquid · EntropyIO (dex io)",
+    "operator": "EntropyIO",
+    "symbol": "io:OAI",
+    "company": {
+     "slug": "openai",
+     "name": "OpenAI"
+    },
+    "status": "live",
+    "review": {
+     "state": "reviewed",
+     "reasons": [],
+     "reviewedAt": "2026-11-15",
+     "validUntil": "2026-12-15T00:00:00Z",
+     "fingerprintChecked": true
+    },
+    "contract": {
+     "nature": "cash-settled perpetual quoted in market cap, pure synthetic, no ownership",
+     "unit": {
+      "kind": "valuation_usd_billions",
+      "label": "USD billions of fully diluted company valuation (1.00 = $1B)"
+     },
+     "quoteCurrency": "USD",
+     "collateral": "USDC",
+     "underlying": "OpenAI",
+     "contractSize": "1 contract = 1 unit of OAI; smallest size 0.001",
+     "multiplier": {
+      "value": "1",
+      "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)"
+     },
+     "settlement": "If unlisted at 2 Sep 2028: cash-settled to the 6-month trailing TWAP of the mark. Early-settlement notice: 30-day TWAP. M&A: the confirmed deal market cap, else 30-day TWAP.",
+     "ipoConversion": "Stays a market-cap perpetual; at the first official opening trade the oracle switches to share price × fully diluted share count ÷ 1e9 (count fixed once from the final prospectus).",
+     "oracle": "Same Entropy blend as io:ANTH (internal EMA of the book mid + undisclosed external aggregate, delivered by RedStone); clipped to [200, 3000].",
+     "liquidation": "Hyperliquid margining of the builder dex: liquidation when account or isolated-position equity falls below the maintenance margin (half of the initial margin at maximum leverage); the deployer may halt the market and settle every position at the mark price (HIP-3 haltTrading). Cross margin allowed; maximum leverage 6x; auto-deleveraging exists.",
+     "maxLeverage": "6",
+     "margin": "cross_allowed",
+     "lotSize": "0.001",
+     "szDecimals": 3,
+     "fundingIntervalSec": 3600,
+     "assetId": 200000,
+     "dex": "io",
+     "oiCapUsd": "12000000",
+     "fundingMultiplier": "0.125",
+     "onChainDescription": "",
+     "unconfirmedConvention": null,
+     "sources": [
+      "https://docs.entropy.io/market-types/pre-ipo-perpetuals",
+      "https://docs.entropy.io/asset-directory/pre-ipo-assets",
+      "https://docs.entropy.io/pre-ipo-perp-mechanics/no-ipo-resolution"
+     ]
+    },
+    "market": {
+     "price": {
+      "value": "1313",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — mark price",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "oracle": {
+      "value": "1310.9",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — oracle price",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "mid": {
+      "value": "1312.65",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — book mid",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "funding": {
+      "value": "0.0000149425",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — funding rate per interval",
+      "ts": 1794791164590,
+      "stale": false,
+      "intervalSec": 3600
+     },
+     "openInterest": {
+      "value": "5733.586",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — open interest, contracts",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "openInterestUsd": {
+      "value": "7528198.418",
+      "source": "wallet arithmetic: open interest × mark × contract multiplier (not a venue field)",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "volume24h": {
+      "value": "388704.4184",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — 24 h notional volume, USD",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "volumeBase24h": {
+      "value": "294.315",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — 24 h volume, contracts",
+      "ts": 1794791164590,
+      "stale": false
+     },
+     "frozen": false
+    },
+    "valuation": {
+     "syntheticPrice": {
+      "value": "1313",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex io) — mark price",
+      "ts": 1794791164590,
+      "stale": false,
+      "unit": "valuation_usd_billions",
+      "unitLabel": "USD billions of fully diluted company valuation (1.00 = $1B)",
+      "priceKind": "mark"
+     },
+     "contractMarketValue": {
+      "value": "1313",
+      "formula": "contract value = price × 1 (contract size defined by the venue: Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16))",
+      "reason": null,
+      "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)",
+      "ts": 1794791164590
+     },
+     "notionalExposure": {
+      "value": "13130",
+      "formula": "size × contract value, negative for a short",
+      "reason": null,
+      "position": {
+       "side": "long",
+       "size": "10"
+      },
+      "hypothetical": true,
+      "ts": 1794791164590
+     },
+     "impliedValuation": {
+      "value": "1313000000000",
+      "formula": "implied fully diluted valuation (USD) = price × 1 000 000 000",
+      "formulaId": "price_x_1e9",
+      "formulaSource": {
+       "url": "https://docs.entropy.io/market-types/pre-ipo-perpetuals",
+       "quote": "pre-IPO perpetuals are quoted in market cap: a price of $1 represents $1B of the company's fully diluted valuation.",
+       "readAt": "2026-11-15"
+      },
+      "asOf": 1794791164590,
+      "label": "market-implied, from the price of a derivative on Hyperliquid · EntropyIO (dex io) — not a company figure",
+      "reason": null,
+      "reasonCode": null
+     },
+     "lastPrivateValuation": {
+      "value": "1250000000000",
+      "kind": "primary_round",
+      "detail": "$11B first close of a round of up to $20B; reported by unnamed sources; the company declined to comment; pre- or post-money not stated",
+      "date": "2026-11-06",
+      "sourceUrl": "https://www.bloomberg.com/news/articles/2026-11-06/openai-completes-11-billion-portion-of-funding-at-1-25-trillion-value",
+      "confidence": "medium"
+     },
+     "lastPrivateValuationReason": null,
+     "premiumDiscount": {
+      "premiumBps": "504",
+      "reason": null,
+      "caveat": "the reference is a press report dated 2026-11-06; the contract price is dated 2026-11-16. The two figures are of different kinds and dates"
+     },
+     "caveats": [
+      {
+       "code": "synthetic",
+       "text": "a synthetic price is the price of a derivative contract: it gives no claim on shares and can trade far from any share transaction"
+      },
+      {
+       "code": "arithmetic",
+       "text": "an implied valuation is arithmetic on that price, not an appraisal of the company"
+      },
+      {
+       "code": "reference_kind",
+       "text": "the reference is a press report dated 2026-11-06; the contract price is dated 2026-11-16. The two figures are of different kinds and dates"
+      }
+     ]
+    },
+    "tradable": false,
+    "notTradable": {
+     "code": "builder_dex_read_only",
+     "reasons": [
+      "Builder-deployed (HIP-3) Hyperliquid markets are served for market data only: the wallet's trading path covers the validator-operated dex alone (pinned asset table, signer policy), each builder dex has its own collateral balance, deployer-set oracle and settlement powers, and the deployers' terms restrict some jurisdictions. No order, transfer or signed action is built for them.",
+      "EntropyIO lists Ontario among its restricted jurisdictions (https://docs.entropy.io/legal-and-disclaimers/restricted-jurisdictions); whether offering this market in Québec is lawful is not established."
+     ]
+    },
+    "error": null
+   },
+   {
+    "id": "hyperliquid:xyz:OURA",
+    "venue": "hyperliquid",
+    "platform": "Hyperliquid · trade.xyz (dex xyz)",
+    "operator": "trade.xyz (XYZ Ltd)",
+    "symbol": "xyz:OURA",
+    "company": {
+     "slug": "oura",
+     "name": "Oura Inc."
+    },
+    "status": "live",
+    "review": {
+     "state": "reviewed",
+     "reasons": [],
+     "reviewedAt": "2026-11-15",
+     "validUntil": "2026-12-01T00:00:00Z",
+     "fingerprintChecked": true
+    },
+    "contract": {
+     "nature": "cash-settled linear perpetual, pure synthetic, no ownership",
+     "unit": {
+      "kind": "usd_per_share",
+      "label": "USD per 1 share of common stock"
+     },
+     "quoteCurrency": "USD",
+     "collateral": "USDC",
+     "underlying": "Oura Inc.",
+     "contractSize": "1 contract = 1 unit of OURA; smallest size 0.1",
+     "multiplier": {
+      "value": "1",
+      "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)"
+     },
+     "settlement": "The anticipated listing date (2 Oct 2026) has passed; the grace period ends on 1 Dec 2026, after which alternative settlement may apply (default: TWAP of the market since launch).",
+     "ipoConversion": "Converts to a standard XYZ equity perpetual upon the IPO.",
+     "oracle": "Internal only: 30-minute EWMA advanced by the market's own impact price. Discovery bounds ±50 %.",
+     "liquidation": "Hyperliquid margining of the builder dex: liquidation when account or isolated-position equity falls below the maintenance margin (half of the initial margin at maximum leverage); the deployer may halt the market and settle every position at the mark price (HIP-3 haltTrading). Isolated margin only (noCross); maximum leverage 5x.",
+     "maxLeverage": "5",
+     "margin": "no_cross",
+     "lotSize": "0.1",
+     "szDecimals": 1,
+     "fundingIntervalSec": 3600,
+     "assetId": 110123,
+     "dex": "xyz",
+     "oiCapUsd": "25000000",
+     "fundingMultiplier": "0.005",
+     "onChainDescription": "OURA references 1 share of Oura Inc. common stock (Nasdaq: OURA), quoted in USD. OURA is currently a pre-IPO market reflecting the anticipated share price; it is expected to convert to a standard XYZ perpetual upon the IPO. Oura designs the Oura Ring, a smart ring that measures sleep, activity, stress, and heart-health signals, and sells a subscription membership for health insights.",
+     "unconfirmedConvention": null,
+     "sources": [
+      "https://docs.trade.xyz/perpetuals/markets/pre-ipo-perpetuals",
+      "https://docs.trade.xyz/perpetuals/specifications-and-schedules/pre-ipo-specification-index"
+     ]
+    },
+    "market": {
+     "price": {
+      "value": "48.76",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — mark price",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "oracle": {
+      "value": "48.76",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — oracle price",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "mid": {
+      "value": "48.743",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — book mid",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "funding": {
+      "value": "0.0000017705",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — funding rate per interval",
+      "ts": 1794791164624,
+      "stale": false,
+      "intervalSec": 3600
+     },
+     "openInterest": {
+      "value": "12243",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — open interest, contracts",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "openInterestUsd": {
+      "value": "596968.68",
+      "source": "wallet arithmetic: open interest × mark × contract multiplier (not a venue field)",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "volume24h": {
+      "value": "8259.6548",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — 24 h notional volume, USD",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "volumeBase24h": {
+      "value": "169.7",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — 24 h volume, contracts",
+      "ts": 1794791164624,
+      "stale": false
+     },
+     "frozen": false
+    },
+    "valuation": {
+     "syntheticPrice": {
+      "value": "48.76",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — mark price",
+      "ts": 1794791164624,
+      "stale": false,
+      "unit": "usd_per_share",
+      "unitLabel": "USD per 1 share of common stock",
+      "priceKind": "mark"
+     },
+     "contractMarketValue": {
+      "value": "48.76",
+      "formula": "contract value = price × 1 (contract size defined by the venue: Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16))",
+      "reason": null,
+      "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)",
+      "ts": 1794791164624
+     },
+     "notionalExposure": {
+      "value": "487.6",
+      "formula": "size × contract value, negative for a short",
+      "reason": null,
+      "position": {
+       "side": "long",
+       "size": "10"
+      },
+      "hypothetical": true,
+      "ts": 1794791164624
+     },
+     "impliedValuation": {
+      "value": null,
+      "formula": null,
+      "formulaId": null,
+      "formulaSource": {
+       "url": "https://docs.trade.xyz/perpetuals/specifications-and-schedules/pre-ipo-specification-index",
+       "quote": "OURA references 1 share of Oura Inc. common stock (Nasdaq: OURA), quoted in USD.",
+       "readAt": "2026-11-15"
+      },
+      "asOf": null,
+      "label": null,
+      "reason": "quoted per share, and the operator publishes no share count; the IPO was postponed on 29 Sep 2026",
+      "reasonCode": "per_share_no_share_count"
+     },
+     "lastPrivateValuation": {
+      "value": "11000000000",
+      "kind": "primary_round",
+      "detail": "$900M Series E (secondary write-up; the original release was not fetched)",
+      "date": "2025-10",
+      "sourceUrl": "https://allium.so/blog/oura-ipo-valuation-from-11b-to-a-postponed-deal",
+      "confidence": "medium"
+     },
+     "lastPrivateValuationReason": null,
+     "premiumDiscount": {
+      "premiumBps": null,
+      "reason": "no implied valuation: quoted per share, and the operator publishes no share count; the IPO was postponed on 29 Sep 2026",
+      "caveat": null
+     },
+     "caveats": [
+      {
+       "code": "synthetic",
+       "text": "a synthetic price is the price of a derivative contract: it gives no claim on shares and can trade far from any share transaction"
+      },
+      {
+       "code": "arithmetic",
+       "text": "an implied valuation is arithmetic on that price, not an appraisal of the company"
+      },
+      {
+       "code": "company_note",
+       "text": "IPO postponed on 29 Sep 2026."
+      },
+      {
+       "code": "thin_market",
+       "text": "Thin market: open interest ≈ $597.0k, 24 h volume ≈ $8.3k. A small order moves this price.",
+       "data": {
+        "openInterestUsd": "596968.68",
+        "volume24hUsd": "8259.6548",
+        "thresholds": {
+         "openInterestUsd": "1000000",
+         "volume24hUsd": "100000"
+        }
+       }
+      }
+     ]
+    },
+    "tradable": false,
+    "notTradable": {
+     "code": "builder_dex_read_only",
+     "reasons": [
+      "Builder-deployed (HIP-3) Hyperliquid markets are served for market data only: the wallet's trading path covers the validator-operated dex alone (pinned asset table, signer policy), each builder dex has its own collateral balance, deployer-set oracle and settlement powers, and the deployers' terms restrict some jurisdictions. No order, transfer or signed action is built for them.",
+      "trade.xyz Terms of Use §2.2 (updated 6 Sep 2026) name Canada among the restricted jurisdictions of its interface (https://trade.xyz/terms)."
+     ]
+    },
+    "error": null
+   },
+   {
+    "id": "edgex:POLYMARKETUSDC",
+    "venue": "edgex",
+    "platform": "edgeX",
+    "operator": "edgeX",
+    "symbol": "POLYMARKETUSDC",
+    "company": {
+     "slug": "polymarket",
+     "name": "Polymarket"
+    },
+    "status": "live",
+    "review": {
+     "state": "reviewed",
+     "reasons": [],
+     "reviewedAt": "2026-11-15",
+     "validUntil": "2026-12-15T00:00:00Z",
+     "fingerprintChecked": true
+    },
+    "contract": {
+     "nature": "USDC-margined linear perpetual, cash-settled, pure synthetic: no claim on any share (venue metadata; edgeX publishes no specification for it)",
+     "unit": {
+      "kind": "unknown",
+      "label": "unit not published by the venue"
+     },
+     "quoteCurrency": "USDC",
+     "collateral": "USDC",
+     "underlying": "Polymarket",
+     "contractSize": "1 contract = 1 unit of POLYMARKET; smallest size 0.01",
+     "multiplier": {
+      "value": "1",
+      "source": "edgeX metadata: USDC-margined linear contract — value = price × size (ticker value ÷ size = price, docs/v11/research/edgex-api.md §2.1)"
+     },
+     "settlement": "not published by the venue (generic rule: PnL and funding settle in USDC in the venue account; no expiry)",
+     "ipoConversion": "not published by the venue",
+     "oracle": "not published per instrument: a single oracle signer for stock-type contracts (venue metadata); the general price pages name Binance, OKX, Bybit and Coinbase (index) and Stork or a \"Multi-CEX Oracle\", without saying which applies",
+     "liquidation": "Per-contract risk tiers of the venue metadata (maintenance margin by position value); liquidation fee 1 %; funding every 4 h, capped at ±2 % per interval.",
+     "maxLeverage": "10",
+     "margin": "cross / isolated",
+     "lotSize": "0.01",
+     "szDecimals": null,
+     "fundingIntervalSec": 14400,
+     "assetId": null,
+     "dex": null,
+     "oiCapUsd": null,
+     "fundingMultiplier": null,
+     "onChainDescription": null,
+     "unconfirmedConvention": {
+      "text": "Unconfirmed convention: press coverage of the centralised-exchange pre-IPO perpetuals that edgeX's index tracks says they assume about one billion shares, so that price × 1e9 would approximate a valuation. edgeX itself states nothing; the wallet does not apply it.",
+      "url": "https://cryptobriefing.com/anthropic-pre-ipo-perps-1-8t-valuation/"
+     },
+     "sources": [
+      "https://edgex-1.gitbook.io/edgeX-documentation",
+      "https://edgex-1.gitbook.io/edgeX-documentation/about/terms-of-use"
+     ]
+    },
+    "market": {
+     "price": {
+      "value": "23.843732316662992181",
+      "source": "edgeX public quote API (ticker) — mark price",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "oracle": {
+      "value": "23.843732316662992181",
+      "source": "edgeX public quote API (ticker) — index price",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "mid": {
+      "value": "23.835",
+      "source": "edgeX public quote API (ticker) — book mid",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "funding": {
+      "value": "0.00020971",
+      "source": "edgeX public quote API (ticker) — funding rate per interval",
+      "ts": 1794791165055,
+      "stale": false,
+      "intervalSec": 14400
+     },
+     "openInterest": {
+      "value": "253.72",
+      "source": "edgeX public quote API (ticker) — open interest, contracts",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "openInterestUsd": {
+      "value": "6049.63176338373437616332",
+      "source": "wallet arithmetic: open interest × mark × contract multiplier (not a venue field)",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "volume24h": {
+      "value": "229126.9257",
+      "source": "edgeX public quote API (ticker) — 24 h notional volume, USDC",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "volumeBase24h": {
+      "value": "9614.76",
+      "source": "edgeX public quote API (ticker) — 24 h volume, contracts",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "frozen": false
+    },
+    "valuation": {
+     "syntheticPrice": {
+      "value": "23.843732316662992181",
+      "source": "edgeX public quote API (ticker) — mark price",
+      "ts": 1794791165055,
+      "stale": false,
+      "unit": "unknown",
+      "unitLabel": "unit not published by the venue",
+      "priceKind": "mark"
+     },
+     "contractMarketValue": {
+      "value": "23.843732316662992181",
+      "formula": "contract value = price × 1 (contract size defined by the venue: edgeX metadata: USDC-margined linear contract — value = price × size (ticker value ÷ size = price, docs/v11/research/edgex-api.md §2.1))",
+      "reason": null,
+      "source": "edgeX metadata: USDC-margined linear contract — value = price × size (ticker value ÷ size = price, docs/v11/research/edgex-api.md §2.1)",
+      "ts": 1794791165055
+     },
+     "notionalExposure": {
+      "value": "238.43732316662992181",
+      "formula": "size × contract value, negative for a short",
+      "reason": null,
+      "position": {
+       "side": "long",
+       "size": "10"
+      },
+      "hypothetical": true,
+      "ts": 1794791165055
+     },
+     "impliedValuation": {
+      "value": null,
+      "formula": null,
+      "formulaId": null,
+      "formulaSource": null,
+      "asOf": null,
+      "label": null,
+      "reason": "unit not published by the venue: edgeX publishes no contract specification for its pre-IPO perpetuals (no statement of what one contract represents, of the index constituents, or of what happens at an IPO) — searched in its documentation, help center and app on 2026-11-15",
+      "reasonCode": "unit_not_published"
+     },
+     "lastPrivateValuation": {
+      "value": "21000000000",
+      "kind": "primary_round",
+      "detail": "$1B round led by 1789 Capital, post-money, reported by people familiar with the matter",
+      "date": "2026-08-31",
+      "sourceUrl": "https://www.bloomberg.com/news/articles/2026-08-31/polymarket-funding-round-led-by-1789-values-firm-at-21-billion",
+      "confidence": "medium"
+     },
+     "lastPrivateValuationReason": null,
+     "premiumDiscount": {
+      "premiumBps": null,
+      "reason": "no implied valuation: unit not published by the venue: edgeX publishes no contract specification for its pre-IPO perpetuals (no statement of what one contract represents, of the index constituents, or of what happens at an IPO) — searched in its documentation, help center and app on 2026-11-15",
+      "caveat": null
+     },
+     "caveats": [
+      {
+       "code": "synthetic",
+       "text": "a synthetic price is the price of a derivative contract: it gives no claim on shares and can trade far from any share transaction"
+      },
+      {
+       "code": "arithmetic",
+       "text": "an implied valuation is arithmetic on that price, not an appraisal of the company"
+      },
+      {
+       "code": "unconfirmed_convention",
+       "text": "Unconfirmed convention: press coverage of the centralised-exchange pre-IPO perpetuals that edgeX's index tracks says they assume about one billion shares, so that price × 1e9 would approximate a valuation. edgeX itself states nothing; the wallet does not apply it.",
+       "data": {
+        "url": "https://cryptobriefing.com/anthropic-pre-ipo-perps-1-8t-valuation/"
+       }
+      },
+      {
+       "code": "thin_market",
+       "text": "Thin market: open interest ≈ $6.0k, 24 h volume ≈ $229.1k. A small order moves this price.",
+       "data": {
+        "openInterestUsd": "6049.63176338373437616332",
+        "volume24hUsd": "229126.9257",
+        "thresholds": {
+         "openInterestUsd": "1000000",
+         "volume24hUsd": "100000"
+        }
+       }
+      }
+     ]
+    },
+    "tradable": false,
+    "notTradable": {
+     "code": "venue_restricted",
+     "reasons": [
+      "Trading unavailable: edgeX's terms exclude Canada. edgeX is served for market data only: its Terms of Use name the United States of America and Canada as blocked jurisdictions, for its interface and for perpetual contracts, and forbid getting around it with a VPN (https://edgex-1.gitbook.io/edgeX-documentation/about/terms-of-use, read 2026-11-15). No account view, no order and no paper account are offered on this venue, so that it cannot be mistaken for a venue the owner may trade on.",
+      "edgeX publishes no contract specification for its pre-IPO perpetuals."
+     ]
+    },
+    "error": null
+   },
+   {
+    "id": "edgex:MOONSHOTUSDC",
+    "venue": "edgex",
+    "platform": "edgeX",
+    "operator": "edgeX",
+    "symbol": "MOONSHOTUSDC",
+    "company": {
+     "slug": "moonshot",
+     "name": "Moonshot AI"
+    },
+    "status": "live",
+    "review": {
+     "state": "reviewed",
+     "reasons": [],
+     "reviewedAt": "2026-11-15",
+     "validUntil": "2026-12-15T00:00:00Z",
+     "fingerprintChecked": true
+    },
+    "contract": {
+     "nature": "USDC-margined linear perpetual, cash-settled, pure synthetic: no claim on any share (venue metadata; edgeX publishes no specification for it)",
+     "unit": {
+      "kind": "unknown",
+      "label": "unit not published by the venue"
+     },
+     "quoteCurrency": "USDC",
+     "collateral": "USDC",
+     "underlying": "Moonshot AI",
+     "contractSize": "1 contract = 1 unit of MOONSHOT; smallest size 0.01",
+     "multiplier": {
+      "value": "1",
+      "source": "edgeX metadata: USDC-margined linear contract — value = price × size (ticker value ÷ size = price, docs/v11/research/edgex-api.md §2.1)"
+     },
+     "settlement": "not published by the venue (generic rule: PnL and funding settle in USDC in the venue account; no expiry)",
+     "ipoConversion": "not published by the venue",
+     "oracle": "not published per instrument: a single oracle signer for stock-type contracts (venue metadata); the general price pages name Binance, OKX, Bybit and Coinbase (index) and Stork or a \"Multi-CEX Oracle\", without saying which applies",
+     "liquidation": "Per-contract risk tiers of the venue metadata (maintenance margin by position value); liquidation fee 1 %; funding every 4 h, capped at ±2 % per interval.",
+     "maxLeverage": "10",
+     "margin": "cross / isolated",
+     "lotSize": "0.01",
+     "szDecimals": null,
+     "fundingIntervalSec": 14400,
+     "assetId": null,
+     "dex": null,
+     "oiCapUsd": null,
+     "fundingMultiplier": null,
+     "onChainDescription": null,
+     "unconfirmedConvention": {
+      "text": "Unconfirmed convention: press coverage of the centralised-exchange pre-IPO perpetuals that edgeX's index tracks says they assume about one billion shares, so that price × 1e9 would approximate a valuation. edgeX itself states nothing; the wallet does not apply it.",
+      "url": "https://cryptobriefing.com/anthropic-pre-ipo-perps-1-8t-valuation/"
+     },
+     "sources": [
+      "https://edgex-1.gitbook.io/edgeX-documentation",
+      "https://edgex-1.gitbook.io/edgeX-documentation/about/terms-of-use"
+     ]
+    },
+    "market": {
+     "price": {
+      "value": "59.855183208740709264",
+      "source": "edgeX public quote API (ticker) — mark price",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "oracle": {
+      "value": "60.0883100551354641",
+      "source": "edgeX public quote API (ticker) — index price",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "mid": {
+      "value": "59.985",
+      "source": "edgeX public quote API (ticker) — book mid",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "funding": {
+      "value": "-0.00017781",
+      "source": "edgeX public quote API (ticker) — funding rate per interval",
+      "ts": 1794791165055,
+      "stale": false,
+      "intervalSec": 14400
+     },
+     "openInterest": {
+      "value": "118.17",
+      "source": "edgeX public quote API (ticker) — open interest, contracts",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "openInterestUsd": {
+      "value": "7073.08699977688961372688",
+      "source": "wallet arithmetic: open interest × mark × contract multiplier (not a venue field)",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "volume24h": {
+      "value": "304512.2666",
+      "source": "edgeX public quote API (ticker) — 24 h notional volume, USDC",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "volumeBase24h": {
+      "value": "5122.6",
+      "source": "edgeX public quote API (ticker) — 24 h volume, contracts",
+      "ts": 1794791165055,
+      "stale": false
+     },
+     "frozen": false
+    },
+    "valuation": {
+     "syntheticPrice": {
+      "value": "59.855183208740709264",
+      "source": "edgeX public quote API (ticker) — mark price",
+      "ts": 1794791165055,
+      "stale": false,
+      "unit": "unknown",
+      "unitLabel": "unit not published by the venue",
+      "priceKind": "mark"
+     },
+     "contractMarketValue": {
+      "value": "59.855183208740709264",
+      "formula": "contract value = price × 1 (contract size defined by the venue: edgeX metadata: USDC-margined linear contract — value = price × size (ticker value ÷ size = price, docs/v11/research/edgex-api.md §2.1))",
+      "reason": null,
+      "source": "edgeX metadata: USDC-margined linear contract — value = price × size (ticker value ÷ size = price, docs/v11/research/edgex-api.md §2.1)",
+      "ts": 1794791165055
+     },
+     "notionalExposure": {
+      "value": "598.55183208740709264",
+      "formula": "size × contract value, negative for a short",
+      "reason": null,
+      "position": {
+       "side": "long",
+       "size": "10"
+      },
+      "hypothetical": true,
+      "ts": 1794791165055
+     },
+     "impliedValuation": {
+      "value": null,
+      "formula": null,
+      "formulaId": null,
+      "formulaSource": null,
+      "asOf": null,
+      "label": null,
+      "reason": "unit not published by the venue: edgeX publishes no contract specification for its pre-IPO perpetuals (no statement of what one contract represents, of the index constituents, or of what happens at an IPO) — searched in its documentation, help center and app on 2026-11-15",
+      "reasonCode": "unit_not_published"
+     },
+     "lastPrivateValuation": null,
+     "lastPrivateValuationReason": "no private valuation of Moonshot AI was researched (docs/v11/research/private-markets.md §4)",
+     "premiumDiscount": {
+      "premiumBps": null,
+      "reason": "no implied valuation: unit not published by the venue: edgeX publishes no contract specification for its pre-IPO perpetuals (no statement of what one contract represents, of the index constituents, or of what happens at an IPO) — searched in its documentation, help center and app on 2026-11-15",
+      "caveat": null
+     },
+     "caveats": [
+      {
+       "code": "synthetic",
+       "text": "a synthetic price is the price of a derivative contract: it gives no claim on shares and can trade far from any share transaction"
+      },
+      {
+       "code": "arithmetic",
+       "text": "an implied valuation is arithmetic on that price, not an appraisal of the company"
+      },
+      {
+       "code": "unconfirmed_convention",
+       "text": "Unconfirmed convention: press coverage of the centralised-exchange pre-IPO perpetuals that edgeX's index tracks says they assume about one billion shares, so that price × 1e9 would approximate a valuation. edgeX itself states nothing; the wallet does not apply it.",
+       "data": {
+        "url": "https://cryptobriefing.com/anthropic-pre-ipo-perps-1-8t-valuation/"
+       }
+      },
+      {
+       "code": "company_note",
+       "text": "Reference valuation not researched."
+      },
+      {
+       "code": "thin_market",
+       "text": "Thin market: open interest ≈ $7.1k, 24 h volume ≈ $304.5k. A small order moves this price.",
+       "data": {
+        "openInterestUsd": "7073.08699977688961372688",
+        "volume24hUsd": "304512.2666",
+        "thresholds": {
+         "openInterestUsd": "1000000",
+         "volume24hUsd": "100000"
+        }
+       }
+      }
+     ]
+    },
+    "tradable": false,
+    "notTradable": {
+     "code": "venue_restricted",
+     "reasons": [
+      "Trading unavailable: edgeX's terms exclude Canada. edgeX is served for market data only: its Terms of Use name the United States of America and Canada as blocked jurisdictions, for its interface and for perpetual contracts, and forbid getting around it with a VPN (https://edgex-1.gitbook.io/edgeX-documentation/about/terms-of-use, read 2026-11-15). No account view, no order and no paper account are offered on this venue, so that it cannot be mistaken for a venue the owner may trade on.",
+      "edgeX publishes no contract specification for its pre-IPO perpetuals."
+     ]
+    },
+    "error": null
+   }
+  ],
+  "companies": [
+   {
+    "slug": "anthropic",
+    "name": "Anthropic, PBC",
+    "note": "IPO reported for pricing on 18 Nov 2026 and first trade on 19 Nov 2026 (press; the SEC filing states no date). Every Anthropic contract changes methodology, unit or oracle around that date.",
+    "contracts": [
+     "edgex:ANTHROPICUSDC",
+     "hyperliquid:io:ANTH",
+     "hyperliquid:para:ANTH",
+     "hyperliquid:xyz:ANT"
+    ],
+    "lastPrivateValuation": {
+     "value": "965000000000",
+     "kind": "primary_round",
+     "detail": "Series H, $65B raised, post-money",
+     "date": "2026-05-28",
+     "sourceUrl": "https://www.anthropic.com/news/series-h",
+     "confidence": "high"
+    },
+    "divergence": [
+     {
+      "unit": "usd_per_share",
+      "unitLabel": "USD per 1 share (share class not specified by the operator)",
+      "contracts": [
+       {
+        "id": "hyperliquid:para:ANTH",
+        "price": "101.41",
+        "ts": 1794791164594
+       },
+       {
+        "id": "hyperliquid:xyz:ANT",
+        "price": "101.72",
+        "ts": 1794791164624
+       }
+      ],
+      "spreadBps": "30.57",
+      "note": "spread between the highest and the lowest mark of contracts quoted in the same unit; different contracts with different settlement rules — shown side by side, never averaged"
+     }
+    ]
+   },
+   {
+    "slug": "openai",
+    "name": "OpenAI",
+    "note": null,
+    "contracts": [
+     "hyperliquid:io:OAI"
+    ],
+    "lastPrivateValuation": {
+     "value": "1250000000000",
+     "kind": "primary_round",
+     "detail": "$11B first close of a round of up to $20B; reported by unnamed sources; the company declined to comment; pre- or post-money not stated",
+     "date": "2026-11-06",
+     "sourceUrl": "https://www.bloomberg.com/news/articles/2026-11-06/openai-completes-11-billion-portion-of-funding-at-1-25-trillion-value",
+     "confidence": "medium"
+    },
+    "divergence": []
+   },
+   {
+    "slug": "oura",
+    "name": "Oura Inc.",
+    "note": "IPO postponed on 29 Sep 2026.",
+    "contracts": [
+     "hyperliquid:xyz:OURA"
+    ],
+    "lastPrivateValuation": {
+     "value": "11000000000",
+     "kind": "primary_round",
+     "detail": "$900M Series E (secondary write-up; the original release was not fetched)",
+     "date": "2025-10",
+     "sourceUrl": "https://allium.so/blog/oura-ipo-valuation-from-11b-to-a-postponed-deal",
+     "confidence": "medium"
+    },
+    "divergence": []
+   },
+   {
+    "slug": "polymarket",
+    "name": "Polymarket",
+    "note": null,
+    "contracts": [
+     "edgex:POLYMARKETUSDC"
+    ],
+    "lastPrivateValuation": {
+     "value": "21000000000",
+     "kind": "primary_round",
+     "detail": "$1B round led by 1789 Capital, post-money, reported by people familiar with the matter",
+     "date": "2026-08-31",
+     "sourceUrl": "https://www.bloomberg.com/news/articles/2026-08-31/polymarket-funding-round-led-by-1789-values-firm-at-21-billion",
+     "confidence": "medium"
+    },
+    "divergence": []
+   },
+   {
+    "slug": "moonshot",
+    "name": "Moonshot AI",
+    "note": "Reference valuation not researched.",
+    "contracts": [
+     "edgex:MOONSHOTUSDC"
+    ],
+    "lastPrivateValuation": null,
+    "divergence": []
+   }
+  ],
+  "excluded": [
+   {
+    "id": "hyperliquid:xyz:SPCX",
+    "company": "SpaceX",
+    "reason": "SpaceX is a listed company (Nasdaq: SPCX): the deployer annotates this market as a listed stock and categorises it `stocks`. Not a private market.",
+    "liveCategory": "stocks",
+    "delisted": false
+   },
+   {
+    "id": "hyperliquid:xyz:CBRS",
+    "company": "Cerebras",
+    "reason": "The deployer converted this market from pre-IPO to a standard equity perpetual on the listed security (category `stocks`, read live 2026-11-16; research dossier §0.3). Not a private market.",
+    "liveCategory": "stocks",
+    "delisted": false
+   },
+   {
+    "id": "hyperliquid:xyz:QNT",
+    "company": "Quantinuum",
+    "reason": "The deployer converted this market from pre-IPO to a standard equity perpetual on the listed security (category `stocks`, read live 2026-11-16; research dossier §0.3). Not a private market.",
+    "liveCategory": "stocks",
+    "delisted": false
+   },
+   {
+    "id": "hyperliquid:xyz:JIO",
+    "company": "Jio Platforms",
+    "reason": "The deployer converted this market from pre-IPO to a standard equity perpetual on the listed security (category `stocks`, read live 2026-11-16; research dossier §0.3). Not a private market.",
+    "liveCategory": "stocks",
+    "delisted": false
+   },
+   {
+    "id": "hyperliquid:xyz:SKHY",
+    "company": "SK hynix",
+    "reason": "References SK hynix ADS, a listed security: standard equity perpetual (category `stocks`, read live 2026-11-16; research dossier §0.3). Not a private market.",
+    "liveCategory": "stocks",
+    "delisted": false
+   }
+  ],
+  "venues": [
+   {
+    "venue": "hyperliquid",
+    "name": "Hyperliquid (builder-deployed dexes)",
+    "status": "ok",
+    "error": null,
+    "ts": 1794791163950,
+    "instruments": 5
+   },
+   {
+    "venue": "edgex",
+    "name": "edgeX",
+    "status": "ok",
+    "error": null,
+    "ts": 1794791165060,
+    "instruments": 3
+   }
+  ],
+  "venuesWithoutAdapter": [
+   {
+    "venue": "Aster",
+    "note": "ANTHROPICUSDT, OPENAIUSDT, POLYMARKETUSD1, OURAUSD1, MOONSHOTUSD1 — per share against a notional reference count of 1 billion shares"
+   },
+   {
+    "venue": "Lighter",
+    "note": "ANTHROPIC, OPENAI, OURA — unit not found in the operator's documentation"
+   },
+   {
+    "venue": "Polymarket Perps",
+    "note": "ANT-USD — USD billions until its rebase of 16 Nov 2026 (~10:00 ET), USD per share afterwards"
+   }
+  ],
+  "notice": {
+   "tradable": false,
+   "code": "private_markets_display_only",
+   "text": "Displayed for information only — not tradable from this wallet. These are synthetic derivative contracts: they give no claim on any share. Trading is disabled for two reasons: jurisdiction (trade.xyz's terms name Canada as a restricted jurisdiction for its interface, EntropyIO names Ontario, edgeX excludes Canada) and contract definition (units differ between venues, some are not published, and the Anthropic contracts change oracle or unit around its IPO)."
+  },
+  "filter": {
+   "delisted": false
+  },
+  "position": {
+   "side": "long",
+   "size": "10"
+  },
+  "cache": {
+   "discovery": {
+    "ttl": 60000,
+    "maxAge": 900000
+   },
+   "markets": {
+    "ttl": 20000,
+    "maxAge": 120000
+   },
+   "delisted": {
+    "ttl": 600000,
+    "maxAge": 3600000
+   },
+   "annotation": {
+    "ttl": 600000,
+    "maxAge": 3600000
+   },
+   "book": {
+    "ttl": 5000,
+    "maxAge": 30000
+   },
+   "candles": {
+    "ttl": 60000,
+    "maxAge": 600000
+   },
+   "edgexTickers": {
+    "ttl": 3000,
+    "maxAge": 15000
+   },
+   "edgexInstruments": {
+    "ttl": 600000,
+    "maxAge": 3600000
+   },
+   "staleAfter": {
+    "hyperliquid": 60000,
+    "edgex": 15000
+   }
+  },
+  "reviewedTable": {
+   "entries": 10,
+   "reviewedAt": "2026-11-15"
+  },
+  "ts": 1794791165068,
+  "source": "venue"
+ }
+}
