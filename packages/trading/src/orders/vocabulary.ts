@@ -148,6 +148,27 @@ export function mapVenueAction(state: VenueActionState): UnifiedState {
   }
 }
 
+// ------------------------------------------------------------------------------------------------------------------ paper orders
+/**
+ * The paper engine's order status (`Order.status` of @spw/derivatives, stored in `deriv_orders.status` with `state` null;
+ * services/api/src/derivatives/paper.ts). The paper engine is the venue of a paper order: it has no approval step and no signer,
+ * so the first status seen is already at the venue.
+ */
+export const PAPER_ORDER_STATUSES = ['pending', 'open', 'filled', 'partially_filled', 'cancelled', 'rejected', 'triggered'] as const;
+export type PaperOrderStatus = (typeof PAPER_ORDER_STATUSES)[number];
+const someFilled = (x: string | null | undefined): boolean => typeof x === 'string' && /^\d+(\.\d+)?$/.test(x) && /[1-9]/.test(x);
+export function mapPaperOrder(status: PaperOrderStatus, row: { filled?: string | null; rejectReason?: string | null } = {}): UnifiedState {
+  switch (status) {
+    case 'pending': return u('SUBMITTED', 'VENUE_ACCEPTED', 'a trigger order the paper engine accepted and holds until its trigger');
+    case 'triggered': return u('SUBMITTED', 'VENUE_RESTING', 'triggered; waits for the next book');
+    case 'open': return u('SUBMITTED', 'VENUE_RESTING');
+    case 'partially_filled': return u('PARTIALLY_FILLED', 'VENUE_FILL');
+    case 'filled': return u('FILLED', 'VENUE_FILLED');
+    case 'cancelled': return someFilled(row.filled) ? u('CANCELLED', 'REMAINDER_CANCELLED') : u('CANCELLED', 'CANCELLED_AT_VENUE', 'cancelled in the paper engine (by request, by a loss-limit halt, or an IOC remainder)');
+    case 'rejected': return u('REJECTED', 'VENUE_REJECTED', 'refused by the paper engine\'s own rules');
+  }
+}
+
 // ------------------------------------------------------------------------------------------------------------------ rendering
 
 export const VOCABULARIES = [
@@ -156,6 +177,7 @@ export const VOCABULARIES = [
   { id: 'deposit', title: 'Collateral deposits', table: 'deriv_collateral.state (kind = deposit)', source: 'services/api/src/derivatives/collateral.ts (DepositState)', states: DEPOSIT_STATES as readonly string[] },
   { id: 'withdraw', title: 'Collateral withdrawals', table: 'deriv_collateral.state (kind = withdraw)', source: 'services/api/src/derivatives/collateral.ts (WithdrawState)', states: WITHDRAW_STATES as readonly string[] },
   { id: 'action', title: 'Venue actions (cancel, leverage)', table: 'deriv_actions.state', source: 'services/api/src/derivatives/exec.ts (act, approveLeverage)', states: VENUE_ACTION_STATES as readonly string[] },
+  { id: 'paper', title: 'Paper orders', table: 'deriv_orders.status (state is null)', source: 'services/api/src/derivatives/paper.ts (Order.status of @spw/derivatives)', states: PAPER_ORDER_STATUSES as readonly string[] },
 ] as const;
 
 function row(legacy: string, m: UnifiedState): string { return `| \`${legacy}\` | \`${m.state}\` | \`${m.reason}\` | ${m.note ?? ''} |`; }
@@ -179,5 +201,10 @@ export function renderVocabularyTables(): string {
   out.push(row('rejected (error: "… without any trace …")', mapWithdraw('rejected', { error: '30 minutes without any trace of this withdrawal' })));
   out.push('', `#### ${VOCABULARIES[4].title} — \`${VOCABULARIES[4].table}\`, ${VOCABULARIES[4].source}`, '', ...head);
   for (const s of VENUE_ACTION_STATES) out.push(row(s, mapVenueAction(s)));
+  out.push('', `#### ${VOCABULARIES[5].title} — \`${VOCABULARIES[5].table}\`, ${VOCABULARIES[5].source}`, '', ...head);
+  for (const s of PAPER_ORDER_STATUSES) {
+    if (s === 'cancelled') { out.push(row('cancelled (nothing filled)', mapPaperOrder(s, { filled: '0' })), row('cancelled (partly filled)', mapPaperOrder(s, { filled: '1' }))); continue; }
+    out.push(row(s, mapPaperOrder(s)));
+  }
   return out.join('\n');
 }

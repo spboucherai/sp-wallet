@@ -306,9 +306,50 @@ create table if not exists trading_mandates (
   state text not null, enforcement jsonb not null default '[]', compiled jsonb, signer jsonb, revocation jsonb, stop jsonb,
   created_at timestamptz not null default now(), approved_at timestamptz, revoked_at timestamptz, updated_at timestamptz not null default now());
 create index if not exists trading_mandates_principal on trading_mandates (principal_kind, principal_id, created_at desc);
+-- v11 exec2: the owner's passkey approval of the FULL trading mandate hash (intent + assertion), verified again at every use
+alter table trading_mandates add column if not exists approval jsonb;
 create table if not exists trading_mandate_usage (
   mandate_id uuid primary key references trading_mandates(id), orders_accepted int not null default 0, orders_rejected int not null default 0, consecutive_rejects int not null default 0,
   notional_total numeric not null default 0, peak_equity numeric, start_equity numeric, last_order_at timestamptz, signer_unreachable_since timestamptz, updated_at timestamptz not null default now());
+-- v11 exec2 — spot. The owner's swaps (proposals, kind = 'swap') and the spot agents' swaps (agent_orders) are projected onto the
+-- unified order table like the venue engines' rows: a trigger queues every change, orders/spot.ts turns it into events.
+create or replace function spw_queue_swap() returns trigger language plpgsql as $spw$
+begin if new.kind = 'swap' then insert into order_projection_queue (engine, ref) values ('swap', new.id::text); end if; return null; end $spw$;
+drop trigger if exists proposals_swap_projection on proposals;
+create trigger proposals_swap_projection after insert or update on proposals for each row execute function spw_queue_swap();
+create or replace function spw_queue_agent_order() returns trigger language plpgsql as $spw$
+begin insert into order_projection_queue (engine, ref) values ('agent_swap', new.id::text); return null; end $spw$;
+drop trigger if exists agent_orders_projection on agent_orders;
+create trigger agent_orders_projection after insert or update on agent_orders for each row execute function spw_queue_agent_order();
+-- the global kill switch and read-only mode (settings 'risk.switches', risk/service.ts), applied to a spot agent's order at the
+-- only point this layer owns: the row itself. Read-only: no order is recorded. Kill switch: an order that BUYS risk (it spends
+-- the agent's cash leg) is refused; a sale into the cash leg passes. Paper and live alike: the paper engine and the live engine
+-- both insert the row before anything else happens (agents/engine.ts, agents/live.ts placeLive — before the signer is asked).
+create or replace function spw_agent_order_gate() returns trigger language plpgsql as $spw$
+declare sw jsonb; v_cash text;
+begin
+  select value into sw from settings where key = 'risk.switches';
+  if sw is null then return new; end if;
+  if coalesce((sw->'readOnly'->>'on')::boolean, false) then
+    raise exception 'read_only_mode: read-only mode is on: no order of a spot agent is recorded (only cancels are permitted)';
+  end if;
+  if coalesce((sw->'killSwitch'->>'on')::boolean, false) then
+    select a.cash into v_cash from agents a where a.id = new.agent_id;
+    if new.from_symbol = coalesce(v_cash, 'USDC') then
+      raise exception 'kill_switch_active: the kill switch is on: a spot agent buys no risk (a sale into its cash leg still passes)';
+    end if;
+  end if;
+  return new;
+end $spw$;
+drop trigger if exists agent_orders_gate on agent_orders;
+create trigger agent_orders_gate before insert on agent_orders for each row execute function spw_agent_order_gate();
+-- v11 exec2 — stop-loss / take-profit attached to an order by a command: placed only once the parent has filled, sized to what
+-- filled (orders/attached.ts). One row per (parent, role); the children are ordinary unified orders.
+create table if not exists order_attachments (
+  id text primary key, parent_id text not null references orders(id), role text not null, template jsonb not null, caller jsonb not null, account_id text,
+  idem text not null, state text not null default 'pending', placed numeric not null default 0, children jsonb not null default '[]', attempts int not null default 0,
+  reason text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create index if not exists order_attachments_open on order_attachments (parent_id) where state <> 'closed';
 -- <<< v11 execution
 -- >>> v11 trading agents runtime (services/api/src/agent-runtime): additive. An agent gets a family, a template, an engine
 -- ('bar' = the two bar engines, 'stream' = the sub-bar engine, 'supervisor' = the risk manager), a versioned configuration and a

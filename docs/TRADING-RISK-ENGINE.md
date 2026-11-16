@@ -15,9 +15,22 @@ need the owner's session. An API key cannot reach them.
 ## Before the first live order
 
 On a live book the engine has defaults for data quality and order rates only. Every limit on capital is
-absent, and an absent limit denies. **Until the limits below are set, every new live order is refused**, with
-the list of missing limits. This also applies to live orders placed from the Futures screen and by perp
-agents that were live before this version. Cancels and strictly reducing orders are not concerned.
+absent, and an absent limit denies. Cancels and strictly reducing orders are not concerned.
+
+**Your own orders (Futures screen, the trading API with your session).** The first time a V11 server starts,
+it carries over, once, the limits you had already approved on your venue accounts before V11: instruments,
+order and position notional, gross exposure, account leverage, the leverage setting of the venue
+authorization, daily and total loss (`GET /api/v1/risk/limits/live` → `seed`, with where each value came from;
+with several venue accounts the smallest value is taken). These apply to your orders only. Six limits have no
+equivalent before V11 and are **not** carried over: `maxDailyNotional`, `maxNetExposure`, `maxAssetExposure`,
+`maxVenueExposure`, `maxVenueCollateralShareBps`, `maxDrawdownBps`. **Until you set those six, your real orders
+that add risk are still refused** — the Risk screen shows the banner "ordres réels refusés tant que ces
+limites ne sont pas définies" with exactly the list (`missing`). GMX is not carried over: add `gmx` and its
+instruments to the allow-lists yourself. The carry-over is done once and never recomputed.
+
+**API keys and agents (perp agents that were live before this version included).** They never see the
+carried-over values. They are refused until you have stored each limit yourself (`missingForAutomation`).
+Storing a limit applies it to everybody and asks for the passkey.
 
 Limits to set (Risk → Limits → Live):
 
@@ -104,6 +117,7 @@ from the price checks.
 | `SPW_DERIV_MANDATE_MAINNET` | off | unchanged |
 | `SPW_DERIV_GMX_LIVE` | off | unchanged |
 | `SPW_WORKERS` | on | the `orders` loop (reconciler, mandate supervisor, automatic stops) runs only with workers on |
+| `SPW_RISK_CONTEXT_TTL_MS` | 2000 | how long the venue reads of a live book are shared between evaluations (0 = every evaluation reads the venues; at most 30000). A shared copy is dropped at once on any fill, cancel or new order |
 
 The Risk screen shows the state of the four locks.
 
@@ -111,6 +125,12 @@ The Risk screen shows the state of the four locks.
 
 - It is enforced by the API. If the API process is compromised, what still holds is what the signer enforces:
   the passkey per manual order, the derivative mandate, the GMX policy.
+- A position changed at the venue outside this wallet is seen at most `SPW_RISK_CONTEXT_TTL_MS` late.
+- A key or an agent closes only the part of a position its own fills opened (403 `position_not_attributable`
+  otherwise). You close anything. A fill the wallet cannot attribute counts as yours.
+- A mandate whose stored record no longer matches what your passkey approved is unusable (403
+  `mandate_integrity`) and is revoked by the supervisor: approve a new one. This also happens to mandates
+  approved with a passkey you have since removed.
 - It does not count resting orders in exposure.
 - A second account on the same venue is judged per account for the per-venue limits.
 - GMX has no order book: the two book checks are marked not applicable there.
