@@ -11,26 +11,32 @@ import pytest
 import sp_wallet
 from conftest import NET, TIMEOUT, fail, ok
 from sp_wallet import (
+    AmbiguousCommand,
     AmbiguousSymbol,
     APIError,
     AuthenticationError,
     ConfigurationError,
     Conflict,
+    ExecutionDisabled,
     ExecutionNotWired,
     IdempotencyConflict,
+    MandateDenied,
     MandateRequired,
     NetworkError,
     NotFound,
     OutcomeUnknown,
     PermissionDenied,
     RateLimited,
+    RiskDenied,
     ScopeDenied,
     ServerError,
     ServiceUnavailable,
     SPWalletError,
     ValidationError,
     error_from_response,
+    models,
 )
+from test_client import ORDER_ROW, SAMPLES
 
 ORDER: dict[str, Any] = {"instrument": "hyperliquid:BTC", "side": "buy", "order_type": "market", "size": "0.01"}
 AGENTS = ok({"agents": []})
@@ -42,6 +48,10 @@ TABLE: list[tuple[int, str, type, type | None]] = [
     (403, "insufficient_scope", ScopeDenied, PermissionDenied), (403, "scope_denied", ScopeDenied, PermissionDenied),
     (403, "mandate_required", MandateRequired, PermissionDenied), (403, "restricted", PermissionDenied, None), (403, "ip_not_allowed", PermissionDenied, None),
     (403, "key_path_forbidden", PermissionDenied, None), (404, "unknown_order", NotFound, None), (404, "unknown_instrument", NotFound, None),
+    (403, "execution_disabled", ExecutionDisabled, PermissionDenied), (403, "mandate_denied", MandateDenied, PermissionDenied), (403, "mandate_not_approved", MandateDenied, PermissionDenied),
+    (403, "key_limit_exceeded", PermissionDenied, None), (422, "risk_denied", RiskDenied, None), (423, "kill_switch_active", RiskDenied, None), (423, "read_only_mode", RiskDenied, None),
+    (423, "halted", RiskDenied, None), (422, "venue_rejected", ValidationError, None), (422, "below_min_size", ValidationError, None),
+    (409, "ambiguous_command", AmbiguousCommand, Conflict), (404, "not_found", NotFound, None), (400, "invalid_cursor", ValidationError, None),
     (409, "idempotency_conflict", IdempotencyConflict, Conflict), (409, "ambiguous_symbol", AmbiguousSymbol, Conflict), (409, "something_else", Conflict, None),
     (429, "rate_limited", RateLimited, None), (429, "auth_throttled", RateLimited, None),
     (501, "execution_not_wired", ExecutionNotWired, sp_wallet.NotImplementedError), (501, "other", sp_wallet.NotImplementedError, None),
@@ -150,9 +160,68 @@ def test_reads_give_up_after_max_retries(mock: Any) -> None:
     assert len(h.calls) == 2
 
 
+def test_a_refusal_about_an_order_carries_the_order_the_reasons_the_failed_checks_and_the_questions() -> None:
+    order = {**ORDER_ROW, "id": "o-1", "status": "REJECTED", "engineStatus": None, "final": True, "rejectCode": "mandate_denied"}
+    md = error_from_response(403, {"error": "mandate_denied", "message": "outside the mandate", "data": {"reasons": ["ORDER_NOTIONAL_EXCEEDED", "LEVERAGE_EXCEEDED"], "order": order}})
+    assert type(md) is MandateDenied
+    assert md.reasons == ["ORDER_NOTIONAL_EXCEEDED", "LEVERAGE_EXCEEDED"]
+    assert type(md.order) is models.Order
+    assert (md.order.id, md.order.status, md.order.final, md.order.reject_code) == ("o-1", "REJECTED", True, "mandate_denied")
+    checks = [{"id": "kill_switch", "ok": False, "observed": "on", "limit": "off", "detail": "the kill switch is on", "exempt": False}]
+    rd = error_from_response(423, {"error": "kill_switch_active", "message": "no new risk", "data": {"failed": ["kill_switch"], "checks": checks, "decisionId": 7, "order": order}})
+    assert type(rd) is RiskDenied
+    assert rd.kill_switch is True
+    assert rd.failed == ["kill_switch"]
+    assert [(c.id, c.ok, c.observed, c.limit) for c in rd.checks] == [("kill_switch", False, "on", "off")]
+    assert rd.order is not None and rd.order.id == "o-1"
+    r2 = error_from_response(422, {"error": "risk_denied", "message": "order_notional: above", "data": {"failed": ["order_notional"], "checks": [], "order": order}})
+    assert (r2.kill_switch, r2.failed) == (False, ["order_notional"])
+    q = [{"field": "venue", "options": ["hyperliquid", "gmx"], "message": "which venue?"}]
+    ac = error_from_response(409, {"error": "ambiguous_command", "message": "answer the questions", "data": {"questions": q}})
+    assert type(ac) is AmbiguousCommand
+    assert ac.questions == q
+    assert ac.order is None
+    # an engine refusal after the order existed: a ValidationError that still carries the order
+    ve = error_from_response(422, {"error": "price_deviation", "message": "too far from the mark", "data": {"order": order}})
+    assert type(ve) is ValidationError
+    assert ve.order is not None and ve.order.status == "REJECTED"
+    # malformed or absent detail never raises: empty lists, no order
+    for body in ({"error": "mandate_denied", "message": "m"}, {"error": "mandate_denied", "message": "m", "data": {"reasons": "x", "order": "y"}}, {"error": "mandate_denied", "message": "m", "data": None},
+                 {"error": "mandate_denied", "message": "m", "data": {"order": {"id": "o", "status": "open"}}}):  # fmt: skip
+        e = error_from_response(403, body)
+        assert (e.reasons, e.order) == ([], None)
+    assert [c.id for c in error_from_response(422, {"error": "risk_denied", "message": "m", "data": {"checks": [1, None, {"id": "x", "ok": False, "observed": None, "limit": None, "detail": "d", "exempt": False}]}}).checks] == ["x"]
+    assert error_from_response(403, {"error": "execution_disabled", "message": "m"}).order is None
+
+
+@pytest.mark.parametrize("method", ["preview_order", "engage_kill_switch"])
+def test_preview_and_kill_switch_are_safe_to_repeat_retried_like_a_read_never_outcome_unknown(mock: Any, method: str) -> None:
+    sample = SAMPLES["previewOrder" if method == "preview_order" else "engageKillSwitch"]
+    kwargs = ORDER if method == "preview_order" else {}
+    h = mock([NET, fail(503, "venue_unavailable"), {"status": 502, "text": ""}, ok(sample)], max_retries=3)
+    out = h.call(method, **kwargs)
+    assert out.meta.attempts == 4 and out.meta.idempotency_key is None
+    assert len({c.body for c in h.calls}) == 1
+    assert all("idempotency-key" not in c.headers for c in h.calls)
+    n = mock([NET], max_retries=1)
+    e = n.error(method, **kwargs)
+    assert type(e) is NetworkError and len(n.calls) == 2
+    assert type(mock([TIMEOUT], max_retries=0).error(method, **kwargs)) is sp_wallet.TimeoutError
+    s = mock([{"status": 500, "text": "oops"}], max_retries=2)
+    assert type(s.error(method, **kwargs)) is ServerError and len(s.calls) == 1
+
+
+def test_a_write_answered_200_with_an_answer_outside_the_contract_says_the_operation_ran(mock: Any) -> None:
+    h = mock([ok({"order": {**ORDER_ROW, "status": "open"}, "idempotent": False, "approval": None})])
+    e = h.error("create_order", **ORDER)
+    assert type(e) is ServerError and e.code == "invalid_response"
+    assert "the operation ran" in str(e)
+    assert e.idempotency_key == h.calls[0].headers["idempotency-key"]
+
+
 # ---------------------------------------------------------------------------------------------------------------- writes
 def test_one_key_per_logical_call_and_the_same_key_and_bytes_on_every_retry(mock: Any) -> None:
-    h = mock([NET, fail(503, "venue_unavailable"), {"status": 502, "text": ""}, fail(409, "idempotency_in_progress"), ok({"orderId": "o1"}, **{"idempotent-replay": "true"})], max_retries=4)
+    h = mock([NET, fail(503, "venue_unavailable"), {"status": 502, "text": ""}, fail(409, "idempotency_in_progress"), ok(SAMPLES["placeOrder"], **{"idempotent-replay": "true"})], max_retries=4)
     r = h.call("create_order", **ORDER, client_order_id="client-0001", reduce_only=False)
     assert len(h.calls) == 5
     keys = {c.headers["idempotency-key"] for c in h.calls}
@@ -167,7 +236,7 @@ def test_one_key_per_logical_call_and_the_same_key_and_bytes_on_every_retry(mock
 
 
 def test_the_body_is_canonical_and_a_caller_key_is_sent_as_is(mock: Any) -> None:
-    h = mock([ok()])
+    h = mock([ok(SAMPLES["placeOrder"])])
     h.call("create_order", order_type="limit", size="1", side="sell", price="2", instrument="hyperliquid:ETH", mode="live", idempotency_key="resume-key-0001")
     h.call("create_order", mode="live", instrument="hyperliquid:ETH", side="sell", order_type="limit", price="2", size="1", idempotency_key="resume-key-0001")
     assert h.calls[0].body == b'{"instrument":"hyperliquid:ETH","mode":"live","price":"2","side":"sell","size":"1","type":"limit"}'
@@ -176,7 +245,7 @@ def test_the_body_is_canonical_and_a_caller_key_is_sent_as_is(mock: Any) -> None
     assert "x-spw-timestamp" not in h.calls[0].headers
     import time
 
-    t = mock([ok()], send_timestamp=True)
+    t = mock([ok(SAMPLES["cancelOrder"])], send_timestamp=True)
     t.call("cancel_order", "o1")
     assert abs(int(t.calls[0].headers["x-spw-timestamp"]) - time.time()) < 5
 
@@ -194,11 +263,11 @@ def test_a_timeout_on_a_write_is_outcome_unknown_and_carries_the_key_to_resume_w
     assert "do not retry with a new key" in str(e)
     assert (e.method, e.path) == ("POST", "/api/v1/trading/orders")
     # resuming: the same call with the key of the error
-    r = mock([ok({"orderId": "o1"}, **{"idempotent-replay": "true"})])
+    r = mock([ok(SAMPLES["placeOrder"], **{"idempotent-replay": "true"})])
     out = r.call("create_order", **ORDER, idempotency_key=e.idempotency_key)
     assert r.calls[0].headers["idempotency-key"] == e.idempotency_key
     assert out.meta.idempotent_replay is True
-    assert out.orderId == "o1"
+    assert (out.order.id, out.order.status) == ("o", "FILLED")
 
 
 UNKNOWN_SCRIPTS: dict[str, list[Any]] = {
@@ -236,7 +305,7 @@ def test_a_definite_answer_stays_a_typed_error(mock: Any, steps: list[Any], cls:
 
 
 WRITES: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = [
-    ("preview_order", (), ORDER), ("create_order", (), ORDER), ("cancel_order", ("o",), {}), ("close_position", ("p",), {}), ("reduce_position", ("p",), {"fraction": "0.5"}),
+    ("run_command", ("STOP ALL AGENTS",), {}), ("create_order", (), ORDER), ("cancel_order", ("o",), {}), ("close_position", ("p",), {}), ("reduce_position", ("p",), {"fraction": "0.5"}),
     ("create_strategy", (), {"kind": "spot", "path": "x"}), ("backtest_strategy", ("s",), {}), ("start_strategy", ("s",), {"mode": "paper"}), ("stop_strategy", ("s",), {}),
     ("create_agent", (), {"kind": "spot", "name": "ab", "universe": ["BTC"]}), ("start_agent", ("a",), {"mode": "paper"}), ("stop_agent", ("a",), {}),
 ]  # fmt: skip

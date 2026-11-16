@@ -22,6 +22,122 @@ SCOPES: tuple[str, ...] = ('wallet:read', 'markets:read', 'orders:read', 'orders
 #: inert on a key that is not bound to a trading mandate (403 `mandate_required`)
 EXECUTION_SCOPES: tuple[str, ...] = ('orders:execute', 'orders:cancel', 'positions:manage', 'strategies:manage', 'agents:manage',)
 WEBHOOK_EVENTS: tuple[str, ...] = ('key.revoked', 'risk.kill_switch', 'agent.updated', 'order.updated',)
+#: the states of the unified order state machine — the closed set of `Order.status`
+ORDER_STATES: tuple[str, ...] = ('CREATED', 'VALIDATED', 'AWAITING_APPROVAL', 'APPROVED', 'SUBMITTING', 'SUBMITTED', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED', 'REJECTED', 'FAILED', 'UNKNOWN',)
+#: UNKNOWN is not among them: it is neither final nor a failure
+FINAL_ORDER_STATES: tuple[str, ...] = ('FILLED', 'CANCELLED', 'REJECTED', 'FAILED',)
+#: `data.reasons` of a `mandate_denied` refusal
+MANDATE_DENY_REASONS: tuple[str, ...] = ('INVALID_INPUT', 'MANDATE_NOT_YET_VALID', 'MANDATE_ENDED', 'MANDATE_REVOKED', 'WIND_DOWN_REDUCING_ONLY', 'PRINCIPAL_MISMATCH', 'MANDATE_ID_MISMATCH', 'MODE_MISMATCH', 'ACCOUNT_NOT_ALLOWED', 'VENUE_NOT_ALLOWED', 'NETWORK_NOT_ALLOWED', 'INSTRUMENT_NOT_ALLOWED', 'MARKET_KIND_NOT_ALLOWED', 'ORDER_TYPE_NOT_ALLOWED', 'NOTIONAL_UNKNOWN', 'ORDER_NOTIONAL_EXCEEDED', 'POSITION_NOTIONAL_EXCEEDED', 'CAPITAL_EXCEEDED', 'LEVERAGE_EXCEEDED', 'LEVERAGE_UNKNOWN', 'DAILY_LOSS_REACHED', 'BELOW_FLOOR_EQUITY', 'RATE_PER_MINUTE', 'RATE_PER_HOUR', 'RATE_PER_DAY', 'SLIPPAGE_ABOVE_MANDATE', 'FEE_ABOVE_MANDATE', 'ORDER_OUTLIVES_MANDATE', 'STOP_LOSS_GTE', 'STOP_DRAWDOWN_GTE', 'STOP_CONSECUTIVE_REJECTS_GTE', 'STOP_DATA_STALE_GTE', 'STOP_SIGNER_UNREACHABLE_GTE',)
+#: ids of the risk checks (`data.failed`, `data.checks[].id`, `risk.checks[].id` of a preview)
+RISK_CHECK_IDS: tuple[str, ...] = ('input_valid', 'read_only', 'kill_switch', 'reduce_only_valid', 'venue_allowed', 'instrument_allowed', 'instrument_status', 'signer_status', 'venue_connection', 'price_freshness', 'price_consistency', 'order_notional', 'daily_notional', 'order_rate_minute', 'order_rate_hour', 'order_rate_day', 'position_size', 'order_leverage', 'account_leverage', 'gross_exposure', 'net_exposure', 'asset_exposure', 'venue_exposure', 'collateral_concentration', 'daily_loss', 'total_loss', 'drawdown', 'liquidation_distance', 'slippage', 'min_liquidity', 'context_complete',)
+
+
+class Order(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str = Field(description='the id every order operation takes')
+    mode: Literal["paper", "live"] = Field(description='paper = simulated, live = a venue or on-chain account. The two are never merged in one figure.')
+    venue: str
+    network: str
+    account_id: str | None = Field(alias='accountId')
+    instrument: str | None
+    side: str | None
+    type: str
+    status: Literal["CREATED", "VALIDATED", "AWAITING_APPROVAL", "APPROVED", "SUBMITTING", "SUBMITTED", "PARTIALLY_FILLED", "FILLED", "CANCELLED", "REJECTED", "FAILED", "UNKNOWN"] = Field(description='unified order state. Final: FILLED, CANCELLED, REJECTED, FAILED. UNKNOWN means the outcome at the venue is not known yet: it is not final and it is not a failure')
+    engine_status: str | None = Field(alias='engineStatus', description='the word of the engine that executes the order (paper engine, Hyperliquid engine, GMX operation, agent swap) for the same moment; null before an engine holds it. Informative: decide on `status`')
+    final: bool = Field(description='true exactly when `status` is FILLED, CANCELLED, REJECTED or FAILED')
+    size: str | None = Field(default=None)
+    price: str | None = Field(default=None)
+    trigger_price: str | None = Field(default=None, alias='triggerPrice')
+    reduce_only: bool | None = Field(default=None, alias='reduceOnly')
+    tif: str | None = Field(default=None)
+    filled: str | None = Field(default=None, description='cumulative filled size, base units')
+    avg_fill_price: str | None = Field(default=None, alias='avgFillPrice')
+    reason_code: str | None = Field(default=None, alias='reasonCode', description='closed reason code of the current state (state machine)')
+    reason: str | None = Field(default=None, description='sentence for people')
+    reject_code: str | None = Field(default=None, alias='rejectCode', description='API error code of the refusal, when the order was refused')
+    client_order_id: str | None = Field(default=None, alias='clientOrderId')
+    order_id: str | None = Field(default=None, alias='orderId')
+    origin: str | None = Field(default=None)
+    mandate_id: str | None = Field(default=None, alias='mandateId')
+    notional_usd: str | None = Field(default=None, alias='notionalUsd')
+    created_at: int = Field(alias='createdAt', description='milliseconds since the Unix epoch')
+    updated_at: int = Field(alias='updatedAt', description='milliseconds since the Unix epoch')
+
+
+class RiskCheck(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str = Field(description='one of `x-spw-risk-checks`')
+    ok: bool
+    observed: str | None
+    limit: str | None
+    detail: str
+    exempt: bool
+
+
+class ErrorDataQuestionsItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    field: str
+    options: list[str] = Field(description='the known candidates; empty = a free value is needed')
+    message: str
+
+
+class ErrorData(ApiModel):
+    """machine-readable detail of a refusal — extra members are allowed by the contract"""
+
+    order: Order | None = Field(default=None, description='the order the refusal is about, when one exists (state REJECTED or FAILED)')
+    reasons: list[str] | None = Field(default=None, description='`mandate_denied`: codes of `x-spw-mandate-deny-reasons`; a mandate that cannot be used: the error code in upper case')
+    failed: list[str] | None = Field(default=None, description='`risk_denied`, `kill_switch_active`, `read_only_mode`: ids of the failed risk checks')
+    checks: list[RiskCheck] | None = Field(default=None, description='the failed risk checks, each with what was observed and its limit')
+    decision_id: int | None = Field(default=None, alias='decisionId')
+    questions: list[ErrorDataQuestionsItem] | None = Field(default=None, description="`ambiguous_command`: what the command and the owner's defaults leave open")
+    code: str | None = Field(default=None, description="`parse_error`: the grammar's own code")
+    token: int | None = Field(default=None, description='`parse_error`: index of the offending token')
+
+
+class ApiErrorBody(ApiModel):
+    """extra members are allowed by the contract"""
+
+    error: str = Field(description="stable machine code: one of the operation's `x-spw-errors`")
+    message: str = Field(description='human-readable sentence (English)')
+    candidates: list[str] | None = Field(default=None, description='`ambiguous_symbol`: the `venue:symbol` ids the bare symbol could mean')
+    data: ErrorData | None = Field(default=None, description='machine-readable detail of a refusal')
+
+
+class CanonicalOrderPrincipal(ApiModel):
+    """extra members are allowed by the contract"""
+
+    kind: Literal["owner", "agent", "api_key"]
+    id: str
+
+
+class CanonicalOrder(ApiModel):
+    """the canonical order SPW-ORDER-INTENT-v1: what is hashed, checked by the mandate and the risk engine, and handed to the engine — extra members are allowed by the contract"""
+
+    v: Literal[1]
+    venue: str
+    network: str
+    instrument: str
+    market_kind: Literal["spot", "perp"] = Field(alias='marketKind')
+    side: Literal["buy", "sell"]
+    type: Literal["market", "limit", "stop", "take_profit"]
+    size: str | None
+    notional: str | None
+    limit_price: str | None = Field(alias='limitPrice')
+    trigger_price: str | None = Field(alias='triggerPrice')
+    reduce_only: bool = Field(alias='reduceOnly')
+    tif: str
+    max_slippage_bps: int = Field(alias='maxSlippageBps')
+    max_fee_usd: str = Field(alias='maxFeeUsd', description='decimal number as a string (never a float)')
+    leverage: str | None
+    client_order_id: str = Field(alias='clientOrderId')
+    mode: Literal["research", "paper", "live"]
+    principal: CanonicalOrderPrincipal
+    mandate_id: str | None = Field(alias='mandateId')
+    created_at: int = Field(alias='createdAt', description='milliseconds since the Unix epoch')
+    expires_at: int = Field(alias='expiresAt', description='milliseconds since the Unix epoch')
 
 
 class OpenApiDocument(ApiModel):
@@ -62,13 +178,103 @@ class MarketList(ApiModel):
     ts: int = Field(description='milliseconds since the Unix epoch')
 
 
+class ComparisonRow(ApiModel):
+    """extra members are allowed by the contract"""
+
+    venue: str
+    instrument: str
+    tradable: bool = Field(description='false: the wallet cannot trade this venue or instrument; the row is shown for information')
+    tradable_reason: str | None = Field(alias='tradableReason')
+    cost: dict[str, Any] | None = Field(description='itemised estimate: every component is { value, reason, basis } — value null WITH the reason when an input is missing')
+    price_outlier: bool = Field(alias='priceOutlier')
+    age_ms: Decimal | None = Field(alias='ageMs')
+    stale: bool
+
+
+class MarketComparisonDiscrepanciesItemAssumptionsItem(ApiModel):
+    """closed object in the contract"""
+
+    code: str
+    text: str
+
+
+class MarketComparisonDiscrepanciesItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    long_venue: str = Field(alias='longVenue')
+    short_venue: str = Field(alias='shortVenue')
+    net_edge_estimate_bps: str | None = Field(alias='netEdgeEstimateBps', description='an ESTIMATE under `assumptions`, with `risks`')
+    flagged: bool
+    actionable_from_wallet: bool = Field(alias='actionableFromWallet')
+    assumptions: list[MarketComparisonDiscrepanciesItemAssumptionsItem]
+    risks: list[MarketComparisonDiscrepanciesItemAssumptionsItem]
+
+
+class MarketComparisonTexts(ApiModel):
+    """extra members are allowed by the contract"""
+
+    disclaimer: str
+
+
+class MarketComparison(ApiModel):
+    """extra members are allowed by the contract"""
+
+    underlying: str
+    category: str | None
+    request: dict[str, Any]
+    rows: list[ComparisonRow]
+    discrepancies: list[MarketComparisonDiscrepanciesItem]
+    texts: MarketComparisonTexts
+    warnings: list[str]
+    errors: list[PartialError]
+    ts: int = Field(description='milliseconds since the Unix epoch')
+    source: str
+
+
+class Instrument(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str = Field(description='`venue:symbol`')
+    venue: str
+    symbol: str
+    base: str
+    quote: str
+    kind: Literal['perpetual']
+    collateral: str
+    settlement: str
+    tick_size: str = Field(alias='tickSize', description='price increment: a limit or trigger price is a multiple of it')
+    lot_size: str = Field(alias='lotSize', description='size increment: an order size is a multiple of it')
+    min_order_size: str | None = Field(alias='minOrderSize', description='smallest order size, base units; null when the venue states none')
+    min_notional: str | None = Field(alias='minNotional', description='smallest order value, quote currency; null when the venue states none')
+    max_leverage: str = Field(alias='maxLeverage', description='decimal number as a string (never a float)')
+    margin_modes: list[Literal["cross", "isolated"]] = Field(alias='marginModes')
+    funding_interval_sec: int = Field(alias='fundingIntervalSec')
+    mark_price_method: str = Field(alias='markPriceMethod')
+    status: Literal["active", "reduce_only", "halted"]
+    category: Literal["crypto", "equity", "pre_ipo", "commodity", "fx"] | None = Field(default=None, description="what the underlying is, when the venue's own metadata says it")
+
+
+class Ticker(ApiModel):
+    """extra members are allowed by the contract"""
+
+    instrument: str
+    mark: str = Field(description='decimal number as a string (never a float)')
+    index: str | None
+    mid: str | None
+    funding: str | None = Field(description='per funding interval')
+    open_interest: str | None = Field(alias='openInterest')
+    volume24h: str | None
+    change24h: str | None
+    ts: int = Field(description='milliseconds since the Unix epoch')
+
+
 class MarketDetail(ApiModel):
     """extra members are allowed by the contract"""
 
     market: Market
-    instrument: dict[str, Any] | None
-    ticker: dict[str, Any] | None
-    quality: dict[str, Any] | None
+    instrument: Instrument | None = Field(description='null for a spot market-data symbol')
+    ticker: Ticker | None
+    quality: dict[str, Any] | None = Field(description='spot only: data quality per interval')
     ts: int = Field(description='milliseconds since the Unix epoch')
     source: str
 
@@ -85,7 +291,7 @@ class Orderbook(ApiModel):
 
 
 class Candle(ApiModel):
-    """closed object in the contract"""
+    """extra members are allowed by the contract"""
 
     ts: int = Field(description='milliseconds since the Unix epoch')
     open: str = Field(description='decimal number as a string (never a float)')
@@ -96,7 +302,7 @@ class Candle(ApiModel):
 
 
 class Candles(ApiModel):
-    """closed object in the contract"""
+    """extra members are allowed by the contract"""
 
     id: str
     interval: str
@@ -106,19 +312,245 @@ class Candles(ApiModel):
     source: str
 
 
+class PrivateMarketCompany(ApiModel):
+    """closed object in the contract"""
+
+    slug: str
+    name: str
+
+
+class PrivateMarketReview(ApiModel):
+    """extra members are allowed by the contract"""
+
+    state: Literal["reviewed", "under_review", "not_reviewed"]
+    reasons: list[str]
+
+
+class PrivateMarketContractUnit(ApiModel):
+    """closed object in the contract"""
+
+    kind: Literal["usd_per_share", "valuation_usd_billions", "unknown"]
+    label: str
+
+
+class PrivateMarketContract(ApiModel):
+    """extra members are allowed by the contract"""
+
+    nature: str
+    unit: PrivateMarketContractUnit
+    quote_currency: str = Field(alias='quoteCurrency')
+    settlement: str
+    oracle: str
+    liquidation: str
+
+
+class PrivateMarketMarketPrice(ApiModel):
+    """one figure with where it comes from, when it was read, and whether it is older than its freshness bound — closed object in the contract"""
+
+    value: str | None
+    source: str
+    ts: int | None
+    stale: bool
+
+
+class PrivateMarketMarketFunding(ApiModel):
+    """closed object in the contract"""
+
+    value: str | None
+    source: str
+    ts: int | None
+    stale: bool
+    interval_sec: int | None = Field(alias='intervalSec')
+
+
+class PrivateMarketMarket(ApiModel):
+    """extra members are allowed by the contract"""
+
+    price: PrivateMarketMarketPrice = Field(description='one figure with where it comes from, when it was read, and whether it is older than its freshness bound')
+    funding: PrivateMarketMarketFunding
+    open_interest: PrivateMarketMarketPrice = Field(alias='openInterest', description='one figure with where it comes from, when it was read, and whether it is older than its freshness bound')
+    volume24h: PrivateMarketMarketPrice = Field(description='one figure with where it comes from, when it was read, and whether it is older than its freshness bound')
+
+
+class PrivateMarketValuationSyntheticPrice(ApiModel):
+    """extra members are allowed by the contract"""
+
+    value: str | None
+
+
+class PrivateMarketValuationContractMarketValue(ApiModel):
+    """extra members are allowed by the contract"""
+
+    value: str | None
+    reason: str | None
+
+
+class PrivateMarketValuationNotionalExposure(ApiModel):
+    """extra members are allowed by the contract"""
+
+    value: str | None
+    hypothetical: Literal[True]
+
+
+class PrivateMarketValuationImpliedValuation(ApiModel):
+    """null + reason unless the reviewed definition gives the formula — extra members are allowed by the contract"""
+
+    value: str | None
+    formula: str | None
+    reason: str | None
+    reason_code: str | None = Field(alias='reasonCode')
+
+
+class PrivateMarketValuationLastPrivateValuation(ApiModel):
+    """extra members are allowed by the contract"""
+
+    value: str = Field(description='decimal number as a string (never a float)')
+    kind: str
+    date: str
+    source_url: str = Field(alias='sourceUrl')
+
+
+class PrivateMarketValuationPremiumDiscount(ApiModel):
+    """extra members are allowed by the contract"""
+
+    premium_bps: str | None = Field(alias='premiumBps')
+
+
+class PrivateMarketValuationCaveatsItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    code: str
+    text: str
+
+
+class PrivateMarketValuation(ApiModel):
+    """extra members are allowed by the contract"""
+
+    synthetic_price: PrivateMarketValuationSyntheticPrice = Field(alias='syntheticPrice')
+    contract_market_value: PrivateMarketValuationContractMarketValue = Field(alias='contractMarketValue')
+    notional_exposure: PrivateMarketValuationNotionalExposure = Field(alias='notionalExposure')
+    implied_valuation: PrivateMarketValuationImpliedValuation = Field(alias='impliedValuation', description='null + reason unless the reviewed definition gives the formula')
+    last_private_valuation: PrivateMarketValuationLastPrivateValuation | None = Field(alias='lastPrivateValuation')
+    premium_discount: PrivateMarketValuationPremiumDiscount = Field(alias='premiumDiscount')
+    caveats: list[PrivateMarketValuationCaveatsItem]
+
+
+class PrivateMarketNotTradable(ApiModel):
+    """closed object in the contract"""
+
+    code: str
+    reasons: list[str]
+
+
+class PrivateMarket(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    venue: str
+    platform: str
+    symbol: str
+    company: PrivateMarketCompany | None
+    status: Literal["live", "delisted", "halted", "reduce_only"]
+    review: PrivateMarketReview
+    contract: PrivateMarketContract
+    market: PrivateMarketMarket
+    valuation: PrivateMarketValuation
+    tradable: Literal[False]
+    not_tradable: PrivateMarketNotTradable = Field(alias='notTradable')
+    error: str | None
+
+
+class PrivateCompany(ApiModel):
+    """extra members are allowed by the contract"""
+
+    slug: str
+    name: str
+    contracts: list[str]
+
+
+class PrivateMarketsExcludedItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    reason: str
+
+
+class PrivateMarketsVenuesItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    venue: str
+    status: Literal["ok", "stale", "error"]
+    error: str | None
+
+
+class PrivateMarketsNotice(ApiModel):
+    """closed object in the contract"""
+
+    tradable: Literal[False]
+    code: str
+    text: str
+
+
+class PrivateMarkets(ApiModel):
+    """extra members are allowed by the contract"""
+
+    markets: list[PrivateMarket]
+    companies: list[PrivateCompany]
+    excluded: list[PrivateMarketsExcludedItem]
+    venues: list[PrivateMarketsVenuesItem]
+    notice: PrivateMarketsNotice
+    ts: int = Field(description='milliseconds since the Unix epoch')
+
+
+class PrivateMarketCompanyDetailCompany(ApiModel):
+    """extra members are allowed by the contract"""
+
+    slug: str
+    name: str
+
+
+class PrivateMarketCompanyDetail(ApiModel):
+    """extra members are allowed by the contract"""
+
+    company: PrivateMarketCompanyDetailCompany
+    contracts: list[PrivateMarket]
+    delisted: list[PrivateMarket]
+    references: list[dict[str, Any]]
+    merged: None = Field(description='always null: venues are never merged')
+    ts: int = Field(description='milliseconds since the Unix epoch')
+
+
+class PrivateMarketDetailReferencesItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    kind: str
+    date: str
+    source_url: str = Field(alias='sourceUrl')
+
+
+class PrivateMarketDetail(ApiModel):
+    """extra members are allowed by the contract"""
+
+    market: PrivateMarket
+    book: dict[str, Any]
+    candles: dict[str, Any]
+    references: list[PrivateMarketDetailReferencesItem]
+    ts: int = Field(description='milliseconds since the Unix epoch')
+
+
 class PortfolioBalance(ApiModel):
     """extra members are allowed by the contract"""
 
     network: str
     symbol: str
     display: str | None
-    value_usd: Decimal | None = Field(alias='valueUsd')
+    value_usd: str | None = Field(alias='valueUsd', description='USD, a decimal string; null when the asset has no price or no readable balance')
 
 
 class PortfolioWallet(ApiModel):
     """closed object in the contract"""
 
-    value_usd: Decimal | None = Field(alias='valueUsd')
+    value_usd: str | None = Field(alias='valueUsd', description='USD, a decimal string; null when the price feed is unavailable')
     priced: int
     unpriced: int
     prices_as_of: str | None = Field(alias='pricesAsOf')
@@ -138,9 +570,10 @@ class PortfolioAccount(ApiModel):
 class PortfolioTotals(ApiModel):
     """three separate figures; there is no sum across modes — closed object in the contract"""
 
-    wallet_usd: Decimal | None = Field(alias='walletUsd')
+    wallet_usd: str | None = Field(alias='walletUsd')
     live_venue_equity: str | None = Field(alias='liveVenueEquity')
     paper_equity: str | None = Field(alias='paperEquity')
+    note: str = Field(description='what the three figures are, in a sentence')
 
 
 class Portfolio(ApiModel):
@@ -150,7 +583,7 @@ class Portfolio(ApiModel):
     wallet: PortfolioWallet
     accounts: list[PortfolioAccount]
     totals: PortfolioTotals = Field(description='three separate figures; there is no sum across modes')
-    halted: bool
+    halted: bool | None = Field(description='emergency halt of the signer; null when the signer does not say')
     errors: list[PartialError]
 
 
@@ -172,6 +605,7 @@ class Balances(ApiModel):
     as_of: str = Field(alias='asOf')
     balances: list[Balance]
     errors: list[PartialError]
+    halted: bool | None = Field(description='emergency halt of the signer; null when the signer does not say')
 
 
 class ActivityItem(ApiModel):
@@ -186,6 +620,7 @@ class Activity(ApiModel):
     """closed object in the contract"""
 
     items: list[ActivityItem]
+    next_cursor: str | None = Field(alias='nextCursor', description='pass it as `cursor` to read the next (older) page; null when there is none')
 
 
 class Position(ApiModel):
@@ -212,27 +647,39 @@ class Positions(ApiModel):
     ts: int = Field(description='milliseconds since the Unix epoch')
 
 
-class OrderSummary(ApiModel):
-    """extra members are allowed by the contract"""
-
-    id: str
-    mode: Literal["paper", "live"] = Field(description='paper = simulated, live = a venue or on-chain account. The two are never merged in one figure.')
-    venue: str
-    account_id: str | None = Field(alias='accountId')
-    instrument: str | None
-    side: str | None
-    type: str
-    status: str
-    final: bool | None
-    created_at: int = Field(alias='createdAt', description='milliseconds since the Unix epoch')
-    updated_at: int = Field(alias='updatedAt', description='milliseconds since the Unix epoch')
-
-
 class Orders(ApiModel):
     """closed object in the contract"""
 
-    orders: list[OrderSummary]
+    orders: list[Order]
+    next_cursor: str | None = Field(alias='nextCursor', description='pass it as `cursor` to read the next (older) page; null when there is none')
     ts: int = Field(description='milliseconds since the Unix epoch')
+
+
+class OwnerApprovalApprove(ApiModel):
+    """extra members are allowed by the contract"""
+
+    method: str
+    path: str
+
+
+class OwnerApproval(ApiModel):
+    """extra members are allowed by the contract"""
+
+    by: str
+    engine: str
+    account_id: str = Field(alias='accountId')
+    client_id: str = Field(alias='clientId')
+    hash: str | None
+    expires_at: int | None = Field(alias='expiresAt')
+    approve: OwnerApprovalApprove
+
+
+class PlacedOrder(ApiModel):
+    """extra members are allowed by the contract"""
+
+    order: Order
+    idempotent: bool = Field(description='true: this Idempotency-Key (or clientOrderId) already placed this order; nothing was sent again')
+    approval: OwnerApproval | None = Field(description='set while an owner order waits AWAITING_APPROVAL: where the owner approves it with the passkey. Always null for an API key')
 
 
 class OrderRequest(RequestModel):
@@ -243,29 +690,48 @@ class OrderRequest(RequestModel):
     instrument: Annotated[str, Field(min_length=1, max_length=120)] = Field(description='`venue:symbol` (e.g. `hyperliquid:BTC`, `spot:ETH`); a bare symbol is accepted when it is not ambiguous')
     side: Literal["buy", "sell"]
     type: Literal["limit", "market", "stop_market", "stop_limit", "take_profit_market", "take_profit_limit"]
-    size: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] = Field(description='decimal number as a string (never a float)')
+    size: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description='quantity of the base asset. Exactly one of `size` and `notional` is required')
+    notional: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description='value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required')
     price: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description='decimal number as a string (never a float)')
     trigger_price: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, alias='triggerPrice', description='decimal number as a string (never a float)')
     reduce_only: bool | None = Field(default=None, alias='reduceOnly', description='server default: false')
     tif: Literal["gtc", "ioc", "alo"] | None = Field(default=None, description='server default: "gtc"')
     slippage_bps: Annotated[int, Field(ge=1, le=500)] | None = Field(default=None, alias='slippageBps')
-    client_order_id: Annotated[str, Field(pattern='^[A-Za-z0-9._:-]{8,100}$')] | None = Field(default=None, alias='clientOrderId')
+    leverage: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description='paper only: leverage setting of the instrument on the account. On a venue account the leverage is a venue setting')
+    max_fee_usd: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, alias='maxFeeUsd', description='highest fee accepted, USD; default: 10 bps of the notional')
+    client_order_id: Annotated[str, Field(pattern='^[A-Za-z0-9._:-]{8,100}$')] | None = Field(default=None, alias='clientOrderId', description='idempotency key of the ORDER; default: the Idempotency-Key header. The order id is derived from it and from the principal')
 
 
-class Order(ApiModel):
+class Fill(ApiModel):
     """extra members are allowed by the contract"""
 
     id: str
-    mode: Literal["paper", "live"] = Field(description='paper = simulated, live = a venue or on-chain account. The two are never merged in one figure.')
-    venue: str
-    status: str
+    instrument: str
+    side: str
+    price: str = Field(description='decimal number as a string (never a float)')
+    size: str = Field(description='decimal number as a string (never a float)')
+    fee: str = Field(description='decimal number as a string (never a float)')
+    fee_asset: str = Field(alias='feeAsset')
+    closed_pnl: str | None = Field(alias='closedPnl')
+    liquidation: bool
+    ts: int = Field(description='milliseconds since the Unix epoch')
 
 
 class OrderDetail(ApiModel):
     """extra members are allowed by the contract"""
 
     order: Order
-    fills: list[dict[str, Any]]
+    fills: list[Fill]
+    history: list[dict[str, Any]] | None = Field(default=None, description='the transitions of the order, oldest first (absent for `agent:` rows)')
+
+
+class CancelledOrder(ApiModel):
+    """extra members are allowed by the contract"""
+
+    order: Order
+    sent: bool = Field(description='true: a cancel request went to a venue')
+    changed: bool = Field(description='false: the order was already final')
+    venue: Any = Field(default=None)
 
 
 class StrategyLibraryEntry(ApiModel):
@@ -360,6 +826,30 @@ class RiskAccount(ApiModel):
     halted: bool | None
 
 
+class SwitchBy(ApiModel):
+    """extra members are allowed by the contract"""
+
+    kind: str
+    id: str
+
+
+class Switch(ApiModel):
+    """extra members are allowed by the contract"""
+
+    on: bool
+    at: int | None
+    by: SwitchBy | None
+    reason: str | None
+
+
+class RiskEngine(ApiModel):
+    """the global switches of the risk engine: `killSwitch.on` blocks every new risk; `readOnly.on` lets only cancels pass — extra members are allowed by the contract"""
+
+    kill_switch: Switch = Field(alias='killSwitch')
+    read_only: Switch = Field(alias='readOnly')
+    note: str
+
+
 class Risk(ApiModel):
     """extra members are allowed by the contract"""
 
@@ -368,6 +858,99 @@ class Risk(ApiModel):
     capability_locks: list[CapabilityLock] = Field(alias='capabilityLocks')
     accounts: list[RiskAccount]
     errors: list[PartialError]
+    ts: int = Field(description='milliseconds since the Unix epoch')
+    engine: RiskEngine = Field(description='the global switches of the risk engine: `killSwitch.on` blocks every new risk; `readOnly.on` lets only cancels pass')
+
+
+class OrderPreviewResolved(ApiModel):
+    """extra members are allowed by the contract"""
+
+    size: str = Field(description='base units')
+    worst_price: str | None = Field(alias='worstPrice')
+    notional_usd: str | None = Field(alias='notionalUsd')
+
+
+class Refusal(ApiModel):
+    """extra members are allowed by the contract"""
+
+    stage: Literal["key", "lock", "mandate", "risk", "engine"]
+    code: str
+    message: str
+    reasons: list[str] | None = Field(default=None)
+
+
+class OrderPreviewApproval(ApiModel):
+    """extra members are allowed by the contract"""
+
+    required: bool
+    by: Literal["owner_passkey", "mandate", "none"]
+
+
+class PreviewRiskDerived(ApiModel):
+    """extra members are allowed by the contract"""
+
+    size: str | None
+    notional: str | None
+    reference_price: str | None = Field(alias='referencePrice')
+    position_before: str | None = Field(default=None, alias='positionBefore', description='decimal number as a string (never a float)')
+    position_after: str | None = Field(default=None, alias='positionAfter')
+
+
+class PreviewRisk(ApiModel):
+    """extra members are allowed by the contract"""
+
+    decision: Literal["allow", "deny"]
+    reducing: bool
+    checks: list[RiskCheck]
+    derived: PreviewRiskDerived
+
+
+class OrderPreviewMandate(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    decision: Literal["allow", "deny"]
+    reasons: list[str]
+
+
+class OrderPreviewEngineRisk(ApiModel):
+    """extra members are allowed by the contract"""
+
+    ok: bool
+
+
+class OrderPreviewEngine(ApiModel):
+    """extra members are allowed by the contract"""
+
+    name: str
+    risk: OrderPreviewEngineRisk | None
+    estimate: dict[str, Any] | None = Field(description='fees, slippage against the real book, liquidation price: an estimate')
+
+
+class PreviewAccount(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    venue: str
+    network: str
+    equity: str | None = Field(default=None)
+    free_collateral: str | None = Field(default=None, alias='freeCollateral')
+    withheld: bool = Field(description='true: the key holds neither `wallet:read` nor `positions:read`, so `equity`, `freeCollateral`, the position figures of `risk.derived`, and the account figures of the risk checks, of the refusal sentences and of the estimate are omitted')
+
+
+class OrderPreview(ApiModel):
+    """extra members are allowed by the contract"""
+
+    order: CanonicalOrder
+    hash: str = Field(description='SHA-256 of the canonical bytes, hex')
+    resolved: OrderPreviewResolved | None = Field(description='what the canonical order leaves open; null when it could not be resolved (see `refusals`)')
+    would_execute: bool = Field(alias='wouldExecute', description='true exactly when `refusals` is empty')
+    refusals: list[Refusal]
+    approval: OrderPreviewApproval
+    risk: PreviewRisk
+    mandate: OrderPreviewMandate | None = Field(description="null for the owner session, and when the key's mandate cannot be used (a `mandate` refusal then says why)")
+    engine: OrderPreviewEngine
+    account: PreviewAccount
     ts: int = Field(description='milliseconds since the Unix epoch')
 
 
@@ -382,6 +965,72 @@ class ReducePositionRequest(RequestModel):
 
     fraction: Annotated[str, Field(pattern='^(0(\\.\\d+)?|1(\\.0+)?)$')] = Field(description='share of the position to close, in (0, 1]')
     slippage_bps: Annotated[int, Field(ge=1, le=500)] | None = Field(default=None, alias='slippageBps')
+
+
+class CommandResultControl(ApiModel):
+    """extra members are allowed by the contract"""
+
+    type: Literal["cancel_order", "cancel_all", "kill_switch_on"]
+
+
+class CommandResultAttachedItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    role: Literal["stop_loss", "take_profit"]
+    placed: bool
+    note: str
+
+
+class CommandResultResultsItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    ok: bool
+
+
+class CommandResult(ApiModel):
+    """extra members are allowed by the contract"""
+
+    kind: Literal["query", "control", "order"] = Field(description='what the command resolved to')
+    command: str = Field(description='the parsed command type')
+    mode: Literal["paper", "live"] = Field(description='paper = simulated, live = a venue or on-chain account. The two are never merged in one figure.')
+    dry_run: bool = Field(alias='dryRun')
+    executed: bool | None = Field(default=None, description='absent for a query; false for a dry run')
+    query: str | None = Field(default=None)
+    data: dict[str, Any] | None = Field(default=None, description='query: the answer of the matching read operation')
+    control: CommandResultControl | None = Field(default=None)
+    order: dict[str, Any] | None = Field(default=None, description='kind `order`. Dry run: the canonical order the command resolves to. Executed: the order as POST /orders answers it (`id`, `status`, `final`, …)')
+    canonical: CanonicalOrder | None = Field(default=None, description='executed order: the canonical order that was placed')
+    hash: str | None = Field(default=None)
+    idempotent: bool | None = Field(default=None)
+    approval: dict[str, Any] | None = Field(default=None)
+    attached: list[CommandResultAttachedItem] | None = Field(default=None)
+    result: dict[str, Any] | None = Field(default=None, description='CANCEL ORDER: the answer of the cancel')
+    results: list[CommandResultResultsItem] | None = Field(default=None, description='CANCEL ALL: one row per order')
+    orders: list[str] | None = Field(default=None, description='CANCEL ALL dry run: the ids that would be cancelled')
+    kill_switch: Switch | None = Field(default=None, alias='killSwitch')
+
+
+class CommandRequest(RequestModel):
+    """closed object in the contract"""
+
+    text: Annotated[str, Field(min_length=1, max_length=300)] = Field(description='one line of the trading command grammar, English or French: LONG BTC-PERP 500 x2, CLOSE BTC-PERP 50%, CANCEL ORDER <id>, SHOW POSITIONS, KILL …')
+    mode: Literal["paper", "live"] | None = Field(default=None, description='paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. — server default: "paper"')
+    account_id: Annotated[str, Field(pattern='^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$')] | None = Field(default=None, alias='accountId', description='paper account or venue account; required when the wallet has several on the venue')
+    dry_run: bool | None = Field(default=None, alias='dryRun', description='true: answer the canonical order (or the control) the command resolves to, and do nothing — server default: false')
+
+
+class KillSwitchResult(ApiModel):
+    """extra members are allowed by the contract"""
+
+    kill_switch: Switch = Field(alias='killSwitch')
+    read_only: Switch = Field(alias='readOnly')
+
+
+class KillSwitchRequest(RequestModel):
+    """closed object in the contract"""
+
+    reason: Annotated[str, Field(max_length=200)] | None = Field(default=None, description='server default: ""')
 
 
 class BacktestRequest(RequestModel):
@@ -408,34 +1057,75 @@ class StopRequest(RequestModel):
 OPERATIONS: dict[str, tuple[str, str, str, bool, bool, bool]] = {
     'getOpenApi': ('GET', '/api/v1/trading/openapi.json', 'any valid key', True, False, False),
     'listMarkets': ('GET', '/api/v1/trading/markets', 'markets:read', True, False, False),
+    'compareMarkets': ('GET', '/api/v1/trading/markets/compare', 'markets:read', True, False, False),
     'getMarket': ('GET', '/api/v1/trading/markets/{symbol}', 'markets:read', True, False, False),
     'getOrderbook': ('GET', '/api/v1/trading/markets/{symbol}/orderbook', 'markets:read', True, False, False),
     'getCandles': ('GET', '/api/v1/trading/markets/{symbol}/candles', 'markets:read', True, False, False),
+    'listPrivateMarkets': ('GET', '/api/v1/trading/private-markets', 'markets:read', True, False, False),
+    'getPrivateMarketCompany': ('GET', '/api/v1/trading/private-markets/companies/{slug}', 'markets:read', True, False, False),
+    'getPrivateMarket': ('GET', '/api/v1/trading/private-markets/{id}', 'markets:read', True, False, False),
     'getPortfolio': ('GET', '/api/v1/trading/portfolio', 'wallet:read', True, False, False),
     'getBalances': ('GET', '/api/v1/trading/balances', 'wallet:read', True, False, False),
     'getActivity': ('GET', '/api/v1/trading/activity', 'wallet:read', True, False, False),
     'listPositions': ('GET', '/api/v1/trading/positions', 'positions:read', True, False, False),
     'listOrders': ('GET', '/api/v1/trading/orders', 'orders:read', True, False, False),
-    'placeOrder': ('POST', '/api/v1/trading/orders', 'orders:execute', False, True, True),
+    'placeOrder': ('POST', '/api/v1/trading/orders', 'orders:execute', True, True, True),
     'getOrder': ('GET', '/api/v1/trading/orders/{id}', 'orders:read', True, False, False),
-    'cancelOrder': ('DELETE', '/api/v1/trading/orders/{id}', 'orders:cancel', False, True, True),
+    'cancelOrder': ('DELETE', '/api/v1/trading/orders/{id}', 'orders:cancel', True, True, False),
     'listStrategies': ('GET', '/api/v1/trading/strategies', 'strategies:read', True, False, False),
     'createStrategy': ('POST', '/api/v1/trading/strategies', 'strategies:manage', False, True, True),
     'listAgents': ('GET', '/api/v1/trading/agents', 'agents:read', True, False, False),
     'createAgent': ('POST', '/api/v1/trading/agents', 'agents:manage', False, True, True),
     'getRisk': ('GET', '/api/v1/trading/risk', 'positions:read', True, False, False),
-    'previewOrder': ('POST', '/api/v1/trading/orders/preview', 'orders:prepare', False, True, False),
-    'closePosition': ('POST', '/api/v1/trading/positions/{id}/close', 'positions:manage', False, True, True),
-    'reducePosition': ('POST', '/api/v1/trading/positions/{id}/reduce', 'positions:manage', False, True, True),
+    'previewOrder': ('POST', '/api/v1/trading/orders/preview', 'orders:prepare', True, False, False),
+    'closePosition': ('POST', '/api/v1/trading/positions/{id}/close', 'positions:manage', True, True, True),
+    'reducePosition': ('POST', '/api/v1/trading/positions/{id}/reduce', 'positions:manage', True, True, True),
+    'runCommand': ('POST', '/api/v1/trading/commands', 'orders:prepare', True, True, False),
+    'engageKillSwitch': ('POST', '/api/v1/trading/risk/kill-switch', 'positions:manage', True, False, False),
     'backtestStrategy': ('POST', '/api/v1/trading/strategies/{id}/backtest', 'strategies:manage', False, True, True),
     'startStrategy': ('POST', '/api/v1/trading/strategies/{id}/start', 'strategies:manage', False, True, True),
     'stopStrategy': ('POST', '/api/v1/trading/strategies/{id}/stop', 'strategies:manage', False, True, True),
     'startAgent': ('POST', '/api/v1/trading/agents/{id}/start', 'agents:manage', False, True, True),
     'stopAgent': ('POST', '/api/v1/trading/agents/{id}/stop', 'agents:manage', False, True, True),
 }
+#: operationId -> every error answer the operation can give: (HTTP status, code) — the document's `x-spw-errors`
+OPERATION_ERRORS: dict[str, tuple[tuple[int, str], ...]] = {
+    'getOpenApi': ((401, 'unauthenticated'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'listMarkets': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'unknown_venue'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'markets_unavailable'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'compareMarkets': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'unknown_underlying'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'getMarket': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'unknown_instrument'), (404, 'unknown_market'), (404, 'unknown_venue'), (409, 'ambiguous_symbol'), (422, 'venue_rejected'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'getOrderbook': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'unknown_instrument'), (404, 'unknown_market'), (404, 'unknown_venue'), (409, 'ambiguous_symbol'), (422, 'no_orderbook'), (422, 'venue_rejected'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'stale_data'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'getCandles': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'unknown_instrument'), (404, 'unknown_market'), (404, 'unknown_venue'), (409, 'ambiguous_symbol'), (422, 'unsupported_interval'), (422, 'venue_rejected'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'listPrivateMarkets': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'getPrivateMarketCompany': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (404, 'unknown_company'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'getPrivateMarket': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'not_a_private_market'), (404, 'unknown_private_market'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'getPortfolio': ((401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'service_unavailable'), (503, 'signer_unreachable'),),
+    'getBalances': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'unknown_network'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'service_unavailable'), (503, 'signer_unreachable'),),
+    'getActivity': ((400, 'bad_request'), (400, 'invalid_cursor'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'listPositions': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'service_unavailable'),),
+    'listOrders': ((400, 'bad_request'), (400, 'invalid_cursor'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'placeOrder': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_market'), (404, 'unknown_venue'), (409, 'account_required'), (409, 'ambiguous_symbol'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'getOrder': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'unknown_order'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'cancelOrder': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'not_your_order'), (404, 'unknown_order'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'cancel_in_app'), (422, 'venue_rejected'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'signer_unreachable'), (503, 'venue_unavailable'),),
+    'listStrategies': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'createStrategy': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
+    'listAgents': ((401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'createAgent': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
+    'getRisk': ((401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'previewOrder': ((400, 'bad_request'), (400, 'invalid_order'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_market'), (404, 'unknown_venue'), (409, 'account_required'), (409, 'ambiguous_symbol'), (422, 'below_min_size'), (422, 'no_account'), (422, 'spot_via_swap_screen'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'closePosition': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_position'), (404, 'unknown_venue'), (409, 'account_required'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'close_in_app'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'no_position'), (422, 'not_reducing'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'reducePosition': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_position'), (404, 'unknown_venue'), (409, 'account_required'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'close_in_app'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'no_position'), (422, 'not_reducing'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'runCommand': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'parse_error'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'not_your_order'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_order'), (404, 'unknown_venue'), (409, 'account_required'), (409, 'ambiguous_command'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'cancel_in_app'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'fee_cap_not_expressible'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'inconsistent_prices'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'invalid_order'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'missing_balance'), (422, 'missing_reference_price'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'no_client_id_format'), (422, 'no_instrument'), (422, 'no_position'), (422, 'not_reducing'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (422, 'zero_size'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'service_unavailable'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
+    'engageKillSwitch': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'backtestStrategy': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
+    'startStrategy': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
+    'stopStrategy': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
+    'startAgent': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
+    'stopAgent': ((400, 'bad_request'), (400, 'idempotency'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mandate_required'), (403, 'mixed_credentials'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'),),
+}
 #: operationId -> response model
-RESPONSE_MODELS: dict[str, type[ApiModel]] = {'getOpenApi': OpenApiDocument, 'listMarkets': MarketList, 'getMarket': MarketDetail, 'getOrderbook': Orderbook, 'getCandles': Candles, 'getPortfolio': Portfolio, 'getBalances': Balances, 'getActivity': Activity, 'listPositions': Positions, 'listOrders': Orders, 'getOrder': OrderDetail, 'listStrategies': Strategies, 'listAgents': Agents, 'getRisk': Risk}
+RESPONSE_MODELS: dict[str, type[ApiModel]] = {'getOpenApi': OpenApiDocument, 'listMarkets': MarketList, 'compareMarkets': MarketComparison, 'getMarket': MarketDetail, 'getOrderbook': Orderbook, 'getCandles': Candles, 'listPrivateMarkets': PrivateMarkets, 'getPrivateMarketCompany': PrivateMarketCompanyDetail, 'getPrivateMarket': PrivateMarketDetail, 'getPortfolio': Portfolio, 'getBalances': Balances, 'getActivity': Activity, 'listPositions': Positions, 'listOrders': Orders, 'placeOrder': PlacedOrder, 'getOrder': OrderDetail, 'cancelOrder': CancelledOrder, 'listStrategies': Strategies, 'listAgents': Agents, 'getRisk': Risk, 'previewOrder': OrderPreview, 'closePosition': PlacedOrder, 'reducePosition': PlacedOrder, 'runCommand': CommandResult, 'engageKillSwitch': KillSwitchResult}
 #: operationId -> request-body model
-REQUEST_MODELS: dict[str, type[RequestModel]] = {'placeOrder': OrderRequest, 'createStrategy': CreateStrategyRequest, 'createAgent': CreateAgentRequest, 'previewOrder': OrderRequest, 'closePosition': ClosePositionRequest, 'reducePosition': ReducePositionRequest, 'backtestStrategy': BacktestRequest, 'startStrategy': StartRequest, 'stopStrategy': StopRequest, 'startAgent': StartRequest, 'stopAgent': StopRequest}
+REQUEST_MODELS: dict[str, type[RequestModel]] = {'placeOrder': OrderRequest, 'createStrategy': CreateStrategyRequest, 'createAgent': CreateAgentRequest, 'previewOrder': OrderRequest, 'closePosition': ClosePositionRequest, 'reducePosition': ReducePositionRequest, 'runCommand': CommandRequest, 'engageKillSwitch': KillSwitchRequest, 'backtestStrategy': BacktestRequest, 'startStrategy': StartRequest, 'stopStrategy': StopRequest, 'startAgent': StartRequest, 'stopAgent': StopRequest}
 
-__all__ = ['API_VERSION', 'Activity', 'ActivityItem', 'Agent', 'Agents', 'BacktestRequest', 'Balance', 'Balances', 'Candle', 'Candles', 'CapabilityLock', 'ClosePositionRequest', 'CreateAgentRequest', 'CreateStrategyRequest', 'EXECUTION_SCOPES', 'KillSwitch', 'Market', 'MarketDetail', 'MarketList', 'OPERATIONS', 'OpenApiDocument', 'Order', 'OrderDetail', 'OrderRequest', 'OrderSummary', 'Orderbook', 'Orders', 'PartialError', 'Portfolio', 'PortfolioAccount', 'PortfolioBalance', 'PortfolioTotals', 'PortfolioWallet', 'Position', 'Positions', 'REQUEST_MODELS', 'RESPONSE_MODELS', 'ReducePositionRequest', 'Risk', 'RiskAccount', 'SCOPES', 'StartRequest', 'StopRequest', 'Strategies', 'StrategyLibraryEntry', 'StrategyVersion', 'WEBHOOK_EVENTS']
+__all__ = ['API_VERSION', 'Activity', 'ActivityItem', 'Agent', 'Agents', 'ApiErrorBody', 'BacktestRequest', 'Balance', 'Balances', 'CancelledOrder', 'Candle', 'Candles', 'CanonicalOrder', 'CanonicalOrderPrincipal', 'CapabilityLock', 'ClosePositionRequest', 'CommandRequest', 'CommandResult', 'CommandResultAttachedItem', 'CommandResultControl', 'CommandResultResultsItem', 'ComparisonRow', 'CreateAgentRequest', 'CreateStrategyRequest', 'EXECUTION_SCOPES', 'ErrorData', 'ErrorDataQuestionsItem', 'FINAL_ORDER_STATES', 'Fill', 'Instrument', 'KillSwitch', 'KillSwitchRequest', 'KillSwitchResult', 'MANDATE_DENY_REASONS', 'Market', 'MarketComparison', 'MarketComparisonDiscrepanciesItem', 'MarketComparisonDiscrepanciesItemAssumptionsItem', 'MarketComparisonTexts', 'MarketDetail', 'MarketList', 'OPERATIONS', 'OPERATION_ERRORS', 'ORDER_STATES', 'OpenApiDocument', 'Order', 'OrderDetail', 'OrderPreview', 'OrderPreviewApproval', 'OrderPreviewEngine', 'OrderPreviewEngineRisk', 'OrderPreviewMandate', 'OrderPreviewResolved', 'OrderRequest', 'Orderbook', 'Orders', 'OwnerApproval', 'OwnerApprovalApprove', 'PartialError', 'PlacedOrder', 'Portfolio', 'PortfolioAccount', 'PortfolioBalance', 'PortfolioTotals', 'PortfolioWallet', 'Position', 'Positions', 'PreviewAccount', 'PreviewRisk', 'PreviewRiskDerived', 'PrivateCompany', 'PrivateMarket', 'PrivateMarketCompany', 'PrivateMarketCompanyDetail', 'PrivateMarketCompanyDetailCompany', 'PrivateMarketContract', 'PrivateMarketContractUnit', 'PrivateMarketDetail', 'PrivateMarketDetailReferencesItem', 'PrivateMarketMarket', 'PrivateMarketMarketFunding', 'PrivateMarketMarketPrice', 'PrivateMarketNotTradable', 'PrivateMarketReview', 'PrivateMarketValuation', 'PrivateMarketValuationCaveatsItem', 'PrivateMarketValuationContractMarketValue', 'PrivateMarketValuationImpliedValuation', 'PrivateMarketValuationLastPrivateValuation', 'PrivateMarketValuationNotionalExposure', 'PrivateMarketValuationPremiumDiscount', 'PrivateMarketValuationSyntheticPrice', 'PrivateMarkets', 'PrivateMarketsExcludedItem', 'PrivateMarketsNotice', 'PrivateMarketsVenuesItem', 'REQUEST_MODELS', 'RESPONSE_MODELS', 'RISK_CHECK_IDS', 'ReducePositionRequest', 'Refusal', 'Risk', 'RiskAccount', 'RiskCheck', 'RiskEngine', 'SCOPES', 'StartRequest', 'StopRequest', 'Strategies', 'StrategyLibraryEntry', 'StrategyVersion', 'Switch', 'SwitchBy', 'Ticker', 'WEBHOOK_EVENTS']

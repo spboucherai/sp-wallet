@@ -30,7 +30,6 @@ from sp_wallet import (
     is_terminal_order,
     new_idempotency_key,
     order_state,
-    size_from_notional,
     to_decimal,
     verify_webhook,
     webhook_signature,
@@ -150,35 +149,18 @@ def test_decimal_helpers_never_accept_a_float() -> None:
             decimal_str(bad)  # type: ignore[arg-type]
 
 
-def test_size_from_notional_is_exact_and_rounds_down() -> None:
-    assert size_from_notional("100", "64907", "0.00001") == "0.00154"
-    assert size_from_notional(100, "0.1", "0.001") == "1000"
-    assert size_from_notional("0.3", "0.1", "0.1") == "3"  # 0.1 + 0.2 territory: no float involved
-    assert size_from_notional("1000000000000000000000.5", "3", "0.01") == "333333333333333333333.5"
-    assert size_from_notional(Decimal("99.99"), Decimal("100"), Decimal("0.01")) == "0.99"
-    assert size_from_notional("5", "3") == "1.666666"
-    assert size_from_notional("0", "3") == "0"
-    assert size_from_notional("10", "3", "1") == "3"
-    # same vectors as the TypeScript SDK (packages/trading-sdk/test/client.test.ts)
-    with pytest.raises(ConfigurationError):
-        size_from_notional("100", "0")
-    with pytest.raises(ConfigurationError):
-        size_from_notional(0.1, "1")  # type: ignore[arg-type]
-
-
-# ---------------------------------------------------------------------------------------------------------------- order states
 def test_order_states() -> None:
     assert ORDER_STATES == ("CREATED", "VALIDATED", "AWAITING_APPROVAL", "APPROVED", "SUBMITTING", "SUBMITTED", "PARTIALLY_FILLED", "FILLED", "CANCELLED", "REJECTED", "FAILED", "UNKNOWN")
     assert frozenset({"FILLED", "CANCELLED", "REJECTED", "FAILED"}) == TERMINAL_ORDER_STATES
     assert "UNKNOWN" not in TERMINAL_ORDER_STATES
-    assert order_state("filled") == "FILLED"
-    assert order_state("canceled") == "CANCELLED"
-    assert order_state("open") is None
-    assert order_state(None) is None
+    assert order_state("FILLED") == "FILLED"
+    # the contract's enum is closed and exact: no case folding, no alias, no other vocabulary
+    for other in ("filled", "canceled", "open", "expired", None, 1):
+        assert order_state(other) is None
     for s in ORDER_STATES:
-        assert is_terminal_order({"status": s, "final": True}) == (s in TERMINAL_ORDER_STATES)
-        assert is_terminal_order({"status": s.lower()}) == (s in TERMINAL_ORDER_STATES)
+        assert is_terminal_order({"status": s}) == (s in TERMINAL_ORDER_STATES)
+        assert is_terminal_order({"status": s, "final": True}) == (s in TERMINAL_ORDER_STATES)  # the state decides, not the flag
     assert not is_terminal_order({"status": "UNKNOWN", "final": True})  # UNKNOWN is never final
-    assert is_terminal_order({"status": "expired", "final": True})  # older tables: the server's flag decides
-    assert not is_terminal_order({"status": "open", "final": False})
-    assert not is_terminal_order({"status": "open"})
+    assert not is_terminal_order({"status": "expired", "final": True})  # a word outside the enum is never taken for final
+    assert not is_terminal_order({})
+

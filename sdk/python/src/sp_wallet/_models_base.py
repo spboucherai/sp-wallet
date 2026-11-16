@@ -59,5 +59,6 @@ class RequestModel(BaseModel):
 
 
 class WriteResult(ApiModel):
-    """Answer of a write operation. The OpenAPI document declares no success schema for them yet: every member is in
-    `model_extra` (also reachable as attributes and through `to_dict()`)."""
+    """Answer of an operation the server does not implement yet (the strategy and agent writes answer 501): the
+    contract declares no success schema for them, so every member would be in `model_extra`. The implemented writes
+    return typed models (`models.OrderPreview`, `PlacedOrder`, `CancelledOrder`, `CommandResult`, `KillSwitchResult`)."""

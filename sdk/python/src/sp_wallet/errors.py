@@ -11,6 +11,10 @@ import builtins
 import re
 from typing import Any
 
+import pydantic
+
+from .models import Order, RiskCheck
+
 _KEY_RE = re.compile(r"spw_live_[A-Za-z0-9_-]+(<redacted>)?")
 _BEARER_RE = re.compile(r"Bearer\s+(?!spw_live_<redacted>)[A-Za-z0-9._~+/=-]+", re.IGNORECASE)
 
@@ -40,6 +44,8 @@ class SPWalletError(Exception):
     request_id       `X-Request-Id` of the answer (the wallet's owner finds the call in the usage log with it)
     idempotency_key  the `Idempotency-Key` sent with a mutating call
     body             decoded JSON body of the error answer
+    order            the order a refusal is about, when the server created one before it refused (`data.order`: state
+                     REJECTED or FAILED); None when the call was refused before any order existed — nothing was created
     """
 
     def __init__(
@@ -59,9 +65,31 @@ class SPWalletError(Exception):
         self.request_id = request_id
         self.idempotency_key = idempotency_key
         self.body = body
+        self.order: Order | None = _order_of(body)
+
+    @property
+    def data(self) -> dict[str, Any]:
+        """`data` of the error body — the machine-readable detail of a refusal — as a dict (empty when absent)."""
+        d = self.body.get("data") if isinstance(self.body, dict) else None
+        return d if isinstance(d, dict) else {}
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(code={self.code!r}, status={self.status!r}, request_id={self.request_id!r}, message={self.message!r})"
+
+
+def _order_of(body: Any) -> Order | None:
+    d = body.get("data") if isinstance(body, dict) else None
+    o = d.get("order") if isinstance(d, dict) else None
+    if not isinstance(o, dict):
+        return None
+    try:
+        return Order.model_validate(o)
+    except pydantic.ValidationError:
+        return None  # an order this SDK cannot read is not invented: the raw answer stays in `body`
+
+
+def _strings(v: Any) -> list[str]:
+    return [x for x in v if isinstance(x, str)] if isinstance(v, list) else []
 
 
 class ConfigurationError(SPWalletError):
@@ -76,7 +104,8 @@ class APIError(SPWalletError):
 
 
 class ValidationError(APIError):
-    """400 (`bad_request`, `idempotency`, `stale_request`) and 422 (`no_orderbook`, `venue_rejected`)."""
+    """400 (`bad_request`, `invalid_order`, `idempotency`, `stale_request`, …) and 422 (`no_orderbook`, `venue_rejected`,
+    `below_min_size`, a refusal of the venue engine's own rules, …). When the order existed, it is in `order`."""
 
 
 class AuthenticationError(APIError):
@@ -93,6 +122,44 @@ class ScopeDenied(PermissionDenied):
 
 class MandateRequired(PermissionDenied):
     """403 `mandate_required`: execution needs a key bound to an owner-approved trading mandate; this key has none."""
+
+
+class ExecutionDisabled(PermissionDenied):
+    """403 `execution_disabled`: live execution through the trading API is closed on this server
+    (`SPW_TRADING_API_EXECUTION` is not `on`). Nothing was created. Paper orders, cancels and strictly reducing orders
+    are not affected."""
+
+
+class MandateDenied(PermissionDenied):
+    """403 `mandate_denied` (the order is outside the trading mandate bound to the key) or `mandate_not_approved`.
+    `reasons` are the mandate's own codes (`models.MANDATE_DENY_REASONS`: `ORDER_NOTIONAL_EXCEEDED`,
+    `INSTRUMENT_NOT_ALLOWED`, …); `order` is the REJECTED order."""
+
+    def __init__(self, message: str, **kw: Any) -> None:
+        super().__init__(message, **kw)
+        self.reasons: list[str] = _strings(self.data.get("reasons"))
+
+
+class RiskDenied(APIError):
+    """422 `risk_denied`, 423 `kill_switch_active` / `read_only_mode`: the independent risk engine refused the order.
+    `failed` are the ids of the failed checks (`models.RISK_CHECK_IDS`), `checks` the failed checks with what was
+    observed and their limit, `order` the REJECTED order. With the kill switch on, cancels and strictly reducing orders
+    still pass."""
+
+    def __init__(self, message: str, **kw: Any) -> None:
+        super().__init__(message, **kw)
+        self.failed: list[str] = _strings(self.data.get("failed"))
+        self.checks: list[RiskCheck] = []
+        for c in self.data.get("checks") if isinstance(self.data.get("checks"), list) else []:
+            try:
+                self.checks.append(RiskCheck.model_validate(c))
+            except pydantic.ValidationError:
+                continue
+
+    @property
+    def kill_switch(self) -> bool:
+        """True when the refusal is the global kill switch (423 `kill_switch_active`)."""
+        return self.code == "kill_switch_active"
 
 
 class NotFound(APIError):
@@ -114,6 +181,20 @@ class AmbiguousSymbol(Conflict):
         super().__init__(message, **kw)
         c = self.body.get("candidates") if isinstance(self.body, dict) else None
         self.candidates: list[str] = [x for x in c if isinstance(x, str)] if isinstance(c, list) else []
+
+
+class AmbiguousCommand(Conflict):
+    """409 `ambiguous_command`: the command and the owner's stored defaults do not settle everything. Nothing was
+    executed. `questions` says what is open: each is `{"field", "options", "message"}`."""
+
+    def __init__(self, message: str, **kw: Any) -> None:
+        super().__init__(message, **kw)
+        q = self.data.get("questions")
+        self.questions: list[dict[str, Any]] = [
+            {"field": x["field"], "options": _strings(x.get("options")), "message": x["message"] if isinstance(x.get("message"), str) else ""}
+            for x in (q if isinstance(q, list) else [])
+            if isinstance(x, dict) and isinstance(x.get("field"), str)
+        ]
 
 
 class RateLimited(APIError):
@@ -188,6 +269,8 @@ class WebhookVerificationError(SPWalletError):
 
 
 _SCOPE_CODES = {"insufficient_scope", "scope_denied", "scope_undeclared"}
+_RISK_CODES = {"risk_denied", "kill_switch_active", "read_only_mode"}
+_MANDATE_DENIED_CODES = {"mandate_denied", "mandate_not_approved"}
 
 
 def error_from_response(
@@ -207,16 +290,29 @@ def error_from_response(
     text = f"{message} [{code}, HTTP {status}{f', request {request_id}' if request_id else ''}]"
     kw: dict[str, Any] = {"code": code, "status": status, "request_id": request_id, "idempotency_key": idempotency_key, "body": body}
     cls: type[APIError]
-    if status in (400, 422):
+    if status == 423 or (status == 422 and code in _RISK_CODES):
+        cls = RiskDenied
+    elif status in (400, 422):
         cls = ValidationError
     elif status == 401:
         cls = AuthenticationError
     elif status == 403:
-        cls = MandateRequired if code == "mandate_required" else ScopeDenied if code in _SCOPE_CODES else PermissionDenied
+        cls = (
+            MandateRequired if code == "mandate_required"
+            else MandateDenied if code in _MANDATE_DENIED_CODES
+            else ExecutionDisabled if code == "execution_disabled"
+            else ScopeDenied if code in _SCOPE_CODES
+            else PermissionDenied
+        )  # fmt: skip
     elif status == 404:
         cls = NotFound
     elif status == 409:
-        cls = IdempotencyConflict if code == "idempotency_conflict" else AmbiguousSymbol if code == "ambiguous_symbol" else Conflict
+        cls = (
+            IdempotencyConflict if code == "idempotency_conflict"
+            else AmbiguousSymbol if code == "ambiguous_symbol"
+            else AmbiguousCommand if code == "ambiguous_command"
+            else Conflict
+        )  # fmt: skip
     elif status == 429:
         return RateLimited(text, retry_after=retry_after, **kw)
     elif status == 501:
@@ -231,9 +327,10 @@ def error_from_response(
 
 
 __all__ = [
-    "APIError", "AmbiguousSymbol", "AuthenticationError", "ConfigurationError", "Conflict", "ExecutionNotWired", "IdempotencyConflict",
-    "MandateRequired", "NetworkError", "NotFound", "NotImplementedError", "OutcomeUnknown", "PermissionDenied", "RateLimited",
-    "SPWalletError", "ScopeDenied", "ServerError", "ServiceUnavailable", "TimeoutError", "ValidationError", "WaitTimeout",
+    "APIError", "AmbiguousCommand", "AmbiguousSymbol", "AuthenticationError", "ConfigurationError", "Conflict", "ExecutionDisabled",
+    "ExecutionNotWired", "IdempotencyConflict", "MandateDenied", "MandateRequired", "NetworkError", "NotFound", "NotImplementedError",
+    "OutcomeUnknown", "PermissionDenied", "RateLimited", "RiskDenied", "SPWalletError", "ScopeDenied", "ServerError", "ServiceUnavailable",
+    "TimeoutError", "ValidationError", "WaitTimeout",
     "WebhookVerificationError", "error_from_response", "redact_deep", "redact_secrets",
 ]  # fmt: skip
 

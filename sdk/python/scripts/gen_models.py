@@ -4,7 +4,8 @@
     uv run python scripts/gen_models.py --check    exit 1 when the committed file is not what the document gives
 
 Only the JSON Schema subset the document uses is understood (type, properties, required, additionalProperties, items,
-prefixItems, enum, anyOf and the validation keywords); anything else raises instead of guessing.
+prefixItems, enum, const, anyOf, the validation keywords, and `$ref` to `#/components/schemas/<name>` — a named model);
+anything else raises instead of guessing.
 tests/test_models_drift.py regenerates and compares, and separately walks the document against the model classes.
 """
 
@@ -22,7 +23,7 @@ OPENAPI_PATH = HERE.parents[2] / "docs" / "openapi" / "trading-v1.json"
 OUTPUT_PATH = HERE.parent / "src" / "sp_wallet" / "models.py"
 
 KNOWN = {
-    "type", "properties", "required", "additionalProperties", "items", "prefixItems", "enum", "anyOf", "description", "default",
+    "type", "properties", "required", "additionalProperties", "items", "prefixItems", "enum", "const", "anyOf", "$ref", "description", "default",
     "pattern", "format", "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems",
 }  # fmt: skip
 
@@ -31,22 +32,31 @@ RESPONSE_NAMES = {
     "getOpenApi": "OpenApiDocument", "listMarkets": "MarketList", "getMarket": "MarketDetail", "getOrderbook": "Orderbook",
     "getCandles": "Candles", "getPortfolio": "Portfolio", "getBalances": "Balances", "getActivity": "Activity",
     "listPositions": "Positions", "listOrders": "Orders", "getOrder": "OrderDetail", "listStrategies": "Strategies",
-    "listAgents": "Agents", "getRisk": "Risk",
+    "listAgents": "Agents", "getRisk": "Risk", "compareMarkets": "MarketComparison", "listPrivateMarkets": "PrivateMarkets",
+    "getPrivateMarketCompany": "PrivateMarketCompanyDetail", "getPrivateMarket": "PrivateMarketDetail", "previewOrder": "OrderPreview",
+    "placeOrder": "PlacedOrder", "closePosition": "PlacedOrder", "reducePosition": "PlacedOrder", "cancelOrder": "CancelledOrder",
+    "runCommand": "CommandResult", "engageKillSwitch": "KillSwitchResult",
 }  # fmt: skip
+#: name of a component schema (`#/components/schemas/<name>`) -> name of its model
+COMPONENT_NAMES = {"Error": "ApiErrorBody", "Order": "Order", "CanonicalOrder": "CanonicalOrder", "RiskCheck": "RiskCheck"}
 #: operationId -> name of the request-body model (identical schemas share one class: the first name wins)
 REQUEST_NAMES = {
     "placeOrder": "OrderRequest", "previewOrder": "OrderRequest", "closePosition": "ClosePositionRequest",
     "reducePosition": "ReducePositionRequest", "createStrategy": "CreateStrategyRequest", "backtestStrategy": "BacktestRequest",
     "startStrategy": "StartRequest", "startAgent": "StartRequest", "stopStrategy": "StopRequest", "stopAgent": "StopRequest",
-    "createAgent": "CreateAgentRequest",
+    "createAgent": "CreateAgentRequest", "runCommand": "CommandRequest", "engageKillSwitch": "KillSwitchRequest",
 }  # fmt: skip
 #: mechanical name of a nested object (Parent + Property [+ Item]) -> the name used
 NESTED_NAMES = {
     "MarketListMarketsItem": "Market", "MarketListErrorsItem": "PartialError", "CandlesCandlesItem": "Candle",
     "PortfolioWalletBalancesItem": "PortfolioBalance", "PortfolioAccountsItem": "PortfolioAccount", "BalancesBalancesItem": "Balance",
-    "ActivityItemsItem": "ActivityItem", "PositionsPositionsItem": "Position", "OrdersOrdersItem": "OrderSummary",
-    "OrderDetailOrder": "Order", "StrategiesLibraryItem": "StrategyLibraryEntry", "StrategiesVersionsItem": "StrategyVersion",
+    "ActivityItemsItem": "ActivityItem", "PositionsPositionsItem": "Position",
+    "StrategiesLibraryItem": "StrategyLibraryEntry", "StrategiesVersionsItem": "StrategyVersion",
     "AgentsAgentsItem": "Agent", "RiskKillSwitch": "KillSwitch", "RiskCapabilityLocksItem": "CapabilityLock", "RiskAccountsItem": "RiskAccount",
+    "MarketDetailInstrument": "Instrument", "MarketDetailTicker": "Ticker", "OrderDetailFillsItem": "Fill", "RiskEngineKillSwitch": "Switch",
+    "RiskEngine": "RiskEngine", "OrderPreviewRefusalsItem": "Refusal", "OrderPreviewAccount": "PreviewAccount", "OrderPreviewRisk": "PreviewRisk",
+    "PlacedOrderApproval": "OwnerApproval", "ApiErrorBodyData": "ErrorData", "ApiErrorBodyDataQuestionsItem": "CommandQuestion",
+    "MarketComparisonRowsItem": "ComparisonRow", "PrivateMarketsMarketsItem": "PrivateMarket", "PrivateMarketsCompaniesItem": "PrivateCompany",
 }  # fmt: skip
 
 
@@ -63,9 +73,18 @@ def pascal(name: str) -> str:
 
 
 class Generator:
-    def __init__(self) -> None:
+    def __init__(self, components: dict[str, Any] | None = None) -> None:
         self.classes: dict[str, str] = {}  # name -> source
         self.by_schema: dict[str, str] = {}  # canonical schema JSON (+ kind) -> name
+        self.components: dict[str, Any] = components or {}
+        self.component_models: dict[str, str] = {}  # component name -> model name
+        self.top: dict[str, str] = {}  # name of an operation's body / answer model -> its schema key
+
+    def component(self, name: str) -> str:
+        """The model of `#/components/schemas/<name>` (an answer shape: components are never request bodies)."""
+        if name not in self.component_models:
+            self.component_models[name] = self.model(self.components[name], COMPONENT_NAMES[name], request=False)
+        return self.component_models[name]
 
     def type_of(self, s: Any, hint: str, request: bool) -> str:
         if s is True or s == {}:
@@ -75,6 +94,13 @@ class Generator:
         unknown = set(s) - KNOWN
         if unknown:
             raise ValueError(f"unsupported JSON Schema keyword(s) {sorted(unknown)} — extend gen_models.py")
+        if "$ref" in s:
+            m = re.fullmatch(r"#/components/schemas/([A-Za-z][A-Za-z0-9]*)", s["$ref"])
+            if not m or m.group(1) not in self.components:
+                raise ValueError(f"unsupported $ref {s['$ref']!r} — only #/components/schemas/<name> of this document")
+            return self.component(m.group(1))
+        if "const" in s:
+            return f"Literal[{s['const']!r}]"
         if "enum" in s:
             return f"Literal[{', '.join(json.dumps(v) for v in s['enum'])}]"
         if "anyOf" in s:
@@ -122,13 +148,21 @@ class Generator:
             return self.model(s, hint, request)
         raise ValueError(f"unsupported type {t!r}")
 
-    def model(self, s: dict[str, Any], hint: str, request: bool) -> str:
+    def model(self, s: dict[str, Any], hint: str, request: bool, top: bool = False) -> str:
+        """`top`: the body or the answer of an operation, generated under ITS name even when another operation has the same
+        shape (StopRequest and KillSwitchRequest are both `{reason}`: two names, two classes). Nested shapes are shared."""
         key = json.dumps(s, sort_keys=True) + ("|request" if request else "|response")
+        if top:
+            if self.top.get(hint) == key:
+                return hint
+            key += f"|{hint}"
         if key in self.by_schema:
             return self.by_schema[key]
         name = NESTED_NAMES.get(hint, hint)
         if name in self.classes:
             raise ValueError(f"two different schemas want the class name {name}: add an entry to NESTED_NAMES")
+        if top:
+            self.top[hint] = key[: -len(hint) - 1]
         self.by_schema[key] = name
         self.classes[name] = ""  # reserve the position after its dependencies are known
         required = set(s.get("required", []))
@@ -144,7 +178,7 @@ class Generator:
             ann = self.type_of(ps, name + pascal(prop), request)
             args = []
             if prop not in required:
-                if "None" not in ann.split(" | "):
+                if ann != "Any" and "None" not in ann.split(" | "):
                     ann += " | None"
                 args.append("default=None")
             if py != prop:
@@ -162,17 +196,19 @@ class Generator:
 
 
 def generate(document: dict[str, Any]) -> str:
-    g = Generator()
+    g = Generator(document["components"]["schemas"])
+    for component in document["components"]["schemas"]:
+        g.component(component)
     ops = [(o["operationId"], method.upper(), path, o) for path, item in document["paths"].items() for method, o in item.items()]
     responses: dict[str, str] = {}
     requests: dict[str, str] = {}
     for op_id, _method, _path, o in ops:
         ok = o["responses"].get("200", {}).get("content", {}).get("application/json")
         if ok:
-            responses[op_id] = g.model(ok["schema"], RESPONSE_NAMES[op_id], request=False)
+            responses[op_id] = g.model(ok["schema"], RESPONSE_NAMES[op_id], request=False, top=True)
         body = o.get("requestBody", {}).get("content", {}).get("application/json")
         if body:
-            requests[op_id] = g.model(body["schema"], REQUEST_NAMES[op_id], request=True)
+            requests[op_id] = g.model(body["schema"], REQUEST_NAMES[op_id], request=True, top=True)
 
     out = [
         '"""Models of the SP Trading API.',
@@ -199,6 +235,14 @@ def generate(document: dict[str, Any]) -> str:
         "#: inert on a key that is not bound to a trading mandate (403 `mandate_required`)",
         f"EXECUTION_SCOPES: tuple[str, ...] = ({', '.join(repr(s['scope']) for s in document['x-spw-scopes'] if s['execution'])},)",
         f"WEBHOOK_EVENTS: tuple[str, ...] = ({', '.join(repr(e['event']) for e in document['x-spw-webhook-events'])},)",
+        "#: the states of the unified order state machine — the closed set of `Order.status`",
+        f"ORDER_STATES: tuple[str, ...] = ({', '.join(repr(x['state']) for x in document['x-spw-order-states'])},)",
+        "#: UNKNOWN is not among them: it is neither final nor a failure",
+        f"FINAL_ORDER_STATES: tuple[str, ...] = ({', '.join(repr(x['state']) for x in document['x-spw-order-states'] if x['final'])},)",
+        "#: `data.reasons` of a `mandate_denied` refusal",
+        f"MANDATE_DENY_REASONS: tuple[str, ...] = ({', '.join(repr(x) for x in document['x-spw-mandate-deny-reasons'])},)",
+        "#: ids of the risk checks (`data.failed`, `data.checks[].id`, `risk.checks[].id` of a preview)",
+        f"RISK_CHECK_IDS: tuple[str, ...] = ({', '.join(repr(x) for x in document['x-spw-risk-checks'])},)",
         "",
     ]
     for src in g.classes.values():
@@ -212,12 +256,20 @@ def generate(document: dict[str, Any]) -> str:
             f"{o.get('x-spw-requires-mandate') is True}),"
         )
     out.append("}")
+    out.append("#: operationId -> every error answer the operation can give: (HTTP status, code) — the document's `x-spw-errors`")
+    out.append("OPERATION_ERRORS: dict[str, tuple[tuple[int, str], ...]] = {")
+    for op_id, _method, _path, o in ops:
+        out.append(f"    {op_id!r}: ({', '.join(repr((e['status'], e['code'])) for e in o['x-spw-errors'])},),")
+    out.append("}")
     out.append("#: operationId -> response model")
     out.append("RESPONSE_MODELS: dict[str, type[ApiModel]] = {" + ", ".join(f"{k!r}: {v}" for k, v in responses.items()) + "}")
     out.append("#: operationId -> request-body model")
     out.append("REQUEST_MODELS: dict[str, type[RequestModel]] = {" + ", ".join(f"{k!r}: {v}" for k, v in requests.items()) + "}")
     out.append("")
-    names = sorted([*g.classes, "API_VERSION", "SCOPES", "EXECUTION_SCOPES", "WEBHOOK_EVENTS", "OPERATIONS", "RESPONSE_MODELS", "REQUEST_MODELS"])
+    names = sorted([
+        *g.classes, "API_VERSION", "SCOPES", "EXECUTION_SCOPES", "WEBHOOK_EVENTS", "OPERATIONS", "OPERATION_ERRORS", "RESPONSE_MODELS", "REQUEST_MODELS",
+        "ORDER_STATES", "FINAL_ORDER_STATES", "MANDATE_DENY_REASONS", "RISK_CHECK_IDS",
+    ])  # fmt: skip
     out.append("__all__ = [" + ", ".join(repr(n) for n in names) + "]")
     out.append("")
     return "\n".join(out)
