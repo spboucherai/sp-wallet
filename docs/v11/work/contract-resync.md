@@ -1,5 +1,9 @@
 # V11 work log — the SP Trading API contract and its two SDKs, resynchronised
 
+> **Two parts.** Part 1 (below) is the resynchronisation against `v11` at `8618bdf`. Part 2, at the end, is the second one:
+> `v11` at `a105202` (agents runtime, exec2) merged into this branch, 41 operations. Where the two differ, Part 2 is the
+> current state — in particular the numbers (32 operations, the seven 501 writes) and the agent swap projection of item 7.
+
 Branch `v11-contract`, from local `v11` (`8618bdf`). Date: 2026-11-15. Author: an agent working in an isolated worktree.
 Nothing was pushed or published; production was not touched; no real order was sent. The local stacks used a throwaway
 signer keystore, an own per-run database, broadcast off, `SPW_TRADING_API_EXECUTION` unset (live execution closed):
@@ -394,3 +398,189 @@ overwritten a file of the same name of that session.
 9. `scripts/demo-trading-api.mts` and `docs/TRADING-API-ARCHITECTURE.md` still describe the write side as 501 in places;
    they are outside this work's files and were not changed.
 10. The documents' code snippets are not executed as such; the examples are (three in TypeScript, four in Python).
+
+---
+
+# Part 2 — second resynchronisation: `v11` at `a105202` merged (agents runtime, exec2)
+
+Same branch, same rules (nothing pushed, no real order, paper only, the live case stops at a lock). Scratch files were
+kept in a private directory only.
+
+## Verification summary (Part 2)
+
+| Check | Result (observed) |
+|---|---|
+| `pnpm typecheck` | exit 0 |
+| `gen-openapi.mts --check` (node and tsx), `gen-types.mts --check`, `gen_models.py --check`, `gen_sync.py --check` | up to date |
+| `vitest run services/api/test/trading-contract.test.ts` | **21 passed** |
+| `vitest run packages/trading-sdk` | 4 files, **147 passed**: 125 unit + 22 integration |
+| `uv run pytest` (`sdk/python`, Python 3.13) | **391 passed**: 350 unit + 41 integration; the 350 unit tests also pass on Python 3.10 |
+| `uv run ruff check` | `All checks passed!` |
+| Full `pnpm test` | 171 files, 4 066 tests. First run after the merge work: **7 failed** — all caused by this work, in `execution-spot.test.ts` (6, one root cause and its cascade) and `execution-gmx.test.ts` (1); see below. After the fixes: **4 007 passed, 59 skipped, 0 failed** (one run) |
+
+The seven failures of the first full run, and what they were:
+
+- `execution-spot.test.ts`: my boundary answered `403 mandate_required` to a preview by a key without a mandate **before**
+  the order service could answer its own, more precise refusal of a spot order to any key
+  (`spot_execution_requires_agent_vault`). Fixed: the boundary leaves a spot instrument to the order service. The five
+  other failures of that file were the rest of the same test sequence running on the state the first one left.
+- `execution-gmx.test.ts`: the test documented the known limit "the listed GMX position id cannot be used in the path
+  (414)" and asserted the 414. The id listed by `GET /positions` is now the short form, which the path takes: the
+  assertion became `expect(pos.id).toBe('live:gmx:<account>:<instrument>')`.
+
+## 1. The merge
+
+`git merge v11` conflicted in `spec.ts`, `routes.ts` and the generated `docs/openapi/trading-v1.json`.
+
+- `spec.ts`: kept this branch's shapes, error table and `errorsOf`; took the agents workstream's schemas, bodies and
+  operations (16 of them now implemented); dropped `v11`'s closed `ErrorSchema`.
+- `routes.ts`: kept `...agentTradingHandlers()`, exec2's `callerOf(p, req)` (the owner's session handed to the swap flow)
+  and its spot instrument rule; kept this branch's read-layer order list, notional, preview shaping, `mandate_required`
+  for a preview, and the catch-all 404.
+- The document and the Markdown reference were **regenerated**, not merged: 41 operations, all implemented.
+- `GET /orders`: exec2 made the unified table the ONE source (the owner's swaps and the spot agents' swaps are projected
+  into it by `orders/spot.ts`). The read layer's own projection of agent swaps (Part 1, item 7) was therefore removed;
+  the keyset pagination now reads one table, with the order service's visibility rule in SQL (a spot order by venue and
+  network, any other by venue and instrument).
+
+## 2. What exec2 asked of this workstream
+
+- **GMX position ids** — `GET /positions` named a GMX position `live:gmx:<address>:<66-character key>`: 118 characters,
+  above the router's 100-character limit for a path parameter, so `POST /positions/{id}/close` could not be reached with
+  it. `read.ts` now gives the instrument form (`live:gmx:<address>:<instrument id>`) when the wallet holds one position
+  on that market — the form the order service already accepts. A long and a short on the same market keep their keys
+  (the service would answer `409 ambiguous_position` to the instrument form): those two cannot be closed through the
+  path. Tests: contract test (one position → the short id reaches the handler; the key form → 404; two positions → keys),
+  and exec2's own GMX test, which now closes the position with the id as listed.
+- **`notional` for a spot BUY** — a swap is exact-input, and the order service's input carries a base size only
+  (`spot_buy_needs_quote_amount`). At the boundary, `POST /orders` and `POST /orders/preview` with
+  `{ instrument: 'spot:…', side: 'buy', type: 'market', notional }` are resolved the way the command grammar resolves
+  `BUY <base> <amount> [<quote>]` (same defaults, same canonical order, same swap flow) and answered in the shapes of the
+  order operations. Tests: in exec2's spot harness — preview (`notional: '40'`, `size: null`, owner passkey), place
+  (`AWAITING_APPROVAL`, `notionalUsd: '40'`), cancel; in the contract test — a BUY by base size is still
+  `spot_buy_needs_quote_amount`, a key is refused 403.
+- **Review item 9, refusals** — `shapeRefusal` (`shaping.ts`): the `data.checks` of a refusal of `POST /orders`, of a
+  close, a reduce or an order command lose `observed` and `detail` for the account-level checks, and the sentence is
+  withheld, for a key that holds neither `wallet:read` nor `positions:read`; code, status, failed ids, limits and the
+  order stay. Applied inside the idempotency wrapper, so the stored answer is the shaped one. Test: a unit test of the
+  function. **Limitation**: no integration test provokes an account-level risk refusal through HTTP for such a key (the
+  suite's refusals are the mandate and the kill switch, whose figures are not the account's).
+- `position_not_attributable`, `account_has_active_mandate`, `mandate_integrity`, `gmx_requires_owner_passkey`, the spot
+  codes and `ambiguous_order` / `ambiguous_position` are declared in `x-spw-errors`.
+
+## 3. The strategy and agent operations
+
+- **Errors** declared for the sixteen operations by reading `agents/trading-handlers.ts`, `lifecycle.ts`,
+  `templates.ts`, `strategies.ts` and `agent-runtime/store.ts` (none edited): `restricted`, `not_found`,
+  `owner_required`, `bad_state`, `mandate_required` (409), `live_unavailable`, `no_strategy`, `no_report`,
+  `bad_report`, `other_version`, `wrong_kind`, `strategy_not_installed`, `exists`, `universe_mismatch`, `bad_strategy`.
+  `strategies:manage` and `agents:manage` are no longer execution scopes, so `errorsOf` no longer adds the key-level
+  `mandate_required` to them.
+- **Response schemas** are the agents workstream's (`R.agent`, `agentResult`, `job`, `signals`, `journal`,
+  `agentOrders`, `performance`, `templates`, `strategyResult`); the contract test validates the real answers against them.
+- **Contract test**: templates → create from the stream template `market-making` → get → start paper → signals,
+  journal, orders (each with `mode=paper`, with `mode=live`, and `mode=all` → 400) → performance → pause → backtest job
+  → `GET /jobs/{id}` → stop; `start live` → 409; an unknown id on ten operations → 404 `not_found`; a spot agent by a
+  key → `owner_required`; a key restricted to another venue → `restricted`.
+- **SDKs** (both): `listAgentTemplates`, `getAgent`, `listAgentSignals`, `listAgentJournal`, `listAgentOrders`,
+  `getAgentPerformance`, `getJob`, `waitForJob`, `pauseAgent`, `backtestAgent`, and typed results for the seven writes
+  that used to answer 501. The per-agent reads take `mode` as a **required** argument (the API would fall back on the
+  agent's current mode; the SDKs do not let a caller rely on that): a missing or unknown mode is refused before any
+  request. Python sends an agent's `risk` limits as JSON numbers when they are whole, as decimal strings otherwise —
+  never a float.
+- **Obsolete 501 tests**: the "every strategy / agent write answers 501" integration tests are gone; the mocked test
+  "a 501 is an error on every write method" stays (a server can still answer 501: an owner's spot order without the swap
+  flow), now over 14 methods. `scripts/demo-trading-api.mts` and `docs/TRADING-API-ARCHITECTURE.md` no longer say 501.
+
+## 4. The two SDK-facing mismatches
+
+- **`CommandResult.order`** — the answer of `POST /commands` is declared as a union of four shapes, told apart by `kind`
+  and, for an order, by `executed`: `query`; `control`; an order **dry run** (`executed: false`, `order` is the
+  CANONICAL order, `hash`, `attached`, `preview` for spot); an order **executed** (`executed: true`, `order` is the
+  unified order, `canonical`, `idempotent`, `approval`). TypeScript: a discriminated union (`if (r.kind === 'order' &&
+  r.executed) r.order.status`). Python: four models (`CommandQuery`, `CommandControl`, `CommandDryRun`,
+  `CommandExecuted`); the generator and the document walk handle an answer that is an `anyOf` of objects. `Switch` became
+  a named component.
+- **Rotation** — behaviour kept (the mandate names the old key id; the new key is unbound). The answer now also carries
+  `mandate.rebind`: the four owner calls that give the new key a mandate. The contract test follows them (a mandate for
+  the new id, approved, bound with the passkey) and the rotated key trades again. Both SDK documents have a section
+  "Key rotation and the trading mandate" with what stops working, what keeps working, and the owner's steps.
+
+## 5. Found on the way
+
+- **A named notional order was not replay-stable.** With `notional`, the size is derived at the boundary from the price
+  read at that moment. The same order sent again under its `clientOrderId` but another `Idempotency-Key` header reached
+  the order service with a size computed at another price and was refused `409 idempotency_conflict` — observed in the
+  Python integration run (the synchronous run had passed by luck of the tape). Fix (`idempotency.ts` `withOrderKey`,
+  `routes.ts`): an order that has both `notional` and `clientOrderId` is protected a second time under the key
+  `order:<clientOrderId>`: same body → the first answer, before any price is read; another body → 409. Test: the
+  contract test moves the mark between the two sends. **Limitation**: the stored answer is pruned with the idempotency
+  table; after that, a replay is sized again. The real fix is `OrderInput.notional` in the order service (mismatch 1).
+- **Position provenance has no order for fills on one timestamp.** `orders/provenance.ts` replays fills oldest first;
+  with the frozen clock of the fixtures, an owner's close and a key's open on the same instant were replayed in either
+  order, and the key was then told nothing of the position was its own. Not changed (not this workstream's file); the
+  contract test now advances its clock by a second before each write. Reported to the execution workstream: a
+  tie-break (fill id, or the order's sequence) would make the ledger deterministic.
+
+## Real run output — agents on paper, and the named notional order
+
+### TypeScript
+
+```
+[sdk-ts] createOrder(clientOrderId) twice → same order=true Idempotent-Replay=true; another body → IdempotencyConflict
+[sdk-ts] runCommand('LONG BTC-PERP 100', {dryRun:true}) → HTTP 200 request=9b233655… ratelimit=535/600 reset=57s kind=order executed=false order={"instrument":"hyperliquid:BTC","side":"buy","notional":"100","size":null} (the canonical order); orders created: 0
+[sdk-ts] runCommand('SHOW POSITIONS') → kind=query query=positions; runCommand('KILL', {dryRun:true}) → kind=control executed=false; runCommand('FROBNICATE…') → ValidationError parse_error
+[sdk-ts] listAgentTemplates() → HTTP 200 request=fcc81cd5… ratelimit=599/600 reset=60s stat-arb(bar: research/paper/live), funding-arb(stream: research/paper), market-making(stream: research/paper), momentum(bar: research/paper/live), mean-reversion(bar: research/paper/live), cross-exchange(stream:…
+[sdk-ts] createAgent({template:'market-making',venues:['hyperliquid'],universe:['BTC']}) → HTTP 200 request=1583f14a… ratelimit=598/600 reset=60s agent=0fc663c6-fab… state=stopped mode=research
+[sdk-ts] startAgent(id, {mode:'paper'}) → HTTP 200 request=eefcadfc… ratelimit=597/600 reset=60s state=active mode=paper
+[sdk-ts] listAgentSignals/Journal/Orders(id, {mode:'paper'}), getAgentPerformance(id, {mode:'paper'}) → signals=0 journal=1 ("Paper trading started by key:spk_289e00a91ba2") orders=0 performance: "PAPER — simulated orders and fills; no money moved" points=0
+[sdk-ts] pauseAgent(id) → state=paused; backtestAgent(id, {hours:1}) → job=628fe9d5-946… status=queued; getJob → queued; waitForJob(20 s) → done
+[sdk-ts] stopAgent(id) → HTTP 200 request=dabda483… ratelimit=581/600 reset=59s state=stopped
+[sdk-ts] startAgent(id, {mode:'live'}) without an owner-approved mandate → Conflict HTTP 409 live_unavailable; getAgent(unknown) → NotFound not_found
+```
+
+### Python (synchronous client)
+
+```
+[sdk-py] [sync] create_order(client_order_id) twice → same order=True Idempotent-Replay=True; another body → IdempotencyConflict
+[sdk-py] [sync] run_command('LONG BTC-PERP 100', dry_run=True) → HTTP 200 request=7326b5de… ratelimit=532/600 reset=54s kind=order executed=False order={instrument: hyperliquid:BTC, side: buy, notional: 100} (the canonical order); orders created: 0
+[sdk-py] [sync] run_command('SHOW POSITIONS') → kind=query query=positions; run_command('KILL', dry_run=True) → kind=control executed=False; run_command('FROBNICATE…') → ValidationError parse_error
+[sdk-py] [sync] list_agent_templates() → HTTP 200 request=9818127d… ratelimit=599/600 reset=60s ['stat-arb(bar: research/paper/live)', 'funding-arb(stream: research/paper)', 'market-making(stream: research/paper)', 'momentum(bar: research/paper/live)', 'mean-reversion(bar: research/paper/live)', 'c…
+[sdk-py] [sync] create_agent(template='market-making', venues=['hyperliquid'], universe=['BTC']) → HTTP 200 request=9b015512… ratelimit=598/600 reset=60s agent=f9d3f8a3-cdd… state=stopped mode=research
+[sdk-py] [sync] start_agent(id, mode='paper') → HTTP 200 request=5d646fbf… ratelimit=597/600 reset=60s state=active mode=paper
+[sdk-py] [sync] list_agent_signals/journal/orders(id, mode='paper'), get_agent_performance(id, mode='paper') → signals=0 journal=1 ('Paper trading started by key:spk_7dea8e72d54e') orders=0 performance: 'PAPER — simulated orders and fills; no money moved' points=0
+[sdk-py] [sync] pause_agent(id) → state=paused; backtest_agent(id, hours=1) → job=cb6a12a4-8e7… status=queued; get_job → queued; wait_for_job(20 s) → done
+[sdk-py] [sync] stop_agent(id) → HTTP 200 request=31fe4993… ratelimit=576/600 reset=56s state=stopped
+[sdk-py] [sync] start_agent(id, mode='live') without an owner-approved mandate → Conflict HTTP 409 live_unavailable; get_agent(unknown) → NotFound not_found
+```
+
+## Files touched outside the owned set (Part 2)
+
+- `services/api/src/trading-api/routes.ts`, `idempotency.ts`, `keys.ts`, `shaping.ts` — as described above.
+- `services/api/test/trading-contract.test.ts`, `trading-api-unit.test.ts` (one assertion: which operations document a 501).
+- `services/api/test/execution-gmx.test.ts` — one assertion (the listed GMX position id), replacing the asserted 414.
+- `services/api/test/execution-spot.test.ts` — eleven lines added to one test: a spot BUY by `notional` through
+  `POST /orders/preview` and `POST /orders`, then its cancel.
+- `scripts/demo-trading-api.mts`, `docs/TRADING-API-ARCHITECTURE.md` — the stale 501 passages, as asked.
+
+Nothing under `agents/**`, `agent-runtime/**`, `orders/**`, `risk/**`, `mandates/**`, `derivatives/**` or `apps/web/src`.
+
+## Remaining mismatches (current list — it replaces the list of Part 1)
+
+1. **`OrderInput` has no `notional`** (`orders/service.ts`). The boundary converts for perpetuals and goes through the
+   command path for a spot BUY; the canonical order of a perpetual carries `size`, and a replay of a named notional
+   order relies on a stored answer. With `notional` in the order service all three would go.
+2. **A long and a short GMX position on one market** cannot be closed through the path (their ids are the 66-character
+   keys). A short per-position id from the GMX service, or `maxParamLength` on the server, would fix it; `server.ts`
+   is not this workstream's file.
+3. **`listAgentSignals` and `listAgentJournal` declare `open`** (they share the page query of the orders); the handlers
+   ignore it. The SDKs do not expose it on those two.
+4. **The per-agent reads make `mode` optional** in the contract (default: the agent's current mode). The SDKs require it.
+5. **`createAgent.mode` accepts `live` in the schema** while its description says "never live".
+6. **`agent.updated` and the agent answers are loose** (`looseObject`): the SDK types name the documented members only.
+7. **Refusal shaping** is unit-tested, not provoked through HTTP with an account-level risk refusal.
+8. **A preview needs a mandate on the key** although `orders:prepare` is not an execution scope (reported, as asked).
+9. **`StartRequest.agentId`** on `POST /agents/{id}/start` (reported, as asked; agents workstream).
+10. **Rotation unbinds a trading key** — kept on purpose; documented and tested, with the way back.
+11. **Position provenance on equal timestamps** (section 5) — the execution workstream's.
+12. `halted: null` is declared, not provoked. The documents' code snippets are not executed as such; the examples are.
