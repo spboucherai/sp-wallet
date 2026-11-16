@@ -60,7 +60,7 @@ export interface PerpBook {
 }
 /** bookkeeping of the LIVE life cycle (perp-live-cycle.ts) */
 export interface PerpLiveBook {
-  accountId: string; network: 'testnet' | 'mainnet'; mandateId: string; strategySha256: string; since: number;
+  accountId: string; network: 'testnet' | 'mainnet'; mandateId: string; strategySha256: string; since: number; /** V11.2: mandateId is an owner-approved TRADING mandate (mandates/service.ts) — the only authority for new risk */ unified?: boolean;
   /** reference capital of the loss limits and of the absolute caps: the venue's account value when the mandate was prepared */
   capital: DecStr;
   /** why the agent left LIVE; `done` once it is STOPPED; `retryAt`: no closing attempt before this time (after a refused one) */
@@ -123,6 +123,9 @@ export interface PerpExecutor {
   place(order: OrderRequest, leverage: DecStr): Promise<PlaceResult>;
   /** LIVE only: instruments on which an order of the agent is not confirmed by the venue yet — the bar stays open for them */
   unconfirmed?(): string[];
+  /** V11.2, LIVE only: what the executor decides before an order exists, and what it is told once the unified order service answered */
+  prepare?(order: OrderRequest, leverage: DecStr): Promise<{ proceed: true; size: DecStr } | { proceed: false; result: PlaceResult }>;
+  observe?(order: OrderRequest, outcome: { state: string; rejectCode: string | null; detail: string | null }): Promise<void>;
 }
 
 /** What a LIVE agent adds to an engine step (perp-live-cycle.ts). Absent = PAPER, exactly as before. */
@@ -158,7 +161,10 @@ export interface PerpEngineDeps {
 export function gatewayExecutor(a: PerpAgentRow, inner: PerpExecutor, d: Pick<PerpEngineDeps, 'now' | 'lookupOrder' | 'gateway' | 'killSwitch'>): GatewayPerpExecutor {
   if (inner instanceof GatewayPerpExecutor) return inner;
   const lb = a.mode === 'LIVE' ? a.perp?.live ?? null : null, gw = d.gateway?.(a, inner);
-  return new GatewayPerpExecutor(a, inner, { mode: lb ? 'live' : 'paper', network: lb?.network ?? 'mainnet', authorityId: lb ? lb.mandateId : a.deriv_account_id, accountId: lb?.accountId ?? a.deriv_account_id,
+  // the authority an order names: LIVE — the owner-approved TRADING mandate in force (`unified`; a derivative mandate approved
+  // before the trading mandates existed authorises reduce-only exits only); PAPER — the agent's paper trading mandate
+  const paper = (a as unknown as { runtime?: { paperMandate?: { id: string } } | null }).runtime?.paperMandate?.id ?? null;
+  return new GatewayPerpExecutor(a, inner, { mode: lb ? 'live' : 'paper', network: lb?.network ?? 'mainnet', authorityId: lb ? (lb.unified ? lb.mandateId : null) : paper, legacyAuthorityId: lb && !lb.unified ? lb.mandateId : null, accountId: lb?.accountId ?? a.deriv_account_id,
     slippageBps: a.risk.slippageBps, now: d.now, configVersion: a.config_version ?? 1, ...(d.lookupOrder ? { lookup: d.lookupOrder } : {}), ...(gw ? { gateway: gw } : {}), ...(d.killSwitch ? { killSwitch: d.killSwitch } : {}) });
 }
 

@@ -55,16 +55,27 @@ export function perpSeam(inner: PerpExecutor, o: PerpSeamOptions): OrderSeam {
       if (o.lookup) return o.lookup(order.clientOrderId);
       return paperLookup(order.clientOrderId);
     },
+    // UNIFIED path: the live executor's own conditions before an order exists (cool-down, unconfirmed earlier order, floor guard,
+    // the venue's leverage setting, the mandate's per-order bound). The paper executor has none.
+    ...(inner.prepare ? { async prepare(order: CanonicalOrder, ctx: SeamContext) {
+      const p = await inner.prepare!(toOrderRequest(order, { size: order.size!, worstPrice: ctx.worstPrice }), order.leverage ?? '1');
+      return p.proceed ? p : { proceed: false as const, result: fromPlace(p.result, order.clientOrderId) as Exclude<SeamResult, { status: 'accepted' }> };
+    } } : {}),
+    ...(inner.observe ? { async observe(order: CanonicalOrder, outcome: { state: string; rejectCode: string | null; detail: string | null }) {
+      await inner.observe!(toOrderRequest(order, { size: order.size!, worstPrice: order.limitPrice ?? '0' }), outcome);
+    } } : {}),
     // paper: one local transaction — no row means no order. live: the order row is written before the signer is asked — no row means nothing was signed
     absenceConclusiveAt: (_order, submittedAt) => submittedAt,
   };
 }
 
 function toPlace(rec: AgentOrderRecord, req: OrderRequest): PlaceResult {
-  const order = (status: Order['status']): Order => ({ ...req, venueOrderId: rec.venueOrderId, status, filled: rec.filledSize, avgFillPrice: rec.avgFillPrice, createdAt: rec.createdAt, updatedAt: rec.updatedAt, rejectReason: rec.detail });
+  const order = (status: Order['status'], note: string | null = rec.detail): Order => ({ ...req, venueOrderId: rec.venueOrderId, status, filled: rec.filledSize, avgFillPrice: rec.avgFillPrice, createdAt: rec.createdAt, updatedAt: rec.updatedAt, rejectReason: note });
   const [code, ...rest] = (rec.detail ?? '').split(': '), reason = rest.join(': ') || rec.detail || rec.reason;
+  // the order that was sent is smaller than the one the engine asked for: the live executor cut it to the mandate's bound
+  const cut = rec.size !== null && D.lt(D.from(rec.size), D.from(req.size));
   switch (rec.state) {
-    case 'FILLED': return { status: 'placed', order: order('filled'), fills: [], idempotent: rec.idempotent };
+    case 'FILLED': return { status: 'placed', order: cut ? order('partially_filled', `cut to the mandate's notional per order: ${rec.size} of ${req.size} sent and filled; the rest follows from the real position`) : order('filled'), fills: [], idempotent: rec.idempotent };
     case 'CANCELLED': {
       if (!rec.venueOrderId) return { status: 'refused', code: 'withdrawn', reason: rec.detail ?? 'withdrawn' };
       // an IOC order that ended with a remainder: the venue's own word for it when the gateway kept it (cancelled / partially_filled)
@@ -73,12 +84,15 @@ function toPlace(rec: AgentOrderRecord, req: OrderRequest): PlaceResult {
     }
     case 'PARTIALLY_FILLED': case 'SUBMITTED': return { status: 'placed', order: order(rec.state === 'SUBMITTED' ? 'open' : 'partially_filled'), fills: [], idempotent: rec.idempotent };
     case 'REJECTED': return { status: 'refused', code: /^[a-z_]{3,40}$/.test(code ?? '') ? code! : rec.reason.toLowerCase(), reason };
-    case 'FAILED': return { status: 'deferred', code: /^[a-z_]{3,40}$/.test(code ?? '') ? code! : 'not_sent', reason };
+    // a unified order that ended FAILED is final for its key (nothing was sent, and nothing will be under this key): the instrument
+    // is held until the next bar. A deferral that left no order (`source: 'none'`) and the seam ledger's NOT_SENT may be attempted again.
+    case 'FAILED': return rec.source === 'orders' ? { status: 'refused', code: /^[a-z_]{3,40}$/.test(code ?? '') ? code! : rec.reason.toLowerCase(), reason }
+      : { status: 'deferred', code: /^[a-z_]{3,40}$/.test(code ?? '') ? code! : 'not_sent', reason };
     default: return { status: 'deferred', code: 'live_unknown_pending', reason: `order ${rec.clientOrderId} is ${rec.state}: ${rec.detail ?? 'its outcome is not known yet'}; nothing more is sent on ${req.instrument} until it is reconciled` };
   }
 }
 
-export interface GatewayPerpOptions { mode: 'paper' | 'live'; network: string; authorityId: string | null; slippageBps: number; now: () => number; configVersion: number; strategySha256?: string | null; signalId?: string | null; bar?: number | null;
+export interface GatewayPerpOptions { mode: 'paper' | 'live'; network: string; authorityId: string | null; legacyAuthorityId?: string | null; slippageBps: number; now: () => number; configVersion: number; strategySha256?: string | null; signalId?: string | null; bar?: number | null;
   gateway?: AgentOrderGateway; killSwitch?: KillSwitchRead; lookup?: PerpSeamOptions['lookup']; accountId: string }
 /** The executor the perp engine uses: reads from the underlying account, orders through the gateway. */
 export class GatewayPerpExecutor implements PerpExecutor {
@@ -88,7 +102,7 @@ export class GatewayPerpExecutor implements PerpExecutor {
   private readonly inner: PerpExecutor; private readonly a: PerpAgentRow; private readonly o: GatewayPerpOptions;
   constructor(a: PerpAgentRow, inner: PerpExecutor, o: GatewayPerpOptions) {
     this.a = a; this.inner = inner; this.o = o; this.signalId = o.signalId ?? null; this.strategySha256 = o.strategySha256 ?? null; this.bar = o.bar ?? null;
-    this.gateway = o.gateway ?? orderGateway({ agent: a, authorityId: o.authorityId, seam: perpSeam(inner, { accountId: o.accountId, mode: o.mode, ...(o.lookup ? { lookup: o.lookup } : {}) }), killSwitch: o.killSwitch ?? killSwitchRead, now: o.now });
+    this.gateway = o.gateway ?? orderGateway({ agent: a, authorityId: o.authorityId, accountId: o.accountId, legacyAuthorityId: o.legacyAuthorityId ?? null, seam: perpSeam(inner, { accountId: o.accountId, mode: o.mode, ...(o.lookup ? { lookup: o.lookup } : {}) }), killSwitch: o.killSwitch ?? killSwitchRead, now: o.now });
   }
   account(sinceEventId?: number): Promise<ExecAccount> { return this.inner.account(sinceEventId); }
   positions(): Promise<Position[]> { return this.inner.positions(); }
@@ -99,7 +113,7 @@ export class GatewayPerpExecutor implements PerpExecutor {
     const now = this.o.now(), notional = D.mul(D.from(req.size), D.from(req.price));
     const order: CanonicalOrderInput = { v: 1, venue: 'hyperliquid', network: this.o.network, instrument: req.instrument, marketKind: 'perp', side: req.side, type: 'market', size: req.size, notional: null, limitPrice: null, triggerPrice: null,
       reduceOnly: req.reduceOnly, tif: 'ioc', maxSlippageBps: this.o.slippageBps, maxFeeUsd: feeCap(notional), leverage: D.str(D.max(D.one, D.from(leverage))), marginMode: 'cross', clientOrderId: req.clientId, mode: this.o.mode,
-      principal: { kind: 'agent', id: this.a.id }, mandateId: this.o.authorityId ?? this.a.id, createdAt: now, expiresAt: now + ORDER_TTL_MS };
+      principal: { kind: 'agent', id: this.a.id }, mandateId: this.o.authorityId ?? this.o.legacyAuthorityId ?? this.a.id, createdAt: now, expiresAt: now + ORDER_TTL_MS };
     const rec = await this.gateway.submit({ kind: 'agent', id: this.a.id }, order, { idempotencyKey: req.clientId, resolved: { worstPrice: req.price },
       context: { signalId: this.signalId, configVersion: this.o.configVersion, strategySha256: this.strategySha256, bar: this.bar } });
     return toPlace(rec, req);

@@ -12,6 +12,7 @@ import { BTC, Clock, T0, fixtureVenues, setMarket, useDatabase, type Venues } fr
 type Eng = typeof import('../src/agents/perp-engine.ts');
 let sql: any, eng: Eng, pd: typeof import('../src/agents/perp-data.ts'), ps: typeof import('../src/agents/perp-strategies.ts'), pl: typeof import('../src/agents/perp-live.ts');
 let mod: typeof import('../src/derivatives/index.ts'), wk: typeof import('../src/derivatives/worker.ts');
+let gwm: typeof import('../src/agent-runtime/gateway.ts'), pgw: typeof import('../src/agents/perp-gateway.ts');
 
 beforeAll(async () => {
   await useDatabase('perp_agent');
@@ -20,6 +21,7 @@ beforeAll(async () => {
   await db.migrate(); await db.migrate();
   eng = await import('../src/agents/perp-engine.ts'); pd = await import('../src/agents/perp-data.ts'); ps = await import('../src/agents/perp-strategies.ts'); pl = await import('../src/agents/perp-live.ts');
   mod = await import('../src/derivatives/index.ts'); wk = await import('../src/derivatives/worker.ts');
+  gwm = await import('../src/agent-runtime/gateway.ts'); pgw = await import('../src/agents/perp-gateway.ts');
 });
 afterAll(async () => { await sql?.end(); });
 
@@ -253,6 +255,10 @@ async function world(o: { risk?: Partial<typeof RISK>; approved?: boolean; meta?
       market: async (s) => { const m = Number(ex.marks[s]); return { inst: INST[s]!, ticker: { instrument: `hyperliquid:${s}`, mark: ex.marks[s]!, index: ex.marks[s]!, mid: ex.marks[s]!, funding: '0', openInterest: null, volume24h: null, change24h: null, ts: clock.now() },
         book: { instrument: `hyperliquid:${s}`, bids: [[String(m - 1), '1000']], asks: [[String(m + 1), '1000']], ts: clock.now() } }; },
       executor: () => ex as never,
+      // V11.2: the ENGINE STEP is tested here against a fake executor, so its orders go through the seam adapter over that fake
+      // (the gateway is passed explicitly: nothing is bound in this describe). The unified order service — the path of every
+      // real perp agent — is exercised by the API tests below and by agent-bind.test.ts.
+      gateway: (a, inner) => new gwm.SeamOrderGateway({ agent: a, authorityId: a.id, seam: pgw.perpSeam(inner, { accountId: a.deriv_account_id, mode: 'paper' }), now: clock.now }),
     },
     row: async () => (await sql`select * from agents where id = ${id}`)[0],
     tick: async () => eng.tickPerpAgent(await w.row(), w.deps) };
@@ -430,7 +436,8 @@ describe('perp agent through the API (fixture venues, real paper service)', () =
     await sql`insert into strategy_versions (id, agent_id, name, version, code_sha256, path, meta, status, report) values (${sv}, ${id}, 'fixed_perp', '1', ${createHash('sha256').update(id).digest('hex')}, 'strategies/fixed_perp/1',
       ${sql.json({ kind: 'perp', lookback: 10, max_leverage: 2, max_gross_exposure: 2 })}, 'approved', ${sql.json({})})`;
     await sql`update agents set strategy_version_id = ${sv} where id = ${id}`;
-    expect((await api('POST', `/agents/${id}/mode`, { mode: 'PAPER' })).json.state).toBe('PAPER_TRADING');
+    const started = (await api('POST', `/agents/${id}/mode`, { mode: 'PAPER' })).json;
+    expect(started.state, JSON.stringify(started)).toBe('PAPER_TRADING');
   };
   const pass = async (id: string) => (await pl.perpEnginePass(rt, clock.now()))[id];
   const orders = (acct: string) => sql`select client_id, side, reduce_only, status, size::text, origin, type, tif from deriv_orders where account_id = ${acct} order by created_at, venue_order_id`;

@@ -151,7 +151,7 @@ export function createAgentRuntime(h: RuntimeHandlers, o: RuntimeOptions = {}) {
     for (const s of sups) {
       const r = await withLease(s.id, worker, async () => {
         const ports: SupervisorPorts = {
-          now, killSwitch: killSwitch(),
+          now, killSwitch: { engage: (reason) => killSwitch().engage(reason, { kind: 'agent', id: s.id }) },   // the ONE switch (the risk engine's), engaged in this supervisor's name
           snapshots: () => snapshots(s.id),
           pause: async (agentId, reason) => { if (!h.pause) throw new Error('no pause handler bound'); await h.pause(agentId, reason, s.id); },
           propose: (f, acted, note) => propose(s.id, f, acted, note),

@@ -13,14 +13,14 @@ import { useTestDatabase } from './test-db.ts';
 
 let sql: any;
 let leases: typeof import('../src/agent-runtime/leases.ts'), queue: typeof import('../src/agent-runtime/queue.ts'), sched: typeof import('../src/agent-runtime/scheduler.ts'), gw: typeof import('../src/agent-runtime/gateway.ts'),
-  ks: typeof import('../src/agent-runtime/kill-switch.ts'), ksAdmin: typeof import('../src/agent-runtime/kill-switch-admin.ts');
+  ks: typeof import('../src/agent-runtime/kill-switch.ts');
 
 beforeAll(async () => {
   await useTestDatabase('agent_workers');
   const db = await import('../src/db.ts'); sql = db.sql;
   await db.migrate();
   leases = await import('../src/agent-runtime/leases.ts'); queue = await import('../src/agent-runtime/queue.ts'); sched = await import('../src/agent-runtime/scheduler.ts'); gw = await import('../src/agent-runtime/gateway.ts');
-  ks = await import('../src/agent-runtime/kill-switch.ts'); ksAdmin = await import('../src/agent-runtime/kill-switch-admin.ts');
+  ks = await import('../src/agent-runtime/kill-switch.ts');
 });
 afterAll(async () => { await sql?.end(); });
 beforeEach(async () => { await sql`delete from agent_jobs`; await sql`delete from agent_leases`; });
@@ -232,7 +232,7 @@ const P = (id: string) => ({ kind: 'agent' as const, id });
 describe('order gateway — the adapter over the engine seams', () => {
   it('a paper order: CREATED → VALIDATED → APPROVED (simulated account) → SUBMITTING → FILLED, with its fills, journal lines and context', async () => {
     const a = await agent(), s = seam();
-    const g = gw.orderGateway({ agent: await row(a), seam: s, authorityId: a });
+    const g = gw.seamGatewayFactory({ agent: await row(a), seam: s, authorityId: a });
     const o = order(a), rec = await g.submit(P(a), o, { idempotencyKey: o.clientOrderId, resolved: { worstPrice: '100100' }, context: { signalId: '7', configVersion: 3, strategySha256: 'ab'.repeat(32) } });
     expect([rec.state, rec.reason, rec.filledSize, rec.avgFillPrice, rec.venueOrderId, rec.mode, rec.idempotent, rec.attempt]).toEqual(['FILLED', 'VENUE_FILLED', '0.01', '100000', 'v-1', 'paper', false, 1]);
     expect(rec.history.map((h) => `${h.from}>${h.to}`)).toEqual(['CREATED>VALIDATED', 'VALIDATED>APPROVED', 'APPROVED>SUBMITTING', 'SUBMITTING>FILLED']);
@@ -245,13 +245,13 @@ describe('order gateway — the adapter over the engine seams', () => {
 
   it('same idempotency key: the stored record is the answer and NOTHING is executed again — whatever the body says', async () => {
     const a = await agent(), s = seam();
-    const g = gw.orderGateway({ agent: await row(a), seam: s, authorityId: a }), o = order(a);
+    const g = gw.seamGatewayFactory({ agent: await row(a), seam: s, authorityId: a }), o = order(a);
     await g.submit(P(a), o, { idempotencyKey: o.clientOrderId });
     const again = await g.submit(P(a), { ...o, size: '5' }, { idempotencyKey: o.clientOrderId });
     expect([again.state, again.idempotent, again.size, s.calls.execute]).toEqual(['FILLED', true, '0.01', 1]);
     // two workers submitting the same key at the same instant: one row, one execution
     const o2 = order(a), s2 = seam();
-    const g2 = gw.orderGateway({ agent: await row(a), seam: s2, authorityId: a });
+    const g2 = gw.seamGatewayFactory({ agent: await row(a), seam: s2, authorityId: a });
     const [r1, r2] = await Promise.all([g2.submit(P(a), o2, { idempotencyKey: o2.clientOrderId }), g2.submit(P(a), o2, { idempotencyKey: o2.clientOrderId })]);
     expect(s2.calls.execute).toBe(1); expect([r1.id, r2.id]).toEqual([o2.clientOrderId, o2.clientOrderId]);
   });
@@ -260,12 +260,12 @@ describe('order gateway — the adapter over the engine seams', () => {
     const a = await agent();
     let t = Date.now(), finish: (r: any) => void = () => {};
     const hanging = seam({ execute: () => new Promise((res) => { finish = res; }), lookup: null });   // the first worker's call to the venue is still in the air
-    const g1 = gw.orderGateway({ agent: await row(a), seam: hanging, authorityId: a, now: () => t }), o = order(a);
+    const g1 = gw.seamGatewayFactory({ agent: await row(a), seam: hanging, authorityId: a, now: () => t }), o = order(a);
     const first = g1.submit(P(a), o, { idempotencyKey: o.clientOrderId });
     await sleep(30);
     // a second worker comes with the same key while the first is mid-flight: "no trace" on the execution side must NOT become "never placed"
     const other = seam({ lookup: null });
-    const g2 = gw.orderGateway({ agent: await row(a), seam: other, authorityId: a, now: () => t });
+    const g2 = gw.seamGatewayFactory({ agent: await row(a), seam: other, authorityId: a, now: () => t });
     const seen = await g2.submit(P(a), o, { idempotencyKey: o.clientOrderId });
     expect([seen.state, seen.idempotent, other.calls.execute, other.calls.lookup]).toEqual(['SUBMITTING', true, 0, 0]);
     expect((await g2.reconcile!()).map((r) => r.state)).toEqual(['SUBMITTING']); expect(other.calls.lookup).toBe(0);
@@ -276,18 +276,18 @@ describe('order gateway — the adapter over the engine seams', () => {
     expect(hanging.calls.execute).toBe(1);
     // a SUBMITTING record whose worker died (nothing changed for longer than the grace) IS asked about
     const o2 = order(a), dead = seam({ execute: () => new Promise(() => {}), lookup: null });
-    void gw.orderGateway({ agent: await row(a), seam: dead, authorityId: a, now: () => t }).submit(P(a), o2, { idempotencyKey: o2.clientOrderId });
+    void gw.seamGatewayFactory({ agent: await row(a), seam: dead, authorityId: a, now: () => t }).submit(P(a), o2, { idempotencyKey: o2.clientOrderId });
     await sleep(30);
     t += gw.IN_FLIGHT_GRACE_MS + 1;
     const late = seam({ lookup: { status: 'pending', code: 'submitted', reason: 'the venue has it, unconfirmed', venueOrderId: 'v-77' } });
-    const settled = await gw.orderGateway({ agent: await row(a), seam: late, authorityId: a, now: () => t }).submit(P(a), o2, { idempotencyKey: o2.clientOrderId });
+    const settled = await gw.seamGatewayFactory({ agent: await row(a), seam: late, authorityId: a, now: () => t }).submit(P(a), o2, { idempotencyKey: o2.clientOrderId });
     expect([settled.state, settled.venueOrderId, late.calls.lookup, late.calls.execute]).toEqual(['SUBMITTED', 'v-77', 1, 0]);
   });
 
   it('refused before anything leaves: research mode, another mode than the agent\'s, no mandate in force, another mandate, an instrument that is not the agent\'s', async () => {
     const paper = await agent(), research = await agent({ state: 'CREATED', mode: 'RESEARCH' }), live = await agent({ state: 'LIVE', mode: 'LIVE' });
     const s = seam(), mandate = randomUUID();
-    const sub = async (id: string, authorityId: string | null, o: Partial<CanonicalOrderInput>) => { const ord = order(id, o); return gw.orderGateway({ agent: await row(id), seam: s, authorityId }).submit(P(id), ord, { idempotencyKey: ord.clientOrderId }); };
+    const sub = async (id: string, authorityId: string | null, o: Partial<CanonicalOrderInput>) => { const ord = order(id, o); return gw.seamGatewayFactory({ agent: await row(id), seam: s, authorityId }).submit(P(id), ord, { idempotencyKey: ord.clientOrderId }); };
     const cases: [string, Promise<any>, string, RegExp][] = [
       ['research agent', sub(research, research, {}), 'READ_ONLY_MODE', /research mode places no order/],
       ['live order on a paper agent', sub(paper, paper, { mode: 'live' }), 'READ_ONLY_MODE', /the order says live and the agent is in paper/],
@@ -304,14 +304,14 @@ describe('order gateway — the adapter over the engine seams', () => {
     expect([ok.state, ok.mode, ok.history[1]!.reason]).toEqual(['FILLED', 'live', 'APPROVED_BY_MANDATE']);
     // the order must be the submitting agent's own
     const o = order(paper);
-    await expect(gw.orderGateway({ agent: await row(paper), seam: s, authorityId: paper }).submit(P(research), o, { idempotencyKey: o.clientOrderId })).rejects.toThrow(/bound to another agent/);
-    await expect(gw.orderGateway({ agent: await row(paper), seam: s, authorityId: paper }).submit(P(paper), order(research), { idempotencyKey: o.clientOrderId })).rejects.toThrow(/another principal/);
-    await expect(gw.orderGateway({ agent: await row(paper), seam: s, authorityId: paper }).submit(P(paper), { ...order(paper), mandateId: null } as never, { idempotencyKey: o.clientOrderId })).rejects.toThrow();   // the canonical schema: an agent acts under an authority
+    await expect(gw.seamGatewayFactory({ agent: await row(paper), seam: s, authorityId: paper }).submit(P(research), o, { idempotencyKey: o.clientOrderId })).rejects.toThrow(/bound to another agent/);
+    await expect(gw.seamGatewayFactory({ agent: await row(paper), seam: s, authorityId: paper }).submit(P(paper), order(research), { idempotencyKey: o.clientOrderId })).rejects.toThrow(/another principal/);
+    await expect(gw.seamGatewayFactory({ agent: await row(paper), seam: s, authorityId: paper }).submit(P(paper), { ...order(paper), mandateId: null } as never, { idempotencyKey: o.clientOrderId })).rejects.toThrow();   // the canonical schema: an agent acts under an authority
   });
 
   it('kill switch: an order that adds risk is refused; a reduce-only order and a spot sale pass', async () => {
     const a = await agent(), s = seam(), engaged = { engaged: async () => ({ engaged: true, reason: 'daily loss' }) };
-    const g = gw.orderGateway({ agent: await row(a), seam: s, authorityId: a, killSwitch: engaged });
+    const g = gw.seamGatewayFactory({ agent: await row(a), seam: s, authorityId: a, killSwitch: engaged });
     const open = order(a), close = order(a, { side: 'sell', reduceOnly: true });
     const r1 = await g.submit(P(a), open, { idempotencyKey: open.clientOrderId });
     expect([r1.state, r1.reason]).toEqual(['REJECTED', 'KILL_SWITCH_ACTIVE']); expect(r1.detail).toMatch(/daily loss/);
@@ -322,7 +322,7 @@ describe('order gateway — the adapter over the engine seams', () => {
 
   it('refusals of the execution side: risk engine, mandate, signer, venue — each recorded with who said no', async () => {
     const a = await agent();
-    const by = async (res: any) => { const o = order(a); return gw.orderGateway({ agent: await row(a), seam: seam({ execute: res }), authorityId: a }).submit(P(a), o, { idempotencyKey: o.clientOrderId }); };
+    const by = async (res: any) => { const o = order(a); return gw.seamGatewayFactory({ agent: await row(a), seam: seam({ execute: res }), authorityId: a }).submit(P(a), o, { idempotencyKey: o.clientOrderId }); };
     expect([(await by({ status: 'rejected', by: 'risk', code: 'max_position', reason: 'too large' })).reason, (await by({ status: 'rejected', by: 'mandate', code: 'mandate_none', reason: 'no mandate' })).reason,
       (await by({ status: 'rejected', by: 'signer', code: 'signer_refused', reason: 'price' })).reason, (await by({ status: 'rejected', by: 'venue', code: 'venue_rejected', reason: 'no liquidity' })).reason])
       .toEqual(['RISK_DENIED', 'MANDATE_DENIED', 'SIGNER_REFUSED', 'VENUE_REJECTED']);
@@ -336,12 +336,12 @@ describe('order gateway — the adapter over the engine seams', () => {
     const a = await agent();
     let found: any = new Error('venue unreachable');
     const s = seam({ execute: new Error('socket hang up'), lookup: () => found, conclusive: null });
-    const g = gw.orderGateway({ agent: await row(a), seam: s, authorityId: a }), o = order(a);
+    const g = gw.seamGatewayFactory({ agent: await row(a), seam: s, authorityId: a }), o = order(a);
     const r1 = await g.submit(P(a), o, { idempotencyKey: o.clientOrderId });
     expect([r1.state, r1.reason, r1.detail]).toEqual(['UNKNOWN', 'SUBMIT_NETWORK_ERROR', 'socket hang up']);
     expect((await sql`select severity, code, title from research_log where agent_id = ${a}`)[0]).toMatchObject({ severity: 'error', code: 'ORDER_OUTCOME_UNKNOWN', title: 'Order outcome unknown: it will be reconciled, not sent again' });
     // the engine comes back with the same key (next pass, or after a restart: a NEW gateway object). The execution side cannot be asked: still unknown, still not sent.
-    const g2 = gw.orderGateway({ agent: await row(a), seam: s, authorityId: a });
+    const g2 = gw.seamGatewayFactory({ agent: await row(a), seam: s, authorityId: a });
     const r2 = await g2.submit(P(a), o, { idempotencyKey: o.clientOrderId });
     expect([r2.state, r2.idempotent, s.calls.execute, s.calls.lookup]).toEqual(['UNKNOWN', true, 1, 1]);
     // it answers "no trace" but absence cannot be proven on this venue: still unknown, still not sent
@@ -362,7 +362,7 @@ describe('order gateway — the adapter over the engine seams', () => {
     // 1 — the executor says "not sent now" (a cool-down): FAILED/NOT_SENT, then the retry runs
     const s1 = seam({ execute: (_o: any, _c: any, n: number) => (n === 1 ? { status: 'not_sent', code: 'live_cooldown', reason: 'the signer still counts the last order' } : undefined) });
     s1.execute = ((orig) => async (o: any, c: any) => (await orig(o, c)) ?? s1.filled)(s1.execute);
-    const g1 = gw.orderGateway({ agent: await row(a), seam: s1, authorityId: a }), o1 = order(a);
+    const g1 = gw.seamGatewayFactory({ agent: await row(a), seam: s1, authorityId: a }), o1 = order(a);
     const first = await g1.submit(P(a), o1, { idempotencyKey: o1.clientOrderId });
     expect([first.state, first.reason, first.detail, first.attempt]).toEqual(['FAILED', 'NOT_SENT', 'live_cooldown: the signer still counts the last order', 1]);
     const second = await g1.submit(P(a), o1, { idempotencyKey: o1.clientOrderId });
@@ -370,14 +370,14 @@ describe('order gateway — the adapter over the engine seams', () => {
     // 2 — unknown, then the execution side has no trace of it and absence IS conclusive there: FAILED/NEVER_PLACED, then the retry runs
     let n = 0;
     const s2 = seam({ execute: () => (++n === 1 ? new Error('timeout') : s2.filled), lookup: null });
-    const g2 = gw.orderGateway({ agent: await row(a), seam: s2, authorityId: a }), o2 = order(a);
+    const g2 = gw.seamGatewayFactory({ agent: await row(a), seam: s2, authorityId: a }), o2 = order(a);
     expect((await g2.submit(P(a), o2, { idempotencyKey: o2.clientOrderId })).state).toBe('UNKNOWN');
     const retried = await g2.submit(P(a), o2, { idempotencyKey: o2.clientOrderId });
     expect([retried.state, retried.attempt, s2.calls.execute]).toEqual(['FILLED', 2, 2]);
     expect((await sql`select attempt, state, reason from agent_order_intents where idempotency_key = ${o2.clientOrderId} order by attempt`).map((r: any) => [r.attempt, r.state, r.reason])).toEqual([[1, 'FAILED', 'NEVER_PLACED'], [2, 'FILLED', 'VENUE_FILLED']]);
     // 3 — a REJECTED or CANCELLED order is final: never a second attempt
     const s3 = seam({ execute: { status: 'rejected', by: 'venue', code: 'venue_rejected', reason: 'no liquidity' } });
-    const g3 = gw.orderGateway({ agent: await row(a), seam: s3, authorityId: a }), o3 = order(a);
+    const g3 = gw.seamGatewayFactory({ agent: await row(a), seam: s3, authorityId: a }), o3 = order(a);
     await g3.submit(P(a), o3, { idempotencyKey: o3.clientOrderId });
     expect([(await g3.submit(P(a), o3, { idempotencyKey: o3.clientOrderId })).state, s3.calls.execute]).toEqual(['REJECTED', 1]);
   });
@@ -387,7 +387,7 @@ describe('order gateway — the adapter over the engine seams', () => {
     let state: any = { status: 'accepted', venueOrderId: 'v-9', filledSize: '0', avgFillPrice: null, fills: [], final: false };
     const s = seam({ execute: () => state, lookup: () => state });
     s.cancel = async () => ({ status: 'accepted', venueOrderId: 'v-9', filledSize: '0', avgFillPrice: null, fills: [], final: true });
-    const g = gw.orderGateway({ agent: await row(a), seam: s, authorityId: a }), o = order(a, { type: 'limit', limitPrice: '99000', tif: 'alo' });
+    const g = gw.seamGatewayFactory({ agent: await row(a), seam: s, authorityId: a }), o = order(a, { type: 'limit', limitPrice: '99000', tif: 'alo' });
     const r = await g.submit(P(a), o, { idempotencyKey: o.clientOrderId });
     expect(r.state).toBe('SUBMITTED');
     const n = (await g.reconcile!())[0]!.history.length;
@@ -400,20 +400,31 @@ describe('order gateway — the adapter over the engine seams', () => {
   });
 });
 
-describe('kill switch port', () => {
-  it('engage records the switch first, halts the venue accounts, notifies once; a second engage changes nothing; only the admin module releases', async () => {
-    await ksAdmin.releaseKillSwitch('owner');
-    const halted: string[] = [], notified: any[] = [];
-    const port = ks.localKillSwitch({ haltAccounts: async (reason) => { expect((await ks.killSwitchState()).engaged).toBe(true); halted.push(reason); return ['acct-1']; }, notify: async (s) => { notified.push(s); }, now: () => T }, 'agent:risk-1');
+describe('kill switch port — bound to the risk engine (the ONE switch)', () => {
+  it('engage goes to the risk service in the agent\'s name, once; the port has nothing else; unbound it refuses loudly; the state the agents read is the risk engine\'s record', async () => {
+    const bind = await import('../src/agents/execution-bind.ts'), ord = await import('../src/orders/index.ts');
+    await sql`delete from settings where key in ('risk.switches', 'agents.kill_switch')`;
+    // unbound: the read still answers the one switch, engage does not pretend
+    bind.bindExecution(null);
+    expect(await ks.killSwitchRead.engaged()).toEqual({ engaged: false, reason: null, readOnly: false });
+    await expect(ks.killSwitch().engage('x')).rejects.toThrow(/not bound to the risk service/);
+    const ex = ord.createExecution({ verifyOwner: async () => { throw new Error('no passkey in this test'); }, signerStatus: async () => ({ halted: false }) });
+    bind.bindExecution(ex);
+    const port = ks.killSwitch();
     expect(Object.keys(port)).toEqual(['engage']);                              // no release on the port
-    expect(await port.engage('LIVE agents lost 12 % today')).toEqual({ engaged: true, at: T, already: false });
-    expect(await ks.killSwitchState()).toEqual({ engaged: true, reason: 'LIVE agents lost 12 % today', at: T, by: 'agent:risk-1', haltedAccounts: ['acct-1'] });
-    expect(await ks.killSwitchRead.engaged()).toEqual({ engaged: true, reason: 'LIVE agents lost 12 % today' });
-    expect(await port.engage('again')).toEqual({ engaged: true, at: T, already: true });
-    expect([halted.length, notified.length]).toEqual([1, 1]);
-    expect((await sql`select type, actor from audit_events where type like 'agents.kill_switch%' order by seq`).map((r: any) => [r.type, r.actor])).toEqual([['agents.kill_switch_engaged', 'agent:risk-1']]);
-    const rel = await ksAdmin.releaseKillSwitch('owner');
-    expect([rel.engaged, rel.stillHaltedAccounts]).toEqual([false, ['acct-1']]);  // the accounts it halted keep their halt: lifting it needs the passkey
-    expect((await ks.killSwitchState()).engaged).toBe(false);
+    expect(await port.engage('LIVE agents lost 12 % today', { kind: 'agent', id: 'risk-1' })).toMatchObject({ engaged: true, already: false });
+    expect((await ex.risk.switches()).killSwitch).toMatchObject({ on: true, reason: 'LIVE agents lost 12 % today', by: { kind: 'agent', id: 'risk-1' } });
+    expect(await ks.killSwitchState()).toMatchObject({ engaged: true, reason: 'LIVE agents lost 12 % today', by: 'agent:risk-1', readOnly: false, release: { route: '/risk', passkey: true } });
+    expect(await ks.killSwitchRead.engaged()).toEqual({ engaged: true, reason: 'LIVE agents lost 12 % today', readOnly: false });
+    expect(await port.engage('again', { kind: 'agent', id: 'risk-2' })).toMatchObject({ engaged: true, already: true });
+    expect((await ex.risk.switches()).killSwitch.by).toEqual({ kind: 'agent', id: 'risk-1' });
+    expect((await sql`select type, actor from audit_events where type like '%kill_switch%' order by seq`).map((r: any) => [r.type, r.actor])).toEqual([['risk.kill_switch', 'agent:risk-1']]);
+    // nothing in the agents' modules releases: the module exports no such thing, and the risk engine's release wants the passkey
+    expect(Object.keys(ks).filter((k) => /release/i.test(k))).toEqual([]);
+    expect(Object.keys(bind).filter((k) => /release/i.test(k))).toEqual([]);
+    await expect(ex.risk.release('kill_switch', undefined)).rejects.toBeTruthy();
+    expect((await ex.risk.switches()).killSwitch.on).toBe(true);
+    await sql`delete from settings where key = 'risk.switches'`;
+    bind.bindExecution(null);
   });
 });
