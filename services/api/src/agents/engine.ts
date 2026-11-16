@@ -24,6 +24,8 @@ export interface EngineDeps {
   /** is a live order of this agent still unsettled? */
   inFlight(a: AgentRow): Promise<boolean>;
   halted(): Promise<boolean>;
+  /** V11 (D2): revoke the agent's mandate AT THE SIGNER when the engine stops it — a stopped agent must not leave a mandate that still signs. Never throws. */
+  revokeMandate?(a: AgentRow, reason: string): Promise<void>;
   now(): number;
 }
 export interface PlannedOrder { fromSymbol: string; toSymbol: string; fromId: string; toId: string; fromDecimals: number; toDecimals: number; amountIn: bigint; usd: number; reason: string }
@@ -97,7 +99,7 @@ export async function tickAgent(a: AgentRow, d: EngineDeps): Promise<string> {
   const [sv] = await sql<{ path: string; code_sha256: string; status: string }[]>`select path, code_sha256, status from strategy_versions where id = ${a.strategy_version_id}`;
   if (!sv || sv.status !== 'approved') return 'strategy not approved';
   // LIVE runs only the exact code the mandate was approved for
-  if (mode === 'LIVE' && a.mandate?.strategySha256 !== sv.code_sha256) { await stop(a, 'the approved strategy no longer matches the mandate'); return 'stopped'; }
+  if (mode === 'LIVE' && a.mandate?.strategySha256 !== sv.code_sha256) { await stop(a, 'the approved strategy no longer matches the mandate', d); return 'stopped'; }
   const cash = cashOf(a), symbols = agentSymbols(a);
   const data: Record<string, Bar[]> = {};
   try { for (const s of symbols) { await d.assertFresh(s, a.interval); data[s] = await d.series(s, a.interval, LOOKBACK); if (data[s]!.length < 50) throw new Error(`not enough history for ${s}`); } }
@@ -144,13 +146,15 @@ export async function tickAgent(a: AgentRow, d: EngineDeps): Promise<string> {
     const h2 = await d.holdings(a, mode);
     const eq = h2.filter((h) => h.symbol === cash || a.universe.includes(h.symbol)).reduce((s, h) => s + (h.symbol === cash ? h.units : h.units * (prices[h.symbol] ?? 0)), 0);
     await sql`insert into agent_equity (agent_id, ts, mode, equity_usd, positions) values (${a.id}, ${new Date(bar)}, ${mode}, ${eq}, ${sql.json(Object.fromEntries(h2.map((h) => [h.symbol, h.units])))}) on conflict do nothing`;
-    if (breached) { await stop(a, `loss limit reached: equity ${eqNow.toFixed(2)} USD against ${capital.toFixed(2)} USD allocated (limit ${a.risk.maxLossPct} %); positions were sold to ${cash}`); return 'stopped: loss limit'; }
+    if (breached) { await stop(a, `loss limit reached: equity ${eqNow.toFixed(2)} USD against ${capital.toFixed(2)} USD allocated (limit ${a.risk.maxLossPct} %); positions were sold to ${cash}`, d); return 'stopped: loss limit'; }
   }
   return placed ? `${placed} order(s)` : note || 'no order';
 }
 
-async function stop(a: AgentRow, reason: string): Promise<void> {
+async function stop(a: AgentRow, reason: string, d?: EngineDeps): Promise<void> {
   await sql`update agents set state = 'STOPPED', stop_reason = ${reason}, updated_at = now() where id = ${a.id}`;
+  // V11 (D2): the engine's stop is not enough — the signer would go on signing for this vault if asked. The mandate is revoked there.
+  if (a.mode === 'LIVE' && a.mandate_id && d?.revokeMandate) await d.revokeMandate(a, reason);
   await log(a, 'stop', 'Agent stopped', reason);
   await audit('agent.stopped', 'engine', { id: a.id, reason });
 }

@@ -16,6 +16,7 @@ import { getSeries } from '../market/series.ts';
 import { listQuality } from '../market/store.ts';
 import { FEE_WARN_SHARE, feeShare, FLOOR_ORDERS, gasReserve, RESERVE_ORDERS, type GasReserve } from './gas.ts';
 import { signer } from '../signer-client.ts';
+import { revokeAgentMandate } from './live.ts'; // V11 (D2): leaving LIVE revokes the mandate at the signer
 // >>> v6 perp agents: the shared routes delegate to perp-routes.ts when the agent's kind is 'perp'
 import { assertPerpApprovable, createPerpAgent, isPerp, perpDetail, perpMode, perpView, spotOnly } from './perp-routes.ts';
 // <<< v6 perp agents
@@ -201,6 +202,9 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     const state = b.mode === 'PAPER' ? 'PAPER_TRADING' : b.mode;
     const [r] = await sql<AgentRow[]>`update agents set state = ${state}, mode = ${b.mode === 'PAPER' ? 'PAPER' : a.mode}, stop_reason = ${b.mode === 'STOPPED' ? 'stopped by the owner' : null}, updated_at = now() where id = ${a.id} returning *`;
     await audit('agent.mode', 'owner', { id: a.id, state });
+    // V11 (D2): leaving LIVE — stopped, paused or back to research — ends the mandate AT THE SIGNER too. The state change above is
+    // not undone when the signer cannot be reached: stopping always works, and the engine revokes at its next pass.
+    if (a.state === 'LIVE' && a.mandate_id) await revokeAgentMandate(a, `the owner set the agent to ${state}`);
     return view(r!);
   });
 
@@ -211,6 +215,9 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     const [v] = await sql`select * from strategy_versions where id = ${z.uuid().parse(sid)} and agent_id = ${a.id}`;
     if (!v) throw new UserError('not_found', 'strategy version not found', 404);
     if (!v.report) throw new UserError('no_report', 'this version has no backtest report: it cannot be approved', 409);
+    // V11 (D4): a report whose own look-ahead check did not pass is not evidence of anything — the perp path already refuses it (perp-strategies.ts)
+    if (!isPerp(a) && (v.meta as { kind?: string } | null)?.kind !== 'perp' && (v.report as { checks?: Record<string, unknown> } | null)?.checks?.lookahead !== 'pass')
+      throw new UserError('bad_report', 'the report\'s own look-ahead check did not pass (or the report carries none): this version cannot be approved. Run the backtest again; a strategy that reads future bars fails it.', 409);
     // v6: kinds never cross — a perp agent approves only a contract-2 version with a valid version-2 report, a spot agent never one
     if (isPerp(a)) assertPerpApprovable(a, v as never); else if ((v.meta as { kind?: string } | null)?.kind === 'perp') throw new UserError('wrong_kind', 'a perpetual-futures strategy cannot run on a spot agent', 409);
     if (a.state === 'LIVE') throw new UserError('bad_state', 'the code of a live agent cannot change: revoke the mandate first, then approve the new version and a new mandate', 409);
@@ -247,6 +254,8 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     const b = z.object({ assertion: z.record(z.string(), z.unknown()) }).parse(req.body);
     if (!a.mandate) throw new UserError('bad_state', 'prepare the mandate first', 409);
     await requireGasReserve(a, (await signer.status(true)).policy.maxFee[a.network]);
+    // V11 (D2): the signer holds ONE active mandate per vault. The previous one of this agent ends before the new one is asked for.
+    if (a.mandate_id && a.mandate_id !== a.mandate.mandateId && !(await revokeAgentMandate(a, 'replaced by a new mandate'))) throw new UserError('signer_unreachable', 'the previous mandate could not be revoked on the signer; nothing was approved', 503);
     const r = await signer.mandateApprove(a.mandate, b.assertion); // only the signer judges the passkey and stores the limits
     const [row] = await sql<AgentRow[]>`update agents set mandate_id = ${r.mandateId}, state = 'LIVE', mode = 'LIVE', stop_reason = null, updated_at = now() where id = ${a.id} returning *`;
     await audit('mandate.approved', 'owner', { agent: a.id, mandateId: r.mandateId, hash: r.hash });

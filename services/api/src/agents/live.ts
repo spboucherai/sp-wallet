@@ -127,20 +127,73 @@ export function engineDeps(m: MarketDeps, a0?: AgentRow): EngineDeps {
     placeLive,
     inFlight: async (a) => (await sql`select 1 from agent_orders where agent_id = ${a.id} and mode = 'LIVE' and state in ${sql(OPEN)} limit 1`).length > 0,
     halted: async () => (await signer.status()).halted,
+    revokeMandate: async (a, reason) => { await revokeAgentMandate(a, reason); },
     now: () => Date.now(),
   };
 }
 
+/** what the mandate reconciliation needs from the signer (the real client, or a fake in tests) */
+export interface MandatePort {
+  status(): Promise<{ mandates?: { mandate: { mandateId: string; vaultIndex: number }; approvedAt: string; revoked: boolean; expired: boolean }[] }>;
+  mandateRevoke(mandateId: string): Promise<unknown>;
+}
+/**
+ * V11 (D2) — revoke an agent's mandate at the signer because the agent is no longer LIVE (stopped by the engine or by the owner,
+ * paused, loss limit, expiry). Revocation needs no passkey: it only removes authority. It never throws: when the signer cannot
+ * be reached the failure is recorded and `revokeStaleMandates` — every engine pass — does it as soon as the signer answers.
+ */
+export async function revokeAgentMandate(a: Pick<AgentRow, 'id' | 'mandate_id'>, reason: string, port: MandatePort = signer): Promise<boolean> {
+  if (!a.mandate_id) return true;
+  try {
+    await port.mandateRevoke(a.mandate_id);
+    await audit('mandate.revoked', 'engine', { agent: a.id, mandateId: a.mandate_id, reason: reason.slice(0, 200) });
+    return true;
+  } catch (e) {
+    const m = (e as Error).message.slice(0, 200);
+    if ((e as { code?: string }).code === 'signer_not_found') return true;                    // the signer never stored it: nothing to revoke
+    await audit('mandate.revoke_failed', 'engine', { agent: a.id, mandateId: a.mandate_id, reason: reason.slice(0, 200), error: m }).catch(() => {});
+    await sql`insert into research_log (agent_id, kind, title, body) values (${a.id}, 'stop', 'Mandate not revoked yet', ${`the signer could not be reached to revoke the mandate (${m}); it is retried every minute`})`.catch(() => {});
+    return false;
+  }
+}
+/** a mandate the signer approved this recently may belong to an approval whose database write is still in flight */
+const MANDATE_ADOPTION_GRACE_MS = 120_000;
+/**
+ * The signer's own list decides (nothing is remembered here): every mandate it still holds as active must belong to an agent
+ * that is LIVE with exactly that mandate. Any other one — the agent stopped or paused, the revocation failed earlier, the
+ * answer of an approval was lost, the agent was deleted — is revoked. Returns the ids revoked.
+ */
+export async function revokeStaleMandates(port: MandatePort = signer, now = Date.now()): Promise<string[]> {
+  let st: Awaited<ReturnType<MandatePort['status']>>;
+  try { st = await port.status(); } catch { return []; }                                       // signer unreachable: it signs nothing either; next pass
+  const active = (st.mandates ?? []).filter((m) => !m.revoked && !m.expired);
+  if (!active.length) return [];
+  const agents = await sql<{ id: string; state: string; mandate_id: string | null }[]>`select id, state, mandate_id from agents where mandate_id is not null`;
+  const out: string[] = [];
+  for (const m of active) {
+    const id = m.mandate.mandateId, owner = agents.find((a) => a.mandate_id === id);
+    if (owner?.state === 'LIVE') continue;
+    if (!owner && now - Date.parse(m.approvedAt) < MANDATE_ADOPTION_GRACE_MS) continue;
+    try {
+      await port.mandateRevoke(id); out.push(id);
+      await audit('mandate.revoked', 'engine', { agent: owner?.id ?? null, mandateId: id, reason: owner ? `the agent is ${owner.state}, not LIVE` : 'no agent holds this mandate' });
+    } catch { /* next pass */ }
+  }
+  return out;
+}
+
 const backoff = new Map<string, number>();
 /** One pass over every active agent: settle open orders, then let the engine decide. Errors never cross agents. */
-export async function enginePass(m: MarketDeps, now = Date.now()): Promise<Record<string, string>> {
+export async function enginePass(m: MarketDeps, now = Date.now(), port: MandatePort = signer): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
+  await revokeStaleMandates(port, now).catch(() => []);                                       // V11 (D2): before anything is decided
   const agents = await sql<AgentRow[]>`select * from agents where state in ('PAPER_TRADING', 'LIVE') and kind = 'spot' order by created_at`; // v6: perp agents have their own engine (perp-live.ts)
   for (const a of agents) {
     try {
       for (const r of await sql<OrderRow[]>`select * from agent_orders where agent_id = ${a.id} and mode = 'LIVE' and state in ${sql(OPEN)} order by ts`) await advanceOrder(a, r, now);
       if (a.state === 'LIVE' && a.mandate && a.mandate.expiresAt * 1000 <= now) {
         await sql`update agents set state = 'STOPPED', stop_reason = 'the mandate expired; approve a new one to continue', updated_at = now() where id = ${a.id}`;
+        await revokeAgentMandate(a, 'mandate expired', port);                                   // the signer refuses an expired mandate by itself; revoked as well, so that its record says so
         await audit('agent.stopped', 'engine', { id: a.id, reason: 'mandate expired' }); out[a.id] = 'stopped: mandate expired'; continue;
       }
       if ((backoff.get(a.id) ?? 0) > now) { out[a.id] = 'backing off after an error'; continue; }
