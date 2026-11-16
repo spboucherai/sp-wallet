@@ -10,6 +10,8 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from .errors import ConfigurationError
+from .models import FINAL_ORDER_STATES as _FINAL_ORDER_STATES
+from .models import ORDER_STATES as _ORDER_STATES
 
 # ------------------------------------------------------------------------------------------------------------ canonical JSON
 
@@ -110,52 +112,21 @@ def decimal_str(value: str | int | Decimal, what: str = "value") -> str:
     return s
 
 
-def size_from_notional(notional: str | int | Decimal, price: str | int | Decimal, lot_size: str | int | Decimal = "0.000001") -> str:
-    """Largest multiple of `lot_size` whose value at `price` does not exceed `notional` — exact decimal arithmetic,
-    rounded DOWN, never up. Example: size_from_notional("100", "64907", "0.00001") == "0.00154"."""
-    (a, sa), (b, sb), (c, sc) = (_scaled(decimal_str(v, w)) for v, w in ((notional, "notional"), (price, "price"), (lot_size, "lot_size")))
-    if b == 0 or c == 0:
-        raise ConfigurationError("price and lot_size must be positive")
-    # units = floor(notional / (price × lot)); every operand is an integer scaled by a power of ten: no rounding anywhere
-    units = (a * 10 ** (sb + sc)) // (b * c * 10**sa)
-    digits = str(units * c).rjust(sc + 1, "0")
-    s = f"{digits[: len(digits) - sc]}.{digits[len(digits) - sc :]}" if sc else digits
-    return s.rstrip("0").rstrip(".") if "." in s else s
-
-
-def _scaled(s: str) -> tuple[int, int]:
-    """"12.340" → (12340, 3)"""
-    whole, _, frac = s.partition(".")
-    return int(whole + frac), len(frac)
-
-
 # ------------------------------------------------------------------------------------------------------------ order states
 
-#: the states of the unified order state machine
-ORDER_STATES: tuple[str, ...] = (
-    "CREATED", "VALIDATED", "AWAITING_APPROVAL", "APPROVED", "SUBMITTING", "SUBMITTED",
-    "PARTIALLY_FILLED", "FILLED", "CANCELLED", "REJECTED", "FAILED", "UNKNOWN",
-)  # fmt: skip
+#: the states of the unified order state machine — generated from the contract (`models.ORDER_STATES`)
+ORDER_STATES: tuple[str, ...] = _ORDER_STATES
 #: final states. UNKNOWN is NOT final and is NOT a failure: the venue's answer is not known yet — keep reading the order.
-TERMINAL_ORDER_STATES: frozenset[str] = frozenset({"FILLED", "CANCELLED", "REJECTED", "FAILED"})
+TERMINAL_ORDER_STATES: frozenset[str] = frozenset(_FINAL_ORDER_STATES)
 
 
 def order_state(status: Any) -> str | None:
-    """`status` of an order as one of ORDER_STATES (case-insensitive, `canceled` = `cancelled`), or None."""
-    if not isinstance(status, str):
-        return None
-    s = status.upper()
-    if s == "CANCELED":
-        s = "CANCELLED"
-    return s if s in ORDER_STATES else None
+    """`status` of an order when it is one of ORDER_STATES, else None (an answer of a server newer than this SDK)."""
+    return status if isinstance(status, str) and status in ORDER_STATES else None
 
 
 def is_terminal_order(order: Any) -> bool:
-    """True when the order is final. An order whose `status` is one of the twelve states is judged by that state alone;
-    for the statuses the read side still reports from older tables (`open`, `pending`, `triggered`, swap states…), the
-    server's own `final` flag decides. `UNKNOWN` is never final."""
-    get = order.get if isinstance(order, dict) else lambda k: getattr(order, k, None)
-    s = order_state(get("status"))
-    if s is not None:
-        return s in TERMINAL_ORDER_STATES
-    return get("final") is True
+    """True when the order is final: its `status` is FILLED, CANCELLED, REJECTED or FAILED — the closed enum of the
+    contract decides, nothing else. `UNKNOWN` is never final, and a status this SDK does not know is not final either."""
+    status = order.get("status") if isinstance(order, dict) else getattr(order, "status", None)
+    return order_state(status) in TERMINAL_ORDER_STATES

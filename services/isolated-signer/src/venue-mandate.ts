@@ -76,6 +76,10 @@ export async function venueMandateApprove(ctx: VenueCtx, raw: unknown, assertion
   for (const other of Object.values(st.state.venueMandates ?? {})) {
     if (other.mandate.authorizationId === m.authorizationId && phaseOf(other, now).phase === 'active') deny('conflict', 'another mandate is active on this venue authorization: revoke it first');
   }
+  // V11: a quoting mandate (venue-quoting.ts) and a directional mandate exclude each other on a venue authorization
+  for (const q of Object.values(st.state.venueQuotingMandates ?? {})) {
+    if (q.mandate.authorizationId === m.authorizationId && venueMandatePhase(q.mandate, q.revoked ? sec(q.revokedAt) : null, now).phase === 'active') deny('conflict', 'a quoting mandate is active on this venue authorization: revoke it first');
+  }
   if (!assertion) deny('bad_approval', 'the owner\'s passkey approval is required');
   try { await ctx.verify(assertion!, hash); } catch (e) { deny((e as { code?: string }).code ?? 'bad_approval', (e as Error).message); }
   (st.state.venueMandates ??= {})[id] = { mandate: m, hash: hex(hash), approvedAt: new Date(now * 1000).toISOString(), revoked: false, usage: {}, hour: [] };
@@ -170,7 +174,7 @@ export async function venueMandateSign(ctx: VenueCtx, req: VenueMandateSignReque
   const trading = createHlTrading({ network: a.network, assets: hlPinnedAssets(a.network) });
   let d: HlDescription;
   try { d = trading.describe(s); } catch (e) { return deny('rejected', `payload refused: ${(e as Error).message}`); }
-  if (d.kind === 'approve_agent' || d.kind === 'other' || s.kind !== HL_KIND_L1) deny('unsupported', `this payload is not an order, a cancel or a leverage change (${String(d.detail.type ?? d.detail.primaryType ?? s.kind).slice(0, 60)}): a mandate signs nothing else`);
+  if (d.kind === 'approve_agent' || d.kind === 'other' || d.kind === 'schedule_cancel' || s.kind !== HL_KIND_L1) deny('unsupported', `this payload is not an order, a cancel or a leverage change (${String(d.detail.type ?? d.detail.primaryType ?? s.kind).slice(0, 60)}): a mandate signs nothing else`);
   const p = d.detail as { nonce: number; vaultAddress: string | null; expiresAfter: number | null; connectionId: string };
   if (p.vaultAddress !== null) deny('unsupported', 'sub-accounts and vaults are not traded');
   if (p.expiresAfter === null) deny('policy', 'the action carries no venue expiry: a signature that never expires is not released');

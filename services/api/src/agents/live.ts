@@ -75,7 +75,7 @@ export async function placeLive(a: AgentRow, o: PlannedOrder, bar: number, ref?:
     values (${id}, ${a.id}, 'LIVE', ${o.fromId}, ${o.toId}, ${o.fromSymbol}, ${o.toSymbol}, ${o.amountIn.toString()}, ${ps.expected.toString()}, ${ps.minOut.toString()}, 'prepared', ${o.reason}, ${new Date(bar)}, ${sql.json(ps.intent as never)}, ${sql.json({ swapData: ps.data, usd: o.usd })},
       ${ref?.clientOrderId ?? null}, ${ref?.signalId ?? null}, ${ref?.configVersion ?? null}, ${ref?.strategySha256 ?? null})`;
   let signed;
-  try { signed = await signer.mandateSign(a.mandate_id, ps.intent, { swapData: ps.data }); }
+  try { signed = await signer.mandateSign(a.mandate_id, ps.intent, { swapData: ps.data }, { reducesRisk: o.toSymbol === (a.cash ?? 'USDC') }); }
   catch (e) { await setState(id, 'failed', `refused by the signer: ${(e as Error).message.slice(0, 200)}`); await audit('agent.order_refused', 'signer', { agent: a.id, id, reason: (e as Error).message.slice(0, 200) }); throw e; }
   await sql`update agent_orders set state = 'signed', raw = ${signed.raw}, txid = ${signed.txid}, pre_raw = ${signed.pre?.raw ?? null}, pre_txid = ${signed.pre?.txid ?? null}, updated_at = now() where id = ${id}`;
   await audit('agent.order_signed', 'engine', { agent: a.id, id, from: o.fromSymbol, to: o.toSymbol, amount: o.amountIn.toString(), minOut: ps.minOut.toString(), txid: signed.txid });

@@ -1,5 +1,7 @@
 // Pure helpers: canonical JSON, idempotency keys, decimal strings, order states. No I/O, no dependency.
+// (An order sized by a notional is sized by the SERVER since API 1.0.0 of V11: there is no sizing arithmetic here any more.)
 import { ConfigurationError } from './errors.ts';
+import { FINAL_ORDER_STATES, ORDER_STATES, type OrderState } from './generated/openapi.ts';
 
 // ---------------------------------------------------------------------------------------------------------------- canonical JSON
 /** Deterministic JSON: object keys sorted, `undefined` members dropped, no whitespace — the same rule as the server's
@@ -40,39 +42,17 @@ export function decimalString(v: string | number, what: string): string {
   if (!isDecimalString(v)) throw new ConfigurationError(`${what}: expected a non-negative decimal string such as "0.01"`);
   return v;
 }
-const parse = (s: string): { n: bigint; scale: number } => { const [i, f = ''] = s.split('.'); return { n: BigInt(i! + f), scale: f.length }; };
-const format = (n: bigint, scale: number): string => {
-  if (scale === 0) return n.toString();
-  const s = n.toString().padStart(scale + 1, '0'), out = `${s.slice(0, -scale)}.${s.slice(-scale)}`.replace(/0+$/, '').replace(/\.$/, '');
-  return out;
-};
-/** Largest multiple of `lotSize` whose value at `price` does not exceed `notional` — exact integer arithmetic on the
- *  decimal strings (rounded DOWN, never up). Example: sizeFromNotional("100", "64907", "0.00001") = "0.00154". */
-export function sizeFromNotional(notional: string | number, price: string, lotSize = '0.000001'): string {
-  const a = parse(decimalString(notional, 'notional')), p = parse(decimalString(price, 'price')), l = parse(decimalString(lotSize, 'lotSize'));
-  if (p.n === 0n || l.n === 0n) throw new ConfigurationError('price and lotSize must be positive');
-  // units = floor(notional / (price × lot)), with every operand an integer scaled by a power of ten
-  const units = (a.n * 10n ** BigInt(p.scale + l.scale)) / (p.n * l.n * 10n ** BigInt(a.scale));
-  return format(units * l.n, l.scale);
-}
 
 // ---------------------------------------------------------------------------------------------------------------- order states
-/** the states of the unified order state machine */
-export const ORDER_STATES = ['CREATED', 'VALIDATED', 'AWAITING_APPROVAL', 'APPROVED', 'SUBMITTING', 'SUBMITTED', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED', 'REJECTED', 'FAILED', 'UNKNOWN'] as const;
-export type OrderState = (typeof ORDER_STATES)[number];
 /** final states. UNKNOWN is NOT final and is NOT a failure: the venue's answer is not known yet — keep reading the order. */
-export const TERMINAL_ORDER_STATES: readonly OrderState[] = ['FILLED', 'CANCELLED', 'REJECTED', 'FAILED'];
-/** `status` of an order as an OrderState (case-insensitive, `canceled` = `cancelled`), or null when it is not one of the twelve */
+export const TERMINAL_ORDER_STATES: readonly OrderState[] = FINAL_ORDER_STATES;
+/** `status` as an OrderState, or null when it is not one of the twelve (an answer of a server newer than this SDK) */
 export function orderState(status: unknown): OrderState | null {
-  if (typeof status !== 'string') return null;
-  const s = status.toUpperCase().replace(/^CANCELED$/, 'CANCELLED');
-  return (ORDER_STATES as readonly string[]).includes(s) ? (s as OrderState) : null;
+  return typeof status === 'string' && (ORDER_STATES as readonly string[]).includes(status) ? (status as OrderState) : null;
 }
-/** True when the order is final. An order whose `status` is one of the twelve states is judged by that state alone; for
- *  the statuses the read side still reports from older tables (`open`, `pending`, `triggered`, swap states…), the
- *  server's own `final` flag decides. `UNKNOWN` is never final. */
-export function isTerminalOrder(order: { status?: unknown; final?: unknown }): boolean {
+/** True when the order is final: its `status` is FILLED, CANCELLED, REJECTED or FAILED — the closed enum of the contract
+ *  decides, nothing else. `UNKNOWN` is never final, and a status this SDK does not know is not final either. */
+export function isTerminalOrder(order: { status?: unknown }): boolean {
   const s = orderState(order.status);
-  if (s !== null) return TERMINAL_ORDER_STATES.includes(s);
-  return order.final === true;
+  return s !== null && TERMINAL_ORDER_STATES.includes(s);
 }

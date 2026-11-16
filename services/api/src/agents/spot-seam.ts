@@ -39,6 +39,10 @@ export function spotSeam(a: AgentRow, d: Pick<EngineDeps, 'quote' | 'placeLive'>
   };
   const row = async (clientOrderId: string): Promise<SpotOrderRow | null> =>
     (await sql<SpotOrderRow[]>`select state, reason, amount_in::text as amount_in, received::text as received, txid, from_symbol, to_symbol, aux from agent_orders where agent_id = ${a.id} and client_order_id = ${clientOrderId}`)[0] ?? null;
+  // exec2: a BEFORE INSERT trigger on agent_orders (spw_agent_order_gate) refuses a row under the kill switch (a purchase) or in
+  // read-only mode (everything). It raises inside our insert: that is a refusal by the risk engine — a state, journaled once under
+  // the order's key — not an unknown outcome and not a crash. Nothing was recorded, so nothing was signed.
+  const gateRefusal = (e: unknown): SeamResult | null => { const m = /^(kill_switch_active|read_only_mode): (.*)$/s.exec((e as Error)?.message ?? ''); return m ? { status: 'rejected', by: m[1] === 'read_only_mode' ? 'mode' : 'risk', code: m[1]!, reason: m[2]!.slice(0, 300) } : null; };
   return {
     plan(id, o) { plans.set(id, o); },
     async execute(order, ctx) {
@@ -48,20 +52,20 @@ export function spotSeam(a: AgentRow, d: Pick<EngineDeps, 'quote' | 'placeLive'>
       if (mode === 'LIVE') {
         // the order row exists before anything is signed; a refusal by the signer is recorded on it and thrown
         try { await d.placeLive(a, o, bar, ref); }
-        catch (e) { const r = await row(order.clientOrderId); if (r) return fromRow(r); return { status: 'not_sent', code: 'not_prepared', reason: (e as Error).message.slice(0, 300) }; }
+        catch (e) { const g = gateRefusal(e); if (g) return g; const r = await row(order.clientOrderId); if (r) return fromRow(r); return { status: 'not_sent', code: 'not_prepared', reason: (e as Error).message.slice(0, 300) }; }
         return { status: 'pending', code: 'signed', reason: 'signed under the mandate; the engine broadcasts and follows it' };
       }
       // paper: fill at the provider's live quote for this exact size; nothing is signed
       let out: bigint;
       try { out = await d.quote(a, o.fromId, o.toId, o.amountIn); } catch (e) { return { status: 'not_sent', code: 'no_quote', reason: (e as Error).message.slice(0, 200) }; }
       const unitsIn = Number(formatUnits(o.amountIn, o.fromDecimals)), unitsOut = Number(formatUnits(out, o.toDecimals));
-      await sql.begin(async (tx) => {
+      try { await sql.begin(async (tx) => {
         await tx`insert into agent_orders (id, agent_id, mode, from_asset, to_asset, from_symbol, to_symbol, amount_in, expected_out, received, state, reason, bar, aux, client_order_id, signal_id, config_version, strategy_sha256)
           values (${uuidFrom(order.clientOrderId)}, ${a.id}, 'PAPER', ${o.fromId}, ${o.toId}, ${o.fromSymbol}, ${o.toSymbol}, ${o.amountIn.toString()}, ${out.toString()}, ${out.toString()}, 'filled', ${o.reason}, ${new Date(bar)}, ${tx.json({ usd: o.usd })},
             ${order.clientOrderId}, ${ctx.signalId}, ${ctx.configVersion}, ${ctx.strategySha256})`;
         await tx`insert into agent_paper (agent_id, symbol, units) values (${a.id}, ${o.fromSymbol}, ${-unitsIn}) on conflict (agent_id, symbol) do update set units = agent_paper.units + excluded.units`;
         await tx`insert into agent_paper (agent_id, symbol, units) values (${a.id}, ${o.toSymbol}, ${unitsOut}) on conflict (agent_id, symbol) do update set units = agent_paper.units + excluded.units`;
-      });
+      }); } catch (e) { const g = gateRefusal(e); if (g) return g; throw e; }
       return fromRow((await row(order.clientOrderId))!);
     },
     async lookup(order) { const r = await row(order.clientOrderId); return r ? fromRow(r) : null; },

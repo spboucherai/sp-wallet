@@ -1,39 +1,49 @@
-"""Preview an order, with every outcome handled. Needs a key with `orders:prepare` (and `markets:read` for notional_usdc).
+"""Preview an order, with every outcome handled. Needs a key with `orders:prepare`, bound to a trading mandate (a key
+previews the order it could place).
 
     SP_WALLET_API_KEY=spw_live_… uv run python examples/preview_order.py
 
-A preview places nothing. Placing (`create_order`) additionally needs `orders:execute` AND a key bound to a trading
-mandate approved by the wallet's owner — otherwise the API answers 403 `mandate_required`.
+A preview creates, signs and sends nothing. What would refuse the order is in `refusals` — a preview that says "no" is a
+normal answer (HTTP 200), not an exception. Placing (`create_order`, see paper_order.py) additionally needs
+`orders:execute` AND a key bound to a trading mandate approved by the wallet's owner.
 """
 
 from __future__ import annotations
 
-from sp_wallet import ExecutionNotWired, MandateRequired, OutcomeUnknown, RateLimited, ScopeDenied, SPWallet, ValidationError, new_idempotency_key
+from sp_wallet import AmbiguousSymbol, MandateRequired, RateLimited, ScopeDenied, ServiceUnavailable, SPWallet, ValidationError
 
 
 def main() -> None:
-    client = SPWallet()
-    # One key per LOGICAL call. Persist it before sending if your process can crash: the same key resumes the same call.
-    key = new_idempotency_key()
-    print(f"idempotency key of this call: {key}")
-    try:
-        preview = client.preview_order(exchange="hyperliquid", symbol="BTC", side="buy", order_type="market", notional_usdc=100, idempotency_key=key)
-        print("preview:", preview.to_dict(), preview.meta)
-    except OutcomeUnknown as e:
-        # NOT a failure: no trustworthy answer was received. Re-send the same call with the same key, or read the object.
-        print(f"outcome unknown — resume with idempotency_key={e.idempotency_key}")
-    except ExecutionNotWired as e:
-        print(f"the server does not execute this operation yet (501 {e.code}): nothing was done")
-    except MandateRequired:
-        print("this key is not bound to an owner-approved trading mandate: execution is refused")
-    except ScopeDenied as e:
-        print(f"the key lacks a scope: {e}")
-    except RateLimited as e:
-        print(f"rate limited; retry in {e.retry_after} s")
-    except ValidationError as e:
-        print(f"refused request ({e.code}): {e}")
-    finally:
-        client.close()
+    with SPWallet() as client:
+        try:
+            # `notional` is in the quote currency: the SERVER reads the price and computes the size, rounded down to the lot
+            preview = client.preview_order(mode="paper", exchange="hyperliquid", symbol="BTC", side="buy", order_type="market", notional="100")
+            limit = preview.meta.rate_limit
+            print(f"preview: would execute={preview.would_execute}; rate limit {limit.remaining}/{limit.limit}")
+            size = preview.resolved.size if preview.resolved else "?"
+            print(f"order: {preview.order.side} {size} {preview.order.instrument} ({preview.order.type}), hash {preview.hash[:16]}…")
+            failed = sum(1 for c in preview.risk.checks if not c.ok)
+            print(f"approval: {preview.approval.by}; risk engine: {preview.risk.decision} ({len(preview.risk.checks)} checks, {failed} failed)")
+            for r in preview.refusals:
+                print(f"refusal [{r.stage}] {r.code}: {r.message}")
+            # the account's figures are answered only to a key that may read them (wallet:read or positions:read)
+            if preview.account.withheld:
+                print("account figures: withheld (this key cannot read the account)")
+            else:
+                print(f"account: equity {preview.account.equity}, free collateral {preview.account.free_collateral}")
+        except MandateRequired:
+            print("this key is not bound to an owner-approved trading mandate: there is no order it could place, so nothing to preview")
+        except ScopeDenied as e:
+            print(f"the key lacks a scope: {e}")
+        except AmbiguousSymbol as e:
+            print(f"name the venue: {', '.join(e.candidates)}")
+        except RateLimited as e:
+            print(f"rate limited; retry in {e.retry_after} s")
+        except ServiceUnavailable as e:
+            print(f"a venue or the signer cannot be read now ({e.code}): nothing was done")
+        except ValidationError as e:
+            print(f"refused request ({e.code}): {e}")
+    print("done")
 
 
 if __name__ == "__main__":

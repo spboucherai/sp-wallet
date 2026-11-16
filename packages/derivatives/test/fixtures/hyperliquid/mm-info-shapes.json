@@ -1,0 +1,8 @@
+{
+  "recordedAt": "2026-11-16T03:10:00Z",
+  "provenance": "POST https://api.hyperliquid.xyz/info (public, read-only, no key), user = the zero address. Recorded while building the V11 market-making core. The `orderStatusOrder` entry is NOT recorded: it is the example of the official documentation (for-developers/api/info-endpoint, 'Query order status by oid or cloid', read 2026-11-15), completed with a cloid.",
+  "userRateLimit": { "request": { "type": "userRateLimit", "user": "0x0000000000000000000000000000000000000000" }, "body": { "cumVlm": "137296626.3600000143", "nRequestsUsed": 0, "nRequestsCap": 137306626, "nRequestsSurplus": 0 } },
+  "orderStatusUnknownByCloid": { "request": { "type": "orderStatus", "user": "0x0000000000000000000000000000000000000000", "oid": "0x00000000000000000000000000000001" }, "body": { "status": "unknownOid" } },
+  "orderStatusUnknownByOid": { "request": { "type": "orderStatus", "user": "0x0000000000000000000000000000000000000000", "oid": 1 }, "body": { "status": "unknownOid" } },
+  "orderStatusOrder": { "source": "documentation example", "body": { "status": "order", "order": { "order": { "coin": "ETH", "side": "A", "limitPx": "2412.7", "sz": "0.0", "oid": 1, "timestamp": 1724361546645, "triggerCondition": "N/A", "isTrigger": false, "triggerPx": "0.0", "children": [], "isPositionTpsl": false, "reduceOnly": true, "orderType": "Market", "origSz": "0.0076", "tif": "FrontendMarket", "cloid": "0x00000000000000000000000000000009" }, "status": "filled", "statusTimestamp": 1724361546645 } } }
+}

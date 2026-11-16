@@ -54,6 +54,8 @@ function hlFeed() {
 beforeAll(async () => {
   await useTestDatabase('agent_stream');
   const db = await import('../src/db.ts'); sql = db.sql; await db.migrate();
+  // V11.2: bound as a process binds it — the stream agents' simulated orders stay on the seam gateway and read the ONE kill switch
+  (await import('../src/agents/execution-bind.ts')).bindExecution((await import('../src/orders/index.ts')).createExecution());
   se = await import('../src/agent-runtime/stream-engine.ts'); tpl = await import('../src/agents/templates.ts'); life = await import('../src/agents/lifecycle.ts'); store = await import('../src/agent-runtime/store.ts');
   BTC = (await fixtureVenues(new Clock()).adapters.hyperliquid.instruments()).find((i) => i.symbol === 'BTC')!;
 });

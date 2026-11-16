@@ -49,7 +49,7 @@ async function liveKey(accountId: string, over: Record<string, unknown> = {}) {
   const id = m.json.mandate.id as string;
   const prep = await call('POST', `/api/v1/mandates/${id}/approve/prepare`, { body: { locale: 'en' } });
   expect(prep.status, JSON.stringify(prep.json)).toBe(200);
-  const a = await call('POST', `/api/v1/mandates/${id}/approve`, { body: { assertion: sign(prep.json.signer.options), acknowledged: true } });
+  const a = await call('POST', `/api/v1/mandates/${id}/approve`, { body: { assertion: sign(prep.json.signer.options), bindingAssertion: sign(prep.json.binding.options), acknowledged: true } });
   expect(a.status, JSON.stringify(a.json)).toBe(200);
   const p = await call('POST', `${DEV}/keys/${k.id}/update/prepare`, { body: { changes: { mandateId: id } } });
   expect((await call('POST', `${DEV}/keys/${k.id}/update`, { body: { intentId: p.json.intentId, assertion: sign(p.json.options) } })).status).toBe(200);
@@ -109,8 +109,18 @@ describe('locks and defaults', () => {
   it('live limits the owner never set deny new risk — through the trading API and through the route that existed before', async () => {
     const r = await call('POST', `${T}/orders`, { headers: idem(), body: order(testnet) });
     expect([r.status, r.json.error]).toEqual([422, 'risk_denied']);
-    expect(r.json.data.failed).toEqual(expect.arrayContaining(['venue_allowed', 'instrument_allowed', 'order_notional', 'daily_notional', 'position_size', 'order_leverage', 'account_leverage', 'gross_exposure', 'net_exposure', 'asset_exposure',
-      'venue_exposure', 'collateral_concentration', 'daily_loss', 'total_loss', 'drawdown']));
+    // the one-time seed ran when this server became ready, on a wallet that already had its authorized venue account: the owner's
+    // own order is judged on the limits that account's policy and authorization already express. What has no equivalent there is
+    // still missing, and still denies.
+    expect([...r.json.data.failed].sort()).toEqual(['asset_exposure', 'collateral_concentration', 'daily_notional', 'drawdown', 'net_exposure', 'venue_exposure']);
+    const lv = (await call('GET', '/api/v1/risk/limits/live')).json;
+    expect(lv).toMatchObject({ stored: {}, ownerOrdersRefused: true, automationOrdersRefused: true, missing: ['maxDailyNotional', 'maxNetExposure', 'maxAssetExposure', 'maxVenueExposure', 'maxVenueCollateralShareBps', 'maxDrawdownBps'] });
+    expect(lv.missingForAutomation).toHaveLength(15);
+    expect(lv.seed.limits).toMatchObject({ allowedVenues: ['hyperliquid'], allowedInstruments: AUTH_POLICY.allowedInstruments, maxOrderLeverage: String(AUTH_POLICY.maxLeverage) });
+    expect(lv.seed.accounts).toEqual([{ id: testnet, venue: 'hyperliquid', network: 'testnet' }]);
+    // an API key or an agent sees none of it: every capital limit is still missing for them
+    expect(await app.execution.risk.limitsFor('live', 'api_key')).toEqual({});
+    expect(await app.execution.risk.limitsFor('live', 'agent')).toEqual({});
     expect(r.json.data.order).toMatchObject({ status: 'REJECTED', reasonCode: 'RISK_DENIED' });
     expect(w.signs).toHaveLength(0);
     const old = await call('POST', `${L}/accounts/${testnet}/orders`, { body: { instrument: BTC, side: 'buy', type: 'limit', size: '0.005', price: '69000' }, headers: idem() });
@@ -231,13 +241,12 @@ describe('a LIVE trading mandate and an API key', () => {
     expect(st.venueMandates.find((m: any) => m.mandate.mandateId === k.mandateId)).toMatchObject({ hash: k.prep.signer.hash, phase: 'active' });
     expect((await call('GET', `/api/v1/mandates/${k.mandateId}`)).json.mandate).toMatchObject({ state: 'active', phase: 'active', signer: { shape: 'SPW-VENUE-MANDATE-v1', mandateId: k.mandateId, hash: k.prep.signer.hash, accountId: testnet } });
     expect((await sql`select data from audit_events where type = 'mandate.approved' order by seq desc limit 1`)[0].data).toMatchObject({ mandateId: k.mandateId, passkey: true, mode: 'live' });
-    // one mandate per venue account at the signer: a second one cannot be prepared while this one is active
-    const k2 = await newKey();
+    // one venue account serves one principal at a time: a second principal is refused at creation, with the holder; nothing is stored
+    const k2 = await newKey(), nMandates = (await sql`select count(*)::int as n from trading_mandates`)[0].n;
     const m2 = await call('POST', '/api/v1/mandates', { body: { ...MANDATE, principal: { kind: 'api_key', id: k2.id }, accountIds: [testnet] } });
-    expect(m2.status, JSON.stringify(m2.json)).toBe(200);
-    expect((await call('POST', `/api/v1/mandates/${m2.json.mandate.id}/approve/prepare`, { body: {} })).json.error).toBe('bad_state');
-    expect((await call('POST', `/api/v1/mandates/${m2.json.mandate.id}/approve`, { body: {} })).json.error).toBe('bad_state');
-    expect((await call('GET', `/api/v1/mandates/${m2.json.mandate.id}`)).json.mandate.state).toBe('created');
+    expect([m2.status, m2.json.error], JSON.stringify(m2.json)).toEqual([409, 'account_has_active_mandate']);
+    expect(m2.json.data.holder).toEqual({ via: 'trading_mandate', mandateId: k.mandateId, principal: `api_key:${k.id}` });
+    expect((await sql`select count(*)::int as n from trading_mandates`)[0].n).toBe(nMandates);
     // what cannot be expressed for the signer is refused at creation, with the field
     for (const [over, code] of [[{ maxLeverage: '2.5' }, 'value_not_expressible'], [{ maxOrderNotionalUsd: '1200', maxPositionNotionalUsd: '1200' }, 'exceeds_authorization'], [{ days: 45 }, 'duration_not_expressible'],
       [{ instruments: [BTC, 'hyperliquid:ETH'] }, 'exceeds_authorization'], [{ frequency: { perMinute: 5, perHour: 20, perDay: 60 } }, 'exceeds_authorization']] as const) {

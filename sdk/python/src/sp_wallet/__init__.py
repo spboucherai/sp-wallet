@@ -6,6 +6,7 @@
     client.get_balances()
     client.get_positions()
     client.preview_order(exchange="hyperliquid", symbol="BTC", side="buy", order_type="market", notional_usdc=100)
+    client.create_order(exchange="hyperliquid", symbol="BTC", side="buy", order_type="market", notional_usdc=100)   # paper by default
 
 `AsyncSPWallet` is the same client on asyncio. Documentation: docs/sdk/python.md.
 """
@@ -25,18 +26,20 @@ from ._util import (
     is_terminal_order,
     new_idempotency_key,
     order_state,
-    size_from_notional,
     to_decimal,
 )
 from ._version import USER_AGENT, __version__
 from .errors import (
+    AmbiguousCommand,
     AmbiguousSymbol,
     APIError,
     AuthenticationError,
     ConfigurationError,
     Conflict,
+    ExecutionDisabled,
     ExecutionNotWired,
     IdempotencyConflict,
+    MandateDenied,
     MandateRequired,
     NetworkError,
     NotFound,
@@ -44,6 +47,7 @@ from .errors import (
     OutcomeUnknown,
     PermissionDenied,
     RateLimited,
+    RiskDenied,
     ScopeDenied,
     ServerError,
     ServiceUnavailable,
@@ -55,16 +59,18 @@ from .errors import (
     error_from_response,
     redact_secrets,
 )
-from .models import API_VERSION, EXECUTION_SCOPES, OPERATIONS, SCOPES, WEBHOOK_EVENTS
+from .models import API_VERSION, EXECUTION_SCOPES, MANDATE_DENY_REASONS, OPERATION_ERRORS, OPERATIONS, RISK_CHECK_IDS, SCOPES, WEBHOOK_EVENTS
 from .webhooks import WEBHOOK_TOLERANCE_SECONDS, construct_webhook_event, verify_webhook, webhook_signature
 
 __all__ = [
-    "API_VERSION", "DECIMAL_RE", "DEFAULT_BASE_URL", "EXECUTION_SCOPES", "IDEMPOTENCY_KEY_RE", "OPERATIONS", "ORDER_STATES", "SCOPES",
-    "TERMINAL_ORDER_STATES", "USER_AGENT", "WEBHOOK_EVENTS", "WEBHOOK_TOLERANCE_SECONDS",
-    "APIError", "AmbiguousSymbol", "ApiModel", "AsyncSPWallet", "AuthenticationError", "ConfigurationError", "Conflict",
-    "ExecutionNotWired", "IdempotencyConflict", "MandateRequired", "NetworkError", "NotFound", "NotImplementedError", "OutcomeUnknown",
-    "PermissionDenied", "RateLimit", "RateLimited", "RequestModel", "ResponseMeta", "SPWallet", "SPWalletError", "ScopeDenied",
-    "ServerError", "ServiceUnavailable", "TimeoutError", "ValidationError", "WaitTimeout", "WebhookVerificationError", "WriteResult",
+    "API_VERSION", "DECIMAL_RE", "DEFAULT_BASE_URL", "EXECUTION_SCOPES", "IDEMPOTENCY_KEY_RE", "MANDATE_DENY_REASONS", "OPERATIONS",
+    "OPERATION_ERRORS", "ORDER_STATES", "RISK_CHECK_IDS", "SCOPES", "TERMINAL_ORDER_STATES", "USER_AGENT", "WEBHOOK_EVENTS",
+    "WEBHOOK_TOLERANCE_SECONDS",
+    "APIError", "AmbiguousCommand", "AmbiguousSymbol", "ApiModel", "AsyncSPWallet", "AuthenticationError", "ConfigurationError", "Conflict",
+    "ExecutionDisabled", "ExecutionNotWired", "IdempotencyConflict", "MandateDenied", "MandateRequired", "NetworkError", "NotFound",
+    "NotImplementedError", "OutcomeUnknown", "PermissionDenied", "RateLimit", "RateLimited", "RequestModel", "ResponseMeta", "RiskDenied",
+    "SPWallet", "SPWalletError", "ScopeDenied", "ServerError", "ServiceUnavailable", "TimeoutError", "ValidationError", "WaitTimeout",
+    "WebhookVerificationError", "WriteResult",
     "__version__", "canonical_json", "construct_webhook_event", "decimal_str", "error_from_response", "is_terminal_order", "models",
-    "new_idempotency_key", "order_state", "redact_secrets", "size_from_notional", "to_decimal", "verify_webhook", "webhook_signature",
+    "new_idempotency_key", "order_state", "redact_secrets", "to_decimal", "verify_webhook", "webhook_signature",
 ]  # fmt: skip

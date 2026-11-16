@@ -25,18 +25,56 @@ import { view as proposalView, type ProposalRow } from '../transfers.ts';
 import { hubFor } from '../markets-hub/index.ts';
 import { toCompareQuery, type CompareQueryInput } from '../markets-hub/schema.ts';
 import { createListing, SPOT, type Access, type MarketRow, type PartialError } from '../markets-hub/listing.ts';
+import type { OrderService } from '../orders/service.ts';
+import type { OrderRow } from '../orders/store.ts';
 import type { Principal } from './principal.ts';
+import { sizeFromNotional } from './shaping.ts';
+import { FINAL_ORDER_STATES } from './spec.ts';
 
 export interface ReadDeps {
   derivatives: () => Derivatives; live: () => LiveService;
   /** GMX positions are read from the chain through the GMX service */
   gmx: () => Pick<GmxService, 'status'>;
+  /** the order service of this server: its projection queue and its view of a unified order (GET /orders lists the unified table) */
+  orders: () => Pick<OrderService, 'drain' | 'view'>;
   prices: () => Promise<Record<string, { usd: number }> | null>;
   /** the spot/perp strategy libraries (they start laboratory processes: injectable) */
   library?: () => Promise<{ kind: 'spot' | 'perp'; path: string; sha256: string; meta: unknown }[]>;
   now?: () => number;
 }
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 200);
+
+// ---------------------------------------------------------------------------------------------------------------- money
+/** a price of the feed (a JSON number) as a decimal string: plain digits, never an exponent */
+export const priceString = (n: number): DecStr | null => (Number.isFinite(n) && n >= 0 && n < 1e21 ? D.str(D.from(n.toFixed(12))) : null);
+const MICRO_USD = D.from('0.000001');
+/** balance × price in USD, exact on the two decimal strings, kept to a millionth of a dollar (rounded down) */
+export const usdValue = (display: string, price: DecStr): DecStr => D.str(D.quantize(D.mul(D.from(display), D.from(price)), MICRO_USD, 'down'));
+
+// ---------------------------------------------------------------------------------------------------------------- cursors
+// Keyset pagination: a list is ordered by (time desc, source tag desc, id desc) — a total order, so a page boundary never
+// repeats or skips a row. The cursor is the key of the last row of the page: [microseconds since the epoch, tag, id].
+export interface Cursor { us: string; tag: string; id: string }
+export const encodeCursor = (c: Cursor): string => Buffer.from(JSON.stringify([c.us, c.tag, c.id])).toString('base64url');
+export function decodeCursor(raw: string | undefined, tags: readonly string[]): Cursor | null {
+  if (raw === undefined) return null;
+  try {
+    const v = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as unknown;
+    if (Array.isArray(v) && v.length === 3 && typeof v[0] === 'string' && /^\d{1,18}$/.test(v[0]) && typeof v[1] === 'string' && tags.includes(v[1]) && typeof v[2] === 'string' && v[2].length > 0 && v[2].length <= 300) return { us: v[0], tag: v[1], id: v[2] };
+  } catch { /* refused below */ }
+  throw new UserError('invalid_cursor', 'this cursor is not one a previous page of this list returned', 400);
+}
+/** newest first; ids are compared as bytes (the SQL side orders them with the "C" collation) */
+export const cursorOrder = (a: Cursor, b: Cursor): number => { const x = BigInt(a.us), y = BigInt(b.us); return x !== y ? (x > y ? -1 : 1) : a.tag !== b.tag ? (a.tag > b.tag ? -1 : 1) : a.id === b.id ? 0 : a.id > b.id ? -1 : 1; };
+type Sql = any; // eslint-disable-line @typescript-eslint/no-explicit-any -- a postgres.js fragment, interpolated into typed queries
+const US = (col: Sql): Sql => sql`(extract(epoch from ${col}) * 1000000)::bigint::text`;
+/** SQL condition "strictly after the cursor" for the rows of one source (`tag`), whose time is `at` and whose id is `id` */
+function afterCursor(c: Cursor | null, tag: string, at: Sql, id: Sql): Sql {
+  if (c === null) return sql`true`;
+  const t = sql`('epoch'::timestamptz + ${c.us}::bigint * interval '1 microsecond')`;
+  return tag < c.tag ? sql`${at} <= ${t}` : tag > c.tag ? sql`${at} < ${t}` : sql`(${at} < ${t} or (${at} = ${t} and ${id} < ${c.id} collate "C"))`;
+}
+
 
 // ---------------------------------------------------------------------------------------------------------------- restrictions
 const lists = (p: Principal) => (p.kind === 'api_key' ? p.restrictions : null);
@@ -98,6 +136,22 @@ export function createReads(deps: ReadDeps) {
     // a venue that could not be read may be the one that lists it: say so instead of "unknown"
     if (errors.length) throw new UserError('venue_unavailable', `'${raw.slice(0, 40)}' was not found on the venues that answered; unread: ${errors.join('; ').slice(0, 200)}`, 503);
     throw new UserError('unknown_market', `unknown market '${raw.slice(0, 40)}'`, 404);
+  }
+
+  /**
+   * The size of an order given as a `notional` (quote currency): notional / reference, rounded down to the lot. The reference is
+   * the price the order names (limit price, else trigger price), else the venue's mark read NOW — refused when it is stale.
+   */
+  async function sizeForNotional(r: Resolved, b: { notional?: string; type: string; price?: string; triggerPrice?: string }): Promise<DecStr> {
+    // spot: the order service refuses every spot order on this endpoint before it reads a size (spot_execution_requires_agent_vault / spot_via_swap_screen)
+    if (r.venue === SPOT || !('inst' in r)) return b.notional!;
+    const limited = b.type === 'limit' || b.type === 'stop_limit' || b.type === 'take_profit_limit', named = limited ? b.price : b.type === 'market' ? undefined : b.triggerPrice;
+    if (b.type !== 'market' && named === undefined) throw new UserError('invalid_order', `a ${b.type} order sized by a notional needs its ${limited ? 'price' : 'triggerPrice'}`, 400);
+    if (named !== undefined) return sizeFromNotional(b.notional!, named, r.inst.lotSize);
+    let t: Awaited<ReturnType<Derivatives['data']['ticker']>>;
+    try { t = await deps.derivatives().data.ticker(r.inst); } catch (e) { throw venueFailure(e); }
+    if (now() - t.ts > DATA_BOUNDS.tickers.maxAge) throw new UserError('stale_data', `the mark price of ${r.inst.id} is ${Math.round((now() - t.ts) / 1000)} s old: the notional is not turned into a size from a stale price; send \`size\``, 503);
+    return sizeFromNotional(b.notional!, t.mark, r.inst.lotSize);
   }
 
   async function market(p: Principal, raw: string) {
@@ -181,10 +235,11 @@ export function createReads(deps: ReadDeps) {
   async function portfolio(p: Principal) {
     const b = await balances(p, {}), px = await deps.prices().catch(() => null), errors: PartialError[] = [...b.errors];
     if (!px) errors.push({ source: 'prices', message: 'the price feed is off or unavailable: the wallet is listed without a value' });
-    const rows = b.balances.map((r) => { const usd = px?.[r.symbol]?.usd; return { ...r, valueUsd: r.display !== null && usd !== undefined ? Number(r.display) * usd : null }; });
+    // money leaves this API as decimal strings: the feed's number is turned into one once, and every product and sum is exact
+    const rows = b.balances.map((r) => { const usd = px?.[r.symbol]?.usd, price = usd === undefined ? null : priceString(usd); return { ...r, valueUsd: r.display !== null && price !== null ? usdValue(r.display, price) : null }; });
     const priced = rows.filter((r) => r.valueUsd !== null), held = rows.filter((r) => r.amount !== null && r.amount !== '0');
     const accts = await accounts(p, errors);
-    const walletUsd = px ? priced.reduce((s, r) => s + r.valueUsd!, 0) : null;
+    const walletUsd = px ? D.str(priced.reduce((t, r) => D.add(t, D.from(r.valueUsd!)), D.zero)) : null;
     return {
       asOf: b.asOf,
       wallet: { valueUsd: walletUsd, priced: held.filter((r) => r.valueUsd !== null).length, unpriced: held.filter((r) => r.valueUsd === null).length,
@@ -225,7 +280,13 @@ export function createReads(deps: ReadDeps) {
       try {
         const s = await deps.gmx().status();
         if (s.positionsError) errors.push({ source: 'gmx', message: s.positionsError });
-        for (const x of s.positions) rows.push({ id: `live:gmx:${s.account?.address ?? 'wallet'}:${x.key}`, mode: 'live', venue: 'gmx', network: s.network, accountId: s.account?.address ?? 'wallet', instrument: x.instrument, side: x.side, size: x.sizeTokens, entryPrice: x.entryPrice,
+        // A GMX position key is 66 characters: with it the id is longer than the 100 characters a path parameter may have, and
+        // POST /positions/{id}/close could never be reached. The order service also takes the INSTRUMENT id, which names the position
+        // when the wallet holds one position on that market: that form is the id. A long and a short on one market keep their keys
+        // (the service answers 409 `ambiguous_position` to the instrument form): those two are closed in the app.
+        const perMarket = new Map<string, number>();
+        for (const x of s.positions) perMarket.set(x.instrument ?? '', (perMarket.get(x.instrument ?? '') ?? 0) + 1);
+        for (const x of s.positions) rows.push({ id: `live:gmx:${s.account?.address ?? 'wallet'}:${x.instrument && perMarket.get(x.instrument) === 1 ? x.instrument : x.key}`, mode: 'live', venue: 'gmx', network: s.network, accountId: s.account?.address ?? 'wallet', instrument: x.instrument, side: x.side, size: x.sizeTokens, entryPrice: x.entryPrice,
           markPrice: x.markPrice, liquidationPrice: x.liquidationPrice, leverage: x.leverage, margin: x.collateral, unrealizedPnl: x.pnlUsd, source: x.source });
       } catch (e) { errors.push({ source: 'gmx', message: msg(e) }); }
     }
@@ -234,51 +295,27 @@ export function createReads(deps: ReadDeps) {
   }
 
   // -------------------------------------------------------------------------------------------------------------- orders
-  type Row = Record<string, any>;
+  type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any -- a database row
   const ms = (d: Date | null | undefined): number | null => (d ? d.getTime() : null);
-  const PAPER_OPEN = new Set(['pending', 'open', 'partially_filled', 'triggered']);
-  const derivOrder = (r: Row, mode: 'paper' | 'live') => ({
-    id: `deriv:${r.account_id}:${r.client_id}`, mode, venue: r.venue as string, network: r.network as string, accountId: r.account_id as string, clientId: r.client_id as string, venueOrderId: r.venue_order_id as string | null,
-    instrument: r.instrument as string | null, side: r.side as string | null, type: r.type as string, size: r.size as string | null, price: r.price as string | null, triggerPrice: r.trigger_price as string | null, reduceOnly: r.reduce_only as boolean, tif: r.tif as string,
-    status: (r.state ?? r.status) as string, final: (r.state !== null && r.state !== undefined ? r.final : !PAPER_OPEN.has(r.status)) as boolean | null, filled: r.filled as string, avgFillPrice: r.avg_fill_price as string | null, reason: r.reject_reason as string | null,
-    origin: r.origin as string, mandateId: (r.mandate_id ?? null) as string | null, createdAt: ms(r.created_at)!, updatedAt: ms(r.updated_at)! });
-  const gmxOrder = (r: Row) => ({ id: `gmx:${r.id}`, mode: 'live' as const, venue: 'gmx', network: 'arbitrum', accountId: r.account as string | null, instrument: null as string | null, market: r.market as string | null, side: (r.is_long === null ? null : r.is_long ? 'long' : 'short') as string | null,
-    type: r.kind as string, status: r.state as string, final: r.final as boolean | null, sizeUsd: r.size_usd as string | null, txid: r.txid as string | null, error: r.error as string | null, createdAt: ms(r.created_at)!, updatedAt: ms(r.updated_at)! });
-  const agentOrder = (r: Row) => ({ id: `agent:${r.id}`, mode: (r.mode === 'LIVE' ? 'live' : 'paper') as 'paper' | 'live', venue: SPOT, network: r.network as string, accountId: r.agent_id as string | null, agentId: r.agent_id as string, instrument: `${r.from_symbol}>${r.to_symbol}` as string | null,
-    side: null as string | null, type: 'swap', status: r.state as string, final: null as boolean | null, amountIn: r.amount_in as string, expectedOut: r.expected_out as string | null, received: r.received as string | null, txid: r.txid as string | null, reason: r.reason as string | null,
-    createdAt: ms(r.ts)!, updatedAt: ms(r.updated_at)! });
-  const orderVisible = (p: Principal, o: { venue: string; instrument: string | null; network: string }): boolean => venueAllowed(p, o.venue) && (o.venue === SPOT ? networkAllowed(p, o.network) : instrumentAllowed(p, o.instrument));
-
-  async function orders(p: Principal, q: { mode?: 'paper' | 'live'; venue?: string; open?: 'true' | 'false'; limit: number }) {
+  const FINAL = [...FINAL_ORDER_STATES];
+  /**
+   * Every order of the wallet, newest first, from the ONE unified table (every principal, mode and venue; swaps included). One
+   * total order — (creation time, id) — and keyset pagination on it; every filter, the key's restrictions included, is applied in
+   * SQL so that a page is full unless the list ends. A spot order is restricted by venue and network, any other by venue and
+   * instrument (the rule of the order service's own `visible`).
+   */
+  async function orders(p: Principal, q: { mode?: 'paper' | 'live'; venue?: string; open?: 'true' | 'false'; limit: number; cursor?: string }) {
     if (q.venue !== undefined && !venueAllowed(p, q.venue)) throw restricted(`venue ${q.venue}`);
-    const n = q.limit, all: (ReturnType<typeof derivOrder> | ReturnType<typeof gmxOrder> | ReturnType<typeof agentOrder>)[] = [];
-    if (q.mode !== 'live') all.push(...(await sql`select o.*, a.venue, a.network from deriv_orders o join deriv_paper_accounts a on a.id = o.account_id order by o.created_at desc limit ${n}`).map((r) => derivOrder(r, 'paper')));
-    if (q.mode !== 'paper') {
-      all.push(...(await sql`select o.*, a.venue, a.network from deriv_orders o join deriv_accounts a on a.id = o.account_id order by o.created_at desc limit ${n}`).map((r) => derivOrder(r, 'live')));
-      all.push(...(await sql`select * from deriv_gmx_ops order by created_at desc limit ${n}`).map(gmxOrder));
-    }
-    all.push(...(await sql`select o.*, a.network from agent_orders o join agents a on a.id = o.agent_id ${q.mode === 'paper' ? sql`where o.mode <> 'LIVE'` : q.mode === 'live' ? sql`where o.mode = 'LIVE'` : sql``} order by o.ts desc limit ${n}`).map(agentOrder));
-    const out = all.filter((o) => (q.venue === undefined || o.venue === q.venue) && (q.open !== 'true' || o.final === false) && (q.open !== 'false' || o.final !== false) && orderVisible(p, o))
-      .sort((a, b) => b.createdAt - a.createdAt).slice(0, n);
-    return { orders: out, ts: now() };
-  }
-  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-  const unknownOrder = (): UserError => new UserError('unknown_order', 'unknown order', 404);
-  async function order(p: Principal, id: string) {
-    const [kind, a, ...rest] = id.split(':'), b = rest.join(':');
-    let o: ReturnType<typeof derivOrder> | ReturnType<typeof gmxOrder> | ReturnType<typeof agentOrder> | null = null, fills: unknown[] = [];
-    if (kind === 'deriv' && a && UUID.test(a) && b) {
-      const [paper] = await sql`select o.*, a.venue, a.network from deriv_orders o join deriv_paper_accounts a on a.id = o.account_id where o.account_id = ${a} and o.client_id = ${b}`;
-      const [live] = paper ? [] : await sql`select o.*, a.venue, a.network from deriv_orders o join deriv_accounts a on a.id = o.account_id where o.account_id = ${a} and o.client_id = ${b}`;
-      if (paper || live) {
-        o = derivOrder((paper ?? live)!, paper ? 'paper' : 'live');
-        fills = (await sql`select * from deriv_fills where account_id = ${a} and client_id = ${b} order by ts`).map((f) => ({ id: f.fill_id, instrument: f.instrument, side: f.side, price: f.price, size: f.size, fee: f.fee, feeAsset: f.fee_asset, closedPnl: f.closed_pnl, liquidation: f.liquidation, ts: ms(f.ts) }));
-      }
-    } else if (kind === 'gmx' && a && UUID.test(a) && !b) { const [r] = await sql`select * from deriv_gmx_ops where id = ${a}`; if (r) o = gmxOrder(r); }
-    else if (kind === 'agent' && a && UUID.test(a) && !b) { const [r] = await sql`select o.*, a.network from agent_orders o join agents a on a.id = o.agent_id where o.id = ${a}`; if (r) o = agentOrder(r); }
-    if (!o) throw unknownOrder();
-    if (!orderVisible(p, o)) throw restricted('this order');
-    return { order: o, fills };
+    const cur = decodeCursor(q.cursor, ['o']), n = q.limit + 1, r = lists(p), svc = deps.orders();
+    await svc.drain();
+    const found = await sql<(OrderRow & { cur_us: string })[]>`select o.*, ${US(sql`o.created_at`)} as cur_us from orders o where ${afterCursor(cur, 'o', sql`o.created_at`, sql`o.id collate "C"`)}
+      ${q.mode ? sql`and o.mode = ${q.mode}` : sql``} ${q.venue ? sql`and o.venue = ${q.venue}` : sql``}
+      ${q.open === 'true' ? sql`and o.state <> all(${FINAL})` : q.open === 'false' ? sql`and o.state = any(${FINAL})` : sql``}
+      ${r && r.venues.length ? sql`and o.venue = any(${r.venues})` : sql``}
+      ${r && r.instruments.length ? sql`and (o.venue = ${SPOT} or o.instrument = any(${r.instruments}))` : sql``} ${r && r.networks.length ? sql`and (o.venue <> ${SPOT} or o.network = any(${r.networks}))` : sql``}
+      order by o.created_at desc, o.id collate "C" desc limit ${n}`;
+    const page = found.slice(0, q.limit), last = page.at(-1);
+    return { orders: page.map((x) => svc.view(x)), nextCursor: found.length > q.limit && last ? encodeCursor({ us: last.cur_us, tag: 'o', id: last.id }) : null, ts: now() };
   }
 
   // -------------------------------------------------------------------------------------------------------------- strategies, agents
@@ -330,22 +367,35 @@ export function createReads(deps: ReadDeps) {
   }
 
   // -------------------------------------------------------------------------------------------------------------- activity
-  async function activity(p: Principal, q: { limit: number }) {
-    const out = await sql<ProposalRow[]>`select * from proposals where state <> 'draft' order by created_at desc limit ${q.limit}`;
-    const dep = await sql`select d.*, c.finalized from deposits d left join scan_cursor c on c.network = d.network order by coalesce(d.block_time, d.seen_at) desc limit ${q.limit}`;
-    const fills = await sql`select f.*, coalesce(pa.venue, la.venue) as venue, (pa.id is not null) as is_paper from deriv_fills f left join deriv_paper_accounts pa on pa.id = f.account_id left join deriv_accounts la on la.id = f.account_id
-      where pa.id is not null or la.id is not null order by f.ts desc limit ${q.limit}`;
-    const items = [
-      ...out.filter((x) => networkAllowed(p, x.network)).map((x) => ({ ...proposalView(x), kind: x.kind === 'swap' || x.kind === 'xswap' ? 'swap' : x.kind === 'bridge' ? 'bridge' : x.kind === 'gmx' ? 'gmx' : 'send', mode: 'live' as const, at: x.created_at.toISOString() })),
-      ...dep.filter((d) => networkAllowed(p, d.network)).map((d) => {
-        const n = getNetwork(d.network), a = d.asset === 'native' ? n.native : n.tokens.find((t) => t.id === d.asset);
-        return { kind: 'receive', mode: 'live' as const, at: ((d.block_time ?? d.seen_at) as Date).toISOString(), id: `${d.network}:${d.txid}:${d.idx}`, network: d.network as string, asset: d.asset as string, symbol: a?.symbol ?? '?', amount: d.amount as string,
-          amountDisplay: a ? formatUnits(BigInt(d.amount), a.decimals) : null, from: d.from_addr as string, txid: d.txid as string, state: Number(d.block) <= Number(d.finalized ?? 0) ? 'finalized' : 'confirming' };
+  /**
+   * Sends, swaps, bridges, receipts and derivative fills, newest first, in one total order — (time, source, id) — with keyset
+   * pagination. The key's restrictions are applied in SQL (networks for wallet movements, venues and instruments for fills).
+   */
+  async function activity(p: Principal, q: { limit: number; cursor?: string }) {
+    const cur = decodeCursor(q.cursor, ['p', 'd', 'f']), n = q.limit + 1, r = lists(p);
+    const nets = r && r.networks.length ? r.networks : null;
+    const depId = sql`(d.network || ':' || d.txid || ':' || d.idx::text || ':' || d.asset) collate "C"`, depAt = sql`coalesce(d.block_time, d.seen_at)`, fillId = sql`(f.account_id::text || ':' || f.fill_id) collate "C"`;
+    const out = await sql<(ProposalRow & { cur_us: string })[]>`select x.*, ${US(sql`x.created_at`)} as cur_us from proposals x where x.state <> 'draft' and ${afterCursor(cur, 'p', sql`x.created_at`, sql`x.id::text collate "C"`)}
+      ${nets ? sql`and x.network = any(${nets})` : sql``} order by x.created_at desc, x.id::text collate "C" desc limit ${n}`;
+    const dep = await sql`select d.*, c.finalized, ${US(depAt)} as cur_us, ${depId} as cur_id from deposits d left join scan_cursor c on c.network = d.network where ${afterCursor(cur, 'd', depAt, depId)}
+      ${nets ? sql`and d.network = any(${nets})` : sql``} order by ${depAt} desc, ${depId} desc limit ${n}`;
+    const fills = await sql`select f.*, coalesce(pa.venue, la.venue) as venue, (pa.id is not null) as is_paper, ${US(sql`f.ts`)} as cur_us, ${fillId} as cur_id
+      from deriv_fills f left join deriv_paper_accounts pa on pa.id = f.account_id left join deriv_accounts la on la.id = f.account_id
+      where (pa.id is not null or la.id is not null) and ${afterCursor(cur, 'f', sql`f.ts`, fillId)}
+      ${r && r.venues.length ? sql`and coalesce(pa.venue, la.venue) = any(${r.venues})` : sql``} ${r && r.instruments.length ? sql`and f.instrument = any(${r.instruments})` : sql``}
+      order by f.ts desc, ${fillId} desc limit ${n}`;
+    const rows = [
+      ...out.map((x) => ({ key: { us: x.cur_us, tag: 'p', id: x.id }, item: { ...proposalView(x), kind: x.kind === 'swap' || x.kind === 'xswap' ? 'swap' : x.kind === 'bridge' ? 'bridge' : x.kind === 'gmx' ? 'gmx' : 'send', mode: 'live' as const, at: x.created_at.toISOString() } })),
+      ...dep.map((d) => {
+        const net = getNetwork(d.network), a = d.asset === 'native' ? net.native : net.tokens.find((t) => t.id === d.asset);
+        return { key: { us: d.cur_us as string, tag: 'd', id: d.cur_id as string }, item: { kind: 'receive', mode: 'live' as const, at: ((d.block_time ?? d.seen_at) as Date).toISOString(), id: `${d.network}:${d.txid}:${d.idx}`, network: d.network as string, asset: d.asset as string, symbol: a?.symbol ?? '?', amount: d.amount as string,
+          amountDisplay: a ? formatUnits(BigInt(d.amount), a.decimals) : null, from: d.from_addr as string, txid: d.txid as string, state: Number(d.block) <= Number(d.finalized ?? 0) ? 'finalized' : 'confirming' } };
       }),
-      ...fills.filter((f) => marketAllowed(p, f.venue, f.instrument)).map((f) => ({ kind: 'fill', mode: (f.is_paper ? 'paper' : 'live') as 'paper' | 'live', at: (f.ts as Date).toISOString(), id: `${f.account_id}:${f.fill_id}`, venue: f.venue as string, accountId: f.account_id as string,
-        instrument: f.instrument as string, side: f.side as string, price: f.price as string, size: f.size as string, fee: f.fee as string, closedPnl: f.closed_pnl as string | null })),
-    ].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0)).slice(0, q.limit);
-    return { items };
+      ...fills.map((f) => ({ key: { us: f.cur_us as string, tag: 'f', id: f.cur_id as string }, item: { kind: 'fill', mode: (f.is_paper ? 'paper' : 'live') as 'paper' | 'live', at: (f.ts as Date).toISOString(), id: `${f.account_id}:${f.fill_id}`, venue: f.venue as string, accountId: f.account_id as string,
+        instrument: f.instrument as string, side: f.side as string, price: f.price as string, size: f.size as string, fee: f.fee as string, closedPnl: f.closed_pnl as string | null } })),
+    ].sort((x, y) => cursorOrder(x.key, y.key));
+    const page = rows.slice(0, q.limit);
+    return { items: page.map((x) => x.item), nextCursor: rows.length > q.limit ? encodeCursor(page.at(-1)!.key) : null };
   }
 
   // -------------------------------------------------------------------------------------------------------------- private markets (v11)
@@ -370,6 +420,6 @@ export function createReads(deps: ReadDeps) {
     return { ...a, contracts, delisted: a.delisted.filter(ok), venues: a.venues.filter((v) => venueAllowed(p, v.venue)), divergence: a.divergence.filter((d) => d.contracts.every((k) => keep.has(k.id))) };
   }
 
-  return { markets, compare, market, orderbook, candles, balances, portfolio, positions, orders, order, strategies, agents, risk, activity, resolve, privateMarkets, privateMarket, privateMarketCompany, now };
+  return { markets, compare, market, orderbook, candles, balances, portfolio, positions, orders, strategies, agents, risk, activity, resolve, sizeForNotional, privateMarkets, privateMarket, privateMarketCompany, now };
 }
 export type Reads = ReturnType<typeof createReads>;

@@ -336,6 +336,19 @@ Causes hidden in `reject_reason` (the texts `exec.ts` writes), told apart by `ma
 | `rejected` | `REJECTED` | `LEGACY_UNSPECIFIED` | a signer refusal ("not signed: …") or a venue refusal |
 | `unknown` | `UNKNOWN` | `SUBMIT_UNREADABLE_ANSWER` |  |
 | `cancelled` | `CANCELLED` | `APPROVAL_EXPIRED` |  |
+
+#### Paper orders — `deriv_orders.status (state is null)`, services/api/src/derivatives/paper.ts (Order.status of @spw/derivatives)
+
+| Legacy state | Unified state | Reason code | Note |
+|---|---|---|---|
+| `pending` | `SUBMITTED` | `VENUE_ACCEPTED` | a trigger order the paper engine accepted and holds until its trigger |
+| `open` | `SUBMITTED` | `VENUE_RESTING` |  |
+| `filled` | `FILLED` | `VENUE_FILLED` |  |
+| `partially_filled` | `PARTIALLY_FILLED` | `VENUE_FILL` |  |
+| `cancelled (nothing filled)` | `CANCELLED` | `CANCELLED_AT_VENUE` | cancelled in the paper engine (by request, by a loss-limit halt, or an IOC remainder) |
+| `cancelled (partly filled)` | `CANCELLED` | `REMAINDER_CANCELLED` |  |
+| `rejected` | `REJECTED` | `VENUE_REJECTED` | refused by the paper engine's own rules |
+| `triggered` | `SUBMITTED` | `VENUE_RESTING` | triggered; waits for the next book |
 <!-- /GENERATED:vocabularies -->
 
 ## 6. Command engine (`commands/parse.ts`)
@@ -539,8 +552,48 @@ One pass, run every 5 s by the `orders` loop when workers are on. It keeps nothi
   the venue, `cancel_requested` is recorded first (so that the final reason is `CANCELLED_BY_REQUEST`), the
   engine's cancel is called, and the order is `CANCELLED` when the venue says so. A GMX order is cancelled in
   the app (a wallet transaction with a passkey).
-- `reducePosition` (close = fraction 1): a reduce-only market order sized from the position the account
-  reports. It is refused with `not_reducing` unless the risk engine itself finds it strictly reducing.
+- `reducePosition` (close = fraction 1): a reduce-only market order. For the owner it is sized from the position
+  the account reports. For an API key or an agent it is sized from **its own part** of that position — what its
+  own fills opened, minus what it already asked to reduce (`orders/provenance.ts`); with nothing attributable
+  the answer is 403 `position_not_attributable`. It is refused with `not_reducing` unless the risk engine itself
+  finds it strictly reducing.
+- Every reduce-only order of a key or an agent, and every order of theirs that points against a position partly
+  held by somebody else, is bounded the same way before an order exists; the preview shows the refusal under the
+  stage `provenance`.
+
+### 8.6.1 Live GMX orders of the owner (exec2)
+
+`POST /orders`, `DELETE /orders/{id}`, `positions/{id}/close|reduce` and the perp commands reach the existing
+GMX engine for the **owner** (one passkey per order, as in the app); an API key or an agent is refused with 403
+`gmx_requires_owner_passkey` — the signer has no mandate for GMX.
+
+| Trading API | GMX engine (`GmxOrderBody`) |
+|---|---|
+| `type` | `market` only; anything else is 422 `gmx_market_orders_only` |
+| `reduceOnly: false`, `side` | an increase; buy = long, sell = short |
+| `size` (or a command's notional) | `sizeUsd` = the notional, or size × the venue mark, rounded down to the cent |
+| `leverage` (required for an increase: 422 `gmx_leverage_required`) | `collateral` = `sizeUsd ÷ leverage`, rounded up to the token's decimals |
+| `slippageBps` (1–500, default 50) | the acceptable price |
+| `reduceOnly: true` | a decrease of the same share of the position's USD size as `size` is of its tokens |
+| `accountId` | refused: the account is the wallet's own address |
+
+The order is created by the service (the order id is the engine's idempotency key), linked to the engine's
+operation (`engine_ref` = the operation id) and follows the existing projection; it waits `AWAITING_APPROVAL`
+with the descriptor of the existing approve route. The unified order is unsized (the engine stores no token fill
+quantity); the size asked stays in `canonical` and `detail.gmx`. The engine's gate always evaluates a GMX order
+itself (its request — a USD-derived size and an oracle price — is not the service's), without counting the order
+in its own usage. A cancel of an operation still waiting for the passkey withdraws it at once; a cancel of an
+order already on-chain, and a close, are wallet transactions: the answer carries their own approval descriptor.
+With `SPW_DERIV_GMX_LIVE` off an increase is a `REJECTED / VENUE_NOT_ALLOWED` row (`gmx_disabled`), and a
+decrease or a cancellation still passes. Tests: `execution-gmx.test.ts` (six).
+
+GMX in the risk book: the GMX "account" is the wallet's USDC on Arbitrum (free collateral, sent with each order)
+plus the margin and PnL of the open positions — the view the GMX engine itself judges an order on. It is read
+when the order is on GMX, or once the wallet has used GMX; a read made only because the order is on GMX is not
+recorded as the book's peak equity. Known limits: one GMX operation can await approval at a time (the engine
+withdraws the previous one); a GMX position id of `GET /positions` is longer than the server's path-parameter
+limit — `live:gmx:<address>:<instrument id>` is accepted instead when the wallet holds one position on the market
+(noted for the contract workstream: `maxParamLength` or shorter ids).
 
 ### 8.7 Locks
 
@@ -555,11 +608,75 @@ The three existing locks are applied by the engines, as before. The order servic
 a lock that is off rejects the order with its code, and the preview lists it under `refusals` with the stage
 `lock`.
 
-### 8.8 What is not done
+### 8.8 Spot, attached orders, STOP ALL AGENTS (exec2)
 
-- Spot orders through the order service. For the owner the answer is 422 `spot_via_swap_screen`; for an API
-  key or an agent 403 `spot_execution_requires_agent_vault`.
-- Live orders on GMX through the order service (422 `venue_not_wired`). GMX orders placed in the app are
-  projected into the unified table.
-- The stop-loss and take-profit orders a command attaches (`SL`, `TP`) are returned, not placed.
-- The spot agents' swaps are not unified orders.
+**Spot orders of the owner** (`orders/spot.ts`, `orders/spot-orders.ts`). A spot order is a unified order
+(`engine: spot`, instrument `spot:BASE-QUOTE`) and then a proposal of the EXISTING swap flow: the service calls
+`POST /api/v1/swap/proposals` of this server in process (`app.inject`), with the owner's own session cookie,
+origin and CSRF header and an Idempotency-Key derived from the order id — the route's authentication, policy
+check, quote and passkey request are the existing ones, not a copy. The order waits `AWAITING_APPROVAL`; the
+answer carries the proposal id, the intent hash, the flow's WebAuthn options and the existing approve path
+(`/api/v1/transfers/proposals/:id/approve`). A cancel while it waits calls the existing reject route; once
+approved a swap cannot be withdrawn (409 `bad_state`).
+
+| Case | Answer (nothing is created) |
+|---|---|
+| an API key or an agent | 403 `spot_execution_requires_agent_vault` |
+| paper mode | 422 `spot_paper_not_available` (the owner has no paper spot engine) |
+| `POST /orders` BUY with a base size | 422 `spot_buy_needs_quote_amount`: a swap is exact-input; `BUY <asset> <amount> <quote>` on `POST /commands` expresses it (for the contract workstream: `OrderRequestSchema` needs a `notional`) |
+| a type other than market | 422 `spot_market_only` |
+| network or quote asset not settled by the owner's command defaults | 409 `ambiguous_order` / `ambiguous_command`, with the questions |
+
+Risk: the two global switches are applied before the proposal exists. Read-only refuses everything. The kill
+switch refuses a BUY and lets through a sale of a non-cash asset into a cash leg — decided on the two legs
+(`SpotOrders.addsRisk`); this is narrower than the pure engine, which does not classify a spot sell as
+reducing and is unchanged. The owner's unified limits are **not** evaluated for a spot order: the signer's own
+policy (per-transfer and daily amounts) and the passkey bound a swap, as in the Swap screen.
+
+**One order table.** Triggers on `proposals` (kind `swap`) and on `agent_orders` queue every change; the
+projector maps them with `advance()` and stores the execution steps (`exec-status.ts`) in `detail.execution`.
+
+| Source state | Unified |
+|---|---|
+| proposal `pending_approval` | `AWAITING_APPROVAL` |
+| `rejected` / `expired` | `CANCELLED` (`WITHDRAWN_BEFORE_APPROVAL` / `APPROVAL_EXPIRED`) |
+| `approved` / `signed` | `APPROVED` / `SUBMITTING` |
+| `broadcast`, `confirming` | `SUBMITTED` |
+| `finalized` | `FILLED`, with what was received |
+| a failure before the transaction left / after | `FAILED` (`NOT_SENT`, `TX_REVERTED`, …) / the venue-refusal path |
+| agent order `prepared` / `signed` / `broadcast` / `filled` | `APPROVED` (by mandate) / `SUBMITTING` / `SUBMITTED` / `FILLED` |
+| agent order `failed` | told apart by its reason text (see `exec2-notes-agents.md`: a `reason_code` column is asked for) |
+
+A swap prepared in the Swap screen is adopted as `swap:<id>`; a spot agent's swap as `agent:<id>`, principal
+`agent:<agent id>`. `GET /orders` reads the unified table only.
+
+**Kill switch and spot agents.** A BEFORE INSERT trigger on `agent_orders` (`spw_agent_order_gate`) refuses, for
+paper and live rows alike, every order in read-only mode and every order that spends the agent's cash leg under
+the kill switch; a sale into cash passes. Both engines insert the row before anything else, so a paper fill is
+not recorded and the signer is not asked. The agents runtime catches the error, backs off and logs it.
+
+**Attached stop-loss / take-profit** (`orders/attached.ts`, table `order_attachments`). The `SL` / `TP` of a
+command are stored with the parent order and placed only once it has filled, as reduce-only trigger orders
+sized to what filled, through the same service (mandate, risk engine, provenance, engine). A later partial fill
+gets an additional order. One-cancels-the-other is done by the supervisor (the `orders` loop, and at once after
+a command or a close): when one executes, or when what they protect is gone or smaller than they are, the
+sibling is cancelled. A parent that is refused, or ends unfilled, places nothing: its attachments are closed
+with the reason. A sibling pair counts once against the principal's own lot. On a live account the owner's
+protective orders each wait for their own passkey; a key's go under its mandate.
+
+**STOP ALL AGENTS** (`orders/agent-control.ts`, `AgentControlPort`). Perp agents are stopped through the
+exported `perpMode(agent, 'STOPPED')`. No exported function stops a spot agent: a live one has its mandate
+revoked at the signer and every spot agent is reported in `notStopped`, never as stopped; when agents run and
+none could be stopped the command answers 501.
+
+### 8.9 What is not done
+
+- A real successful swap proposal through the in-process port was not exercised: the tests use a port that
+  writes the row the route writes, and the real port up to the route's own refusal.
+- Spot agents cannot be stopped by `STOP ALL AGENTS`, and a live spot agent cannot sell into cash under the kill
+  switch (`signerGuards.beforeMandateSign` takes no argument): both are for the agents workstream
+  (`docs/v11/work/exec2-notes-agents.md`).
+- Protective orders are cancelled, not re-sized, when a position is partly reduced; a stop that gaps past its
+  slippage bound is not re-placed; an owner's live protective order that is not approved in time expires.
+  Attached orders were tested on paper only.
+- GMX: market orders only; one operation awaiting approval at a time.

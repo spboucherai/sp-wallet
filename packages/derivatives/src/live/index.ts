@@ -6,6 +6,7 @@ export * from './canonical.ts';
 export * from './hl-assets.ts';
 export * from './jurisdiction.ts';
 export * from './mandate.ts';
+export * from './quoting.ts'; // V11: the quoting mandate (market making) — a separate shape; mandate.ts is unchanged
 export * from './collateral.ts'; // funding the venue account: pinned bridge, canonical deposit section and withdrawal (v6)
 export * from './gmx.ts'; // v8: GMX v2 orders as wallet transactions — pins, calldata builder, intent verification, venue policy
 export { D, type DecStr } from '../decimal.ts';

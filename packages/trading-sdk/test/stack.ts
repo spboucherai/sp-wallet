@@ -3,10 +3,16 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export interface StackKey { id: string; secret: string }
+export interface StackKey { id: string; secret: string; /** the paper mandate bound to the key (trader, trader2) */ mandateId?: string }
 export interface Stack {
   baseUrl: string;
-  keys: Record<'reader' | 'trader' | 'unbound' | 'narrow' | 'limited' | 'revoked', StackKey>;
+  keys: Record<'reader' | 'trader' | 'trader2' | 'unbound' | 'narrow' | 'prepare' | 'limited' | 'revoked', StackKey>;
+  /** the paper account the two trader keys' mandates cover */
+  paper: { accountId: string; instrument: string; maxOrderNotionalUsd: string };
+  /** a venue account row without any authorization: a live order on it stops at the execution lock */
+  live: { accountId: string };
+  /** owner actions: POST <control>/kill-switch/release, PUT <control>/command-defaults */
+  control: string;
   webhook: { secret: string; timestamp: number; body: string; signature: string };
   stop(): Promise<void>;
 }
@@ -26,7 +32,7 @@ export function startStack(label: string): Promise<Stack | { skip: string }> {
       if (done || nl < 0) return;
       done = true; clearTimeout(timer);
       const m = JSON.parse(buf.slice(0, nl)) as { ok: boolean; skip?: boolean; reason?: string } & Omit<Stack, 'stop'>;
-      if (m.ok) resolve({ baseUrl: m.baseUrl, keys: m.keys, webhook: m.webhook, stop });
+      if (m.ok) resolve({ baseUrl: m.baseUrl, keys: m.keys, paper: m.paper, live: m.live, control: m.control, webhook: m.webhook, stop });
       else if (m.skip) resolve({ skip: m.reason ?? 'PostgreSQL is not reachable' });
       else { void stop(); reject(new Error(`the SDK test stack failed: ${m.reason}`)); }
     });

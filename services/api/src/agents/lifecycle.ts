@@ -67,7 +67,15 @@ export async function startAgent(id: string, mode: Mode, actor: Actor): Promise<
       await sql`update agents set state = 'RUNNING', mode = 'LIVE', stop_reason = null, updated_at = now() where id = ${a.id}`;
     } else if (kind === 'perp') {
       const p = a as unknown as PerpAgentRow;
-      if (!isLiveActive(p)) throw new MandateRequired(a.id, kind, 'this agent has no derivative mandate in force (go live from the agent page: venue account, then the mandate)');
+      if (!isLiveActive(p)) {
+        // V11.2: a trading mandate the OWNER approved in the Risk screen is in force for this agent → it is recorded and the
+        // agent is LIVE. Nothing is created or approved here (perp-live-cycle.ts `activateLive` only reads the mandate service).
+        const pend = (p.perp as { livePending?: { unified?: boolean } } | null)?.livePending;
+        if (!pend?.unified) throw new MandateRequired(a.id, kind, 'this agent has no trading mandate in force (agent page → Live, or Risk: the owner creates and approves it with the passkey)');
+        if (actor.kind !== 'owner') throw new MandateRequired(a.id, kind, 'a trading mandate was prepared for this agent; the owner approves it and starts the agent');
+        const { activateLive } = await import('./perp-live-cycle.ts');
+        await activateLive(p, (await import('./perp-live.ts')).perpRuntime(), 'owner').catch((e: unknown) => { throw e instanceof UserError && e.code === 'mandate_required' ? new MandateRequired(a.id, kind, e.message) : e; });
+      }
       if (p.state === 'PAUSED') await resumeLive(p, (await import('./perp-live.ts')).perpRuntime());   // refuses when the mandate is no longer active at the signer
     } else if (kind === 'spot') {
       if (a.state !== 'LIVE') throw new MandateRequired(a.id, kind, a.mode === 'LIVE' ? 'the mandate of this agent was revoked when it left LIVE (pause, stop, loss limit or expiry) — a new one must be approved' : 'no mandate was ever approved for this agent');

@@ -16,7 +16,14 @@ export interface VenueReader {
   account(network: VenueNetwork, account: string): Promise<VenueAccountView>;
   /** the leverage setting of one instrument on the account */
   leverage(network: VenueNetwork, account: string, coin: string): Promise<{ type: 'cross' | 'isolated'; value: number }>;
+  /**
+   * V11 (quoting mandates): what became of ONE order, by its client order id — null when the venue does not know the id.
+   * Optional: a reader without it changes nothing (the signer then keeps counting a signed quote until its expiry + grace).
+   */
+  order?(network: VenueNetwork, account: string, cloid: string): Promise<VenueOrderStatusView | null>;
 }
+/** `state`: `open` while the order rests; `closed` once it is filled, cancelled or rejected — a state it never leaves */
+export interface VenueOrderStatusView { coin: string; side: 'buy' | 'sell'; price: string; reduceOnly: boolean; cloid: string; /** when the venue took the order (unix ms) */ timestamp: number; state: 'open' | 'closed'; status: string; /** when it reached that status (unix ms) */ statusTimestamp: number }
 export type JsonPost = (url: string, body: unknown) => Promise<unknown>;
 
 /** the only venue hosts the signer ever contacts, and only their /info path */
@@ -78,6 +85,20 @@ export function hyperliquidReader(send: JsonPost = post): VenueReader {
       const a = obj(await send(url, { type: 'activeAssetData', user: user(account), coin: coin(c, 'coin') }), 'activeAssetData');
       if (a.coin !== undefined && a.coin !== c) bad('activeAssetData is for another coin');
       return lev(a.leverage, 'leverage');
+    },
+    async order(network, account, cloid) {
+      const url = VENUE_INFO_URL[network] ?? bad('network');
+      if (!/^0x[0-9a-f]{32}$/.test(cloid)) bad('cloid');
+      const a = obj(await send(url, { type: 'orderStatus', user: user(account), oid: cloid }), 'orderStatus');
+      if (a.status === 'unknownOid') return null;
+      if (a.status !== 'order') bad('orderStatus');
+      const w = obj(a.order, 'orderStatus order'), o = obj(w.order, 'order');
+      if ((o.side !== 'B' && o.side !== 'A') || typeof o.reduceOnly !== 'boolean' || o.cloid !== cloid || typeof w.status !== 'string' || !/^[A-Za-z]{1,60}$/.test(w.status)) bad('orderStatus order');
+      if (!Number.isSafeInteger(o.timestamp) || (o.timestamp as number) < 0 || !Number.isSafeInteger(w.statusTimestamp) || (w.statusTimestamp as number) < 0) bad('order timestamp');
+      // every documented status other than `open` and `triggered` is final: filled, canceled, *Canceled, *Rejected, scheduledCancel
+      const final = w.status === 'filled' || w.status === 'canceled' || w.status === 'rejected' || w.status === 'scheduledCancel' || /Canceled$|Rejected$/.test(w.status as string);
+      if (!final && w.status !== 'open' && w.status !== 'triggered') bad('order status');
+      return { coin: coin(o.coin, 'order coin'), side: o.side === 'B' ? 'buy' : 'sell', price: nonNeg(o.limitPx, 'limitPx'), reduceOnly: o.reduceOnly as boolean, cloid, timestamp: o.timestamp as number, state: final ? 'closed' : 'open', status: w.status as string, statusTimestamp: w.statusTimestamp as number };
     },
   };
 }

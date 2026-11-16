@@ -48,7 +48,7 @@ SCRIPTS: list[list[Any]] = [
 def test_not_in_an_error_its_traceback_its_causes_or_its_body(mock: Any, steps: list[Any], write: bool) -> None:
     h = mock(steps, max_retries=0)
     if write:
-        e = h.error("preview_order", instrument="hyperliquid:BTC", side="buy", order_type="market", size="1")
+        e = h.error("create_order", instrument="hyperliquid:BTC", side="buy", order_type="market", size="1")
     else:
         e = h.error("get_portfolio")
     seen: list[str] = []

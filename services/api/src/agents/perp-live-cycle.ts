@@ -25,6 +25,7 @@ import { mandateAccountState, mandateOrder, type MandateAccountState } from '../
 import { PERP_STEP_MS, type PerpInterval } from './perp-data.ts';
 import { flattenPerp, instrumentId, tickPerpAgent, type PerpAgentRow, type PerpEngineDeps, type PerpLiveBook } from './perp-engine.ts';
 import { LIVE_EXIT_CODES, LivePerpExecutor } from './perp-exec-live.ts';
+import { executionBound } from './execution-bind.ts';
 import { liveOrderResult } from './perp-gateway.ts';
 
 /** what the engine needs from the runtime (perp-live.ts builds it; tests and the simulation script build their own) */
@@ -232,7 +233,7 @@ export async function liveReadiness(a: PerpAgentRow, rt: PerpLiveRuntime, q: { a
 }
 
 export const LivePrepareBody = z.strictObject({ accountId: z.uuid(), days: z.number().int().min(1).max(VENUE_MANDATE_BOUNDS.maxDays).optional(), locale: z.enum(['fr', 'en']).default('en') });
-export const LiveApproveBody = z.strictObject({ accountId: z.uuid(), assertion: z.record(z.string(), z.unknown()), acknowledged: z.literal(true) });
+export const LiveApproveBody = z.strictObject({ accountId: z.uuid(), assertion: z.record(z.string(), z.unknown()), /** V11.2: the API's own passkey step over the FULL trading mandate hash (mandates/service.ts `binding`) */ bindingAssertion: z.record(z.string(), z.unknown()).optional(), acknowledged: z.literal(true) });
 
 // Steps 1 and 2 of going live — `prepareLive` and `approveLive`, the only functions that WRITE a derivative mandate for an agent —
 // are in mandate-write.ts (V11): the engines and the agent runtime never import that module (agent-boundaries.test.ts).
@@ -316,7 +317,7 @@ export async function beginExit(stale: PerpAgentRow, rt: PerpLiveRuntime, code: 
   let note = '';
   try {
     const s = await mandateAccountState(lb.accountId, svc);
-    if (s.mandate?.id === lb.mandateId && s.mandate.phase === 'active') await svc.revokeMandate(lb.accountId, { cancelOpenOrders: true });
+    if (s.mandate?.id === lb.mandateId && s.mandate.phase === 'active') await revokeLiveMandate(lb, svc, actor, code, reason);
   } catch (e) { note = ` The mandate could not be revoked at once (${msg(e)}); it is tried again on every pass.`; }
   const exit = { ts: svc.now(), code, reason };
   await sql`update agents set state = 'STOPPING', stop_reason = ${reason}, perp = perp || ${sql.json({ live: { ...lb, exit } } as never)}, updated_at = now() where id = ${a.id}`;
@@ -342,7 +343,7 @@ export async function windDownStep(a: PerpAgentRow, rt: PerpLiveRuntime): Promis
   const why = lb.exit.reason;
   let s = await mandateAccountState(lb.accountId, svc);
   if (s.mandate?.id === lb.mandateId && s.mandate.phase === 'active') {
-    try { await svc.revokeMandate(lb.accountId, { cancelOpenOrders: true }); s = await mandateAccountState(lb.accountId, svc); }
+    try { await revokeLiveMandate(lb, svc, lb.exit.code === 'owner_stop' ? 'owner' : 'engine', lb.exit.code, why); s = await mandateAccountState(lb.accountId, svc); }
     catch (e) { return `stopping: the mandate could not be revoked yet (${msg(e)})`; }
   }
   if (s.error !== null) return `stopping: the venue account could not be read (${s.error.slice(0, 120)})`;
@@ -374,6 +375,51 @@ export async function windDownStep(a: PerpAgentRow, rt: PerpLiveRuntime): Promis
 }
 
 // ------------------------------------------------------------------ owner actions (no passkey: stopping never needs one)
+
+/**
+ * V11.2 — revocation REMOVES authority, so the engines may ask for it. A mandate that is a trading mandate of the execution
+ * layer (`unified`) is revoked THROUGH the mandate service: it revokes at the signer first, then closes its own record (reason,
+ * wind-down, the Risk screen), so the API's mandate and the signer's can never disagree. A derivative mandate approved before
+ * the trading mandates existed is revoked on the live module, as before.
+ */
+async function revokeLiveMandate(lb: PerpLiveBook, svc: LiveService, actor: 'owner' | 'engine', code: string, reason: string): Promise<void> {
+  const ex = lb.unified ? executionBound() : null;
+  // the signer first, with every open order of the account cancelled at the venue (as before); then the mandate service closes
+  // its own record — it finds the signer's copy already revoked
+  await svc.revokeMandate(lb.accountId, { cancelOpenOrders: true });
+  if (!ex) return;
+  const r = await ex.mandates.revoke(lb.mandateId, { by: actor === 'owner' ? 'owner' : 'system', reason: actor === 'owner' ? 'owner_request' : 'stop_condition', detail: `${code.toUpperCase()}: ${reason}`.slice(0, 300), cancelOpenOrders: true });
+  if (r.signerRevoked === false) throw new Error(r.signerError ?? 'the signer has not taken the revocation yet');
+}
+
+/**
+ * V11.2 — the agent goes LIVE under a trading mandate the OWNER approved (here nothing is created, prepared or approved: the
+ * mandate in force is READ from the mandate service and recorded on the agent). Called after the passkey approval of the agent
+ * page, or by "start live" once the owner approved the mandate in the Risk screen.
+ */
+export async function activateLive(a: PerpAgentRow, rt: Pick<PerpLiveRuntime, 'live'>, actor: 'owner'): Promise<PerpAgentRow> {
+  const pend = (a.perp as { livePending?: { accountId: string; mandateId: string; capital: DecStr; strategySha256: string; unified?: boolean } } | null)?.livePending, ex = executionBound();
+  if (isLiveActive(a)) throw new UserError('bad_state', 'this agent is already on a venue account', 409);
+  if (!pend?.unified || !ex) throw new UserError('mandate_required', 'no trading mandate was prepared for this agent', 409);
+  const m = await ex.mandates.get(pend.mandateId), sv = await approvedVersion(a);
+  if (m.principal.kind !== 'agent' || m.principal.id !== a.id || m.mode !== 'live') throw new UserError('mandate_required', 'the mandate prepared for this agent is not a live mandate of this agent', 409);
+  if (m.state !== 'active' || m.phase !== 'active' || !m.signer) throw new UserError('mandate_required', `the trading mandate of this agent is ${m.state === 'active' ? m.phase : m.state}: the owner approves it with the passkey (agent page, or Risk)`, 409);
+  if (!sv || sv.code_sha256 !== m.mandate.strategySha256 || sv.code_sha256 !== pend.strategySha256) throw new UserError('mandate_required', 'the mandate was approved for another strategy version than the one approved now', 409);
+  if (m.signer.accountId !== pend.accountId) throw new UserError('mandate_required', 'the mandate was approved on another venue account', 409);
+  const svc = rt.live();
+  const [acct] = await sql<{ network: 'testnet' | 'mainnet' }[]>`select network from deriv_accounts where id = ${pend.accountId}`;
+  if (!acct) throw new UserError('unknown_account', 'unknown venue account', 404);
+  // one agent per venue account
+  try { await sql`update agents set live_account_id = ${pend.accountId}, updated_at = now() where id = ${a.id}`; }
+  catch (e) { if ((e as { code?: string }).code === '23505') throw new UserError('used_by_other_agent', 'this venue account is used by another agent: one agent per venue account', 409); throw e; }
+  const live: PerpLiveBook = { accountId: pend.accountId, network: acct.network, mandateId: pend.mandateId, strategySha256: pend.strategySha256, since: svc.now(), capital: pend.capital, exit: null, unified: true };
+  // the daily-loss reference, a paper hold and a paper flatten do not carry over to the venue account
+  const [row] = await sql<PerpAgentRow[]>`update agents set state = 'LIVE', mode = 'LIVE', stop_reason = null,
+    perp = (perp - 'livePending' - 'day' - 'hold' - 'flatten') || ${sql.json({ live } as never)}, updated_at = now() where id = ${a.id} returning *`;
+  await log(a, 'live', `LIVE on the ${acct.network} venue account`, `mandate ${pend.mandateId}, strategy ${pend.strategySha256.slice(0, 12)}…, reference capital ${pend.capital} USDC. Orders inside the mandate are placed without a passkey.`);
+  await audit('agent.perp_live', actor, { id: a.id, account: pend.accountId, network: acct.network, mandateId: pend.mandateId, tradingMandate: m.hash, strategySha256: pend.strategySha256, capital: pend.capital });
+  return row!;
+}
 
 export async function stopLive(a: PerpAgentRow, rt: PerpLiveRuntime, locale: LiveLocale) {
   if (!isLiveActive(a) || !a.perp?.live) throw new UserError('bad_state', 'this agent is not on a venue account', 409);

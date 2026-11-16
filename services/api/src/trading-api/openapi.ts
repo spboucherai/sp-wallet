@@ -2,14 +2,29 @@
 // `z.toJSONSchema`: no extra dependency). Pure and deterministic: the same table always gives the same bytes, so the committed
 // copy (docs/openapi/trading-v1.json) is compared with the generated one by a test.
 import { z } from 'zod';
-import { ANY_SCOPE, API_VERSION, ErrorSchema, EXECUTION_SCOPES, OPERATIONS, SCOPES, TRADING_PREFIX, WEBHOOK_EVENTS, type OperationSpec } from './spec.ts';
+import { ANY_SCOPE, API_VERSION, COMPONENT_SCHEMAS, ErrorSchema, errorsOf, EXECUTION_SCOPES, FINAL_ORDER_STATES, MANDATE_DENY_REASONS, NOT_FOUND, OPERATIONS, ORDER_STATES, requiresMandate, RISK_CHECK_IDS, SCOPES, TRADING_PREFIX, WEBHOOK_EVENTS, type OperationSpec } from './spec.ts';
 
 type Json = Record<string, unknown>;
-const schema = (s: z.ZodType, io: 'input' | 'output'): Json => {
+const raw = (s: z.ZodType, io: 'input' | 'output'): Json => {
   const j = z.toJSONSchema(s, { target: 'draft-2020-12', io, unrepresentable: 'any' }) as Json;
   delete j.$schema;
   return j;
 };
+// Shared shapes (an order, the canonical order, a risk check) are written once under components and referenced: a sub-schema
+// that is exactly a component — its own `description` aside — becomes `{ $ref }` (with that description when it has one).
+const bare = (j: Json): string => { const { description: _d, ...rest } = j; return JSON.stringify(rest); };
+const COMPONENTS = Object.entries(COMPONENT_SCHEMAS).map(([name, s]) => { const json = raw(s, 'output'); return { name, json, key: bare(json), description: json.description }; });
+function refs(node: unknown, root = false): unknown {
+  if (Array.isArray(node)) return node.map((x) => refs(x));
+  if (node === null || typeof node !== 'object') return node;
+  const j = node as Json;
+  if (!root && j.type === 'object') {
+    const c = COMPONENTS.find((x) => x.key === bare(j));
+    if (c) return { $ref: `#/components/schemas/${c.name}`, ...(typeof j.description === 'string' && j.description !== c.description ? { description: j.description } : {}) };
+  }
+  return Object.fromEntries(Object.entries(j).map(([k, v]) => [k, refs(v)]));
+}
+const schema = (s: z.ZodType, io: 'input' | 'output'): Json => refs(raw(s, io)) as Json;
 const oaPath = (p: string): string => TRADING_PREFIX + p.replace(/:([A-Za-z]+)/g, '{$1}');
 const ERR = { $ref: '#/components/schemas/Error' };
 const errorAnswer = (description: string): Json => ({ description, content: { 'application/json': { schema: ERR } } });
@@ -31,28 +46,26 @@ function parameters(op: OperationSpec): Json[] {
   return out;
 }
 
+/** what a status means, before the codes an operation can answer with it */
+const STATUS_TEXT: Record<number, string> = {
+  400: 'The request is not valid', 401: 'Missing, malformed, unknown, expired or revoked key', 403: 'Authenticated, and refused', 404: 'The object named by the request does not exist',
+  409: 'The request conflicts with the state of the object, or needs a choice', 422: 'A valid request that cannot be carried out', 423: 'Blocked by the kill switch, by read-only mode or by a halt',
+  429: 'Too many requests (see the `RateLimit-*` and `Retry-After` headers)', 500: 'Server error; a mutating call may or may not have run: send it again with the same Idempotency-Key',
+  501: 'Declared but not connected yet. Never a success: nothing was done', 503: 'A backing service is unavailable; nothing was done',
+};
+
 function operationObject(op: OperationSpec): Json {
   const responses: Record<string, Json> = {};
   if (op.implemented) responses['200'] = { description: 'OK', ...(op.response ? { content: { 'application/json': { schema: schema(op.response, 'output') } } } : {}) };
-  else responses['501'] = errorAnswer('`execution_not_wired`: this operation is declared but not connected yet. Never a success.');
-  responses['400'] = errorAnswer('`bad_request`, `idempotency`, `stale_request`');
-  responses['401'] = errorAnswer('`unauthenticated`: missing, malformed, unknown, expired or revoked key');
-  const write = op.implemented && op.method !== 'GET';
-  responses['403'] = errorAnswer(write ? '`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`, `mandate_denied` (with `data.reasons`), `execution_disabled`, `key_limit_exceeded`, `not_your_order`, a closed server lock (`mainnet_disabled`, `mandate_mainnet_disabled`), `venue_restricted`, `spot_execution_requires_agent_vault`'
-    : '`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`');
-  if (write) {
-    responses['422'] = errorAnswer('`risk_denied` (with `data.failed` and `data.checks`), `not_reducing`, `no_position`, `no_account`, `below_min_size`, `leverage_mismatch`, a refusal of the venue engine. When an order exists it is in `data.order` (state `REJECTED` or `FAILED`).');
-    responses['423'] = errorAnswer('`kill_switch_active` or `read_only_mode`: the global kill switch blocks new risk; read-only mode lets only cancels pass');
-  }
-  if (op.params) responses['404'] = errorAnswer('unknown market, order or object');
-  if (op.idempotent || op.id === 'getMarket') responses['409'] = errorAnswer(op.idempotent ? '`idempotency_conflict`, `idempotency_in_progress`' : '`ambiguous_symbol` (with `candidates`)');
-  responses['429'] = errorAnswer('`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`');
-  if (op.implemented && op.method === 'GET' && op.id !== 'getOpenApi') responses['503'] = errorAnswer('a backing service is unavailable: `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…');
+  const errors = errorsOf(op), byStatus = new Map<number, string[]>();
+  for (const e of errors) byStatus.set(e.status, [...(byStatus.get(e.status) ?? []), e.code]);
+  for (const [status, codes] of byStatus) responses[String(status)] = errorAnswer(`${STATUS_TEXT[status] ?? 'Error'}: ${codes.map((c) => `\`${c}\``).join(', ')}`);
   const scopes = op.scope === ANY_SCOPE ? [] : [op.scope];
   return {
     operationId: op.id, tags: [op.tag], summary: op.summary, ...(op.description ? { description: op.description } : {}),
     security: [{ bearerKey: scopes }], 'x-spw-scope': op.scope === ANY_SCOPE ? 'any valid key' : op.scope, 'x-spw-implemented': op.implemented,
-    ...(op.scope !== ANY_SCOPE && (EXECUTION_SCOPES as readonly string[]).includes(op.scope) && !op.noMandate ? { 'x-spw-requires-mandate': true } : {}),
+    ...(requiresMandate(op) ? { 'x-spw-requires-mandate': true } : {}),
+    'x-spw-errors': errors, ...(op.implemented && op.errorsOpen ? { 'x-spw-errors-open': true } : {}),
     parameters: parameters(op),
     ...(op.body ? { requestBody: { required: true, content: { 'application/json': { schema: schema(op.body, 'input') } } } } : {}),
     responses,
@@ -71,7 +84,9 @@ export function buildOpenApi(): Json {
         'Authentication: `Authorization: Bearer spw_live_…` (an API key created by the owner with his passkey). A key opens nothing outside `/api/v1/trading/`.',
         'Every operation names the scope it needs (`x-spw-scope`). Scopes are access control inside the API; they are not what bounds execution: an order placed with a key is bounded by a trading mandate that the isolated signer enforces, and execution scopes are inert without one.',
         'Numbers that carry money are decimal strings. Paper and live data always carry a `mode` and are never merged.',
-        'Errors are `{ "error": "<code>", "message": "<sentence>" }`. Rate limits are per key: `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (seconds).',
+        'Errors are `{ "error": "<code>", "message": "<sentence>" }`, with `data` when a refusal has machine-readable detail (the order it is about, the mandate\'s reasons, the failed risk checks, the questions of an ambiguous command). Every operation lists the codes it can answer, with their status, in `x-spw-errors`. Rate limits are per key: `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (seconds).',
+        `A path that is not an operation of this document (or a known path with another method) answers ${NOT_FOUND.status} \`${NOT_FOUND.code}\` in the same error model.`,
+        'An order\'s `status` is one of the twelve states of `x-spw-order-states`; `final` is true for the states marked final. `UNKNOWN` is neither final nor a failure. Lists that can grow without bound (`GET /orders`, `GET /activity`) are paginated with `cursor` / `nextCursor`.',
       ].join('\n\n'),
     },
     servers: [{ url: '/', description: 'the wallet\'s own origin' }],
@@ -79,9 +94,13 @@ export function buildOpenApi(): Json {
     paths,
     components: {
       securitySchemes: { bearerKey: { type: 'http', scheme: 'bearer', bearerFormat: 'spw_live_<key id>_<secret>', description: 'API key shown once at creation. Never sent together with a session cookie.' } },
-      schemas: { Error: schema(ErrorSchema, 'output') },
+      schemas: { Error: schema(ErrorSchema, 'output'), ...Object.fromEntries(COMPONENTS.map((c) => [c.name, refs(c.json, true)])) },
     },
     'x-spw-scopes': SCOPES.map((s) => ({ scope: s, execution: (EXECUTION_SCOPES as readonly string[]).includes(s) })),
+    'x-spw-order-states': ORDER_STATES.map((state) => ({ state, final: FINAL_ORDER_STATES.includes(state) })),
+    'x-spw-mandate-deny-reasons': [...MANDATE_DENY_REASONS],
+    'x-spw-risk-checks': [...RISK_CHECK_IDS],
+    'x-spw-not-found': { status: NOT_FOUND.status, error: NOT_FOUND.code },
     'x-spw-webhook-events': WEBHOOK_EVENTS.map((e) => ({ ...e })),
   };
 }
@@ -107,13 +126,21 @@ export function openApiMarkdown(): string {
     if (ps.length) { L.push('| Name | In | Required | Schema | Description |', '|---|---|---|---|---|'); for (const p of ps) L.push(`| \`${p.name}\` | ${p.in} | ${p.required ? 'yes' : 'no'} | \`${JSON.stringify(p.schema)}\` | ${String(p.description ?? '').replace(/\|/g, '\\|')} |`); L.push(''); }
     if (op.body) L.push('Request body (JSON):', '', '```json', JSON.stringify(schema(op.body, 'input'), null, 2), '```', '');
   }
-  L.push('## Errors', '', 'Every error is `{ "error": "<code>", "message": "<sentence>" }`; a refusal about an order also carries `data` (`data.order`, `data.reasons`, `data.failed`, `data.checks`, `data.questions`).', '', '| Status | Codes |', '|---|---|',
-    '| 400 | `bad_request`, `invalid_order`, `parse_error`, `idempotency`, `stale_request` |', '| 401 | `unauthenticated` |',
-    '| 403 | `key_path_forbidden`, `mixed_credentials`, `insufficient_scope`, `scope_undeclared`, `restricted`, `ip_not_allowed`, `mandate_required`, `mandate_not_approved`, `mandate_denied`, `execution_disabled`, `key_limit_exceeded`, `not_your_order`, `mainnet_disabled`, `mandate_mainnet_disabled`, `venue_restricted`, `spot_execution_requires_agent_vault` |',
-    '| 404 | `unknown_market`, `unknown_order`, `unknown_account`, `unknown_position`, `not_found` |', '| 409 | `ambiguous_symbol`, `ambiguous_command`, `account_required`, `idempotency_conflict`, `idempotency_in_progress`, `bad_state` |',
-    '| 422 | `no_orderbook`, `venue_rejected`, `risk_denied`, `not_reducing`, `no_position`, `no_account`, `below_min_size`, `leverage_mismatch`, `venue_not_wired`, `spot_via_swap_screen`, `cancel_in_app`, `close_in_app`, the risk codes of the venue engine |',
-    '| 423 | `kill_switch_active`, `read_only_mode` |',
-    '| 429 | `rate_limited`, `auth_throttled` |', '| 501 | `execution_not_wired` |', '| 503 | `signer_unreachable`, `venue_unavailable`, `venue_rate_limited`, `markets_unavailable`, `stale_data`, `service_unavailable` |', '');
+  L.push('## Errors', '', 'Every error is `{ "error": "<code>", "message": "<sentence>" }`; a refusal about an order also carries `data` (`data.order`, `data.reasons`, `data.failed`, `data.checks`, `data.questions`).',
+    `A path that is not an operation (or a known path with another method) answers ${NOT_FOUND.status} \`${NOT_FOUND.code}\`.`, '',
+    'The codes each operation can answer (the document\'s `x-spw-errors`). "open": the venue engine that executes the order can add a refusal code of its own rules.', '');
+  for (const op of OPERATIONS) {
+    const by = new Map<number, string[]>();
+    for (const e of errorsOf(op)) by.set(e.status, [...(by.get(e.status) ?? []), e.code]);
+    L.push(`### ${op.method} \`${oaPath(op.path)}\`${op.implemented && op.errorsOpen ? ' (open)' : ''}`, '', '| Status | Codes |', '|---|---|');
+    for (const [status, codes] of by) L.push(`| ${status} | ${codes.map((c) => `\`${c}\``).join(', ')} |`);
+    L.push('');
+  }
+  L.push('## Order states', '', '| `status` | `final` |', '|---|---|');
+  for (const s of ORDER_STATES) L.push(`| \`${s}\` | ${FINAL_ORDER_STATES.includes(s) ? 'yes' : 'no'} |`);
+  L.push('', '`UNKNOWN`: the outcome at the venue is not known yet. It is not final and it is not a failure; the server resolves it by asking the venue.', '',
+    '## Refusal detail', '', `\`mandate_denied\` — \`data.reasons\`: ${MANDATE_DENY_REASONS.map((r) => `\`${r}\``).join(', ')}.`, '',
+    `\`risk_denied\`, \`kill_switch_active\`, \`read_only_mode\` — \`data.failed\` (ids of \`data.checks\`): ${RISK_CHECK_IDS.map((r) => `\`${r}\``).join(', ')}.`, '');
   L.push('## Webhook events', '', '| Event | Emitted in this version | Payload (`data`) | Description |', '|---|---|---|---|');
   for (const e of WEBHOOK_EVENTS) L.push(`| \`${e.event}\` | ${e.emitted ? 'yes' : 'no — pending wiring'} | \`${e.payload}\` | ${e.description} |`);
   L.push('');
