@@ -58,7 +58,7 @@ afterAll(async () => { await sql?.end(); });
 describe.skipIf(!READY)('confinement does not change a signal', () => {
   it('every library strategy: the sandboxed output is byte-identical to the pre-v8 invocation, and runSignal / runPerpSignal return those weights', async () => {
     expect(library.length).toBeGreaterThanOrEqual(20);
-    let spot = 0, perp = 0;
+    let spot = 0, perp = 0; const perpDone: string[] = [], skippedSpotLegs: string[] = [];
     for (const rel of library) {
       const dir = path.join(fx.dir, 'strategies', rel), realDir = path.join(REAL_LAB, 'strategies', rel);
       const d = legacy(['spq.describe', '--strategy', realDir, '--contract', '2']);
@@ -66,7 +66,7 @@ describe.skipIf(!READY)('confinement does not change a signal', () => {
       const info = JSON.parse(d.stdout) as { sha256: string; kind: 'spot' | 'perp'; meta: { universe: string[]; lookback: number; interval: string } };
       if (info.meta.interval !== '1h') continue;
       const universe = info.meta.universe[0] === '*' ? ['BTC', 'ETH', 'LINK'] : info.meta.universe;
-      if (universe.some((s) => s.endsWith('.SPOT'))) continue;            // spot legs: not runnable by a perp agent
+      if (universe.some((s) => s.endsWith('.SPOT'))) { skippedSpotLegs.push(rel); continue; }   // spot legs: not runnable by a perp agent
       const n = info.meta.lookback + 5;
       if (info.kind === 'spot') {
         const data = Object.fromEntries(universe.map((s) => [s, bars(n, SYMS[s]![0], SYMS[s]![1])]));
@@ -87,10 +87,14 @@ describe.skipIf(!READY)('confinement does not change a signal', () => {
         const boxed = await lab.labExec(['spq.signal', '--contract', '2', '--strategy', dir, '--sha256', info.sha256, '--input', '-'], { timeoutMs: 120_000, stdin: input, strategyDir: dir });
         expect(boxed.out, rel).toBe(ref.stdout);
         expect((await perpSignal.runPerpSignal({ path: `strategies/${rel}`, sha256: info.sha256 }, data as never, '1h')).weights, rel).toEqual(JSON.parse(ref.stdout).weights);
-        perp += 1;
+        perp += 1; perpDone.push(rel);
       }
     }
-    expect(spot).toBeGreaterThanOrEqual(12); expect(perp).toBeGreaterThanOrEqual(5);
+    expect(spot).toBeGreaterThanOrEqual(12); expect(perp).toBeGreaterThanOrEqual(10);
+    // V11: the five 1 h perp strategies of the quant lab went through the comparison (the two generic ones on BTC, ETH, LINK — the
+    // symbols come from the input); the spot-leg strategy is skipped; the cross-venue one is not in research/strategies at all
+    for (const rel of ['momentum_xs_perp/1', 'momentum_xs_perp/2', 'mean_reversion_bands_perp/1', 'mean_reversion_bands_perp/2', 'statarb_basket_perp/1']) expect(perpDone, rel).toContain(rel);
+    expect(skippedSpotLegs).toContain('basis_cash_carry/1'); expect(library.some((r) => r.startsWith('funding_arb_cross_venue/'))).toBe(false);
     console.log(`[lab-identity] ${spot} spot + ${perp} perp library strategies: sandboxed signal output byte-identical to the pre-v8 invocation`);
   }, 600_000);
 
@@ -111,7 +115,8 @@ describe.skipIf(!READY)('the spot backtest: files exported by the API ≡ the la
     for (const rel of ['ma_trend/3', 'ts_momentum/3']) {
       const realDir = path.join(REAL_LAB, 'strategies', rel), info = await strategies.describe(rel), tmp = realpathSync(mkdtempSync(path.join(tmpdir(), 'spw-identity-')));
       // before (pre-v8): the laboratory opens the database itself
-      const ref = legacy(['spq.backtest', '--strategy', realDir, '--sha256', info.sha256, '--symbols', 'BTC,ETH', '--out', path.join(tmp, 'before.json'), '--ledger', path.join(tmp, 'ledger.jsonl')],
+      // V11: backtest() now passes --engine-parity (the live spot engine's default caps and loss-limit stop); the reference run takes the same flag
+      const ref = legacy(['spq.backtest', '--strategy', realDir, '--sha256', info.sha256, '--symbols', 'BTC,ETH', '--out', path.join(tmp, 'before.json'), '--ledger', path.join(tmp, 'ledger.jsonl'), '--engine-parity'],
         { env: { DATABASE_URL: process.env.DATABASE_URL!, SPQ_CANDLE_SOURCE: 'coinbase' } });
       expect(ref.status, ref.stderr).toBe(0);
       // after (v8): the real backtest() — export to files, sandbox, no database URL

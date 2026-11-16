@@ -15,6 +15,7 @@ import { AgentState, VersionTag } from './Agents';
 import { AgentModeBand, GoLiveCard, LiveActivity, LiveControls, LivePanel, PerpLiveState, Refusal } from './PerpAgentLive';   // v7 perp live: the real mode
 import { ResearchPanel } from './Research'; // v7 research runtime
 import { CardHead, EquityCard, FormGroup, Journal, LogoStack, Metric, PnlArrow, PositionRows, UnitInput } from './agentBits'; // v10 design pass
+import { ReportV3, SPLITS, StoppedTag, stopOfSplit } from './labReport'; // v11: the version-3 sections of a backtest report
 
 interface PerpRisk { maxLeverage: number; maxGrossExposureX: number; maxPositionX: number; maxDailyLossPct: number; maxTotalLossPct: number; slippageBps: number; minTradePct: number }
 interface VenueInst { symbol: string; id: string; maxLeverage: string; lotSize: string; mark: string | null; volume24h: string | null; eligible: boolean; why: string | null }
@@ -145,7 +146,9 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
   ];
 
   const have = new Set((a.versions as any[]).map((v) => v.code_sha256)), uni = [...(a.universe as string[])].sort().join();
-  const fit = (lib.data?.strategies ?? []).filter((x) => !have.has(x.sha256) && !x.spotLegs && x.meta.interval === a.interval && [...x.meta.universe].sort().join() === uni);
+  // v11: a universe-generic strategy (['*']) fits any agent whose number of instruments is within its bounds; a fixed one needs exactly these
+  const nInst = (a.universe as string[]).length;
+  const fit = (lib.data?.strategies ?? []).filter((x) => !have.has(x.sha256) && !x.spotLegs && x.meta.interval === a.interval && (x.generic ? nInst >= x.minSymbols && nInst <= x.maxSymbols : [...x.meta.universe].sort().join() === uni));
 
   return (
     <div className="space-y-4">
@@ -209,6 +212,9 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
               <Metric label={t('agRet')} value={pctOf(s.metrics.test?.total_return)} sub={<>{t('paVsPerp')} {pctOf(s.benchmarks.perp_long_1x?.total_return)}</>} />
               <Metric label="Sharpe" value={n2(s.metrics.test?.sharpe)} sub={<>[{n2(s.robustness?.bootstrap_sharpe_ci?.[0])} … {n2(s.robustness?.bootstrap_sharpe_ci?.[1])}]</>} />
               <Metric label={t('agDD')} value={pctOf(s.metrics.test?.max_drawdown)} sub={<>{t('paIntrabar')} {pctOf(s.metrics.test?.worst_intrabar_drawdown)}</>} /></dl>
+            {/* v11: a split the engine's own loss limit ended reads as a flat curve — it is said next to the figures, not left to be guessed */}
+            {SPLITS.map((k) => { const st = stopOfSplit(s, k); return st ? <div key={k} className="mt-2"><StoppedTag split={k} stop={st} /></div> : null; })}
+            <ReportV3 summary={s} />
             <div className="mt-3 rounded-2xl border border-warn/30 bg-warn/[0.09] p-3.5 text-[13px] leading-snug"><div className="mb-1.5 flex items-center gap-2 font-semibold"><Icon n="warn" className="h-4 w-4 shrink-0 text-warn" />{t('paCaveats')}</div><ul className="list-disc space-y-1.5 pl-5">
               <li>{t('paCavHistory', { days: s.historyDays ?? '?', bars: s.config?.bars ?? '?', interval: s.config?.interval ?? a.interval })}</li>
               <li>{t('paCavEstimates', { fee: s.config?.fee_bps ?? '?', slip: s.config?.slippage_bps ?? '?', pen: s.config?.liquidation_penalty_bps ?? '?' })}</li>
@@ -225,7 +231,7 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
           {lib.isLoading ? <div className="space-y-2" aria-hidden="true"><div className="skel h-[68px] !rounded-2xl" /></div> : fit.length === 0 ? <p className="text-[13.5px] leading-snug text-mute">{t('paLibNone', { assets: (a.universe as string[]).join(', '), interval: a.interval })}</p> :
             <ul className="divide-y divide-line">{fit.map((x) => <li key={x.sha256} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
               <span className="min-w-0 flex-1"><span className="block text-[15px] font-semibold">{x.meta.name} <span className="font-normal text-mute">v{x.meta.version}</span></span>
-                <span className="mt-0.5 block text-[12.5px] leading-snug text-mute [overflow-wrap:anywhere]">{x.meta.universe.join(' · ')} · {x.meta.interval} · {t('paBounds', { lev: x.meta.max_leverage, gross: x.meta.max_gross_exposure })}</span></span>
+                <span className="mt-0.5 block text-[12.5px] leading-snug text-mute [overflow-wrap:anywhere]">{x.generic ? (a.universe as string[]).join(' · ') : x.meta.universe.join(' · ')} · {x.meta.interval} · {t('paBounds', { lev: x.meta.max_leverage, gross: x.meta.max_gross_exposure })}</span></span>
               <Btn kind="soft" className="shrink-0" busy={busy === `r${x.sha256}`} onClick={() => act(`r${x.sha256}`, () => post(`/agents/${id}/strategies`, { path: x.path.replace(/^strategies\//, '') }))}>{t('agLibTest')}</Btn></li>)}</ul>}</div>
       </Card>
       </div>

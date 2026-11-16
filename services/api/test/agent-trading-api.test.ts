@@ -64,10 +64,10 @@ beforeAll(async () => {
   app = await (await import('../src/server.ts')).buildServer({ derivatives: deriv });
   // the agent runtime, bound as main.ts binds it (seam gateway, local kill switch, webhook emitter) — its loops are driven by hand here
   const bindings = await import('../src/agents/runtime-bindings.ts'), sched = await import('../src/agent-runtime/scheduler.ts');
-  rt = bindings.bindAgentRuntime({ market: { series: async () => [], assertFresh: async () => {} }, stream: false, emit: async (event, data) => { events.push({ event, data }); },
+  rt = bindings.bindAgentRuntime({ execution: app.execution, market: { series: async () => [], assertFresh: async () => {} }, stream: false, emit: async (event, data) => { events.push({ event, data }); },
     runtime: { workerId: 'test-worker', stream: { snapshotMs: 1000, equityEveryMs: 1000 } } });
   // …with the production feed (the derivatives data service) over the fixture-backed Hyperliquid adapter and its scripted stream
-  rt = sched.createAgentRuntime({ ...bindings.runtimeHandlers({ market: { series: async () => [], assertFresh: async () => {} }, stream: false, emit: async (event, data) => { events.push({ event, data }); } }), feed: sched.derivFeed(deriv.data as never) },
+  rt = sched.createAgentRuntime({ ...bindings.runtimeHandlers({ execution: app.execution, market: { series: async () => [], assertFresh: async () => {} }, stream: false, emit: async (event, data) => { events.push({ event, data }); } }), feed: sched.derivFeed(deriv.data as never) },
     { workerId: 'test-worker', stream: { snapshotMs: 1000, equityEveryMs: 1000 } });   // queue and leases on the real clock; the venues and the stream engine on the fixtures' clock
   KEY = await newKey(['agents:read', 'agents:manage', 'strategies:read', 'strategies:manage']);
   READER = await newKey(['agents:read', 'strategies:read']);
@@ -84,7 +84,11 @@ describe('trading API — an agent from a template, with a key that holds no man
     const by = Object.fromEntries(r.json.templates.map((t: any) => [t.id, t]));
     expect(by.momentum.installed).toEqual([]); expect(by.momentum.strategyNames).toEqual(['momentum_xs_perp', 'ts_momentum_perp', 'ma_trend_perp', 'vol_breakout_perp']);
     expect(by['market-making'].modes).toEqual(['research', 'paper']); expect(by['cross-exchange'].liveReason).toBe('mode réel indisponible : une seule plateforme autorise l\'exécution sous mandat');
-    expect(by['market-making'].rule).toMatchObject({ name: 'spread_inventory', version: '1' }); expect(by['market-making'].labBacktest).toEqual({ wanted: ['market_making_as'], installed: [] });
+    expect(by['market-making'].rule).toMatchObject({ name: 'spread_inventory', version: '1' }); expect(by['market-making'].labBacktest).toEqual({ wanted: [], installed: [], agentRunnable: false });
+    // V11: market_making_as is a model STUDY of the laboratory, not a strategy; the funding family's two laboratory strategies are backtest references no agent runs
+    expect(by['market-making'].labStudies.map((x: any) => [x.kind, x.name])).toEqual([['study', 'market_making_as'], ['study', 'vol_forecast']]);
+    expect(by['funding-arb'].labBacktest).toMatchObject({ wanted: ['funding_arb_cross_venue', 'basis_cash_carry'], agentRunnable: false });
+    for (const t of r.json.templates) expect(Array.isArray(t.labVerdicts), t.id).toBe(true);
     const refused = await call('POST', `${T}/agents`, { key: KEY, body: { template: 'momentum', name: 'Momentum' } });
     expect([refused.status, refused.json.error]).toEqual([409, 'strategy_not_installed']); expect(refused.json.message).toMatch(/momentum_xs_perp, ts_momentum_perp/);
     expect((await sql`select count(*)::int as n from agents`)[0].n).toBe(0);
@@ -279,10 +283,12 @@ describe('the risk-management agent, end to end', () => {
     expect((await sql`select state from agents where id = ${victim}`)[0].state).toBe('PAUSED');
   });
 
-  it('the kill switch: engaged through the port, visible in the runtime status, refusing what adds risk; released by the owner only', async () => {
+  it('ONE kill switch: the Agents alias engages the risk engine\'s switch; visible in the runtime status and in /risk; refusing what adds risk; no release in the agents\' routes — the passkey route of the risk engine only', async () => {
     const e = await call('POST', `${A}/kill-switch/engage`, { body: { reason: 'drill' } });
-    expect(e.json).toMatchObject({ engaged: true, reason: 'owner: drill' });
-    expect(events.filter((x) => x.event === 'risk.kill_switch')).toHaveLength(1);
+    expect(e.json).toMatchObject({ engaged: true, reason: 'drill', by: 'owner:owner', release: { route: '/risk', passkey: true } });
+    // it IS the risk engine's switch: its state route says so, and no agents-side flag exists
+    expect((await call('GET', '/api/v1/risk/state')).json.switches.killSwitch).toMatchObject({ on: true, reason: 'drill', by: { kind: 'owner', id: 'owner' } });
+    expect(await sql`select key from settings where key = 'agents.kill_switch'`).toEqual([]);
     const st = await call('GET', `${A}/runtime/status`);
     expect(st.json.killSwitch.engaged).toBe(true); expect(st.json.queue).toMatchObject({ queued: expect.any(Number), running: 0 }); expect(Array.isArray(st.json.leases)).toBe(true);
     // a running paper market maker: its quotes add risk → refused by the gateway while the switch is on
@@ -291,9 +297,14 @@ describe('the risk-management agent, end to end', () => {
     const ord = await call('GET', `${T}/agents/${r.json.agent.id}/orders?mode=paper`, { key: READER });
     expect(ord.json.orders.length).toBeGreaterThan(0); expect(ord.json.orders.every((o: any) => o.state === 'REJECTED' && o.reason === 'KILL_SWITCH_ACTIVE')).toBe(true);
     expect((await call('GET', `${A}/${r.json.agent.id}/overview`)).json.killSwitch.engaged).toBe(true);
-    const rel = await call('POST', `${A}/kill-switch/release`, { body: {} });
-    expect(rel.json.engaged).toBe(false);
-    expect((await sql`select type, actor from audit_events where type like 'agents.kill_switch%' order by seq`).map((x: any) => [x.type, x.actor])).toEqual([['agents.kill_switch_engaged', 'agent:risk'], ['agents.kill_switch_released', 'owner']]);
+    // the agents' release route does not exist any more; the risk engine's needs the passkey
+    expect((await call('POST', `${A}/kill-switch/release`, { body: {} })).status).toBe(404);
+    expect((await call('POST', '/api/v1/risk/kill-switch/release', { body: {} })).status).toBeGreaterThanOrEqual(400);
+    expect((await call('GET', `${A}/runtime/status`)).json.killSwitch.engaged).toBe(true);
+    expect((await sql`select type, actor from audit_events where type like 'agents.kill_switch%'`)).toEqual([]);
+    expect((await sql`select type, actor from audit_events where type = 'risk.kill_switch' order by seq`).map((x: any) => [x.type, x.actor])).toEqual([['risk.kill_switch', 'owner']]);
+    // the suite goes on without the switch: put back as the passkey release would (the release itself is tested in agent-bind.test.ts)
+    await sql`delete from settings where key = 'risk.switches'`;
   });
 
   it('the owner\'s panel routes: overview, timeline of one mode, configuration versions; a configuration change is a new version and needs the agent stopped', async () => {

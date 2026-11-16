@@ -135,7 +135,9 @@ export async function backtest(versionId: string, info: StrategyInfo, symbols: s
     await withCandleDb((db) => exportCandles(data, source, symbols, info.meta.interval, db));
     const ledger = stageLedger(tmp), dir = path.join(RESEARCH_DIR, info.path);
     // the agent's symbols are always passed: a generic strategy has no list of its own, a fixed one equals them (checked at registration)
-    const r = await py(['spq.backtest', '--strategy', dir, '--sha256', info.sha256, '--symbols', symbols.join(','), '--data-dir', data, '--source', source, '--out', out, '--ledger', ledger.copy],
+    const r = await py(['spq.backtest', '--strategy', dir, '--sha256', info.sha256, '--symbols', symbols.join(','), '--data-dir', data, '--source', source, '--out', out, '--ledger', ledger.copy,
+      // V11: the live spot engine's default caps and loss-limit stop are applied to the backtest (research/src/spq/params/engine-parity.json); the report stays version 1 and its checks.notes state them
+      '--engine-parity'],
       { timeoutMs: 20 * 60_000, strategyDir: dir, scratch: tmp });
     if (r.code !== 0 || !existsSync(out)) { await sql`update strategy_versions set status = 'draft', notes = ${`backtest failed: ${r.err.trim().split('\n').pop()?.slice(0, 300) ?? 'no report'}`} where id = ${versionId} and status = 'backtesting'`; return; }
     ledger.merge();
