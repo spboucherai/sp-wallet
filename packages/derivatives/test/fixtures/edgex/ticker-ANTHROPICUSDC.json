@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-16T00:01:47.629Z",
+ "url": "https://edgex-prod-v2.edgex.exchange/api/v2/public/quote/getTicker?contractId=30000192",
+ "status": 200,
+ "text": "{\"code\":\"SUCCESS\",\"data\":[{\"close\":\"1342.584\",\"contractId\":\"30000192\",\"contractName\":\"ANTHROPICUSDC\",\"endTime\":\"1794787200000\",\"fundingRate\":\"0.00034823\",\"fundingTime\":\"1794787200000\",\"high\":\"1349.814\",\"highTime\":\"1794702021546\",\"indexPrice\":\"1346.0863369809704915\",\"lastPrice\":\"1342.584\",\"low\":\"1324.091\",\"lowTime\":\"1794706630547\",\"markPrice\":\"1342.79074137772117176\",\"nextFundingTime\":\"1794801600000\",\"open\":\"1344.897\",\"openInterest\":\"5.08\",\"oraclePrice\":\"1342.79074137772117176\",\"priceChange\":\"-2.313\",\"priceChangePercent\":\"-0.001719\",\"size\":\"163.73\",\"startTime\":\"1794700800000\",\"trades\":\"3142\",\"value\":\"218972.12676\"}],\"errorParam\":null,\"msg\":null,\"requestTime\":\"1794787307526\",\"responseTime\":\"1794787307533\",\"traceId\":\"\"}"
+}

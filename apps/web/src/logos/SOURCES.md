@@ -149,6 +149,7 @@ identify the asset, network or service it designates.
 | venue | `hyperliquid` | logo of asset `HYPE` |  |  |  |  |
 | venue | `gmx` | logo of asset `GMX` |  |  |  |  |
 | venue | `dydx` | `venue/dydx.svg` | <https://raw.githubusercontent.com/cosmos/chain-registry/master/dydx/images/dydx-circle.svg> | CC-BY-4.0 — cosmos/chain-registry (images each chain publishes about itself) | published by the dYdX chain in the chain registry | 2026-11-11 |
+| venue | `edgex` | generic fallback: no official edgeX mark was found in a licensed, address- or project-keyed registry on 2026-11-15 (Web3Icons has a ticker-keyed EDGE token logo whose owner could not be verified; edgeX publishes no brand kit under a redistribution licence): the venue is shown with its initials |  |  |  |  |
 | provider | `kyberswap` | `provider/kyberswap.svg` | <https://raw.githubusercontent.com/lifinance/types/main/src/assets/icons/exchanges/kyberswap.svg> | Apache-2.0 — lifinance/types (icons of the bridges, exchanges and chains LI.FI integrates) | KyberSwap exchange icon | 2026-11-11 |
 | provider | `jupiter` | logo of asset `JUP` |  |  |  |  |
 | provider | `cctp` | `provider/cctp.svg` | <https://raw.githubusercontent.com/lifinance/types/main/src/assets/icons/bridges/circle.svg> | Apache-2.0 — lifinance/types (icons of the bridges, exchanges and chains LI.FI integrates) | Circle (CCTP) bridge icon | 2026-11-11 |

@@ -3,7 +3,7 @@
 // trading objects, signing helpers and raw HTTP clients are not reachable from here, so nothing that goes through this registry can build,
 // sign or send an order to a venue.
 import {
-  createDydxAdapter, createGmxAdapter, createHyperliquidAdapter, VenueError,
+  createDydxAdapter, createEdgeXAdapter, createGmxAdapter, createHyperliquidAdapter, VenueError,
   type Capabilities, type DecStr, type GmxLiquidity, type VenueAdapter, type VenueId,
 } from '@spw/derivatives';
 import { UserError } from '../config.ts';
@@ -33,6 +33,9 @@ export type VenueStatus = 'ok' | 'degraded' | 'down';
 export interface VenueHealth { status: VenueStatus; lastOkAt: number | null; lastErrorAt: number | null; lastError: string | null; consecutiveFailures: number }
 
 export const DYDX_RESTRICTION = 'dYdX is served for market data only: its terms of use exclude Canada (and the United States and the United Kingdom) and its indexer geoblocks account reads from the owner\'s network. No account view and no paper account are offered on this venue, so that it cannot be mistaken for a venue the owner may trade on.';
+
+/** v11: same rule as dYdX. The text starts with the notice shown wherever trading would otherwise be offered. */
+export const EDGEX_RESTRICTION = 'Trading unavailable: edgeX\'s terms exclude Canada. edgeX is served for market data only: its Terms of Use name the United States of America and Canada as blocked jurisdictions, for its interface and for perpetual contracts, and forbid getting around it with a VPN (https://edgex-1.gitbook.io/edgeX-documentation/about/terms-of-use, read 2026-11-15). No account view, no order and no paper account are offered on this venue, so that it cannot be mistaken for a venue the owner may trade on.';
 
 /** failures in a row before a venue is reported `down` (1 … DOWN_AFTER − 1 = `degraded`) */
 export const DOWN_AFTER = 3;
@@ -138,6 +141,17 @@ export const DYDX_FACTS: VenueFacts = {
     'Eligibility: the terms exclude the United States, Canada and the United Kingdom.',
   ],
 };
+export const EDGEX_FACTS: VenueFacts = {
+  takerFeeBps: '4.5', makerFeeBps: '4', paperFees: null, hasOrderBook: true,
+  notes: [
+    'Central limit order book operated by edgeX; settlement on the Edge chain; all contracts are quoted, margined and settled in USDC.',
+    'Besides crypto, edgeX lists perpetuals on equities, ETFs, commodities, currencies and pre-IPO names; edgeX publishes no contract specification for the pre-IPO ones (unit, index sources, what happens at an IPO).',
+    'Funding is settled every 4 h on every contract (read live on 2026-11-15); the rate shown is the running forecast for the current interval.',
+    'The mark price equalled the oracle price in every answer read on 2026-11-15; stock-type contracts have a single oracle signer.',
+    'Fee shown is the default of the venue metadata (taker 0.045 %, maker 0.04 %); maximum leverage and maintenance margin are per contract, by position-value tier.',
+    'Eligibility: the Terms of Use exclude the United States and Canada. Rate limits are not published; there is no public testnet.',
+  ],
+};
 export const GMX_FACTS: VenueFacts = {
   takerFeeBps: null, makerFeeBps: null, paperFees: null, hasOrderBook: false,
   notes: [
@@ -158,6 +172,7 @@ export function createDefaultRegistry(o: { fetch?: typeof fetch; now?: () => num
     hyperliquid: createHyperliquidAdapter({ network: 'mainnet', now, ...f }),
     gmx: createGmxAdapter({ chain: 'arbitrum', now, ...f }),
     dydx: createDydxAdapter({ network: 'mainnet', now, ...f }),
+    edgex: createEdgeXAdapter({ now, ...f }),   // v11: public market data only
   }, now);
 }
 
@@ -167,5 +182,6 @@ export function createRegistry(adapters: Partial<Record<VenueId, VenueAdapter & 
   if (adapters.hyperliquid) out.push({ id: 'hyperliquid', name: 'Hyperliquid', adapter: readOnly(adapters.hyperliquid, null), restriction: null, facts: HYPERLIQUID_FACTS });
   if (adapters.gmx) out.push({ id: 'gmx', name: 'GMX v2 (Arbitrum)', adapter: readOnly(adapters.gmx, null), restriction: null, facts: GMX_FACTS });
   if (adapters.dydx) out.push({ id: 'dydx', name: 'dYdX v4', adapter: readOnly(adapters.dydx, DYDX_RESTRICTION), restriction: DYDX_RESTRICTION, facts: DYDX_FACTS });
+  if (adapters.edgex) out.push({ id: 'edgex', name: 'edgeX', adapter: readOnly(adapters.edgex, EDGEX_RESTRICTION), restriction: EDGEX_RESTRICTION, facts: EDGEX_FACTS });
   return new VenueRegistry(out, now);
 }

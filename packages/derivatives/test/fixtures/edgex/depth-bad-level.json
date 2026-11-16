@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-16T00:01:49.075Z",
+ "url": "https://edgex-prod-v2.edgex.exchange/api/v2/public/quote/getDepth?contractId=30000192&level=50",
+ "status": 400,
+ "text": "{\"code\":\"INVALID_DEPTH_LEVEL\",\"data\":null,\"errorParam\":{},\"msg\":\"depth level only support 15 and 200\",\"requestTime\":\"1794787308982\",\"responseTime\":\"1794787308982\",\"traceId\":\"\"}"
+}

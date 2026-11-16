@@ -1,0 +1,7 @@
+{
+ "recordedAt": "2026-11-16T00:01:51.070Z",
+ "url": "https://pro.edgex.exchange/api/v1/public/meta/getMetaData",
+ "status": 200,
+ "text": "<!DOCTYPE html>\n<html lang=\"en-US\" class=\"dark\" data-ssr-seo-path=\"/en-US/api/v1/public/meta/getMetaData\" data-theme=\"dark\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <script src=\"https://s3.edgex.exchange/boot/first-hidden.f6d9352b81.js\"></script>\n    <title>Trade, Earn &amp; Participate On-Chain | edgeX</title>\n    <meta name=\"keywords\" content=\"on-chain trading, tokenized assets, decentralized finance\" />\n    <meta name=\"description\" content=\"Access the edgeX ecosystem for on-chain trading, rewards, tokenized assets, vault strategies, and decentralized financial opportunities across blockch",
+ "trimmed": "HTML body cut from 9068 to 600 characters"
+}

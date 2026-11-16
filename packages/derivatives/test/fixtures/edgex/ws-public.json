@@ -1,0 +1,5866 @@
+{
+ "recordedAt": "2026-11-16T00:02:11.078Z",
+ "url": "wss://edgex-quote-prod-v2.edgex.exchange/api/v1/public/ws",
+ "sent": [
+  {
+   "type": "subscribe",
+   "channel": "ticker.30000192"
+  },
+  {
+   "type": "subscribe",
+   "channel": "depth.30000192.15"
+  },
+  {
+   "type": "subscribe",
+   "channel": "trades.30000192"
+  },
+  {
+   "type": "subscribe",
+   "channel": "ticker.all.1s"
+  },
+  {
+   "type": "subscribe",
+   "channel": "trades.30000001"
+  },
+  {
+   "type": "subscribe",
+   "channel": "bogus.channel"
+  },
+  {
+   "type": "pong",
+   "time": "1794787313784"
+  },
+  {
+   "type": "pong",
+   "time": "1794787323785"
+  },
+  {
+   "type": "unsubscribe",
+   "channel": "trades.30000001"
+  }
+ ],
+ "trimmed": "ticker.all.1s: first 3 of 21 frames kept, each cut from every contract to the recorded ones; BTC trade increments: first 3 of 15 kept; every other frame is complete and in order",
+ "messages": [
+  {
+   "sid": "5fea265f-c957-4dcf-a304-f5fd6b9e74c1",
+   "type": "connected"
+  },
+  {
+   "type": "subscribed",
+   "channel": "ticker.30000192",
+   "request": "{\"type\":\"subscribe\",\"channel\":\"ticker.30000192\"}"
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "bestAskPrice": "1343.354",
+      "bestBidPrice": "1342.104",
+      "close": "1342.584",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1059990580565791",
+      "lastPrice": "1342.584",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.763932764920793076",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.763932764920793076",
+      "priceChange": "-2.313",
+      "priceChangePercent": "-0.001719",
+      "size": "163.73",
+      "startTime": "1794700800000",
+      "trades": "3142",
+      "value": "218972.12676"
+     }
+    ],
+    "dataType": "Snapshot"
+   }
+  },
+  {
+   "type": "subscribed",
+   "channel": "depth.30000192.15",
+   "request": "{\"type\":\"subscribe\",\"channel\":\"depth.30000192.15\"}"
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.354",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.355",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.356",
+        "size": "0.64"
+       },
+       {
+        "price": "1343.357",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.358",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.359",
+        "size": "0.60"
+       },
+       {
+        "price": "1343.360",
+        "size": "0.62"
+       },
+       {
+        "price": "1343.361",
+        "size": "0.51"
+       },
+       {
+        "price": "1343.362",
+        "size": "0.40"
+       },
+       {
+        "price": "1343.363",
+        "size": "0.49"
+       },
+       {
+        "price": "1343.364",
+        "size": "0.40"
+       },
+       {
+        "price": "1343.365",
+        "size": "0.56"
+       },
+       {
+        "price": "1343.366",
+        "size": "0.36"
+       },
+       {
+        "price": "1343.367",
+        "size": "0.33"
+       },
+       {
+        "price": "1343.368",
+        "size": "0.36"
+       }
+      ],
+      "bids": [
+       {
+        "price": "1342.104",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.103",
+        "size": "0.56"
+       },
+       {
+        "price": "1342.102",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.101",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.100",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.099",
+        "size": "0.45"
+       },
+       {
+        "price": "1342.098",
+        "size": "0.56"
+       },
+       {
+        "price": "1342.097",
+        "size": "0.42"
+       },
+       {
+        "price": "1342.096",
+        "size": "0.38"
+       },
+       {
+        "price": "1342.095",
+        "size": "0.44"
+       },
+       {
+        "price": "1342.094",
+        "size": "0.62"
+       },
+       {
+        "price": "1342.093",
+        "size": "0.44"
+       },
+       {
+        "price": "1342.092",
+        "size": "0.45"
+       },
+       {
+        "price": "1342.091",
+        "size": "0.36"
+       },
+       {
+        "price": "1342.090",
+        "size": "0.36"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "SNAPSHOT",
+      "endVersion": "274903786",
+      "level": 15,
+      "startVersion": "274903586"
+     }
+    ],
+    "dataType": "Snapshot"
+   }
+  },
+  {
+   "type": "subscribed",
+   "channel": "trades.30000192",
+   "request": "{\"type\":\"subscribe\",\"channel\":\"trades.30000192\"}"
+  },
+  {
+   "type": "quote-event",
+   "channel": "trades.30000192",
+   "content": {
+    "channel": "trades.30000192",
+    "data": [
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997082534510806",
+      "price": "1342.584",
+      "size": "0.06",
+      "takerOrderId": "816997082534511830",
+      "ticketId": "a6adfe90-c7e3-4407-9f6b-8ae61a722cb5",
+      "time": "1794787283550",
+      "value": "80.55504"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816996969279914198",
+      "price": "1342.588",
+      "size": "0.04",
+      "takerOrderId": "816996969279915222",
+      "ticketId": "eab6672c-49b0-4c12-9f7f-9fc84faed95d",
+      "time": "1794787256548",
+      "value": "53.70352"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816996847712207062",
+      "price": "1343.841",
+      "size": "0.06",
+      "takerOrderId": "816996847712208086",
+      "ticketId": "6b53a212-57d3-4943-b400-9ff6842de5a2",
+      "time": "1794787227564",
+      "value": "80.63046"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816996730313638102",
+      "price": "1343.833",
+      "size": "0.05",
+      "takerOrderId": "816996730313639126",
+      "ticketId": "f59ade7e-7dd0-46ef-92b3-35247793ed12",
+      "time": "1794787199574",
+      "value": "67.19165"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816996608569770198",
+      "price": "1344.303",
+      "size": "0.06",
+      "takerOrderId": "816996608569771222",
+      "ticketId": "74914f4e-0f9d-408c-969b-290cf6900d6c",
+      "time": "1794787170549",
+      "value": "80.65818"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816996474347847894",
+      "price": "1344.293",
+      "size": "0.05",
+      "takerOrderId": "816996474347848918",
+      "ticketId": "7497feb3-abfc-4bf6-9b08-f8fd93f2ce82",
+      "time": "1794787138547",
+      "value": "67.21465"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816996356907335894",
+      "price": "1344.238",
+      "size": "0.05",
+      "takerOrderId": "816996356907336918",
+      "ticketId": "c2f08cab-a5e9-4b49-840b-877e712ff40d",
+      "time": "1794787110547",
+      "value": "67.21190"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816996235272519894",
+      "price": "1343.507",
+      "size": "0.05",
+      "takerOrderId": "816996235272520918",
+      "ticketId": "b13c6dd8-8d10-4370-b331-92ba57b179a9",
+      "time": "1794787081547",
+      "value": "67.17535"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816996122160529622",
+      "price": "1343.513",
+      "size": "0.05",
+      "takerOrderId": "816996122160530646",
+      "ticketId": "b2afe4d9-8eab-4af1-ad56-9a1c3c799c88",
+      "time": "1794787054584",
+      "value": "67.17565"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816996000517325014",
+      "price": "1346.430",
+      "size": "0.06",
+      "takerOrderId": "816996000517326038",
+      "ticketId": "551da583-dd5f-420c-ae86-560b3a770a69",
+      "time": "1794787025577",
+      "value": "80.78580"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816995878895091926",
+      "price": "1346.094",
+      "size": "0.05",
+      "takerOrderId": "816995878895092950",
+      "ticketId": "ac569354-f89a-4e14-8b6a-4af44bbe5148",
+      "time": "1794786996579",
+      "value": "67.30470"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816995765506277590",
+      "price": "1346.099",
+      "size": "0.05",
+      "takerOrderId": "816995765506278614",
+      "ticketId": "78f52267-72db-4a42-a6e2-8669fd7e05c0",
+      "time": "1794786969546",
+      "value": "67.30495"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816995648065765590",
+      "price": "1346.098",
+      "size": "0.06",
+      "takerOrderId": "816995648065766614",
+      "ticketId": "3ed805ac-2c9d-4963-bb9e-db8efe9641dd",
+      "time": "1794786941545",
+      "value": "80.76588"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816995518054924502",
+      "price": "1345.777",
+      "size": "0.04",
+      "takerOrderId": "816995518054925526",
+      "ticketId": "3aa2b290-ca66-4e05-8888-87c470dd8889",
+      "time": "1794786910549",
+      "value": "53.83108"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816995404804522198",
+      "price": "1345.767",
+      "size": "0.04",
+      "takerOrderId": "816995404804523222",
+      "ticketId": "695f7718-779d-4cc2-982e-5ff52f11d43d",
+      "time": "1794786883548",
+      "value": "53.83068"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816995283169706198",
+      "price": "1344.709",
+      "size": "0.04",
+      "takerOrderId": "816995283169707222",
+      "ticketId": "22545531-aaa7-4453-9783-1bdcfc6af02f",
+      "time": "1794786854548",
+      "value": "53.78836"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816995182502215894",
+      "price": "1344.709",
+      "size": "0.07",
+      "takerOrderId": "816995182502216918",
+      "ticketId": "8d6e3482-2e00-4785-850e-dda487f134ec",
+      "time": "1794786830547",
+      "value": "94.12963"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816995035705770198",
+      "price": "1343.982",
+      "size": "0.04",
+      "takerOrderId": "816995035705771222",
+      "ticketId": "ea17e2bc-c88b-4dfb-8c92-ed7e8aaae62e",
+      "time": "1794786795548",
+      "value": "53.75928"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816994926649671894",
+      "price": "1343.992",
+      "size": "0.06",
+      "takerOrderId": "816994926649672918",
+      "ticketId": "c79ed27a-be28-4e78-a70e-7662178a32f6",
+      "time": "1794786769547",
+      "value": "80.63952"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816994813403463894",
+      "price": "1343.995",
+      "size": "0.05",
+      "takerOrderId": "816994813403464918",
+      "ticketId": "ae6f8790-eb77-4300-9c8c-49b6d91122f3",
+      "time": "1794786742547",
+      "value": "67.19975"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816994704347365590",
+      "price": "1344.000",
+      "size": "0.06",
+      "takerOrderId": "816994704347366614",
+      "ticketId": "b6f35875-cbc4-44c3-8654-b50a0f220a69",
+      "time": "1794786716546",
+      "value": "80.64000"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816994574336524502",
+      "price": "1343.343",
+      "size": "0.04",
+      "takerOrderId": "816994574336525526",
+      "ticketId": "cd1f0641-db84-424c-af98-599284bc55e4",
+      "time": "1794786685549",
+      "value": "53.73372"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816994469592170710",
+      "price": "1343.486",
+      "size": "0.06",
+      "takerOrderId": "816994469592171734",
+      "ticketId": "655d92e0-c393-47cd-bd1f-861d419a5ec1",
+      "time": "1794786660576",
+      "value": "80.60916"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816994335252807894",
+      "price": "1343.480",
+      "size": "0.05",
+      "takerOrderId": "816994335252808918",
+      "ticketId": "55e7d013-b024-4be9-be5d-4aac613697a6",
+      "time": "1794786628546",
+      "value": "67.17400"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816994221998211286",
+      "price": "1343.473",
+      "size": "0.06",
+      "takerOrderId": "816994221998212310",
+      "ticketId": "d9e53ccb-0ef1-4425-a7a9-15432535d8ae",
+      "time": "1794786601546",
+      "value": "80.60838"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816994100363395286",
+      "price": "1342.912",
+      "size": "0.05",
+      "takerOrderId": "816994100363396310",
+      "ticketId": "e14bcd2d-f171-44c0-8d87-a566bbf6ef9b",
+      "time": "1794786572546",
+      "value": "67.14560"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816993987129770198",
+      "price": "1343.226",
+      "size": "0.04",
+      "takerOrderId": "816993987129771222",
+      "ticketId": "764ea379-7bf2-4a3d-a377-34778b6f3cc2",
+      "time": "1794786545548",
+      "value": "53.72904"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816993865511731414",
+      "price": "1343.221",
+      "size": "0.04",
+      "takerOrderId": "816993865511732438",
+      "ticketId": "2c2e186f-0870-448a-997e-36e7418a0098",
+      "time": "1794786516555",
+      "value": "53.72884"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816993752240357590",
+      "price": "1342.285",
+      "size": "0.05",
+      "takerOrderId": "816993752240358614",
+      "ticketId": "5f2e01b6-8973-4d71-8d08-579f555fe63f",
+      "time": "1794786489546",
+      "value": "67.11425"
+     },
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816993630634901718",
+      "price": "1343.171",
+      "size": "0.05",
+      "takerOrderId": "816993630639096022",
+      "ticketId": "0ed554b1-c9b8-40ec-b813-56da0c41f078",
+      "time": "1794786460555",
+      "value": "67.15855"
+     }
+    ],
+    "dataType": "Snapshot"
+   }
+  },
+  {
+   "type": "subscribed",
+   "channel": "ticker.all.1s",
+   "request": "{\"type\":\"subscribe\",\"channel\":\"ticker.all.1s\"}"
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.all.1s",
+   "content": {
+    "channel": "ticker.all.1s",
+    "data": [
+     {
+      "bestAskPrice": "65248.0",
+      "bestBidPrice": "65247.0",
+      "close": "65247.0",
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00005000",
+      "fundingTime": "1794787200000",
+      "high": "66031.3",
+      "highTime": "1794733925614",
+      "indexPrice": "65296.3317751221",
+      "lastPrice": "65247.0",
+      "low": "61975.1",
+      "lowTime": "1794707141183",
+      "markPrice": "65265.352905953423219042",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "63687.0",
+      "openInterest": "2446.095",
+      "oraclePrice": "65265.352905953423219042",
+      "priceChange": "1560.0",
+      "priceChangePercent": "0.024494",
+      "size": "5077.566",
+      "startTime": "1794699000000",
+      "trades": "102851",
+      "value": "327391290.5090"
+     },
+     {
+      "bestAskPrice": "3900.3",
+      "bestBidPrice": "3900.0",
+      "close": "3900.1",
+      "contractId": "30000005",
+      "contractName": "XAUUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00000598",
+      "fundingTime": "1794787200000",
+      "high": "3903.5",
+      "highTime": "1794786919043",
+      "indexPrice": "3891.4381396297",
+      "lastPrice": "3900.1",
+      "low": "3800.9",
+      "lowTime": "1794705024051",
+      "markPrice": "3877.30183389505267264",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "3812.3",
+      "openInterest": "3075.585",
+      "oraclePrice": "3877.30183389505267264",
+      "priceChange": "87.8",
+      "priceChangePercent": "0.023030",
+      "size": "4918.420",
+      "startTime": "1794699000000",
+      "trades": "31824",
+      "value": "18952137.6272"
+     },
+     {
+      "bestAskPrice": "757.57",
+      "bestBidPrice": "756.03",
+      "close": "757.55",
+      "contractId": "30000010",
+      "contractName": "SPYUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00009409",
+      "fundingTime": "1794787200000",
+      "high": "757.57",
+      "highTime": "1794786912586",
+      "indexPrice": "755.7905670734",
+      "lastPrice": "757.55",
+      "low": "745.44",
+      "lowTime": "1794708157584",
+      "markPrice": "756.490344801605805148",
+      "marketOpen": false,
+      "nextFundingTime": "1794801600000",
+      "open": "748.17",
+      "openInterest": "815.588",
+      "oraclePrice": "756.490344801605805148",
+      "priceChange": "9.38",
+      "priceChangePercent": "0.012537",
+      "size": "293.809",
+      "startTime": "1794699000000",
+      "trades": "3152",
+      "value": "220472.25963"
+     },
+     {
+      "bestAskPrice": "359.52",
+      "bestBidPrice": "358.78",
+      "close": "358.82",
+      "contractId": "30000012",
+      "contractName": "AAPLUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "-0.00030172",
+      "fundingTime": "1794787200000",
+      "high": "360.87",
+      "highTime": "1794784062576",
+      "indexPrice": "358.9044131842",
+      "lastPrice": "358.82",
+      "low": "355.56",
+      "lowTime": "1794706063581",
+      "markPrice": "359.122944275170947235",
+      "marketOpen": false,
+      "nextFundingTime": "1794801600000",
+      "open": "356.21",
+      "openInterest": "229.99",
+      "oraclePrice": "359.122944275170947235",
+      "priceChange": "2.61",
+      "priceChangePercent": "0.007327",
+      "size": "969.01",
+      "startTime": "1794699000000",
+      "trades": "3094",
+      "value": "345817.0179"
+     },
+     {
+      "bestAskPrice": "0",
+      "bestBidPrice": "0",
+      "close": "0.006445",
+      "contractId": "30000161",
+      "contractName": "JPYUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00012284",
+      "fundingTime": "1794787200000",
+      "high": "0.006445",
+      "highTime": "1789563141860",
+      "indexPrice": "0.006256782555823945",
+      "lastPrice": "0.006445",
+      "liquidity": "HIGH",
+      "low": "0.006445",
+      "lowTime": "1789563141860",
+      "markPrice": "0.00625716601852189",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "0.006445",
+      "openInterest": "0",
+      "oraclePrice": "0.00625716601852189",
+      "priceChange": "-0.000042",
+      "priceChangePercent": "-0.006474",
+      "size": "0",
+      "startTime": "1794699000000",
+      "trades": "0",
+      "value": "0"
+     },
+     {
+      "bestAskPrice": "159.74",
+      "bestBidPrice": "159.66",
+      "close": "159.69",
+      "contractId": "30000174",
+      "contractName": "USDJPYUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "-0.00003182",
+      "fundingTime": "1794787200000",
+      "high": "159.83",
+      "highTime": "1794773823597",
+      "indexPrice": "159.7542695026",
+      "lastPrice": "159.69",
+      "liquidity": "HIGH",
+      "low": "159.54",
+      "lowTime": "1794781238597",
+      "markPrice": "159.688825811907018228",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "159.74",
+      "openInterest": "5.84",
+      "oraclePrice": "159.688825811907018228",
+      "priceChange": "-0.05",
+      "priceChangePercent": "-0.000313",
+      "size": "865.32",
+      "startTime": "1794700800000",
+      "trades": "5535",
+      "value": "138235.2179"
+     },
+     {
+      "bestAskPrice": "1343.354",
+      "bestBidPrice": "1342.104",
+      "close": "1342.584",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1059990580565791",
+      "lastPrice": "1342.584",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.763932764920793076",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.763932764920793076",
+      "priceChange": "-2.313",
+      "priceChangePercent": "-0.001719",
+      "size": "163.73",
+      "startTime": "1794700800000",
+      "trades": "3142",
+      "value": "218972.12676"
+     }
+    ],
+    "dataType": "Snapshot"
+   }
+  },
+  {
+   "type": "subscribed",
+   "channel": "trades.30000001",
+   "request": "{\"type\":\"subscribe\",\"channel\":\"trades.30000001\"}"
+  },
+  {
+   "type": "quote-event",
+   "channel": "trades.30000001",
+   "content": {
+    "channel": "trades.30000001",
+    "data": [
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997189980001832",
+      "price": "65247.0",
+      "size": "0.002",
+      "takerOrderId": "816997200373481622",
+      "ticketId": "d4df2c1a-2610-48ea-951c-d93336050be3",
+      "time": "1794787311644",
+      "value": "130.4940"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997196053348502",
+      "price": "65247.2",
+      "size": "0.003",
+      "takerOrderId": "816997196053349526",
+      "ticketId": "1e013aa6-a48f-4951-9352-d6fc21fc2904",
+      "time": "1794787310619",
+      "value": "195.7416"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997189980001832",
+      "price": "65247.0",
+      "size": "0.009",
+      "takerOrderId": "816997191980679318",
+      "ticketId": "0fcfb2c7-efe3-42d0-8934-39c92d2faa77",
+      "time": "1794787309644",
+      "value": "587.2230"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997179318075937",
+      "price": "65247.3",
+      "size": "0.005",
+      "takerOrderId": "816997187668934806",
+      "ticketId": "809ad3f3-5c5d-44af-9a7c-497cd0df3bb5",
+      "time": "1794787308617",
+      "value": "326.2365"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997183503990934",
+      "price": "65246.7",
+      "size": "0.005",
+      "takerOrderId": "816997183503991958",
+      "ticketId": "23d20e4f-961a-4856-a7a3-6841b921cfa2",
+      "time": "1794787307624",
+      "value": "326.2335"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": false,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997179318075937",
+      "price": "65247.3",
+      "size": "0.006",
+      "takerOrderId": "816997179385188502",
+      "ticketId": "b579bdc4-9d54-45cd-9774-0dd855a9951e",
+      "time": "1794787306643",
+      "value": "391.4838"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": false,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997179318075937",
+      "price": "65247.3",
+      "size": "0.007",
+      "takerOrderId": "816997179385186454",
+      "ticketId": "27e54994-f9b6-42f3-9e58-d98822398316",
+      "time": "1794787306643",
+      "value": "456.7311"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": false,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997179318075937",
+      "price": "65247.3",
+      "size": "0.004",
+      "takerOrderId": "816997179385184406",
+      "ticketId": "8cec489f-c9c1-4df4-8b43-d2fc06a4e7a8",
+      "time": "1794787306643",
+      "value": "260.9892"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997166798080150",
+      "price": "65257.2",
+      "size": "0.002",
+      "takerOrderId": "816997171025936534",
+      "ticketId": "7e3f89a0-c182-4c3c-b43a-3e32df171b91",
+      "time": "1794787304647",
+      "value": "130.5144"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997166793883798",
+      "price": "65257.4",
+      "size": "0.007",
+      "takerOrderId": "816997166798079126",
+      "ticketId": "a575fb6c-886d-4d1c-aa1f-928918b4c067",
+      "time": "1794787303643",
+      "value": "456.8018"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": false,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997166798078102",
+      "price": "65257.2",
+      "size": "0.004",
+      "takerOrderId": "816997166798079126",
+      "ticketId": "7512037d-fc27-417d-bbb0-a2b4b4163641",
+      "time": "1794787303643",
+      "value": "261.0288"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997154873672225",
+      "price": "65262.4",
+      "size": "0.004",
+      "takerOrderId": "816997158422053014",
+      "ticketId": "9b655f9f-010e-4b37-8ebe-b2875ded34d1",
+      "time": "1794787301644",
+      "value": "261.0496"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997145893671457",
+      "price": "65261.5",
+      "size": "0.002",
+      "takerOrderId": "816997154584264854",
+      "ticketId": "da997b94-f28b-4d06-ae72-a30a200c78bf",
+      "time": "1794787300729",
+      "value": "130.5230"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997145893671457",
+      "price": "65261.5",
+      "size": "0.005",
+      "takerOrderId": "816997150033447062",
+      "ticketId": "c66fe659-2cb9-47f7-bb62-5e6df791e326",
+      "time": "1794787299644",
+      "value": "326.3075"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997145893671457",
+      "price": "65261.5",
+      "size": "0.007",
+      "takerOrderId": "816997150033446038",
+      "ticketId": "1016b6fb-a068-408f-a035-57f14ad674ae",
+      "time": "1794787299644",
+      "value": "456.8305"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997145893671457",
+      "price": "65261.5",
+      "size": "0.004",
+      "takerOrderId": "816997150033445014",
+      "ticketId": "c7597e4a-9b08-4956-9af0-2f7007ff37f3",
+      "time": "1794787299644",
+      "value": "261.0460"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997142051685921",
+      "price": "65266.6",
+      "size": "0.002",
+      "takerOrderId": "816997145809782934",
+      "ticketId": "7fdd8756-fb41-436c-a314-a97b57319f15",
+      "time": "1794787298636",
+      "value": "130.5332"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997134506135073",
+      "price": "65265.7",
+      "size": "0.007",
+      "takerOrderId": "816997145809781910",
+      "ticketId": "1ff1f659-c922-44a9-859f-6dc90c427b86",
+      "time": "1794787298636",
+      "value": "456.8599"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997142051685921",
+      "price": "65266.6",
+      "size": "0.012",
+      "takerOrderId": "816997145809780886",
+      "ticketId": "4642f0fb-cb91-43a5-babb-e033de7b67ed",
+      "time": "1794787298636",
+      "value": "783.1992"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997134371915297",
+      "price": "65266.1",
+      "size": "0.004",
+      "takerOrderId": "816997141724528790",
+      "ticketId": "68add064-5601-4d4b-af47-21d4eb7238e6",
+      "time": "1794787297664",
+      "value": "261.0644"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997137467310230",
+      "price": "65266.5",
+      "size": "0.013",
+      "takerOrderId": "816997137467311254",
+      "ticketId": "8391e53c-060a-4628-89b1-be6efb5f0118",
+      "time": "1794787296647",
+      "value": "848.4645"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997133142982806",
+      "price": "65272.2",
+      "size": "0.006",
+      "takerOrderId": "816997133142983830",
+      "ticketId": "46dca534-cacd-4940-aae2-3e28db74fa28",
+      "time": "1794787295617",
+      "value": "391.6332"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997121692534305",
+      "price": "65276.2",
+      "size": "0.002",
+      "takerOrderId": "816997130467016854",
+      "ticketId": "150c04ee-1c75-47cc-bff2-dda682dfd450",
+      "time": "1794787294977",
+      "value": "130.5524"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": false,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997121851917857",
+      "price": "65277.1",
+      "size": "0.047",
+      "takerOrderId": "816997130429268118",
+      "ticketId": "b2fac672-4684-4294-a3cf-ea9377db6cd5",
+      "time": "1794787294969",
+      "value": "3068.0237"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997121851917857",
+      "price": "65277.1",
+      "size": "0.006",
+      "takerOrderId": "816997124876009622",
+      "ticketId": "f53ca6df-4b1a-4259-8a84-bf3a77362cd4",
+      "time": "1794787293645",
+      "value": "391.6626"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": false,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997120270664225",
+      "price": "65283.5",
+      "size": "0.010",
+      "takerOrderId": "816997120568459414",
+      "ticketId": "2ff33195-1535-4737-a22b-eb59afefc993",
+      "time": "1794787292617",
+      "value": "652.8350"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": false,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997115908590113",
+      "price": "65291.1",
+      "size": "0.010",
+      "takerOrderId": "816997116365766806",
+      "ticketId": "ad431c5f-8b07-4b9a-81d3-9682514e0189",
+      "time": "1794787291617",
+      "value": "652.9110"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997112184045718",
+      "price": "65278.6",
+      "size": "0.002",
+      "takerOrderId": "816997112184046742",
+      "ticketId": "8eb40a6a-8074-4cad-9a82-c219eeba665a",
+      "time": "1794787290620",
+      "value": "130.5572"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997108102987926",
+      "price": "65266.7",
+      "size": "0.004",
+      "takerOrderId": "816997108102988950",
+      "ticketId": "c091d182-5101-4ec8-aff3-0e54c7d6a8e2",
+      "time": "1794787289646",
+      "value": "261.0668"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": false,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997103996765729",
+      "price": "65261.1",
+      "size": "0.005",
+      "takerOrderId": "816997104739156507",
+      "ticketId": "a0efa4bc-f278-4677-99b8-c1d53d411e88",
+      "time": "1794787288844",
+      "value": "326.3055"
+     }
+    ],
+    "dataType": "Snapshot"
+   }
+  },
+  {
+   "type": "error",
+   "request": "{\"type\":\"subscribe\",\"channel\":\"bogus.channel\"}",
+   "content": {
+    "code": "GATEWAY_INVALID_CHANNEL",
+    "msg": "invalid channel : bogus.channel"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.all.1s",
+   "content": {
+    "channel": "ticker.all.1s",
+    "data": [
+     {
+      "bestAskPrice": "65248.0",
+      "bestBidPrice": "65247.0",
+      "close": "65247.0",
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00005000",
+      "fundingTime": "1794787200000",
+      "high": "66031.3",
+      "highTime": "1794733925614",
+      "indexPrice": "65296.3317751221",
+      "lastPrice": "65247.0",
+      "low": "61975.1",
+      "lowTime": "1794707141183",
+      "markPrice": "65265.352905953423219042",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "63687.0",
+      "openInterest": "2446.095",
+      "oraclePrice": "65265.352905953423219042",
+      "priceChange": "1560.0",
+      "priceChangePercent": "0.024494",
+      "size": "5077.566",
+      "startTime": "1794699000000",
+      "trades": "102851",
+      "value": "327391290.5090"
+     },
+     {
+      "bestAskPrice": "3900.3",
+      "bestBidPrice": "3900.0",
+      "close": "3900.1",
+      "contractId": "30000005",
+      "contractName": "XAUUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00000598",
+      "fundingTime": "1794787200000",
+      "high": "3903.5",
+      "highTime": "1794786919043",
+      "indexPrice": "3891.4381396297",
+      "lastPrice": "3900.1",
+      "low": "3800.9",
+      "lowTime": "1794705024051",
+      "markPrice": "3877.30183389505267264",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "3812.3",
+      "openInterest": "3075.585",
+      "oraclePrice": "3877.30183389505267264",
+      "priceChange": "87.8",
+      "priceChangePercent": "0.023030",
+      "size": "4918.420",
+      "startTime": "1794699000000",
+      "trades": "31824",
+      "value": "18952137.6272"
+     },
+     {
+      "bestAskPrice": "757.57",
+      "bestBidPrice": "756.03",
+      "close": "757.55",
+      "contractId": "30000010",
+      "contractName": "SPYUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00009409",
+      "fundingTime": "1794787200000",
+      "high": "757.57",
+      "highTime": "1794786912586",
+      "indexPrice": "755.7905670734",
+      "lastPrice": "757.55",
+      "low": "745.44",
+      "lowTime": "1794708157584",
+      "markPrice": "756.490344801605805148",
+      "marketOpen": false,
+      "nextFundingTime": "1794801600000",
+      "open": "748.17",
+      "openInterest": "815.588",
+      "oraclePrice": "756.490344801605805148",
+      "priceChange": "9.38",
+      "priceChangePercent": "0.012537",
+      "size": "293.809",
+      "startTime": "1794699000000",
+      "trades": "3152",
+      "value": "220472.25963"
+     },
+     {
+      "bestAskPrice": "359.52",
+      "bestBidPrice": "358.78",
+      "close": "358.82",
+      "contractId": "30000012",
+      "contractName": "AAPLUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "-0.00030172",
+      "fundingTime": "1794787200000",
+      "high": "360.87",
+      "highTime": "1794784062576",
+      "indexPrice": "358.9044131842",
+      "lastPrice": "358.82",
+      "low": "355.56",
+      "lowTime": "1794706063581",
+      "markPrice": "359.122944275170947235",
+      "marketOpen": false,
+      "nextFundingTime": "1794801600000",
+      "open": "356.21",
+      "openInterest": "229.99",
+      "oraclePrice": "359.122944275170947235",
+      "priceChange": "2.61",
+      "priceChangePercent": "0.007327",
+      "size": "969.01",
+      "startTime": "1794699000000",
+      "trades": "3094",
+      "value": "345817.0179"
+     },
+     {
+      "bestAskPrice": "0",
+      "bestBidPrice": "0",
+      "close": "0.006445",
+      "contractId": "30000161",
+      "contractName": "JPYUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00012284",
+      "fundingTime": "1794787200000",
+      "high": "0.006445",
+      "highTime": "1789563141860",
+      "indexPrice": "0.006256782555823945",
+      "lastPrice": "0.006445",
+      "liquidity": "HIGH",
+      "low": "0.006445",
+      "lowTime": "1789563141860",
+      "markPrice": "0.00625716601852189",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "0.006445",
+      "openInterest": "0",
+      "oraclePrice": "0.00625716601852189",
+      "priceChange": "-0.000042",
+      "priceChangePercent": "-0.006474",
+      "size": "0",
+      "startTime": "1794699000000",
+      "trades": "0",
+      "value": "0"
+     },
+     {
+      "bestAskPrice": "159.74",
+      "bestBidPrice": "159.66",
+      "close": "159.69",
+      "contractId": "30000174",
+      "contractName": "USDJPYUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "-0.00003182",
+      "fundingTime": "1794787200000",
+      "high": "159.83",
+      "highTime": "1794773823597",
+      "indexPrice": "159.7542695026",
+      "lastPrice": "159.69",
+      "liquidity": "HIGH",
+      "low": "159.54",
+      "lowTime": "1794781238597",
+      "markPrice": "159.688825811907018228",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "159.74",
+      "openInterest": "5.84",
+      "oraclePrice": "159.688825811907018228",
+      "priceChange": "-0.05",
+      "priceChangePercent": "-0.000313",
+      "size": "865.32",
+      "startTime": "1794700800000",
+      "trades": "5535",
+      "value": "138235.2179"
+     },
+     {
+      "bestAskPrice": "1343.354",
+      "bestBidPrice": "1342.104",
+      "close": "1342.584",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1059990580565791",
+      "lastPrice": "1342.584",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.763932764920793076",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.763932764920793076",
+      "priceChange": "-2.313",
+      "priceChangePercent": "-0.001719",
+      "size": "163.73",
+      "startTime": "1794700800000",
+      "trades": "3142",
+      "value": "218972.12676"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.284",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.285",
+        "size": "0.63"
+       },
+       {
+        "price": "1343.286",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.287",
+        "size": "0.48"
+       },
+       {
+        "price": "1343.288",
+        "size": "0.74"
+       },
+       {
+        "price": "1343.289",
+        "size": "0.63"
+       },
+       {
+        "price": "1343.290",
+        "size": "0.59"
+       },
+       {
+        "price": "1343.291",
+        "size": "0.59"
+       },
+       {
+        "price": "1343.292",
+        "size": "0.55"
+       },
+       {
+        "price": "1343.293",
+        "size": "0.54"
+       },
+       {
+        "price": "1343.294",
+        "size": "0.36"
+       },
+       {
+        "price": "1343.295",
+        "size": "0.48"
+       },
+       {
+        "price": "1343.296",
+        "size": "0.43"
+       },
+       {
+        "price": "1343.297",
+        "size": "0.30"
+       },
+       {
+        "price": "1343.298",
+        "size": "0.36"
+       },
+       {
+        "price": "1343.354",
+        "size": "0"
+       },
+       {
+        "price": "1343.355",
+        "size": "0"
+       },
+       {
+        "price": "1343.356",
+        "size": "0"
+       },
+       {
+        "price": "1343.357",
+        "size": "0"
+       },
+       {
+        "price": "1343.358",
+        "size": "0"
+       },
+       {
+        "price": "1343.359",
+        "size": "0"
+       },
+       {
+        "price": "1343.360",
+        "size": "0"
+       },
+       {
+        "price": "1343.361",
+        "size": "0"
+       },
+       {
+        "price": "1343.362",
+        "size": "0"
+       },
+       {
+        "price": "1343.363",
+        "size": "0"
+       },
+       {
+        "price": "1343.364",
+        "size": "0"
+       },
+       {
+        "price": "1343.365",
+        "size": "0"
+       },
+       {
+        "price": "1343.366",
+        "size": "0"
+       },
+       {
+        "price": "1343.367",
+        "size": "0"
+       },
+       {
+        "price": "1343.368",
+        "size": "0"
+       }
+      ],
+      "bids": [
+       {
+        "price": "1342.334",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.333",
+        "size": "0.74"
+       },
+       {
+        "price": "1342.332",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.331",
+        "size": "0.72"
+       },
+       {
+        "price": "1342.330",
+        "size": "0.64"
+       },
+       {
+        "price": "1342.329",
+        "size": "0.66"
+       },
+       {
+        "price": "1342.328",
+        "size": "0.52"
+       },
+       {
+        "price": "1342.327",
+        "size": "0.74"
+       },
+       {
+        "price": "1342.326",
+        "size": "0.72"
+       },
+       {
+        "price": "1342.325",
+        "size": "0.66"
+       },
+       {
+        "price": "1342.324",
+        "size": "0.41"
+       },
+       {
+        "price": "1342.323",
+        "size": "0.37"
+       },
+       {
+        "price": "1342.322",
+        "size": "0.50"
+       },
+       {
+        "price": "1342.321",
+        "size": "0.48"
+       },
+       {
+        "price": "1342.320",
+        "size": "0.41"
+       },
+       {
+        "price": "1342.104",
+        "size": "0"
+       },
+       {
+        "price": "1342.103",
+        "size": "0"
+       },
+       {
+        "price": "1342.102",
+        "size": "0"
+       },
+       {
+        "price": "1342.101",
+        "size": "0"
+       },
+       {
+        "price": "1342.100",
+        "size": "0"
+       },
+       {
+        "price": "1342.099",
+        "size": "0"
+       },
+       {
+        "price": "1342.098",
+        "size": "0"
+       },
+       {
+        "price": "1342.097",
+        "size": "0"
+       },
+       {
+        "price": "1342.096",
+        "size": "0"
+       },
+       {
+        "price": "1342.095",
+        "size": "0"
+       },
+       {
+        "price": "1342.094",
+        "size": "0"
+       },
+       {
+        "price": "1342.093",
+        "size": "0"
+       },
+       {
+        "price": "1342.092",
+        "size": "0"
+       },
+       {
+        "price": "1342.091",
+        "size": "0"
+       },
+       {
+        "price": "1342.090",
+        "size": "0"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274903986",
+      "level": 15,
+      "startVersion": "274903786"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "trades.30000001",
+   "content": {
+    "channel": "trades.30000001",
+    "data": [
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": false,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997179385189526",
+      "price": "65248.0",
+      "size": "0.004",
+      "takerOrderId": "816997202969757217",
+      "ticketId": "9bbc62ad-3ebc-46c7-abff-a8e894f8f237",
+      "time": "1794787312267",
+      "value": "260.9920"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": false,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997179385185430",
+      "price": "65248.1",
+      "size": "0.006",
+      "takerOrderId": "816997202969757217",
+      "ticketId": "b059a961-aea0-4ac2-8de1-a4de4800ead1",
+      "time": "1794787312267",
+      "value": "391.4886"
+     },
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": false,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997179385187478",
+      "price": "65248.2",
+      "size": "0.007",
+      "takerOrderId": "816997202969757217",
+      "ticketId": "8d82b049-6a03-430b-b877-84779b16b45c",
+      "time": "1794787312267",
+      "value": "456.7374"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "trades.30000001",
+   "content": {
+    "channel": "trades.30000001",
+    "data": [
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": true,
+      "makerOrderId": "816997202969759265",
+      "price": "65257.5",
+      "size": "0.007",
+      "takerOrderId": "816997204571979926",
+      "ticketId": "e80ca042-22a0-4b78-a65a-24da125a3d12",
+      "time": "1794787312647",
+      "value": "456.8025"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.584",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1153616593323312",
+      "lastPrice": "1342.584",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.763932764920793076",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.763932764920793076",
+      "priceChange": "-2.313",
+      "priceChangePercent": "-0.001719",
+      "size": "163.73",
+      "startTime": "1794700800000",
+      "trades": "3142",
+      "value": "218972.12676"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.all.1s",
+   "content": {
+    "channel": "ticker.all.1s",
+    "data": [
+     {
+      "bestAskPrice": "65258.4",
+      "bestBidPrice": "65257.5",
+      "close": "65257.5",
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00005000",
+      "fundingTime": "1794787200000",
+      "high": "66031.3",
+      "highTime": "1794733925614",
+      "indexPrice": "65299.4903016576",
+      "lastPrice": "65257.5",
+      "low": "61975.1",
+      "lowTime": "1794707141183",
+      "markPrice": "65265.352905953423219042",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "63687.0",
+      "openInterest": "2446.095",
+      "oraclePrice": "65265.352905953423219042",
+      "priceChange": "1570.5",
+      "priceChangePercent": "0.024659",
+      "size": "5077.590",
+      "startTime": "1794699000000",
+      "trades": "102855",
+      "value": "327392856.5295"
+     },
+     {
+      "bestAskPrice": "3900.3",
+      "bestBidPrice": "3900.0",
+      "close": "3900.1",
+      "contractId": "30000005",
+      "contractName": "XAUUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00000598",
+      "fundingTime": "1794787200000",
+      "high": "3903.5",
+      "highTime": "1794786919043",
+      "indexPrice": "3891.4510765447",
+      "lastPrice": "3900.1",
+      "low": "3800.9",
+      "lowTime": "1794705024051",
+      "markPrice": "3877.30183389505267264",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "3812.3",
+      "openInterest": "3075.585",
+      "oraclePrice": "3877.30183389505267264",
+      "priceChange": "87.8",
+      "priceChangePercent": "0.023030",
+      "size": "4918.525",
+      "startTime": "1794699000000",
+      "trades": "31825",
+      "value": "18952547.1377"
+     },
+     {
+      "bestAskPrice": "757.57",
+      "bestBidPrice": "756.03",
+      "close": "757.55",
+      "contractId": "30000010",
+      "contractName": "SPYUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00009409",
+      "fundingTime": "1794787200000",
+      "high": "757.57",
+      "highTime": "1794786912586",
+      "indexPrice": "755.7908685475",
+      "lastPrice": "757.55",
+      "low": "745.44",
+      "lowTime": "1794708157584",
+      "markPrice": "756.490344801605805148",
+      "marketOpen": false,
+      "nextFundingTime": "1794801600000",
+      "open": "748.17",
+      "openInterest": "815.588",
+      "oraclePrice": "756.490344801605805148",
+      "priceChange": "9.38",
+      "priceChangePercent": "0.012537",
+      "size": "293.809",
+      "startTime": "1794699000000",
+      "trades": "3152",
+      "value": "220472.25963"
+     },
+     {
+      "bestAskPrice": "359.52",
+      "bestBidPrice": "358.78",
+      "close": "358.82",
+      "contractId": "30000012",
+      "contractName": "AAPLUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "-0.00030172",
+      "fundingTime": "1794787200000",
+      "high": "360.87",
+      "highTime": "1794784062576",
+      "indexPrice": "358.9044523988",
+      "lastPrice": "358.82",
+      "low": "355.56",
+      "lowTime": "1794706063581",
+      "markPrice": "359.122944275170947235",
+      "marketOpen": false,
+      "nextFundingTime": "1794801600000",
+      "open": "356.21",
+      "openInterest": "229.99",
+      "oraclePrice": "359.122944275170947235",
+      "priceChange": "2.61",
+      "priceChangePercent": "0.007327",
+      "size": "969.01",
+      "startTime": "1794699000000",
+      "trades": "3094",
+      "value": "345817.0179"
+     },
+     {
+      "bestAskPrice": "0",
+      "bestBidPrice": "0",
+      "close": "0.006445",
+      "contractId": "30000161",
+      "contractName": "JPYUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00012284",
+      "fundingTime": "1794787200000",
+      "high": "0.006445",
+      "highTime": "1789563141860",
+      "indexPrice": "0.006257417506705893",
+      "lastPrice": "0.006445",
+      "liquidity": "HIGH",
+      "low": "0.006445",
+      "lowTime": "1789563141860",
+      "markPrice": "0.00625716601852189",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "0.006445",
+      "openInterest": "0",
+      "oraclePrice": "0.00625716601852189",
+      "priceChange": "-0.000042",
+      "priceChangePercent": "-0.006474",
+      "size": "0",
+      "startTime": "1794699000000",
+      "trades": "0",
+      "value": "0"
+     },
+     {
+      "bestAskPrice": "159.74",
+      "bestBidPrice": "159.66",
+      "close": "159.69",
+      "contractId": "30000174",
+      "contractName": "USDJPYUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "-0.00003182",
+      "fundingTime": "1794787200000",
+      "high": "159.83",
+      "highTime": "1794773823597",
+      "indexPrice": "159.7514697145",
+      "lastPrice": "159.69",
+      "liquidity": "HIGH",
+      "low": "159.54",
+      "lowTime": "1794781238597",
+      "markPrice": "159.688825811907018228",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "159.74",
+      "openInterest": "5.84",
+      "oraclePrice": "159.688825811907018228",
+      "priceChange": "-0.05",
+      "priceChangePercent": "-0.000313",
+      "size": "865.32",
+      "startTime": "1794700800000",
+      "trades": "5535",
+      "value": "138235.2179"
+     },
+     {
+      "bestAskPrice": "1343.284",
+      "bestBidPrice": "1342.334",
+      "close": "1342.584",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1153616593323312",
+      "lastPrice": "1342.584",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.763932764920793076",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.763932764920793076",
+      "priceChange": "-2.313",
+      "priceChangePercent": "-0.001719",
+      "size": "163.73",
+      "startTime": "1794700800000",
+      "trades": "3142",
+      "value": "218972.12676"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [],
+      "bids": [
+       {
+        "price": "1342.334",
+        "size": "0"
+       },
+       {
+        "price": "1342.333",
+        "size": "0"
+       },
+       {
+        "price": "1342.332",
+        "size": "0"
+       },
+       {
+        "price": "1342.331",
+        "size": "0"
+       },
+       {
+        "price": "1342.330",
+        "size": "0"
+       },
+       {
+        "price": "1342.329",
+        "size": "0"
+       },
+       {
+        "price": "1342.328",
+        "size": "0"
+       },
+       {
+        "price": "1342.327",
+        "size": "0"
+       },
+       {
+        "price": "1342.326",
+        "size": "0"
+       },
+       {
+        "price": "1342.325",
+        "size": "0"
+       },
+       {
+        "price": "1342.319",
+        "size": "0.48"
+       },
+       {
+        "price": "1342.318",
+        "size": "0.30"
+       },
+       {
+        "price": "1342.317",
+        "size": "0.30"
+       },
+       {
+        "price": "1342.316",
+        "size": "0.36"
+       },
+       {
+        "price": "1342.315",
+        "size": "0.34"
+       },
+       {
+        "price": "1342.314",
+        "size": "0.28"
+       },
+       {
+        "price": "1342.313",
+        "size": "0.34"
+       },
+       {
+        "price": "1342.312",
+        "size": "0.25"
+       },
+       {
+        "price": "1342.311",
+        "size": "0.34"
+       },
+       {
+        "price": "1342.310",
+        "size": "0.19"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274903998",
+      "level": 15,
+      "startVersion": "274903986"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.244",
+        "size": "0.74"
+       },
+       {
+        "price": "1343.245",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.246",
+        "size": "0.63"
+       },
+       {
+        "price": "1343.247",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.248",
+        "size": "0.56"
+       },
+       {
+        "price": "1343.249",
+        "size": "0.67"
+       },
+       {
+        "price": "1343.250",
+        "size": "0.61"
+       },
+       {
+        "price": "1343.251",
+        "size": "0.61"
+       },
+       {
+        "price": "1343.252",
+        "size": "0.47"
+       },
+       {
+        "price": "1343.253",
+        "size": "0.61"
+       },
+       {
+        "price": "1343.254",
+        "size": "0.54"
+       },
+       {
+        "price": "1343.255",
+        "size": "0.40"
+       },
+       {
+        "price": "1343.256",
+        "size": "0.58"
+       },
+       {
+        "price": "1343.257",
+        "size": "0.40"
+       },
+       {
+        "price": "1343.258",
+        "size": "0.29"
+       },
+       {
+        "price": "1343.284",
+        "size": "0"
+       },
+       {
+        "price": "1343.285",
+        "size": "0"
+       },
+       {
+        "price": "1343.286",
+        "size": "0"
+       },
+       {
+        "price": "1343.287",
+        "size": "0"
+       },
+       {
+        "price": "1343.288",
+        "size": "0"
+       },
+       {
+        "price": "1343.289",
+        "size": "0"
+       },
+       {
+        "price": "1343.290",
+        "size": "0"
+       },
+       {
+        "price": "1343.291",
+        "size": "0"
+       },
+       {
+        "price": "1343.292",
+        "size": "0"
+       },
+       {
+        "price": "1343.293",
+        "size": "0"
+       },
+       {
+        "price": "1343.294",
+        "size": "0"
+       },
+       {
+        "price": "1343.295",
+        "size": "0"
+       },
+       {
+        "price": "1343.296",
+        "size": "0"
+       },
+       {
+        "price": "1343.297",
+        "size": "0"
+       },
+       {
+        "price": "1343.298",
+        "size": "0"
+       }
+      ],
+      "bids": [
+       {
+        "price": "1342.324",
+        "size": "0"
+       },
+       {
+        "price": "1342.323",
+        "size": "0"
+       },
+       {
+        "price": "1342.322",
+        "size": "0"
+       },
+       {
+        "price": "1342.321",
+        "size": "0"
+       },
+       {
+        "price": "1342.320",
+        "size": "0"
+       },
+       {
+        "price": "1342.319",
+        "size": "0"
+       },
+       {
+        "price": "1342.318",
+        "size": "0"
+       },
+       {
+        "price": "1342.317",
+        "size": "0"
+       },
+       {
+        "price": "1342.316",
+        "size": "0"
+       },
+       {
+        "price": "1342.315",
+        "size": "0"
+       },
+       {
+        "price": "1342.314",
+        "size": "0"
+       },
+       {
+        "price": "1342.313",
+        "size": "0"
+       },
+       {
+        "price": "1342.312",
+        "size": "0"
+       },
+       {
+        "price": "1342.311",
+        "size": "0"
+       },
+       {
+        "price": "1342.310",
+        "size": "0"
+       },
+       {
+        "price": "1342.104",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.103",
+        "size": "0.65"
+       },
+       {
+        "price": "1342.102",
+        "size": "0.54"
+       },
+       {
+        "price": "1342.101",
+        "size": "0.56"
+       },
+       {
+        "price": "1342.100",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.099",
+        "size": "0.56"
+       },
+       {
+        "price": "1342.098",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.097",
+        "size": "0.56"
+       },
+       {
+        "price": "1342.096",
+        "size": "0.60"
+       },
+       {
+        "price": "1342.095",
+        "size": "0.61"
+       },
+       {
+        "price": "1342.094",
+        "size": "0.54"
+       },
+       {
+        "price": "1342.093",
+        "size": "0.38"
+       },
+       {
+        "price": "1342.092",
+        "size": "0.43"
+       },
+       {
+        "price": "1342.091",
+        "size": "0.38"
+       },
+       {
+        "price": "1342.090",
+        "size": "0.47"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274904186",
+      "level": 15,
+      "startVersion": "274903998"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.584",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1153616593323312",
+      "lastPrice": "1342.584",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.763932764920793076",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.763932764920793076",
+      "priceChange": "-2.313",
+      "priceChangePercent": "-0.001719",
+      "size": "163.73",
+      "startTime": "1794700800000",
+      "trades": "3142",
+      "value": "218972.12676"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.584",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1125017285956935",
+      "lastPrice": "1342.584",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.763932764920793076",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.763932764920793076",
+      "priceChange": "-2.313",
+      "priceChangePercent": "-0.001719",
+      "size": "163.73",
+      "startTime": "1794700800000",
+      "trades": "3142",
+      "value": "218972.12676"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1125017285956935",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.763932764920793076",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.763932764920793076",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "trades.30000192",
+   "content": {
+    "channel": "trades.30000192",
+    "data": [
+     {
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997208367825110",
+      "price": "1342.577",
+      "size": "0.04",
+      "takerOrderId": "816997208367826134",
+      "ticketId": "28c44586-9c7a-4ebd-9bf2-ee3d44e8ebd7",
+      "time": "1794787313551",
+      "value": "53.70308"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "trades.30000001",
+   "content": {
+    "channel": "trades.30000001",
+    "data": [
+     {
+      "contractId": "30000001",
+      "contractName": "BTCUSDC",
+      "isBestMatch": true,
+      "isBuyerMaker": false,
+      "makerOrderId": "816997202835539489",
+      "price": "65258.4",
+      "size": "0.002",
+      "takerOrderId": "816997208640454806",
+      "ticketId": "676267fc-853e-44c8-8255-9b644903cde4",
+      "time": "1794787313615",
+      "value": "130.5168"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "ping",
+   "time": "1794787313784"
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1125017285956935",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.747478679522655162",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.747478679522655162",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.244",
+        "size": "0"
+       },
+       {
+        "price": "1343.245",
+        "size": "0"
+       },
+       {
+        "price": "1343.246",
+        "size": "0"
+       },
+       {
+        "price": "1343.247",
+        "size": "0"
+       },
+       {
+        "price": "1343.248",
+        "size": "0"
+       },
+       {
+        "price": "1343.249",
+        "size": "0"
+       },
+       {
+        "price": "1343.250",
+        "size": "0"
+       },
+       {
+        "price": "1343.251",
+        "size": "0"
+       },
+       {
+        "price": "1343.252",
+        "size": "0"
+       },
+       {
+        "price": "1343.253",
+        "size": "0"
+       },
+       {
+        "price": "1343.254",
+        "size": "0"
+       },
+       {
+        "price": "1343.255",
+        "size": "0"
+       },
+       {
+        "price": "1343.256",
+        "size": "0"
+       },
+       {
+        "price": "1343.257",
+        "size": "0"
+       },
+       {
+        "price": "1343.258",
+        "size": "0"
+       },
+       {
+        "price": "1343.294",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.295",
+        "size": "0.63"
+       },
+       {
+        "price": "1343.296",
+        "size": "0.59"
+       },
+       {
+        "price": "1343.297",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.298",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.299",
+        "size": "0.65"
+       },
+       {
+        "price": "1343.300",
+        "size": "0.70"
+       },
+       {
+        "price": "1343.301",
+        "size": "0.52"
+       },
+       {
+        "price": "1343.302",
+        "size": "0.59"
+       },
+       {
+        "price": "1343.303",
+        "size": "0.43"
+       },
+       {
+        "price": "1343.304",
+        "size": "0.50"
+       },
+       {
+        "price": "1343.305",
+        "size": "0.61"
+       },
+       {
+        "price": "1343.306",
+        "size": "0.56"
+       },
+       {
+        "price": "1343.307",
+        "size": "0.38"
+       },
+       {
+        "price": "1343.308",
+        "size": "0.30"
+       }
+      ],
+      "bids": [],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274904328",
+      "level": 15,
+      "startVersion": "274904186"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [],
+      "bids": [
+       {
+        "price": "1342.374",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.373",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.372",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.371",
+        "size": "0.67"
+       },
+       {
+        "price": "1342.370",
+        "size": "0.67"
+       },
+       {
+        "price": "1342.369",
+        "size": "0.68"
+       },
+       {
+        "price": "1342.368",
+        "size": "0.72"
+       },
+       {
+        "price": "1342.367",
+        "size": "0.74"
+       },
+       {
+        "price": "1342.366",
+        "size": "0.39"
+       },
+       {
+        "price": "1342.365",
+        "size": "0.52"
+       },
+       {
+        "price": "1342.364",
+        "size": "0.38"
+       },
+       {
+        "price": "1342.363",
+        "size": "0.36"
+       },
+       {
+        "price": "1342.362",
+        "size": "0.38"
+       },
+       {
+        "price": "1342.361",
+        "size": "0.43"
+       },
+       {
+        "price": "1342.360",
+        "size": "0.49"
+       },
+       {
+        "price": "1342.104",
+        "size": "0"
+       },
+       {
+        "price": "1342.103",
+        "size": "0"
+       },
+       {
+        "price": "1342.102",
+        "size": "0"
+       },
+       {
+        "price": "1342.101",
+        "size": "0"
+       },
+       {
+        "price": "1342.100",
+        "size": "0"
+       },
+       {
+        "price": "1342.099",
+        "size": "0"
+       },
+       {
+        "price": "1342.098",
+        "size": "0"
+       },
+       {
+        "price": "1342.097",
+        "size": "0"
+       },
+       {
+        "price": "1342.096",
+        "size": "0"
+       },
+       {
+        "price": "1342.095",
+        "size": "0"
+       },
+       {
+        "price": "1342.094",
+        "size": "0"
+       },
+       {
+        "price": "1342.093",
+        "size": "0"
+       },
+       {
+        "price": "1342.092",
+        "size": "0"
+       },
+       {
+        "price": "1342.091",
+        "size": "0"
+       },
+       {
+        "price": "1342.090",
+        "size": "0"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274904428",
+      "level": 15,
+      "startVersion": "274904328"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1026508985533647",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.747478679522655162",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.747478679522655162",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.0780563649629738",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.747478679522655162",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.747478679522655162",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.284",
+        "size": "0.70"
+       },
+       {
+        "price": "1343.285",
+        "size": "0.70"
+       },
+       {
+        "price": "1343.286",
+        "size": "0.65"
+       },
+       {
+        "price": "1343.287",
+        "size": "0.65"
+       },
+       {
+        "price": "1343.288",
+        "size": "0.63"
+       },
+       {
+        "price": "1343.289",
+        "size": "0.54"
+       },
+       {
+        "price": "1343.290",
+        "size": "0.45"
+       },
+       {
+        "price": "1343.291",
+        "size": "0.63"
+       },
+       {
+        "price": "1343.292",
+        "size": "0.56"
+       },
+       {
+        "price": "1343.293",
+        "size": "0.50"
+       },
+       {
+        "price": "1343.294",
+        "size": "0.48"
+       },
+       {
+        "price": "1343.295",
+        "size": "0.45"
+       },
+       {
+        "price": "1343.296",
+        "size": "0.41"
+       },
+       {
+        "price": "1343.297",
+        "size": "0.36"
+       },
+       {
+        "price": "1343.298",
+        "size": "0.32"
+       },
+       {
+        "price": "1343.299",
+        "size": "0"
+       },
+       {
+        "price": "1343.300",
+        "size": "0"
+       },
+       {
+        "price": "1343.301",
+        "size": "0"
+       },
+       {
+        "price": "1343.302",
+        "size": "0"
+       },
+       {
+        "price": "1343.303",
+        "size": "0"
+       },
+       {
+        "price": "1343.304",
+        "size": "0"
+       },
+       {
+        "price": "1343.305",
+        "size": "0"
+       },
+       {
+        "price": "1343.306",
+        "size": "0"
+       },
+       {
+        "price": "1343.307",
+        "size": "0"
+       },
+       {
+        "price": "1343.308",
+        "size": "0"
+       }
+      ],
+      "bids": [
+       {
+        "price": "1342.371",
+        "size": "0.47"
+       },
+       {
+        "price": "1342.370",
+        "size": "0.61"
+       },
+       {
+        "price": "1342.369",
+        "size": "0.72"
+       },
+       {
+        "price": "1342.368",
+        "size": "0.57"
+       },
+       {
+        "price": "1342.367",
+        "size": "0.65"
+       },
+       {
+        "price": "1342.366",
+        "size": "0.59"
+       },
+       {
+        "price": "1342.365",
+        "size": "0.61"
+       },
+       {
+        "price": "1342.364",
+        "size": "0.54"
+       },
+       {
+        "price": "1342.363",
+        "size": "0.39"
+       },
+       {
+        "price": "1342.362",
+        "size": "0.50"
+       },
+       {
+        "price": "1342.361",
+        "size": "0.50"
+       },
+       {
+        "price": "1342.360",
+        "size": "0.50"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274904648",
+      "level": 15,
+      "startVersion": "274904428"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.0879881010832511",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.747478679522655162",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.747478679522655162",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.284",
+        "size": "0"
+       },
+       {
+        "price": "1343.285",
+        "size": "0"
+       },
+       {
+        "price": "1343.286",
+        "size": "0"
+       },
+       {
+        "price": "1343.287",
+        "size": "0"
+       },
+       {
+        "price": "1343.288",
+        "size": "0"
+       },
+       {
+        "price": "1343.289",
+        "size": "0"
+       },
+       {
+        "price": "1343.290",
+        "size": "0"
+       },
+       {
+        "price": "1343.291",
+        "size": "0"
+       },
+       {
+        "price": "1343.292",
+        "size": "0"
+       },
+       {
+        "price": "1343.293",
+        "size": "0"
+       },
+       {
+        "price": "1343.294",
+        "size": "0"
+       },
+       {
+        "price": "1343.295",
+        "size": "0"
+       },
+       {
+        "price": "1343.296",
+        "size": "0"
+       },
+       {
+        "price": "1343.297",
+        "size": "0"
+       },
+       {
+        "price": "1343.298",
+        "size": "0"
+       },
+       {
+        "price": "1343.414",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.415",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.416",
+        "size": "0.54"
+       },
+       {
+        "price": "1343.417",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.418",
+        "size": "0.64"
+       },
+       {
+        "price": "1343.419",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.420",
+        "size": "0.60"
+       },
+       {
+        "price": "1343.421",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.422",
+        "size": "0.60"
+       },
+       {
+        "price": "1343.423",
+        "size": "0.58"
+       },
+       {
+        "price": "1343.424",
+        "size": "0.41"
+       },
+       {
+        "price": "1343.425",
+        "size": "0.58"
+       },
+       {
+        "price": "1343.426",
+        "size": "0.52"
+       },
+       {
+        "price": "1343.427",
+        "size": "0.39"
+       },
+       {
+        "price": "1343.428",
+        "size": "0.51"
+       }
+      ],
+      "bids": [
+       {
+        "price": "1342.514",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.513",
+        "size": "0.56"
+       },
+       {
+        "price": "1342.512",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.511",
+        "size": "0.58"
+       },
+       {
+        "price": "1342.510",
+        "size": "0.52"
+       },
+       {
+        "price": "1342.509",
+        "size": "0.56"
+       },
+       {
+        "price": "1342.508",
+        "size": "0.47"
+       },
+       {
+        "price": "1342.507",
+        "size": "0.41"
+       },
+       {
+        "price": "1342.506",
+        "size": "0.58"
+       },
+       {
+        "price": "1342.505",
+        "size": "0.51"
+       },
+       {
+        "price": "1342.504",
+        "size": "0.52"
+       },
+       {
+        "price": "1342.503",
+        "size": "0.37"
+       },
+       {
+        "price": "1342.502",
+        "size": "0.39"
+       },
+       {
+        "price": "1342.501",
+        "size": "0.47"
+       },
+       {
+        "price": "1342.500",
+        "size": "0.45"
+       },
+       {
+        "price": "1342.374",
+        "size": "0"
+       },
+       {
+        "price": "1342.373",
+        "size": "0"
+       },
+       {
+        "price": "1342.372",
+        "size": "0"
+       },
+       {
+        "price": "1342.371",
+        "size": "0"
+       },
+       {
+        "price": "1342.370",
+        "size": "0"
+       },
+       {
+        "price": "1342.369",
+        "size": "0"
+       },
+       {
+        "price": "1342.368",
+        "size": "0"
+       },
+       {
+        "price": "1342.367",
+        "size": "0"
+       },
+       {
+        "price": "1342.366",
+        "size": "0"
+       },
+       {
+        "price": "1342.365",
+        "size": "0"
+       },
+       {
+        "price": "1342.364",
+        "size": "0"
+       },
+       {
+        "price": "1342.363",
+        "size": "0"
+       },
+       {
+        "price": "1342.362",
+        "size": "0"
+       },
+       {
+        "price": "1342.361",
+        "size": "0"
+       },
+       {
+        "price": "1342.360",
+        "size": "0"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274904848",
+      "level": 15,
+      "startVersion": "274904648"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1112824389350154",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.747478679522655162",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.747478679522655162",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1112824389350154",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.747478679522655162",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.747478679522655162",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1285588556173201",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.747478679522655162",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.747478679522655162",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1285588556173201",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.801451554190255521",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.801451554190255521",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00034823",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1535405072008514",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.801451554190255521",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.801451554190255521",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.414",
+        "size": "0"
+       },
+       {
+        "price": "1343.415",
+        "size": "0"
+       },
+       {
+        "price": "1343.416",
+        "size": "0"
+       },
+       {
+        "price": "1343.417",
+        "size": "0"
+       },
+       {
+        "price": "1343.418",
+        "size": "0"
+       },
+       {
+        "price": "1343.419",
+        "size": "0"
+       },
+       {
+        "price": "1343.420",
+        "size": "0"
+       },
+       {
+        "price": "1343.421",
+        "size": "0"
+       },
+       {
+        "price": "1343.422",
+        "size": "0"
+       },
+       {
+        "price": "1343.423",
+        "size": "0"
+       },
+       {
+        "price": "1343.424",
+        "size": "0.65"
+       },
+       {
+        "price": "1343.425",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.426",
+        "size": "0.56"
+       },
+       {
+        "price": "1343.427",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.428",
+        "size": "0.56"
+       },
+       {
+        "price": "1343.429",
+        "size": "0.54"
+       },
+       {
+        "price": "1343.430",
+        "size": "0.73"
+       },
+       {
+        "price": "1343.431",
+        "size": "0.62"
+       },
+       {
+        "price": "1343.432",
+        "size": "0.40"
+       },
+       {
+        "price": "1343.433",
+        "size": "0.38"
+       },
+       {
+        "price": "1343.434",
+        "size": "0.51"
+       },
+       {
+        "price": "1343.435",
+        "size": "0.45"
+       },
+       {
+        "price": "1343.436",
+        "size": "0.40"
+       },
+       {
+        "price": "1343.437",
+        "size": "0.49"
+       },
+       {
+        "price": "1343.438",
+        "size": "0.32"
+       }
+      ],
+      "bids": [],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274904958",
+      "level": 15,
+      "startVersion": "274904848"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [],
+      "bids": [
+       {
+        "price": "1342.594",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.593",
+        "size": "0.58"
+       },
+       {
+        "price": "1342.592",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.591",
+        "size": "0.53"
+       },
+       {
+        "price": "1342.590",
+        "size": "0.62"
+       },
+       {
+        "price": "1342.589",
+        "size": "0.53"
+       },
+       {
+        "price": "1342.588",
+        "size": "0.69"
+       },
+       {
+        "price": "1342.587",
+        "size": "0.53"
+       },
+       {
+        "price": "1342.586",
+        "size": "0.64"
+       },
+       {
+        "price": "1342.585",
+        "size": "0.43"
+       },
+       {
+        "price": "1342.584",
+        "size": "0.42"
+       },
+       {
+        "price": "1342.583",
+        "size": "0.51"
+       },
+       {
+        "price": "1342.582",
+        "size": "0.40"
+       },
+       {
+        "price": "1342.581",
+        "size": "0.36"
+       },
+       {
+        "price": "1342.580",
+        "size": "0.42"
+       },
+       {
+        "price": "1342.514",
+        "size": "0"
+       },
+       {
+        "price": "1342.513",
+        "size": "0"
+       },
+       {
+        "price": "1342.512",
+        "size": "0"
+       },
+       {
+        "price": "1342.511",
+        "size": "0"
+       },
+       {
+        "price": "1342.510",
+        "size": "0"
+       },
+       {
+        "price": "1342.509",
+        "size": "0"
+       },
+       {
+        "price": "1342.508",
+        "size": "0"
+       },
+       {
+        "price": "1342.507",
+        "size": "0"
+       },
+       {
+        "price": "1342.506",
+        "size": "0"
+       },
+       {
+        "price": "1342.505",
+        "size": "0"
+       },
+       {
+        "price": "1342.504",
+        "size": "0"
+       },
+       {
+        "price": "1342.503",
+        "size": "0"
+       },
+       {
+        "price": "1342.502",
+        "size": "0"
+       },
+       {
+        "price": "1342.501",
+        "size": "0"
+       },
+       {
+        "price": "1342.500",
+        "size": "0"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274905108",
+      "level": 15,
+      "startVersion": "274904958"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1535405072008514",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.801451554190255521",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.801451554190255521",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.1787249734073521",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.801451554190255521",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.801451554190255521",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.2094938197316859",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.801451554190255521",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.801451554190255521",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.424",
+        "size": "0"
+       },
+       {
+        "price": "1343.425",
+        "size": "0"
+       },
+       {
+        "price": "1343.426",
+        "size": "0"
+       },
+       {
+        "price": "1343.427",
+        "size": "0"
+       },
+       {
+        "price": "1343.428",
+        "size": "0"
+       },
+       {
+        "price": "1343.429",
+        "size": "0"
+       },
+       {
+        "price": "1343.430",
+        "size": "0"
+       },
+       {
+        "price": "1343.431",
+        "size": "0"
+       },
+       {
+        "price": "1343.432",
+        "size": "0"
+       },
+       {
+        "price": "1343.433",
+        "size": "0"
+       },
+       {
+        "price": "1343.434",
+        "size": "0"
+       },
+       {
+        "price": "1343.435",
+        "size": "0"
+       },
+       {
+        "price": "1343.436",
+        "size": "0"
+       },
+       {
+        "price": "1343.437",
+        "size": "0"
+       },
+       {
+        "price": "1343.438",
+        "size": "0"
+       },
+       {
+        "price": "1343.504",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.505",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.506",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.507",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.508",
+        "size": "0.70"
+       },
+       {
+        "price": "1343.509",
+        "size": "0.59"
+       },
+       {
+        "price": "1343.510",
+        "size": "0.45"
+       },
+       {
+        "price": "1343.511",
+        "size": "0.61"
+       },
+       {
+        "price": "1343.512",
+        "size": "0.45"
+       },
+       {
+        "price": "1343.513",
+        "size": "0.57"
+       },
+       {
+        "price": "1343.514",
+        "size": "0.34"
+       },
+       {
+        "price": "1343.515",
+        "size": "0.56"
+       },
+       {
+        "price": "1343.516",
+        "size": "0.50"
+       },
+       {
+        "price": "1343.517",
+        "size": "0.41"
+       },
+       {
+        "price": "1343.518",
+        "size": "0.41"
+       }
+      ],
+      "bids": [
+       {
+        "price": "1342.674",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.673",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.672",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.671",
+        "size": "0.54"
+       },
+       {
+        "price": "1342.670",
+        "size": "0.67"
+       },
+       {
+        "price": "1342.669",
+        "size": "0.72"
+       },
+       {
+        "price": "1342.668",
+        "size": "0.50"
+       },
+       {
+        "price": "1342.667",
+        "size": "0.65"
+       },
+       {
+        "price": "1342.666",
+        "size": "0.63"
+       },
+       {
+        "price": "1342.665",
+        "size": "0.59"
+       },
+       {
+        "price": "1342.664",
+        "size": "0.50"
+       },
+       {
+        "price": "1342.663",
+        "size": "0.59"
+       },
+       {
+        "price": "1342.662",
+        "size": "0.48"
+       },
+       {
+        "price": "1342.661",
+        "size": "0.36"
+       },
+       {
+        "price": "1342.660",
+        "size": "0.48"
+       },
+       {
+        "price": "1342.594",
+        "size": "0"
+       },
+       {
+        "price": "1342.593",
+        "size": "0"
+       },
+       {
+        "price": "1342.592",
+        "size": "0"
+       },
+       {
+        "price": "1342.591",
+        "size": "0"
+       },
+       {
+        "price": "1342.590",
+        "size": "0"
+       },
+       {
+        "price": "1342.589",
+        "size": "0"
+       },
+       {
+        "price": "1342.588",
+        "size": "0"
+       },
+       {
+        "price": "1342.587",
+        "size": "0"
+       },
+       {
+        "price": "1342.586",
+        "size": "0"
+       },
+       {
+        "price": "1342.585",
+        "size": "0"
+       },
+       {
+        "price": "1342.584",
+        "size": "0"
+       },
+       {
+        "price": "1342.583",
+        "size": "0"
+       },
+       {
+        "price": "1342.582",
+        "size": "0"
+       },
+       {
+        "price": "1342.581",
+        "size": "0"
+       },
+       {
+        "price": "1342.580",
+        "size": "0"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274905308",
+      "level": 15,
+      "startVersion": "274905108"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.2183227011164739",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.801451554190255521",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.801451554190255521",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.2183227011164739",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.801451554190255521",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.801451554190255521",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.2365991759441429",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.801451554190255521",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.801451554190255521",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "ping",
+   "time": "1794787323785"
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.504",
+        "size": "0"
+       },
+       {
+        "price": "1343.505",
+        "size": "0"
+       },
+       {
+        "price": "1343.506",
+        "size": "0"
+       },
+       {
+        "price": "1343.507",
+        "size": "0"
+       },
+       {
+        "price": "1343.508",
+        "size": "0"
+       },
+       {
+        "price": "1343.509",
+        "size": "0"
+       },
+       {
+        "price": "1343.510",
+        "size": "0"
+       },
+       {
+        "price": "1343.511",
+        "size": "0"
+       },
+       {
+        "price": "1343.512",
+        "size": "0"
+       },
+       {
+        "price": "1343.513",
+        "size": "0"
+       },
+       {
+        "price": "1343.514",
+        "size": "0"
+       },
+       {
+        "price": "1343.515",
+        "size": "0"
+       },
+       {
+        "price": "1343.516",
+        "size": "0"
+       },
+       {
+        "price": "1343.517",
+        "size": "0"
+       },
+       {
+        "price": "1343.518",
+        "size": "0"
+       },
+       {
+        "price": "1343.554",
+        "size": "0.61"
+       },
+       {
+        "price": "1343.555",
+        "size": "0.70"
+       },
+       {
+        "price": "1343.556",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.557",
+        "size": "0.65"
+       },
+       {
+        "price": "1343.558",
+        "size": "0.74"
+       },
+       {
+        "price": "1343.559",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.560",
+        "size": "0.49"
+       },
+       {
+        "price": "1343.561",
+        "size": "0.47"
+       },
+       {
+        "price": "1343.562",
+        "size": "0.50"
+       },
+       {
+        "price": "1343.563",
+        "size": "0.41"
+       },
+       {
+        "price": "1343.564",
+        "size": "0.45"
+       },
+       {
+        "price": "1343.565",
+        "size": "0.56"
+       },
+       {
+        "price": "1343.566",
+        "size": "0.52"
+       },
+       {
+        "price": "1343.567",
+        "size": "0.47"
+       },
+       {
+        "price": "1343.568",
+        "size": "0.52"
+       }
+      ],
+      "bids": [
+       {
+        "price": "1342.674",
+        "size": "0"
+       },
+       {
+        "price": "1342.673",
+        "size": "0"
+       },
+       {
+        "price": "1342.672",
+        "size": "0"
+       },
+       {
+        "price": "1342.671",
+        "size": "0"
+       },
+       {
+        "price": "1342.670",
+        "size": "0"
+       },
+       {
+        "price": "1342.669",
+        "size": "0"
+       },
+       {
+        "price": "1342.668",
+        "size": "0"
+       },
+       {
+        "price": "1342.667",
+        "size": "0"
+       },
+       {
+        "price": "1342.666",
+        "size": "0"
+       },
+       {
+        "price": "1342.665",
+        "size": "0"
+       },
+       {
+        "price": "1342.664",
+        "size": "0"
+       },
+       {
+        "price": "1342.663",
+        "size": "0"
+       },
+       {
+        "price": "1342.662",
+        "size": "0"
+       },
+       {
+        "price": "1342.661",
+        "size": "0"
+       },
+       {
+        "price": "1342.660",
+        "size": "0"
+       },
+       {
+        "price": "1342.644",
+        "size": "0.68"
+       },
+       {
+        "price": "1342.643",
+        "size": "0.56"
+       },
+       {
+        "price": "1342.642",
+        "size": "0.74"
+       },
+       {
+        "price": "1342.641",
+        "size": "0.58"
+       },
+       {
+        "price": "1342.640",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.639",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.638",
+        "size": "0.72"
+       },
+       {
+        "price": "1342.637",
+        "size": "0.47"
+       },
+       {
+        "price": "1342.636",
+        "size": "0.61"
+       },
+       {
+        "price": "1342.635",
+        "size": "0.59"
+       },
+       {
+        "price": "1342.634",
+        "size": "0.54"
+       },
+       {
+        "price": "1342.633",
+        "size": "0.59"
+       },
+       {
+        "price": "1342.632",
+        "size": "0.39"
+       },
+       {
+        "price": "1342.631",
+        "size": "0.45"
+       },
+       {
+        "price": "1342.630",
+        "size": "0.41"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274905548",
+      "level": 15,
+      "startVersion": "274905308"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.2365991759441429",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.862840970670580854",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.862840970670580854",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.2601711375555725",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.862840970670580854",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.862840970670580854",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.2608805238339302",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.862840970670580854",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.862840970670580854",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.544",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.545",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.546",
+        "size": "0.54"
+       },
+       {
+        "price": "1343.547",
+        "size": "0.71"
+       },
+       {
+        "price": "1343.548",
+        "size": "0.60"
+       },
+       {
+        "price": "1343.549",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.550",
+        "size": "0.65"
+       },
+       {
+        "price": "1343.551",
+        "size": "0.56"
+       },
+       {
+        "price": "1343.552",
+        "size": "0.51"
+       },
+       {
+        "price": "1343.553",
+        "size": "0.58"
+       },
+       {
+        "price": "1343.554",
+        "size": "0.54"
+       },
+       {
+        "price": "1343.555",
+        "size": "0.60"
+       },
+       {
+        "price": "1343.556",
+        "size": "0.34"
+       },
+       {
+        "price": "1343.557",
+        "size": "0.38"
+       },
+       {
+        "price": "1343.558",
+        "size": "0.47"
+       },
+       {
+        "price": "1343.559",
+        "size": "0"
+       },
+       {
+        "price": "1343.560",
+        "size": "0"
+       },
+       {
+        "price": "1343.561",
+        "size": "0"
+       },
+       {
+        "price": "1343.562",
+        "size": "0"
+       },
+       {
+        "price": "1343.563",
+        "size": "0"
+       },
+       {
+        "price": "1343.564",
+        "size": "0"
+       },
+       {
+        "price": "1343.565",
+        "size": "0"
+       },
+       {
+        "price": "1343.566",
+        "size": "0"
+       },
+       {
+        "price": "1343.567",
+        "size": "0"
+       },
+       {
+        "price": "1343.568",
+        "size": "0"
+       }
+      ],
+      "bids": [
+       {
+        "price": "1342.642",
+        "size": "0"
+       },
+       {
+        "price": "1342.639",
+        "size": "0"
+       },
+       {
+        "price": "1342.636",
+        "size": "0"
+       },
+       {
+        "price": "1342.633",
+        "size": "0"
+       },
+       {
+        "price": "1342.631",
+        "size": "0"
+       },
+       {
+        "price": "1342.628",
+        "size": "0.29"
+       },
+       {
+        "price": "1342.626",
+        "size": "0.25"
+       },
+       {
+        "price": "1342.625",
+        "size": "0.30"
+       },
+       {
+        "price": "1342.624",
+        "size": "0.34"
+       },
+       {
+        "price": "1342.623",
+        "size": "0.23"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274905698",
+      "level": 15,
+      "startVersion": "274905548"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [],
+      "bids": [
+       {
+        "price": "1342.644",
+        "size": "0.64"
+       },
+       {
+        "price": "1342.643",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.642",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.641",
+        "size": "0.60"
+       },
+       {
+        "price": "1342.639",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.638",
+        "size": "0.69"
+       },
+       {
+        "price": "1342.637",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.636",
+        "size": "0.49"
+       },
+       {
+        "price": "1342.635",
+        "size": "0.45"
+       },
+       {
+        "price": "1342.634",
+        "size": "0.49"
+       },
+       {
+        "price": "1342.633",
+        "size": "0.62"
+       },
+       {
+        "price": "1342.632",
+        "size": "0.43"
+       },
+       {
+        "price": "1342.631",
+        "size": "0.32"
+       },
+       {
+        "price": "1342.630",
+        "size": "0.53"
+       },
+       {
+        "price": "1342.628",
+        "size": "0"
+       },
+       {
+        "price": "1342.626",
+        "size": "0"
+       },
+       {
+        "price": "1342.625",
+        "size": "0"
+       },
+       {
+        "price": "1342.624",
+        "size": "0"
+       },
+       {
+        "price": "1342.623",
+        "size": "0"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274905788",
+      "level": 15,
+      "startVersion": "274905698"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "unsubscribed",
+   "channel": "trades.30000001",
+   "request": "{\"type\":\"unsubscribe\",\"channel\":\"trades.30000001\"}"
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.2776402672983564",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.862840970670580854",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.862840970670580854",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.284407015362781",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.862840970670580854",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.862840970670580854",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.524",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.525",
+        "size": "0.70"
+       },
+       {
+        "price": "1343.526",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.527",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.528",
+        "size": "0.72"
+       },
+       {
+        "price": "1343.529",
+        "size": "0.70"
+       },
+       {
+        "price": "1343.530",
+        "size": "0.68"
+       },
+       {
+        "price": "1343.531",
+        "size": "0.42"
+       },
+       {
+        "price": "1343.532",
+        "size": "0.48"
+       },
+       {
+        "price": "1343.533",
+        "size": "0.46"
+       },
+       {
+        "price": "1343.534",
+        "size": "0.59"
+       },
+       {
+        "price": "1343.535",
+        "size": "0.57"
+       },
+       {
+        "price": "1343.536",
+        "size": "0.46"
+       },
+       {
+        "price": "1343.537",
+        "size": "0.33"
+       },
+       {
+        "price": "1343.538",
+        "size": "0.33"
+       },
+       {
+        "price": "1343.544",
+        "size": "0"
+       },
+       {
+        "price": "1343.545",
+        "size": "0"
+       },
+       {
+        "price": "1343.546",
+        "size": "0"
+       },
+       {
+        "price": "1343.547",
+        "size": "0"
+       },
+       {
+        "price": "1343.548",
+        "size": "0"
+       },
+       {
+        "price": "1343.549",
+        "size": "0"
+       },
+       {
+        "price": "1343.550",
+        "size": "0"
+       },
+       {
+        "price": "1343.551",
+        "size": "0"
+       },
+       {
+        "price": "1343.552",
+        "size": "0"
+       },
+       {
+        "price": "1343.553",
+        "size": "0"
+       },
+       {
+        "price": "1343.554",
+        "size": "0"
+       },
+       {
+        "price": "1343.555",
+        "size": "0"
+       },
+       {
+        "price": "1343.556",
+        "size": "0"
+       },
+       {
+        "price": "1343.557",
+        "size": "0"
+       },
+       {
+        "price": "1343.558",
+        "size": "0"
+       }
+      ],
+      "bids": [],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274905868",
+      "level": 15,
+      "startVersion": "274905788"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [],
+      "bids": [
+       {
+        "price": "1342.694",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.693",
+        "size": "0.72"
+       },
+       {
+        "price": "1342.692",
+        "size": "0.66"
+       },
+       {
+        "price": "1342.691",
+        "size": "0.59"
+       },
+       {
+        "price": "1342.690",
+        "size": "0.72"
+       },
+       {
+        "price": "1342.689",
+        "size": "0.52"
+       },
+       {
+        "price": "1342.688",
+        "size": "0.66"
+       },
+       {
+        "price": "1342.687",
+        "size": "0.61"
+       },
+       {
+        "price": "1342.686",
+        "size": "0.48"
+       },
+       {
+        "price": "1342.685",
+        "size": "0.42"
+       },
+       {
+        "price": "1342.684",
+        "size": "0.55"
+       },
+       {
+        "price": "1342.683",
+        "size": "0.40"
+       },
+       {
+        "price": "1342.682",
+        "size": "0.61"
+       },
+       {
+        "price": "1342.681",
+        "size": "0.57"
+       },
+       {
+        "price": "1342.680",
+        "size": "0.39"
+       },
+       {
+        "price": "1342.644",
+        "size": "0"
+       },
+       {
+        "price": "1342.643",
+        "size": "0"
+       },
+       {
+        "price": "1342.642",
+        "size": "0"
+       },
+       {
+        "price": "1342.641",
+        "size": "0"
+       },
+       {
+        "price": "1342.640",
+        "size": "0"
+       },
+       {
+        "price": "1342.639",
+        "size": "0"
+       },
+       {
+        "price": "1342.638",
+        "size": "0"
+       },
+       {
+        "price": "1342.637",
+        "size": "0"
+       },
+       {
+        "price": "1342.636",
+        "size": "0"
+       },
+       {
+        "price": "1342.635",
+        "size": "0"
+       },
+       {
+        "price": "1342.634",
+        "size": "0"
+       },
+       {
+        "price": "1342.633",
+        "size": "0"
+       },
+       {
+        "price": "1342.632",
+        "size": "0"
+       },
+       {
+        "price": "1342.631",
+        "size": "0"
+       },
+       {
+        "price": "1342.630",
+        "size": "0"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274905988",
+      "level": 15,
+      "startVersion": "274905868"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.284407015362781",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.862840970670580854",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.862840970670580854",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.3024210034206844",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.862840970670580854",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.862840970670580854",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.3024210034206844",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.909522548452982728",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.909522548452982728",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.3029771683126520",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.909522548452982728",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.909522548452982728",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.524",
+        "size": "0"
+       },
+       {
+        "price": "1343.525",
+        "size": "0"
+       },
+       {
+        "price": "1343.528",
+        "size": "0"
+       },
+       {
+        "price": "1343.529",
+        "size": "0"
+       },
+       {
+        "price": "1343.530",
+        "size": "0"
+       },
+       {
+        "price": "1343.532",
+        "size": "0"
+       },
+       {
+        "price": "1343.536",
+        "size": "0"
+       },
+       {
+        "price": "1343.540",
+        "size": "0.31"
+       },
+       {
+        "price": "1343.542",
+        "size": "0.35"
+       },
+       {
+        "price": "1343.543",
+        "size": "0.29"
+       },
+       {
+        "price": "1343.544",
+        "size": "0.40"
+       },
+       {
+        "price": "1343.545",
+        "size": "0.35"
+       },
+       {
+        "price": "1343.546",
+        "size": "0.37"
+       },
+       {
+        "price": "1343.547",
+        "size": "0.35"
+       }
+      ],
+      "bids": [
+       {
+        "price": "1342.694",
+        "size": "0"
+       },
+       {
+        "price": "1342.693",
+        "size": "0"
+       },
+       {
+        "price": "1342.692",
+        "size": "0"
+       },
+       {
+        "price": "1342.691",
+        "size": "0"
+       },
+       {
+        "price": "1342.690",
+        "size": "0"
+       },
+       {
+        "price": "1342.689",
+        "size": "0"
+       },
+       {
+        "price": "1342.688",
+        "size": "0"
+       },
+       {
+        "price": "1342.687",
+        "size": "0"
+       },
+       {
+        "price": "1342.686",
+        "size": "0"
+       },
+       {
+        "price": "1342.685",
+        "size": "0"
+       },
+       {
+        "price": "1342.684",
+        "size": "0"
+       },
+       {
+        "price": "1342.683",
+        "size": "0"
+       },
+       {
+        "price": "1342.682",
+        "size": "0"
+       },
+       {
+        "price": "1342.681",
+        "size": "0"
+       },
+       {
+        "price": "1342.680",
+        "size": "0"
+       },
+       {
+        "price": "1342.674",
+        "size": "0.62"
+       },
+       {
+        "price": "1342.673",
+        "size": "0.75"
+       },
+       {
+        "price": "1342.672",
+        "size": "0.55"
+       },
+       {
+        "price": "1342.671",
+        "size": "0.53"
+       },
+       {
+        "price": "1342.670",
+        "size": "0.56"
+       },
+       {
+        "price": "1342.669",
+        "size": "0.45"
+       },
+       {
+        "price": "1342.668",
+        "size": "0.47"
+       },
+       {
+        "price": "1342.667",
+        "size": "0.70"
+       },
+       {
+        "price": "1342.666",
+        "size": "0.41"
+       },
+       {
+        "price": "1342.665",
+        "size": "0.47"
+       },
+       {
+        "price": "1342.664",
+        "size": "0.53"
+       },
+       {
+        "price": "1342.663",
+        "size": "0.41"
+       },
+       {
+        "price": "1342.662",
+        "size": "0.47"
+       },
+       {
+        "price": "1342.661",
+        "size": "0.45"
+       },
+       {
+        "price": "1342.660",
+        "size": "0.53"
+       }
+      ],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274906138",
+      "level": 15,
+      "startVersion": "274905988"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "depth.30000192.15",
+   "content": {
+    "channel": "depth.30000192.15",
+    "data": [
+     {
+      "asks": [
+       {
+        "price": "1343.504",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.505",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.506",
+        "size": "0.56"
+       },
+       {
+        "price": "1343.507",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.508",
+        "size": "0.53"
+       },
+       {
+        "price": "1343.509",
+        "size": "0.75"
+       },
+       {
+        "price": "1343.510",
+        "size": "0.68"
+       },
+       {
+        "price": "1343.511",
+        "size": "0.45"
+       },
+       {
+        "price": "1343.512",
+        "size": "0.55"
+       },
+       {
+        "price": "1343.513",
+        "size": "0.55"
+       },
+       {
+        "price": "1343.514",
+        "size": "0.37"
+       },
+       {
+        "price": "1343.515",
+        "size": "0.56"
+       },
+       {
+        "price": "1343.516",
+        "size": "0.39"
+       },
+       {
+        "price": "1343.517",
+        "size": "0.36"
+       },
+       {
+        "price": "1343.518",
+        "size": "0.30"
+       },
+       {
+        "price": "1343.526",
+        "size": "0"
+       },
+       {
+        "price": "1343.527",
+        "size": "0"
+       },
+       {
+        "price": "1343.531",
+        "size": "0"
+       },
+       {
+        "price": "1343.533",
+        "size": "0"
+       },
+       {
+        "price": "1343.534",
+        "size": "0"
+       },
+       {
+        "price": "1343.535",
+        "size": "0"
+       },
+       {
+        "price": "1343.537",
+        "size": "0"
+       },
+       {
+        "price": "1343.538",
+        "size": "0"
+       },
+       {
+        "price": "1343.540",
+        "size": "0"
+       },
+       {
+        "price": "1343.542",
+        "size": "0"
+       },
+       {
+        "price": "1343.543",
+        "size": "0"
+       },
+       {
+        "price": "1343.544",
+        "size": "0"
+       },
+       {
+        "price": "1343.545",
+        "size": "0"
+       },
+       {
+        "price": "1343.546",
+        "size": "0"
+       },
+       {
+        "price": "1343.547",
+        "size": "0"
+       }
+      ],
+      "bids": [],
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "depthType": "CHANGED",
+      "endVersion": "274906228",
+      "level": 15,
+      "startVersion": "274906138"
+     }
+    ],
+    "dataType": "changed"
+   }
+  },
+  {
+   "type": "quote-event",
+   "channel": "ticker.30000192",
+   "content": {
+    "channel": "ticker.30000192",
+    "data": [
+     {
+      "close": "1342.577",
+      "contractId": "30000192",
+      "contractName": "ANTHROPICUSDC",
+      "endTime": "1794787200000",
+      "fundingRate": "0.00003827",
+      "fundingTime": "1794787200000",
+      "high": "1349.814",
+      "highTime": "1794702021546",
+      "indexPrice": "1346.3057358971666296",
+      "lastPrice": "1342.577",
+      "low": "1324.091",
+      "lowTime": "1794706630547",
+      "markPrice": "1342.909522548452982728",
+      "marketOpen": true,
+      "nextFundingTime": "1794801600000",
+      "open": "1344.897",
+      "openInterest": "5.08",
+      "oraclePrice": "1342.909522548452982728",
+      "priceChange": "-2.320",
+      "priceChangePercent": "-0.001725",
+      "size": "163.77",
+      "startTime": "1794700800000",
+      "trades": "3143",
+      "value": "219025.82984"
+     }
+    ],
+    "dataType": "changed"
+   }
+  }
+ ]
+}

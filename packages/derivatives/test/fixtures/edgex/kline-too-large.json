@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-16T00:01:50.020Z",
+ "url": "https://edgex-prod-v2.edgex.exchange/api/v2/public/quote/getKline?contractId=30000192&klineType=HOUR_1&priceType=LAST_PRICE&size=1001",
+ "status": 400,
+ "text": "{\"code\":\"INVALID_GET_PAGE_SIZE\",\"data\":null,\"errorParam\":{\"maxSize\":\"1000\",\"size\":\"1001\"},\"msg\":\"The page size must be less or equal than 1000. Current page size is '1001'.\",\"requestTime\":\"1794787309915\",\"responseTime\":\"1794787309915\",\"traceId\":\"\"}"
+}

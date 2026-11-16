@@ -19,7 +19,7 @@ describe('logo set', () => {
     expect(reg.symbols.length).toBeGreaterThanOrEqual(95);
     for (const s of [...reg.symbols, 'ADA', 'DOT']) expect(ASSET_ICONS[s] ?? (ICON_FALLBACKS.includes(s) ? {} : undefined), `asset ${s}`).toBeDefined();
     for (const n of [...Object.keys(NETWORKS), ...UPCOMING_NETWORKS]) expect(NETWORK_ICONS[n], `network ${n}`).toBeDefined();
-    for (const v of VENUE_IDS) expect(VENUE_ICONS[v], `venue ${v}`).toBeDefined();
+    for (const v of VENUE_IDS) expect(VENUE_ICONS[v] ?? (ICON_FALLBACKS.includes(`venue:${v}`) ? {} : undefined), `venue ${v}`).toBeDefined();   // v11: edgeX is a declared fallback
     for (const p of PROVIDER_IDS) expect(PROVIDER_ICONS[p], `provider ${p}`).toBeDefined();
   });
   it('every file exists, is a sanitised SVG or a raster of at least 128 px, and records its source, licence and date', () => {

@@ -161,7 +161,7 @@ class Sim {
   size(usd: number, px: number): string { const s = D.quantize(D.from(n2s(usd / px, 10)), this.lot, 'down'); return D.str(D.isPos(s) ? s : this.lot); }
   trade(ts: number): void {
     if (this.inst.venue === 'gmx') return;
-    const p = PROFILES[this.inst.venue], buy = this.r() < 0.5, k = buy ? this.k + p.spread : this.k, px = Number(this.price(k));
+    const p = PROFILES[this.inst.venue as 'hyperliquid' | 'dydx'], buy = this.r() < 0.5, k = buy ? this.k + p.spread : this.k, px = Number(this.price(k));
     const usd = p.tradeUsd[Math.floor(this.r() * p.tradeUsd.length)] ?? 500;
     const t: PublicTrade = { instrument: this.inst.id, price: this.price(k), size: this.size(Math.max(12, usd * (px / 73700 > 0.2 ? 1 : 0.2)), px), side: buy ? 'buy' : 'sell', ts, id: `m-${this.inst.symbol}-${++this.seq}` };
     this.trades = [t, ...this.trades].slice(0, 60); this.fresh.push(t);
@@ -183,7 +183,7 @@ class Sim {
       this.ticker = { ...this.ticker, mark, index: mark, change24h: n2s0((Number(mark) - this.seed.prev) / this.seed.prev), ts: now };
       return;
     }
-    const p = PROFILES[this.inst.venue];
+    const p = PROFILES[this.inst.venue as 'hyperliquid' | 'dydx'];
     const bids: [string, string][] = [], asks: [string, string][] = [];
     for (const l of p.bids) { const k = this.k - l.gap; if (k < 1) break; const px = k * stepN; bids.push([this.price(k), this.size(l.usd * (0.55 + this.r() * 0.9) * this.scaleUsd(), px)]); }
     for (const l of p.asks) { const k = this.k + p.spread + l.gap, px = k * stepN; asks.push([this.price(k), this.size(l.usd * (0.55 + this.r() * 0.9) * this.scaleUsd(), px)]); }

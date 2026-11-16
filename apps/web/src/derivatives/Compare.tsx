@@ -12,7 +12,7 @@ import { DataTable, Seg, VENUE_NAME, VenueBadge, type Col } from './bits';
 import { compactUsd, fmt, pct, priceDp } from './dec';
 import type { CompareRow, Instrument, VenueId } from './types';
 
-const ORDER: VenueId[] = ['hyperliquid', 'gmx', 'dydx'];
+const ORDER: VenueId[] = ['hyperliquid', 'gmx', 'dydx', 'edgex'];   // v11: edgeX last (market data only)
 const MAJORS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'LINK', 'AVAX', 'ARB'];
 const FIELDS = ['collateral', 'settlement', 'funding', 'leverage', 'fee', 'price'] as const;
 /**
@@ -30,7 +30,7 @@ export function CompareView({ instruments, base, onBase, onOpen }: { instruments
   const q = useQuery({ queryKey: ['deriv', 'compare', base, locale], queryFn: () => dapi.compare(base, locale), refetchInterval: 15_000 });   // v8: the server's sentences in the screen's language
   const rows = useMemo(() => [...(q.data?.rows ?? [])].sort((a, b) => ORDER.indexOf(a.venue) - ORDER.indexOf(b.venue) || a.instrument.localeCompare(b.instrument)), [q.data]);   // fixed venue order: never by "quality"
   const cols: Col<CompareRow>[] = [
-    { id: 'v', label: t('fxVenue'), head: true, cell: (r) => <><VenueBadge venue={r.venue} />{r.restriction ? <span className="mt-1 block text-[11.5px] font-normal text-warn">{t('fxDataOnly')}</span> : null}</> },
+    { id: 'v', label: t('fxVenue'), head: true, cell: (r) => <><VenueBadge venue={r.venue} />{r.restriction ? <span className="mt-1 block text-[11.5px] font-normal text-warn" data-testid={r.venue === 'edgex' ? 'edgex-unavailable' : undefined}>{t(r.venue === 'edgex' ? 'exTradingUnavailable' : 'fxDataOnly')}</span> : null}</> },
     { id: 'i', label: t('fxInstrument'), head: true, cell: (r) => <button type="button" onClick={() => onOpen(r.instrument)} className={COMPARE_OPEN_CLS} data-testid="compare-open" aria-label={t('fxOpenMarket', { symbol: r.instrument })}>{r.instrument.slice(r.instrument.indexOf(':') + 1)}</button> },
     { id: 'mark', label: t('fxMark'), num: true, cell: (r) => <span className="font-semibold">{fmt(r.mark, { dp: priceDp('0.01', r.mark), locale })}</span> },
     { id: 'index', label: t('fxIndex'), num: true, cell: (r) => (r.index ? fmt(r.index, { dp: priceDp('0.01', r.index), locale }) : '—') },
@@ -60,9 +60,9 @@ export function CompareView({ instruments, base, onBase, onOpen }: { instruments
       </Card>
       <Card>
         <H>{t('fxDiffTitle')}</H>
-        <div className="grid grid-cols-1 gap-x-8 gap-y-6 xl:grid-cols-3">{(present.length ? present : ORDER).map((v) => <section key={v} className="min-w-0 border-line max-xl:border-t max-xl:pt-5 max-xl:first:border-t-0 max-xl:first:pt-0 xl:border-l xl:pl-8 xl:first:border-l-0 xl:first:pl-0" aria-label={VENUE_NAME[v]}>
+        <div className={`grid grid-cols-1 gap-x-8 gap-y-6 ${present.length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>{(present.length ? present : ORDER).map((v) => <section key={v} className="min-w-0 border-line max-xl:border-t max-xl:pt-5 max-xl:first:border-t-0 max-xl:first:pt-0 xl:border-l xl:pl-8 xl:first:border-l-0 xl:first:pl-0" aria-label={VENUE_NAME[v]}>
           <div className="flex items-center gap-2.5"><VenueIcon venue={v} size={32} /><h3 className="text-[16px] font-semibold tracking-[-0.01em]">{VENUE_NAME[v]}</h3></div>
-          <dl className="mt-3 space-y-3">{FIELDS.map((k) => <div key={k}><dt className="t-eyebrow">{t(`fxDiffField_${k}` as Key)}</dt><dd className="mt-0.5 text-[13.5px] leading-snug">{t(`fxDiff_${v}_${k}` as Key)}</dd></div>)}</dl>
+          <dl className="mt-3 space-y-3">{FIELDS.map((k) => <div key={k}><dt className="t-eyebrow">{t(`fxDiffField_${k}` as Key)}</dt><dd className="mt-0.5 text-[13.5px] leading-snug">{t((v === 'edgex' ? `exDiff_${k}` : `fxDiff_${v}_${k}`) as Key)}</dd></div>)}</dl>
         </section>)}</div>
         <ul className="mt-5 list-disc space-y-1.5 border-t border-line pl-5 pt-4 text-[13.5px] leading-snug">{(['fxNever1', 'fxNever2', 'fxNever3', 'fxNever4'] as const).map((k) => <li key={k}>{t(k)}</li>)}</ul>
         <p className="mt-3 text-[12px] leading-snug text-mute">{t('fxDiffSource')}</p>

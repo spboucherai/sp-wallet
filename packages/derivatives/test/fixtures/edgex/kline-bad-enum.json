@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-16T00:01:49.779Z",
+ "url": "https://edgex-prod-v2.edgex.exchange/api/v2/public/quote/getKline?contractId=30000192&klineType=NOPE&priceType=LAST_PRICE&size=5",
+ "status": 400,
+ "text": "{\"code\":\"GATEWAY_INVALID_REQUEST\",\"data\":null,\"errorParam\":null,\"msg\":\"invalid enum parameter\",\"requestTime\":\"1794787309683\",\"responseTime\":\"1794787309683\",\"traceId\":\"\"}"
+}

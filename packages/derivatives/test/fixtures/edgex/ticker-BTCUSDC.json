@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-16T00:01:46.546Z",
+ "url": "https://edgex-prod-v2.edgex.exchange/api/v2/public/quote/getTicker?contractId=30000001",
+ "status": 200,
+ "text": "{\"code\":\"SUCCESS\",\"data\":[{\"close\":\"65257.2\",\"contractId\":\"30000001\",\"contractName\":\"BTCUSDC\",\"endTime\":\"1794787200000\",\"fundingRate\":\"0.00005000\",\"fundingTime\":\"1794787200000\",\"high\":\"66031.3\",\"highTime\":\"1794733925614\",\"indexPrice\":\"65305.5256540876\",\"lastPrice\":\"65257.2\",\"low\":\"61975.1\",\"lowTime\":\"1794707141183\",\"markPrice\":\"65270.146285157574309953\",\"nextFundingTime\":\"1794801600000\",\"open\":\"63687.0\",\"openInterest\":\"2446.091\",\"oraclePrice\":\"65270.146285157574309953\",\"priceChange\":\"1570.2\",\"priceChangePercent\":\"0.024654\",\"size\":\"5077.525\",\"startTime\":\"1794699000000\",\"trades\":\"102843\",\"value\":\"327388615.3763\"}],\"errorParam\":null,\"msg\":null,\"requestTime\":\"1794787306374\",\"responseTime\":\"1794787306374\",\"traceId\":\"\"}"
+}

@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-16T00:01:46.764Z",
+ "url": "https://edgex-prod-v2.edgex.exchange/api/v2/public/quote/getTicker?contractId=30000012",
+ "status": 200,
+ "text": "{\"code\":\"SUCCESS\",\"data\":[{\"close\":\"358.82\",\"contractId\":\"30000012\",\"contractName\":\"AAPLUSDC\",\"endTime\":\"1794787200000\",\"fundingRate\":\"-0.00030172\",\"fundingTime\":\"1794787200000\",\"high\":\"360.87\",\"highTime\":\"1794784062576\",\"indexPrice\":\"358.9020703457\",\"lastPrice\":\"358.82\",\"low\":\"355.56\",\"lowTime\":\"1794706063581\",\"markPrice\":\"359.129881506632280582\",\"nextFundingTime\":\"1794801600000\",\"open\":\"356.21\",\"openInterest\":\"229.99\",\"oraclePrice\":\"359.129881506632280582\",\"priceChange\":\"2.61\",\"priceChangePercent\":\"0.007327\",\"size\":\"969.01\",\"startTime\":\"1794699000000\",\"trades\":\"3094\",\"value\":\"345817.0179\"}],\"errorParam\":null,\"msg\":null,\"requestTime\":\"1794787306669\",\"responseTime\":\"1794787306669\",\"traceId\":\"\"}"
+}

@@ -22,6 +22,7 @@ const WALLET: Record<VenueId, VenueSnapshot['wallet']> = {
   hyperliquid: { trading: 'paper', note: 'this wallet trades Hyperliquid in simulation (paper account); live trading exists and stays off until the owner authorizes a venue account with his passkey' },
   gmx: { trading: 'none', note: 'this wallet only READS GMX: no GMX order can be built or sent from it today' },
   dydx: { trading: 'none', note: DYDX_NOTE },
+  edgex: { trading: 'none', note: DYDX_NOTE },   // v11: market data only (the mock lists no edgeX instrument)
 };
 
 export interface MockMarket { inst: Instrument; ticker: Ticker; book: Book | null }
@@ -65,7 +66,7 @@ function gmxState(decimals: (base: string) => number): Map<string, Omit<GmxLiqui
 
 export function createRouterMock(deps: RouterMockDeps) {
   let state: ReturnType<typeof gmxState> | null = null;
-  const ORDER: VenueId[] = ['hyperliquid', 'gmx', 'dydx'];
+  const ORDER: VenueId[] = ['hyperliquid', 'gmx', 'dydx', 'edgex'];
   const json = (status: number, j: unknown) => ({ status, json: j });
 
   function assets() {

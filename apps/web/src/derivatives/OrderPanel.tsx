@@ -115,7 +115,7 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
     <div className="space-y-3" data-testid="order-panel">
       {title}
       <div className="flex items-center gap-2.5 text-[13.5px] font-semibold"><VenueIcon venue={instrument.venue} size={28} />{VENUE_NAME[instrument.venue] ?? instrument.venue}</div>
-      <Notice tone="warn">{t(instrument.venue === 'dydx' ? 'fxNoPaper_dydx' : instrument.venue === 'gmx' ? 'fxNoPaper_gmx' : 'fxNoPaper_other', { venue: VENUE_NAME[instrument.venue] ?? instrument.venue })}
+      <Notice tone="warn">{t(instrument.venue === 'dydx' ? 'fxNoPaper_dydx' : instrument.venue === 'edgex' ? 'exNoPaper' : instrument.venue === 'gmx' ? 'fxNoPaper_gmx' : 'fxNoPaper_other', { venue: VENUE_NAME[instrument.venue] ?? instrument.venue })}
         {venue?.restriction && <ServerSays text={venue.restriction} className="mt-1.5 text-[12px] text-mute" />}</Notice>
     </div>);
   if (!account) return (

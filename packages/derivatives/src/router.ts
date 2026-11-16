@@ -107,6 +107,24 @@ export const ROUTER_FACTS: Record<VenueId, VenueRouterFacts> = {
     },
     collateral: { asset: 'USDC (Noble USDC over IBC)', route: 'not offered: the venue is restricted for the owner', fixedCostUsd: null, needsArbitrumTransfer: false, needsArbitrumRequest: false, source: 'docs/v4/venues/dydx.md' },
   },
+  // v11: edgeX — market data only (its Terms of Use exclude Canada); shown for information, never ranked
+  edgex: {
+    name: 'edgeX', orderBook: true, takerRate: '0.00045', makerRate: '0.0004',
+    feeSource: 'default rates of the venue metadata (taker 0.045 %, maker 0.04 %), read live on 2026-11-15; VIP tiers lower them — GET https://edgex-prod-v2.edgex.exchange/api/v2/public/meta/getMetaData',
+    maintenance: null, maintenanceText: 'maintenance margin rate per contract and per position-value tier (riskTierList of the venue metadata; e.g. 10 % for the first tier of a 5× contract) — https://edgex-1.gitbook.io/edgeX-documentation/api-v2',
+    integerLeverage: false,
+    terms: {
+      structure: 'central limit order book operated by the venue; settlement on the Edge chain',
+      execution: 'immediate match against the book; stock-type contracts accept limit orders only, inside a price band',
+      quote: 'quoted, margined and settled in USDC',
+      fundingRule: 'settled every 4 h on every contract (read live on 2026-11-15); the rate is capped per contract',
+      otherCarry: 'none',
+      sizeUnit: 'base asset, lot per contract',
+      liquidation: 'liquidation fee 1 % (venue metadata); maintenance margin per risk tier',
+      fees: 'taker / maker on notional, VIP tiers',
+    },
+    collateral: { asset: 'USDC', route: 'not offered: the venue is restricted for the owner', fixedCostUsd: null, needsArbitrumTransfer: false, needsArbitrumRequest: false, source: 'docs/V11-EXCHANGE-INTEGRATIONS.md' },
+  },
   gmx: {
     name: 'GMX v2 (Arbitrum)', orderBook: false, takerRate: null, makerRate: null,
     feeSource: 'position fee factors of the market, read from the venue (GET /markets/config) — https://docs.gmx.io/docs/trading/fees/',

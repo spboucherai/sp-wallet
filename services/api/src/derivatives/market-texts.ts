@@ -9,7 +9,7 @@
 // A sentence this file does not know is returned as it is (English), never dropped and never altered.
 import { ROUTER_FACTS, ROUTER_WARNINGS, type VenueId } from '@spw/derivatives';
 import type { LiveLocale } from './live-texts.ts';
-import { DYDX_FACTS, DYDX_RESTRICTION, GMX_FACTS, HYPERLIQUID_FACTS } from './venues.ts';
+import { DYDX_FACTS, DYDX_RESTRICTION, EDGEX_FACTS, EDGEX_RESTRICTION, GMX_FACTS, HYPERLIQUID_FACTS } from './venues.ts';
 
 export type TextLocale = LiveLocale;
 export const textLocale = (x: unknown): TextLocale => (x === 'fr' ? 'fr' : 'en');
@@ -41,6 +41,16 @@ const GMX_NOTES_FR = [
   'Frais de position de 0,04 % quand la transaction améliore l’équilibre entre longs et shorts, 0,06 % sinon (le plus élevé est affiché) ; plus l’impact de prix, des frais d’exécution en ETH et le gaz d’Arbitrum.',
   'Le levier maximal est la borne du contrat ; le maximum effectif est plus bas et baisse quand l’intérêt ouvert augmente.',
 ];
+// v11: edgeX
+const EDGEX_NOTES_FR = [
+  'Carnet d’ordres central à cours limité exploité par edgeX ; règlement sur la chaîne Edge ; tous les contrats sont cotés, garantis et réglés en USDC.',
+  'En plus des cryptoactifs, edgeX liste des contrats perpétuels sur des actions, des FNB, des matières premières, des devises et des sociétés avant leur entrée en bourse ; edgeX ne publie aucune spécification de contrat pour ces dernières (unité, sources de l’indice, sort du contrat lors d’une entrée en bourse).',
+  'Le financement est réglé toutes les 4 h sur tous les contrats (lu en direct le 2026-11-15) ; le taux affiché est la prévision courante pour l’intervalle en cours.',
+  'Le prix de référence était égal au prix d’oracle dans toutes les réponses lues le 2026-11-15 ; les contrats de type action n’ont qu’un seul signataire d’oracle.',
+  'Les frais affichés sont ceux par défaut des métadonnées de la plateforme (preneur 0,045 %, teneur 0,04 %) ; le levier maximal et la marge de maintien sont propres à chaque contrat, par palier de valeur de position.',
+  'Admissibilité : les conditions d’utilisation excluent les États-Unis et le Canada. Les limites de débit ne sont pas publiées ; il n’existe pas de réseau de test public.',
+];
+export const EDGEX_RESTRICTION_FR = 'Négociation indisponible : les conditions d’edgeX excluent le Canada. edgeX est servi pour les données de marché seulement : ses conditions d’utilisation désignent les États-Unis d’Amérique et le Canada comme juridictions bloquées, pour son interface et pour les contrats perpétuels, et interdisent de contourner cette restriction par un VPN (https://edgex-1.gitbook.io/edgeX-documentation/about/terms-of-use, lu le 2026-11-15). Aucune vue de compte, aucun ordre et aucun compte de simulation ne sont offerts sur cette plateforme, afin qu’elle ne puisse pas être prise pour une plateforme où le propriétaire peut négocier.';
 export const DYDX_RESTRICTION_FR = 'dYdX est servi pour les données de marché seulement : ses conditions d’utilisation excluent le Canada (ainsi que les États-Unis et le Royaume-Uni) et son indexeur bloque géographiquement la lecture des comptes depuis le réseau du propriétaire. Aucune vue de compte et aucun compte de simulation ne sont offerts sur cette plateforme, afin qu’elle ne puisse pas être prise pour une plateforme où le propriétaire peut négocier.';
 
 /** settlement and mark-price sentences of the adapters (packages/derivatives/src/venues/*): keyed by the English text they return */
@@ -53,6 +63,10 @@ const INSTRUMENT_FR: Record<string, string> = {
     'Contrat perpétuel linéaire avec marge en USDC sur la chaîne dYdX : le résultat et le financement se règlent en USDC (USDC de Noble, par IBC) dans le sous-compte ; pas d’échéance, pas de livraison',
   'no separate mark price: the protocol oracle price (validator-aggregated index of exchange prices, updated per block) values positions, margin, liquidations and conditional triggers':
     'pas de prix de référence distinct : le prix d’oracle du protocole (indice de prix de bourses agrégé par les validateurs, mis à jour à chaque bloc) valorise les positions, la marge, les liquidations et les déclenchements conditionnels',
+  'USDC-margined linear perpetual on edgeX (Edge chain): PnL and funding settle in USDC in the venue account; no expiry, no delivery; a synthetic cash-settled contract that confers no claim on the underlying':
+    'Contrat perpétuel linéaire avec marge en USDC sur edgeX (chaîne Edge) : le résultat et le financement se règlent en USDC dans le compte de la plateforme ; pas d’échéance, pas de livraison ; un contrat synthétique réglé en espèces qui ne confère aucun droit sur le sous-jacent',
+  'mark price as the venue publishes it (equal to its oracle price in every answer recorded on 2026-11-15); the index is published separately; edgeX does not state the index sources per instrument':
+    'prix de référence tel que la plateforme le publie (égal à son prix d’oracle dans toutes les réponses enregistrées le 2026-11-15) ; l’indice est publié séparément ; edgeX n’indique pas les sources de l’indice par instrument',
   'isolated position against a GM liquidity pool; PnL is computed in USD and paid in the pool token of the side (long token for longs, short token for shorts) on top of the returned collateral; settlement happens on chain when a keeper executes the order':
     'position isolée contre une réserve de liquidité GM ; le résultat est calculé en USD et payé dans le jeton de la réserve du côté de la position (jeton long pour les longs, jeton court pour les shorts), en plus de la garantie rendue ; le règlement a lieu sur la chaîne quand un « keeper » exécute l’ordre',
   'no order book and no separate mark price: orders execute at the Chainlink Data Streams signed min/max oracle price (longs open at max, close at min) adjusted by price impact; the displayed mark is (min + max) / 2':
@@ -84,6 +98,17 @@ const TERMS_FR: Record<VenueId, TermsFr> = {
     fees: 'preneur / teneur sur le notionnel, paliers de volume sur 30 jours',
     maintenance: 'fraction de marge de maintien propre à chaque marché (1,2 % pour BTC et ETH), sur le prix d’oracle — https://docs.dydx.xyz/concepts/trading/margin',
   },
+  edgex: {
+    structure: 'carnet d’ordres central à cours limité exploité par la plateforme ; règlement sur la chaîne Edge',
+    execution: 'appariement immédiat contre le carnet ; les contrats de type action n’acceptent que des ordres à cours limité, à l’intérieur d’une fourchette de prix',
+    quote: 'coté, garanti et réglé en USDC',
+    fundingRule: 'réglé toutes les 4 h sur tous les contrats (lu en direct le 2026-11-15) ; le taux est plafonné par contrat',
+    otherCarry: 'aucun',
+    sizeUnit: 'actif de base, lot propre à chaque contrat',
+    liquidation: 'frais de liquidation de 1 % (métadonnées de la plateforme) ; marge de maintien par palier de risque',
+    fees: 'preneur / teneur sur le notionnel, paliers VIP',
+    maintenance: 'taux de marge de maintien propre à chaque contrat et à chaque palier de valeur de position (riskTierList des métadonnées de la plateforme ; p. ex. 10 % pour le premier palier d’un contrat à 5×) — https://edgex-1.gitbook.io/edgeX-documentation/api-v2',
+  },
   gmx: {
     structure: 'pas de carnet d’ordres : transactions au prix d’oracle contre une réserve de liquidité GM ; un instrument par réserve',
     execution: 'deux transactions : une demande, puis un « keeper » exécute à un prix d’oracle signé ultérieur ; l’ordre peut être annulé ou gelé à la place',
@@ -106,9 +131,9 @@ const ROUTER_WARNINGS_FR = [
 
 const EXACT = new Map<string, string>();
 const pair = (en: readonly string[], fr: readonly string[]): void => { en.forEach((s, i) => { if (fr[i] !== undefined) EXACT.set(s, fr[i]!); }); };
-pair(HYPERLIQUID_FACTS.notes, HL_NOTES_FR); pair(DYDX_FACTS.notes, DYDX_NOTES_FR); pair(GMX_FACTS.notes, GMX_NOTES_FR);
+pair(HYPERLIQUID_FACTS.notes, HL_NOTES_FR); pair(DYDX_FACTS.notes, DYDX_NOTES_FR); pair(GMX_FACTS.notes, GMX_NOTES_FR); pair(EDGEX_FACTS.notes, EDGEX_NOTES_FR);
 pair(ROUTER_WARNINGS, ROUTER_WARNINGS_FR);
-EXACT.set(DYDX_RESTRICTION, DYDX_RESTRICTION_FR);
+EXACT.set(DYDX_RESTRICTION, DYDX_RESTRICTION_FR); EXACT.set(EDGEX_RESTRICTION, EDGEX_RESTRICTION_FR);
 for (const [en, fr] of Object.entries(INSTRUMENT_FR)) EXACT.set(en, fr);
 for (const v of Object.keys(TERMS_FR) as VenueId[]) {
   const f = ROUTER_FACTS[v], t = TERMS_FR[v];

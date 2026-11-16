@@ -75,3 +75,26 @@ export function jurisdictionAckOf(venue: AckVenue, sha: string): JurisdictionAck
   for (const locale of ['fr', 'en'] as const) { const a = jurisdictionAck(venue, locale); if (a.sha256 === sha) return a; }
   return null;
 }
+
+// >>> v11 edgeX (additive). NOT an acknowledgement: there is nothing to approve. A venue whose terms name the owner's country
+// as blocked is integrated for market data only (the rule already applied to dYdX), and no text here can enable trading on it.
+// Mirrors the edgeX row of docs/v4/venues/jurisdiction.md. General information, not legal advice.
+export interface VenueJurisdictionBlock {
+  venue: 'edgex'; reason: string; readOn: string; termsUrl: string; termsUpdated: string;
+  /** verbatim quotes of the venue's Terms of Use */
+  clauses: string[];
+  notice: Record<AckLocale, string>;
+}
+export const EDGEX_BLOCKED_JURISDICTION: VenueJurisdictionBlock = {
+  venue: 'edgex', reason: 'edgex_trading_restricted_jurisdiction', readOn: '2026-11-15',
+  termsUrl: 'https://edgex-1.gitbook.io/edgeX-documentation/about/terms-of-use', termsUpdated: '2026-10-04',
+  clauses: [
+    'THE edgeX INTERFACE (AS DEFINED BELOW) IS NOT AVAILABLE TO PERSONS OR ENTITIES WHO RESIDE IN, ARE LOCATED IN, ARE INCORPORATED IN, OR HAVE A REGISTERED OFFICE IN THE UNITED STATES OF AMERICA OR CANADA (COLLECTIVELY, "BLOCKED PERSONS"). … WE DO NOT MAKE EXCEPTIONS; THEREFORE, IF YOU ARE A BLOCKED PERSON, THEN DO NOT ATTEMPT TO USE THE edgeX INTERFACE … USE OF A VIRTUAL PRIVATE NETWORK ("VPN") TO CIRCUMVENT THE RESTRICTIONS SET FORTH HEREIN IS PROHIBITED.',
+    '12.1 … As a result of restrictions under the Commodity Exchange Act and the regulations promulgated thereunder by the U.S. Commodity Futures Trading Commission ("CFTC"), no Blocked Person may enter into Perpetual Contracts using the Services.',
+  ],
+  notice: {
+    en: 'Trading unavailable: edgeX\'s terms exclude Canada. edgeX is shown for its market data only; no account, no order and no simulated account are offered on it, and SP Wallet does not work around the restriction.',
+    fr: 'Négociation indisponible : les conditions d\'edgeX excluent le Canada. edgeX est affiché pour ses données de marché seulement ; aucun compte, aucun ordre et aucun compte de simulation n\'y sont offerts, et SP Wallet ne contourne pas la restriction.',
+  },
+};
+// <<< v11 edgeX
