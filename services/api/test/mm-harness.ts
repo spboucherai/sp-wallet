@@ -1,6 +1,6 @@
 // Simulator harness of the market-making engine: the engine (src/mm/engine.ts) over the LIVE adapter (src/mm/live-adapter.ts),
 // the REAL isolated-signer code (a `Signer` instance in this process, its own state directory, a quoting mandate approved with a
-// test passkey) and a fake venue (src/mm/sim-venue.ts) that replays a recorded Hyperliquid tape and enforces the venue's rules.
+// test passkey) and a fake venue (test/mm-sim-venue.ts) that replays a recorded Hyperliquid tape and enforces the venue's rules.
 // The signer's own venue read goes through its real reader (venue-read.ts) to the fake venue's info endpoint; its own prices are
 // an injected feed (the tape's mid, plus an offset a test can set). Nothing here touches a network or a real key.
 import { createHash } from 'node:crypto';
@@ -20,7 +20,7 @@ import { TestPasskey } from '../../../tests/helpers/passkey.ts';
 import { MmEngine, type MmEngineConfig } from '../src/mm/engine.ts';
 import { createLiveMmAdapter } from '../src/mm/live-adapter.ts';
 import type { JournalEvent, MandateView, VenueStatus } from '../src/mm/ports.ts';
-import { SimVenue, type TapeEvent } from '../src/mm/sim-venue.ts';
+import { SimVenue, type TapeEvent } from './mm-sim-venue.ts';
 
 export interface TapeDoc { provenance: Record<string, unknown>; coin: string; t0: number; b: [number, string, string, string, string][]; t: [number, 0 | 1, string, string][] }
 export const TAPE: TapeDoc = JSON.parse(gunzipSync(readFileSync(new URL('./fixtures/mm/hl-btc-tape.json.gz', import.meta.url))).toString('utf8'));

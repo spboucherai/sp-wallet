@@ -88,6 +88,7 @@ export class MmEngine {
   private stopAskedAt: number | null = null;
   private manual: 'pull' | 'flatten' | null = null;
   private flattenAtStop: boolean | null = null;
+  private external: string | null = null;
   private lastBookTs: number | null = null;
 
   constructor(private cfg: MmEngineConfig, private policy: QuotePolicy, private p: { market: MarketDataPort; orders: OrderPort; risk: RiskPort; mandate: MandatePort; clock: ClockPort; journal: JournalPort }) {
@@ -123,6 +124,11 @@ export class MmEngine {
     if (this.phase !== 'halted') return;
     this.breakers = breakersInit(); this.consecutiveRejects = 0; this.phase = 'pulled'; this.reason = null; this.log('mm.resumed');
   }
+  /**
+   * A reason OUTSIDE the engine for which nothing may be quoted now (a server lock that was closed, hours outside the session's
+   * schedule): quotes are pulled while it is set and come back by themselves when it is cleared. null clears it.
+   */
+  hold(why: string | null): void { if (why === this.external) return; this.external = why; this.log(why ? 'mm.hold' : 'mm.hold_cleared', why ? { why } : {}); }
   /**
    * The owner's "pull quotes now": every quote is cancelled at the next cycle and none is placed until `resume()`. Cancels are
    * signed under every lock, during a halt and during the wind-down, so this works whenever the signer and the venue answer.
@@ -165,10 +171,15 @@ export class MmEngine {
       if (this.needReconcile) return;                                                             // the venue could not be read: nothing is assumed
       const resting = [...this.orders.values()];
       if (resting.length) { await this.cancelIds(resting.filter((o) => o.state !== 'cancelling').map((o) => o.clientId), 'start-up'); this.needReconcile = true; return; }
-      if (!mandate || mandate.phase !== 'active') { this.note(`start-up waits: ${mandate ? `the mandate is in ${mandate.phase}` : 'no quoting mandate'}`); return; }
-      if (now - this.lastHeartbeatAt < 5000) return;                                             // a refused or lost arming is retried, not hammered
-      if (!(await this.heartbeat(now, mandate, true))) return;
-      this.phase = 'quoting'; this.log('mm.quoting');
+      if (!mandate) { this.note('start-up waits: no quoting mandate'); return; }
+      if (mandate.phase !== 'active') {
+        // a mandate in its wind-down signs no quote: nothing to arm. The session exists only to pull and to reduce.
+        this.phase = 'pulled'; this.log('mm.started_without_quoting', { mandate: mandate.phase });
+      } else {
+        if (now - this.lastHeartbeatAt < 5000) return;                                           // a refused or lost arming is retried, not hammered
+        if (!(await this.heartbeat(now, mandate, true))) return;
+        this.phase = 'quoting'; this.log('mm.quoting');
+      }
     }
 
     // ---- shutdown sequence: cancel-all → reconcile → (flatten) → disarm ----
@@ -193,7 +204,7 @@ export class MmEngine {
     // ---- dead man's switch heartbeat: while anything of ours can rest ----
     const wantsQuotes = this.phase === 'quoting' || this.phase === 'pulled';
     let switchOk = this.switchDeadline !== null && this.switchDeadline - now > this.p.orders.actionTtlMs + 3000;
-    if (mandate && (wantsQuotes || this.orders.size > 0) && now - this.lastHeartbeatAt >= (mandate.deadManSeconds * 1000) / 3) switchOk = (await this.heartbeat(now, mandate, false)) || switchOk;
+    if (mandate && mandate.phase !== 'ended' && (wantsQuotes || this.orders.size > 0) && now - this.lastHeartbeatAt >= (mandate.deadManSeconds * 1000) / 3) switchOk = (await this.heartbeat(now, mandate, false)) || switchOk;
 
     // ---- breakers ----
     const v = stepBreakers(this.breakers, { nowMs: now, venueStatus: snap.status, bookTs: book?.ts ?? null, bid: book?.bid ?? null, bidSize: book?.bidSize ?? null, ask: book?.ask ?? null, askSize: book?.askSize ?? null,
@@ -210,6 +221,7 @@ export class MmEngine {
     else if (v.pull) { mode = v.flatten ? 'flatten' : 'pull'; why = `breaker ${v.active.join(', ')}`; }
     else if (!switchOk) { mode = 'pull'; why = 'the dead man\'s switch could not be renewed'; }
     else if (this.phase === 'halted') { mode = 'pull'; why = `halted: ${this.reason}`; }
+    else if (this.external) { mode = 'pull'; why = this.external; }
     // the owner's own instruction comes on top of everything: it can only pull or reduce
     if (this.manual) {
       if (mode === 'quote') { mode = 'pull'; why = 'pulled by the owner'; }

@@ -26,7 +26,7 @@ const currentMode = (a: RuntimeAgentRow): 'research' | 'paper' | 'live' => (a.mo
 
 /** What the owner would have to approve for this agent to go live — the FIELDS, read-only. Nothing is prepared at the signer here. */
 export async function mandateDraft(a: RuntimeAgentRow, locale: 'fr' | 'en' = 'en') {
-  const family = (a.family ?? 'custom') as Family, kind = a.kind ?? 'spot', lv = liveVerdict(family, kind, a.universe);
+  const family = (a.family ?? 'custom') as Family, kind = a.kind ?? 'spot', lv = liveVerdict(family, kind, a.universe, (a.runtime as { venues?: string[] } | null)?.venues);
   const base = { draft: `agent:${a.id}`, agentId: a.id, family, approval: { route: `/risk?mandate=agent:${a.id}`, note: 'the mandate is approved by the owner with the passkey; the signer judges the approval and enforces the mandate on every order' } };
   if (!lv.capable) return { ...base, available: false as const, code: lv.code, reason: lv.reason, fields: null };
   if (kind === 'perp') {

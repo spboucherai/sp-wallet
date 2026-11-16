@@ -22,10 +22,12 @@ describe('agent model', () => {
   it('eight families, each with an engine and the modes it runs in; only single-venue bar families and the supervisor reach live', () => {
     expect([...FAMILIES]).toEqual(['momentum', 'mean_reversion', 'stat_arb', 'funding_arb', 'market_making', 'cross_exchange', 'risk_manager', 'custom']);
     const live = FAMILIES.filter((f) => FAMILY_MODES[f].modes.includes('live'));
-    expect(live).toEqual(['momentum', 'mean_reversion', 'stat_arb', 'risk_manager', 'custom']);
-    for (const f of ['funding_arb', 'market_making', 'cross_exchange'] as const) {
+    // V11 live market making: the family reaches live (one venue, under a quoting mandate); the two-venue families still do not
+    expect(live).toEqual(['momentum', 'mean_reversion', 'stat_arb', 'market_making', 'risk_manager', 'custom']);
+    for (const f of ['funding_arb', 'cross_exchange'] as const) {
       expect(FAMILY_MODES[f].engine).toBe('stream'); expect([...FAMILY_MODES[f].modes]).toEqual(['research', 'paper']); expect(FAMILY_MODES[f].liveReason).toBeTruthy();
     }
+    expect(FAMILY_MODES.market_making).toEqual({ engine: 'stream', modes: ['research', 'paper', 'live'], liveReason: null });
     // the sentence the product shows for the two-venue families
     expect(FAMILY_MODES.cross_exchange.liveReason).toBe('mode réel indisponible : une seule plateforme autorise l\'exécution sous mandat');
     expect(FAMILY_MODES.funding_arb.liveReason).toBe(NO_LIVE_ONE_VENUE);
@@ -45,8 +47,13 @@ describe('agent model', () => {
     const hype = liveVerdict('momentum', 'perp', ['BTC', 'ETH', 'SOL', 'HYPE']);
     expect(hype.capable).toBe(false);
     if (!hype.capable) { expect(hype.code).toBe('universe_not_pinned'); expect(hype.reason).toMatch(/HYPE is not/); expect(hype.reason).toMatch(/BTC, ETH, SOL/); }
-    const mm = liveVerdict('market_making', 'stream', ['BTC']);
-    expect(mm.capable).toBe(false); if (!mm.capable) expect(mm.code).toBe('family_not_live');
+    // V11 live market making: ONE pinned instrument, on Hyperliquid only
+    expect(liveVerdict('market_making', 'stream', ['BTC'], ['hyperliquid'])).toEqual({ capable: true });
+    for (const [u, v, code] of [[['HYPE'], ['hyperliquid'], 'universe_not_pinned'], [['BTC', 'ETH'], ['hyperliquid'], 'universe_not_pinned'], [['BTC'], ['edgex'], 'venue_not_live'], [['BTC'], ['hyperliquid', 'dydx'], 'venue_not_live']] as const) {
+      const mm = liveVerdict('market_making', 'stream', u, v);
+      expect(mm.capable).toBe(false); if (!mm.capable) expect(mm.code).toBe(code);
+    }
+    expect(liveVerdict('cross_exchange', 'stream', ['BTC']).capable).toBe(false);
     const cx = liveVerdict('cross_exchange', 'stream', ['BTC']);
     if (!cx.capable) expect(cx.reason).toBe(NO_LIVE_ONE_VENUE);
   });

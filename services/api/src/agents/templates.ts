@@ -151,7 +151,7 @@ export async function createFromTemplate(body: unknown, actor: string, library?:
   const capital = b.capitalUsdc ?? t.defaults.capitalUsdc;
   if (Number(capital) < 50) throw new UserError('bad_request', 'at least 50 USDC of simulated capital', 400);
   const row = await insertRuntimeAgent({ kind: 'stream', family: t.family, template: t.id, name: b.name, mission: b.mission, universe, venues, rule: t.rule!, config: ruleConfig(t, b.config), risk: streamRisk(t, b.risk), capitalUsdc: capital, actor });
-  return { agent: await agentSummary(row), strategy: null, warnings: [{ code: 'no_live', message: FAMILY_MODES[t.family].liveReason ?? '' }] };
+  return { agent: await agentSummary(row), strategy: null, warnings: FAMILY_MODES[t.family].liveReason ? [{ code: 'no_live', message: FAMILY_MODES[t.family].liveReason ?? '' }] : [] };
 }
 
 /** Replace the rule configuration and/or the limits of a stream or supervisor agent: a new configuration version. Not while it runs. */

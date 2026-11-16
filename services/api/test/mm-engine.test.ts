@@ -355,7 +355,7 @@ describe('the live adapter and the three mainnet locks', () => {
     return { adapter, signed, sent };
   };
   const q = [{ clientId: `0x${'a'.repeat(32)}`, side: 'buy' as const, price: '64990', size: '0.0003' }];
-  const ALL = { SPW_DERIV_LIVE_MAINNET: 'on', SPW_DERIV_MANDATE_MAINNET: 'on', [MM_MAINNET_LOCK]: 'on' };
+  const ALL = { SPW_DERIV_LIVE_MAINNET: 'on', SPW_DERIV_MANDATE_MAINNET: 'on', [MM_MAINNET_LOCK]: 'on', SPW_TRADING_API_EXECUTION: 'on' };   // V11 integration: the agents' execution switch gates quotes too (one rule: mmOpeningLock)
   it('SPW_DERIV_MM_MAINNET is a third lock, off by default: with ANY of the three off, a quote is refused with a precise code before anything is signed', async () => {
     expect(MM_MAINNET_LOCK).toBe('SPW_DERIV_MM_MAINNET');
     for (const [env, code] of [[{}, 'mainnet_disabled'], [{ ...ALL, SPW_DERIV_LIVE_MAINNET: undefined }, 'mainnet_disabled'], [{ ...ALL, SPW_DERIV_MANDATE_MAINNET: 'off' }, 'mandate_mainnet_disabled'], [{ ...ALL, [MM_MAINNET_LOCK]: undefined }, 'mm_mainnet_disabled'],
@@ -381,7 +381,7 @@ describe('the live adapter and the three mainnet locks', () => {
     expect(sent).toEqual(['order']);
   });
   it('outcomes: a signer refusal or an unreachable signer is `refused` (nothing was sent); a lost or unreadable venue answer is `unknown`; an off-grid price is refused here, never rounded', async () => {
-    const base = { network: 'testnet' as const, account: `0x${'11'.repeat(20)}`, mandateId: 'm', now: () => 1_794_800_000_000, locks: envMmLocks({}) };
+    const base = { network: 'testnet' as const, account: `0x${'11'.repeat(20)}`, mandateId: 'm', now: () => 1_794_800_000_000, locks: envMmLocks({ SPW_DERIV_MM_TESTNET: 'on', SPW_TRADING_API_EXECUTION: 'on' }) };
     const okSig = async () => ({ signature: { r: `0x${'1'.repeat(64)}` as const, s: `0x${'2'.repeat(64)}` as const, v: 27 }, signer: '0x', kind: 'x', hash: '', mandateId: 'm', phase: 'active', orders: 1 });
     const venue = (exchange: () => Promise<unknown>) => ({ exchange, info: async () => [] });
     const denied = createLiveMmAdapter({ ...base, signer: { venueQuotingSign: async () => { throw Object.assign(new Error('worst-case inventory …'), { code: 'inventory_exceeded' }); } }, venue: venue(async () => { throw new Error('must not be called'); }) });

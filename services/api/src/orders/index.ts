@@ -16,7 +16,10 @@ import { live } from '../derivatives/live.ts';
 import { MandateService } from '../mandates/service.ts';
 import { verifyStoredAssertion } from '../risk/passkey.ts';
 import { RiskService, type BookKey } from '../risk/service.ts';
-import { signerGuards } from '../signer-client.ts';
+import { signer as signerClient, signerGuards } from '../signer-client.ts';
+import type { QuotingSignerPort } from '../mm/quoting-mandate.ts';
+import type { MmLocks, QuotingSignerPort as QuotingSignPort } from '../mm/live-adapter.ts';
+import type { SignerQuotingView } from '../mm/runtime.ts';
 import { emitWebhook } from '../trading-api/webhooks.ts';
 import { loop } from '../worker.ts';
 import { getSetting } from '../db.ts';
@@ -26,7 +29,9 @@ import { injectSpotPort, type SpotPort } from './spot.ts';
 import { onTransition } from './store.ts';
 
 export { OrderService, OWNER_CALLER, type Caller, type OrderInput } from './service.ts';
-export interface Execution { risk: RiskService; mandates: MandateService; orders: OrderService; /** STOP ALL AGENTS (orders/agent-control.ts) */ agents: AgentControlPort }
+/** the signer's quoting endpoints (market making): approval and revocation for the mandate service, signatures and the status for the sessions */
+export type QuotingSigner = QuotingSignerPort & QuotingSignPort & { status(fresh?: boolean): Promise<{ halted: boolean; venueQuotingMandates?: (SignerQuotingView & { mandate: { mandateId: string; authorizationId: string; account: string; network: string }; hash: string; revoked: boolean })[] }> };
+export interface Execution { risk: RiskService; mandates: MandateService; orders: OrderService; /** STOP ALL AGENTS (orders/agent-control.ts) */ agents: AgentControlPort; /** V11 market making */ quotingSigner: QuotingSigner; live: () => LiveService }
 declare module 'fastify' { interface FastifyInstance { execution: Execution } }
 export interface ExecutionOpts {
   derivatives?: Derivatives | undefined; live?: LiveService | undefined; gmx?: GmxService | undefined;
@@ -36,6 +41,8 @@ export interface ExecutionOpts {
   /** tests: the re-verification of an approval stored with a live mandate; default: risk/passkey.ts against the credentials table */
   reverifyOwner?: (assertion: unknown, challenge: Uint8Array) => Promise<void>;
   signerStatus?: () => Promise<{ halted: boolean }>;
+  /** V11 market making — tests: the signer's quoting endpoints (an in-process signer) and the quoting locks; default: the signer client and the process environment */
+  quotingSigner?: QuotingSigner | undefined; mmLocks?: (() => MmLocks) | undefined;
   /** tests: the swap proposal flow behind an owner's spot order; default: the routes of this server, called in process (orders/spot.ts) */
   spot?: SpotPort | undefined;
   /** tests: the agents runtime behind STOP ALL AGENTS; default: the functions agents/ exports (orders/agent-control.ts) */
@@ -57,7 +64,8 @@ export function createExecution(o: ExecutionOpts = {}): Execution {
   const verifyOwner = o.verifyOwner ?? verifyOwnerAssertion;
   const mdeps: ConstructorParameters<typeof MandateService>[0] = { now, derivatives: d, live: l, signerStatus,
     passkey: { now, rpId: config.rpId, credentials: async () => (await listCreds()).map((c) => ({ id: c.id, transports: c.transports })), verifyOwner },
-    reverify: o.reverifyOwner ?? ((assertion, challenge) => verifyStoredAssertion(assertion, challenge, { rpId: config.rpId, origin: config.origin })) };
+    reverify: o.reverifyOwner ?? ((assertion, challenge) => verifyStoredAssertion(assertion, challenge, { rpId: config.rpId, origin: config.origin })),
+    quotingSigner: o.quotingSigner ?? (signerClient as unknown as QuotingSigner), ...(o.mmLocks ? { mmLocks: o.mmLocks } : {}) };
   const mandates = new MandateService(mdeps);
   const orders = new OrderService({ now, derivatives: d, live: l, risk, mandates, executionEnabled: tradingApiExecutionEnabled,
     gmx: async () => o.gmx ?? (await import('../derivatives/gmx-live.ts')).gmx() });
@@ -65,7 +73,7 @@ export function createExecution(o: ExecutionOpts = {}): Execution {
   // spot: the owner's command defaults settle the network and the quote asset of a spot order (the same record as trading-api/commands.ts)
   orders.deps.spot = o.spot ?? null;
   orders.deps.spotDefaults = async () => { const v = await getSetting<{ spotNetwork?: string; spotQuote?: string; maxSlippageBps?: number }>('trading.command_defaults', {}); return { spotNetwork: v.spotNetwork, spotQuote: v.spotQuote, maxSlippageBps: v.maxSlippageBps }; };
-  return { risk, mandates, orders, agents: o.agents ?? agentControl() };
+  return { risk, mandates, orders, agents: o.agents ?? agentControl(), quotingSigner: mdeps.quotingSigner as QuotingSigner, live: l };
 }
 
 /** puts the unified risk engine and the kill switch in front of every engine path, for the instances this server uses */
@@ -97,7 +105,7 @@ export function executionRoutes(app: FastifyInstance, ex: Execution): void {
     switches: await risk.switches(), auto: await risk.autoKill(), limits: { paper: await risk.limits('paper'), live: await risk.limits('live') },
     exposure: { paper: await exposure('paper'), live: await exposure('live-mainnet'), liveTestnet: await exposure('live-testnet') },
     decisions: await risk.decisions(30),
-    locks: [...capabilities().filter((c) => ['deriv_live_mainnet', 'deriv_mandate_mainnet', 'deriv_gmx_live'].includes(c.id)).map((c) => ({ id: c.id, on: c.on, why: c.why })),
+    locks: [...capabilities().filter((c) => ['deriv_live_mainnet', 'deriv_mandate_mainnet', 'deriv_gmx_live', 'deriv_mm_mainnet', 'deriv_mm_testnet'].includes(c.id)).map((c) => ({ id: c.id, on: c.on, why: c.why })),
       { id: 'trading_api_execution', on: tradingApiExecutionEnabled(), why: tradingApiExecutionEnabled() ? 'live orders can be placed through the trading API (inside a mandate, or with the owner\'s passkey)'
         : 'SPW_TRADING_API_EXECUTION is not "on": no NEW live risk is placed through the trading API; cancels and strictly reducing orders still pass; paper works' }],
     ts: risk.now(),
@@ -125,6 +133,8 @@ export function executionRoutes(app: FastifyInstance, ex: Execution): void {
   app.get(`${M}/:id`, async (req) => ({ mandate: await mandates.get(IdParam.parse(req.params).id) }));
   app.post(`${M}/:id/approve/prepare`, async (req) => mandates.prepareApproval(IdParam.parse(req.params).id, z.strictObject({ locale: z.enum(['fr', 'en']).default('en') }).parse(req.body ?? {}).locale));
   app.post(`${M}/:id/approve`, async (req) => ({ mandate: await mandates.approve(IdParam.parse(req.params).id, z.strictObject({ assertion: z.record(z.string(), z.unknown()).optional(), bindingAssertion: z.record(z.string(), z.unknown()).optional(), acknowledged: z.boolean().optional() }).parse(req.body ?? {})) }));
+  // V11 market making: a lost answer of a quoting approval, and quoting mandates the signer holds that no record accounts for
+  app.post(`${M}/recover-quoting`, async () => mandates.recoverQuoting());
   app.post(`${M}/:id/revoke`, async (req) => {
     const b = z.strictObject({ cancelOpenOrders: z.boolean().default(true), detail: z.string().max(300).optional() }).parse(req.body ?? {});
     return mandates.revoke(IdParam.parse(req.params).id, { by: 'owner', reason: 'owner_request', detail: b.detail ?? null, cancelOpenOrders: b.cancelOpenOrders });
