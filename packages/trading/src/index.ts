@@ -9,6 +9,8 @@ export * from './risk/engine.ts';
 // `checkOrder` of the mandate is also exported as `checkTradingMandateOrder`: the derivatives package already exports a `checkOrder` (risk.ts)
 export * from './mandate/trading-mandate.ts';
 export { checkOrder as checkTradingMandateOrder } from './mandate/trading-mandate.ts';
+export * from './mandate/quoting-mandate.ts'; // V11 market making: trading mandate → quoting mandate, with its enforced-by table
+// the market-making core itself is the entry point `@spw/trading/mm` (src/mm/index.ts)
 export * from './commands/parse.ts';
 export * from './compare/cost.ts';
 export * from './compare/symbols.ts';
