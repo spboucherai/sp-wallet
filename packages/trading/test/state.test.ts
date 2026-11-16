@@ -236,6 +236,14 @@ describe('order state machine — properties', () => {
     fc.record({ type: fc.constant('approved' as const), by: fc.constantFrom('owner' as const, 'mandate' as const) }),
     fc.record({ type: fc.constant('expired' as const), source: fc.constantFrom('local' as const, 'venue' as const) }),
   );
+  it('a venue answer "filled" with nothing executed is refused, not recorded as a fill (found by the property test, seed 1568288699)', () => {
+    let o = newOrder({ id: 'z', size: null }, T0);
+    o = transition(o, { type: 'validated' }, T0 + 1).order;
+    o = transition(o, { type: 'approved', by: 'mandate' }, T0 + 2).order;
+    o = transition(o, { type: 'submit_started' }, T0 + 3).order;
+    expect(() => transition(o, { type: 'reconciled_found', status: 'filled', filledSize: '0' }, T0 + 4)).toThrow(IllegalTransitionError);
+    expect(o.state).toBe('SUBMITTING');
+  });
   it('any sequence of events keeps the invariants; an illegal one throws and changes nothing', () => {
     fc.assert(fc.property(fc.array(event, { maxLength: 40 }), fc.option(dec, { nil: null }), (events, size) => {
       let o = newOrder({ id: 'p', size }, T0), at = T0;
