@@ -38,7 +38,7 @@ export interface VenueTrading {
   buildOrder(req: OrderRequest, ctx: { instrument: Instrument; nonce: number }): { action: unknown; sign: SignRequest };
   buildCancel(o: { instrument: Instrument; venueOrderId?: string; clientId?: string; nonce: number }): { action: unknown; sign: SignRequest };
   /** independent re-derivation used by the signer: what does this signed payload do? throws if it is not exactly an order/cancel */
-  describe(sign: SignRequest): { kind: 'order' | 'cancel' | 'leverage' | 'approve_agent' | 'other'; orders?: OrderRequest[]; detail: Record<string, unknown> };
+  describe(sign: SignRequest): { kind: 'order' | 'cancel' | 'leverage' | 'approve_agent' | 'schedule_cancel' | 'other'; orders?: OrderRequest[]; detail: Record<string, unknown> };
   submit(action: unknown, signature: unknown, nonce: number): Promise<{ accepted: boolean; venueOrderIds: string[]; error: string | null; raw: unknown }>;
 }
 

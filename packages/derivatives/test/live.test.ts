@@ -153,7 +153,7 @@ describe('the entry point bundled into the isolated signer is lean', () => {
     };
     walk(resolve(here, '../src/live/index.ts'));
     const files = [...seen].map((f) => f.slice(f.indexOf('/src/') + 5)).sort();
-    expect(files).toEqual(['decimal.ts', 'live/canonical.ts', 'live/collateral.ts', 'live/gmx.ts' /* v8: GMX pins, calldata builder, venue policy — pure */, 'live/hl-assets.ts', 'live/index.ts', 'live/jurisdiction.ts', 'live/mandate.ts', 'models.ts', 'venue.ts', 'venues/hyperliquid/error.ts', 'venues/hyperliquid/format.ts',
+    expect(files).toEqual(['decimal.ts', 'live/canonical.ts', 'live/collateral.ts', 'live/gmx.ts' /* v8: GMX pins, calldata builder, venue policy — pure */, 'live/hl-assets.ts', 'live/index.ts', 'live/jurisdiction.ts', 'live/mandate.ts', 'live/quoting.ts' /* V11: the quoting mandate — canonical bytes and bounds, pure */, 'models.ts', 'venue.ts', 'venues/hyperliquid/error.ts', 'venues/hyperliquid/format.ts',
       'venues/hyperliquid/msgpack.ts', 'venues/hyperliquid/schemas.ts', 'venues/hyperliquid/signing.ts', 'venues/hyperliquid/trading.ts']);
     for (const f of seen) expect(readFileSync(f, 'utf8'), f).not.toMatch(/\bfetch\(|WebSocket|node:https?|node:net\b/);
   });

@@ -9,3 +9,5 @@ export * from './schemas.ts';
 export * from './signing.ts';
 export * from './stream.ts';
 export * from './trading.ts';
+export * from './quoting-round.ts'; // V11 market making: one-directional rounding of quotes
+export * from './reconcile.ts'; // V11 market making: batch answers, order status by cloid, address rate limit
