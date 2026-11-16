@@ -4,10 +4,16 @@
  * components subscribed to the slice that changed (`useSlice`). Twenty book updates a second therefore cost a handful of small
  * renders, never a render of the screen.
  *
+ * v11: the stream is the tab's shared quote websocket (quotes.ts — quote, order book with sequence + checksum, trades, venue
+ * status). The per-instrument SSE stream this store used before is still there as the FALLBACK: it is opened when that
+ * socket cannot connect (a proxy that refuses websockets) and closed when it comes back. The 5 s REST snapshot stays as the
+ * last safety net. Nothing downstream changed: same slices, same commit loop, same freshness rule.
+ *
  * Freshness is never taken on trust: `freshness()` is 'live' only while the stream says `connected` AND an event arrived less
  * than STALE_MS ago. Anything else is shown as reconnecting or stale, with the age of the last data.
  */
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { quoteClient, type LiveBook, type LiveQuote, type LiveTrade } from '../quotes';   // v11 live quotes: the tab's shared websocket
 import { dapi } from './api';
 import { mergeBook, mergeTrades } from './reducers';
 import type { Book, Instrument, Liquidity, PublicTrade, StreamStatus, Ticker } from './types';
@@ -38,6 +44,7 @@ export class MarketStore {
   private raf = 0;
   private lastBookCommit = 0;
   private es: EventSource | null = null;
+  private offLive: (() => void)[] = [];
   private poll: ReturnType<typeof setInterval> | null = null;
   private closed = false;
 
@@ -57,6 +64,8 @@ export class MarketStore {
   stop(): void {
     this.closed = true;
     this.es?.close(); this.es = null;
+    for (const off of this.offLive) off();
+    this.offLive = [];
     if (this.poll) clearInterval(this.poll);
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0; this.poll = null;
@@ -79,7 +88,33 @@ export class MarketStore {
     }
   }
 
+  /** v11: live data from the shared quote socket; the SSE stream is opened only while that socket is in `fallback` */
   private open(): void {
+    const c = quoteClient(), id = this.id, venue = id.slice(0, Math.max(0, id.indexOf(':')));
+    const seen = () => { this.perf.events++; this.lastEventAt = Date.now(); };
+    const onQuote = (): void => {
+      const q = c.get<LiveQuote>(`quote|${id}|`);
+      if (!q || q.mark === null) return;                          // no mark from the source: the REST snapshot's ticker stands
+      seen();
+      this.pTicker = { instrument: id, mark: q.mark, index: q.index, mid: q.mid, funding: q.funding, openInterest: q.openInterest, volume24h: q.volume24h, change24h: q.change24h, ts: Math.round(q.at), ...(q.last !== null ? { last: q.last } : {}) };
+      this.schedule();
+    };
+    const onBook = (): void => { const b = c.get<LiveBook>(`book|${id}|20`); if (!b) return; seen(); this.pBook = { instrument: id, bids: b.bids as [string, string][], asks: b.asks as [string, string][], ts: b.venueTs ?? Math.round(b.at) }; this.schedule(); };
+    const onTrades = (): void => { const t = c.get<LiveTrade[]>(`trades|${id}|`); if (!t || !t.length) return; seen(); this.pTrades.push(...t.map((x) => ({ instrument: id, price: x.price, size: x.size, side: x.side, ts: x.ts, id: x.id }))); this.schedule(); };
+    const onConn = (): void => {
+      const st = c.state(), v = c.venueStatuses()[venue];
+      if (st === 'fallback') { if (!this.es && !this.closed) this.openSse(); return; }   // the SSE stream reports its own state
+      if (this.es) { this.es.close(); this.es = null; }
+      if (st === 'live') this.setConn(!v || v.status === 'connected' || v.status === 'idle' ? 'connected' : v.status === 'down' ? 'stale' : v.status);
+      else if (st === 'reconnecting' || st === 'paused') this.setConn('reconnecting');
+    };
+    // GMX has no order book and no public trade feed: the server refuses those two channels, the quote still ticks
+    this.offLive = [c.subscribe({ type: 'quote', id }), c.subscribe({ type: 'book', id, depth: 20 }), c.subscribe({ type: 'trades', id }), c.subscribe({ type: 'status', id: '*' }),
+      c.listen(`quote|${id}|`, onQuote), c.listen(`book|${id}|20`, onBook), c.listen(`trades|${id}|`, onTrades), c.listen('@conn', onConn), c.listen('@status', onConn)];
+    onConn(); onQuote(); onBook(); onTrades();                    // what the socket already holds (another screen was subscribed)
+  }
+
+  private openSse(): void {
     let es: EventSource;
     try { es = new EventSource(dapi.streamUrl(this.id)); } catch { this.setConn('error'); return; }
     this.es = es;

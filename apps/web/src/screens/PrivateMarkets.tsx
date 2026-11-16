@@ -2,7 +2,7 @@
 // their price. Display only: nothing here is tradable from the wallet. Model and pure helpers: ../privateMarkets.ts.
 // Design system: docs/v9/DESIGN.md (ui.tsx primitives; a state is always an icon or a word, never a colour alone).
 import { useQuery } from '@tanstack/react-query';
-import { useContext, useState, type ReactNode } from 'react';
+import { useContext, useMemo, useState, type ReactNode } from 'react';
 import { get } from '../api';
 import type { Nav } from '../App';
 import { Spark } from '../chart';
@@ -11,6 +11,8 @@ import {
   ageText, caveatKey, compactUsd, freshness, fundingText, groupByCompany, hostOf, noValuationKey, orderCaveats, pmDetailQuery, pmListQuery, premiumText, priceText, quantities, referenceKindKey, sizeParam, unitBadge,
   type Datum, type PmCompany, type PmDetail, type PmList, type PmMarket, type PmPosition, type PmReference, type PmValuation, type PmVenue,
 } from '../privateMarkets';
+import { useConn, useQuoteSubscriptions } from '../quotes';   // v11 live quotes: the price, bid and ask tick from the venue streams; the derived figures keep the server's cadence
+import { LiveCell, QuoteDot } from '../quotes-ui';
 import { Btn, Card, EmptyState, ErrorState, Fact, Field, Fold, Icon, inputCls, Notice, PageTitle, Section, Seg, SkeletonCard, SkeletonRows, Stat, StatGrid, Tag, when } from '../ui';
 
 type T = ReturnType<typeof useT>;
@@ -35,8 +37,12 @@ export function PmNotice({ compact }: { compact?: boolean }) {
 function UnitTag({ m }: { m: PmMarket }) { const t = useT(), b = unitBadge(m); return <Tag tone={b.tone} testid="pm-unit">{t(b.key)}</Tag>; }
 function FreshTag({ m, now }: { m: PmMarket; now: number }) {
   const t = useT(), locale = useLocale(), f = freshness(m), age = ageText(m.market.price.ts, now, locale);
-  return <Tag tone={f.tone} icon={f.tone === 'ok' ? 'check' : f.tone === 'mute' ? 'clock' : 'warn'} testid="pm-fresh">{t(f.key)}{age && !m.market.frozen ? ` · ${age}` : ''}</Tag>;
+  const tag = <Tag tone={f.tone} icon={f.tone === 'ok' ? 'check' : f.tone === 'mute' ? 'clock' : 'warn'} testid="pm-fresh">{t(f.key)}{age && !m.market.frozen ? ` · ${age}` : ''}</Tag>;
+  // v11 live quotes: a market that ticks says so (live / delayed / stale with its age); without a live quote, the polled freshness as before
+  return liveIdOf(m) ? <QuoteDot id={m.id}>{tag}</QuoteDot> : tag;
 }
+/** v11 live quotes: a contract ticks when it is live on its venue and its price is not frozen (a delisted or settled contract has no stream) */
+export const liveIdOf = (m: Pick<PmMarket, 'id' | 'status' | 'market'>): string | null => (m.status === 'live' && !m.market.frozen ? m.id : null);
 
 /** One contract of one venue, in the list: price with its unit, funding, open interest, volume, freshness, and the implied valuation or why there is none. */
 export function ContractRow({ m, now, onOpen }: { m: PmMarket; now: number; onOpen: (id: string) => void }) {
@@ -45,7 +51,7 @@ export function ContractRow({ m, now, onOpen }: { m: PmMarket; now: number; onOp
     className="row-press block w-full px-5 py-4 text-left">
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0"><p className="text-[15px] font-semibold leading-snug">{m.platform}</p><p className="break-all font-mono text-[12.5px] text-mute">{m.symbol}</p></div>
-      <div className="shrink-0 text-right"><p className="t-num text-[20px]">{priceText(m.market.price.value, locale)}</p><p className="text-[11.5px] text-mute">{m.contract.quoteCurrency}</p></div>
+      <div className="shrink-0 text-right"><p className="t-num text-[20px]"><LiveCell id={liveIdOf(m)} flash={(q) => q.mark} render={(q) => (q.mark ? priceText(q.mark, locale) : null)}>{priceText(m.market.price.value, locale)}</LiveCell></p><p className="text-[11.5px] text-mute">{m.contract.quoteCurrency}</p></div>
     </div>
     <div className="mt-2 flex flex-wrap items-center gap-1.5"><UnitTag m={m} /><FreshTag m={m} now={now} />{m.status === 'delisted' && <Tag tone="mute" icon="stop" testid="pm-delisted">{t('pmDelisted')}</Tag>}
       {m.valuation.caveats.some((c) => c.code === 'thin_market') && <Tag tone="warn" icon="warn">{t('pmThin')}</Tag>}</div>
@@ -155,7 +161,11 @@ function References({ list }: { list: PmReference[] }) {
 function Detail({ id, nav, delisted }: { id: string; nav: Nav; delisted: boolean }) {
   const t = useT(), locale = useLocale();
   const [pos, setPos] = useState<PmPosition>({ side: 'long', size: '1' }), [typed, setTyped] = useState('1');
-  const q = useQuery({ queryKey: ['pm-detail', id, pos.side, pos.size], queryFn: () => get<PmDetail>(pmDetailQuery(id, pos)), refetchInterval: 20_000, placeholderData: (prev) => prev });
+  // v11 live quotes: with the stream live the price ticks by itself and the answer (valuation, references, candles) is re-read every minute; without it, every 20 s as before
+  const conn = useConn();
+  const q = useQuery({ queryKey: ['pm-detail', id, pos.side, pos.size], queryFn: () => get<PmDetail>(pmDetailQuery(id, pos)), refetchInterval: conn === 'live' ? 60_000 : 20_000, placeholderData: (prev) => prev });
+  const lid = q.data ? liveIdOf(q.data.market) : null;
+  useQuoteSubscriptions(lid ? [lid] : []);
   const back = () => nav({ tab: 'private', view: delisted ? 'delisted' : undefined });
   if (q.isLoading) return <div className="space-y-4"><PageTitle onBack={back} backLabel={t('pmBack')}>{id.split(':').slice(1).join(':')}</PageTitle><SkeletonCard lines={4} /><SkeletonCard lines={6} /></div>;
   if (q.isError || !q.data) return <div className="space-y-4"><PageTitle onBack={back} backLabel={t('pmBack')}>{t('pmTitle')}</PageTitle><ErrorState title={t('pmLoadError')} onRetry={() => void q.refetch()}>{(q.error as Error | null)?.message}</ErrorState></div>;
@@ -166,7 +176,7 @@ function Detail({ id, nav, delisted }: { id: string; nav: Nav; delisted: boolean
     <PmNotice compact />
     <Card><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[15px] font-semibold">{m.platform}</p><p className="break-all font-mono text-[12.5px] text-mute">{m.id}</p></div>
       {closes.length > 1 && <Spark data={closes} w={96} h={34} />}</div>
-      <p className="t-num mt-3 text-[34px]">{priceText(m.market.price.value, locale, 6)} <span className="text-[14px] font-medium text-mute">{c.quoteCurrency}</span></p>
+      <p className="t-num mt-3 text-[34px]"><LiveCell id={lid} flash={(x) => x.mark} render={(x) => (x.mark ? priceText(x.mark, locale, 6) : null)}>{priceText(m.market.price.value, locale, 6)}</LiveCell> <span className="text-[14px] font-medium text-mute">{c.quoteCurrency}</span></p>
       <div className="mt-2 flex flex-wrap gap-1.5"><UnitTag m={m} /><FreshTag m={m} now={now} />{m.status === 'delisted' && <Tag tone="mute" icon="stop">{t('pmDelisted')}</Tag>}
         <Tag tone={m.review.state === 'reviewed' ? 'ok' : 'warn'} icon={m.review.state === 'reviewed' ? 'check' : 'warn'} testid="pm-review">{t(`pmReview_${m.review.state}` as Key)}</Tag></div>
       {m.review.reasons.length > 0 && <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[12.5px] leading-snug text-mute">{m.review.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
@@ -184,8 +194,8 @@ function Detail({ id, nav, delisted }: { id: string; nav: Nav; delisted: boolean
       <Stat label={t('pmFunding')} value={fundingText(m.market.funding, locale)} sub={ageText(m.market.funding.ts, now, locale)} />
       <Stat label={t('pmOpenInterest')} value={compactUsd(m.market.openInterestUsd.value, locale)} sub={`${priceText(m.market.openInterest.value, locale, 2)} ${t('pmContracts')} · ${t('pmOurArithmetic')}`} />
       <Stat label={t('pmVolume')} value={compactUsd(m.market.volume24h.value, locale)} sub={`${priceText(m.market.volumeBase24h.value, locale, 2)} ${t('pmContracts')}`} />
-      <Stat label={t('pmBid')} value={d.book.bids?.[0] ? priceText(d.book.bids[0][0], locale, 6) : '—'} sub={d.book.bids?.[0] ? `× ${priceText(d.book.bids[0][1], locale, 4)}` : d.book.error ?? t('pmEmptyBook')} />
-      <Stat label={t('pmAsk')} value={d.book.asks?.[0] ? priceText(d.book.asks[0][0], locale, 6) : '—'} sub={d.book.asks?.[0] ? `× ${priceText(d.book.asks[0][1], locale, 4)}` : d.book.error ?? t('pmEmptyBook')} />
+      <Stat label={t('pmBid')} value={<LiveCell id={lid} render={(x) => (x.bid ? priceText(x.bid, locale, 6) : null)}>{d.book.bids?.[0] ? priceText(d.book.bids[0][0], locale, 6) : '—'}</LiveCell>} sub={d.book.bids?.[0] ? `× ${priceText(d.book.bids[0][1], locale, 4)}` : d.book.error ?? t('pmEmptyBook')} />
+      <Stat label={t('pmAsk')} value={<LiveCell id={lid} render={(x) => (x.ask ? priceText(x.ask, locale, 6) : null)}>{d.book.asks?.[0] ? priceText(d.book.asks[0][0], locale, 6) : '—'}</LiveCell>} sub={d.book.asks?.[0] ? `× ${priceText(d.book.asks[0][1], locale, 4)}` : d.book.error ?? t('pmEmptyBook')} />
     </StatGrid><div className="mt-1.5 px-1"><Provenance d={m.market.price} now={now} /></div></Section>
 
     <Section title={t('pmContract')}><Card className="!py-2"><p className="pb-1 pt-2 text-[12px] text-mute">{t('pmSourceTextNote')}</p><dl>
@@ -212,7 +222,9 @@ function Detail({ id, nav, delisted }: { id: string; nav: Nav; delisted: boolean
 
 export function PrivateMarkets({ instrument, view, nav }: { instrument?: string; view?: string; nav: Nav }) {
   const t = useT(), delisted = view === 'delisted';
-  const q = useQuery({ queryKey: ['pm-list', delisted], queryFn: () => get<PmList>(pmListQuery(delisted)), refetchInterval: 20_000, enabled: !instrument });
+  const conn = useConn();   // v11 live quotes: prices tick from the stream; the list is re-read every minute while it is live, every 20 s otherwise
+  const q = useQuery({ queryKey: ['pm-list', delisted], queryFn: () => get<PmList>(pmListQuery(delisted)), refetchInterval: conn === 'live' ? 60_000 : 20_000, enabled: !instrument });
+  useQuoteSubscriptions(useMemo(() => (instrument ? [] : (q.data?.markets ?? []).map(liveIdOf).filter((x): x is string => x !== null)), [q.data, instrument]));
   if (instrument) return <Detail id={instrument} nav={nav} delisted={delisted} />;
   return <div className="space-y-4" data-testid="pm-screen">
     <PageTitle>{t('pmTitle')}</PageTitle>

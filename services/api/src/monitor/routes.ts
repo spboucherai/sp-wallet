@@ -9,6 +9,7 @@ import { capital, exposure, pnl } from './aggregate.ts';
 import { auditChainStatus, collectConnectors, diskFree, lastBackup, versions } from './health.ts';
 import { labStatus } from '../agents/lab.ts'; // v8
 import { capabilities } from '../capabilities.ts'; // v8
+import { quoteSummary } from '../quotes/index.ts'; // v11 quote engine: connections, rates, conflation, upstream state
 
 const cache = new Map<string, { at: number; v: unknown }>();
 async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
@@ -59,6 +60,8 @@ export function monitorRoutes(app: FastifyInstance): void {
         ageSec: l.lastOkAt === null ? null : Math.round((now - l.lastOkAt) / 1000), late: l.lastOkAt !== null && now - l.lastOkAt > Math.max(3 * l.everyMs, 60_000) })),
       // v8: the agent engines (`agent-engine`, `perp-agent-engine`) report their heartbeat like every other loop
       loopsNote: null,
+      // v11 quote engine (websocket fan-out of public market data): null before the first server is built
+      quotes: quoteSummary(),
       backup: backup ? { visible: true, lastAt: backup.lastAt, files: backup.files, ageHours: backup.lastAt === null ? null : Math.round((now - backup.lastAt) / 360_000) / 10 } : { visible: false, lastAt: null, files: 0, ageHours: null },
       disk: await diskFree(),
       audit,

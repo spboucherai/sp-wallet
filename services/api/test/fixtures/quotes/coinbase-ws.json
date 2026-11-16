@@ -1,0 +1,344 @@
+{
+ "recordedAt": "2026-11-16T03:13:07.935Z",
+ "url": "wss://ws-feed.exchange.coinbase.com",
+ "sent": [
+  {
+   "type": "subscribe",
+   "product_ids": [
+    "BTC-USD",
+    "ETH-USD"
+   ],
+   "channels": [
+    "ticker",
+    "heartbeat"
+   ]
+  },
+  {
+   "type": "subscribe",
+   "product_ids": [
+    "NOPE-USD"
+   ],
+   "channels": [
+    "ticker"
+   ]
+  }
+ ],
+ "trimmed": "the first 5 frames of each channel and market are kept",
+ "counts": {
+  "subscriptions:": 2,
+  "ticker:BTC-USD": 78,
+  "ticker:ETH-USD": 15,
+  "heartbeat:ETH-USD": 7,
+  "heartbeat:BTC-USD": 7,
+  "error:": 1
+ },
+ "messages": [
+  {
+   "type": "subscriptions",
+   "channels": [
+    {
+     "name": "ticker",
+     "product_ids": [
+      "BTC-USD",
+      "ETH-USD"
+     ],
+     "account_ids": null
+    },
+    {
+     "name": "heartbeat",
+     "product_ids": [
+      "BTC-USD",
+      "ETH-USD"
+     ],
+     "account_ids": null
+    }
+   ]
+  },
+  {
+   "type": "ticker",
+   "sequence": 139533419189,
+   "product_id": "BTC-USD",
+   "price": "65069.2",
+   "open_24h": "64783.4",
+   "volume_24h": "10450.09170114",
+   "low_24h": "63725.59",
+   "high_24h": "66100",
+   "volume_30d": "230441.28401011",
+   "best_bid": "65069.20",
+   "best_bid_size": "0.00015686",
+   "best_ask": "65069.21",
+   "best_ask_size": "0.01752006",
+   "side": "sell",
+   "time": "2026-11-16T03:13:08.021949Z",
+   "trade_id": 1131111774,
+   "last_size": "0.00000002"
+  },
+  {
+   "type": "ticker",
+   "sequence": 105197683267,
+   "product_id": "ETH-USD",
+   "price": "1821.96",
+   "open_24h": "1818.08",
+   "volume_24h": "173640.45820992",
+   "low_24h": "1771.56",
+   "high_24h": "1845.01",
+   "volume_30d": "3524725.85322798",
+   "best_bid": "1821.95",
+   "best_bid_size": "4.24181694",
+   "best_ask": "1822.32",
+   "best_ask_size": "12.03650275",
+   "side": "buy",
+   "time": "2026-11-16T03:13:06.611076Z",
+   "trade_id": 855669473,
+   "last_size": "0.00019322"
+  },
+  {
+   "type": "ticker",
+   "sequence": 105197684833,
+   "product_id": "ETH-USD",
+   "price": "1822.15",
+   "open_24h": "1818.08",
+   "volume_24h": "173640.51746992",
+   "low_24h": "1771.56",
+   "high_24h": "1845.01",
+   "volume_30d": "3524725.91248798",
+   "best_bid": "1822.15",
+   "best_bid_size": "0.23675000",
+   "best_ask": "1822.34",
+   "best_ask_size": "6.25308692",
+   "side": "sell",
+   "time": "2026-11-16T03:13:08.480954Z",
+   "trade_id": 855669474,
+   "last_size": "0.05926"
+  },
+  {
+   "type": "ticker",
+   "sequence": 139533419351,
+   "product_id": "BTC-USD",
+   "price": "65069.2",
+   "open_24h": "64783.4",
+   "volume_24h": "10450.09185800",
+   "low_24h": "63725.59",
+   "high_24h": "66100",
+   "volume_30d": "230441.28416697",
+   "best_bid": "65069.20",
+   "best_bid_size": "0.00218110",
+   "best_ask": "65069.21",
+   "best_ask_size": "0.03107585",
+   "side": "sell",
+   "time": "2026-11-16T03:13:08.572194Z",
+   "trade_id": 1131111775,
+   "last_size": "0.00015686"
+  },
+  {
+   "type": "ticker",
+   "sequence": 139533419353,
+   "product_id": "BTC-USD",
+   "price": "65069.2",
+   "open_24h": "64783.4",
+   "volume_24h": "10450.09186517",
+   "low_24h": "63725.59",
+   "high_24h": "66100",
+   "volume_30d": "230441.28417414",
+   "best_bid": "65069.20",
+   "best_bid_size": "0.00217393",
+   "best_ask": "65069.21",
+   "best_ask_size": "0.03107585",
+   "side": "sell",
+   "time": "2026-11-16T03:13:08.572194Z",
+   "trade_id": 1131111776,
+   "last_size": "0.00000717"
+  },
+  {
+   "type": "ticker",
+   "sequence": 139533419362,
+   "product_id": "BTC-USD",
+   "price": "65069.2",
+   "open_24h": "64783.4",
+   "volume_24h": "10450.09256980",
+   "low_24h": "63725.59",
+   "high_24h": "66100",
+   "volume_30d": "230441.28487877",
+   "best_bid": "65069.20",
+   "best_bid_size": "0.00146930",
+   "best_ask": "65069.21",
+   "best_ask_size": "0.03107585",
+   "side": "sell",
+   "time": "2026-11-16T03:13:08.597301Z",
+   "trade_id": 1131111777,
+   "last_size": "0.00070463"
+  },
+  {
+   "type": "ticker",
+   "sequence": 139533419467,
+   "product_id": "BTC-USD",
+   "price": "65069.21",
+   "open_24h": "64783.4",
+   "volume_24h": "10450.09353483",
+   "low_24h": "63725.59",
+   "high_24h": "66100",
+   "volume_30d": "230441.28584380",
+   "best_bid": "65069.20",
+   "best_bid_size": "0.09635617",
+   "best_ask": "65069.41",
+   "best_ask_size": "0.00015690",
+   "side": "buy",
+   "time": "2026-11-16T03:13:08.704533Z",
+   "trade_id": 1131111778,
+   "last_size": "0.00096503"
+  },
+  {
+   "type": "heartbeat",
+   "last_trade_id": 855669474,
+   "product_id": "ETH-USD",
+   "sequence": 105197685034,
+   "time": "2026-11-16T03:13:09.000000Z"
+  },
+  {
+   "type": "heartbeat",
+   "last_trade_id": 1131111780,
+   "product_id": "BTC-USD",
+   "sequence": 139533419793,
+   "time": "2026-11-16T03:13:09.000000Z"
+  },
+  {
+   "type": "heartbeat",
+   "last_trade_id": 855669474,
+   "product_id": "ETH-USD",
+   "sequence": 105197685210,
+   "time": "2026-11-16T03:13:10.000000Z"
+  },
+  {
+   "type": "heartbeat",
+   "last_trade_id": 1131111787,
+   "product_id": "BTC-USD",
+   "sequence": 139533420137,
+   "time": "2026-11-16T03:13:10.000000Z"
+  },
+  {
+   "type": "heartbeat",
+   "last_trade_id": 855669474,
+   "product_id": "ETH-USD",
+   "sequence": 105197685499,
+   "time": "2026-11-16T03:13:11.000000Z"
+  },
+  {
+   "type": "heartbeat",
+   "last_trade_id": 1131111792,
+   "product_id": "BTC-USD",
+   "sequence": 139533420442,
+   "time": "2026-11-16T03:13:11.000000Z"
+  },
+  {
+   "type": "ticker",
+   "sequence": 105197685566,
+   "product_id": "ETH-USD",
+   "price": "1822.16",
+   "open_24h": "1818.08",
+   "volume_24h": "173640.51856753",
+   "low_24h": "1771.56",
+   "high_24h": "1845.01",
+   "volume_30d": "3524725.91358559",
+   "best_bid": "1822.16",
+   "best_bid_size": "0.54621740",
+   "best_ask": "1822.17",
+   "best_ask_size": "0.96900000",
+   "side": "sell",
+   "time": "2026-11-16T03:13:11.085310Z",
+   "trade_id": 855669475,
+   "last_size": "0.00109761"
+  },
+  {
+   "type": "ticker",
+   "sequence": 105197685568,
+   "product_id": "ETH-USD",
+   "price": "1822.16",
+   "open_24h": "1818.08",
+   "volume_24h": "173640.80521909",
+   "low_24h": "1771.56",
+   "high_24h": "1845.01",
+   "volume_30d": "3524726.20023715",
+   "best_bid": "1822.16",
+   "best_bid_size": "0.25956584",
+   "best_ask": "1822.17",
+   "best_ask_size": "0.96900000",
+   "side": "sell",
+   "time": "2026-11-16T03:13:11.085310Z",
+   "trade_id": 855669476,
+   "last_size": "0.28665156"
+  },
+  {
+   "type": "ticker",
+   "sequence": 105197685570,
+   "product_id": "ETH-USD",
+   "price": "1822.16",
+   "open_24h": "1818.08",
+   "volume_24h": "173641.06478493",
+   "low_24h": "1771.56",
+   "high_24h": "1845.01",
+   "volume_30d": "3524726.45980299",
+   "best_bid": "1821.96",
+   "best_bid_size": "0.54913223",
+   "best_ask": "1822.17",
+   "best_ask_size": "0.96900000",
+   "side": "sell",
+   "time": "2026-11-16T03:13:11.085310Z",
+   "trade_id": 855669477,
+   "last_size": "0.25956584"
+  },
+  {
+   "type": "error",
+   "message": "Failed to subscribe",
+   "reason": "NOPE-USD is not a valid product"
+  },
+  {
+   "type": "subscriptions",
+   "channels": [
+    {
+     "name": "ticker",
+     "product_ids": [
+      "BTC-USD",
+      "ETH-USD"
+     ],
+     "account_ids": null
+    },
+    {
+     "name": "heartbeat",
+     "product_ids": [
+      "BTC-USD",
+      "ETH-USD"
+     ],
+     "account_ids": null
+    }
+   ]
+  },
+  {
+   "type": "heartbeat",
+   "last_trade_id": 855669477,
+   "product_id": "ETH-USD",
+   "sequence": 105197686324,
+   "time": "2026-11-16T03:13:12.000000Z"
+  },
+  {
+   "type": "heartbeat",
+   "last_trade_id": 1131111799,
+   "product_id": "BTC-USD",
+   "sequence": 139533421216,
+   "time": "2026-11-16T03:13:12.000000Z"
+  },
+  {
+   "type": "heartbeat",
+   "last_trade_id": 855669477,
+   "product_id": "ETH-USD",
+   "sequence": 105197686985,
+   "time": "2026-11-16T03:13:13.000000Z"
+  },
+  {
+   "type": "heartbeat",
+   "last_trade_id": 1131111802,
+   "product_id": "BTC-USD",
+   "sequence": 139533421570,
+   "time": "2026-11-16T03:13:13.000000Z"
+  }
+ ]
+}

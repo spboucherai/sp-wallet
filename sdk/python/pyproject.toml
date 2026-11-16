@@ -9,11 +9,16 @@ dependencies = [
     "pydantic==2.14.3",
 ]
 
+[project.optional-dependencies]
+# sp_wallet.stream (the websocket of the quote engine): pip install "sp-wallet-python[stream]"
+stream = ["websockets==16.0"]
+
 [dependency-groups]
 dev = [
     "jsonschema==4.26.0",
     "pytest==9.2.0",
     "ruff==0.17.5",
+    "websockets==16.0",
 ]
 
 [build-system]

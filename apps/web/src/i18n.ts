@@ -2767,6 +2767,18 @@ const D = {
   pmOtherVenues: ['Même société, autres plateformes', 'Same company, other venues'],
   pmTrading: ['Négociation', 'Trading'], pmTradingDisabled: ['Négociation désactivée', 'Trading disabled'],
   // <<< end of the `pm` block
+  // >>> v11 live quotes (`qt` block): the websocket quote engine — freshness of a ticking figure, state of the stream, per-venue upstream state
+  qtLive: ['en direct', 'live'], qtDelayed: ['différé · {age}', 'delayed · {age}'], qtStale: ['périmé · {age}', 'stale · {age}'], qtReconnecting: ['reconnexion…', 'reconnecting…'],
+  qtSource: ['Source : {source}', 'Source: {source}'],
+  qtConnIdle: ['Flux en direct inactif', 'Live stream idle'], qtConnConnecting: ['Connexion au flux en direct…', 'Connecting to the live stream…'], qtConnLive: ['Cotations en direct', 'Live quotes'],
+  qtConnReconnecting: ['Reconnexion au flux en direct…', 'Reconnecting to the live stream…'],
+  qtConnFallback: ['Flux en direct indisponible — les prix sont relus périodiquement', 'Live stream unavailable — prices are re-read periodically'],
+  qtConnPaused: ['Flux en direct en pause (onglet masqué)', 'Live stream paused (tab hidden)'],
+  qtVenue_reconnecting: ['reconnexion', 'reconnecting'], qtVenue_stale: ['flux silencieux', 'feed silent'], qtVenue_down: ['hors service', 'down'],
+  qtRecompute: ['Recalculer maintenant', 'Recompute now'], qtLiveNow: ['en direct : {value}', 'live: {value}'],
+  qtLivePrices: ['{n} prix en direct', '{n} live prices'],
+  qtSpotConverted: ['Prix en direct de Coinbase en USD ; en CAD, il est converti au taux du dernier relevé de prix.', 'Live Coinbase price in USD; in CAD it is converted at the rate of the last price reading.'],
+  // <<< end of the `qt` block
 } as const;
 export type Key = keyof typeof D;
 // v10 performance pass — ONE language at a time in the browser. `D` above (both languages side by side, the form every

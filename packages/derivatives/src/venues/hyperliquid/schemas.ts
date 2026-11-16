@@ -97,6 +97,8 @@ export type HlExchangeAnswer = z.infer<typeof hlExchangeAnswer>;
 export const hlWsEnvelope = z.looseObject({ channel: z.string().min(1).max(60), data: z.unknown().optional() });
 export const hlWsActiveAssetCtx = z.looseObject({ coin, ctx: hlAssetCtx });
 export const hlWsAllMids = z.looseObject({ mids: z.record(z.string(), hlDec) });
+// v11 quote engine: best bid / offer of one coin (either side may be null on an empty side) — frames recorded live 2026-11-15
+export const hlWsBbo = z.looseObject({ coin, time: ms, bbo: z.tuple([level.nullable(), level.nullable()]) });
 export const hlWsUserFills = z.looseObject({ isSnapshot: z.boolean().optional(), user: hlAddressSchema, fills: hlFills });
 export const hlWsUserEvent = z.looseObject({
   fills: hlFills.optional(),

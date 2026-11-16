@@ -39,9 +39,12 @@ import { planRoutes, type PlanDeps } from './plan-exec.ts'; // v7 any-to-any pla
 import { marketsHub } from './markets-hub/index.ts'; // v11 markets hub: universal explorer and venue comparator (read-only)
 import { privateMarketsRoutes } from './private-markets/routes.ts'; // v11 private markets (read-only)
 import { apiKeyGate, OWNER, tradingApi } from './trading-api/index.ts'; // v11 trading API (machine authentication)
+import { installQuotes, type QuotesDeps } from './quotes/index.ts'; // v11 quote engine: websocket fan-out of public market data (read-only)
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
-const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+// v11 quote engine: the browser opens ONE websocket to its own origin. CSP3 lets 'self' match the ws/wss scheme of the page's origin,
+// but Safari up to 15.3 did not (WebKit bug 201591, closed as a duplicate of 235873): the same-origin websocket origin is named explicitly.
+const CSP = `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ${config.origin.replace(/^http/, 'ws')}; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
 
 const NETS = Object.values(NETWORKS) as NetworkDef[];
 /** What a proposal is in the activity feed: a native cross-chain swap is shown with the swaps; a GMX order transaction is its own kind. */
@@ -137,11 +140,12 @@ async function walletAddresses(): Promise<{ st: Awaited<ReturnType<typeof signer
   }
 }
 
-export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService; collateral?: import('./derivatives/collateral.ts').CollateralService; gmx?: import('./derivatives/gmx-exec.ts').GmxService; plan?: Partial<PlanDeps> } = {}): Promise<FastifyInstance> {
+export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService; collateral?: import('./derivatives/collateral.ts').CollateralService; gmx?: import('./derivatives/gmx-exec.ts').GmxService; plan?: Partial<PlanDeps>; /** v11 quote engine: scripted upstreams and limits (tests) */ quotes?: QuotesDeps } = {}): Promise<FastifyInstance> {
   const swapProviders = opts.swapProviders;
   const app = Fastify({ logger: { level: 'warn', redact: ['req.headers.cookie', 'req.headers.authorization'] }, bodyLimit: 64 * 1024, trustProxy: config.trustProxy });
   await app.register(cookie);
   await app.register(rateLimit, { max: 240, timeWindow: '1 minute' });
+  const quotes = await installQuotes(app, { derivatives: opts.derivatives, prices: markets, ...opts.quotes }); // v11 quote engine: the websocket plugin, before the routes
 
   app.addHook('onRequest', async (req, reply) => {
     reply.header('content-security-policy', CSP).header('x-content-type-options', 'nosniff').header('referrer-policy', 'no-referrer')
@@ -156,6 +160,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     // that secret opens these paths and no other, and the owner session does not open them
     // >>> v11 trading API: `Authorization: Bearer spw_live_…` is an API key — accepted under /api/v1/trading/ only, never with a
     // cookie, and exempt from the CSRF check below because it carries no ambient credential (trading-api/principal.ts)
+    if (quotes.ticketGate(req, path)) return; // v11 quote engine: a single-use stream ticket is the credential of that one upgrade request
     if (await apiKeyGate(req, reply, path)) return;
     // <<< v11 trading API
     if (path.startsWith(RUNNER_PREFIX)) { runnerGate(req); return; }
@@ -204,6 +209,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   marketsHub(app, { derivatives: opts.derivatives }); // v11: /api/v1/markets-hub — explorer over spot and the four venues' perps, venue comparator; read-only public market data
   const execution = registerExecution(app, { derivatives: opts.derivatives, live: opts.live, gmx: opts.gmx, prices: markets }); // v11 execution: unified orders, independent risk engine, trading mandates (owner routes /api/v1/risk, /api/v1/mandates)
   await tradingApi(app, { derivatives: opts.derivatives, live: opts.live, gmx: opts.gmx, prices: markets, execution }); // v11: /api/v1/trading (scoped API keys or the owner) and /api/v1/developer (owner only)
+  quotes.routes(app); // v11 quote engine: /api/v1/stream (owner session + Origin), /api/v1/trading/stream (API key or ticket, markets:read), /api/v1/stream/stats
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));
   app.get('/api/v1/health/ready', async () => {
