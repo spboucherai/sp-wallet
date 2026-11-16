@@ -72,10 +72,10 @@ export function perpSeam(inner: PerpExecutor, o: PerpSeamOptions): OrderSeam {
 function toPlace(rec: AgentOrderRecord, req: OrderRequest): PlaceResult {
   const order = (status: Order['status'], note: string | null = rec.detail): Order => ({ ...req, venueOrderId: rec.venueOrderId, status, filled: rec.filledSize, avgFillPrice: rec.avgFillPrice, createdAt: rec.createdAt, updatedAt: rec.updatedAt, rejectReason: note });
   const [code, ...rest] = (rec.detail ?? '').split(': '), reason = rest.join(': ') || rec.detail || rec.reason;
-  // the order that was sent is smaller than the one the engine asked for: the live executor cut it to the mandate's bound
+  // the order that was sent is smaller than the one the engine asked for: cut to the mandate's bound by the live executor, or to the agent's own lot (provenance)
   const cut = rec.size !== null && D.lt(D.from(rec.size), D.from(req.size));
   switch (rec.state) {
-    case 'FILLED': return { status: 'placed', order: cut ? order('partially_filled', `cut to the mandate's notional per order: ${rec.size} of ${req.size} sent and filled; the rest follows from the real position`) : order('filled'), fills: [], idempotent: rec.idempotent };
+    case 'FILLED': return { status: 'placed', order: cut ? order('partially_filled', `cut to what this agent may send (the mandate's notional per order, or the part of the position its own fills opened): ${rec.size} of ${req.size} sent and filled; the rest follows from the real position`) : order('filled'), fills: [], idempotent: rec.idempotent };
     case 'CANCELLED': {
       if (!rec.venueOrderId) return { status: 'refused', code: 'withdrawn', reason: rec.detail ?? 'withdrawn' };
       // an IOC order that ended with a remainder: the venue's own word for it when the gateway kept it (cancelled / partially_filled)

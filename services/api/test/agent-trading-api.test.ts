@@ -186,7 +186,7 @@ describe('LIVE needs a mandate the owner approved — and nothing under the trad
     expect((await call('POST', `${T}/agents/${perp}/stop`, { key: KEY, body: {} })).json.agent.state).toBe('stopped');
     // the mandate draft is READ-only information for the owner's approval surface
     const d = await call('GET', `${A}/${perp}/mandate-draft`);
-    expect(d.json).toMatchObject({ draft: `agent:${perp}`, kind: 'derivative', shape: 'SPW-VENUE-MANDATE-v1', approval: { route: `/risk?mandate=agent:${perp}` } });
+    expect(d.json).toMatchObject({ draft: `agent:${perp}`, kind: 'derivative', shape: 'SPW-TRADING-MANDATE-v1 → SPW-VENUE-MANDATE-v1', pending: null, approval: { route: `/risk?mandate=agent:${perp}` } });
   });
 
   it('D9 — a spot agent paused while LIVE: its mandate was revoked, so "resume" is a new owner approval; neither the key nor the owner\'s resume route goes around it', async () => {

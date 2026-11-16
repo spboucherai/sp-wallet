@@ -233,7 +233,7 @@ export async function liveReadiness(a: PerpAgentRow, rt: PerpLiveRuntime, q: { a
 }
 
 export const LivePrepareBody = z.strictObject({ accountId: z.uuid(), days: z.number().int().min(1).max(VENUE_MANDATE_BOUNDS.maxDays).optional(), locale: z.enum(['fr', 'en']).default('en') });
-export const LiveApproveBody = z.strictObject({ accountId: z.uuid(), assertion: z.record(z.string(), z.unknown()), acknowledged: z.literal(true) });
+export const LiveApproveBody = z.strictObject({ accountId: z.uuid(), assertion: z.record(z.string(), z.unknown()), /** V11.2: the API's own passkey step over the FULL trading mandate hash (mandates/service.ts `binding`) */ bindingAssertion: z.record(z.string(), z.unknown()).optional(), acknowledged: z.literal(true) });
 
 // Steps 1 and 2 of going live — `prepareLive` and `approveLive`, the only functions that WRITE a derivative mandate for an agent —
 // are in mandate-write.ts (V11): the engines and the agent runtime never import that module (agent-boundaries.test.ts).

@@ -46,7 +46,8 @@ async function bindWorld(w: LiveWorld): Promise<void> {
   // one clock for the mandate service and the live engine: the world's (the paper side is never used by a live agent)
   const h = await import('./derivatives-helpers.ts'), dm = await import('../src/derivatives/index.ts');
   const derivatives = dm.createDerivatives({ registry: dm.createRegistry(h.fixtureVenues(w.clock as never).adapters, w.clock.now), now: w.clock.now });
-  const ex = ord.createExecution({ live: w.svc, derivatives, signerStatus: async () => ({ halted: false }) });
+  // the API's own (second) passkey step of a mandate approval is the execution workstream's and is tested there: here an assertion must be present
+  const ex = ord.createExecution({ live: w.svc, derivatives, signerStatus: async () => ({ halted: false }), verifyOwner: async (assertion) => { if (!assertion) throw new Error('no binding assertion'); }, reverifyOwner: async (assertion) => { if (!assertion) throw new Error('no stored assertion'); } });
   w.svc.preTrade = ex.risk.gate; w.svc.newRiskBlock = ex.risk.newRiskBlock;
   bind.bindExecution(ex);
 }
@@ -71,10 +72,12 @@ async function agent(w: LiveWorld, o: { risk?: Partial<typeof RISK>; approved?: 
     signalRows: () => sql`select bar, status, orders, targets from agent_signals where agent_id = ${id} order by bar` };
   return a;
 }
-/** the ONE passkey: prepare the mandate derived from the agent's limits, approve it */
+/** V11.2: the second assertion of a live trading mandate — the API's, over the intent that names the full mandate hash */
+const bind2 = (w: LiveWorld, prep: { binding: { options: { challenge: string } } }) => w.pk.assert(Buffer.from(prep.binding.options.challenge, 'base64url')) as never;
+/** the passkey: prepare the mandate derived from the agent's limits, approve it (the signer's prompt, then the API's) */
 async function goLive(w: LiveWorld, a: Agent, accountId: string) {
   const prep = await mw.prepareLive(await a.row(), a.rt, { accountId, locale: 'fr' });
-  const row = await mw.approveLive(await a.row(), a.rt, { accountId, assertion: w.pk.assert(w.b64(prep.hash)) as never, acknowledged: true });
+  const row = await mw.approveLive(await a.row(), a.rt, { accountId, assertion: w.pk.assert(w.b64(prep.hash)) as never, bindingAssertion: bind2(w, prep), acknowledged: true });
   return { prep, row };
 }
 async function liveAgent(o: { risk?: Partial<typeof RISK>; fund?: string } = {}) {
@@ -158,10 +161,10 @@ describe('going live: the checklist, the mandate derived from the limits, one pa
     expect(prep.options.challenge).toBe(w.b64(prep.hash).toString('base64url'));                                         // the passkey signs the mandate hash
     // a passkey assertion over something else, the checkbox, another agent's preparation
     expect(cyc.LiveApproveBody.safeParse({ accountId: acct, assertion: {}, acknowledged: false }).success).toBe(false);
-    expect(await refusal(mw.approveLive(await b.row(), b.rt, { accountId: acct, assertion: w.pk.assert(w.b64(prep.hash)) as never, acknowledged: true }))).toMatchObject({ code: 'not_ready', status: 409 });
-    expect(await refusal(mw.approveLive(await a.row(), a.rt, { accountId: acct, assertion: w.pk.assert(Buffer.alloc(32, 7)) as never, acknowledged: true }))).toMatchObject({ code: 'signer_bad_approval' });
+    expect(await refusal(mw.approveLive(await b.row(), b.rt, { accountId: acct, assertion: w.pk.assert(w.b64(prep.hash)) as never, bindingAssertion: bind2(w, prep), acknowledged: true }))).toMatchObject({ code: 'not_ready', status: 409 });
+    expect(await refusal(mw.approveLive(await a.row(), a.rt, { accountId: acct, assertion: w.pk.assert(Buffer.alloc(32, 7)) as never, bindingAssertion: bind2(w, prep), acknowledged: true }))).toMatchObject({ code: 'signer_bad_approval' });
     expect(await a.row()).toMatchObject({ state: 'AWAITING_APPROVAL', mode: 'PAPER', live_account_id: null });           // a refused approval leaves the agent in simulation and releases the account
-    expect(await refusal(mw.approveLive(await a.row(), a.rt, { accountId: acct, assertion: w.pk.assert(w.b64(prep.hash)) as never, acknowledged: true }))).toMatchObject({ code: 'not_ready' });   // consumed: prepare again
+    expect(await refusal(mw.approveLive(await a.row(), a.rt, { accountId: acct, assertion: w.pk.assert(w.b64(prep.hash)) as never, bindingAssertion: bind2(w, prep), acknowledged: true }))).toMatchObject({ code: 'not_ready' });   // consumed: prepare again
 
     const { row } = await goLive(w, a, acct);
     expect(row).toMatchObject({ state: 'LIVE', mode: 'LIVE', live_account_id: acct, perp: { live: { accountId: acct, network: 'testnet', strategySha256: a.sha, capital: '1000', exit: null } } });
@@ -463,11 +466,15 @@ describe('signer refusals: hold until the next bar, or leave LIVE', () => {
       await a.tick();
       w.t.forcePosition(w.ACCOUNT, 'BTC', '0.012');
       await w.svc.reconcile(acct); w.next(); await w.svc.reconcile(acct);
-      expect(await a.pass()).toBe('stopped');
+      // V11.2 (provenance, orders/provenance.ts): the agent closes what ITS fills opened (0.00714) — not the part it did not
+      // create (0.00486): that one is the owner's to close, and the agent says it is still open until the wind-down ends
+      expect(await a.pass()).toBe('stopping: 1 position(s) still open (long 0.00486 BTC)');
+      expect(pos(w)).toBe('0.00486');
+      expect((await sql`select reduce_only, record->>'size' as size, state from orders where principal_id = ${a.id} order by created_at`).map((x: any) => [x.reduce_only, x.size, x.state])).toEqual([[false, '0.00714', 'FILLED'], [true, '0.00714', 'FILLED']]);
       const row = await a.row();
+      expect(row.state).toBe('STOPPING');
       expect(row.perp.live.exit).toMatchObject({ code: 'divergence' });
       expect(row.stop_reason).toMatch(/the venue's state and the wallet's records differ/);
-      expect(pos(w)).toBe('0');                                                                                           // closed in full, with a reduce-only order under the wind-down
     }
     {
       // the owner places a manual order (passkey) on the account while the agent is live
@@ -608,7 +615,7 @@ describe('V11.2 — bound to the execution layer: unified orders, the trading-ma
     await cyc.stopLive(await a.row(), a.rt, 'en');
     for (let i = 0; i < 4 && (await a.row()).state !== 'STOPPED'; i++) await a.pass();
     expect((await a.row()).state).toBe('STOPPED'); expect(pos(w)).toBe('0');
-    const after = await ex.mandates.get(lb.mandateId);
+    const after: any = await ex.mandates.get(lb.mandateId);
     expect(after).toMatchObject({ state: 'revoked' }); expect(after.revocation.signerRevoked).toBe(true); expect(after.revocation.record.reason).toBe('owner_request');
     await w.svc.reconcile(acct);                                                                         // the live worker's reconciliation: the venue's own record of the closing order
     await ex.orders.reconcile();                                                                         // the `orders` loop of the API process (every 5 s): what the venue engine learned since is projected
@@ -628,7 +635,7 @@ describe('V11.2 — bound to the execution layer: unified orders, the trading-ma
     // what the Risk screen does: prepare the approval sheet, one passkey
     const sheet = await ex.mandates.prepareApproval(created.id, 'en');
     expect(sheet.passkey).toBe(true);
-    await ex.mandates.approve(created.id, { assertion: w.pk.assert(w.b64(sheet.signer!.hash)) as never, acknowledged: true });
+    await ex.mandates.approve(created.id, { assertion: w.pk.assert(w.b64(sheet.signer!.hash)) as never, bindingAssertion: bind2(w, sheet as never), acknowledged: true });
     expect((await a.row()).state).not.toBe('LIVE');                                                      // approving in Risk does not start anything
     await expect(life.startAgent(a.id, 'live', { kind: 'api_key', id: 'spk_x' })).rejects.toMatchObject({ code: 'mandate_required' });
     const started = await life.startAgent(a.id, 'live', { kind: 'owner' });
@@ -687,6 +694,8 @@ describe('through the API routes: the owner\'s session, CSRF, no route that plac
     await reset();
     const { randomBytes } = await import('node:crypto'), { fixtureVenues } = await import('./derivatives-helpers.ts'), mod = await import('../src/derivatives/index.ts');
     const w = await liveWorld(), ORIGIN = 'https://wallet.test';
+    // V11.2: the API's own passkey step of the mandate approval is verified against the API's credentials table
+    { const c = w.pk.credential(); await sql`insert into credentials (id, public_key, counter, transports, label) values (${c.id}, ${c.publicKey}, 0, ${sql.json(c.transports)}, 'test passkey') on conflict (id) do nothing`; }
     const dv = mod.createDerivatives({ registry: mod.createRegistry(fixtureVenues(w.clock as never).adapters, w.clock.now), now: w.clock.now });
     const app = await (await import('../src/server.ts')).buildServer({ derivatives: dv, live: w.svc });
     await (await import('./derivatives-helpers.ts')).openLiveLimits(sql);   // V11: the owner's limits of the unified risk engine (absent = every new live order is denied)
@@ -714,7 +723,7 @@ describe('through the API routes: the owner\'s session, CSRF, no route that plac
       const prep = (await api('POST', `/agents/${a.id}/perp/live/prepare`, { accountId: acct, locale: 'fr' })).json;
       expect(prep).toMatchObject({ locale: 'fr', mandate: { agentId: a.id, strategySha256: sha }, proposal: { capital: '1000' } });
       expect((await api('POST', `/agents/${a.id}/perp/live/approve`, { accountId: acct, assertion: w.pk.assert(w.b64(prep.hash)), acknowledged: false })).status).toBe(400);
-      const live = await api('POST', `/agents/${a.id}/perp/live/approve`, { accountId: acct, assertion: w.pk.assert(w.b64(prep.hash)), acknowledged: true });
+      const live = await api('POST', `/agents/${a.id}/perp/live/approve`, { accountId: acct, assertion: w.pk.assert(w.b64(prep.hash)), bindingAssertion: bind2(w, prep), acknowledged: true });
       expect(live.json).toMatchObject({ state: 'LIVE', mode: 'LIVE', simulation: false, execution: { kind: 'live', network: 'testnet' },
         live: { available: true, active: true, accountId: acct, network: 'testnet', capital: '1000', account: { id: acct, mandate: { phase: 'active' } }, signer: { phase: 'active' } } });
       expect(live.json.execution.note).toMatch(/test network: the money is not real/);

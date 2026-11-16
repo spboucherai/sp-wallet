@@ -19,6 +19,7 @@
 import type { Execution } from '../orders/index.ts';
 import { GatewayError, SeamOrderGateway, setOrderGatewayFactory, type KillSwitchRead, type OrderGatewayFactory } from '../agent-runtime/gateway.ts';
 import { setKillSwitch, type KillSwitchPort } from '../agent-runtime/kill-switch.ts';
+import { agentControlPort } from './control.ts';
 import { UnifiedOrderGateway } from './unified-gateway.ts';
 
 let current: Execution | null = null;
@@ -49,6 +50,8 @@ export function bindExecution(ex: Execution | null, o: { gateway?: OrderGatewayF
   current = ex;
   if (!ex) { setOrderGatewayFactory(o.gateway ?? null); setKillSwitch(o.killSwitch ?? null); return; }
   const ks = riskKillSwitch(ex);
+  // STOP ALL AGENTS (the command engine): every trading agent, through the runtime's own stop (control.ts)
+  ex.agents = agentControlPort();
   setOrderGatewayFactory(o.gateway ?? unifiedGatewayFactory(ex));
   setKillSwitch(o.killSwitch ?? ks.port, ks.read);
 }

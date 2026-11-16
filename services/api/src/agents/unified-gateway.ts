@@ -36,7 +36,7 @@ import { getByIdempotency, getOrder, history } from '../orders/store.ts';
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 400);
 /** refusal codes of the order service that are raised BEFORE an order exists → the reason code the engines read */
 const PRE_REASON: Record<string, ReasonCode> = { mandate_required: 'MANDATE_DENIED', mandate_not_approved: 'MANDATE_DENIED', execution_disabled: 'RISK_DENIED', key_limit_exceeded: 'RISK_DENIED', not_reducing: 'INVALID_ORDER',
-  venue_restricted: 'VENUE_NOT_ALLOWED', unknown_venue: 'VENUE_NOT_ALLOWED', restricted: 'VENUE_NOT_ALLOWED', unknown_instrument: 'INSTRUMENT_NOT_ALLOWED' };
+  position_not_attributable: 'RISK_DENIED', venue_restricted: 'VENUE_NOT_ALLOWED', unknown_venue: 'VENUE_NOT_ALLOWED', restricted: 'VENUE_NOT_ALLOWED', unknown_instrument: 'INSTRUMENT_NOT_ALLOWED' };
 
 export class UnifiedOrderGateway implements AgentOrderGateway {
   private readonly b: SeamBinding;
@@ -134,11 +134,21 @@ export class UnifiedOrderGateway implements AgentOrderGateway {
 
     // 4 — the unified order service: risk engine, trading mandate, the engine's own path
     let rec: AgentOrderRecord | null = null, thrown: UserError | null = null;
-    try {
+    for (let attempt = 0; ; attempt++) try {
       await this.ex.orders.submitCanonical({ principal: this.principal, mandateId: order.mandateId }, order, o.idempotencyKey, { origin: 'agent', accountId: this.b.accountId });
+      break;
     } catch (e) {
       const stored = await getOrder(order.clientOrderId);
       if (!stored) {
+        // PROVENANCE (orders/provenance.ts): an agent reduces only what its OWN fills opened. A closing order larger than its lot
+        // (the owner traded by hand on the account, or the venue shows a position the wallet did not create) is refused whole,
+        // before any order exists: the agent then closes ITS part — the rest is the owner's, and the engine reports it still open.
+        const own = e instanceof UserError && e.code === 'position_not_attributable' ? (e as UserError & { data?: { provenance?: { reducible?: DecStr } } }).data?.provenance?.reducible : undefined;
+        if (attempt === 0 && own && order.reduceOnly && order.size !== null && D.isPos(D.from(own)) && D.lt(D.from(own), D.from(order.size))) {
+          await journal(a.id, { mode, kind: 'risk', code: 'position_not_attributable', severity: 'warning', title: 'Closing only what this agent opened', body: `${what} — ${(e as Error).message.slice(0, 300)} The order is cut to ${own}.`, ref, configVersion: ctx.configVersion });
+          order = canonicalOrder({ ...order, size: own });
+          continue;
+        }
         // nothing was created, so nothing was signed or sent: a refusal is a refusal, anything else can be attempted again under the same key
         if (e instanceof UserError && e.status < 500) return none('REJECTED', PRE_REASON[e.code] ?? 'INVALID_ORDER', e.code, e.message);
         return none('FAILED', 'NOT_SENT', e instanceof UserError ? e.code : 'not_created', `no order was created: ${msg(e)}`);
@@ -146,6 +156,7 @@ export class UnifiedOrderGateway implements AgentOrderGateway {
       // the order exists: the code its engine (or the signer behind it) refused it with is kept — the engines read it
       if (e instanceof UserError) thrown = e;
       if (!isTerminal(stored.state)) await journal(a.id, { mode, kind: 'error', code: 'ORDER_OUTCOME_UNKNOWN', severity: 'error', title: 'Order outcome unknown: it will be reconciled, not sent again', body: `${what} (${stored.id}, ${stored.state}): ${msg(e)}`, ref, configVersion: ctx.configVersion });
+      break;
     }
     await this.context(order, o.idempotencyKey, ctx);
     // the paper engine marks who placed the order on its own row, as the paper executor always did

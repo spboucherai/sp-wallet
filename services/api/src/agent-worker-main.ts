@@ -41,7 +41,10 @@ const agents = bindAgentRuntime({
   // the delivery worker of the webhooks runs in the API process; this one only queues the events
   emit: (event, data) => emitWebhook(event, data),
 });
-const stop = agents.start();
+// operator settings (all optional, milliseconds): the cadence of the bar engines, of the job queue and of the supervisor
+const ms = (name: string): number | undefined => { const n = Number(process.env[name]); return Number.isFinite(n) && n >= 100 ? Math.floor(n) : undefined; };
+const bar = ms('SPW_AGENT_BAR_MS'), jobs = ms('SPW_AGENT_JOBS_MS'), sup = ms('SPW_AGENT_SUPERVISOR_MS');
+const stop = agents.start({ ...(bar ? { barMs: bar } : {}), ...(jobs ? { jobsMs: jobs } : {}), ...(sup ? { supervisorMs: sup } : {}) });
 console.log(`sp-wallet agents worker ${agents.worker} started (bar engines, stream engine, supervisor, job queue)`);
 void labStatus().then((l) => console.log(`[startup] strategy sandbox: ${l.mode}${l.ok ? ' (confined, self-test passed)' : ` — ${l.reason}${l.mode === 'unavailable' ? ' — signals and backtests will NOT run' : ''}`}`));
 for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { stop(); void sql.end({ timeout: 5 }).then(() => process.exit(0)); });

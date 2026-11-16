@@ -131,19 +131,20 @@ export async function createLiveMandate(a: PerpAgentRow, rt: PerpLiveRuntime, bo
   return { created, proposal: r.proposal };
 }
 
-/** Step 1 of going live from the agent page: the trading mandate is created and its approval prepared — the WebAuthn request
- *  is built by the live module over the hash of the COMPILED derivative mandate, as before. */
+/** Step 1 of going live from the agent page: the trading mandate is created and its approval prepared. TWO passkey prompts, as
+ *  for every live trading mandate: `options` — built by the live module over the hash of the COMPILED derivative mandate, the
+ *  one the signer verifies, as before — and `binding.options` — the API's own, over an intent that names the FULL mandate hash. */
 export async function prepareLive(a: PerpAgentRow, rt: PerpLiveRuntime, body: z.infer<typeof LivePrepareBody>) {
   const { created, proposal } = await createLiveMandate(a, rt, body);
   const p = await execution().mandates.prepareApproval(created.id, body.locale);
   if (!p.passkey) throw new UserError('bad_state', 'a live mandate is approved with the passkey', 409);
   const sg = p.signer;
-  return { locale: body.locale, mandate: sg.mandate, hash: sg.hash, options: sg.options, acknowledgement: sg.acknowledgement, warning: sg.warning, enforcedBySigner: sg.enforcedBySigner, trustedBySigner: sg.trustedBySigner, notEnforced: sg.notEnforced, windDown: sg.windDown, proposal,
+  return { locale: body.locale, mandate: sg.mandate, hash: sg.hash, options: sg.options, acknowledgement: sg.acknowledgement, warning: sg.warning, enforcedBySigner: sg.enforcedBySigner, trustedBySigner: sg.trustedBySigner, notEnforced: sg.notEnforced, windDown: sg.windDown, proposal, binding: p.binding,
     /** the trading mandate this derivative mandate was compiled from: field by field, what the signer enforces and what only the API enforces */
     tradingMandate: { id: created.id, hash: p.hash, mandate: p.mandate, enforcement: p.enforcement, derived: p.derived, risk: `/risk?mandate=${created.id}` } };
 }
 
-/** Step 2: the ONE passkey approval, through the mandate service. The signer judges it; on success the agent is LIVE on that venue account. */
+/** Step 2: the approval, through the mandate service (the signer judges the first assertion, the API the binding one); on success the agent is LIVE on that venue account. */
 export async function approveLive(a: PerpAgentRow, rt: PerpLiveRuntime, body: z.infer<typeof LiveApproveBody>): Promise<PerpAgentRow> {
   const svc = rt.live(), pend = (a.perp as { livePending?: LivePending } | null)?.livePending;
   if (isLiveActive(a)) throw new UserError('bad_state', 'this agent is already on a venue account', 409);
@@ -156,7 +157,7 @@ export async function approveLive(a: PerpAgentRow, rt: PerpLiveRuntime, body: z.
   // one agent per venue account: the account is taken before the passkey is judged, and released if the approval fails
   try { await sql`update agents set live_account_id = ${body.accountId}, updated_at = now() where id = ${a.id}`; }
   catch (e) { if ((e as { code?: string }).code === '23505') throw new UserError('used_by_other_agent', 'this venue account is used by another agent: one agent per venue account', 409); throw e; }
-  try { await execution().mandates.approve(pend.mandateId, { assertion: body.assertion, acknowledged: true }); }
+  try { await execution().mandates.approve(pend.mandateId, { assertion: body.assertion, ...(body.bindingAssertion ? { bindingAssertion: body.bindingAssertion } : {}), acknowledged: true }); }
   catch (e) { await sql`update agents set live_account_id = null, perp = perp - 'livePending', updated_at = now() where id = ${a.id}`; throw e; }
   return (await import('./perp-live-cycle.ts')).activateLive((await sql<PerpAgentRow[]>`select * from agents where id = ${a.id}`)[0]!, { live: () => svc }, 'owner');
 }
