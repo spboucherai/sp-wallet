@@ -194,7 +194,7 @@ export class StreamEngine {
     // An agent that is no longer active is still passed on while it has a session: the session's shutdown needs its ticks.
     if (a.engine === 'stream' && a.family === 'market_making' && RULES[rule] && a.mode !== 'RESEARCH') {
       const inst = await this.instrument(rt.venues[0]!, a.universe[0]!);
-      if (inst && (a.mode !== 'LIVE' || !this.o.mm?.books)) this.market(inst);                    // the feed's stream of that instrument (a testnet session has its own source)
+      if (inst) this.market(inst);                                                                // the feed's stream of that instrument (a testnet session reads its own source on top)
       return this.mm.tick(a as unknown as MmAgentRow);
     }
     if (a.engine !== 'stream' || !RULES[rule] || (a.state !== 'PAPER_TRADING' && a.state !== 'RUNNING')) return 'idle';

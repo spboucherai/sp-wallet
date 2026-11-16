@@ -89,6 +89,28 @@ export function roundersFor(inst: Instrument): { round: QuoteRounder; roundReduc
   };
   return { round: mk(false), roundReduce: mk(true) };
 }
+/** how far inside the mandate's quote band the engine keeps its own quotes (bps): the signer measures the band from ITS mid (spot, two exchanges), the engine prices from the venue's book */
+export const BAND_MARGIN_BPS = '0.5';
+/**
+ * A LIVE policy never asks for a quote the signer would refuse for its distance from the mid: whatever the rule computes (a skew
+ * can bring one side closer than the rule's own minimum), a bid is at most mid × (1 − floor) and at least mid × (1 − ceiling),
+ * an ask the mirror — floor = the mandate's `minHalfSpreadBps` + the margin, ceiling = its `maxDistanceBps` − the margin. It can
+ * only move a quote AWAY from the mid or back inside the band; the signer still judges every quote against its own mid.
+ */
+export function withinBand(policy: QuotePolicy, minHalfSpreadBps: number, maxDistanceBps: number): QuotePolicy {
+  const B = D.from(10000n), floor = D.add(D.from(String(minHalfSpreadBps)), D.from(BAND_MARGIN_BPS)), ceil = D.sub(D.from(String(maxDistanceBps)), D.from(BAND_MARGIN_BPS));
+  return { id: policy.id, version: policy.version, quotes(input) {
+    const out = policy.quotes(input), mid = D.div(D.add(D.from(input.book.bid), D.from(input.book.ask)), D.from(2n), 12, 'half_even'), notes = [...out.notes];
+    const at = (bps: typeof floor, sign: 1 | -1): string => D.str(D.div(D.mul(mid, sign === 1 ? D.add(B, bps) : D.sub(B, bps)), B, 12, sign === 1 ? 'up' : 'down'));
+    const quotes = out.quotes.map((q) => {
+      const p = D.from(q.price), near = D.from(at(floor, q.side === 'buy' ? -1 : 1)), far = D.from(at(ceil, q.side === 'buy' ? -1 : 1));
+      if (q.side === 'buy' ? D.gt(p, near) : D.lt(p, near)) { notes.push(`${q.side} moved to the mandate's minimum distance from the mid`); return { ...q, price: D.str(near) }; }
+      if (q.side === 'buy' ? D.lt(p, far) : D.gt(p, far)) { notes.push(`${q.side} moved back inside the mandate's maximum distance`); return { ...q, price: D.str(far) }; }
+      return q;
+    });
+    return { ...out, quotes, notes };
+  } };
+}
 /** is `now` inside the session's hours? [start, end) in minutes of the UTC day; start > end wraps midnight; null = any time */
 export function inSessionHours(hours: QuotingSection['engine']['hours'], now: number): boolean {
   if (!hours) return true;
@@ -199,7 +221,7 @@ export class MmRuntime {
       if (!first.book) return hold('data_not_fresh', `${inst.id}: no two-sided book yet`);
     }
     const capital = Number(a.capital_usdc) / 1e6, fees = this.deps.fees(venue), cfg0 = rt.config as { requoteBps?: unknown; minRestMs?: unknown; quoteSizeUsd?: unknown; maxInventoryUsd?: unknown; policy?: string };
-    const policy = quotePolicyOf(rt.config, inst, a.risk.maxPositionUsd);
+    const rule = quotePolicyOf(rt.config, inst, a.risk.maxPositionUsd), policy = mandate ? withinBand(rule, mandate.section.terms.minHalfSpreadBps, mandate.section.terms.maxDistanceBps) : rule;
     const row = await openSession({ agentId: a.id, mode, instrument: inst.id, network, accountId: mandate?.accountId ?? null, mandateId: mandate?.mandateId ?? null, policy: policy.id, configVersion: a.config_version, worker: this.deps.worker, now });
     const queue: JournalEvent[] = [], books = this.deps.books(network);
     let port: OrderPort, paper: PaperVenue | null = null, stream: StreamReconciledPort | null = null, budget: MmBudget;

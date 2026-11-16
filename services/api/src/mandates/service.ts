@@ -251,6 +251,9 @@ export class MandateService {
   /** the owner's session only. Nothing is approved here: the mandate is stored `created` and has no effect until approved. */
   async create(raw: unknown) {
     const b = MandateCreateSchema.parse(raw), nowSec = Math.floor(this.now() / 1000);
+    // a quoting mandate is a LIVE mandate of an AGENT: said before anything else is looked up
+    if (b.quoting && b.principal.kind !== 'agent') throw new UserError('quoting_requires_agent', 'a quoting mandate is approved for a market-making AGENT, never for an API key', 422);
+    if (b.quoting && b.mode !== 'live') throw new UserError('quoting_requires_live', 'a quoting mandate is a live mandate: paper market making needs no mandate of this kind', 422);
     if (b.principal.kind === 'api_key') {
       const [k] = await sql`select id from api_keys where id = ${b.principal.id} and revoked_at is null`;
       if (!k) throw new UserError('unknown_principal', 'no active API key with this id', 404);
@@ -280,15 +283,19 @@ export class MandateService {
       this.quotingSigner();
       const agent = await quotingAgent(b.principal.id), mh = tradingMandateHashHex(mandate);
       const section = buildQuotingSection(mandate, mh, b.quoting, agent);
+      // exclusivity first: it is the more useful answer than a bound the other mandate would make moot
+      for (const a of accounts) await this.refuseOtherKind(a.accountId, null, true);
       const c = await this.compileQuotingFor(mandate, section, accounts, b.locale);
-      for (const a of accounts) { await this.refuseOtherKind(a.accountId, null, true); await this.refuseSecondPrincipal(a.accountId, null, b.principal); }
+      for (const a of accounts) await this.refuseSecondPrincipal(a.accountId, null, b.principal);
       enforcement = c.enforcement; compiled = { accounts, venue: { accountId: c.accountId, mandate: c.mandate, derived: c.derived } };
       quoting = { section, hash: sectionHash(section), termsEnforcement: c.termsEnforcement, sectionEnforcement: c.sectionEnforcement, maxima: c.maxima, agent: { id: agent.id, rule: agent.rule, configVersion: agent.configVersion, instrument: agent.instrument } };
     } else if (b.mode === 'live') {
+      // a venue account under an active QUOTING mandate takes no directional mandate (said before anything else about this one)
+      for (const a of accounts) await this.refuseOtherKind(a.accountId, null, false);
       // refused NOW if it cannot be compiled for the signer: a live mandate never exists in a form the signer does not bound
       const c = await this.compile(mandate, accounts, b.locale);
       // one venue account serves one principal at a time: a second principal is refused before anything is stored
-      for (const a of accounts) { await this.refuseOtherKind(a.accountId, null, false); await this.refuseSecondPrincipal(a.accountId, null, b.principal); }
+      for (const a of accounts) await this.refuseSecondPrincipal(a.accountId, null, b.principal);
       enforcement = c.enforcement; compiled = { accounts, venue: { accountId: c.accountId, mandate: c.mandate, derived: c.derived } };
     } else enforcement = (Object.keys(TradingMandateSchema.shape) as (keyof TradingMandate)[]).map((field) => ({ field, enforcedBy: 'api_only' as const, signerField: null, note: PAPER_ENFORCEMENT_NOTE }));
     const hash = tradingMandateHashHex(mandate);

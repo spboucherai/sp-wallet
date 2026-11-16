@@ -49,6 +49,7 @@ export function streamReconciled(inner: OrderPort, o: UserStreamOptions): Stream
   const byOid = new Map<string, Entry>(), byClient = new Map<string, Entry>();
   const fills = new Map<string, VenueFill>(), reduceIds = new Set<string>();
   let status: VenueStatus = 'idle', synced = false, lastAuditAt = -Infinity, lastRestAt = -Infinity, buffering: UserFeedEvent[] | null = null;
+  let everSynced = false;
   let account: AccountRead | null = null, accountAt = -Infinity, accountDirty = true, fillsCursor = 0;
   const st = { rest: { openOrders: 0, fills: 0, account: 0, lookup: 0 }, streamOrders: 0, streamFills: 0, audits: 0, divergences: 0, gaps: 0 };
 
@@ -103,11 +104,14 @@ export function streamReconciled(inner: OrderPort, o: UserStreamOptions): Stream
         const e: Entry = { instrument, clientId: x.clientId, venueOrderId: x.venueOrderId, side: x.side, price: x.price, remaining: x.size, state: 'open', reduceOnly: x.reduceOnly, createdAt: x.timestamp, updatedAt: x.timestamp };
         byOid.set(e.venueOrderId, e); if (e.clientId) byClient.set(e.clientId, e);
       }
+      // a fill the venue reports and the stream never delivered (while it claimed to be connected): a missed event — counted, reported, REST wins
+      const missed = everSynced && status === 'connected' ? got.filter((f) => !fills.has(f.id)).map((f) => `fill:${f.id}`) : [];
+      if (missed.length) { st.divergences += 1; o.onDivergence?.({ instrument, onlyStream: [], onlyRest: missed }); }
       for (const f of got) { addFill(f); fillsCursor = Math.max(fillsCursor, f.ts); }
       accountDirty = false;
       const late = buffering; buffering = null;
       for (const ev of late) apply(ev);
-      synced = status === 'connected'; lastRestAt = o.now(); if (synced || status !== 'connected') lastAuditAt = o.now();
+      synced = status === 'connected'; everSynced = everSynced || synced; lastRestAt = o.now(); if (synced || status !== 'connected') lastAuditAt = o.now();
     } finally { if (buffering) { const late = buffering; buffering = null; for (const ev of late) apply(ev); } }
   };
   const ensure = async (instrument: string): Promise<void> => {
@@ -142,7 +146,8 @@ export function streamReconciled(inner: OrderPort, o: UserStreamOptions): Stream
       if (r.kind === 'done') for (const x of r.results) {
         const cur = byClient.get(x.clientId);
         if (cur && x.outcome === 'cancelled') put({ ...cur, state: 'cancelled', updatedAt: o.now() });
-        if (x.outcome === 'gone') { accountDirty = true; if (cur && cur.state === 'open') { byOid.delete(cur.venueOrderId); byClient.delete(x.clientId); } }   // it left before the cancel: the stream or `lookup` says how
+        // it left before the cancel and the stream had not said so: something was missed — the next read is a full REST read
+        if (x.outcome === 'gone') { accountDirty = true; if (cur && cur.state === 'open') { byOid.delete(cur.venueOrderId); byClient.delete(x.clientId); synced = false; } }
       }
       return r;
     },

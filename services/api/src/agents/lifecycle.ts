@@ -84,7 +84,8 @@ export async function startAgent(id: string, mode: Mode, actor: Actor): Promise<
       // go-live checklist complete (mm/lifecycle.ts — nothing is created, approved or signed here). The session itself is
       // started by the worker that holds the agent's lease: cancel-all → reconcile → arm the dead man's switch → quote.
       const { execution } = await import('./execution-bind.ts'), { assertLiveStart } = await import('../mm/lifecycle.ts');
-      const ok = await assertLiveStart(a, actor, execution().mandates, { now: Date.now(), mandateRequired: (why) => new MandateRequired(a.id, kind, why) });
+      const locks = execution().mandates.deps.mmLocks?.();
+      const ok = await assertLiveStart(a, actor, execution().mandates, { now: execution().risk.now(), ...(locks ? { locks } : {}), mandateRequired: (why) => new MandateRequired(a.id, kind, why) });
       await sql`update agents set state = 'LIVE', mode = 'LIVE', stop_reason = null, runtime = jsonb_set((coalesce(runtime, '{}'::jsonb) - 'hold' - 'pausedFrom'), '{mm}', coalesce(runtime->'mm', '{}'::jsonb) || ${sql.json({ live: { mandateId: ok.mandateId, network: ok.network, activatedAt: Date.now() } } as never)}, true), updated_at = now() where id = ${a.id}`;
     } else throw new UserError('live_unavailable', fm.liveReason ?? 'live mode is not available for this agent', 409);
     await journal(a.id, { mode: 'LIVE', kind: 'state', code: 'started_live', title: `Live ${a.state === 'PAUSED' ? 'resumed' : 'confirmed'} by ${who}`, body: 'under the mandate in force at the signer' });

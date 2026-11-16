@@ -41,6 +41,7 @@ export interface MmRouteDeps { execution: Execution; now: () => number;
 
 export function mmRoutes(app: FastifyInstance, d: MmRouteDeps): void {
   app.addHook('preHandler', async (req) => { const p = req.url.split('?')[0]!; if (p === P || p.startsWith(`${P}/`)) ownerOnly(req); });
+  const lk = () => { const l = d.execution.mandates.deps.mmLocks?.(); return l ? { locks: l } : {}; };
   const agentOf = async (id: string) => { const a = await loadAgent(id); if ((a.family ?? '') !== 'market_making') throw new UserError('not_market_making_agent', 'this agent is not a market-making agent', 409); return a; };
 
   app.get(`${P}/evidence`, async (req) => {
@@ -59,7 +60,7 @@ export function mmRoutes(app: FastifyInstance, d: MmRouteDeps): void {
     return { agentId: a.id, state: a.state, mode: a.mode, family: a.family, universe: a.universe, venues: (a.runtime as { venues?: string[] } | null)?.venues ?? [], config: (a.runtime as { config?: unknown } | null)?.config ?? {}, configVersion: a.config_version,
       session: run && (run.mode === dbMode(mode)) ? view(run) : null, sessions: sessions.map(view),
       mandate: q ? { id: q.row.id, state: q.row.state, phase: q.phase, integrity: q.integrity, hash: q.row.hash, quoting: q.row.quoting, expiresAt: q.row.mandate.notAfter * 1000, signer: q.row.signer } : null,
-      goLive: await goLiveChecklist(a, d.execution.mandates, { now }), ts: now };
+      goLive: await goLiveChecklist(a, d.execution.mandates, { now, ...lk() }), ts: now };
   });
   app.get(`${P}/agents/:id/fills`, async (req) => {
     const a = await agentOf(Id.parse(req.params).id), q = z.object({ mode: z.enum(['paper', 'live']).default('paper'), limit: z.coerce.number().int().min(1).max(500).default(100), session: z.uuid().optional() }).parse(req.query);
@@ -90,7 +91,7 @@ export function mmRoutes(app: FastifyInstance, d: MmRouteDeps): void {
     const a = await agentOf(Id.parse(req.params).id), b = z.strictObject({ step: z.enum(['evidence', 'jurisdiction', 'testnet']), locale: z.enum(['fr', 'en']).default('en'), acknowledged: z.literal(true), note: z.string().max(500).optional() }).parse(req.body);
     const acks = await acknowledge(a.id, b.step, { locale: b.locale, ...(b.note ? { note: b.note } : {}) }, d.now());
     await audit('mm.golive_ack', 'owner', { agent: a.id, step: b.step, sha256: b.step === 'testnet' ? null : acks[b.step]?.sha256 ?? null }).catch(() => {});
-    return { goLive: await goLiveChecklist(await loadAgent(a.id), d.execution.mandates, { now: d.now() }) };
+    return { goLive: await goLiveChecklist(await loadAgent(a.id), d.execution.mandates, { now: d.now(), ...lk() }) };
   });
   app.post(`${P}/recover`, async () => d.execution.mandates.recoverQuoting());
 }
