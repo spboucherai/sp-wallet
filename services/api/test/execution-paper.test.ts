@@ -387,7 +387,10 @@ describe('risk engine', () => {
     await expect(asAgent()).rejects.toMatchObject({ code: 'kill_switch_active', status: 423 });
     // an increase of an existing position is new risk too; a sell that would flip is not a reduction
     expect((await place(k.secret, { size: '0.001' })).json.error).toBe('kill_switch_active');
-    expect((await place(k.secret, { side: 'sell', size: '0.035', reduceOnly: true })).json.data.failed).toContain('reduce_only_valid');          // the position is 0.03
+    // the position is 0.03: 0.02 of it is the key's, 0.01 the agent's. The key may not reduce more than its own part; for the owner, more than the position is not a reduction
+    const tooMuch = await place(k.secret, { side: 'sell', size: '0.035', reduceOnly: true });
+    expect([tooMuch.status, tooMuch.json.error, tooMuch.json.data.provenance.own]).toEqual([403, 'position_not_attributable', '0.02']);
+    expect((await call('POST', `${T}/orders`, { headers: idem(), body: { ...ORDER, side: 'sell', size: '0.035', reduceOnly: true } })).json.data.failed).toContain('reduce_only_valid');
     // a spot agent's swap is stopped before the signer is asked (the guard in front of /mandate/sign)
     const { signerGuards } = await import('../src/signer-client.ts');
     await expect(signerGuards.beforeMandateSign!()).rejects.toMatchObject({ code: 'kill_switch_active' });

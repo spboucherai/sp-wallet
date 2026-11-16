@@ -27,6 +27,7 @@ import { boundPrice, MAX_SLIPPAGE_BPS, worstPrice, type OrderBody } from '../der
 import type { MandateRow, MandateService } from '../mandates/service.ts';
 import type { Evaluated, RiskService } from '../risk/service.ts';
 import { advance, gmxSnapshot, hyperliquidSnapshot, paperSnapshot, reasonOfCode, type EngineSnapshot } from './projection.ts';
+import { provenance, type Provenance } from './provenance.ts';
 import { applyEvent, getByEngineRef, getByIdempotency, getOrder, history, insertOrder, mutate, mutateWith, patchOrder, type Engine, type OrderRow, type Origin } from './store.ts';
 
 /** who asks. `restrictions` and `limits` are an API key's; `mandateId` is the mandate the key or the agent is bound to */
@@ -166,6 +167,25 @@ export class OrderService {
     return D.str(D.from(u!.n));
   }
 
+  /**
+   * Whose position is it? A key or an agent may reduce only the part of a position that its OWN fills opened (orders/provenance.ts):
+   * never what the owner opened by hand, never another principal's. Applies to every order of a non-owner that points against the
+   * position the account holds: a reduce-only order (close, reduce, stop-loss, take-profit) is bounded by the principal's own lot
+   * minus what it already asked to reduce; an order that is not reduce-only may not eat into somebody else's part either.
+   * The owner is not bound: the account is his.
+   */
+  private async provenanceRefusal(c: Caller, order: CanonicalOrder, t: Target, size: DecStr, position: DecStr, exceptId: string | null): Promise<{ code: string; message: string; data: { provenance: Provenance } } | null> {
+    if (c.principal.kind === 'owner' || order.marketKind !== 'perp') return null;
+    const pos = D.from(position);
+    if (D.isZero(pos) || D.isPos(pos) !== (order.side === 'sell')) return null;         // no position, or the order adds to it: nothing of anybody is reduced
+    await this.drain();                                                                 // fills of orders placed through the older routes are attributed too
+    const p = await provenance(c.principal, t.accountId, order.instrument, position, exceptId);
+    if (D.lte(D.from(size), D.from(p.reducible))) return null;
+    if (!order.reduceOnly && !D.isPos(D.from(p.foreign))) return null;                  // the whole position is this principal's own: it may also turn it around, inside its mandate
+    return { code: 'position_not_attributable', data: { provenance: p },
+      message: `this ${c.principal.kind === 'api_key' ? 'key' : 'agent'} may reduce only what its own fills opened on this account: ${p.own} of the ${D.str(D.abs(pos))} ${order.instrument} there is attributable to it${D.isPos(D.from(p.pending)) ? ` (${p.pending} already in its open reduce-only orders)` : ''}; the order asks for ${size}. The rest was opened by the owner or by another principal and is not this one's to close.` };
+  }
+
   // ------------------------------------------------------------------ views
   private legacyId(r: OrderRow): string { return r.origin === 'legacy' && r.engine_ref ? (r.engine === 'gmx' ? `gmx:${r.engine_ref}` : `deriv:${r.engine_ref}`) : r.id; }
   view(r: OrderRow) {
@@ -218,13 +238,14 @@ export class OrderService {
   async preview(c: Caller, input: OrderInput, idemKey: string) {
     const now = this.now(), t = await this.target(c, input.mode, input.instrument, input.accountId), m = await this.market(t, input.instrument);
     const order = this.canonical(c, t, m, input, idemKey, now);
-    const refusals: { stage: 'key' | 'lock' | 'mandate' | 'risk' | 'engine'; code: string; message: string; reasons?: string[] }[] = [];
+    const refusals: { stage: 'key' | 'lock' | 'mandate' | 'provenance' | 'risk' | 'engine'; code: string; message: string; reasons?: string[] }[] = [];
     let res: ReturnType<OrderService['resolved']> | null = null;
     try { res = this.resolved(order, m); } catch (e) { refusals.push({ stage: 'engine', code: e instanceof UserError ? e.code : 'internal', message: msg(e) }); }
     const ev = await this.deps.risk.evaluateOrder(order, { accountId: t.accountId, preview: true, ...(m.ticker ? { known: { ticker: m.ticker, book: m.book, account: null, positions: null, leverage: null }, instrument: m.instrument } : {}) });
     if (t.mode === 'live' && !this.deps.executionEnabled() && !ev.reducing) refusals.push({ stage: 'lock', code: 'execution_disabled', message: 'SPW_TRADING_API_EXECUTION is not "on": no new live risk is placed through the trading API (cancels and strictly reducing orders still pass)' });
     const kl = input.reduceOnly ? null : this.keyLimits(c, res?.notionalUsd ?? null, await this.keyUsedToday(c, null));
     if (kl) refusals.push({ stage: 'key', ...kl });
+    if (res) { const pr = await this.provenanceRefusal(c, order, t, res.size, ev.derived.positionBefore, null); if (pr) refusals.push({ stage: 'provenance', code: pr.code, message: pr.message }); }
     let mandate: { id: string; decision: 'allow' | 'deny'; reasons: string[]; phase: string } | null = null;
     if (c.principal.kind !== 'owner') {
       try {
@@ -295,6 +316,8 @@ export class OrderService {
     if (o.strictReduce && !first.reducing) throw new UserError('not_reducing', 'this order would not strictly reduce an existing position: nothing was placed', 422);
     if (t.mode === 'live' && !this.deps.executionEnabled() && !first.reducing) throw new UserError('execution_disabled', 'live execution through the trading API is disabled on this server (SPW_TRADING_API_EXECUTION is not "on"); nothing was created. Cancels and strictly reducing orders still pass.', 403);
     if (!first.reducing) { const kl = this.keyLimits(c, res.notionalUsd, await this.keyUsedToday(c, null)); if (kl) throw new UserError(kl.code, kl.message, 403); }
+    const pr = await this.provenanceRefusal(c, order, t, res.size, first.derived.positionBefore, null);
+    if (pr) throw refusal(pr.code, pr.message, 403, pr.data);
     // 3 — the order exists from here: every outcome is a state of it
     const req = toOrderRequest(order, res);
     const row = await insertOrder({ id, principal: c.principal, idempotencyKey: idemKey, bodyHash, mode: t.mode, venue: t.venue, network: t.network, instrument: order.instrument, marketKind: order.marketKind, side: order.side, type: req.type, reduceOnly: order.reduceOnly,
@@ -303,7 +326,7 @@ export class OrderService {
     if (!row) { const again = (await getByIdempotency(c.principal, idemKey)) ?? (await getOrder(id)); if (again) return this.replay(again, bodyHash, c); throw new UserError('idempotency_conflict', 'this client order id is in use', 409); }
     const reject = async (ev: Extract<OrderEvent, { type: 'local_rejected' | 'local_failed' }>, code: string): Promise<OrderRow> => (await applyEvent(id, ev, this.now(), { rejectCode: code }))!.row;
     // 4 — the risk engine, on the stored order (the decision is linked to it)
-    const ev = await this.deps.risk.evaluateOrder(order, { accountId: t.accountId, orderId: id, ...(m.ticker ? { known: { ticker: m.ticker, book: m.book, account: null, positions: null, leverage: null }, instrument: m.instrument } : {}) });
+    const ev = await this.deps.risk.evaluateOrder(order, { accountId: t.accountId, orderId: id, engineReq: req, ...(m.ticker ? { known: { ticker: m.ticker, book: m.book, account: null, positions: null, leverage: null }, instrument: m.instrument } : {}) });
     // 5 — the mandate (an agent or an API key acts under one, exactly)
     let mandate: MandateRow | null = null;
     if (!owner) {
@@ -432,9 +455,17 @@ export class OrderService {
   async reducePosition(c: Caller, positionId: string, fraction: string, slippageBps: number | undefined, idemKey: string) {
     if (!D.isValid(fraction) || !D.isPos(D.from(fraction)) || D.gt(D.from(fraction), D.one)) throw new UserError('bad_request', 'the fraction is above 0 and at most 1', 400);
     const { t, position } = await this.position(c, positionId), m = await this.market(t, position.instrument);
-    const whole = D.eq(D.from(fraction), D.one), size = whole ? D.from(position.size) : D.quantize(D.mul(D.from(position.size), D.from(fraction)), D.from(m.instrument.lotSize), 'down');
-    if (!D.isPos(size)) throw new UserError('below_min_size', `${fraction} of the position is less than one lot (${m.instrument.lotSize})`, 422);
+    // the owner closes the position; a key or an agent closes ITS part of it: what its own fills opened, minus what it already asked to reduce
     const seen = await getByIdempotency(c.principal, idemKey);
+    let basis = D.from(position.size);
+    if (c.principal.kind !== 'owner' && !seen) {
+      await this.drain();
+      const p = await provenance(c.principal, t.accountId, position.instrument, position.side === 'long' ? position.size : D.str(D.neg(D.from(position.size))));
+      if (!D.isPos(D.from(p.reducible))) throw refusal('position_not_attributable', `nothing of the ${position.size} ${position.instrument} on this account is this ${c.principal.kind === 'api_key' ? 'key' : 'agent'}'s to close: it was opened by the owner or by another principal${D.isPos(D.from(p.pending)) ? `, or is already in its open reduce-only orders (${p.pending})` : ''}`, 403, { provenance: p });
+      basis = D.from(p.reducible);
+    }
+    const whole = D.eq(D.from(fraction), D.one), size = whole ? basis : D.quantize(D.mul(basis, D.from(fraction)), D.from(m.instrument.lotSize), 'down');
+    if (!D.isPos(size)) throw new UserError('below_min_size', `${fraction} of the position is less than one lot (${m.instrument.lotSize})`, 422);
     const order = this.canonical(c, t, m, { mode: t.mode, accountId: t.accountId, instrument: position.instrument, side: position.side === 'long' ? 'sell' : 'buy', type: 'market', size: D.str(size), reduceOnly: true, tif: 'ioc', slippageBps: slippageBps ?? DEFAULT_SLIPPAGE_BPS },
       idemKey, seen ? seen.created_at.getTime() : this.now());
     return this.place(c, order, t, m, idemKey, { strictReduce: true });

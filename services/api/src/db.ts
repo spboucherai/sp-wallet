@@ -306,6 +306,8 @@ create table if not exists trading_mandates (
   state text not null, enforcement jsonb not null default '[]', compiled jsonb, signer jsonb, revocation jsonb, stop jsonb,
   created_at timestamptz not null default now(), approved_at timestamptz, revoked_at timestamptz, updated_at timestamptz not null default now());
 create index if not exists trading_mandates_principal on trading_mandates (principal_kind, principal_id, created_at desc);
+-- v11 exec2: the owner's passkey approval of the FULL trading mandate hash (intent + assertion), verified again at every use
+alter table trading_mandates add column if not exists approval jsonb;
 create table if not exists trading_mandate_usage (
   mandate_id uuid primary key references trading_mandates(id), orders_accepted int not null default 0, orders_rejected int not null default 0, consecutive_rejects int not null default 0,
   notional_total numeric not null default 0, peak_equity numeric, start_equity numeric, last_order_at timestamptz, signer_unreachable_since timestamptz, updated_at timestamptz not null default now());

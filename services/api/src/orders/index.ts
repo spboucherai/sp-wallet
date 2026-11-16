@@ -14,6 +14,7 @@ import type { LiveService } from '../derivatives/exec.ts';
 import type { GmxService } from '../derivatives/gmx-exec.ts';
 import { live } from '../derivatives/live.ts';
 import { MandateService } from '../mandates/service.ts';
+import { verifyStoredAssertion } from '../risk/passkey.ts';
 import { RiskService, type BookKey } from '../risk/service.ts';
 import { signerGuards } from '../signer-client.ts';
 import { emitWebhook } from '../trading-api/webhooks.ts';
@@ -29,6 +30,8 @@ export interface ExecutionOpts {
   prices?: () => Promise<Record<string, { usd: number; priceAt?: string | null }> | null>;
   /** tests: a verifier for the passkey steps of the API itself (limits, switches); default: auth.ts against the credentials table */
   verifyOwner?: (assertion: unknown, challenge: Uint8Array) => Promise<void>;
+  /** tests: the re-verification of an approval stored with a live mandate; default: risk/passkey.ts against the credentials table */
+  reverifyOwner?: (assertion: unknown, challenge: Uint8Array) => Promise<void>;
   signerStatus?: () => Promise<{ halted: boolean }>;
 }
 /** server setting, read at every use: anything but the exact value `on` keeps live execution through the trading API closed */
@@ -44,7 +47,10 @@ export function createExecution(o: ExecutionOpts = {}): Execution {
     derivatives: d, live: l, gmx, signerStatus, ...(o.prices ? { prices: o.prices } : {}),
     emit: (event, data) => emitWebhook(event, data) });
   // the order service and the mandates need each other (wind-down cancels what rests): the mandate service gets the cancel late
-  const mdeps: ConstructorParameters<typeof MandateService>[0] = { now, derivatives: d, live: l, signerStatus };
+  const verifyOwner = o.verifyOwner ?? verifyOwnerAssertion;
+  const mdeps: ConstructorParameters<typeof MandateService>[0] = { now, derivatives: d, live: l, signerStatus,
+    passkey: { now, rpId: config.rpId, credentials: async () => (await listCreds()).map((c) => ({ id: c.id, transports: c.transports })), verifyOwner },
+    reverify: o.reverifyOwner ?? ((assertion, challenge) => verifyStoredAssertion(assertion, challenge, { rpId: config.rpId, origin: config.origin })) };
   const mandates = new MandateService(mdeps);
   const orders = new OrderService({ now, derivatives: d, live: l, risk, mandates, executionEnabled: tradingApiExecutionEnabled });
   mdeps.cancelResting = (id) => orders.cancelResting(id);
@@ -107,7 +113,7 @@ export function executionRoutes(app: FastifyInstance, ex: Execution): void {
   app.post(M, async (req) => ({ mandate: await mandates.create(req.body) }));
   app.get(`${M}/:id`, async (req) => ({ mandate: await mandates.get(IdParam.parse(req.params).id) }));
   app.post(`${M}/:id/approve/prepare`, async (req) => mandates.prepareApproval(IdParam.parse(req.params).id, z.strictObject({ locale: z.enum(['fr', 'en']).default('en') }).parse(req.body ?? {}).locale));
-  app.post(`${M}/:id/approve`, async (req) => ({ mandate: await mandates.approve(IdParam.parse(req.params).id, z.strictObject({ assertion: z.record(z.string(), z.unknown()).optional(), acknowledged: z.boolean().optional() }).parse(req.body ?? {})) }));
+  app.post(`${M}/:id/approve`, async (req) => ({ mandate: await mandates.approve(IdParam.parse(req.params).id, z.strictObject({ assertion: z.record(z.string(), z.unknown()).optional(), bindingAssertion: z.record(z.string(), z.unknown()).optional(), acknowledged: z.boolean().optional() }).parse(req.body ?? {})) }));
   app.post(`${M}/:id/revoke`, async (req) => {
     const b = z.strictObject({ cancelOpenOrders: z.boolean().default(true), detail: z.string().max(300).optional() }).parse(req.body ?? {});
     return mandates.revoke(IdParam.parse(req.params).id, { by: 'owner', reason: 'owner_request', detail: b.detail ?? null, cancelOpenOrders: b.cancelOpenOrders });
@@ -120,6 +126,11 @@ export function registerExecution(app: FastifyInstance, o: ExecutionOpts = {}): 
   installGates(ex, o);
   // the other workstreams (the agents runtime) and the tests reach the services of THIS server instance through the app
   app.decorate('execution', ex);
+  // one-time migration, before the first request is served: the owner's live limits are seeded from what he had approved before V11
+  app.addHook('onReady', async () => { await ex.risk.seedLiveLimits().catch((e: Error) => console.error(`[risk] the live limits could not be seeded from the venue accounts: ${e.message}`)); });
+  // a fill or a cancel changes what the next evaluation must see: the shared venue reads of that book are dropped at once
+  const offCache = onTransition((row, e) => { if (row.mode === 'live' && (e.to === 'FILLED' || e.to === 'PARTIALLY_FILLED' || e.to === 'CANCELLED' || e.event === 'reconciled_found')) ex.risk.invalidate(row.network === 'testnet' ? 'live-testnet' : 'live-mainnet'); });
+  app.addHook('onClose', async () => { offCache(); });
   const off = onTransition(async (row, e) => { await emitWebhook('order.updated', { orderId: row.id, mode: row.mode, venue: row.venue, instrument: row.instrument, status: e.to, previous: e.from, event: e.event, reason: e.reason, seq: e.seq,
     principal: `${row.principal_kind}:${row.principal_id}`, mandateId: row.mandate_id }); });
   app.addHook('onClose', async () => { off(); });
