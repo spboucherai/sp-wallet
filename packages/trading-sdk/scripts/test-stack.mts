@@ -26,18 +26,19 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const label = (process.argv[2] ?? 'sdk').replace(/[^a-z0-9_]/g, '').slice(0, 20) || 'sdk';
 const say = (o: unknown): void => { process.stdout.write(JSON.stringify(o) + '\n'); };
 const children: ChildProcess[] = [];
-let db: TestDb | null = null, dir = '', closing = false;
+let db: TestDb | null = null, dir = '';
 
-async function shutdown(code: number): Promise<never> {
-  if (!closing) {
-    closing = true;
+let stopping: Promise<void> | null = null;
+/** idempotent: stdin 'end' and 'close' (and a signal) may all ask for it; the process exits only when the cleanup is done */
+function shutdown(code: number): Promise<never> {
+  stopping ??= (async () => {
     for (const c of children) { try { c.kill('SIGTERM'); } catch { /* gone */ } }
     await new Promise((r) => setTimeout(r, 150));
     for (const c of children) { try { c.kill('SIGKILL'); } catch { /* gone */ } }
-    try { await db?.drop(); } catch { /* the global teardown or clean-test-dbs.sh removes it */ }
+    try { await db?.drop(); } catch { /* the global teardown or scripts/clean-test-dbs.sh removes it */ }
     if (dir) rmSync(dir, { recursive: true, force: true });
-  }
-  process.exit(code);
+  })();
+  return stopping.then(() => process.exit(code));
 }
 const freePort = (): Promise<number> => new Promise((res, rej) => { const s = createServer(); s.once('error', rej); s.listen(0, '127.0.0.1', () => { const p = (s.address() as { port: number }).port; s.close(() => res(p)); }); });
 

@@ -76,8 +76,21 @@ describe.skipIf(skip !== null)('integration: reads against the real route handle
     expect(e.candidates).toEqual(expect.arrayContaining(['hyperliquid:BTC']));
     expect(e).toMatchObject({ status: 409, code: 'ambiguous_symbol' }); expect(e.requestId).toMatch(/^[0-9a-f-]{36}$/);
     say(`getMarket('BTC') → AmbiguousSymbol HTTP 409 candidates=${JSON.stringify(e.candidates.slice(0, 4))}…`);
+    // an id with ':' '/' ' ' '[' ']' goes through the real router as ONE path segment, and a venue without a book answers 422
+    const gmx = e.candidates.find((x) => x.startsWith('gmx:'));
+    if (gmx) {
+      const g = await c.getMarket(gmx);
+      expect(g.market.id).toBe(gmx);
+      const nb = await caught(c.getOrderbook(gmx));
+      expect(nb).toBeInstanceOf(ValidationError); expect(nb).toMatchObject({ status: 422, code: 'no_orderbook' });
+      say(`getMarket('${gmx}') → ${meta(g)} id=${g.market.id}; getOrderbook('${gmx}') → ${nb.name} HTTP ${nb.status} ${nb.code}`);
+    }
+    const spot = await caught(c.getOrderbook('spot:BTC'));
+    expect(spot).toBeInstanceOf(ValidationError); expect(spot).toMatchObject({ status: 422, code: 'no_orderbook' });
     const nf = await caught(c.getMarket('nowhere:XYZ'));
     expect(nf).toBeInstanceOf(NotFound); say(`getMarket('nowhere:XYZ') → ${nf.name} ${nf.status} ${nf.code}`);
+    const nv = await caught(c.listMarkets({ venue: 'nowhere' }));
+    expect(nv).toBeInstanceOf(NotFound); expect(nv.code).toBe('unknown_venue'); say(`listMarkets({venue:'nowhere'}) → ${nv.name} ${nv.status} ${nv.code}`);
     const no = await caught(c.getOrder(`deriv:${UUID}:nope`));
     expect(no).toBeInstanceOf(NotFound); expect(no.code).toBe('unknown_order'); say(`getOrder('deriv:…:nope') → ${no.name} ${no.status} ${no.code}`);
     const route = await caught(c.waitForOrder('not-an-order-id', { waitTimeoutMs: 10 }));
