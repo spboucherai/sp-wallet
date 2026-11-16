@@ -22,7 +22,10 @@ export const ANY_SCOPE = '*' as const;
 export type RouteScope = Scope | typeof ANY_SCOPE;
 /** Scopes that would make a venue or the signer act. On a key they are INERT without a trading mandate bound to the key
  *  (`mandate_required`), and a scope is never what bounds execution: the signer-enforced mandate is. */
-export const EXECUTION_SCOPES: readonly Scope[] = ['orders:execute', 'orders:cancel', 'positions:manage', 'strategies:manage', 'agents:manage'];
+export const EXECUTION_SCOPES: readonly Scope[] = ['orders:execute', 'orders:cancel', 'positions:manage'];
+/** V11 agents: `strategies:manage` and `agents:manage` are MANAGEMENT scopes — research, paper trading, pause and stop sign nothing.
+ *  Going LIVE is bounded by the AGENT's own mandate (approved by the owner with the passkey, enforced by the signer): the handler
+ *  answers 409 `mandate_required` without one, whatever the key holds. */
 export const isExecutionScope = (s: string): boolean => (EXECUTION_SCOPES as readonly string[]).includes(s);
 
 // ---------------------------------------------------------------------------------------------------------------- key model
@@ -69,7 +72,8 @@ export const WEBHOOK_EVENTS = [
   { event: 'key.revoked', emitted: true, description: 'an API key was revoked (or replaced by a rotation)', payload: '{ keyId, name, reason }' },
   { event: 'risk.kill_switch', emitted: true, description: 'the emergency halt of the signer was triggered (source "signer"), or the global kill switch of the risk engine was engaged or released (source "risk_engine")',
     payload: '{ source: "signer", halted: true } | { source: "risk_engine", engaged, by, reason }' },
-  { event: 'agent.updated', emitted: true, description: 'an agent changed mode through an owner action (engine-side transitions: pending wiring)', payload: '{ agentId, kind, state, mode }' },
+  { event: 'agent.updated', emitted: true, description: 'an agent was started, paused or stopped (by the owner, an API key or the risk-management agent)', payload: '{ agentId, kind, state, mode }' },
+  { event: 'risk.proposal', emitted: true, description: 'the risk-management agent proposes a reduction or a pause, or acted (paused an agent, engaged the kill switch)', payload: '{ supervisorId, agentId, mode, action, code, acted, message, metrics }' },
   { event: 'order.updated', emitted: true, description: 'an order changed state: one event per transition of the unified order state machine, for every principal, mode and venue',
     payload: '{ orderId, mode, venue, instrument, status, previous, event, reason, seq, principal, mandateId }' },
 ] as const;
@@ -80,6 +84,7 @@ export const WEBHOOK_EVENT_NAMES = WEBHOOK_EVENTS.map((e) => e.event) as [Webhoo
 const Dec = z.string().describe('decimal number as a string (never a float)');
 const Ms = z.number().int().describe('milliseconds since the Unix epoch');
 const Mode = z.enum(['paper', 'live']).describe('paper = simulated, live = a venue or on-chain account. The two are never merged in one figure.');
+const AgentMode = z.enum(['research', 'paper', 'live']).describe('research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.');
 const PartialError = z.object({ source: z.string(), message: z.string() });
 const MarketId = z.string().min(1).max(120).describe('`venue:symbol` (e.g. `hyperliquid:BTC`, `spot:ETH`); a bare symbol is accepted when it is not ambiguous');
 
@@ -160,8 +165,23 @@ export const CanonicalOrder = z.looseObject({ v: z.literal(1), venue: z.string()
   clientOrderId: z.string(), mode: z.enum(['research', 'paper', 'live']), principal: z.looseObject({ kind: z.enum(['owner', 'agent', 'api_key']), id: z.string() }), mandateId: z.string().nullable(), createdAt: Ms, expiresAt: Ms,
 }).describe('the canonical order SPW-ORDER-INTENT-v1: what is hashed, checked by the mandate and the risk engine, and handed to the engine');
 
+const CmdBase = { command: z.string().describe('the parsed command type'), mode: Mode, dryRun: z.boolean() };
+const Attached = z.array(z.looseObject({ role: z.enum(['stop_loss', 'take_profit']), placed: z.boolean(), note: z.string() }));
+/** POST /commands: four shapes, told apart by `kind` and, for an order, by `executed`. The member `order` is the CANONICAL order of a
+ *  dry run and the UNIFIED order of an executed command: the two are separate alternatives, never one loose object. */
+const CommandAnswer = z.union([
+  z.looseObject({ kind: z.literal('query'), ...CmdBase, query: z.string(), data: z.looseObject({}).describe('the answer of the matching read operation') }).describe('SHOW …'),
+  z.looseObject({ kind: z.literal('control'), ...CmdBase, executed: z.boolean(), control: z.looseObject({ type: z.enum(['cancel_order', 'cancel_all', 'kill_switch_on', 'stop_all_agents']) }),
+    result: z.looseObject({}).optional().describe('CANCEL ORDER, executed: the answer of the cancel'), results: z.array(z.looseObject({ id: z.string(), ok: z.boolean() })).optional().describe('CANCEL ALL, executed: one row per order'),
+    orders: z.array(z.string()).optional().describe('CANCEL ALL, dry run: the ids that would be cancelled'), killSwitch: Switch.optional() }).describe('CANCEL, KILL, STOP ALL AGENTS'),
+  z.looseObject({ kind: z.literal('order'), ...CmdBase, executed: z.literal(false), order: CanonicalOrder.describe('the canonical order the command resolves to; nothing was created'), hash: z.string(), attached: Attached,
+    preview: z.looseObject({}).optional().describe('spot: the preview of the swap the order would become') }).describe('an order command with `dryRun`'),
+  z.looseObject({ kind: z.literal('order'), ...CmdBase, executed: z.literal(true), order: OrderRow.describe('the order that was placed, as POST /orders answers it'), canonical: CanonicalOrder.describe('the canonical order that was placed'),
+    hash: z.string(), idempotent: z.boolean(), approval: z.looseObject({}).nullable(), attached: Attached }).describe('an order command, executed'),
+]);
+
 /** shapes the document names once (`#/components/schemas/<name>`) instead of repeating them in every answer */
-export const COMPONENT_SCHEMAS: Record<string, z.ZodType> = { Order: OrderRow, CanonicalOrder, RiskCheck };
+export const COMPONENT_SCHEMAS: Record<string, z.ZodType> = { Order: OrderRow, CanonicalOrder, RiskCheck, Switch };
 
 const R = {
   markets: z.object({ markets: z.array(MarketRow), total: z.number().int().describe('rows matching the filters, before `limit`'), truncated: z.boolean(), errors: z.array(PartialError), ts: Ms }),
@@ -182,7 +202,17 @@ const R = {
   orders: z.object({ orders: z.array(OrderRow), nextCursor: NextCursor, ts: Ms }),
   order: z.looseObject({ order: OrderRow, fills: z.array(Fill), history: z.array(z.looseObject({})).optional().describe('the transitions of the order, oldest first (absent for `agent:` rows)') }),
   strategies: z.object({ library: z.array(z.looseObject({ kind: z.enum(['spot', 'perp']), path: z.string(), sha256: z.string() })), versions: z.array(z.looseObject({ id: z.string(), agentId: z.string(), name: z.string(), version: z.string(), sha256: z.string(), status: z.string() })), errors: z.array(PartialError) }),
-  agents: z.object({ agents: z.array(z.looseObject({ id: z.string(), kind: z.enum(['spot', 'perp']), name: z.string(), state: z.string(), mode: z.string(), tradingMode: z.enum(['research', 'paper', 'live']).nullable(), venue: z.string(), universe: z.array(z.string()), interval: z.string() })) }),
+  agents: z.object({ agents: z.array(z.looseObject({ id: z.string(), kind: z.enum(['spot', 'perp', 'stream', 'supervisor']), name: z.string(), family: z.string(), state: z.string().describe('historical raw state'), mode: z.string().describe('historical raw mode'),
+    lifecycle: z.enum(['active', 'paused', 'stopped']), tradingMode: z.enum(['research', 'paper', 'live']).nullable(), venue: z.string(), universe: z.array(z.string()), interval: z.string(), configVersion: z.number().int() })) }),
+  agent: z.looseObject({ agent: z.looseObject({ id: z.string(), family: z.string(), state: z.enum(['active', 'paused', 'stopped']), mode: AgentMode }), mandateDraft: z.looseObject({}).nullable() }),
+  agentResult: z.looseObject({ agent: z.looseObject({ id: z.string(), state: z.enum(['active', 'paused', 'stopped']), mode: AgentMode }) }),
+  job: z.object({ job: z.looseObject({ id: z.string(), kind: z.string(), status: z.enum(['queued', 'running', 'done', 'failed', 'cancelled']), attempts: z.number().int() }), label: z.string().optional() }),
+  signals: z.object({ mode: AgentMode, signals: z.array(z.looseObject({ id: z.string(), ts: Ms, mode: AgentMode, configVersion: z.number().int(), strategySha256: z.string(), decision: z.enum(['pending', 'acted', 'skipped']), reasonCode: z.string().nullable() })) }),
+  journal: z.object({ mode: AgentMode, entries: z.array(z.looseObject({ id: z.string(), ts: Ms, mode: AgentMode, kind: z.string(), severity: z.string(), title: z.string() })) }),
+  agentOrders: z.object({ mode: AgentMode, orders: z.array(z.looseObject({ id: z.string(), mode: z.enum(['paper', 'live']), instrument: z.string(), side: z.string(), state: z.string().describe('unified order state (CREATED … FILLED, CANCELLED, REJECTED, FAILED, UNKNOWN)') })) }),
+  performance: z.looseObject({ mode: AgentMode, label: z.string().describe('says which mode the figures are for; a backtest is never in this answer'), points: z.number().int(), warnings: z.array(z.object({ code: z.string(), message: z.string() })) }),
+  templates: z.object({ templates: z.array(z.looseObject({ id: z.string(), family: z.string(), engine: z.string(), modes: z.array(AgentMode), liveReason: z.string().nullable(), strategyInstalled: z.boolean() })) }),
+  strategyResult: z.looseObject({ strategy: z.looseObject({ id: z.string(), agentId: z.string(), sha256: z.string(), status: z.string() }) }),
   risk: z.looseObject({
     killSwitch: z.object({ signerReachable: z.boolean(), signerHalted: z.boolean().nullable(), note: z.string() }),
     signerPolicy: z.looseObject({}).nullable(), capabilityLocks: z.array(z.object({ id: z.string(), on: z.boolean(), why: z.string() })),
@@ -200,29 +230,20 @@ const R = {
     texts: z.looseObject({ disclaimer: z.string() }), warnings: z.array(z.string()), errors: z.array(PartialError), ts: Ms, source: z.string(),
   }),
   preview: z.looseObject({ order: CanonicalOrder, hash: z.string().describe('SHA-256 of the canonical bytes, hex'),
-    resolved: z.looseObject({ size: Dec.describe('base units'), worstPrice: Dec.nullable(), notionalUsd: Dec.nullable() }).nullable().describe('what the canonical order leaves open; null when it could not be resolved (see `refusals`)'),
+    resolved: z.looseObject({ size: Dec.nullable().describe('base units; null when the order is sized by a quote amount the venue converts (a GMX increase)'), worstPrice: Dec.nullable(), notionalUsd: Dec.nullable() }).nullable().describe('what the canonical order leaves open; null when it could not be resolved (see `refusals`)'),
     wouldExecute: z.boolean().describe('true exactly when `refusals` is empty'),
     refusals: z.array(z.looseObject({ stage: z.enum(['key', 'lock', 'mandate', 'risk', 'engine']), code: z.string(), message: z.string(), reasons: z.array(z.string()).optional() })),
     approval: z.looseObject({ required: z.boolean(), by: z.enum(['owner_passkey', 'mandate', 'none']) }),
     risk: z.looseObject({ decision: z.enum(['allow', 'deny']), reducing: z.boolean(), checks: z.array(RiskCheck),
-      derived: z.looseObject({ size: Dec.nullable(), notional: Dec.nullable(), referencePrice: Dec.nullable(), positionBefore: Dec.optional(), positionAfter: Dec.nullable().optional() }) }),
+      derived: z.looseObject({ size: Dec.nullable(), notional: Dec.nullable(), referencePrice: Dec.nullable(), positionBefore: Dec.optional(), positionAfter: Dec.nullable().optional() }).nullable().describe('null for a spot order: of the risk engine only the kill switch and read-only mode apply to it') }),
     mandate: z.looseObject({ id: z.string(), decision: z.enum(['allow', 'deny']), reasons: z.array(z.string()) }).nullable().describe('null for the owner session, and when the key\'s mandate cannot be used (a `mandate` refusal then says why)'),
     engine: z.looseObject({ name: z.string(), risk: z.looseObject({ ok: z.boolean() }).nullable(), estimate: z.looseObject({}).nullable().describe('fees, slippage against the real book, liquidation price: an estimate') }),
-    account: z.looseObject({ id: z.string(), venue: z.string(), network: z.string(), equity: Dec.nullable().optional(), freeCollateral: Dec.nullable().optional(),
+    account: z.looseObject({ id: z.string().nullable().describe('null for a spot order (the wallet itself)'), venue: z.string(), network: z.string(), equity: Dec.nullable().optional(), freeCollateral: Dec.nullable().optional(),
       withheld: z.boolean().describe('true: the key holds neither `wallet:read` nor `positions:read`, so `equity`, `freeCollateral`, the position figures of `risk.derived`, and the account figures of the risk checks, of the refusal sentences and of the estimate are omitted') }),
     ts: Ms }),
   placed: Placed,
   cancelled: z.looseObject({ order: OrderRow, sent: z.boolean().describe('true: a cancel request went to a venue'), changed: z.boolean().describe('false: the order was already final'), venue: z.unknown().optional() }),
-  command: z.looseObject({
-    kind: z.enum(['query', 'control', 'order']).describe('what the command resolved to'), command: z.string().describe('the parsed command type'), mode: Mode, dryRun: z.boolean(),
-    executed: z.boolean().optional().describe('absent for a query; false for a dry run'), query: z.string().optional(), data: z.looseObject({}).optional().describe('query: the answer of the matching read operation'),
-    control: z.looseObject({ type: z.enum(['cancel_order', 'cancel_all', 'kill_switch_on']) }).optional(),
-    order: z.looseObject({}).optional().describe('kind `order`. Dry run: the canonical order the command resolves to. Executed: the order as POST /orders answers it (`id`, `status`, `final`, …)'),
-    canonical: CanonicalOrder.optional().describe('executed order: the canonical order that was placed'), hash: z.string().optional(), idempotent: z.boolean().optional(), approval: z.looseObject({}).nullable().optional(),
-    attached: z.array(z.looseObject({ role: z.enum(['stop_loss', 'take_profit']), placed: z.boolean(), note: z.string() })).optional(),
-    result: z.looseObject({}).optional().describe('CANCEL ORDER: the answer of the cancel'), results: z.array(z.looseObject({ id: z.string(), ok: z.boolean() })).optional().describe('CANCEL ALL: one row per order'),
-    orders: z.array(z.string()).optional().describe('CANCEL ALL dry run: the ids that would be cancelled'), killSwitch: Switch.optional(),
-  }),
+  command: CommandAnswer,
   killSwitch: z.looseObject({ killSwitch: Switch, readOnly: Switch }),
 };
 
@@ -239,7 +260,7 @@ export const OrderRequestSchema = z.strictObject({
   instrument: MarketId, side: z.enum(['buy', 'sell']),
   type: z.enum(['limit', 'market', 'stop_market', 'stop_limit', 'take_profit_market', 'take_profit_limit']),
   size: PosDec.optional().describe('quantity of the base asset. Exactly one of `size` and `notional` is required'),
-  notional: PosDec.optional().describe('value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required'),
+  notional: PosDec.optional().describe('value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required. A SPOT order: a SELL names `size` (the quantity sold); a BUY names `notional` — the amount of the quote asset to spend — because a swap is exact-input'),
   price: PosDec.optional(), triggerPrice: PosDec.optional(),
   reduceOnly: z.boolean().default(false), tif: z.enum(['gtc', 'ioc', 'alo']).default('gtc'), slippageBps: z.number().int().min(1).max(500).optional(),
   leverage: PosDec.optional().describe('paper only: leverage setting of the instrument on the account. On a venue account the leverage is a venue setting'),
@@ -256,9 +277,14 @@ const CloseBody = z.strictObject({ slippageBps: z.number().int().min(1).max(500)
 const ReduceBody = z.strictObject({ fraction: Dec.regex(/^(0(\.\d+)?|1(\.0+)?)$/).describe('share of the position to close, in (0, 1]'), slippageBps: z.number().int().min(1).max(500).optional() });
 const StrategyBody = z.strictObject({ kind: z.enum(['spot', 'perp']), path: z.string().min(1).max(200).describe('library path of the strategy'), agentId: z.uuid().optional() });
 const BacktestBody = z.strictObject({ symbols: z.array(z.string().regex(/^[A-Z0-9]{2,15}$/)).min(1).max(12).optional(), interval: z.enum(['1h', '1d']).optional() });
-const StartBody = z.strictObject({ mode: Mode, agentId: z.uuid().optional() });
+const StartBody = z.strictObject({ mode: AgentMode, agentId: z.uuid().optional() });
 const StopBody = z.strictObject({ reason: z.string().max(200).default('') });
-const AgentBody = z.strictObject({ kind: z.enum(['spot', 'perp']), name: z.string().min(2).max(40), mission: z.string().max(400).default(''), universe: z.array(z.string().regex(/^[A-Z0-9]{2,15}$/)).min(1).max(12), interval: z.enum(['1h', '1d']).default('1h'), mode: Mode.default('paper') });
+const AgentBody = z.strictObject({ kind: z.enum(['spot', 'perp']).optional().describe('without a template: perp (a spot agent needs a vault from the signer: owner only)'), template: z.string().max(40).optional().describe('one of GET /agents/templates'),
+  name: z.string().min(2).max(40), mission: z.string().max(400).default(''), universe: z.array(z.string().regex(/^[A-Z0-9]{2,15}$/)).min(1).max(12).optional(), venues: z.array(z.enum(['hyperliquid', 'edgex', 'dydx', 'gmx'])).min(1).max(2).optional(),
+  strategyPath: z.string().max(60).optional(), interval: z.enum(['1h', '4h', '1d']).optional(), capitalUsdc: z.string().regex(/^\d{1,7}(\.\d{1,6})?$/).optional(), risk: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional(),
+  config: z.record(z.string(), z.unknown()).optional(), mode: AgentMode.default('research').describe('research (default: created, not running) or paper (stream and supervisor agents start at once); never live') });
+const AgentPage = z.object({ mode: AgentMode.optional().describe('default: the mode the agent is in now'), limit: Limit(100, 500), before: z.coerce.number().int().positive().optional().describe('unix ms: rows strictly before it'), open: z.enum(['true', 'false']).optional() });
+const AgentBacktestBody = z.strictObject({ versionId: z.uuid().optional(), hours: z.number().int().min(1).max(168).optional().describe('stream agents: how many hours of recorded snapshots to replay') });
 
 // ---------------------------------------------------------------------------------------------------------------- private markets (v11)
 const PmDatum = z.object({ value: Dec.nullable(), source: z.string(), ts: Ms.nullable(), stale: z.boolean() }).describe('one figure with where it comes from, when it was read, and whether it is older than its freshness bound');
@@ -308,13 +334,24 @@ const X = {
   idem: [...E(400, 'idempotency', 'stale_request'), ...E(409, 'idempotency_conflict', 'idempotency_in_progress')],
   /** orders/service.ts `target`, `market`, `canonical`, `resolved`, and the notional sizing of routes.ts: refused before an order exists */
   target: [...E(400, 'invalid_order'), ...E(403, 'restricted', 'spot_execution_requires_agent_vault', 'venue_restricted'), ...E(404, 'unknown_venue', 'unknown_account', 'unknown_instrument'), ...E(409, 'account_required'),
-    ...E(422, 'spot_via_swap_screen', 'no_account', 'venue_not_wired', 'below_min_size'), ...E(503, 'unknown_instrument', 'stale_data', 'venue_unavailable', 'venue_rate_limited', 'venue_timeout')],
+    ...E(422, 'spot_via_swap_screen', 'no_account', 'venue_not_wired', 'below_min_size', 'unknown_instrument', 'gmx_leverage_required'),
+    ...E(503, 'unknown_instrument', 'stale_data', 'venue_unavailable', 'venue_rate_limited', 'venue_timeout'),
+    // an owner's spot order is a swap proposal of the existing flow (orders/spot-orders.ts); a spot BUY names the quote amount (`notional`)
+    ...E(403, 'owner_session_required'), ...E(409, 'ambiguous_order', 'ambiguous_command'), ...E(422, 'spot_market_only', 'spot_buy_needs_quote_amount', 'spot_paper_not_available', 'swap_not_enabled', 'unsupported_asset', ...COMMAND_UNRESOLVABLE_CODES),
+    ...E(501, 'execution_not_wired'), ...E(502, 'swap_flow_failed')],
   /** orders/service.ts `place`: the key, the lock, the mandate, the risk engine, then the venue engine's own refusal (with the order in `data.order` once it exists) */
-  place: [...E(400, 'bad_policy'), ...E(403, 'mandate_required', 'mandate_not_approved', 'mandate_denied', 'execution_disabled', 'key_limit_exceeded', 'mainnet_disabled', 'mandate_mainnet_disabled'), ...E(409, 'bad_state'),
+  place: [...E(400, 'bad_policy'), ...E(403, 'mandate_required', 'mandate_not_approved', 'mandate_denied', 'mandate_integrity', 'execution_disabled', 'key_limit_exceeded', 'mainnet_disabled', 'mandate_mainnet_disabled',
+    'position_not_attributable', 'gmx_requires_owner_passkey', 'gmx_disabled'), ...E(409, 'bad_state', 'account_has_active_mandate'),
     ...E(422, 'risk_denied', 'leverage_mismatch', ...ENGINE_RISK_CODES, 'venue_rejected', 'authorization_expired', 'mandate_mismatch', 'mandate_none', 'mandate_wind_down', 'paper_unsupported', 'live_not_available'),
     ...E(423, 'kill_switch_active', 'read_only_mode', 'halted'), ...E(503, 'no_liquidity', 'signer_unreachable', 'mandate_unavailable', 'authorization_unknown')],
-  cancel: [...E(403, 'not_your_order'), ...E(404, 'unknown_order'), ...E(409, 'bad_state'), ...E(422, 'cancel_in_app', 'venue_rejected'), ...E(503, 'venue_unavailable', 'signer_unreachable')],
-  reduce: [...E(404, 'unknown_position'), ...E(422, 'close_in_app', 'no_position', 'not_reducing')],
+  cancel: [...E(403, 'not_your_order', 'gmx_requires_owner_passkey', 'owner_session_required'), ...E(404, 'unknown_order'), ...E(409, 'bad_state'), ...E(422, 'cancel_in_app', 'venue_rejected'), ...E(503, 'venue_unavailable', 'signer_unreachable')],
+  reduce: [...E(404, 'unknown_position'), ...E(409, 'ambiguous_position'), ...E(422, 'close_in_app', 'no_position', 'not_reducing')],
+};
+/** agents/trading-handlers.ts: `agentFor` (a key restricted to venues reaches only the agents that trade there; 404 `not_found`), then lifecycle.ts */
+const A = {
+  agent: [...E(403, 'restricted'), ...E(404, 'not_found')],
+  start: [...E(403, 'owner_required'), ...E(409, 'bad_state', 'mandate_required', 'live_unavailable', 'no_strategy', 'no_report', 'bad_report')],
+  stop: E(409, 'bad_state'),
 };
 const ENGINE_NOTE = ' The venue engine that executes the order can refuse it with a code of its own rules that this list does not name (`x-spw-errors-open`): the HTTP status still tells the class, and the order is in `data.order`.';
 
@@ -338,6 +375,9 @@ export interface OperationSpec {
   errorsOpen?: boolean;
 }
 const NOT_WIRED = 'Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.';
+const START_NOTE = 'research and paper sign nothing. `live` is accepted ONLY when a mandate approved by the owner with the passkey is in force for this agent at the signer; otherwise 409 `mandate_required` (a key, an agent or this API can never approve a mandate). Families that cannot go live answer 409 `live_unavailable` with the reason.';
+const STOP_NOTE = 'Always allowed. The safe wind-down: a live perp agent\'s mandate is revoked and its positions are closed with reduce-only orders; a live spot agent\'s mandate is revoked at the signer; simulated quotes are withdrawn.';
+const done = (description: string): Partial<OperationSpec> => ({ implemented: true, description });
 const read = (id: string, path: string, tag: OperationSpec['tag'], scope: RouteScope, summary: string, o: Partial<OperationSpec> = {}): OperationSpec => ({ id, method: 'GET', path, tag, scope, summary, implemented: true, ...o });
 const write = (id: string, method: 'POST' | 'DELETE', path: string, tag: OperationSpec['tag'], scope: Scope, summary: string, o: Partial<OperationSpec> = {}): OperationSpec =>
   ({ id, method, path, tag, scope, summary, description: NOT_WIRED, idempotent: true, implemented: false, ...o });
@@ -397,18 +437,31 @@ export const OPERATIONS: readonly OperationSpec[] = [
   write('reducePosition', 'POST', '/positions/:id/reduce', 'Positions', 'positions:manage', 'Reduce a position', { params: IdParam, body: ReduceBody, implemented: true, response: R.placed, errors: [...X.target, ...X.idem, ...X.place, ...X.reduce], errorsOpen: true,
     description: 'As close, on a fraction of the position (rounded down to the lot).' + ENGINE_NOTE }),
   write('runCommand', 'POST', '/commands', 'Orders', 'orders:prepare', 'Run one line of the trading command grammar', { body: CommandBody, implemented: true, noMandate: true, response: R.command, errorsOpen: true,
-    errors: [...E(400, 'parse_error'), ...E(403, 'insufficient_scope', 'mandate_required'), ...E(409, 'ambiguous_command'), ...E(422, ...COMMAND_UNRESOLVABLE_CODES), ...E(501, 'execution_not_wired'), ...E(503, 'signer_unreachable', 'service_unavailable'),
+    errors: [...E(400, 'parse_error'), ...E(403, 'insufficient_scope', 'mandate_required'), ...E(409, 'ambiguous_command'), ...E(422, ...COMMAND_UNRESOLVABLE_CODES), ...E(503, 'signer_unreachable', 'service_unavailable'),
       ...X.target, ...X.idem, ...X.place, ...X.cancel, ...E(422, 'not_reducing')],
-    description: 'Deterministic grammar (no model). The scope checked is the one of the operation the command resolves to: an order needs `orders:execute` (`orders:prepare` with `dryRun`), CLOSE `positions:manage`, CANCEL `orders:cancel`, SHOW the matching read scope, KILL `positions:manage`. Resolution uses the owner\'s stored defaults (GET/PUT /api/v1/developer/command-defaults) and nothing else: a command the defaults do not settle answers 409 `ambiguous_command` with the questions in `data.questions` and executes nothing. `kind` says what the command resolved to: `query` (the read answer is in `data`), `control` (a cancel or the kill switch) or `order`. STOP ALL AGENTS answers 501 `execution_not_wired`.' + ENGINE_NOTE }),
+    description: 'Deterministic grammar (no model). The scope checked is the one of the operation the command resolves to: an order needs `orders:execute` (`orders:prepare` with `dryRun`), CLOSE `positions:manage`, CANCEL `orders:cancel`, SHOW the matching read scope, KILL `positions:manage`. Resolution uses the owner\'s stored defaults (GET/PUT /api/v1/developer/command-defaults) and nothing else: a command the defaults do not settle answers 409 `ambiguous_command` with the questions in `data.questions` and executes nothing. `kind` says what the command resolved to: `query` (the read answer is in `data`), `control` (a cancel or the kill switch) or `order`. A spot order (BUY ETH 100 USDC, SELL ETH 0.5) is the owner\'s: it becomes a swap proposal approved with the passkey.' + ENGINE_NOTE }),
   write('engageKillSwitch', 'POST', '/risk/kill-switch', 'Risk', 'positions:manage', 'Engage the global kill switch', { body: KillBody, implemented: true, noMandate: true, idempotent: false, response: R.killSwitch,
     description: 'Blocks every NEW risk for every principal on every venue and in every mode; cancels and strictly reducing orders still pass. Engaging needs no mandate (it only removes risk) and takes no Idempotency-Key: engaging a switch that is on changes nothing. Releasing it is NOT possible with a key: owner session and passkey only.' }),
-  write('createStrategy', 'POST', '/strategies', 'Strategies', 'strategies:manage', 'Register a strategy version', { body: StrategyBody }),
-  write('backtestStrategy', 'POST', '/strategies/:id/backtest', 'Strategies', 'strategies:manage', 'Run a backtest', { params: IdParam, body: BacktestBody }),
-  write('startStrategy', 'POST', '/strategies/:id/start', 'Strategies', 'strategies:manage', 'Start a strategy', { params: IdParam, body: StartBody }),
-  write('stopStrategy', 'POST', '/strategies/:id/stop', 'Strategies', 'strategies:manage', 'Stop a strategy', { params: IdParam, body: StopBody }),
-  write('createAgent', 'POST', '/agents', 'Agents', 'agents:manage', 'Create an agent', { body: AgentBody }),
-  write('startAgent', 'POST', '/agents/:id/start', 'Agents', 'agents:manage', 'Start an agent', { params: IdParam, body: StartBody }),
-  write('stopAgent', 'POST', '/agents/:id/stop', 'Agents', 'agents:manage', 'Stop an agent', { params: IdParam, body: StopBody }),
+  write('createStrategy', 'POST', '/strategies', 'Strategies', 'strategies:manage', 'Register a library strategy version on an agent', { body: StrategyBody, response: R.strategyResult, errors: [...A.agent, ...E(409, 'wrong_kind'), ...E(422, 'bad_strategy')], ...done('Pins the version by the SHA-256 of its file and queues its backtest. Registers nothing new in the library and approves nothing. `agentId` is required.') }),
+  write('backtestStrategy', 'POST', '/strategies/:id/backtest', 'Strategies', 'strategies:manage', 'Run the backtest of a strategy version (asynchronous job)', { params: IdParam, body: BacktestBody, response: R.job, errors: A.agent, ...done('Answers a job id; read it with GET /jobs/{id}. The result is a BACKTEST report on the version — never a performance figure.') }),
+  write('startStrategy', 'POST', '/strategies/:id/start', 'Strategies', 'strategies:manage', 'Start the agent a strategy version is pinned to', { params: IdParam, body: StartBody, response: R.agentResult, errors: [...A.agent, ...A.start, ...E(409, 'other_version', 'bad_request')], ...done(START_NOTE) }),
+  write('stopStrategy', 'POST', '/strategies/:id/stop', 'Strategies', 'strategies:manage', 'Stop the agent a strategy version is pinned to', { params: IdParam, body: StopBody, response: R.agentResult, errors: [...A.agent, ...A.stop], ...done(STOP_NOTE) }),
+  read('listAgentTemplates', '/agents/templates', 'Agents', 'agents:read', 'The seven built-in agents: family, engine, modes, installed strategies', { response: R.templates,
+    description: 'A bar template is bound BY NAME to laboratory strategies; `strategyInstalled: false` means none of them is installed (no placeholder is ever substituted). `liveReason` says why a family cannot go live.' }),
+  read('getAgent', '/agents/:id', 'Agents', 'agents:read', 'One agent: model, strategy, limits, mandate reference, backtest reports (labelled), worker state', { params: IdParam, response: R.agent, errors: A.agent }),
+  read('listAgentSignals', '/agents/:id/signals', 'Agents', 'agents:read', 'Signal history of one agent, ONE mode', { params: IdParam, query: AgentPage, errors: A.agent, response: R.signals,
+    description: 'Each signal carries the mode, the configuration version, the strategy hash, a digest of its inputs, its output and the decision: `acted`, or `skipped` with a reason code.' }),
+  read('listAgentJournal', '/agents/:id/journal', 'Agents', 'agents:read', 'Activity journal of one agent, ONE mode', { params: IdParam, query: AgentPage, errors: A.agent, response: R.journal,
+    description: 'Decisions, orders, fills, errors, risk denials, mandate events and state changes, newest first.' }),
+  read('listAgentOrders', '/agents/:id/orders', 'Agents', 'agents:read', 'Order history of one agent, ONE mode, in the unified order states', { params: IdParam, query: AgentPage, response: R.agentOrders, errors: A.agent }),
+  read('getAgentPerformance', '/agents/:id/performance', 'Agents', 'agents:read', 'Computed performance of one agent, ONE mode', { params: IdParam, query: z.object({ mode: AgentMode.optional() }), errors: A.agent, response: R.performance,
+    description: 'Equity curve, returns, volatility, Sharpe, Sortino, max drawdown, win rate, profit factor, turnover, fees, funding, slippage, net PnL — computed from the records of that mode only, with small-sample warnings. Paper and live are never added. Backtests are not here.' }),
+  read('getJob', '/jobs/:id', 'Agents', 'agents:read', 'One agent job (backtest, wind-down): status and result', { params: IdParam, response: R.job, errors: A.agent }),
+  write('createAgent', 'POST', '/agents', 'Agents', 'agents:manage', 'Create an agent (from a template, or a perp agent)', { body: AgentBody, response: R.agentResult, errors: [...E(403, 'owner_required'), ...E(409, 'bad_state', 'strategy_not_installed', 'wrong_kind', 'exists'), ...E(422, 'bad_request', 'universe_mismatch'), ...A.start], ...done('Nothing is signed and no vault is derived. A spot agent is created in the owner\'s app (403 `owner_required`). A template whose strategy is not installed answers 409 `strategy_not_installed`.') }),
+  write('startAgent', 'POST', '/agents/:id/start', 'Agents', 'agents:manage', 'Start an agent in research, paper or live mode', { params: IdParam, body: StartBody, response: R.agentResult, errors: [...A.agent, ...A.start], ...done(START_NOTE) }),
+  write('pauseAgent', 'POST', '/agents/:id/pause', 'Agents', 'agents:manage', 'Pause an agent', { params: IdParam, body: StopBody, response: R.agentResult, errors: [...A.agent, ...A.stop], ...done('No new exposure. A live perp agent keeps its positions and its mandate; a live spot agent\'s mandate is revoked at the signer (resuming it needs a new owner approval).') }),
+  write('stopAgent', 'POST', '/agents/:id/stop', 'Agents', 'agents:manage', 'Stop an agent (always allowed)', { params: IdParam, body: StopBody, response: R.agentResult, errors: [...A.agent, ...A.stop], ...done(STOP_NOTE) }),
+  write('backtestAgent', 'POST', '/agents/:id/backtest', 'Agents', 'agents:manage', 'Run a backtest for an agent (asynchronous job)', { params: IdParam, body: AgentBacktestBody, response: R.job, errors: [...A.agent, ...E(409, 'wrong_kind', 'no_strategy')], ...done('Bar agents: the laboratory backtest of the strategy version. Stream agents: the rule replayed on the top-of-book snapshots the stream engine recorded. Always a BACKTEST, labelled as such.') }),
 ];
 export type OperationId = string;
 export const operation = (id: string): OperationSpec => { const o = OPERATIONS.find((x) => x.id === id); if (!o) throw new Error(`unknown operation ${id}`); return o; };

@@ -21,10 +21,11 @@ import { UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
 import type { LiveService } from '../derivatives/exec.ts';
 import { liveReason, liveTexts, type LiveLocale, type LiveReasonCode } from '../derivatives/live-texts.ts';
-import { mandateAccountState, type MandateAccountState } from '../derivatives/mandate.ts';
+import { mandateAccountState, mandateOrder, type MandateAccountState } from '../derivatives/mandate.ts';
 import { PERP_STEP_MS, type PerpInterval } from './perp-data.ts';
 import { flattenPerp, instrumentId, tickPerpAgent, type PerpAgentRow, type PerpEngineDeps, type PerpLiveBook } from './perp-engine.ts';
 import { LIVE_EXIT_CODES, LivePerpExecutor } from './perp-exec-live.ts';
+import { liveOrderResult } from './perp-gateway.ts';
 
 /** what the engine needs from the runtime (perp-live.ts builds it; tests and the simulation script build their own) */
 export interface PerpLiveRuntime { deps: PerpEngineDeps; live: () => LiveService }
@@ -47,7 +48,7 @@ const CENT = D.from('0.01'), HUNDRED = D.from(100n);
 
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 240);
 const numDec = (n: number, dp = 4) => D.from(n.toFixed(dp));
-const log = (a: { id: string }, kind: string, title: string, body = '', data?: unknown) => sql`insert into research_log (agent_id, kind, title, body, data) values (${a.id}, ${kind}, ${title}, ${body.slice(0, 2000)}, ${data === undefined ? null : sql.json(data as never)})`;
+export const log = (a: { id: string }, kind: string, title: string, body = '', data?: unknown) => sql`insert into research_log (agent_id, kind, title, body, data) values (${a.id}, ${kind}, ${title}, ${body.slice(0, 2000)}, ${data === undefined ? null : sql.json(data as never)})`;
 const reload = async (id: string): Promise<PerpAgentRow> => (await sql<PerpAgentRow[]>`select * from agents where id = ${id}`)[0]!;
 const setLive = (id: string, live: PerpLiveBook | null) => sql`update agents set perp = perp || ${sql.json({ live } as never)}, updated_at = now() where id = ${id}`;
 const symbolOf = (instrument: string): string => instrument.slice(instrument.indexOf(':') + 1);
@@ -82,7 +83,7 @@ const exitText = (code: string, detail = ''): string => `${EXIT_TEXT[code] ?? `t
 type Summary = Awaited<ReturnType<LiveService['list']>>[number];
 interface Version { id: string; name: string; version: string; code_sha256: string; status: string; meta: { kind?: string } | null }
 
-async function approvedVersion(a: PerpAgentRow): Promise<Version | null> {
+export async function approvedVersion(a: PerpAgentRow): Promise<Version | null> {
   if (!a.strategy_version_id) return null;
   const [v] = await sql<Version[]>`select id, name, version, code_sha256, status, meta from strategy_versions where id = ${a.strategy_version_id}`;
   return v && v.status === 'approved' && v.meta?.kind === 'perp' ? v : null;
@@ -233,46 +234,8 @@ export async function liveReadiness(a: PerpAgentRow, rt: PerpLiveRuntime, q: { a
 export const LivePrepareBody = z.strictObject({ accountId: z.uuid(), days: z.number().int().min(1).max(VENUE_MANDATE_BOUNDS.maxDays).optional(), locale: z.enum(['fr', 'en']).default('en') });
 export const LiveApproveBody = z.strictObject({ accountId: z.uuid(), assertion: z.record(z.string(), z.unknown()), acknowledged: z.literal(true) });
 
-/** Step 1 of going live: the mandate derived from the agent's limits, prepared on the live module (which builds the WebAuthn request). */
-export async function prepareLive(a: PerpAgentRow, rt: PerpLiveRuntime, body: z.infer<typeof LivePrepareBody>) {
-  if (isLiveActive(a)) throw new UserError('bad_state', 'this agent is already on a venue account: stop it first', 409);
-  const r = await liveReadiness(a, rt, { account: body.accountId, locale: body.locale, days: body.days });
-  if (r.accountId !== body.accountId) throw new UserError('unknown_account', 'unknown venue account', 404);
-  const st = r.steps;
-  if (r.next === 'locked') { const code = st.mandate.lock!.code as LiveReasonCode; throw new UserError(code, liveReason(code), code === 'mandate_unavailable' ? 503 : 403); }
-  if (r.next !== 'mandate' || !r.proposal) {
-    const why = !st.strategy.ok ? st.strategy.reason : !st.account.ok ? st.account.reason : !st.funded.ok ? st.funded.reason : 'the agent is already live';
-    throw new UserError('not_ready', `not ready to go live (${r.next}): ${why}`, 409);
-  }
-  const prep = await rt.live().prepareMandate(body.accountId, { ...r.proposal.body, locale: body.locale });
-  await sql`update agents set perp = perp || ${sql.json({ livePending: { accountId: body.accountId, mandateId: prep.mandate.mandateId, capital: r.proposal.capital, strategySha256: r.proposal.body.strategySha256, preparedAt: rt.live().now() } } as never)}, updated_at = now() where id = ${a.id}`;
-  await audit('agent.perp_live_prepared', 'owner', { id: a.id, account: body.accountId, mandateId: prep.mandate.mandateId, capital: r.proposal.capital, limits: r.proposal.body });
-  return { ...prep, proposal: r.proposal };
-}
-
-/** Step 2: the ONE passkey approval. The signer judges it; on success the agent is LIVE on that venue account. */
-export async function approveLive(a: PerpAgentRow, rt: PerpLiveRuntime, body: z.infer<typeof LiveApproveBody>): Promise<PerpAgentRow> {
-  const svc = rt.live(), pend = (a.perp as { livePending?: { accountId: string; mandateId: string; capital: DecStr; strategySha256: string } } | null)?.livePending;
-  if (isLiveActive(a)) throw new UserError('bad_state', 'this agent is already on a venue account', 409);
-  const sv = await approvedVersion(a);
-  const [prepared] = await sql<{ id: string; mandate: { agentId: string; strategySha256: string } }[]>`select id, mandate from deriv_mandates where account_id = ${body.accountId} and state = 'prepared' order by prepared_at desc limit 1`;
-  if (!pend || pend.accountId !== body.accountId || !prepared || prepared.id !== pend.mandateId || prepared.mandate.agentId !== a.id || !sv || sv.code_sha256 !== prepared.mandate.strategySha256) {
-    throw new UserError('not_ready', 'prepare the mandate of this agent on this venue account first (the preparation is used once, and only for the strategy version that is approved now)', 409);
-  }
-  // one agent per venue account: the account is taken before the passkey is judged, and released if the approval fails
-  try { await sql`update agents set live_account_id = ${body.accountId}, updated_at = now() where id = ${a.id}`; }
-  catch (e) { if ((e as { code?: string }).code === '23505') throw new UserError('used_by_other_agent', 'this venue account is used by another agent: one agent per venue account', 409); throw e; }
-  let network: 'testnet' | 'mainnet';
-  try { network = (await svc.approveMandate(body.accountId, { assertion: body.assertion, acknowledged: true })).network; }
-  catch (e) { await sql`update agents set live_account_id = null, perp = perp - 'livePending', updated_at = now() where id = ${a.id}`; throw e; }
-  const live: PerpLiveBook = { accountId: body.accountId, network, mandateId: pend.mandateId, strategySha256: pend.strategySha256, since: svc.now(), capital: pend.capital, exit: null };
-  // the daily-loss reference, a paper hold and a paper flatten do not carry over to the venue account
-  const [row] = await sql<PerpAgentRow[]>`update agents set state = 'LIVE', mode = 'LIVE', stop_reason = null,
-    perp = (perp - 'livePending' - 'day' - 'hold' - 'flatten') || ${sql.json({ live } as never)}, updated_at = now() where id = ${a.id} returning *`;
-  await log(a, 'live', `LIVE on the ${network} venue account`, `mandate ${pend.mandateId}, strategy ${pend.strategySha256.slice(0, 12)}…, reference capital ${pend.capital} USDC. Orders inside the mandate are placed without a passkey.`);
-  await audit('agent.perp_live', 'owner', { id: a.id, account: body.accountId, network, mandateId: pend.mandateId, strategySha256: pend.strategySha256, capital: pend.capital });
-  return row!;
-}
+// Steps 1 and 2 of going live — `prepareLive` and `approveLive`, the only functions that WRITE a derivative mandate for an agent —
+// are in mandate-write.ts (V11): the engines and the agent runtime never import that module (agent-boundaries.test.ts).
 
 // ------------------------------------------------------------------ the engine pass of a live agent
 
@@ -280,6 +243,8 @@ function liveDeps(rt: PerpLiveRuntime, network: string, ex: LivePerpExecutor): P
   const venue = rt.live().deps.venues.get(network);
   return {
     ...rt.deps, executor: () => ex,
+    // V11: the order gateway settles an order whose outcome is not known from the venue account's own record of it (nothing is sent)
+    lookupOrder: async (clientId) => { const o = await mandateOrder(ex.accountId, clientId, rt.live()); return o ? liveOrderResult(o) : null; },
     // the market the orders are sent to: the account's own network (the signal still comes from the gate's closed bars)
     market: async (symbol) => { const inst = await venue.instrument(instrumentId(symbol)); const { ticker, book } = await venue.market(inst); return { inst, ticker, book }; },
   };
@@ -446,8 +411,8 @@ export async function liveBlock(a: PerpAgentRow, rt: PerpLiveRuntime, full: bool
     strategySha256: lb?.strategySha256 ?? null, since: lb?.since ?? null, capital: lb?.capital ?? null, paused: active && a.state === 'PAUSED', exit: lb?.exit ? { ts: lb.exit.ts, code: lb.exit.code, reason: lb.exit.reason } : null };
   if (!full || !lb || a.mode !== 'LIVE') return { ...base, account: null, signer: null, holds: [] as { ts: number; bar: string; symbol: string; code: string; reason: string }[] };
   const [account, status] = await Promise.all([svc.get(lb.accountId).catch(() => null), svc.mandateStatus(lb.accountId).catch(() => null)]);
-  const rows = await sql<{ bar: Date; updated_at: Date; orders: { list?: { symbol?: string; status?: string; code?: string; why?: string }[] } | null }[]>`select bar, updated_at, orders from perp_agent_signals
-    where agent_id = ${a.id} and bar >= ${new Date(lb.since - 86_400_000)} order by bar desc limit 30`;
+  const rows = await sql<{ bar: Date; updated_at: Date; orders: { list?: { symbol?: string; status?: string; code?: string; why?: string }[] } | null }[]>`select bar, updated_at, orders from agent_signals
+    where agent_id = ${a.id} and mode = 'LIVE' and bar >= ${new Date(lb.since - 86_400_000)} order by bar desc limit 30`;
   const holds = rows.flatMap((r) => (r.orders?.list ?? []).filter((o) => o.status === 'refused' || o.status === 'deferred')
     .map((o) => ({ ts: r.updated_at.getTime(), bar: r.bar.toISOString(), symbol: String(o.symbol ?? ''), code: String(o.code ?? o.status), reason: String(o.why ?? '') }))).slice(0, 20);
   return { ...base, account, signer: status?.signer ?? null, holds };

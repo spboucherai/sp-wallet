@@ -614,7 +614,7 @@ describe('write surface (not wired)', () => {
   it('the strategy and agent operations (not wired yet) answer 501 execution_not_wired — never 2xx — for a key bound to a mandate and for the owner', async () => {
     const k = await boundKey({ scopes: ALL, rateLimitPerMin: 600 });
     const writes = spec.OPERATIONS.filter((o) => !o.implemented);
-    expect(writes.map((o) => o.id).sort()).toEqual(['backtestStrategy', 'createAgent', 'createStrategy', 'startAgent', 'startStrategy', 'stopAgent', 'stopStrategy']);
+    expect(writes.map((o) => o.id).sort()).toEqual([]);   // V11: every write operation is wired (execution + agents)
     const before = (await sql`select count(*)::int as n from deriv_orders`)[0].n;
     for (const op of writes) {
       for (const who of [{ key: k.secret }, {}]) {
@@ -635,7 +635,9 @@ describe('write surface (not wired)', () => {
 
   it('execution scopes are inert on a key without a mandate: 403 mandate_required before anything else', async () => {
     const k = await newKey({ scopes: ALL });
-    expect(k.view.inertScopes).toEqual(['agents:manage', 'orders:cancel', 'orders:execute', 'positions:manage', 'strategies:manage']);
+    // V11 agents: `agents:manage` and `strategies:manage` are management scopes (research, paper, pause, stop sign nothing); LIVE is
+    // bounded by the AGENT's own owner-approved mandate, checked by the handler (agent-trading-api.test.ts)
+    expect(k.view.inertScopes).toEqual(['orders:cancel', 'orders:execute', 'positions:manage']);
     for (const op of spec.OPERATIONS.filter((o) => !o.implemented)) {
       const r = await send(op, { key: k.secret, headers: idem() });
       if (spec.isExecutionScope(op.scope)) { expect(r.status, op.id).toBe(403); expect(r.json.error, op.id).toBe('mandate_required'); }
@@ -782,8 +784,8 @@ describe('usage, status, retention', () => {
     expect(by.execution.ok).toBe(true);
     expect(by.execution.detail).toMatch(/live execution through the API is disabled/);
     expect(by['market-data'].ok).toBe(false);                                                            // nothing ingested in this database
-    expect(s.json.api).toMatchObject({ prefix: T, operations: spec.OPERATIONS.length, implemented: spec.OPERATIONS.length - 7 });
-    expect(s.json.api.notImplemented).toHaveLength(7);
+    expect(s.json.api).toMatchObject({ prefix: T, operations: spec.OPERATIONS.length, implemented: spec.OPERATIONS.length });
+    expect(s.json.api.notImplemented).toHaveLength(0);
     expect(s.json.rateLimits).toMatchObject({ defaultPerMin: 120, failedAuthPerMinPerAddress: 10 });
   });
 

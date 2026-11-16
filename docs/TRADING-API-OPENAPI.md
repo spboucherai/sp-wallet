@@ -23,9 +23,9 @@ Version 1.0.0. Machine-readable document: [`docs/openapi/trading-v1.json`](opena
 | `positions:read` | no |
 | `positions:manage` | yes |
 | `strategies:read` | no |
-| `strategies:manage` | yes |
+| `strategies:manage` | no |
 | `agents:read` | no |
-| `agents:manage` | yes |
+| `agents:manage` | no |
 
 ## Operations
 
@@ -56,13 +56,22 @@ Version 1.0.0. Machine-readable document: [`docs/openapi/trading-v1.json`](opena
 | POST | `/api/v1/trading/positions/{id}/reduce` | `positions:manage` | implemented | required | Reduce a position |
 | POST | `/api/v1/trading/commands` | `orders:prepare` | implemented | required | Run one line of the trading command grammar |
 | POST | `/api/v1/trading/risk/kill-switch` | `positions:manage` | implemented | — | Engage the global kill switch |
-| POST | `/api/v1/trading/strategies` | `strategies:manage` | **501** `execution_not_wired` | required | Register a strategy version |
-| POST | `/api/v1/trading/strategies/{id}/backtest` | `strategies:manage` | **501** `execution_not_wired` | required | Run a backtest |
-| POST | `/api/v1/trading/strategies/{id}/start` | `strategies:manage` | **501** `execution_not_wired` | required | Start a strategy |
-| POST | `/api/v1/trading/strategies/{id}/stop` | `strategies:manage` | **501** `execution_not_wired` | required | Stop a strategy |
-| POST | `/api/v1/trading/agents` | `agents:manage` | **501** `execution_not_wired` | required | Create an agent |
-| POST | `/api/v1/trading/agents/{id}/start` | `agents:manage` | **501** `execution_not_wired` | required | Start an agent |
-| POST | `/api/v1/trading/agents/{id}/stop` | `agents:manage` | **501** `execution_not_wired` | required | Stop an agent |
+| POST | `/api/v1/trading/strategies` | `strategies:manage` | implemented | required | Register a library strategy version on an agent |
+| POST | `/api/v1/trading/strategies/{id}/backtest` | `strategies:manage` | implemented | required | Run the backtest of a strategy version (asynchronous job) |
+| POST | `/api/v1/trading/strategies/{id}/start` | `strategies:manage` | implemented | required | Start the agent a strategy version is pinned to |
+| POST | `/api/v1/trading/strategies/{id}/stop` | `strategies:manage` | implemented | required | Stop the agent a strategy version is pinned to |
+| GET | `/api/v1/trading/agents/templates` | `agents:read` | implemented | — | The seven built-in agents: family, engine, modes, installed strategies |
+| GET | `/api/v1/trading/agents/{id}` | `agents:read` | implemented | — | One agent: model, strategy, limits, mandate reference, backtest reports (labelled), worker state |
+| GET | `/api/v1/trading/agents/{id}/signals` | `agents:read` | implemented | — | Signal history of one agent, ONE mode |
+| GET | `/api/v1/trading/agents/{id}/journal` | `agents:read` | implemented | — | Activity journal of one agent, ONE mode |
+| GET | `/api/v1/trading/agents/{id}/orders` | `agents:read` | implemented | — | Order history of one agent, ONE mode, in the unified order states |
+| GET | `/api/v1/trading/agents/{id}/performance` | `agents:read` | implemented | — | Computed performance of one agent, ONE mode |
+| GET | `/api/v1/trading/jobs/{id}` | `agents:read` | implemented | — | One agent job (backtest, wind-down): status and result |
+| POST | `/api/v1/trading/agents` | `agents:manage` | implemented | required | Create an agent (from a template, or a perp agent) |
+| POST | `/api/v1/trading/agents/{id}/start` | `agents:manage` | implemented | required | Start an agent in research, paper or live mode |
+| POST | `/api/v1/trading/agents/{id}/pause` | `agents:manage` | implemented | required | Pause an agent |
+| POST | `/api/v1/trading/agents/{id}/stop` | `agents:manage` | implemented | required | Stop an agent (always allowed) |
+| POST | `/api/v1/trading/agents/{id}/backtest` | `agents:manage` | implemented | required | Run a backtest for an agent (asynchronous job) |
 
 ## Parameters
 
@@ -230,7 +239,7 @@ Request body (JSON):
       "pattern": "^\\d+(\\.\\d+)?$"
     },
     "notional": {
-      "description": "value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required",
+      "description": "value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required. A SPOT order: a SELL names `size` (the quantity sold); a BUY names `notional` — the amount of the quote asset to spend — because a swap is exact-input",
       "type": "string",
       "pattern": "^\\d+(\\.\\d+)?$"
     },
@@ -340,7 +349,7 @@ Request body (JSON):
       "pattern": "^\\d+(\\.\\d+)?$"
     },
     "notional": {
-      "description": "value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required",
+      "description": "value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required. A SPOT order: a SELL names `size` (the quantity sold); a BUY names `notional` — the amount of the quote asset to spend — because a swap is exact-input",
       "type": "string",
       "pattern": "^\\d+(\\.\\d+)?$"
     },
@@ -599,10 +608,11 @@ Request body (JSON):
     "mode": {
       "type": "string",
       "enum": [
+        "research",
         "paper",
         "live"
       ],
-      "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+      "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
     },
     "agentId": {
       "type": "string",
@@ -639,6 +649,55 @@ Request body (JSON):
 }
 ```
 
+### GET `/api/v1/trading/agents/{id}`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+
+### GET `/api/v1/trading/agents/{id}/signals`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in now |
+| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
+| `before` | query | no | `{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}` | unix ms: rows strictly before it |
+| `open` | query | no | `{"type":"string","enum":["true","false"]}` |  |
+
+### GET `/api/v1/trading/agents/{id}/journal`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in now |
+| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
+| `before` | query | no | `{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}` | unix ms: rows strictly before it |
+| `open` | query | no | `{"type":"string","enum":["true","false"]}` |  |
+
+### GET `/api/v1/trading/agents/{id}/orders`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in now |
+| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
+| `before` | query | no | `{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}` | unix ms: rows strictly before it |
+| `open` | query | no | `{"type":"string","enum":["true","false"]}` |  |
+
+### GET `/api/v1/trading/agents/{id}/performance`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. |
+
+### GET `/api/v1/trading/jobs/{id}`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+
 ### POST `/api/v1/trading/agents`
 
 Request body (JSON):
@@ -648,11 +707,17 @@ Request body (JSON):
   "type": "object",
   "properties": {
     "kind": {
+      "description": "without a template: perp (a spot agent needs a vault from the signer: owner only)",
       "type": "string",
       "enum": [
         "spot",
         "perp"
       ]
+    },
+    "template": {
+      "description": "one of GET /agents/templates",
+      "type": "string",
+      "maxLength": 40
     },
     "name": {
       "type": "string",
@@ -673,28 +738,69 @@ Request body (JSON):
         "pattern": "^[A-Z0-9]{2,15}$"
       }
     },
+    "venues": {
+      "minItems": 1,
+      "maxItems": 2,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "hyperliquid",
+          "edgex",
+          "dydx",
+          "gmx"
+        ]
+      }
+    },
+    "strategyPath": {
+      "type": "string",
+      "maxLength": 60
+    },
     "interval": {
-      "default": "1h",
       "type": "string",
       "enum": [
         "1h",
+        "4h",
         "1d"
       ]
     },
+    "capitalUsdc": {
+      "type": "string",
+      "pattern": "^\\d{1,7}(\\.\\d{1,6})?$"
+    },
+    "risk": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": [
+          "number",
+          "string",
+          "boolean"
+        ]
+      }
+    },
+    "config": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
     "mode": {
-      "default": "paper",
+      "default": "research",
+      "description": "research (default: created, not running) or paper (stream and supervisor agents start at once); never live",
       "type": "string",
       "enum": [
+        "research",
         "paper",
         "live"
-      ],
-      "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+      ]
     }
   },
   "required": [
-    "kind",
-    "name",
-    "universe"
+    "name"
   ],
   "additionalProperties": false
 }
@@ -715,10 +821,11 @@ Request body (JSON):
     "mode": {
       "type": "string",
       "enum": [
+        "research",
         "paper",
         "live"
       ],
-      "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+      "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
     },
     "agentId": {
       "type": "string",
@@ -729,6 +836,28 @@ Request body (JSON):
   "required": [
     "mode"
   ],
+  "additionalProperties": false
+}
+```
+
+### POST `/api/v1/trading/agents/{id}/pause`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+
+Request body (JSON):
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "reason": {
+      "default": "",
+      "type": "string",
+      "maxLength": 200
+    }
+  },
   "additionalProperties": false
 }
 ```
@@ -749,6 +878,34 @@ Request body (JSON):
       "default": "",
       "type": "string",
       "maxLength": 200
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+### POST `/api/v1/trading/agents/{id}/backtest`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+
+Request body (JSON):
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "versionId": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+    },
+    "hours": {
+      "description": "stream agents: how many hours of recorded snapshots to replay",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 168
     }
   },
   "additionalProperties": false
@@ -970,12 +1127,14 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_request`, `invalid_order` |
 | 401 | `unauthenticated` |
-| 403 | `insufficient_scope`, `ip_not_allowed`, `mandate_required`, `mixed_credentials`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mandate_required`, `mixed_credentials`, `owner_session_required`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted` |
 | 404 | `unknown_account`, `unknown_instrument`, `unknown_market`, `unknown_venue` |
-| 409 | `account_required`, `ambiguous_symbol` |
-| 422 | `below_min_size`, `no_account`, `spot_via_swap_screen`, `venue_not_wired`, `venue_rejected` |
+| 409 | `account_required`, `ambiguous_command`, `ambiguous_order`, `ambiguous_symbol` |
+| 422 | `below_min_size`, `fee_cap_not_expressible`, `gmx_leverage_required`, `inconsistent_prices`, `invalid_order`, `missing_balance`, `missing_reference_price`, `no_account`, `no_client_id_format`, `no_instrument`, `no_position`, `spot_buy_needs_quote_amount`, `spot_market_only`, `spot_paper_not_available`, `spot_via_swap_screen`, `swap_not_enabled`, `unknown_instrument`, `unsupported_asset`, `venue_not_wired`, `venue_rejected`, `zero_size` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
+| 501 | `execution_not_wired` |
+| 502 | `swap_flow_failed` |
 | 503 | `stale_data`, `unknown_instrument`, `venue_rate_limited`, `venue_timeout`, `venue_unavailable` |
 
 ### POST `/api/v1/trading/orders` (open)
@@ -984,13 +1143,15 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_policy`, `bad_request`, `idempotency`, `invalid_order`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `execution_disabled`, `insufficient_scope`, `ip_not_allowed`, `key_limit_exceeded`, `mainnet_disabled`, `mandate_denied`, `mandate_mainnet_disabled`, `mandate_not_approved`, `mandate_required`, `mixed_credentials`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted` |
+| 403 | `execution_disabled`, `gmx_disabled`, `gmx_requires_owner_passkey`, `insufficient_scope`, `ip_not_allowed`, `key_limit_exceeded`, `mainnet_disabled`, `mandate_denied`, `mandate_integrity`, `mandate_mainnet_disabled`, `mandate_not_approved`, `mandate_required`, `mixed_credentials`, `owner_session_required`, `position_not_attributable`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted` |
 | 404 | `unknown_account`, `unknown_instrument`, `unknown_market`, `unknown_venue` |
-| 409 | `account_required`, `ambiguous_symbol`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress` |
-| 422 | `authorization_expired`, `bad_input`, `bad_mark`, `bad_order`, `bad_policy`, `below_min_notional`, `below_min_size`, `daily_loss_exceeded`, `data_mismatch`, `duplicate_client_id`, `gross_exposure_exceeded`, `halted`, `instrument_halted`, `instrument_mismatch`, `instrument_not_allowed`, `instrument_reduce_only`, `insufficient_collateral`, `leverage_exceeded`, `leverage_mismatch`, `liquidation_too_close`, `live_not_available`, `mandate_mismatch`, `mandate_none`, `mandate_wind_down`, `mark_index_divergence`, `mode_read_only`, `no_account`, `order_notional_exceeded`, `order_rate_day`, `order_rate_minute`, `paper_unsupported`, `position_notional_exceeded`, `price_deviation`, `price_not_on_tick`, `price_required`, `reduce_only_would_flip`, `reduce_only_would_increase`, `risk_denied`, `size_not_on_lot`, `spot_via_swap_screen`, `stale_book`, `stale_ticker`, `total_loss_exceeded`, `trigger_required`, `venue_not_wired`, `venue_rejected` |
+| 409 | `account_has_active_mandate`, `account_required`, `ambiguous_command`, `ambiguous_order`, `ambiguous_symbol`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress` |
+| 422 | `authorization_expired`, `bad_input`, `bad_mark`, `bad_order`, `bad_policy`, `below_min_notional`, `below_min_size`, `daily_loss_exceeded`, `data_mismatch`, `duplicate_client_id`, `fee_cap_not_expressible`, `gmx_leverage_required`, `gross_exposure_exceeded`, `halted`, `inconsistent_prices`, `instrument_halted`, `instrument_mismatch`, `instrument_not_allowed`, `instrument_reduce_only`, `insufficient_collateral`, `invalid_order`, `leverage_exceeded`, `leverage_mismatch`, `liquidation_too_close`, `live_not_available`, `mandate_mismatch`, `mandate_none`, `mandate_wind_down`, `mark_index_divergence`, `missing_balance`, `missing_reference_price`, `mode_read_only`, `no_account`, `no_client_id_format`, `no_instrument`, `no_position`, `order_notional_exceeded`, `order_rate_day`, `order_rate_minute`, `paper_unsupported`, `position_notional_exceeded`, `price_deviation`, `price_not_on_tick`, `price_required`, `reduce_only_would_flip`, `reduce_only_would_increase`, `risk_denied`, `size_not_on_lot`, `spot_buy_needs_quote_amount`, `spot_market_only`, `spot_paper_not_available`, `spot_via_swap_screen`, `stale_book`, `stale_ticker`, `swap_not_enabled`, `total_loss_exceeded`, `trigger_required`, `unknown_instrument`, `unsupported_asset`, `venue_not_wired`, `venue_rejected`, `zero_size` |
 | 423 | `halted`, `kill_switch_active`, `read_only_mode` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
+| 501 | `execution_not_wired` |
+| 502 | `swap_flow_failed` |
 | 503 | `authorization_unknown`, `mandate_unavailable`, `no_liquidity`, `signer_unreachable`, `stale_data`, `unknown_instrument`, `venue_rate_limited`, `venue_timeout`, `venue_unavailable` |
 
 ### DELETE `/api/v1/trading/orders/{id}`
@@ -999,7 +1160,7 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_request`, `idempotency`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `not_your_order` |
+| 403 | `gmx_requires_owner_passkey`, `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `not_your_order`, `owner_session_required` |
 | 404 | `unknown_order` |
 | 409 | `bad_state`, `idempotency_conflict`, `idempotency_in_progress` |
 | 422 | `cancel_in_app`, `venue_rejected` |
@@ -1013,13 +1174,15 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_policy`, `bad_request`, `idempotency`, `invalid_order`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `execution_disabled`, `insufficient_scope`, `ip_not_allowed`, `key_limit_exceeded`, `mainnet_disabled`, `mandate_denied`, `mandate_mainnet_disabled`, `mandate_not_approved`, `mandate_required`, `mixed_credentials`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted` |
+| 403 | `execution_disabled`, `gmx_disabled`, `gmx_requires_owner_passkey`, `insufficient_scope`, `ip_not_allowed`, `key_limit_exceeded`, `mainnet_disabled`, `mandate_denied`, `mandate_integrity`, `mandate_mainnet_disabled`, `mandate_not_approved`, `mandate_required`, `mixed_credentials`, `owner_session_required`, `position_not_attributable`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted` |
 | 404 | `unknown_account`, `unknown_instrument`, `unknown_position`, `unknown_venue` |
-| 409 | `account_required`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress` |
-| 422 | `authorization_expired`, `bad_input`, `bad_mark`, `bad_order`, `bad_policy`, `below_min_notional`, `below_min_size`, `close_in_app`, `daily_loss_exceeded`, `data_mismatch`, `duplicate_client_id`, `gross_exposure_exceeded`, `halted`, `instrument_halted`, `instrument_mismatch`, `instrument_not_allowed`, `instrument_reduce_only`, `insufficient_collateral`, `leverage_exceeded`, `leverage_mismatch`, `liquidation_too_close`, `live_not_available`, `mandate_mismatch`, `mandate_none`, `mandate_wind_down`, `mark_index_divergence`, `mode_read_only`, `no_account`, `no_position`, `not_reducing`, `order_notional_exceeded`, `order_rate_day`, `order_rate_minute`, `paper_unsupported`, `position_notional_exceeded`, `price_deviation`, `price_not_on_tick`, `price_required`, `reduce_only_would_flip`, `reduce_only_would_increase`, `risk_denied`, `size_not_on_lot`, `spot_via_swap_screen`, `stale_book`, `stale_ticker`, `total_loss_exceeded`, `trigger_required`, `venue_not_wired`, `venue_rejected` |
+| 409 | `account_has_active_mandate`, `account_required`, `ambiguous_command`, `ambiguous_order`, `ambiguous_position`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress` |
+| 422 | `authorization_expired`, `bad_input`, `bad_mark`, `bad_order`, `bad_policy`, `below_min_notional`, `below_min_size`, `close_in_app`, `daily_loss_exceeded`, `data_mismatch`, `duplicate_client_id`, `fee_cap_not_expressible`, `gmx_leverage_required`, `gross_exposure_exceeded`, `halted`, `inconsistent_prices`, `instrument_halted`, `instrument_mismatch`, `instrument_not_allowed`, `instrument_reduce_only`, `insufficient_collateral`, `invalid_order`, `leverage_exceeded`, `leverage_mismatch`, `liquidation_too_close`, `live_not_available`, `mandate_mismatch`, `mandate_none`, `mandate_wind_down`, `mark_index_divergence`, `missing_balance`, `missing_reference_price`, `mode_read_only`, `no_account`, `no_client_id_format`, `no_instrument`, `no_position`, `not_reducing`, `order_notional_exceeded`, `order_rate_day`, `order_rate_minute`, `paper_unsupported`, `position_notional_exceeded`, `price_deviation`, `price_not_on_tick`, `price_required`, `reduce_only_would_flip`, `reduce_only_would_increase`, `risk_denied`, `size_not_on_lot`, `spot_buy_needs_quote_amount`, `spot_market_only`, `spot_paper_not_available`, `spot_via_swap_screen`, `stale_book`, `stale_ticker`, `swap_not_enabled`, `total_loss_exceeded`, `trigger_required`, `unknown_instrument`, `unsupported_asset`, `venue_not_wired`, `venue_rejected`, `zero_size` |
 | 423 | `halted`, `kill_switch_active`, `read_only_mode` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
+| 501 | `execution_not_wired` |
+| 502 | `swap_flow_failed` |
 | 503 | `authorization_unknown`, `mandate_unavailable`, `no_liquidity`, `signer_unreachable`, `stale_data`, `unknown_instrument`, `venue_rate_limited`, `venue_timeout`, `venue_unavailable` |
 
 ### POST `/api/v1/trading/positions/{id}/reduce` (open)
@@ -1028,13 +1191,15 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_policy`, `bad_request`, `idempotency`, `invalid_order`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `execution_disabled`, `insufficient_scope`, `ip_not_allowed`, `key_limit_exceeded`, `mainnet_disabled`, `mandate_denied`, `mandate_mainnet_disabled`, `mandate_not_approved`, `mandate_required`, `mixed_credentials`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted` |
+| 403 | `execution_disabled`, `gmx_disabled`, `gmx_requires_owner_passkey`, `insufficient_scope`, `ip_not_allowed`, `key_limit_exceeded`, `mainnet_disabled`, `mandate_denied`, `mandate_integrity`, `mandate_mainnet_disabled`, `mandate_not_approved`, `mandate_required`, `mixed_credentials`, `owner_session_required`, `position_not_attributable`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted` |
 | 404 | `unknown_account`, `unknown_instrument`, `unknown_position`, `unknown_venue` |
-| 409 | `account_required`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress` |
-| 422 | `authorization_expired`, `bad_input`, `bad_mark`, `bad_order`, `bad_policy`, `below_min_notional`, `below_min_size`, `close_in_app`, `daily_loss_exceeded`, `data_mismatch`, `duplicate_client_id`, `gross_exposure_exceeded`, `halted`, `instrument_halted`, `instrument_mismatch`, `instrument_not_allowed`, `instrument_reduce_only`, `insufficient_collateral`, `leverage_exceeded`, `leverage_mismatch`, `liquidation_too_close`, `live_not_available`, `mandate_mismatch`, `mandate_none`, `mandate_wind_down`, `mark_index_divergence`, `mode_read_only`, `no_account`, `no_position`, `not_reducing`, `order_notional_exceeded`, `order_rate_day`, `order_rate_minute`, `paper_unsupported`, `position_notional_exceeded`, `price_deviation`, `price_not_on_tick`, `price_required`, `reduce_only_would_flip`, `reduce_only_would_increase`, `risk_denied`, `size_not_on_lot`, `spot_via_swap_screen`, `stale_book`, `stale_ticker`, `total_loss_exceeded`, `trigger_required`, `venue_not_wired`, `venue_rejected` |
+| 409 | `account_has_active_mandate`, `account_required`, `ambiguous_command`, `ambiguous_order`, `ambiguous_position`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress` |
+| 422 | `authorization_expired`, `bad_input`, `bad_mark`, `bad_order`, `bad_policy`, `below_min_notional`, `below_min_size`, `close_in_app`, `daily_loss_exceeded`, `data_mismatch`, `duplicate_client_id`, `fee_cap_not_expressible`, `gmx_leverage_required`, `gross_exposure_exceeded`, `halted`, `inconsistent_prices`, `instrument_halted`, `instrument_mismatch`, `instrument_not_allowed`, `instrument_reduce_only`, `insufficient_collateral`, `invalid_order`, `leverage_exceeded`, `leverage_mismatch`, `liquidation_too_close`, `live_not_available`, `mandate_mismatch`, `mandate_none`, `mandate_wind_down`, `mark_index_divergence`, `missing_balance`, `missing_reference_price`, `mode_read_only`, `no_account`, `no_client_id_format`, `no_instrument`, `no_position`, `not_reducing`, `order_notional_exceeded`, `order_rate_day`, `order_rate_minute`, `paper_unsupported`, `position_notional_exceeded`, `price_deviation`, `price_not_on_tick`, `price_required`, `reduce_only_would_flip`, `reduce_only_would_increase`, `risk_denied`, `size_not_on_lot`, `spot_buy_needs_quote_amount`, `spot_market_only`, `spot_paper_not_available`, `spot_via_swap_screen`, `stale_book`, `stale_ticker`, `swap_not_enabled`, `total_loss_exceeded`, `trigger_required`, `unknown_instrument`, `unsupported_asset`, `venue_not_wired`, `venue_rejected`, `zero_size` |
 | 423 | `halted`, `kill_switch_active`, `read_only_mode` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
+| 501 | `execution_not_wired` |
+| 502 | `swap_flow_failed` |
 | 503 | `authorization_unknown`, `mandate_unavailable`, `no_liquidity`, `signer_unreachable`, `stale_data`, `unknown_instrument`, `venue_rate_limited`, `venue_timeout`, `venue_unavailable` |
 
 ### POST `/api/v1/trading/commands` (open)
@@ -1043,14 +1208,15 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_policy`, `bad_request`, `idempotency`, `invalid_order`, `parse_error`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `execution_disabled`, `insufficient_scope`, `ip_not_allowed`, `key_limit_exceeded`, `mainnet_disabled`, `mandate_denied`, `mandate_mainnet_disabled`, `mandate_not_approved`, `mandate_required`, `mixed_credentials`, `not_your_order`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted` |
+| 403 | `execution_disabled`, `gmx_disabled`, `gmx_requires_owner_passkey`, `insufficient_scope`, `ip_not_allowed`, `key_limit_exceeded`, `mainnet_disabled`, `mandate_denied`, `mandate_integrity`, `mandate_mainnet_disabled`, `mandate_not_approved`, `mandate_required`, `mixed_credentials`, `not_your_order`, `owner_session_required`, `position_not_attributable`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted` |
 | 404 | `unknown_account`, `unknown_instrument`, `unknown_order`, `unknown_venue` |
-| 409 | `account_required`, `ambiguous_command`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress` |
-| 422 | `authorization_expired`, `bad_input`, `bad_mark`, `bad_order`, `bad_policy`, `below_min_notional`, `below_min_size`, `cancel_in_app`, `daily_loss_exceeded`, `data_mismatch`, `duplicate_client_id`, `fee_cap_not_expressible`, `gross_exposure_exceeded`, `halted`, `inconsistent_prices`, `instrument_halted`, `instrument_mismatch`, `instrument_not_allowed`, `instrument_reduce_only`, `insufficient_collateral`, `invalid_order`, `leverage_exceeded`, `leverage_mismatch`, `liquidation_too_close`, `live_not_available`, `mandate_mismatch`, `mandate_none`, `mandate_wind_down`, `mark_index_divergence`, `missing_balance`, `missing_reference_price`, `mode_read_only`, `no_account`, `no_client_id_format`, `no_instrument`, `no_position`, `not_reducing`, `order_notional_exceeded`, `order_rate_day`, `order_rate_minute`, `paper_unsupported`, `position_notional_exceeded`, `price_deviation`, `price_not_on_tick`, `price_required`, `reduce_only_would_flip`, `reduce_only_would_increase`, `risk_denied`, `size_not_on_lot`, `spot_via_swap_screen`, `stale_book`, `stale_ticker`, `total_loss_exceeded`, `trigger_required`, `venue_not_wired`, `venue_rejected`, `zero_size` |
+| 409 | `account_has_active_mandate`, `account_required`, `ambiguous_command`, `ambiguous_order`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress` |
+| 422 | `authorization_expired`, `bad_input`, `bad_mark`, `bad_order`, `bad_policy`, `below_min_notional`, `below_min_size`, `cancel_in_app`, `daily_loss_exceeded`, `data_mismatch`, `duplicate_client_id`, `fee_cap_not_expressible`, `gmx_leverage_required`, `gross_exposure_exceeded`, `halted`, `inconsistent_prices`, `instrument_halted`, `instrument_mismatch`, `instrument_not_allowed`, `instrument_reduce_only`, `insufficient_collateral`, `invalid_order`, `leverage_exceeded`, `leverage_mismatch`, `liquidation_too_close`, `live_not_available`, `mandate_mismatch`, `mandate_none`, `mandate_wind_down`, `mark_index_divergence`, `missing_balance`, `missing_reference_price`, `mode_read_only`, `no_account`, `no_client_id_format`, `no_instrument`, `no_position`, `not_reducing`, `order_notional_exceeded`, `order_rate_day`, `order_rate_minute`, `paper_unsupported`, `position_notional_exceeded`, `price_deviation`, `price_not_on_tick`, `price_required`, `reduce_only_would_flip`, `reduce_only_would_increase`, `risk_denied`, `size_not_on_lot`, `spot_buy_needs_quote_amount`, `spot_market_only`, `spot_paper_not_available`, `spot_via_swap_screen`, `stale_book`, `stale_ticker`, `swap_not_enabled`, `total_loss_exceeded`, `trigger_required`, `unknown_instrument`, `unsupported_asset`, `venue_not_wired`, `venue_rejected`, `zero_size` |
 | 423 | `halted`, `kill_switch_active`, `read_only_mode` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
 | 501 | `execution_not_wired` |
+| 502 | `swap_flow_failed` |
 | 503 | `authorization_unknown`, `mandate_unavailable`, `no_liquidity`, `service_unavailable`, `signer_unreachable`, `stale_data`, `unknown_instrument`, `venue_rate_limited`, `venue_timeout`, `venue_unavailable` |
 
 ### POST `/api/v1/trading/risk/kill-switch`
@@ -1069,11 +1235,12 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_request`, `idempotency`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `insufficient_scope`, `ip_not_allowed`, `mandate_required`, `mixed_credentials` |
-| 409 | `idempotency_conflict`, `idempotency_in_progress` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `not_found` |
+| 409 | `idempotency_conflict`, `idempotency_in_progress`, `wrong_kind` |
+| 422 | `bad_strategy` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
-| 501 | `execution_not_wired` |
 
 ### POST `/api/v1/trading/strategies/{id}/backtest`
 
@@ -1081,11 +1248,11 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_request`, `idempotency`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `insufficient_scope`, `ip_not_allowed`, `mandate_required`, `mixed_credentials` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `not_found` |
 | 409 | `idempotency_conflict`, `idempotency_in_progress` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
-| 501 | `execution_not_wired` |
 
 ### POST `/api/v1/trading/strategies/{id}/start`
 
@@ -1093,11 +1260,11 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_request`, `idempotency`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `insufficient_scope`, `ip_not_allowed`, `mandate_required`, `mixed_credentials` |
-| 409 | `idempotency_conflict`, `idempotency_in_progress` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `owner_required`, `restricted` |
+| 404 | `not_found` |
+| 409 | `bad_report`, `bad_request`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy`, `other_version` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
-| 501 | `execution_not_wired` |
 
 ### POST `/api/v1/trading/strategies/{id}/stop`
 
@@ -1105,11 +1272,86 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_request`, `idempotency`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `insufficient_scope`, `ip_not_allowed`, `mandate_required`, `mixed_credentials` |
-| 409 | `idempotency_conflict`, `idempotency_in_progress` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `not_found` |
+| 409 | `bad_state`, `idempotency_conflict`, `idempotency_in_progress` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
-| 501 | `execution_not_wired` |
+
+### GET `/api/v1/trading/agents/templates`
+
+| Status | Codes |
+|---|---|
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials` |
+| 429 | `auth_throttled`, `rate_limited` |
+| 500 | `internal` |
+
+### GET `/api/v1/trading/agents/{id}`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `not_found` |
+| 429 | `auth_throttled`, `rate_limited` |
+| 500 | `internal` |
+
+### GET `/api/v1/trading/agents/{id}/signals`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `not_found` |
+| 429 | `auth_throttled`, `rate_limited` |
+| 500 | `internal` |
+
+### GET `/api/v1/trading/agents/{id}/journal`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `not_found` |
+| 429 | `auth_throttled`, `rate_limited` |
+| 500 | `internal` |
+
+### GET `/api/v1/trading/agents/{id}/orders`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `not_found` |
+| 429 | `auth_throttled`, `rate_limited` |
+| 500 | `internal` |
+
+### GET `/api/v1/trading/agents/{id}/performance`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `not_found` |
+| 429 | `auth_throttled`, `rate_limited` |
+| 500 | `internal` |
+
+### GET `/api/v1/trading/jobs/{id}`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `not_found` |
+| 429 | `auth_throttled`, `rate_limited` |
+| 500 | `internal` |
 
 ### POST `/api/v1/trading/agents`
 
@@ -1117,11 +1359,11 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_request`, `idempotency`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `insufficient_scope`, `ip_not_allowed`, `mandate_required`, `mixed_credentials` |
-| 409 | `idempotency_conflict`, `idempotency_in_progress` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `owner_required` |
+| 409 | `bad_report`, `bad_state`, `exists`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy`, `strategy_not_installed`, `wrong_kind` |
+| 422 | `bad_request`, `universe_mismatch` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
-| 501 | `execution_not_wired` |
 
 ### POST `/api/v1/trading/agents/{id}/start`
 
@@ -1129,11 +1371,23 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_request`, `idempotency`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `insufficient_scope`, `ip_not_allowed`, `mandate_required`, `mixed_credentials` |
-| 409 | `idempotency_conflict`, `idempotency_in_progress` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `owner_required`, `restricted` |
+| 404 | `not_found` |
+| 409 | `bad_report`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
-| 501 | `execution_not_wired` |
+
+### POST `/api/v1/trading/agents/{id}/pause`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request`, `idempotency`, `stale_request` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `not_found` |
+| 409 | `bad_state`, `idempotency_conflict`, `idempotency_in_progress` |
+| 429 | `auth_throttled`, `rate_limited` |
+| 500 | `internal` |
 
 ### POST `/api/v1/trading/agents/{id}/stop`
 
@@ -1141,11 +1395,23 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_request`, `idempotency`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `insufficient_scope`, `ip_not_allowed`, `mandate_required`, `mixed_credentials` |
-| 409 | `idempotency_conflict`, `idempotency_in_progress` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `not_found` |
+| 409 | `bad_state`, `idempotency_conflict`, `idempotency_in_progress` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
-| 501 | `execution_not_wired` |
+
+### POST `/api/v1/trading/agents/{id}/backtest`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request`, `idempotency`, `stale_request` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `not_found` |
+| 409 | `idempotency_conflict`, `idempotency_in_progress`, `no_strategy`, `wrong_kind` |
+| 429 | `auth_throttled`, `rate_limited` |
+| 500 | `internal` |
 
 ## Order states
 
@@ -1178,5 +1444,6 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|---|---|
 | `key.revoked` | yes | `{ keyId, name, reason }` | an API key was revoked (or replaced by a rotation) |
 | `risk.kill_switch` | yes | `{ source: "signer", halted: true } | { source: "risk_engine", engaged, by, reason }` | the emergency halt of the signer was triggered (source "signer"), or the global kill switch of the risk engine was engaged or released (source "risk_engine") |
-| `agent.updated` | yes | `{ agentId, kind, state, mode }` | an agent changed mode through an owner action (engine-side transitions: pending wiring) |
+| `agent.updated` | yes | `{ agentId, kind, state, mode }` | an agent was started, paused or stopped (by the owner, an API key or the risk-management agent) |
+| `risk.proposal` | yes | `{ supervisorId, agentId, mode, action, code, acted, message, metrics }` | the risk-management agent proposes a reduction or a pause, or acted (paused an agent, engaged the kill switch) |
 | `order.updated` | yes | `{ orderId, mode, venue, instrument, status, previous, event, reason, seq, principal, mandateId }` | an order changed state: one event per transition of the unified order state machine, for every principal, mode and venue |

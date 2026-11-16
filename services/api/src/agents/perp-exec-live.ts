@@ -74,6 +74,8 @@ export class LivePerpExecutor implements PerpExecutor {
   readonly stats = { orders: 0, leverage: 0 };
 
   constructor(svc: LiveService, o: LiveExecOptions) { this.svc = svc; this.o = o; }
+  /** the venue account this executor trades (V11: the order gateway looks an order up on it) */
+  get accountId(): string { return this.o.accountId; }
 
   /** the venue's own state, read now; an unreadable venue is an error, never an empty account */
   private async read(): Promise<MandateAccountState> {

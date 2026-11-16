@@ -4,10 +4,12 @@
 export const SCOPES = ['wallet:read', 'markets:read', 'orders:read', 'orders:prepare', 'orders:execute', 'orders:cancel', 'positions:read', 'positions:manage', 'strategies:read', 'strategies:manage', 'agents:read', 'agents:manage'] as const;
 export type Scope = (typeof SCOPES)[number];
 /** scopes shown together in the checklist (the server's list is the truth: a scope it does not announce is not shown) */
-export const SCOPE_GROUPS: { id: 'read' | 'prepare' | 'execute'; scopes: Scope[] }[] = [
+export const SCOPE_GROUPS: { id: 'read' | 'prepare' | 'manage' | 'execute'; scopes: Scope[] }[] = [
   { id: 'read', scopes: ['wallet:read', 'markets:read', 'orders:read', 'positions:read', 'strategies:read', 'agents:read'] },
   { id: 'prepare', scopes: ['orders:prepare'] },
-  { id: 'execute', scopes: ['orders:execute', 'orders:cancel', 'positions:manage', 'strategies:manage', 'agents:manage'] },
+  // v11 agents: management scopes — research, paper trading, pause and stop sign nothing; an agent goes LIVE only under ITS OWN owner-approved mandate
+  { id: 'manage', scopes: ['strategies:manage', 'agents:manage'] },
+  { id: 'execute', scopes: ['orders:execute', 'orders:cancel', 'positions:manage'] },
 ];
 /** `orders:read` → `dvScope_orders_read` */
 export const scopeKey = (s: string): string => `dvScope_${s.replace(':', '_')}`;

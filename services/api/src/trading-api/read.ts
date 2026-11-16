@@ -29,7 +29,7 @@ import type { OrderService } from '../orders/service.ts';
 import type { OrderRow } from '../orders/store.ts';
 import type { Principal } from './principal.ts';
 import { sizeFromNotional } from './shaping.ts';
-import { FINAL_ORDER_STATES, type OrderStatus } from './spec.ts';
+import { FINAL_ORDER_STATES } from './spec.ts';
 
 export interface ReadDeps {
   derivatives: () => Derivatives; live: () => LiveService;
@@ -75,15 +75,6 @@ function afterCursor(c: Cursor | null, tag: string, at: Sql, id: Sql): Sql {
   return tag < c.tag ? sql`${at} <= ${t}` : tag > c.tag ? sql`${at} < ${t}` : sql`(${at} < ${t} or (${at} = ${t} and ${id} < ${c.id} collate "C"))`;
 }
 
-// ---------------------------------------------------------------------------------------------------------------- agent swaps
-/** the spot agents' own word for a swap (`agent_orders.state`, written by agents/engine.ts and agents/live.ts) → the unified state */
-const AGENT_SWAP_STATES: Readonly<Record<string, OrderStatus>> = { prepared: 'VALIDATED', signed: 'APPROVED', broadcast: 'SUBMITTED', filled: 'FILLED', failed: 'FAILED', skipped: 'CANCELLED' };
-const AGENT_SWAP_FINAL = ['filled', 'failed', 'skipped'];
-/** `failed` with the signer's refusal is a REJECTED order (nothing was signed); a word this table does not know is UNKNOWN — not final, not a failure */
-export function agentSwapStatus(state: string, reason: string | null): OrderStatus {
-  if (state === 'failed' && reason !== null && reason.startsWith('refused by the signer')) return 'REJECTED';
-  return Object.hasOwn(AGENT_SWAP_STATES, state) ? AGENT_SWAP_STATES[state]! : 'UNKNOWN';
-}
 
 // ---------------------------------------------------------------------------------------------------------------- restrictions
 const lists = (p: Principal) => (p.kind === 'api_key' ? p.restrictions : null);
@@ -289,7 +280,13 @@ export function createReads(deps: ReadDeps) {
       try {
         const s = await deps.gmx().status();
         if (s.positionsError) errors.push({ source: 'gmx', message: s.positionsError });
-        for (const x of s.positions) rows.push({ id: `live:gmx:${s.account?.address ?? 'wallet'}:${x.key}`, mode: 'live', venue: 'gmx', network: s.network, accountId: s.account?.address ?? 'wallet', instrument: x.instrument, side: x.side, size: x.sizeTokens, entryPrice: x.entryPrice,
+        // A GMX position key is 66 characters: with it the id is longer than the 100 characters a path parameter may have, and
+        // POST /positions/{id}/close could never be reached. The order service also takes the INSTRUMENT id, which names the position
+        // when the wallet holds one position on that market: that form is the id. A long and a short on one market keep their keys
+        // (the service answers 409 `ambiguous_position` to the instrument form): those two are closed in the app.
+        const perMarket = new Map<string, number>();
+        for (const x of s.positions) perMarket.set(x.instrument ?? '', (perMarket.get(x.instrument ?? '') ?? 0) + 1);
+        for (const x of s.positions) rows.push({ id: `live:gmx:${s.account?.address ?? 'wallet'}:${x.instrument && perMarket.get(x.instrument) === 1 ? x.instrument : x.key}`, mode: 'live', venue: 'gmx', network: s.network, accountId: s.account?.address ?? 'wallet', instrument: x.instrument, side: x.side, size: x.sizeTokens, entryPrice: x.entryPrice,
           markPrice: x.markPrice, liquidationPrice: x.liquidationPrice, leverage: x.leverage, margin: x.collateral, unrealizedPnl: x.pnlUsd, source: x.source });
       } catch (e) { errors.push({ source: 'gmx', message: msg(e) }); }
     }
@@ -300,55 +297,25 @@ export function createReads(deps: ReadDeps) {
   // -------------------------------------------------------------------------------------------------------------- orders
   type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any -- a database row
   const ms = (d: Date | null | undefined): number | null => (d ? d.getTime() : null);
-  /** a spot agent's swap, in the shape of an order: the unified `status`, the agent engine's word in `engineStatus`, and a real `final` */
-  const agentOrder = (r: Row) => {
-    const status = agentSwapStatus(String(r.state), (r.reason ?? null) as string | null);
-    return { id: `agent:${r.id}`, mode: (r.mode === 'LIVE' ? 'live' : 'paper') as 'paper' | 'live', venue: SPOT, network: r.network as string, accountId: r.agent_id as string | null, agentId: r.agent_id as string, instrument: `${r.from_symbol}>${r.to_symbol}` as string | null,
-      side: null as string | null, type: 'swap', status, engineStatus: String(r.state) as string | null, final: FINAL_ORDER_STATES.includes(status), amountIn: r.amount_in as string, expectedOut: r.expected_out as string | null, received: r.received as string | null,
-      txid: r.txid as string | null, reason: r.reason as string | null, createdAt: ms(r.ts)!, updatedAt: ms(r.updated_at)! };
-  };
-  const orderVisible = (p: Principal, o: { venue: string; instrument: string | null; network: string }): boolean => venueAllowed(p, o.venue) && (o.venue === SPOT ? networkAllowed(p, o.network) : instrumentAllowed(p, o.instrument));
   const FINAL = [...FINAL_ORDER_STATES];
-
   /**
-   * Every order of the wallet, newest first: the unified table (every principal, mode and venue) and the spot agents' swaps, which
-   * have their own table. One total order — (creation time, source, id) — and keyset pagination on it; every filter, the key's
-   * restrictions included, is applied in SQL so that a page is full unless the list ends.
+   * Every order of the wallet, newest first, from the ONE unified table (every principal, mode and venue; swaps included). One
+   * total order — (creation time, id) — and keyset pagination on it; every filter, the key's restrictions included, is applied in
+   * SQL so that a page is full unless the list ends. A spot order is restricted by venue and network, any other by venue and
+   * instrument (the rule of the order service's own `visible`).
    */
   async function orders(p: Principal, q: { mode?: 'paper' | 'live'; venue?: string; open?: 'true' | 'false'; limit: number; cursor?: string }) {
     if (q.venue !== undefined && !venueAllowed(p, q.venue)) throw restricted(`venue ${q.venue}`);
-    const cur = decodeCursor(q.cursor, ['o', 'a']), n = q.limit + 1, r = lists(p), svc = deps.orders();
-    const rows: { key: Cursor; order: ReturnType<typeof svc.view> | ReturnType<typeof agentOrder> }[] = [];
-    if (q.venue !== SPOT) {
-      await svc.drain();
-      const found = await sql<(OrderRow & { cur_us: string })[]>`select o.*, ${US(sql`o.created_at`)} as cur_us from orders o where ${afterCursor(cur, 'o', sql`o.created_at`, sql`o.id collate "C"`)}
-        ${q.mode ? sql`and o.mode = ${q.mode}` : sql``} ${q.venue ? sql`and o.venue = ${q.venue}` : sql``}
-        ${q.open === 'true' ? sql`and o.state <> all(${FINAL})` : q.open === 'false' ? sql`and o.state = any(${FINAL})` : sql``}
-        ${r && r.venues.length ? sql`and o.venue = any(${r.venues})` : sql``} ${r && r.instruments.length ? sql`and o.instrument = any(${r.instruments})` : sql``}
-        order by o.created_at desc, o.id collate "C" desc limit ${n}`;
-      for (const x of found) rows.push({ key: { us: x.cur_us, tag: 'o', id: x.id }, order: svc.view(x) });
-    }
-    if ((q.venue === undefined || q.venue === SPOT) && venueAllowed(p, SPOT)) {
-      const found = await sql`select o.*, a.network, ${US(sql`o.ts`)} as cur_us from agent_orders o join agents a on a.id = o.agent_id where ${afterCursor(cur, 'a', sql`o.ts`, sql`o.id::text collate "C"`)}
-        ${q.mode === 'paper' ? sql`and o.mode <> 'LIVE'` : q.mode === 'live' ? sql`and o.mode = 'LIVE'` : sql``}
-        ${q.open === 'true' ? sql`and o.state <> all(${AGENT_SWAP_FINAL})` : q.open === 'false' ? sql`and o.state = any(${AGENT_SWAP_FINAL})` : sql``}
-        ${r && r.networks.length ? sql`and a.network = any(${r.networks})` : sql``}
-        order by o.ts desc, o.id::text collate "C" desc limit ${n}`;
-      for (const x of found) rows.push({ key: { us: x.cur_us as string, tag: 'a', id: x.id as string }, order: agentOrder(x) });
-    }
-    rows.sort((a, b) => cursorOrder(a.key, b.key));
-    const page = rows.slice(0, q.limit);
-    return { orders: page.map((x) => x.order), nextCursor: rows.length > q.limit ? encodeCursor(page.at(-1)!.key) : null, ts: now() };
-  }
-  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-  /** one swap of a spot agent (`agent:<uuid>`); every other order is read from the unified table by the order service */
-  async function agentSwap(p: Principal, id: string) {
-    const uuid = id.startsWith('agent:') ? id.slice(6) : '';
-    const [r] = UUID.test(uuid) ? await sql`select o.*, a.network from agent_orders o join agents a on a.id = o.agent_id where o.id = ${uuid}` : [];
-    if (!r) throw new UserError('unknown_order', 'unknown order', 404);
-    const o = agentOrder(r);
-    if (!orderVisible(p, o)) throw restricted('this order');
-    return { order: o, fills: [] as unknown[] };
+    const cur = decodeCursor(q.cursor, ['o']), n = q.limit + 1, r = lists(p), svc = deps.orders();
+    await svc.drain();
+    const found = await sql<(OrderRow & { cur_us: string })[]>`select o.*, ${US(sql`o.created_at`)} as cur_us from orders o where ${afterCursor(cur, 'o', sql`o.created_at`, sql`o.id collate "C"`)}
+      ${q.mode ? sql`and o.mode = ${q.mode}` : sql``} ${q.venue ? sql`and o.venue = ${q.venue}` : sql``}
+      ${q.open === 'true' ? sql`and o.state <> all(${FINAL})` : q.open === 'false' ? sql`and o.state = any(${FINAL})` : sql``}
+      ${r && r.venues.length ? sql`and o.venue = any(${r.venues})` : sql``}
+      ${r && r.instruments.length ? sql`and (o.venue = ${SPOT} or o.instrument = any(${r.instruments}))` : sql``} ${r && r.networks.length ? sql`and (o.venue <> ${SPOT} or o.network = any(${r.networks}))` : sql``}
+      order by o.created_at desc, o.id collate "C" desc limit ${n}`;
+    const page = found.slice(0, q.limit), last = page.at(-1);
+    return { orders: page.map((x) => svc.view(x)), nextCursor: found.length > q.limit && last ? encodeCursor({ us: last.cur_us, tag: 'o', id: last.id }) : null, ts: now() };
   }
 
   // -------------------------------------------------------------------------------------------------------------- strategies, agents
@@ -453,6 +420,6 @@ export function createReads(deps: ReadDeps) {
     return { ...a, contracts, delisted: a.delisted.filter(ok), venues: a.venues.filter((v) => venueAllowed(p, v.venue)), divergence: a.divergence.filter((d) => d.contracts.every((k) => keep.has(k.id))) };
   }
 
-  return { markets, compare, market, orderbook, candles, balances, portfolio, positions, orders, agentSwap, strategies, agents, risk, activity, resolve, sizeForNotional, privateMarkets, privateMarket, privateMarketCompany, now };
+  return { markets, compare, market, orderbook, candles, balances, portfolio, positions, orders, strategies, agents, risk, activity, resolve, sizeForNotional, privateMarkets, privateMarket, privateMarketCompany, now };
 }
 export type Reads = ReturnType<typeof createReads>;

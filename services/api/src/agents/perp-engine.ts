@@ -18,7 +18,10 @@ import { formatUnits } from '@spw/core';
 import { D, type AccountState, type Book, type Dec, type DecStr, type Fill, type Instrument, type Order, type OrderRequest, type Position, type RiskPolicy, type Ticker } from '@spw/derivatives';
 import { audit, sql } from '../db.ts';
 import { worstPrice } from '../derivatives/paper.ts';
+import type { AgentOrderGateway, KillSwitchRead, SeamResult } from '../agent-runtime/gateway.ts';
+import { decisionOf, inputsDigest, journal } from '../agent-runtime/journal.ts';
 import type { PerpInterval, PerpSeries } from './perp-data.ts';
+import { GatewayPerpExecutor } from './perp-gateway.ts';
 import type { AgentRow } from './routes.ts';
 
 // ------------------------------------------------------------------ the owner's limits
@@ -143,6 +146,20 @@ export interface PerpEngineDeps {
   /** instrument, live ticker and live book of one symbol */
   market(symbol: string): Promise<PerpMarket>;
   executor(a: PerpAgentRow): PerpExecutor;
+  /** V11: what the execution side knows about an order of this agent by its client id, without sending anything (LIVE: the venue
+   *  account's stored order). Used by the order gateway to settle an order whose outcome is not known. Absent = the paper account. */
+  lookupOrder?(clientId: string): Promise<SeamResult | null>;
+  /** V11, tests: the order gateway and the kill switch of this tick instead of the bound ones */
+  gateway?(a: PerpAgentRow, inner: PerpExecutor): AgentOrderGateway;
+  killSwitch?: KillSwitchRead;
+}
+
+/** V11 — every order of a perp agent goes through the order gateway: the engine's executor is wrapped, reads pass through. */
+export function gatewayExecutor(a: PerpAgentRow, inner: PerpExecutor, d: Pick<PerpEngineDeps, 'now' | 'lookupOrder' | 'gateway' | 'killSwitch'>): GatewayPerpExecutor {
+  if (inner instanceof GatewayPerpExecutor) return inner;
+  const lb = a.mode === 'LIVE' ? a.perp?.live ?? null : null, gw = d.gateway?.(a, inner);
+  return new GatewayPerpExecutor(a, inner, { mode: lb ? 'live' : 'paper', network: lb?.network ?? 'mainnet', authorityId: lb ? lb.mandateId : a.deriv_account_id, accountId: lb?.accountId ?? a.deriv_account_id,
+    slippageBps: a.risk.slippageBps, now: d.now, configVersion: a.config_version ?? 1, ...(d.lookupOrder ? { lookup: d.lookupOrder } : {}), ...(gw ? { gateway: gw } : {}), ...(d.killSwitch ? { killSwitch: d.killSwitch } : {}) });
 }
 
 // ------------------------------------------------------------------ pure parts
@@ -264,7 +281,9 @@ export function lossBreach(equity: Dec, capital: Dec, dayEquity: Dec, r: PerpRis
 
 // ------------------------------------------------------------------ one engine step
 
-const log = (a: { id: string }, kind: string, title: string, body = '', data?: unknown) => sql`insert into research_log (agent_id, kind, title, body, data) values (${a.id}, ${kind}, ${title}, ${body}, ${data === undefined ? null : sql.json(data as never)})`;
+/** journal line of the engine, tagged with the mode the agent trades in (V11: no mode-less line) */
+const log = (a: { id: string; mode?: string; config_version?: number }, kind: 'hold' | 'stop' | 'risk' | 'flag', title: string, body = '', data?: unknown) =>
+  journal(a.id, { mode: a.mode === 'LIVE' ? 'LIVE' : 'PAPER', kind, title, body, ...(data === undefined ? {} : { data }), severity: kind === 'hold' ? 'info' : 'warning', configVersion: a.config_version ?? null });
 /** The engine's own bookkeeping. The keys of the LIVE life cycle (`live`, `livePending`) are never written from here: they are
  *  kept as they are in the database, so that a pass that started before the owner stopped the agent cannot undo the stop. */
 const saveBook = (a: { id: string }, book: PerpBook) => {
@@ -290,8 +309,8 @@ const leverageFor = (a: PerpAgentRow, inst: Instrument): DecStr => D.str(D.quant
 const symbolOf = (instrument: string): string => instrument.slice(instrument.indexOf(':') + 1);
 
 /** Close every position with reduce-only IOC orders (works under a halt). Returns the positions still open afterwards. */
-export async function flattenPerp(a: PerpAgentRow, d: PerpEngineDeps, ex: PerpExecutor, tag: string, only?: (p: Position) => boolean): Promise<{ left: Position[]; results: Record<string, unknown>[] }> {
-  const results: Record<string, unknown>[] = [];
+export async function flattenPerp(a: PerpAgentRow, d: PerpEngineDeps, inner: PerpExecutor, tag: string, only?: (p: Position) => boolean): Promise<{ left: Position[]; results: Record<string, unknown>[] }> {
+  const results: Record<string, unknown>[] = [], ex = gatewayExecutor(a, inner, d);
   for (const p of await ex.positions()) {
     if (only && !only(p)) continue;
     const symbol = symbolOf(p.instrument), m = await d.market(symbol), side = p.side === 'long' ? 'sell' as const : 'buy' as const;
@@ -306,7 +325,8 @@ export async function tickPerpAgent(a: PerpAgentRow, d: PerpEngineDeps, live?: P
   // PAPER: state PAPER_TRADING, no hooks. LIVE: only through perp-live-cycle.ts, which passes the hooks (a paused live agent runs `riskOnly`).
   const runs = live ? a.mode === 'LIVE' && (a.state === 'LIVE' || (a.state === 'PAUSED' && live.riskOnly === true)) : a.state === 'PAPER_TRADING' && a.mode !== 'LIVE';
   if (a.kind !== 'perp' || !runs) return 'idle';
-  const ex = d.executor(a), book: PerpBook = { ...(a.perp ?? {}) }, now = d.now(), capital = live ? D.from(live.capital) : capitalOf(a);
+  const ex = gatewayExecutor(a, d.executor(a), d), book: PerpBook = { ...(a.perp ?? {}) }, now = d.now(), capital = live ? D.from(live.capital) : capitalOf(a);
+  const mode = live ? 'LIVE' : 'PAPER', cfg = a.config_version ?? 1;
   const what = live ? 'venue account' : 'paper account';
   /** equity: the venue's own account value when the state comes from the venue; the paper account's collateral + PnL at the live marks otherwise */
   const equityOf = (state: AccountState, pos: Position[]): Dec => (state.source === 'venue' ? D.from(state.equity) : equityAt(state.collateral, pos, marks));
@@ -359,17 +379,20 @@ export async function tickPerpAgent(a: PerpAgentRow, d: PerpEngineDeps, live?: P
 
   // 4 — ONE decision per bar: the row is written before any order, and a restart reads it back instead of deciding again
   const complete = async (): Promise<void> => { await sql`update agents set last_bar = ${new Date(bar)}, updated_at = now() where id = ${a.id}`; };
-  let [row] = await sql<{ status: string; weights: Record<string, number> | null; strategy_sha256: string; orders?: { list?: Record<string, unknown>[] } | null }[]>`select status, weights, strategy_sha256, orders from perp_agent_signals where agent_id = ${a.id} and bar = ${new Date(bar)}`;
+  // V11: the signal log is `agent_signals` (one row per agent, MODE and bar), with the configuration version and a digest of the inputs
+  let [row] = await sql<{ id: string; status: string; weights: Record<string, number> | null; strategy_sha256: string; orders?: { list?: Record<string, unknown>[] } | null }[]>`select id, status, weights, strategy_sha256, orders from agent_signals where agent_id = ${a.id} and mode = ${mode} and bar = ${new Date(bar)}`;
   if (!row) {
     let sig: PerpSignal | null = null, why = '';
     try { sig = await d.signal({ path: sv.path, sha256: sv.code_sha256 }, gated.data, interval); checkPerpWeights(sig, symbols, sv.meta as PerpMetaBounds); }
     catch (e) { sig = null; why = (e as Error).message.slice(0, 300); }
-    [row] = await sql<{ status: string; weights: Record<string, number> | null; strategy_sha256: string }[]>`insert into perp_agent_signals (agent_id, bar, status, reason, strategy_sha256, weights)
-      values (${a.id}, ${new Date(bar)}, ${sig ? 'decided' : 'hold'}, ${why}, ${sv.code_sha256}, ${sig ? sql.json(sig.weights as never) : null})
-      on conflict (agent_id, bar) do update set updated_at = now() returning status, weights, strategy_sha256`;
+    const digest = inputsDigest({ interval, bar, data: gated.data });
+    [row] = await sql<{ id: string; status: string; weights: Record<string, number> | null; strategy_sha256: string }[]>`insert into agent_signals (agent_id, bar, mode, kind, config_version, strategy_sha256, inputs_digest, status, reason, decision, reason_code, weights)
+      values (${a.id}, ${new Date(bar)}, ${mode}, 'perp', ${cfg}, ${sv.code_sha256}, ${digest}, ${sig ? 'decided' : 'hold'}, ${why}, ${sig ? 'pending' : 'skipped'}, ${sig ? null : 'no_valid_signal'}, ${sig ? sql.json(sig.weights as never) : null})
+      on conflict (agent_id, mode, bar) do update set updated_at = now() returning id, status, weights, strategy_sha256`;
     if (!sig) await log(a, 'hold', 'No valid signal: holding', why);
   }
   book.hold = null;
+  ex.signalId = String(row!.id); ex.strategySha256 = sv.code_sha256; ex.bar = bar;
   if (row!.status === 'hold') { await saveBook(a, book); await complete(); return 'hold: no valid signal'; }
   if (row!.status === 'done') { await saveBook(a, book); await complete(); return 'waiting for the next bar'; }
   if (row!.strategy_sha256 !== sv.code_sha256) { await saveBook(a, book); await complete(); return 'hold: this bar was decided by another strategy version'; }
@@ -419,8 +442,8 @@ export async function tickPerpAgent(a: PerpAgentRow, d: PerpEngineDeps, live?: P
   if (deferred > 0) {
     // LIVE: something waits (the venue has not confirmed an order, or the signer still counts the last one). The bar stays
     // open: the next pass reads the decision back and plans again from the venue's real positions — same client ids, no new signal.
-    await sql`update perp_agent_signals set scaled = ${sql.json(str(scaled) as never)}, scale = ${D.str(factor)}, equity = ${D.str(eq)}, targets = ${sql.json(str(targets) as never)},
-      orders = ${sql.json({ binding, threshold: D.str(threshold), slippageBps: a.risk.slippageBps, list: results } as never)}, updated_at = now() where agent_id = ${a.id} and bar = ${new Date(bar)}`;
+    await sql`update agent_signals set scaled = ${sql.json(str(scaled) as never)}, scale = ${D.str(factor)}, equity = ${D.str(eq)}, targets = ${sql.json(str(targets) as never)},
+      orders = ${sql.json({ binding, threshold: D.str(threshold), slippageBps: a.risk.slippageBps, list: results } as never)}, updated_at = now() where agent_id = ${a.id} and mode = ${mode} and bar = ${new Date(bar)}`;
     await saveBook(a, book);
     if (placed) await audit('agent.perp_orders', 'engine', { agent: a.id, bar: new Date(bar).toISOString(), orders: results.length, placed, deferred, sha256: sv.code_sha256 });
     return `${placed} order(s), ${deferred} waiting for the next pass`;
@@ -430,8 +453,9 @@ export async function tickPerpAgent(a: PerpAgentRow, d: PerpEngineDeps, live?: P
   positions = await ex.positions();
   const after = await ex.account(book.lastEventId ?? 0);
   const eqAfter = equityOf(after.state, positions);
-  await sql`update perp_agent_signals set status = 'done', scaled = ${sql.json(str(scaled) as never)}, scale = ${D.str(factor)}, equity = ${D.str(eq)}, targets = ${sql.json(str(targets) as never)},
-    orders = ${sql.json({ binding, threshold: D.str(threshold), slippageBps: a.risk.slippageBps, list: results } as never)}, updated_at = now() where agent_id = ${a.id} and bar = ${new Date(bar)}`;
+  const verdict = decisionOf(results, plan.length);
+  await sql`update agent_signals set status = 'done', decision = ${verdict.decision}, reason_code = ${verdict.reasonCode}, scaled = ${sql.json(str(scaled) as never)}, scale = ${D.str(factor)}, equity = ${D.str(eq)}, targets = ${sql.json(str(targets) as never)},
+    orders = ${sql.json({ binding, threshold: D.str(threshold), slippageBps: a.risk.slippageBps, list: results } as never)}, updated_at = now() where agent_id = ${a.id} and mode = ${mode} and bar = ${new Date(bar)}`;
   await sql`insert into agent_equity (agent_id, ts, mode, equity_usd, positions) values (${a.id}, ${new Date(bar)}, ${live ? 'LIVE' : 'PAPER'}, ${D.toNumber(eqAfter)}, ${sql.json(Object.fromEntries(positions.map((p) => [symbolOf(p.instrument), D.str(signed(p))])))})
     on conflict (agent_id, ts, mode) do update set equity_usd = excluded.equity_usd, positions = excluded.positions`;
   await saveBook(a, book);

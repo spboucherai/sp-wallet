@@ -28,6 +28,8 @@ const DEC = /^\d+(\.\d+)?$/;
 let app: any, sql: any, cookie = '', clock: Clock, v: Venues, signerSrv: Server, acct = '', doc: any;
 let spec: typeof import('../src/trading-api/spec.ts'), read: typeof import('../src/trading-api/read.ts'), shaping: typeof import('../src/trading-api/shaping.ts');
 let ipSeq = 0;
+const GMX_ADDR = '0x00000000000000000000000000000000000000aa';
+const gmxFake = { positions: [] as any[], status: async () => ({ network: 'arbitrum', account: { address: GMX_ADDR }, positionsError: null, positions: gmxFake.positions }) };
 
 interface Res { status: number; json: any; headers: Record<string, any> }
 async function call(method: string, path: string, o: { key?: string | null; cookie?: string | null; body?: unknown; headers?: Record<string, string> } = {}): Promise<Res> {
@@ -138,7 +140,7 @@ beforeAll(async () => {
   const mod = await import('../src/derivatives/index.ts');
   clock = new Clock(); v = fixtureVenues(clock);
   setMarket(v, 50_000);
-  app = await (await import('../src/server.ts')).buildServer({ derivatives: mod.createDerivatives({ registry: mod.createRegistry(v.adapters, clock.now), now: clock.now }), gmx: { status: async () => ({ network: 'arbitrum', account: null, positionsError: null, positions: [] }) } as never });
+  app = await (await import('../src/server.ts')).buildServer({ derivatives: mod.createDerivatives({ registry: mod.createRegistry(v.adapters, clock.now), now: clock.now }), gmx: gmxFake as never });
   const a = await call('POST', '/api/v1/derivatives/accounts', { body: { venue: 'hyperliquid', label: 'Contract', collateral: '10000' } });
   expect(a.status, JSON.stringify(a.json)).toBe(200);
   acct = a.json.id; ORDER.accountId = acct;
@@ -167,19 +169,22 @@ describe('the document and the code agree on the closed lists', () => {
       for (const e of errs) expect(op.responses[String(e.status)].description, `${o.id} ${e.status}`).toContain(`\`${e.code}\``);
       expect(errs, o.id).toContainEqual({ status: 401, code: 'unauthenticated' });
       if (!o.implemented) expect(errs, o.id).toContainEqual({ status: 501, code: 'execution_not_wired' });
-      if (o.implemented && o.method !== 'GET') expect(op.responses['200'].content['application/json'].schema.type ?? op.responses['200'].content['application/json'].schema.$ref, `${o.id} has a success schema`).toBeTruthy();
     }
     const errs = (id: string) => opOf(id)['x-spw-errors'];
     expect(errs('listMarkets')).toContainEqual({ status: 404, code: 'unknown_venue' });
     expect(errs('getOrderbook')).toContainEqual({ status: 422, code: 'no_orderbook' });
     for (const code of ['execution_disabled', 'mandate_required', 'mandate_denied', 'key_limit_exceeded']) expect(errs('placeOrder'), code).toContainEqual({ status: 403, code });
     for (const code of ['idempotency_conflict', 'idempotency_in_progress']) expect(errs('placeOrder'), code).toContainEqual({ status: 409, code });
-    for (const code of ['risk_denied', 'venue_rejected', 'spot_via_swap_screen', 'venue_not_wired']) expect(errs('placeOrder'), code).toContainEqual({ status: 422, code });
+    for (const code of ['risk_denied', 'venue_rejected', 'spot_market_only', 'venue_not_wired']) expect(errs('placeOrder'), code).toContainEqual({ status: 422, code });
     for (const code of ['kill_switch_active', 'read_only_mode']) expect(errs('placeOrder'), code).toContainEqual({ status: 423, code });
     expect(opOf('placeOrder')['x-spw-errors-open']).toBe(true); expect(opOf('getMarket')['x-spw-errors-open']).toBeUndefined();
+    expect(spec.OPERATIONS).toHaveLength(41); expect(spec.OPERATIONS.filter((o) => !o.implemented)).toEqual([]);
+    for (const o of spec.OPERATIONS) expect(opOf(o.id).responses['200'].content['application/json'].schema, `${o.id} has a success schema`).toBeTruthy();
+    for (const code of ['position_not_attributable', 'mandate_integrity', 'gmx_requires_owner_passkey']) expect(errs('placeOrder'), code).toContainEqual({ status: 403, code });
+    expect(errs('placeOrder')).toContainEqual({ status: 409, code: 'account_has_active_mandate' });
     // preview and the kill switch take no Idempotency-Key; every other implemented write requires one
     for (const id of ['previewOrder', 'engageKillSwitch']) expect(opOf(id).parameters.some((p: any) => p.name === 'Idempotency-Key'), id).toBe(false);
-    for (const id of ['placeOrder', 'cancelOrder', 'closePosition', 'reducePosition', 'runCommand']) expect(opOf(id).parameters.find((p: any) => p.name === 'Idempotency-Key'), id).toMatchObject({ required: true });
+    for (const id of ['placeOrder', 'cancelOrder', 'closePosition', 'reducePosition', 'runCommand', 'createAgent', 'startAgent', 'pauseAgent', 'stopAgent', 'backtestAgent', 'createStrategy']) expect(opOf(id).parameters.find((p: any) => p.name === 'Idempotency-Key'), id).toMatchObject({ required: true });
   });
   it('the validator of this file refuses what the document does not describe', () => {
     const s = opOf('getBalances').responses['200'].content['application/json'].schema;
@@ -254,11 +259,21 @@ describe('3, 4 — the error codes each operation really answers are declared', 
     expect((await post('closePosition', `/positions/paper:hyperliquid:${acct}:${BTC}/close`, unbound.secret, {})).json.error).toBe('mandate_required');
     expect((await post('placeOrder', '/orders', k.secret, ORDER, {})).json.error).toBe('idempotency');
     expect((await post('placeOrder', '/orders', k.secret, ORDER, { ...idem(), 'x-spw-timestamp': '1000000000' })).json.error).toBe('stale_request');
-    expect((await post('placeOrder', '/orders', k.secret, { ...ORDER, instrument: 'spot:BTC' })).json.error).toBe('spot_execution_requires_agent_vault');
-    const ownerSpot = await post('placeOrder', '/orders', null, { ...ORDER, instrument: 'spot:BTC' });
-    expect([ownerSpot.status, ownerSpot.json.error]).toEqual([422, 'spot_via_swap_screen']);
+    expect((await post('placeOrder', '/orders', k.secret, { ...ORDER, instrument: 'spot:BTC' })).status).toBe(403);
+    // the owner's spot order is a swap proposal of the existing flow, a live GMX order his passkey's: whatever this instance (no swap
+    // provider, no GMX engine) answers is a declared answer of the operation — `check` asserts it
+    const spotSell = await post('placeOrder', '/orders', null, { mode: 'live', instrument: 'spot:ETH-USDC', side: 'sell', type: 'market', size: '0.1' });
+    expect(spotSell.status).not.toBe(500);
+    // a spot BUY names the quote amount: `notional` reaches the swap flow (it is no longer refused for lack of a field to carry it)
+    const spotBuy = await post('placeOrder', '/orders', null, { mode: 'live', instrument: 'spot:ETH-USDC', side: 'buy', type: 'market', notional: '25' });
+    expect(spotBuy.json.error).not.toBe('spot_buy_needs_quote_amount'); expect(spotBuy.status).not.toBe(500);
+    const spotBuyPreview = await post('previewOrder', '/orders/preview', null, { mode: 'live', instrument: 'spot:ETH-USDC', side: 'buy', type: 'market', notional: '25' }, {});
+    expect(spotBuyPreview.json?.error).not.toBe('spot_buy_needs_quote_amount'); expect(spotBuyPreview.status).not.toBe(500);
+    if (spotBuyPreview.status === 200) expect(spotBuyPreview.json.order).toMatchObject({ marketKind: 'spot', side: 'buy', notional: '25', size: null });
+    expect((await post('placeOrder', '/orders', null, { mode: 'live', instrument: 'spot:ETH-USDC', side: 'buy', type: 'market', size: '0.1' })).json.error).toBe('spot_buy_needs_quote_amount');   // a BUY by base size is not a swap
+    expect((await post('placeOrder', '/orders', k.secret, { mode: 'live', instrument: 'spot:ETH-USDC', side: 'buy', type: 'market', notional: '25' })).status).toBe(403);                          // a key: never spot
     const gmx = await post('placeOrder', '/orders', null, { mode: 'live', instrument: GMX_BTC, side: 'buy', type: 'market', size: '0.01' });
-    expect([gmx.status, gmx.json.error]).toEqual([422, 'venue_not_wired']);
+    expect(gmx.status).toBeGreaterThanOrEqual(400); expect(gmx.status).not.toBe(500);
     expect((await post('placeOrder', '/orders', k.secret, { ...ORDER, accountId: randomUUID() })).json.error).toBe('unknown_account');
     expect((await post('placeOrder', '/orders', k.secret, { ...ORDER, instrument: 'hyperliquid:NOPE' })).json.error).toBe('unknown_instrument');
     expect((await post('placeOrder', '/orders', k.secret, { ...ORDER, type: 'market', price: '50000' })).json.error).toBe('bad_request');
@@ -267,7 +282,7 @@ describe('3, 4 — the error codes each operation really answers are declared', 
     const np = await post('closePosition', `/positions/paper:hyperliquid:${acct}:hyperliquid:ETH/close`, null, {});
     expect([np.status, np.json.error]).toEqual([422, 'no_position']);
     expect((await post('reducePosition', '/positions/not-a-position/reduce', null, { fraction: '0.5' })).json.error).toBe('unknown_position');
-    expect((await post('closePosition', '/positions/live:gmx:wallet:x/close', null, {})).json.error).toBe('close_in_app');
+    expect((await post('closePosition', '/positions/live:gmx:wallet:x/close', null, {})).status).toBeGreaterThanOrEqual(400);
     const resting = await post('placeOrder', '/orders', k.secret, { ...ORDER, type: 'limit', price: '49500', size: '0.01' });
     expect(resting.status, JSON.stringify(resting.json)).toBe(200);
     const other = await tradingKey();
@@ -275,8 +290,6 @@ describe('3, 4 — the error codes each operation really answers are declared', 
     expect([nyo.status, nyo.json.error]).toEqual([403, 'not_your_order']);
     expect(check('cancelOrder', await call('DELETE', `${T}/orders/nope-nope-nope`, { key: k.secret, headers: idem() })).json.error).toBe('unknown_order');
     expect(check('cancelOrder', await call('DELETE', `${T}/orders/${resting.json.order.id}`, { key: k.secret, headers: idem() })).json.order.status).toBe('CANCELLED');
-    const nw = await post('createAgent', '/agents', null, { kind: 'perp', name: 'contract agent', universe: ['BTC'] });
-    expect([nw.status, nw.json.error]).toEqual([501, 'execution_not_wired']);
     // out of mandate: 403 mandate_denied, the reasons from the closed list, the REJECTED order attached
     const md = await post('placeOrder', '/orders', k.secret, { ...ORDER, size: '0.05' });
     expect([md.status, md.json.error]).toEqual([403, 'mandate_denied']);
@@ -406,6 +419,21 @@ describe('6, 7, 9, 12 — the write side answers what the document declares', ()
     expect(h.engine).toEqual({ name: 'paper', risk: { ok: false, code: 'insufficient_collateral', reason: shaping.WITHHELD }, estimate: { fee: '1', rejectReason: shaping.WITHHELD } });
     expect(JSON.stringify(h)).not.toMatch(/10000"|9000"|83333/);
   });
+  it('9 (review) — a refusal of POST /orders withholds the account figures of data.checks from a key that may not read the account', () => {
+    const mk = () => Object.assign(new (shaping as any).__UserError('risk_denied', 'gross_exposure: 250000 above 30000', 422), { data: { failed: ['gross_exposure', 'order_notional'], decisionId: 3, order: { id: 'o' },
+      checks: [{ id: 'gross_exposure', ok: false, observed: '250000', limit: '30000', detail: 'd1', exempt: false }, { id: 'order_notional', ok: false, observed: '250000', limit: '100000', detail: 'd2', exempt: false }] } });
+    const key = (scopes: string[]) => ({ kind: 'api_key', scopes }) as never;
+    for (const who of [{ kind: 'owner' } as never, key(['orders:execute', 'positions:read']), key(['orders:execute', 'wallet:read'])]) {
+      const e = shaping.shapeRefusal(who, mk()) as any;
+      expect(e.message).toBe('gross_exposure: 250000 above 30000'); expect(e.data.checks[0].observed).toBe('250000');
+    }
+    const h = shaping.shapeRefusal(key(['orders:execute', 'orders:read', 'markets:read']), mk()) as any;
+    expect([h.code, h.status, h.message]).toEqual(['risk_denied', 422, `gross_exposure: ${shaping.WITHHELD}`]);
+    expect(h.data.failed).toEqual(['gross_exposure', 'order_notional']); expect(h.data.order).toEqual({ id: 'o' }); expect(h.data.decisionId).toBe(3);
+    expect(h.data.checks).toEqual([{ id: 'gross_exposure', ok: false, observed: null, limit: '30000', detail: shaping.WITHHELD, exempt: false }, { id: 'order_notional', ok: false, observed: '250000', limit: '100000', detail: 'd2', exempt: false }]);
+    const plain = new Error('x');
+    expect(shaping.shapeRefusal(key([]), plain)).toBe(plain);
+  });
   it('commands: an ambiguous command answers 409 with the questions; dry runs and queries validate; the kill switch blocks new risk, not exits', async () => {
     await flatten();
     const k = await tradingKey();
@@ -427,8 +455,8 @@ describe('6, 7, 9, 12 — the write side answers what the document declares', ()
     expect((await cmd('SHOW ORDERS')).json.kind).toBe('query');
     expect((await cmd(`CANCEL ORDER ${run.json.order.id}`, { dryRun: true })).json).toMatchObject({ kind: 'control', control: { type: 'cancel_order' }, executed: false });
     expect((await cmd('KILL', { dryRun: true })).json).toMatchObject({ kind: 'control', control: { type: 'kill_switch_on' }, executed: false });
-    const stop = await cmd('STOP ALL AGENTS');
-    expect([501, 403]).toContain(stop.status);
+    const stop = await cmd('STOP ALL AGENTS', { dryRun: true });
+    expect(stop.status, JSON.stringify(stop.json)).toBe(200); expect(stop.json).toMatchObject({ kind: 'control', control: { type: 'stop_all_agents' }, executed: false });
     const reader = await newKey({ scopes: ['orders:prepare', 'markets:read'] });
     expect((await cmd('LONG BTC-PERP 500', {}, reader.secret)).json.error).toBe('insufficient_scope');
 
@@ -451,31 +479,104 @@ describe('6, 7, 9, 12 — the write side answers what the document declares', ()
 });
 
 describe('7 — order states', () => {
-  it('every order row carries one of the twelve states, the engine\'s word and a boolean `final`; agent swaps are projected truthfully', async () => {
+  it('every order row carries one of the twelve states, the engine\'s word and a boolean `final` — the spot agents\' swaps included', async () => {
     const agentId = randomUUID();
     await sql`insert into agents (id, name, universe, risk, vault_index, vault_address, state, mode) values (${agentId}, 'Contract agent', ${sql.json(['BTC'])}, ${sql.json({})}, 9301, '0x0', 'PAPER_TRADING', 'PAPER')`;
-    const swaps: [string, string | null, string, boolean][] = [['prepared', null, 'VALIDATED', false], ['signed', null, 'APPROVED', false], ['broadcast', null, 'SUBMITTED', false], ['filled', null, 'FILLED', true],
-      ['failed', 'the swap reverted on-chain; only the network fee was spent', 'FAILED', true], ['failed', 'refused by the signer: over the daily limit', 'REJECTED', true], ['skipped', null, 'CANCELLED', true], ['a_new_word', null, 'UNKNOWN', false]];
     const ids: string[] = [];
-    for (const [i, [state, reason]] of swaps.entries()) {
+    for (const [i, state] of ['prepared', 'signed', 'broadcast', 'filled', 'failed', 'filled', 'failed', 'filled'].entries()) {
       const id = randomUUID(); ids.push(id);
-      await sql`insert into agent_orders (id, agent_id, ts, mode, from_asset, to_asset, from_symbol, to_symbol, amount_in, state, reason) values (${id}, ${agentId}, ${new Date(clock.now() - 86_400_000 - i * 1000)}, ${i % 2 ? 'LIVE' : 'PAPER'}, 'usdc', 'native', 'USDC', 'ETH', 1000000, ${state}, ${reason})`;
+      await sql`insert into agent_orders (id, agent_id, ts, mode, from_asset, to_asset, from_symbol, to_symbol, amount_in, state) values (${id}, ${agentId}, ${new Date(clock.now() - 86_400_000 - i * 1000)}, ${i % 2 ? 'LIVE' : 'PAPER'}, 'usdc', 'native', 'USDC', 'ETH', 1000000, ${state})`;
     }
     const k = (await newKey()).secret;
     const all = await get('listOrders', '/orders?limit=500', k);
     expect(all.status).toBe(200);
     for (const o of all.json.orders) { expect(spec.ORDER_STATES as readonly string[], o.id).toContain(o.status); expect(o.final, o.id).toBe(TERMINAL_STATES.includes(o.status)); expect('engineStatus' in o).toBe(true); }
-    expect(all.json.orders.some((o: any) => !o.id.startsWith('agent:') && o.engineStatus === 'filled' && o.status === 'FILLED')).toBe(true);
-    for (const [i, [state, , status, final]] of swaps.entries()) {
-      const row = all.json.orders.find((o: any) => o.id === `agent:${ids[i]}`);
-      expect(row, state).toMatchObject({ status, final, engineStatus: state, venue: 'spot', type: 'swap' });
-      expect((await get('getOrder', `/orders/agent:${ids[i]}`, k)).json.order).toMatchObject({ status, final, engineStatus: state });
+    expect(all.json.orders.some((o: any) => o.venue !== 'spot' && o.engineStatus === 'filled' && o.status === 'FILLED')).toBe(true);
+    // the swaps are rows of the same table (projected by the order service), under the id the read side always gave them
+    for (const id of ids) {
+      const row = all.json.orders.find((o: any) => o.id === `agent:${id}`);
+      expect(row, id).toMatchObject({ venue: 'spot' }); expect(typeof row.final).toBe('boolean');
+      expect((await get('getOrder', `/orders/agent:${id}`, k)).json.order).toMatchObject({ id: `agent:${id}`, status: row.status, final: row.final });
     }
     const open = await get('listOrders', '/orders?open=true&venue=spot', k), closed = await get('listOrders', '/orders?open=false&venue=spot', k);
-    expect(open.json.orders.map((o: any) => o.engineStatus).sort()).toEqual(['a_new_word', 'broadcast', 'prepared', 'signed']);
-    expect(closed.json.orders.every((o: any) => o.final === true)).toBe(true); expect(closed.json.orders).toHaveLength(4);
-    expect((await get('listOrders', '/orders?open=true&limit=500', k)).json.orders.every((o: any) => o.final === false)).toBe(true);
-    expect(read.agentSwapStatus('failed', null)).toBe('FAILED');
+    expect(open.json.orders.every((o: any) => o.final === false)).toBe(true); expect(closed.json.orders.every((o: any) => o.final === true)).toBe(true);
+    expect(open.json.orders.length + closed.json.orders.length).toBe(ids.length);
+  });
+});
+
+describe('positions — an id that fits a path parameter', () => {
+  it('a GMX position is named by its instrument (its 66-character key would exceed the router\'s parameter limit); two on one market keep their keys', async () => {
+    const k = (await newKey()).secret, key = (n: string) => `0x${n.repeat(64)}`;
+    const row = (n: string, side: string) => ({ key: key(n), instrument: GMX_BTC, side, sizeTokens: '0.01', entryPrice: '50000', markPrice: '50000', liquidationPrice: null, leverage: '2', collateral: '250', pnlUsd: '0', source: 'chain' });
+    gmxFake.positions = [row('a', 'long')];
+    try {
+      const one = (await get('listPositions', '/positions?mode=live&venue=gmx', k)).json.positions;
+      expect(one).toHaveLength(1);
+      expect(one[0].id).toBe(`live:gmx:${GMX_ADDR}:${GMX_BTC}`); expect(one[0].id.length).toBeLessThanOrEqual(100);
+      // the id reaches the handler of POST /positions/{id}/close: a refusal of the operation (this instance has no GMX engine), not the 404 of an unroutable path
+      const close = await post('closePosition', `/positions/${encodeURIComponent(one[0].id)}/close`, null, {});
+      expect(close.json.error).not.toBe('not_found'); expect(close.status).not.toBe(500);
+      const long = await call('POST', `${T}/positions/${encodeURIComponent(`live:gmx:${GMX_ADDR}:${key('a')}`)}/close`, { body: {}, headers: idem() });
+      expect([long.status, long.json.error]).toEqual([404, 'not_found']);                              // what the key form used to give: the router never matched it
+      gmxFake.positions = [row('a', 'long'), row('b', 'short')];
+      const two = (await get('listPositions', '/positions?mode=live&venue=gmx', k)).json.positions;
+      expect(two.map((x: any) => x.id).sort()).toEqual([`live:gmx:${GMX_ADDR}:${key('a')}`, `live:gmx:${GMX_ADDR}:${key('b')}`]);
+    } finally { gmxFake.positions = []; }
+  });
+});
+
+describe('agents and strategies — every answer of the agent operations is the document\'s', () => {
+  it('templates → create from a stream template → read (one mode per call) → start paper → pause → stop; a backtest job; the refusals', async () => {
+    const k = (await newKey()).secret, del = (id: string, path: string, body: unknown = {}) => post(id, path, k, body);
+    const t = await get('listAgentTemplates', '/agents/templates', k);
+    expect(t.status).toBe(200); expect(t.json.templates.length).toBeGreaterThan(3);
+    const mm = t.json.templates.find((x: any) => x.id === 'market-making');
+    expect(mm).toMatchObject({ engine: 'stream' }); expect(mm.modes).toContain('paper');
+    const c = await del('createAgent', '/agents', { template: 'market-making', name: 'Contract MM', venues: ['hyperliquid'], universe: ['BTC'], capitalUsdc: '1000' });
+    expect(c.status, JSON.stringify(c.json)).toBe(200);
+    const id = c.json.agent.id as string;
+    expect(c.json.agent).toMatchObject({ state: 'stopped', mode: 'research' });
+    const one = await get('getAgent', `/agents/${id}`, k);
+    expect(one.json.agent).toMatchObject({ id, family: mm.family });
+    expect((await get('listAgents', '/agents', k)).json.agents.find((a: any) => a.id === id)).toMatchObject({ kind: 'stream', lifecycle: 'stopped' });
+    const started = await del('startAgent', `/agents/${id}/start`, { mode: 'paper' });
+    expect(started.status, JSON.stringify(started.json)).toBe(200); expect(started.json.agent).toMatchObject({ id, state: 'active', mode: 'paper' });
+    for (const [op, path, member] of [['listAgentSignals', 'signals', 'signals'], ['listAgentJournal', 'journal', 'entries'], ['listAgentOrders', 'orders', 'orders']] as const) {
+      const r = await get(op, `/agents/${id}/${path}?mode=paper&limit=20`, k);
+      expect(r.status, op).toBe(200); expect(r.json.mode).toBe('paper'); expect(Array.isArray(r.json[member])).toBe(true);
+      expect((await get(op, `/agents/${id}/${path}?mode=live`, k)).json.mode).toBe('live');             // another mode is another answer, never mixed
+      const all = await get(op, `/agents/${id}/${path}?mode=all`, k);
+      expect([all.status, all.json.error], op).toEqual([400, 'bad_request']);
+    }
+    expect((await get('listAgentJournal', `/agents/${id}/journal?mode=paper`, k)).json.entries.length).toBeGreaterThan(0);       // "Paper trading started by …"
+    const perf = await get('getAgentPerformance', `/agents/${id}/performance?mode=paper`, k);
+    expect(perf.status).toBe(200); expect(perf.json.mode).toBe('paper'); expect(typeof perf.json.label).toBe('string');
+    expect((await get('getAgentPerformance', `/agents/${id}/performance?mode=all`, k)).status).toBe(400);
+    const paused = await del('pauseAgent', `/agents/${id}/pause`, { reason: 'contract test' });
+    expect(paused.status, JSON.stringify(paused.json)).toBe(200); expect(paused.json.agent.state).toBe('paused');
+    const bt = await del('backtestAgent', `/agents/${id}/backtest`, { hours: 1 });
+    expect(bt.status, JSON.stringify(bt.json)).toBe(200); expect(bt.json).toMatchObject({ label: 'backtest', job: { kind: 'backtest' } });
+    const job = await get('getJob', `/jobs/${bt.json.job.id}`, k);
+    expect(job.json.job).toMatchObject({ id: bt.json.job.id }); expect(['queued', 'running', 'done', 'failed', 'cancelled']).toContain(job.json.job.status);
+    const stopped = await del('stopAgent', `/agents/${id}/stop`, { reason: 'contract test' });
+    expect(stopped.status, JSON.stringify(stopped.json)).toBe(200); expect(stopped.json.agent.state).toBe('stopped');
+    // refusals, each a declared (status, code)
+    const live = await del('startAgent', `/agents/${id}/start`, { mode: 'live' });
+    expect(live.status).toBe(409); expect(['mandate_required', 'live_unavailable']).toContain(live.json.error);
+    const ghost = randomUUID();
+    for (const [op, r] of [['getAgent', await get('getAgent', `/agents/${ghost}`, k)], ['startAgent', await del('startAgent', `/agents/${ghost}/start`, { mode: 'paper' })], ['pauseAgent', await del('pauseAgent', `/agents/${ghost}/pause`)],
+      ['stopAgent', await del('stopAgent', `/agents/${ghost}/stop`)], ['backtestAgent', await del('backtestAgent', `/agents/${ghost}/backtest`)], ['getJob', await get('getJob', `/jobs/${ghost}`, k)],
+      ['listAgentSignals', await get('listAgentSignals', `/agents/${ghost}/signals?mode=paper`, k)], ['backtestStrategy', await del('backtestStrategy', `/strategies/${ghost}/backtest`)],
+      ['startStrategy', await del('startStrategy', `/strategies/${ghost}/start`, { mode: 'paper' })], ['stopStrategy', await del('stopStrategy', `/strategies/${ghost}/stop`)]] as const)
+      expect([r.status, r.json.error], op).toEqual([404, 'not_found']);
+    expect((await del('createAgent', '/agents', { kind: 'spot', name: 'Spot via key', universe: ['BTC'] })).json.error).toBe('owner_required');
+    expect((await del('createStrategy', '/strategies', { kind: 'perp', path: 'momentum/v1' })).json.error).toBe('bad_request');
+    const wrong = await del('createStrategy', '/strategies', { kind: 'perp', path: 'momentum/v1', agentId: id });
+    expect(wrong.status).toBeGreaterThanOrEqual(400); expect(wrong.status).toBeLessThan(500);
+    const restricted = (await newKey({ restrictions: { venues: ['gmx'] } })).secret;
+    expect((await get('getAgent', `/agents/${id}`, restricted)).json.error).toBe('restricted');
+    // no scope for agents is an execution scope any more: a key without a mandate manages agents (research and paper sign nothing)
+    expect(doc['x-spw-scopes'].filter((x: any) => x.execution).map((x: any) => x.scope)).toEqual(['orders:execute', 'orders:cancel', 'positions:manage']);
   });
 });
 
@@ -573,11 +674,11 @@ describe('11 — cursor pagination', () => {
     expect((await get('getActivity', `/activity?cursor=${oc}`, k)).json.error).toBe('invalid_cursor');
   });
   it('cursor helpers: a total order, and a round trip', () => {
-    const a = { us: '1794790800000000', tag: 'o', id: 'b' }, rows = [a, { ...a, id: 'a' }, { ...a, tag: 'a', id: 'z' }, { ...a, us: '1794790800000001', tag: 'a', id: 'a' }];
-    expect([...rows].sort(read.cursorOrder).map((x) => `${x.us.slice(-1)}${x.tag}${x.id}`)).toEqual(['1aa', '0ob', '0oa', '0az']);
-    expect(read.decodeCursor(read.encodeCursor(a), ['o', 'a'])).toEqual(a);
+    const a = { us: '1794790800000000', tag: 'p', id: 'b' }, rows = [a, { ...a, id: 'a' }, { ...a, tag: 'd', id: 'z' }, { ...a, us: '1794790800000001', tag: 'd', id: 'a' }];
+    expect([...rows].sort(read.cursorOrder).map((x) => `${x.us.slice(-1)}${x.tag}${x.id}`)).toEqual(['1da', '0pb', '0pa', '0dz']);
+    expect(read.decodeCursor(read.encodeCursor(a), ['p', 'd'])).toEqual(a);
     expect(read.decodeCursor(undefined, ['o'])).toBeNull();
-    expect(() => read.decodeCursor(read.encodeCursor(a), ['p'])).toThrow(/cursor/);
+    expect(() => read.decodeCursor(read.encodeCursor(a), ['o'])).toThrow(/cursor/);
   });
 });
 

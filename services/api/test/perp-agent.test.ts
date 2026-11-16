@@ -258,7 +258,7 @@ async function world(o: { risk?: Partial<typeof RISK>; approved?: boolean; meta?
     tick: async () => eng.tickPerpAgent(await w.row(), w.deps) };
   return w;
 }
-const signalRows = (id: string) => sql`select bar, status, reason, weights, scaled, scale, targets, orders from perp_agent_signals where agent_id = ${id} order by bar`;
+const signalRows = (id: string) => sql`select bar, status, reason, weights, scaled, scale, targets, orders from agent_signals where agent_id = ${id} order by bar`;
 const size = (w: World, s: string) => { const p = w.ex.pos.get(s); return p ? D.str(p.size) : '0'; };
 
 describe('perp engine step (fake executor)', () => {
@@ -324,8 +324,11 @@ describe('perp engine step (fake executor)', () => {
 
   it('restart in the middle of a bar: the decision is read back, not taken again, and no order is placed twice', async () => {
     const w = await world();
-    w.ex.throwAt = 2;                                                                // the process "dies" on the second order
-    await expect(w.tick()).rejects.toThrow(/scripted/);
+    w.ex.throwAt = 2;                                                                // the executor fails in the middle of the second order
+    // V11: an executor that throws leaves an order whose outcome is NOT KNOWN. The order gateway records it (UNKNOWN) instead of
+    // letting the exception end the pass; the bar stays open, and the next pass asks the execution side before anything is sent again.
+    expect(await w.tick()).toBe('1 order(s), 1 waiting for the next pass');
+    expect((await sql`select state, reason from agent_order_intents where agent_id = ${w.id} order by created_at`).map((r: any) => `${r.state}/${r.reason}`)).toEqual(['FILLED/VENUE_FILLED', 'UNKNOWN/SUBMIT_NETWORK_ERROR']);
     expect(size(w, 'BTC')).toBe('0.1'); expect(size(w, 'ETH')).toBe('0');
     expect((await signalRows(w.id))[0].status).toBe('decided');
     expect((await w.row()).last_bar).toBeNull();
@@ -336,7 +339,7 @@ describe('perp engine step (fake executor)', () => {
     expect([size(w, 'BTC'), size(w, 'ETH')]).toEqual(['0.1', '-1.6']);
     // crash AFTER the orders but before the bar was marked complete: every order is sent again with the same key and changes nothing
     await sql`update agents set last_bar = null where id = ${w.id}`;
-    await sql`update perp_agent_signals set status = 'decided' where agent_id = ${w.id}`;
+    await sql`update agent_signals set status = 'decided' where agent_id = ${w.id}`;
     w.ex.pos.clear();                                                                // as if the engine did not know the fills (worst case: it plans both orders again)
     const before = w.ex.first.size;
     await w.tick();
@@ -433,7 +436,7 @@ describe('perp agent through the API (fixture venues, real paper service)', () =
   const orders = (acct: string) => sql`select client_id, side, reduce_only, status, size::text, origin, type, tif from deriv_orders where account_id = ${acct} order by created_at, venue_order_id`;
 
   beforeAll(async () => {
-    await sql`delete from perp_agent_signals`; await sql`delete from agent_equity`; await sql`delete from research_log`; await sql`delete from strategy_versions`; await sql`delete from agents`;
+    await sql`delete from agent_signals`; await sql`delete from agent_equity`; await sql`delete from research_log`; await sql`delete from strategy_versions`; await sql`delete from agents`;
     await sql`truncate deriv_paper_accounts cascade`; await sql`delete from perp_candles`; await sql`delete from perp_funding`;
     const token = randomBytes(32).toString('base64url');
     await sql`insert into sessions (id_hash, expires_at) values (${createHash('sha256').update(token).digest('hex')}, now() + interval '1 hour')`;
@@ -557,7 +560,7 @@ describe('perp agent through the API (fixture venues, real paper service)', () =
     expect(calls).toBe(2);
     // restart after the orders, before the bar was marked complete: same keys, nothing placed twice, the signal is not asked again
     await sql`update agents set last_bar = ${new Date(BAR0)} where id = ${a.id}`;
-    await sql`update perp_agent_signals set status = 'decided' where agent_id = ${a.id} and bar = ${new Date(BAR0 + H)}`;
+    await sql`update agent_signals set status = 'decided' where agent_id = ${a.id} and bar = ${new Date(BAR0 + H)}`;
     next = { BTC: 1 }; rebuild();                                                    // a strategy that would now answer something else
     await pass(a.id);
     expect([(await orders(acct)).length, calls, (await api('GET', `/agents/${a.id}`)).json.account.positions[0].size]).toEqual([3, 2, det.account.positions[0].size]);

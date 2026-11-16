@@ -129,8 +129,8 @@ describe('OpenAPI', () => {
         expect(op.responses['401'].content['application/json'].schema).toEqual({ $ref: '#/components/schemas/Error' });
         const idem = op.parameters.find((p: any) => p.name === 'Idempotency-Key');
         if (method === 'get' || !spec.idempotent) expect(idem).toBeUndefined(); else expect(idem).toMatchObject({ in: 'header', required: true });
-        // an implemented operation answers 501 only where one of its paths is really not connected (the STOP ALL AGENTS command)
-        if (spec.implemented) { expect(op.responses['200']).toBeDefined(); expect(op.responses['501'] !== undefined, op.operationId).toBe(op.operationId === 'runCommand'); }
+        // an implemented operation documents a 501 only where one of its paths can really be unconnected on a server (an owner's spot order without the swap flow)
+        if (spec.implemented) { expect(op.responses['200']).toBeDefined(); expect(op.responses['501'] !== undefined, op.operationId).toBe(op['x-spw-errors'].some((e: any) => e.status === 501)); }
         else { expect(op.responses['501']).toBeDefined(); expect(Object.keys(op.responses).some((c) => c.startsWith('2'))).toBe(false); }  // an unwired operation documents no success
         for (const p of op.parameters.filter((x: any) => x.in === 'path')) expect(path).toContain(`{${p.name}}`);
       }

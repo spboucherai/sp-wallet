@@ -19,6 +19,7 @@ import { dropScratch, RESEARCH_DIR, scratchDir } from './lab.ts';
 import { VENUE_MAX_BARS, type PerpDataStore, type PerpInterval } from './perp-data.ts';
 import { PERP_VENUE, type PerpAgentRow } from './perp-engine.ts';
 import { py, stageLedger } from './strategies.ts';
+import { inLibraryManifest } from '../agent-runtime/model.ts';
 import { z } from 'zod';
 
 const ROOT = path.join(RESEARCH_DIR, 'strategies');
@@ -53,6 +54,7 @@ export async function perpLibrary(): Promise<(PerpStrategyInfo & { readme: strin
   if (!existsSync(ROOT)) return out;
   for (const name of readdirSync(ROOT).sort()) { if (!/^[a-z0-9_]{1,40}$/.test(name)) continue;
     if (/^rj_[0-9a-f]{12}$/.test(name)) continue; // v7: a research job's strategy is listed by the research routes
+    if (!inLibraryManifest(name)) continue;       // V11 (D10): the production library is an explicit manifest
     for (const ver of readdirSync(path.join(ROOT, name)).sort()) { if (!/^[a-z0-9_]{1,12}$/.test(ver)) continue;
       try { const i = await describePerp(`${name}/${ver}`); let readme = '';
         try { readme = readFileSync(path.join(ROOT, name, ver, 'README.md'), 'utf8').slice(0, 1500); } catch { /* none */ }

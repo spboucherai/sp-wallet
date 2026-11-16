@@ -2,8 +2,8 @@
 // paper service — risk engine first (`checkOrder` with the policy derived from the owner's limits), then the paper engine
 // against the live book. Nothing here signs, calls the signer or reaches a venue's trading endpoint.
 //
-// A live executor (not in this delivery) will implement the same three methods over a venue account whose orders are signed
-// under a signer-enforced derivatives mandate (`MANDATE_LIVE`); the engine will not change.
+// The live executor (perp-exec-live.ts, V7) implements the same three methods over a venue account whose orders are signed under
+// a signer-enforced derivative mandate. V11: the engine reaches either of them through the order gateway (perp-gateway.ts).
 import type { DecStr, OrderRequest, Position } from '@spw/derivatives';
 import { UserError } from '../config.ts';
 import { sql } from '../db.ts';

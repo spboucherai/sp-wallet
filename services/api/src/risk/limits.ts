@@ -39,6 +39,58 @@ export function effectiveLimits(mode: RiskMode, stored: RiskLimits, order: { ven
   return RiskLimitsSchema.parse(out);
 }
 
+/** the limits on CAPITAL that have no default in live mode: each must come from the owner (or, for his own orders, from the seed below) */
+export const LIVE_REQUIRED = ['allowedVenues', 'allowedInstruments', 'maxOrderNotional', 'maxDailyNotional', 'maxPositionNotional', 'maxOrderLeverage', 'maxAccountLeverage', 'maxGrossExposure', 'maxNetExposure',
+  'maxAssetExposure', 'maxVenueExposure', 'maxVenueCollateralShareBps', 'maxDailyLoss', 'maxTotalLoss', 'maxDrawdownBps'] as const;
+
+// ---------------------------------------------------------------------------------------------------------------- the V10 seed
+// Before V11 the owner's limits lived on each venue account (`deriv_accounts.policy`, and the venue authorization the passkey
+// approved). The unified engine denies new risk on an absent limit, so at the first start of V11 every manual live order would
+// be refused until the owner filled the Risk screen. `seedFromV10` derives, ONCE, the part of the live limit set that those
+// existing limits already express. Rules:
+//  - only the OWNER's own orders see the seed (risk/service.ts `limitsFor`): an API key or an agent stays denied until the owner
+//    stores a limit himself;
+//  - never looser than what exists: a value is the MINIMUM over the authorized venue accounts (with one account, exactly its
+//    policy); an allow-list is the union of what the accounts allow (each account's own list still binds its orders);
+//  - never an invented value: a limit with no V10 equivalent — daily notional, net exposure, exposure per asset, exposure per
+//    venue, collateral share, drawdown — is NOT seeded. It stays absent, the engine denies, and the Risk screen names it.
+export interface V10Account { id: string; venue: string; network: string; policy: Record<string, unknown> | null; authorizationPolicy: { maxLeverage?: unknown } | null }
+export interface LimitSeed { v: 1; limits: RiskLimits; /** `field` ← where it came from */ sources: { field: string; from: string; accounts: string[] }[]; /** required limits the seed could not supply */ notSeeded: string[] }
+const decOf = (x: unknown): ReturnType<typeof D.from> | null => { try { return typeof x === 'string' && D.isValid(x) ? D.from(x) : typeof x === 'number' && Number.isFinite(x) ? D.from(String(x)) : null; } catch { return null; } };
+export function seedFromV10(accounts: readonly V10Account[]): LimitSeed {
+  const limits: RiskLimits = {}, sources: LimitSeed['sources'] = [], ids = accounts.map((a) => a.id);
+  const minOf = (key: string, positive: boolean): string | null => {
+    let m: ReturnType<typeof D.from> | null = null;
+    for (const a of accounts) { const v = decOf(a.policy?.[key]); if (v === null || D.isNeg(v) || (positive && !D.isPos(v))) return null; m = m === null ? v : D.min(m, v); }   // one account without the value: nothing is seeded for it
+    return m === null ? null : D.str(m);
+  };
+  const put = (field: string, from: string): void => { sources.push({ field, from, accounts: ids }); };
+  if (accounts.length) {
+    limits.allowedVenues = [...new Set(accounts.map((a) => a.venue))].sort(); put('allowedVenues', 'the venues of the authorized venue accounts');
+    const inst = new Set<string>();
+    for (const a of accounts) for (const i of Array.isArray(a.policy?.allowedInstruments) ? a.policy.allowedInstruments as unknown[] : []) if (typeof i === 'string' && i.length > 0) inst.add(i);
+    if (inst.size) { limits.allowedInstruments = [...inst].sort(); put('allowedInstruments', 'policy.allowedInstruments (union)'); }
+    const order = minOf('maxOrderNotional', false), position = minOf('maxPositionNotional', false), gross = minOf('maxGrossExposure', false), lev = minOf('maxLeverage', true), daily = minOf('maxDailyLoss', false), total = minOf('maxTotalLoss', false);
+    if (order !== null) { limits.maxOrderNotional = order; put('maxOrderNotional', 'policy.maxOrderNotional (minimum)'); }
+    if (position !== null) { limits.maxPositionNotional = { per: {}, default: position }; put('maxPositionNotional', 'policy.maxPositionNotional (minimum)'); }
+    if (gross !== null) { limits.maxGrossExposure = gross; put('maxGrossExposure', 'policy.maxGrossExposure (minimum)'); }
+    if (lev !== null) { limits.maxAccountLeverage = lev; put('maxAccountLeverage', 'policy.maxLeverage — gross exposure / equity (minimum)'); }
+    if (daily !== null) { limits.maxDailyLoss = daily; put('maxDailyLoss', 'policy.maxDailyLoss (minimum)'); }
+    if (total !== null) { limits.maxTotalLoss = total; put('maxTotalLoss', 'policy.maxTotalLoss (minimum)'); }
+    // the leverage SETTING of an order: what the passkey approved in the venue authorization
+    let setting: number | null = null;
+    for (const a of accounts) { const v = a.authorizationPolicy?.maxLeverage; if (typeof v !== 'number' || !Number.isInteger(v) || v < 1) { setting = null; break; } setting = setting === null ? v : Math.min(setting, v); }
+    if (setting !== null) { limits.maxOrderLeverage = String(setting); put('maxOrderLeverage', 'venue authorization policy.maxLeverage (minimum)'); }
+    // limits that HAVE a live default: taken only when the account policy is tighter than the default
+    const perMin = minOf('maxOrdersPerMinute', false), perDay = minOf('maxOrdersPerDay', false), liq = (() => { let m: ReturnType<typeof D.from> | null = null; for (const a of accounts) { const v = decOf(a.policy?.minLiquidationDistanceBps); if (v === null) return null; m = m === null ? v : D.max(m, v); } return m; })();
+    if (perMin !== null && D.lt(D.from(perMin), D.from(String(LIVE_DEFAULT_LIMITS.maxOrdersPerMinute!)))) { limits.maxOrdersPerMinute = Number(perMin); put('maxOrdersPerMinute', 'policy.maxOrdersPerMinute (tighter than the default)'); }
+    if (perDay !== null && D.lt(D.from(perDay), D.from(String(LIVE_DEFAULT_LIMITS.maxOrdersPerDay!)))) { limits.maxOrdersPerDay = Number(perDay); put('maxOrdersPerDay', 'policy.maxOrdersPerDay (tighter than the default)'); }
+    if (liq !== null && D.gt(liq, D.from(LIVE_DEFAULT_LIMITS.minLiquidationDistanceBps!))) { limits.minLiquidationDistanceBps = D.str(liq); put('minLiquidationDistanceBps', 'policy.minLiquidationDistanceBps (stricter than the default)'); }
+  }
+  const parsed = RiskLimitsSchema.parse(limits);
+  return { v: 1, limits: parsed, sources, notSeeded: LIVE_REQUIRED.filter((k) => parsed[k] === undefined) };
+}
+
 type Keyed = { per: Record<string, string | number>; default?: string | number | undefined } | undefined;
 const num = (x: string | number | undefined): ReturnType<typeof D.from> | null => (x === undefined ? null : D.from(String(x)));
 /** `up`: a larger value allows more (a missing one allows nothing). `down`: a smaller value allows more (a missing one allows nothing). */

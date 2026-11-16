@@ -30,6 +30,8 @@ export interface AgentRow {
   last_bar: Date | null; stop_reason: string | null; created_at: Date; updated_at: Date;
   /** v6: 'spot' (default) or 'perp'; a perp agent has no vault and no mandate, its paper account is `deriv_account_id` (perp-engine.ts) */
   kind?: string; deriv_account_id?: string | null; perp?: unknown;
+  /** V11 (agent-runtime/model.ts): family, template, engine ('bar' | 'stream' | 'supervisor'), the running configuration version and the persistent runtime state */
+  family?: string | null; template?: string | null; engine?: string; config_version?: number; runtime?: Record<string, unknown> | null;
 }
 const Risk = z.strictObject({
   /** share of the vault that may be invested in non-USDC assets, percent */
@@ -79,6 +81,13 @@ const view = (a: AgentRow) => ({ id: a.id, name: a.name, mission: a.mission, sta
   holdings: (() => { try { return agentAssets(a).map((x) => ({ symbol: x.symbol, asset: x.id, assetSymbol: x.assetSymbol, name: x.name, kind: x.kind, issuer: x.issuer })); } catch { return null; } })(),
   vaultAddress: a.vault_address, vaultIndex: a.vault_index, capitalUsdc: formatUnits(BigInt(a.capital_usdc), 6), strategyVersionId: a.strategy_version_id, mandateId: a.mandate_id,
   mandate: a.mandate ? { expiresAt: a.mandate.expiresAt, label: a.mandate.label, strategySha256: a.mandate.strategySha256, maxOrdersPerDay: a.mandate.maxOrdersPerDay } : null,
+  // V11: family, running configuration version, and where a paused agent came from (D9: 'LIVE' → resuming needs a new mandate)
+  family: a.family ?? 'custom', template: a.template ?? null, engine: a.engine ?? 'bar', configVersion: a.config_version ?? 1, pausedFrom: (a.runtime as { pausedFrom?: string } | null)?.pausedFrom ?? null,
+  lastBar: a.last_bar, stopReason: a.stop_reason, createdAt: a.created_at, updatedAt: a.updated_at });
+/** V11: the list/detail view of an agent run by the stream engine or the supervisor (no vault, no network) */
+export const runtimeView = (a: AgentRow) => ({ id: a.id, kind: a.kind ?? 'stream', name: a.name, mission: a.mission, state: a.state, mode: a.mode, family: a.family ?? 'custom', template: a.template ?? null, engine: a.engine ?? 'stream',
+  network: a.network, networkName: a.kind === 'supervisor' ? 'All agents' : ((a.runtime as { venues?: string[] } | null)?.venues ?? []).join(' + '), universe: a.universe, cash: 'USDC', interval: a.interval, risk: a.risk,
+  capitalUsdc: formatUnits(BigInt(a.capital_usdc), 6), strategyVersionId: null, mandateId: null, mandate: null, vaultAddress: '', holdings: null, configVersion: a.config_version ?? 1, simulation: true,
   lastBar: a.last_bar, stopReason: a.stop_reason, createdAt: a.created_at, updatedAt: a.updated_at });
 
 /** Build the mandate from the agent's risk settings: USD caps become per-asset base-unit caps at current prices. */
@@ -118,6 +127,28 @@ export async function requireGasReserve(a: AgentRow, feeCeiling: string | undefi
   return { reserve: r.reserve, held };
 }
 
+/** Owner (or risk-supervisor) change of state of a SPOT agent. Never needs a passkey: none of these adds authority.
+ *  V11 — D9: a LIVE agent can be PAUSED; the mandate is revoked at the signer at once (nothing stays signable while it is paused)
+ *  and `runtime.pausedFrom = 'LIVE'` records where it came from, so that the page offers "resume": a NEW mandate, approved by
+ *  the owner's passkey (the signer has no way to suspend a spot mandate, and inventing one would weaken it).
+ *  D11: "RESEARCH" is a MODE, not a state: the state goes back to the pre-trading one. */
+export async function setSpotMode(a: AgentRow, mode: 'PAPER' | 'PAUSED' | 'STOPPED' | 'RESEARCH', actor: string): Promise<AgentRow> {
+  if (mode === 'PAPER' && !a.strategy_version_id) throw new UserError('no_strategy', 'approve a strategy version first', 409);
+  if (a.state === 'LIVE' && mode === 'PAPER') throw new UserError('bad_state', 'revoke the mandate before returning to paper trading', 409);
+  const state = mode === 'PAPER' ? 'PAPER_TRADING' : mode === 'RESEARCH' ? (a.strategy_version_id ? 'AWAITING_APPROVAL' : 'CREATED') : mode;
+  const wasLive = a.state === 'LIVE';
+  const pausedFrom = mode === 'PAUSED' ? (wasLive ? 'LIVE' : a.state === 'PAUSED' ? (a.runtime as { pausedFrom?: string } | null)?.pausedFrom ?? 'PAPER' : 'PAPER') : null;
+  const [r] = await sql<AgentRow[]>`update agents set state = ${state}, mode = ${mode === 'PAPER' ? 'PAPER' : mode === 'RESEARCH' ? 'RESEARCH' : a.mode}, stop_reason = ${mode === 'STOPPED' ? `stopped by the ${actor === 'owner' ? 'owner' : actor}` : null},
+    runtime = (coalesce(runtime, '{}'::jsonb) - 'pausedFrom') || ${sql.json((pausedFrom ? { pausedFrom } : {}) as never)}, updated_at = now() where id = ${a.id} returning *`;
+  await audit('agent.mode', actor, { id: a.id, state });
+  await sql`insert into research_log (agent_id, kind, title, body, mode, code) values (${a.id}, 'state', ${`${state === 'PAPER_TRADING' ? 'Paper trading started' : state === 'PAUSED' ? 'Paused' : state === 'STOPPED' ? 'Stopped' : 'Back to research'} by the ${actor === 'owner' ? 'owner' : actor}`},
+    ${wasLive ? 'The mandate is revoked at the signer: nothing can be signed for this agent until the owner approves a new one.' : ''}, ${wasLive ? 'LIVE' : mode === 'PAPER' ? 'PAPER' : null}, ${`state_${state.toLowerCase()}`})`.catch(() => {});
+  // V11 (D2): leaving LIVE — stopped, paused or back to research — ends the mandate AT THE SIGNER too. The state change above is
+  // not undone when the signer cannot be reached: stopping always works, and the engine revokes at its next pass.
+  if (wasLive && a.mandate_id) await revokeAgentMandate(a, `the ${actor} set the agent to ${state}`);
+  return r!;
+}
+
 export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
   // what an agent can trade, network by network: derived from the token registry and the static table of listings
   app.get('/api/v1/agents/networks', async () => {
@@ -137,7 +168,7 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     return { networks, maxSymbols: MAX_AGENT_SYMBOLS, maxLiveSymbols: 11, feeWarnShare: FEE_WARN_SHARE };
   });
 
-  app.get('/api/v1/agents', async () => ({ agents: (await sql<AgentRow[]>`select * from agents order by created_at desc`).map((a) => (isPerp(a) ? perpView(a) : view(a))) })); // v6: perp agents have their own view
+  app.get('/api/v1/agents', async () => ({ agents: (await sql<AgentRow[]>`select * from agents order by created_at desc`).map((a) => (isPerp(a) ? perpView(a) : a.kind && a.kind !== 'spot' ? runtimeView(a) : view(a))) })); // v6: perp agents have their own view; V11: stream and supervisor agents too
 
   app.post('/api/v1/agents', async (req) => {
     if ((req.body as { kind?: unknown } | null)?.kind === 'perp') return createPerpAgent(req.body); // v6: a perp agent (paper account, no vault, no signer call)
@@ -161,6 +192,7 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
         values (${id}, ${b.name}, ${b.mission}, ${n.id}, ${tx.json(b.universe)}, ${cash.symbol}, ${tx.json(chosen)}, ${b.interval}, ${tx.json(b.risk as never)}, ${next}, ${address}, ${parseUnits(b.capitalUsdc, 6).toString()}) returning *`;
     });
     await audit('agent.created', 'owner', { id, name: b.name, network: n.id, vault: row!.vault_address, vaultIndex: row!.vault_index, universe: b.universe, cash: cash.symbol, assets: chosen });
+    await (await import('../agent-runtime/store.ts')).bumpConfig(id, 'owner', 'created');   // V11: configuration version 1
     // warnings never block: network fees against the order size, symbols that can only be paper traded
     const warnings: { code: string; message: string }[] = [];
     try { const r = await gasReserve(n, st.policy.maxFee[n.id]); const usd = (await symbolPrices([n.native.symbol], await deps.prices().catch(() => null)))[n.native.symbol];
@@ -175,13 +207,17 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
   app.get('/api/v1/agents/:id', async (req) => {
     const a = await load((req.params as { id: string }).id);
     if (isPerp(a)) return perpDetail(a); // v6
+    if (a.kind && a.kind !== 'spot') return runtimeView(a); // V11: the agent panel reads /agents/:id/overview for these
     const balances = await vaultBalances(a).catch(() => null);
     const px = await symbolPrices((balances ?? []).filter((x) => x.kind !== 'cash').map((x) => x.symbol), await deps.prices().catch(() => null));
     const usd = (x: VaultBalance) => { const p = x.kind === 'cash' ? 1 : px[x.symbol]; return p === undefined ? null : Number(formatUnits(x.amount, x.decimals)) * p; };
     const versions = await sql`select id, name, version, code_sha256, status, notes, created_at, approved_at, report->'metrics' as metrics, report->'robustness' as robustness, report->'benchmarks' as benchmarks, report->'config' as config from strategy_versions where agent_id = ${a.id} order by created_at desc`;
-    const orders = await sql`select id, ts, mode, from_symbol, to_symbol, amount_in, expected_out, min_out, received, state, reason, txid from agent_orders where agent_id = ${a.id} order by ts desc limit 60`;
-    const equity = await sql`select ts, mode, equity_usd from agent_equity where agent_id = ${a.id} order by ts desc limit 500`;
-    const log = await sql`select ts, kind, title, body from research_log where agent_id = ${a.id} order by ts desc limit 40`;
+    // V11 (D5): orders, equity and journal of the mode the agent is in NOW (LIVE, else PAPER) — never both in one list or one curve.
+    // The other mode is read through /agents/:id/orders|performance|journal?mode=…
+    const cur = a.mode === 'LIVE' ? 'LIVE' : 'PAPER';
+    const orders = await sql`select id, ts, mode, from_symbol, to_symbol, amount_in, expected_out, min_out, received, state, reason, txid from agent_orders where agent_id = ${a.id} and mode = ${cur} order by ts desc limit 60`;
+    const equity = await sql`select ts, mode, equity_usd from agent_equity where agent_id = ${a.id} and mode = ${cur} order by ts desc limit 500`;
+    const log = await sql`select ts, kind, title, body, mode, severity, code from research_log where agent_id = ${a.id} and (mode = ${cur} or mode = 'RESEARCH') order by id desc limit 40`;
     const st = await signer.status().catch(() => null);
     const sm = st?.mandates?.find((m) => m.mandate.mandateId === a.mandate_id) ?? null;
     return { ...view(a),
@@ -197,15 +233,8 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     const a = await load((req.params as { id: string }).id);
     const b = z.strictObject({ mode: z.enum(['PAPER', 'PAUSED', 'STOPPED', 'RESEARCH']) }).parse(req.body);
     if (isPerp(a)) return perpMode(a, b.mode); // v6
-    if (b.mode === 'PAPER' && !a.strategy_version_id) throw new UserError('no_strategy', 'approve a strategy version first', 409);
-    if (a.state === 'LIVE' && b.mode === 'PAPER') throw new UserError('bad_state', 'revoke the mandate before returning to paper trading', 409);
-    const state = b.mode === 'PAPER' ? 'PAPER_TRADING' : b.mode;
-    const [r] = await sql<AgentRow[]>`update agents set state = ${state}, mode = ${b.mode === 'PAPER' ? 'PAPER' : a.mode}, stop_reason = ${b.mode === 'STOPPED' ? 'stopped by the owner' : null}, updated_at = now() where id = ${a.id} returning *`;
-    await audit('agent.mode', 'owner', { id: a.id, state });
-    // V11 (D2): leaving LIVE — stopped, paused or back to research — ends the mandate AT THE SIGNER too. The state change above is
-    // not undone when the signer cannot be reached: stopping always works, and the engine revokes at its next pass.
-    if (a.state === 'LIVE' && a.mandate_id) await revokeAgentMandate(a, `the owner set the agent to ${state}`);
-    return view(r!);
+    if (a.kind && a.kind !== 'spot') throw new UserError('wrong_kind', 'this agent is run by the stream engine or the supervisor: use the agent panel (start, pause, stop)', 409); // V11
+    return view(await setSpotMode(a, b.mode, 'owner'));
   });
 
   // strategy versions: registered by the research side (path + hash), approved by the owner
@@ -222,9 +251,10 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
     if (isPerp(a)) assertPerpApprovable(a, v as never); else if ((v.meta as { kind?: string } | null)?.kind === 'perp') throw new UserError('wrong_kind', 'a perpetual-futures strategy cannot run on a spot agent', 409);
     if (a.state === 'LIVE') throw new UserError('bad_state', 'the code of a live agent cannot change: revoke the mandate first, then approve the new version and a new mandate', 409);
     await sql`update strategy_versions set status = 'retired' where agent_id = ${a.id} and status = 'approved'`;
-    await sql`update strategy_versions set status = 'approved', approved_at = now() where id = ${v.id}`;
+    await sql`update strategy_versions set status = 'approved', approved_at = now(), approved_by = 'owner' where id = ${v.id}`;   // V11: only an owner approval can be pinned by a live mandate
     const [r] = await sql<AgentRow[]>`update agents set strategy_version_id = ${v.id}, state = case when state in ('CREATED','RESEARCHING','BACKTESTING','AWAITING_APPROVAL') then 'AWAITING_APPROVAL' else state end, updated_at = now() where id = ${a.id} returning *`;
     await audit('strategy.approved', 'owner', { agent: a.id, version: v.id, sha256: v.code_sha256 });
+    await (await import('../agent-runtime/store.ts')).bumpConfig(a.id, 'owner', `strategy version ${v.name}/${v.version} (${String(v.code_sha256).slice(0, 12)}…) approved`);   // V11: a new strategy is a new configuration version
     if (isPerp(r!)) return perpView(r!); // v6
     return view(r!);
   });
@@ -232,34 +262,12 @@ export function agentRoutes(app: FastifyInstance, deps: AgentDeps): void {
   // mandate: prepared from the agent's limits, approved with a passkey whose challenge is the mandate hash
   app.post('/api/v1/agents/:id/mandate/prepare', async (req) => {
     const a = await load((req.params as { id: string }).id); spotOnly(a); // v6: vault and mandate routes are for spot agents
-    if (!a.strategy_version_id) throw new UserError('no_strategy', 'approve a strategy version first', 409);
-    if (a.state === 'LIVE') throw new UserError('bad_state', 'a mandate is already active; revoke it to change limits', 409);
-    const [v] = await sql`select code_sha256 from strategy_versions where id = ${a.strategy_version_id}`;
-    const st = await signer.status(true);
-    if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
-    const px = await symbolPrices(agentSymbols(a), await deps.prices().catch(() => null));
-    const mandate = mandateFor(a, st.keyId, v!.code_sha256, px, Math.floor(Date.now() / 1000));
-    const gas = await requireGasReserve(a, st.policy.maxFee[a.network]); // no reserve, no live trading
-    const hash = mandateHash(mandate);
-    await sql`update agents set mandate = ${sql.json(mandate as never)}, updated_at = now() where id = ${a.id}`;
-    const creds = await listCreds();
-    const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge: new Uint8Array(hash), timeout: 120_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
-    if (options.challenge !== toB64u(hash)) throw new Error('challenge binding mismatch');
-    const n = getNetwork(a.network);
-    const human = agentAssets(a, n).map((x) => ({ symbol: x.assetSymbol === x.symbol ? x.symbol : `${x.assetSymbol} (${x.symbol})`, tracks: x.symbol, assetSymbol: x.assetSymbol, kind: x.kind, issuer: x.issuer, maxOrder: formatUnits(BigInt(mandate.maxOrder[x.id]!), x.decimals), maxDaily: formatUnits(BigInt(mandate.maxDaily[x.id]!), x.decimals) }));
-    return { mandate, hash: toHex(hash), limits: human, options, network: n.id, networkName: n.name, gasReserve: { required: formatUnits(gas.reserve, n.native.decimals), held: formatUnits(gas.held, n.native.decimals), symbol: n.native.symbol } };
+    return (await import('./mandate-write.ts')).prepareSpotMandate(a, deps);  // V11: the mandate-writing module (never imported by the engines)
   });
   app.post('/api/v1/agents/:id/mandate/approve', async (req) => {
     const a = await load((req.params as { id: string }).id); spotOnly(a); // v6: vault and mandate routes are for spot agents
     const b = z.object({ assertion: z.record(z.string(), z.unknown()) }).parse(req.body);
-    if (!a.mandate) throw new UserError('bad_state', 'prepare the mandate first', 409);
-    await requireGasReserve(a, (await signer.status(true)).policy.maxFee[a.network]);
-    // V11 (D2): the signer holds ONE active mandate per vault. The previous one of this agent ends before the new one is asked for.
-    if (a.mandate_id && a.mandate_id !== a.mandate.mandateId && !(await revokeAgentMandate(a, 'replaced by a new mandate'))) throw new UserError('signer_unreachable', 'the previous mandate could not be revoked on the signer; nothing was approved', 503);
-    const r = await signer.mandateApprove(a.mandate, b.assertion); // only the signer judges the passkey and stores the limits
-    const [row] = await sql<AgentRow[]>`update agents set mandate_id = ${r.mandateId}, state = 'LIVE', mode = 'LIVE', stop_reason = null, updated_at = now() where id = ${a.id} returning *`;
-    await audit('mandate.approved', 'owner', { agent: a.id, mandateId: r.mandateId, hash: r.hash });
-    return view(row!);
+    return view(await (await import('./mandate-write.ts')).approveSpotMandate(a, b.assertion));
   });
   // stopping never needs a passkey
   app.post('/api/v1/agents/:id/revoke', async (req) => {

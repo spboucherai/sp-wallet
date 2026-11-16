@@ -18,7 +18,7 @@ export const ACCOUNT_ENGINE_CODES: readonly string[] = ['reduce_only_would_incre
 
 interface PreviewLike {
   refusals: { stage: string; code: string; message: string }[];
-  risk: { checks: { id: string; observed: string | null; detail: string }[]; derived: Record<string, unknown> };
+  risk: { checks: { id: string; observed: string | null; detail: string }[]; derived: Record<string, unknown> | null };
   engine: { risk: unknown; estimate: unknown };
   account: Record<string, unknown>;
 }
@@ -26,7 +26,7 @@ interface PreviewLike {
 export function shapePreview<T extends PreviewLike>(p: Principal, out: T): T {
   if (mayReadAccount(p)) return { ...out, account: { ...out.account, withheld: false } };
   const { equity: _e, freeCollateral: _f, ...account } = out.account;
-  const { positionBefore: _b, positionAfter: _a, ...derived } = out.risk.derived;
+  const { positionBefore: _b, positionAfter: _a, ...derived } = out.risk.derived ?? {};
   const hidden = (id: string): boolean => ACCOUNT_RISK_CHECKS.includes(id);
   const er = out.engine.risk as { ok?: boolean; code?: string; reason?: string } | null;
   const est = out.engine.estimate as Record<string, unknown> | null;
@@ -40,7 +40,7 @@ export function shapePreview<T extends PreviewLike>(p: Principal, out: T): T {
       if (r.stage === 'engine' && ACCOUNT_ENGINE_CODES.includes(r.code)) return { ...r, message: WITHHELD };
       return r;
     }),
-    risk: { ...out.risk, derived, checks: out.risk.checks.map((c) => (hidden(c.id) ? { ...c, observed: null, detail: WITHHELD } : c)) },
+    risk: { ...out.risk, derived: out.risk.derived === null ? null : derived, checks: out.risk.checks.map((c) => (hidden(c.id) ? { ...c, observed: null, detail: WITHHELD } : c)) },
     engine: { ...out.engine, risk: engineHidden ? { ...er, reason: WITHHELD } : out.engine.risk,
       estimate: est === null ? null : (({ freeCollateralAfter: _c, liquidationPrice: _l, rejectReason, ...rest }) => ({ ...rest, rejectReason: engineHidden ? WITHHELD : rejectReason }))(est) },
     account: { ...account, withheld: true },
@@ -55,3 +55,22 @@ export function sizeFromNotional(notional: string, reference: DecStr, lotSize: D
   if (!D.isPos(size)) throw new UserError('below_min_size', `a notional of ${notional} buys less than one lot (${lotSize}) at ${reference}`, 422);
   return D.str(size);
 }
+
+/**
+ * A refusal of an order (POST /orders, close, reduce, an order command) carries the failed risk checks in `data.checks`, and the
+ * sentence of the first one as its message. For a key that may not read the account, the account-level checks lose `observed`
+ * and `detail`, and the sentence is withheld; the code, the status, the ids of the failed checks, their limits and the order stay.
+ * The error is changed in place and returned: what the idempotency store keeps is what the key was answered.
+ */
+export function shapeRefusal(p: Principal, e: unknown): unknown {
+  if (!(e instanceof UserError) || mayReadAccount(p)) return e;
+  const data = (e as { data?: { checks?: unknown } }).data;
+  if (!data || !Array.isArray(data.checks)) return e;
+  const hidden = (id: unknown): boolean => typeof id === 'string' && ACCOUNT_RISK_CHECKS.includes(id);
+  data.checks = data.checks.map((c: { id?: unknown }) => (c !== null && typeof c === 'object' && hidden(c.id) ? { ...c, observed: null, detail: WITHHELD } : c));
+  const check = e.message.slice(0, Math.max(0, e.message.indexOf(':')));
+  if (hidden(check)) e.message = `${check}: ${WITHHELD}`;
+  return e;
+}
+/** tests build a refusal with the server's own error class */
+export const __UserError = UserError;
