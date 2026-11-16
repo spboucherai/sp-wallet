@@ -232,7 +232,9 @@ function decide(o: OrderRecord, e: OrderEvent, now: number): Step {
       const some = D.isPos(D.from(filled));
       const patch: Partial<OrderRecord> = { filledSize: filled, acknowledged: true, ...(e.venueOrderId !== undefined ? { venueOrderId: e.venueOrderId } : {}),
         ...(e.avgFillPrice !== undefined && e.avgFillPrice !== null ? { avgFillPrice: canon(e.avgFillPrice) } : {}) };
-      if (e.status === 'filled' && !some) throw new IllegalTransitionError(o.state, e.type, 'the venue reports the order filled with nothing executed; a contradictory answer is not a fill');
+      // a SIZED order reported filled with nothing executed is a contradictory answer; an order with no base size (a notional order, an operation)
+      // may be reported executed without a quantity: its fill size stays unknown rather than invented
+      if (e.status === 'filled' && !some && o.size !== null) throw new IllegalTransitionError(o.state, e.type, 'the venue reports the order filled with nothing executed; a contradictory answer is not a fill');
       if (e.status === 'filled') return { to: 'FILLED', reason: 'VENUE_FILLED', patch: o.size === null ? { ...patch, size: some ? filled : null } : patch };
       if (e.status === 'cancelled') return { to: 'CANCELLED', reason: some ? 'REMAINDER_CANCELLED' : o.cancelRequested ? 'CANCELLED_BY_REQUEST' : 'CANCELLED_AT_VENUE', patch };
       if (e.status === 'rejected') {

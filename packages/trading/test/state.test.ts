@@ -237,7 +237,7 @@ describe('order state machine — properties', () => {
     fc.record({ type: fc.constant('expired' as const), source: fc.constantFrom('local' as const, 'venue' as const) }),
   );
   it('a venue answer "filled" with nothing executed is refused, not recorded as a fill (found by the property test, seed 1568288699)', () => {
-    let o = newOrder({ id: 'z', size: null }, T0);
+    let o = newOrder({ id: 'z', size: '1' }, T0);
     o = transition(o, { type: 'validated' }, T0 + 1).order;
     o = transition(o, { type: 'approved', by: 'mandate' }, T0 + 2).order;
     o = transition(o, { type: 'submit_started' }, T0 + 3).order;
@@ -264,7 +264,7 @@ describe('order state machine — properties', () => {
         expect(r.entry).toMatchObject({ from: o.state, to: r.order.state, event: e.type, at, seq: o.version + 1, reason: r.order.reason });
         expect(r.order.version).toBe(o.version + 1);
         expect(D.gte(D.from(r.order.filledSize), D.from(o.filledSize))).toBe(true);     // fills never shrink
-        if (r.order.state === 'FILLED' || r.order.state === 'PARTIALLY_FILLED') { expect(D.isPos(D.from(r.order.filledSize))).toBe(true); expect(r.order.acknowledged).toBe(true); }
+        if (r.order.state === 'FILLED' || r.order.state === 'PARTIALLY_FILLED') { expect(D.isPos(D.from(r.order.filledSize)) || (r.order.state === 'FILLED' && r.order.size === null)).toBe(true); expect(r.order.acknowledged).toBe(true); }
         if (D.gt(D.from(r.order.filledSize), D.from(o.filledSize))) expect(VENUE_ORIGINATED_EVENTS).toContain(e.type);
         if (r.order.state === 'FAILED') expect(D.isZero(D.from(r.order.filledSize)) || r.entry.event === 'operator_resolved').toBe(true);
         if (r.order.state === 'REJECTED') expect(D.isZero(D.from(r.order.filledSize))).toBe(true);
