@@ -4,6 +4,7 @@
 // script and by a test without starting anything. routes.ts registers exactly these operations (one handler per `id`, a missing
 // or extra handler fails at start-up), and openapi.ts renders exactly this table: the document cannot drift from the server.
 import { z } from 'zod';
+import { CompareQuerySchema } from '../markets-hub/schema.ts'; // pure (zod only)
 
 export const TRADING_PREFIX = '/api/v1/trading';
 export const DEVELOPER_PREFIX = '/api/v1/developer';
@@ -114,6 +115,14 @@ const R = {
   }),
   activity: z.object({ items: z.array(z.looseObject({ kind: z.string(), at: z.string(), mode: Mode })) }),
   openapi: z.looseObject({ openapi: z.string() }),
+  compare: z.looseObject({
+    underlying: z.string(), category: z.string().nullable(), request: z.looseObject({}),
+    rows: z.array(z.looseObject({ venue: z.string(), instrument: z.string(), tradable: z.boolean().describe('false: the wallet cannot trade this venue or instrument; the row is shown for information'), tradableReason: z.string().nullable(),
+      cost: z.looseObject({}).nullable().describe('itemised estimate: every component is { value, reason, basis } — value null WITH the reason when an input is missing'), priceOutlier: z.boolean(), ageMs: z.number().nullable(), stale: z.boolean() })),
+    discrepancies: z.array(z.looseObject({ longVenue: z.string(), shortVenue: z.string(), netEdgeEstimateBps: Dec.nullable().describe('an ESTIMATE under `assumptions`, with `risks`'), flagged: z.boolean(), actionableFromWallet: z.boolean(),
+      assumptions: z.array(z.object({ code: z.string(), text: z.string() })), risks: z.array(z.object({ code: z.string(), text: z.string() })) })),
+    texts: z.looseObject({ disclaimer: z.string() }), warnings: z.array(z.string()), errors: z.array(PartialError), ts: Ms, source: z.string(),
+  }),
 };
 
 // ---------------------------------------------------------------------------------------------------------------- requests
@@ -188,6 +197,9 @@ export const OPERATIONS: readonly OperationSpec[] = [
   read('listMarkets', '/markets', 'Markets', 'markets:read', 'Instruments across venues (perpetuals) and the spot market-data symbols',
     { query: z.object({ venue: Venue, kind: z.enum(['perpetual', 'spot']).optional(), q: z.string().max(40).optional().describe('case-insensitive match on id, symbol or base'), limit: Limit(2000, 5000) }), response: R.markets,
       description: 'Each row carries the time its source produced it (`ts`) and a `stale` flag. A venue that cannot be read is listed in `errors`; when no source answers the call fails with 503.' }),
+  read('compareMarkets', '/markets/compare', 'Markets', 'markets:read', 'Compare the estimated cost of one position across venues',
+    { query: CompareQuerySchema, response: R.compare,
+      description: 'One row per venue for a common underlying, from the real instrument, order book (GMX: pool figures), ticker, fee schedule and funding rate read now: spread, depth within 10/25/50 bps, slippage for the notional, fees, funding expected over the horizon (current rate held constant), collateral, liquidation estimate and the itemised total. Every figure is an estimate; a missing input gives null with its reason. Venues the wallet cannot trade on are shown and flagged. `discrepancies` are estimates with their assumptions and risks, never a recommendation.' }),
   read('getMarket', '/markets/:symbol', 'Markets', 'markets:read', 'One market: instrument, ticker and data quality',
     { params: SymbolParam, response: R.market, description: 'A bare symbol that exists on several venues answers 409 `ambiguous_symbol` with the candidates.' }),
   read('getOrderbook', '/markets/:symbol/orderbook', 'Markets', 'markets:read', 'Order book of one market',

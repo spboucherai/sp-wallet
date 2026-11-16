@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+// v11: the multi-series comparison chart (same approach: hand-written SVG, no library) is `MultiSeriesChart` in chart-multi.tsx — a
+// module of its own so that it stays out of the first chunk (this file is loaded with Home and the asset page).
 export interface Pt { t: number; p: number }
 /** Tiny trend line for list rows. Decorative: the adjacent text carries the value. */
 export function Spark({ data, w = 64, h = 26 }: { data: number[]; w?: number; h?: number }) {

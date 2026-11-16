@@ -47,7 +47,7 @@ describe('key form', () => {
 describe('OpenAPI viewer', () => {
   const ops = docOps(doc);
   it('lists every operation of the committed document with its scope, state and parameters', () => {
-    expect(ops).toHaveLength(29);   // 26 + the 3 private-markets reads (v11)
+    expect(ops).toHaveLength(30);   // 26 + the 3 private-markets reads + compareMarkets (v11)
     expect(ops.every((o) => o.scope && o.summary && o.path.startsWith('/api/v1/trading/') && o.responses.length > 0)).toBe(true);
     expect(ops.filter((o) => !o.implemented).map((o) => o.id).sort()).toEqual(['backtestStrategy', 'cancelOrder', 'closePosition', 'createAgent', 'createStrategy', 'placeOrder', 'previewOrder', 'reducePosition', 'startAgent', 'startStrategy', 'stopAgent', 'stopStrategy']);
     for (const o of ops.filter((x) => !x.implemented)) { expect(o.idempotent, o.id).toBe(true); expect(o.responses.some((r) => r.code.startsWith('2')), o.id).toBe(false); expect(o.responses.some((r) => r.code === '501'), o.id).toBe(true); }
@@ -60,7 +60,7 @@ describe('OpenAPI viewer', () => {
     expect(place).toMatchObject({ method: 'POST', scope: 'orders:execute', needsMandate: true });
     expect(JSON.parse(place.body!).required).toEqual(expect.arrayContaining(['mode', 'instrument', 'side', 'type', 'size']));
     expect(docTags(ops).map((g) => g.tag)).toEqual(['Meta', 'Markets', 'Portfolio', 'Positions', 'Orders', 'Strategies', 'Agents', 'Risk']);
-    expect(docTags(ops).reduce((n, g) => n + g.ops.length, 0)).toBe(29);
+    expect(docTags(ops).reduce((n, g) => n + g.ops.length, 0)).toBe(30);
   });
   it('never throws on a missing or odd document', () => {
     expect(docOps(null)).toEqual([]);

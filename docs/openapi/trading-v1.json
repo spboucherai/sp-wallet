@@ -362,6 +362,385 @@
         }
       }
     },
+    "/api/v1/trading/markets/compare": {
+      "get": {
+        "operationId": "compareMarkets",
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Compare the estimated cost of one position across venues",
+        "description": "One row per venue for a common underlying, from the real instrument, order book (GMX: pool figures), ticker, fee schedule and funding rate read now: spread, depth within 10/25/50 bps, slippage for the notional, fees, funding expected over the horizon (current rate held constant), collateral, liquidation estimate and the itemised total. Every figure is an estimate; a missing input gives null with its reason. Venues the wallet cannot trade on are shown and flagged. `discrepancies` are estimates with their assumptions and risks, never a recommendation.",
+        "security": [
+          {
+            "bearerKey": [
+              "markets:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "markets:read",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "underlying",
+            "in": "query",
+            "required": false,
+            "description": "common underlying, e.g. BTC (see GET /markets-hub/underlyings)",
+            "schema": {
+              "default": "BTC",
+              "type": "string",
+              "pattern": "^[A-Za-z0-9]{1,15}$"
+            }
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "long",
+              "type": "string",
+              "enum": [
+                "long",
+                "short"
+              ]
+            }
+          },
+          {
+            "name": "notional",
+            "in": "query",
+            "required": false,
+            "description": "position notional in USD (not the collateral)",
+            "schema": {
+              "default": "1000",
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"
+            }
+          },
+          {
+            "name": "leverage",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "1",
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"
+            }
+          },
+          {
+            "name": "horizonHours",
+            "in": "query",
+            "required": false,
+            "description": "expected holding period; funding is the current rate held constant over it",
+            "schema": {
+              "default": "24",
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d{0,3})(\\.\\d{1,4})?$"
+            }
+          },
+          {
+            "name": "liquidity",
+            "in": "query",
+            "required": false,
+            "description": "how the entry and the exit are executed, for the fee",
+            "schema": {
+              "default": "taker",
+              "type": "string",
+              "enum": [
+                "taker",
+                "maker"
+              ]
+            }
+          },
+          {
+            "name": "minNetEdgeBps",
+            "in": "query",
+            "required": false,
+            "description": "a discrepancy estimate above this is flagged",
+            "schema": {
+              "default": "0",
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d{0,4})(\\.\\d{1,4})?$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "underlying": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "request": {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": {}
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "venue": {
+                            "type": "string"
+                          },
+                          "instrument": {
+                            "type": "string"
+                          },
+                          "tradable": {
+                            "type": "boolean",
+                            "description": "false: the wallet cannot trade this venue or instrument; the row is shown for information"
+                          },
+                          "tradableReason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "cost": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": {}
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "itemised estimate: every component is { value, reason, basis } — value null WITH the reason when an input is missing"
+                          },
+                          "priceOutlier": {
+                            "type": "boolean"
+                          },
+                          "ageMs": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "stale": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "venue",
+                          "instrument",
+                          "tradable",
+                          "tradableReason",
+                          "cost",
+                          "priceOutlier",
+                          "ageMs",
+                          "stale"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "discrepancies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "longVenue": {
+                            "type": "string"
+                          },
+                          "shortVenue": {
+                            "type": "string"
+                          },
+                          "netEdgeEstimateBps": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "decimal number as a string (never a float)"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "an ESTIMATE under `assumptions`, with `risks`"
+                          },
+                          "flagged": {
+                            "type": "boolean"
+                          },
+                          "actionableFromWallet": {
+                            "type": "boolean"
+                          },
+                          "assumptions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "code",
+                                "text"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "risks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "code",
+                                "text"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "longVenue",
+                          "shortVenue",
+                          "netEdgeEstimateBps",
+                          "flagged",
+                          "actionableFromWallet",
+                          "assumptions",
+                          "risks"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "texts": {
+                      "type": "object",
+                      "properties": {
+                        "disclaimer": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "disclaimer"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "ts": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "milliseconds since the Unix epoch"
+                    },
+                    "source": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "underlying",
+                    "category",
+                    "request",
+                    "rows",
+                    "discrepancies",
+                    "texts",
+                    "warnings",
+                    "errors",
+                    "ts",
+                    "source"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "a backing service is unavailable: `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/trading/markets/{symbol}": {
       "get": {
         "operationId": "getMarket",

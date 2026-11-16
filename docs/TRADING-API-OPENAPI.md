@@ -33,6 +33,7 @@ Version 1.0.0. Machine-readable document: [`docs/openapi/trading-v1.json`](opena
 |---|---|---|---|---|---|
 | GET | `/api/v1/trading/openapi.json` | any valid key | implemented | — | This document |
 | GET | `/api/v1/trading/markets` | `markets:read` | implemented | — | Instruments across venues (perpetuals) and the spot market-data symbols |
+| GET | `/api/v1/trading/markets/compare` | `markets:read` | implemented | — | Compare the estimated cost of one position across venues |
 | GET | `/api/v1/trading/markets/{symbol}` | `markets:read` | implemented | — | One market: instrument, ticker and data quality |
 | GET | `/api/v1/trading/markets/{symbol}/orderbook` | `markets:read` | implemented | — | Order book of one market |
 | GET | `/api/v1/trading/markets/{symbol}/candles` | `markets:read` | implemented | — | Closed bars of one market |
@@ -71,6 +72,18 @@ Version 1.0.0. Machine-readable document: [`docs/openapi/trading-v1.json`](opena
 | `kind` | query | no | `{"type":"string","enum":["perpetual","spot"]}` |  |
 | `q` | query | no | `{"type":"string","maxLength":40}` | case-insensitive match on id, symbol or base |
 | `limit` | query | no | `{"default":2000,"type":"integer","minimum":1,"maximum":5000}` |  |
+
+### GET `/api/v1/trading/markets/compare`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `underlying` | query | no | `{"default":"BTC","type":"string","pattern":"^[A-Za-z0-9]{1,15}$"}` | common underlying, e.g. BTC (see GET /markets-hub/underlyings) |
+| `side` | query | no | `{"default":"long","type":"string","enum":["long","short"]}` |  |
+| `notional` | query | no | `{"default":"1000","type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` | position notional in USD (not the collateral) |
+| `leverage` | query | no | `{"default":"1","type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` |  |
+| `horizonHours` | query | no | `{"default":"24","type":"string","pattern":"^(0|[1-9]\\d{0,3})(\\.\\d{1,4})?$"}` | expected holding period; funding is the current rate held constant over it |
+| `liquidity` | query | no | `{"default":"taker","type":"string","enum":["taker","maker"]}` | how the entry and the exit are executed, for the fee |
+| `minNetEdgeBps` | query | no | `{"default":"0","type":"string","pattern":"^(0|[1-9]\\d{0,4})(\\.\\d{1,4})?$"}` | a discrepancy estimate above this is flagged |
 
 ### GET `/api/v1/trading/markets/{symbol}`
 

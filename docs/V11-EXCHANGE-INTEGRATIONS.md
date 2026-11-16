@@ -4,9 +4,10 @@ One chapter per perpetual venue: initial state, API used, what is implemented, t
 Every figure below was measured or read on the date given; nothing is extrapolated.
 
 - [edgeX](#edgex) — written 2026-11-15 (branch `v11-edgex`)
-- [Hyperliquid](#hyperliquid) — placeholder, to be filled by its own work stream
-- [GMX](#gmx) — placeholder, to be filled by its own work stream
-- [dYdX](#dydx) — placeholder, to be filled by its own work stream
+- [Hyperliquid](#hyperliquid) — written 2026-11-15 (branch `v11-markets-compare`; trading facts from the V11 audit)
+- [GMX](#gmx) — written 2026-11-15 (branch `v11-markets-compare`; trading facts from the V11 audit)
+- [dYdX](#dydx) — written 2026-11-15 (branch `v11-markets-compare`)
+- [Comparator](#comparator) — the venue cost comparison and the cross-venue discrepancy estimates
 
 ---
 
@@ -270,19 +271,346 @@ None of this can be done by the software, and none of it is prepared in code.
 
 ## Hyperliquid
 
-> **Placeholder — to be filled by the Hyperliquid work stream.**
-> Expected sections: 1. Initial state · 2. API used · 3. What is implemented · 4. Tests run · 5. Observed results · 6. Limitations.
+**Status: market data, paper trading and a live trading path that exists end to end and is locked by server variables. No order
+was ever accepted on a funded account.** Written 2026-11-15 (branch `v11-markets-compare`). The trading facts below are those of
+the V11 audit (`docs/v11/audit-parts/derivatives-exec-signer.md` §1, §3.1, §4.4–4.6); execution was not re-audited here. What this
+work added is the read side used by the Markets explorer and the Comparator.
+
+### 1. Initial state
+
+- Adapter `packages/derivatives/src/venues/hyperliquid/` (read: `adapter.ts`, `mappers.ts`, `stream.ts`; trade: `trading.ts`,
+  `signing.ts`), mainnet and testnet. Venue contract: `docs/v4/venues/hyperliquid.md`.
+- In the API: instruments, tickers, book, trades, candles, funding, the public websocket (book, trades, ticker), the old
+  comparison table and the router simulation; paper accounts; the live engine `services/api/src/derivatives/exec.ts`.
+- Not there before this work: no listing across venues with a freshness stamp per row, no mapping from `kPEPE` to an underlying,
+  no "can the wallet trade this" flag per instrument, no cost comparison from the real book.
+
+### 2. API used (public, read-only)
+
+| Call | Used for |
+|---|---|
+| `POST https://api.hyperliquid.xyz/info` `{"type":"meta"}`, `{"type":"metaAndAssetCtxs"}` | instruments (name, size decimals, maximum leverage, delisted flag) and every ticker in one answer (mark, oracle, mid, funding, open interest, 24 h notional volume, previous-day price) |
+| `{"type":"l2Book","coin":…}` | order book: 20 levels a side at the finest price step |
+| `{"type":"recentTrades"}`, `{"type":"candleSnapshot"}`, `{"type":"fundingHistory"}` | trades, bars, hourly funding applied (at most 500 rows from the start time) |
+| `wss://api.hyperliquid.xyz/ws` | book, trades and ticker of an open instrument (Futures terminal) |
+| `{"type":"clearinghouseState"}`, `{"type":"frontendOpenOrders"}`, … | account reads of the live engine (not used by the hub or the comparator) |
+
+Trading uses `POST /exchange` (audit §1.1). The hub and the comparator never call it: the venue registry hands them a view of the
+adapter without `trading` (`services/api/src/derivatives/venues.ts`), and the smoke run checks every outgoing request.
+
+### 3. What is connected
+
+| | State |
+|---|---|
+| Market data | real, mainnet (the hub) and testnet (the live engine's tests) |
+| Paper trading | yes — the only venue with a paper account |
+| Live trading | wired end to end: build, signer-side reading of the payload, submit, cancel, TP/SL, reduce-only, leverage, collateral deposit and withdrawal (audit §1.1). Manual mode needs a passkey per order; a derivative mandate allows passkey-less orders inside signer-enforced bounds |
+| Tradable instruments | **BTC, ETH, SOL** only: the pinned asset table `packages/derivatives/src/live/hl-assets.ts` (checked against the venue's `meta` on 2026-11-15, identical). Every other instrument is shown with `tradableReason: hl_asset_not_pinned` |
+| Builder dexes (HIP-3) | read through `adapter.builder` by the Private Markets work stream (`/api/v1/private-markets`), market data only. The hub lists the main dex (the adapter's `instruments()`); a symbol with a `dex:` prefix reaching it would be flagged `hl_builder_dex` and never mapped to an underlying |
+
+Symbol normalisation: the base is the venue's own `name`. The main perp dex lists crypto assets under their ticker, so they map by
+venue metadata. `kPEPE`, `kSHIB`, `kBONK`, `kFLOKI` are reviewed rows with multiplier 1 000; `kLUNC`, `kNEIRO`, `kDOGS` are not
+reviewed and stay unmapped (`multiplier_unreviewed`).
+
+Comparator inputs: instrument and ticker from `metaAndAssetCtxs`, the `l2Book` snapshot, fees = base tier of the router's reviewed
+table (taker 0.045 %, maker 0.015 %, checked 2026-11-10), funding = the ticker's hourly rate, maintenance margin =
+1 / (2 × maximum leverage).
+
+### 4. Locks
+
+| Lock | Effect |
+|---|---|
+| `SPW_DERIV_LIVE_MAINNET=on` | without it every mainnet trade, cancel and collateral move answers `mainnet_disabled` (testnet needs no variable) |
+| `SPW_DERIV_MANDATE_MAINNET=on` | needed, with the first, for mandate (passkey-less) orders on mainnet |
+| Signer | a stored venue authorization approved with the passkey; its own `halted` flag |
+| Pinned assets | the signer and the API refuse an instrument outside the pinned table |
+
+The audit lists two High findings that touch these locks (turning a lock off, or the emergency halt, also blocks cancels and
+closes). They are for the execution work stream; nothing here changes them. The explorer reports the state of the server locks
+next to the rows (`locks`), by name and state only.
+
+### 5. Tests
+
+- Existing (not changed): `packages/derivatives/test/hyperliquid/adapter.test.ts` (24), `stream.test.ts` (16), `trading.test.ts`
+  (38), the signer's venue tests, `services/api/test/derivatives-api.test.ts` (21), `derivatives-live.test.ts` (22).
+- This work: `packages/trading/test/symbols.test.ts` (the 235 recorded instruments; the `k` contracts; unit prices within 1 %),
+  `services/api/test/markets-hub.test.ts` (rows, tradability, the BTC comparison hand-checked against the recorded book, a missing
+  book, a venue that throws or hangs).
+
+### 6. Observed (live, read-only, 2026-11-16 01:19 UTC, `scripts/smoke-markets-hub.mts`)
+
+235 instruments (179 active, 56 halted), all with a price, tickers 1.0 s old when listed. 232 mapped as crypto, 3 unmapped
+(`multiplier_unreviewed`). Tradable: `hyperliquid:BTC`, `hyperliquid:ETH`, `hyperliquid:SOL`; 176 `hl_asset_not_pinned`, 56
+`instrument_halted`. BTC: mark 64 846, 24 h volume 4.58 G USD, open interest 2.37 G USD, funding 0.0000125 / h = 10.95 % a year.
+BTC long 1 000 USD ×3 over 24 h: mid 64 843.5, spread 0.15 bps, entry slippage 0.008 USD (0.08 bps), exit slippage 0.109 USD,
+fees 0.45 + 0.45 USD, funding 0.30 USD, collateral 333.30 USD, liquidation estimate 43 776.54, **total 1.32 USD = 13.17 bps**.
+6 `POST /info` requests for the whole run; no other endpoint.
+
+### 7. Limitations
+
+1. The book snapshot is 20 levels a side: on BTC it ends about 3 bps from the mid. The comparator's depth at 10, 25 and 50 bps is
+   therefore a **lower bound** on this venue, marked as such (`askComplete: false`, "+" on screen). The adapter does not request
+   the aggregated book (`nSigFigs`); doing so belongs to the adapter's owner.
+2. Fees are the base tier: volume tiers and staking discounts are not applied.
+3. Maintenance margin is the first tier (1 / (2 × max leverage)); the venue's size tiers are not modelled.
+4. A burst of requests can be answered 429 (audit §1.5); the data service then serves the last good value, marked stale.
+
+### 8. Not verified on mainnet
+
+No order, cancel, leverage change, deposit or withdrawal was ever accepted on a funded account (audit §1.4). Whether production
+runs with the locks on was not read. Nothing in this work sends anything to the venue's trading endpoint.
 
 ---
 
 ## GMX
 
-> **Placeholder — to be filled by the GMX work stream.**
-> Expected sections: 1. Initial state · 2. API used · 3. What is implemented · 4. Tests run · 5. Observed results · 6. Limitations.
+**Status: market data, and market increase / decrease orders on two pinned Arbitrum markets as wallet transactions, locked by
+server variables. Nothing was ever sent to Arbitrum mainnet.** Written 2026-11-15 (branch `v11-markets-compare`). Trading facts:
+audit §1, §3.2, §4.7.
+
+### 1. Initial state
+
+- Adapter `packages/derivatives/src/venues/gmx/` (read side, Arbitrum; Avalanche endpoints exist, unused by the API). Venue
+  contract: `docs/v4/venues/gmx.md`. Order building and verification: `packages/derivatives/src/live/gmx.ts`; engine
+  `services/api/src/derivatives/gmx-exec.ts`.
+- GMX has no order book: the old comparison table showed "no book" and the router simulation carried the price-impact formula.
+- Not there before this work: GMX rows in a cross-venue listing, a cost row comparable with the order-book venues.
+
+### 2. API used (public, read-only)
+
+| Call | Used for |
+|---|---|
+| `GET https://arbitrum.gmxapi.io/v1/markets`, `/markets/tickers`, `/markets/config`, `/markets/values`, `/tokens/info`, `/pairs` | markets (one instrument per pool), oracle range, open interest per side, capacity, funding and borrowing rates, price-impact and fee factors, virtual inventory |
+| `GET https://arbitrum-api.gmxinfra.io/prices/tickers`, `/tokens` | the adapter's `oraclePrices()` (**not** called by the hub or the comparator — the smoke run contacted `arbitrum.gmxapi.io` only) |
+| `GET …/prices/ohlcv`, `…/rates` | bars and funding history |
+| GraphQL `gmx.squids.live` | public trade actions (trades panel) |
+
+No websocket (the hub polls). The chain reads of the trading engine (`gmx-chain.ts`: `Reader`, `DataStore`, pinned bytecode) are
+not used by the hub or the comparator.
+
+### 3. What is connected
+
+| | State |
+|---|---|
+| Market data | real, Arbitrum One |
+| Paper trading | no (no order book for the paper engine) |
+| Live trading | `MarketIncrease` and `MarketDecrease` only, as transactions of the wallet's own key, each approved with the passkey; no limit, stop or take-profit order; cancellation only 300 s after creation or when frozen (audit §1.1) |
+| Tradable instruments | the two pinned markets of `GMX_MARKETS`: `gmx:BTC/USD [BTC-USDC]` and `gmx:ETH/USD [WETH-USDC]`. Every other pool is shown with `gmx_market_not_pinned` |
+| Autonomous trading | none: `MANUAL_LIVE` only |
+
+Symbol normalisation: GMX publishes no asset class. A base ticker maps only when it is in the list reviewed on 2026-11-15 (84
+tickers: active on GMX, same ticker listed as crypto by Hyperliquid or edgeX, mark within 1 %). `kPEPE`, `kSHIB`, `kBONK`,
+`kFLOKI` are reviewed rows with multiplier **1**: GMX spells the market `kPEPE` but prices and sizes it per 1 PEPE — the same name
+as Hyperliquid's contract, a unit a thousand times smaller. `SPY`, `QQQ`, `NATGAS`, `SPCX` (edgeX lists those letters as an
+equity or a commodity) stay unmapped (`no_category_metadata`), as do `GOLD`, `SILVER`, `WTIOIL`, `BRENTOIL`, `XAUT` and six
+others (`ticker_not_reviewed`).
+
+Comparator inputs (one row: the pinned pool, else the most traded pool; the others are listed as `alternatives`): the oracle
+range stands in for the best bid and ask (a buy executes at the max, a sell at the min); slippage = distance of that price from
+the oracle mid plus the pool's price impact when it is against the trade (`gmxPriceImpact` of the router, capped at the market's
+maximum factors; a favourable impact is not credited); fees = the market's position fee factor (the higher, "balance not
+improved", 0.06 %); carry = the side's **net** rate per hour (funding and borrowing together; the short side has its own rate);
+maintenance = `minCollateralFactorForLiquidation`. Depth is null with the reason: there is no book.
+
+### 4. Locks
+
+| Lock | Effect |
+|---|---|
+| `SPW_DERIV_LIVE_MAINNET=on` **and** `SPW_DERIV_GMX_LIVE=on` | without both, every GMX prepare, approve and relay answers `gmx_disabled` / `mainnet_disabled`; reading works |
+| Venue policy | approved once with the passkey; markets, leverage and daily order count are bounded by it |
+| Pins | contract addresses and runtime bytecode hashes are checked on both registry RPC endpoints before every order |
+
+The audit notes that GMX runs with placeholder loss limits and no kill switch (Medium), and that a cancel needs a passkey because
+it is a wallet transaction. Not changed here.
+
+### 5. Tests
+
+- Existing (not changed): `packages/derivatives/test/gmx/adapter.test.ts` (26), `gmx-live.test.ts` (23), `router.test.ts` (16,
+  the impact formula against the venue's own figures), `services/api/test/derivatives-gmx.test.ts` (20).
+- This work: `packages/trading/test/cost-pool.test.ts` (pool execution hand-checked; the recorded BTC pool; capacity refusal;
+  short-side carry), `symbols.test.ts` (the 124 recorded pools), `services/api/test/markets-hub.test.ts` (the GMX row of the BTC
+  and ETH comparisons; a hanging GMX).
+
+### 6. Observed (live, read-only, 2026-11-16 01:19 UTC)
+
+124 pools, all active, all with a price, tickers 0.8 s old. 109 mapped as crypto, 15 unmapped (11 `ticker_not_reviewed`, 4
+`no_category_metadata`). Tradable: the two pinned markets; 122 `gmx_market_not_pinned`. BTC long 1 000 USD ×3 over 24 h on
+`gmx:BTC/USD [BTC-USDC]`: oracle mid 64 841.68, oracle spread 0, entry cost 0.393 USD (3.93 bps, price impact against the trade),
+exit 0 (the impact would be in favour: not credited), fees 0.60 + 0.60 USD, net carry of the long side 0.0000220 / h = 19.31 % a
+year → 0.53 USD, collateral 333.33 USD, liquidation estimate 43 462.07, **total 2.12 USD = 21.22 bps**. ETH on
+`gmx:ETH/USD [WETH-USDC]`: longs were receiving (−21.06 % a year), total 0.97 USD = 9.74 bps. 9 `GET` requests for the run.
+
+### 7. Limitations
+
+1. The order executes later, at the oracle price of that moment, by a keeper: the figure is an estimate of now. The execution fee
+   in ETH and the Arbitrum gas are **not** in the comparator's total (they are in the router simulation, `/derivatives/route`).
+2. The price impact of the exit is computed on the pool as it is now, not as it will be after the entry; the impact pool's
+   balance, which can cut a favourable impact, is not modelled (the comparator credits no favourable impact at all).
+3. The collateral is the pool's token or USDC; the comparator treats it as USD.
+4. The opening leg of the impact formula is not itself verified against the venue (the closing leg is, to six digits).
+
+### 8. Not verified on mainnet
+
+Creation, simulated execution and keeper cancellation were proven on an anvil fork with the real bytecode; shorts, the BTC market,
+frozen orders, liquidation and ADL were not run; nothing was sent to Arbitrum mainnet (audit §1.4).
 
 ---
 
 ## dYdX
 
-> **Placeholder — to be filled by the dYdX work stream.**
-> Expected sections: 1. Initial state · 2. API used · 3. What is implemented · 4. Tests run · 5. Observed results · 6. Limitations.
+**Status: READ-ONLY market-data venue. No account read, no paper account, no trading code. Its terms exclude Canada.** Written
+2026-11-15 (branch `v11-markets-compare`).
+
+### 1. Initial state
+
+- Adapter `packages/derivatives/src/venues/dydx/` (indexer REST and websocket). Venue contract: `docs/v4/venues/dydx.md`;
+  jurisdiction: `docs/v4/venues/jurisdiction.md`.
+- The registry serves dYdX with a restriction text: account reads answer 403 `venue_restricted` although the adapter implements
+  them, and the adapter declares `orders: false`.
+- Not there before this work: dYdX rows in a cross-venue listing with the reason they cannot be traded, a cost row.
+
+### 2. API used (public, read-only)
+
+| Call | Used for |
+|---|---|
+| `GET https://indexer.dydx.trade/v4/perpetualMarkets` | every market: ticker, status, tick and step size, initial margin fraction (maximum leverage), oracle price, next funding rate, open interest, 24 h volume and price change |
+| `GET /v4/orderbooks/perpetualMarket/{ticker}` | order book (50 levels a side in the recording) |
+| `GET /v4/trades/perpetualMarket/{ticker}`, `/v4/candles/perpetualMarkets/{ticker}`, `/v4/historicalFunding/{ticker}` | trades, bars, hourly funding applied |
+| `wss://indexer.dydx.trade/v4/ws` | public book and trades of an open instrument |
+
+The account endpoints (`/v4/addresses/…`, orders, fills, funding payments) are never called from the wallet's network; the tests
+fail if one is.
+
+### 3. What is connected
+
+| | State |
+|---|---|
+| Market data | real, mainnet |
+| Account, paper, trading | none, by decision: the terms of use exclude Canada (and the United States and the United Kingdom) and the indexer geoblocks account reads. Every row carries `tradable: false`, `tradableReason: dydx_jurisdiction`, and the restriction text |
+
+Symbol normalisation: the base is the part of the ticker before `-USD`. dYdX publishes no asset class, and most of its markets are
+halted with a stale oracle price (239 of 296 on 2026-11-15, many of them 20 % to 90 % away from the same ticker elsewhere). A base
+maps only when it is in the list reviewed on 2026-11-15 (54 tickers: active on dYdX, same ticker crypto on Hyperliquid or edgeX,
+mark within 1 %), plus `PEPE` and `BONK` (reviewed against the ×1 000 contracts of Hyperliquid and edgeX). 233 instruments stay
+unmapped as `ticker_not_reviewed`, 6 as `bad_ticker` (names such as `MAD,RAYDIUM,<address>-USD`), 1 as `no_category_metadata`.
+A halted instrument is never compared.
+
+Comparator inputs: the real book, fees = base tier of the router's reviewed table (taker 0.05 %, maker 0.01 %, checked
+2026-11-10), funding = the estimated next hourly rate of the ticker. The maintenance margin fraction is per market and is not
+carried by the adapter: the liquidation estimate is **null with that reason**.
+
+### 4. Locks
+
+None are needed: there is no trading code to lock. The restriction is structural (`createRegistry` wraps the adapter in a
+read-only view whose account methods refuse).
+
+### 5. Tests
+
+- Existing (not changed): `packages/derivatives/test/dydx/adapter.test.ts` (23), `stream.test.ts` (16),
+  `services/api/test/derivatives-api.test.ts` (the 403 on account reads).
+- This work: `symbols.test.ts` (the 296 recorded markets), `services/api/test/markets-hub.test.ts` (rows and reason code; the
+  30 000 USD slippage walked over three levels of the recorded BTC book, hand-checked; a hanging dYdX; a scripted price gap
+  flagged and marked not actionable from the wallet).
+
+### 6. Observed (live, read-only, 2026-11-16 01:19 UTC)
+
+296 markets (57 active, 239 halted), tickers 1.2 s old. 56 mapped as crypto, 240 unmapped. BTC long 1 000 USD ×3 over 24 h: mid
+64 857.5, spread 2.00 bps, depth within 10 / 25 / 50 bps 0.30 / 2.53 / 3.65 M USD bid and 0.50 / 1.55 / 2.47 M USD ask (complete at
+each distance), entry slippage 0.10 USD (1.00 bps), fees 0.50 + 0.50 USD, funding 0.0000118 / h = 10.33 % a year → 0.28 USD,
+**total 1.48 USD = 14.84 bps**, liquidation null (maintenance fraction not carried). 6 `GET` requests for the run.
+
+### 7. Limitations
+
+1. No liquidation estimate (see above).
+2. The funding figure is the venue's estimate of the next hourly rate, not a rate already applied.
+3. The reviewed list is a snapshot: a market that dYdX reactivates stays unmapped until it is reviewed.
+
+### 8. Not verified
+
+Nothing beyond public reads: there is nothing to verify on the trading side, and none is planned while the terms exclude Canada.
+
+---
+
+## Comparator
+
+**What it is: a table of what holding one position would cost on each venue, computed from real inputs read now. Estimates,
+never a quote, never a recommendation.** Written 2026-11-15 (branch `v11-markets-compare`). Detail per item:
+`docs/v11/work/markets-compare.md`.
+
+### 1. Routes
+
+| Route | Auth | Answer |
+|---|---|---|
+| `GET /api/v1/markets-hub` | owner session | the explorer: spot assets and the perps of the four venues, filters, sort, pagination |
+| `GET /api/v1/markets-hub/underlyings`, `/underlyings/:symbol` | owner session | the underlyings the instruments map to; every venue's instruments for one of them |
+| `GET /api/v1/markets-hub/compare?underlying=BTC&side=long&notional=1000&leverage=3&horizonHours=24` | owner session | one row per venue + cross-venue discrepancy estimates |
+| `GET /api/v1/trading/markets/compare` | API key with `markets:read`, or the owner | the same computation, filtered by the key's venue and instrument restrictions |
+
+### 2. Where the arithmetic lives
+
+Pure code, `packages/trading/src/compare/`: `cost.ts` (`venueCost`, `compareVenues`, `crossVenueDiscrepancy`,
+`findDiscrepancies`, `depthWithin`, `annualiseFunding`, the GMX pool helpers) and `symbols.ts` (`normaliseSymbols`,
+`toUnderlyingUnits`, `priceOutliers`). The book walk, the margin and the liquidation price are the functions of
+`packages/derivatives` (`walkBook`, `initialMargin`, `liquidationPriceAtLeverage`, `gmxPriceImpact`) — imported, not copied. The
+API (`services/api/src/markets-hub/compare.ts`) only gathers inputs.
+
+### 3. One row
+
+For the notional N, the leverage L and the horizon H, per venue:
+
+| Figure | How |
+|---|---|
+| mid, spread | best bid and ask of the real book (GMX: the oracle range) |
+| depth within 10 / 25 / 50 bps | Σ price × size inside each distance, per side; flagged when the book that was read ends before it |
+| size | N / mid, rounded down to the lot |
+| entry and exit slippage | average price of walking the book for the whole size, against the mid (half the spread included); the exit on the **current** book |
+| fees | taker (or maker) rate × notional, entry and exit; the schedule's source and date are in the answer |
+| funding | the current rate, held constant over H (stated as an assumption); the venue's raw rate and interval are kept next to the per-hour and annualised figures |
+| collateral | notional / L; null when L is above the venue's maximum, with that reason |
+| liquidation | isolated-margin estimate at L with the venue's maintenance fraction; null when the fraction is unknown |
+| total | entry slippage + exit slippage + entry fee + exit fee + funding; **null when one of the five is null**, naming it |
+
+Every figure is `{ value, reason, basis }`: a number with how it was obtained, or null with why. A venue the wallet cannot trade
+on has its row, flagged with the reason code.
+
+### 4. Cross-venue discrepancy
+
+For every ordered pair of venues (buy on one, sell on the other, same size on both lots): the gap between the two average
+execution prices, net of the fees of four legs, the exit slippage on both and the net funding over the horizon —
+`netEdgeEstimateBps`. Each result carries `assumptions[]` (six: simultaneous fills at the current books, convergence to one
+price, constant funding, same contract, collateral already in place…) and `risks[]` (six: execution, convergence, funding,
+liquidation, venue, model). `flagged` only says the estimate is above the threshold asked (default 0). `actionableFromWallet` is
+false when a leg is on dYdX or edgeX.
+
+Three guards keep a data problem from looking like an opportunity:
+
+1. instruments are compared only through the reviewed symbol map, in units of the underlying (`toUnderlyingUnits`);
+2. a row whose unit price is more than 3 % from the median of the venues is left out (`priceOutliers`), with a warning;
+3. a stale row, or one without a price of its own, is in no pair.
+
+Wording: no text of the API or of the two screens says that an estimate is an outcome. Tests grep the constants, whole answers
+and the `mk` / `cp` i18n block for the forbidden words (`services/api/test/markets-hub.test.ts`, `apps/web/test/markets.test.ts`).
+
+### 5. Observed (live, read-only, 2026-11-16 01:19 UTC)
+
+BTC long 1 000 USD ×3 over 24 h — total estimated cost: edgeX 12.14 bps, Hyperliquid 13.17 bps, dYdX 14.84 bps, GMX 21.22 bps.
+ETH: dYdX 7.46 bps (longs were receiving funding), GMX 9.74 bps (same), Hyperliquid 9.85 bps, edgeX 12.70 bps. Twelve ordered pairs
+each; gross gaps between −3.1 and +4.9 bps among the first four; every net estimate negative (−14.5 to −20.2 bps for the first
+four): **no pair flagged** — the costs of four legs exceed the gaps observed. The full output is in
+`docs/v11/work/markets-compare.md`.
+
+### 6. Relation to the older views
+
+- `GET /derivatives/compare` (contract facts per base: spread, depth within 1 %, base fee, notes) is unchanged in shape; its
+  hourly funding now comes from the same `annualiseFunding`. The web view shows the cost comparison above it.
+- `POST /derivatives/route` (router simulation for one order intent: account policies, GMX execution fee and gas, uncertainty
+  bands) is untouched and its tests pass. It answers "what would this order cost and which account policy accepts it"; the
+  comparator answers "what does a position of this size cost on each venue". Both use `walkBook` and `gmxPriceImpact`.
+
+### 7. Limitations
+
+1. One snapshot. Books move; the exit is priced on the current book; funding changes every interval.
+2. Depth is bounded by the book each adapter reads (Hyperliquid 20 levels, edgeX 50): beyond it the figures are lower bounds.
+3. Base fee tiers only. No gas, no bridge, no collateral transfer cost (the discrepancy assumes collateral on both venues).
+4. One instrument per venue (GMX: the pinned pool).
+5. The symbol map is reviewed by hand against a recorded snapshot; new listings wait for a review.
