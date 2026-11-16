@@ -1,6 +1,7 @@
 # V11 — Real-time quotation engine with WebSocket: work note
 
-Branch `v11-quotes`, from the local branch `v11` at `dbd62f2`. Written 2026-11-15 (the runs below are stamped 2026-11-16 UTC).
+Branch `v11-quotes`, from the local branch `v11` at `dbd62f2`; the local `v11` of the end of the work (`8b489d7`) is merged in.
+Written 2026-11-15 (the runs below are stamped 2026-11-16 UTC).
 Scope: READ-ONLY public market data. The engine never places, signs or cancels anything; no production access, no production
 change. Architecture and protocol reference: [`docs/V11-QUOTE-ENGINE.md`](../../V11-QUOTE-ENGINE.md).
 
@@ -240,6 +241,25 @@ No flaky test failed in the final run (`api.test.ts › swap: quotes…` and `la
 
 One failure of the first full run was caused by this branch and fixed: `generated.test.ts › the built package` (the SDK's
 declaration build has no `@types/node`, and `stream.ts` named `process`); it passes now.
+
+### After merging the local `v11` as it stood at the end of the work (`8b489d7`, with `v11-exec2`, `v11-contract`, `v11-mm-core`)
+
+`v11` moved three times during the work. It was merged into this branch (`91c0c12`); one conflict, in the test line named above:
+the route / spec equality now lists both exceptions — the two streaming routes and the trading prefix's catch-all.
+
+| Suite, on the merged tree | Result |
+|---|---|
+| `pnpm typecheck` | exit 0 |
+| **`pnpm test`, whole repository** | **185 files: 183 passed, 2 failed — 4 344 tests: 4 342 passed, 2 failed** (144 s) |
+| the two failures, re-run alone | both pass: `services/api/test/trading-contract.test.ts` 21 / 21 (21 s), `packages/trading-sdk/test/integration.test.ts` 22 / 22 (70 s) |
+| Python SDK, `pytest -m "not integration"` | 359 passed (the contract drift tests pass on the merged tree) |
+| Python stream tests | 14 / 14 |
+| `vite build` | first chunk 262.35 kB (gzip 80.63 kB) |
+| browser check (§C script) | all checks passed again |
+
+The two failures of the merged full run were 30 s timeouts under the load of the whole suite (`trading-contract.test.ts ›
+templates → create from a stream template…` and `integration.test.ts › getPortfolio / getBalances…`); neither is a file of this
+branch, both pass alone. They are not in the list of known flaky tests given for this work.
 
 ## 9. Files touched outside the owned set
 
