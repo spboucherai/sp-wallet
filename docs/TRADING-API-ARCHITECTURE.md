@@ -1,9 +1,10 @@
 # SP Trading API — architecture (V11)
 
 Status: machine authentication and the **read side** are implemented and connected to the real services. Since
-Phase F (branch `v11-exec`) the **order operations of the write side** are wired to the order service (section 7); the
-strategy and agent operations are registered (scope, validation, replay protection) and answer
-`501 execution_not_wired`. Security model: `docs/TRADING-API-SECURITY.md`. Reference: `docs/TRADING-API-OPENAPI.md`.
+Phase F (branch `v11-exec`) the **order operations of the write side** are wired to the order service (section 7), and
+the strategy and agent operations to the agents runtime (`agents/trading-handlers.ts`). All 41 operations of the contract
+are implemented; `501 execution_not_wired` remains only as the answer of an owner's spot order on a server whose swap flow
+is not configured. Every operation declares the error answers it can give (`x-spw-errors`). Security model: `docs/TRADING-API-SECURITY.md`. Reference: `docs/TRADING-API-OPENAPI.md`.
 
 ## 1. Where it sits
 
@@ -32,7 +33,7 @@ All code is in `services/api/src/trading-api/`. Outside it, three files changed:
 | `principal.ts` | `Principal`, `apiKeyGate` (onRequest), `scopeGuard` (the single preHandler), limiters, usage log, retention |
 | `idempotency.ts` | `withIdempotency`, `replayHeaders` |
 | `read.ts` | the read services and key restrictions |
-| `routes.ts` | registers `/api/v1/trading/*` from `spec.ts`; `requireMandate`; the order handlers (calls to the order service); the 501 handler |
+| `routes.ts` | registers `/api/v1/trading/*` from `spec.ts`; `requireMandate`; the order handlers (calls to the order service), the agents' handlers (`agentTradingHandlers`), the shaping of previews and refusals, the catch-all `404 not_found` |
 | `commands.ts` | `POST /commands`: the command grammar, the owner's resolution defaults |
 | `developer-routes.ts` | `/api/v1/developer/*` (owner session only) |
 | `webhooks.ts` | endpoints, `emitWebhook`, delivery with retries |
@@ -159,11 +160,25 @@ Order of checks for `POST /orders`: authentication → scope → `mandate_requir
 → key limits → the order exists → risk engine → mandate → engine. The key of the order is the body's
 `clientOrderId` when given, else the `Idempotency-Key` header.
 
-Seven operations still answer 501: `POST /strategies`, `POST /strategies/{id}/backtest|start|stop`,
-`POST /agents`, `POST /agents/{id}/start|stop` (agents runtime).
+The strategy and agent operations are implemented by the agents runtime: `POST /strategies`,
+`POST /strategies/{id}/backtest|start|stop`, `POST /agents`, `POST /agents/{id}/start|pause|stop|backtest`, and the
+reads `GET /agents/templates`, `/agents/{id}`, `/agents/{id}/signals|journal|orders|performance` (ONE mode per call),
+`GET /jobs/{id}`. `agents:manage` and `strategies:manage` are management scopes — no mandate on the key: research and
+paper sign nothing, and going live is bounded by the agent's own owner-approved mandate (409 `mandate_required`).
 
-Spot: 403 `spot_execution_requires_agent_vault` for a key, 422 `spot_via_swap_screen` for the owner. Live
-orders on GMX: 422 `venue_not_wired`.
+Spot: 403 for a key (`spot_execution_requires_agent_vault`); the owner's spot order is a swap proposal of the existing
+flow, approved with the passkey — a SELL names `size`, a BUY names `notional` (the quote amount: a swap is exact-input).
+Live orders on GMX are the owner's, with the passkey (403 `gmx_requires_owner_passkey` for a key).
+
+At the boundary (`routes.ts`, `read.ts`, `shaping.ts`), before or after the order service:
+- `notional` on a perpetual becomes a size (notional ÷ the order's own price, else the mark read now, rounded down to the
+  lot); such an order named by its `clientOrderId` is replayed from its stored answer, so a replay never re-reads a price;
+- a preview, and the `data.checks` of an order refusal, withhold the account's figures from a key that holds neither
+  `wallet:read` nor `positions:read`;
+- `GET /orders` and `GET /activity` are keyset-paginated (`cursor` / `nextCursor`) on (time, id);
+- a GMX position id is `live:gmx:<account>:<instrument>` when the wallet holds one position on that market (the
+  66-character position key would not fit a path parameter);
+- any other path under the prefix answers `404 not_found`.
 
 ## 8. Webhooks
 

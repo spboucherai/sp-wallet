@@ -38,8 +38,9 @@ if (preview.wouldExecute) {
 
 **Execution requires an owner-approved mandate bound to the key**; the API refuses it otherwise (`MandateRequired`),
 and an order outside the mandate is `MandateDenied`. Paper orders are simulated by the wallet. Live orders also need
-`SPW_TRADING_API_EXECUTION=on` on the server (`ExecutionDisabled` otherwise). The strategy and agent writes answer
-`501 execution_not_wired`: the SDK throws `ExecutionNotWired` and never reports a success that did not happen.
+`SPW_TRADING_API_EXECUTION=on` on the server (`ExecutionDisabled` otherwise). All 41 operations of the contract are implemented, the strategy and agent operations included (agents are read ONE
+mode per call). Managing agents needs no mandate on the key; an agent goes live only under its own owner-approved mandate.
+Rotating a key unbinds its mandate (the mandate names the old key id): see "Key rotation" in the documentation.
 
 ```
 src/        client.ts, errors.ts, util.ts (canonical JSON, decimals, order states), webhooks.ts, generated/openapi.ts

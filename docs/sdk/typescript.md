@@ -9,17 +9,17 @@ reference: [`docs/TRADING-API-OPENAPI.md`](../TRADING-API-OPENAPI.md)). Source: 
 - Money, prices and sizes are decimal **strings** end to end. The SDK never converts them to a `number`.
 - The API key is never logged, never part of an error, never shown by `console.log(client)`.
 
-> **Execution requires an owner-approved mandate.** Placing or cancelling an order, closing or reducing a position,
-> and managing strategies and agents need — besides the scope — an API key **bound to a trading mandate approved by the
-> wallet's owner**. Without one the API refuses the call (`403 mandate_required` → `MandateRequired`). A scope alone never
-> lets a key execute.
+> **Execution requires an owner-approved mandate.** Placing an order and closing or reducing a position need — besides
+> the scope — an API key **bound to a trading mandate approved by the wallet's owner**. Without one the API refuses the
+> call (`403 mandate_required` → `MandateRequired`); an order outside the mandate is `MandateDenied`. A scope alone never
+> lets a key execute. Managing agents and strategies needs **no** mandate on the key (research and paper sign nothing):
+> an agent goes live only under its *own* mandate, approved by the owner.
 >
-> **State of the API in this version.** Reads, order previews, orders (place, cancel), positions (close, reduce), the
-> command endpoint and the kill switch are implemented and answer typed results. **Paper** orders are simulated by the
-> wallet's paper engine against the venue's real order book. **Live** orders additionally need
-> `SPW_TRADING_API_EXECUTION=on` on the server (default off → `403 execution_disabled` → `ExecutionDisabled`) and the
-> wallet's mainnet locks. The seven strategy and agent writes are declared, validated and replay-checked, then answer
-> `501 execution_not_wired` (`ExecutionNotWired`): they return an untyped `WriteResult` because no success schema exists.
+> **State of the API in this version.** All 41 operations of the contract are implemented and answer typed results.
+> **Paper** orders are simulated by the wallet's paper engine against the venue's real order book. **Live** orders
+> additionally need `SPW_TRADING_API_EXECUTION=on` on the server (default off → `403 execution_disabled` →
+> `ExecutionDisabled`) and the wallet's mainnet locks. Spot orders and live GMX orders are the owner's (passkey): a key is
+> refused them.
 
 ## Install (from the repository)
 
@@ -90,9 +90,12 @@ Each method takes a last argument `{ timeoutMs, maxRetries, signal }` (and `idem
 | `reducePosition(id, { fraction, slippageBps })` → `PlacedOrder` | `POST /positions/{id}/reduce` | `positions:manage` + mandate |
 | `runCommand(text, { mode, accountId, dryRun })` → `CommandResult` | `POST /commands` | the scope of what the command resolves to |
 | `listStrategies({ kind })` | `GET /strategies` | `strategies:read` |
-| `createStrategy`, `backtestStrategy(id)`, `startStrategy(id)`, `stopStrategy(id)` | `POST /strategies…` (501) | `strategies:manage` + mandate |
+| `createStrategy({ kind, path, agentId })` → strategy · `backtestStrategy(id)` → job · `startStrategy(id, { mode })`, `stopStrategy(id)` → agent | `POST /strategies…` | `strategies:manage` |
 | `listAgents()` | `GET /agents` | `agents:read` |
-| `createAgent`, `startAgent(id)`, `stopAgent(id)` | `POST /agents…` (501) | `agents:manage` + mandate |
+| `listAgentTemplates()`, `getAgent(id)` | `GET /agents/templates`, `/agents/{id}` | `agents:read` |
+| `listAgentSignals(id, { mode, limit, before })`, `listAgentJournal(id, { mode, … })`, `listAgentOrders(id, { mode, open, … })`, `getAgentPerformance(id, { mode })` | `GET /agents/{id}/signals`, `journal`, `orders`, `performance` — **one mode per call** | `agents:read` |
+| `getJob(id)`, `waitForJob(id, { waitTimeoutMs, pollIntervalMs })` | `GET /jobs/{id}` | `agents:read` |
+| `createAgent({ template, name, … })`, `startAgent(id, { mode })`, `pauseAgent(id)`, `stopAgent(id)` → agent · `backtestAgent(id, { hours })` → job | `POST /agents…` | `agents:manage` |
 | `openapi()` | `GET /openapi.json` | any valid key |
 
 `responseMeta(result)` gives the facts of the HTTP exchange behind any result: `status`, `requestId`, `idempotencyKey`,
@@ -160,8 +163,12 @@ if (position) {
 import { AmbiguousCommand } from '@sp-wallet/trading-sdk';
 
 try {
-  const dry = await client.runCommand('LONG BTC-PERP 500 x2', { dryRun: true });   // kind: 'order', executed: false
-  const pos = await client.runCommand('SHOW POSITIONS');                             // kind: 'query', data: the read answer
+  const r = await client.runCommand('LONG BTC-PERP 500 x2', { dryRun: true });
+  // the answer is a discriminated union: narrow on `kind`, and for an order on `executed`
+  if (r.kind === 'order' && !r.executed) console.log(r.order.instrument, r.order.notional, r.hash);   // dry run: the CANONICAL order
+  if (r.kind === 'order' && r.executed) console.log(r.order.id, r.order.status, r.canonical.instrument); // executed: the placed order
+  if (r.kind === 'query') console.log(r.query, r.data);                                                 // SHOW …
+  if (r.kind === 'control') console.log(r.control.type, r.executed);                                    // CANCEL, KILL, STOP ALL AGENTS
 } catch (e) {
   if (e instanceof AmbiguousCommand) console.log(e.questions.map((q) => `${q.field}: ${q.options.join(' | ')}`));   // nothing was executed
   else throw e;
@@ -172,6 +179,34 @@ await client.engageKillSwitch('manual stop');   // blocks every NEW risk; cancel
 
 The grammar is deterministic (no model). What a command leaves open (venue, leverage, …) comes from the owner's stored
 defaults and from nothing else; when they do not settle it, the API answers `409 ambiguous_command` with the questions.
+
+### Agents
+
+```ts
+const { templates } = await client.listAgentTemplates();                       // family, engine, the modes each can run in
+const { agent } = await client.createAgent({ template: 'market-making', name: 'MM BTC', venues: ['hyperliquid'], universe: ['BTC'] });
+await client.startAgent(agent.id, { mode: 'paper' });                          // research and paper sign nothing
+
+// every per-agent read is ONE mode per call: `mode` is required, and an answer never mixes two (`all` is refused)
+const signals = await client.listAgentSignals(agent.id, { mode: 'paper', limit: 50 });
+const journal = await client.listAgentJournal(agent.id, { mode: 'paper' });
+const orders = await client.listAgentOrders(agent.id, { mode: 'paper', open: true });
+const performance = await client.getAgentPerformance(agent.id, { mode: 'paper' });   // computed from paper records only; never a backtest
+
+const { job } = await client.backtestAgent(agent.id, { hours: 24 });           // asynchronous
+const done = await client.waitForJob(job.id, { waitTimeoutMs: 120_000 });      // done | failed | cancelled; WaitTimeout is not a failure
+await client.pauseAgent(agent.id); await client.stopAgent(agent.id);           // stop is always allowed
+```
+
+`startAgent(id, { mode: 'live' })` succeeds only when a mandate the **owner** approved for that agent with the passkey is
+in force at the signer; otherwise `409 mandate_required` (a `Conflict`). A key can never approve one. A spot agent is
+created in the owner's app (`403 owner_required`).
+
+### Spot orders (owner session only)
+
+A key is refused spot execution (`403`). For the owner, a spot order is a swap proposal approved with the passkey:
+a SELL names `size` (the quantity sold), a BUY names `notional` — the amount of the quote asset to spend, because a swap
+is exact-input: `{ instrument: 'spot:ETH-USDC', side: 'buy', type: 'market', notional: '100', mode: 'live' }`.
 
 ### Order states and `waitForOrder`
 
@@ -210,7 +245,7 @@ Every error extends `SPWalletError` and carries `code` (the API's `error` member
 | ↳ `AmbiguousSymbol` | 409 `ambiguous_symbol` — `error.candidates` lists the `venue:symbol` ids |
 | ↳ `AmbiguousCommand` | 409 `ambiguous_command` — `error.questions`; nothing was executed |
 | `RateLimited` | 429 `rate_limited`, `auth_throttled` — `error.retryAfterSeconds` |
-| `NotImplementedError` ↳ `ExecutionNotWired` | 501 `execution_not_wired` — nothing was done |
+| `NotImplementedError` ↳ `ExecutionNotWired` | 501 `execution_not_wired` — an operation this server has not connected (an owner's spot order without the swap flow); nothing was done |
 | `ServerError` ↳ `ServiceUnavailable` | 5xx; 503 `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`… |
 | `NetworkError` ↳ `TimeoutError` | no answer (reads, previews) |
 | `OutcomeUnknown` | a mutating call without a trustworthy answer — **not a failure**, see below |
@@ -273,6 +308,36 @@ try {
 }
 ```
 
+## Key rotation and the trading mandate
+
+A trading mandate names **one principal — the key id it was approved for** — and a rotation gives the key a new id. The
+rotation therefore does **not** carry the mandate: the new key keeps the scopes, limits, restrictions and expiry, and is
+**unbound**. Until the owner approves a mandate for the new id and binds it, `createOrder`, `closePosition` and
+`reducePosition` throw `MandateRequired` (and `previewOrder` too); reads, cancels of its own orders, the kill switch and
+agent management keep working. The answer of the rotation says so:
+`{ key: { mandateId: null, inertScopes: […] }, secret, revoked, mandate: { carried: false, mandateId: '<old mandate>', code: 'mandate_principal_mismatch', note } }`.
+
+```ts
+try { await client.createOrder(order); }
+catch (e) {
+  if (e instanceof MandateRequired) { /* after a rotation: ask the owner for a mandate for THIS key id, then retry — nothing was created */ }
+  else throw e;
+}
+```
+
+The owner's side of it (owner session and passkey — nothing a key can do):
+
+```bash
+# 1. a mandate for the NEW key id: created, then approved (a live mandate is approved with the passkey at the signer)
+POST /api/v1/mandates                         { "principal": { "kind": "api_key", "id": "<new key id>" }, "mode": "paper", "accountIds": ["…"], … }
+POST /api/v1/mandates/<mandate id>/approve    { }                      # live: /approve/prepare first, then the passkey assertion
+# 2. bind it to the key (binding gives the key authority: passkey)
+POST /api/v1/developer/keys/<new key id>/update/prepare   { "changes": { "mandateId": "<mandate id>" } }
+POST /api/v1/developer/keys/<new key id>/update           { "intentId": "…", "assertion": { … } }
+```
+
+In the app: Developer → the key → *Trading mandate* → *New mandate*.
+
 ## Webhooks
 
 The wallet signs every delivery: `X-SPW-Timestamp: <unix seconds>` and
@@ -289,8 +354,8 @@ const event = await constructWebhookEvent({
 ```
 
 `verifyWebhook(…)` returns a boolean instead. Delivery is at-least-once: deduplicate on `event.id`. Events:
-`key.revoked`, `risk.kill_switch`, `agent.updated`, `order.updated` (one event per transition of an order).
-A complete receiver: `packages/trading-sdk/examples/webhook-receiver.ts`.
+`key.revoked`, `risk.kill_switch`, `agent.updated`, `order.updated` (one event per transition of an order),
+`risk.proposal`. A complete receiver: `packages/trading-sdk/examples/webhook-receiver.ts`.
 
 ## Examples
 
@@ -313,5 +378,5 @@ SPW_SDK_INTEGRATION=off node_modules/.bin/vitest run packages/trading-sdk   # un
 The integration test starts the real API and the real signer on an own database (`scripts/test-stack.mts`), creates
 keys, a paper account and paper mandates through the owner flow, calls every method and runs the whole **paper** write
 path (preview → order → fill → reduce → close → resting order → cancel, replay and conflict, the refusals, the kill
-switch, commands). No live order is sent: the live case stops at `execution_disabled`. It is **skipped** (reported as
+switch, commands) and an agent on paper (create from a template → start → signals, journal, orders, performance → pause → backtest job → stop). No live order is sent: the live case stops at `execution_disabled`. It is **skipped** (reported as
 skipped) when PostgreSQL is not reachable; a test whose venue cannot be read is skipped with that reason.
