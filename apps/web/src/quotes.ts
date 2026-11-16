@@ -47,13 +47,18 @@ export const CLIENT = {
   /** shown as « delayed » past this age, before the source's own staleness bound */ delayedAfterMs: 5000,
 } as const;
 const CONN = '@conn', STATUS = '@status', CLOCK = '@clock';
+const STATUS_ALL: Channel = { type: 'status', id: '*' };
 
-/** live / delayed / stale / reconnecting for one value, with its age — the server's verdict AND this clock's */
-export function freshnessOf(v: { at: number; stale: boolean; staleAfterMs?: number | null } | null | undefined, conn: Conn, now: number): { state: Fresh; ageMs: number | null } {
+/**
+ * live / delayed / stale / reconnecting for one value, with its age — the server's verdict AND this clock's.
+ * `venue`: the state of the value's upstream as the server reports it; a venue that is reconnecting, silent or down makes its
+ * figures « reconnecting » at once (they are no longer maintained), then stale once they are older than their source's bound.
+ */
+export function freshnessOf(v: { at: number; stale: boolean; staleAfterMs?: number | null } | null | undefined, conn: Conn, now: number, venue?: string | null): { state: Fresh; ageMs: number | null } {
   if (!v) return { state: conn === 'reconnecting' || conn === 'connecting' ? 'reconnecting' : 'none', ageMs: null };
-  const ageMs = Math.max(0, now - v.at), bound = v.staleAfterMs ?? 30_000;
-  if (ageMs > bound || (v.stale && conn === 'live')) return { state: 'stale', ageMs };
-  if (conn !== 'live') return { state: ageMs > bound ? 'stale' : 'reconnecting', ageMs };
+  const ageMs = Math.max(0, now - v.at), bound = v.staleAfterMs ?? 30_000, troubled = venue === 'reconnecting' || venue === 'stale' || venue === 'down';
+  if (ageMs > bound || (v.stale && conn === 'live' && !troubled)) return { state: 'stale', ageMs };
+  if (conn !== 'live' || troubled) return { state: 'reconnecting', ageMs };
   return { state: ageMs > Math.min(CLIENT.delayedAfterMs, bound / 2) ? 'delayed' : 'live', ageMs };
 }
 
@@ -137,9 +142,9 @@ export class QuoteClient {
     const subs = this.toSubscribe, unsubs = this.toUnsubscribe;
     this.toSubscribe = []; this.toUnsubscribe = [];
     if (!this.ws || this.ws.readyState !== 1 || !this.greeted) return;   // on (re)connection everything still referenced is sent anyway
-    const live = subs.filter((c) => this.refs.has(channelKey(c)));
+    const live = subs.filter((c) => c.type !== 'status' && this.refs.has(channelKey(c)));   // the statuses are subscribed with every connection
     for (let i = 0; i < live.length; i += 100) this.send({ v: V, op: 'subscribe', channels: live.slice(i, i + 100) });
-    const gone = unsubs.filter((c) => !this.refs.has(channelKey(c)));
+    const gone = unsubs.filter((c) => c.type !== 'status' && !this.refs.has(channelKey(c)));
     for (let i = 0; i < gone.length; i += 100) this.send({ v: V, op: 'unsubscribe', channels: gone.slice(i, i + 100) });
   }
   private send(m: unknown): void { try { this.ws?.send(JSON.stringify(m)); } catch { /* the close handler reconnects */ } }
@@ -207,11 +212,13 @@ export class QuoteClient {
       case 'hello': {
         this.greeted = true; this.attempt = 0; this.failures = 0; this.setConn('live');
         this.toSubscribe = []; this.toUnsubscribe = [];
-        const all = [...this.refs.values()].filter((r) => r.dead === null).map((r) => r.ch);
+        // the venue statuses always come along: a figure must be able to say that its venue is reconnecting
+        const all = [STATUS_ALL, ...[...this.refs.values()].filter((r) => r.dead === null && r.ch.type !== 'status').map((r) => r.ch)];
         for (let i = 0; i < all.length; i += 100) this.send({ v: V, op: 'subscribe', channels: all.slice(i, i + 100) });
         return;
       }
       case 'subscribed': {
+        if (m.key.startsWith('status|')) { for (const s of (m.snapshot as ServerMessage[] | null) ?? []) this.onData(s, now); return; }
         const r = this.refs.get(m.key);
         if (!r) return;
         r.staleAfterMs = m.staleAfterMs;
@@ -285,7 +292,7 @@ export function watchSpot(symbols: string[], on: (v: Record<string, LiveSpot>) =
   const tick = (): void => {
     const out: Record<string, LiveSpot> = {}, now = Date.now();
     for (const s of symbols) {
-      const q = c.get<LiveQuote>(`quote|spot:${s}|`), p = q ? q.last ?? q.mid : null, f = freshnessOf(q, c.state(), now).state;
+      const q = c.get<LiveQuote>(`quote|spot:${s}|`), p = q ? q.last ?? q.mid : null, f = freshnessOf(q, c.state(), now, c.venueStatuses().spot?.status).state;
       if (q && p !== null && q.source.endsWith('-ws') && (f === 'live' || f === 'delayed') && Number.isFinite(Number(p))) out[s] = { usd: Number(p), at: q.at, source: q.source };
     }
     const sig = JSON.stringify(out);
@@ -350,7 +357,9 @@ export function useConn(): Conn { const c = quoteClient(); return useSyncExterna
 /** this clock, once a second — for ages on screen */
 export function useClock(): number { const c = quoteClient(); return useSyncExternalStore(useCallback((f: () => void) => c.listen(CLOCK, f), [c]), () => c.now(), () => 0); }
 /** freshness of one live value, re-evaluated every second with this clock and at every connection change */
-export function useFresh(v: { at: number; stale: boolean; staleAfterMs?: number | null } | null | undefined): { state: Fresh; ageMs: number | null } {
-  const conn = useConn(), now = useClock();
-  return freshnessOf(v, conn, Math.max(now, v?.at ?? 0));
+export function useFresh(v: { at: number; stale: boolean; staleAfterMs?: number | null; id?: string } | null | undefined): { state: Fresh; ageMs: number | null } {
+  const c = quoteClient(), conn = useConn(), now = useClock();
+  const st = useSyncExternalStore(useCallback((f: () => void) => c.listen(STATUS, f), [c]), () => c.venueStatuses(), () => NO_STATUS);
+  const venue = v?.id ? st[v.id.slice(0, Math.max(0, v.id.indexOf(':')))]?.status ?? null : null;
+  return freshnessOf(v, conn, Math.max(now, v?.at ?? 0), venue);
 }

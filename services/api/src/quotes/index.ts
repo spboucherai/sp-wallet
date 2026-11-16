@@ -8,6 +8,7 @@
 //                                                   the API another module (the agents' stream engine) can adopt instead of
 //                                                   opening its own venue streams
 import type { FastifyInstance } from 'fastify';
+import { createHlStream, type HlWebSocketCtor } from '@spw/derivatives';
 import { derivatives, type Derivatives } from '../derivatives/index.ts';
 import { QuoteEngine, type StreamLimits } from './engine.ts';
 import { QuoteHub, type HubOptions, type Upstream } from './hub.ts';
@@ -19,11 +20,15 @@ export interface QuotesDeps {
   sessionAlive?: (token: string | undefined) => Promise<boolean>; keyActive?: (id: string) => Promise<boolean>;
 }
 
-/** one upstream per venue of the derivatives registry, plus spot. Nothing is connected until a channel is subscribed. */
-export function defaultUpstreams(d: Derivatives, prices?: SpotPrices): Upstream[] {
+/**
+ * one upstream per venue of the derivatives registry, plus spot. Nothing is connected until a channel is subscribed.
+ * `hlWebSocket`: the websocket constructor of the hub's own Hyperliquid connection (the browser check cuts that venue with it).
+ */
+export function defaultUpstreams(d: Derivatives, prices?: SpotPrices, o: { hlWebSocket?: HlWebSocketCtor } = {}): Upstream[] {
   const out: Upstream[] = [];
   for (const e of d.registry.list()) {
-    if (e.id === 'hyperliquid') out.push(hyperliquidUpstream({ data: d.data, now: d.data.now, ...(e.adapter.builder ? { builderCoins: () => e.adapter.builder!.assetIds() } : {}) }));
+    if (e.id === 'hyperliquid') out.push(hyperliquidUpstream({ data: d.data, now: d.data.now, ...(o.hlWebSocket ? { stream: createHlStream({ network: 'mainnet', now: d.data.now, WebSocket: o.hlWebSocket }) } : {}),
+      ...(e.adapter.builder ? { builderCoins: () => e.adapter.builder!.assetIds() } : {}) }));
     else out.push(venueUpstream({ venue: e.id, data: d.data }));
   }
   out.push(spotUpstream(prices ? { prices } : {}));

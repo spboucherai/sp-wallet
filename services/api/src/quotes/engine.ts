@@ -18,7 +18,7 @@ import { getKey, keyStatus } from '../trading-api/keys.ts';
 import { OWNER, type Principal } from '../trading-api/principal.ts';
 import { QuoteError, QuoteHub, type Frame, type Subscription } from './hub.ts';
 import { Outbox } from './outbox.ts';
-import { ClientMessageSchema, type Channel, type DataMessage, type QuoteErrorCode } from './protocol.ts';
+import { ClientMessageSchema, type Channel, type QuoteErrorCode } from './protocol.ts';
 import { channelKey, CLOSE, HEARTBEAT_MS, QUOTE_PROTOCOL_VERSION as V } from './shared.ts';
 
 export const STREAM_PATH = '/api/v1/stream', TRADING_STREAM_PATH = '/api/v1/trading/stream', TICKET_PATH = '/api/v1/trading/stream/ticket', STATS_PATH = '/api/v1/stream/stats';
@@ -63,7 +63,7 @@ class Conn {
     const l = engine.limits;
     this.openedAt = this.lastClientAt = this.tokensAt = engine.now(); this.tokens = l.maxMessagesPerSec * 2;
     this.out = new Outbox(ws, { lowWaterBytes: l.lowWaterBytes, highWaterBytes: l.highWaterBytes, overMs: l.overMs, now: engine.now, snapshot: (key) => engine.hub.snapshotByKey(key),
-      onOverflow: () => this.close(CLOSE.slowConsumer, 'slow consumer: over the high-water mark'), onSent: (m, bytes) => engine.sent(m, bytes) });
+      onOverflow: () => this.close(CLOSE.slowConsumer, 'slow consumer: over the high-water mark'), onSent: (bytes, lagTs) => engine.sent(bytes, lagTs) });
     ws.on('message', (data, isBinary) => this.onFrame(data as Buffer, isBinary));
     ws.on('pong', () => { this.alive = true; });
     ws.on('close', () => this.dispose());
@@ -189,12 +189,10 @@ export class QuoteEngine {
   log(level: 'info' | 'warn', ev: Record<string, unknown>): void { try { this.app?.log[level](ev); } catch { /* logging must not break the stream */ } }
 
   // ------------------------------------------------------------------------------------------------ metrics
-  sent(m: DataMessage | null, bytes: number): void {
+  sent(bytes: number, lagTs: number | null): void {
     this.counters.messagesSent += 1; this.counters.bytesSent += bytes; this.sentThisSec += 1;
-    if (!m) return;
-    const ts = m.type === 'quote' || m.type === 'book' ? m.venueTs : m.type === 'trade' && !m.snapshot ? m.trades[m.trades.length - 1]?.ts ?? null : null;
-    if (ts === null || ts === undefined) return;
-    const lag = Date.now() - ts;                                   // real clocks on both ends: the venue's stamp and this machine's
+    if (lagTs === null) return;
+    const lag = Date.now() - lagTs;                                // real clocks on both ends: the venue's stamp and this machine's
     if (lag >= -1000 && lag < 600_000) { this.lag[this.lagN % this.lag.length] = Math.max(0, lag); this.lagN += 1; }
   }
   private lagStats(): { samples: number; p50: number | null; p95: number | null } {
@@ -217,7 +215,7 @@ export class QuoteEngine {
       clients: { deadPeers: this.counters.deadPeers, badFrames: this.counters.badFrames, rateLimited: this.counters.rateLimited, restricted: this.counters.restricted, unauthorizedClosed: this.counters.unauthorizedClosed },
       tickets: { issued: this.counters.ticketsIssued, used: this.counters.ticketsUsed, refused: this.counters.ticketsRefused, pending: this.tickets.size },
       upstreamReconnects: hub.venues.reduce((s, v) => s + v.reconnects, 0),
-      /** venue timestamp → written to the client socket, over the last 4096 stamped frames (ms) */ lagMs: this.lagStats(),
+      /** the venue's own timestamp of an update → that update written to a client socket, over the last 4096 venue-stamped updates sent without queueing (ms) */ lagMs: this.lagStats(),
       limits: this.limits, hub,
     };
   }

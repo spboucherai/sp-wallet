@@ -8,7 +8,7 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(0); });
 afterEach(() => { vi.useRealTimers(); });
 
 class SlowSocket { sent: any[] = []; bufferedAmount = 0; send(data: string): void { this.sent.push(JSON.parse(data)); } }
-const frame = (msg: DataMessage, key: string): Frame => ({ key, msg, text: JSON.stringify(msg) });
+const frame = (msg: DataMessage, key: string): Frame => ({ key, msg, text: JSON.stringify(msg), lagTs: null });
 const quote = (id: string, mark: string, seq: number): Frame => frame({ v: 1, type: 'quote', id, bid: null, bidSize: null, ask: null, askSize: null, mid: null, mark, index: null, last: null, funding: null, openInterest: null, change24h: null, volume24h: null, venueTs: null, recvTs: 0, seq, source: 't', stale: false } satisfies QuoteMsg, `quote|${id}|`);
 const book = (id: string, kind: 'snapshot' | 'delta', seq: number, prevSeq: number | null): Frame => frame({ v: 1, type: 'book', id, depth: 20, kind, bids: [['100', String(seq)]], asks: [], seq, prevSeq, checksum: seq, venueTs: null, recvTs: 0, source: 't', stale: false } satisfies BookMsg, `book|${id}|20`);
 const trade = (id: string, n: number, seq: number): Frame => frame({ v: 1, type: 'trade', id, trades: Array.from({ length: n }, (_, k) => ({ id: `${seq}-${k}`, price: '1', size: '1', side: 'buy' as const, ts: 0 })), seq, recvTs: 0, source: 't' } satisfies TradeMsg, `trades|${id}|`);

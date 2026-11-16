@@ -53,7 +53,7 @@ describe('one lazy connection per tab', () => {
     expect(last().sent).toEqual([]);                                               // nothing before the server says hello
     last().accept(); frame();
     expect(c.state()).toBe('live');
-    expect(last().sent).toEqual([{ v: 1, op: 'subscribe', channels: [{ type: 'quote', id: 'hyperliquid:BTC' }, { type: 'book', id: 'hyperliquid:BTC', depth: 20 }] }]);   // one frame, each channel once
+    expect(last().sent).toEqual([{ v: 1, op: 'subscribe', channels: [{ type: 'status', id: '*' }, { type: 'quote', id: 'hyperliquid:BTC' }, { type: 'book', id: 'hyperliquid:BTC', depth: 20 }] }]);   // one frame, each channel once; the venue statuses always come along
     const e = c.subscribe({ type: 'trades', id: 'hyperliquid:BTC' }), f = c.subscribe({ type: 'quote', id: 'dydx:BTC-USD' });
     vi.advanceTimersByTime(0);
     expect(last().sent[1]).toEqual({ v: 1, op: 'subscribe', channels: [{ type: 'trades', id: 'hyperliquid:BTC' }, { type: 'quote', id: 'dydx:BTC-USD' }] });   // later subscriptions of one turn: one frame
@@ -92,7 +92,7 @@ describe('reconnection', () => {
     vi.advanceTimersByTime(1);
     const s3 = last(); s3.accept(); frame();
     expect(c.state()).toBe('live');
-    expect(s3.subs()).toEqual(['quote:hyperliquid:BTC', 'book:hyperliquid:BTC:20']);  // not the refused one
+    expect(s3.subs()).toEqual(['status:*', 'quote:hyperliquid:BTC', 'book:hyperliquid:BTC:20']);  // not the refused one
     // a delta that arrives before the snapshot of the new connection is NOT applied to the old book
     s3.serve(book('delta', 7, 6, [['100', '9']], [], { bids: [['100', '9'], ['99', '2']], asks: full.asks })); frame();
     expect(c.get<LiveBook>('book|hyperliquid:BTC|20')!.bids[0]).toEqual(['100', '1']);
@@ -142,7 +142,7 @@ describe('reconnection', () => {
     setHidden(false); frame();
     expect(Sock.all.length).toBe(2); expect(c.state()).toBe('reconnecting');
     last().accept(); frame();
-    expect(c.state()).toBe('live'); expect(last().subs()).toEqual(['quote:hyperliquid:BTC']);
+    expect(c.state()).toBe('live'); expect(last().subs()).toEqual(['status:*', 'quote:hyperliquid:BTC']);
   });
 });
 
@@ -152,7 +152,7 @@ describe('rendering cost', () => {
     const ids = Array.from({ length: 150 }, (_, k) => `hyperliquid:M${k}`), calls = new Map<string, number>();
     for (const id of ids) { c.subscribe({ type: 'quote', id }); c.listen(`quote|${id}|`, () => calls.set(id, (calls.get(id) ?? 0) + 1)); }
     last().accept(); frame();
-    expect(last().sent.map((m) => m.channels.length)).toEqual([100, 50]);            // subscriptions in frames of 100
+    expect(last().sent.map((m) => m.channels.length)).toEqual([100, 51]);            // subscriptions in frames of 100 (150 quotes + the statuses)
     const commits = c.stats.commits;
     for (let round = 1; round <= 20; round++) for (const id of ids) last().serve(quote(id, String(1000 + round), round));
     expect(pendingFrames()).toBe(1);                                                // 3000 messages → one animation frame requested
@@ -212,7 +212,10 @@ describe('freshness is re-evaluated with this clock', () => {
     expect(freshnessOf(q, 'live', T0 + 16_000)).toEqual({ state: 'stale', ageMs: 16_000 });   // a frozen feed turns stale on screen without any message
     expect(freshnessOf({ ...q, stale: true }, 'live', T0 + 10)).toMatchObject({ state: 'stale' });
     expect(freshnessOf(q, 'reconnecting', T0 + 2000)).toMatchObject({ state: 'reconnecting' });
-    expect(freshnessOf(q, 'fallback', T0 + 20_000)).toMatchObject({ state: 'stale' });
+    // the venue of the figure is reconnecting while the tab's own connection is fine: said at once, then stale past the bound
+    expect(freshnessOf(q, 'live', T0 + 2000, 'reconnecting')).toMatchObject({ state: 'reconnecting' }); expect(freshnessOf(q, 'live', T0 + 2000, 'down')).toMatchObject({ state: 'reconnecting' });
+    expect(freshnessOf(q, 'live', T0 + 16_000, 'reconnecting')).toMatchObject({ state: 'stale' }); expect(freshnessOf(q, 'live', T0 + 2000, 'connected')).toMatchObject({ state: 'live' });
+    expect(freshnessOf(q, 'fallback', T0 + 20_000)).toMatchObject({ state: 'stale' }); expect(freshnessOf(q, 'fallback', T0 + 2000)).toMatchObject({ state: 'reconnecting' });
     expect(freshnessOf(null, 'live', T0)).toEqual({ state: 'none', ageMs: null }); expect(freshnessOf(null, 'connecting', T0)).toMatchObject({ state: 'reconnecting' });
     expect(freshnessOf({ at: T0, stale: false, staleAfterMs: 4000 }, 'live', T0 + 2500)).toMatchObject({ state: 'delayed' });   // never « live » past half the source's bound
     // through the client: a quote whose source dated it 3 minutes before the server received it is 3 minutes old here too

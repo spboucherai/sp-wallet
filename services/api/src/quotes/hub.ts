@@ -57,8 +57,13 @@ export interface Upstream {
 
 export class QuoteError extends Error { constructor(readonly code: QuoteErrorCode, message: string) { super(message); } }
 
-/** what a listener receives: the message, and its JSON text built once for every connection it goes to */
-export interface Frame { readonly key: string; readonly msg: DataMessage; readonly text: string }
+/**
+ * what a listener receives: the message, and its JSON text built once for every connection it goes to.
+ * `lagTs`: the venue's own timestamp of the update that TRIGGERED this message, when it carried one — what the lag metric is
+ * measured from (a quote re-sent because its unstamped ticker moved still shows the stamp of its last best bid / offer in
+ * `venueTs`: that is the age of that part, not a delay of the engine).
+ */
+export interface Frame { readonly key: string; readonly msg: DataMessage; readonly text: string; readonly lagTs: number | null }
 export type Listener = (f: Frame) => void;
 export interface Subscription {
   key: string; unsubscribe(): void;
@@ -68,7 +73,7 @@ export interface Subscription {
   info: FeedInfo | null;
 }
 
-const frame = (key: string, msg: DataMessage): Frame => { let text: string | null = null; return { key, msg, get text() { return (text ??= JSON.stringify(msg)); } }; };
+const frame = (key: string, msg: DataMessage, lagTs: number | null = null): Frame => { let text: string | null = null; return { key, msg, lagTs, get text() { return (text ??= JSON.stringify(msg)); } }; };
 const half = (a: DecStr, b: DecStr): DecStr => D.str(D.div(D.add(D.from(a), D.from(b)), D.from(2n), 18, 'half_even'));
 
 interface Feed { key: string; spec: FeedSpec; info: FeedInfo; up: Upstream; chans: Set<Chan>; close: () => void }
@@ -77,7 +82,7 @@ interface QuoteState { bid: DecStr | null; bidSize: DecStr | null; ask: DecStr |
 interface Chan {
   key: string; type: 'quote' | 'book' | 'trades' | 'candle'; id: string; venue: string; symbol: string; depth: number; interval: Interval; up: Upstream; info: FeedInfo;
   listeners: Set<Listener>; feeds: Feed[]; seq: number; idle: ReturnType<typeof setTimeout> | null; lastAt: number;
-  quote: QuoteState | null; qTimer: ReturnType<typeof setTimeout> | null; qLastEmit: number; qSent: boolean;
+  quote: QuoteState | null; qTimer: ReturnType<typeof setTimeout> | null; qLastEmit: number; qSent: boolean; qLagTs: number | null;
   bids: Level[]; asks: Level[]; hasBook: boolean; needSnapshot: boolean; bookVenueTs: number | null; bookSeq: number | null;
   trades: TradeRow[]; tradesPrimed: boolean; candle: CandleMsg | null;
 }
@@ -187,7 +192,7 @@ export class QuoteHub {
     const specs = up.feedsFor(type, symbol, interval);
     if (specs.length === 0) throw new QuoteError('unsupported_channel', `${venue} has no ${type} channel`);
     const c: Chan = { key, type, id: ch.id, venue, symbol, depth: ch.depth ?? 20, interval, up, info: up.info(specs[0]!), listeners: new Set(), feeds: [], seq: 0, idle: null, lastAt: 0,
-      quote: null, qTimer: null, qLastEmit: 0, qSent: false, bids: [], asks: [], hasBook: false, needSnapshot: true, bookVenueTs: null, bookSeq: null, trades: [], tradesPrimed: false, candle: null };
+      quote: null, qTimer: null, qLastEmit: 0, qSent: false, qLagTs: null, bids: [], asks: [], hasBook: false, needSnapshot: true, bookVenueTs: null, bookSeq: null, trades: [], tradesPrimed: false, candle: null };
     this.chans.set(key, c);
     try { for (const spec of specs) c.feeds.push(this.acquireFeed(up, spec, c)); }
     catch (e) { this.closeChan(c); throw e instanceof QuoteError ? e : new QuoteError('upstream_unavailable', e instanceof Error ? e.message.slice(0, 200) : 'upstream error'); }
@@ -248,10 +253,10 @@ export class QuoteHub {
   }
 
   // ------------------------------------------------------------------------------------------------ data in → messages out
-  private emit(c: Chan, msg: DataMessage): void {
+  private emit(c: Chan, msg: DataMessage, lagTs: number | null = null): void {
     c.lastAt = this.o.now();
     if (c.listeners.size === 0) return;
-    const f = frame(c.key, msg);
+    const f = frame(c.key, msg, lagTs);
     for (const l of [...c.listeners]) { try { l(f); } catch { this.counters.listenerErrors += 1; } }
   }
   private staleNow(c: Chan, recvTs: number): boolean {
@@ -271,7 +276,7 @@ export class QuoteHub {
     // the mid of the two sides when the source gives both; else the venue's own figure; never a mix of two venues
     q.mid = q.bid !== null && q.ask !== null ? half(q.bid, q.ask) : q.venueMid;
     if (p.venueTs !== null && (q.venueTs === null || p.venueTs > q.venueTs)) q.venueTs = p.venueTs;
-    q.recvTs = now; c.quote = q;
+    q.recvTs = now; c.quote = q; c.qLagTs = p.venueTs;
     const wait = this.o.quoteMinIntervalMs - (now - c.qLastEmit);
     if (wait <= 0 || !c.qSent) { this.flushQuote(c); return; }
     if (!c.qTimer) { c.qTimer = setTimeout(() => { c.qTimer = null; if (this.chans.get(c.key) === c) this.flushQuote(c); }, wait); c.qTimer.unref?.(); }
@@ -279,7 +284,8 @@ export class QuoteHub {
   private flushQuote(c: Chan): void {
     if (!c.quote) return;
     c.seq += 1; c.qLastEmit = this.o.now(); c.qSent = true; this.counters.quote += 1;
-    this.emit(c, this.quoteMsg(c, c.quote));
+    const lagTs = c.qLagTs; c.qLagTs = null;
+    this.emit(c, this.quoteMsg(c, c.quote), lagTs);
   }
 
   private bookMsg(c: Chan, kind: 'snapshot' | 'delta', bids: readonly Level[], asks: readonly Level[], seq: number, prevSeq: number | null): BookMsg {
@@ -298,7 +304,7 @@ export class QuoteHub {
       c.bids = bids; c.asks = asks; c.hasBook = true; c.needSnapshot = false;
       c.seq += 1; c.bookSeq = c.seq; c.lastAt = this.o.now();
       this.counters.book += 1; if (snapshot) this.counters.bookSnapshots += 1;
-      this.emit(c, this.bookMsg(c, snapshot ? 'snapshot' : 'delta', db, da, c.seq, prev));
+      this.emit(c, this.bookMsg(c, snapshot ? 'snapshot' : 'delta', db, da, c.seq, prev), b.venueTs);
     }
     // a venue without a best-bid/offer feed: the quote of the same market takes its two sides from the book while one is open
     const q = this.chans.get(`quote|${feed.up.venue}:${feed.spec.symbol}|`);
@@ -317,7 +323,7 @@ export class QuoteHub {
     // the first batch after a subscription (or after a gap) is the venue's recent history, not live prints: it is flagged
     const history = !c.tradesPrimed || c.needSnapshot;
     c.tradesPrimed = true; c.needSnapshot = false;
-    this.emit(c, { v: V, type: 'trade', id: c.id, trades: fresh, seq: c.seq, recvTs: this.o.now(), source: c.info.source, ...(history ? { snapshot: true } : {}) });
+    this.emit(c, { v: V, type: 'trade', id: c.id, trades: fresh, seq: c.seq, recvTs: this.o.now(), source: c.info.source, ...(history ? { snapshot: true } : {}) }, history ? null : fresh[fresh.length - 1]!.ts);
   }
 
   private onCandle(c: Chan, k: CandleRow): void {

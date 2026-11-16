@@ -14,12 +14,12 @@ const DOT: Record<Fresh, string> = { live: 'bg-emerald', delayed: 'bg-mute', sta
  * live / delayed / stale / reconnecting, with the age. Renders `children` (the screen's own, polled freshness) when there is
  * no live value to speak of — so a screen without the socket shows exactly what it showed before.
  */
-export function LiveDot({ v, children, className = '' }: { v: { at: number; stale: boolean; staleAfterMs?: number | null; source?: string } | null | undefined; children?: ReactNode; className?: string }) {
+export function LiveDot({ v, children, className = '' }: { v: { at: number; stale: boolean; staleAfterMs?: number | null; source?: string; id?: string } | null | undefined; children?: ReactNode; className?: string }) {
   const t = useT(); const { locale } = useContext(I18n);
   const f = useFresh(v);
   if (!v || f.state === 'none') return <>{children ?? null}</>;
   const text = f.state === 'live' ? t('qtLive') : f.state === 'reconnecting' ? t('qtReconnecting') : t(f.state === 'stale' ? 'qtStale' : 'qtDelayed', { age: ageLabel(f.ageMs, locale) });
-  return <span className={`inline-flex items-center gap-1.5 text-[12px] ${f.state === 'stale' || f.state === 'reconnecting' ? 'font-medium text-warn' : 'text-mute'} ${className}`} data-testid="qt-dot" data-state={f.state}
+  return <span className={`inline-flex items-center gap-1.5 text-[12px] ${f.state === 'stale' || f.state === 'reconnecting' ? 'font-medium text-warn' : 'text-mute'} ${className}`} data-testid="qt-dot" data-state={f.state} data-id={v.id ?? ''}
     title={v.source ? t('qtSource', { source: v.source }) : undefined}><span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT[f.state]}`} aria-hidden="true" />{text}</span>;
 }
 /** the same for one market id: subscribes to its quote */

@@ -19,7 +19,8 @@ export interface OutboxOptions {
   /** the current value of a channel as a message (QuoteHub.snapshotByKey) — used to turn conflated book deltas into a snapshot */
   snapshot: (key: string) => DataMessage | null;
   onOverflow: () => void;
-  /** called for every data frame written to the socket (metrics) */ onSent?: (msg: DataMessage | null, bytes: number) => void;
+  /** called for every frame written to the socket (metrics); `lagTs`: the venue timestamp of the update that triggered a data frame sent WITHOUT waiting in the queue */
+  onSent?: (bytes: number, lagTs: number | null) => void;
 }
 export interface OutboxStats { sent: number; bytes: number; queuedNow: number; queuedMax: number; conflated: number; bookResyncs: number; tradesDropped: number; overflowed: boolean }
 
@@ -40,13 +41,13 @@ export class Outbox {
     this.low = o.lowWaterBytes ?? 256 * 1024; this.high = o.highWaterBytes ?? 4 * 1024 * 1024; this.overMs = o.overMs ?? 10_000; this.flushMs = o.flushMs ?? 25; this.now = o.now ?? Date.now;
   }
 
-  private write(text: string, msg: DataMessage | null): void {
+  private write(text: string, lagTs: number | null = null): void {
     try { this.sock.send(text); } catch { return; }
     this.stats.sent += 1; this.stats.bytes += text.length;
-    this.o.onSent?.(msg, text.length);
+    this.o.onSent?.(text.length, lagTs);
   }
   /** hello, subscribed, error, pong, heartbeat: written at once */
-  control(msg: unknown): void { if (!this.closed) this.write(JSON.stringify(msg), null); }
+  control(msg: unknown): void { if (!this.closed) this.write(JSON.stringify(msg)); }
 
   private congested(): boolean { return this.q.size > 0 || this.dropped.size > 0 || this.sock.bufferedAmount > this.low; }
   /** true when the client is over the high-water mark for too long (the caller closes it) */
@@ -61,7 +62,7 @@ export class Outbox {
   /** a data frame of the hub for this client */
   data(f: Frame): void {
     if (this.closed || this.checkOverflow()) return;
-    if (!this.congested()) { this.write(f.text, f.msg); return; }
+    if (!this.congested()) { this.write(f.text, f.lagTs); return; }
     const m = f.msg;
     if (m.type === 'trade') {
       const n = m.trades.length;
@@ -94,7 +95,7 @@ export class Outbox {
       const d = this.dropped.entries().next().value;
       if (d) {
         this.dropped.delete(d[0]);
-        this.write(JSON.stringify({ v: V, type: 'dropped', channel: 'trades', id: d[0], count: d[1], total: this.droppedTotal.get(d[0]) ?? d[1] }), null);
+        this.write(JSON.stringify({ v: V, type: 'dropped', channel: 'trades', id: d[0], count: d[1], total: this.droppedTotal.get(d[0]) ?? d[1] }));
         continue;
       }
       const [key, e] = this.q.entries().next().value!;
@@ -102,8 +103,8 @@ export class Outbox {
       if (e.resync) {
         const snap = this.o.snapshot(key);
         this.stats.bookResyncs += 1;
-        if (snap) this.write(JSON.stringify(snap), snap);   // the channel was closed meanwhile: nothing to send
-      } else this.write(e.text, e.msg);
+        if (snap) this.write(JSON.stringify(snap));   // the channel was closed meanwhile: nothing to send
+      } else this.write(e.text);
     }
     this.stats.queuedNow = this.q.size;
     if (this.q.size > 0 || this.dropped.size > 0) this.arm();
