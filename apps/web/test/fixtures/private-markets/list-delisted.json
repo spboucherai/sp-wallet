@@ -1,0 +1,508 @@
+{
+ "recordedAt": "2026-11-16T01:06:06.334Z",
+ "answer": {
+  "markets": [
+   {
+    "id": "hyperliquid:vntl:ANTHROPIC",
+    "venue": "hyperliquid",
+    "platform": "Hyperliquid · Ventuals (dex vntl) — shut down",
+    "operator": "Ventuals",
+    "symbol": "vntl:ANTHROPIC",
+    "company": {
+     "slug": "anthropic",
+     "name": "Anthropic, PBC"
+    },
+    "status": "delisted",
+    "review": {
+     "state": "reviewed",
+     "reasons": [],
+     "reviewedAt": "2026-11-15",
+     "validUntil": null,
+     "fingerprintChecked": true
+    },
+    "contract": {
+     "nature": "cash-settled perpetual, pure synthetic — DELISTED: Ventuals shut down on 15 Jun 2026 and its markets were settled",
+     "unit": {
+      "kind": "valuation_usd_billions",
+      "label": "USD billions of company valuation (historical)"
+     },
+     "quoteCurrency": "USD",
+     "collateral": "USDH",
+     "underlying": "Anthropic, PBC",
+     "contractSize": "1 contract = 1 unit of ANTHROPIC; smallest size 0.001",
+     "multiplier": {
+      "value": "1",
+      "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)"
+     },
+     "settlement": "Settled at the 24 h mark TWAP 1618.90 on 15 Jun 2026 (Ventuals sunset guide).",
+     "ipoConversion": "not applicable (settled)",
+     "oracle": "Was 1/3 Notice price + 2/3 two-hour EMA of the mark (Ventuals documentation).",
+     "liquidation": "not applicable (no open position can exist)",
+     "maxLeverage": "3",
+     "margin": "strict_isolated",
+     "lotSize": "0.001",
+     "szDecimals": 3,
+     "fundingIntervalSec": 3600,
+     "assetId": 130002,
+     "dex": "vntl",
+     "oiCapUsd": "10000000",
+     "fundingMultiplier": "0",
+     "onChainDescription": "ANTHROPIC tracks the total valuation of Anthropic, in billions. E.g. if 1 ANTHROPIC = $500, then the implied total valuation of the company is $500B.",
+     "unconfirmedConvention": null,
+     "sources": [
+      "https://docs.ventuals.com/perp-specifications/private-companies",
+      "https://docs.ventuals.com/sunset-guide"
+     ]
+    },
+    "market": {
+     "price": {
+      "value": "1619.3",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — mark price (frozen: delisted)",
+      "ts": 1794791165256,
+      "stale": false
+     },
+     "oracle": {
+      "value": "1618.9",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — oracle price",
+      "ts": 1794791165256,
+      "stale": false
+     },
+     "mid": {
+      "value": null,
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — book mid",
+      "ts": null,
+      "stale": false
+     },
+     "funding": {
+      "value": "0",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — funding rate per interval",
+      "ts": 1794791165256,
+      "stale": false,
+      "intervalSec": 3600
+     },
+     "openInterest": {
+      "value": "0",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — open interest, contracts",
+      "ts": 1794791165256,
+      "stale": false
+     },
+     "openInterestUsd": {
+      "value": "0",
+      "source": "wallet arithmetic: open interest × mark × contract multiplier (not a venue field)",
+      "ts": 1794791165256,
+      "stale": false
+     },
+     "volume24h": {
+      "value": "0",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — 24 h notional volume, USD",
+      "ts": 1794791165256,
+      "stale": false
+     },
+     "volumeBase24h": {
+      "value": "0",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — 24 h volume, contracts",
+      "ts": 1794791165256,
+      "stale": false
+     },
+     "frozen": true
+    },
+    "valuation": {
+     "syntheticPrice": {
+      "value": "1619.3",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — mark price (frozen: delisted)",
+      "ts": 1794791165256,
+      "stale": false,
+      "unit": "valuation_usd_billions",
+      "unitLabel": "USD billions of company valuation (historical)",
+      "priceKind": "frozen mark"
+     },
+     "contractMarketValue": {
+      "value": null,
+      "formula": null,
+      "reason": "delisted market: the frozen price is not the value of a contract that can be held",
+      "source": null,
+      "ts": null
+     },
+     "notionalExposure": {
+      "value": null,
+      "formula": null,
+      "reason": "delisted market: the frozen price is not the value of a contract that can be held",
+      "position": {
+       "side": "long",
+       "size": "10"
+      },
+      "hypothetical": true,
+      "ts": null
+     },
+     "impliedValuation": {
+      "value": null,
+      "formula": null,
+      "formulaId": null,
+      "formulaSource": {
+       "url": "https://docs.ventuals.com/perp-specifications/private-companies",
+       "quote": "The price of the perp contract is the company valuation divided by 1 billion.",
+       "readAt": "2026-11-15"
+      },
+      "asOf": null,
+      "label": null,
+      "reason": "delisted market: the price is frozen at its last value of June 2026 and is not a current price — no valuation is derived from it",
+      "reasonCode": "delisted_frozen"
+     },
+     "lastPrivateValuation": {
+      "value": "965000000000",
+      "kind": "primary_round",
+      "detail": "Series H, $65B raised, post-money",
+      "date": "2026-05-28",
+      "sourceUrl": "https://www.anthropic.com/news/series-h",
+      "confidence": "high"
+     },
+     "lastPrivateValuationReason": null,
+     "premiumDiscount": {
+      "premiumBps": null,
+      "reason": "delisted market: the price is frozen at its last value of June 2026 and is not a current price — no valuation is derived from it",
+      "caveat": null
+     },
+     "caveats": [
+      {
+       "code": "synthetic",
+       "text": "a synthetic price is the price of a derivative contract: it gives no claim on shares and can trade far from any share transaction"
+      },
+      {
+       "code": "arithmetic",
+       "text": "an implied valuation is arithmetic on that price, not an appraisal of the company"
+      },
+      {
+       "code": "frozen",
+       "text": "Delisted market: the price is the last value before delisting, kept by the venue. It is not a current price and must not be read as a valuation."
+      }
+     ]
+    },
+    "tradable": false,
+    "notTradable": {
+     "code": "builder_dex_read_only",
+     "reasons": [
+      "Builder-deployed (HIP-3) Hyperliquid markets are served for market data only: the wallet's trading path covers the validator-operated dex alone (pinned asset table, signer policy), each builder dex has its own collateral balance, deployer-set oracle and settlement powers, and the deployers' terms restrict some jurisdictions. No order, transfer or signed action is built for them."
+     ]
+    },
+    "error": null
+   },
+   {
+    "id": "hyperliquid:vntl:OPENAI",
+    "venue": "hyperliquid",
+    "platform": "Hyperliquid · Ventuals (dex vntl) — shut down",
+    "operator": "Ventuals",
+    "symbol": "vntl:OPENAI",
+    "company": {
+     "slug": "openai",
+     "name": "OpenAI"
+    },
+    "status": "delisted",
+    "review": {
+     "state": "reviewed",
+     "reasons": [],
+     "reviewedAt": "2026-11-15",
+     "validUntil": null,
+     "fingerprintChecked": true
+    },
+    "contract": {
+     "nature": "cash-settled perpetual, pure synthetic — DELISTED: Ventuals shut down on 15 Jun 2026 and its markets were settled",
+     "unit": {
+      "kind": "valuation_usd_billions",
+      "label": "USD billions of company valuation (historical)"
+     },
+     "quoteCurrency": "USD",
+     "collateral": "USDH",
+     "underlying": "OpenAI",
+     "contractSize": "1 contract = 1 unit of OPENAI; smallest size 0.001",
+     "multiplier": {
+      "value": "1",
+      "source": "Hyperliquid: linear contract of one unit — notional = size × price (position value = szi × mark; dayNtlVlm ÷ dayBaseVlm = price, checked on the live contexts of 2026-11-16)"
+     },
+     "settlement": "Settled at the 24 h mark TWAP 1341.80 on 15 Jun 2026 (Ventuals sunset guide).",
+     "ipoConversion": "not applicable (settled)",
+     "oracle": "Was 1/3 Notice price + 2/3 two-hour EMA of the mark (Ventuals documentation).",
+     "liquidation": "not applicable (no open position can exist)",
+     "maxLeverage": "3",
+     "margin": "strict_isolated",
+     "lotSize": "0.001",
+     "szDecimals": 3,
+     "fundingIntervalSec": 3600,
+     "assetId": 130001,
+     "dex": "vntl",
+     "oiCapUsd": "5000000",
+     "fundingMultiplier": "0",
+     "onChainDescription": "OPENAI tracks the total valuation of OpenAI, in billions. E.g. if 1 OPENAI = $500, then the implied total valuation of the company is $500B.",
+     "unconfirmedConvention": null,
+     "sources": [
+      "https://docs.ventuals.com/perp-specifications/private-companies",
+      "https://docs.ventuals.com/sunset-guide"
+     ]
+    },
+    "market": {
+     "price": {
+      "value": "1336.2",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — mark price (frozen: delisted)",
+      "ts": 1794791165256,
+      "stale": false
+     },
+     "oracle": {
+      "value": "1341.8",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — oracle price",
+      "ts": 1794791165256,
+      "stale": false
+     },
+     "mid": {
+      "value": null,
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — book mid",
+      "ts": null,
+      "stale": false
+     },
+     "funding": {
+      "value": "0",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — funding rate per interval",
+      "ts": 1794791165256,
+      "stale": false,
+      "intervalSec": 3600
+     },
+     "openInterest": {
+      "value": "0",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — open interest, contracts",
+      "ts": 1794791165256,
+      "stale": false
+     },
+     "openInterestUsd": {
+      "value": "0",
+      "source": "wallet arithmetic: open interest × mark × contract multiplier (not a venue field)",
+      "ts": 1794791165256,
+      "stale": false
+     },
+     "volume24h": {
+      "value": "0",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — 24 h notional volume, USD",
+      "ts": 1794791165256,
+      "stale": false
+     },
+     "volumeBase24h": {
+      "value": "0",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — 24 h volume, contracts",
+      "ts": 1794791165256,
+      "stale": false
+     },
+     "frozen": true
+    },
+    "valuation": {
+     "syntheticPrice": {
+      "value": "1336.2",
+      "source": "Hyperliquid info metaAndAssetCtxs (dex vntl) — mark price (frozen: delisted)",
+      "ts": 1794791165256,
+      "stale": false,
+      "unit": "valuation_usd_billions",
+      "unitLabel": "USD billions of company valuation (historical)",
+      "priceKind": "frozen mark"
+     },
+     "contractMarketValue": {
+      "value": null,
+      "formula": null,
+      "reason": "delisted market: the frozen price is not the value of a contract that can be held",
+      "source": null,
+      "ts": null
+     },
+     "notionalExposure": {
+      "value": null,
+      "formula": null,
+      "reason": "delisted market: the frozen price is not the value of a contract that can be held",
+      "position": {
+       "side": "long",
+       "size": "10"
+      },
+      "hypothetical": true,
+      "ts": null
+     },
+     "impliedValuation": {
+      "value": null,
+      "formula": null,
+      "formulaId": null,
+      "formulaSource": {
+       "url": "https://docs.ventuals.com/perp-specifications/private-companies",
+       "quote": "The price of the perp contract is the company valuation divided by 1 billion.",
+       "readAt": "2026-11-15"
+      },
+      "asOf": null,
+      "label": null,
+      "reason": "delisted market: the price is frozen at its last value of June 2026 and is not a current price — no valuation is derived from it",
+      "reasonCode": "delisted_frozen"
+     },
+     "lastPrivateValuation": {
+      "value": "1250000000000",
+      "kind": "primary_round",
+      "detail": "$11B first close of a round of up to $20B; reported by unnamed sources; the company declined to comment; pre- or post-money not stated",
+      "date": "2026-11-06",
+      "sourceUrl": "https://www.bloomberg.com/news/articles/2026-11-06/openai-completes-11-billion-portion-of-funding-at-1-25-trillion-value",
+      "confidence": "medium"
+     },
+     "lastPrivateValuationReason": null,
+     "premiumDiscount": {
+      "premiumBps": null,
+      "reason": "delisted market: the price is frozen at its last value of June 2026 and is not a current price — no valuation is derived from it",
+      "caveat": null
+     },
+     "caveats": [
+      {
+       "code": "synthetic",
+       "text": "a synthetic price is the price of a derivative contract: it gives no claim on shares and can trade far from any share transaction"
+      },
+      {
+       "code": "arithmetic",
+       "text": "an implied valuation is arithmetic on that price, not an appraisal of the company"
+      },
+      {
+       "code": "frozen",
+       "text": "Delisted market: the price is the last value before delisting, kept by the venue. It is not a current price and must not be read as a valuation."
+      }
+     ]
+    },
+    "tradable": false,
+    "notTradable": {
+     "code": "builder_dex_read_only",
+     "reasons": [
+      "Builder-deployed (HIP-3) Hyperliquid markets are served for market data only: the wallet's trading path covers the validator-operated dex alone (pinned asset table, signer policy), each builder dex has its own collateral balance, deployer-set oracle and settlement powers, and the deployers' terms restrict some jurisdictions. No order, transfer or signed action is built for them."
+     ]
+    },
+    "error": null
+   }
+  ],
+  "companies": [
+   {
+    "slug": "anthropic",
+    "name": "Anthropic, PBC",
+    "note": "IPO reported for pricing on 18 Nov 2026 and first trade on 19 Nov 2026 (press; the SEC filing states no date). Every Anthropic contract changes methodology, unit or oracle around that date.",
+    "contracts": [
+     "hyperliquid:vntl:ANTHROPIC"
+    ],
+    "lastPrivateValuation": {
+     "value": "965000000000",
+     "kind": "primary_round",
+     "detail": "Series H, $65B raised, post-money",
+     "date": "2026-05-28",
+     "sourceUrl": "https://www.anthropic.com/news/series-h",
+     "confidence": "high"
+    },
+    "divergence": []
+   },
+   {
+    "slug": "openai",
+    "name": "OpenAI",
+    "note": null,
+    "contracts": [
+     "hyperliquid:vntl:OPENAI"
+    ],
+    "lastPrivateValuation": {
+     "value": "1250000000000",
+     "kind": "primary_round",
+     "detail": "$11B first close of a round of up to $20B; reported by unnamed sources; the company declined to comment; pre- or post-money not stated",
+     "date": "2026-11-06",
+     "sourceUrl": "https://www.bloomberg.com/news/articles/2026-11-06/openai-completes-11-billion-portion-of-funding-at-1-25-trillion-value",
+     "confidence": "medium"
+    },
+    "divergence": []
+   }
+  ],
+  "excluded": [
+   {
+    "id": "hyperliquid:vntl:SPACEX",
+    "company": "SpaceX",
+    "reason": "SpaceX is a listed company today (Nasdaq: SPCX); this Ventuals market is delisted and its last candle dates from June 2026. Not a private market.",
+    "liveCategory": "preipo",
+    "delisted": true
+   }
+  ],
+  "venues": [
+   {
+    "venue": "hyperliquid",
+    "name": "Hyperliquid (builder-deployed dexes)",
+    "status": "ok",
+    "error": null,
+    "ts": 1794791163950,
+    "instruments": 2
+   },
+   {
+    "venue": "edgex",
+    "name": "edgeX",
+    "status": "ok",
+    "error": null,
+    "ts": null,
+    "instruments": 0
+   }
+  ],
+  "venuesWithoutAdapter": [
+   {
+    "venue": "Aster",
+    "note": "ANTHROPICUSDT, OPENAIUSDT, POLYMARKETUSD1, OURAUSD1, MOONSHOTUSD1 — per share against a notional reference count of 1 billion shares"
+   },
+   {
+    "venue": "Lighter",
+    "note": "ANTHROPIC, OPENAI, OURA — unit not found in the operator's documentation"
+   },
+   {
+    "venue": "Polymarket Perps",
+    "note": "ANT-USD — USD billions until its rebase of 16 Nov 2026 (~10:00 ET), USD per share afterwards"
+   }
+  ],
+  "notice": {
+   "tradable": false,
+   "code": "private_markets_display_only",
+   "text": "Displayed for information only — not tradable from this wallet. These are synthetic derivative contracts: they give no claim on any share. Trading is disabled for two reasons: jurisdiction (trade.xyz's terms name Canada as a restricted jurisdiction for its interface, EntropyIO names Ontario, edgeX excludes Canada) and contract definition (units differ between venues, some are not published, and the Anthropic contracts change oracle or unit around its IPO)."
+  },
+  "filter": {
+   "delisted": true
+  },
+  "position": {
+   "side": "long",
+   "size": "10"
+  },
+  "cache": {
+   "discovery": {
+    "ttl": 60000,
+    "maxAge": 900000
+   },
+   "markets": {
+    "ttl": 20000,
+    "maxAge": 120000
+   },
+   "delisted": {
+    "ttl": 600000,
+    "maxAge": 3600000
+   },
+   "annotation": {
+    "ttl": 600000,
+    "maxAge": 3600000
+   },
+   "book": {
+    "ttl": 5000,
+    "maxAge": 30000
+   },
+   "candles": {
+    "ttl": 60000,
+    "maxAge": 600000
+   },
+   "edgexTickers": {
+    "ttl": 3000,
+    "maxAge": 15000
+   },
+   "edgexInstruments": {
+    "ttl": 600000,
+    "maxAge": 3600000
+   },
+   "staleAfter": {
+    "hyperliquid": 60000,
+    "edgex": 15000
+   }
+  },
+  "reviewedTable": {
+   "entries": 10,
+   "reviewedAt": "2026-11-15"
+  },
+  "ts": 1794791165494,
+  "source": "venue"
+ }
+}

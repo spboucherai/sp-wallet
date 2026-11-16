@@ -2,7 +2,9 @@
 // adapters — Hyperliquid's public info endpoint (builder dexes) and edgeX's public quote API. No database, no account, no
 // key, no order: every outgoing request is listed by host and path, and anything that is not a public read is refused
 // before it leaves the process.
-// Run: npx tsx scripts/smoke-private-markets.mts [--size 10] [--side long]
+// Run: npx tsx scripts/smoke-private-markets.mts [--size 10] [--side long] [--json <dir>]
+//   --json <dir>   also writes the API answers (list, delisted list, two details, one company) as JSON — the recorded answers
+//                  the web component tests render (apps/web/test/fixtures/private-markets/)
 const arg = (name: string, d: string) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1]! : d; };
 Object.assign(process.env, { SPW_ORIGIN: 'https://smoke.invalid', SPW_RP_ID: 'smoke.invalid', DATABASE_URL: 'postgres:///unused', SPW_SIGNER_SECRET: 'unused-'.repeat(8),
   SPW_SIGNER_URL: 'http://127.0.0.1:9', SPW_BROADCAST: 'off', SPW_WORKERS: 'off' });
@@ -89,6 +91,16 @@ else { const b = ex.book as { bids?: [string, string][]; asks?: [string, string]
   line('book top', b.error ?? `bid ${b.bids?.[0]?.join(' × ')} / ask ${b.asks?.[0]?.join(' × ')}`); line('candles', c.error ?? `${c.candles?.length} × ${c.interval}`);
   line('unconfirmed convention', ex.market.contract.unconfirmedConvention?.text ?? '—'); }
 
+const dir = arg('json', '');
+if (dir) {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  mkdirSync(dir, { recursive: true });
+  const out = (name: string, v: unknown) => writeFileSync(`${dir}/${name}.json`, `${JSON.stringify({ recordedAt: new Date().toISOString(), answer: v }, null, 1)}\n`);
+  out('list', live); out('list-delisted', old); out('detail-io-ANTH', det); if (!('error' in ex)) out('detail-edgex-ANTHROPICUSDC', ex);
+  out('detail-xyz-ANT', await pm.detail('hyperliquid:xyz:ANT', { position })); out('detail-vntl-ANTHROPIC', await pm.detail('hyperliquid:vntl:ANTHROPIC', { position }));
+  out('company-anthropic', await pm.company('anthropic', { position }));
+  console.log(`\nJSON answers written to ${dir}`);
+}
 console.log(`\n== outgoing requests (all public reads)`);
 for (const [k, n] of [...seen].sort()) line(k, n);
 console.log(`\nvenues without adapter (documented only): ${live.venuesWithoutAdapter.map((v) => v.venue).join(', ')}`);

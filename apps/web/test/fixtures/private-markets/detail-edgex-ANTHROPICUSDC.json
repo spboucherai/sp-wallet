@@ -1,0 +1,998 @@
+{
+ "recordedAt": "2026-11-16T01:06:06.335Z",
+ "answer": {
+  "market": {
+   "id": "edgex:ANTHROPICUSDC",
+   "venue": "edgex",
+   "platform": "edgeX",
+   "operator": "edgeX",
+   "symbol": "ANTHROPICUSDC",
+   "company": {
+    "slug": "anthropic",
+    "name": "Anthropic, PBC"
+   },
+   "status": "live",
+   "review": {
+    "state": "reviewed",
+    "reasons": [],
+    "reviewedAt": "2026-11-15",
+    "validUntil": "2026-11-18T00:00:00Z",
+    "fingerprintChecked": true
+   },
+   "contract": {
+    "nature": "USDC-margined linear perpetual, cash-settled, pure synthetic: no claim on any share (venue metadata; edgeX publishes no specification for it)",
+    "unit": {
+     "kind": "unknown",
+     "label": "unit not published by the venue"
+    },
+    "quoteCurrency": "USDC",
+    "collateral": "USDC",
+    "underlying": "Anthropic, PBC",
+    "contractSize": "1 contract = 1 unit of ANTHROPIC; smallest size 0.01",
+    "multiplier": {
+     "value": "1",
+     "source": "edgeX metadata: USDC-margined linear contract — value = price × size (ticker value ÷ size = price, docs/v11/research/edgex-api.md §2.1)"
+    },
+    "settlement": "not published by the venue (generic rule: PnL and funding settle in USDC in the venue account; no expiry)",
+    "ipoConversion": "not published by the venue",
+    "oracle": "not published per instrument: a single oracle signer for stock-type contracts (venue metadata); the general price pages name Binance, OKX, Bybit and Coinbase (index) and Stork or a \"Multi-CEX Oracle\", without saying which applies",
+    "liquidation": "Per-contract risk tiers of the venue metadata (maintenance margin by position value); liquidation fee 1 %; funding every 4 h, capped at ±2 % per interval.",
+    "maxLeverage": "5",
+    "margin": "cross / isolated",
+    "lotSize": "0.01",
+    "szDecimals": null,
+    "fundingIntervalSec": 14400,
+    "assetId": null,
+    "dex": null,
+    "oiCapUsd": null,
+    "fundingMultiplier": null,
+    "onChainDescription": null,
+    "unconfirmedConvention": {
+     "text": "Unconfirmed convention: press coverage of the centralised-exchange pre-IPO perpetuals that edgeX's index tracks says they assume about one billion shares, so that price × 1e9 would approximate a valuation. edgeX itself states nothing; the wallet does not apply it.",
+     "url": "https://cryptobriefing.com/anthropic-pre-ipo-perps-1-8t-valuation/"
+    },
+    "sources": [
+     "https://edgex-1.gitbook.io/edgeX-documentation",
+     "https://edgex-1.gitbook.io/edgeX-documentation/about/terms-of-use"
+    ]
+   },
+   "market": {
+    "price": {
+     "value": "1338.923121435860836647",
+     "source": "edgeX public quote API (ticker) — mark price",
+     "ts": 1794791165055,
+     "stale": false
+    },
+    "oracle": {
+     "value": "1342.3357153475105841",
+     "source": "edgeX public quote API (ticker) — index price",
+     "ts": 1794791165055,
+     "stale": false
+    },
+    "mid": {
+     "value": "1339.0215",
+     "source": "edgeX public quote API (ticker) — book mid",
+     "ts": 1794791165055,
+     "stale": false
+    },
+    "funding": {
+     "value": "0.00038228",
+     "source": "edgeX public quote API (ticker) — funding rate per interval",
+     "ts": 1794791165055,
+     "stale": false,
+     "intervalSec": 14400
+    },
+    "openInterest": {
+     "value": "5.04",
+     "source": "edgeX public quote API (ticker) — open interest, contracts",
+     "ts": 1794791165055,
+     "stale": false
+    },
+    "openInterestUsd": {
+     "value": "6748.17253203673861670088",
+     "source": "wallet arithmetic: open interest × mark × contract multiplier (not a venue field)",
+     "ts": 1794791165055,
+     "stale": false
+    },
+    "volume24h": {
+     "value": "219306.81817",
+     "source": "edgeX public quote API (ticker) — 24 h notional volume, USDC",
+     "ts": 1794791165055,
+     "stale": false
+    },
+    "volumeBase24h": {
+     "value": "164",
+     "source": "edgeX public quote API (ticker) — 24 h volume, contracts",
+     "ts": 1794791165055,
+     "stale": false
+    },
+    "frozen": false
+   },
+   "valuation": {
+    "syntheticPrice": {
+     "value": "1338.923121435860836647",
+     "source": "edgeX public quote API (ticker) — mark price",
+     "ts": 1794791165055,
+     "stale": false,
+     "unit": "unknown",
+     "unitLabel": "unit not published by the venue",
+     "priceKind": "mark"
+    },
+    "contractMarketValue": {
+     "value": "1338.923121435860836647",
+     "formula": "contract value = price × 1 (contract size defined by the venue: edgeX metadata: USDC-margined linear contract — value = price × size (ticker value ÷ size = price, docs/v11/research/edgex-api.md §2.1))",
+     "reason": null,
+     "source": "edgeX metadata: USDC-margined linear contract — value = price × size (ticker value ÷ size = price, docs/v11/research/edgex-api.md §2.1)",
+     "ts": 1794791165055
+    },
+    "notionalExposure": {
+     "value": "13389.23121435860836647",
+     "formula": "size × contract value, negative for a short",
+     "reason": null,
+     "position": {
+      "side": "long",
+      "size": "10"
+     },
+     "hypothetical": true,
+     "ts": 1794791165055
+    },
+    "impliedValuation": {
+     "value": null,
+     "formula": null,
+     "formulaId": null,
+     "formulaSource": null,
+     "asOf": null,
+     "label": null,
+     "reason": "unit not published by the venue: edgeX publishes no contract specification for its pre-IPO perpetuals (no statement of what one contract represents, of the index constituents, or of what happens at an IPO) — searched in its documentation, help center and app on 2026-11-15",
+     "reasonCode": "unit_not_published"
+    },
+    "lastPrivateValuation": {
+     "value": "965000000000",
+     "kind": "primary_round",
+     "detail": "Series H, $65B raised, post-money",
+     "date": "2026-05-28",
+     "sourceUrl": "https://www.anthropic.com/news/series-h",
+     "confidence": "high"
+    },
+    "lastPrivateValuationReason": null,
+    "premiumDiscount": {
+     "premiumBps": null,
+     "reason": "no implied valuation: unit not published by the venue: edgeX publishes no contract specification for its pre-IPO perpetuals (no statement of what one contract represents, of the index constituents, or of what happens at an IPO) — searched in its documentation, help center and app on 2026-11-15",
+     "caveat": null
+    },
+    "caveats": [
+     {
+      "code": "synthetic",
+      "text": "a synthetic price is the price of a derivative contract: it gives no claim on shares and can trade far from any share transaction"
+     },
+     {
+      "code": "arithmetic",
+      "text": "an implied valuation is arithmetic on that price, not an appraisal of the company"
+     },
+     {
+      "code": "unconfirmed_convention",
+      "text": "Unconfirmed convention: press coverage of the centralised-exchange pre-IPO perpetuals that edgeX's index tracks says they assume about one billion shares, so that price × 1e9 would approximate a valuation. edgeX itself states nothing; the wallet does not apply it.",
+      "data": {
+       "url": "https://cryptobriefing.com/anthropic-pre-ipo-perps-1-8t-valuation/"
+      }
+     },
+     {
+      "code": "company_note",
+      "text": "IPO reported for pricing on 18 Nov 2026 and first trade on 19 Nov 2026 (press; the SEC filing states no date). Every Anthropic contract changes methodology, unit or oracle around that date."
+     },
+     {
+      "code": "thin_market",
+      "text": "Thin market: open interest ≈ $6.7k, 24 h volume ≈ $219.3k. A small order moves this price.",
+      "data": {
+       "openInterestUsd": "6748.17253203673861670088",
+       "volume24hUsd": "219306.81817",
+       "thresholds": {
+        "openInterestUsd": "1000000",
+        "volume24hUsd": "100000"
+       }
+      }
+     },
+     {
+      "code": "cross_venue",
+      "text": "Other contracts on Anthropic, PBC, each a different contract on its own venue: hyperliquid:io:ANTH 1770.7 (USD billions of fully diluted company valuation (1.00 = $1B)); hyperliquid:para:ANTH 101.41 (USD per 1 share (share class not specified by the operator)); hyperliquid:xyz:ANT 101.72 (USD per 1 share of Class A common stock). Prices are never averaged across venues and never used to fill another venue's gap.",
+      "data": {
+       "others": [
+        {
+         "id": "hyperliquid:io:ANTH",
+         "price": "1770.7",
+         "unit": "valuation_usd_billions"
+        },
+        {
+         "id": "hyperliquid:para:ANTH",
+         "price": "101.41",
+         "unit": "usd_per_share"
+        },
+        {
+         "id": "hyperliquid:xyz:ANT",
+         "price": "101.72",
+         "unit": "usd_per_share"
+        }
+       ],
+       "spreadBps": null
+      }
+     },
+     {
+      "code": "unit_mismatch",
+      "text": "The contracts on Anthropic, PBC are quoted in different units (USD billions of fully diluted company valuation (1.00 = $1B) | USD per 1 share (share class not specified by the operator) | USD per 1 share of Class A common stock | unit not published by the venue): their prices are not comparable with each other."
+     }
+    ]
+   },
+   "tradable": false,
+   "notTradable": {
+    "code": "venue_restricted",
+    "reasons": [
+     "Trading unavailable: edgeX's terms exclude Canada. edgeX is served for market data only: its Terms of Use name the United States of America and Canada as blocked jurisdictions, for its interface and for perpetual contracts, and forbid getting around it with a VPN (https://edgex-1.gitbook.io/edgeX-documentation/about/terms-of-use, read 2026-11-15). No account view, no order and no paper account are offered on this venue, so that it cannot be mistaken for a venue the owner may trade on.",
+     "edgeX publishes no contract specification for its pre-IPO perpetuals."
+    ]
+   },
+   "error": null
+  },
+  "book": {
+   "bids": [
+    [
+     "1339.062",
+     "0.75"
+    ],
+    [
+     "1339.061",
+     "0.75"
+    ],
+    [
+     "1339.06",
+     "0.65"
+    ],
+    [
+     "1339.059",
+     "0.75"
+    ],
+    [
+     "1339.058",
+     "0.56"
+    ]
+   ],
+   "asks": [
+    [
+     "1339.89",
+     "0.75"
+    ],
+    [
+     "1339.891",
+     "0.75"
+    ],
+    [
+     "1339.892",
+     "0.65"
+    ],
+    [
+     "1339.893",
+     "0.69"
+    ],
+    [
+     "1339.894",
+     "0.5"
+    ]
+   ],
+   "ts": 1794791166333,
+   "stale": false,
+   "source": "edgeX public quote API (depth)"
+  },
+  "candles": {
+   "interval": "1h",
+   "candles": [
+    {
+     "ts": 1794531600000,
+     "open": "1382.71",
+     "high": "1383.381",
+     "low": "1367.84",
+     "close": "1368.394",
+     "volume": "6.48"
+    },
+    {
+     "ts": 1794535200000,
+     "open": "1368.394",
+     "high": "1368.939",
+     "low": "1353.654",
+     "close": "1354.72",
+     "volume": "6.39"
+    },
+    {
+     "ts": 1794538800000,
+     "open": "1354.72",
+     "high": "1357.296",
+     "low": "1350.097",
+     "close": "1355.668",
+     "volume": "6.4"
+    },
+    {
+     "ts": 1794542400000,
+     "open": "1355.668",
+     "high": "1361.619",
+     "low": "1353.581",
+     "close": "1361.511",
+     "volume": "6.68"
+    },
+    {
+     "ts": 1794546000000,
+     "open": "1361.511",
+     "high": "1363.945",
+     "low": "1356.278",
+     "close": "1360.641",
+     "volume": "6.46"
+    },
+    {
+     "ts": 1794549600000,
+     "open": "1360.641",
+     "high": "1368.161",
+     "low": "1354.203",
+     "close": "1359.839",
+     "volume": "6.49"
+    },
+    {
+     "ts": 1794553200000,
+     "open": "1359.839",
+     "high": "1366.334",
+     "low": "1359.712",
+     "close": "1362.3",
+     "volume": "6.53"
+    },
+    {
+     "ts": 1794556800000,
+     "open": "1362.3",
+     "high": "1362.531",
+     "low": "1355.777",
+     "close": "1360.703",
+     "volume": "6.71"
+    },
+    {
+     "ts": 1794560400000,
+     "open": "1360.703",
+     "high": "1364.658",
+     "low": "1357.019",
+     "close": "1358.18",
+     "volume": "6.36"
+    },
+    {
+     "ts": 1794564000000,
+     "open": "1358.18",
+     "high": "1361.028",
+     "low": "1354.184",
+     "close": "1354.184",
+     "volume": "6.56"
+    },
+    {
+     "ts": 1794567600000,
+     "open": "1354.184",
+     "high": "1357.737",
+     "low": "1332.715",
+     "close": "1336.442",
+     "volume": "6.28"
+    },
+    {
+     "ts": 1794571200000,
+     "open": "1336.442",
+     "high": "1344.973",
+     "low": "1336.442",
+     "close": "1342.634",
+     "volume": "6.53"
+    },
+    {
+     "ts": 1794574800000,
+     "open": "1342.634",
+     "high": "1355.893",
+     "low": "1337.304",
+     "close": "1337.305",
+     "volume": "6.42"
+    },
+    {
+     "ts": 1794578400000,
+     "open": "1337.305",
+     "high": "1341.969",
+     "low": "1326.58",
+     "close": "1333.304",
+     "volume": "6.63"
+    },
+    {
+     "ts": 1794582000000,
+     "open": "1333.304",
+     "high": "1343.22",
+     "low": "1332.343",
+     "close": "1335.918",
+     "volume": "6.33"
+    },
+    {
+     "ts": 1794585600000,
+     "open": "1335.918",
+     "high": "1347.216",
+     "low": "1335.342",
+     "close": "1342.8",
+     "volume": "6.76"
+    },
+    {
+     "ts": 1794589200000,
+     "open": "1342.8",
+     "high": "1348.51",
+     "low": "1332.515",
+     "close": "1336.68",
+     "volume": "6.54"
+    },
+    {
+     "ts": 1794592800000,
+     "open": "1336.68",
+     "high": "1342.819",
+     "low": "1334.662",
+     "close": "1342.553",
+     "volume": "6.45"
+    },
+    {
+     "ts": 1794596400000,
+     "open": "1342.553",
+     "high": "1346.564",
+     "low": "1342.021",
+     "close": "1345.688",
+     "volume": "6.65"
+    },
+    {
+     "ts": 1794600000000,
+     "open": "1345.688",
+     "high": "1349.265",
+     "low": "1343.735",
+     "close": "1347.574",
+     "volume": "6.61"
+    },
+    {
+     "ts": 1794603600000,
+     "open": "1347.574",
+     "high": "1350.226",
+     "low": "1341.052",
+     "close": "1347.092",
+     "volume": "6.44"
+    },
+    {
+     "ts": 1794607200000,
+     "open": "1347.092",
+     "high": "1349.228",
+     "low": "1339.955",
+     "close": "1340.865",
+     "volume": "6.6"
+    },
+    {
+     "ts": 1794610800000,
+     "open": "1340.865",
+     "high": "1346.648",
+     "low": "1340.08",
+     "close": "1345.873",
+     "volume": "6.57"
+    },
+    {
+     "ts": 1794614400000,
+     "open": "1345.873",
+     "high": "1351.196",
+     "low": "1345.584",
+     "close": "1349.857",
+     "volume": "6.62"
+    },
+    {
+     "ts": 1794618000000,
+     "open": "1349.857",
+     "high": "1349.865",
+     "low": "1341.183",
+     "close": "1342.62",
+     "volume": "6.6"
+    },
+    {
+     "ts": 1794621600000,
+     "open": "1342.62",
+     "high": "1342.828",
+     "low": "1330.763",
+     "close": "1337.639",
+     "volume": "6.43"
+    },
+    {
+     "ts": 1794625200000,
+     "open": "1337.639",
+     "high": "1338.064",
+     "low": "1328.528",
+     "close": "1329.125",
+     "volume": "6.71"
+    },
+    {
+     "ts": 1794628800000,
+     "open": "1329.125",
+     "high": "1333.306",
+     "low": "1329.117",
+     "close": "1332.528",
+     "volume": "6.49"
+    },
+    {
+     "ts": 1794632400000,
+     "open": "1332.528",
+     "high": "1337.16",
+     "low": "1329.4",
+     "close": "1337.144",
+     "volume": "6.52"
+    },
+    {
+     "ts": 1794636000000,
+     "open": "1337.144",
+     "high": "1340.34",
+     "low": "1330.962",
+     "close": "1332.032",
+     "volume": "6.53"
+    },
+    {
+     "ts": 1794639600000,
+     "open": "1332.032",
+     "high": "1334.822",
+     "low": "1331.117",
+     "close": "1333.535",
+     "volume": "6.52"
+    },
+    {
+     "ts": 1794643200000,
+     "open": "1333.535",
+     "high": "1340.961",
+     "low": "1332.599",
+     "close": "1340.819",
+     "volume": "6.57"
+    },
+    {
+     "ts": 1794646800000,
+     "open": "1340.819",
+     "high": "1347.955",
+     "low": "1337.578",
+     "close": "1347.955",
+     "volume": "6.49"
+    },
+    {
+     "ts": 1794650400000,
+     "open": "1347.955",
+     "high": "1352.353",
+     "low": "1344.198",
+     "close": "1350.742",
+     "volume": "6.33"
+    },
+    {
+     "ts": 1794654000000,
+     "open": "1350.742",
+     "high": "1354.631",
+     "low": "1346.128",
+     "close": "1347.966",
+     "volume": "6.56"
+    },
+    {
+     "ts": 1794657600000,
+     "open": "1347.966",
+     "high": "1356.029",
+     "low": "1347.596",
+     "close": "1352.109",
+     "volume": "7.08"
+    },
+    {
+     "ts": 1794661200000,
+     "open": "1352.109",
+     "high": "1353.123",
+     "low": "1348.081",
+     "close": "1348.602",
+     "volume": "6.5"
+    },
+    {
+     "ts": 1794664800000,
+     "open": "1348.602",
+     "high": "1349.22",
+     "low": "1335.483",
+     "close": "1340.801",
+     "volume": "6.5"
+    },
+    {
+     "ts": 1794668400000,
+     "open": "1340.801",
+     "high": "1342.833",
+     "low": "1333.176",
+     "close": "1340.662",
+     "volume": "6.53"
+    },
+    {
+     "ts": 1794672000000,
+     "open": "1340.662",
+     "high": "1341.404",
+     "low": "1331.302",
+     "close": "1335.172",
+     "volume": "6.62"
+    },
+    {
+     "ts": 1794675600000,
+     "open": "1335.172",
+     "high": "1341.238",
+     "low": "1333.278",
+     "close": "1338.819",
+     "volume": "6.75"
+    },
+    {
+     "ts": 1794679200000,
+     "open": "1338.819",
+     "high": "1342.718",
+     "low": "1338.819",
+     "close": "1340.567",
+     "volume": "6.45"
+    },
+    {
+     "ts": 1794682800000,
+     "open": "1340.567",
+     "high": "1343.704",
+     "low": "1338.449",
+     "close": "1339.676",
+     "volume": "6.44"
+    },
+    {
+     "ts": 1794686400000,
+     "open": "1339.676",
+     "high": "1346",
+     "low": "1334.82",
+     "close": "1337.026",
+     "volume": "6.45"
+    },
+    {
+     "ts": 1794690000000,
+     "open": "1337.026",
+     "high": "1346.028",
+     "low": "1333.597",
+     "close": "1344.953",
+     "volume": "6.71"
+    },
+    {
+     "ts": 1794693600000,
+     "open": "1344.953",
+     "high": "1344.96",
+     "low": "1335.729",
+     "close": "1342.22",
+     "volume": "6.58"
+    },
+    {
+     "ts": 1794697200000,
+     "open": "1342.22",
+     "high": "1346.26",
+     "low": "1339.41",
+     "close": "1344.897",
+     "volume": "6.53"
+    },
+    {
+     "ts": 1794700800000,
+     "open": "1344.897",
+     "high": "1349.814",
+     "low": "1342.58",
+     "close": "1344.19",
+     "volume": "6.7"
+    },
+    {
+     "ts": 1794704400000,
+     "open": "1344.19",
+     "high": "1344.198",
+     "low": "1324.091",
+     "close": "1328.44",
+     "volume": "6.35"
+    },
+    {
+     "ts": 1794708000000,
+     "open": "1328.44",
+     "high": "1340.453",
+     "low": "1325.939",
+     "close": "1339.314",
+     "volume": "7.67"
+    },
+    {
+     "ts": 1794711600000,
+     "open": "1339.314",
+     "high": "1341.867",
+     "low": "1334.734",
+     "close": "1340.97",
+     "volume": "6.36"
+    },
+    {
+     "ts": 1794715200000,
+     "open": "1340.97",
+     "high": "1341.015",
+     "low": "1328.854",
+     "close": "1329.846",
+     "volume": "6.31"
+    },
+    {
+     "ts": 1794718800000,
+     "open": "1329.846",
+     "high": "1334.989",
+     "low": "1328.293",
+     "close": "1333.94",
+     "volume": "8.25"
+    },
+    {
+     "ts": 1794722400000,
+     "open": "1333.94",
+     "high": "1336.497",
+     "low": "1332.894",
+     "close": "1335.273",
+     "volume": "6.22"
+    },
+    {
+     "ts": 1794726000000,
+     "open": "1335.273",
+     "high": "1335.935",
+     "low": "1333.358",
+     "close": "1333.986",
+     "volume": "6.31"
+    },
+    {
+     "ts": 1794729600000,
+     "open": "1333.986",
+     "high": "1337.557",
+     "low": "1332.227",
+     "close": "1337.557",
+     "volume": "6.46"
+    },
+    {
+     "ts": 1794733200000,
+     "open": "1337.557",
+     "high": "1339.622",
+     "low": "1336.219",
+     "close": "1336.79",
+     "volume": "6.51"
+    },
+    {
+     "ts": 1794736800000,
+     "open": "1336.79",
+     "high": "1339.225",
+     "low": "1336.049",
+     "close": "1338.962",
+     "volume": "6.42"
+    },
+    {
+     "ts": 1794740400000,
+     "open": "1338.962",
+     "high": "1339.939",
+     "low": "1337.342",
+     "close": "1339.141",
+     "volume": "6.68"
+    },
+    {
+     "ts": 1794744000000,
+     "open": "1339.141",
+     "high": "1339.571",
+     "low": "1336.37",
+     "close": "1338.16",
+     "volume": "6.63"
+    },
+    {
+     "ts": 1794747600000,
+     "open": "1338.16",
+     "high": "1340.681",
+     "low": "1337.724",
+     "close": "1339.972",
+     "volume": "6.45"
+    },
+    {
+     "ts": 1794751200000,
+     "open": "1339.972",
+     "high": "1342.8",
+     "low": "1333.577",
+     "close": "1336.519",
+     "volume": "6.56"
+    },
+    {
+     "ts": 1794754800000,
+     "open": "1336.519",
+     "high": "1336.682",
+     "low": "1333.75",
+     "close": "1334.704",
+     "volume": "6.57"
+    },
+    {
+     "ts": 1794758400000,
+     "open": "1334.704",
+     "high": "1338.917",
+     "low": "1334.675",
+     "close": "1338.355",
+     "volume": "11.44"
+    },
+    {
+     "ts": 1794762000000,
+     "open": "1338.355",
+     "high": "1339.884",
+     "low": "1338.355",
+     "close": "1338.88",
+     "volume": "6.57"
+    },
+    {
+     "ts": 1794765600000,
+     "open": "1338.88",
+     "high": "1339.564",
+     "low": "1335.979",
+     "close": "1336.831",
+     "volume": "6.61"
+    },
+    {
+     "ts": 1794769200000,
+     "open": "1336.831",
+     "high": "1339.768",
+     "low": "1335.486",
+     "close": "1336.264",
+     "volume": "6.44"
+    },
+    {
+     "ts": 1794772800000,
+     "open": "1336.264",
+     "high": "1339.602",
+     "low": "1335.978",
+     "close": "1339.602",
+     "volume": "6.54"
+    },
+    {
+     "ts": 1794776400000,
+     "open": "1339.602",
+     "high": "1342.411",
+     "low": "1337.23",
+     "close": "1342.376",
+     "volume": "6.44"
+    },
+    {
+     "ts": 1794780000000,
+     "open": "1342.376",
+     "high": "1343.996",
+     "low": "1342.336",
+     "close": "1343.563",
+     "volume": "6.53"
+    },
+    {
+     "ts": 1794783600000,
+     "open": "1343.563",
+     "high": "1346.884",
+     "low": "1335.808",
+     "close": "1343.833",
+     "volume": "6.55"
+    },
+    {
+     "ts": 1794787200000,
+     "open": "1343.833",
+     "high": "1344.925",
+     "low": "1339.142",
+     "close": "1339.859",
+     "volume": "6.47"
+    }
+   ],
+   "ts": 1794791165910,
+   "stale": false,
+   "source": "edgeX public quote API (kline)"
+  },
+  "references": [
+   {
+    "company": "anthropic",
+    "valueUsd": "965000000000",
+    "kind": "primary_round",
+    "detail": "Series H, $65B raised, post-money",
+    "date": "2026-05-28",
+    "sourceUrl": "https://www.anthropic.com/news/series-h",
+    "confidence": "high",
+    "postMoney": true
+   },
+   {
+    "company": "anthropic",
+    "valueUsd": null,
+    "kind": "ipo_range",
+    "detail": "IPO price range (not final, not a valuation): $70.00–$78.00 per share; 825,000,000 Class A shares offered; Nasdaq ANT; S-1/A Amendment No. 2",
+    "date": "2026-11-10",
+    "sourceUrl": "https://www.sec.gov/Archives/edgar/data/2130357/000162828026072484/anthropicpbc-sx1ax2.htm",
+    "confidence": "high",
+    "postMoney": false
+   },
+   {
+    "company": "anthropic",
+    "valueUsd": "1405000000000",
+    "kind": "press_estimate",
+    "detail": "CNBC: \"up to $1.405 trillion on a fully diluted basis\" at the top of the IPO range (a press computation, not a company statement)",
+    "date": "2026-11-10",
+    "sourceUrl": "https://www.cnbc.com/2026/11/10/anthropic-sets-price-range-of-70-to-78-in-upcoming-ipo.html",
+    "confidence": "medium",
+    "postMoney": false
+   }
+  ],
+  "company": {
+   "slug": "anthropic",
+   "name": "Anthropic, PBC",
+   "note": "IPO reported for pricing on 18 Nov 2026 and first trade on 19 Nov 2026 (press; the SEC filing states no date). Every Anthropic contract changes methodology, unit or oracle around that date.",
+   "contracts": [
+    "edgex:ANTHROPICUSDC",
+    "hyperliquid:io:ANTH",
+    "hyperliquid:para:ANTH",
+    "hyperliquid:xyz:ANT"
+   ],
+   "lastPrivateValuation": {
+    "value": "965000000000",
+    "kind": "primary_round",
+    "detail": "Series H, $65B raised, post-money",
+    "date": "2026-05-28",
+    "sourceUrl": "https://www.anthropic.com/news/series-h",
+    "confidence": "high"
+   },
+   "divergence": [
+    {
+     "unit": "usd_per_share",
+     "unitLabel": "USD per 1 share (share class not specified by the operator)",
+     "contracts": [
+      {
+       "id": "hyperliquid:para:ANTH",
+       "price": "101.41",
+       "ts": 1794791164594
+      },
+      {
+       "id": "hyperliquid:xyz:ANT",
+       "price": "101.72",
+       "ts": 1794791164624
+      }
+     ],
+     "spreadBps": "30.57",
+     "note": "spread between the highest and the lowest mark of contracts quoted in the same unit; different contracts with different settlement rules — shown side by side, never averaged"
+    }
+   ]
+  },
+  "sameCompany": [
+   {
+    "id": "hyperliquid:io:ANTH",
+    "platform": "Hyperliquid · EntropyIO (dex io)",
+    "price": {
+     "value": "1770.7",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex io) — mark price",
+     "ts": 1794791164590,
+     "stale": false
+    },
+    "unit": {
+     "kind": "valuation_usd_billions",
+     "label": "USD billions of fully diluted company valuation (1.00 = $1B)"
+    },
+    "review": "reviewed"
+   },
+   {
+    "id": "hyperliquid:para:ANTH",
+    "platform": "Hyperliquid · Paragon (dex para)",
+    "price": {
+     "value": "101.41",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex para) — mark price",
+     "ts": 1794791164594,
+     "stale": false
+    },
+    "unit": {
+     "kind": "usd_per_share",
+     "label": "USD per 1 share (share class not specified by the operator)"
+    },
+    "review": "reviewed"
+   },
+   {
+    "id": "hyperliquid:xyz:ANT",
+    "platform": "Hyperliquid · trade.xyz (dex xyz)",
+    "price": {
+     "value": "101.72",
+     "source": "Hyperliquid info metaAndAssetCtxs (dex xyz) — mark price",
+     "ts": 1794791164624,
+     "stale": false
+    },
+    "unit": {
+     "kind": "usd_per_share",
+     "label": "USD per 1 share of Class A common stock"
+    },
+    "review": "reviewed"
+   }
+  ],
+  "notice": {
+   "tradable": false,
+   "code": "private_markets_display_only",
+   "text": "Displayed for information only — not tradable from this wallet. These are synthetic derivative contracts: they give no claim on any share. Trading is disabled for two reasons: jurisdiction (trade.xyz's terms name Canada as a restricted jurisdiction for its interface, EntropyIO names Ontario, edgeX excludes Canada) and contract definition (units differ between venues, some are not published, and the Anthropic contracts change oracle or unit around its IPO)."
+  },
+  "position": {
+   "side": "long",
+   "size": "10"
+  },
+  "ts": 1794791166333,
+  "source": "venue"
+ }
+}
