@@ -6,7 +6,7 @@ import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, statS
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DEFAULT_POLICY, mandateHash, verifyAuditChain, type AuditRecord, type Mandate } from '@spw/core';
+import { appendAudit, DEFAULT_POLICY, mandateHash, verifyAuditChain, type AuditRecord, type Mandate } from '@spw/core';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
 import { applyControl, controlCall, isControlRequest, startControlServer } from '../src/control.ts';
 import { deriveKeys } from '../src/keys.ts';
@@ -257,8 +257,39 @@ describe('a state.json and policy.json written before V11 (fixture in the old fo
     expect(again.journalHead()!.seq).toBe(3);
     again.save();
     expect(lines(p.journal).map((r) => r.type)).toEqual(['a', 'b', 'old.binary']);
-    writeFileSync(p.state, JSON.stringify({ ...onDisk(p.state), journal: [{ ...extra, seq: 1, prev: '0'.repeat(64) }] }));   // a chain started over
+    writeFileSync(p.state, JSON.stringify({ ...onDisk(p.state), journal: [{ ...extra, seq: 1, prev: '0'.repeat(64) }] }));   // neither a continuation nor a valid chain of its own
     expect(new Store(p.state, p.policy).journalBrokenAt).not.toBeNull();
+  });
+
+  it('a rollback to the pre-V11 binary and forward again: the state it wrote is used, what it journaled is kept in a side file the main chain commits to', () => {
+    const p = fresh(), s = new Store(p.state, p.policy);
+    for (const t of ['a', 'b']) { s.log(t, {}); s.save(); }
+    // the pre-V11 binary on this directory, exactly as its store worked: it parses state.json, appends to the `journal` array
+    // (it finds it empty, so its chain starts from nothing), changes the state and rewrites the whole file
+    const old = onDisk(p.state);
+    for (const t of ['halt.on', 'sign.denied']) old.journal.push(appendAudit(old.journal.at(-1) ?? null, t, 'signer', { by: 'old binary' }));
+    old.halted = true; old.used = { 'proposal-signed-by-the-old-binary': 1794700000 };
+    writeFileSync(p.state, JSON.stringify(old));
+    expect(verifyAuditChain(old.journal)).toBeNull();                                  // the old binary starts happily on this file (its own check)
+    // V11 again
+    const again = new Store(p.state, p.policy);
+    expect(again.journalBrokenAt).toBeNull();
+    expect(again.state.halted).toBe(true);                                             // nothing the old binary decided is lost
+    expect(again.state.used).toEqual(old.used);
+    expect(again.journalHead()!.seq).toBe(2);
+    expect(readdirSync(p.dir).filter((f) => f.startsWith('journal-rollback-'))).toEqual([]);   // opening writes nothing
+    again.log('c', {}); again.save();
+    const main = lines(p.journal), [side] = readdirSync(p.dir).filter((f) => /^journal-rollback-\d{14}\.jsonl$/.test(f));
+    expect(main.map((r) => r.type)).toEqual(['a', 'b', 'c', 'journal.rollback_segment']);   // recorded at the first save
+    expect(verifyAuditChain(main)).toBeNull();
+    expect(lines(join(p.dir, side!))).toEqual(old.journal);                            // its records, untouched
+    expect(main[3]!.data).toEqual({ file: side, records: 2, firstTs: old.journal[0]!.ts, lastTs: old.journal[1]!.ts, headHash: old.journal[1]!.hash });
+    expect(onDisk(p.state)).toMatchObject({ journal: [], halted: true, journalRef: { seq: 4 } });
+    const third = new Store(p.state, p.policy);
+    expect(third.journalBrokenAt).toBeNull(); expect(third.journalHead()!.seq).toBe(4);
+    third.log('d', {}); third.save();
+    expect(lines(p.journal)).toHaveLength(5);
+    expect(readdirSync(p.dir).filter((f) => f.startsWith('journal-rollback-'))).toHaveLength(1);
   });
 });
 

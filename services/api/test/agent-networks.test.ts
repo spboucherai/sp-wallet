@@ -320,6 +320,8 @@ describe('V11 D2: when an agent leaves LIVE, its mandate is revoked AT THE SIGNE
   const active = async (vault = 2) => (await signerMandates()).filter((m) => m.mandate.vaultIndex === vault && !m.revoked && !m.expired).map((m) => m.mandate.mandateId);
 
   it('paused or stopped by the owner: revoked on the signer at once; a new mandate is then the only one in force on the vault', async () => {
+    // (when the laboratory is installed, the registration test above has set this agent STOPPED in the database: it is made LIVE again here)
+    if ((await sql`select state from agents where id = ${arb.id}`)[0].state !== 'LIVE') await liveAgain(arb.id);
     const [row] = await sql`select state, mandate_id from agents where id = ${arb.id}`;
     expect(row.state).toBe('LIVE');
     const first = row.mandate_id as string;

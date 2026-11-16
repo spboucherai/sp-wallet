@@ -137,6 +137,8 @@ export class Store {
   private fileFirstSeq: number | null = null;
   /** bytes of an incomplete last line found in the journal file when it was read */
   private torn = 0;
+  /** a separate chain a pre-V11 binary wrote into the state after a rollback: moved to a side file at the first save */
+  private rollback: AuditRecord[] | null = null;
 
   constructor(private statePath: string, private policyPath: string, opts: StoreOptions = {}) {
     this.journalPath = opts.journalPath ?? join(dirname(statePath), 'journal.jsonl');
@@ -170,10 +172,14 @@ export class Store {
       last = { seq: ref.seq, hash: ref.hash } as AuditRecord;
     } else if (last.seq < ref.seq) this.journalBrokenAt ??= last.seq + 1;                          // the file lost records the state was saved with
     else if (recs.find((r) => r.seq === ref.seq)?.hash !== ref.hash && !(recs[0]!.seq === ref.seq + 1 && recs[0]!.prev === ref.hash)) this.journalBrokenAt ??= ref.seq; // not the same chain
-    // records appended to the state by a pre-V11 binary run after this one (a rollback): they continue the chain, or the journal is broken
+    // Records found in the state itself: a pre-V11 binary ran on this directory after this version (a rollback) and journaled
+    // the only way it knows. Either they continue the chain (taken into the file), or they are a chain of their own that it
+    // started from nothing because it saw `journal: []` (kept whole in a side file, whose head the main chain then records —
+    // see save()). Anything else is a broken journal.
     const extra = inState.filter((r) => r.seq > last!.seq);
-    if (inState.length && (extra.length !== inState.length || verifyJournalSegment(extra, { seq: last.seq, hash: last.hash }) !== null)) this.journalBrokenAt ??= inState[0]!.seq;
-    else if (extra.length) { this.unsaved = [...extra]; recs = [...recs, ...extra]; }
+    if (inState.length && extra.length === inState.length && verifyJournalSegment(extra, { seq: last.seq, hash: last.hash }) === null) { this.unsaved = [...extra]; recs = [...recs, ...extra]; }
+    else if (inState.length && verifyAuditChain(inState) === null) this.rollback = [...inState];
+    else if (inState.length) this.journalBrokenAt ??= inState[0]!.seq;
     this.head = recs[recs.length - 1] ?? last;
     s.journal = recs.slice(-this.tail);
   }
@@ -229,6 +235,14 @@ export class Store {
 
   /** Durably persist before any signature is released: the journal lines first, then the state that refers to them. */
   save(): void {
+    if (this.rollback) {
+      // what the old binary journaled while it ran is not lost and not silently merged: its records go, untouched, to a file
+      // of their own, and the main chain commits to that file's last hash
+      const seg = this.rollback, first = seg[0]!, lastRec = seg[seg.length - 1]!, name = `journal-rollback-${first.ts.replace(/[^0-9]/g, '').slice(0, 14)}.jsonl`;
+      this.atomicWrite(join(dirname(this.journalPath), name), seg.map((r) => `${JSON.stringify(r)}\n`).join(''));
+      this.rollback = null;
+      this.log('journal.rollback_segment', { file: name, records: seg.length, firstTs: first.ts, lastTs: lastRec.ts, headHash: lastRec.hash });
+    }
     this.flushJournal();
     const { journal: _tail, journalRef: _ref, ...rest } = this.state;
     void _tail; void _ref;
