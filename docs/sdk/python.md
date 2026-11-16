@@ -9,8 +9,8 @@ reference: [`docs/TRADING-API-OPENAPI.md`](../TRADING-API-OPENAPI.md)). Source: 
   when the committed models are not what the document gives, and a second test walks every schema of the document
   against the model classes.
 - Money, prices and sizes are decimal **strings** end to end (`str`), exactly as the API sends them; `to_decimal()` and
-  `decimal_str()` convert from and to `decimal.Decimal`. **A `float` is never produced and never accepted**: the few
-  members the API sends as JSON numbers are parsed as `Decimal`.
+  `decimal_str()` convert from and to `decimal.Decimal`. **A `float` is never produced and never accepted**: a JSON number
+  that is not money (an age in milliseconds, a count) is parsed as `int` or `Decimal`.
 - The API key is never logged, never part of an error or a traceback, never in `repr(client)`.
 
 > **Execution requires an owner-approved mandate.** Placing or cancelling an order, closing or reducing a position,
@@ -18,10 +18,13 @@ reference: [`docs/TRADING-API-OPENAPI.md`](../TRADING-API-OPENAPI.md)). Source: 
 > wallet's owner**. Without one the API refuses the call (`403 mandate_required` → `MandateRequired`). A scope alone never
 > lets a key execute.
 >
-> **State of the API in this version.** Read operations are implemented. The 12 write operations are declared, validated
-> and replay-checked by the server, then answer `501 execution_not_wired`. The SDK raises `ExecutionNotWired` (a
-> `sp_wallet.NotImplementedError`); it never reports a success that did not happen. The OpenAPI document declares no
-> success schema for the write operations yet, so they return a `WriteResult` whose members are untyped.
+> **State of the API in this version.** Reads, order previews, orders (place, cancel), positions (close, reduce), the
+> command endpoint and the kill switch are implemented and answer typed models. **Paper** orders are simulated by the
+> wallet's paper engine against the venue's real order book. **Live** orders additionally need
+> `SPW_TRADING_API_EXECUTION=on` on the server (default off → `403 execution_disabled` → `ExecutionDisabled`) and the
+> wallet's mainnet locks. The seven strategy and agent writes are declared, validated and replay-checked, then answer
+> `501 execution_not_wired` (`ExecutionNotWired`): they return a `WriteResult` whose members are untyped, because no
+> success schema exists.
 
 ## Install (from the repository)
 
@@ -40,7 +43,10 @@ client = SPWallet(api_key="spw_live_…")          # or SPWallet() with the envi
 
 client.get_balances()
 client.get_positions()
-client.preview_order(exchange="hyperliquid", symbol="BTC", side="buy", order_type="market", notional_usdc=100)
+preview = client.preview_order(exchange="hyperliquid", symbol="BTC", side="buy", order_type="market", notional_usdc=100)
+if preview.would_execute:
+    placed = client.create_order(exchange="hyperliquid", symbol="BTC", side="buy", order_type="market", notional_usdc=100)  # mode="paper" by default
+    done = client.wait_for_order(placed.order.id)        # FILLED, CANCELLED, REJECTED or FAILED
 ```
 
 Asynchronous — the same methods, awaited:
@@ -69,126 +75,207 @@ async with AsyncSPWallet() as client:
 
 ## Methods
 
-| Method | Returns | Operation | Scope |
-|---|---|---|---|
-| `list_markets(venue=, kind=, q=, limit=)` | `MarketList` | `GET /markets` | `markets:read` |
-| `get_market(symbol)` | `MarketDetail` | `GET /markets/{symbol}` | `markets:read` |
-| `get_orderbook(symbol, depth=)` | `Orderbook` | `GET /markets/{symbol}/orderbook` | `markets:read` |
-| `get_candles(symbol, interval=, limit=)` | `Candles` | `GET /markets/{symbol}/candles` | `markets:read` |
-| `get_portfolio()` | `Portfolio` | `GET /portfolio` | `wallet:read` |
-| `get_balances(network=)` | `Balances` | `GET /balances` | `wallet:read` |
-| `get_activity(limit=)` | `Activity` | `GET /activity` | `wallet:read` |
-| `get_positions(mode=, venue=)` | `Positions` | `GET /positions` | `positions:read` |
-| `get_risk()` | `Risk` | `GET /risk` | `positions:read` |
-| `list_orders(mode=, venue=, open=, limit=)` | `Orders` | `GET /orders` | `orders:read` |
-| `get_order(order_id)` | `OrderDetail` | `GET /orders/{id}` | `orders:read` |
-| `wait_for_order(order_id, timeout=, poll_interval=, until=)` | `OrderDetail` | polls `GET /orders/{id}` | `orders:read` |
-| `preview_order(…)` | `WriteResult` | `POST /orders/preview` | `orders:prepare` |
-| `create_order(…)` | `WriteResult` | `POST /orders` | `orders:execute` + mandate |
-| `cancel_order(order_id)` | `WriteResult` | `DELETE /orders/{id}` | `orders:cancel` + mandate |
-| `close_position(position_id, slippage_bps=)` | `WriteResult` | `POST /positions/{id}/close` | `positions:manage` + mandate |
-| `reduce_position(position_id, fraction=, slippage_bps=)` | `WriteResult` | `POST /positions/{id}/reduce` | `positions:manage` + mandate |
-| `list_strategies(kind=)` | `Strategies` | `GET /strategies` | `strategies:read` |
-| `create_strategy(kind=, path=, agent_id=)`, `backtest_strategy(id, symbols=, interval=)`, `start_strategy(id, mode=, agent_id=)`, `stop_strategy(id, reason=)` | `WriteResult` | `POST /strategies…` | `strategies:manage` + mandate |
-| `list_agents()` | `Agents` | `GET /agents` | `agents:read` |
-| `create_agent(kind=, name=, universe=, mission=, interval=, mode=)`, `start_agent(id, mode=)`, `stop_agent(id, reason=)` | `WriteResult` | `POST /agents…` | `agents:manage` + mandate |
-| `openapi()` | `OpenApiDocument` | `GET /openapi.json` | any valid key |
+The same methods on `SPWallet` and, awaited, on `AsyncSPWallet`.
 
-Every mutating method also takes `idempotency_key=`.
+| Method | Operation | Scope |
+|---|---|---|
+| `list_markets(venue=, kind=, q=, limit=)` | `GET /markets` | `markets:read` |
+| `compare_markets(underlying=, side=, notional=, leverage=, horizon_hours=, liquidity=, min_net_edge_bps=)` | `GET /markets/compare` | `markets:read` |
+| `get_market(symbol)` | `GET /markets/{symbol}` | `markets:read` |
+| `get_orderbook(symbol, depth=)` | `GET /markets/{symbol}/orderbook` | `markets:read` |
+| `get_candles(symbol, interval=, limit=)` | `GET /markets/{symbol}/candles` | `markets:read` |
+| `list_private_markets(delisted=, size=, side=)` | `GET /private-markets` | `markets:read` |
+| `get_private_market(market_id, size=, side=, interval=, limit=)` | `GET /private-markets/{id}` | `markets:read` |
+| `get_private_market_company(slug, …)` | `GET /private-markets/companies/{slug}` | `markets:read` |
+| `get_portfolio()` | `GET /portfolio` | `wallet:read` |
+| `get_balances(network=)` | `GET /balances` | `wallet:read` |
+| `get_activity(limit=, cursor=)`, `iter_activity(limit=, max_items=)` | `GET /activity` | `wallet:read` |
+| `get_positions(mode=, venue=)` | `GET /positions` | `positions:read` |
+| `get_risk()` | `GET /risk` | `positions:read` |
+| `engage_kill_switch(reason)` | `POST /risk/kill-switch` | `positions:manage` (no mandate) |
+| `list_orders(mode=, venue=, open=, limit=, cursor=)`, `iter_orders(…, max_items=)` | `GET /orders` | `orders:read` |
+| `get_order(order_id)` | `GET /orders/{id}` | `orders:read` |
+| `wait_for_order(order_id, timeout=, poll_interval=, until=)` | polls `GET /orders/{id}` | `orders:read` |
+| `preview_order(…)` → `models.OrderPreview` | `POST /orders/preview` | `orders:prepare` (a key needs a mandate bound to it) |
+| `create_order(…)` → `models.PlacedOrder` | `POST /orders` | `orders:execute` + mandate |
+| `cancel_order(order_id)` → `models.CancelledOrder` | `DELETE /orders/{id}` | `orders:cancel` (its own orders; no mandate) |
+| `close_position(position_id, slippage_bps=)` → `models.PlacedOrder` | `POST /positions/{id}/close` | `positions:manage` + mandate |
+| `reduce_position(position_id, fraction=, slippage_bps=)` → `models.PlacedOrder` | `POST /positions/{id}/reduce` | `positions:manage` + mandate |
+| `run_command(text, mode=, account_id=, dry_run=)` → `models.CommandResult` | `POST /commands` | the scope of what the command resolves to |
+| `list_strategies(kind=)` | `GET /strategies` | `strategies:read` |
+| `create_strategy`, `backtest_strategy`, `start_strategy`, `stop_strategy` | `POST /strategies…` (501) | `strategies:manage` + mandate |
+| `list_agents()` | `GET /agents` | `agents:read` |
+| `create_agent`, `start_agent`, `stop_agent` | `POST /agents…` (501) | `agents:manage` + mandate |
+| `openapi()` | `GET /openapi.json` | any valid key |
 
-Models (`sp_wallet.models`) use snake_case attributes for the API's camelCase members (`portfolio.totals.wallet_usd`,
+Results are pydantic models with snake_case attributes (`portfolio.totals.paper_equity`, `placed.order.avg_fill_price`,
 `position.entry_price`); `result.to_dict()` gives the answer with the API's own names. Members the contract does not
 name are kept (`model_extra`, also reachable as attributes). `result.meta` gives the facts of the HTTP exchange:
 `status`, `request_id`, `idempotency_key`, `idempotent_replay`, `rate_limit` (`limit`, `remaining`, `reset_seconds`),
-`attempts`. An answer that does not match the contract raises `ServerError` (`code == "invalid_response"`) instead of
-returning a half-typed object.
+`attempts`. An answer that does not match the contract — a status outside the twelve states, a number where a decimal
+string is declared — raises `ServerError` (`code == "invalid_response"`) instead of returning a half-typed object; on a
+write the message says that the operation ran.
 
-**Pagination.** The API does not paginate in this version: lists take a `limit`, and `list_markets` answers `total` and
-`truncated` so a cut list is visible. There is therefore no pagination helper.
+The private markets are display only: none of these contracts is tradable (`tradable` is False on every row).
+
+### Pagination
+
+`GET /orders` and `GET /activity` are paginated by cursor: a page carries `next_cursor`, which is the `cursor` of the
+next (older) page; `None` at the end. The order is stable (time, then id): no row is repeated or skipped across pages.
+The iterators follow the cursor for you; `limit` is the page size.
+
+```python
+for order in client.iter_orders(open=True, limit=100):
+    print(order.id, order.status)
+for item in client.iter_activity(max_items=500):
+    print(item.kind, item.at)
+
+async for order in async_client.iter_orders(open=True):      # AsyncSPWallet: an asynchronous iterator
+    ...
+
+page = client.list_orders(limit=50)                            # one page by hand
+older = client.list_orders(limit=50, cursor=page.next_cursor) if page.next_cursor else None
+```
+
+`list_markets` is not paginated: it answers `total` and `truncated` so a list cut by `limit` is visible.
 
 ### Decimals
 
 ```python
 from decimal import Decimal
-from sp_wallet import to_decimal, decimal_str, size_from_notional
+from sp_wallet import to_decimal, decimal_str
 
 book = client.get_orderbook("hyperliquid:BTC", depth=1)
 bid, ask = to_decimal(book.bids[0][0]), to_decimal(book.asks[0][0])     # str → Decimal, exact
 client.preview_order(instrument="hyperliquid:BTC", side="buy", order_type="limit",
-                     size=Decimal("0.01"), price=(bid + ask) / 2)        # Decimal, int or str — never float
-size_from_notional("100", "64907", "0.00001")                            # "0.00154", rounded down
+                     size=Decimal("0.01"), price=int((bid + ask) / 2))   # Decimal, int or str — never float
+decimal_str(Decimal("1E-7"))                                             # "0.0000001": what goes on the wire
 ```
 
 Passing a `float` anywhere an amount is expected raises `ConfigurationError` before any request.
 
 ### Orders
 
-- `instrument` is `venue:symbol` as returned by `list_markets`; `exchange=` + `symbol=` is the same thing in two parts.
-- `order_type` is the API's `type`: `limit`, `market`, `stop_market`, `stop_limit`, `take_profit_market`,
-  `take_profit_limit`.
-- `mode` (`"paper"` | `"live"`) is required by the API; the SDK sends `"paper"` when you give none.
-- `size` is in base units. `notional_usdc` is a **client-side convenience, not a field of the API**: the SDK reads
-  `GET /markets/{instrument}` (scope `markets:read`) and sends `size = floor(notional / mark price, lot size)` in exact
-  decimal arithmetic. It refuses to size from a stale or missing mark price.
-- Request bodies are validated locally with the constraints of the contract (enums, patterns, bounds): a wrong argument
-  raises `ConfigurationError` and nothing is sent.
+```python
+order = dict(mode="paper", instrument="hyperliquid:BTC", side="buy", order_type="limit", price="60000", size="0.01")
+preview = client.preview_order(**order)        # nothing is created; preview.refusals says what would refuse it
+placed = client.create_order(**order)          # placed.order.status: "SUBMITTED" while it rests
+client.cancel_order(placed.order.id)           # → order.status "CANCELLED", changed True
+```
+
+- `instrument` is `venue:symbol` as returned by `list_markets`; `exchange` + `symbol` is the same thing in two parts.
+- The API's `type` is the argument `order_type`. `mode` defaults to `"paper"`.
+- Size the order with exactly one of `size` (base units) and `notional` (quote currency).
+- **`notional` is sized by the server**: it divides by the order's own price (limit, else trigger), else by the mark
+  price it reads at that moment, and rounds **down** to the lot size. A stale mark is refused (`503 stale_data`); less
+  than one lot is `422 below_min_size`. The answer carries the size that was used (`preview.resolved.size`,
+  `placed.order.size`). `notional_usdc` is the same field under the name of the quick start: the SDK sends it as
+  `notional` and computes nothing.
+- `client.get_market(instrument).instrument` gives what an order must respect: `lot_size`, `tick_size`,
+  `min_order_size`, `min_notional`, `max_leverage`.
+- A preview says "no" in its answer, not with an exception: `would_execute` is False and `refusals` lists each refusal
+  with its `stage` (`key`, `lock`, `mandate`, `risk`, `engine`) and `code`. `preview.account.equity` and
+  `free_collateral` are answered only to a key that also holds `wallet:read` or `positions:read`
+  (`preview.account.withheld` is True otherwise). A key previews the order it could place: without a mandate bound to
+  it, `preview_order` raises `MandateRequired`.
+- `preview_order` and `engage_kill_switch` take no `Idempotency-Key` (the contract declares none): they are safe to
+  repeat and are retried like a read.
+
+A position is closed or reduced by its `id` from `get_positions()`; both are strictly reduce-only market orders:
+
+```python
+positions = client.get_positions(mode="paper").positions
+if positions:
+    client.reduce_position(positions[0].id, fraction=Decimal("0.5"))
+    client.close_position(positions[0].id)
+```
+
+### Commands and the kill switch
+
+```python
+from sp_wallet import AmbiguousCommand
+
+try:
+    dry = client.run_command("LONG BTC-PERP 500 x2", dry_run=True)    # dry.kind == "order", dry.executed is False
+    pos = client.run_command("SHOW POSITIONS")                         # pos.kind == "query", pos.data: the read answer
+except AmbiguousCommand as e:
+    print([f"{q['field']}: {' | '.join(q['options'])}" for q in e.questions])   # nothing was executed
+
+client.engage_kill_switch("manual stop")   # blocks every NEW risk; cancels and exits still pass; only the owner releases it
+```
+
+The grammar is deterministic (no model). What a command leaves open (venue, leverage, …) comes from the owner's stored
+defaults and from nothing else; when they do not settle it, the API answers `409 ambiguous_command` with the questions.
 
 ### Order states and `wait_for_order`
 
-`ORDER_STATES`: `CREATED, VALIDATED, AWAITING_APPROVAL, APPROVED, SUBMITTING, SUBMITTED, PARTIALLY_FILLED, FILLED,
-CANCELLED, REJECTED, FAILED, UNKNOWN`. Final states (`TERMINAL_ORDER_STATES`): `FILLED, CANCELLED, REJECTED, FAILED`.
-**`UNKNOWN` is not final and is not a failure**: the venue's answer is not known yet; keep reading the order.
+`order.status` is one of the twelve `ORDER_STATES` — a closed enum in the contract and a `Literal` in the model:
+`CREATED, VALIDATED, AWAITING_APPROVAL, APPROVED, SUBMITTING, SUBMITTED, PARTIALLY_FILLED, FILLED, CANCELLED, REJECTED,
+FAILED, UNKNOWN`. Final states (`TERMINAL_ORDER_STATES`): `FILLED, CANCELLED, REJECTED, FAILED`; `order.final` is True
+exactly for those. **`UNKNOWN` is not final and is not a failure**: the venue's answer is not known yet; keep reading
+the order. `order.engine_status` is the executing engine's own word for the same moment (`open`, `filled`, a swap
+state…): it is informative — decide on `status`.
 
 ```python
-detail = client.wait_for_order(order_id, timeout=60, poll_interval=1)
+done = client.wait_for_order(order_id, timeout=60, poll_interval=1)
+print(done.order.status, done.order.filled, len(done.fills))
 ```
 
-`wait_for_order` raises `WaitTimeout` when the time elapses first — that is not an order failure either; `error.last`
-is the last answer. The read side currently reports the statuses of the older tables for existing orders (`open`,
-`pending`, `filled`, swap states…): a status that is not one of the twelve states is judged by the server's own `final`
-flag.
+`wait_for_order` returns when the status is final (or when `until(order)` is true) and raises `WaitTimeout` when the
+time elapses first — that is not an order failure either; `error.last` is the last answer.
 
 ## Errors
 
 Every error extends `SPWalletError` and carries `code` (the API's `error` member), `message`, `status`, `request_id`
-(`X-Request-Id`: the owner finds the call in the usage log with it) and, for mutating calls, `idempotency_key`.
+(`X-Request-Id`: the owner finds the call in the usage log with it), `body`, `data` (the refusal's machine-readable
+detail) and, for mutating calls, `idempotency_key`.
 
 | Class | When |
 |---|---|
-| `ValidationError` | 400 `bad_request`, `idempotency`, `stale_request`; 422 `no_orderbook`, `venue_rejected` |
+| `ValidationError` | 400 `bad_request`, `invalid_order`, `invalid_cursor`, `parse_error`, `idempotency`, `stale_request`; 422 `no_orderbook`, `venue_rejected`, `below_min_size`, `no_position`, a refusal of the venue engine's own rules |
 | `AuthenticationError` | 401 `unauthenticated` — missing, malformed, unknown, expired or revoked key (one answer for all) |
-| `PermissionDenied` | 403 — `restricted`, `ip_not_allowed`, `key_path_forbidden`… |
+| `PermissionDenied` | 403 — `restricted`, `ip_not_allowed`, `key_limit_exceeded`, `not_your_order`… |
 | ↳ `ScopeDenied` | 403 `insufficient_scope` — the key does not hold the operation's scope |
 | ↳ `MandateRequired` | 403 `mandate_required` — no trading mandate is bound to the key |
-| `NotFound` | 404 `unknown_order`, `unknown_instrument`, `unknown_venue`… |
+| ↳ `MandateDenied` | 403 `mandate_denied` — the order is outside the mandate; `error.reasons` (`MANDATE_DENY_REASONS`: `ORDER_NOTIONAL_EXCEEDED`, `INSTRUMENT_NOT_ALLOWED`…) |
+| ↳ `ExecutionDisabled` | 403 `execution_disabled` — live execution through the API is closed on this server; nothing was created |
+| `RiskDenied` | 422 `risk_denied`, 423 `kill_switch_active` / `read_only_mode` — `error.failed` (ids of `RISK_CHECK_IDS`), `error.checks`, `error.kill_switch` |
+| `NotFound` | 404 `unknown_order`, `unknown_instrument`, `unknown_venue`, `unknown_market`, `unknown_position`, `not_found` (a path that is not an operation)… |
 | `Conflict` | 409 |
 | ↳ `IdempotencyConflict` | 409 `idempotency_conflict` — the key was used with a different request |
 | ↳ `AmbiguousSymbol` | 409 `ambiguous_symbol` — `error.candidates` lists the `venue:symbol` ids |
+| ↳ `AmbiguousCommand` | 409 `ambiguous_command` — `error.questions`; nothing was executed |
 | `RateLimited` | 429 `rate_limited`, `auth_throttled` — `error.retry_after` (seconds) |
 | `sp_wallet.NotImplementedError` ↳ `ExecutionNotWired` | 501 `execution_not_wired` — nothing was done |
-| `ServerError` ↳ `ServiceUnavailable` | 5xx; 503 `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`… |
-| `NetworkError` ↳ `sp_wallet.TimeoutError` | no answer (reads) |
+| `ServerError` ↳ `ServiceUnavailable` | 5xx; 503 `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…; `invalid_response` |
+| `NetworkError` ↳ `sp_wallet.TimeoutError` | no answer (reads, previews) |
 | `OutcomeUnknown` | a mutating call without a trustworthy answer — **not a failure**, see below |
 | `WaitTimeout`, `WebhookVerificationError`, `ConfigurationError` | SDK-side |
 
-`sp_wallet.NotImplementedError` and `sp_wallet.TimeoutError` are this package's classes, not the builtins of the same
-name: write `except sp_wallet.NotImplementedError` (or `except ExecutionNotWired`).
+**`error.order`**: when the server created the order before it refused it (a mandate or risk refusal, a refusal of the
+venue engine), the error carries that order as a `models.Order` — state `REJECTED` or `FAILED` — so you know its id. It
+is `None` when the call was refused before any order existed (nothing was created). The codes each operation can answer
+are in the contract (`x-spw-errors`) and in the SDK as `OPERATION_ERRORS[operation_id]`.
 
 ```python
-from sp_wallet import ExecutionNotWired, MandateRequired, OutcomeUnknown, RateLimited, ScopeDenied
+from sp_wallet import ExecutionDisabled, MandateDenied, MandateRequired, OutcomeUnknown, RateLimited, RiskDenied, ScopeDenied
 
 try:
-    client.create_order(instrument="hyperliquid:BTC", side="buy", order_type="market", size="0.01", mode="live")
-except OutcomeUnknown as e:
-    ...                       # see "OutcomeUnknown"
+    client.create_order(instrument="hyperliquid:BTC", side="buy", order_type="market", notional="100", mode="paper")
+except OutcomeUnknown:
+    ...                                    # see "OutcomeUnknown"
 except MandateRequired:
-    ...                       # the owner must bind an approved mandate to this key
-except ExecutionNotWired:
-    ...                       # this server does not execute yet; nothing was done
+    ...                                    # the owner must bind an approved mandate to this key
+except MandateDenied as e:
+    print(e.reasons, e.order.id if e.order else None)          # ['ORDER_NOTIONAL_EXCEEDED'] …
+except RiskDenied as e:
+    print("kill switch" if e.kill_switch else e.failed, [(c.id, c.observed, c.limit) for c in e.checks])
+except ExecutionDisabled:
+    ...                                    # live orders are closed on this server; paper is not affected
 except ScopeDenied:
-    ...                       # the key lacks orders:execute
+    ...                                    # the key lacks orders:execute
 except RateLimited as e:
-    ...                       # wait e.retry_after seconds
+    ...                                    # wait e.retry_after seconds
 ```
 
 ## Retries and idempotency
@@ -203,7 +290,9 @@ except RateLimited as e:
 - The key is exposed three ways so that you can resume after a crash: pass your own (`idempotency_key=`, generate it
   with `new_idempotency_key()` and **persist it before sending**), read it from `result.meta.idempotency_key`, or from
   `error.idempotency_key`.
-- Not retried: 400, 401, 403, 404, 409 (except `idempotency_in_progress`), 500, 501.
+- `preview_order` and `engage_kill_switch` are `POST`s without an `Idempotency-Key` in the contract (repeating them
+  changes nothing): they are retried like a read and fail with the ordinary errors, never `OutcomeUnknown`.
+- Not retried: 400, 401, 403, 404, 409 (except `idempotency_in_progress`), 422, 423, 500, 501.
 
 ### `OutcomeUnknown`
 
@@ -239,7 +328,7 @@ event = construct_webhook_event(
 ```
 
 `verify_webhook(…)` returns a boolean instead. Delivery is at-least-once: deduplicate on `event["id"]`. Events:
-`key.revoked`, `risk.kill_switch`, `agent.updated` (emitted), `order.updated` (defined, not emitted yet).
+`key.revoked`, `risk.kill_switch`, `agent.updated`, `order.updated` (one event per transition of an order).
 A complete receiver: `sdk/python/examples/webhook_receiver.py`.
 
 ## Examples
@@ -249,7 +338,10 @@ cd sdk/python && uv sync
 SP_WALLET_API_KEY=spw_live_… uv run python examples/read_only.py       # read-only tour
 SP_WALLET_API_KEY=spw_live_… uv run python examples/async_read.py      # the asynchronous client
 SP_WALLET_API_KEY=spw_live_… uv run python examples/preview_order.py   # a preview with every outcome handled
+SP_WALLET_API_KEY=spw_live_… uv run python examples/paper_order.py     # PAPER: preview → place → wait → position → close
 ```
+
+The four are executed against the real API by the integration test.
 
 ## Development
 
@@ -265,6 +357,9 @@ SPW_SDK_INTEGRATION=off uv run pytest            # unit tests only
 
 The synchronous client is generated from the asynchronous one: one implementation, the same behaviour by construction.
 The integration test starts the real API and the real signer on an own database
-(`packages/trading-sdk/scripts/test-stack.mts`; it needs the repository's `node_modules` and PostgreSQL), creates keys
-through the owner flow and calls every method with both clients. It is **skipped** (reported as skipped) when
-PostgreSQL is not reachable.
+(`packages/trading-sdk/scripts/test-stack.mts`; it needs the repository's `node_modules` and PostgreSQL), creates
+keys, a paper account and paper mandates through the owner flow, calls every method with both clients and runs the
+whole **paper** write path (preview → order → fill → reduce → close → resting order → cancel, replay and conflict, the
+refusals, the kill switch, commands); every answer is validated against the OpenAPI document, closed objects included.
+No live order is sent: the live case stops at `execution_disabled`. It is **skipped** (reported as skipped) when
+PostgreSQL is not reachable; a test whose venue cannot be read is skipped with that reason.

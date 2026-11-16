@@ -15,26 +15,37 @@ const client = new SPWallet({ apiKey: process.env.SP_WALLET_API_KEY });   // or 
 
 await client.getBalances();
 await client.getPositions();
-await client.previewOrder({ exchange: 'hyperliquid', symbol: 'BTC', side: 'buy', type: 'market', notionalUsdc: 100 });
+const order = { exchange: 'hyperliquid', symbol: 'BTC', side: 'buy', type: 'market', notionalUsdc: 100 } as const;   // paper by default
+const preview = await client.previewOrder(order);
+if (preview.wouldExecute) {
+  const placed = await client.createOrder(order);
+  await client.waitForOrder(placed.order.id);          // FILLED, CANCELLED, REJECTED or FAILED — UNKNOWN keeps waiting
+}
 ```
 
 - Types generated from `docs/openapi/trading-v1.json` (`scripts/gen-types.mts`, drift test); amounts stay decimal strings.
-- Typed errors (`AuthenticationError`, `ScopeDenied`, `MandateRequired`, `RateLimited`, `ExecutionNotWired`, …) with
-  `code`, `status`, `requestId`.
+- Typed results for every implemented operation, the write side included (`OrderPreview`, `PlacedOrder`,
+  `CancelledOrder`, `CommandResult`); an order's `status` is the contract's closed enum of twelve states.
+- A `notional` is sized by the **server** (the SDK sends it and computes nothing); `iterateOrders` / `iterateActivity`
+  follow the cursor pagination.
+- Typed errors (`AuthenticationError`, `ScopeDenied`, `MandateRequired`, `MandateDenied` with the reasons, `RiskDenied`
+  with the failed checks, `ExecutionDisabled`, `AmbiguousCommand` with the questions, `RateLimited`, …) with `code`,
+  `status`, `requestId`, and `error.order` when the refusal is about an order the server created.
 - Safe retries: reads on network errors / 429 / 502–504; mutating calls only because they carry an `Idempotency-Key`
   (same key, same bytes on every retry). A mutating call without a trustworthy answer throws `OutcomeUnknown` — not a
   failure — with the key to resume with.
 - `waitForOrder`, webhook signature verification, the API key never in a log, an inspection or an error.
 
-**Execution requires an owner-approved mandate bound to the key**; the API refuses it otherwise (`MandateRequired`).
-In this version of the API the write operations answer `501 execution_not_wired`: the SDK throws `ExecutionNotWired`
-and never reports a success that did not happen.
+**Execution requires an owner-approved mandate bound to the key**; the API refuses it otherwise (`MandateRequired`),
+and an order outside the mandate is `MandateDenied`. Paper orders are simulated by the wallet. Live orders also need
+`SPW_TRADING_API_EXECUTION=on` on the server (`ExecutionDisabled` otherwise). The strategy and agent writes answer
+`501 execution_not_wired`: the SDK throws `ExecutionNotWired` and never reports a success that did not happen.
 
 ```
 src/        client.ts, errors.ts, util.ts (canonical JSON, decimals, order states), webhooks.ts, generated/openapi.ts
 scripts/    gen-types.mts (types from the OpenAPI document), build.mts, test-stack.mts (the real API for the
             integration tests of both SDKs), gen-fixtures.mts (server-made vectors for the Python SDK's tests)
-examples/   read-only.ts, preview-order.ts, webhook-receiver.ts
+examples/   read-only.ts, preview-order.ts, paper-order.ts (executed by the integration test), webhook-receiver.ts
 test/       unit tests (mocked fetch) + integration.test.ts (the real API)
 ```
 
