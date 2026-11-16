@@ -236,10 +236,24 @@ client.pause_agent(agent.id)
 client.stop_agent(agent.id)                                              # stop is always allowed
 ```
 
-`start_agent(agent_id, mode="live")` succeeds only when a mandate the **owner** approved for that agent with the passkey
-is in force at the signer; otherwise `409 mandate_required` (a `Conflict`). A key can never approve one. A spot agent is
-created in the owner's app (`403 owner_required`). An agent's `risk` limits are ints, bools, `Decimal`s or decimal
-strings — never a float.
+- **`mode` on the reads.** On the wire `mode` is optional: the server answers the mode the agent is in now (for a stopped
+  agent, the one it last ran in) and says which in `mode`. The SDK makes it a **required** keyword, so that code never reads
+  paper figures believing they are live ones; `open` exists on `list_agent_orders` only.
+- **`create_agent(mode=)`** is `"research"` (default: created, not running) or `"paper"`: an agent from a stream or
+  supervisor template starts on paper at once; a bar agent (or `kind="perp"`) is created and not started — register and
+  backtest a strategy version, then `start_agent`. `"live"` is refused (`400 bad_request`).
+- **Paper.** Starting a perp agent on paper creates its *paper trading mandate* (nothing is signed): its orders go through
+  the same order service, risk engine and kill switch as every other order. The key needs `agents:manage`, and a key
+  restricted to other venues or instruments gets `403 restricted`; a halted paper account answers `409 halted`.
+- **Live.** `start_agent(agent_id, mode="live")` succeeds only when a mandate the **owner** approved for that agent with the
+  passkey is in force — for a perp agent a trading mandate, which only the owner activates. Otherwise `409 mandate_required`.
+  A key can never approve one. Families that cannot go live answer `409 live_unavailable`.
+- **Errors.** Every 409 of the agent operations is a `Conflict`; read `e.code` (`mandate_required`, `halted`, `bad_state`,
+  `live_unavailable`, `no_strategy`, `no_report`, `bad_report`). `MandateRequired` (403) is about the *key's* mandate on the
+  order operations, not about an agent's.
+- **One kill switch.** There is no agents-side switch: `engage_kill_switch(reason)` engages the risk engine's, which stops every
+  agent's new risk too. Releasing it is the owner's act, in the app. A spot agent is created in the owner's app
+  (`403 owner_required`). An agent's `risk` limits are ints, bools, `Decimal`s or decimal strings — never a float.
 
 ### Spot orders (owner session only)
 
@@ -381,6 +395,69 @@ POST /api/v1/developer/keys/<new key id>/update           { "intentId": "…", "
 
 In the app: Developer → the key → *Trading mandate* → *New mandate*.
 
+## Streaming
+
+Live market data over one websocket: quotes, order books, trades, candles and venue statuses. Read-only (scope
+`markets:read`), same key, same restrictions (a channel of a venue or instrument outside the key's restrictions is refused,
+per subscription). The client is asynchronous and needs the optional dependency `websockets`:
+
+```bash
+pip install "sp-wallet-python[stream]"      # in the repository: uv sync --extra stream
+```
+
+`SPWalletStream`, `OrderBook`, `StreamError`, `book_checksum` and `channel_key` are exported by `sp_wallet` and loaded on
+first use: `import sp_wallet` works on a base install, and `websockets` is imported only when a stream connects.
+
+```python
+import asyncio
+from sp_wallet import SPWalletStream
+from sp_wallet.stream import Quote
+
+async def main() -> None:
+    async with SPWalletStream(base_url="https://wallet.example") as stream:     # the key: SP_WALLET_API_KEY, in the Authorization header
+        stream.on("close", lambda c: print("closed;", "reconnecting" if c["will_reconnect"] else "stopped"))
+        stream.on("error", lambda e: print("stream error:", e.code))
+        await stream.subscribe([{"type": "quote", "id": "hyperliquid:BTC"}, {"type": "status", "id": "hyperliquid"}])
+        async for m in stream:                                                  # or stream.on("quote", …)
+            if isinstance(m, Quote):
+                print(m.id, m.bid, m.ask, m.mark, m.stale)                      # decimal strings; `stale` is the server's verdict
+
+asyncio.run(main())
+```
+
+- **Channels**: `quote`, `book` (`depth`), `trades`, `candles` (`interval`), `status` (`id`: a venue or `"*"`). Ids are
+  `<venue>:<instrument>` (`hyperliquid:BTC`, `dydx:BTC-USD`, `spot:BTC`). Messages are models: `Quote`, `Book`, `Trades`,
+  `Candle`, `VenueStatus` (snake_case attributes: `recv_ts`, `venue_ts`, `bid_size`).
+- **Reconnection** is on by default (`reconnect=False` to turn it off): exponential backoff with jitter between `backoff_min`
+  and `backoff_max`; after a reconnection the client subscribes again to everything and the server sends fresh snapshots.
+  `close` events carry `will_reconnect`. A refusal that a retry cannot fix (no `markets:read`, revoked key, unknown
+  instrument) is a `StreamError` with the server's `code`, and is not retried.
+- **Order books**: feed every `Book` to an `OrderBook`; `apply()` returns `False` on a sequence hole or a checksum mismatch —
+  `await stream.resync(channel)` and the server restarts the book from a snapshot.
+- **Slow consumers**: quotes are conflated and a `dropped` event says what was skipped; the iterator's buffer is bounded by
+  `buffer_size`.
+- A stream connection writes **no row in the key's usage log** (the ticket request does).
+
+### Browsers and proxies: the ticket flow
+
+A browser cannot set a header on a websocket, and the key must never reach it. A backend asks for a single-use ticket (30 s)
+with the key — `POST /api/v1/trading/stream/ticket`, answer `{ ticket, expiresAt, ttlMs, url, protocol }` — and hands only
+the ticket to the page, which connects to `/api/v1/trading/stream?ticket=…` (in the TypeScript SDK:
+`new SPWalletStream({ baseUrl, ticket: () => … })`, see `docs/sdk/typescript.md`). A Python backend:
+
+```python
+import httpx, os
+
+def stream_ticket() -> str:                    # behind YOUR authentication; a new ticket for every (re)connection
+    r = httpx.post(f"{WALLET}/api/v1/trading/stream/ticket", headers={"authorization": f"Bearer {os.environ['SP_WALLET_API_KEY']}"}, json={})
+    r.raise_for_status()
+    return r.json()["ticket"]
+```
+
+The ticket carries the key's scope and restrictions, works once, and is refused when mixed with another credential. The
+Python client can connect that way too: `SPWalletStream(auth="ticket")` asks for the ticket itself with its key (useful
+behind a proxy that strips headers on upgrade), and `SPWalletStream(ticket=my_async_function)` uses yours.
+
 ## Webhooks
 
 The wallet signs every delivery: `X-SPW-Timestamp: <unix seconds>` and
@@ -409,9 +486,10 @@ SP_WALLET_API_KEY=spw_live_… uv run python examples/read_only.py       # read-
 SP_WALLET_API_KEY=spw_live_… uv run python examples/async_read.py      # the asynchronous client
 SP_WALLET_API_KEY=spw_live_… uv run python examples/preview_order.py   # a preview with every outcome handled
 SP_WALLET_API_KEY=spw_live_… uv run python examples/paper_order.py     # PAPER: preview → place → wait → position → close
+SP_WALLET_API_KEY=spw_live_… uv run --extra stream python examples/stream_quotes.py   # live quotes over the websocket, with reconnection
 ```
 
-The four are executed against the real API by the integration test.
+The five are executed against the real API by the integration tests.
 
 ## Development
 

@@ -303,8 +303,7 @@ def test_the_query_parameters_of_each_read_are_the_methods_keyword_arguments() -
         for cls in (SPWallet, AsyncSPWallet):
             params = set(inspect.signature(getattr(cls, CASES[op_id][0])).parameters) - {"self", "symbol", "market_id", "slug", "agent_id"}
             camel = {p.split("_")[0] + "".join(w.title() for w in p.split("_")[1:]) for p in params}
-            # the document's shared page query declares `open` on the signals and the journal too; only the ORDERS have open ones
-            assert camel == query - ({"open"} if op_id in ("listAgentSignals", "listAgentJournal") else set()), (op_id, cls.__name__)
+            assert camel == query, (op_id, cls.__name__)  # `open` is declared on the order list only
 
 
 def test_python_sources_exist() -> None:

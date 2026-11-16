@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 export interface StackKey { id: string; secret: string; /** the paper mandate bound to the key (trader, trader2) */ mandateId?: string }
 export interface Stack {
   baseUrl: string;
-  keys: Record<'reader' | 'trader' | 'trader2' | 'unbound' | 'narrow' | 'prepare' | 'limited' | 'revoked', StackKey>;
+  keys: Record<'reader' | 'trader' | 'trader2' | 'unbound' | 'narrow' | 'venues' | 'agentsOnly' | 'prepare' | 'limited' | 'revoked', StackKey>;
   /** the paper account the two trader keys' mandates cover */
   paper: { accountId: string; instrument: string; maxOrderNotionalUsd: string };
   /** a venue account row without any authorization: a live order on it stops at the execution lock */

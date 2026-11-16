@@ -6,10 +6,15 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { afterAll, describe, expect, it, type TestContext } from 'vitest';
+import { afterAll, describe, expect, it, vi, type TestContext } from 'vitest';
 import { AmbiguousCommand, AmbiguousSymbol, AuthenticationError, Conflict, ConfigurationError, constructWebhookEvent, errorFromResponse, ExecutionDisabled, FINAL_ORDER_STATES, IdempotencyConflict, MandateDenied, MandateRequired,
   newIdempotencyKey, NotFound, OPERATION_ERRORS, OPERATIONS, ORDER_STATES, RateLimited, responseMeta, RiskDenied, ScopeDenied, ServiceUnavailable, SPWallet, SPWalletError, ValidationError, verifyWebhook, type OperationId, type Order } from '../src/index.ts';
 import { ROOT, startStack, type Stack } from './stack.ts';
+
+// Every test talks to a real API in another process, which talks to PostgreSQL, the signer and the venues' public endpoints.
+// With the whole suite on the same machine a call can wait seconds: the bound is explicit and generous — a guard against a
+// hang, not a measure. No assertion depends on a duration (the waits below are polls that return as soon as the state is there).
+vi.setConfig({ testTimeout: 240_000 });
 
 const started = await startStack('ts');
 const skip = 'skip' in started ? started.skip : null;
@@ -165,7 +170,7 @@ describe.skipIf(skip !== null)('integration: reads against the real route handle
     }
     const unknown = declared('getPrivateMarketCompany', await caught(c.getPrivateMarketCompany('no-such-company')));
     expect(unknown).toBeInstanceOf(NotFound); expect(unknown.code).toBe('unknown_company');
-  }, 120_000);
+  }, 300_000);
   it('every read operation of the document is exercised in this file', () => {
     const reads = (Object.keys(OPERATIONS) as OperationId[]).filter((id) => OPERATIONS[id].method === 'GET');
     expect(reads.sort()).toEqual(['compareMarkets', 'getActivity', 'getAgent', 'getAgentPerformance', 'getBalances', 'getCandles', 'getJob', 'getMarket', 'getOpenApi', 'getOrder', 'getOrderbook', 'getPortfolio', 'getPrivateMarket',
@@ -214,7 +219,7 @@ describe.skipIf(skip !== null)('integration: the PAPER write path, end to end, a
     expect(placed).toMatchObject({ idempotent: false, approval: null, order: { mode: 'paper', venue: 'hyperliquid', instrument: I(), side: 'buy', type: 'market', accountId: acct(), mandateId: stack.keys.trader.mandateId } });
     expect(ORDER_STATES).toContain(placed.order.status); expect(responseMeta(placed)).toMatchObject({ status: 200, idempotencyKey, idempotentReplay: false });
     say(`createOrder(…, {idempotencyKey:'${short(idempotencyKey)}'}) → ${meta(placed)} order=${short(id)} ${line(placed.order)}`);
-    const done = await c.waitForOrder(id, { waitTimeoutMs: 30_000, pollIntervalMs: 250 });
+    const done = await c.waitForOrder(id, { waitTimeoutMs: 90_000, pollIntervalMs: 250 });
     expect(done.order).toMatchObject({ id, status: 'FILLED', final: true, engineStatus: 'filled' }); expect(done.order.filled).toBe(done.order.size); expect(done.order.avgFillPrice).toMatch(DEC);
     expect(done.fills.length).toBeGreaterThan(0); for (const f of done.fills) { expect(f.price).toMatch(DEC); expect(f.size).toMatch(DEC); }
     say(`waitForOrder('${short(id)}') → ${line(done.order)} fills=${done.fills.length} history=${(done.history ?? []).length} transitions`);
@@ -282,7 +287,7 @@ describe.skipIf(skip !== null)('integration: the PAPER write path, end to end, a
     expect(items).toEqual(acts.items.map((a) => String(a.id))); expect(items.length).toBeGreaterThanOrEqual(4); expect(acts.items.every((a) => a.kind === 'fill' && a.mode === 'paper')).toBe(true);
     expect(declared('listOrders', await caught(c.listOrders({ cursor: 'AAAA' }))).code).toBe('invalid_cursor');
     say(`listOrders({limit:2}) → ${firstPage.orders.length} orders, nextCursor=${firstPage.nextCursor!.slice(0, 16)}…; iterateOrders({limit:2}) → ${paged.length} orders in ${Math.ceil(paged.length / 2)} pages = listOrders({limit:500}); iterateActivity({limit:2}) → ${items.length} fills`);
-  }, 180_000);
+  }, 300_000);
 
   it('refusals: a live order with the execution lock off → ExecutionDisabled; out of the mandate → MandateDenied with the reasons and the REJECTED order', async (ctx) => {
     const c = client('trader', { timeoutMs: 60_000 });
@@ -308,7 +313,7 @@ describe.skipIf(skip !== null)('integration: the PAPER write path, end to end, a
     const theirs = declared('cancelOrder', await caught(client('trader2').cancelOrder(mine.order.id)));
     expect(theirs).toMatchObject({ status: 403, code: 'not_your_order' });
     expect((await c.cancelOrder(mine.order.id)).order.status).toBe('CANCELLED');
-  }, 120_000);
+  }, 300_000);
 
   it('the kill switch: new risk → RiskDenied; a cancel and a close still pass; only the owner releases it', async (ctx) => {
     const c = client('trader', { timeoutMs: 60_000 });
@@ -340,7 +345,7 @@ describe.skipIf(skip !== null)('integration: the PAPER write path, end to end, a
     expect(again.order.status).toBe('FILLED');
     await flat(c);
     say(`owner released the kill switch (passkey) → createOrder → ${again.order.status}`);
-  }, 120_000);
+  }, 300_000);
 
   it('commands: an ambiguous command → AmbiguousCommand with the questions; a dry run places nothing; a query', async (ctx) => {
     const c = client('trader', { timeoutMs: 60_000 });
@@ -366,7 +371,7 @@ describe.skipIf(skip !== null)('integration: the PAPER write path, end to end, a
     const bad = declared('runCommand', await caught(c.runCommand('FROBNICATE THE MARKET')));
     expect(bad).toBeInstanceOf(ValidationError); expect(bad.code).toBe('parse_error');
     say(`runCommand('SHOW POSITIONS') → kind=${show.kind} query=${show.query}; runCommand('KILL', {dryRun:true}) → kind=${kill.kind} executed=${String((kill as { executed?: boolean }).executed)}; runCommand('FROBNICATE…') → ${bad.name} ${bad.code}`);
-  }, 120_000);
+  }, 300_000);
 
   it('a preview answers the account\'s figures only to a key that may read the account', async (ctx) => {
     const p = await venue(ctx, () => client('prepare').previewOrder({ mode: 'paper', accountId: acct(), instrument: I(), side: 'buy', type: 'market', notional: '100' }));
@@ -425,7 +430,7 @@ describe.skipIf(skip !== null)('integration: agents on PAPER, against the real s
     expect(declared('createStrategy', await caught(c.createStrategy({ kind: 'perp', path: 'momentum/v1' }))).code).toBe('bad_request');
     for (const run of [() => c.backtestStrategy(UUID), () => c.startStrategy(UUID, { mode: 'paper' }), () => c.stopStrategy(UUID)]) expect(await caught(run())).toBeInstanceOf(NotFound);
     say(`startAgent(id, {mode:'live'}) without an owner-approved mandate → ${live.name} HTTP ${live.status} ${live.code}; getAgent(unknown) → ${ghost.name} ${ghost.code}`);
-  }, 180_000);
+  }, 300_000);
 });
 
 describe.skipIf(skip !== null)('integration: the write surface and the refusals', () => {
@@ -503,7 +508,7 @@ describe.skipIf(skip !== null)('integration: webhook, examples', () => {
     expect(out).toMatch(/portfolio: wallet/); expect(out).toMatch(/risk: signer reachable=true, halted=false/); expect(out.trimEnd().endsWith('done')).toBe(true);
     if (/markets: ServiceUnavailable/.test(out)) ctx.skip('venue unreachable');
     expect(out).toMatch(/orderbook: best bid \d/);
-  }, 120_000);
+  }, 300_000);
   it('examples/preview-order.ts: a real preview, with a key that may preview and may not read the account', (ctx) => {
     const out = execFileSync('node', [path.join(ROOT, 'packages/trading-sdk/examples/preview-order.ts')], { encoding: 'utf8', env: { PATH: process.env.PATH ?? '', SP_WALLET_API_KEY: stack.keys.prepare.secret, SP_WALLET_BASE_URL: stack.baseUrl } });
     if (process.env.SPW_SDK_TRANSCRIPT) console.log(out.split('\n').filter(Boolean).map((l) => `[example preview-order.ts] ${l}`).join('\n'));
@@ -513,7 +518,7 @@ describe.skipIf(skip !== null)('integration: webhook, examples', () => {
     // the same example with a key that has no mandate says what is missing
     const unbound = execFileSync('node', [path.join(ROOT, 'packages/trading-sdk/examples/preview-order.ts')], { encoding: 'utf8', env: { PATH: process.env.PATH ?? '', SP_WALLET_API_KEY: stack.keys.reader.secret, SP_WALLET_BASE_URL: stack.baseUrl } });
     expect(unbound).toMatch(/not bound to an owner-approved trading mandate/); expect(unbound.trimEnd().endsWith('done')).toBe(true);
-  }, 120_000);
+  }, 300_000);
   it('examples/paper-order.ts: preview → place → replay → final → position → close, on the paper account', (ctx) => {
     const out = execFileSync('node', [path.join(ROOT, 'packages/trading-sdk/examples/paper-order.ts')], { encoding: 'utf8', env: { PATH: process.env.PATH ?? '', SP_WALLET_API_KEY: stack.keys.trader2.secret, SP_WALLET_BASE_URL: stack.baseUrl } });
     if (process.env.SPW_SDK_TRANSCRIPT) console.log(out.split('\n').filter(Boolean).map((l) => `[example paper-order.ts] ${l}`).join('\n'));
@@ -521,5 +526,5 @@ describe.skipIf(skip !== null)('integration: webhook, examples', () => {
     if (/venue_unavailable|venue_timeout|venue_rate_limited/.test(out)) ctx.skip('venue unreachable');
     expect(out).toMatch(/preview: would execute=true/); expect(out).toMatch(/placed: order .* status=FILLED final=true/); expect(out).toMatch(/replay: same order=true, answered from the idempotency store=true/);
     expect(out).toMatch(/final: status=FILLED/); expect(out).toMatch(/position: long /); expect(out).toMatch(/closed: status=FILLED reduceOnly=true/); expect(out.trimEnd().endsWith('done')).toBe(true);
-  }, 120_000);
+  }, 300_000);
 });

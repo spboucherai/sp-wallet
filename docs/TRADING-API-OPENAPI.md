@@ -10,6 +10,16 @@ Version 1.0.0. Machine-readable document: [`docs/openapi/trading-v1.json`](opena
 `Authorization: Bearer spw_live_<key id>_<secret>`. No cookie, no CSRF header. The key is refused on every path outside
 `/api/v1/trading/`.
 
+## Streaming
+
+Live market data (quotes, order books, trades, candles, venue statuses) is also served over a websocket, which the OpenAPI document cannot describe:
+`GET /api/v1/trading/stream` — scope `markets:read`; the key in the `Authorization` header of the handshake, or `?ticket=` with a single-use ticket
+from `POST /api/v1/trading/stream/ticket` (the way of a browser, which cannot set a header on a websocket). Protocol: [`V11-QUOTE-ENGINE.md`](V11-QUOTE-ENGINE.md); clients:
+`SPWalletStream` in both SDKs.
+
+**A stream connection writes no row in the key's usage log**: it is counted in the stream's own statistics. The ticket request is an ordinary call and is
+logged like any other.
+
 ## Scopes
 
 | Scope | Execution scope (inert without an approved trading mandate bound to the key — except a cancel of the key's own order and the kill switch, which only remove risk) |
@@ -660,37 +670,35 @@ Request body (JSON):
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
 | `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
-| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in now |
+| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it. |
 | `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
 | `before` | query | no | `{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}` | unix ms: rows strictly before it |
-| `open` | query | no | `{"type":"string","enum":["true","false"]}` |  |
 
 ### GET `/api/v1/trading/agents/{id}/journal`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
 | `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
-| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in now |
+| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it. |
 | `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
 | `before` | query | no | `{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}` | unix ms: rows strictly before it |
-| `open` | query | no | `{"type":"string","enum":["true","false"]}` |  |
 
 ### GET `/api/v1/trading/agents/{id}/orders`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
 | `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
-| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in now |
+| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it. |
 | `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
 | `before` | query | no | `{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}` | unix ms: rows strictly before it |
-| `open` | query | no | `{"type":"string","enum":["true","false"]}` |  |
+| `open` | query | no | `{"type":"string","enum":["true","false"]}` | true: only the orders that are not final |
 
 ### GET `/api/v1/trading/agents/{id}/performance`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
 | `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
-| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. |
+| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it. |
 
 ### GET `/api/v1/trading/jobs/{id}`
 
@@ -790,12 +798,11 @@ Request body (JSON):
     },
     "mode": {
       "default": "research",
-      "description": "research (default: created, not running) or paper (stream and supervisor agents start at once); never live",
+      "description": "research (default): the agent is created and not running. paper: an agent created from a stream or supervisor template is started on paper at once; a bar agent (momentum, mean reversion, …, or `kind: perp`) is created and NOT started — it needs a backtested strategy version first, then POST /agents/{id}/start. `live` is refused (400 `bad_request`): an agent goes live only through POST /agents/{id}/start, under a mandate the owner approved.",
       "type": "string",
       "enum": [
         "research",
-        "paper",
-        "live"
+        "paper"
       ]
     }
   },
@@ -1262,7 +1269,7 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 | 401 | `unauthenticated` |
 | 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `owner_required`, `restricted` |
 | 404 | `not_found` |
-| 409 | `bad_report`, `bad_request`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy`, `other_version` |
+| 409 | `bad_report`, `bad_request`, `bad_state`, `halted`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy`, `other_version` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
 
@@ -1360,7 +1367,7 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 | 400 | `bad_request`, `idempotency`, `stale_request` |
 | 401 | `unauthenticated` |
 | 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `owner_required` |
-| 409 | `bad_report`, `bad_state`, `exists`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy`, `strategy_not_installed`, `wrong_kind` |
+| 409 | `bad_report`, `bad_state`, `exists`, `halted`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy`, `strategy_not_installed`, `wrong_kind` |
 | 422 | `bad_request`, `universe_mismatch` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
@@ -1373,7 +1380,7 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 | 401 | `unauthenticated` |
 | 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `owner_required`, `restricted` |
 | 404 | `not_found` |
-| 409 | `bad_report`, `bad_state`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy` |
+| 409 | `bad_report`, `bad_state`, `halted`, `idempotency_conflict`, `idempotency_in_progress`, `live_unavailable`, `mandate_required`, `no_report`, `no_strategy` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
 
