@@ -256,6 +256,34 @@ describe('order gateway — the adapter over the engine seams', () => {
     expect(s2.calls.execute).toBe(1); expect([r1.id, r2.id]).toEqual([o2.clientOrderId, o2.clientOrderId]);
   });
 
+  it('an order another worker is executing RIGHT NOW is left alone: no lookup, no settlement, no second execution — until the grace has passed', async () => {
+    const a = await agent();
+    let t = Date.now(), finish: (r: any) => void = () => {};
+    const hanging = seam({ execute: () => new Promise((res) => { finish = res; }), lookup: null });   // the first worker's call to the venue is still in the air
+    const g1 = gw.orderGateway({ agent: await row(a), seam: hanging, authorityId: a, now: () => t }), o = order(a);
+    const first = g1.submit(P(a), o, { idempotencyKey: o.clientOrderId });
+    await sleep(30);
+    // a second worker comes with the same key while the first is mid-flight: "no trace" on the execution side must NOT become "never placed"
+    const other = seam({ lookup: null });
+    const g2 = gw.orderGateway({ agent: await row(a), seam: other, authorityId: a, now: () => t });
+    const seen = await g2.submit(P(a), o, { idempotencyKey: o.clientOrderId });
+    expect([seen.state, seen.idempotent, other.calls.execute, other.calls.lookup]).toEqual(['SUBMITTING', true, 0, 0]);
+    expect((await g2.reconcile!()).map((r) => r.state)).toEqual(['SUBMITTING']); expect(other.calls.lookup).toBe(0);
+    // the first worker's call returns: its record is settled by IT
+    finish(hanging.filled);
+    expect((await first).state).toBe('FILLED');
+    expect((await g2.submit(P(a), o, { idempotencyKey: o.clientOrderId })).state).toBe('FILLED');
+    expect(hanging.calls.execute).toBe(1);
+    // a SUBMITTING record whose worker died (nothing changed for longer than the grace) IS asked about
+    const o2 = order(a), dead = seam({ execute: () => new Promise(() => {}), lookup: null });
+    void gw.orderGateway({ agent: await row(a), seam: dead, authorityId: a, now: () => t }).submit(P(a), o2, { idempotencyKey: o2.clientOrderId });
+    await sleep(30);
+    t += gw.IN_FLIGHT_GRACE_MS + 1;
+    const late = seam({ lookup: { status: 'pending', code: 'submitted', reason: 'the venue has it, unconfirmed', venueOrderId: 'v-77' } });
+    const settled = await gw.orderGateway({ agent: await row(a), seam: late, authorityId: a, now: () => t }).submit(P(a), o2, { idempotencyKey: o2.clientOrderId });
+    expect([settled.state, settled.venueOrderId, late.calls.lookup, late.calls.execute]).toEqual(['SUBMITTED', 'v-77', 1, 0]);
+  });
+
   it('refused before anything leaves: research mode, another mode than the agent\'s, no mandate in force, another mandate, an instrument that is not the agent\'s', async () => {
     const paper = await agent(), research = await agent({ state: 'CREATED', mode: 'RESEARCH' }), live = await agent({ state: 'LIVE', mode: 'LIVE' });
     const s = seam(), mandate = randomUUID();

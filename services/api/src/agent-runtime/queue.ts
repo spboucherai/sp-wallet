@@ -44,8 +44,7 @@ export async function claim(worker: string, o: { limit?: number; kinds?: readonl
     const due = await tx<JobRow[]>`select * from agent_jobs where state = 'queued' and run_at <= coalesce(${t}, now()) and kind in ${tx(kinds)} order by run_at, created_at limit ${o.limit ?? 8} for update skip locked`;
     const out: JobRow[] = [];
     for (const j of due) {
-      const until = new Date((o.now ?? Date.now()) + LOCK_MS[j.kind]);
-      const [r] = await tx<JobRow[]>`update agent_jobs set state = 'running', attempts = attempts + 1, locked_by = ${worker}, locked_until = ${until}, updated_at = coalesce(${t}, now()) where id = ${j.id} returning *`;
+      const [r] = await tx<JobRow[]>`update agent_jobs set state = 'running', attempts = attempts + 1, locked_by = ${worker}, locked_until = coalesce(${t}, now()) + ${`${LOCK_MS[j.kind]} milliseconds`}::interval, updated_at = coalesce(${t}, now()) where id = ${j.id} returning *`;
       if (r) out.push(r);
     }
     return out;
@@ -60,10 +59,10 @@ export async function complete(job: Pick<JobRow, 'id'>, worker: string, result: 
 
 /** A failed attempt: retry later, or dead-letter. Returns the state the job is in now. */
 export async function fail(job: Pick<JobRow, 'id' | 'kind' | 'attempts' | 'max_attempts'>, worker: string, error: string, now?: number): Promise<'queued' | 'dead' | 'lost'> {
-  const t = at(now), dead = job.attempts >= job.max_attempts, next = new Date((now ?? Date.now()) + backoffMs(job.kind, job.attempts));
+  const t = at(now), dead = job.attempts >= job.max_attempts, wait = `${backoffMs(job.kind, job.attempts)} milliseconds`;
   const rows = dead
     ? await sql`update agent_jobs set state = 'dead', last_error = ${error.slice(0, 500)}, locked_by = null, locked_until = null, finished_at = coalesce(${t}, now()), updated_at = coalesce(${t}, now()) where id = ${job.id} and state = 'running' and locked_by = ${worker} returning id`
-    : await sql`update agent_jobs set state = 'queued', last_error = ${error.slice(0, 500)}, locked_by = null, locked_until = null, run_at = ${next}, updated_at = coalesce(${t}, now()) where id = ${job.id} and state = 'running' and locked_by = ${worker} returning id`;
+    : await sql`update agent_jobs set state = 'queued', last_error = ${error.slice(0, 500)}, locked_by = null, locked_until = null, run_at = coalesce(${t}, now()) + ${wait}::interval, updated_at = coalesce(${t}, now()) where id = ${job.id} and state = 'running' and locked_by = ${worker} returning id`;
   return rows.length ? (dead ? 'dead' : 'queued') : 'lost';
 }
 

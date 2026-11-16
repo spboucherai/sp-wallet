@@ -46,6 +46,9 @@ export const TICK_TIMEOUT_MS = 150_000;
 export function createAgentRuntime(h: RuntimeHandlers, o: RuntimeOptions = {}) {
   const worker = o.workerId ?? newWorkerId(process.env.SPW_WORKERS === 'agents' ? 'agents' : 'api'), now = o.now ?? Date.now;
   const concurrency = o.concurrency ?? 4, deadline = o.tickTimeoutMs ?? TICK_TIMEOUT_MS;
+  /** the queue's clock: the DATABASE's own (`now()`) unless a clock was injected — a job enqueued with the database's microsecond clock must not
+   *  look "not due yet" to a JavaScript millisecond read in the same instant */
+  const qnow = (): number | undefined => (o.now ? now() : undefined);
   const stream = h.feed ? new StreamEngine(h.feed, o.stream) : null, streamLeases = new Map<string, Lease>();
   /** ticks still running after their deadline: their lease is kept until they really end */
   const overrun = new Set<Promise<unknown>>();
@@ -62,15 +65,15 @@ export function createAgentRuntime(h: RuntimeHandlers, o: RuntimeOptions = {}) {
       if (r === 'timeout') {
         // the engine step cannot be interrupted: it keeps its lease until it ends (nobody else may tick this agent meanwhile); the JOB is failed
         const p = real.catch(() => {}).finally(() => overrun.delete(p)); overrun.add(p);
-        const st = await fail(job, worker, `the ${job.kind} did not finish within ${deadline} ms`, now());
+        const st = await fail(job, worker, `the ${job.kind} did not finish within ${deadline} ms`, qnow());
         if (job.agent_id) await journal(job.agent_id, { kind: 'error', code: 'tick_timeout', severity: 'error', title: `Engine ${job.kind} timed out`, body: `after ${deadline} ms; ${st === 'dead' ? 'dead-lettered' : 'it will be retried'}`, ref: { job: job.id } });
         return `error: timed out after ${deadline} ms`;
       }
-      if (!r.held) { await complete(job, worker, { skipped: 'leased by another worker' }, now()); return 'leased by another worker'; }
-      await complete(job, worker, r.value ?? null, now());
+      if (!r.held) { await complete(job, worker, { skipped: 'leased by another worker' }, qnow()); return 'leased by another worker'; }
+      await complete(job, worker, r.value ?? null, qnow());
       return typeof r.value === 'string' ? r.value : 'done';
     } catch (e) {
-      const msg = (e as Error).message ?? String(e), st = await fail(job, worker, msg, now());
+      const msg = (e as Error).message ?? String(e), st = await fail(job, worker, msg, qnow());
       if (job.agent_id && st === 'dead') await journal(job.agent_id, { kind: 'error', code: 'job_dead_letter', severity: 'error', title: `${job.kind} job dead-lettered after ${job.attempts} attempt(s)`, body: msg.slice(0, 300), ref: { job: job.id }, data: { ms: now() - t } });
       return `error: ${msg.slice(0, 160)}`;
     } finally { if (timer) clearTimeout(timer); }
@@ -81,12 +84,12 @@ export function createAgentRuntime(h: RuntimeHandlers, o: RuntimeOptions = {}) {
     const out: Record<string, string> = {};
     let seen = 0;
     for (;;) {
-      const jobs = await claim(worker, { kinds, limit: concurrency, now: now() });
+      const jq = qnow(), jobs = await claim(worker, { kinds, limit: concurrency, ...(jq === undefined ? {} : { now: jq }) });
       if (!jobs.length || seen >= limit) break;
       seen += jobs.length;
       await Promise.all(jobs.map(async (j) => {
         const fn = handlerOf(j);
-        const r = fn ? await runJob(j, fn) : await fail(j, worker, `no handler for ${j.kind}`, now()).then(() => 'error: no handler');
+        const r = fn ? await runJob(j, fn) : await fail(j, worker, `no handler for ${j.kind}`, qnow()).then(() => 'error: no handler');
         out[j.agent_id ?? j.id] = r;
       }));
     }
@@ -98,9 +101,10 @@ export function createAgentRuntime(h: RuntimeHandlers, o: RuntimeOptions = {}) {
     const t = now();
     if (engine === 'spot') await h.beforeSpotPass?.(t).catch(() => {});
     const agents = engine === 'spot' ? await h.spotAgents() : await h.perpAgents();
-    for (const a of agents) await enqueue('tick', { agentId: a.id, payload: { engine }, dedupeKey: `tick:${a.id}`, runAt: t });
+    const tq = qnow(), at = tq === undefined ? null : new Date(tq);
+    for (const a of agents) await enqueue('tick', { agentId: a.id, payload: { engine }, dedupeKey: `tick:${a.id}`, ...(tq === undefined ? {} : { runAt: tq }) });
     const mine = new Set(agents.map((a) => a.id)), out: Record<string, string> = {};
-    const due = await sql<JobRow[]>`select * from agent_jobs where state = 'queued' and kind = 'tick' and payload->>'engine' = ${engine} and run_at <= ${new Date(t)} order by run_at limit 500`;
+    const due = await sql<JobRow[]>`select * from agent_jobs where state = 'queued' and kind = 'tick' and payload->>'engine' = ${engine} and run_at <= coalesce(${at}, now()) order by run_at limit 500`;
     const ids = due.map((j) => j.id);
     for (let i = 0; i < ids.length; i += concurrency) {
       const claimed = await claimIds(ids.slice(i, i + concurrency));
@@ -111,14 +115,14 @@ export function createAgentRuntime(h: RuntimeHandlers, o: RuntimeOptions = {}) {
   };
   async function claimIds(ids: string[]): Promise<JobRow[]> {
     if (!ids.length) return [];
-    const t = now();
-    return sql<JobRow[]>`update agent_jobs set state = 'running', attempts = attempts + 1, locked_by = ${worker}, locked_until = ${new Date(t + 180_000)}, updated_at = ${new Date(t)}
+    const tq = qnow(), at = tq === undefined ? null : new Date(tq);
+    return sql<JobRow[]>`update agent_jobs set state = 'running', attempts = attempts + 1, locked_by = ${worker}, locked_until = coalesce(${at}, now()) + interval '180 seconds', updated_at = coalesce(${at}, now())
       where id in ${sql(ids)} and state = 'queued' returning *` as unknown as Promise<JobRow[]>;
   }
 
   /** the other job kinds: backtests and wind-downs asked for through the API */
   const jobsPass = async (): Promise<Record<string, string>> => {
-    const r = await reap(now());
+    const r = await reap(qnow());
     for (const j of r.dead) if (j.agent_id) await journal(j.agent_id, { kind: 'error', code: 'job_dead_letter', severity: 'error', title: `${j.kind} job dead-lettered: its worker stopped answering`, body: j.last_error ?? '', ref: { job: j.id } });
     return drain(['backtest', 'wind_down'], (j) => (j.kind === 'backtest' && h.backtest ? () => h.backtest!(j) : j.kind === 'wind_down' && h.windDown ? () => h.windDown!(j) : null));
   };

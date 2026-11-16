@@ -91,8 +91,11 @@ export interface SeamBinding {
 }
 export type OrderGatewayFactory = (binding: SeamBinding) => AgentOrderGateway;
 
-export class GatewayError extends Error { constructor(readonly code: string, message: string) { super(message); } }
+export class GatewayError extends Error { readonly code: string; constructor(code: string, message: string) { super(message); this.code = code; } }
 const PROVEN_NOT_SENT: readonly string[] = ['NOT_SENT', 'NEVER_PLACED'];
+/** A record in SUBMITTING that changed less than this long ago belongs to a worker that is executing it RIGHT NOW: nobody else asks
+ *  the execution side about it or settles it ("no trace yet" would be read as "never placed" while the order is on its way). */
+export const IN_FLIGHT_GRACE_MS = 60_000;
 const AT_VENUE: readonly OrderState[] = ['SUBMITTING', 'SUBMITTED', 'PARTIALLY_FILLED', 'UNKNOWN'];
 const OPEN_STATES: string[] = [...AT_VENUE, 'CREATED', 'VALIDATED', 'APPROVED'];
 /** an order that can only reduce risk: a reduce-only derivative order, or a spot sale back to the cash leg */
@@ -117,6 +120,7 @@ export class SeamOrderGateway implements AgentOrderGateway {
   private readonly now: () => number;
   constructor(b: SeamBinding) { this.b = b; this.now = b.now ?? Date.now; }
 
+  private inFlight(row: IntentRow): boolean { return row.record.state === 'SUBMITTING' && this.now() - row.record.updatedAt < IN_FLIGHT_GRACE_MS; }
   private own(p: AgentPrincipal): void { if (p.kind !== 'agent' || p.id !== this.b.agent.id) throw new GatewayError('wrong_principal', 'this gateway is bound to another agent'); }
   private async latest(key: string): Promise<IntentRow | null> {
     return (await sql<IntentRow[]>`select * from agent_order_intents where agent_id = ${this.b.agent.id} and idempotency_key = ${key} order by attempt desc limit 1`)[0] ?? null;
@@ -178,6 +182,7 @@ export class SeamOrderGateway implements AgentOrderGateway {
 
     // 1 — this key already has an order: its record is the answer. Never a second order, unless the last attempt provably never left.
     let prior = await this.latest(o.idempotencyKey);
+    if (prior && this.inFlight(prior)) return view(prior, true);                 // another worker is executing it now: its record, as it stands, is the answer
     if (prior && AT_VENUE.includes(prior.record.state)) prior = await this.reconcileRow(prior);
     let attempt = 1;
     if (prior) {
@@ -251,7 +256,14 @@ export class SeamOrderGateway implements AgentOrderGateway {
     let res: SeamResult | null;
     try { res = await this.b.seam.lookup(row.order_json); } catch { return row; }       // cannot be asked now: unchanged, asked again on the next pass
     const before = row.record.state;
-    const next = await this.settle(row, res, row.record.createdAt);
+    let next: IntentRow;
+    try { next = await this.settle(row, res, row.record.createdAt); }
+    catch (e) {
+      // another worker settled it in the meantime: its version is the record
+      if (!(e instanceof GatewayError) || e.code !== 'concurrent_update') throw e;
+      const [cur] = await sql<IntentRow[]>`select * from agent_order_intents where id = ${row.id}`;
+      return cur ?? row;
+    }
     // an execution found by the reconciliation is a fill like any other: its own journal line
     if (D.gt(D.from(next.record.filledSize), D.from(row.record.filledSize))) await journal(row.agent_id, { mode: row.mode, kind: 'fill', code: 'FILL', title: `Filled ${next.record.filledSize} at ${next.record.avgFillPrice ?? '?'}`,
       body: `${row.order_json.side} ${row.order_json.instrument} (${row.id})${row.mode === 'LIVE' ? '' : ' — SIMULATED fill'}`, data: { fills: next.fills }, ref: { order: row.id, signal: row.signal_id }, configVersion: row.config_version });
@@ -263,7 +275,7 @@ export class SeamOrderGateway implements AgentOrderGateway {
   async reconcile(): Promise<AgentOrderRecord[]> {
     const rows = await sql<IntentRow[]>`select * from agent_order_intents where agent_id = ${this.b.agent.id} and state in ${sql(AT_VENUE as string[])} order by created_at`;
     const out: AgentOrderRecord[] = [];
-    for (const r of rows) out.push(view(await this.reconcileRow(r), true));
+    for (const r of rows) out.push(view(this.inFlight(r) ? r : await this.reconcileRow(r), true));
     return out;
   }
 

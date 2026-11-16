@@ -86,7 +86,8 @@ export class StreamEngine {
   private readonly resolved = new Map<string, Instrument | null>();
   private prunedAt = 0;
   readonly stats = { passes: 0, snapshots: 0, gaps: 0, missing: 0, decisions: 0 };
-  constructor(private readonly feed: StreamFeed, private readonly o: StreamOptions = {}) {}
+  private readonly feed: StreamFeed; private readonly o: StreamOptions;
+  constructor(feed: StreamFeed, o: StreamOptions = {}) { this.feed = feed; this.o = o; }
 
   private async instrument(venue: string, base: string): Promise<Instrument | null> {
     const k = `${venue}|${base}`;

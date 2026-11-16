@@ -30,8 +30,10 @@ const changed = async (id: string, what: 'started' | 'paused' | 'stopped'): Prom
 const kindOf = (a: RuntimeAgentRow): 'spot' | 'perp' | 'stream' | 'supervisor' => (a.kind ?? 'spot') as never;
 
 export class MandateRequired extends UserError {
-  constructor(readonly agentId: string, readonly kind: string, why: string) {
+  readonly agentId: string; readonly kind: string;
+  constructor(agentId: string, kind: string, why: string) {
     super('mandate_required', `LIVE needs a mandate approved by the owner with the passkey, in force at the signer: ${why}. A key, an agent or this route can never approve one.`, 409);
+    this.agentId = agentId; this.kind = kind;
   }
 }
 
