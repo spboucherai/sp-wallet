@@ -39,10 +39,15 @@ describe('implied valuation — what the price unit defines', () => {
     expect(impliedValuation(contract({ priceUnit: { kind: 'index_points' }, dilutedShares: shares }), price('1042')).implied.impliedValuation).toBeNull();
     expect(impliedValuation(contract({ priceUnit: { kind: 'unknown' }, dilutedShares: shares }), price('1042')).implied.impliedValuation).toBeNull();
   });
-  it('a valuation unit that no document of the venue backs is flagged as unsourced', () => {
-    const r = impliedValuation(contract({ priceUnit: { kind: 'valuation_usd_billions' }, formulaSource: null }), price('352.5'));
-    expect(r.implied.impliedValuation!.sources[1]!.source).toMatch(/NOT SOURCED/);
-    expect(r.caveats.some((c) => /not backed by a document/.test(c))).toBe(true);
+  it('a valuation unit that no document of the venue backs yields NO valuation, with the reason (never a flagged estimate)', () => {
+    for (const priceUnit of [{ kind: 'valuation_usd_billions' as const }, { kind: 'valuation_scaled' as const, divisor: '1000000000' }]) {
+      const r = impliedValuation(contract({ priceUnit, formulaSource: null }), price('1343.1'), { lastPrivate: lastRound });
+      expect(r.implied).toEqual({ impliedValuation: null, reason: expect.stringMatching(/not backed by a document of the venue/) });
+      expect(r.versusPrivate).toMatchObject({ premiumBps: null, reason: expect.stringMatching(/not backed by a document/) });   // no premium either
+      expect(JSON.stringify(r)).not.toContain('1343100000000');
+    }
+    // the same unit WITH its document is derived
+    expect(impliedValuation(contract({ priceUnit: { kind: 'valuation_usd_billions' } }), price('1343.1')).implied.impliedValuation!.value).toBe('1343100000000');
   });
 });
 
@@ -59,6 +64,22 @@ describe('implied valuation — contract value, exposure and price are kept apar
     expect(r.contractMarketValue).toMatchObject({ value: null, reason: expect.stringMatching(/not the USD value of a contract/) });
     expect(r.notionalExposure).toMatchObject({ value: null }); expect(r.notionalExposure!.reason).toBeTruthy();
     expect(r.implied.impliedValuation!.value).toBe('352500000000');                 // …while the valuation is defined
+  });
+  it('a valuation-quoted contract WITH the venue\'s contract size: contract value and exposure are computed, apart from the valuation', () => {
+    const multiplier = { value: '1', source: 'venue metadata: linear contract, notional = size × price' };
+    const r = impliedValuation(contract({ priceUnit: { kind: 'valuation_usd_billions' }, multiplier }), price('1776.6'), { position: { side: 'short', size: '2.5' } });
+    expect(r.contractMarketValue).toMatchObject({ value: '1776.6', reason: null }); expect(r.contractMarketValue.formula).toMatch(/price × 1 .*venue metadata/);
+    expect(r.notionalExposure).toMatchObject({ value: '-4441.5', reason: null });
+    expect(r.implied.impliedValuation!.value).toBe('1776600000000');                // three different figures
+    // a contract size other than one
+    expect(impliedValuation(contract({ priceUnit: { kind: 'valuation_usd_billions' }, multiplier: { value: '0.01', source: 'venue spec' } }), price('1776.6'), { position: { side: 'long', size: '10' } }).notionalExposure!.value).toBe('177.66');
+    // the multiplier also gives a contract value when the UNIT is unknown — and still no valuation
+    const u = impliedValuation(contract({ priceUnit: { kind: 'unknown' }, formulaSource: null, multiplier }), price('1343.1'), { position: { side: 'long', size: '2' } });
+    expect(u.contractMarketValue.value).toBe('1343.1'); expect(u.notionalExposure!.value).toBe('2686.2'); expect(u.implied.impliedValuation).toBeNull();
+    // per share with a multiplier: value = price × multiplier
+    expect(impliedValuation(contract({ multiplier: { value: '100', source: 'venue spec' } }), price('141.2')).contractMarketValue.value).toBe('14120');
+    // null or absent: unchanged
+    expect(impliedValuation(contract({ priceUnit: { kind: 'valuation_usd_billions' }, multiplier: null }), price('352.5')).contractMarketValue.value).toBeNull();
   });
   it('no position, no exposure', () => { expect(impliedValuation(contract(), price('141.2')).notionalExposure).toBeNull(); });
   it('always carries the two standing caveats', () => { expect(impliedValuation(contract(), price('1')).caveats).toEqual(expect.arrayContaining([...VALUATION_CAVEATS])); });
@@ -108,7 +129,8 @@ describe('implied valuation — inputs', () => {
     const unit = fc.constantFrom<ContractDescriptor['priceUnit']>({ kind: 'usd_per_share' }, { kind: 'valuation_usd_billions' }, { kind: 'valuation_scaled', divisor: '1000' }, { kind: 'index_points' }, { kind: 'unknown' });
     fc.assert(fc.property(unit, fc.boolean(), fc.boolean(), (u, withShares, withDoc) => {
       const r = impliedValuation(contract({ priceUnit: u, dilutedShares: withShares ? shares : null, formulaSource: withDoc ? 'https://example.com/d' : null }), price('12.5'));
-      const defined = u.kind === 'valuation_usd_billions' || u.kind === 'valuation_scaled' || (u.kind === 'usd_per_share' && withShares);
+      // v11: a valuation unit defines a valuation only when a document of the venue backs it
+      const defined = ((u.kind === 'valuation_usd_billions' || u.kind === 'valuation_scaled') && withDoc) || (u.kind === 'usd_per_share' && withShares);
       expect(r.implied.impliedValuation !== null).toBe(defined);
       if (!defined) expect(r.implied.reason).toBeTruthy(); else { expect(r.implied.impliedValuation!.formula).toBeTruthy(); expect(r.implied.impliedValuation!.sources.length).toBeGreaterThanOrEqual(2); }
     }), { numRuns: 100 });

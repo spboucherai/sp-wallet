@@ -3,11 +3,12 @@
  *
  * Four different things are kept apart, because they are routinely confused:
  *  - `syntheticPrice`        the price the contract trades at, in the contract's own unit;
- *  - `contractMarketValue`   what ONE contract is worth in USD, when the unit says so;
+ *  - `contractMarketValue`   what ONE contract is worth in USD: price × the venue's contract multiplier. Per share without a
+ *                            multiplier it is the price; quoted in valuation units it needs the venue's contract size, else null;
  *  - `notionalExposure`      the USD exposure of a POSITION (size × contract value);
  *  - `impliedValuation`      the company valuation the price implies — given ONLY when the price unit defines it:
- *                              · `valuation_usd_billions`      valuation = price × 1e9
- *                              · `valuation_scaled {divisor}`  valuation = price × divisor
+ *                              · `valuation_usd_billions`      valuation = price × 1e9      — ONLY with a `formulaSource`
+ *                              · `valuation_scaled {divisor}`  valuation = price × divisor  — ONLY with a `formulaSource`
  *                              · `usd_per_share`               valuation = price × fully diluted shares, ONLY with a SOURCED share count
  *                              · `index_points`, `unknown`     no valuation: `{ impliedValuation: null, reason }`
  *
@@ -41,6 +42,11 @@ export const ContractDescriptorSchema = z.strictObject({
   formulaSource: z.url().nullable(),
   /** fully diluted share count, with its date and source; null when none is sourced */
   dilutedShares: z.strictObject({ value: PosDecSchema, asOf: IsoDate, source: Source }).nullable(),
+  /**
+   * contract size as the VENUE defines it: USD of notional per contract for 1.00 of price (a linear contract of one unit = 1),
+   * with where the venue states it. Optional; absent or null = the venue's contract size is not known to the caller.
+   */
+  multiplier: z.strictObject({ value: PosDecSchema, source: Source }).nullable().optional(),
 });
 export type ContractDescriptor = z.infer<typeof ContractDescriptorSchema>;
 
@@ -95,9 +101,14 @@ export function impliedValuation(contractIn: ContractDescriptor, priceIn: PriceP
   const priceSrc = { what: 'contract price', source: p.source, asOf: new Date(p.ts).toISOString() };
   const formulaSrc = [{ what: 'price definition of the venue', source: c.formulaSource ?? 'NOT SOURCED: the descriptor gives no document for the price unit', asOf: 'as published' }];
 
+
   // value of one contract in USD
-  const cmv: ValuationResult['contractMarketValue'] = unit.kind === 'usd_per_share' ? { value: canon(p.price), reason: null, formula: 'one contract = one synthetic share: value = price (USD)' }
-    : unit.kind === 'unknown' ? { value: null, reason: 'the price unit of the contract is unknown', formula: null }
+  const mult = c.multiplier ?? null;
+  const cmv: ValuationResult['contractMarketValue'] = mult !== null
+    // the venue defines the contract size: the USD value of one contract follows whatever the price is a price OF
+    ? { value: D.str(D.mul(price, D.from(mult.value))), reason: null, formula: `contract value = price × ${canon(mult.value)} (contract size defined by the venue: ${mult.source})` }
+    : unit.kind === 'usd_per_share' ? { value: canon(p.price), reason: null, formula: 'one contract = one synthetic share: value = price (USD)' }
+    : unit.kind === 'unknown' ? { value: null, reason: 'the price unit of the contract is unknown and no contract size of the venue was supplied', formula: null }
     : unit.kind === 'index_points' ? { value: null, reason: 'the contract is quoted in index points: the USD value of a point is not defined by the descriptor', formula: null }
     : { value: null, reason: 'the price is a company valuation, not the USD value of a contract: the descriptor does not give a contract multiplier', formula: null };
 
@@ -106,7 +117,10 @@ export function impliedValuation(contractIn: ContractDescriptor, priceIn: PriceP
     : { value: D.str(D.mul(D.mul(D.from(position.size), D.from(cmv.value)), position.side === 'long' ? D.one : D.neg(D.one))), reason: null, formula: 'size × contract value, negative for a short' };
 
   let implied: ImpliedValuation;
-  if (unit.kind === 'valuation_usd_billions') {
+  if ((unit.kind === 'valuation_usd_billions' || unit.kind === 'valuation_scaled') && c.formulaSource === null) {
+    // a unit that no document of the venue backs is a convention, not a definition: nothing is derived from it
+    implied = { impliedValuation: null, reason: 'the valuation unit of this contract is not backed by a document of the venue (formulaSource is null): no valuation is derived from an unsourced unit' };
+  } else if (unit.kind === 'valuation_usd_billions') {
     implied = { impliedValuation: { value: D.str(D.mul(price, BILLION)), formula: 'valuation = price × 1 000 000 000 (the contract is quoted in USD billions of valuation)', sources: [priceSrc, ...formulaSrc] }, reason: null };
   } else if (unit.kind === 'valuation_scaled') {
     implied = { impliedValuation: { value: D.str(D.mul(price, D.from(unit.divisor))), formula: `valuation = price × ${canon(unit.divisor)} (the contract is quoted as valuation ÷ ${canon(unit.divisor)})`, sources: [priceSrc, ...formulaSrc] }, reason: null };
@@ -124,5 +138,5 @@ export function impliedValuation(contractIn: ContractDescriptor, priceIn: PriceP
       : { premiumBps: bpsStr(ratioBps(D.sub(D.from(implied.impliedValuation.value), D.from(last.value)), D.from(last.value))), reason: null, reference: last, caveat };
   }
   return { venue: c.venue, symbol: c.symbol, syntheticPrice: { value: canon(p.price), unit: unit.kind, ts: p.ts, source: p.source }, contractMarketValue: cmv, notionalExposure: exposure, implied, versusPrivate: versus,
-    caveats: [...VALUATION_CAVEATS, ...(c.formulaSource === null && implied.impliedValuation !== null ? ['the price unit of this contract is not backed by a document of the venue (formulaSource is null): the valuation rests on the descriptor alone'] : []), ...(c.dilutedShares !== null && unit.kind === 'usd_per_share' ? [`the share count is dated ${c.dilutedShares.asOf}: later issuances, option pools and conversions change it`] : [])] };
+    caveats: [...VALUATION_CAVEATS, ...(c.dilutedShares !== null && unit.kind === 'usd_per_share' ? [`the share count is dated ${c.dilutedShares.asOf}: later issuances, option pools and conversions change it`] : [])] };
 }
