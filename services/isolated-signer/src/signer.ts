@@ -16,7 +16,7 @@ import { noVaults, type VaultView } from './vaults.ts';
 import type { Keys } from './keys.ts';
 import { noPrices, type PriceView } from './prices.ts';
 import type { Store, StoredBridge, StoredCredential } from './store.ts';
-import { venueAuthorize, venueKeyAddress, venueRevoke, venueSign, venueStatus, type VenueCtx, type VenueSignRequest } from './venue.ts';
+import { venueAuthorizationAgain, venueAuthorize, venueKeyAddress, venueRevoke, venueSign, venueStatus, type VenueCtx, type VenueSignRequest } from './venue.ts';
 import { venueDepositVerdict, venueWithdraw } from './venue-collateral.ts';
 import { venueMandateApprove, venueMandateRevoke, venueMandateSign, venueMandateStatus, type VenueMandateSignRequest } from './venue-mandate.ts';
 import { noVenueReader, type VenueReader } from './venue-read.ts';
@@ -40,7 +40,7 @@ export class Signer {
       credentials: s.credentials.map((c) => ({ id: c.id, addedAt: c.addedAt })),
       policy: this.store.policy,
       spentToday: Object.fromEntries(Object.entries(s.spent).filter(([k]) => k.startsWith(today)).map(([k, v]) => [k.slice(11), v])),
-      journalHead: s.journal[s.journal.length - 1]?.hash ?? null, journalLength: s.journal.length,
+      journalHead: this.store.journalHead()?.hash ?? null, journalLength: this.store.journalHead()?.seq ?? 0,
       bridges: Object.entries(s.bridges ?? {}).map(([id, b]) => ({ id, ...b.bridge, approvedAt: b.approvedAt, burnTxid: b.burnTxid, mintTxid: b.mint?.txid ?? null, mintSignatures: b.mint?.signatures ?? 0,
         ...(b.sol ? { eventAccount: b.sol.eventAccount, reclaimTxid: b.reclaim?.txid ?? null, reclaimSignatures: b.reclaim?.signatures ?? 0 } : {}) })),
       mandates: Object.values(s.mandates ?? {}).map((m) => ({ mandate: m.mandate, approvedAt: m.approvedAt, revoked: m.revoked, revokedAt: m.revokedAt ?? null,
@@ -60,6 +60,8 @@ export class Signer {
   venueKey(venue: unknown, network: unknown) { return venueKeyAddress(this.venueCtx(), venue, network); }
   venueAuthorize(authorization: unknown, assertion?: AuthenticationResponseJSON) { return venueAuthorize(this.venueCtx(), authorization, assertion); }
   venueRevoke(authorizationId: string) { return venueRevoke(this.venueCtx(), authorizationId); }
+  /** V11: the stored answer of an authorization, again (a lost answer no longer locks the venue account) — nothing is signed */
+  venueAuthorization(authorizationId: string) { return venueAuthorizationAgain(this.venueCtx(), authorizationId); }
   venueSign(req: VenueSignRequest) { return venueSign(this.venueCtx(), req); }
   /** collateral: withdraw3 to the wallet's own address, the second (and last) kind of venue message the main key signs */
   venueWithdraw(withdrawal: unknown, assertion?: AuthenticationResponseJSON) { return venueWithdraw(this.venueCtx(), withdrawal, assertion); }
@@ -124,6 +126,12 @@ export class Signer {
     if (m.vault !== this.vaultAddress(m.vaultIndex)) deny('wrong_vault', 'vault address does not match this signer\'s derivation');
     if (st.state.mandates?.[m.mandateId]) deny('replay', 'mandate already recorded');
     try { validateMandate(m, now); } catch (e) { deny('unsupported', (e as Error).message); }
+    // V11 (D2): ONE mandate in force per vault. A second one is refused rather than silently superseding the first: its daily
+    // caps would add up with the first one's, and replacing limits must be a visible act (revoke — no passkey — then approve).
+    // Same rule as derivative mandates (venue-mandate.ts). A vault is one HD account whatever the network, so the rule is per index.
+    for (const other of Object.values(st.state.mandates ?? {})) {
+      if (other.mandate.vaultIndex === m.vaultIndex && !other.revoked && now < other.mandate.expiresAt) deny('conflict', 'another mandate is active on this vault: revoke it first');
+    }
     // v5 (agents on every execution-enabled network): no mandate on a network whose fee ceiling this signer's policy does not set
     if (st.policy.maxFee[m.network] === undefined) deny('policy', 'no fee ceiling in the policy for the mandate\'s network');
     try { await this.verifyAssertion(assertion, hash); } catch (e) { deny((e as SignerError).code ?? 'bad_approval', (e as Error).message); }
@@ -440,7 +448,11 @@ export class Signer {
 
     const day = new Date(now * 1000).toISOString().slice(0, 10), spendKey = `${day}|${i.network}:${i.symbol}`;
     // v8 GMX: a decrease or a cancellation moves no asset amount (amount = 0, checked by the builder): the amount limits have nothing to bound, everything else applies
-    const verdict = i.gmx && i.gmx.action !== 'increase' ? checkPolicyNoSpend(st.policy, i, now, st.state.halted) : checkPolicy(st.policy, i, BigInt(st.state.spent[spendKey] ?? '0'), now, st.state.halted);
+    // V11 (B-01): the emergency halt never blocks a risk reduction. For a GMX decrease or cancellation the halt is therefore not
+    // judged here, on the intent's own word, but below, once this signer has BUILT the transaction and seen that it can only
+    // reduce (`reducesOnly`). Everything else — transfers, swaps, bridges, deposits, GMX increases — is refused under halt as before.
+    const gmxExit = !!i.gmx && i.gmx.action !== 'increase';
+    const verdict = gmxExit ? checkPolicyNoSpend(st.policy, i, now, false) : checkPolicy(st.policy, i, BigInt(st.state.spent[spendKey] ?? '0'), now, st.state.halted);
     if (!verdict.ok) deny('policy', verdict.reason);
 
     // Rebuild the chain transaction from the intent alone; any unsupported shape throws here.
@@ -449,6 +461,7 @@ export class Signer {
       // v8 GMX v2 order: authorization, pinned contracts, transaction built from the intent, venue policy at the signer's own prices (venue-gmx.ts)
       let ready: Awaited<ReturnType<typeof gmxPrepare>>;
       try { ready = await gmxPrepare(this.venueCtx(), i, own!); } catch (e) { return deny(e instanceof SignerError ? e.code : 'unsupported', (e as Error).message); }
+      if (st.state.halted && !ready.reducesOnly) deny('policy', 'emergency halt is active: only a GMX decrease or cancellation is signed');
       build = async () => {
         const acct = privateKeyToAccount(`0x${Buffer.from(this.keys.evmPriv).toString('hex')}`);
         const raw = await acct.signTransaction(ready.main), pre = ready.approve ? await acct.signTransaction(ready.approve) : null;
@@ -559,14 +572,6 @@ export interface BridgeReclaimRequest { proposalId: string; message: string; att
 /** any valid public key that is not the wallet: lets the intent be checked in full before the one-time event key exists */
 const EVENT_ACCOUNT_PROBE = 'SysvarC1ock11111111111111111111111111111111';
 export interface BridgeMintResult { raw: string; txid: string; messageHash: string; minted: string; replayed: boolean }
-
-export interface DelegatedSigner {
-  vaultAddress(index: number): string;
-  approveMandate(raw: unknown, assertion: AuthenticationResponseJSON): Promise<{ mandateId: string; hash: string }>;
-  revokeMandate(mandateId: string): void;
-  signDelegated(mandateId: string, rawIntent: unknown, aux?: Record<string, unknown>): Promise<SignResult>;
-  signReturn(mandateId: string, rawIntent: unknown): Promise<SignResult>;
-}
 
 export function enrollChallenge(credId: string, publicKey: string): Uint8Array {
   return new Uint8Array(sha(`SPW-ENROLL-v1\n${credId}\n${publicKey}`));

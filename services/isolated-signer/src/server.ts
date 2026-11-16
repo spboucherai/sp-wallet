@@ -18,8 +18,19 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-/** Narrow HTTP surface: status, enroll, sign, halt. Every request is HMAC-authenticated with replay protection. */
-export function createSignerServer(signer: Signer, secret: string, allowedIps: string[] = []): Server {
+/** One queue for everything that reads or changes the signer state: HTTP requests and the operator's control commands (control.ts). */
+export type Enqueue = <T>(fn: () => Promise<T> | T) => Promise<T>;
+export function createQueue(): Enqueue {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T>(fn: () => Promise<T> | T): Promise<T> => { const r = tail.then(fn); tail = r.catch(() => {}); return r; };
+}
+
+/**
+ * The signer's HTTP surface (the route table below is all of it). Every request except the liveness probe is HMAC-authenticated
+ * with replay protection, and all of them run one at a time. What each route verifies by itself, and which ones release a
+ * signature without a passkey, is listed in docs/adr/0001-custody.md.
+ */
+export function createSignerServer(signer: Signer, secret: string, allowedIps: string[] = [], enqueue: Enqueue = createQueue()): Server {
   if (secret.length < 32) throw new Error('signer shared secret too short');
   const nonces = new Map<string, number>();
   const check = (req: IncomingMessage, body: string) => {
@@ -33,8 +44,7 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
     if (nonces.has(m[2]!)) throw new SignerError('unauthorized', 'replayed request');
     nonces.set(m[2]!, ts);
   };
-  let queue: Promise<unknown> = Promise.resolve(); // strictly serialize state-changing work
-  return createServer((req, res) => {
+  return createServer((req, res) => { // state-changing work is strictly serialized (`enqueue`)
     const send = (code: number, obj: unknown) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store', connection: 'close' }); res.end(JSON.stringify(obj)); };
     if (req.method === 'GET' && req.url === '/healthz') return send(200, { ok: true }); // liveness only, no information
     const run = async () => {
@@ -66,6 +76,8 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
       if (route === 'POST /venue/authorize') return await signer.venueAuthorize(json.authorization, json.assertion);
       if (route === 'POST /venue/sign') return await signer.venueSign(json);
       if (route === 'POST /venue/revoke') return signer.venueRevoke(String(json.authorizationId));
+      // V11: the stored answer of an active authorization, again (a lost answer of /venue/authorize); nothing is signed, no passkey
+      if (route === 'POST /venue/authorization') return signer.venueAuthorization(String(json.authorizationId));
       // collateral: a withdrawal from the venue to the wallet's own address, signed by the main key after a passkey approval (venue-collateral.ts)
       if (route === 'POST /venue/withdraw') return await signer.venueWithdraw(json.withdrawal, json.assertion);
       // derivative mandates: approval needs the owner's passkey; signing needs none (every limit is checked by the signer); revoking is always allowed
@@ -77,7 +89,7 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
       if (route === 'POST /venue/gmx/revoke') return signer.gmxRevoke(String(json.authorizationId));
       throw new SignerError('not_found', 'no such route');
     };
-    queue = queue.then(run).then((r) => send(200, r), (e: unknown) => {
+    void enqueue(run).then((r) => send(200, r), (e: unknown) => {
       const code = e instanceof SignerError ? e.code : 'internal';
       const http = code === 'unauthorized' ? 401 : code === 'not_found' ? 404 : code === 'internal' ? 500 : 422;
       send(http, { error: code, message: e instanceof SignerError ? e.message : 'internal error' });

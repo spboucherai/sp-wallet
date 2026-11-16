@@ -1,6 +1,6 @@
-import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeSync } from 'node:fs';
-import { dirname } from 'node:path';
-import { appendAudit, DEFAULT_POLICY, PolicySchema, type AuditRecord, type CctpBridge, type Mandate, type Policy } from '@spw/core';
+import { closeSync, existsSync, fsyncSync, ftruncateSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+import { appendAudit, auditHash, DEFAULT_POLICY, PolicySchema, verifyAuditChain, type AuditRecord, type CctpBridge, type Mandate, type Policy } from '@spw/core';
 
 export interface StoredCredential { id: string; publicKey: string; counter: number; transports?: string[]; addedAt: string }
 export interface SignerState {
@@ -12,7 +12,14 @@ export interface SignerState {
   used: Record<string, number>;
   /** "<YYYY-MM-DD>|<network>:<symbol>" -> base units signed that UTC day */
   spent: Record<string, string>;
+  /**
+   * IN MEMORY: the last records of the journal (a bounded window, see JOURNAL_TAIL). ON DISK, since V11: always `[]` — the
+   * records live in the append-only journal file and `journalRef` names the last one. A state.json written before V11 holds
+   * the whole journal here and no `journalRef`: it is read as such and moved to the journal file at the first save.
+   */
   journal: AuditRecord[];
+  /** V11: sequence number and hash of the last journal record this state was saved with (absent in a pre-V11 file) */
+  journalRef?: { seq: number; hash: string };
   /** agent mandates approved by the owner; usage is counted per UTC day */
   mandates?: Record<string, StoredMandate>;
   /** bridges approved by the owner (proposalId -> record): each authorises the one matching mint on the destination, with no expiry */
@@ -56,14 +63,140 @@ export interface StoredMandate { mandate: Mandate; approvedAt: string; revoked: 
 
 const EMPTY: SignerState = { v: 1, halted: false, setupTokenHash: null, credentials: [], used: {}, spent: {}, journal: [] };
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// V11 (B-05, B-06) — the journal is an append-only file next to state.json, and one process at a time writes the state.
+//
+//   <dir>/state.json            counters, replay markers, authorizations, `journalRef` (last record) — small, rewritten atomically
+//   <dir>/journal.jsonl         one audit record per line, appended and fsynced BEFORE state.json is replaced
+//   <dir>/journal-<a>-<b>.jsonl a closed segment (records a..b), produced by rotation; never written again
+//   <dir>/state.lock            pid of the process that owns the state (the daemon, or a CLI command when no daemon runs)
+//
+// Order of a save: journal lines first, state second. A crash in between leaves the journal AHEAD of the state: the records
+// describe a decision whose counters were not saved and whose signature was therefore never released; at the next start the
+// journal's own last record becomes the head again. The chain (seq, prev, hash) runs unbroken across segments.
+
+/** records kept in memory (`state.journal`); the file is the whole journal */
+export const JOURNAL_TAIL = 1000;
+/** a journal file is closed and a new one started once it is this large */
+export const JOURNAL_ROTATE_BYTES = 8 * 1024 * 1024;
+export interface StoreOptions { journalPath?: string; rotateBytes?: number; tail?: number }
+
+/** first record that does not follow from the one before it (seq + 1, prev = hash of the previous, own hash valid); null = intact */
+export function verifyJournalSegment(records: AuditRecord[], before: { seq: number; hash: string } | null = null): number | null {
+  let prev = before;
+  for (const r of records) {
+    const { hash, ...rest } = r;
+    if (auditHash(rest) !== hash || (prev !== null && (r.seq !== prev.seq + 1 || r.prev !== prev.hash))) return r.seq;
+    prev = { seq: r.seq, hash };
+  }
+  return null;
+}
+
+export class StoreLockedError extends Error { constructor(public pid: number, path: string) { super(`the signer state is in use by process ${pid} (${path})`); } }
+/**
+ * Exclusive ownership of the signer directory. The daemon holds it for its whole life; a CLI command that changes the state
+ * takes it only when no daemon runs (otherwise it asks the daemon, control.ts). A lock left by a process that no longer
+ * exists is taken over. Returns the release function.
+ */
+export function acquireStateLock(statePath: string): () => void {
+  const path = `${statePath}.lock`;
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  for (let k = 0; k < 3; k++) {
+    try {
+      const fd = openSync(path, 'wx', 0o600);
+      try { writeSync(fd, String(process.pid)); fsyncSync(fd); } finally { closeSync(fd); }
+      let released = false;
+      return () => { if (released) return; released = true; try { if (readFileSync(path, 'utf8').trim() === String(process.pid)) unlinkSync(path); } catch { /* already gone */ } };
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      let pid = NaN;
+      try { pid = Number(readFileSync(path, 'utf8').trim()); } catch { continue; } // released meanwhile: try again
+      let alive = false;
+      if (Number.isInteger(pid) && pid > 0) { try { process.kill(pid, 0); alive = true; } catch (x) { alive = (x as NodeJS.ErrnoException).code === 'EPERM'; } }
+      if (alive) throw new StoreLockedError(pid, path);
+      try { unlinkSync(path); } catch { /* another process took it over */ }
+    }
+  }
+  throw new Error(`could not take the signer state lock (${path})`);
+}
+
 export class Store {
   state: SignerState;
   policy: Policy;
-  constructor(private statePath: string, private policyPath: string) {
+  /** first broken sequence number of the journal as found on disk (null = intact). The daemon refuses to start on a broken journal. */
+  journalBrokenAt: number | null = null;
+  private readonly journalPath: string;
+  private readonly rotateBytes: number;
+  private readonly tail: number;
+  private head: AuditRecord | null = null;
+  /** records logged (or carried by a pre-V11 state) that are not in the journal file yet */
+  private unsaved: AuditRecord[] = [];
+  /** a pre-V11 state.json: the journal file is (re)written whole at the first save */
+  private migrate = false;
+  /** sequence number of the first record of the current journal file (null = the file is empty or absent) */
+  private fileFirstSeq: number | null = null;
+  /** bytes of an incomplete last line found in the journal file when it was read */
+  private torn = 0;
+
+  constructor(private statePath: string, private policyPath: string, opts: StoreOptions = {}) {
+    this.journalPath = opts.journalPath ?? join(dirname(statePath), 'journal.jsonl');
+    this.rotateBytes = opts.rotateBytes ?? JOURNAL_ROTATE_BYTES;
+    this.tail = opts.tail ?? JOURNAL_TAIL;
     this.state = existsSync(statePath) ? (JSON.parse(readFileSync(statePath, 'utf8')) as SignerState) : structuredClone(EMPTY);
+    this.loadJournal();
     if (existsSync(policyPath)) this.policy = PolicySchema.parse(JSON.parse(readFileSync(policyPath, 'utf8')));
     else { this.policy = DEFAULT_POLICY; this.atomicWrite(policyPath, JSON.stringify(DEFAULT_POLICY, null, 2)); }
   }
+
+  /** Reads only: nothing is written here (the CLI `status` command opens a store next to a running daemon). */
+  private loadJournal(): void {
+    const s = this.state, inState = Array.isArray(s.journal) ? s.journal : [];
+    if (s.journalRef === undefined) {
+      // a state.json of before V11 (or a new one): the journal is the array itself
+      this.journalBrokenAt = verifyAuditChain(inState);
+      this.head = inState[inState.length - 1] ?? null;
+      this.unsaved = [...inState]; this.migrate = inState.length > 0;
+      s.journal = inState.slice(-this.tail);
+      return;
+    }
+    const ref = s.journalRef, file = this.readSegment(this.journalPath);
+    let recs = file.records, last = recs[recs.length - 1] ?? null;
+    this.torn = file.torn;
+    this.fileFirstSeq = recs[0]?.seq ?? null;
+    this.journalBrokenAt = verifyJournalSegment(recs);
+    if (last === null) {
+      // empty: legitimate only right after a rotation (the closed segment ends at the state's reference)
+      if (!readdirSync(dirname(this.journalPath)).some((f) => f.startsWith('journal-') && f.endsWith(`-${ref.seq}.jsonl`))) this.journalBrokenAt ??= ref.seq;
+      last = { seq: ref.seq, hash: ref.hash } as AuditRecord;
+    } else if (last.seq < ref.seq) this.journalBrokenAt ??= last.seq + 1;                          // the file lost records the state was saved with
+    else if (recs.find((r) => r.seq === ref.seq)?.hash !== ref.hash && !(recs[0]!.seq === ref.seq + 1 && recs[0]!.prev === ref.hash)) this.journalBrokenAt ??= ref.seq; // not the same chain
+    // records appended to the state by a pre-V11 binary run after this one (a rollback): they continue the chain, or the journal is broken
+    const extra = inState.filter((r) => r.seq > last!.seq);
+    if (inState.length && (extra.length !== inState.length || verifyJournalSegment(extra, { seq: last.seq, hash: last.hash }) !== null)) this.journalBrokenAt ??= inState[0]!.seq;
+    else if (extra.length) { this.unsaved = [...extra]; recs = [...recs, ...extra]; }
+    this.head = recs[recs.length - 1] ?? last;
+    s.journal = recs.slice(-this.tail);
+  }
+  /** the records of one journal file; an incomplete last line (a crash while appending) is not a record */
+  private readSegment(path: string): { records: AuditRecord[]; torn: number } {
+    if (!existsSync(path)) return { records: [], torn: 0 };
+    const text = readFileSync(path, 'utf8'), lines = text.split('\n'), records: AuditRecord[] = [];
+    let good = 0;
+    for (let k = 0; k < lines.length; k++) {
+      const line = lines[k]!;
+      if (line === '') { if (k < lines.length - 1) good += 1; continue; }
+      let rec: AuditRecord | null = null;
+      try { rec = JSON.parse(line) as AuditRecord; } catch { rec = null; }
+      if (rec === null || k === lines.length - 1) {
+        // unreadable, or readable but not terminated by a newline: only tolerated as the very last line
+        if (k !== lines.length - 1) { records.push({ seq: -1, ts: '', type: 'unreadable', actor: '', data: {}, prev: '', hash: '' }); good += Buffer.byteLength(line) + 1; continue; }
+        return { records, torn: Buffer.byteLength(text) - good };
+      }
+      records.push(rec); good += Buffer.byteLength(line) + 1;
+    }
+    return { records, torn: 0 };
+  }
+
   private atomicWrite(path: string, data: string): void {
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     const tmp = `${path}.tmp`;
@@ -71,11 +204,51 @@ export class Store {
     try { writeSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }
     renameSync(tmp, path);
   }
-  /** Durably persist before any signature is released. */
-  save(): void { this.atomicWrite(this.statePath, JSON.stringify(this.state)); }
+  private flushJournal(): void {
+    if (!this.unsaved.length && !this.migrate) return;
+    const lines = this.unsaved.map((r) => `${JSON.stringify(r)}\n`).join('');
+    if (this.migrate) { this.atomicWrite(this.journalPath, lines); this.fileFirstSeq = this.unsaved[0]?.seq ?? null; this.migrate = false; }
+    else {
+      mkdirSync(dirname(this.journalPath), { recursive: true, mode: 0o700 });
+      // an incomplete last line left by a crash while appending (seen when the file was read) is cut before the first append;
+      // after that every append of this process is whole lines, fsynced
+      if (this.torn > 0) { const fd = openSync(this.journalPath, 'r+'); try { ftruncateSync(fd, statSync(this.journalPath).size - this.torn); fsyncSync(fd); } finally { closeSync(fd); } this.torn = 0; }
+      const fd = openSync(this.journalPath, 'a', 0o600);
+      try { writeSync(fd, lines); fsyncSync(fd); } finally { closeSync(fd); }
+      this.fileFirstSeq ??= this.unsaved[0]!.seq;
+    }
+    this.unsaved = [];
+  }
+  /** closes the current journal file once it is large: it is renamed, never written again, and the chain goes on in a new file */
+  private rotate(): void {
+    if (this.head === null || this.fileFirstSeq === null || !existsSync(this.journalPath) || statSync(this.journalPath).size < this.rotateBytes) return;
+    const to = join(dirname(this.journalPath), `${basename(this.journalPath, '.jsonl')}-${this.fileFirstSeq}-${this.head.seq}.jsonl`);
+    renameSync(this.journalPath, to);
+    this.fileFirstSeq = null;
+  }
+
+  /** Durably persist before any signature is released: the journal lines first, then the state that refers to them. */
+  save(): void {
+    this.flushJournal();
+    const { journal: _tail, journalRef: _ref, ...rest } = this.state;
+    void _tail; void _ref;
+    const ref = this.head ? { seq: this.head.seq, hash: this.head.hash } : undefined;
+    if (ref) this.state.journalRef = ref;
+    this.atomicWrite(this.statePath, JSON.stringify({ ...rest, journal: [], ...(ref ? { journalRef: ref } : {}) }));
+    this.rotate(); // after the state names the segment's last record
+  }
   log(type: string, data: Record<string, unknown>): void {
+    const rec = appendAudit(this.head, type, 'signer', data);
+    this.head = rec; this.unsaved.push(rec);
     const j = this.state.journal;
-    j.push(appendAudit(j[j.length - 1] ?? null, type, 'signer', data));
+    j.push(rec);
+    if (j.length > this.tail * 2) j.splice(0, j.length - this.tail);
+  }
+  /** the last record of the journal (logged, not necessarily saved yet); null for an empty journal */
+  journalHead(): { seq: number; hash: string } | null { return this.head ? { seq: this.head.seq, hash: this.head.hash } : null; }
+  /** every record of the CURRENT journal file plus what is not saved yet — for the CLI and tests; closed segments are not read */
+  journalRecords(): AuditRecord[] {
+    return this.migrate ? [...this.unsaved] : [...this.readSegment(this.journalPath).records, ...this.unsaved];
   }
   prune(nowSec: number): void {
     for (const [k, exp] of Object.entries(this.state.used)) if (exp + 86400 < nowSec) delete this.state.used[k];

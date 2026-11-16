@@ -121,7 +121,7 @@ describe('venue authorization (passkey over the canonical authorization)', () =>
     expect(await tryIt({ account: '0x' + '11'.repeat(20) })).toMatch(/^wrong_source/);
     expect(await tryIt({ agentAddress: '0x' + '22'.repeat(20) })).toMatch(/^wrong_agent/);                       // an attacker's agent address
     expect(await tryIt({ agentAddress: keys.venueKey('hyperliquid', 'mainnet').address })).toMatch(/^wrong_agent/); // the other network's key
-    expect(await tryIt({ mode: 'MANDATE_LIVE' })).toMatch(/^unsupported: MANDATE_LIVE/);
+    expect(await tryIt({ mode: 'MANDATE_LIVE' })).toMatch(/^unsupported: a venue authorization is always MANUAL_LIVE/);
     expect(await tryIt({ expiresAt: w.t.now + 91 * 86400 })).toMatch(/at most 90 days/);
     expect(await tryIt({ createdAt: w.t.now - 3600, approveNonce: (w.t.now - 3600) * 1000 })).toMatch(/not current/);
     expect(await tryIt({ keyId: 'spw-0000000000000000' })).toMatch(/^wrong_key/);
@@ -198,7 +198,7 @@ describe('/venue/sign — orders', () => {
     const w = await setup(), { a } = await authorized(w);
     expect(await code(send(w, a, order(w, a, { price: '73000', size: '0.001' })))).toMatch(/^price: price 73000 is more than 300 bps away from the signer's own BTC price 70000/);
     expect(await code(send(w, a, order(w, a, { price: '67000' })))).toMatch(/^price: /);
-    expect(await code(send(w, a, order(w, a, { type: 'stop_market', side: 'sell', reduceOnly: true, price: '69000', triggerPrice: '60000' })))).toMatch(/^price: trigger price 60000/);
+    expect(await code(send(w, a, order(w, a, { type: 'stop_market', side: 'sell', reduceOnly: true, price: '69000', triggerPrice: '60000' })))).toMatch(/^price: price 69000 is more than 300 bps away from its own trigger price 60000/); // V11: the trigger may rest; its worst price must be near it
     w.px.BTC = 35_000;                                                                                  // the API's view and the signer's differ by half
     expect(await code(send(w, a, order(w, a)))).toMatch(/^price: /);
     w.px.fail = 'price sources disagree on BTC';
@@ -351,5 +351,94 @@ describe('/venue/sign — cancels and leverage', () => {
     expect(await go(sent, { ...shown.canonical, nonce: sent.canonical.nonce, expiresAt: sent.canonical.expiresAt })).toMatch(/^mismatch/);   // shows 2x, signs 3x
     expect(await go(lev(2, 'isolated'), { ...lev(2, 'isolated').canonical })).toMatch(/^mismatch/);                                          // context of another nonce
     expect(w.signer.status().venues[0]!.today.leverage).toBe(1);
+  });
+});
+
+// V11 Phase B — the emergency halt never blocks a risk reduction (B-01), protective orders can rest away from the market (B-07),
+// and a lost /venue/authorize answer can be asked again (B-04).
+describe('V11 — halt, protective orders, lost authorization answer', () => {
+  it('under the emergency halt a reduce-only order is still signed, with the passkey; whatever opens or adds, and leverage, is refused', async () => {
+    const w = await setup(), { a } = await authorized(w);
+    w.signer.halt();
+    // reduce-only close: signed — the flag is read from the payload the trading key signs
+    const close = order(w, a, { side: 'sell', reduceOnly: true, price: '69500' });
+    const r = await send(w, a, close);
+    expect(r.kind).toBe('order');
+    expect(await recoverTypedDataSigner((close.sign.payload as HlL1SignPayload).typedData, r.signature)).toBe(AGENT);
+    expect(journal(w, 'venue.sign.ok').at(-1)!.data).toMatchObject({ kind: 'order', reduceOnly: true });
+    // …but never without the passkey, never outside the stored policy
+    expect(await code(send(w, a, order(w, a, { side: 'sell', reduceOnly: true }), null as never))).toMatch(/^bad_approval: MANUAL_LIVE/);
+    expect(await code(send(w, a, order(w, a, { side: 'sell', reduceOnly: true, size: '0.01' })))).toMatch(/^policy: order notional/);
+    expect(await code(send(w, a, order(w, a, { side: 'sell', reduceOnly: true, price: '60000' })))).toMatch(/^price: /);
+    expect(await code(send(w, a, order(w, a, { side: 'sell', reduceOnly: true }, { instrument: ETH })))).toMatch(/^policy: hyperliquid:ETH is not allowed/);
+    // an order that can open or add: refused, on either side
+    expect(await code(send(w, a, order(w, a)))).toMatch(/^policy: emergency halt is active: only cancels and reduce-only orders/);
+    expect(await code(send(w, a, order(w, a, { side: 'sell' })))).toMatch(/^policy: emergency halt/);
+    // the API says "reduce-only" about a payload that is not: the payload decides
+    const lie = order(w, a), shown: VenueOrder = { ...lie.canonical, reduceOnly: true };
+    expect(await code(send(w, a, { sign: lie.sign, canonical: shown }))).toMatch(/^policy: emergency halt/);
+    // leverage change: refused
+    const nonce = w.t.now * 1000 + ++nonceSeq, lv = trading.buildUpdateLeverage({ instrument: BTC, leverage: 2, marginMode: 'cross', nonce });
+    const lc: VenueLeverage = { v: 1, authorizationId: a.authorizationId, venue: 'hyperliquid', network: 'testnet', account: ACCOUNT, kind: 'leverage', instrument: BTC.id, leverage: 2, marginMode: 'cross', nonce, expiresAt: nonce + TTL };
+    expect(await code(w.signer.venueSign({ authorizationId: a.authorizationId, sign: lv.sign, context: { leverage: lc }, assertion: w.pk.assert(venueLeverageHash(lc)) }))).toMatch(/^policy: emergency halt/);
+    // a new authorization: refused; a cancel: signed, as before
+    const again = authorization(w.t.now, { network: 'mainnet', agentAddress: keys.venueKey('hyperliquid', 'mainnet').address });
+    expect(await code(w.signer.venueAuthorize(again, w.pk.assert(venueAuthorizationHash(again))))).toMatch(/^policy: emergency halt/);
+    const c = trading.buildCancel({ instrument: BTC, clientId: 'k-1', nonce: w.t.now * 1000 + 900 });
+    expect((await send(w, a, { sign: c.sign })).kind).toBe('cancel');
+    expect(w.signer.status().venues.find((v) => v.authorization.authorizationId === a.authorizationId)!.today).toMatchObject({ orders: 1, cancels: 1, leverage: 0 });
+    // a revoked authorization signs nothing under halt either
+    w.signer.venueRevoke(a.authorizationId);
+    expect(await code(send(w, a, order(w, a, { side: 'sell', reduceOnly: true })))).toMatch(/^revoked/);
+  });
+
+  it('a reduce-only stop-loss or take-profit may rest away from the market; nothing else gains any latitude', async () => {
+    const w = await setup(), { a } = await authorized(w, {}, { maxOrdersPerDay: 50 });   // signer mid 70 000, band 300 bps
+    const go = (o: Partial<OrderRequest>) => code(send(w, a, order(w, a, { size: '0.002', ...o })));
+    // resting protective orders, far outside the 3 % band: signed (worst price within the band of the TRIGGER)
+    expect(await go({ type: 'stop_market', side: 'sell', reduceOnly: true, triggerPrice: '60000', price: '59000' })).toBe('ok');           // stop-loss of a long, −14 %
+    expect(await go({ type: 'take_profit_market', side: 'sell', reduceOnly: true, triggerPrice: '90000', price: '88000' })).toBe('ok');    // take-profit of a long, +29 %
+    expect(await go({ type: 'stop_limit', side: 'buy', reduceOnly: true, triggerPrice: '80000', price: '81000' })).toBe('ok');             // stop-loss of a short
+    expect(await go({ type: 'take_profit_limit', side: 'buy', reduceOnly: true, triggerPrice: '50000', price: '50500' })).toBe('ok');      // take-profit of a short
+    expect(journal(w, 'venue.sign.ok').at(-1)!.data).toMatchObject({ reduceOnly: true, triggerPrice: '50000', mid: '70000' });
+    // the same WITHOUT reduce-only could open a position far from the market: the rule of before, unchanged
+    expect(await go({ type: 'stop_market', side: 'sell', triggerPrice: '60000', price: '59000' })).toMatch(/^price: price 59000 is more than 300 bps away from the signer's own BTC price 70000/);
+    expect(await go({ type: 'take_profit_market', side: 'sell', triggerPrice: '90000', price: '88000' })).toMatch(/^price: /);
+    expect(await go({ type: 'stop_limit', side: 'buy', triggerPrice: '80000', price: '81000' })).toMatch(/^price: /);
+    expect(await go({ type: 'stop_limit', side: 'buy', triggerPrice: '80000', price: '70000' })).toMatch(/^price: trigger price 80000 is more than 300 bps away/);
+    // reduce-only, but the trigger is on the side where it fires at once: a market order in disguise — the plain band applies
+    expect(await go({ type: 'stop_market', side: 'sell', reduceOnly: true, triggerPrice: '80000', price: '79000' })).toMatch(/^price: trigger price 80000 would fire at once/);
+    expect(await go({ type: 'take_profit_market', side: 'sell', reduceOnly: true, triggerPrice: '60000', price: '59000' })).toMatch(/would fire at once/);
+    expect(await go({ type: 'stop_limit', side: 'buy', reduceOnly: true, triggerPrice: '60000', price: '60500' })).toMatch(/would fire at once/);
+    expect(await go({ type: 'take_profit_limit', side: 'buy', reduceOnly: true, triggerPrice: '80000', price: '80500' })).toMatch(/would fire at once/);
+    // resting, but absurd: outside ÷3 … ×3 of the signer's mid
+    expect(await go({ type: 'stop_market', side: 'sell', reduceOnly: true, triggerPrice: '23000', price: '22800', size: '0.001' })).toMatch(/^price: trigger price 23000 is outside the sanity band/);
+    expect(await go({ type: 'take_profit_market', side: 'sell', reduceOnly: true, triggerPrice: '211000', price: '210000', size: '0.0005' })).toMatch(/outside the sanity band/);
+    expect(await go({ type: 'stop_market', side: 'sell', reduceOnly: true, triggerPrice: '24000', price: '23800', size: '0.001' })).toBe('ok');       // just inside
+    // resting and sane, but the worst price is far from the trigger: it would sell far below where it triggers
+    expect(await go({ type: 'stop_market', side: 'sell', reduceOnly: true, triggerPrice: '60000', price: '50000' })).toMatch(/^price: price 50000 is more than 300 bps away from its own trigger price 60000/);
+    expect(await go({ type: 'stop_limit', side: 'buy', reduceOnly: true, triggerPrice: '80000', price: '90000' })).toMatch(/its own trigger price 80000/);
+    // a plain reduce-only limit far from the market: no trigger, no latitude
+    expect(await go({ side: 'sell', reduceOnly: true, price: '60000' })).toMatch(/^price: price 60000 is more than 300 bps away from the signer's own BTC price 70000/);
+    // the notional bound still counts the trigger price
+    expect(await go({ type: 'take_profit_market', side: 'sell', reduceOnly: true, triggerPrice: '90000', price: '88000', size: '0.003' })).toMatch(/^policy: order notional 270 is above the authorized 200/);
+    // the signer's own mid decides where "resting" is: with a mid of 55 000 the 60 000 sell stop would fire at once
+    w.px.BTC = 55_000;
+    expect(await go({ type: 'stop_market', side: 'sell', reduceOnly: true, triggerPrice: '60000', price: '59000' })).toMatch(/would fire at once/);
+  });
+
+  it('the stored answer of an authorization can be asked again: same bytes, no new signature, nothing for a revoked, expired or unknown one', async () => {
+    const w = await setup(), { a, r } = await authorized(w);
+    const before = journal(w, 'venue.authorized').length, again = w.signer.venueAuthorization(a.authorizationId);
+    expect(again).toEqual({ ...r, authorization: a });
+    expect(w.restart().venueAuthorization(a.authorizationId).approve).toEqual(r.approve);       // from the file, after a restart
+    expect(journal(w, 'venue.authorized')).toHaveLength(before);                                  // nothing was signed or recorded
+    const ask = (id: string) => code(Promise.resolve().then(() => w.signer.venueAuthorization(id)));
+    expect(await ask(uuid())).toMatch(/^not_found/);
+    w.t.now += 31 * 86400;
+    expect(await ask(a.authorizationId)).toMatch(/^expired/);
+    w.t.now -= 31 * 86400;
+    w.signer.venueRevoke(a.authorizationId);
+    expect(await ask(a.authorizationId)).toMatch(/^revoked/);
   });
 });

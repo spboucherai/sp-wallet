@@ -15,7 +15,7 @@
 import { sign } from 'viem/accounts';
 import {
   createHlTrading, D, HL_KIND_L1, hex, hlPinnedAsset, hlPinnedAssets, jurisdictionAckOf, signatureFromHex, typedDataDigest, validateVenueMandate, VENUE_MANDATE_BOUNDS, VENUE_PENDING_GRACE_MS,
-  VENUE_READ_MAX_AGE_MS, venueMandateHash, venueMandatePhase, VenueMandateSchema, venueOrderHash, venueOrderNotional, VenueOrderSchema, venueWindowError, withinBand, worstCaseExposure,
+  VENUE_READ_MAX_AGE_MS, venueMandateHash, venueMandatePhase, VenueMandateSchema, venueOrderHash, venueOrderNotional, venueOrderPriceError, VenueOrderSchema, venueWindowError, worstCaseExposure,
   type ExposureOrder, type HlDescription, type HlL1SignPayload, type HlSignature, type SignRequest, type VenueAuthorization, type VenueMandate, type VenueMandatePhase, type VenueOrder,
 } from '@spw/derivatives/live';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
@@ -215,9 +215,9 @@ export async function venueMandateSign(ctx: VenueCtx, req: VenueMandateSignReque
     let mid: string;
     try { const px = (await ctx.prices.get([symbol]))[symbol]; if (!(typeof px === 'number' && px > 0 && Number.isFinite(px))) throw new Error('no price'); mid = canon(px.toFixed(8)); }
     catch (e) { return deny('no_price', `the signer could not establish its own market price for ${symbol} (${(e as Error).message.slice(0, 80)}); order refused`); }
-    for (const [what, px] of [['price', c.price], ['trigger price', c.triggerPrice]] as const) {
-      if (px !== null && !withinBand(px, mid, m.maxPriceDeviationBps)) deny('price', `${what} ${canon(px)} is more than ${m.maxPriceDeviationBps} bps away from the signer's own ${symbol} price ${mid}`);
-    }
+    // V11 (B-07): the same rule as /venue/sign — only a reduce-only trigger order may rest away from the market
+    const off = venueOrderPriceError(c, mid, m.maxPriceDeviationBps);
+    if (off) deny('price', `${off.reason} the signer's own ${symbol} price ${mid}`);
     let exposure: Record<string, unknown> = {};
     if (c.reduceOnly) usage.reduceOnly += 1;      // the venue never lets a reduce-only order add to a position or open the opposite one
     else {

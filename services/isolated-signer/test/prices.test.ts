@@ -4,15 +4,17 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MARKET_LISTINGS, hasSignerPrice } from '@spw/core';
-import { exchangePrices, pricedSymbols, type JsonGet } from '../src/prices.ts';
+import { exchangePrices, KRAKEN_STATUS_URL, pricedSymbols, type JsonGet } from '../src/prices.ts';
 
 const rec = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/tickers.json'), 'utf8')) as { recordedAt: string; symbols: string[]; responses: Record<string, any> };
 const NOW = Date.parse(rec.recordedAt);
 const CB = (pair: string) => `https://api.exchange.coinbase.com/products/${pair}/ticker`, KR = (pair: string) => `https://api.kraken.com/0/public/Ticker?pair=${pair}`;
+/** V11: Kraken's own statement that it is trading, dated by its clock. Not in the recording (made before the check existed): the shape is the one read from the public endpoint on 2026-11-16. */
+const ST = KRAKEN_STATUS_URL, online = (at: number, status = 'online') => ({ error: [], result: { status, timestamp: new Date(at).toISOString().replace(/\.\d{3}Z$/, 'Z') } });
 /** Serves the recorded answers; `over` replaces or removes one. Every URL asked is logged. */
 function recorded(over: Record<string, unknown> = {}) {
   const asked: string[] = [];
-  const get: JsonGet = async (url) => { asked.push(url); const v = Object.hasOwn(over, url) ? over[url] : rec.responses[url]; if (v === undefined || v === null) throw new Error('HTTP 404'); if (v instanceof Error) throw v; return structuredClone(v); };
+  const get: JsonGet = async (url) => { asked.push(url); const v = Object.hasOwn(over, url) ? over[url] : url === ST ? online(NOW) : rec.responses[url]; if (v === undefined || v === null) throw new Error('HTTP 404'); if (v instanceof Error) throw v; return structuredClone(v); };
   return { get, asked };
 }
 const mid = (url: string) => { const r = rec.responses[url]; if (url.includes('coinbase')) return (Number(r.ask) + Number(r.bid)) / 2; const row = Object.values(r.result)[0] as any; return (Number(row.a[0]) + Number(row.b[0])) / 2; };
@@ -28,7 +30,7 @@ describe("signer price view: more symbols, same rule", () => {
       const got = await v.get([s]).then((p) => p[s]!, (e: Error) => e);
       const a = mid(CB(l.coinbase!)), b = mid(KR(l.kraken!));
       if (got instanceof Error) { expect(got.message, s).toMatch(/stale quote|abnormal spread|disagree/); continue; } // a thin book at recording time: refused, never guessed
-      expect(asked.sort(), s).toEqual([CB(l.coinbase!), KR(l.kraken!)].sort()); // both, and nothing else
+      expect(asked.sort(), s).toEqual([CB(l.coinbase!), KR(l.kraken!), ST].sort()); // both, Kraken's status, and nothing else
       expect(got, s).toBeCloseTo((a + b) / 2, 10);
       expect(Math.abs(a - b) / Math.min(a, b), s).toBeLessThanOrEqual(0.01);
     }
@@ -41,10 +43,10 @@ describe("signer price view: more symbols, same rule", () => {
   it('cash legs are worth one dollar only while the peg holds on the exchange(s)', async () => {
     const usdc = view();
     expect(await usdc.v.get(['USDC'])).toEqual({ USDC: 1 });
-    expect(usdc.asked).toEqual([KR('USDCUSD')]);
+    expect(usdc.asked).toEqual([ST, KR('USDCUSD')]); // Kraken alone prices USDC: its status is asked first
     const usdt = view();
     expect(await usdt.v.get(['USDT'])).toEqual({ USDT: 1 });
-    expect(usdt.asked.sort()).toEqual([CB('USDT-USD'), KR('USDTUSD')].sort()); // both for USDT
+    expect(usdt.asked.sort()).toEqual([CB('USDT-USD'), KR('USDTUSD'), ST].sort()); // both for USDT
     const off = (pair: string, p: string) => ({ error: [], result: { [pair]: { a: [p, '1', '1'], b: [p, '1', '1'] } } });
     await expect(view({ [KR('USDCUSD')]: off('USDCUSD', '0.9700') }).v.get(['USDC'])).rejects.toThrow(/off its peg/);
     await expect(view({ [KR('USDTUSD')]: off('USDTZUSD', '0.9850') }).v.get(['USDT'])).rejects.toThrow(/disagree|off its peg/);
@@ -70,6 +72,28 @@ describe("signer price view: more symbols, same rule", () => {
     await expect(view({ [KR('LINKUSD')]: null }).v.get(['ETH', 'LINK'])).rejects.toThrow();
   });
 
+  it('V11: a Kraken quote is used only while Kraken itself says it is online, in an answer dated within three minutes', async () => {
+    expect((await view().v.get(['ETH'])).ETH).toBeGreaterThan(0);
+    for (const status of ['maintenance', 'cancel_only', 'post_only', 'limit_only', '', 'ONLINE']) {
+      await expect(view({ [ST]: online(NOW, status as string) }).v.get(['ETH']), String(status)).rejects.toThrow(/Kraken is not trading normally/);
+      await expect(view({ [ST]: online(NOW, status as string) }).v.get(['USDC']), String(status)).rejects.toThrow(/Kraken is not trading normally/); // USDC rests on Kraken alone
+    }
+    await expect(view({ [ST]: online(NOW - 181_000) }).v.get(['USDC'])).rejects.toThrow(/stale quote/);          // an old (cached, replayed) answer
+    await expect(view({ [ST]: online(NOW + 181_000) }).v.get(['ETH'])).rejects.toThrow(/stale quote/);           // or a signer clock that is minutes off
+    expect((await view({ [ST]: online(NOW - 170_000) }).v.get(['USDC'])).USDC).toBe(1);
+    await expect(view({ [ST]: { error: [], result: { status: 'online' } } }).v.get(['ETH'])).rejects.toThrow(/stale quote/); // no time, no trust
+    await expect(view({ [ST]: { error: [], result: { status: 'online', timestamp: 1794787499 } } }).v.get(['ETH'])).rejects.toThrow(/stale quote/);
+    await expect(view({ [ST]: { error: ['EService:Unavailable'] } }).v.get(['ETH'])).rejects.toThrow(/exchange error/);
+    await expect(view({ [ST]: null }).v.get(['ETH'])).rejects.toThrow(/HTTP 404/);                                // status unreachable: no Kraken quote, so no price
+    // a refusal is never remembered: the next request asks again; a positive answer is remembered 15 s, like a price
+    let now = NOW, down = true; const r = recorded();
+    const v = exchangePrices(() => now, async (url) => (url === ST && down ? online(now, 'maintenance') : r.get(url)));
+    await expect(v.get(['ETH'])).rejects.toThrow(/not trading normally/);
+    down = false; expect((await v.get(['ETH'])).ETH).toBeGreaterThan(0);
+    down = true; now += 5_000; expect((await v.get(['LINK'])).LINK).toBeGreaterThan(0);        // inside the 15 s
+    now += 16_000; await expect(v.get(['LINK'])).rejects.toThrow(/not trading normally/);
+  });
+
   it('never prices a symbol that is not on both exchanges, whatever is asked', async () => {
     const { v, asked } = view();
     await expect(v.get(['EUR'])).rejects.toThrow(/no price source for EUR: it is not listed on coinbase/); // Bitstamp + Kraken only
@@ -84,8 +108,8 @@ describe("signer price view: more symbols, same rule", () => {
   it('caches a price for 15 seconds, per symbol', async () => {
     let now = NOW; const r = recorded(), v = exchangePrices(() => now, r.get);
     await v.get(['ETH']); await v.get(['ETH', 'ETH']);
-    expect(r.asked).toHaveLength(2);
+    expect(r.asked).toHaveLength(3); // the two tickers and Kraken's status
     now += 16_000; await v.get(['ETH']);
-    expect(r.asked).toHaveLength(4);
+    expect(r.asked).toHaveLength(6); // all three again
   });
 });
