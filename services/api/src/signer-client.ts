@@ -32,6 +32,13 @@ async function call<T>(method: 'GET' | 'POST', path: string, payload?: unknown):
   return j as T;
 }
 
+/**
+ * V11: checks the API makes before it asks the signer for a signature on behalf of a SPOT AGENT (`/mandate/sign`). The risk service
+ * sets `beforeMandateSign` (orders/index.ts): with the global kill switch or read-only mode on it throws, and the signer is not
+ * asked. Returns to the owner (`vaultReturn`, `mandateReturn`) and every passkey-approved action of the owner never pass here.
+ */
+export const signerGuards: { beforeMandateSign: (() => Promise<void>) | null } = { beforeMandateSign: null };
+
 let cached: { at: number; v: SignerStatus } | null = null;
 export const signer = {
   async status(fresh = false): Promise<SignerStatus> {
@@ -52,7 +59,7 @@ export const signer = {
   vaultAddress: (index: number) => call<{ address: string }>('POST', '/vault/address', { index }),
   mandateApprove: (mandate: unknown, assertion: unknown) => { cached = null; return call<{ mandateId: string; hash: string }>('POST', '/mandate/approve', { mandate, assertion }); },
   mandateRevoke: (mandateId: string) => { cached = null; return call<{ ok: true }>('POST', '/mandate/revoke', { mandateId }); },
-  mandateSign: (mandateId: string, intent: unknown, aux?: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string; pre?: { raw: string; txid: string } }>('POST', '/mandate/sign', { mandateId, intent, ...(aux ? { aux } : {}) }); },
+  mandateSign: async (mandateId: string, intent: unknown, aux?: unknown) => { await signerGuards.beforeMandateSign?.(); cached = null; return call<{ raw: string; txid: string; hash: string; pre?: { raw: string; txid: string } }>('POST', '/mandate/sign', { mandateId, intent, ...(aux ? { aux } : {}) }); },
   vaultReturn: (index: number, intent: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string }>('POST', '/vault/return', { index, intent }); },
   mandateReturn: (mandateId: string, intent: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string }>('POST', '/mandate/return', { mandateId, intent }); },  // live derivatives: venue trading key, authorization (passkey), one signature per venue action, revocation
   venueKey: (venue: string, network: string) => call<{ venue: string; network: string; address: string; path: string; account: string }>('POST', '/venue/key', { venue, network }),

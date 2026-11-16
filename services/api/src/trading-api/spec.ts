@@ -66,9 +66,11 @@ export type KeyChanges = z.infer<typeof KeyChangesSchema>;
 /** `emitted`: an event source exists in this version. The others are defined (name and payload) and wait for their source. */
 export const WEBHOOK_EVENTS = [
   { event: 'key.revoked', emitted: true, description: 'an API key was revoked (or replaced by a rotation)', payload: '{ keyId, name, reason }' },
-  { event: 'risk.kill_switch', emitted: true, description: 'the owner triggered the emergency halt of the signer', payload: '{ source: "signer", halted: true }' },
+  { event: 'risk.kill_switch', emitted: true, description: 'the emergency halt of the signer was triggered (source "signer"), or the global kill switch of the risk engine was engaged or released (source "risk_engine")',
+    payload: '{ source: "signer", halted: true } | { source: "risk_engine", engaged, by, reason }' },
   { event: 'agent.updated', emitted: true, description: 'an agent changed mode through an owner action (engine-side transitions: pending wiring)', payload: '{ agentId, kind, state, mode }' },
-  { event: 'order.updated', emitted: false, description: 'an order changed state (pending wiring: emitted by the unified order state machine)', payload: '{ orderId, mode, venue, instrument, status }' },
+  { event: 'order.updated', emitted: true, description: 'an order changed state: one event per transition of the unified order state machine, for every principal, mode and venue',
+    payload: '{ orderId, mode, venue, instrument, status, previous, event, reason, seq, principal, mandateId }' },
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number]['event'];
 export const WEBHOOK_EVENT_NAMES = WEBHOOK_EVENTS.map((e) => e.event) as [WebhookEvent, ...WebhookEvent[]];
@@ -114,6 +116,14 @@ const R = {
   }),
   activity: z.object({ items: z.array(z.looseObject({ kind: z.string(), at: z.string(), mode: Mode })) }),
   openapi: z.looseObject({ openapi: z.string() }),
+  preview: z.looseObject({ order: z.looseObject({ clientOrderId: z.string() }).describe('the canonical order SPW-ORDER-INTENT-v1'), hash: z.string().describe('SHA-256 of the canonical bytes, hex'), wouldExecute: z.boolean(),
+    refusals: z.array(z.looseObject({ stage: z.enum(['key', 'lock', 'mandate', 'risk', 'engine']), code: z.string(), message: z.string() })),
+    approval: z.looseObject({ required: z.boolean(), by: z.enum(['owner_passkey', 'mandate', 'none']) }),
+    risk: z.looseObject({ decision: z.enum(['allow', 'deny']), reducing: z.boolean(), checks: z.array(z.looseObject({ id: z.string(), ok: z.boolean(), observed: z.string().nullable(), limit: z.string().nullable(), detail: z.string(), exempt: z.boolean() })) }),
+    mandate: z.looseObject({ id: z.string(), decision: z.enum(['allow', 'deny']), reasons: z.array(z.string()) }).nullable(), engine: z.looseObject({ name: z.string() }), ts: Ms }),
+  placed: z.looseObject({ order: z.looseObject({ id: z.string(), mode: Mode, venue: z.string(), status: z.string().describe('CREATED, VALIDATED, AWAITING_APPROVAL, APPROVED, SUBMITTING, SUBMITTED, PARTIALLY_FILLED, FILLED, CANCELLED, REJECTED, FAILED or UNKNOWN') }),
+    idempotent: z.boolean(), approval: z.looseObject({}).nullable().describe('set while the order waits for the owner\'s passkey: where it is approved') }),
+  cancelled: z.looseObject({ order: z.looseObject({ id: z.string(), status: z.string() }), sent: z.boolean(), changed: z.boolean() }),
 };
 
 // ---------------------------------------------------------------------------------------------------------------- requests
@@ -129,8 +139,16 @@ export const OrderRequestSchema = z.strictObject({
   type: z.enum(['limit', 'market', 'stop_market', 'stop_limit', 'take_profit_market', 'take_profit_limit']),
   size: Dec.regex(/^\d+(\.\d+)?$/), price: Dec.regex(/^\d+(\.\d+)?$/).optional(), triggerPrice: Dec.regex(/^\d+(\.\d+)?$/).optional(),
   reduceOnly: z.boolean().default(false), tif: z.enum(['gtc', 'ioc', 'alo']).default('gtc'), slippageBps: z.number().int().min(1).max(500).optional(),
-  clientOrderId: z.string().regex(/^[A-Za-z0-9._:-]{8,100}$/).optional(),
+  leverage: Dec.regex(/^\d+(\.\d+)?$/).optional().describe('paper only: leverage setting of the instrument on the account. On a venue account the leverage is a venue setting'),
+  maxFeeUsd: Dec.regex(/^\d+(\.\d+)?$/).optional().describe('highest fee accepted, USD; default: 10 bps of the notional'),
+  clientOrderId: z.string().regex(/^[A-Za-z0-9._:-]{8,100}$/).optional().describe('idempotency key of the ORDER; default: the Idempotency-Key header. The order id is derived from it and from the principal'),
 });
+export type OrderRequest = z.infer<typeof OrderRequestSchema>;
+export const CommandBody = z.strictObject({
+  text: z.string().min(1).max(300).describe('one line of the trading command grammar, English or French: LONG BTC-PERP 500 x2, CLOSE BTC-PERP 50%, CANCEL ORDER <id>, SHOW POSITIONS, KILL …'),
+  mode: Mode.default('paper'), dryRun: z.boolean().default(false).describe('true: answer the canonical order (or the control) the command resolves to, and do nothing'),
+});
+const KillBody = z.strictObject({ reason: z.string().max(200).default('') });
 const CloseBody = z.strictObject({ slippageBps: z.number().int().min(1).max(500).optional() });
 const ReduceBody = z.strictObject({ fraction: Dec.regex(/^(0(\.\d+)?|1(\.0+)?)$/).describe('share of the position to close, in (0, 1]'), slippageBps: z.number().int().min(1).max(500).optional() });
 const StrategyBody = z.strictObject({ kind: z.enum(['spot', 'perp']), path: z.string().min(1).max(200).describe('library path of the strategy'), agentId: z.uuid().optional() });
@@ -151,6 +169,8 @@ export interface OperationSpec {
   idempotent?: boolean;
   /** false: the route exists with its scope, validation and idempotency, and answers 501 `execution_not_wired` */
   implemented: boolean;
+  /** true: an execution scope that needs NO trading mandate on the key — the operation can only remove risk (a cancel, the kill switch) */
+  noMandate?: boolean;
 }
 const NOT_WIRED = 'Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.';
 const read = (id: string, path: string, tag: OperationSpec['tag'], scope: RouteScope, summary: string, o: Partial<OperationSpec> = {}): OperationSpec => ({ id, method: 'GET', path, tag, scope, summary, implemented: true, ...o });
@@ -181,11 +201,20 @@ export const OPERATIONS: readonly OperationSpec[] = [
   read('listAgents', '/agents', 'Agents', 'agents:read', 'Trading agents', { response: R.agents }),
   read('getRisk', '/risk', 'Risk', 'positions:read', 'Risk state: kill switch, signer limits, capability locks, account policies', { response: R.risk }),
 
-  write('previewOrder', 'POST', '/orders/preview', 'Orders', 'orders:prepare', 'Preview an order (risk check and estimate)', { body: OrderRequestSchema }),
-  write('placeOrder', 'POST', '/orders', 'Orders', 'orders:execute', 'Place an order', { body: OrderRequestSchema }),
-  write('cancelOrder', 'DELETE', '/orders/:id', 'Orders', 'orders:cancel', 'Cancel an order', { params: IdParam }),
-  write('closePosition', 'POST', '/positions/:id/close', 'Positions', 'positions:manage', 'Close a position', { params: IdParam, body: CloseBody }),
-  write('reducePosition', 'POST', '/positions/:id/reduce', 'Positions', 'positions:manage', 'Reduce a position', { params: IdParam, body: ReduceBody }),
+  write('previewOrder', 'POST', '/orders/preview', 'Orders', 'orders:prepare', 'Preview an order: every check it would meet, and an estimate', { body: OrderRequestSchema, implemented: true, idempotent: false, response: R.preview,
+    description: 'Resolves the instrument and the account, then runs the key limits, the server locks, the trading mandate (keys and agents), the independent risk engine and the venue engine\'s own checks on the market as it is now. Answers the canonical order and its hash, every check with what was observed and its limit, an estimate (fees, slippage against the real book, liquidation price) and whether an owner passkey approval would be required. Never creates, signs or sends anything.' }),
+  write('placeOrder', 'POST', '/orders', 'Orders', 'orders:execute', 'Place an order', { body: OrderRequestSchema, implemented: true, response: R.placed,
+    description: 'Idempotent on (principal, Idempotency-Key): a replay answers the same order and never sends a second request to a venue. Owner session: the order is checked and waits `AWAITING_APPROVAL` until the owner approves it with the passkey in the app (paper: executed at once, nothing is signed). API key: needs a trading mandate bound to the key that covers the order exactly (403 `mandate_denied` with the reasons otherwise), then the risk engine, then the venue engine\'s mandate path — the isolated signer applies the derivative mandate it stores. LIVE needs `SPW_TRADING_API_EXECUTION=on` on the server (403 `execution_disabled` otherwise) and the existing mainnet locks. A refusal after the order exists answers 4xx with the order in `data.order` (state `REJECTED` or `FAILED`). An outcome that is not known is `UNKNOWN`, never a failure. Spot orders: 403 `spot_execution_requires_agent_vault` for a key; 422 `spot_via_swap_screen` for the owner.' }),
+  write('cancelOrder', 'DELETE', '/orders/:id', 'Orders', 'orders:cancel', 'Cancel an order', { params: IdParam, implemented: true, noMandate: true, response: R.cancelled,
+    description: 'A key cancels its OWN orders only (403 `not_your_order`); no trading mandate is required, and the kill switch and read-only mode never stop a cancel: it can only remove what could still execute. At the venue the order is `CANCELLED` when the venue says so.' }),
+  write('closePosition', 'POST', '/positions/:id/close', 'Positions', 'positions:manage', 'Close a position', { params: IdParam, body: CloseBody, implemented: true, response: R.placed,
+    description: 'A strictly reduce-only market order on the whole position (`id` from GET /positions). Refused (422 `not_reducing`) if it would not strictly reduce. A key: the position must be on an account and an instrument of its mandate. Passes the kill switch; not read-only mode.' }),
+  write('reducePosition', 'POST', '/positions/:id/reduce', 'Positions', 'positions:manage', 'Reduce a position', { params: IdParam, body: ReduceBody, implemented: true, response: R.placed,
+    description: 'As close, on a fraction of the position (rounded down to the lot).' }),
+  write('runCommand', 'POST', '/commands', 'Orders', 'orders:prepare', 'Run one line of the trading command grammar', { body: CommandBody, implemented: true, noMandate: true, response: z.looseObject({ kind: z.string() }),
+    description: 'Deterministic grammar (no model). The scope checked is the one of the operation the command resolves to: an order needs `orders:execute` (`orders:prepare` with `dryRun`), CLOSE `positions:manage`, CANCEL `orders:cancel`, SHOW the matching read scope, KILL `positions:manage`. Resolution uses the owner\'s stored defaults (GET/PUT /api/v1/developer/command-defaults) and nothing else: a command the defaults do not settle answers 409 `ambiguous_command` with the questions and executes nothing.' }),
+  write('engageKillSwitch', 'POST', '/risk/kill-switch', 'Risk', 'positions:manage', 'Engage the global kill switch', { body: KillBody, implemented: true, noMandate: true, idempotent: false, response: z.looseObject({ killSwitch: z.looseObject({ on: z.boolean() }) }),
+    description: 'Blocks every NEW risk for every principal on every venue and in every mode; cancels and strictly reducing orders still pass. Engaging needs no mandate (it only removes risk). Releasing it is NOT possible with a key: owner session and passkey only.' }),
   write('createStrategy', 'POST', '/strategies', 'Strategies', 'strategies:manage', 'Register a strategy version', { body: StrategyBody }),
   write('backtestStrategy', 'POST', '/strategies/:id/backtest', 'Strategies', 'strategies:manage', 'Run a backtest', { params: IdParam, body: BacktestBody }),
   write('startStrategy', 'POST', '/strategies/:id/start', 'Strategies', 'strategies:manage', 'Start a strategy', { params: IdParam, body: StartBody }),

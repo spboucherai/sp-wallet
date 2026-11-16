@@ -128,6 +128,8 @@ interface Row {
   error: string | null; attempts: number; expires_at: Date | null; sent_at: Date | null; order_created_at: Date | null; done_at: Date | null; checked_at: Date | null; created_at: Date; updated_at: Date;
 }
 interface Computed {
+  /** V11: the order as the unified risk gate takes it, and what was read for it */
+  gate: { req: import('@spw/derivatives').OrderRequest; instrument: Instrument; ticker: Ticker; position: Position | null };
   pin: GmxMarketPin; isLong: boolean; increase: boolean; amount: bigint; sizeRaw: bigint; acceptable: bigint; slippageBps: number; leverage: DecStr | null;
   estimate: Record<string, any>; risk: { ok: true } | { ok: false; code: string; reason: string }; signerWould: string | null; executionFee: bigint; base: bigint; tip: bigint;
 }
@@ -135,6 +137,9 @@ interface Computed {
 export class GmxService {
   readonly deps: GmxDeps;
   readonly now: () => number;
+  /** V11: the unified risk gate and the global kill switch / read-only mode (derivatives/gate.ts), set by the server */
+  preTrade: import('./gate.ts').PreTradeGate | null = null;
+  newRiskBlock: import('./gate.ts').NewRiskBlock | null = null;
   constructor(deps: GmxDeps) { this.deps = deps; this.now = deps.now; }
 
   // ------------------------------------------------------------------ helpers
@@ -518,7 +523,11 @@ export class GmxService {
         signerWould = v && v !== 'no price' ? v : null;
       } catch { signerWould = null; }
     }
-    return { pin, isLong, increase, amount, sizeRaw, acceptable, slippageBps: body.slippageBps, leverage, estimate, risk, signerWould, executionFee, base, tip };
+    const gatePos: Position | null = closing ? { instrument: pin.instrument, side: isLong ? 'long' : 'short', size: unscale(closing.sizeInTokens, pin.indexDecimals), entryPrice: D.str(reference), markPrice: D.str(mid), liquidationPrice: null,
+      leverage: '1', marginMode: 'isolated', margin: '0', unrealizedPnl: '0', realizedPnl: null, fundingPaid: null, source: 'venue' } : null;
+    const gate: Computed['gate'] = { instrument: md.instrument, ticker: md.ticker, position: gatePos,
+      req: { instrument: pin.instrument, side: isLong === increase ? 'buy' : 'sell', type: 'market', size: D.str(tokens), price: gmxPriceFromRaw(acceptable, pin.indexDecimals), triggerPrice: null, reduceOnly: !increase, tif: 'ioc', clientId: randomUUID() } };
+    return { gate, pin, isLong, increase, amount, sizeRaw, acceptable, slippageBps: body.slippageBps, leverage, estimate, risk, signerWould, executionFee, base, tip };
   }
 
   async preview(body: GmxOrderBody) {
@@ -616,6 +625,12 @@ export class GmxService {
     await this.busy();
     const bal = await this.deps.chain.balances(me), c = await this.compute(body, me, auth, bal.usdc), col = c.pin.collateral[0]!;
     if (!c.risk.ok) throw new UserError(`risk_${c.risk.code}`, c.risk.reason, 422);
+    // V11: the unified risk engine (every venue of the live book, the owner's limits, the kill switch). A decrease is judged on the position read on-chain.
+    if (this.preTrade) {
+      const g = await this.preTrade({ mode: 'live', venue: 'gmx', network: GMX_PINS.network, accountId: me, req: { ...c.gate.req, clientId: idem.length >= 8 ? `gmx-${idem}`.slice(0, 100) : c.gate.req.clientId }, instrument: c.gate.instrument, origin: body.action === 'decrease' ? 'close' : 'owner',
+        known: { ticker: c.gate.ticker, book: null, account: null, positions: c.gate.position ? [c.gate.position] : null, leverage: c.leverage } });
+      if (!g.ok) throw new UserError(g.code, g.reason, g.code === 'risk_denied' ? 422 : 423);
+    }
     // the signer's venue policy, applied before the owner is asked (the signer applies it again with its OWN price)
     if (c.signerWould) throw new UserError('venue_policy', c.signerWould, 422);
     if (c.executionFee === 0n) throw new UserError('chain_unreadable', 'the execution fee could not be computed (gas parameters or base fee unreadable)', 503);
@@ -676,6 +691,9 @@ export class GmxService {
     let [p] = await sql<ProposalRow[]>`select * from proposals where id = ${r.proposal_id}`;
     if (r.state !== 'pending_approval' || !p || p.state !== 'pending_approval' || !p.intent) throw new UserError('bad_state', `the operation is ${r.state}`, 409);
     if (p.expires_at && p.expires_at.getTime() < this.now()) { await this.refresh(r); throw new UserError('expired', 'approval window expired; start again', 410); }
+    // V11: the global kill switch (an increase) or read-only mode (anything but a cancellation), engaged after the order was prepared
+    const blk = this.newRiskBlock && r.kind !== 'cancel' ? await this.newRiskBlock() : null;
+    if (blk && (r.kind === 'increase' || blk.code === 'read_only_mode')) { await this.withdraw(r.id).catch(() => {}); throw new UserError(blk.code, blk.reason, 423); }
     await this.busy(p.id);
     r = await this.set(r, { state: 'signed' }, 'pending_approval');
     p = await move(p, 'approved');

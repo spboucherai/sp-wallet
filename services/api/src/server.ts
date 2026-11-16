@@ -30,6 +30,7 @@ import { perpAgentRoutes } from './agents/perp-routes.ts'; // v6 perp agents
 import { transferRoutes, view, type ProposalRow } from './transfers.ts';
 import { healthCache } from './worker.ts';
 import { alertRoutes } from './alerts/routes.ts';     // v6-alerts
+import { registerExecution } from './orders/index.ts'; // v11 execution
 import { monitorRoutes } from './monitor/routes.ts'; // v6-alerts
 import { researchRoutes, RUNNER_PREFIX, runnerGate } from './research/routes.ts'; // v7 research runtime
 import { perpRuntime } from './agents/perp-live.ts'; // v7 research runtime (perp data for research jobs)
@@ -195,7 +196,8 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   await alertRoutes(app); // v6-alerts: in-app alerts, push subscriptions, webhook — all behind the owner session
   monitorRoutes(app);     // v6-alerts: read-only monitoring dashboard
   await researchRoutes(app, { perp: () => perpRuntime().lab }); // v7 research runtime: jobs for the owner, a narrow endpoint pair for the runner
-  await tradingApi(app, { derivatives: opts.derivatives, live: opts.live, gmx: opts.gmx, prices: markets }); // v11: /api/v1/trading (scoped API keys or the owner) and /api/v1/developer (owner only)
+  const execution = registerExecution(app, { derivatives: opts.derivatives, live: opts.live, gmx: opts.gmx, prices: markets }); // v11 execution: unified orders, independent risk engine, trading mandates (owner routes /api/v1/risk, /api/v1/mandates)
+  await tradingApi(app, { derivatives: opts.derivatives, live: opts.live, gmx: opts.gmx, prices: markets, execution }); // v11: /api/v1/trading (scoped API keys or the owner) and /api/v1/developer (owner only)
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));
   app.get('/api/v1/health/ready', async () => {

@@ -85,11 +85,21 @@ const base = (action: IntentAction): IntentBase => ({ v: 1, action, intentId: ra
 const uniq = <T extends string>(a: readonly T[]): T[] => [...new Set(a)].sort();
 const cleanRestrictions = (r: Restrictions): Restrictions => ({ networks: uniq(r.networks), venues: uniq(r.venues), instruments: uniq(r.instruments), ipAllow: uniq(r.ipAllow) });
 
+/**
+ * V11: `mandate_id` is verified wherever a key is bound to a mandate — the mandate exists, is approved and active, and was
+ * approved for THIS key (mandates/service.ts `verifyKeyBinding`; set by index.ts). A key is created without a mandate (its id
+ * does not exist before), the owner then approves a mandate for it and binds it with an update, which needs the passkey.
+ */
+let verifyMandate: ((keyId: string, mandateId: string) => Promise<void>) | null = null;
+export const setMandateVerifier = (fn: typeof verifyMandate): void => { verifyMandate = fn; };
+const checkBinding = async (keyId: string, mandateId: string | null | undefined): Promise<void> => { if (mandateId && verifyMandate) await verifyMandate(keyId, mandateId); };
+
 export async function prepareCreate(b: KeyCreate) {
   const [n] = await sql<{ n: number }[]>`select count(*)::int as n from api_keys where revoked_at is null and expires_at > now()`;
   if ((n?.n ?? 0) >= KEY_BOUNDS.maxKeys) throw new UserError('too_many_keys', `at most ${KEY_BOUNDS.maxKeys} active API keys`, 409);
-  const b0 = base('create');
-  return storeIntent<CreateIntent>({ ...b0, action: 'create', key: { id: newKeyId(), name: b.name, scopes: uniq(b.scopes), expiresAt: new Date(Date.parse(b0.preparedAt) + b.expiresInDays * DAY).toISOString(),
+  const b0 = base('create'), id = newKeyId();
+  await checkBinding(id, b.mandateId);
+  return storeIntent<CreateIntent>({ ...b0, action: 'create', key: { id, name: b.name, scopes: uniq(b.scopes), expiresAt: new Date(Date.parse(b0.preparedAt) + b.expiresInDays * DAY).toISOString(),
     limits: b.limits, restrictions: cleanRestrictions(b.restrictions), rateLimitPerMin: b.rateLimitPerMin, mandateId: b.mandateId } });
 }
 export async function prepareRotate(id: string) {
@@ -107,6 +117,7 @@ function checkedChanges(k: KeyRow, c: KeyChanges): { next: KeyFacts; widening: s
 }
 export async function prepareUpdate(id: string, c: KeyChanges) {
   const k = await getKey(id), r = checkedChanges(k, c);
+  if (r.changes.mandateId !== undefined && r.changes.mandateId !== k.mandate_id) await checkBinding(k.id, r.changes.mandateId);
   return storeIntent<UpdateIntent>({ ...base('update'), action: 'update', keyId: k.id, changes: r.changes, widening: r.widening });
 }
 
@@ -172,6 +183,7 @@ export async function updateKey(id: string, intentId: string, assertion: unknown
   const i = await approveIntent<UpdateIntent>(intentId, 'update', assertion, ip);
   if (i.keyId !== id) throw new UserError('intent_mismatch', 'this approval was prepared for another key', 409);
   const k = await getKey(id), r = checkedChanges(k, i.changes); // recomputed against the key as it is NOW
+  if (r.changes.mandateId !== undefined && r.changes.mandateId !== k.mandate_id) await checkBinding(k.id, r.changes.mandateId); // and the mandate as it is NOW
   const row = await saveFacts(id, r.next);
   await audit('apikey.updated', 'owner', { ...auditFacts(row), widening: r.widening, ip });
   return { key: keyView(row) };

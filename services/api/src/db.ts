@@ -261,6 +261,54 @@ create table if not exists api_webhook_deliveries (
 create index if not exists api_webhook_deliveries_due on api_webhook_deliveries (next_attempt_at) where state = 'pending';
 create index if not exists api_webhook_deliveries_recent on api_webhook_deliveries (webhook_id, id desc);
 -- <<< v11 trading API
+-- >>> v11 execution (services/api/src/orders, risk, mandates): ONE order table for every principal, mode and venue. A row is
+-- changed only by transition() of @spw/trading (orders/store.ts); order_events is its append-only history. The venue engines
+-- keep their own rows (deriv_orders, deriv_gmx_ops): a trigger queues every change of them, and the projector (orders/projection.ts)
+-- turns each change into events of the unified order — whatever code path wrote the engine row.
+create table if not exists orders (
+  id text primary key, principal_kind text not null, principal_id text not null, idempotency_key text, body_hash text,
+  mode text not null, venue text not null, network text not null, instrument text not null, market_kind text not null, side text not null, type text not null,
+  reduce_only boolean not null default false, account_id text, mandate_id uuid, canonical jsonb, order_hash text,
+  record jsonb not null, state text not null, reason text not null, version int not null default 0, reject_code text,
+  engine text not null, engine_ref text, engine_sig text, request_expires_at timestamptz, notional_usd numeric, origin text not null default 'trading_api',
+  projection_error text, next_reconcile_at timestamptz, detail jsonb not null default '{}', created_at timestamptz not null, updated_at timestamptz not null);
+create unique index if not exists orders_idempotency on orders (principal_kind, principal_id, idempotency_key) where idempotency_key is not null;
+create unique index if not exists orders_engine_ref on orders (engine, engine_ref) where engine_ref is not null;
+create index if not exists orders_recent on orders (created_at desc);
+create index if not exists orders_open on orders (state) where state not in ('FILLED', 'CANCELLED', 'REJECTED', 'FAILED');
+create index if not exists orders_principal on orders (principal_kind, principal_id, created_at desc);
+create table if not exists order_events (
+  order_id text not null references orders(id), seq int not null, from_state text not null, to_state text not null, event text not null, body jsonb not null,
+  reason text not null, detail text, at timestamptz not null, primary key (order_id, seq));
+create or replace function spw_append_only() returns trigger language plpgsql as $spw$ begin raise exception '% is append-only', tg_table_name; end $spw$;
+drop trigger if exists order_events_append_only on order_events;
+create trigger order_events_append_only before update or delete on order_events for each row execute function spw_append_only();
+create table if not exists order_projection_queue (id bigserial primary key, engine text not null, ref text not null, queued_at timestamptz not null default now());
+create or replace function spw_queue_deriv_order() returns trigger language plpgsql as $spw$
+begin insert into order_projection_queue (engine, ref) values ('deriv', new.account_id::text || ':' || new.client_id); return null; end $spw$;
+create or replace function spw_queue_gmx_op() returns trigger language plpgsql as $spw$
+begin insert into order_projection_queue (engine, ref) values ('gmx', new.id::text); return null; end $spw$;
+drop trigger if exists deriv_orders_projection on deriv_orders;
+create trigger deriv_orders_projection after insert or update on deriv_orders for each row execute function spw_queue_deriv_order();
+drop trigger if exists deriv_gmx_ops_projection on deriv_gmx_ops;
+create trigger deriv_gmx_ops_projection after insert or update on deriv_gmx_ops for each row execute function spw_queue_gmx_op();
+-- every evaluation of the unified risk engine (allowed or denied, previews included), linked to the order when there is one
+create table if not exists risk_decisions (
+  id bigserial primary key, at timestamptz not null, order_id text, client_order_id text, kind text not null, preview boolean not null default false,
+  principal_kind text not null, principal_id text not null, mode text not null, venue text not null, instrument text,
+  decision text not null, reducing boolean not null, failed text[] not null default '{}', checks jsonb not null, derived jsonb, limits jsonb, context jsonb);
+create index if not exists risk_decisions_recent on risk_decisions (id desc);
+create index if not exists risk_decisions_order on risk_decisions (client_order_id);
+-- trading mandates SPW-TRADING-MANDATE-v1: immutable once created; state and the usage counters are the only things that change
+create table if not exists trading_mandates (
+  id uuid primary key, principal_kind text not null, principal_id text not null, mode text not null, mandate jsonb not null, hash text not null,
+  state text not null, enforcement jsonb not null default '[]', compiled jsonb, signer jsonb, revocation jsonb, stop jsonb,
+  created_at timestamptz not null default now(), approved_at timestamptz, revoked_at timestamptz, updated_at timestamptz not null default now());
+create index if not exists trading_mandates_principal on trading_mandates (principal_kind, principal_id, created_at desc);
+create table if not exists trading_mandate_usage (
+  mandate_id uuid primary key references trading_mandates(id), orders_accepted int not null default 0, orders_rejected int not null default 0, consecutive_rejects int not null default 0,
+  notional_total numeric not null default 0, peak_equity numeric, start_equity numeric, last_order_at timestamptz, signer_unreachable_since timestamptz, updated_at timestamptz not null default now());
+-- <<< v11 execution
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }

@@ -1,12 +1,16 @@
 // /api/v1/trading — registration of the operations of spec.ts. One handler per operation id; the table and the handlers are
 // compared at start-up (a missing or an extra handler throws), so a route cannot exist without a declared scope and a schema.
 //
-// Read operations call read.ts. Write operations are registered with their scope, their validation schema and the
-// idempotency middleware, and answer 501 `execution_not_wired`: the next wave replaces `notWired` by a real handler and
-// nothing else. A 501 is an error answer — never a success, and never stored as the answer of an Idempotency-Key.
+// Read operations call read.ts. The order operations call the order service (orders/service.ts) — the single entry of every
+// order, which runs the mandate, the risk engine and then the venue engine's own path; nothing here talks to a venue or to the
+// signer. The strategy and agent operations are still registered with their scope, their validation schema and the idempotency
+// middleware, and answer 501 `execution_not_wired` (the agents runtime wires them). A 501 is never stored as the answer of a key.
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { UserError } from '../config.ts';
-import { withIdempotency } from './idempotency.ts';
+import { OWNER_CALLER, type Caller, type Execution, type OrderInput } from '../orders/index.ts';
+import { runCommand } from './commands.ts';
+import { IDEMPOTENCY_RE, replayHeaders, withIdempotency } from './idempotency.ts';
 import { buildOpenApi } from './openapi.ts';
 import { requirePrincipal, type Principal } from './principal.ts';
 import { AmbiguousSymbol, type Reads } from './read.ts';
@@ -15,16 +19,34 @@ import { ANY_SCOPE, isExecutionScope, OPERATIONS, TRADING_PREFIX, type Operation
 interface Input { params: any; query: any; body: any } // eslint-disable-line @typescript-eslint/no-explicit-any -- validated by the operation's zod schemas
 type Handler = (p: Principal, i: Input, req: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
 
-/** 403 unless the key is bound to a trading mandate. The owner session is not a key: it never passes through here. */
-export function requireMandate(p: Principal, op: Pick<OperationSpec, 'scope'>): void {
-  if (p.kind === 'api_key' && op.scope !== ANY_SCOPE && isExecutionScope(op.scope) && !p.mandateId)
+/**
+ * 403 unless the key is bound to a trading mandate. The owner session is not a key: it never passes through here.
+ * An operation that can only REMOVE risk (`noMandate`: a cancel of the key's own order, the kill switch) needs no mandate, and
+ * a command is judged on the operation it resolves to (commands.ts). Whether the bound mandate is approved, active and covers
+ * the order is decided by the order service, order by order.
+ */
+export function requireMandate(p: Principal, op: Pick<OperationSpec, 'scope' | 'noMandate'>): void {
+  if (p.kind === 'api_key' && op.scope !== ANY_SCOPE && isExecutionScope(op.scope) && !op.noMandate && !p.mandateId)
     throw new UserError('mandate_required', `the scope ${op.scope} is inert on this key: no trading mandate is bound to it`, 403);
 }
 const notWired = (op: OperationSpec): Handler => async (_p, _i, req, reply) =>
   withIdempotency(req, reply, async () => { throw new UserError('execution_not_wired', `${op.method} ${TRADING_PREFIX}${op.path} is declared but not connected to execution yet; nothing was done`, 501); });
 
-export function tradingRoutes(app: FastifyInstance, reads: Reads): void {
+/** the principal of the request as the order service takes it: a key's limits and restrictions travel with it */
+export const callerOf = (p: Principal): Caller => (p.kind === 'owner' ? OWNER_CALLER
+  : { principal: { kind: 'api_key', id: p.id }, mandateId: p.mandateId, limits: p.limits, restrictions: { networks: p.restrictions.networks, venues: p.restrictions.venues, instruments: p.restrictions.instruments } });
+
+export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution): void {
   let doc: unknown = null;
+  /** `venue:symbol` after the read side resolved a bare symbol (409 `ambiguous_symbol`) and applied the key's restrictions */
+  const orderInput = async (p: Principal, b: Input['body']): Promise<OrderInput> => {
+    const r = await reads.resolve(p, b.instrument);
+    return { mode: b.mode, accountId: b.accountId, instrument: r.id, side: b.side, type: b.type, size: b.size, price: b.price, triggerPrice: b.triggerPrice, reduceOnly: b.reduceOnly, tif: b.tif, slippageBps: b.slippageBps, leverage: b.leverage, maxFeeUsd: b.maxFeeUsd };
+  };
+  /** the idempotency key of the ORDER: the body's clientOrderId when given, else the Idempotency-Key header */
+  const orderKey = (req: FastifyRequest, b?: { clientOrderId?: string }): string => b?.clientOrderId ?? replayHeaders(req).key;
+  const previewKey = (req: FastifyRequest, b: { clientOrderId?: string }): string => { const h = req.headers['idempotency-key']; return b.clientOrderId ?? (typeof h === 'string' && IDEMPOTENCY_RE.test(h) ? h : `preview-${randomUUID()}`); };
+  const AGENT_ID = /^agent:/;
   const handlers: Record<string, Handler> = {
     getOpenApi: async () => (doc ??= buildOpenApi()),
     listMarkets: (p, i) => reads.markets(p, i.query),
@@ -35,11 +57,28 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads): void {
     getBalances: (p, i) => reads.balances(p, i.query),
     getActivity: (p, i) => reads.activity(p, i.query),
     listPositions: (p, i) => reads.positions(p, i.query),
-    listOrders: (p, i) => reads.orders(p, i.query),
-    getOrder: (p, i) => reads.order(p, i.params.id),
+    // orders: the unified table (every principal, mode and venue), plus the spot agents' swaps, which have their own table
+    listOrders: async (p, i) => {
+      const unified = i.query.venue === 'spot' ? [] : await ex.orders.list(callerOf(p), i.query);
+      const agents = (await reads.orders(p, i.query)).orders.filter((o) => AGENT_ID.test(o.id));
+      return { orders: [...unified, ...agents].sort((a, b) => b.createdAt - a.createdAt).slice(0, i.query.limit), ts: reads.now() };
+    },
+    getOrder: async (p, i) => {
+      if (AGENT_ID.test(i.params.id)) return reads.order(p, i.params.id);
+      const o = await ex.orders.get(callerOf(p), i.params.id);
+      if (!o) throw new UserError('unknown_order', 'unknown order', 404);
+      return o;
+    },
+    previewOrder: async (p, i, req) => ex.orders.preview(callerOf(p), await orderInput(p, i.body), previewKey(req, i.body)),
+    placeOrder: (p, i, req, reply) => withIdempotency(req, reply, async () => ex.orders.submit(callerOf(p), await orderInput(p, i.body), orderKey(req, i.body))),
+    cancelOrder: (p, i, req, reply) => withIdempotency(req, reply, () => ex.orders.cancel(callerOf(p), i.params.id)),
+    closePosition: (p, i, req, reply) => withIdempotency(req, reply, () => ex.orders.reducePosition(callerOf(p), i.params.id, '1', i.body.slippageBps, orderKey(req))),
+    reducePosition: (p, i, req, reply) => withIdempotency(req, reply, () => ex.orders.reducePosition(callerOf(p), i.params.id, i.body.fraction, i.body.slippageBps, orderKey(req))),
+    runCommand: (p, i, req, reply) => withIdempotency(req, reply, () => runCommand(ex, reads, p, callerOf(p), i.body, orderKey(req))),
+    engageKillSwitch: async (p, i) => { const s = await ex.risk.engageKillSwitch(p.kind === 'owner' ? { kind: 'owner', id: 'owner' } : { kind: 'api_key', id: p.id }, i.body.reason); return { killSwitch: s.killSwitch, readOnly: s.readOnly }; },
     listStrategies: (p, i) => reads.strategies(p, i.query),
     listAgents: (p) => reads.agents(p),
-    getRisk: (p) => reads.risk(p),
+    getRisk: async (p) => ({ ...(await reads.risk(p)), engine: { ...(await ex.risk.switches()), note: 'the global kill switch blocks every new risk (cancels and strictly reducing orders pass); read-only mode lets only cancels pass. Releasing either needs the owner\'s passkey.' } }),
   };
   for (const op of OPERATIONS) if (!op.implemented) { if (handlers[op.id]) throw new Error(`trading-api: ${op.id} is declared not implemented but has a handler`); handlers[op.id] = notWired(op); }
   const declared = new Set(OPERATIONS.map((o) => o.id));

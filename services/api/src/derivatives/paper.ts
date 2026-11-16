@@ -20,6 +20,7 @@ import {
 import { UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
 import type { DerivData } from './data.ts';
+import type { PreTradeGate } from './gate.ts';
 
 type Tx = TransactionSql;
 const BPS = D.from(10000n);
@@ -126,6 +127,15 @@ export function worstPrice(inst: Instrument, book: Book, side: 'buy' | 'sell', b
   return q;
 }
 
+/** V11: the same bound from a given reference price (the trigger of a stop / take-profit market order) instead of the best opposite price */
+export function boundPrice(inst: Instrument, reference: DecStr, side: 'buy' | 'sell', bps: number): DecStr {
+  const k = D.from(BigInt(bps)), px = D.from(reference);
+  const raw = side === 'buy' ? D.div(D.mul(px, D.add(BPS, k)), BPS, 18, 'down') : D.div(D.mul(px, D.sub(BPS, k)), BPS, 18, 'up');
+  const q = priceRules(inst).quantize(raw, side === 'buy' ? 'down' : 'up');
+  if (!D.isPos(D.from(q))) throw new UserError('no_liquidity', 'no positive price can be derived from the reference', 503);
+  return q;
+}
+
 function compact(state: PaperState): void {
   const closed = state.orders.filter((o) => !isOpen(o));
   if (closed.length > KEEP.closedOrders) {
@@ -139,6 +149,8 @@ function compact(state: PaperState): void {
 export class PaperService {
   readonly data: DerivData;
   readonly now: () => number;
+  /** V11: the unified risk gate (derivatives/gate.ts), set by the server; null = the account's own policy alone judges */
+  preTrade: PreTradeGate | null = null;
   constructor(data: DerivData, now: () => number = Date.now) { this.data = data; this.now = now; }
 
   // ------------------------------------------------------------------ storage
@@ -367,11 +379,16 @@ export class PaperService {
   }
 
   /** risk engine on the account as it stands at the live ticker */
-  private async risk(tx: Tx, l: Loaded, req: OrderRequest, m: { inst: Instrument; ticker: Ticker; book: Book }, lev: DecStr, now: number): Promise<RiskResult> {
-    return checkOrder(l.policy, req, {
+  private async risk(tx: Tx, l: Loaded, req: OrderRequest, m: { inst: Instrument; ticker: Ticker; book: Book }, lev: DecStr, now: number, preview = false): Promise<RiskResult> {
+    const own = checkOrder(l.policy, req, {
       instrument: m.inst, account: l.acct.accountState(now), positions: l.acct.positions(), openOrders: l.acct.openOrders(), book: m.book, ticker: m.ticker, now,
       usage: await this.usage(tx, l.row.id, l.acct, now), leverage: lev, maintenanceMarginFraction: l.acct.state.config.maintenanceMarginFraction,
     });
+    if (!own.ok || !this.preTrade) return own;
+    // V11: the unified risk engine — the same one as for live orders, with the paper limits; the paper book only (never a live position)
+    const g = await this.preTrade({ mode: 'paper', venue: l.row.venue, network: l.row.network, accountId: l.row.id, req, instrument: m.inst, origin: 'owner', preview,
+      known: { ticker: m.ticker, book: m.book, account: l.acct.accountState(now), positions: l.acct.positions(), leverage: lev, maintenanceMarginFraction: l.acct.state.config.maintenanceMarginFraction } });
+    return g.ok ? own : { ok: false, code: g.code as never, reason: g.reason };
   }
 
   private estimate(l: Loaded, req: OrderRequest, m: { inst: Instrument; ticker: Ticker; book: Book }, lev: DecStr, now: number): OrderEstimate {
@@ -425,7 +442,7 @@ export class PaperService {
       l.acct.onTicker(m.ticker, now);                               // on the loaded copy only: equity at the live mark
       const { lev, refusal: levRefusal } = this.leverageFor(l, m.inst, body.leverage);
       const { req, refusal: priceRefusal } = this.request(body, m.inst, m.book, 'preview');
-      const risk = levRefusal ?? priceRefusal ?? await this.risk(tx, l, req, m, lev, now);
+      const risk = levRefusal ?? priceRefusal ?? await this.risk(tx, l, req, m, lev, now, true);
       return { risk, estimate: this.estimate(l, req, m, lev, now), request: req, ts: now };
     }) as Promise<{ risk: RiskResult; estimate: OrderEstimate; request: OrderRequest; ts: number }>;
   }
