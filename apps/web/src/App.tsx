@@ -23,6 +23,7 @@ const screens = {
   agents: () => import('./screens/Agents'), research: () => import('./screens/Research'), plan: () => import('./plan'),
   security: () => import('./screens/Security'), settings: () => import('./screens/Settings'),
   developer: () => import('./screens/Developer'),   // v11 Developer / API: opened from Settings, never preloaded
+  risk: () => import('./screens/Risk'),             // v11 Risk: opened from Settings and Monitor, never preloaded
 };
 const Futures = lazy(() => screens.futures().then((m) => ({ default: m.Futures })));
 const Alerts = lazy(() => screens.alerts().then((m) => ({ default: m.Alerts })));
@@ -38,6 +39,7 @@ const PlanScreen = lazy(() => screens.plan().then((m) => ({ default: m.PlanScree
 const Security = lazy(() => screens.security().then((m) => ({ default: m.Security })));
 const Settings = lazy(() => screens.settings().then((m) => ({ default: m.Settings })));
 const Developer = lazy(() => screens.developer().then((m) => ({ default: m.Developer })));
+const Risk = lazy(() => screens.risk().then((m) => ({ default: m.Risk })));
 /** After the first screen is drawn: the logo set, then the tab-bar screens, one at a time, each when the browser is idle. A failure is silent (the screen asks again when opened). */
 let preloaded = false;
 function preloadScreens(): void {
@@ -51,11 +53,11 @@ function preloadScreens(): void {
 const ScreenSkeleton = () => <div className="space-y-4" aria-busy="true"><Skeleton h="h-9" className="!mt-2 !w-44 !rounded-xl" /><SkeletonRows n={5} /></div>;
 
 const TABS = [['home', '/', 'home'], ['swap', '/swap', 'swap'], ['agents', '/agents', 'key'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
-export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent' | 'futures' | 'alerts' | 'monitor' | 'research' | 'plan' | 'developer';
+export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent' | 'futures' | 'alerts' | 'monitor' | 'research' | 'plan' | 'developer' | 'risk';
 /** Where to go, with optional pre-selection (asset page, or send/receive pre-filled). */
 export interface Route { tab: Tab; network?: string; asset?: string; /** sub-view of a screen (Futures: compare, accounts) */ view?: string }
 export type Nav = (r: Route) => void;
-const pathOf = (r: Route) => r.tab === 'developer' ? `/developer${r.view ? `?v=${r.view}` : ''}` : r.tab === 'plan' ? `/plan/${r.asset}` : r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
+const pathOf = (r: Route) => r.tab === 'risk' ? '/risk' : r.tab === 'developer' ? `/developer${r.view ? `?v=${r.view}` : ''}` : r.tab === 'plan' ? `/plan/${r.asset}` : r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
 function routeOf(): Route {
   const m = /^\/asset\/([a-z0-9-]+)\/(.+)$/.exec(location.pathname);
   if (m) return { tab: 'asset', network: m[1], asset: decodeURIComponent(m[2]!) };
@@ -68,6 +70,7 @@ function routeOf(): Route {
   if (location.pathname === '/alerts') return { tab: 'alerts', view: q.get('v') ?? undefined };   // v6-alerts
   if (location.pathname === '/monitor') return { tab: 'monitor' };
   if (location.pathname === '/developer') return { tab: 'developer', view: q.get('v') ?? undefined };   // v11 Developer / API
+  if (location.pathname === '/risk') return { tab: 'risk' };   // v11 Risk
   if (location.pathname === '/research') return { tab: 'research', asset: q.get('job') ?? undefined }; // v7 research runtime
   const fu = /^\/futures(?:\/(.+))?$/.exec(location.pathname);   // /futures, /futures/<venue:symbol>
   if (fu) return { tab: 'futures', asset: fu[1] ? decodeURIComponent(fu[1]) : undefined, view: q.get('v') ?? undefined };
@@ -167,6 +170,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
           {tab === 'security' && <Security />}
           {tab === 'settings' && <Settings lock={lock} go={go} />}
           {tab === 'developer' && <Developer view={route.view} setView={(v) => nav({ tab: 'developer', view: v === 'keys' ? undefined : v })} onBack={() => go('settings')} />}{/* v11 Developer / API */}
+          {tab === 'risk' && <Risk onBack={() => go('settings')} />}{/* v11 Risk */}
           {tab === 'research' && <Research nav={nav} job={route.asset} />}{/* v7 research runtime */}
           </Suspense>
           {tab === 'alerts' && <Suspense fallback={<Skeleton h="h-72" />}><Alerts view={route.view === 'settings' ? 'settings' : 'list'} open={openPath} setView={(v) => nav({ tab: 'alerts', view: v === 'settings' ? 'settings' : undefined })} /></Suspense>}

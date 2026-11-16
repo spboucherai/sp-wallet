@@ -72,7 +72,7 @@ export function Monitor({ open }: { open: (path: string) => void }) {
     : <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-elev text-mute" aria-hidden="true"><Icon n={GROUP_ICON[x.group] ?? 'list'} className="h-4 w-4" /></span>; };
   return (
     <div className="space-y-5" data-testid="monitor-screen">
-      <PageTitle>{t('moTitle')}</PageTitle>
+      <PageTitle right={<button type="button" onClick={() => open('/risk')} className="row-press flex min-h-11 items-center gap-1.5 rounded-full bg-elev px-3.5 text-[13.5px] font-semibold" data-testid="mon-risk"><Icon n="shield" className="h-4 w-4" />{t('rkTitle')}</button>}>{t('moTitle')}</PageTitle>{/* v11 Risk */}
 
       {/* one overall status: an icon and a sentence */}
       {!h ? (health.isError ? <ErrorState title={t('dzMoLoadFailed')} onRetry={() => void health.refetch()}>{t('dzMoLoadFailedBody')}</ErrorState> : <SkeletonCard lines={1} />)

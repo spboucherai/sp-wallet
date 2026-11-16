@@ -2014,7 +2014,7 @@
           "Orders"
         ],
         "summary": "Place an order",
-        "description": "Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.",
+        "description": "Idempotent on (principal, Idempotency-Key): a replay answers the same order and never sends a second request to a venue. Owner session: the order is checked and waits `AWAITING_APPROVAL` until the owner approves it with the passkey in the app (paper: executed at once, nothing is signed). API key: needs a trading mandate bound to the key that covers the order exactly (403 `mandate_denied` with the reasons otherwise), then the risk engine, then the venue engine's mandate path — the isolated signer applies the derivative mandate it stores. LIVE needs `SPW_TRADING_API_EXECUTION=on` on the server (403 `execution_disabled` otherwise) and the existing mainnet locks. A refusal after the order exists answers 4xx with the order in `data.order` (state `REJECTED` or `FAILED`). An outcome that is not known is `UNKNOWN`, never a failure. Spot orders: 403 `spot_execution_requires_agent_vault` for a key; 422 `spot_via_swap_screen` for the owner.",
         "security": [
           {
             "bearerKey": [
@@ -2023,7 +2023,7 @@
           }
         ],
         "x-spw-scope": "orders:execute",
-        "x-spw-implemented": false,
+        "x-spw-implemented": true,
         "x-spw-requires-mandate": true,
         "parameters": [
           {
@@ -2125,7 +2125,18 @@
                     "minimum": 1,
                     "maximum": 500
                   },
+                  "leverage": {
+                    "description": "paper only: leverage setting of the instrument on the account. On a venue account the leverage is a venue setting",
+                    "type": "string",
+                    "pattern": "^\\d+(\\.\\d+)?$"
+                  },
+                  "maxFeeUsd": {
+                    "description": "highest fee accepted, USD; default: 10 bps of the notional",
+                    "type": "string",
+                    "pattern": "^\\d+(\\.\\d+)?$"
+                  },
                   "clientOrderId": {
+                    "description": "idempotency key of the ORDER; default: the Idempotency-Key header. The order id is derived from it and from the principal",
                     "type": "string",
                     "pattern": "^[A-Za-z0-9._:-]{8,100}$"
                   }
@@ -2143,6 +2154,70 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "order": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "paper",
+                            "live"
+                          ],
+                          "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+                        },
+                        "venue": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "CREATED, VALIDATED, AWAITING_APPROVAL, APPROVED, SUBMITTING, SUBMITTED, PARTIALLY_FILLED, FILLED, CANCELLED, REJECTED, FAILED or UNKNOWN"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "mode",
+                        "venue",
+                        "status"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "idempotent": {
+                      "type": "boolean"
+                    },
+                    "approval": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {}
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "set while the order waits for the owner's passkey: where it is approved"
+                    }
+                  },
+                  "required": [
+                    "order",
+                    "idempotent",
+                    "approval"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
           "400": {
             "description": "`bad_request`, `idempotency`, `stale_request`",
             "content": {
@@ -2164,7 +2239,7 @@
             }
           },
           "403": {
-            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`, `mandate_denied` (with `data.reasons`), `execution_disabled`, `key_limit_exceeded`, `not_your_order`, a closed server lock (`mainnet_disabled`, `mandate_mainnet_disabled`), `venue_restricted`, `spot_execution_requires_agent_vault`",
             "content": {
               "application/json": {
                 "schema": {
@@ -2183,8 +2258,8 @@
               }
             }
           },
-          "429": {
-            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+          "422": {
+            "description": "`risk_denied` (with `data.failed` and `data.checks`), `not_reducing`, `no_position`, `no_account`, `below_min_size`, `leverage_mismatch`, a refusal of the venue engine. When an order exists it is in `data.order` (state `REJECTED` or `FAILED`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2193,8 +2268,18 @@
               }
             }
           },
-          "501": {
-            "description": "`execution_not_wired`: this operation is declared but not connected yet. Never a success.",
+          "423": {
+            "description": "`kill_switch_active` or `read_only_mode`: the global kill switch blocks new risk; read-only mode lets only cancels pass",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
             "content": {
               "application/json": {
                 "schema": {
@@ -2357,7 +2442,7 @@
           "Orders"
         ],
         "summary": "Cancel an order",
-        "description": "Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.",
+        "description": "A key cancels its OWN orders only (403 `not_your_order`); no trading mandate is required, and the kill switch and read-only mode never stop a cancel: it can only remove what could still execute. At the venue the order is `CANCELLED` when the venue says so.",
         "security": [
           {
             "bearerKey": [
@@ -2366,8 +2451,7 @@
           }
         ],
         "x-spw-scope": "orders:cancel",
-        "x-spw-implemented": false,
-        "x-spw-requires-mandate": true,
+        "x-spw-implemented": true,
         "parameters": [
           {
             "name": "id",
@@ -2401,6 +2485,46 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "order": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "sent": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "order",
+                    "sent",
+                    "changed"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
           "400": {
             "description": "`bad_request`, `idempotency`, `stale_request`",
             "content": {
@@ -2422,7 +2546,7 @@
             }
           },
           "403": {
-            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`, `mandate_denied` (with `data.reasons`), `execution_disabled`, `key_limit_exceeded`, `not_your_order`, a closed server lock (`mainnet_disabled`, `mandate_mainnet_disabled`), `venue_restricted`, `spot_execution_requires_agent_vault`",
             "content": {
               "application/json": {
                 "schema": {
@@ -2451,8 +2575,8 @@
               }
             }
           },
-          "429": {
-            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+          "422": {
+            "description": "`risk_denied` (with `data.failed` and `data.checks`), `not_reducing`, `no_position`, `no_account`, `below_min_size`, `leverage_mismatch`, a refusal of the venue engine. When an order exists it is in `data.order` (state `REJECTED` or `FAILED`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2461,8 +2585,18 @@
               }
             }
           },
-          "501": {
-            "description": "`execution_not_wired`: this operation is declared but not connected yet. Never a success.",
+          "423": {
+            "description": "`kill_switch_active` or `read_only_mode`: the global kill switch blocks new risk; read-only mode lets only cancels pass",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
             "content": {
               "application/json": {
                 "schema": {
@@ -3339,8 +3473,8 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Preview an order (risk check and estimate)",
-        "description": "Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.",
+        "summary": "Preview an order: every check it would meet, and an estimate",
+        "description": "Resolves the instrument and the account, then runs the key limits, the server locks, the trading mandate (keys and agents), the independent risk engine and the venue engine's own checks on the market as it is now. Answers the canonical order and its hash, every check with what was observed and its limit, an estimate (fees, slippage against the real book, liquidation price) and whether an owner passkey approval would be required. Never creates, signs or sends anything.",
         "security": [
           {
             "bearerKey": [
@@ -3349,29 +3483,8 @@
           }
         ],
         "x-spw-scope": "orders:prepare",
-        "x-spw-implemented": false,
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "description": "Replay protection: 8 to 100 characters (letters, digits, . _ : -). The same key with the same request returns the first answer; with a different request, 409 `idempotency_conflict`.",
-            "schema": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9._:-]{8,100}$"
-            }
-          },
-          {
-            "name": "X-SPW-Timestamp",
-            "in": "header",
-            "required": false,
-            "description": "Optional freshness check: Unix seconds; refused (400 `stale_request`) when more than 300 s from the server clock.",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{9,11}$"
-            }
-          }
-        ],
+        "x-spw-implemented": true,
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -3450,7 +3563,18 @@
                     "minimum": 1,
                     "maximum": 500
                   },
+                  "leverage": {
+                    "description": "paper only: leverage setting of the instrument on the account. On a venue account the leverage is a venue setting",
+                    "type": "string",
+                    "pattern": "^\\d+(\\.\\d+)?$"
+                  },
+                  "maxFeeUsd": {
+                    "description": "highest fee accepted, USD; default: 10 bps of the notional",
+                    "type": "string",
+                    "pattern": "^\\d+(\\.\\d+)?$"
+                  },
                   "clientOrderId": {
+                    "description": "idempotency key of the ORDER; default: the Idempotency-Key header. The order id is derived from it and from the principal",
                     "type": "string",
                     "pattern": "^[A-Za-z0-9._:-]{8,100}$"
                   }
@@ -3468,6 +3592,215 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "order": {
+                      "type": "object",
+                      "properties": {
+                        "clientOrderId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "clientOrderId"
+                      ],
+                      "additionalProperties": {},
+                      "description": "the canonical order SPW-ORDER-INTENT-v1"
+                    },
+                    "hash": {
+                      "type": "string",
+                      "description": "SHA-256 of the canonical bytes, hex"
+                    },
+                    "wouldExecute": {
+                      "type": "boolean"
+                    },
+                    "refusals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "stage": {
+                            "type": "string",
+                            "enum": [
+                              "key",
+                              "lock",
+                              "mandate",
+                              "risk",
+                              "engine"
+                            ]
+                          },
+                          "code": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "stage",
+                          "code",
+                          "message"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "approval": {
+                      "type": "object",
+                      "properties": {
+                        "required": {
+                          "type": "boolean"
+                        },
+                        "by": {
+                          "type": "string",
+                          "enum": [
+                            "owner_passkey",
+                            "mandate",
+                            "none"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "required",
+                        "by"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "risk": {
+                      "type": "object",
+                      "properties": {
+                        "decision": {
+                          "type": "string",
+                          "enum": [
+                            "allow",
+                            "deny"
+                          ]
+                        },
+                        "reducing": {
+                          "type": "boolean"
+                        },
+                        "checks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "ok": {
+                                "type": "boolean"
+                              },
+                              "observed": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "limit": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "detail": {
+                                "type": "string"
+                              },
+                              "exempt": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "ok",
+                              "observed",
+                              "limit",
+                              "detail",
+                              "exempt"
+                            ],
+                            "additionalProperties": {}
+                          }
+                        }
+                      },
+                      "required": [
+                        "decision",
+                        "reducing",
+                        "checks"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "mandate": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "decision": {
+                              "type": "string",
+                              "enum": [
+                                "allow",
+                                "deny"
+                              ]
+                            },
+                            "reasons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "decision",
+                            "reasons"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "engine": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "ts": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "milliseconds since the Unix epoch"
+                    }
+                  },
+                  "required": [
+                    "order",
+                    "hash",
+                    "wouldExecute",
+                    "refusals",
+                    "approval",
+                    "risk",
+                    "mandate",
+                    "engine",
+                    "ts"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
           "400": {
             "description": "`bad_request`, `idempotency`, `stale_request`",
             "content": {
@@ -3489,7 +3822,7 @@
             }
           },
           "403": {
-            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`, `mandate_denied` (with `data.reasons`), `execution_disabled`, `key_limit_exceeded`, `not_your_order`, a closed server lock (`mainnet_disabled`, `mandate_mainnet_disabled`), `venue_restricted`, `spot_execution_requires_agent_vault`",
             "content": {
               "application/json": {
                 "schema": {
@@ -3498,8 +3831,18 @@
               }
             }
           },
-          "409": {
-            "description": "`idempotency_conflict`, `idempotency_in_progress`",
+          "422": {
+            "description": "`risk_denied` (with `data.failed` and `data.checks`), `not_reducing`, `no_position`, `no_account`, `below_min_size`, `leverage_mismatch`, a refusal of the venue engine. When an order exists it is in `data.order` (state `REJECTED` or `FAILED`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "`kill_switch_active` or `read_only_mode`: the global kill switch blocks new risk; read-only mode lets only cancels pass",
             "content": {
               "application/json": {
                 "schema": {
@@ -3510,16 +3853,6 @@
           },
           "429": {
             "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "`execution_not_wired`: this operation is declared but not connected yet. Never a success.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3538,7 +3871,7 @@
           "Positions"
         ],
         "summary": "Close a position",
-        "description": "Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.",
+        "description": "A strictly reduce-only market order on the whole position (`id` from GET /positions). Refused (422 `not_reducing`) if it would not strictly reduce. A key: the position must be on an account and an instrument of its mandate. Passes the kill switch; not read-only mode.",
         "security": [
           {
             "bearerKey": [
@@ -3547,7 +3880,7 @@
           }
         ],
         "x-spw-scope": "positions:manage",
-        "x-spw-implemented": false,
+        "x-spw-implemented": true,
         "x-spw-requires-mandate": true,
         "parameters": [
           {
@@ -3600,6 +3933,70 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "order": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "paper",
+                            "live"
+                          ],
+                          "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+                        },
+                        "venue": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "CREATED, VALIDATED, AWAITING_APPROVAL, APPROVED, SUBMITTING, SUBMITTED, PARTIALLY_FILLED, FILLED, CANCELLED, REJECTED, FAILED or UNKNOWN"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "mode",
+                        "venue",
+                        "status"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "idempotent": {
+                      "type": "boolean"
+                    },
+                    "approval": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {}
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "set while the order waits for the owner's passkey: where it is approved"
+                    }
+                  },
+                  "required": [
+                    "order",
+                    "idempotent",
+                    "approval"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
           "400": {
             "description": "`bad_request`, `idempotency`, `stale_request`",
             "content": {
@@ -3621,7 +4018,7 @@
             }
           },
           "403": {
-            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`, `mandate_denied` (with `data.reasons`), `execution_disabled`, `key_limit_exceeded`, `not_your_order`, a closed server lock (`mainnet_disabled`, `mandate_mainnet_disabled`), `venue_restricted`, `spot_execution_requires_agent_vault`",
             "content": {
               "application/json": {
                 "schema": {
@@ -3650,8 +4047,8 @@
               }
             }
           },
-          "429": {
-            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+          "422": {
+            "description": "`risk_denied` (with `data.failed` and `data.checks`), `not_reducing`, `no_position`, `no_account`, `below_min_size`, `leverage_mismatch`, a refusal of the venue engine. When an order exists it is in `data.order` (state `REJECTED` or `FAILED`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -3660,8 +4057,18 @@
               }
             }
           },
-          "501": {
-            "description": "`execution_not_wired`: this operation is declared but not connected yet. Never a success.",
+          "423": {
+            "description": "`kill_switch_active` or `read_only_mode`: the global kill switch blocks new risk; read-only mode lets only cancels pass",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
             "content": {
               "application/json": {
                 "schema": {
@@ -3680,7 +4087,7 @@
           "Positions"
         ],
         "summary": "Reduce a position",
-        "description": "Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.",
+        "description": "As close, on a fraction of the position (rounded down to the lot).",
         "security": [
           {
             "bearerKey": [
@@ -3689,7 +4096,7 @@
           }
         ],
         "x-spw-scope": "positions:manage",
-        "x-spw-implemented": false,
+        "x-spw-implemented": true,
         "x-spw-requires-mandate": true,
         "parameters": [
           {
@@ -3750,6 +4157,70 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "order": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "paper",
+                            "live"
+                          ],
+                          "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+                        },
+                        "venue": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "CREATED, VALIDATED, AWAITING_APPROVAL, APPROVED, SUBMITTING, SUBMITTED, PARTIALLY_FILLED, FILLED, CANCELLED, REJECTED, FAILED or UNKNOWN"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "mode",
+                        "venue",
+                        "status"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "idempotent": {
+                      "type": "boolean"
+                    },
+                    "approval": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {}
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "set while the order waits for the owner's passkey: where it is approved"
+                    }
+                  },
+                  "required": [
+                    "order",
+                    "idempotent",
+                    "approval"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
           "400": {
             "description": "`bad_request`, `idempotency`, `stale_request`",
             "content": {
@@ -3771,7 +4242,7 @@
             }
           },
           "403": {
-            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`, `mandate_denied` (with `data.reasons`), `execution_disabled`, `key_limit_exceeded`, `not_your_order`, a closed server lock (`mainnet_disabled`, `mandate_mainnet_disabled`), `venue_restricted`, `spot_execution_requires_agent_vault`",
             "content": {
               "application/json": {
                 "schema": {
@@ -3800,6 +4271,26 @@
               }
             }
           },
+          "422": {
+            "description": "`risk_denied` (with `data.failed` and `data.checks`), `not_reducing`, `no_position`, `no_account`, `below_min_size`, `leverage_mismatch`, a refusal of the venue engine. When an order exists it is in `data.order` (state `REJECTED` or `FAILED`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "`kill_switch_active` or `read_only_mode`: the global kill switch blocks new risk; read-only mode lets only cancels pass",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "429": {
             "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
             "content": {
@@ -3809,9 +4300,301 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/commands": {
+      "post": {
+        "operationId": "runCommand",
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Run one line of the trading command grammar",
+        "description": "Deterministic grammar (no model). The scope checked is the one of the operation the command resolves to: an order needs `orders:execute` (`orders:prepare` with `dryRun`), CLOSE `positions:manage`, CANCEL `orders:cancel`, SHOW the matching read scope, KILL `positions:manage`. Resolution uses the owner's stored defaults (GET/PUT /api/v1/developer/command-defaults) and nothing else: a command the defaults do not settle answers 409 `ambiguous_command` with the questions and executes nothing.",
+        "security": [
+          {
+            "bearerKey": [
+              "orders:prepare"
+            ]
+          }
+        ],
+        "x-spw-scope": "orders:prepare",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Replay protection: 8 to 100 characters (letters, digits, . _ : -). The same key with the same request returns the first answer; with a different request, 409 `idempotency_conflict`.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{8,100}$"
+            }
           },
-          "501": {
-            "description": "`execution_not_wired`: this operation is declared but not connected yet. Never a success.",
+          {
+            "name": "X-SPW-Timestamp",
+            "in": "header",
+            "required": false,
+            "description": "Optional freshness check: Unix seconds; refused (400 `stale_request`) when more than 300 s from the server clock.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{9,11}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300,
+                    "description": "one line of the trading command grammar, English or French: LONG BTC-PERP 500 x2, CLOSE BTC-PERP 50%, CANCEL ORDER <id>, SHOW POSITIONS, KILL …"
+                  },
+                  "mode": {
+                    "default": "paper",
+                    "type": "string",
+                    "enum": [
+                      "paper",
+                      "live"
+                    ],
+                    "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+                  },
+                  "accountId": {
+                    "description": "paper account or venue account; required when the wallet has several on the venue",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "dryRun": {
+                    "default": false,
+                    "description": "true: answer the canonical order (or the control) the command resolves to, and do nothing",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "text"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`, `mandate_denied` (with `data.reasons`), `execution_disabled`, `key_limit_exceeded`, `not_your_order`, a closed server lock (`mainnet_disabled`, `mandate_mainnet_disabled`), `venue_restricted`, `spot_execution_requires_agent_vault`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`idempotency_conflict`, `idempotency_in_progress`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`risk_denied` (with `data.failed` and `data.checks`), `not_reducing`, `no_position`, `no_account`, `below_min_size`, `leverage_mismatch`, a refusal of the venue engine. When an order exists it is in `data.order` (state `REJECTED` or `FAILED`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "`kill_switch_active` or `read_only_mode`: the global kill switch blocks new risk; read-only mode lets only cancels pass",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/risk/kill-switch": {
+      "post": {
+        "operationId": "engageKillSwitch",
+        "tags": [
+          "Risk"
+        ],
+        "summary": "Engage the global kill switch",
+        "description": "Blocks every NEW risk for every principal on every venue and in every mode; cancels and strictly reducing orders still pass. Engaging needs no mandate (it only removes risk). Releasing it is NOT possible with a key: owner session and passkey only.",
+        "security": [
+          {
+            "bearerKey": [
+              "positions:manage"
+            ]
+          }
+        ],
+        "x-spw-scope": "positions:manage",
+        "x-spw-implemented": true,
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "default": "",
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "killSwitch": {
+                      "type": "object",
+                      "properties": {
+                        "on": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "on"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "killSwitch"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`, `mandate_denied` (with `data.reasons`), `execution_disabled`, `key_limit_exceeded`, `not_your_order`, a closed server lock (`mainnet_disabled`, `mandate_mainnet_disabled`), `venue_restricted`, `spot_execution_requires_agent_vault`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`risk_denied` (with `data.failed` and `data.checks`), `not_reducing`, `no_position`, `no_account`, `below_min_size`, `leverage_mismatch`, a refusal of the venue engine. When an order exists it is in `data.order` (state `REJECTED` or `FAILED`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "`kill_switch_active` or `read_only_mode`: the global kill switch blocks new risk; read-only mode lets only cancels pass",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
             "content": {
               "application/json": {
                 "schema": {
@@ -4657,8 +5440,8 @@
     {
       "event": "risk.kill_switch",
       "emitted": true,
-      "description": "the owner triggered the emergency halt of the signer",
-      "payload": "{ source: \"signer\", halted: true }"
+      "description": "the emergency halt of the signer was triggered (source \"signer\"), or the global kill switch of the risk engine was engaged or released (source \"risk_engine\")",
+      "payload": "{ source: \"signer\", halted: true } | { source: \"risk_engine\", engaged, by, reason }"
     },
     {
       "event": "agent.updated",
@@ -4668,9 +5451,9 @@
     },
     {
       "event": "order.updated",
-      "emitted": false,
-      "description": "an order changed state (pending wiring: emitted by the unified order state machine)",
-      "payload": "{ orderId, mode, venue, instrument, status }"
+      "emitted": true,
+      "description": "an order changed state: one event per transition of the unified order state machine, for every principal, mode and venue",
+      "payload": "{ orderId, mode, venue, instrument, status, previous, event, reason, seq, principal, mandateId }"
     }
   ]
 }

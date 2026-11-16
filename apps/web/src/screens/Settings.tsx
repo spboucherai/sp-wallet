@@ -16,7 +16,7 @@ export function Settings({ lock, go }: { lock: () => void; go: (t: Tab) => void 
     <div className="space-y-4">
       <PageTitle>{t('settings')}</PageTitle>
       {/* one grouped list of destinations (v6-alerts: entry points that leave the five phone tabs as they are) */}
-      <nav aria-label={t('settings')} className="card divide-y divide-line overflow-hidden">{([['security', 'shield', t('securityLink'), ''], ['alerts', 'bell', t('alTitle'), ''], ['monitor', 'bars', t('moTitle'), ''], ['developer', 'key', t('dvTitle'), ''], ['agents', 'robot', t('agents'), 'lg:hidden']] as const).map(([id, icon, label, cls]) =>
+      <nav aria-label={t('settings')} className="card divide-y divide-line overflow-hidden">{([['security', 'shield', t('securityLink'), ''], ['alerts', 'bell', t('alTitle'), ''], ['monitor', 'bars', t('moTitle'), ''], ['developer', 'key', t('dvTitle'), ''], ['risk', 'shield', t('rkTitle'), ''], ['agents', 'robot', t('agents'), 'lg:hidden']] as const).map(([id, icon, label, cls]) =>
         <button key={id} onClick={() => go(id)} className={`row-press flex min-h-[64px] w-full items-center gap-3.5 px-4 py-2.5 text-left ${cls}`}>
           <span className="grid h-10 w-10 place-items-center rounded-full bg-elev"><Icon n={icon} className="h-[19px] w-[19px]" /></span>
           <span className="flex-1 text-[15.5px] font-semibold">{label}</span><Icon n="chev" className="h-5 w-5 text-mute" /></button>)}</nav>

@@ -179,6 +179,32 @@ describe('the owner, live', () => {
   });
 });
 
+describe('restart', () => {
+  it('while an order waits for the passkey, and while one rests at the venue: a new process settles both from the engine rows and the venue', async () => {
+    w.next();
+    const a = await call('POST', `${T}/orders`, { headers: idem(), body: order(testnet, { type: 'limit', price: '69000', size: '0.002' }) });
+    expect(a.json.order?.status, JSON.stringify(a.json)).toBe('AWAITING_APPROVAL');
+    w.next();
+    const b = await call('POST', `${T}/orders`, { headers: idem(), body: order(testnet, { type: 'limit', price: '68000', size: '0.002' }) });
+    expect((await call('POST', b.json.approval.approve.path, { body: { assertion: w.pk.assert(w.b64(b.json.approval.hash)) } })).status).toBe(200);
+    expect((await call('GET', `${T}/orders/${b.json.order.id}`)).json.order.status).toBe('SUBMITTED');
+    // the API process is gone. Meanwhile the approval window of the first order closes, and the venue cancels the second.
+    await sql`delete from order_projection_queue`;
+    w.clock.advance(180_000);
+    const resting = w.t.user(w.ACCOUNT).orders.find((x: any) => x.cloid === b.json.order.id)!;
+    resting.status = 'canceled'; resting.statusTimestamp = w.clock.now();
+    // a new process: the engine's own reconciliation worker, then the order reconciler — nothing but the database and the venue
+    const { createExecution } = await import('../src/orders/index.ts');
+    const fresh = createExecution({ derivatives: derivs, live: w.svc, gmx: { status: async () => ({ positions: [] }) } as never });
+    await w.svc.step();
+    await fresh.orders.reconcile();
+    expect(await orderRow(a.json.order.id)).toMatchObject({ state: 'CANCELLED', reason: 'APPROVAL_EXPIRED' });
+    expect(await orderRow(b.json.order.id)).toMatchObject({ state: 'CANCELLED', reason: 'CANCELLED_AT_VENUE' });
+    expect((await states(b.json.order.id)).at(-1)).toBe('CANCELLED:reconciled_found');
+    expect((await sql`select count(*)::int as n from orders where projection_error is not null`)[0].n).toBe(0);
+  });
+});
+
 describe('a LIVE trading mandate and an API key', () => {
   let k: Awaited<ReturnType<typeof liveKey>>;
 
