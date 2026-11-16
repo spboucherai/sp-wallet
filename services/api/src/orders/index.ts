@@ -23,6 +23,7 @@ import { onTransition } from './store.ts';
 
 export { OrderService, OWNER_CALLER, type Caller, type OrderInput } from './service.ts';
 export interface Execution { risk: RiskService; mandates: MandateService; orders: OrderService }
+declare module 'fastify' { interface FastifyInstance { execution: Execution } }
 export interface ExecutionOpts {
   derivatives?: Derivatives | undefined; live?: LiveService | undefined; gmx?: GmxService | undefined;
   prices?: () => Promise<Record<string, { usd: number; priceAt?: string | null }> | null>;
@@ -41,7 +42,7 @@ export function createExecution(o: ExecutionOpts = {}): Execution {
   const risk = new RiskService({ now, rpId: config.rpId, credentials: async () => (await listCreds()).map((c) => ({ id: c.id, transports: c.transports })), verifyOwner: o.verifyOwner ?? verifyOwnerAssertion,
     derivatives: d, live: l, gmx, signerStatus, ...(o.prices ? { prices: o.prices } : {}),
     emit: (event, data) => emitWebhook(event, data),
-    alert: async (kind, params, dedupe) => (await (await import('../alerts/dispatcher.ts')).alerts()).raise({ kind, params, dedupe }) });
+    alert: async (kind, params, dedupe) => { const a = await import('../alerts/dispatcher.ts'); await (await import('../alerts/store.ts')).migrateAlerts(); return (await a.alerts()).raise({ kind, params, dedupe }, { source: 'risk' }); } });
   // the order service and the mandates need each other (wind-down cancels what rests): the mandate service gets the cancel late
   const mdeps: ConstructorParameters<typeof MandateService>[0] = { now, derivatives: d, live: l, signerStatus };
   const mandates = new MandateService(mdeps);
@@ -117,6 +118,8 @@ export function executionRoutes(app: FastifyInstance, ex: Execution): void {
 export function registerExecution(app: FastifyInstance, o: ExecutionOpts = {}): Execution {
   const ex = createExecution(o);
   installGates(ex, o);
+  // the other workstreams (the agents runtime) and the tests reach the services of THIS server instance through the app
+  app.decorate('execution', ex);
   const off = onTransition(async (row, e) => { await emitWebhook('order.updated', { orderId: row.id, mode: row.mode, venue: row.venue, instrument: row.instrument, status: e.to, previous: e.from, event: e.event, reason: e.reason, seq: e.seq,
     principal: `${row.principal_kind}:${row.principal_id}`, mandateId: row.mandate_id }); });
   app.addHook('onClose', async () => { off(); });

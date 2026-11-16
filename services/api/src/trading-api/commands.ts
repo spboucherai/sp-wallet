@@ -38,10 +38,11 @@ const SCOPE_OF = (c: Command, dryRun: boolean): Scope => {
 };
 
 /** what the wallet itself knows, for one perp asset: the instruments on the venues it can trade, its positions, the venue marks */
-async function perpCatalog(ex: Execution, mode: 'paper' | 'live', asset: string): Promise<Catalog> {
+async function perpCatalog(ex: Execution, mode: 'paper' | 'live', asset: string, accountId: string | undefined): Promise<Catalog> {
   const d = ex.orders.deps.derivatives(), instruments: CatalogInstrument[] = [], referencePricesUsd: Record<string, DecStr> = {}, positions: { instrument: string; side: 'long' | 'short'; size: DecStr }[] = [];
-  const accounts = mode === 'paper' ? await sql<{ id: string; venue: string; network: string }[]>`select id, venue, network from deriv_paper_accounts`
+  const all = mode === 'paper' ? await sql<{ id: string; venue: string; network: string }[]>`select id, venue, network from deriv_paper_accounts`
     : await sql<{ id: string; venue: string; network: string }[]>`select id, venue, network from deriv_accounts where authorization_id is not null`;
+  const accounts = accountId ? all.filter((a) => a.id === accountId) : all;                 // a named account: its positions only
   for (const v of d.registry.list()) {
     if (v.restriction !== null) continue;                                  // never tradable from this wallet: not even a candidate
     const list = await d.data.instruments(v.id).then((s) => s.value, () => []);
@@ -52,12 +53,12 @@ async function perpCatalog(ex: Execution, mode: 'paper' | 'live', asset: string)
       if (t) referencePricesUsd[i.id] = t.mark;
     }
   }
-  if (mode === 'paper') { for (const a of await d.paper.list()) for (const p of a.positions) positions.push({ instrument: p.instrument, side: p.side, size: p.size }); }
+  if (mode === 'paper') { for (const a of await d.paper.list()) if (accounts.some((x) => x.id === a.id)) for (const p of a.positions) positions.push({ instrument: p.instrument, side: p.side, size: p.size }); }
   else for (const a of accounts) { const s = await ex.orders.deps.live().mandateAccountState(a.id).catch(() => null); for (const p of s?.positions ?? []) positions.push({ instrument: p.instrument, side: p.side, size: p.size }); }
   return { instruments, positions, referencePricesUsd };
 }
 
-export async function runCommand(ex: Execution, reads: Reads, p: Principal, caller: Caller, body: { text: string; mode: 'paper' | 'live'; dryRun: boolean }, idemKey: string): Promise<Record<string, unknown>> {
+export async function runCommand(ex: Execution, reads: Reads, p: Principal, caller: Caller, body: { text: string; mode: 'paper' | 'live'; accountId?: string | undefined; dryRun: boolean }, idemKey: string): Promise<Record<string, unknown>> {
   const now = ex.orders.now();
   const parsed = parseCommand(body.text);
   if (!parsed.ok) throw Object.assign(new UserError('parse_error', parsed.error.message, 400), { data: { code: parsed.error.code, token: parsed.error.token } });
@@ -92,13 +93,13 @@ export async function runCommand(ex: Execution, reads: Reads, p: Principal, call
     throw new UserError('spot_via_swap_screen', 'a spot order of the owner is a swap proposal approved with the passkey: prepare it in the Swap screen (not wired to commands in this version)', 422);
   }
   if (p.kind !== 'owner' && !caller.mandateId) throw new UserError('mandate_required', 'this key has no trading mandate: an order command cannot execute', 403);
-  const catalog = await perpCatalog(ex, body.mode, command.asset);
+  const catalog = await perpCatalog(ex, body.mode, command.asset, body.accountId);
   const r = interpret(body.text, await commandDefaults(), catalog, { now, principal: caller.principal, mandateId: p.kind === 'owner' ? null : caller.mandateId, mode: body.mode, idempotencyKey: idemKey }).resolution!;
   if (r.kind === 'ambiguous') throw Object.assign(new UserError('ambiguous_command', 'the command and the owner\'s defaults do not settle everything: answer the questions (or set the defaults) and send it again. Nothing was executed.', 409), { data: { questions: r.questions } });
   if (r.kind === 'unresolvable') throw new UserError(r.code, r.message, 422);
   if (r.kind !== 'order') throw new UserError('bad_request', 'the command did not resolve to an order', 400);
   const attached = r.attached.map((a) => ({ role: a.role, order: a.order, hash: a.hash, placed: false, note: 'a stop-loss / take-profit is placed only once the entry is filled, sized to what was filled: not placed by this endpoint in this version' }));
   if (body.dryRun) return { ...base, kind: 'order', order: r.order, hash: r.hash, attached, executed: false };
-  const out = await ex.orders.submitCanonical(caller, r.order, idemKey, { origin: 'command', strictReduce: command.type === 'perp_close' });
+  const out = await ex.orders.submitCanonical(caller, r.order, idemKey, { origin: 'command', strictReduce: command.type === 'perp_close', ...(body.accountId ? { accountId: body.accountId } : {}) });
   return { ...base, kind: 'order', executed: true, ...out, canonical: r.order, hash: r.hash, attached };
 }

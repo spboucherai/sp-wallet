@@ -146,7 +146,7 @@ export const OrderRequestSchema = z.strictObject({
 export type OrderRequest = z.infer<typeof OrderRequestSchema>;
 export const CommandBody = z.strictObject({
   text: z.string().min(1).max(300).describe('one line of the trading command grammar, English or French: LONG BTC-PERP 500 x2, CLOSE BTC-PERP 50%, CANCEL ORDER <id>, SHOW POSITIONS, KILL …'),
-  mode: Mode.default('paper'), dryRun: z.boolean().default(false).describe('true: answer the canonical order (or the control) the command resolves to, and do nothing'),
+  mode: Mode.default('paper'), accountId: z.uuid().optional().describe('paper account or venue account; required when the wallet has several on the venue'), dryRun: z.boolean().default(false).describe('true: answer the canonical order (or the control) the command resolves to, and do nothing'),
 });
 const KillBody = z.strictObject({ reason: z.string().max(200).default('') });
 const CloseBody = z.strictObject({ slippageBps: z.number().int().min(1).max(500).optional() });

@@ -239,8 +239,9 @@ export class RiskService {
       const d = this.deps.derivatives().data;
       instrument = await d.instrument(instrumentId);
       const hasBook = d.hasBook(instrument);
-      const [ticker, book] = await Promise.all([d.ticker(instrument, { within: 1_000 }), hasBook ? d.book(instrument, { within: 1_000 }) : Promise.resolve(null)]);
-      return { instrument, ticker, book, hasBook, error: null };
+      // the ticker and the book are two reads: one that fails does not take the other with it (each absence is judged by its own check)
+      const [t, b] = await Promise.allSettled([d.ticker(instrument, { within: 1_000 }), hasBook ? d.book(instrument, { within: 1_000 }) : Promise.resolve(null)]);
+      return { instrument, ticker: t.status === 'fulfilled' ? t.value : null, book: b.status === 'fulfilled' ? b.value : null, hasBook, error: t.status === 'rejected' ? msg(t.reason) : b.status === 'rejected' ? msg(b.reason) : null };
     } catch (e) {
       const hasBook = instrument ? (venue === 'hyperliquid' ? true : (() => { try { return this.deps.derivatives().data.hasBook(instrument!); } catch { return true; } })()) : true;
       return { instrument, ticker: null, book: null, hasBook, error: msg(e) };

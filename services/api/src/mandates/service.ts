@@ -28,6 +28,7 @@ import { UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
 import type { Derivatives } from '../derivatives/index.ts';
 import type { LiveService } from '../derivatives/exec.ts';
+import { DYDX_RESTRICTION, EDGEX_RESTRICTION } from '../derivatives/venues.ts';
 import type { Evaluated } from '../risk/service.ts';
 
 /** the convention of an API-key principal in the signer's `strategySha256` field */
@@ -70,6 +71,8 @@ export interface MandateDeps {
 }
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 300);
 const dayStart = (now: number): number => Math.floor(now / 86_400_000) * 86_400_000;
+/** venues the wallet never trades, for the owner's jurisdiction (docs/v4/venues/jurisdiction.md) */
+const JURISDICTION: Readonly<Record<string, string>> = { dydx: DYDX_RESTRICTION, edgex: EDGEX_RESTRICTION };
 const PAPER_ENFORCEMENT_NOTE = 'paper: nothing is signed; every field is enforced by the API on the simulated account';
 
 export class MandateService {
@@ -128,8 +131,9 @@ export class MandateService {
     const reg = this.deps.derivatives().registry;
     for (const v of venues) {
       const entry = reg.list().find((e) => e.id === v);
-      // jurisdiction first, in any mode: dYdX and edgeX are market data only for this wallet
-      if (entry && entry.restriction !== null) throw new UserError('venue_restricted', `${entry.name} is never tradable from this wallet: ${entry.restriction}`, 403);
+      // jurisdiction first, in any mode: dYdX and edgeX are market data only for this wallet (also when this server's registry does not list them)
+      const restriction = entry ? entry.restriction : Object.hasOwn(JURISDICTION, v) ? JURISDICTION[v]! : null;
+      if (restriction !== null) throw new UserError('venue_restricted', `${entry?.name ?? v} is never tradable from this wallet: ${restriction}`, 403);
       if (mode === 'live') {
         if (!Object.hasOwn(SIGNER_MANDATE_SHAPES, v)) throw new UserError('no_signer_mandate_for_venue', `the isolated signer has no mandate for the venue ${v}: a live mandate there would be enforced by the API only, which is not accepted. Orders on ${v} need the owner's passkey each.`, 422);
         if (v !== 'hyperliquid') throw new UserError('spot_mandate_via_agent_vault', `a live spot mandate on ${v} is approved through an agent vault (Agents screen); it is not created here`, 422);
