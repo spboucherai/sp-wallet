@@ -11,6 +11,7 @@ import { buildOpenApi } from './openapi.ts';
 import { requirePrincipal, type Principal } from './principal.ts';
 import { AmbiguousSymbol, type Reads } from './read.ts';
 import { ANY_SCOPE, isExecutionScope, OPERATIONS, TRADING_PREFIX, type OperationSpec } from './spec.ts';
+import { agentTradingHandlers } from '../agents/trading-handlers.ts'; // v11 agents: the strategies and agents operations
 
 interface Input { params: any; query: any; body: any } // eslint-disable-line @typescript-eslint/no-explicit-any -- validated by the operation's zod schemas
 type Handler = (p: Principal, i: Input, req: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
@@ -38,7 +39,7 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads): void {
     listOrders: (p, i) => reads.orders(p, i.query),
     getOrder: (p, i) => reads.order(p, i.params.id),
     listStrategies: (p, i) => reads.strategies(p, i.query),
-    listAgents: (p) => reads.agents(p),
+    ...agentTradingHandlers(),   // v11 agents: createStrategy … stopAgent, listAgents and the per-agent, mode-scoped reads
     getRisk: (p) => reads.risk(p),
   };
   for (const op of OPERATIONS) if (!op.implemented) { if (handlers[op.id]) throw new Error(`trading-api: ${op.id} is declared not implemented but has a handler`); handlers[op.id] = notWired(op); }

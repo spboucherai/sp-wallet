@@ -1,0 +1,36 @@
+// sp-wallet-agents — the agent workers as their OWN process (optional).
+//
+//   SPW_WORKERS=agents node dist/agents.mjs        this process: the agent runtime only (bar engines, stream engine, supervisor,
+//                                                  job queue). No HTTP server, no other worker.
+//   SPW_WORKERS=api    node dist/api.mjs           the API process next to it: HTTP + every other worker, NOT the agent runtime.
+//   SPW_WORKERS=on     node dist/api.mjs           the default, unchanged: everything in the API process; this file is not used.
+//
+// Same code, same database, same signer client and the same bindings as main.ts (`bindAgentRuntime`). Running both an API with
+// SPW_WORKERS=on and this process is SAFE (per-agent leases, claimed jobs) but pointless. This process does not migrate the
+// schema: the API does, and must have started once on this version.
+import dns from 'node:dns';
+import net from 'node:net';
+import { bindAgentRuntime } from './agents/runtime-bindings.ts';
+import { labStatus } from './agents/lab.ts';
+import { sql } from './db.ts';
+import { assertFresh, getSeries, type Interval, type MarketSymbol } from './market/index.ts';
+import { applyRpcExtra } from './rpc-extra.ts';
+import { emitWebhook } from './trading-api/webhooks.ts';
+
+dns.setDefaultResultOrder('ipv4first');
+net.setDefaultAutoSelectFamilyAttemptTimeout(2500);
+
+if (process.env.SPW_WORKERS !== 'agents') { console.error('sp-wallet-agents: start this process with SPW_WORKERS=agents (and the API with SPW_WORKERS=api); nothing was started'); process.exit(2); }
+applyRpcExtra();
+const [ready] = await sql<{ ok: boolean }[]>`select to_regclass('agent_jobs') is not null and to_regclass('agent_leases') is not null as ok`;
+if (!ready?.ok) { console.error('sp-wallet-agents: the database has no agent runtime tables yet — start the API on this version once (it migrates), then this process'); await sql.end(); process.exit(3); }
+
+const agents = bindAgentRuntime({
+  market: { series: async (s, i, limit) => (await getSeries(s as MarketSymbol, i as Interval, { limit })).bars, assertFresh: async (s, i) => { await assertFresh(s as MarketSymbol, i as Interval); } },
+  // the delivery worker of the webhooks runs in the API process; this one only queues the events
+  emit: (event, data) => emitWebhook(event, data),
+});
+const stop = agents.start();
+console.log(`sp-wallet agents worker ${agents.worker} started (bar engines, stream engine, supervisor, job queue)`);
+void labStatus().then((l) => console.log(`[startup] strategy sandbox: ${l.mode}${l.ok ? ' (confined, self-test passed)' : ` — ${l.reason}${l.mode === 'unavailable' ? ' — signals and backtests will NOT run' : ''}`}`));
+for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { stop(); void sql.end({ timeout: 5 }).then(() => process.exit(0)); });

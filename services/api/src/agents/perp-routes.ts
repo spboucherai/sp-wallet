@@ -45,6 +45,7 @@ export const perpView = (a: PerpAgentRow) => ({
   instruments: a.universe.map(instrumentId), cash: 'USDC', interval: a.interval, risk: a.risk, capitalUsdc: formatUnits(BigInt(a.capital_usdc), 6), accountId: a.deriv_account_id,
   strategyVersionId: a.strategy_version_id, mandateId: null, mandate: null, vaultAddress: '', holdings: null,
   flag: a.perp?.flag ?? null, hold: a.perp?.hold ?? null, flattening: a.perp?.flatten ?? null,
+  family: (a as { family?: string | null }).family ?? 'custom', template: (a as { template?: string | null }).template ?? null, engine: 'bar', configVersion: a.config_version ?? 1,
   lastBar: a.last_bar, stopReason: a.stop_reason, createdAt: a.created_at, updatedAt: a.updated_at });
 
 const rt = () => perpRuntime();
@@ -80,6 +81,7 @@ export async function createPerpAgent(body: unknown) {
     row = rows[0]!;
   } catch (e) { await sql`delete from deriv_paper_accounts where id = ${account.id}`.catch(() => {}); throw e; }
   await audit('agent.created', 'owner', { id, kind: 'perp', name: b.name, venue: PERP_VENUE, instruments: b.instruments, account: account.id, capital, risk: b.risk });
+  await (await import('../agent-runtime/store.ts')).bumpConfig(id, 'owner', 'created');   // V11: configuration version 1
   return { ...perpView(row), warnings };
 }
 
@@ -132,7 +134,7 @@ export async function perpDetail(a: PerpAgentRow) {
 }
 
 /** Owner changes of state. PAPER needs an approved version and an account whose circuit breaker is not set. */
-export async function perpMode(a: PerpAgentRow, mode: 'PAPER' | 'PAUSED' | 'STOPPED' | 'RESEARCH') {
+export async function perpMode(a: PerpAgentRow, mode: 'PAPER' | 'PAUSED' | 'STOPPED' | 'RESEARCH', actor = 'owner') {
   // V7: an agent that is on a venue account changes state through the live life cycle only (pause keeps positions; stop
   // revokes the mandate and closes them). It returns to simulation once it is STOPPED.
   if (isLiveActive(a)) {
@@ -145,11 +147,13 @@ export async function perpMode(a: PerpAgentRow, mode: 'PAPER' | 'PAUSED' | 'STOP
     const acct = await paper().get(a.deriv_account_id);
     if (acct.policy.halt !== null) throw new UserError('halted', `the paper account is halted (${acct.policy.halt}); replace the limits and lift the halt, or reset the account in the Futures terminal`, 409);
   }
-  const state = mode === 'PAPER' ? 'PAPER_TRADING' : mode;
+  // V11 (D11): RESEARCH is a mode, not a state — the agent goes back to its pre-trading state
+  const state = mode === 'PAPER' ? 'PAPER_TRADING' : mode === 'RESEARCH' ? (a.strategy_version_id ? 'AWAITING_APPROVAL' : 'CREATED') : mode;
   const book: PerpBook = { ...(a.perp ?? {}) };
   if (mode === 'PAPER') { book.flatten = null; book.hold = null; }
-  const [r] = await sql<PerpAgentRow[]>`update agents set state = ${state}, mode = 'PAPER', perp = ${sql.json(book as never)}, stop_reason = ${mode === 'STOPPED' ? 'stopped by the owner' : null}, updated_at = now() where id = ${a.id} returning *`;
-  await audit('agent.mode', 'owner', { id: a.id, kind: 'perp', state });
+  const [r] = await sql<PerpAgentRow[]>`update agents set state = ${state}, mode = ${mode === 'RESEARCH' ? 'RESEARCH' : 'PAPER'}, perp = ${sql.json(book as never)}, stop_reason = ${mode === 'STOPPED' ? `stopped by the ${actor}` : null}, updated_at = now() where id = ${a.id} returning *`;
+  await audit('agent.mode', actor, { id: a.id, kind: 'perp', state });
+  await sql`insert into research_log (agent_id, kind, title, mode, code) values (${a.id}, 'state', ${`${state === 'PAPER_TRADING' ? 'Paper trading started' : state === 'PAUSED' ? 'Paused' : state === 'STOPPED' ? 'Stopped' : 'Back to research'} by the ${actor}`}, ${mode === 'RESEARCH' ? 'RESEARCH' : 'PAPER'}, ${`state_${state.toLowerCase()}`})`.catch(() => {});
   return perpView(r!);
 }
 
@@ -197,6 +201,7 @@ export function perpAgentRoutes(app: FastifyInstance, d?: Derivatives, l?: LiveS
     await paper().setPolicy(a.deriv_account_id, perpPolicy(a.universe, formatUnits(BigInt(a.capital_usdc), 6), b.risk, b.liftHalt ? null : acct.policy.halt));
     const [r] = await sql<PerpAgentRow[]>`update agents set risk = ${sql.json(b.risk as never)}, updated_at = now() where id = ${a.id} returning *`;
     await audit('agent.perp_risk', 'owner', { id: a.id, risk: b.risk, liftHalt: b.liftHalt });
+    await (await import('../agent-runtime/store.ts')).bumpConfig(a.id, 'owner', 'risk limits replaced by the owner');   // V11: every change is a configuration version
     return perpView(r!);
   });
 

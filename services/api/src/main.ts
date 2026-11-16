@@ -3,8 +3,8 @@ import net from 'node:net';
 import { config } from './config.ts';
 import { migrate } from './db.ts';
 import { buildServer } from './server.ts';
-import { startAgentEngine } from './agents/live.ts';
-import { startPerpAgentEngine } from './agents/perp-live.ts'; // v6 perp agents
+import { bindAgentRuntime } from './agents/runtime-bindings.ts'; // v11: agent workers (leases, job queue, stream engine, supervisor)
+import { emitWebhook } from './trading-api/webhooks.ts';
 import { assertFresh, getSeries, type Interval, type MarketSymbol } from './market/index.ts';
 import { startMarketWorker } from './market/worker.ts';
 import { startWorkers } from './worker.ts';
@@ -34,14 +34,18 @@ if (config.workers) {
   startCollateralWorker(); // deposits and withdrawals in flight: venue ledger + the wallet's own chain records (reads; re-sends only already signed withdrawals)
   startGmxWorker(); // v8 GMX: tracks the wallet's own orders on-chain until executed, cancelled or frozen (reads; relays only already signed transactions)
   await startAlerts(); // v6-alerts: ONE dispatcher tailing the audit chain, risk events and research log; read-only on those tables
-  // trading agents: decisions only on bars the market engine declares fresh, complete and consistent across sources
-  startAgentEngine({
-    series: async (s, i, limit) => (await getSeries(s as MarketSymbol, i as Interval, { limit })).bars,
-    assertFresh: async (s, i) => { await assertFresh(s as MarketSymbol, i as Interval); },
-  });
-  startPerpAgentEngine(); // v6 perp agents (paper only): venue bars + funding in, simulated orders on their paper accounts out
 }
-console.log(`sp-wallet api listening on ${config.host}:${config.port} origin=${config.origin} broadcast=${config.broadcast ? 'on' : 'OFF'}`);
+// v11 trading agents. The order gateway and the kill switch are BOUND here (dependency injection): `bindAgentRuntime` binds the
+// adapter over the existing engine seams and the local kill switch; the execution workstream passes its own `gateway` /
+// `killSwitch` in this call and nothing else changes. The workers run in this process when SPW_WORKERS=on (default, as before),
+// or in the separate `sp-wallet-agents` process (agent-worker-main.ts, SPW_WORKERS=agents) when this one runs with SPW_WORKERS=api.
+const agents = bindAgentRuntime({
+  // decisions only on bars the market engine declares fresh, complete and consistent across sources
+  market: { series: async (s, i, limit) => (await getSeries(s as MarketSymbol, i as Interval, { limit })).bars, assertFresh: async (s, i) => { await assertFresh(s as MarketSymbol, i as Interval); } },
+  emit: (event, data) => emitWebhook(event, data),
+});
+if (config.agentWorkers) agents.start(); // spot + perp bar engines (paper and live), the stream engine (research and paper), the risk supervisor, the job queue
+console.log(`sp-wallet api listening on ${config.host}:${config.port} origin=${config.origin} broadcast=${config.broadcast ? 'on' : 'OFF'} workers=${process.env.SPW_WORKERS ?? 'on'} agent-workers=${config.agentWorkers ? `in-process (${agents.worker})` : 'not in this process'}`);
 // v8: which optional capabilities are on, and which variable is missing for the others (names only, never a value)
 console.log(`[startup] ${capabilitiesLine()}`);
 void labStatus().then((l) => console.log(`[startup] strategy sandbox: ${l.mode}${l.ok ? ' (confined, self-test passed)' : ` — ${l.reason}${l.mode === 'unavailable' ? ' — signals and backtests will NOT run' : ''}`}`));

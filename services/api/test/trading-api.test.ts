@@ -556,7 +556,8 @@ describe('write surface (not wired)', () => {
   it('every write operation answers 501 execution_not_wired — never 2xx — for a key bound to a mandate and for the owner', async () => {
     const k = await newKey({ scopes: ALL, mandateId: randomUUID(), rateLimitPerMin: 600 });
     const writes = spec.OPERATIONS.filter((o) => !o.implemented);
-    expect(writes.map((o) => o.id).sort()).toEqual(['backtestStrategy', 'cancelOrder', 'closePosition', 'createAgent', 'createStrategy', 'placeOrder', 'previewOrder', 'reducePosition', 'startAgent', 'startStrategy', 'stopAgent', 'stopStrategy']);
+    // V11 agents: the strategies and agents operations are wired (agent-trading-api.test.ts); the order and position ones wait for the execution wave
+    expect(writes.map((o) => o.id).sort()).toEqual(['cancelOrder', 'closePosition', 'placeOrder', 'previewOrder', 'reducePosition']);
     const before = (await sql`select count(*)::int as n from deriv_orders`)[0].n;
     for (const op of writes) {
       for (const who of [{ key: k.secret }, {}]) {
@@ -577,7 +578,9 @@ describe('write surface (not wired)', () => {
 
   it('execution scopes are inert on a key without a mandate: 403 mandate_required before anything else', async () => {
     const k = await newKey({ scopes: ALL });
-    expect(k.view.inertScopes).toEqual(['agents:manage', 'orders:cancel', 'orders:execute', 'positions:manage', 'strategies:manage']);
+    // V11 agents: `agents:manage` and `strategies:manage` are management scopes (research, paper, pause, stop sign nothing); LIVE is
+    // bounded by the AGENT's own owner-approved mandate, checked by the handler (agent-trading-api.test.ts)
+    expect(k.view.inertScopes).toEqual(['orders:cancel', 'orders:execute', 'positions:manage']);
     for (const op of spec.OPERATIONS.filter((o) => !o.implemented)) {
       const r = await send(op, { key: k.secret, headers: idem() });
       if (spec.isExecutionScope(op.scope)) { expect(r.status, op.id).toBe(403); expect(r.json.error, op.id).toBe('mandate_required'); }
@@ -723,8 +726,8 @@ describe('usage, status, retention', () => {
     expect(by['venue:hyperliquid'].ok).toBe(true);
     expect(by.execution).toMatchObject({ ok: false });
     expect(by['market-data'].ok).toBe(false);                                                            // nothing ingested in this database
-    expect(s.json.api).toMatchObject({ prefix: T, operations: spec.OPERATIONS.length, implemented: 14 });
-    expect(s.json.api.notImplemented).toHaveLength(12);
+    expect(s.json.api).toMatchObject({ prefix: T, operations: spec.OPERATIONS.length, implemented: 30 });
+    expect(s.json.api.notImplemented).toHaveLength(5);
     expect(s.json.rateLimits).toMatchObject({ defaultPerMin: 120, failedAuthPerMinPerAddress: 10 });
   });
 

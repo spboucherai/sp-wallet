@@ -27,6 +27,7 @@ import { xswapRoutes } from './xswap.ts';
 import { agentRoutes } from './agents/routes.ts';
 import { strategyRoutes } from './agents/strategies.ts';
 import { perpAgentRoutes } from './agents/perp-routes.ts'; // v6 perp agents
+import { runtimeRoutes } from './agents/runtime-routes.ts'; // v11 agent panel: templates, mode-scoped reads, start/pause/stop, jobs, kill switch
 import { transferRoutes, view, type ProposalRow } from './transfers.ts';
 import { healthCache } from './worker.ts';
 import { alertRoutes } from './alerts/routes.ts';     // v6-alerts
@@ -186,6 +187,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   planRoutes(app, { prices: markets, runtimes: swapRuntimes, ...opts.plan }); // v7 any-to-any plans: a saga over the routes above; signs nothing itself
   agentRoutes(app, { prices: markets });
   strategyRoutes(app);
+  runtimeRoutes(app); // v11 agent panel (registered before the :id routes of the same family is not needed: static segments win)
   perpAgentRoutes(app, opts.derivatives, opts.live); // v6 perp agents on paper accounts; v7: LIVE on a venue account under a signer-enforced mandate
   marketDataRoutes(app);
   derivativesRoutes(app, opts.derivatives);

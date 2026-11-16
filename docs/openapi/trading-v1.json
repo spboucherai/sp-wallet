@@ -2661,8 +2661,8 @@
         "tags": [
           "Strategies"
         ],
-        "summary": "Register a strategy version",
-        "description": "Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.",
+        "summary": "Register a library strategy version on an agent",
+        "description": "Pins the version by the SHA-256 of its file and queues its backtest. Registers nothing new in the library and approves nothing. `agentId` is required.",
         "security": [
           {
             "bearerKey": [
@@ -2671,8 +2671,7 @@
           }
         ],
         "x-spw-scope": "strategies:manage",
-        "x-spw-implemented": false,
-        "x-spw-requires-mandate": true,
+        "x-spw-implemented": true,
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -2731,6 +2730,46 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "strategy": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "sha256": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "agentId",
+                        "sha256",
+                        "status"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "strategy"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
           "400": {
             "description": "`bad_request`, `idempotency`, `stale_request`",
             "content": {
@@ -2780,16 +2819,6 @@
                 }
               }
             }
-          },
-          "501": {
-            "description": "`execution_not_wired`: this operation is declared but not connected yet. Never a success.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         }
       }
@@ -2831,17 +2860,32 @@
                             "type": "string",
                             "enum": [
                               "spot",
-                              "perp"
+                              "perp",
+                              "stream",
+                              "supervisor"
                             ]
                           },
                           "name": {
                             "type": "string"
                           },
-                          "state": {
+                          "family": {
                             "type": "string"
                           },
+                          "state": {
+                            "type": "string",
+                            "description": "historical raw state"
+                          },
                           "mode": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "historical raw mode"
+                          },
+                          "lifecycle": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "paused",
+                              "stopped"
+                            ]
                           },
                           "tradingMode": {
                             "anyOf": [
@@ -2869,18 +2913,26 @@
                           },
                           "interval": {
                             "type": "string"
+                          },
+                          "configVersion": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
                           }
                         },
                         "required": [
                           "id",
                           "kind",
                           "name",
+                          "family",
                           "state",
                           "mode",
+                          "lifecycle",
                           "tradingMode",
                           "venue",
                           "universe",
-                          "interval"
+                          "interval",
+                          "configVersion"
                         ],
                         "additionalProperties": {}
                       }
@@ -2951,8 +3003,8 @@
         "tags": [
           "Agents"
         ],
-        "summary": "Create an agent",
-        "description": "Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.",
+        "summary": "Create an agent (from a template, or a perp agent)",
+        "description": "Nothing is signed and no vault is derived. A spot agent is created in the owner's app (403 `owner_required`). A template whose strategy is not installed answers 409 `strategy_not_installed`.",
         "security": [
           {
             "bearerKey": [
@@ -2961,8 +3013,7 @@
           }
         ],
         "x-spw-scope": "agents:manage",
-        "x-spw-implemented": false,
-        "x-spw-requires-mandate": true,
+        "x-spw-implemented": true,
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -2993,11 +3044,17 @@
                 "type": "object",
                 "properties": {
                   "kind": {
+                    "description": "without a template: perp (a spot agent needs a vault from the signer: owner only)",
                     "type": "string",
                     "enum": [
                       "spot",
                       "perp"
                     ]
+                  },
+                  "template": {
+                    "description": "one of GET /agents/templates",
+                    "type": "string",
+                    "maxLength": 40
                   },
                   "name": {
                     "type": "string",
@@ -3018,28 +3075,69 @@
                       "pattern": "^[A-Z0-9]{2,15}$"
                     }
                   },
+                  "venues": {
+                    "minItems": 1,
+                    "maxItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "hyperliquid",
+                        "edgex",
+                        "dydx",
+                        "gmx"
+                      ]
+                    }
+                  },
+                  "strategyPath": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
                   "interval": {
-                    "default": "1h",
                     "type": "string",
                     "enum": [
                       "1h",
+                      "4h",
                       "1d"
                     ]
                   },
+                  "capitalUsdc": {
+                    "type": "string",
+                    "pattern": "^\\d{1,7}(\\.\\d{1,6})?$"
+                  },
+                  "risk": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "number",
+                        "string",
+                        "boolean"
+                      ]
+                    }
+                  },
+                  "config": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
                   "mode": {
-                    "default": "paper",
+                    "default": "research",
+                    "description": "research (default: created, not running) or paper (stream and supervisor agents start at once); never live",
                     "type": "string",
                     "enum": [
+                      "research",
                       "paper",
                       "live"
-                    ],
-                    "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+                    ]
                   }
                 },
                 "required": [
-                  "kind",
-                  "name",
-                  "universe"
+                  "name"
                 ],
                 "additionalProperties": false
               }
@@ -3047,6 +3145,53 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agent": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused",
+                            "stopped"
+                          ]
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "research",
+                            "paper",
+                            "live"
+                          ],
+                          "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state",
+                        "mode"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "agent"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
           "400": {
             "description": "`bad_request`, `idempotency`, `stale_request`",
             "content": {
@@ -3089,16 +3234,6 @@
           },
           "429": {
             "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "`execution_not_wired`: this operation is declared but not connected yet. Never a success.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3829,8 +3964,8 @@
         "tags": [
           "Strategies"
         ],
-        "summary": "Run a backtest",
-        "description": "Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.",
+        "summary": "Run the backtest of a strategy version (asynchronous job)",
+        "description": "Answers a job id; read it with GET /jobs/{id}. The result is a BACKTEST report on the version — never a performance figure.",
         "security": [
           {
             "bearerKey": [
@@ -3839,8 +3974,7 @@
           }
         ],
         "x-spw-scope": "strategies:manage",
-        "x-spw-implemented": false,
-        "x-spw-requires-mandate": true,
+        "x-spw-implemented": true,
         "parameters": [
           {
             "name": "id",
@@ -3903,6 +4037,58 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "running",
+                            "done",
+                            "failed",
+                            "cancelled"
+                          ]
+                        },
+                        "attempts": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "status",
+                        "attempts"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "job"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "400": {
             "description": "`bad_request`, `idempotency`, `stale_request`",
             "content": {
@@ -3955,16 +4141,6 @@
           },
           "429": {
             "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "`execution_not_wired`: this operation is declared but not connected yet. Never a success.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3982,8 +4158,8 @@
         "tags": [
           "Strategies"
         ],
-        "summary": "Start a strategy",
-        "description": "Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.",
+        "summary": "Start the agent a strategy version is pinned to",
+        "description": "research and paper sign nothing. `live` is accepted ONLY when a mandate approved by the owner with the passkey is in force for this agent at the signer; otherwise 409 `mandate_required` (a key, an agent or this API can never approve a mandate). Families that cannot go live answer 409 `live_unavailable` with the reason.",
         "security": [
           {
             "bearerKey": [
@@ -3992,8 +4168,7 @@
           }
         ],
         "x-spw-scope": "strategies:manage",
-        "x-spw-implemented": false,
-        "x-spw-requires-mandate": true,
+        "x-spw-implemented": true,
         "parameters": [
           {
             "name": "id",
@@ -4036,10 +4211,11 @@
                   "mode": {
                     "type": "string",
                     "enum": [
+                      "research",
                       "paper",
                       "live"
                     ],
-                    "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+                    "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
                   },
                   "agentId": {
                     "type": "string",
@@ -4056,6 +4232,53 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agent": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused",
+                            "stopped"
+                          ]
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "research",
+                            "paper",
+                            "live"
+                          ],
+                          "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state",
+                        "mode"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "agent"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
           "400": {
             "description": "`bad_request`, `idempotency`, `stale_request`",
             "content": {
@@ -4108,16 +4331,6 @@
           },
           "429": {
             "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "`execution_not_wired`: this operation is declared but not connected yet. Never a success.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4135,8 +4348,8 @@
         "tags": [
           "Strategies"
         ],
-        "summary": "Stop a strategy",
-        "description": "Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.",
+        "summary": "Stop the agent a strategy version is pinned to",
+        "description": "Always allowed. The safe wind-down: a live perp agent's mandate is revoked and its positions are closed with reduce-only orders; a live spot agent's mandate is revoked at the signer; simulated quotes are withdrawn.",
         "security": [
           {
             "bearerKey": [
@@ -4145,8 +4358,7 @@
           }
         ],
         "x-spw-scope": "strategies:manage",
-        "x-spw-implemented": false,
-        "x-spw-requires-mandate": true,
+        "x-spw-implemented": true,
         "parameters": [
           {
             "name": "id",
@@ -4198,6 +4410,53 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agent": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused",
+                            "stopped"
+                          ]
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "research",
+                            "paper",
+                            "live"
+                          ],
+                          "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state",
+                        "mode"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "agent"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
           "400": {
             "description": "`bad_request`, `idempotency`, `stale_request`",
             "content": {
@@ -4257,9 +4516,1235 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/agents/templates": {
+      "get": {
+        "operationId": "listAgentTemplates",
+        "tags": [
+          "Agents"
+        ],
+        "summary": "The seven built-in agents: family, engine, modes, installed strategies",
+        "description": "A bar template is bound BY NAME to laboratory strategies; `strategyInstalled: false` means none of them is installed (no placeholder is ever substituted). `liveReason` says why a family cannot go live.",
+        "security": [
+          {
+            "bearerKey": [
+              "agents:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "agents:read",
+        "x-spw-implemented": true,
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "templates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "family": {
+                            "type": "string"
+                          },
+                          "engine": {
+                            "type": "string"
+                          },
+                          "modes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "research",
+                                "paper",
+                                "live"
+                              ],
+                              "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                            }
+                          },
+                          "liveReason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "strategyInstalled": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "family",
+                          "engine",
+                          "modes",
+                          "liveReason",
+                          "strategyInstalled"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "templates"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
-          "501": {
-            "description": "`execution_not_wired`: this operation is declared but not connected yet. Never a success.",
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "a backing service is unavailable: `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/agents/{id}": {
+      "get": {
+        "operationId": "getAgent",
+        "tags": [
+          "Agents"
+        ],
+        "summary": "One agent: model, strategy, limits, mandate reference, backtest reports (labelled), worker state",
+        "security": [
+          {
+            "bearerKey": [
+              "agents:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "agents:read",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agent": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "family": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused",
+                            "stopped"
+                          ]
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "research",
+                            "paper",
+                            "live"
+                          ],
+                          "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "family",
+                        "state",
+                        "mode"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "mandateDraft": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {}
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "agent",
+                    "mandateDraft"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "unknown market, order or object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "a backing service is unavailable: `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/agents/{id}/signals": {
+      "get": {
+        "operationId": "listAgentSignals",
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Signal history of one agent, ONE mode",
+        "description": "Each signal carries the mode, the configuration version, the strategy hash, a digest of its inputs, its output and the decision: `acted`, or `skipped` with a reason code.",
+        "security": [
+          {
+            "bearerKey": [
+              "agents:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "agents:read",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "description": "default: the mode the agent is in now",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "research",
+                "paper",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "unix ms: rows strictly before it",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "open",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "research",
+                        "paper",
+                        "live"
+                      ],
+                      "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                    },
+                    "signals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "ts": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "milliseconds since the Unix epoch"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "research",
+                              "paper",
+                              "live"
+                            ],
+                            "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                          },
+                          "configVersion": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "strategySha256": {
+                            "type": "string"
+                          },
+                          "decision": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "acted",
+                              "skipped"
+                            ]
+                          },
+                          "reasonCode": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "ts",
+                          "mode",
+                          "configVersion",
+                          "strategySha256",
+                          "decision",
+                          "reasonCode"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "signals"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "unknown market, order or object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "a backing service is unavailable: `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/agents/{id}/journal": {
+      "get": {
+        "operationId": "listAgentJournal",
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Activity journal of one agent, ONE mode",
+        "description": "Decisions, orders, fills, errors, risk denials, mandate events and state changes, newest first.",
+        "security": [
+          {
+            "bearerKey": [
+              "agents:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "agents:read",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "description": "default: the mode the agent is in now",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "research",
+                "paper",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "unix ms: rows strictly before it",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "open",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "research",
+                        "paper",
+                        "live"
+                      ],
+                      "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "ts": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "milliseconds since the Unix epoch"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "research",
+                              "paper",
+                              "live"
+                            ],
+                            "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "severity": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "ts",
+                          "mode",
+                          "kind",
+                          "severity",
+                          "title"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "entries"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "unknown market, order or object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "a backing service is unavailable: `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/agents/{id}/orders": {
+      "get": {
+        "operationId": "listAgentOrders",
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Order history of one agent, ONE mode, in the unified order states",
+        "security": [
+          {
+            "bearerKey": [
+              "agents:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "agents:read",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "description": "default: the mode the agent is in now",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "research",
+                "paper",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "unix ms: rows strictly before it",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "open",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "research",
+                        "paper",
+                        "live"
+                      ],
+                      "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                    },
+                    "orders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "paper",
+                              "live"
+                            ]
+                          },
+                          "instrument": {
+                            "type": "string"
+                          },
+                          "side": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "description": "unified order state (CREATED … FILLED, CANCELLED, REJECTED, FAILED, UNKNOWN)"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "mode",
+                          "instrument",
+                          "side",
+                          "state"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "orders"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "unknown market, order or object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "a backing service is unavailable: `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/agents/{id}/performance": {
+      "get": {
+        "operationId": "getAgentPerformance",
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Computed performance of one agent, ONE mode",
+        "description": "Equity curve, returns, volatility, Sharpe, Sortino, max drawdown, win rate, profit factor, turnover, fees, funding, slippage, net PnL — computed from the records of that mode only, with small-sample warnings. Paper and live are never added. Backtests are not here.",
+        "security": [
+          {
+            "bearerKey": [
+              "agents:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "agents:read",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "research",
+                "paper",
+                "live"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "research",
+                        "paper",
+                        "live"
+                      ],
+                      "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                    },
+                    "label": {
+                      "type": "string",
+                      "description": "says which mode the figures are for; a backtest is never in this answer"
+                    },
+                    "points": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "label",
+                    "points",
+                    "warnings"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "unknown market, order or object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "a backing service is unavailable: `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/jobs/{id}": {
+      "get": {
+        "operationId": "getJob",
+        "tags": [
+          "Agents"
+        ],
+        "summary": "One agent job (backtest, wind-down): status and result",
+        "security": [
+          {
+            "bearerKey": [
+              "agents:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "agents:read",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "running",
+                            "done",
+                            "failed",
+                            "cancelled"
+                          ]
+                        },
+                        "attempts": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "status",
+                        "attempts"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "job"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "unknown market, order or object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "a backing service is unavailable: `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…",
             "content": {
               "application/json": {
                 "schema": {
@@ -4277,8 +5762,8 @@
         "tags": [
           "Agents"
         ],
-        "summary": "Start an agent",
-        "description": "Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.",
+        "summary": "Start an agent in research, paper or live mode",
+        "description": "research and paper sign nothing. `live` is accepted ONLY when a mandate approved by the owner with the passkey is in force for this agent at the signer; otherwise 409 `mandate_required` (a key, an agent or this API can never approve a mandate). Families that cannot go live answer 409 `live_unavailable` with the reason.",
         "security": [
           {
             "bearerKey": [
@@ -4287,8 +5772,7 @@
           }
         ],
         "x-spw-scope": "agents:manage",
-        "x-spw-implemented": false,
-        "x-spw-requires-mandate": true,
+        "x-spw-implemented": true,
         "parameters": [
           {
             "name": "id",
@@ -4331,10 +5815,11 @@
                   "mode": {
                     "type": "string",
                     "enum": [
+                      "research",
                       "paper",
                       "live"
                     ],
-                    "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+                    "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
                   },
                   "agentId": {
                     "type": "string",
@@ -4351,6 +5836,53 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agent": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused",
+                            "stopped"
+                          ]
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "research",
+                            "paper",
+                            "live"
+                          ],
+                          "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state",
+                        "mode"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "agent"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
           "400": {
             "description": "`bad_request`, `idempotency`, `stale_request`",
             "content": {
@@ -4410,28 +5942,18 @@
                 }
               }
             }
-          },
-          "501": {
-            "description": "`execution_not_wired`: this operation is declared but not connected yet. Never a success.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         }
       }
     },
-    "/api/v1/trading/agents/{id}/stop": {
+    "/api/v1/trading/agents/{id}/pause": {
       "post": {
-        "operationId": "stopAgent",
+        "operationId": "pauseAgent",
         "tags": [
           "Agents"
         ],
-        "summary": "Stop an agent",
-        "description": "Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.",
+        "summary": "Pause an agent",
+        "description": "No new exposure. A live perp agent keeps its positions and its mandate; a live spot agent's mandate is revoked at the signer (resuming it needs a new owner approval).",
         "security": [
           {
             "bearerKey": [
@@ -4440,8 +5962,7 @@
           }
         ],
         "x-spw-scope": "agents:manage",
-        "x-spw-implemented": false,
-        "x-spw-requires-mandate": true,
+        "x-spw-implemented": true,
         "parameters": [
           {
             "name": "id",
@@ -4493,6 +6014,53 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agent": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused",
+                            "stopped"
+                          ]
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "research",
+                            "paper",
+                            "live"
+                          ],
+                          "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state",
+                        "mode"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "agent"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
           "400": {
             "description": "`bad_request`, `idempotency`, `stale_request`",
             "content": {
@@ -4552,9 +6120,366 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/agents/{id}/stop": {
+      "post": {
+        "operationId": "stopAgent",
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Stop an agent (always allowed)",
+        "description": "Always allowed. The safe wind-down: a live perp agent's mandate is revoked and its positions are closed with reduce-only orders; a live spot agent's mandate is revoked at the signer; simulated quotes are withdrawn.",
+        "security": [
+          {
+            "bearerKey": [
+              "agents:manage"
+            ]
+          }
+        ],
+        "x-spw-scope": "agents:manage",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
           },
-          "501": {
-            "description": "`execution_not_wired`: this operation is declared but not connected yet. Never a success.",
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Replay protection: 8 to 100 characters (letters, digits, . _ : -). The same key with the same request returns the first answer; with a different request, 409 `idempotency_conflict`.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{8,100}$"
+            }
+          },
+          {
+            "name": "X-SPW-Timestamp",
+            "in": "header",
+            "required": false,
+            "description": "Optional freshness check: Unix seconds; refused (400 `stale_request`) when more than 300 s from the server clock.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{9,11}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "default": "",
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agent": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused",
+                            "stopped"
+                          ]
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "research",
+                            "paper",
+                            "live"
+                          ],
+                          "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state",
+                        "mode"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "agent"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "unknown market, order or object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`idempotency_conflict`, `idempotency_in_progress`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/agents/{id}/backtest": {
+      "post": {
+        "operationId": "backtestAgent",
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Run a backtest for an agent (asynchronous job)",
+        "description": "Bar agents: the laboratory backtest of the strategy version. Stream agents: the rule replayed on the top-of-book snapshots the stream engine recorded. Always a BACKTEST, labelled as such.",
+        "security": [
+          {
+            "bearerKey": [
+              "agents:manage"
+            ]
+          }
+        ],
+        "x-spw-scope": "agents:manage",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Replay protection: 8 to 100 characters (letters, digits, . _ : -). The same key with the same request returns the first answer; with a different request, 409 `idempotency_conflict`.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{8,100}$"
+            }
+          },
+          {
+            "name": "X-SPW-Timestamp",
+            "in": "header",
+            "required": false,
+            "description": "Optional freshness check: Unix seconds; refused (400 `stale_request`) when more than 300 s from the server clock.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{9,11}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "versionId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "hours": {
+                    "description": "stream agents: how many hours of recorded snapshots to replay",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 168
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "running",
+                            "done",
+                            "failed",
+                            "cancelled"
+                          ]
+                        },
+                        "attempts": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "status",
+                        "attempts"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "job"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "unknown market, order or object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`idempotency_conflict`, `idempotency_in_progress`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
             "content": {
               "application/json": {
                 "schema": {
@@ -4636,7 +6561,7 @@
     },
     {
       "scope": "strategies:manage",
-      "execution": true
+      "execution": false
     },
     {
       "scope": "agents:read",
@@ -4644,7 +6569,7 @@
     },
     {
       "scope": "agents:manage",
-      "execution": true
+      "execution": false
     }
   ],
   "x-spw-webhook-events": [
@@ -4663,8 +6588,14 @@
     {
       "event": "agent.updated",
       "emitted": true,
-      "description": "an agent changed mode through an owner action (engine-side transitions: pending wiring)",
+      "description": "an agent was started, paused or stopped (by the owner, an API key or the risk-management agent)",
       "payload": "{ agentId, kind, state, mode }"
+    },
+    {
+      "event": "risk.proposal",
+      "emitted": true,
+      "description": "the risk-management agent proposes a reduction or a pause, or acted (paused an agent, engaged the kill switch)",
+      "payload": "{ supervisorId, agentId, mode, action, code, acted, message, metrics }"
     },
     {
       "event": "order.updated",
