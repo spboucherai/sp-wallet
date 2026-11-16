@@ -21,7 +21,7 @@ import type { CanonicalOrderInput, FeeSchedule, QuotingSection } from '@spw/trad
 import { DEFAULT_BREAKER_ACTION, VOL_STUDY_DEFAULTS, type BreakerConfig, type QuotePolicy, type QuoteRounder } from '@spw/trading/mm';
 import { audit, sql } from '../db.ts';
 import { quotePolicyOf } from '../agent-runtime/families.ts';
-import { journal } from '../agent-runtime/journal.ts';
+import { inputsDigest, journal, REASON_CODES } from '../agent-runtime/journal.ts';
 import { configHash, ruleHash } from '../agent-runtime/model.ts';
 import { MmBudget } from './budget.ts';
 import { MmEngine, type EngineStatus, type MmEngineConfig } from './engine.ts';
@@ -260,7 +260,7 @@ export class MmRuntime {
       reconcileEveryMs: this.deps.reconcileEveryMs ?? (mode === 'PAPER' ? 1000 : 2000), rateEveryMs: 120_000, ipWeightRemaining: () => budget.remaining(), flattenOnStop: sec?.flattenOnStop ?? false, round, roundReduce,
       dayPnlUsd: (t) => D.str(D.add(D.from(dayBefore), D.from(t))),
     };
-    const s: Session = { row, mode, agentId: a.id, instrument: inst.id, inst, network, engine: null as never, cfg, policy, port, paper, stream, budget, mandate, queue, refusals: {}, breakers: [], unwinds: new Map(), startedAt: now, lastSaveAt: -Infinity, lastSlowAt: now, lastTapeAt: -Infinity,
+    const s: Session = { row, mode, agentId: a.id, instrument: inst.id, inst, network, engine: null as never, cfg, policy, port, paper, stream, budget, mandate, queue, refusals: {}, breakers: [], unwinds: new Map(), startedAt: now, lastSaveAt: -Infinity, lastSlowAt: -Infinity, lastTapeAt: -Infinity,
       lastMandateAt: now, lastNote: {}, dayBefore, priorTotal: prior?.t ?? '0', capital, ending: null, endState: null, lapses: -1, view: null, lockCode: null, cleanup, paperSeq: paper?.state.seq ?? 0, riskCache: new Map() };
     s.engine = new MmEngine(cfg, policy, { market, orders: port, clock: { now: this.deps.now }, journal: { record: (e) => { queue.push(e); } },
       risk: { killSwitch: () => this.deps.killSwitch(), evaluate: (i) => this.evaluate(a, s, i) },
@@ -356,6 +356,7 @@ export class MmRuntime {
     if (now - last < 300_000) return;
     this.holds.set(k, now);
     await journal(a.id, { mode, kind: 'hold', code, severity: 'warning', title: 'No quoting session', body: reason, configVersion: a.config_version });
+    await this.signal(a, mode, now, 'skipped', code, reason, null);
   }
   private readonly holds = new Map<string, number>();
 
@@ -368,6 +369,12 @@ export class MmRuntime {
         await recordFill({ sessionId: s.row.id, agentId: a.id, mode, instrument: s.instrument, accountId: s.mandate?.accountId ?? null, fillId: String(d.id), clientId: d.clientId ?? null, venueOrderId: d.venueOrderId ?? null, side: d.side, price: d.price, size: d.size, fee: d.fee, maker: d.maker === true,
           reduce: d.reduce === true || d.maker !== true, mid: d.mid ?? null, ts: Number(d.fillTs ?? e.ts) });
         if (d.clientId && s.unwinds.has(d.clientId)) { await settleUnwind(d.clientId, 'filled', e.ts, { size: d.size, price: d.price }); }
+      } else if (e.type === 'mm.quote' && this.due(s, 'signal', e.ts, 60_000)) {
+        const qs = d.quotes as QuoteOrder[], side = (x: 'buy' | 'sell') => { const q = qs.find((y) => y.side === x); return q ? { price: Number(q.price), size: Number(q.size) } : null; }, mid = s.engine.status().lastMid;
+        await this.signal(a, mode, e.ts, 'acted', 'acted', `quotes ${side('buy')?.price ?? '—'} / ${side('sell')?.price ?? '—'} (${s.policy.id})`, { bid: side('buy'), ask: side('sell'), mid: mid === null ? null : Number(mid), policy: s.policy.id, session: s.row.id });
+      } else if (e.type === 'mm.pulled') {
+        const why = String(d.why ?? '');
+        await this.signal(a, mode, e.ts, 'skipped', /kill_switch/.test(why) ? 'kill_switch' : /venue_disconnected|data_stale/.test(why) ? 'data_gap' : /mandate|lock|disabled/.test(why) ? 'orders_refused' : 'risk_limit', `quotes pulled: ${why}`, null);
       } else if (e.type === 'mm.reduce') { for (const o of d.orders as QuoteOrder[]) s.unwinds.set(o.clientId, { order: o, why: String(d.why ?? 'hard_limit') }); }
       else if (e.type === 'mm.reduce_result') {
         for (const id of d.clientIds as string[]) {
@@ -393,6 +400,17 @@ export class MmRuntime {
       const body = e.type === 'mm.fill' ? `${d.maker ? 'maker' : 'taker'} ${d.side} ${d.size} @ ${d.price} (fee ${d.fee})${mode === 'PAPER' ? ' — SIMULATED' : ''}` : String(d.why ?? d.message ?? d.code ?? d.note ?? '').slice(0, 400);
       await journal(a.id, { mode, kind: t[0], code: e.type.slice(3) + (d.code ? `:${String(d.code)}` : ''), severity: t[1], title: `${t[2]}${d.code ? `: ${String(d.code)}` : ''}`, body, data, configVersion: a.config_version, ref: { session: s.row.id } });
     }
+  }
+  /**
+   * The signal history of the agent (agent_signals), as for every stream agent — WITHOUT a row per quote: the quotes of a
+   * session's first batch, then the latest ones at most once a minute (`acted`), and each change of the reason quotes are
+   * pulled (`skipped`, with a reason code). The trading API's `signals` read answers from it, per mode.
+   */
+  private async signal(a: MmAgentRow, mode: MmMode, now: number, decision: 'acted' | 'skipped', code: string, reason: string, output: Record<string, unknown> | null): Promise<void> {
+    const rc = (REASON_CODES as readonly string[]).includes(code) ? code : decision === 'acted' ? 'acted' : 'risk_limit';
+    await sql`insert into agent_signals (agent_id, bar, mode, kind, config_version, strategy_sha256, inputs_digest, status, reason, decision, reason_code, weights)
+      values (${a.id}, ${new Date(now)}, ${mode}, 'stream', ${a.config_version}, ${ruleHash(a.runtime.rule)}, ${output ? inputsDigest(output) : null}, ${decision === 'acted' ? 'done' : 'hold'}, ${reason.slice(0, 300)}, ${decision}, ${rc}, ${output ? sql.json(output as never) : null})
+      on conflict (agent_id, mode, bar) do update set status = excluded.status, reason = excluded.reason, decision = excluded.decision, reason_code = excluded.reason_code, weights = excluded.weights, updated_at = now()`.catch(() => {});
   }
   private due(s: Session, key: string, now: number, every: number): boolean { const last = s.lastNote[key] ?? -Infinity; if (now - last < every) return false; s.lastNote[key] = now; return true; }
 

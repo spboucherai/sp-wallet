@@ -264,3 +264,116 @@ API check in front of it.
     (`risk_decisions.fingerprint`). An order given as a notional is evaluated twice.
 11. **Not verified here:** behaviour against the real Hyperliquid testnet or mainnet. Every live test runs
    against the scripted venue of the test suite and the real signer class in process.
+
+## Live market making
+
+Integration of the quoting mandate (`docs/V11-MARKET-MAKING.md`, `docs/v11/work/mm-live.md`), 2026-11-16. Nothing in this
+section was ever run against a real venue: every proof is on the venue double of the test suite with the real signer class
+in process, on a recorded public tape. No real key, no funded account, mainnet or testnet.
+
+### Signer behaviour changes (for human review)
+
+The signer source was NOT modified by the integration; the nine changes below are the foundations' (branch `v11-mm-core`),
+re-read here against `services/isolated-signer/src/venue-quoting.ts`, and now REACHABLE from the running service:
+
+1. A new mandate kind, `SPW-VENUE-QUOTING-MANDATE-v1`, approved by the same passkey ceremony (`POST /venue/quoting/approve`);
+   refused under the halt, without a live `MANUAL_LIVE` authorization, beyond the authorization or the compiled bounds.
+2. A seventh path that signs without a per-operation passkey (`POST /venue/quoting/sign`, trading key): ADR 0001 row 7.
+3. Two new action kinds signed by the trading key, on that path only: an `order` action with more than one order (≤ 20, one
+   instrument, homogeneous) and `scheduleCancel`. `/venue/sign` and `/venue/mandate/sign` still answer `unsupported`.
+4. Quotes do not count against the authorization's `maxOrdersPerDay`; they are bounded by the mandate's own persisted rates.
+5. `venueMandateApprove` (directional) is refused with `conflict` while a quoting mandate is active on the authorization.
+6. A new outbound request of the signer: `orderStatus` on the pinned info hosts.
+7. New optional state: `venueQuotingMandates`, and `q: 1` on ledger entries created by quotes. **Rollback rule: revoke every
+   quoting mandate before rolling the signer back** (`docs/runbooks/deploy.md`).
+8. Journal records `venue.quoting.*`: one per signed action — several per second at the compiled maximum.
+9. `GET /status` gains `venueQuotingMandates[]`.
+
+### API behaviour changes (for human review)
+
+1. `trading_mandates` rows may carry a quoting section; `MandateApprovalIntent` gains `quotingSectionHash`; the integrity
+   check covers the section; a quoting mandate is approved and revoked at the signer's quoting endpoints.
+2. Exclusivity is refused API-side with `quoting_excludes_directional` / `directional_excludes_quoting`, checked BEFORE the
+   compilation (a directional creation on an account under a quoting mandate now answers that code first).
+3. Family `market_making` has a `live` mode (`FAMILY_MODES`), for one pinned instrument on Hyperliquid (`liveVerdict`).
+4. PAPER market making no longer goes through the order gateway: it runs the quoting engine on a simulated venue account
+   (`mm/paper-venue.ts`); its quotes are not `agent_order_intents` rows any more, and its prices are on the venue's own grid
+   (Hyperliquid: 5 significant figures — the previous paper path quoted prices the real venue would have refused).
+5. The stream pass also ticks market-making agents in `LIVE` and `STOPPING`, and paused or stopped ones while a session of
+   theirs is still open (so that its shutdown completes).
+6. `stopAgent` of a live market-making agent revokes its quoting mandate and leaves the agent `STOPPING` until the session
+   has cancelled and removed the switch; a repeated stop of a stream agent in `STOPPING` is a no-op.
+7. `LiveService.setStepPacing`: the live engine's background reconcile of a venue account is paced to 60 s while a quoting
+   session runs on it (its reads cost the IP weight the session needs). Fills and funding of that account are stored up to
+   60 s later during a session; orders placed through the live engine are reconciled when placed, as before.
+8. `MandateService.supervise` reads the equity of a quoting mandate's account once a minute instead of at every pass.
+9. `orders/provenance.ts`: fills are replayed by (time, stored sequence, fill id); a fill carrying a quoting session's
+   client-id prefix is the agent's. `deriv_fills` gains the column `seq`.
+10. New owner routes `/api/v1/mm/*` and `POST /api/v1/mandates/recover-quoting`; two capability ids; six alert kinds.
+11. The engine counts only the fills of ITS session (`lastFillsAt` starts at the session's start): the account's earlier
+    history — the venue's `userFills` snapshot, `userFillsByTime` from 0 — is no longer attributed to a new session.
+
+### What a compromised API can do under an active quoting mandate, and what bounds it
+
+It holds the HMAC secret; it can ask for the four action kinds at will, and nothing else (no transfer, withdrawal, leverage
+change, agent approval, builder or vault field — refused by the strict action reading of the signer).
+
+| It can | Bounded by (signer check) |
+|---|---|
+| place quotes it knows will be picked off | every quote is `Alo`, on its own side of the signer's own mid, at least `minHalfSpreadBps` away, at most `maxDistanceBps`; `maxQuoteNotional` each; resting count and notional per side |
+| build inventory through fills | worst-case inventory per instrument and gross, from the signer's own venue read plus everything it signed that can still land; `floorEquity`; the leverage setting |
+| unwind badly | a reduce-only order is within `maxReduceDeviationBps` of the signer's mid and ≤ `maxQuoteNotional`; it cannot flip a position (the venue enforces reduce-only) |
+| repeat | token bucket, quotes per hour and per day, daily turnover — persisted; a restart refills nothing; the mandate ends after ≤ 7 days |
+| not send the `scheduleCancel` it obtained | nothing — see below; it gains nothing beyond the above (its own quotes are the ones left uncovered) |
+| burn the address rate limit and grow the journal with cancels and reductions | nothing: stopping is never metered (as with the directional mandate) |
+
+Loss per round trip ≈ (staleness of the signer's mid + the reduce band) × inventory, repeated inside the rates until the
+account value reaches the floor, where openings stop. The floor, the inventory and the rates are the owner's choices in the
+mandate; the compiled ceilings (20 000 USD of inventory, 2 000 000 USD of daily turnover) are a backstop, far above the
+wallet's stated scope. What does NOT bound it: every API-only row of the enforced-by table (circuit breakers, session
+hours, the session loss limit, the engine's soft and hard limits, the quote size below the signer's ceiling, the policy).
+
+### Residual risks of the dead man's switch
+
+1. The signer knows it SIGNED a `scheduleCancel`, not that the venue TOOK it; no info request exposes the scheduled time.
+   The rule binds the honest engine that crashes — the realistic failure — not a malicious API.
+2. Up to `deadManSeconds` (≤ 120 s; the tests use 30 s) of unmanaged quotes at their last prices after a crash; the loss is
+   bounded by the resting notional per side and the move in that time. A worker's lease lasts 30 s: with
+   `deadManSeconds` ≤ 30 the venue cancels before another worker can take the agent.
+3. If the venue itself halts, the switch does not fire until it resumes.
+4. The venue allows 10 triggers a UTC day; the signer stops opening at 8 presumed lapses. A crash loop spends them: after 8,
+   no quote until 00:00 UTC (alert `agent.mm_dead_man_switch` at every lapse).
+5. With the signer down NOTHING can be signed — not even a cancel. The switch is then the only thing that cancels; it must
+   already be armed, which the signer's own rule guarantees for every quote it signed.
+6. Clock skew between the engine, the signer and the venue is covered only by the 2 s and 6 s margins.
+
+### Not verified on a real venue
+
+All of these are assumptions taken from the venue's documentation and must be observed on TESTNET by the owner before any
+mainnet session (the go-live checklist's testnet step, `docs/V11-MARKET-MAKING.md`):
+
+- **`scheduleCancel` replacement semantics**: that a new time REPLACES the previous one (not stated by the documentation). If
+  the earliest time won, the switch would fire early: a nuisance and a trigger, not a loss.
+- **Trigger counting**: that the count increments when the switch fires with nothing resting, and resets at 00:00 UTC.
+- **Duplicate-cloid behaviour**: whether the venue refuses a client order id that was used before (the signer refuses a
+  client id that is live in its ledger or open on the venue; the engine never reuses one).
+- **Info lag**: how long after an accepted order `frontendOpenOrders` lists it, and how the `orderUpdates` stream orders
+  itself relative to the HTTP answer (the reconcile lists an order from the answer and never lets a final state be left).
+- **`expiresAfter` rejection**: that an action past its `expiresAfter` is refused (the signer's ledger relies on it + 10 s),
+  and that it costs 5× the address rate limit.
+- The `orderUpdates` message shape on a trading account (parsed from the documented `WsOrder[]`; only the public `userFills`
+  snapshot frame could be recorded without an account that trades), queue position, latency, the real cost in IP weight.
+
+### Items for human review before `SPW_DERIV_MM_MAINNET` is enabled
+
+1. The nine signer changes and the eleven API changes above.
+2. `withinBand` (runtime): it rewrites a rule's quote prices to stay inside the mandate's band. It can only move a quote away
+   from the mid or back inside the maximum, and the signer still judges every quote — but it IS a place where the engine
+   changes what the rule asked.
+3. The owner's "pull" / "flatten" when no worker runs the session (`MmRuntime.emergency`): a short session in the API process
+   under the agent's lease. It never quotes (the instruction is set before the first cycle); review that claim in the code.
+4. The risk engine's decision reuse for quotes (30 s per side, size and inventory lot) and the choice of `preview: true`.
+5. The budget's estimate of the signer's requests (peak of the simulated hour: 878 of 1 200 per minute, held under the
+   engine's own ceiling of 900 by the 300-weight reserve) — and whether the signer should cache its leverage read.
+6. Paper evidence comes from a fill model (trade-through on top of book) that under-counts fills and ignores queue position.
+

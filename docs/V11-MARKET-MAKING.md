@@ -1,18 +1,21 @@
 # V11 — market making on Hyperliquid: design of the core
 
-Status: **foundations, not wired**. This document describes libraries, a signer extension and an engine module that exist
-on branch `v11-mm-core` and are proven on a fake venue with the real signer code and on recorded public data. Nothing here
-was ever sent to a venue; no key other than test vectors and a throwaway random key was used; no funded account, mainnet or
-testnet, was touched. The integration into the agents runtime, the order table and the web is a later step
-(`docs/v11/work/mm-core.md`).
+Status: **integrated, locked off by default** (2026-11-16, branch `v11-mm-live`). Sections 1–11 are the design of the core
+as the foundations wrote it; **section 12 is the system as built** and **section 13 the runbook**. Where they differ, 12 and 13
+are right (the differences are listed at the top of 12). Nothing here was ever sent to a venue; no key other than test vectors
+and a throwaway random key was used; no funded account, mainnet or testnet, was touched. Every proof runs on a venue double
+with the real signer code, on recorded public data, and on paper. Work notes: `docs/v11/work/mm-core.md` (foundations),
+`docs/v11/work/mm-live.md` (integration).
 
 Code: canonical mandate `packages/derivatives/src/live/quoting.ts`; venue primitives
 `packages/derivatives/src/venues/hyperliquid/{trading,quoting-round,reconcile}.ts`; signer
 `services/isolated-signer/src/venue-quoting.ts` (+ `venue-read.ts`, `store.ts`); quoting core `packages/trading/src/mm/`
-(entry point `@spw/trading/mm`); compilation `packages/trading/src/mandate/quoting-mandate.ts`; engine, live adapter and
-simulated venue `services/api/src/mm/`. Tests: `services/isolated-signer/test/venue-quoting.test.ts`,
-`packages/derivatives/test/hyperliquid/mm-primitives.test.ts`, `packages/trading/test/{mm,quoting-mandate}.test.ts`,
-`services/api/test/mm-engine.test.ts`.
+(entry point `@spw/trading/mm`); compilation and the quoting section `packages/trading/src/mandate/quoting-mandate.ts`; engine
+and ports `services/api/src/mm/{engine,ports,live-adapter}.ts`; integration `services/api/src/mm/{runtime,sessions,
+user-stream,budget,market-data,paper-venue,quoting-mandate,lifecycle,routes,bind,register}.ts`. Tests:
+`services/isolated-signer/test/venue-quoting.test.ts`, `packages/derivatives/test/hyperliquid/mm-primitives.test.ts`,
+`packages/trading/test/{mm,quoting-mandate}.test.ts`, `services/api/test/{mm-engine,mm-live,mm-units,agent-stream}.test.ts`
+(venue double: `services/api/test/mm-sim-venue.ts`).
 
 ## 1. What changes, in one paragraph
 
@@ -399,3 +402,131 @@ otherwise on real fills.
 9. Watch the first session live: markouts, PnL attribution, rate-limit budget, signer refusals. Know the stop:
    kill switch (pull quotes), revoke (no passkey), emergency halt.
 10. Stop if the realised markouts confirm the study.
+
+## 12. As built (integration, 2026-11-16)
+
+**Differences from sections 1–11.** (a) §7's REST reconcile is replaced by the venue's user streams (below); its figure of
+≈ 955 weight a minute is superseded by the measurement below. (b) §8's last row: there are FOUR settings on mainnet, and a
+testnet one. (c) The simulated venue of the foundations is a test double, not a paper model: paper has ONE fill model, the
+runtime's. (d) §11 items 3, 6, 7, 8 are implemented as the in-app checklist of §13.
+
+**One engine, two modes.** A market-making agent in PAPER or LIVE is passed by the stream engine, under its lease, to
+`MmRuntime.tick()` → `MmEngine.tick()`. PAPER: the engine over `PaperVenue` — real books, a simulated account, no signer.
+LIVE: the engine over the live adapter — the signer's quoting path only (never a per-order passkey, never the manual or the
+directional path), on Hyperliquid, for the agent's ONE pinned instrument. RESEARCH computes and stores the rule's quotes and
+places nothing (the stream engine, as before).
+
+**One quoting rule.** `spread_inventory` is `mmQuotes` (`agent-runtime/families.ts`): research and the recorded-data replay
+call it directly, paper and live call it through `spreadInventoryPolicy`, its `QuotePolicy` form. Avellaneda–Stoikov is the
+second selectable policy (`policy: 'avellaneda_stoikov'` in the agent's configuration, with `asGamma`, `asTauIntervals`,
+`asKappa`, `maxHalfSpreadBps`). In LIVE the rule is wrapped by `withinBand`: a quote is never asked closer than the mandate's
+`minHalfSpreadBps` + 0.5 bps to the venue's mid, nor further than `maxDistanceBps` − 0.5 bps (the signer measures the band
+from its own, spot, mid).
+
+**One paper fill model: the runtime's `mmFills`** — a quote fills only when a later book trades strictly THROUGH it, at our
+price, for at most the displayed size that crossed, never on the book it was priced from; the remainder is withdrawn; maker
+fee on every fill. Kept, rather than the queue model of the foundations' simulated venue, because the runtime sees the top
+of the book only (the rows it records and replays in a backtest use the same function) and a queue needs the public trades,
+which the runtime does not consume. It under-counts fills in quiet markets and ignores queue position: paper figures are
+labelled SIMULATED everywhere. Paper prices are now on the venue's grid (Hyperliquid: 5 significant figures).
+
+**Ports.**
+
+| Port | Bound to |
+|---|---|
+| `OrderPort` (live) | `createLiveMmAdapter` → `signer.venueQuotingSign` (`POST /venue/quoting/sign`) → the process's Hyperliquid HTTP client; wrapped by `streamReconciled` |
+| `OrderPort` (paper) | `PaperVenue` |
+| `MarketDataPort` | `marketDataPort(BookSource)` — freshness guards: a stream that is not connected serves no book; a book received more than the agent's `maxDataAgeMs` ago is stale; the older of the venue's and the receipt time is the book's time; the user stream's status is folded in. `BookSource` today = the stream engine's market state (mainnet) or the testnet client's `l2Book` stream. **The coming quote hub replaces the SOURCE (`BookSource`: `read(instrument)` → status, top of book, venue time, receipt time), not the port** |
+| reconcile | `user-stream.ts`: `orderUpdates` and `userFills` over WebSocket (documented shapes `WsOrder[]`, `WsUserFills`; the recorded public `userFills` snapshot of mainnet is replayed through the real stream client in `mm-units.test.ts`). REST only at start-up, after a gap (at once, then at most every 10 s while the stream is down), on a 60 s audit, `clearinghouseState` (weight 2) when a fill was seen or every 15 s, and `orderStatus` for a client id the stream never mentioned. A difference found by the audit is counted, journaled (`stream_divergence`) and REST wins |
+| `RiskPort` | the unified risk service (`evaluateOrder`, preview) on the worst case of each side of a plan, reused for 30 s per (side, size, inventory lot); the ONE kill switch read at every cycle → quotes pulled at once; reductions pass |
+| `MandatePort` | the signer's own status of the mandate (phase, bucket, quotes left, the switch's deadline and lapses), narrowed by the API's record (a mandate revoked here is in its wind-down) |
+| `JournalPort` | the agent journal (never a line per quote), `mm_fills`, the unwinds as unified orders, audit events for the alerts |
+
+**Rate budget — measured.** `mm-units.test.ts`, "A SIMULATED HOUR": the 36-minute recorded tape played twice (60 minutes),
+the engine at one cycle a second, the real signer code, every request the venue double saw weighted as the venue documents,
+plus the live engine's own paced reconcile of the account (once a minute). One instrument, one quote per side, 20 USD quotes:
+
+| Per minute | Mean | Notes |
+|---|---|---|
+| signer's own reads (per quote batch: `frontendOpenOrders` 20 + `clearinghouseState` 2, + `activeAssetData` 20 when flat, + `orderStatus` 2 per pending quote) | 352 | cannot be moved; dominates |
+| API REST (60 s audit 42, position reads ≈ 19, `userRateLimit` 10, the live engine's paced reconcile 44) | 111 | was ≈ 555 with the 5 s REST reconcile |
+| exchange (quote batches, cancels, heartbeats) | 22 | |
+| **total** | **485 of 1 200** | **peak minute 878** — held under the engine's own ceiling of 900 (`ipReserve` 300: quoting thins before cancels and heartbeats are at risk) |
+
+492 quote batches, 833 quotes, 800 cancels, 59 fills, 360 heartbeats, no switch trigger, no signer refusal; 1 193 address
+requests used of a cap of 11 112 (10 000 + volume). The budget's own estimate of the peak (890) matches the truth (878).
+
+**Accounting.** Quotes are not rows of `orders`. `mm_sessions`: one row per session (counters, attribution, markout summary,
+refusals by code, the rate budget, breaker events, and the engine's last status — the quotes resting NOW with their age and
+distance from the mid). `mm_fills`: one row per fill, with markouts at 1 s / 10 s / 60 s computed afterwards from `mm_tape`
+(one mid a second while a session runs, kept two days). Every reduce-only unwind is ONE unified order of the agent
+(`engine: 'none'`, written through the order state machine). Performance is per mode, never added: the attribution of the
+mode's sessions (spread capture, inventory, fees, funding — exact) and the agents' performance module on the mode's equity.
+A session counts only its own fills. Fills of a session are attributed to the agent in the position-provenance ledger.
+
+**Circuit breakers and operations.** The core's eleven breakers and the kill switch run in both modes with the section's
+policy per code (`pull` / `flatten` / `halt`; the two drawdowns and the consecutive rejects always stop the session). Each
+trip is journaled, stored in the session, and written as an audit event the alerts module turns into `agent.mm_breaker` /
+`agent.mm_halted`; the other alert kinds are `agent.mm_dead_man_switch`, `agent.mm_signer_refusals`, `agent.mm_rate_budget`, `agent.mm_session_ended`.
+The owner's **pull quotes now** and **flatten** (reduce-only) work under every lock, during a halt and during the
+wind-down; when no worker runs the session they are executed by the API process itself under the agent's lease. The session
+ends outside its hours, at its maximum duration (the agent is then paused), `stopBeforeExpiryS` before the mandate's expiry
+(the agent is stopped and the mandate revoked), or when the mandate is no longer usable.
+
+**Locks (all default off; only the exact value `on` opens).**
+
+| Network | Settings consulted, in this order | Code of the first one that is off |
+|---|---|---|
+| mainnet | `SPW_DERIV_LIVE_MAINNET`, `SPW_DERIV_MANDATE_MAINNET`, `SPW_DERIV_MM_MAINNET`, `SPW_TRADING_API_EXECUTION` | `mainnet_disabled`, `mandate_mainnet_disabled`, `mm_mainnet_disabled`, `execution_disabled` |
+| testnet | `SPW_DERIV_MM_TESTNET`, `SPW_TRADING_API_EXECUTION` | `mm_testnet_disabled`, `execution_disabled` |
+
+`SPW_TRADING_API_EXECUTION` already gated every agent's new live risk in the order service; a market-making agent's quotes are
+new live risk, so the same switch gates them here: one rule (`mmOpeningLock`). The network is the venue account's, never a
+setting. With any lock off: the start is refused with the code; a running session's quotes are pulled and held (the code is
+shown), and come back when the lock opens; cancels, reductions and the dead man's switch pass.
+
+## 13. Runbook
+
+**Go-live checklist (in the app, in order; each step shows its evidence; the server refuses a live start with
+`golive_incomplete` and the missing steps).**
+
+1. A PAPER session of at least 30 minutes on the chosen instrument (`SPW_MM_MIN_PAPER_MINUTES`).
+2. The lab study and the simulation, shown as they are — modelled PnL NEGATIVE in both — and the owner's explicit
+   acknowledgement (the hash of the text he ticked is recorded).
+3. The Hyperliquid jurisdiction acknowledgement of `docs/v4/venues/jurisdiction.md` (its hash is also inside the mandate).
+4. TESTNET, run by the owner with test funds (`SPW_DERIV_MM_TESTNET=on`, a testnet venue account, a testnet quoting mandate):
+   observe (a) that a new `scheduleCancel` replaces the previous one, that it fires, and the trigger count; (b) an `Alo`
+   rejection; (c) an `expiresAfter` rejection; (d) the lag of the open-orders list after an accepted order; (e) what a
+   duplicate client order id does; (f) how `userRateLimit` moves per batch. A testnet session, or his written attestation,
+   completes the step. **Nobody but the owner runs this step.**
+5. The quoting mandate: capital, floor, instrument, quote size, inventory limits, the band, the rates, `deadManSeconds`,
+   session hours and duration, breaker policies — each field with its compiled maximum — then the approval sheet (the
+   enforced-by table verbatim, the hashes) and the passkey, twice. Leverage of the instrument set beforehand (passkey) at or
+   below the mandate's. Any directional mandate on the account revoked first.
+6. The settings of the network on (table above), in every process that runs agent workers.
+
+**Start.** The owner starts the agent LIVE (a key may only resume what he started under the same mandate). The worker that
+holds the agent's lease opens the session: cancel-all → reconcile → arm the dead man's switch → quote.
+
+**Stop.** Stop the agent: the mandate is revoked at the signer first, the session cancels everything, unwinds if the mandate
+says `flattenOnStop`, removes the switch; the agent is `STOPPING` until then. Pause: the session ends the same way, the
+mandate stays. Positions are not closed by a stop unless `flattenOnStop`: use Flatten first if that is wanted.
+
+**Incidents.**
+
+| What you see | What it means | What to do |
+|---|---|---|
+| a breaker (`agent.mm_breaker`): quotes pulled, phase `pulled` | data stale / stream down / book crossed, thin or wide / volatility / fill burst / adverse markouts / kill switch | nothing: quoting resumes 15 s after the condition clears. Persisting: stop the agent |
+| `agent.mm_halted` (drawdown, consecutive rejects) | the session stopped quoting and waits | look at the refusals and the PnL; Resume, Flatten, or Stop |
+| `agent.mm_signer_refusals` | the signer refuses batches (the code says why: band, inventory, floor, leverage setting, rates, switch) | `quote_too_tight` / `quote_crosses_mid`: the perp trades away from spot (basis) — widen the rule or stop; `leverage_setting`: lower the venue's leverage (passkey); `floor_equity`: the account is at its floor |
+| `agent.mm_dead_man_switch` | a deadline the signer signed lapsed: the venue cancelled everything (a crash, the signer or the venue unreachable) | find the cause before restarting; at 8 lapses in a UTC day no quote is signed until 00:00 UTC |
+| `agent.mm_rate_budget` | IP weight or address requests under pressure: quoting thinned or pulled | let it recover; lower the requote rate (wider tolerance, larger minimum spread) |
+| session `stale` (no heartbeat for 20 s) | the worker died | the venue cancels at the switch's deadline; the next worker restarts cleanly. Pull / Flatten work meanwhile (the API executes them itself) |
+| the signer is down | nothing can be signed, not even a cancel | the switch cancels what rests; positions stay until the signer is back |
+| anything you do not understand | — | Pull quotes now; then the kill switch; then revoke the mandate (no passkey) |
+
+**Rollback rule.** **Revoke every quoting mandate before rolling the signer back** to a build without quoting
+(`docs/runbooks/deploy.md`). Rolling the API back: stop every market-making agent first.
+
+**After a session.** Read the markouts and the attribution of the LIVE mode. Stop if they confirm the study.
+

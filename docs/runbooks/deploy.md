@@ -37,6 +37,9 @@ only) and `~/sp-wallet-signer-data` (keystore, `state.json`, `policy.json`). Com
    | `RESEARCH_DATABASE_URL` | backtest candles are read with the API's own role instead of the read-only one |
    | `SPW_RESEARCH_RUNNER_SECRET` (≥ 32 chars) | the research runner routes answer 404; research jobs stay queued |
 
+   | `SPW_DERIV_MM_MAINNET=on` (V11, default off) | no quote is placed on mainnet: a market-making session answers `mm_mainnet_disabled`. Needs `SPW_DERIV_LIVE_MAINNET`, `SPW_DERIV_MANDATE_MAINNET` and `SPW_TRADING_API_EXECUTION` as well; cancels, reduce-only orders and the dead man's switch pass without any of them |
+   | `SPW_DERIV_MM_TESTNET=on` (V11, default off) | no quote is placed on Hyperliquid TESTNET (`mm_testnet_disabled`): the owner's own first go-live step. Needs `SPW_TRADING_API_EXECUTION` as well |
+
    (`SPW_DERIV_MANDATE_MAINNET=on` as well if perp agents trade on mainnet; without it an agent already live can only
    reduce. `SPW_DERIV_GMX_LIVE` is OFF by default; without it no new GMX position is prepared, closing and cancelling
    still work.) Which of these three belong in the environment is the owner's decision about what is open on mainnet —
@@ -69,6 +72,21 @@ only) and `~/sp-wallet-signer-data` (keystore, `state.json`, `policy.json`). Com
 **Rollback (API):** `git checkout <previous commit>`, `pnpm install --frozen-lockfile && pnpm build`, `pm2 restart
 sp-wallet`. The schema changes are additive: the previous code runs on the newer schema. Restore the dump only if data
 were damaged (`gunzip -c <file> | psql <new empty database>`, then point `DATABASE_URL` at it).
+
+### Market making (V11) — what a deployment adds
+
+- **Both processes** that may run agent workers (`sp-wallet`, and `sp-wallet-agents` when it exists) need the SAME values of
+  `SPW_DERIV_MM_MAINNET`, `SPW_DERIV_MM_TESTNET`, `SPW_DERIV_LIVE_MAINNET`, `SPW_DERIV_MANDATE_MAINNET` and
+  `SPW_TRADING_API_EXECUTION`: the worker that holds an agent's lease applies them at every quote, the API applies them to the
+  mandate's approval and to the start. `SPW_MM_MIN_PAPER_MINUTES` (default 30) is the paper session the go-live checklist asks for.
+- The capability line at start-up says `deriv_mm_mainnet=…` and `deriv_mm_testnet=…` with the names of the missing settings.
+- New tables (additive, created by `migrate()`): `mm_sessions`, `mm_fills`, `mm_tape`; new columns `trading_mandates.quoting`,
+  `deriv_fills.seq`. Nothing is rewritten.
+- **Restarting a worker with a live session running**: nothing is cancelled by the shutdown. The venue's dead man's switch
+  cancels what rests within `deadManSeconds`; the next worker takes the agent's lease (30 s) and starts with cancel-all →
+  reconcile → arm → quote. To restart with NOTHING resting: "Pull quotes now" on the agent first, then restart.
+- **Rolling the API back** to a build without market making: stop every market-making agent first (its mandate is revoked at the
+  signer), or the sessions simply end at the switch's deadline and the mandates stay approved at the signer until revoked.
 
 ## 2. Signer node — only when `services/isolated-signer` or `packages/core` changed
 
@@ -107,6 +125,18 @@ it knows is unchanged; it finds an empty journal and starts a new one inside the
 supported: V11 moves what the older binary journaled to `journal-rollback-<time>.jsonl` and records that file's last hash
 in the main journal. `state.json.lock` and `control.sock` are ignored by the older binary. A `state.json.lock` left by a daemon that was
 killed needs no cleaning: V11 takes over a lock whose process no longer exists.
+
+### Signer state added by V11 market making, and the rollback rule
+
+The signer's state file gains two OPTIONAL fields: `venueQuotingMandates` (the approved quoting mandates with their counters,
+token bucket and the deadline of the last `scheduleCancel` it signed) and the mark `q: 1` on ledger entries created by quotes. A
+state written before loads unchanged. A signer binary from BEFORE this work keeps both fields on disk but does not know them: it
+would approve a derivative mandate next to an active quoting mandate, and would no longer bound quotes at all (it has no quoting
+route). Therefore:
+
+**Before rolling the signer back: revoke every quoting mandate** (Risk → quoting mandate → revoke, or
+`POST /api/v1/mandates/<id>/revoke`; revoking needs no passkey). Check `GET /status` of the signer:
+`venueQuotingMandates[].phase` must be `wind_down` or `ended` for all of them. Rolling forward again needs nothing.
 
 ## 3. Research node — only when `services/research-runner` or `research/` changed
 

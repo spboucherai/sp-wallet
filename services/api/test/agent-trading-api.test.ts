@@ -83,7 +83,7 @@ describe('trading API — an agent from a template, with a key that holds no man
       ['cross-exchange', 'stream', true], ['risk-manager', 'supervisor', true]]);
     const by = Object.fromEntries(r.json.templates.map((t: any) => [t.id, t]));
     expect(by.momentum.installed).toEqual([]); expect(by.momentum.strategyNames).toEqual(['momentum_xs_perp', 'ts_momentum_perp', 'ma_trend_perp', 'vol_breakout_perp']);
-    expect(by['market-making'].modes).toEqual(['research', 'paper']); expect(by['cross-exchange'].liveReason).toBe('mode réel indisponible : une seule plateforme autorise l\'exécution sous mandat');
+    expect(by['market-making'].modes).toEqual(['research', 'paper', 'live']); expect(by['market-making'].liveReason).toBeNull(); expect(by['cross-exchange'].modes).toEqual(['research', 'paper']); expect(by['cross-exchange'].liveReason).toBe('mode réel indisponible : une seule plateforme autorise l\'exécution sous mandat');
     expect(by['market-making'].rule).toMatchObject({ name: 'spread_inventory', version: '1' }); expect(by['market-making'].labBacktest).toEqual({ wanted: [], installed: [], agentRunnable: false });
     // V11: market_making_as is a model STUDY of the laboratory, not a strategy; the funding family's two laboratory strategies are backtest references no agent runs
     expect(by['market-making'].labStudies.map((x: any) => [x.kind, x.name])).toEqual([['study', 'market_making_as'], ['study', 'vol_forecast']]);
@@ -98,13 +98,13 @@ describe('trading API — an agent from a template, with a key that holds no man
     const r = await call('POST', `${T}/agents`, { key: KEY, body: { template: 'market-making', name: 'MM via API', venues: ['hyperliquid'], universe: ['BTC'], capitalUsdc: '1000', config: MM, risk: { maxDataAgeMs: 5000 } } });
     expect(r.status, JSON.stringify(r.json)).toBe(200);
     mm = r.json.agent.id;
-    expect(r.json.agent).toMatchObject({ kind: 'stream', family: 'market_making', engine: 'stream', state: 'stopped', mode: 'research', configVersion: 1, capitalUsd: '1000', mandate: null, live: { capable: false, code: 'family_not_live' } });
+    expect(r.json.agent).toMatchObject({ kind: 'stream', family: 'market_making', engine: 'stream', state: 'stopped', mode: 'research', configVersion: 1, capitalUsd: '1000', mandate: null, live: { capable: true } });   // V11 live market making: one pinned instrument on Hyperliquid can go live — under a quoting mandate
     expect(r.json.agent.strategy).toMatchObject({ name: 'spread_inventory', kind: 'rule' }); expect(r.json.agent.riskLimits).toMatchObject({ maxPositionUsd: 500, maxDataAgeMs: 5000 });
     expect((await sql`select actor from audit_events where type = 'agent.created' order by seq desc limit 1`)[0].actor).toMatch(/^key:/);
     const list = await call('GET', `${T}/agents`, { key: READER });
     expect(list.json.agents.map((a: any) => [a.id, a.kind, a.family, a.lifecycle, a.tradingMode, a.state, a.mode])).toEqual([[mm, 'stream', 'market_making', 'stopped', 'research', 'CREATED', 'RESEARCH']]);
     const one = await call('GET', `${T}/agents/${mm}`, { key: READER });
-    expect(one.json.agent.backtests).toMatchObject({ label: 'backtest', recorded: null }); expect(one.json.mandateDraft).toMatchObject({ available: false, code: 'family_not_live' });
+    expect(one.json.agent.backtests).toMatchObject({ label: 'backtest', recorded: null }); expect(one.json.mandateDraft).toMatchObject({ available: true, kind: 'quoting', pending: null, shape: 'SPW-TRADING-MANDATE-v1 + SPW-QUOTING-SECTION-v1 → SPW-VENUE-QUOTING-MANDATE-v1' });
   });
 
   it('backtest → an asynchronous JOB with an id and a status; its result is a BACKTEST report, labelled, with its warnings', async () => {
@@ -125,24 +125,25 @@ describe('trading API — an agent from a template, with a key that holds no man
     expect((await call('GET', `${T}/jobs/${randomUUID()}`, { key: READER })).status).toBe(404);
   });
 
-  it('start paper → signals and simulated orders appear from the recorded Hyperliquid data; every read answers ONE mode', async () => {
+  it('start paper → a quoting session on the recorded Hyperliquid data: signals appear, quotes are NOT orders; every read answers ONE mode', async () => {
     const s = await call('POST', `${T}/agents/${mm}/start`, { key: KEY, body: { mode: 'paper' } });
     expect([s.status, s.json.agent.state, s.json.agent.mode]).toEqual([200, 'active', 'paper']);
     await rt.streamPass();                                                      // subscribes to the venue's stream
     v.hl.stream.status('connected'); await sleep(60);                           // the data service takes its snapshot: the RECORDED l2Book and asset context of the fixtures
     clock.advance(1100);
     const out = await rt.streamPass();
-    expect(out[mm]).toMatch(/^acted: quotes/);
+    expect(out[mm]).toMatch(/^quoting — 2 quote\(s\)/);                             // V11: the quoting engine (services/api/src/mm), the same one as live, on a simulated venue account
     const sig = await call('GET', `${T}/agents/${mm}/signals?mode=paper`, { key: READER });
     expect(sig.json.mode).toBe('paper');
     expect(sig.json.signals.map((x: any) => [x.mode, x.decision, x.reasonCode, x.configVersion])).toEqual([['paper', 'acted', 'acted', 1], ['paper', 'skipped', 'data_gap', 1]]);
     expect(sig.json.signals[0].strategySha256).toMatch(/^[0-9a-f]{64}$/); expect(sig.json.signals[0].inputsDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(sig.json.signals[0].output.bid.price).toBeLessThan(sig.json.signals[0].output.mid); expect(sig.json.signals[0].output.ask.price).toBeGreaterThan(sig.json.signals[0].output.mid);
     const ord = await call('GET', `${T}/agents/${mm}/orders?mode=paper`, { key: READER });
-    expect(ord.json.orders.map((o: any) => [o.mode, o.state, o.side, o.instrument, o.source]).sort()).toEqual([['paper', 'SUBMITTED', 'buy', 'hyperliquid:BTC', 'gateway'], ['paper', 'SUBMITTED', 'sell', 'hyperliquid:BTC', 'gateway']]);
-    expect(ord.json.orders[0].signalId).toBe(sig.json.signals[0].id);            // signal → order
+    expect(ord.json.orders).toEqual([]);                                         // quotes are not orders (one session row, one row per fill, one order per reduce-only unwind)
+    const [ses] = await sql`select mode, state, status from mm_sessions where agent_id = ${mm}`;
+    expect([ses.mode, ses.state, ses.status.quotes.map((q: any) => q.side).sort(), ses.status.simulated]).toEqual(['PAPER', 'running', ['buy', 'sell'], true]);
     const j = await call('GET', `${T}/agents/${mm}/journal?mode=paper`, { key: READER });
-    expect(j.json.entries.every((e: any) => e.mode === 'paper')).toBe(true); expect(j.json.entries.map((e: any) => e.kind)).toEqual(expect.arrayContaining(['order', 'state', 'hold']));
+    expect(j.json.entries.every((e: any) => e.mode === 'paper')).toBe(true); expect(j.json.entries.map((e: any) => e.kind)).toEqual(expect.arrayContaining(['state', 'hold']));
     // the same agent's other modes: empty — nothing of the simulation leaks into live, nothing is summed
     for (const what of ['signals', 'orders', 'journal']) { const r = await call('GET', `${T}/agents/${mm}/${what}?mode=live`, { key: READER }); expect([r.json.mode, (r.json.signals ?? r.json.orders ?? r.json.entries).length], what).toEqual(['live', 0]); }
     const perf = await call('GET', `${T}/agents/${mm}/performance`, { key: READER });      // no mode given: the agent's current one, and the answer says which
@@ -154,10 +155,10 @@ describe('trading API — an agent from a template, with a key that holds no man
     expect((await sql`select count(*)::int as n from market_snapshots where venue = 'hyperliquid' and symbol = 'BTC'`)[0].n).toBeGreaterThanOrEqual(1);
   });
 
-  it('LIVE is refused for this family with the reason; pause and stop always work; a replayed call is answered from the record', async () => {
+  it('LIVE answers mandate_required (no quoting mandate), for a key and for the owner; pause and stop always work; a replayed call is answered from the record', async () => {
     const live = await call('POST', `${T}/agents/${mm}/start`, { key: KEY, body: { mode: 'live' } });
-    expect([live.status, live.json.error]).toEqual([409, 'live_unavailable']); expect(live.json.message).toMatch(/^mode réel indisponible/);
-    expect((await call('POST', `${A}/${mm}/start`, { body: { mode: 'live' } })).json.error).toBe('live_unavailable');   // the owner neither: it is not a permission, it does not exist
+    expect([live.status, live.json.error]).toEqual([409, 'mandate_required']); expect(live.json.message).toMatch(/quoting mandate/);
+    expect((await call('POST', `${A}/${mm}/start`, { body: { mode: 'live' } })).json.error).toBe('mandate_required');   // the owner neither, until he has approved a quoting mandate with the passkey
     const p = await call('POST', `${T}/agents/${mm}/pause`, { key: KEY, body: { reason: 'lunch' } });
     expect([p.status, p.json.agent.state, p.json.agent.pausedFrom]).toEqual([200, 'paused', 'PAPER']);
     expect((await sql`select runtime->'book'->'quotes' as q from agents where id = ${mm}`)[0].q).toEqual([]);
@@ -291,11 +292,11 @@ describe('the risk-management agent, end to end', () => {
     expect(await sql`select key from settings where key = 'agents.kill_switch'`).toEqual([]);
     const st = await call('GET', `${A}/runtime/status`);
     expect(st.json.killSwitch.engaged).toBe(true); expect(st.json.queue).toMatchObject({ queued: expect.any(Number), running: 0 }); expect(Array.isArray(st.json.leases)).toBe(true);
-    // a running paper market maker: its quotes add risk → refused by the gateway while the switch is on
+    // a running paper market maker: its quotes add risk → none is placed while the switch is on (the engine reads the ONE switch at every cycle)
     const r = await call('POST', `${T}/agents`, { key: KEY, body: { template: 'market-making', name: 'MM under KS', venues: ['hyperliquid'], universe: ['BTC'], config: MM, mode: 'paper' } });
     clock.advance(1100); await rt.streamPass(); await sleep(40); clock.advance(1100); await rt.streamPass();
-    const ord = await call('GET', `${T}/agents/${r.json.agent.id}/orders?mode=paper`, { key: READER });
-    expect(ord.json.orders.length).toBeGreaterThan(0); expect(ord.json.orders.every((o: any) => o.state === 'REJECTED' && o.reason === 'KILL_SWITCH_ACTIVE')).toBe(true);
+    const [ks] = await sql`select status, counters from mm_sessions where agent_id = ${r.json.agent.id}`;
+    expect(ks.status.activeBreakers).toContain('kill_switch'); expect(ks.status.quotes).toEqual([]); expect(ks.counters.quotesPlaced).toBe(0);
     expect((await call('GET', `${A}/${r.json.agent.id}/overview`)).json.killSwitch.engaged).toBe(true);
     // the agents' release route does not exist any more; the risk engine's needs the passkey
     expect((await call('POST', `${A}/kill-switch/release`, { body: {} })).status).toBe(404);
@@ -309,10 +310,10 @@ describe('the risk-management agent, end to end', () => {
 
   it('the owner\'s panel routes: overview, timeline of one mode, configuration versions; a configuration change is a new version and needs the agent stopped', async () => {
     const o = await call('GET', `${A}/${mm}/overview`);
-    expect(o.json).toMatchObject({ id: mm, state: 'stopped', mode: 'paper', familyModes: { modes: ['research', 'paper'] }, runtime: { rule: 'spread_inventory', venues: ['hyperliquid'], book: { simulated: true } } });
+    expect(o.json).toMatchObject({ id: mm, state: 'stopped', mode: 'paper', familyModes: { modes: ['research', 'paper', 'live'] }, runtime: { rule: 'spread_inventory', venues: ['hyperliquid'], book: { simulated: true } } });
     expect(o.json.jobs.map((j: any) => [j.kind, j.status])).toEqual([['backtest', 'done']]);
     const tl = await call('GET', `${A}/${mm}/timeline?mode=paper`);
-    expect(tl.json.mode).toBe('paper'); expect(tl.json.items.map((i: any) => i.type)).toEqual(expect.arrayContaining(['signal', 'order', 'state', 'hold']));
+    expect(tl.json.mode).toBe('paper'); expect(tl.json.items.map((i: any) => i.type)).toEqual(expect.arrayContaining(['signal', 'state', 'hold']));
     expect([...tl.json.items].sort((x: any, y: any) => y.ts - x.ts)).toEqual(tl.json.items);                // newest first
     expect((await call('GET', `${A}/${mm}/timeline?mode=live`)).json.items).toEqual([]);
     const cfg = await call('POST', `${A}/${mm}/config`, { body: { config: { quoteSizeUsd: '75' }, risk: { maxPositionUsd: 300 } } });
