@@ -34,6 +34,7 @@ import { monitorRoutes } from './monitor/routes.ts'; // v6-alerts
 import { researchRoutes, RUNNER_PREFIX, runnerGate } from './research/routes.ts'; // v7 research runtime
 import { perpRuntime } from './agents/perp-live.ts'; // v7 research runtime (perp data for research jobs)
 import { planRoutes, type PlanDeps } from './plan-exec.ts'; // v7 any-to-any plans
+import { marketsHub } from './markets-hub/index.ts'; // v11 markets hub: universal explorer and venue comparator (read-only)
 import { apiKeyGate, OWNER, tradingApi } from './trading-api/index.ts'; // v11 trading API (machine authentication)
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
@@ -157,6 +158,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   await alertRoutes(app); // v6-alerts: in-app alerts, push subscriptions, webhook — all behind the owner session
   monitorRoutes(app);     // v6-alerts: read-only monitoring dashboard
   await researchRoutes(app, { perp: () => perpRuntime().lab }); // v7 research runtime: jobs for the owner, a narrow endpoint pair for the runner
+  marketsHub(app, { derivatives: opts.derivatives }); // v11: /api/v1/markets-hub — explorer over spot and the four venues' perps, venue comparator; read-only public market data
   await tradingApi(app, { derivatives: opts.derivatives, live: opts.live, gmx: opts.gmx, prices: markets }); // v11: /api/v1/trading (scoped API keys or the owner) and /api/v1/developer (owner only)
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));

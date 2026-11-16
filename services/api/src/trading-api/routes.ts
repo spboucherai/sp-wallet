@@ -28,6 +28,7 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads): void {
   const handlers: Record<string, Handler> = {
     getOpenApi: async () => (doc ??= buildOpenApi()),
     listMarkets: (p, i) => reads.markets(p, i.query),
+    compareMarkets: (p, i) => reads.compare(p, i.query),
     getMarket: (p, i) => reads.market(p, i.params.symbol),
     getOrderbook: (p, i) => reads.orderbook(p, i.params.symbol, i.query.depth),
     getCandles: (p, i) => reads.candles(p, i.params.symbol, i.query.interval, i.query.limit),

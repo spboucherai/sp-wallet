@@ -5,6 +5,7 @@
 // `ttlMs`; when the venue cannot be reached an older value is served only while it is younger than `maxAgeMs`, with its real
 // `ts`; beyond that the request fails with 503 — old data is never presented as current.
 import { D, VenueError, type Book, type Candle, type DecStr, type GmxLiquidity, type Instrument, type PublicTrade, type Ticker, type VenueId } from '@spw/derivatives';
+import { annualiseFunding } from '@spw/trading';   // v11: ONE funding normalisation in the service (the markets hub and the comparator use the same)
 import { UserError } from '../config.ts';
 import type { ReadAdapter, VenueRegistry } from './venues.ts';
 
@@ -24,6 +25,14 @@ export const DATA_BOUNDS = {
 } as const;
 /** a venue failure is remembered this long: a venue that is down is not hammered by every request */
 export const FAILURE_BACKOFF_MS = 1_000;
+/**
+ * v11 — per-venue budget. How long ONE request waits for a venue. A venue that hangs used to hold every all-venue answer until
+ * its adapter's own request timeout (10 to 20 s). Past the budget the request stops waiting: it is answered from the last good
+ * value, marked stale with its real time, or fails with 503 venue_timeout when there is none. The venue call itself is NOT
+ * cancelled: it fills the cache when it lands, and requests arriving meanwhile share it and wait only for what is left of the
+ * budget (none, once it is spent).
+ */
+export const VENUE_BUDGET_MS = 4_000;
 /** a book whose own (venue) timestamp is older than this is refused, whatever the cache says */
 export const BOOK_MAX_VENUE_AGE_MS = 15_000;
 /** levels per side sent to stream listeners and returned by /market */
@@ -34,6 +43,11 @@ const STREAM_POLL_MS = 3_000;
 const BPS = D.from(10000n);
 
 export interface Stamped<T> { value: T; ts: number; stale: boolean }
+/** options of a cached read. `within`: strict freshness (see `cached`). `budgetMs`: this caller's own budget (default: the service's).
+ *  `lastGood`: when the venue fails or is over budget, accept the last good value WHATEVER its age (always marked stale, with its
+ *  real time) — for listings that show the age of every row; never for a decision. */
+export interface ReadOpts { within?: number; budgetMs?: number; lastGood?: boolean }
+class BudgetExceeded extends Error { constructor(readonly venue: VenueId, readonly ms: number) { super(`${venue} did not answer within ${ms} ms`); } }
 export type StreamEvent =
   | { event: 'status'; data: { status: 'connected' | 'reconnecting' | 'stale'; ts: number } }
   | { event: 'ticker'; data: Ticker & { source: 'venue' } }
@@ -78,13 +92,17 @@ export class DerivData {
   readonly registry: VenueRegistry;
   readonly now: () => number;
   private readonly slots = new Map<string, Slot>();
-  private readonly inflight = new Map<string, Promise<Slot>>();
+  private readonly inflight = new Map<string, { p: Promise<Slot>; startedAt: number }>();
+  /** see VENUE_BUDGET_MS */
+  readonly budgetMs: number;
+  /** requests that stopped waiting for a venue since start (diagnostics and tests) */
+  readonly budgetStats = { exceeded: 0 };
   private readonly failed = new Map<string, { until: number; error: unknown }>();
   private readonly hubs = new Map<string, Hub>();
   /** upstream stream subscriptions opened since start (tests and diagnostics) */
   readonly streamStats = { opened: 0, closed: 0 };
 
-  constructor(registry: VenueRegistry, o: { now?: () => number } = {}) { this.registry = registry; this.now = o.now ?? Date.now; }
+  constructor(registry: VenueRegistry, o: { now?: () => number; budgetMs?: number } = {}) { this.registry = registry; this.now = o.now ?? Date.now; this.budgetMs = o.budgetMs ?? VENUE_BUDGET_MS; }
 
   // ------------------------------------------------------------------ cache
 
@@ -92,20 +110,21 @@ export class DerivData {
    * `within`: the caller needs a value read at most that many ms ago (order flow, snapshot after a gap). Such a caller is never
    * given an older value when the venue fails — it gets the failure.
    */
-  private async cached<T>(key: string, venue: VenueId, bounds: { ttl: number; maxAge: number }, fn: (a: ReadAdapter) => Promise<T>, o: { within?: number } = {}): Promise<Stamped<T>> {
+  private async cached<T>(key: string, venue: VenueId, bounds: { ttl: number; maxAge: number }, fn: (a: ReadAdapter) => Promise<T>, o: ReadOpts = {}): Promise<Stamped<T>> {
     const slot = this.slots.get(key), now = this.now(), strict = o.within !== undefined;
     if (slot && now - slot.at < (o.within ?? bounds.ttl)) return { value: slot.value as T, ts: slot.at, stale: false };
     const serveOld = (err: unknown): Stamped<T> => {
       // an older value may stand in for a venue that cannot be reached, with its real time — never beyond its bound
       const s = this.slots.get(key);
-      if (s && !strict && this.now() - s.at <= bounds.maxAge) return { value: s.value as T, ts: s.at, stale: true };
+      if (s && !strict && (o.lastGood === true || this.now() - s.at <= bounds.maxAge)) return { value: s.value as T, ts: s.at, stale: true };
+      if (err instanceof BudgetExceeded) throw new UserError('venue_timeout', `${err.message}; no earlier value can stand in for it`, 503);
       throw venueFailure(err);
     };
     const f = this.failed.get(key);
     if (f && now < f.until) return serveOld(f.error);
-    let p = this.inflight.get(key);
-    if (!p) {
-      p = this.registry.call(venue, fn).then((value) => {
+    let flight = this.inflight.get(key);
+    if (!flight) {
+      const p = this.registry.call(venue, fn).then((value) => {
         const s = { value, at: this.now() };
         this.slots.set(key, s); this.failed.delete(key);
         return s;
@@ -113,19 +132,31 @@ export class DerivData {
         if (err instanceof VenueError && err.code !== 'rejected' && err.code !== 'unsupported') this.failed.set(key, { until: this.now() + FAILURE_BACKOFF_MS, error: err });
         throw err;
       }).finally(() => { this.inflight.delete(key); });
-      this.inflight.set(key, p);
+      p.catch(() => { /* a call nobody waits for any more must not become an unhandled rejection */ });
+      flight = { p, startedAt: performance.now() };
+      this.inflight.set(key, flight);
     }
-    try { const s = await p; return { value: s.value as T, ts: s.at, stale: false }; } catch (err) { return serveOld(err); }
+    // the budget is real elapsed time (not the injectable clock): it bounds how long THIS request waits, whoever started the call
+    const budget = o.budgetMs ?? this.budgetMs, left = budget - (performance.now() - flight.startedAt);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const s = await (left <= 0 ? Promise.race([flight.p, Promise.resolve().then(() => { throw new BudgetExceeded(venue, budget); })])
+        : Promise.race([flight.p, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new BudgetExceeded(venue, budget)), left); timer.unref?.(); })]));
+      return { value: s.value as T, ts: s.at, stale: false };
+    } catch (err) {
+      if (err instanceof BudgetExceeded) this.budgetStats.exceeded += 1;
+      return serveOld(err);
+    } finally { if (timer !== undefined) clearTimeout(timer); }
   }
 
   // ------------------------------------------------------------------ reads
 
-  async instruments(venue: VenueId): Promise<Stamped<Instrument[]>> {
+  async instruments(venue: VenueId, o: ReadOpts = {}): Promise<Stamped<Instrument[]>> {
     this.registry.get(venue);
     return this.cached(`instruments:${venue}`, venue, DATA_BOUNDS.instruments, async (a) => {
       const rank = (i: Instrument): number => (i.status === 'active' ? 0 : i.status === 'reduce_only' ? 1 : 2);
       return (await a.instruments()).map((i, k) => ({ i, k })).sort((x, y) => rank(x.i) - rank(y.i) || x.k - y.k).map((x) => x.i);
-    });
+    }, o);
   }
 
   async instrument(id: string): Promise<Instrument> {
@@ -136,12 +167,12 @@ export class DerivData {
     return inst;
   }
 
-  async tickers(venue: VenueId, o: { within?: number } = {}): Promise<Stamped<Ticker[]>> {
+  async tickers(venue: VenueId, o: ReadOpts = {}): Promise<Stamped<Ticker[]>> {
     this.registry.get(venue);
     return this.cached(`tickers:${venue}`, venue, DATA_BOUNDS.tickers, (a) => a.tickers(), o);
   }
 
-  async ticker(inst: Instrument, o: { within?: number } = {}): Promise<Ticker> {
+  async ticker(inst: Instrument, o: ReadOpts = {}): Promise<Ticker> {
     const all = await this.tickers(inst.venue, o);
     const t = all.value.find((x) => x.instrument === inst.id);
     if (!t) throw new UserError('venue_unavailable', `${inst.venue} publishes no ticker for ${inst.symbol}`, 503);
@@ -151,7 +182,7 @@ export class DerivData {
   hasBook(inst: Instrument): boolean { return this.registry.get(inst.venue).facts.hasOrderBook; }
 
   /** the order book, or null on a venue that has none (GMX). Refused when the venue's own timestamp is too old. */
-  async book(inst: Instrument, o: { within?: number } = {}): Promise<Book | null> {
+  async book(inst: Instrument, o: ReadOpts = {}): Promise<Book | null> {
     if (!this.hasBook(inst)) return null;
     const b = await this.cached(`book:${inst.id}`, inst.venue, DATA_BOUNDS.book, (a) => a.book(inst.symbol), o);
     const age = this.now() - b.value.ts;
@@ -165,20 +196,20 @@ export class DerivData {
   }
 
   /** what GMX has instead of a book; null on order-book venues */
-  async liquidity(inst: Instrument): Promise<GmxLiquidity | null> {
+  async liquidity(inst: Instrument, o: ReadOpts = {}): Promise<GmxLiquidity | null> {
     if (!this.registry.get(inst.venue).adapter.liquidity) return null;
     // one read for every market of the venue, shared by all its instruments
-    const all = await this.cached(`liquidity:${inst.venue}`, inst.venue, DATA_BOUNDS.liquidity, (a) => a.liquidity!());
+    const all = await this.cached(`liquidity:${inst.venue}`, inst.venue, DATA_BOUNDS.liquidity, (a) => a.liquidity!(), o);
     return all.value.find((x) => x.instrument === inst.id) ?? null;
   }
 
-  async candles(inst: Instrument, interval: CandleInterval, limit: number): Promise<Stamped<Candle[]>> {
-    return this.cached(`candles:${inst.id}:${interval}:${limit}`, inst.venue, DATA_BOUNDS.candles, async (a) => (await a.candles(inst.symbol, interval, { limit })).slice(-limit));   // a venue may answer more bars than asked
+  async candles(inst: Instrument, interval: CandleInterval, limit: number, o: ReadOpts = {}): Promise<Stamped<Candle[]>> {
+    return this.cached(`candles:${inst.id}:${interval}:${limit}`, inst.venue, DATA_BOUNDS.candles, async (a) => (await a.candles(inst.symbol, interval, { limit })).slice(-limit), o);   // a venue may answer more bars than asked
   }
 
-  async funding(inst: Instrument, hours: number): Promise<Stamped<{ ts: number; rate: DecStr }[]>> {
+  async funding(inst: Instrument, hours: number, o: ReadOpts = {}): Promise<Stamped<{ ts: number; rate: DecStr }[]>> {
     return this.cached(`funding:${inst.id}:${hours}`, inst.venue, DATA_BOUNDS.funding, async (a) =>
-      (await a.fundingHistory(inst.symbol, { start: this.now() - hours * 3_600_000 })).map((x) => ({ ts: x.ts, rate: x.rate })));
+      (await a.fundingHistory(inst.symbol, { start: this.now() - hours * 3_600_000 })).map((x) => ({ ts: x.ts, rate: x.rate })), o);
   }
 
   /** uncached funding rates applied by the venue since `start` (paper worker: the rate of each funding time) */
@@ -244,7 +275,7 @@ export class DerivData {
           }
           rows.push({
             venue: v.id, instrument: inst.id, mark: t.mark, index: t.index,
-            funding: t.funding === null ? null : D.str(D.div(D.mul(D.from(t.funding), D.from(3600n)), D.from(BigInt(inst.fundingIntervalSec)), 12, 'half_even')),
+            funding: t.funding === null ? null : annualiseFunding(t.funding, inst.fundingIntervalSec).perHour,
             fundingVenue: { rate: t.funding, intervalSec: inst.fundingIntervalSec },
             spreadBps, depthUsd1pct: bid !== null && ask !== null ? D.str(D.add(D.from(bid), D.from(ask))) : null, depthBidUsd1pct: bid, depthAskUsd1pct: ask,
             takerFeeBps, maxLeverage: inst.maxLeverage, collateral: inst.collateral, settlement: inst.settlement,

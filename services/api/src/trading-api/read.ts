@@ -17,10 +17,12 @@ import type { LiveService } from '../derivatives/exec.ts';
 import type { GmxService } from '../derivatives/gmx-exec.ts';
 import { getSeries } from '../market/series.ts';
 import { listQuality } from '../market/store.ts';
-import { activeMarketConfig } from '../market/symbols.ts';
 import { INTERVAL_MS, expectedLastTs, isInterval, isSymbol, type Interval } from '../market/types.ts';
 import { addressFor, signer } from '../signer-client.ts';
 import { view as proposalView, type ProposalRow } from '../transfers.ts';
+import { hubFor } from '../markets-hub/index.ts';
+import { toCompareQuery, type CompareQueryInput } from '../markets-hub/schema.ts';
+import { createListing, SPOT, type Access, type MarketRow, type PartialError } from '../markets-hub/listing.ts';
 import type { Principal } from './principal.ts';
 
 export interface ReadDeps {
@@ -32,9 +34,7 @@ export interface ReadDeps {
   library?: () => Promise<{ kind: 'spot' | 'perp'; path: string; sha256: string; meta: unknown }[]>;
   now?: () => number;
 }
-type PartialError = { source: string; message: string };
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 200);
-const SPOT = 'spot';
 
 // ---------------------------------------------------------------------------------------------------------------- restrictions
 const lists = (p: Principal) => (p.kind === 'api_key' ? p.restrictions : null);
@@ -55,49 +55,19 @@ export function createReads(deps: ReadDeps) {
   const balCache = new Map<string, { at: number; v: Record<string, bigint> }>();
 
   // -------------------------------------------------------------------------------------------------------------- markets
-  interface MarketRow { id: string; venue: string; kind: 'perpetual' | 'spot'; symbol: string; base: string; quote: string; status: string; mark: string | null; ts: number | null; stale: boolean; [k: string]: unknown }
+  // the unified listing lives in markets-hub/listing.ts (one listing in the service); a key's restrictions are passed as its `Access`
+  const listing = createListing({ derivatives: deps.derivatives, now });
+  const { spotSymbols, spotRow } = listing;
+  const accessOf = (p: Principal): Access => ({ venue: (v) => venueAllowed(p, v), instrument: (id) => instrumentAllowed(p, id), denied: restricted });
+  const markets = (p: Principal, q: { venue?: string; kind?: 'perpetual' | 'spot'; q?: string; limit: number }) => listing.markets(accessOf(p), q);
 
-  async function perpRows(venue: string): Promise<MarketRow[]> {
-    const d = deps.derivatives(), id = d.registry.get(venue).id;
-    const inst = await d.data.instruments(id);
-    const tick = await d.data.tickers(id).catch(() => null);
-    const byId = new Map((tick?.value ?? []).map((t) => [t.instrument, t]));
-    return inst.value.map((i) => {
-      const t = byId.get(i.id);
-      return { id: i.id, venue: i.venue, kind: 'perpetual' as const, symbol: i.symbol, base: i.base, quote: i.quote, status: i.status, mark: t?.mark ?? null, index: t?.index ?? null, funding: t?.funding ?? null,
-        fundingIntervalSec: i.fundingIntervalSec, volume24h: t?.volume24h ?? null, openInterest: t?.openInterest ?? null, maxLeverage: i.maxLeverage, tickSize: i.tickSize, lotSize: i.lotSize, collateral: i.collateral,
-        restriction: d.registry.get(venue).restriction, ts: t ? Math.min(t.ts, tick!.ts) : inst.ts, stale: !t || tick!.stale || inst.stale || now() - tick!.ts > DATA_BOUNDS.tickers.maxAge, source: 'venue' };
-    });
-  }
-  async function spotSymbols(): Promise<string[]> { return (await activeMarketConfig()).symbols.filter(isSymbol); }
-  async function spotRow(symbol: string, quality?: Awaited<ReturnType<typeof listQuality>>): Promise<MarketRow> {
-    const q = (quality ?? await listQuality()).find((x) => x.symbol === symbol && x.interval === '1h');
-    const last = await getSeries(symbol, '1h', { limit: 1 }).then((s) => s.bars.at(-1) ?? null, () => null);
-    const ts = last ? last.ts + INTERVAL_MS['1h'] : q?.last_ts ? q.last_ts.getTime() + INTERVAL_MS['1h'] : null;
-    return { id: `${SPOT}:${symbol}`, venue: SPOT, kind: 'spot', symbol, base: symbol, quote: 'USD', status: q?.status ?? 'no_data', mark: last ? String(last.close) : null, priceKind: 'close of the last consolidated 1h bar',
-      priceSource: last?.source ?? null, quality: q ? { fresh: q.fresh, gaps: q.gaps, checkedAt: q.checked_at.getTime() } : null, ts,
-      stale: !last || !q?.fresh || last.ts < expectedLastTs('1h', now()) - INTERVAL_MS['1h'], source: 'market-data' };
-  }
-
-  async function markets(p: Principal, q: { venue?: string; kind?: 'perpetual' | 'spot'; q?: string; limit: number }) {
-    const d = deps.derivatives();
-    if (q.venue !== undefined && q.venue !== SPOT) d.registry.get(q.venue); // 404 unknown_venue
-    if (q.venue !== undefined && !venueAllowed(p, q.venue)) throw restricted(`venue ${q.venue}`);
-    const wantPerp = q.kind !== 'spot', wantSpot = q.kind !== 'perpetual' && (q.venue === undefined || q.venue === SPOT) && venueAllowed(p, SPOT);
-    const venues = wantPerp ? d.registry.list().map((v) => v.id as string).filter((id) => (q.venue === undefined || q.venue === id) && venueAllowed(p, id)) : [];
-    const errors: PartialError[] = [], rows: MarketRow[] = [];
-    let asked = 0, first: unknown = null;
-    const got = await Promise.allSettled(venues.map((v) => perpRows(v)));
-    if (wantSpot) {   // the few spot symbols first, then the venues in registry order
-      asked += 1;
-      try { const [symbols, quality] = await Promise.all([spotSymbols(), listQuality()]); rows.push(...await Promise.all(symbols.map((s) => spotRow(s, quality)))); }
-      catch (e) { first ??= e; errors.push({ source: SPOT, message: msg(e) }); }
-    }
-    got.forEach((g, k) => { asked += 1; if (g.status === 'fulfilled') rows.push(...g.value); else { first ??= g.reason; errors.push({ source: venues[k]!, message: msg(venueFailure(g.reason)) }); } });
-    if (asked > 0 && errors.length === asked) { const f = venueFailure(first); throw f instanceof UserError && f.status === 503 ? f : new UserError('markets_unavailable', `no market source could be read: ${errors.map((e) => `${e.source}: ${e.message}`).join('; ').slice(0, 300)}`, 503); }
-    const needle = q.q?.toLowerCase();
-    const out = rows.filter((r) => instrumentAllowed(p, r.id) && (!needle || r.id.toLowerCase().includes(needle) || r.symbol.toLowerCase().includes(needle) || r.base.toLowerCase().includes(needle)));
-    return { markets: out.slice(0, q.limit), total: out.length, truncated: out.length > q.limit, errors, ts: now() };
+  /** the venue comparator of the markets hub (one computation in the service); a key sees only the venues and instruments it is allowed on */
+  async function compare(p: Principal, q: CompareQueryInput) {
+    const a = await hubFor(deps.derivatives()).compare.compare(toCompareQuery(q));
+    if (p.kind !== 'api_key') return a;
+    const rows = a.rows.filter((r) => marketAllowed(p, r.venue, r.instrument)), seen = new Set(rows.map((r) => r.instrument));
+    if (rows.length === 0) throw restricted(`the venues listing ${a.underlying}`);
+    return { ...a, rows, discrepancies: a.discrepancies.filter((x) => seen.has(x.longInstrument) && seen.has(x.shortInstrument)) };
   }
 
   type Resolved = { venue: typeof SPOT; id: string; symbol: string } | { venue: string; id: string; inst: Instrument };
@@ -376,6 +346,6 @@ export function createReads(deps: ReadDeps) {
     return { items };
   }
 
-  return { markets, market, orderbook, candles, balances, portfolio, positions, orders, order, strategies, agents, risk, activity, resolve };
+  return { markets, compare, market, orderbook, candles, balances, portfolio, positions, orders, order, strategies, agents, risk, activity, resolve };
 }
 export type Reads = ReturnType<typeof createReads>;

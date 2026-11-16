@@ -723,7 +723,7 @@ describe('usage, status, retention', () => {
     expect(by['venue:hyperliquid'].ok).toBe(true);
     expect(by.execution).toMatchObject({ ok: false });
     expect(by['market-data'].ok).toBe(false);                                                            // nothing ingested in this database
-    expect(s.json.api).toMatchObject({ prefix: T, operations: spec.OPERATIONS.length, implemented: 14 });
+    expect(s.json.api).toMatchObject({ prefix: T, operations: spec.OPERATIONS.length, implemented: 15 });
     expect(s.json.api.notImplemented).toHaveLength(12);
     expect(s.json.rateLimits).toMatchObject({ defaultPerMin: 120, failedAuthPerMinPerAddress: 10 });
   });
