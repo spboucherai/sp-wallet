@@ -269,7 +269,10 @@ describe('transfer lifecycle', () => {
     const st = (await api('GET', '/api/v1/swap/providers')).json;
     expect(st.providers.length).toBe(3);
     expect((await api('GET', '/api/v1/swap/execution')).json.networks).toEqual(['base', 'ethereum', 'arbitrum', 'polygon', 'optimism', 'bsc', 'avalanche', 'hyperevm']);
-    const rows = await sql`select provider, ok, code from swap_quotes`;
+    // the quote log is written without being awaited (swap.ts: `void sql\`insert into swap_quotes …\``): the rows are waited for
+    // with a bounded poll that returns as soon as they are there — the assertion is the same
+    let rows = await sql`select provider, ok, code from swap_quotes`;
+    for (const deadline = Date.now() + 30_000; rows.length < 4 && Date.now() < deadline;) { await new Promise((r) => setTimeout(r, 5)); rows = await sql`select provider, ok, code from swap_quotes`; }
     expect(rows.length).toBeGreaterThanOrEqual(4);
   });
 

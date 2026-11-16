@@ -50,6 +50,17 @@ async function newKey(body: Record<string, unknown> = {}): Promise<{ id: string;
   expect(c.status, JSON.stringify(c.json)).toBe(200);
   return { id: c.json.key.id, secret: c.json.secret, view: c.json.key };
 }
+/** A usage row is written by the onResponse hook, AFTER the answer has left: a test that reads the log waits until the key has
+ *  its `n` rows — a bounded poll that returns as soon as they are there, and fails with the count it saw. Never a fixed sleep. */
+async function usageOf(keyId: string, n: number): Promise<{ status: number; route: string }[]> {
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const rows = await sql<{ status: number; route: string }[]>`select status, route from api_key_usage where key_id = ${keyId} order by id`;
+    if (rows.length === n) return rows;
+    if (rows.length > n || Date.now() > deadline) throw new Error(`the usage log holds ${rows.length} row(s) for ${keyId}, ${n} expected`);
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
 const audits = (type: string) => sql`select * from audit_events where type = ${type} order by seq` as Promise<any[]>;
 /** a paper account of the wallet (created once), for the mandates of this suite */
 let paperForMandates = '';
@@ -216,8 +227,9 @@ describe('API keys', () => {
     expect((await audits('apikey.revoked')).filter((e: any) => e.data.key === k.id)).toHaveLength(1);
     expect((await call('POST', `${DEV}/keys/spk_000000000000/revoke`, { body: {} })).status).toBe(404);
     // the refused calls of a real key show in its history (the secret was right), with their status
-    const usage = await sql`select status, route from api_key_usage where key_id = ${k.id} order by id`;
-    expect(usage.map((u: any) => u.status)).toEqual([200, 401, 200, 401]);
+    // (the rows are written after each answer, by concurrent hooks: their number and statuses are asserted, not their insertion order)
+    const usage = await usageOf(k.id, 4);
+    expect(usage.map((u) => u.status).sort()).toEqual([200, 200, 401, 401]);
     principal.authFailures.reset();
   });
 
@@ -352,7 +364,7 @@ describe('limits', () => {
     expect(Number(over.headers['retry-after'])).toBeGreaterThan(0);
     expect(over.headers['ratelimit-remaining']).toBe('0');
     expect((await call('GET', `${T}/agents`, { key: b.secret })).status).toBe(200);
-    expect((await sql`select status from api_key_usage where key_id = ${a.id} order by id`).map((u: any) => u.status)).toEqual([200, 200, 200, 429]);
+    expect((await usageOf(a.id, 4)).map((u) => u.status).sort()).toEqual([200, 200, 200, 429]);
     principal.keyLimiter.reset();
     expect((await call('GET', `${T}/agents`, { key: a.secret })).status).toBe(200);
   });
@@ -762,15 +774,7 @@ describe('usage, status, retention', () => {
     const k = await newKey();
     // a usage row is written by the onResponse hook, after the answer has left: the test waits for each row (bounded poll,
     // it returns as soon as the row is there) before the next call, so the two rows exist and are in the order of the calls
-    const logged = async (n: number): Promise<void> => {
-      const deadline = Date.now() + 30_000;
-      for (;;) {
-        const [{ c }] = await sql<{ c: number }[]>`select count(*)::int as c from api_key_usage where key_id = ${k.id}`;
-        if (c === n) return;
-        if (c > n || Date.now() > deadline) throw new Error(`the usage log holds ${c} row(s) for this key, ${n} expected`);
-        await new Promise((r) => setTimeout(r, 5));
-      }
-    };
+    const logged = (n: number) => usageOf(k.id, n);
     await call('GET', `${T}/markets?venue=hyperliquid&q=SECRETQUERY&limit=1`, { key: k.secret });
     await logged(1);
     await call('GET', `${T}/markets/${BTC}/candles?limit=2`, { key: k.secret });
