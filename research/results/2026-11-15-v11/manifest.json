@@ -1,0 +1,16 @@
+{
+ "code_sha256": "a8a3aaf89ba2b399acb6d3a2548c1b2abfa78bc35937f26022cc960fb0affebe",
+ "data_manifest": "2026-11-15-v11.json",
+ "reports": {
+  "basis_cash_carry-1.json": "851079d65c74caa6f48599e7ce22fe2a430bad672eae12bf71c53b5f88a6fbe5",
+  "funding_arb_cross_venue-1.json": "479f9f4c0d2b363b433f7a262ddc3f987f006098a0a6930f351de5fc31790914",
+  "mean_reversion_bands_perp-1.json": "33e6750c26c2d8943c64e59dc54c756fca5edc46cc05ff1095925f3536850f40",
+  "mean_reversion_bands_perp-2.json": "8f6637ef11c0583674cb69e4e1fa5704da825af29ad42ebe6ba7a56e6e72427f",
+  "momentum_xs_perp-1.json": "be4ae269b963882f525c2ddeedef13b5b7d9e14de12fae3e3537d2a99439b6fe",
+  "momentum_xs_perp-2.json": "33c0aeb76da0aee5ea8bd71d92818c019b6fd18fc5048bbdbe57d60b4daf779b",
+  "statarb_basket_perp-1.json": "683b4b453e5a5ea2f23f8863bef2471e72d2fd826394a974b5548362640f6298",
+  "summary.json": "58fb4702421bf71291a2b6ac1a688c36660e35c1e405b6899a8850a65af5014f",
+  "summary.md": "1e785d5353b9198faaf238445bdde4278802714b09a7fd31c54ee466fd28febb",
+  "trials.jsonl": "5419e2ea1905b2a77cb67f542e359bee43cf6aca108e861a58cf6b49c2608222"
+ }
+}

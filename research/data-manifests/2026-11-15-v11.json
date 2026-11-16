@@ -1,0 +1,413 @@
+{
+ "books": {
+  "books/dydx/BTC.jsonl": {
+   "first": "2026-11-16T00:32:09.478000+00:00",
+   "last": "2026-11-16T01:39:42.163000+00:00",
+   "rows": 756,
+   "sha256": "c6335adc082e19dc2442c10f7d892eb2933f7e479c36fa6e0dfbf894ad3c3f66"
+  },
+  "books/dydx/ETH.jsonl": {
+   "first": "2026-11-16T00:32:09.565000+00:00",
+   "last": "2026-11-16T01:39:42.948000+00:00",
+   "rows": 756,
+   "sha256": "c3919647b1363f0c51b3a1aa071dc19546dee43af4a422bb679e5fe71f1d4210"
+  },
+  "books/dydx/SOL.jsonl": {
+   "first": "2026-11-16T00:32:09.739000+00:00",
+   "last": "2026-11-16T01:39:43.475000+00:00",
+   "rows": 756,
+   "sha256": "f1c9cf03f1d340212ec6fe537d8183979df00fe0196285fbc2ec8aa7af6232c0"
+  },
+  "books/edgex/BTC.jsonl": {
+   "first": "2026-11-16T00:32:08.350000+00:00",
+   "last": "2026-11-16T01:39:41.247000+00:00",
+   "rows": 756,
+   "sha256": "9a2bf67c61e631d50a22d3957cb9389c3a564d1777b0ecf0bff6e9e6b18e684b"
+  },
+  "books/edgex/ETH.jsonl": {
+   "first": "2026-11-16T00:32:08.645000+00:00",
+   "last": "2026-11-16T01:39:41.540000+00:00",
+   "rows": 756,
+   "sha256": "6d35837bf929ee5d564dc1c64ad555c4decd5a9d99fa8f39101f25a8ccfdd689"
+  },
+  "books/edgex/SOL.jsonl": {
+   "first": "2026-11-16T00:32:09.170000+00:00",
+   "last": "2026-11-16T01:39:41.809000+00:00",
+   "rows": 756,
+   "sha256": "de00191dabfb7253aa08587005cc4675fc9ddfea393919a9a2730e29e47b5848"
+  },
+  "books/hyperliquid/AAVE.jsonl": {
+   "first": "2026-11-16T00:54:34.554000+00:00",
+   "last": "2026-11-16T01:39:29.673000+00:00",
+   "rows": 540,
+   "sha256": "55417893147014448003e6bdb8948a8b767bafec5472a925aa96577f233659ac"
+  },
+  "books/hyperliquid/AVAX.jsonl": {
+   "first": "2026-11-16T00:54:35.300000+00:00",
+   "last": "2026-11-16T01:39:30.484000+00:00",
+   "rows": 540,
+   "sha256": "53418d7190d0cbcb6d1a12f705a6b23dbacc65777246b7505280cb15e167419d"
+  },
+  "books/hyperliquid/BNB.jsonl": {
+   "first": "2026-11-16T00:54:35.556000+00:00",
+   "last": "2026-11-16T01:39:30.722000+00:00",
+   "rows": 540,
+   "sha256": "be78d840b017d34c347897bc5374f0bef80e8ca4d03f22797bd892bc4fd93b49"
+  },
+  "books/hyperliquid/BTC.jsonl": {
+   "first": "2026-11-16T00:32:07.790000+00:00",
+   "last": "2026-11-16T01:39:43.739000+00:00",
+   "rows": 757,
+   "sha256": "c5a0e3c5ca8cf94747f770080839980f1ca132bcff96c2a507a677e76081be8c"
+  },
+  "books/hyperliquid/DOGE.jsonl": {
+   "first": "2026-11-16T00:54:35.113000+00:00",
+   "last": "2026-11-16T01:39:30.227000+00:00",
+   "rows": 540,
+   "sha256": "e5af9964d5519e6d50da9e08fbbd335e95443a5ccd63cabd7b72a9014347f591"
+  },
+  "books/hyperliquid/ETH.jsonl": {
+   "first": "2026-11-16T00:32:07.977000+00:00",
+   "last": "2026-11-16T01:39:43.996000+00:00",
+   "rows": 757,
+   "sha256": "1e88855b62661ed745837993b18e3287e7b9783ce74cb221ac04017f166ada68"
+  },
+  "books/hyperliquid/HYPE.jsonl": {
+   "first": "2026-11-16T00:54:34.746000+00:00",
+   "last": "2026-11-16T01:39:29.852000+00:00",
+   "rows": 540,
+   "sha256": "61e79b978fc213cb8e3ccbe0e1f1e4a5beb102fd76ed2fbc9e42001215428719"
+  },
+  "books/hyperliquid/LINK.jsonl": {
+   "first": "2026-11-16T00:54:34.366000+00:00",
+   "last": "2026-11-16T01:39:29.376000+00:00",
+   "rows": 540,
+   "sha256": "605d1bbfe0acb3bb48dc2bc50eaf5690b7077d165cf0406c6995d83955c8ae8e"
+  },
+  "books/hyperliquid/SOL.jsonl": {
+   "first": "2026-11-16T00:32:08.160000+00:00",
+   "last": "2026-11-16T01:39:44.180000+00:00",
+   "rows": 757,
+   "sha256": "4a9a0c8a897b8a65218ba11118f3c41267f7cc4cee5be6d7758bf8a623fac6af"
+  },
+  "books/hyperliquid/XRP.jsonl": {
+   "first": "2026-11-16T00:54:34.931000+00:00",
+   "last": "2026-11-16T01:39:30.039000+00:00",
+   "rows": 540,
+   "sha256": "7ab00388e37a68c56f192761ffa40d2173ad3d0452af6597b90cbaaba5632ff1"
+  }
+ },
+ "captured_at": "2026-11-16T00:38:24+00:00",
+ "files": {
+  "coinbase/BTC_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:34+00:00",
+   "content_sha256": "1e2ec797f205264e0cfbcb544f550c38b0ca9dbf647aeb0fcf7126264200c61d",
+   "endpoint": "GET /products/{SYM}-USD/candles",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "coinbase/ETH_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:38+00:00",
+   "content_sha256": "14242841488add52c821612b0d25b7b60080fef598355b78626d70b208a6bcef",
+   "endpoint": "GET /products/{SYM}-USD/candles",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "coinbase/SOL_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:42+00:00",
+   "content_sha256": "e1a20e898a7eff3ed42c15929b3d759550aab7c554da7e32d9e23b328d030629",
+   "endpoint": "GET /products/{SYM}-USD/candles",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "dydx/BTC_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:04+00:00",
+   "content_sha256": "fa4e7ec75fb5a1cde16ca0c0100b98c896e76158f218c0519dec6eb511d83a11",
+   "endpoint": "GET /v4/candles/perpetualMarkets/{ticker}",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "dydx/ETH_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:13+00:00",
+   "content_sha256": "76f4acd1aafdb797d9162b8d99cc5b50b2f9df8f2734164bbc25168e1f06f1a3",
+   "endpoint": "GET /v4/candles/perpetualMarkets/{ticker}",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "dydx/SOL_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:22+00:00",
+   "content_sha256": "56841725b98ad19a0f17e2320abf1af58eaeb789f79db88140f08f77f53b78b3",
+   "endpoint": "GET /v4/candles/perpetualMarkets/{ticker}",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "dydx/funding/BTC.parquet": {
+   "captured_at": "2026-11-16T00:35:04+00:00",
+   "content_sha256": "951379596d03ad3ad73d6cf30322cb79ca3a4bb2a5544ba665ddbeb0f13b7853",
+   "endpoint": "GET /v4/historicalFunding/{ticker}",
+   "first": "2026-05-19T00:00:02.125000+00:00",
+   "last": "2026-11-14T23:00:00.312000+00:00",
+   "rows": 4320
+  },
+  "dydx/funding/ETH.parquet": {
+   "captured_at": "2026-11-16T00:35:13+00:00",
+   "content_sha256": "a710d587a8b7f7bae0060a1fe8b27ca46d70ae4307d4a59444ac1f437d7096e3",
+   "endpoint": "GET /v4/historicalFunding/{ticker}",
+   "first": "2026-05-19T00:00:02.125000+00:00",
+   "last": "2026-11-14T23:00:00.312000+00:00",
+   "rows": 4320
+  },
+  "dydx/funding/SOL.parquet": {
+   "captured_at": "2026-11-16T00:35:22+00:00",
+   "content_sha256": "8bf7e8da31a52d0c149399268435a957b913915dac95380259b2bc0ea04b8742",
+   "endpoint": "GET /v4/historicalFunding/{ticker}",
+   "first": "2026-05-19T00:00:02.125000+00:00",
+   "last": "2026-11-14T23:00:00.312000+00:00",
+   "rows": 4320
+  },
+  "edgex/BTC_1h.parquet": {
+   "captured_at": "2026-11-16T00:34:45+00:00",
+   "content_sha256": "1cadc10dfa00beece2999628548a98dc2bd991f4fc762e98818834b79e88a355",
+   "endpoint": "GET /api/v2/public/quote/getKline",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "edgex/ETH_1h.parquet": {
+   "captured_at": "2026-11-16T00:34:51+00:00",
+   "content_sha256": "94e3035878b05c544a3aafaa5af9cb078ccb387eae4bc04b1970959942ca084f",
+   "endpoint": "GET /api/v2/public/quote/getKline",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "edgex/SOL_1h.parquet": {
+   "captured_at": "2026-11-16T00:34:58+00:00",
+   "content_sha256": "ec960d5136e9d29c4f9d208383178a8c9ca55008f744f16d460d31061b91d953",
+   "endpoint": "GET /api/v2/public/quote/getKline",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "edgex/funding/BTC.parquet": {
+   "captured_at": "2026-11-16T00:34:45+00:00",
+   "content_sha256": "8209576a87f97eb16818831167a7561cf39bd9f171faeef2f0332cf78928e82b",
+   "endpoint": "GET /api/v2/public/funding/getFundingRatePage",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T20:00:00+00:00",
+   "rows": 1080
+  },
+  "edgex/funding/ETH.parquet": {
+   "captured_at": "2026-11-16T00:34:51+00:00",
+   "content_sha256": "335afbc58005e94bcd1ba656563d08363efcc84c198645f62a86cd68ebb15ccb",
+   "endpoint": "GET /api/v2/public/funding/getFundingRatePage",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T20:00:00+00:00",
+   "rows": 1080
+  },
+  "edgex/funding/SOL.parquet": {
+   "captured_at": "2026-11-16T00:34:58+00:00",
+   "content_sha256": "6e932d3ee5382d343da1270ebcfce04b5c84f5f1281dd72ffd615540eeb15b7b",
+   "endpoint": "GET /api/v2/public/funding/getFundingRatePage",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T20:00:00+00:00",
+   "rows": 1080
+  },
+  "gmx/BTC_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:31+00:00",
+   "content_sha256": "a64e8975f8511989a973e3c839e523a424725a152e9b2f1f595c0e81e857d951",
+   "endpoint": "GET /prices/candles",
+   "first": "2026-05-20T01:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4295
+  },
+  "gmx/ETH_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:32+00:00",
+   "content_sha256": "7646dbf083e359f1724408b61cd4270fbb5a62eda65b046655c0704ff95dd2cf",
+   "endpoint": "GET /prices/candles",
+   "first": "2026-05-20T01:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4295
+  },
+  "gmx/SOL_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:33+00:00",
+   "content_sha256": "7634baad6631af4b8bd78e698d85d39c1742bb930e377a99bb3c75184f10a880",
+   "endpoint": "GET /prices/candles",
+   "first": "2026-05-20T01:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4295
+  },
+  "hyperliquid/AAVE_1h.parquet": {
+   "captured_at": "2026-11-16T00:38:20+00:00",
+   "content_sha256": "db39063efeef1052e6ef7d1ceccc5bd4cfbd0f6d921ff47bdf8a515cdd61af09",
+   "endpoint": "POST /info candleSnapshot",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/AVAX_1h.parquet": {
+   "captured_at": "2026-11-16T00:36:03+00:00",
+   "content_sha256": "c06f82184acf9fb3edee49f574558bd3967d0cbb572f2485f6287eda02fc02d1",
+   "endpoint": "POST /info candleSnapshot",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/BNB_1h.parquet": {
+   "captured_at": "2026-11-16T00:36:10+00:00",
+   "content_sha256": "6acace79e2ec7d6392f2e6940b7ae922b8a25cdb1fc9cb2d9b84e6f795bc13fd",
+   "endpoint": "POST /info candleSnapshot",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/BTC_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:46+00:00",
+   "content_sha256": "b300cdde9c3e84261165a300b6a980c99f18f967213de83b9b5e9d0ddc80ffa9",
+   "endpoint": "POST /info candleSnapshot",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/DOGE_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:59+00:00",
+   "content_sha256": "21d5f08b6473bcbf9212bbed1ab3785ba08ea78ba9aa2fc4a4bb1d6c30ca64e5",
+   "endpoint": "POST /info candleSnapshot",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/ETH_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:49+00:00",
+   "content_sha256": "d3fb077948c8c398279819276149afa9434dcb6259191aeace5fec25508f7079",
+   "endpoint": "POST /info candleSnapshot",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/HYPE_1h.parquet": {
+   "captured_at": "2026-11-16T00:38:24+00:00",
+   "content_sha256": "7231184f0fa5d1e0f3e41aad819aca46cbc99767c30a9656aa0e5b663e823524",
+   "endpoint": "POST /info candleSnapshot",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/LINK_1h.parquet": {
+   "captured_at": "2026-11-16T00:36:07+00:00",
+   "content_sha256": "c3d7c00c00e44bcd1803a2acb1b19dd2581f74428e8203f37fedb5cc0345d0a7",
+   "endpoint": "POST /info candleSnapshot",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/SOL_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:53+00:00",
+   "content_sha256": "44d0b71b36d463b743967ec3a8887ce2238bd6a9223ff999fdc70df437a06472",
+   "endpoint": "POST /info candleSnapshot",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/XRP_1h.parquet": {
+   "captured_at": "2026-11-16T00:35:55+00:00",
+   "content_sha256": "aee28f987d9896c4f7f659545c57bd8133022d9ddac39ff3710a3badd5fcc61d",
+   "endpoint": "POST /info candleSnapshot",
+   "first": "2026-05-19T00:00:00+00:00",
+   "last": "2026-11-14T23:00:00+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/funding/AAVE.parquet": {
+   "captured_at": "2026-11-16T00:38:20+00:00",
+   "content_sha256": "f284b234de285f844abaa2b2d823862fe112371d8c79a79b3afeeeb2dc94e415",
+   "endpoint": "POST /info fundingHistory",
+   "first": "2026-05-19T00:00:00.076000+00:00",
+   "last": "2026-11-14T23:00:00.058000+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/funding/AVAX.parquet": {
+   "captured_at": "2026-11-16T00:36:03+00:00",
+   "content_sha256": "0d42ef41021a3b5f241b454e2903859bca460fe739455f76801349f9a80e36a2",
+   "endpoint": "POST /info fundingHistory",
+   "first": "2026-05-19T00:00:00.076000+00:00",
+   "last": "2026-11-14T23:00:00.058000+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/funding/BNB.parquet": {
+   "captured_at": "2026-11-16T00:36:10+00:00",
+   "content_sha256": "84cd36fe48c16d12caa40629c09f7f23ceb20aa4833638623e96484cc3e881b0",
+   "endpoint": "POST /info fundingHistory",
+   "first": "2026-05-19T00:00:00.076000+00:00",
+   "last": "2026-11-14T23:00:00.058000+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/funding/BTC.parquet": {
+   "captured_at": "2026-11-16T00:35:46+00:00",
+   "content_sha256": "880cb4f4f3e9cae28f850be94d21621a8108d216609ccbc160c4d5b17eebf928",
+   "endpoint": "POST /info fundingHistory",
+   "first": "2026-05-19T00:00:00.076000+00:00",
+   "last": "2026-11-14T23:00:00.058000+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/funding/DOGE.parquet": {
+   "captured_at": "2026-11-16T00:35:59+00:00",
+   "content_sha256": "93662b0efd000df30f56414c101e4cc6eb169be1a26cd1d5a02a163233e869bf",
+   "endpoint": "POST /info fundingHistory",
+   "first": "2026-05-19T00:00:00.076000+00:00",
+   "last": "2026-11-14T23:00:00.058000+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/funding/ETH.parquet": {
+   "captured_at": "2026-11-16T00:35:49+00:00",
+   "content_sha256": "07aa1cc71f56072822b054cdb4eee7025f78cca37660a790e23c494c518be97e",
+   "endpoint": "POST /info fundingHistory",
+   "first": "2026-05-19T00:00:00.076000+00:00",
+   "last": "2026-11-14T23:00:00.058000+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/funding/HYPE.parquet": {
+   "captured_at": "2026-11-16T00:38:24+00:00",
+   "content_sha256": "cfc80ec0f4f998357c94a972ff9006ec693a145d004e5d86284c722f594a010c",
+   "endpoint": "POST /info fundingHistory",
+   "first": "2026-05-19T00:00:00.076000+00:00",
+   "last": "2026-11-14T23:00:00.058000+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/funding/LINK.parquet": {
+   "captured_at": "2026-11-16T00:36:07+00:00",
+   "content_sha256": "9045dfadcb137e760385f0ea81711fbd5e0b2266d7d8154c2924816db8ac8f26",
+   "endpoint": "POST /info fundingHistory",
+   "first": "2026-05-19T00:00:00.076000+00:00",
+   "last": "2026-11-14T23:00:00.058000+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/funding/SOL.parquet": {
+   "captured_at": "2026-11-16T00:35:53+00:00",
+   "content_sha256": "e564b7e8aca63c2c5178c40f800b9b478a44d4544c8aa4c49d22dfe47a83c7f8",
+   "endpoint": "POST /info fundingHistory",
+   "first": "2026-05-19T00:00:00.076000+00:00",
+   "last": "2026-11-14T23:00:00.058000+00:00",
+   "rows": 4320
+  },
+  "hyperliquid/funding/XRP.parquet": {
+   "captured_at": "2026-11-16T00:35:55+00:00",
+   "content_sha256": "70da90cad3470bbe53db58394be1036f816e10e5d9cb9567d0d3adb9afbdeaa5",
+   "endpoint": "POST /info fundingHistory",
+   "first": "2026-05-19T00:00:00.076000+00:00",
+   "last": "2026-11-14T23:00:00.058000+00:00",
+   "rows": 4320
+  }
+ },
+ "n_files": 38,
+ "range": [
+  "2026-05-19T00:00:00Z",
+  "2026-11-15T00:00:00Z"
+ ],
+ "snapshot_sha256": "25eb8fa4b9e22c3fe439445494dcabe6c18fb6afe866cb26b7043c93e2282764"
+}
