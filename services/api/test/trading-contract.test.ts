@@ -10,7 +10,7 @@ import { mkdtempSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { RISK_CODES } from '@spw/derivatives';
 import { MANDATE_DENY_CODES, ORDER_STATES as MACHINE_STATES, RISK_CHECK_IDS as ENGINE_CHECK_IDS, TERMINAL_STATES, UNRESOLVABLE_CODES } from '@spw/trading';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
@@ -122,6 +122,11 @@ const get = (id: string, path: string, key: string) => call('GET', T + path, { k
  *  where a test wants rows on the same instant (`tick = false`). */
 let tick = true;
 const post = (id: string, path: string, key: string | null, body: unknown, headers: Record<string, string> = idem()) => { if (tick) clock.advance(1_000); return call('POST', T + path, { ...(key ? { key } : {}), body, headers }).then((r) => check(id, r)); };
+
+// Each test of this file drives the real API, the signer and PostgreSQL through tens of calls. Alone it runs in seconds; with
+// the whole suite on the same machine (every core busy, PostgreSQL shared) one call can wait seconds. The bound is explicit and
+// generous: it is a guard against a hang, not a measure — no assertion depends on a duration.
+vi.setConfig({ testTimeout: 240_000 });
 
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spw-contract-'));
@@ -450,6 +455,38 @@ describe('6, 7, 9, 12 — the write side answers what the document declares', ()
     const plain = new Error('x');
     expect(shaping.shapeRefusal(key([]), plain)).toBe(plain);
   });
+  it('9 (HTTP) — POST /orders refused by an account-level risk check: the key that may not read the account gets the verdict without the figures, replay included', async () => {
+    await flatten();
+    const blind = await tradingKey({ scopes: ['orders:execute', 'orders:read', 'markets:read'] }), seeing = await tradingKey({ scopes: ['orders:execute', 'orders:read', 'positions:read'] });
+    // the owner's risk limits of the paper mode: a gross exposure no order of this file fits in (an ACCOUNT check), and an order cap (the order's own check)
+    const limits = async (v: object): Promise<void> => { await sql`insert into settings (key, value) values ('risk.limits.paper', ${sql.json(v as never)}) on conflict (key) do update set value = excluded.value`; };
+    await limits({ maxGrossExposure: '100', maxOrderNotional: '100' });
+    try {
+      const key = idem();
+      const a = await post('placeOrder', '/orders', blind.secret, ORDER, key), b = await post('placeOrder', '/orders', seeing.secret, ORDER);
+      expect([a.status, a.json.error], JSON.stringify(a.json)).toEqual([422, 'risk_denied']); expect([b.status, b.json.error]).toEqual([422, 'risk_denied']);
+      const of = (r: any, id: string) => r.json.data.checks.find((c: any) => c.id === id);
+      // the key that reads positions is told the figures
+      expect(of(b, 'gross_exposure')).toMatchObject({ ok: false, limit: '100' }); expect(of(b, 'gross_exposure').observed).toMatch(DEC); expect(of(b, 'gross_exposure').detail).not.toBe(shaping.WITHHELD);
+      // the other one: same verdict, same failed checks, the limit — and no figure of the account
+      expect(a.json.data.failed).toEqual(b.json.data.failed); expect(a.json.data.failed).toEqual(expect.arrayContaining(['gross_exposure', 'order_notional']));
+      expect(a.json.data.checks.map((c: any) => [c.id, c.ok])).toEqual(b.json.data.checks.map((c: any) => [c.id, c.ok]));
+      for (const c of a.json.data.checks) if (spec.ACCOUNT_RISK_CHECKS.includes(c.id)) expect([c.observed, c.detail], c.id).toEqual([null, shaping.WITHHELD]);
+      expect(of(a, 'gross_exposure')).toMatchObject({ ok: false, limit: '100', observed: null });
+      expect(of(a, 'order_notional').observed).toMatch(DEC); expect(of(a, 'order_notional')).toEqual(of(b, 'order_notional'));            // the order's own figures stay
+      const flat = JSON.stringify(a.json);
+      for (const c of b.json.data.checks) if (spec.ACCOUNT_RISK_CHECKS.includes(c.id) && c.detail.length > 12) expect(flat, c.id).not.toContain(c.detail);
+      const first = String(b.json.message).slice(0, String(b.json.message).indexOf(':'));
+      if (spec.ACCOUNT_RISK_CHECKS.includes(first)) expect(a.json.message).toBe(`${first}: ${shaping.WITHHELD}`); else expect(a.json.message).toBe(b.json.message);
+      expect(a.json.data.order).toMatchObject({ status: 'REJECTED', final: true });
+      // the replay of the same Idempotency-Key is the shaped answer, byte for byte — the store never kept the figures
+      const again = await post('placeOrder', '/orders', blind.secret, ORDER, key);
+      expect([again.status, again.json]).toEqual([a.status, a.json]);
+      expect(JSON.stringify(await sql`select * from api_idempotency where principal = ${`key:${blind.id}`}`)).not.toContain(of(b, 'gross_exposure').detail);
+    } finally { await limits({}); }
+    const ok = await post('placeOrder', '/orders', blind.secret, ORDER);                                 // the limits are back: the same order is accepted
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+  });
   it('commands: an ambiguous command answers 409 with the questions; dry runs and queries validate; the kill switch blocks new risk, not exits', async () => {
     await flatten();
     const k = await tradingKey();
@@ -589,6 +626,23 @@ describe('agents and strategies — every answer of the agent operations is the 
       ['startStrategy', await del('startStrategy', `/strategies/${ghost}/start`, { mode: 'paper' })], ['stopStrategy', await del('stopStrategy', `/strategies/${ghost}/stop`)]] as const)
       expect([r.status, r.json.error], op).toEqual([404, 'not_found']);
     expect((await del('createAgent', '/agents', { kind: 'spot', name: 'Spot via key', universe: ['BTC'] })).json.error).toBe('owner_required');
+    // createAgent.mode is research or paper, in the document as in the server: `live` is refused, never silently ignored
+    expect(opOf('createAgent').requestBody.content['application/json'].schema.properties.mode.enum).toEqual(['research', 'paper']);
+    const liveBorn = await del('createAgent', '/agents', { template: 'market-making', name: 'Contract live', venues: ['hyperliquid'], universe: ['BTC'], mode: 'live' });
+    expect([liveBorn.status, liveBorn.json.error]).toEqual([400, 'bad_request']);
+    expect((await get('listAgents', '/agents', k)).json.agents.some((a: any) => a.name === 'Contract live')).toBe(false);
+    const born = await del('createAgent', '/agents', { template: 'market-making', name: 'Contract paper', venues: ['hyperliquid'], universe: ['ETH'], mode: 'paper' });
+    expect(born.status, JSON.stringify(born.json)).toBe(200); expect(born.json.agent).toMatchObject({ state: 'active', mode: 'paper' });    // a stream agent starts at once
+    // `mode` is optional on the wire: the answer is the mode the agent is in now, and says so
+    for (const path of ['signals', 'journal', 'orders', 'performance']) expect((await get(path === 'performance' ? 'getAgentPerformance' : path === 'signals' ? 'listAgentSignals' : path === 'journal' ? 'listAgentJournal' : 'listAgentOrders', `/agents/${born.json.agent.id}/${path}`, k)).json.mode, path).toBe('paper');
+    expect((await get('listAgentSignals', `/agents/${id}/signals`, k)).json.mode).toBe('paper');                                             // the agent stopped above: the mode it last ran in
+    expect((await del('stopAgent', `/agents/${born.json.agent.id}/stop`, { reason: 'contract test' })).status).toBe(200);
+    // `open` is a parameter of the order list alone
+    const names = (op: string): string[] => (opOf(op).parameters as any[]).filter((x) => x.in === 'query').map((x) => x.name).sort();
+    expect([names('listAgentSignals'), names('listAgentJournal'), names('listAgentOrders')]).toEqual([['before', 'limit', 'mode'], ['before', 'limit', 'mode'], ['before', 'limit', 'mode', 'open']]);
+    // agents bound to the execution layer: what a start can answer since then is declared
+    for (const op of ['startAgent', 'startStrategy', 'createAgent']) expect(opOf(op)['x-spw-errors'].filter((e: any) => e.status === 409).map((e: any) => e.code), op).toEqual(expect.arrayContaining(['mandate_required', 'halted', 'live_unavailable']));
+    for (const op of ['startAgent', 'startStrategy']) expect(opOf(op)['x-spw-errors'].filter((e: any) => e.status === 403).map((e: any) => e.code), op).toEqual(expect.arrayContaining(['restricted', 'insufficient_scope', 'owner_required']));
     expect((await del('createStrategy', '/strategies', { kind: 'perp', path: 'momentum/v1' })).json.error).toBe('bad_request');
     const wrong = await del('createStrategy', '/strategies', { kind: 'perp', path: 'momentum/v1', agentId: id });
     expect(wrong.status).toBeGreaterThanOrEqual(400); expect(wrong.status).toBeLessThan(500);

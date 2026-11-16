@@ -282,8 +282,12 @@ const StopBody = z.strictObject({ reason: z.string().max(200).default('') });
 const AgentBody = z.strictObject({ kind: z.enum(['spot', 'perp']).optional().describe('without a template: perp (a spot agent needs a vault from the signer: owner only)'), template: z.string().max(40).optional().describe('one of GET /agents/templates'),
   name: z.string().min(2).max(40), mission: z.string().max(400).default(''), universe: z.array(z.string().regex(/^[A-Z0-9]{2,15}$/)).min(1).max(12).optional(), venues: z.array(z.enum(['hyperliquid', 'edgex', 'dydx', 'gmx'])).min(1).max(2).optional(),
   strategyPath: z.string().max(60).optional(), interval: z.enum(['1h', '4h', '1d']).optional(), capitalUsdc: z.string().regex(/^\d{1,7}(\.\d{1,6})?$/).optional(), risk: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional(),
-  config: z.record(z.string(), z.unknown()).optional(), mode: AgentMode.default('research').describe('research (default: created, not running) or paper (stream and supervisor agents start at once); never live') });
-const AgentPage = z.object({ mode: AgentMode.optional().describe('default: the mode the agent is in now'), limit: Limit(100, 500), before: z.coerce.number().int().positive().optional().describe('unix ms: rows strictly before it'), open: z.enum(['true', 'false']).optional() });
+  config: z.record(z.string(), z.unknown()).optional(), mode: z.enum(['research', 'paper']).default('research').describe('research (default): the agent is created and not running. paper: an agent created from a stream or supervisor template is started on paper at once; a bar agent (momentum, mean reversion, …, or `kind: perp`) is created and NOT started — it needs a backtested strategy version first, then POST /agents/{id}/start. `live` is refused (400 `bad_request`): an agent goes live only through POST /agents/{id}/start, under a mandate the owner approved.') });
+// 3b — `mode` is OPTIONAL on the wire: the server answers the mode the agent is in now, and says which in `mode`. (Both SDKs make it a required argument.)
+const AgentModeQuery = AgentMode.optional().describe('default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it.');
+const AgentPage = z.object({ mode: AgentModeQuery, limit: Limit(100, 500), before: z.coerce.number().int().positive().optional().describe('unix ms: rows strictly before it') });
+/** the order list alone has `open` (signals and journal entries have no such state) */
+const AgentOrdersPage = AgentPage.extend({ open: z.enum(['true', 'false']).optional().describe('true: only the orders that are not final') });
 const AgentBacktestBody = z.strictObject({ versionId: z.uuid().optional(), hours: z.number().int().min(1).max(168).optional().describe('stream agents: how many hours of recorded snapshots to replay') });
 
 // ---------------------------------------------------------------------------------------------------------------- private markets (v11)
@@ -350,7 +354,9 @@ const X = {
 /** agents/trading-handlers.ts: `agentFor` (a key restricted to venues reaches only the agents that trade there; 404 `not_found`), then lifecycle.ts */
 const A = {
   agent: [...E(403, 'restricted'), ...E(404, 'not_found')],
-  start: [...E(403, 'owner_required'), ...E(409, 'bad_state', 'mandate_required', 'live_unavailable', 'no_strategy', 'no_report', 'bad_report')],
+  // `halted`: the paper account of a perp agent is halted. (`mode_unavailable` exists in the lifecycle and cannot be reached: every family runs in research and paper, and live answers `live_unavailable`.)
+  // 403 `restricted` (in `agent`) is also what a key restricted to other venues or instruments gets when a paper start would create the agent's paper mandate.
+  start: [...E(403, 'owner_required'), ...E(409, 'bad_state', 'mandate_required', 'live_unavailable', 'halted', 'no_strategy', 'no_report', 'bad_report')],
   stop: E(409, 'bad_state'),
 };
 const ENGINE_NOTE = ' The venue engine that executes the order can refuse it with a code of its own rules that this list does not name (`x-spw-errors-open`): the HTTP status still tells the class, and the order is in `data.order`.';
@@ -375,7 +381,7 @@ export interface OperationSpec {
   errorsOpen?: boolean;
 }
 const NOT_WIRED = 'Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.';
-const START_NOTE = 'research and paper sign nothing. `live` is accepted ONLY when a mandate approved by the owner with the passkey is in force for this agent at the signer; otherwise 409 `mandate_required` (a key, an agent or this API can never approve a mandate). Families that cannot go live answer 409 `live_unavailable` with the reason.';
+const START_NOTE = 'research and paper sign nothing. Starting a perp agent on `paper` creates its PAPER trading mandate (nothing is signed; its orders go through the unified order service, the risk engine and that mandate): the key needs `agents:manage` and may not be restricted away from the agent\'s venue or instruments (403 `insufficient_scope` / `restricted`), and a halted paper account answers 409 `halted`. `live` is accepted ONLY when a mandate approved by the owner with the passkey is in force for this agent — for a perp agent a TRADING mandate, which only the owner activates: a key answers 409 `mandate_required` (a key, an agent or this API can never approve a mandate). Families that cannot go live answer 409 `live_unavailable` with the reason.';
 const STOP_NOTE = 'Always allowed. The safe wind-down: a live perp agent\'s mandate is revoked and its positions are closed with reduce-only orders; a live spot agent\'s mandate is revoked at the signer; simulated quotes are withdrawn.';
 const done = (description: string): Partial<OperationSpec> => ({ implemented: true, description });
 const read = (id: string, path: string, tag: OperationSpec['tag'], scope: RouteScope, summary: string, o: Partial<OperationSpec> = {}): OperationSpec => ({ id, method: 'GET', path, tag, scope, summary, implemented: true, ...o });
@@ -453,8 +459,8 @@ export const OPERATIONS: readonly OperationSpec[] = [
     description: 'Each signal carries the mode, the configuration version, the strategy hash, a digest of its inputs, its output and the decision: `acted`, or `skipped` with a reason code.' }),
   read('listAgentJournal', '/agents/:id/journal', 'Agents', 'agents:read', 'Activity journal of one agent, ONE mode', { params: IdParam, query: AgentPage, errors: A.agent, response: R.journal,
     description: 'Decisions, orders, fills, errors, risk denials, mandate events and state changes, newest first.' }),
-  read('listAgentOrders', '/agents/:id/orders', 'Agents', 'agents:read', 'Order history of one agent, ONE mode, in the unified order states', { params: IdParam, query: AgentPage, response: R.agentOrders, errors: A.agent }),
-  read('getAgentPerformance', '/agents/:id/performance', 'Agents', 'agents:read', 'Computed performance of one agent, ONE mode', { params: IdParam, query: z.object({ mode: AgentMode.optional() }), errors: A.agent, response: R.performance,
+  read('listAgentOrders', '/agents/:id/orders', 'Agents', 'agents:read', 'Order history of one agent, ONE mode, in the unified order states', { params: IdParam, query: AgentOrdersPage, response: R.agentOrders, errors: A.agent }),
+  read('getAgentPerformance', '/agents/:id/performance', 'Agents', 'agents:read', 'Computed performance of one agent, ONE mode', { params: IdParam, query: z.object({ mode: AgentModeQuery }), errors: A.agent, response: R.performance,
     description: 'Equity curve, returns, volatility, Sharpe, Sortino, max drawdown, win rate, profit factor, turnover, fees, funding, slippage, net PnL — computed from the records of that mode only, with small-sample warnings. Paper and live are never added. Backtests are not here.' }),
   read('getJob', '/jobs/:id', 'Agents', 'agents:read', 'One agent job (backtest, wind-down): status and result', { params: IdParam, response: R.job, errors: A.agent }),
   write('createAgent', 'POST', '/agents', 'Agents', 'agents:manage', 'Create an agent (from a template, or a perp agent)', { body: AgentBody, response: R.agentResult, errors: [...E(403, 'owner_required'), ...E(409, 'bad_state', 'strategy_not_installed', 'wrong_kind', 'exists'), ...E(422, 'bad_request', 'universe_mismatch'), ...A.start], ...done('Nothing is signed and no vault is derived. A spot agent is created in the owner\'s app (403 `owner_required`). A template whose strategy is not installed answers 409 `strategy_not_installed`.') }),

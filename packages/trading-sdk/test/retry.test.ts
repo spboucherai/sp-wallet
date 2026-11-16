@@ -20,6 +20,8 @@ describe('error mapping: HTTP status + code → typed error', () => {
     [409, 'ambiguous_command', AmbiguousCommand, Conflict], [404, 'not_found', NotFound], [400, 'invalid_cursor', ValidationError],
     [404, 'unknown_order', NotFound], [404, 'unknown_instrument', NotFound],
     [409, 'idempotency_conflict', IdempotencyConflict, Conflict], [409, 'ambiguous_symbol', AmbiguousSymbol, Conflict], [409, 'something_else', Conflict],
+    // the agent operations: a 409 is a Conflict whatever its code — an agent's `mandate_required` is not the key's 403, its `halted` is not the order's 423
+    [409, 'mandate_required', Conflict], [409, 'halted', Conflict], [409, 'live_unavailable', Conflict], [409, 'bad_state', Conflict],
     [429, 'rate_limited', RateLimited], [429, 'auth_throttled', RateLimited],
     [501, 'execution_not_wired', ExecutionNotWired, NotImplementedError], [501, 'other', NotImplementedError],
     [503, 'signer_unreachable', ServiceUnavailable, ServerError], [500, 'internal', ServerError], [418, 'teapot', APIError],
