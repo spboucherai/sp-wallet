@@ -60,7 +60,7 @@ describe('OpenAPI viewer', () => {
     expect(place).toMatchObject({ method: 'POST', scope: 'orders:execute', needsMandate: true });
     expect(JSON.parse(place.body!).required).toEqual(expect.arrayContaining(['mode', 'instrument', 'side', 'type', 'size']));
     expect(docTags(ops).map((g) => g.tag)).toEqual(['Meta', 'Markets', 'Portfolio', 'Positions', 'Orders', 'Strategies', 'Agents', 'Risk']);
-    expect(docTags(ops).reduce((n, g) => n + g.ops.length, 0)).toBe(26);
+    expect(docTags(ops).reduce((n, g) => n + g.ops.length, 0)).toBe(27);
   });
   it('never throws on a missing or odd document', () => {
     expect(docOps(null)).toEqual([]);
