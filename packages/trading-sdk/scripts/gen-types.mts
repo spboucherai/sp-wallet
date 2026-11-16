@@ -14,8 +14,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const OPENAPI_PATH = path.resolve(HERE, '../../../docs/openapi/trading-v1.json');
 export const OUTPUT_PATH = path.resolve(HERE, '../src/generated/openapi.ts');
 
-const KNOWN = new Set(['type', 'properties', 'required', 'additionalProperties', 'items', 'prefixItems', 'enum', 'const', 'anyOf', '$ref', 'description', 'default', 'pattern', 'format',
-  'minimum', 'maximum', 'minLength', 'maxLength', 'minItems', 'maxItems']);
+const KNOWN = new Set(['type', 'properties', 'required', 'additionalProperties', 'items', 'prefixItems', 'enum', 'const', 'anyOf', '$ref', 'propertyNames', 'description', 'default', 'pattern', 'format',
+  'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'minLength', 'maxLength', 'minItems', 'maxItems']);
 const ident = (k: string): string => (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(k) ? k : JSON.stringify(k));
 const doc = (s: Json, pad: string): string => {
   const parts = [typeof s.description === 'string' ? s.description : '', typeof s.pattern === 'string' ? `pattern: ${s.pattern}` : '', s.default !== undefined ? `default: ${JSON.stringify(s.default)}` : ''].filter(Boolean);
@@ -56,6 +56,9 @@ export function tsType(s: unknown, pad = ''): string {
       const props = (j.properties ?? {}) as Record<string, Json>, required = new Set((j.required as string[] | undefined) ?? []);
       const open = j.additionalProperties !== false; // absent, true or {} = extra members are allowed
       const keys = Object.keys(props);
+      if (j.propertyNames !== undefined && JSON.stringify(j.propertyNames) !== '{"type":"string"}') throw new Error('only string property names are supported');
+      // a map (zod's z.record): no named member, every value of one schema
+      if (!keys.length && j.additionalProperties !== null && typeof j.additionalProperties === 'object' && Object.keys(j.additionalProperties).length) return `Record<string, ${tsType(j.additionalProperties, pad)}>`;
       if (!keys.length) return open ? 'Record<string, unknown>' : 'Record<string, never>';
       const inner = pad + '  ';
       const lines = keys.map((k) => `${doc(props[k]!, inner)}${inner}${ident(k)}${required.has(k) ? '' : '?'}: ${tsType(props[k], inner)};`);

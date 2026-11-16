@@ -41,9 +41,18 @@ const CASES: Record<OperationId, { run: (c: SPWallet) => Promise<unknown>; path:
   backtestStrategy: { run: (c) => c.backtestStrategy('s1', { symbols: ['BTC'], interval: '1h' }), path: '/strategies/s1/backtest', body: { symbols: ['BTC'], interval: '1h' } },
   startStrategy: { run: (c) => c.startStrategy('s1', { mode: 'paper' }), path: '/strategies/s1/start', body: { mode: 'paper' } },
   stopStrategy: { run: (c) => c.stopStrategy('s1', { reason: 'done' }), path: '/strategies/s1/stop', body: { reason: 'done' } },
-  createAgent: { run: (c) => c.createAgent({ kind: 'perp', name: 'alpha', universe: ['BTC', 'ETH'] }), path: '/agents', body: { kind: 'perp', name: 'alpha', universe: ['BTC', 'ETH'] } },
+  createAgent: { run: (c) => c.createAgent({ template: 'market-making', name: 'alpha', venues: ['hyperliquid'], universe: ['BTC'], mode: 'paper' }), path: '/agents', body: { template: 'market-making', name: 'alpha', venues: ['hyperliquid'], universe: ['BTC'], mode: 'paper' } },
   startAgent: { run: (c) => c.startAgent('a1', { mode: 'paper' }), path: '/agents/a1/start', body: { mode: 'paper' } },
   stopAgent: { run: (c) => c.stopAgent('a1'), path: '/agents/a1/stop', body: {} },
+  pauseAgent: { run: (c) => c.pauseAgent('a1', { reason: 'lunch' }), path: '/agents/a1/pause', body: { reason: 'lunch' } },
+  backtestAgent: { run: (c) => c.backtestAgent('a1', { hours: 6 }), path: '/agents/a1/backtest', body: { hours: 6 } },
+  listAgentTemplates: { run: (c) => c.listAgentTemplates(), path: '/agents/templates' },
+  getAgent: { run: (c) => c.getAgent('a1'), path: '/agents/a1' },
+  listAgentSignals: { run: (c) => c.listAgentSignals('a1', { mode: 'paper', limit: 10, before: 1794790800000 }), path: '/agents/a1/signals', query: { mode: 'paper', limit: '10', before: '1794790800000' } },
+  listAgentJournal: { run: (c) => c.listAgentJournal('a1', { mode: 'live' }), path: '/agents/a1/journal', query: { mode: 'live' } },
+  listAgentOrders: { run: (c) => c.listAgentOrders('a1', { mode: 'paper', open: true }), path: '/agents/a1/orders', query: { mode: 'paper', open: 'true' } },
+  getAgentPerformance: { run: (c) => c.getAgentPerformance('a1', { mode: 'research' }), path: '/agents/a1/performance', query: { mode: 'research' } },
+  getJob: { run: (c) => c.getJob('j1'), path: '/jobs/j1' },
 };
 
 describe('every operation of the OpenAPI document', () => {
@@ -182,6 +191,35 @@ describe('orders', () => {
     expect(JSON.parse(m.calls[0]!.body!)).toEqual({ text: 'SHOW POSITIONS', mode: 'live', accountId: '00000000-0000-4000-8000-000000000000', dryRun: false });
     expect(m.calls[0]!.headers['idempotency-key']).toBe('cmd-key-0001');
     await expect(m.client.runCommand('  ')).rejects.toBeInstanceOf(ConfigurationError);
+  });
+});
+
+describe('agents', () => {
+  it('the per-agent reads are ONE mode per call: `mode` is required and checked before any request', async () => {
+    const m = mock([ok({})]);
+    for (const run of [() => m.client.listAgentSignals('a1', {} as never), () => m.client.listAgentJournal('a1', { mode: 'all' } as never), () => m.client.listAgentOrders('a1', { mode: undefined } as never),
+      () => m.client.getAgentPerformance('a1', {} as never), () => m.client.listAgentSignals('a1', undefined as never)]) expect(run).toThrow(ConfigurationError);
+    expect(m.calls).toHaveLength(0);
+  });
+  it('waitForJob polls until the job is done, failed or cancelled; a timeout is not a failure', async () => {
+    const job = (status: string) => ok({ job: { id: 'j1', kind: 'backtest', status, attempts: 1 } });
+    const m = mock([job('queued'), job('running'), job('done')]);
+    expect((await m.client.waitForJob('j1', { pollIntervalMs: 5 })).job.status).toBe('done');
+    expect(m.calls).toHaveLength(3); expect(m.sleeps).toEqual([5, 5]);
+    for (const s of ['failed', 'cancelled']) expect((await mock([job(s)]).client.waitForJob('j1')).job.status).toBe(s);
+    const e = await mock([job('running')]).client.waitForJob('j1', { waitTimeoutMs: 0 }).catch((x: unknown) => x) as WaitTimeout;
+    expect(e).toBeInstanceOf(WaitTimeout); expect(e.message).toMatch(/not failed/);
+  });
+  it('a command answer is narrowed by kind and executed: a dry run carries the canonical order, an executed command the placed order', async () => {
+    const dry = await mock([ok({ kind: 'order', command: 'perp_open', mode: 'paper', dryRun: true, executed: false, order: { instrument: 'hyperliquid:BTC', notional: '100', size: null }, hash: 'h', attached: [] })]).client.runCommand('LONG BTC-PERP 100', { dryRun: true });
+    if (dry.kind !== 'order' || dry.executed) throw new Error('expected a dry run');
+    expect([dry.order.instrument, dry.order.notional, dry.order.size]).toEqual(['hyperliquid:BTC', '100', null]);       // CanonicalOrder
+    const done = await mock([ok({ kind: 'order', command: 'perp_open', mode: 'paper', dryRun: false, executed: true, order: { id: 'o1', status: 'FILLED', final: true }, canonical: { instrument: 'hyperliquid:BTC' }, hash: 'h', idempotent: false, approval: null, attached: [] })]).client.runCommand('LONG BTC-PERP 100');
+    if (done.kind !== 'order' || !done.executed) throw new Error('expected an executed order');
+    expect([done.order.id, done.order.status, done.canonical.instrument]).toEqual(['o1', 'FILLED', 'hyperliquid:BTC']);    // Order
+    const q = await mock([ok({ kind: 'query', command: 'show', mode: 'paper', dryRun: false, query: 'positions', data: { positions: [] } })]).client.runCommand('SHOW POSITIONS');
+    if (q.kind !== 'query') throw new Error('expected a query');
+    expect(q.query).toBe('positions');
   });
 });
 

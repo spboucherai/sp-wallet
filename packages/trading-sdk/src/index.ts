@@ -1,5 +1,5 @@
 // @sp-wallet/trading-sdk — official TypeScript client of the SP Wallet Trading API.
-export { SPWallet, DEFAULT_BASE_URL, responseMeta, type SPWalletOptions, type RequestOptions, type WriteOptions, type WaitOptions, type PageOptions, type CommandOptions, type OrderInput, type WriteResult, type ResponseMeta, type RateLimitInfo,
+export { SPWallet, DEFAULT_BASE_URL, responseMeta, type SPWalletOptions, type RequestOptions, type WriteOptions, type WaitOptions, type PageOptions, type CommandOptions, type AgentMode, type AgentPageQuery, type OrderInput, type WriteResult, type ResponseMeta, type RateLimitInfo,
   type OrderPreview, type PlacedOrder, type CancelledOrder, type CommandResult, type KillSwitchResult, type ActivityItem } from './client.ts';
 export { SPWalletError, ConfigurationError, APIError, ValidationError, AuthenticationError, PermissionDenied, ScopeDenied, MandateRequired, MandateDenied, ExecutionDisabled, RiskDenied, NotFound, Conflict, IdempotencyConflict, AmbiguousSymbol, AmbiguousCommand,
   RateLimited, NotImplementedError, ExecutionNotWired, ServerError, ServiceUnavailable, NetworkError, TimeoutError, OutcomeUnknown, WaitTimeout, WebhookVerificationError, errorFromResponse, redactSecrets,

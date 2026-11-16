@@ -70,15 +70,21 @@ const META = new WeakMap<object, ResponseMeta>();
 /** status, request id, idempotency key, rate-limit headers and number of attempts of the call that produced `result` */
 export const responseMeta = (result: object): ResponseMeta | undefined => META.get(result);
 
-/** answer of an operation the server does not implement yet (the strategy and agent writes answer 501): no success schema exists */
+/** @deprecated every operation of the contract has a typed answer now; kept so that code naming the type still compiles */
 export type WriteResult = Record<string, unknown>;
+/** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate */
+export type AgentMode = 'research' | 'paper' | 'live';
+/** a page of one agent's history, in ONE mode: `mode` is required — an answer never carries two modes (`all` is refused by the API) */
+export interface AgentPageQuery { mode: AgentMode; limit?: number; /** unix ms: rows strictly before it */ before?: number }
 /** POST /orders/preview: the canonical order, every check, the refusals it would meet, an estimate */
 export type OrderPreview = T.PreviewOrderResponse;
 /** POST /orders, /positions/{id}/close, /positions/{id}/reduce: the order, whether it is a replay, and the owner approval it waits for */
 export type PlacedOrder = T.PlaceOrderResponse;
 /** DELETE /orders/{id} */
 export type CancelledOrder = T.CancelOrderResponse;
-/** POST /commands: `kind` says what the command resolved to (`query`, `control`, `order`) */
+/** POST /commands — a discriminated union: `kind` is `query`, `control` or `order`; for an order, `executed` false means a dry run
+ *  (`order` is then the CANONICAL order) and true an executed command (`order` is the placed order, `canonical` its canonical form).
+ *  Narrow before reading: `if (r.kind === 'order' && r.executed) r.order.status`. */
 export type CommandResult = T.RunCommandResponse;
 /** POST /risk/kill-switch */
 export type KillSwitchResult = T.EngageKillSwitchResponse;
@@ -134,6 +140,12 @@ function retryAfterSeconds(h: Headers, now: number): number | null {
 }
 const redactDeep = (v: unknown, safe: (s: string) => string): unknown =>
   typeof v === 'string' ? safe(v) : Array.isArray(v) ? v.map((x) => redactDeep(x, safe)) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, redactDeep(x, safe)])) : v;
+const AGENT_MODES = ['research', 'paper', 'live'];
+/** the per-agent reads are ONE mode per call: the mode is required here, although the API would fall back on the agent's current one */
+function agentQuery<Q extends { mode: AgentMode }>(q: Q): Q {
+  if (!q || !AGENT_MODES.includes(q.mode)) throw new ConfigurationError('`mode` is required: "research", "paper" or "live" — one mode per call, an answer never mixes two');
+  return q;
+}
 const seg = (v: string, what: string): string => { if (typeof v !== 'string' || v === '') throw new ConfigurationError(`${what} is required`); return encodeURIComponent(v); };
 
 export class SPWallet {
@@ -271,24 +283,58 @@ export class SPWallet {
   // ============================================================================================================== strategies
   /** GET /strategies — strategy library and the versions pinned to agents */
   listStrategies(query: T.ListStrategiesQuery = {}, o?: RequestOptions): Promise<T.ListStrategiesResponse> { return this.#get('/strategies', query, o); }
-  /** POST /strategies — register a strategy version */
-  createStrategy(body: T.CreateStrategyBody, o?: WriteOptions): Promise<WriteResult> { return this.#write('POST', '/strategies', body, o); }
-  /** POST /strategies/{id}/backtest */
-  backtestStrategy(id: string, body: T.BacktestStrategyBody = {}, o?: WriteOptions): Promise<WriteResult> { return this.#write('POST', `/strategies/${seg(id, 'strategy id')}/backtest`, body, o); }
-  /** POST /strategies/{id}/start */
-  startStrategy(id: string, body: T.StartStrategyBody, o?: WriteOptions): Promise<WriteResult> { return this.#write('POST', `/strategies/${seg(id, 'strategy id')}/start`, body, o); }
+  /** POST /strategies — pin a library strategy version to ONE agent (`agentId` is required) and queue its backtest. Approves nothing. */
+  createStrategy(body: T.CreateStrategyBody, o?: WriteOptions): Promise<T.CreateStrategyResponse> { return this.#write('POST', '/strategies', body, o); }
+  /** POST /strategies/{id}/backtest — an asynchronous job: read it with `getJob(result.job.id)` or `waitForJob` */
+  backtestStrategy(id: string, body: T.BacktestStrategyBody = {}, o?: WriteOptions): Promise<T.BacktestStrategyResponse> { return this.#write('POST', `/strategies/${seg(id, 'strategy id')}/backtest`, body, o); }
+  /** POST /strategies/{id}/start — starts the agent the version is pinned to, in `mode` */
+  startStrategy(id: string, body: T.StartStrategyBody, o?: WriteOptions): Promise<T.StartStrategyResponse> { return this.#write('POST', `/strategies/${seg(id, 'strategy id')}/start`, body, o); }
   /** POST /strategies/{id}/stop */
-  stopStrategy(id: string, body: T.StopStrategyBody = {}, o?: WriteOptions): Promise<WriteResult> { return this.#write('POST', `/strategies/${seg(id, 'strategy id')}/stop`, body, o); }
+  stopStrategy(id: string, body: T.StopStrategyBody = {}, o?: WriteOptions): Promise<T.StopStrategyResponse> { return this.#write('POST', `/strategies/${seg(id, 'strategy id')}/stop`, body, o); }
 
   // ============================================================================================================== agents
+  // Managing agents needs `agents:manage` and NO trading mandate on the key: research and paper sign nothing. Starting an agent
+  // LIVE needs a mandate the OWNER approved for that agent with the passkey (409 `mandate_required` otherwise) — a key can never approve one.
   /** GET /agents */
   listAgents(o?: RequestOptions): Promise<T.ListAgentsResponse> { return this.#get('/agents', undefined, o); }
-  /** POST /agents */
-  createAgent(body: T.CreateAgentBody, o?: WriteOptions): Promise<WriteResult> { return this.#write('POST', '/agents', body, o); }
-  /** POST /agents/{id}/start */
-  startAgent(id: string, body: T.StartAgentBody, o?: WriteOptions): Promise<WriteResult> { return this.#write('POST', `/agents/${seg(id, 'agent id')}/start`, body, o); }
-  /** POST /agents/{id}/stop */
-  stopAgent(id: string, body: T.StopAgentBody = {}, o?: WriteOptions): Promise<WriteResult> { return this.#write('POST', `/agents/${seg(id, 'agent id')}/stop`, body, o); }
+  /** GET /agents/templates — the built-in agents: family, engine, the modes each can run in */
+  listAgentTemplates(o?: RequestOptions): Promise<T.ListAgentTemplatesResponse> { return this.#get('/agents/templates', undefined, o); }
+  /** GET /agents/{id} — one agent: model, strategy, limits, mandate reference, backtest reports (labelled), worker state */
+  getAgent(id: string, o?: RequestOptions): Promise<T.GetAgentResponse> { return this.#get(`/agents/${seg(id, 'agent id')}`, undefined, o); }
+  /** GET /agents/{id}/signals — the signal history of one agent in ONE mode (`mode` is required) */
+  listAgentSignals(id: string, query: AgentPageQuery, o?: RequestOptions): Promise<T.ListAgentSignalsResponse> { return this.#get(`/agents/${seg(id, 'agent id')}/signals`, agentQuery(query), o); }
+  /** GET /agents/{id}/journal — decisions, orders, fills, errors, risk denials and state changes of one agent in ONE mode */
+  listAgentJournal(id: string, query: AgentPageQuery, o?: RequestOptions): Promise<T.ListAgentJournalResponse> { return this.#get(`/agents/${seg(id, 'agent id')}/journal`, agentQuery(query), o); }
+  /** GET /agents/{id}/orders — the orders of one agent in ONE mode, in the unified order states */
+  listAgentOrders(id: string, query: AgentPageQuery & { open?: boolean }, o?: RequestOptions): Promise<T.ListAgentOrdersResponse> {
+    return this.#get(`/agents/${seg(id, 'agent id')}/orders`, { ...agentQuery(query), open: query.open === undefined ? undefined : String(query.open) }, o);
+  }
+  /** GET /agents/{id}/performance — computed from the records of ONE mode; paper and live are never added; a backtest is never here */
+  getAgentPerformance(id: string, query: { mode: AgentMode }, o?: RequestOptions): Promise<T.GetAgentPerformanceResponse> { return this.#get(`/agents/${seg(id, 'agent id')}/performance`, agentQuery(query), o); }
+  /** GET /jobs/{id} — one agent job (a backtest, a wind-down): status and result */
+  getJob(id: string, o?: RequestOptions): Promise<T.GetJobResponse> { return this.#get(`/jobs/${seg(id, 'job id')}`, undefined, o); }
+  /** Reads a job until it is `done`, `failed` or `cancelled`. Throws WaitTimeout — which is not a job failure — when the time elapses first. */
+  async waitForJob(id: string, o: Omit<WaitOptions, 'until'> = {}): Promise<T.GetJobResponse> {
+    const total = o.waitTimeoutMs ?? 60_000, every = o.pollIntervalMs ?? 1_000, started = Date.now();
+    for (;;) {
+      const last = await this.getJob(id, o);
+      if (['done', 'failed', 'cancelled'].includes(last.job.status)) return last;
+      const left = total - (Date.now() - started);
+      if (left <= 0) throw new WaitTimeout(`job ${id} is not finished after ${total} ms (last status: ${last.job.status}); it has not failed — keep reading it`, last);
+      await this.#sleep(Math.min(every, left));
+    }
+  }
+  /** POST /agents — from a `template` (see listAgentTemplates), or a perp agent (`kind: 'perp'` + `universe`). `mode` is `research`
+   *  (default: created, not running) or `paper`; never `live`. Nothing is signed. */
+  createAgent(body: T.CreateAgentBody, o?: WriteOptions): Promise<T.CreateAgentResponse> { return this.#write('POST', '/agents', body, o); }
+  /** POST /agents/{id}/start — `mode`: research, paper or live (live only under an owner-approved mandate for this agent) */
+  startAgent(id: string, body: T.StartAgentBody, o?: WriteOptions): Promise<T.StartAgentResponse> { return this.#write('POST', `/agents/${seg(id, 'agent id')}/start`, body, o); }
+  /** POST /agents/{id}/pause — no new exposure */
+  pauseAgent(id: string, body: T.PauseAgentBody = {}, o?: WriteOptions): Promise<T.PauseAgentResponse> { return this.#write('POST', `/agents/${seg(id, 'agent id')}/pause`, body, o); }
+  /** POST /agents/{id}/stop — always allowed; the safe wind-down */
+  stopAgent(id: string, body: T.StopAgentBody = {}, o?: WriteOptions): Promise<T.StopAgentResponse> { return this.#write('POST', `/agents/${seg(id, 'agent id')}/stop`, body, o); }
+  /** POST /agents/{id}/backtest — an asynchronous job (always a BACKTEST, labelled as such): read it with `getJob` / `waitForJob` */
+  backtestAgent(id: string, body: T.BacktestAgentBody = {}, o?: WriteOptions): Promise<T.BacktestAgentResponse> { return this.#write('POST', `/agents/${seg(id, 'agent id')}/backtest`, body, o); }
 
   // ============================================================================================================== meta
   /** GET /openapi.json — the OpenAPI 3.1 document served by the wallet */

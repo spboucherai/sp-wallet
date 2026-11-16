@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, describe, expect, it, type TestContext } from 'vitest';
-import { AmbiguousCommand, AmbiguousSymbol, AuthenticationError, constructWebhookEvent, errorFromResponse, ExecutionDisabled, ExecutionNotWired, FINAL_ORDER_STATES, IdempotencyConflict, MandateDenied, MandateRequired,
+import { AmbiguousCommand, AmbiguousSymbol, AuthenticationError, Conflict, ConfigurationError, constructWebhookEvent, errorFromResponse, ExecutionDisabled, FINAL_ORDER_STATES, IdempotencyConflict, MandateDenied, MandateRequired,
   newIdempotencyKey, NotFound, OPERATION_ERRORS, OPERATIONS, ORDER_STATES, RateLimited, responseMeta, RiskDenied, ScopeDenied, ServiceUnavailable, SPWallet, SPWalletError, ValidationError, verifyWebhook, type OperationId, type Order } from '../src/index.ts';
 import { ROOT, startStack, type Stack } from './stack.ts';
 
@@ -29,12 +29,6 @@ async function venue<R>(ctx: TestContext, run: () => Promise<R>): Promise<R> {
 const DEC = /^\d+(\.\d+)?$/;
 const ORDER = { mode: 'paper', instrument: 'hyperliquid:BTC', side: 'buy', type: 'market', size: '0.001' } as const;
 const UUID = '00000000-0000-4000-8000-000000000000';
-/** the operations the server does not implement yet: each answers 501 */
-const NOT_WIRED: Record<string, (c: SPWallet) => Promise<unknown>> = {
-  createStrategy: (c) => c.createStrategy({ kind: 'perp', path: 'momentum/v1' }), backtestStrategy: (c) => c.backtestStrategy(UUID, { symbols: ['BTC'], interval: '1h' }),
-  startStrategy: (c) => c.startStrategy(UUID, { mode: 'paper' }), stopStrategy: (c) => c.stopStrategy(UUID, { reason: 'sdk test' }),
-  createAgent: (c) => c.createAgent({ kind: 'perp', name: 'sdk agent', universe: ['BTC', 'ETH'], interval: '1h', mode: 'paper' }), startAgent: (c) => c.startAgent(UUID, { mode: 'paper' }), stopAgent: (c) => c.stopAgent(UUID),
-};
 /** every error this file receives from the server is one the document declares for the operation (`x-spw-errors`) */
 function declared(op: OperationId, e: SPWalletError): SPWalletError {
   expect(OPERATION_ERRORS[op].some(([status, code]) => status === e.status && code === e.code), `${op} answered ${e.status} ${e.code}: not in x-spw-errors`).toBe(true);
@@ -174,8 +168,8 @@ describe.skipIf(skip !== null)('integration: reads against the real route handle
   }, 120_000);
   it('every read operation of the document is exercised in this file', () => {
     const reads = (Object.keys(OPERATIONS) as OperationId[]).filter((id) => OPERATIONS[id].method === 'GET');
-    expect(reads.sort()).toEqual(['compareMarkets', 'getActivity', 'getBalances', 'getCandles', 'getMarket', 'getOpenApi', 'getOrder', 'getOrderbook', 'getPortfolio', 'getPrivateMarket', 'getPrivateMarketCompany', 'getRisk', 'listAgents',
-      'listMarkets', 'listOrders', 'listPositions', 'listPrivateMarkets', 'listStrategies']);
+    expect(reads.sort()).toEqual(['compareMarkets', 'getActivity', 'getAgent', 'getAgentPerformance', 'getBalances', 'getCandles', 'getJob', 'getMarket', 'getOpenApi', 'getOrder', 'getOrderbook', 'getPortfolio', 'getPrivateMarket',
+      'getPrivateMarketCompany', 'getRisk', 'listAgentJournal', 'listAgentOrders', 'listAgentSignals', 'listAgentTemplates', 'listAgents', 'listMarkets', 'listOrders', 'listPositions', 'listPrivateMarkets', 'listStrategies']);
   });
   it('rate-limit headers are exposed on every answer', async () => {
     const c = client('reader');
@@ -361,48 +355,85 @@ describe.skipIf(skip !== null)('integration: the PAPER write path, end to end, a
     const dry = await c.runCommand('LONG BTC-PERP 100', { accountId: acct(), dryRun: true });
     expect(dry).toMatchObject({ kind: 'order', command: 'perp_open', mode: 'paper', dryRun: true, executed: false, order: { instrument: I(), side: 'buy' } }); expect(dry.hash).toMatch(/^[0-9a-f]{64}$/);
     expect((await c.listOrders({ limit: 500 })).orders).toHaveLength(before);
-    say(`runCommand('LONG BTC-PERP 100', {dryRun:true}) → ${meta(dry)} kind=${dry.kind} executed=${dry.executed} order=${JSON.stringify({ instrument: dry.order!.instrument, side: dry.order!.side, notional: dry.order!.notional, size: dry.order!.size })}; orders created: 0`);
+    if (dry.kind !== 'order' || dry.executed) throw new Error('expected the dry run of an order');
+    say(`runCommand('LONG BTC-PERP 100', {dryRun:true}) → ${meta(dry)} kind=${dry.kind} executed=${dry.executed} order=${JSON.stringify({ instrument: dry.order.instrument, side: dry.order.side, notional: dry.order.notional, size: dry.order.size })} (the canonical order); orders created: 0`);
     const show = await c.runCommand('SHOW POSITIONS', { accountId: acct() });
-    expect(show).toMatchObject({ kind: 'query', query: 'positions' }); expect(Array.isArray((show.data as { positions: unknown[] }).positions)).toBe(true);
+    if (show.kind !== 'query') throw new Error('expected a query');
+    expect(show.query).toBe('positions'); expect(Array.isArray((show.data as { positions?: unknown[] }).positions)).toBe(true);
     const kill = await c.runCommand('KILL', { dryRun: true });
     expect(kill).toMatchObject({ kind: 'control', control: { type: 'kill_switch_on' }, executed: false });
     expect((await c.getRisk()).engine.killSwitch.on).toBe(false);
     const bad = declared('runCommand', await caught(c.runCommand('FROBNICATE THE MARKET')));
     expect(bad).toBeInstanceOf(ValidationError); expect(bad.code).toBe('parse_error');
-    say(`runCommand('SHOW POSITIONS') → kind=${show.kind} query=${show.query}; runCommand('KILL', {dryRun:true}) → kind=${kill.kind} executed=${kill.executed}; runCommand('FROBNICATE…') → ${bad.name} ${bad.code}`);
+    say(`runCommand('SHOW POSITIONS') → kind=${show.kind} query=${show.query}; runCommand('KILL', {dryRun:true}) → kind=${kill.kind} executed=${String((kill as { executed?: boolean }).executed)}; runCommand('FROBNICATE…') → ${bad.name} ${bad.code}`);
   }, 120_000);
 
   it('a preview answers the account\'s figures only to a key that may read the account', async (ctx) => {
     const p = await venue(ctx, () => client('prepare').previewOrder({ mode: 'paper', accountId: acct(), instrument: I(), side: 'buy', type: 'market', notional: '100' }));
     expect(p.account).toEqual({ id: acct(), venue: 'hyperliquid', network: p.account.network, withheld: true });
-    expect('positionBefore' in p.risk.derived).toBe(false); expect(p.wouldExecute).toBe(true); expect(p.risk.checks.some((x) => x.detail.startsWith('withheld'))).toBe(true);
+    expect('positionBefore' in p.risk.derived!).toBe(false); expect(p.wouldExecute).toBe(true); expect(p.risk.checks.some((x) => x.detail.startsWith('withheld'))).toBe(true);
     expect(JSON.stringify(p)).not.toMatch(/"(equity|freeCollateral|freeCollateralAfter|liquidationPrice)"/);
     say(`previewOrder with a key holding orders:prepare + markets:read only → account=${JSON.stringify({ ...p.account, id: '<account>' })} refusals=${JSON.stringify(p.refusals.map((r) => r.code))}`);
   });
 });
 
+describe.skipIf(skip !== null)('integration: agents on PAPER, against the real server', () => {
+  it('templates → create from the stream template → start paper → signals / journal / orders / performance (one mode per call) → pause → backtest job → stop', async (ctx) => {
+    const c = client('unbound', { timeoutMs: 60_000 });        // every scope and NO trading mandate: managing agents needs none (research and paper sign nothing)
+    const t = await c.listAgentTemplates();
+    const mm = t.templates.find((x) => x.id === 'market-making')!;
+    expect(mm).toMatchObject({ engine: 'stream' }); expect(mm.modes).toContain('paper');
+    say(`listAgentTemplates() → ${meta(t)} ${t.templates.map((x) => `${x.id}(${x.engine}: ${x.modes.join('/')})`).join(', ')}`);
+    const created = await venue(ctx, () => c.createAgent({ template: 'market-making', name: `SDK MM ${Date.now() % 100000}`, venues: ['hyperliquid'], universe: ['BTC'], capitalUsdc: '1000' }));
+    const id = created.agent.id;
+    expect(created.agent).toMatchObject({ state: 'stopped', mode: 'research' });
+    say(`createAgent({template:'market-making',venues:['hyperliquid'],universe:['BTC']}) → ${meta(created)} agent=${short(id)} state=${created.agent.state} mode=${created.agent.mode}`);
+    const started = await c.startAgent(id, { mode: 'paper' });
+    expect(started.agent).toMatchObject({ id, state: 'active', mode: 'paper' });
+    say(`startAgent(id, {mode:'paper'}) → ${meta(started)} state=${started.agent.state} mode=${started.agent.mode}`);
+    const one = await c.getAgent(id);
+    expect(one.agent).toMatchObject({ id, family: mm.family, state: 'active', mode: 'paper' });
+    expect((await c.listAgents()).agents.find((a) => a.id === id)).toMatchObject({ kind: 'stream', lifecycle: 'active', tradingMode: 'paper' });
+    const signals = await c.listAgentSignals(id, { mode: 'paper', limit: 20 }), journal = await c.listAgentJournal(id, { mode: 'paper' }), orders = await c.listAgentOrders(id, { mode: 'paper', open: false }), perf = await c.getAgentPerformance(id, { mode: 'paper' });
+    for (const r of [signals, journal, orders, perf]) expect(r.mode).toBe('paper');
+    expect(journal.entries.length).toBeGreaterThan(0); expect(journal.entries.every((e) => e.mode === 'paper')).toBe(true);
+    expect(Array.isArray(signals.signals) && Array.isArray(orders.orders)).toBe(true); expect(typeof perf.label).toBe('string');
+    expect((await c.listAgentJournal(id, { mode: 'live' })).entries).toEqual([]);                           // another mode is another answer: nothing of paper in it
+    say(`listAgentSignals/Journal/Orders(id, {mode:'paper'}), getAgentPerformance(id, {mode:'paper'}) → signals=${signals.signals.length} journal=${journal.entries.length} ("${journal.entries[0]!.title}") orders=${orders.orders.length} performance: "${perf.label}" points=${perf.points}`);
+    // one mode per call: required by the SDK, and `all` is a 400 of the API
+    expect(() => c.listAgentSignals(id, {} as never)).toThrow(ConfigurationError);
+    const raw = await fetch(`${stack.baseUrl}/api/v1/trading/agents/${id}/signals?mode=all`, { headers: { authorization: `Bearer ${stack.keys.unbound.secret}` } });
+    expect([raw.status, (await raw.json() as { error: string }).error]).toEqual([400, 'bad_request']);
+    const paused = await c.pauseAgent(id, { reason: 'sdk test' });
+    expect(paused.agent.state).toBe('paused');
+    const bt = await c.backtestAgent(id, { hours: 1 });
+    expect(bt.job).toMatchObject({ kind: 'backtest' }); expect(bt.label).toBe('backtest');
+    const job = await c.getJob(bt.job.id);
+    expect(job.job.id).toBe(bt.job.id); expect(['queued', 'running', 'done', 'failed', 'cancelled']).toContain(job.job.status);
+    const waited = await c.waitForJob(bt.job.id, { waitTimeoutMs: 20_000, pollIntervalMs: 500 }).catch((e: SPWalletError) => e);
+    say(`pauseAgent(id) → state=${paused.agent.state}; backtestAgent(id, {hours:1}) → job=${short(bt.job.id)} status=${bt.job.status}; getJob → ${job.job.status}; waitForJob(20 s) → ${waited instanceof SPWalletError ? `${waited.name} (not a failure: the job is still ${((waited as { last?: { job: { status: string } } }).last)?.job.status})` : waited.job.status}`);
+    const stopped = await c.stopAgent(id, { reason: 'sdk test' });
+    expect(stopped.agent.state).toBe('stopped');
+    say(`stopAgent(id) → ${meta(stopped)} state=${stopped.agent.state}`);
+    // the refusals: live without an owner-approved mandate for the agent; an unknown agent; a spot agent (the owner's app)
+    const live = declared('startAgent', await caught(c.startAgent(id, { mode: 'live' })));
+    expect(live).toBeInstanceOf(Conflict); expect(['mandate_required', 'live_unavailable']).toContain(live.code);
+    const ghost = declared('getAgent', await caught(c.getAgent(UUID)));
+    expect(ghost).toBeInstanceOf(NotFound); expect(ghost.code).toBe('not_found');
+    expect(declared('getJob', await caught(c.getJob(UUID)))).toBeInstanceOf(NotFound);
+    expect(declared('createAgent', await caught(c.createAgent({ kind: 'spot', name: 'spot via key', universe: ['BTC'] }))).code).toBe('owner_required');
+    expect(declared('createStrategy', await caught(c.createStrategy({ kind: 'perp', path: 'momentum/v1' }))).code).toBe('bad_request');
+    for (const run of [() => c.backtestStrategy(UUID), () => c.startStrategy(UUID, { mode: 'paper' }), () => c.stopStrategy(UUID)]) expect(await caught(run())).toBeInstanceOf(NotFound);
+    say(`startAgent(id, {mode:'live'}) without an owner-approved mandate → ${live.name} HTTP ${live.status} ${live.code}; getAgent(unknown) → ${ghost.name} ${ghost.code}`);
+  }, 180_000);
+});
+
 describe.skipIf(skip !== null)('integration: the write surface and the refusals', () => {
-  it('this file calls every write operation of the document', () => {
-    const writes = (Object.keys(OPERATIONS) as OperationId[]).filter((id) => OPERATIONS[id].method !== 'GET').sort();
-    expect(writes).toEqual([...Object.keys(NOT_WIRED), 'cancelOrder', 'closePosition', 'engageKillSwitch', 'placeOrder', 'previewOrder', 'reducePosition', 'runCommand'].sort());
-  });
-  it('the strategy and agent writes answer 501 → ExecutionNotWired, never a success; the key and the request id are on the error; a 501 is not stored', async () => {
-    const c = client('trader', { sendTimestamp: true });
-    for (const [id, run] of Object.entries(NOT_WIRED)) {
-      const e = declared(id as OperationId, await caught(run(c)));
-      expect(e, id).toBeInstanceOf(ExecutionNotWired);
-      expect(e, id).toMatchObject({ status: 501, code: 'execution_not_wired' });
-      expect(e.idempotencyKey, id).toMatch(/^[0-9a-f-]{36}$/); expect(e.requestId, id).toMatch(/^[0-9a-f-]{36}$/);
-      say(`${id} (key bound to a mandate) → ${e.name} HTTP ${e.status} ${e.code} idempotencyKey=${e.idempotencyKey?.slice(0, 8)}…`);
-    }
-    const idempotencyKey = 'sdk-it-resume-0001';
-    for (let i = 0; i < 2; i++) expect(await caught(c.stopAgent(UUID, {}, { idempotencyKey }))).toMatchObject({ status: 501, idempotencyKey });
-  });
-  it('a key WITHOUT a mandate: execution scopes are inert → MandateRequired, a preview included (there is no order it could place); a cancel needs no mandate', async () => {
+  it('a key WITHOUT a mandate: what would move risk on the wallet\'s accounts is refused → MandateRequired, a preview included; a cancel needs no mandate', async () => {
     const c = client('unbound');
-    const gated: Record<string, (c: SPWallet) => Promise<unknown>> = { ...NOT_WIRED, placeOrder: (x) => x.createOrder(ORDER), closePosition: (x) => x.closePosition('pos-1'), reducePosition: (x) => x.reducePosition('pos-1', { fraction: '0.5' }) };
+    const gated: Record<string, (c: SPWallet) => Promise<unknown>> = { placeOrder: (x) => x.createOrder(ORDER), closePosition: (x) => x.closePosition('pos-1'), reducePosition: (x) => x.reducePosition('pos-1', { fraction: '0.5' }) };
+    expect(Object.keys(gated).sort()).toEqual((Object.keys(OPERATIONS) as OperationId[]).filter((id) => OPERATIONS[id].requiresMandate).sort());
     for (const [id, run] of Object.entries(gated)) {
-      expect(OPERATIONS[id as OperationId].requiresMandate, id).toBe(true);
       const e = declared(id as OperationId, await caught(run(c)));
       expect(e, id).toBeInstanceOf(MandateRequired); expect(e, id).toMatchObject({ status: 403, code: 'mandate_required' });
       say(`${id} (key without a mandate) → ${e.name} HTTP ${e.status} ${e.code}`);
@@ -418,7 +449,7 @@ describe.skipIf(skip !== null)('integration: the write surface and the refusals'
   it('the server validates the documented request schemas before anything else', async () => {
     const c = client('trader');
     for (const bad of [() => c.createAgent({ kind: 'perp', name: 'x', universe: ['BTC'] }), () => c.reducePosition('p', { fraction: '1.5' }), () => c.backtestStrategy(UUID, { symbols: ['btc'] }),
-      () => c.createOrder({ ...ORDER, clientOrderId: 'short' }), () => c.startAgent(UUID, { mode: 'paper', agentId: 'not-a-uuid' }), () => c.runCommand('x'.repeat(301))]) {
+      () => c.createOrder({ ...ORDER, clientOrderId: 'short' }), () => c.startAgent(UUID, { mode: 'paper', agentId: 'not-a-uuid' }), () => c.runCommand('x'.repeat(301)), () => c.backtestAgent(UUID, { hours: 0 })]) {
       const e = await caught(bad());
       expect(e).toBeInstanceOf(ValidationError); expect(e.code).toBe('bad_request');
     }

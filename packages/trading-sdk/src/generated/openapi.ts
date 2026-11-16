@@ -7,9 +7,9 @@ export const API_VERSION = "1.0.0";
 export const SCOPES = ["wallet:read", "markets:read", "orders:read", "orders:prepare", "orders:execute", "orders:cancel", "positions:read", "positions:manage", "strategies:read", "strategies:manage", "agents:read", "agents:manage"] as const;
 export type Scope = (typeof SCOPES)[number];
 /** inert on a key that is not bound to a trading mandate (403 `mandate_required`) */
-export const EXECUTION_SCOPES = ["orders:execute", "orders:cancel", "positions:manage", "strategies:manage", "agents:manage"] as const;
+export const EXECUTION_SCOPES = ["orders:execute", "orders:cancel", "positions:manage"] as const;
 
-export const WEBHOOK_EVENTS = ["key.revoked", "risk.kill_switch", "agent.updated", "order.updated"] as const;
+export const WEBHOOK_EVENTS = ["key.revoked", "risk.kill_switch", "agent.updated", "risk.proposal", "order.updated"] as const;
 export type WebhookEventName = (typeof WEBHOOK_EVENTS)[number];
 
 /** the states of the unified order state machine — the closed set of `status` */
@@ -140,6 +140,17 @@ export type RiskCheck = {
   limit: string | null;
   detail: string;
   exempt: boolean;
+  [extra: string]: unknown;
+};
+export type Switch = {
+  on: boolean;
+  at: number | null;
+  by: {
+    kind: string;
+    id: string;
+    [extra: string]: unknown;
+  } | null;
+  reason: string | null;
   [extra: string]: unknown;
 };
 
@@ -1031,7 +1042,7 @@ export type PlaceOrderBody = {
   type: "limit" | "market" | "stop_market" | "stop_limit" | "take_profit_market" | "take_profit_limit";
   /** quantity of the base asset. Exactly one of `size` and `notional` is required — pattern: ^\d+(\.\d+)?$ */
   size?: string;
-  /** value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required — pattern: ^\d+(\.\d+)?$ */
+  /** value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required. A SPOT order: a SELL names `size` (the quantity sold); a BUY names `notional` — the amount of the quote asset to spend — because a swap is exact-input — pattern: ^\d+(\.\d+)?$ */
   notional?: string;
   /** decimal number as a string (never a float) — pattern: ^\d+(\.\d+)?$ */
   price?: string;
@@ -1141,34 +1152,67 @@ export type CreateStrategyBody = {
   /** pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   agentId?: string;
 };
+export type CreateStrategyResponse = {
+  strategy: {
+    id: string;
+    agentId: string;
+    sha256: string;
+    status: string;
+    [extra: string]: unknown;
+  };
+  [extra: string]: unknown;
+};
 
 // ---------------------------------------------------------------------------------------------------- listAgents: GET /api/v1/trading/agents
 export type ListAgentsResponse = {
   agents: {
     id: string;
-    kind: "spot" | "perp";
+    kind: "spot" | "perp" | "stream" | "supervisor";
     name: string;
+    family: string;
+    /** historical raw state */
     state: string;
+    /** historical raw mode */
     mode: string;
+    lifecycle: "active" | "paused" | "stopped";
     tradingMode: "research" | "paper" | "live" | null;
     venue: string;
     universe: string[];
     interval: string;
+    configVersion: number;
     [extra: string]: unknown;
   }[];
 };
 
 // ---------------------------------------------------------------------------------------------------- createAgent: POST /api/v1/trading/agents
 export type CreateAgentBody = {
-  kind: "spot" | "perp";
+  /** without a template: perp (a spot agent needs a vault from the signer: owner only) */
+  kind?: "spot" | "perp";
+  /** one of GET /agents/templates */
+  template?: string;
   name: string;
   /** default: "" */
   mission?: string;
-  universe: string[];
-  /** default: "1h" */
-  interval?: "1h" | "1d";
-  /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. — default: "paper" */
-  mode?: "paper" | "live";
+  universe?: string[];
+  venues?: Array<"hyperliquid" | "edgex" | "dydx" | "gmx">;
+  strategyPath?: string;
+  interval?: "1h" | "4h" | "1d";
+  /** pattern: ^\d{1,7}(\.\d{1,6})?$ */
+  capitalUsdc?: string;
+  risk?: Record<string, number | string | boolean>;
+  config?: Record<string, unknown>;
+  /** research (default: created, not running) or paper (stream and supervisor agents start at once); never live — default: "research" */
+  mode?: "research" | "paper" | "live";
+};
+export type CreateAgentResponse = {
+  agent: {
+    id: string;
+    state: "active" | "paused" | "stopped";
+    /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+    mode: "research" | "paper" | "live";
+    [extra: string]: unknown;
+  };
+  [extra: string]: unknown;
 };
 
 // ---------------------------------------------------------------------------------------------------- getRisk: GET /api/v1/trading/risk
@@ -1201,28 +1245,8 @@ export type GetRiskResponse = {
   ts: number;
   /** the global switches of the risk engine: `killSwitch.on` blocks every new risk; `readOnly.on` lets only cancels pass */
   engine: {
-    killSwitch: {
-      on: boolean;
-      at: number | null;
-      by: {
-        kind: string;
-        id: string;
-        [extra: string]: unknown;
-      } | null;
-      reason: string | null;
-      [extra: string]: unknown;
-    };
-    readOnly: {
-      on: boolean;
-      at: number | null;
-      by: {
-        kind: string;
-        id: string;
-        [extra: string]: unknown;
-      } | null;
-      reason: string | null;
-      [extra: string]: unknown;
-    };
+    killSwitch: Switch;
+    readOnly: Switch;
     note: string;
     [extra: string]: unknown;
   };
@@ -1241,7 +1265,7 @@ export type PreviewOrderBody = {
   type: "limit" | "market" | "stop_market" | "stop_limit" | "take_profit_market" | "take_profit_limit";
   /** quantity of the base asset. Exactly one of `size` and `notional` is required — pattern: ^\d+(\.\d+)?$ */
   size?: string;
-  /** value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required — pattern: ^\d+(\.\d+)?$ */
+  /** value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required. A SPOT order: a SELL names `size` (the quantity sold); a BUY names `notional` — the amount of the quote asset to spend — because a swap is exact-input — pattern: ^\d+(\.\d+)?$ */
   notional?: string;
   /** decimal number as a string (never a float) — pattern: ^\d+(\.\d+)?$ */
   price?: string;
@@ -1265,8 +1289,8 @@ export type PreviewOrderResponse = {
   hash: string;
   /** what the canonical order leaves open; null when it could not be resolved (see `refusals`) */
   resolved: {
-    /** base units */
-    size: string;
+    /** base units; null when the order is sized by a quote amount the venue converts (a GMX increase) */
+    size: string | null;
     worstPrice: string | null;
     notionalUsd: string | null;
     [extra: string]: unknown;
@@ -1289,6 +1313,7 @@ export type PreviewOrderResponse = {
     decision: "allow" | "deny";
     reducing: boolean;
     checks: RiskCheck[];
+    /** null for a spot order: of the risk engine only the kill switch and read-only mode apply to it */
     derived: {
       size: string | null;
       notional: string | null;
@@ -1297,7 +1322,7 @@ export type PreviewOrderResponse = {
       positionBefore?: string;
       positionAfter?: string | null;
       [extra: string]: unknown;
-    };
+    } | null;
     [extra: string]: unknown;
   };
   /** null for the owner session, and when the key's mandate cannot be used (a `mandate` refusal then says why) */
@@ -1318,7 +1343,8 @@ export type PreviewOrderResponse = {
     [extra: string]: unknown;
   };
   account: {
-    id: string;
+    /** null for a spot order (the wallet itself) */
+    id: string | null;
     venue: string;
     network: string;
     equity?: string | null;
@@ -1398,56 +1424,81 @@ export type RunCommandBody = {
   dryRun?: boolean;
 };
 export type RunCommandResponse = {
-  /** what the command resolved to */
-  kind: "query" | "control" | "order";
+  kind: "query";
   /** the parsed command type */
   command: string;
   /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. */
   mode: "paper" | "live";
   dryRun: boolean;
-  /** absent for a query; false for a dry run */
-  executed?: boolean;
-  query?: string;
-  /** query: the answer of the matching read operation */
-  data?: Record<string, unknown>;
-  control?: {
-    type: "cancel_order" | "cancel_all" | "kill_switch_on";
+  query: string;
+  /** the answer of the matching read operation */
+  data: Record<string, unknown>;
+  [extra: string]: unknown;
+} | {
+  kind: "control";
+  /** the parsed command type */
+  command: string;
+  /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. */
+  mode: "paper" | "live";
+  dryRun: boolean;
+  executed: boolean;
+  control: {
+    type: "cancel_order" | "cancel_all" | "kill_switch_on" | "stop_all_agents";
     [extra: string]: unknown;
   };
-  /** kind `order`. Dry run: the canonical order the command resolves to. Executed: the order as POST /orders answers it (`id`, `status`, `final`, …) */
-  order?: Record<string, unknown>;
-  /** executed order: the canonical order that was placed */
-  canonical?: CanonicalOrder;
-  hash?: string;
-  idempotent?: boolean;
-  approval?: Record<string, unknown> | null;
-  attached?: {
-    role: "stop_loss" | "take_profit";
-    placed: boolean;
-    note: string;
-    [extra: string]: unknown;
-  }[];
-  /** CANCEL ORDER: the answer of the cancel */
+  /** CANCEL ORDER, executed: the answer of the cancel */
   result?: Record<string, unknown>;
-  /** CANCEL ALL: one row per order */
+  /** CANCEL ALL, executed: one row per order */
   results?: {
     id: string;
     ok: boolean;
     [extra: string]: unknown;
   }[];
-  /** CANCEL ALL dry run: the ids that would be cancelled */
+  /** CANCEL ALL, dry run: the ids that would be cancelled */
   orders?: string[];
-  killSwitch?: {
-    on: boolean;
-    at: number | null;
-    by: {
-      kind: string;
-      id: string;
-      [extra: string]: unknown;
-    } | null;
-    reason: string | null;
+  killSwitch?: Switch;
+  [extra: string]: unknown;
+} | {
+  kind: "order";
+  /** the parsed command type */
+  command: string;
+  /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. */
+  mode: "paper" | "live";
+  dryRun: boolean;
+  executed: false;
+  /** the canonical order the command resolves to; nothing was created */
+  order: CanonicalOrder;
+  hash: string;
+  attached: {
+    role: "stop_loss" | "take_profit";
+    placed: boolean;
+    note: string;
     [extra: string]: unknown;
-  };
+  }[];
+  /** spot: the preview of the swap the order would become */
+  preview?: Record<string, unknown>;
+  [extra: string]: unknown;
+} | {
+  kind: "order";
+  /** the parsed command type */
+  command: string;
+  /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. */
+  mode: "paper" | "live";
+  dryRun: boolean;
+  executed: true;
+  /** the order that was placed, as POST /orders answers it */
+  order: Order;
+  /** the canonical order that was placed */
+  canonical: CanonicalOrder;
+  hash: string;
+  idempotent: boolean;
+  approval: Record<string, unknown> | null;
+  attached: {
+    role: "stop_loss" | "take_profit";
+    placed: boolean;
+    note: string;
+    [extra: string]: unknown;
+  }[];
   [extra: string]: unknown;
 };
 
@@ -1457,28 +1508,8 @@ export type EngageKillSwitchBody = {
   reason?: string;
 };
 export type EngageKillSwitchResponse = {
-  killSwitch: {
-    on: boolean;
-    at: number | null;
-    by: {
-      kind: string;
-      id: string;
-      [extra: string]: unknown;
-    } | null;
-    reason: string | null;
-    [extra: string]: unknown;
-  };
-  readOnly: {
-    on: boolean;
-    at: number | null;
-    by: {
-      kind: string;
-      id: string;
-      [extra: string]: unknown;
-    } | null;
-    reason: string | null;
-    [extra: string]: unknown;
-  };
+  killSwitch: Switch;
+  readOnly: Switch;
   [extra: string]: unknown;
 };
 
@@ -1487,13 +1518,33 @@ export type BacktestStrategyBody = {
   symbols?: string[];
   interval?: "1h" | "1d";
 };
+export type BacktestStrategyResponse = {
+  job: {
+    id: string;
+    kind: string;
+    status: "queued" | "running" | "done" | "failed" | "cancelled";
+    attempts: number;
+    [extra: string]: unknown;
+  };
+  label?: string;
+};
 
 // ---------------------------------------------------------------------------------------------------- startStrategy: POST /api/v1/trading/strategies/{id}/start
 export type StartStrategyBody = {
-  /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. */
-  mode: "paper" | "live";
+  /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+  mode: "research" | "paper" | "live";
   /** pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   agentId?: string;
+};
+export type StartStrategyResponse = {
+  agent: {
+    id: string;
+    state: "active" | "paused" | "stopped";
+    /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+    mode: "research" | "paper" | "live";
+    [extra: string]: unknown;
+  };
+  [extra: string]: unknown;
 };
 
 // ---------------------------------------------------------------------------------------------------- stopStrategy: POST /api/v1/trading/strategies/{id}/stop
@@ -1501,19 +1552,217 @@ export type StopStrategyBody = {
   /** default: "" */
   reason?: string;
 };
+export type StopStrategyResponse = {
+  agent: {
+    id: string;
+    state: "active" | "paused" | "stopped";
+    /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+    mode: "research" | "paper" | "live";
+    [extra: string]: unknown;
+  };
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- listAgentTemplates: GET /api/v1/trading/agents/templates
+export type ListAgentTemplatesResponse = {
+  templates: {
+    id: string;
+    family: string;
+    engine: string;
+    modes: Array<"research" | "paper" | "live">;
+    liveReason: string | null;
+    strategyInstalled: boolean;
+    [extra: string]: unknown;
+  }[];
+};
+
+// ---------------------------------------------------------------------------------------------------- getAgent: GET /api/v1/trading/agents/{id}
+export type GetAgentResponse = {
+  agent: {
+    id: string;
+    family: string;
+    state: "active" | "paused" | "stopped";
+    /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+    mode: "research" | "paper" | "live";
+    [extra: string]: unknown;
+  };
+  mandateDraft: Record<string, unknown> | null;
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- listAgentSignals: GET /api/v1/trading/agents/{id}/signals
+export interface ListAgentSignalsQuery {
+  /** default: the mode the agent is in now */
+  mode?: "research" | "paper" | "live";
+  /** default: 100 */
+  limit?: number;
+  /** unix ms: rows strictly before it */
+  before?: number;
+  open?: "true" | "false";
+}
+export type ListAgentSignalsResponse = {
+  /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+  mode: "research" | "paper" | "live";
+  signals: {
+    id: string;
+    /** milliseconds since the Unix epoch */
+    ts: number;
+    /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+    mode: "research" | "paper" | "live";
+    configVersion: number;
+    strategySha256: string;
+    decision: "pending" | "acted" | "skipped";
+    reasonCode: string | null;
+    [extra: string]: unknown;
+  }[];
+};
+
+// ---------------------------------------------------------------------------------------------------- listAgentJournal: GET /api/v1/trading/agents/{id}/journal
+export interface ListAgentJournalQuery {
+  /** default: the mode the agent is in now */
+  mode?: "research" | "paper" | "live";
+  /** default: 100 */
+  limit?: number;
+  /** unix ms: rows strictly before it */
+  before?: number;
+  open?: "true" | "false";
+}
+export type ListAgentJournalResponse = {
+  /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+  mode: "research" | "paper" | "live";
+  entries: {
+    id: string;
+    /** milliseconds since the Unix epoch */
+    ts: number;
+    /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+    mode: "research" | "paper" | "live";
+    kind: string;
+    severity: string;
+    title: string;
+    [extra: string]: unknown;
+  }[];
+};
+
+// ---------------------------------------------------------------------------------------------------- listAgentOrders: GET /api/v1/trading/agents/{id}/orders
+export interface ListAgentOrdersQuery {
+  /** default: the mode the agent is in now */
+  mode?: "research" | "paper" | "live";
+  /** default: 100 */
+  limit?: number;
+  /** unix ms: rows strictly before it */
+  before?: number;
+  open?: "true" | "false";
+}
+export type ListAgentOrdersResponse = {
+  /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+  mode: "research" | "paper" | "live";
+  orders: {
+    id: string;
+    mode: "paper" | "live";
+    instrument: string;
+    side: string;
+    /** unified order state (CREATED … FILLED, CANCELLED, REJECTED, FAILED, UNKNOWN) */
+    state: string;
+    [extra: string]: unknown;
+  }[];
+};
+
+// ---------------------------------------------------------------------------------------------------- getAgentPerformance: GET /api/v1/trading/agents/{id}/performance
+export interface GetAgentPerformanceQuery {
+  /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+  mode?: "research" | "paper" | "live";
+}
+export type GetAgentPerformanceResponse = {
+  /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+  mode: "research" | "paper" | "live";
+  /** says which mode the figures are for; a backtest is never in this answer */
+  label: string;
+  points: number;
+  warnings: {
+    code: string;
+    message: string;
+  }[];
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- getJob: GET /api/v1/trading/jobs/{id}
+export type GetJobResponse = {
+  job: {
+    id: string;
+    kind: string;
+    status: "queued" | "running" | "done" | "failed" | "cancelled";
+    attempts: number;
+    [extra: string]: unknown;
+  };
+  label?: string;
+};
 
 // ---------------------------------------------------------------------------------------------------- startAgent: POST /api/v1/trading/agents/{id}/start
 export type StartAgentBody = {
-  /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. */
-  mode: "paper" | "live";
+  /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+  mode: "research" | "paper" | "live";
   /** pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   agentId?: string;
+};
+export type StartAgentResponse = {
+  agent: {
+    id: string;
+    state: "active" | "paused" | "stopped";
+    /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+    mode: "research" | "paper" | "live";
+    [extra: string]: unknown;
+  };
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- pauseAgent: POST /api/v1/trading/agents/{id}/pause
+export type PauseAgentBody = {
+  /** default: "" */
+  reason?: string;
+};
+export type PauseAgentResponse = {
+  agent: {
+    id: string;
+    state: "active" | "paused" | "stopped";
+    /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+    mode: "research" | "paper" | "live";
+    [extra: string]: unknown;
+  };
+  [extra: string]: unknown;
 };
 
 // ---------------------------------------------------------------------------------------------------- stopAgent: POST /api/v1/trading/agents/{id}/stop
 export type StopAgentBody = {
   /** default: "" */
   reason?: string;
+};
+export type StopAgentResponse = {
+  agent: {
+    id: string;
+    state: "active" | "paused" | "stopped";
+    /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
+    mode: "research" | "paper" | "live";
+    [extra: string]: unknown;
+  };
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- backtestAgent: POST /api/v1/trading/agents/{id}/backtest
+export type BacktestAgentBody = {
+  /** pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  versionId?: string;
+  /** stream agents: how many hours of recorded snapshots to replay */
+  hours?: number;
+};
+export type BacktestAgentResponse = {
+  job: {
+    id: string;
+    kind: string;
+    status: "queued" | "running" | "done" | "failed" | "cancelled";
+    attempts: number;
+    [extra: string]: unknown;
+  };
+  label?: string;
 };
 
 /** every operation of the document: method, path template, scope, whether the server implements it, and whether it is a mutating (idempotent-keyed) call */
@@ -1532,24 +1781,33 @@ export const OPERATIONS = {
   getActivity: { method: "GET", path: "/api/v1/trading/activity", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500], errorsOpen: false },
   listPositions: { method: "GET", path: "/api/v1/trading/positions", scope: "positions:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500, 503], errorsOpen: false },
   listOrders: { method: "GET", path: "/api/v1/trading/orders", scope: "orders:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500], errorsOpen: false },
-  placeOrder: { method: "POST", path: "/api/v1/trading/orders", scope: "orders:execute", implemented: true, idempotent: true, requiresMandate: true, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 503], errorsOpen: true },
+  placeOrder: { method: "POST", path: "/api/v1/trading/orders", scope: "orders:execute", implemented: true, idempotent: true, requiresMandate: true, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 501, 502, 503], errorsOpen: true },
   getOrder: { method: "GET", path: "/api/v1/trading/orders/{id}", scope: "orders:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500], errorsOpen: false },
   cancelOrder: { method: "DELETE", path: "/api/v1/trading/orders/{id}", scope: "orders:cancel", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 422, 429, 500, 503], errorsOpen: false },
   listStrategies: { method: "GET", path: "/api/v1/trading/strategies", scope: "strategies:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500], errorsOpen: false },
-  createStrategy: { method: "POST", path: "/api/v1/trading/strategies", scope: "strategies:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
+  createStrategy: { method: "POST", path: "/api/v1/trading/strategies", scope: "strategies:manage", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 422, 429, 500], errorsOpen: false },
   listAgents: { method: "GET", path: "/api/v1/trading/agents", scope: "agents:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 401, 403, 429, 500], errorsOpen: false },
-  createAgent: { method: "POST", path: "/api/v1/trading/agents", scope: "agents:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
+  createAgent: { method: "POST", path: "/api/v1/trading/agents", scope: "agents:manage", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 409, 422, 429, 500], errorsOpen: false },
   getRisk: { method: "GET", path: "/api/v1/trading/risk", scope: "positions:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 401, 403, 429, 500], errorsOpen: false },
-  previewOrder: { method: "POST", path: "/api/v1/trading/orders/preview", scope: "orders:prepare", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 422, 429, 500, 503], errorsOpen: false },
-  closePosition: { method: "POST", path: "/api/v1/trading/positions/{id}/close", scope: "positions:manage", implemented: true, idempotent: true, requiresMandate: true, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 503], errorsOpen: true },
-  reducePosition: { method: "POST", path: "/api/v1/trading/positions/{id}/reduce", scope: "positions:manage", implemented: true, idempotent: true, requiresMandate: true, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 503], errorsOpen: true },
-  runCommand: { method: "POST", path: "/api/v1/trading/commands", scope: "orders:prepare", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 501, 503], errorsOpen: true },
+  previewOrder: { method: "POST", path: "/api/v1/trading/orders/preview", scope: "orders:prepare", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 422, 429, 500, 501, 502, 503], errorsOpen: false },
+  closePosition: { method: "POST", path: "/api/v1/trading/positions/{id}/close", scope: "positions:manage", implemented: true, idempotent: true, requiresMandate: true, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 501, 502, 503], errorsOpen: true },
+  reducePosition: { method: "POST", path: "/api/v1/trading/positions/{id}/reduce", scope: "positions:manage", implemented: true, idempotent: true, requiresMandate: true, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 501, 502, 503], errorsOpen: true },
+  runCommand: { method: "POST", path: "/api/v1/trading/commands", scope: "orders:prepare", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 501, 502, 503], errorsOpen: true },
   engageKillSwitch: { method: "POST", path: "/api/v1/trading/risk/kill-switch", scope: "positions:manage", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500], errorsOpen: false },
-  backtestStrategy: { method: "POST", path: "/api/v1/trading/strategies/{id}/backtest", scope: "strategies:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
-  startStrategy: { method: "POST", path: "/api/v1/trading/strategies/{id}/start", scope: "strategies:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
-  stopStrategy: { method: "POST", path: "/api/v1/trading/strategies/{id}/stop", scope: "strategies:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
-  startAgent: { method: "POST", path: "/api/v1/trading/agents/{id}/start", scope: "agents:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
-  stopAgent: { method: "POST", path: "/api/v1/trading/agents/{id}/stop", scope: "agents:manage", implemented: false, idempotent: true, requiresMandate: true, statuses: [400, 401, 403, 409, 429, 500, 501], errorsOpen: false },
+  backtestStrategy: { method: "POST", path: "/api/v1/trading/strategies/{id}/backtest", scope: "strategies:manage", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 429, 500], errorsOpen: false },
+  startStrategy: { method: "POST", path: "/api/v1/trading/strategies/{id}/start", scope: "strategies:manage", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 429, 500], errorsOpen: false },
+  stopStrategy: { method: "POST", path: "/api/v1/trading/strategies/{id}/stop", scope: "strategies:manage", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 429, 500], errorsOpen: false },
+  listAgentTemplates: { method: "GET", path: "/api/v1/trading/agents/templates", scope: "agents:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 401, 403, 429, 500], errorsOpen: false },
+  getAgent: { method: "GET", path: "/api/v1/trading/agents/{id}", scope: "agents:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500], errorsOpen: false },
+  listAgentSignals: { method: "GET", path: "/api/v1/trading/agents/{id}/signals", scope: "agents:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500], errorsOpen: false },
+  listAgentJournal: { method: "GET", path: "/api/v1/trading/agents/{id}/journal", scope: "agents:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500], errorsOpen: false },
+  listAgentOrders: { method: "GET", path: "/api/v1/trading/agents/{id}/orders", scope: "agents:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500], errorsOpen: false },
+  getAgentPerformance: { method: "GET", path: "/api/v1/trading/agents/{id}/performance", scope: "agents:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500], errorsOpen: false },
+  getJob: { method: "GET", path: "/api/v1/trading/jobs/{id}", scope: "agents:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500], errorsOpen: false },
+  startAgent: { method: "POST", path: "/api/v1/trading/agents/{id}/start", scope: "agents:manage", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 429, 500], errorsOpen: false },
+  pauseAgent: { method: "POST", path: "/api/v1/trading/agents/{id}/pause", scope: "agents:manage", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 429, 500], errorsOpen: false },
+  stopAgent: { method: "POST", path: "/api/v1/trading/agents/{id}/stop", scope: "agents:manage", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 429, 500], errorsOpen: false },
+  backtestAgent: { method: "POST", path: "/api/v1/trading/agents/{id}/backtest", scope: "agents:manage", implemented: true, idempotent: true, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 409, 429, 500], errorsOpen: false },
 } as const;
 export type OperationId = keyof typeof OPERATIONS;
 
@@ -1569,22 +1827,31 @@ export const OPERATION_ERRORS: Record<OperationId, readonly (readonly [number, s
   getActivity: [[400, "bad_request"], [400, "invalid_cursor"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
   listPositions: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "service_unavailable"]],
   listOrders: [[400, "bad_request"], [400, "invalid_cursor"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
-  placeOrder: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_market"], [404, "unknown_venue"], [409, "account_required"], [409, "ambiguous_symbol"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "mode_read_only"], [422, "no_account"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "venue_not_wired"], [422, "venue_rejected"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  placeOrder: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "gmx_disabled"], [403, "gmx_requires_owner_passkey"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_integrity"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "owner_session_required"], [403, "position_not_attributable"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_market"], [404, "unknown_venue"], [409, "account_has_active_mandate"], [409, "account_required"], [409, "ambiguous_command"], [409, "ambiguous_order"], [409, "ambiguous_symbol"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "fee_cap_not_expressible"], [422, "gmx_leverage_required"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "inconsistent_prices"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "invalid_order"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "missing_balance"], [422, "missing_reference_price"], [422, "mode_read_only"], [422, "no_account"], [422, "no_client_id_format"], [422, "no_instrument"], [422, "no_position"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_buy_needs_quote_amount"], [422, "spot_market_only"], [422, "spot_paper_not_available"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "swap_not_enabled"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "unknown_instrument"], [422, "unsupported_asset"], [422, "venue_not_wired"], [422, "venue_rejected"], [422, "zero_size"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"], [502, "swap_flow_failed"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
   getOrder: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "unknown_order"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
-  cancelOrder: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "not_your_order"], [404, "unknown_order"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "cancel_in_app"], [422, "venue_rejected"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "signer_unreachable"], [503, "venue_unavailable"]],
+  cancelOrder: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "gmx_requires_owner_passkey"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "not_your_order"], [403, "owner_session_required"], [404, "unknown_order"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "cancel_in_app"], [422, "venue_rejected"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "signer_unreachable"], [503, "venue_unavailable"]],
   listStrategies: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
-  createStrategy: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
+  createStrategy: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_found"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [409, "wrong_kind"], [422, "bad_strategy"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
   listAgents: [[401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
-  createAgent: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
+  createAgent: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "owner_required"], [409, "bad_report"], [409, "bad_state"], [409, "exists"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [409, "live_unavailable"], [409, "mandate_required"], [409, "no_report"], [409, "no_strategy"], [409, "strategy_not_installed"], [409, "wrong_kind"], [422, "bad_request"], [422, "universe_mismatch"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
   getRisk: [[401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
-  previewOrder: [[400, "bad_request"], [400, "invalid_order"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_market"], [404, "unknown_venue"], [409, "account_required"], [409, "ambiguous_symbol"], [422, "below_min_size"], [422, "no_account"], [422, "spot_via_swap_screen"], [422, "venue_not_wired"], [422, "venue_rejected"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
-  closePosition: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_position"], [404, "unknown_venue"], [409, "account_required"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "close_in_app"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "mode_read_only"], [422, "no_account"], [422, "no_position"], [422, "not_reducing"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "venue_not_wired"], [422, "venue_rejected"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
-  reducePosition: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_position"], [404, "unknown_venue"], [409, "account_required"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "close_in_app"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "mode_read_only"], [422, "no_account"], [422, "no_position"], [422, "not_reducing"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "venue_not_wired"], [422, "venue_rejected"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
-  runCommand: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "parse_error"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "not_your_order"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_order"], [404, "unknown_venue"], [409, "account_required"], [409, "ambiguous_command"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "cancel_in_app"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "fee_cap_not_expressible"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "inconsistent_prices"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "invalid_order"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "missing_balance"], [422, "missing_reference_price"], [422, "mode_read_only"], [422, "no_account"], [422, "no_client_id_format"], [422, "no_instrument"], [422, "no_position"], [422, "not_reducing"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "venue_not_wired"], [422, "venue_rejected"], [422, "zero_size"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "service_unavailable"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  previewOrder: [[400, "bad_request"], [400, "invalid_order"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "owner_session_required"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_market"], [404, "unknown_venue"], [409, "account_required"], [409, "ambiguous_command"], [409, "ambiguous_order"], [409, "ambiguous_symbol"], [422, "below_min_size"], [422, "fee_cap_not_expressible"], [422, "gmx_leverage_required"], [422, "inconsistent_prices"], [422, "invalid_order"], [422, "missing_balance"], [422, "missing_reference_price"], [422, "no_account"], [422, "no_client_id_format"], [422, "no_instrument"], [422, "no_position"], [422, "spot_buy_needs_quote_amount"], [422, "spot_market_only"], [422, "spot_paper_not_available"], [422, "spot_via_swap_screen"], [422, "swap_not_enabled"], [422, "unknown_instrument"], [422, "unsupported_asset"], [422, "venue_not_wired"], [422, "venue_rejected"], [422, "zero_size"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"], [502, "swap_flow_failed"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  closePosition: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "gmx_disabled"], [403, "gmx_requires_owner_passkey"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_integrity"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "owner_session_required"], [403, "position_not_attributable"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_position"], [404, "unknown_venue"], [409, "account_has_active_mandate"], [409, "account_required"], [409, "ambiguous_command"], [409, "ambiguous_order"], [409, "ambiguous_position"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "close_in_app"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "fee_cap_not_expressible"], [422, "gmx_leverage_required"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "inconsistent_prices"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "invalid_order"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "missing_balance"], [422, "missing_reference_price"], [422, "mode_read_only"], [422, "no_account"], [422, "no_client_id_format"], [422, "no_instrument"], [422, "no_position"], [422, "not_reducing"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_buy_needs_quote_amount"], [422, "spot_market_only"], [422, "spot_paper_not_available"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "swap_not_enabled"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "unknown_instrument"], [422, "unsupported_asset"], [422, "venue_not_wired"], [422, "venue_rejected"], [422, "zero_size"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"], [502, "swap_flow_failed"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  reducePosition: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "gmx_disabled"], [403, "gmx_requires_owner_passkey"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_integrity"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "owner_session_required"], [403, "position_not_attributable"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_position"], [404, "unknown_venue"], [409, "account_has_active_mandate"], [409, "account_required"], [409, "ambiguous_command"], [409, "ambiguous_order"], [409, "ambiguous_position"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "close_in_app"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "fee_cap_not_expressible"], [422, "gmx_leverage_required"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "inconsistent_prices"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "invalid_order"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "missing_balance"], [422, "missing_reference_price"], [422, "mode_read_only"], [422, "no_account"], [422, "no_client_id_format"], [422, "no_instrument"], [422, "no_position"], [422, "not_reducing"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_buy_needs_quote_amount"], [422, "spot_market_only"], [422, "spot_paper_not_available"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "swap_not_enabled"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "unknown_instrument"], [422, "unsupported_asset"], [422, "venue_not_wired"], [422, "venue_rejected"], [422, "zero_size"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"], [502, "swap_flow_failed"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
+  runCommand: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "parse_error"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "gmx_disabled"], [403, "gmx_requires_owner_passkey"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_integrity"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "not_your_order"], [403, "owner_session_required"], [403, "position_not_attributable"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_order"], [404, "unknown_venue"], [409, "account_has_active_mandate"], [409, "account_required"], [409, "ambiguous_command"], [409, "ambiguous_order"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "cancel_in_app"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "fee_cap_not_expressible"], [422, "gmx_leverage_required"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "inconsistent_prices"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "invalid_order"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "missing_balance"], [422, "missing_reference_price"], [422, "mode_read_only"], [422, "no_account"], [422, "no_client_id_format"], [422, "no_instrument"], [422, "no_position"], [422, "not_reducing"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_buy_needs_quote_amount"], [422, "spot_market_only"], [422, "spot_paper_not_available"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "swap_not_enabled"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "unknown_instrument"], [422, "unsupported_asset"], [422, "venue_not_wired"], [422, "venue_rejected"], [422, "zero_size"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"], [502, "swap_flow_failed"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "service_unavailable"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],
   engageKillSwitch: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
-  backtestStrategy: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
-  startStrategy: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
-  stopStrategy: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
-  startAgent: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
-  stopAgent: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mandate_required"], [403, "mixed_credentials"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"]],
+  backtestStrategy: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_found"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  startStrategy: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "owner_required"], [403, "restricted"], [404, "not_found"], [409, "bad_report"], [409, "bad_request"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [409, "live_unavailable"], [409, "mandate_required"], [409, "no_report"], [409, "no_strategy"], [409, "other_version"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  stopStrategy: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_found"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  listAgentTemplates: [[401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  getAgent: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_found"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  listAgentSignals: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_found"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  listAgentJournal: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_found"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  listAgentOrders: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_found"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  getAgentPerformance: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_found"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  getJob: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_found"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  startAgent: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "owner_required"], [403, "restricted"], [404, "not_found"], [409, "bad_report"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [409, "live_unavailable"], [409, "mandate_required"], [409, "no_report"], [409, "no_strategy"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  pauseAgent: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_found"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  stopAgent: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_found"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  backtestAgent: [[400, "bad_request"], [400, "idempotency"], [400, "stale_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "not_found"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [409, "no_strategy"], [409, "wrong_kind"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
 };

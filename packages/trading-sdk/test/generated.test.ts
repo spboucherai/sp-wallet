@@ -26,13 +26,14 @@ describe('generated types', () => {
   it('the operation table, the scopes and the events are the document\'s', () => {
     const ids = Object.values(doc.paths as Record<string, Record<string, { operationId: string }>>).flatMap((p) => Object.values(p).map((o) => o.operationId));
     expect(Object.keys(OPERATIONS).sort()).toEqual(ids.sort());
-    expect(ids).toHaveLength(32);
-    const writes = (Object.keys(OPERATIONS) as OperationId[]).filter((id) => OPERATIONS[id].method !== 'GET');
-    expect(writes.filter((id) => OPERATIONS[id].implemented).sort()).toEqual(['cancelOrder', 'closePosition', 'engageKillSwitch', 'placeOrder', 'previewOrder', 'reducePosition', 'runCommand']);
-    // the strategy and agent writes answer 501; a preview and the kill switch take no Idempotency-Key, every other write requires one
-    expect(writes.filter((id) => !OPERATIONS[id].implemented)).toHaveLength(7);
+    expect(ids).toHaveLength(41);
+    const all = Object.keys(OPERATIONS) as OperationId[], writes = all.filter((id) => OPERATIONS[id].method !== 'GET');
+    expect(all.filter((id) => !OPERATIONS[id].implemented)).toEqual([]);                       // every operation of the contract is implemented by the server
+    expect(writes).toHaveLength(16);
+    // a preview and the kill switch take no Idempotency-Key, every other write requires one
     expect(writes.filter((id) => !OPERATIONS[id].idempotent).sort()).toEqual(['engageKillSwitch', 'previewOrder']);
-    expect((Object.keys(OPERATIONS) as OperationId[]).filter((id) => OPERATIONS[id].requiresMandate && OPERATIONS[id].implemented).sort()).toEqual(['closePosition', 'placeOrder', 'reducePosition']);
+    // only what would add or move risk on the wallet's accounts needs a mandate on the KEY; managing agents does not (an agent has its own)
+    expect(all.filter((id) => OPERATIONS[id].requiresMandate).sort()).toEqual(['closePosition', 'placeOrder', 'reducePosition']);
     expect([...ORDER_STATES]).toEqual([...SERVER_STATES]); expect([...FINAL_ORDER_STATES]).toEqual(['FILLED', 'CANCELLED', 'REJECTED', 'FAILED']);
     expect([...MANDATE_DENY_REASONS]).toEqual(doc['x-spw-mandate-deny-reasons']); expect([...RISK_CHECK_IDS]).toEqual(doc['x-spw-risk-checks']);
     for (const [p, item] of Object.entries(doc.paths as Record<string, Record<string, { operationId: OperationId; 'x-spw-errors': { status: number; code: string }[] }>>)) for (const o of Object.values(item)) {
@@ -41,7 +42,7 @@ describe('generated types', () => {
     }
     expect(OPERATION_ERRORS.placeOrder).toContainEqual([403, 'execution_disabled']); expect(OPERATION_ERRORS.getOrderbook).toContainEqual([422, 'no_orderbook']);
     expect([...SCOPES]).toEqual(doc['x-spw-scopes'].map((s: { scope: string }) => s.scope));
-    expect([...EXECUTION_SCOPES]).toEqual(['orders:execute', 'orders:cancel', 'positions:manage', 'strategies:manage', 'agents:manage']);
+    expect([...EXECUTION_SCOPES]).toEqual(['orders:execute', 'orders:cancel', 'positions:manage']);
     expect([...WEBHOOK_EVENTS]).toEqual(doc['x-spw-webhook-events'].map((e: { event: string }) => e.event));
     expect(API_VERSION).toBe(doc.info.version);
   });
@@ -52,6 +53,9 @@ describe('generated types', () => {
     expect(tsType({ anyOf: [{ type: 'string' }, { type: 'null' }] })).toBe('string | null');
     expect(tsType({ type: ['number', 'null'] })).toBe('number | null');
     expect(tsType({})).toBe('unknown');
+    expect(tsType({ type: 'object', propertyNames: { type: 'string' }, additionalProperties: { anyOf: [{ type: 'number' }, { type: 'string' }] } })).toBe('Record<string, number | string>');
+    expect(tsType({ type: 'object', propertyNames: { type: 'string' }, additionalProperties: {} })).toBe('Record<string, unknown>');
+    expect(tsType({ type: 'integer', exclusiveMinimum: 0 })).toBe('number');
     expect(tsType({ const: true })).toBe('true'); expect(tsType({ type: 'string', const: 'perpetual' })).toBe('"perpetual"'); expect(tsType({ const: null })).toBe('null');
     expect(tsType({ $ref: '#/components/schemas/Order' })).toBe('Order'); expect(tsType({ $ref: '#/components/schemas/Error' })).toBe('ApiErrorBody');
     expect(tsType({ anyOf: [{ $ref: '#/components/schemas/Order', description: 'x' }, { type: 'null' }] })).toBe('Order | null');

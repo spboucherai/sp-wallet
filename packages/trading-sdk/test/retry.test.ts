@@ -212,14 +212,14 @@ describe('writes: retried only because of the Idempotency-Key', () => {
       expect(e.idempotencyKey).toBe(m.calls[0]!.headers['idempotency-key']);
     }
   });
-  it('501 execution_not_wired is an error on every write method — never a success', async () => {
+  it('a 501 (an operation a server has not connected: an owner\'s spot order without the swap flow, say) is an error on every write method — never a success', async () => {
     const O = { side: 'buy', type: 'market', size: '1', instrument: 'hyperliquid:BTC' } as const;
     const writes: ((c: ReturnType<typeof mock>['client']) => Promise<unknown>)[] = [
       (c) => c.runCommand('STOP ALL AGENTS'), (c) => c.createOrder(O), (c) => c.cancelOrder('o'), (c) => c.closePosition('p'), (c) => c.reducePosition('p', { fraction: '0.5' }),
       (c) => c.createStrategy({ kind: 'spot', path: 'x' }), (c) => c.backtestStrategy('s'), (c) => c.startStrategy('s', { mode: 'paper' }), (c) => c.stopStrategy('s'),
-      (c) => c.createAgent({ kind: 'spot', name: 'ab', universe: ['BTC'] }), (c) => c.startAgent('a', { mode: 'paper' }), (c) => c.stopAgent('a'),
+      (c) => c.createAgent({ kind: 'perp', name: 'ab', universe: ['BTC'] }), (c) => c.startAgent('a', { mode: 'paper' }), (c) => c.stopAgent('a'), (c) => c.pauseAgent('a'), (c) => c.backtestAgent('a'),
     ];
-    expect(writes).toHaveLength(12);
+    expect(writes).toHaveLength(14);
     for (const w of writes) {
       const m = mock([fail(501, 'execution_not_wired', 'declared but not connected to execution yet; nothing was done')]);
       const e = await caught(w(m.client));
