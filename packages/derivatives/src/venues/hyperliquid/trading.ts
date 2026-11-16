@@ -28,7 +28,9 @@ export interface HlOrderAction { type: 'order'; orders: HlOrderWire[]; grouping:
 export interface HlCancelAction { type: 'cancel'; cancels: { a: number; o: number }[] }
 export interface HlCancelByCloidAction { type: 'cancelByCloid'; cancels: { asset: number; cloid: string }[] }
 export interface HlUpdateLeverageAction { type: 'updateLeverage'; asset: number; isCross: boolean; leverage: number }
-export type HlL1Action = HlOrderAction | HlCancelAction | HlCancelByCloidAction | HlUpdateLeverageAction;
+/** dead man's switch: cancel every open order of the account at `time` (unix ms); without `time`, remove the schedule. Key order of the SDK's `schedule_cancel`: type, then time when present */
+export interface HlScheduleCancelAction { type: 'scheduleCancel'; time?: number }
+export type HlL1Action = HlOrderAction | HlCancelAction | HlCancelByCloidAction | HlUpdateLeverageAction | HlScheduleCancelAction;
 
 /** SignRequest.payload for kind 'hl_l1': everything needed to recompute the hash, plus the typed data that the key signs */
 export interface HlL1SignPayload { scheme: 'l1'; action: unknown; nonce: number; vaultAddress: string | null; expiresAfter: number | null; typedData: HlTypedData }
@@ -79,6 +81,7 @@ const orderAction = z.strictObject({ type: z.literal('order'), orders: z.array(o
 const cancelAction = z.strictObject({ type: z.literal('cancel'), cancels: z.array(z.strictObject({ a: uint, o: uint })).min(1).max(40) });
 const cancelByCloidAction = z.strictObject({ type: z.literal('cancelByCloid'), cancels: z.array(z.strictObject({ asset: uint, cloid: z.string().regex(CLOID) })).min(1).max(40) });
 const updateLeverageAction = z.strictObject({ type: z.literal('updateLeverage'), asset: uint, isCross: z.boolean(), leverage: z.number().int().min(1).max(1000) });
+const scheduleCancelAction = z.strictObject({ type: z.literal('scheduleCancel'), time: uint.optional() });
 const approveAgentAction = z.strictObject({
   type: z.literal('approveAgent'), hyperliquidChain: z.enum(['Mainnet', 'Testnet']), signatureChainId: z.string().regex(/^0x[0-9a-f]{1,12}$/),
   agentAddress: z.string().regex(/^0x[0-9a-f]{40}$/), agentName: z.string().min(1).max(60).optional(), nonce: uint,
@@ -109,11 +112,14 @@ export interface HlTradingOptions {
   expiresAfterMs?: number | null;
   /** `submit` refuses the mainnet exchange endpoint unless this is true (live trading is enabled by the owner, not by the build) */
   allowMainnetExchange?: boolean;
+  /** V11 (market making): `describe` names a `scheduleCancel` action (`schedule_cancel`). Off by default: every caller that does
+   *  not ask for it keeps reading that action as `other`, exactly as before — only the quoting mandate of the signer turns it on */
+  describeScheduleCancel?: boolean;
   /** V11: with the mainnet endpoint closed (above), `submit` still sends what can only reduce risk — cancels, and order actions whose orders are all reduce-only */
   allowMainnetExits?: boolean;
 }
 
-export interface HlDescription { kind: 'order' | 'cancel' | 'leverage' | 'approve_agent' | 'other'; orders?: OrderRequest[]; detail: Record<string, unknown> }
+export interface HlDescription { kind: 'order' | 'cancel' | 'leverage' | 'approve_agent' | 'schedule_cancel' | 'other'; orders?: OrderRequest[]; detail: Record<string, unknown> }
 
 export interface HlTrading extends VenueTrading {
   buildOrder(req: OrderRequest, ctx: { instrument: Instrument; nonce: number }): { action: HlOrderAction; sign: SignRequest };
@@ -122,6 +128,12 @@ export interface HlTrading extends VenueTrading {
   buildUpdateLeverage(o: { instrument: Instrument; leverage: number; marginMode: 'cross' | 'isolated'; nonce: number }): { action: HlUpdateLeverageAction; sign: SignRequest };
   /** approveAgent: authorizes `agentAddress` as API wallet. The sign request is for the ACCOUNT key (kind 'hl_user'). */
   buildApproveAgent(o: { agentAddress: string; agentName: string | null; nonce: number; signatureChainId?: string }): { action: HlApproveAgentAction; sign: SignRequest };
+  /** V11 (market making): several orders in ONE action. Every order is validated like `buildOrder`'s; nothing is rounded. */
+  buildOrders(items: { req: OrderRequest; instrument: Instrument }[], ctx: { nonce: number }): { action: HlOrderAction; sign: SignRequest };
+  /** V11: several cancels in ONE action — all by venue order id, or all by client id (the venue has one action type for each) */
+  buildCancels(items: { instrument: Instrument; venueOrderId?: string; clientId?: string }[], ctx: { nonce: number }): { action: HlCancelAction | HlCancelByCloidAction; sign: SignRequest };
+  /** V11: the venue's dead man's switch. `time` (unix ms): cancel every open order of the account then; null: remove the schedule */
+  buildScheduleCancel(o: { time: number | null; nonce: number }): { action: HlScheduleCancelAction; sign: SignRequest };
   describe(sign: SignRequest): HlDescription;
   /** what `describe` returns for an order built from `req` (market → IOC limit, wire decimals, clientId → cloid) */
   normalizeRequest(req: OrderRequest, instrument: Instrument): OrderRequest;
@@ -250,6 +262,12 @@ export function createHlTrading(o: HlTradingOptions): HlTrading {
         if (a.isCross && x.isolatedOnly) throw reject(`${x.symbol} is isolated-only`);
         return { kind: 'leverage', detail: { ...common, instrument: `${ID}:${x.symbol}`, leverage: String(a.leverage), marginMode: a.isCross ? 'cross' : 'isolated' } };
       }
+      case 'scheduleCancel': {
+        if (o.describeScheduleCancel !== true) return { kind: 'other', detail: { ...common, type: 'scheduleCancel' } };
+        const a = strict(scheduleCancelAction, raw, 'scheduleCancel action');
+        if (!sameKeys(raw, a.time === undefined ? ['type'] : ['type', 'time'])) throw reject('scheduleCancel action fields are not in the canonical order');
+        return { kind: 'schedule_cancel', detail: { ...common, type: 'scheduleCancel', time: a.time ?? null } };
+      }
       default:
         // a valid hash of something this module does not build (transfer between dexes, staking, sub-account, vault …): never sign
         return { kind: 'other', detail: { ...common, type: String(raw.type).slice(0, 60) } };
@@ -282,6 +300,30 @@ export function createHlTrading(o: HlTradingOptions): HlTrading {
         return l1({ type: 'cancel', cancels: [{ a: a.asset, o: Number(c.venueOrderId) }] }, nonce);
       }
       return l1({ type: 'cancelByCloid', cancels: [{ asset: a.asset, cloid: hlCloid(c.clientId!) }] }, nonce);
+    },
+
+    buildOrders(items, ctx) {
+      if (!Array.isArray(items) || items.length < 1 || items.length > 40) throw reject('a batch holds 1 to 40 orders');
+      const orders = items.map((x) => toWire(x.req, x.instrument)), ids = orders.map((w) => w.c);
+      if (new Set(ids).size !== ids.length) throw reject('two orders of the batch carry the same client id');
+      return l1({ type: 'order', orders, grouping: 'na' }, nonceOk(ctx.nonce));
+    },
+
+    buildCancels(items, ctx) {
+      if (!Array.isArray(items) || items.length < 1 || items.length > 40) throw reject('a batch holds 1 to 40 cancels');
+      const byOid = items[0]!.venueOrderId !== undefined;
+      for (const c of items) if ((c.venueOrderId === undefined) === (c.clientId === undefined) || (c.venueOrderId !== undefined) !== byOid) throw reject('a cancel batch is all by venueOrderId or all by clientId, exactly one per cancel');
+      if (byOid) {
+        for (const c of items) if (!/^(0|[1-9]\d{0,15})$/.test(c.venueOrderId!) || !Number.isSafeInteger(Number(c.venueOrderId))) throw reject('venueOrderId must be the venue\'s numeric order id');
+        return l1({ type: 'cancel', cancels: items.map((c) => ({ a: assetOf(c.instrument).asset, o: Number(c.venueOrderId) })) }, nonceOk(ctx.nonce));
+      }
+      return l1({ type: 'cancelByCloid', cancels: items.map((c) => ({ asset: assetOf(c.instrument).asset, cloid: hlCloid(c.clientId!) })) }, nonceOk(ctx.nonce));
+    },
+
+    buildScheduleCancel(c) {
+      const nonce = nonceOk(c.nonce);
+      if (c.time !== null && (!Number.isSafeInteger(c.time) || c.time <= 0)) throw reject('scheduleCancel time must be unix milliseconds');
+      return l1(c.time === null ? { type: 'scheduleCancel' } : { type: 'scheduleCancel', time: c.time }, nonce);
     },
 
     buildUpdateLeverage(u) {
@@ -321,6 +363,7 @@ export function createHlTrading(o: HlTradingOptions): HlTrading {
       else if (type === 'cancel') batch = strict(cancelAction, action, 'cancel action').cancels.length;
       else if (type === 'cancelByCloid') batch = strict(cancelByCloidAction, action, 'cancelByCloid action').cancels.length;
       else if (type === 'updateLeverage') strict(updateLeverageAction, action, 'updateLeverage action');
+      else if (type === 'scheduleCancel') { strict(scheduleCancelAction, action, 'scheduleCancel action'); exit = true; } // it can only cancel orders
       else if (type === 'approveAgent') { isUser = true; if (strict(approveAgentAction, action, 'approveAgent action').nonce !== nonce) throw reject('approveAgent: the nonce of the action and of the request differ'); }
       else throw err('unsupported', `action type '${String(type).slice(0, 40)}' is not submitted by this adapter`);
       // the mainnet lock stops NEW risk. With `allowMainnetExits`, what can only reduce it — a cancel, or orders that are ALL

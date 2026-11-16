@@ -20,6 +20,7 @@ import { venueAuthorizationAgain, venueAuthorize, venueKeyAddress, venueRevoke, 
 import { venueDepositVerdict, venueWithdraw } from './venue-collateral.ts';
 import { venueMandateApprove, venueMandateRevoke, venueMandateSign, venueMandateStatus, type VenueMandateSignRequest } from './venue-mandate.ts';
 import { noVenueReader, type VenueReader } from './venue-read.ts';
+import { venueQuotingApprove, venueQuotingRevoke, venueQuotingSign, venueQuotingStatus, type VenueQuotingSignRequest } from './venue-quoting.ts'; // V11 market making
 import { checkPolicyNoSpend } from '@spw/core'; // v8 GMX: decrease / cancel move no asset amount
 import { gmxAuthorize, gmxPlainVerdict, gmxPrepare, gmxRevoke, gmxStatus } from './venue-gmx.ts'; // v8 GMX v2 orders (wallet transactions built here)
 
@@ -47,6 +48,7 @@ export class Signer {
         expired: this.now() >= m.mandate.expiresAt, today: m.usage[today] ?? { sold: {}, orders: 0 } })),
       venues: venueStatus(this.venueCtx()),
       venueMandates: venueMandateStatus(this.venueCtx()),
+      venueQuotingMandates: venueQuotingStatus(this.venueCtx()), // V11
       gmx: gmxStatus(this.venueCtx()), // v8
     };
   }
@@ -69,6 +71,11 @@ export class Signer {
   venueMandateApprove(mandate: unknown, assertion?: AuthenticationResponseJSON) { return venueMandateApprove(this.venueCtx(), mandate, assertion); }
   venueMandateSign(req: VenueMandateSignRequest) { return venueMandateSign(this.venueCtx(), req); }
   venueMandateRevoke(mandateId: string) { return venueMandateRevoke(this.venueCtx(), mandateId); }
+  // V11 quoting mandates (venue-quoting.ts): one passkey approval, then post-only quotes, reduce-only orders, cancels and the
+  // venue's dead man's switch without a passkey, inside limits enforced here
+  venueQuotingApprove(mandate: unknown, assertion?: AuthenticationResponseJSON) { return venueQuotingApprove(this.venueCtx(), mandate, assertion); }
+  venueQuotingSign(req: VenueQuotingSignRequest) { return venueQuotingSign(this.venueCtx(), req); }
+  venueQuotingRevoke(mandateId: string) { return venueQuotingRevoke(this.venueCtx(), mandateId); }
   // v8 GMX v2: the venue policy (passkey, once); orders themselves go through `sign` with an intent carrying a `gmx` section
   gmxAuthorize(authorization: unknown, assertion?: AuthenticationResponseJSON) { return gmxAuthorize(this.venueCtx(), authorization, assertion); }
   gmxRevoke(authorizationId: string) { return gmxRevoke(this.venueCtx(), authorizationId); }

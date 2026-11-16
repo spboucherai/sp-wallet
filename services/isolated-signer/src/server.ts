@@ -84,6 +84,10 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
       if (route === 'POST /venue/mandate/approve') return await signer.venueMandateApprove(json.mandate, json.assertion);
       if (route === 'POST /venue/mandate/sign') return await signer.venueMandateSign(json);
       if (route === 'POST /venue/mandate/revoke') return signer.venueMandateRevoke(String(json.mandateId));
+      // V11 quoting mandates (market making): approval needs the owner's passkey; signing needs none (every limit is checked by the signer); revoking is always allowed
+      if (route === 'POST /venue/quoting/approve') return await signer.venueQuotingApprove(json.mandate, json.assertion);
+      if (route === 'POST /venue/quoting/sign') return await signer.venueQuotingSign(json);
+      if (route === 'POST /venue/quoting/revoke') return signer.venueQuotingRevoke(String(json.mandateId));
       // v8 GMX v2: the venue policy needs the owner's passkey; revoking is always allowed; orders go through POST /sign (intent with a `gmx` section)
       if (route === 'POST /venue/gmx/authorize') return await signer.gmxAuthorize(json.authorization, json.assertion);
       if (route === 'POST /venue/gmx/revoke') return signer.gmxRevoke(String(json.authorizationId));

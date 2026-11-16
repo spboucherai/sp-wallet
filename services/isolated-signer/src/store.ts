@@ -30,17 +30,31 @@ export interface SignerState {
   venueWithdrawals?: Record<string, import('./venue-collateral.ts').StoredVenueWithdrawal>;
   /** derivative mandates approved by the owner (mandateId -> record), each extending one venue authorization. Never deleted. */
   venueMandates?: Record<string, StoredVenueMandate>;
+  /** V11: quoting mandates (market making) approved by the owner (mandateId -> record), each extending one venue authorization.
+   *  Never deleted. Absent in a state written before V11; a pre-V11 binary keeps the field untouched but does not know it
+   *  (rollback rule: revoke every quoting mandate BEFORE rolling the signer back — docs/v11/work/mm-core.md). */
+  venueQuotingMandates?: Record<string, StoredVenueQuotingMandate>;
   /** v8: GMX venue policies approved by the owner (authorizationId -> record). Never deleted: a revoked one stays revoked. */
   gmx?: Record<string, import('./venue-gmx.ts').StoredGmxAuthorization>;
 }
 /** an order signed with a trading key that can still add exposure on the venue: kept until its venue expiry + a grace (venue-mandate.ts) */
-export interface VenuePendingOrder { clientId: string; instrument: string; side: 'buy' | 'sell'; size: string; price: string; /** unix ms */ until: number; /** unix ms */ signedAt?: number }
+export interface VenuePendingOrder { clientId: string; instrument: string; side: 'buy' | 'sell'; size: string; price: string; /** unix ms */ until: number; /** unix ms */ signedAt?: number;
+  /** V11: 1 = a quote signed under a quoting mandate (venue-quoting.ts drops it once the venue lists it); absent on every other entry */ q?: 1 }
 /**
  * `usage`: per UTC day — orders that can add exposure, reduce-only orders, cancels, leverage changes, and the summed notional of
  * the first. `hour`: unix seconds of the exposure-adding orders signed in the last hour.
  */
 export interface StoredVenueMandate { mandate: import('@spw/derivatives/live').VenueMandate; hash: string; approvedAt: string; revoked: boolean; revokedAt?: string;
   usage: Record<string, { orders: number; reduceOnly: number; cancels: number; leverage: number; turnover: string }>; hour: number[] }
+/**
+ * V11 quoting mandate record. `usage`: per UTC day — quotes signed (orders), quote batches, reduce-only orders, cancels,
+ * dead-man's-switch heartbeats, summed notional of the quotes, and presumed triggers of the switch (`lapses`). `hours`: quotes
+ * per UTC hour ("YYYY-MM-DDTHH"). `bucket`: the token bucket of quote batches — persisted, so a restart refills nothing.
+ * `dms`: the deadline (unix ms) of the last scheduleCancel this signer signed for the account, null when none is in force.
+ */
+export interface StoredVenueQuotingMandate { mandate: import('@spw/derivatives/live').VenueQuotingMandate; hash: string; approvedAt: string; revoked: boolean; revokedAt?: string;
+  usage: Record<string, { quotes: number; batches: number; reduceOnly: number; cancels: number; heartbeats: number; turnover: string; lapses: number }>; hours: Record<string, number>;
+  bucket: import('@spw/derivatives/live').QuotingBucket; dms: { deadline: number; signedAt: number } | null }
 /**
  * `approve`: the one approveAgent signature the main key made for this authorization (kept so that a lost answer gets the same
  * bytes again, never a second signature). `nonces`: the highest venue nonces signed with the trading key (ascending, at most 100 — the venue's own rule). `clientIds`: client
@@ -282,6 +296,11 @@ export class Store {
     for (const m of Object.values(this.state.venueMandates ?? {})) {
       for (const d of Object.keys(m.usage)) if (d < keep) delete m.usage[d];
       m.hour = m.hour.filter((t) => t > nowSec - 3600);
+    }
+    const keepHour = new Date((nowSec - 2 * 3600) * 1000).toISOString().slice(0, 13);
+    for (const m of Object.values(this.state.venueQuotingMandates ?? {})) {
+      for (const d of Object.keys(m.usage)) if (d < keep) delete m.usage[d];
+      for (const h of Object.keys(m.hours)) if (h < keepHour) delete m.hours[h];
     }
   }
 }

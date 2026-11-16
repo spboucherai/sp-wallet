@@ -76,6 +76,7 @@ export function hlOrderStatus(status: string): { status: Order['status']; reject
   if (status === 'triggered') return { status: 'triggered', rejectReason: null };
   if (status === 'canceled') return { status: 'cancelled', rejectReason: null };
   if (status === 'rejected' || /Rejected$/.test(status)) return { status: 'rejected', rejectReason: status };
+  if (status === 'scheduledCancel') return { status: 'cancelled', rejectReason: status };  // V11: the dead man's switch fired ("Canceled due to exceeding scheduled cancel deadline") — the one cancel status that does not end in "Canceled"
   if (/Canceled$/.test(status)) return { status: 'cancelled', rejectReason: status }; // marginCanceled, reduceOnlyCanceled, …: the venue's reason is kept
   throw hlErr('bad_answer', `unknown order status '${status.slice(0, 40)}'`);
 }
