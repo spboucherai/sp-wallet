@@ -569,3 +569,33 @@ Also needed for all seven: a volatility-forecast and a basis signal as *shared i
   `deriv_funding`, `deriv_risk_events`, `deriv_mandates`, `research_jobs`, `research_job_log`.
 - Machine authentication for a programmable API: the only non-cookie precedent is the runner gate
   (`research/routes.ts:34-42`, constant-time secret comparison, POST only, path-scoped in `server.ts:115`).
+
+---
+
+## 10. V11 status (2026-11-15, branch `v11-agents`; Phase B = `docs/v11/work/stab-signer.md`)
+
+What became of each audited defect. "Fixed" means: changed in code and covered by a test named in
+`docs/v11/work/agents.md`. Architecture of what was built: `docs/TRADING-AGENT-ENGINE.md`.
+
+| Defect | Status | What changed / what remains |
+|---|---|---|
+| D1 — six of eight perp strategies can never go live | **Partly fixed** | The refusal is now explicit BEFORE any approval: every installed strategy of a template carries `liveCapable` / `liveReason`, every agent `live.capable`, the mandate draft says why. Templates bind by name to the laboratory's BTC/ETH/SOL variants as soon as they are installed (quant-lab workstream, not merged here). Until then only `pairs_coint_perp` (BTC, ETH) is live-capable; the pinned asset table is unchanged. |
+| D2 — spot mandate active after a stop; several mandates per vault | Fixed in Phase B | Unchanged here. The life cycle of this branch revokes through the same function on pause and stop, whoever asks (owner, key, risk manager). |
+| D3 — no signer-enforced loss limit for spot | Not fixed (Phase B decision) | Documented in `docs/V11-SECURITY-REVIEW.md`. The risk-management agent adds an API-side portfolio watch; it is not a signer limit. |
+| D4 — spot strategy approvable with a failed look-ahead check | Fixed in Phase B | The same check now also gates paper trading started through the trading API; an approval given by a key is recorded as such (`approved_by`) and cannot be pinned by a live mandate. |
+| D5 — paper and live share tables; perp signals have no mode | **Fixed** | `agent_signals` (mode in its key), `research_log.mode` (+ trigger), `agent_order_intents.mode`; backfilled from the audit chain. Every read function takes one mode; the agent pages show the current mode only; a test reads the SQL of the read model. |
+| D6 — backtest and engines do not apply the same rules | Not fixed | Out of this branch's scope (laboratory). Backtest reports are now always labelled and never shown as performance. |
+| D7 — one sequential loop, no cross-process lock, in-memory backoff | **Fixed** | Per-agent leases, a durable job queue (retries, backoff, dead-letter), concurrent isolated ticks with a deadline, optional separate worker process. |
+| D8 — spot agents keep no signal history | **Fixed** | Stored before any order, with mode, configuration version, hash and inputs digest; read back after a restart. |
+| D9 — a live spot agent cannot be paused and resumed | **Fixed, by design choice** | Pause is offered and revokes the mandate at the signer (nothing stays signable); the agent remembers `pausedFrom = LIVE`; resume opens the mandate request: a NEW owner approval. The signer has no suspend for a spot mandate and none was added. |
+| D10 — fixture strategies in the library, polluted trial ledger | **Partly fixed** | The library listing is an explicit manifest (`LIBRARY_MANIFEST`): fixtures and scratch directories are never listed. The cross-run ledger file (`research/results/ledger.jsonl`) belongs to the laboratory workstream and was not touched. |
+| D11 — state vocabulary drift (`state = 'RESEARCH'`) | **Fixed** | RESEARCH is a mode; the state returns to the pre-trading one. `active \| paused \| stopped` is a projection of the historical states. |
+| D12 — stale comments | Partly fixed | `main.ts` and `perp-exec.ts` corrected; `research/README.md` is the laboratory workstream's. |
+| D13 — spot mandate caps fixed in base units at approval prices | Not fixed | Signer-side; the mandate draft says it. |
+| D14 — routes with no UI | **Fixed for the agent routes** | `agents/:id/withdrawals` and `perp/risk` are wired in the agent panel. `market-data/status` and `market-data/candles` stay API-only (market data workstream). |
+| D15 — thin symbols hold an agent | Not fixed | Market-data gate, not in this branch. |
+
+Section 9 ("what must be built"): workers, journal, signal history, order read model, per-mode performance, routes, the
+three modes and the seven agents are built as described in `docs/TRADING-AGENT-ENGINE.md`. Not built: a mandate
+spanning a vault and a venue account, a second live venue, live market making, paired-leg live execution, backtest /
+engine parity — each for the reason given there.

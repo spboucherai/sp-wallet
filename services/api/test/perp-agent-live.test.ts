@@ -8,7 +8,7 @@ import { D } from '@spw/derivatives';
 import { useDatabase } from './derivatives-helpers.ts';
 import { BTC, liveWorld, type LiveWorld } from './perp-live-world.ts';
 
-let sql: any, cyc: typeof import('../src/agents/perp-live-cycle.ts'), xl: typeof import('../src/agents/perp-exec-live.ts'), eng: typeof import('../src/agents/perp-engine.ts'),
+let sql: any, cyc: typeof import('../src/agents/perp-live-cycle.ts'), mw: typeof import('../src/agents/mandate-write.ts'), xl: typeof import('../src/agents/perp-exec-live.ts'), eng: typeof import('../src/agents/perp-engine.ts'),
   pl: typeof import('../src/agents/perp-live.ts'), pp: typeof import('../src/derivatives/paper.ts');
 
 beforeAll(async () => {
@@ -18,12 +18,12 @@ beforeAll(async () => {
   await db.migrate(); await db.migrate();
   eng = await import('../src/agents/perp-engine.ts');
   await import('../src/agents/perp-strategies.ts');                            // module order of the agents' routes (as in perp-agent.test.ts)
-  pl = await import('../src/agents/perp-live.ts'); cyc = await import('../src/agents/perp-live-cycle.ts'); xl = await import('../src/agents/perp-exec-live.ts'); pp = await import('../src/derivatives/paper.ts');
+  pl = await import('../src/agents/perp-live.ts'); cyc = await import('../src/agents/perp-live-cycle.ts'); mw = await import('../src/agents/mandate-write.ts'); xl = await import('../src/agents/perp-exec-live.ts'); pp = await import('../src/derivatives/paper.ts');
 });
 /** an empty database: every world starts with its own venue account (the test mnemonic is the same in all of them) */
 const reset = async () => {
   await sql`truncate deriv_accounts, deriv_orders, deriv_fills, deriv_funding, deriv_risk_events, deriv_equity, deriv_actions, deriv_mandates`;
-  await sql`delete from perp_agent_signals`; await sql`delete from agent_equity`; await sql`delete from research_log`; await sql`delete from strategy_versions`; await sql`delete from agents`;
+  await sql`delete from agent_signals`; await sql`delete from agent_equity`; await sql`delete from research_log`; await sql`delete from strategy_versions`; await sql`delete from agents`;
 };
 beforeEach(reset);
 afterAll(async () => { await sql?.end(); });
@@ -50,13 +50,13 @@ async function agent(w: LiveWorld, o: { risk?: Partial<typeof RISK>; approved?: 
     tick: async () => cyc.tickLivePerpAgent(await a.row(), a.rt),
     pass: async () => { w.next(); return a.tick(); },
     nextBar: async (weights) => { a.bar += H; a.weights = weights; w.next(); return a.tick(); },
-    signalRows: () => sql`select bar, status, orders, targets from perp_agent_signals where agent_id = ${id} order by bar` };
+    signalRows: () => sql`select bar, status, orders, targets from agent_signals where agent_id = ${id} order by bar` };
   return a;
 }
 /** the ONE passkey: prepare the mandate derived from the agent's limits, approve it */
 async function goLive(w: LiveWorld, a: Agent, accountId: string) {
-  const prep = await cyc.prepareLive(await a.row(), a.rt, { accountId, locale: 'fr' });
-  const row = await cyc.approveLive(await a.row(), a.rt, { accountId, assertion: w.pk.assert(w.b64(prep.hash)) as never, acknowledged: true });
+  const prep = await mw.prepareLive(await a.row(), a.rt, { accountId, locale: 'fr' });
+  const row = await mw.approveLive(await a.row(), a.rt, { accountId, assertion: w.pk.assert(w.b64(prep.hash)) as never, acknowledged: true });
   return { prep, row };
 }
 async function liveAgent(o: { risk?: Partial<typeof RISK>; fund?: string } = {}) {
@@ -92,7 +92,7 @@ describe('going live: the checklist, the mandate derived from the limits, one pa
     // a venue account that the owner has not authorised yet
     const ro = (await w.svc.createAccount({ venue: 'hyperliquid', network: 'testnet', label: 'Testnet' })).id as string;
     expect(await ready(a)).toMatchObject({ next: 'account', accountId: ro, steps: { account: { ok: false, code: 'read_only', network: 'testnet', authorization: null }, funded: { ok: false, code: 'unfunded' } } });
-    await expect(cyc.prepareLive(await a.row(), a.rt, { accountId: ro, locale: 'en' })).rejects.toMatchObject({ code: 'not_ready', status: 409 });
+    await expect(mw.prepareLive(await a.row(), a.rt, { accountId: ro, locale: 'en' })).rejects.toMatchObject({ code: 'not_ready', status: 409 });
     // authorised (the owner's passkey, in Futures → Accounts), then the funding step from the venue's own account value
     const acct = await w.authorise('testnet', '1000');
     expect(acct).toBe(ro);
@@ -131,7 +131,7 @@ describe('going live: the checklist, the mandate derived from the limits, one pa
   it('prepare shows what the signer will enforce; ONE passkey makes the agent LIVE; one agent per venue account', async () => {
     const w = await liveWorld(), acct = await w.authorise(), a = await agent(w), b = await agent(w, { name: 'second' });
     const exchangeBefore = w.t.exchangeCalls();
-    const prep = await cyc.prepareLive(await a.row(), a.rt, { accountId: acct, locale: 'fr', days: 7 });
+    const prep = await mw.prepareLive(await a.row(), a.rt, { accountId: acct, locale: 'fr', days: 7 });
     expect(prep).toMatchObject({ locale: 'fr', windDown: { seconds: 86400 }, proposal: { capital: '1000', days: 7 },
       mandate: { network: 'testnet', account: w.ACCOUNT, strategySha256: a.sha, agentId: a.id, maxOrderNotional: '1000', maxGrossExposure: '1500', floorEquity: '900', maxOrdersPerHour: 4 } });
     expect(prep.mandate.expiresAt - prep.mandate.createdAt).toBe(7 * 86400);
@@ -140,10 +140,10 @@ describe('going live: the checklist, the mandate derived from the limits, one pa
     expect(prep.options.challenge).toBe(w.b64(prep.hash).toString('base64url'));                                         // the passkey signs the mandate hash
     // a passkey assertion over something else, the checkbox, another agent's preparation
     expect(cyc.LiveApproveBody.safeParse({ accountId: acct, assertion: {}, acknowledged: false }).success).toBe(false);
-    expect(await refusal(cyc.approveLive(await b.row(), b.rt, { accountId: acct, assertion: w.pk.assert(w.b64(prep.hash)) as never, acknowledged: true }))).toMatchObject({ code: 'not_ready', status: 409 });
-    expect(await refusal(cyc.approveLive(await a.row(), a.rt, { accountId: acct, assertion: w.pk.assert(Buffer.alloc(32, 7)) as never, acknowledged: true }))).toMatchObject({ code: 'signer_bad_approval' });
+    expect(await refusal(mw.approveLive(await b.row(), b.rt, { accountId: acct, assertion: w.pk.assert(w.b64(prep.hash)) as never, acknowledged: true }))).toMatchObject({ code: 'not_ready', status: 409 });
+    expect(await refusal(mw.approveLive(await a.row(), a.rt, { accountId: acct, assertion: w.pk.assert(Buffer.alloc(32, 7)) as never, acknowledged: true }))).toMatchObject({ code: 'signer_bad_approval' });
     expect(await a.row()).toMatchObject({ state: 'AWAITING_APPROVAL', mode: 'PAPER', live_account_id: null });           // a refused approval leaves the agent in simulation and releases the account
-    expect(await refusal(cyc.approveLive(await a.row(), a.rt, { accountId: acct, assertion: w.pk.assert(w.b64(prep.hash)) as never, acknowledged: true }))).toMatchObject({ code: 'not_ready' });   // consumed: prepare again
+    expect(await refusal(mw.approveLive(await a.row(), a.rt, { accountId: acct, assertion: w.pk.assert(w.b64(prep.hash)) as never, acknowledged: true }))).toMatchObject({ code: 'not_ready' });   // consumed: prepare again
 
     const { row } = await goLive(w, a, acct);
     expect(row).toMatchObject({ state: 'LIVE', mode: 'LIVE', live_account_id: acct, perp: { live: { accountId: acct, network: 'testnet', strategySha256: a.sha, capital: '1000', exit: null } } });
@@ -153,8 +153,8 @@ describe('going live: the checklist, the mandate derived from the limits, one pa
       accounts: [{ usedBy: { agentId: a.id, name: 'live-test' }, mandate: { agentId: a.id, phase: 'active' } }] });
     // the second agent sees the account as taken; a live agent cannot be prepared again
     expect((await cyc.liveReadiness(await b.row(), b.rt, { locale: 'en' })).steps.account).toMatchObject({ ok: false, code: 'used_by_other_agent' });
-    expect(await refusal(cyc.prepareLive(await b.row(), b.rt, { accountId: acct, locale: 'en' }))).toMatchObject({ code: 'not_ready' });
-    expect(await refusal(cyc.prepareLive(await a.row(), a.rt, { accountId: acct, locale: 'en' }))).toMatchObject({ code: 'bad_state' });
+    expect(await refusal(mw.prepareLive(await b.row(), b.rt, { accountId: acct, locale: 'en' }))).toMatchObject({ code: 'not_ready' });
+    expect(await refusal(mw.prepareLive(await a.row(), a.rt, { accountId: acct, locale: 'en' }))).toMatchObject({ code: 'bad_state' });
     await expect(sql`update agents set live_account_id = ${acct} where id = ${b.id}`).rejects.toMatchObject({ code: '23505' });   // the database itself: one agent per venue account
     const block = await cyc.liveBlock(await a.row(), a.rt, true);
     expect(block).toMatchObject({ available: true, active: true, network: 'testnet', capital: '1000', paused: false, exit: null, holds: [],
@@ -170,7 +170,7 @@ describe('going live: the checklist, the mandate derived from the limits, one pa
     expect(r.steps.mandate.lock!.reason).toBe(r.config.reasons.mandate_mainnet_disabled.fr);
     expect(r.steps.mandate.lock!.reason).toMatch(/SPW_DERIV_MANDATE_MAINNET=on/);
     expect(r.proposal).not.toBeNull();                                                                                    // what WOULD be approved is shown
-    expect(await refusal(cyc.prepareLive(await a.row(), a.rt, { accountId: acct, locale: 'fr' }))).toMatchObject({ code: 'mandate_mainnet_disabled', status: 403 });
+    expect(await refusal(mw.prepareLive(await a.row(), a.rt, { accountId: acct, locale: 'fr' }))).toMatchObject({ code: 'mandate_mainnet_disabled', status: 403 });
     expect(await a.row()).toMatchObject({ mode: 'PAPER', live_account_id: null });
     expect(w.m.exchangeCalls('order')).toBe(0); expect(w.mandateSigns).toHaveLength(0);
     // manual live off too: the account step says so with the server's sentence
@@ -289,13 +289,13 @@ describe('LivePerpExecutor through the engine: the venue decides', () => {
     // the process died after the order was signed and sent, before it was reconciled and before the bar was marked complete
     await sql`update deriv_orders set state = 'signed', status = 'pending', final = false, filled = 0, avg_fill_price = null, venue_order_id = null where account_id = ${acct}`;
     await sql`update agents set last_bar = null where id = ${a.id}`;
-    await sql`update perp_agent_signals set status = 'decided', orders = null where agent_id = ${a.id}`;
+    await sql`update agent_signals set status = 'decided', orders = null where agent_id = ${a.id}`;
     a.weights = { BTC: -1 };                                                                                              // a strategy that would now answer something else is not asked again
     expect(await a.pass()).toBe('portfolio already at target');
     expect((await orders(acct))[0]).toMatchObject({ state: 'filled', final: true, filled: '0.00714' });
     expect([w.t.exchangeCalls('order'), w.orderSigns(), a.signals, pos(w)]).toEqual([...before, 1, '0.00714']);
     // … and when the venue's positions were not visible either (worst case), the same key answers the same order
-    await sql`update agents set last_bar = null where id = ${a.id}`; await sql`update perp_agent_signals set status = 'decided' where agent_id = ${a.id}`;
+    await sql`update agents set last_bar = null where id = ${a.id}`; await sql`update agent_signals set status = 'decided' where agent_id = ${a.id}`;
     const ex = new xl.LivePerpExecutor(w.svc, { accountId: acct, agentId: a.id, strategySha256: a.sha, symbols: ['BTC'], risk: RISK, capital: '1000' });
     const again = await ex.place({ instrument: BTC, side: 'buy', type: 'market', size: '0.00714', price: '70215', triggerPrice: null, reduceOnly: false, tif: 'ioc', clientId: (await orders(acct))[0].client_id }, '2');
     expect(again).toMatchObject({ status: 'placed', idempotent: true, order: { status: 'filled', filled: '0.00714' } });

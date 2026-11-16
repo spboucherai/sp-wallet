@@ -15,6 +15,7 @@ import { buildOpenApi } from './openapi.ts';
 import { requirePrincipal, type Principal } from './principal.ts';
 import { AmbiguousSymbol, type Reads } from './read.ts';
 import { ANY_SCOPE, isExecutionScope, OPERATIONS, TRADING_PREFIX, type OperationSpec } from './spec.ts';
+import { agentTradingHandlers } from '../agents/trading-handlers.ts'; // v11 agents: the strategies and agents operations
 
 interface Input { params: any; query: any; body: any } // eslint-disable-line @typescript-eslint/no-explicit-any -- validated by the operation's zod schemas
 type Handler = (p: Principal, i: Input, req: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
@@ -81,7 +82,7 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution)
     runCommand: (p, i, req, reply) => withIdempotency(req, reply, () => runCommand(ex, reads, p, callerOf(p), i.body, orderKey(req))),
     engageKillSwitch: async (p, i) => { const s = await ex.risk.engageKillSwitch(p.kind === 'owner' ? { kind: 'owner', id: 'owner' } : { kind: 'api_key', id: p.id }, i.body.reason); return { killSwitch: s.killSwitch, readOnly: s.readOnly }; },
     listStrategies: (p, i) => reads.strategies(p, i.query),
-    listAgents: (p) => reads.agents(p),
+    ...agentTradingHandlers(),   // v11 agents: createStrategy … stopAgent, listAgents and the per-agent, mode-scoped reads
     getRisk: async (p) => ({ ...(await reads.risk(p)), engine: { ...(await ex.risk.switches()), note: 'the global kill switch blocks every new risk (cancels and strictly reducing orders pass); read-only mode lets only cancels pass. Releasing either needs the owner\'s passkey.' } }),
   };
   for (const op of OPERATIONS) if (!op.implemented) { if (handlers[op.id]) throw new Error(`trading-api: ${op.id} is declared not implemented but has a handler`); handlers[op.id] = notWired(op); }

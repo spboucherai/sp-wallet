@@ -22,7 +22,10 @@ export const ANY_SCOPE = '*' as const;
 export type RouteScope = Scope | typeof ANY_SCOPE;
 /** Scopes that would make a venue or the signer act. On a key they are INERT without a trading mandate bound to the key
  *  (`mandate_required`), and a scope is never what bounds execution: the signer-enforced mandate is. */
-export const EXECUTION_SCOPES: readonly Scope[] = ['orders:execute', 'orders:cancel', 'positions:manage', 'strategies:manage', 'agents:manage'];
+export const EXECUTION_SCOPES: readonly Scope[] = ['orders:execute', 'orders:cancel', 'positions:manage'];
+/** V11 agents: `strategies:manage` and `agents:manage` are MANAGEMENT scopes — research, paper trading, pause and stop sign nothing.
+ *  Going LIVE is bounded by the AGENT's own mandate (approved by the owner with the passkey, enforced by the signer): the handler
+ *  answers 409 `mandate_required` without one, whatever the key holds. */
 export const isExecutionScope = (s: string): boolean => (EXECUTION_SCOPES as readonly string[]).includes(s);
 
 // ---------------------------------------------------------------------------------------------------------------- key model
@@ -69,7 +72,8 @@ export const WEBHOOK_EVENTS = [
   { event: 'key.revoked', emitted: true, description: 'an API key was revoked (or replaced by a rotation)', payload: '{ keyId, name, reason }' },
   { event: 'risk.kill_switch', emitted: true, description: 'the emergency halt of the signer was triggered (source "signer"), or the global kill switch of the risk engine was engaged or released (source "risk_engine")',
     payload: '{ source: "signer", halted: true } | { source: "risk_engine", engaged, by, reason }' },
-  { event: 'agent.updated', emitted: true, description: 'an agent changed mode through an owner action (engine-side transitions: pending wiring)', payload: '{ agentId, kind, state, mode }' },
+  { event: 'agent.updated', emitted: true, description: 'an agent was started, paused or stopped (by the owner, an API key or the risk-management agent)', payload: '{ agentId, kind, state, mode }' },
+  { event: 'risk.proposal', emitted: true, description: 'the risk-management agent proposes a reduction or a pause, or acted (paused an agent, engaged the kill switch)', payload: '{ supervisorId, agentId, mode, action, code, acted, message, metrics }' },
   { event: 'order.updated', emitted: true, description: 'an order changed state: one event per transition of the unified order state machine, for every principal, mode and venue',
     payload: '{ orderId, mode, venue, instrument, status, previous, event, reason, seq, principal, mandateId }' },
 ] as const;
@@ -80,6 +84,7 @@ export const WEBHOOK_EVENT_NAMES = WEBHOOK_EVENTS.map((e) => e.event) as [Webhoo
 const Dec = z.string().describe('decimal number as a string (never a float)');
 const Ms = z.number().int().describe('milliseconds since the Unix epoch');
 const Mode = z.enum(['paper', 'live']).describe('paper = simulated, live = a venue or on-chain account. The two are never merged in one figure.');
+const AgentMode = z.enum(['research', 'paper', 'live']).describe('research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.');
 export const ErrorSchema = z.object({ error: z.string().describe('stable machine code'), message: z.string().describe('human-readable sentence (English)') });
 const PartialError = z.object({ source: z.string(), message: z.string() });
 const MarketId = z.string().min(1).max(120).describe('`venue:symbol` (e.g. `hyperliquid:BTC`, `spot:ETH`); a bare symbol is accepted when it is not ambiguous');
@@ -109,7 +114,17 @@ const R = {
   orders: z.object({ orders: z.array(z.looseObject({ id: z.string(), mode: Mode, venue: z.string(), accountId: z.string().nullable(), instrument: z.string().nullable(), side: z.string().nullable(), type: z.string(), status: z.string(), final: z.boolean().nullable(), createdAt: Ms, updatedAt: Ms })), ts: Ms }),
   order: z.looseObject({ order: z.looseObject({ id: z.string(), mode: Mode, venue: z.string(), status: z.string() }), fills: z.array(z.looseObject({})) }),
   strategies: z.object({ library: z.array(z.looseObject({ kind: z.enum(['spot', 'perp']), path: z.string(), sha256: z.string() })), versions: z.array(z.looseObject({ id: z.string(), agentId: z.string(), name: z.string(), version: z.string(), sha256: z.string(), status: z.string() })), errors: z.array(PartialError) }),
-  agents: z.object({ agents: z.array(z.looseObject({ id: z.string(), kind: z.enum(['spot', 'perp']), name: z.string(), state: z.string(), mode: z.string(), tradingMode: z.enum(['research', 'paper', 'live']).nullable(), venue: z.string(), universe: z.array(z.string()), interval: z.string() })) }),
+  agents: z.object({ agents: z.array(z.looseObject({ id: z.string(), kind: z.enum(['spot', 'perp', 'stream', 'supervisor']), name: z.string(), family: z.string(), state: z.string().describe('historical raw state'), mode: z.string().describe('historical raw mode'),
+    lifecycle: z.enum(['active', 'paused', 'stopped']), tradingMode: z.enum(['research', 'paper', 'live']).nullable(), venue: z.string(), universe: z.array(z.string()), interval: z.string(), configVersion: z.number().int() })) }),
+  agent: z.looseObject({ agent: z.looseObject({ id: z.string(), family: z.string(), state: z.enum(['active', 'paused', 'stopped']), mode: AgentMode }), mandateDraft: z.looseObject({}).nullable() }),
+  agentResult: z.looseObject({ agent: z.looseObject({ id: z.string(), state: z.enum(['active', 'paused', 'stopped']), mode: AgentMode }) }),
+  job: z.object({ job: z.looseObject({ id: z.string(), kind: z.string(), status: z.enum(['queued', 'running', 'done', 'failed', 'cancelled']), attempts: z.number().int() }), label: z.string().optional() }),
+  signals: z.object({ mode: AgentMode, signals: z.array(z.looseObject({ id: z.string(), ts: Ms, mode: AgentMode, configVersion: z.number().int(), strategySha256: z.string(), decision: z.enum(['pending', 'acted', 'skipped']), reasonCode: z.string().nullable() })) }),
+  journal: z.object({ mode: AgentMode, entries: z.array(z.looseObject({ id: z.string(), ts: Ms, mode: AgentMode, kind: z.string(), severity: z.string(), title: z.string() })) }),
+  agentOrders: z.object({ mode: AgentMode, orders: z.array(z.looseObject({ id: z.string(), mode: z.enum(['paper', 'live']), instrument: z.string(), side: z.string(), state: z.string().describe('unified order state (CREATED … FILLED, CANCELLED, REJECTED, FAILED, UNKNOWN)') })) }),
+  performance: z.looseObject({ mode: AgentMode, label: z.string().describe('says which mode the figures are for; a backtest is never in this answer'), points: z.number().int(), warnings: z.array(z.object({ code: z.string(), message: z.string() })) }),
+  templates: z.object({ templates: z.array(z.looseObject({ id: z.string(), family: z.string(), engine: z.string(), modes: z.array(AgentMode), liveReason: z.string().nullable(), strategyInstalled: z.boolean() })) }),
+  strategyResult: z.looseObject({ strategy: z.looseObject({ id: z.string(), agentId: z.string(), sha256: z.string(), status: z.string() }) }),
   risk: z.looseObject({
     killSwitch: z.object({ signerReachable: z.boolean(), signerHalted: z.boolean().nullable(), note: z.string() }),
     signerPolicy: z.looseObject({}).nullable(), capabilityLocks: z.array(z.object({ id: z.string(), on: z.boolean(), why: z.string() })),
@@ -162,9 +177,14 @@ const CloseBody = z.strictObject({ slippageBps: z.number().int().min(1).max(500)
 const ReduceBody = z.strictObject({ fraction: Dec.regex(/^(0(\.\d+)?|1(\.0+)?)$/).describe('share of the position to close, in (0, 1]'), slippageBps: z.number().int().min(1).max(500).optional() });
 const StrategyBody = z.strictObject({ kind: z.enum(['spot', 'perp']), path: z.string().min(1).max(200).describe('library path of the strategy'), agentId: z.uuid().optional() });
 const BacktestBody = z.strictObject({ symbols: z.array(z.string().regex(/^[A-Z0-9]{2,15}$/)).min(1).max(12).optional(), interval: z.enum(['1h', '1d']).optional() });
-const StartBody = z.strictObject({ mode: Mode, agentId: z.uuid().optional() });
+const StartBody = z.strictObject({ mode: AgentMode, agentId: z.uuid().optional() });
 const StopBody = z.strictObject({ reason: z.string().max(200).default('') });
-const AgentBody = z.strictObject({ kind: z.enum(['spot', 'perp']), name: z.string().min(2).max(40), mission: z.string().max(400).default(''), universe: z.array(z.string().regex(/^[A-Z0-9]{2,15}$/)).min(1).max(12), interval: z.enum(['1h', '1d']).default('1h'), mode: Mode.default('paper') });
+const AgentBody = z.strictObject({ kind: z.enum(['spot', 'perp']).optional().describe('without a template: perp (a spot agent needs a vault from the signer: owner only)'), template: z.string().max(40).optional().describe('one of GET /agents/templates'),
+  name: z.string().min(2).max(40), mission: z.string().max(400).default(''), universe: z.array(z.string().regex(/^[A-Z0-9]{2,15}$/)).min(1).max(12).optional(), venues: z.array(z.enum(['hyperliquid', 'edgex', 'dydx', 'gmx'])).min(1).max(2).optional(),
+  strategyPath: z.string().max(60).optional(), interval: z.enum(['1h', '4h', '1d']).optional(), capitalUsdc: z.string().regex(/^\d{1,7}(\.\d{1,6})?$/).optional(), risk: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional(),
+  config: z.record(z.string(), z.unknown()).optional(), mode: AgentMode.default('research').describe('research (default: created, not running) or paper (stream and supervisor agents start at once); never live') });
+const AgentPage = z.object({ mode: AgentMode.optional().describe('default: the mode the agent is in now'), limit: Limit(100, 500), before: z.coerce.number().int().positive().optional().describe('unix ms: rows strictly before it'), open: z.enum(['true', 'false']).optional() });
+const AgentBacktestBody = z.strictObject({ versionId: z.uuid().optional(), hours: z.number().int().min(1).max(168).optional().describe('stream agents: how many hours of recorded snapshots to replay') });
 
 // ---------------------------------------------------------------------------------------------------------------- private markets (v11)
 const PmDatum = z.object({ value: Dec.nullable(), source: z.string(), ts: Ms.nullable(), stale: z.boolean() }).describe('one figure with where it comes from, when it was read, and whether it is older than its freshness bound');
@@ -208,6 +228,9 @@ export interface OperationSpec {
   noMandate?: boolean;
 }
 const NOT_WIRED = 'Not wired in this version: the call is authenticated, authorized, validated and checked for replay, then answers 501 `execution_not_wired`. It never answers 2xx.';
+const START_NOTE = 'research and paper sign nothing. `live` is accepted ONLY when a mandate approved by the owner with the passkey is in force for this agent at the signer; otherwise 409 `mandate_required` (a key, an agent or this API can never approve a mandate). Families that cannot go live answer 409 `live_unavailable` with the reason.';
+const STOP_NOTE = 'Always allowed. The safe wind-down: a live perp agent\'s mandate is revoked and its positions are closed with reduce-only orders; a live spot agent\'s mandate is revoked at the signer; simulated quotes are withdrawn.';
+const done = (description: string): Partial<OperationSpec> => ({ implemented: true, description });
 const read = (id: string, path: string, tag: OperationSpec['tag'], scope: RouteScope, summary: string, o: Partial<OperationSpec> = {}): OperationSpec => ({ id, method: 'GET', path, tag, scope, summary, implemented: true, ...o });
 const write = (id: string, method: 'POST' | 'DELETE', path: string, tag: OperationSpec['tag'], scope: Scope, summary: string, o: Partial<OperationSpec> = {}): OperationSpec =>
   ({ id, method, path, tag, scope, summary, description: NOT_WIRED, idempotent: true, implemented: false, ...o });
@@ -259,13 +282,26 @@ export const OPERATIONS: readonly OperationSpec[] = [
     description: 'Deterministic grammar (no model). The scope checked is the one of the operation the command resolves to: an order needs `orders:execute` (`orders:prepare` with `dryRun`), CLOSE `positions:manage`, CANCEL `orders:cancel`, SHOW the matching read scope, KILL `positions:manage`. Resolution uses the owner\'s stored defaults (GET/PUT /api/v1/developer/command-defaults) and nothing else: a command the defaults do not settle answers 409 `ambiguous_command` with the questions and executes nothing.' }),
   write('engageKillSwitch', 'POST', '/risk/kill-switch', 'Risk', 'positions:manage', 'Engage the global kill switch', { body: KillBody, implemented: true, noMandate: true, idempotent: false, response: z.looseObject({ killSwitch: z.looseObject({ on: z.boolean() }) }),
     description: 'Blocks every NEW risk for every principal on every venue and in every mode; cancels and strictly reducing orders still pass. Engaging needs no mandate (it only removes risk). Releasing it is NOT possible with a key: owner session and passkey only.' }),
-  write('createStrategy', 'POST', '/strategies', 'Strategies', 'strategies:manage', 'Register a strategy version', { body: StrategyBody }),
-  write('backtestStrategy', 'POST', '/strategies/:id/backtest', 'Strategies', 'strategies:manage', 'Run a backtest', { params: IdParam, body: BacktestBody }),
-  write('startStrategy', 'POST', '/strategies/:id/start', 'Strategies', 'strategies:manage', 'Start a strategy', { params: IdParam, body: StartBody }),
-  write('stopStrategy', 'POST', '/strategies/:id/stop', 'Strategies', 'strategies:manage', 'Stop a strategy', { params: IdParam, body: StopBody }),
-  write('createAgent', 'POST', '/agents', 'Agents', 'agents:manage', 'Create an agent', { body: AgentBody }),
-  write('startAgent', 'POST', '/agents/:id/start', 'Agents', 'agents:manage', 'Start an agent', { params: IdParam, body: StartBody }),
-  write('stopAgent', 'POST', '/agents/:id/stop', 'Agents', 'agents:manage', 'Stop an agent', { params: IdParam, body: StopBody }),
+  write('createStrategy', 'POST', '/strategies', 'Strategies', 'strategies:manage', 'Register a library strategy version on an agent', { body: StrategyBody, response: R.strategyResult, ...done('Pins the version by the SHA-256 of its file and queues its backtest. Registers nothing new in the library and approves nothing. `agentId` is required.') }),
+  write('backtestStrategy', 'POST', '/strategies/:id/backtest', 'Strategies', 'strategies:manage', 'Run the backtest of a strategy version (asynchronous job)', { params: IdParam, body: BacktestBody, response: R.job, ...done('Answers a job id; read it with GET /jobs/{id}. The result is a BACKTEST report on the version — never a performance figure.') }),
+  write('startStrategy', 'POST', '/strategies/:id/start', 'Strategies', 'strategies:manage', 'Start the agent a strategy version is pinned to', { params: IdParam, body: StartBody, response: R.agentResult, ...done(START_NOTE) }),
+  write('stopStrategy', 'POST', '/strategies/:id/stop', 'Strategies', 'strategies:manage', 'Stop the agent a strategy version is pinned to', { params: IdParam, body: StopBody, response: R.agentResult, ...done(STOP_NOTE) }),
+  read('listAgentTemplates', '/agents/templates', 'Agents', 'agents:read', 'The seven built-in agents: family, engine, modes, installed strategies', { response: R.templates,
+    description: 'A bar template is bound BY NAME to laboratory strategies; `strategyInstalled: false` means none of them is installed (no placeholder is ever substituted). `liveReason` says why a family cannot go live.' }),
+  read('getAgent', '/agents/:id', 'Agents', 'agents:read', 'One agent: model, strategy, limits, mandate reference, backtest reports (labelled), worker state', { params: IdParam, response: R.agent }),
+  read('listAgentSignals', '/agents/:id/signals', 'Agents', 'agents:read', 'Signal history of one agent, ONE mode', { params: IdParam, query: AgentPage, response: R.signals,
+    description: 'Each signal carries the mode, the configuration version, the strategy hash, a digest of its inputs, its output and the decision: `acted`, or `skipped` with a reason code.' }),
+  read('listAgentJournal', '/agents/:id/journal', 'Agents', 'agents:read', 'Activity journal of one agent, ONE mode', { params: IdParam, query: AgentPage, response: R.journal,
+    description: 'Decisions, orders, fills, errors, risk denials, mandate events and state changes, newest first.' }),
+  read('listAgentOrders', '/agents/:id/orders', 'Agents', 'agents:read', 'Order history of one agent, ONE mode, in the unified order states', { params: IdParam, query: AgentPage, response: R.agentOrders }),
+  read('getAgentPerformance', '/agents/:id/performance', 'Agents', 'agents:read', 'Computed performance of one agent, ONE mode', { params: IdParam, query: z.object({ mode: AgentMode.optional() }), response: R.performance,
+    description: 'Equity curve, returns, volatility, Sharpe, Sortino, max drawdown, win rate, profit factor, turnover, fees, funding, slippage, net PnL — computed from the records of that mode only, with small-sample warnings. Paper and live are never added. Backtests are not here.' }),
+  read('getJob', '/jobs/:id', 'Agents', 'agents:read', 'One agent job (backtest, wind-down): status and result', { params: IdParam, response: R.job }),
+  write('createAgent', 'POST', '/agents', 'Agents', 'agents:manage', 'Create an agent (from a template, or a perp agent)', { body: AgentBody, response: R.agentResult, ...done('Nothing is signed and no vault is derived. A spot agent is created in the owner\'s app (403 `owner_required`). A template whose strategy is not installed answers 409 `strategy_not_installed`.') }),
+  write('startAgent', 'POST', '/agents/:id/start', 'Agents', 'agents:manage', 'Start an agent in research, paper or live mode', { params: IdParam, body: StartBody, response: R.agentResult, ...done(START_NOTE) }),
+  write('pauseAgent', 'POST', '/agents/:id/pause', 'Agents', 'agents:manage', 'Pause an agent', { params: IdParam, body: StopBody, response: R.agentResult, ...done('No new exposure. A live perp agent keeps its positions and its mandate; a live spot agent\'s mandate is revoked at the signer (resuming it needs a new owner approval).') }),
+  write('stopAgent', 'POST', '/agents/:id/stop', 'Agents', 'agents:manage', 'Stop an agent (always allowed)', { params: IdParam, body: StopBody, response: R.agentResult, ...done(STOP_NOTE) }),
+  write('backtestAgent', 'POST', '/agents/:id/backtest', 'Agents', 'agents:manage', 'Run a backtest for an agent (asynchronous job)', { params: IdParam, body: AgentBacktestBody, response: R.job, ...done('Bar agents: the laboratory backtest of the strategy version. Stream agents: the rule replayed on the top-of-book snapshots the stream engine recorded. Always a BACKTEST, labelled as such.') }),
 ];
 export type OperationId = string;
 export const operation = (id: string): OperationSpec => { const o = OPERATIONS.find((x) => x.id === id); if (!o) throw new Error(`unknown operation ${id}`); return o; };

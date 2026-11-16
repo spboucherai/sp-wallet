@@ -10,6 +10,7 @@ import { JOB_STRATEGY_RE, listingSources, MAX_AGENT_SYMBOLS } from '@spw/core';
 import { config, UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
 import { dropScratch, labExec, RESEARCH_DIR, scratchDir } from './lab.ts';
+import { inLibraryManifest } from '../agent-runtime/model.ts';
 import { agentSymbols, type AgentRow } from './routes.ts';
 
 const ROOT = path.join(RESEARCH_DIR, 'strategies');
@@ -50,6 +51,7 @@ export async function library(): Promise<(StrategyInfo & { readme: string })[]> 
   const rels: [string, string][] = [];
   for (const name of readdirSync(ROOT).sort()) { if (!/^[a-z0-9_]{1,40}$/.test(name)) continue;
     if (JOB_STRATEGY_RE.test(name)) continue; // v7: a research job's strategy is listed by the research routes, with its server report
+    if (!inLibraryManifest(name)) continue;   // V11 (D10): the production library is an explicit manifest — a fixture or a scratch directory is never listed
     for (const ver of readdirSync(path.join(ROOT, name)).sort()) if (/^[a-z0-9_]{1,12}$/.test(ver)) rels.push([name, ver]); }
   // LISTING ONLY (the page waited ~20 s: one laboratory process per version, one after the other). A version already described
   // under the same code hash is served from memory, the others are described in parallel. Registration still calls describe().
@@ -147,6 +149,28 @@ export async function backtest(versionId: string, info: StrategyInfo, symbols: s
   finally { running.delete(versionId); dropScratch(tmp); }
 }
 
+/** Pin a library version (or a research job's `rj_*`) to an agent and start its backtest. Used by the owner's route and by the
+ *  trading API (`POST /strategies`): registration writes no code and approves nothing. */
+export async function registerStrategy(agentId: string, rel: string, actor: string): Promise<{ id: string; sha256: string; status: string; [k: string]: unknown }> {
+  Rel.parse(rel);
+  const [a] = await sql<AgentRow[]>`select * from agents where id = ${agentId}`;
+  if (!a) throw new UserError('not_found', 'agent not found', 404);
+  if (a.kind && a.kind !== 'spot' && a.kind !== 'perp') throw new UserError('wrong_kind', 'this agent runs a built-in rule of the stream engine: it takes no laboratory strategy', 409);
+  // v7: a research job's strategy (rj_*) is attached with the server report of its job — never re-described or re-backtested without the job's trial count
+  if (JOB_STRATEGY_RE.test(rel.split('/')[0]!)) return (await import('../research/evaluate.ts')).attachJobStrategy(a, rel) as never;
+  // v6: a perp agent takes only contract-2 strategies (described with --contract 2, backtested by spq.perp_backtest)
+  if (a.kind === 'perp') { const p = await import('./perp-routes.ts'); return p.registerPerp(a as never, rel); }
+  const info = await describe(rel);
+  const symbols = agentSymbols(a), fit = fitsAgent(info, symbols, a.interval);
+  if (!fit.ok) throw new UserError(fit.code, fit.message, 422);
+  const [row] = await sql<{ id: string; status: string; has_report: boolean }[]>`insert into strategy_versions (id, agent_id, name, version, code_sha256, path, meta)
+    values (${randomUUID()}, ${a.id}, ${info.meta.name}, ${info.meta.version}, ${info.sha256}, ${info.path}, ${sql.json({ ...info.meta, generic: info.generic, symbols } as never)})
+    on conflict (agent_id, code_sha256) do update set path = excluded.path returning id, status, report is not null as has_report`;
+  await audit('strategy.registered', actor, { agent: a.id, version: row!.id, path: info.path, sha256: info.sha256, generic: info.generic, symbols });
+  if (!row!.has_report && row!.status !== 'approved') void backtest(row!.id, info, symbols);
+  return { id: row!.id, sha256: info.sha256, generic: info.generic, symbols, status: row!.has_report ? row!.status : 'backtesting' };
+}
+
 export function strategyRoutes(app: FastifyInstance): void {
   // v6: `?kind=perp` lists the contract-2 library (perp agents); without it the spot library, which can never contain a perp strategy
   app.get('/api/v1/strategies', async (req) => {
@@ -159,20 +183,6 @@ export function strategyRoutes(app: FastifyInstance): void {
   app.post('/api/v1/agents/:id/strategies', async (req) => {
     const id = z.uuid().parse((req.params as { id: string }).id);
     const b = z.strictObject({ path: Rel }).parse(req.body);
-    const [a] = await sql<AgentRow[]>`select * from agents where id = ${id}`;
-    if (!a) throw new UserError('not_found', 'agent not found', 404);
-    // v7: a research job's strategy (rj_*) is attached with the server report of its job — never re-described or re-backtested without the job's trial count
-    if (JOB_STRATEGY_RE.test(b.path.split('/')[0]!)) return (await import('../research/evaluate.ts')).attachJobStrategy(a, b.path);
-    // v6: a perp agent takes only contract-2 strategies (described with --contract 2, backtested by spq.perp_backtest)
-    if (a.kind === 'perp') { const p = await import('./perp-routes.ts'); return p.registerPerp(a as never, b.path); }
-    const info = await describe(b.path);
-    const symbols = agentSymbols(a), fit = fitsAgent(info, symbols, a.interval);
-    if (!fit.ok) throw new UserError(fit.code, fit.message, 422);
-    const [row] = await sql<{ id: string; status: string; has_report: boolean }[]>`insert into strategy_versions (id, agent_id, name, version, code_sha256, path, meta)
-      values (${randomUUID()}, ${a.id}, ${info.meta.name}, ${info.meta.version}, ${info.sha256}, ${info.path}, ${sql.json({ ...info.meta, generic: info.generic, symbols } as never)})
-      on conflict (agent_id, code_sha256) do update set path = excluded.path returning id, status, report is not null as has_report`;
-    await audit('strategy.registered', 'owner', { agent: a.id, version: row!.id, path: info.path, sha256: info.sha256, generic: info.generic, symbols });
-    if (!row!.has_report && row!.status !== 'approved') void backtest(row!.id, info, symbols);
-    return { id: row!.id, sha256: info.sha256, generic: info.generic, symbols, status: row!.has_report ? row!.status : 'backtesting' };
+    return registerStrategy(id, b.path, 'owner');
   });
 }

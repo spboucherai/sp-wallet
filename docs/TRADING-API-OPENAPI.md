@@ -23,9 +23,9 @@ Version 1.0.0. Machine-readable document: [`docs/openapi/trading-v1.json`](opena
 | `positions:read` | no |
 | `positions:manage` | yes |
 | `strategies:read` | no |
-| `strategies:manage` | yes |
+| `strategies:manage` | no |
 | `agents:read` | no |
-| `agents:manage` | yes |
+| `agents:manage` | no |
 
 ## Operations
 
@@ -56,13 +56,22 @@ Version 1.0.0. Machine-readable document: [`docs/openapi/trading-v1.json`](opena
 | POST | `/api/v1/trading/positions/{id}/reduce` | `positions:manage` | implemented | required | Reduce a position |
 | POST | `/api/v1/trading/commands` | `orders:prepare` | implemented | required | Run one line of the trading command grammar |
 | POST | `/api/v1/trading/risk/kill-switch` | `positions:manage` | implemented | — | Engage the global kill switch |
-| POST | `/api/v1/trading/strategies` | `strategies:manage` | **501** `execution_not_wired` | required | Register a strategy version |
-| POST | `/api/v1/trading/strategies/{id}/backtest` | `strategies:manage` | **501** `execution_not_wired` | required | Run a backtest |
-| POST | `/api/v1/trading/strategies/{id}/start` | `strategies:manage` | **501** `execution_not_wired` | required | Start a strategy |
-| POST | `/api/v1/trading/strategies/{id}/stop` | `strategies:manage` | **501** `execution_not_wired` | required | Stop a strategy |
-| POST | `/api/v1/trading/agents` | `agents:manage` | **501** `execution_not_wired` | required | Create an agent |
-| POST | `/api/v1/trading/agents/{id}/start` | `agents:manage` | **501** `execution_not_wired` | required | Start an agent |
-| POST | `/api/v1/trading/agents/{id}/stop` | `agents:manage` | **501** `execution_not_wired` | required | Stop an agent |
+| POST | `/api/v1/trading/strategies` | `strategies:manage` | implemented | required | Register a library strategy version on an agent |
+| POST | `/api/v1/trading/strategies/{id}/backtest` | `strategies:manage` | implemented | required | Run the backtest of a strategy version (asynchronous job) |
+| POST | `/api/v1/trading/strategies/{id}/start` | `strategies:manage` | implemented | required | Start the agent a strategy version is pinned to |
+| POST | `/api/v1/trading/strategies/{id}/stop` | `strategies:manage` | implemented | required | Stop the agent a strategy version is pinned to |
+| GET | `/api/v1/trading/agents/templates` | `agents:read` | implemented | — | The seven built-in agents: family, engine, modes, installed strategies |
+| GET | `/api/v1/trading/agents/{id}` | `agents:read` | implemented | — | One agent: model, strategy, limits, mandate reference, backtest reports (labelled), worker state |
+| GET | `/api/v1/trading/agents/{id}/signals` | `agents:read` | implemented | — | Signal history of one agent, ONE mode |
+| GET | `/api/v1/trading/agents/{id}/journal` | `agents:read` | implemented | — | Activity journal of one agent, ONE mode |
+| GET | `/api/v1/trading/agents/{id}/orders` | `agents:read` | implemented | — | Order history of one agent, ONE mode, in the unified order states |
+| GET | `/api/v1/trading/agents/{id}/performance` | `agents:read` | implemented | — | Computed performance of one agent, ONE mode |
+| GET | `/api/v1/trading/jobs/{id}` | `agents:read` | implemented | — | One agent job (backtest, wind-down): status and result |
+| POST | `/api/v1/trading/agents` | `agents:manage` | implemented | required | Create an agent (from a template, or a perp agent) |
+| POST | `/api/v1/trading/agents/{id}/start` | `agents:manage` | implemented | required | Start an agent in research, paper or live mode |
+| POST | `/api/v1/trading/agents/{id}/pause` | `agents:manage` | implemented | required | Pause an agent |
+| POST | `/api/v1/trading/agents/{id}/stop` | `agents:manage` | implemented | required | Stop an agent (always allowed) |
+| POST | `/api/v1/trading/agents/{id}/backtest` | `agents:manage` | implemented | required | Run a backtest for an agent (asynchronous job) |
 
 ## Parameters
 
@@ -589,10 +598,11 @@ Request body (JSON):
     "mode": {
       "type": "string",
       "enum": [
+        "research",
         "paper",
         "live"
       ],
-      "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+      "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
     },
     "agentId": {
       "type": "string",
@@ -629,6 +639,55 @@ Request body (JSON):
 }
 ```
 
+### GET `/api/v1/trading/agents/{id}`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+
+### GET `/api/v1/trading/agents/{id}/signals`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in now |
+| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
+| `before` | query | no | `{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}` | unix ms: rows strictly before it |
+| `open` | query | no | `{"type":"string","enum":["true","false"]}` |  |
+
+### GET `/api/v1/trading/agents/{id}/journal`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in now |
+| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
+| `before` | query | no | `{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}` | unix ms: rows strictly before it |
+| `open` | query | no | `{"type":"string","enum":["true","false"]}` |  |
+
+### GET `/api/v1/trading/agents/{id}/orders`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in now |
+| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
+| `before` | query | no | `{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}` | unix ms: rows strictly before it |
+| `open` | query | no | `{"type":"string","enum":["true","false"]}` |  |
+
+### GET `/api/v1/trading/agents/{id}/performance`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. |
+
+### GET `/api/v1/trading/jobs/{id}`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+
 ### POST `/api/v1/trading/agents`
 
 Request body (JSON):
@@ -638,11 +697,17 @@ Request body (JSON):
   "type": "object",
   "properties": {
     "kind": {
+      "description": "without a template: perp (a spot agent needs a vault from the signer: owner only)",
       "type": "string",
       "enum": [
         "spot",
         "perp"
       ]
+    },
+    "template": {
+      "description": "one of GET /agents/templates",
+      "type": "string",
+      "maxLength": 40
     },
     "name": {
       "type": "string",
@@ -663,28 +728,69 @@ Request body (JSON):
         "pattern": "^[A-Z0-9]{2,15}$"
       }
     },
+    "venues": {
+      "minItems": 1,
+      "maxItems": 2,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "hyperliquid",
+          "edgex",
+          "dydx",
+          "gmx"
+        ]
+      }
+    },
+    "strategyPath": {
+      "type": "string",
+      "maxLength": 60
+    },
     "interval": {
-      "default": "1h",
       "type": "string",
       "enum": [
         "1h",
+        "4h",
         "1d"
       ]
     },
+    "capitalUsdc": {
+      "type": "string",
+      "pattern": "^\\d{1,7}(\\.\\d{1,6})?$"
+    },
+    "risk": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": [
+          "number",
+          "string",
+          "boolean"
+        ]
+      }
+    },
+    "config": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
     "mode": {
-      "default": "paper",
+      "default": "research",
+      "description": "research (default: created, not running) or paper (stream and supervisor agents start at once); never live",
       "type": "string",
       "enum": [
+        "research",
         "paper",
         "live"
-      ],
-      "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+      ]
     }
   },
   "required": [
-    "kind",
-    "name",
-    "universe"
+    "name"
   ],
   "additionalProperties": false
 }
@@ -705,10 +811,11 @@ Request body (JSON):
     "mode": {
       "type": "string",
       "enum": [
+        "research",
         "paper",
         "live"
       ],
-      "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+      "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
     },
     "agentId": {
       "type": "string",
@@ -719,6 +826,28 @@ Request body (JSON):
   "required": [
     "mode"
   ],
+  "additionalProperties": false
+}
+```
+
+### POST `/api/v1/trading/agents/{id}/pause`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+
+Request body (JSON):
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "reason": {
+      "default": "",
+      "type": "string",
+      "maxLength": 200
+    }
+  },
   "additionalProperties": false
 }
 ```
@@ -739,6 +868,34 @@ Request body (JSON):
       "default": "",
       "type": "string",
       "maxLength": 200
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+### POST `/api/v1/trading/agents/{id}/backtest`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+
+Request body (JSON):
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "versionId": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+    },
+    "hours": {
+      "description": "stream agents: how many hours of recorded snapshots to replay",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 168
     }
   },
   "additionalProperties": false
@@ -768,5 +925,6 @@ Every error is `{ "error": "<code>", "message": "<sentence>" }`; a refusal about
 |---|---|---|---|
 | `key.revoked` | yes | `{ keyId, name, reason }` | an API key was revoked (or replaced by a rotation) |
 | `risk.kill_switch` | yes | `{ source: "signer", halted: true } | { source: "risk_engine", engaged, by, reason }` | the emergency halt of the signer was triggered (source "signer"), or the global kill switch of the risk engine was engaged or released (source "risk_engine") |
-| `agent.updated` | yes | `{ agentId, kind, state, mode }` | an agent changed mode through an owner action (engine-side transitions: pending wiring) |
+| `agent.updated` | yes | `{ agentId, kind, state, mode }` | an agent was started, paused or stopped (by the owner, an API key or the risk-management agent) |
+| `risk.proposal` | yes | `{ supervisorId, agentId, mode, action, code, acted, message, metrics }` | the risk-management agent proposes a reduction or a pause, or acted (paused an agent, engaged the kill switch) |
 | `order.updated` | yes | `{ orderId, mode, venue, instrument, status, previous, event, reason, seq, principal, mandateId }` | an order changed state: one event per transition of the unified order state machine, for every principal, mode and venue |

@@ -14,7 +14,7 @@ import { audit, sql } from '../db.ts';
 import type { LiveService } from '../derivatives/exec.ts';
 import { derivatives, type Derivatives } from '../derivatives/index.ts';
 import { liveLocale } from '../derivatives/live-texts.ts';
-import { approveLive, isLiveActive, LiveApproveBody, liveBlock, LivePrepareBody, liveReadiness, pauseLive, prepareLive, resumeLive, stopLive } from './perp-live-cycle.ts';
+import { isLiveActive, LiveApproveBody, liveBlock, LivePrepareBody, liveReadiness, pauseLive, resumeLive, stopLive } from './perp-live-cycle.ts';
 import { GATE, PERP_INTERVALS } from './perp-data.ts';
 import { CAP_HEADROOM, flattenPerp, instrumentId, LEVERAGE_HEADROOM, PERP_VENUE, perpPolicy, PerpRisk, type PerpAgentRow, type PerpBook } from './perp-engine.ts';
 import { createPerpRuntime, perpRuntime, setPerpRuntime } from './perp-live.ts';
@@ -45,6 +45,7 @@ export const perpView = (a: PerpAgentRow) => ({
   instruments: a.universe.map(instrumentId), cash: 'USDC', interval: a.interval, risk: a.risk, capitalUsdc: formatUnits(BigInt(a.capital_usdc), 6), accountId: a.deriv_account_id,
   strategyVersionId: a.strategy_version_id, mandateId: null, mandate: null, vaultAddress: '', holdings: null,
   flag: a.perp?.flag ?? null, hold: a.perp?.hold ?? null, flattening: a.perp?.flatten ?? null,
+  family: (a as { family?: string | null }).family ?? 'custom', template: (a as { template?: string | null }).template ?? null, engine: 'bar', configVersion: a.config_version ?? 1,
   lastBar: a.last_bar, stopReason: a.stop_reason, createdAt: a.created_at, updatedAt: a.updated_at });
 
 const rt = () => perpRuntime();
@@ -80,6 +81,7 @@ export async function createPerpAgent(body: unknown) {
     row = rows[0]!;
   } catch (e) { await sql`delete from deriv_paper_accounts where id = ${account.id}`.catch(() => {}); throw e; }
   await audit('agent.created', 'owner', { id, kind: 'perp', name: b.name, venue: PERP_VENUE, instruments: b.instruments, account: account.id, capital, risk: b.risk });
+  await (await import('../agent-runtime/store.ts')).bumpConfig(id, 'owner', 'created');   // V11: configuration version 1
   return { ...perpView(row), warnings };
 }
 
@@ -112,9 +114,11 @@ export async function perpDetail(a: PerpAgentRow) {
   const rows = await sql`select id, name, version, code_sha256, status, notes, created_at, approved_at, meta, report from strategy_versions where agent_id = ${a.id} order by created_at desc`;
   const versions = rows.map((v) => ({ id: v.id, name: v.name, version: v.version, code_sha256: v.code_sha256, status: v.status, notes: v.notes, created_at: v.created_at, approved_at: v.approved_at,
     meta: v.meta, summary: perpReportSummary(v.report, v.code_sha256, a.universe) }));
-  const signals = await sql`select bar, status, reason, strategy_sha256, weights, scaled, scale, equity::text as equity, targets, orders, updated_at from perp_agent_signals where agent_id = ${a.id} order by bar desc limit 60`;
-  const equity = await sql`select ts, mode, equity_usd from agent_equity where agent_id = ${a.id} order by ts desc limit 500`;
-  const log = await sql`select ts, kind, title, body from research_log where agent_id = ${a.id} order by ts desc limit 40`;
+  // V11 (D5): the page of an agent shows the records of the mode it is in NOW — paper and live are never one list or one curve
+  const mode = a.mode === 'LIVE' ? 'LIVE' : 'PAPER';
+  const signals = await sql`select bar, status, reason, strategy_sha256, weights, scaled, scale, equity::text as equity, targets, orders, updated_at, mode, decision, reason_code, config_version from agent_signals where agent_id = ${a.id} and mode = ${mode} order by bar desc limit 60`;
+  const equity = await sql`select ts, mode, equity_usd from agent_equity where agent_id = ${a.id} and mode = ${mode} order by ts desc limit 500`;
+  const log = await sql`select ts, kind, title, body, mode, severity, code from research_log where agent_id = ${a.id} and mode = ${mode} order by id desc limit 40`;
   return { ...perpView(a),
     account: account ? { id: account.id, label: account.label, state: account.state, policy: account.policy, settings: account.settings, totals: account.totals, initialCollateral: account.initialCollateral,
       positions: account.positions, openOrders: account.openOrders, orders: account.orders.slice(0, 60), fills: account.fills.slice(0, 60), funding: account.funding.slice(0, 60),
@@ -130,7 +134,7 @@ export async function perpDetail(a: PerpAgentRow) {
 }
 
 /** Owner changes of state. PAPER needs an approved version and an account whose circuit breaker is not set. */
-export async function perpMode(a: PerpAgentRow, mode: 'PAPER' | 'PAUSED' | 'STOPPED' | 'RESEARCH') {
+export async function perpMode(a: PerpAgentRow, mode: 'PAPER' | 'PAUSED' | 'STOPPED' | 'RESEARCH', actor = 'owner') {
   // V7: an agent that is on a venue account changes state through the live life cycle only (pause keeps positions; stop
   // revokes the mandate and closes them). It returns to simulation once it is STOPPED.
   if (isLiveActive(a)) {
@@ -143,11 +147,13 @@ export async function perpMode(a: PerpAgentRow, mode: 'PAPER' | 'PAUSED' | 'STOP
     const acct = await paper().get(a.deriv_account_id);
     if (acct.policy.halt !== null) throw new UserError('halted', `the paper account is halted (${acct.policy.halt}); replace the limits and lift the halt, or reset the account in the Futures terminal`, 409);
   }
-  const state = mode === 'PAPER' ? 'PAPER_TRADING' : mode;
+  // V11 (D11): RESEARCH is a mode, not a state — the agent goes back to its pre-trading state
+  const state = mode === 'PAPER' ? 'PAPER_TRADING' : mode === 'RESEARCH' ? (a.strategy_version_id ? 'AWAITING_APPROVAL' : 'CREATED') : mode;
   const book: PerpBook = { ...(a.perp ?? {}) };
   if (mode === 'PAPER') { book.flatten = null; book.hold = null; }
-  const [r] = await sql<PerpAgentRow[]>`update agents set state = ${state}, mode = 'PAPER', perp = ${sql.json(book as never)}, stop_reason = ${mode === 'STOPPED' ? 'stopped by the owner' : null}, updated_at = now() where id = ${a.id} returning *`;
-  await audit('agent.mode', 'owner', { id: a.id, kind: 'perp', state });
+  const [r] = await sql<PerpAgentRow[]>`update agents set state = ${state}, mode = ${mode === 'RESEARCH' ? 'RESEARCH' : 'PAPER'}, perp = ${sql.json(book as never)}, stop_reason = ${mode === 'STOPPED' ? `stopped by the ${actor}` : null}, updated_at = now() where id = ${a.id} returning *`;
+  await audit('agent.mode', actor, { id: a.id, kind: 'perp', state });
+  await sql`insert into research_log (agent_id, kind, title, mode, code) values (${a.id}, 'state', ${`${state === 'PAPER_TRADING' ? 'Paper trading started' : state === 'PAUSED' ? 'Paused' : state === 'STOPPED' ? 'Stopped' : 'Back to research'} by the ${actor}`}, ${mode === 'RESEARCH' ? 'RESEARCH' : 'PAPER'}, ${`state_${state.toLowerCase()}`})`.catch(() => {});
   return perpView(r!);
 }
 
@@ -195,6 +201,7 @@ export function perpAgentRoutes(app: FastifyInstance, d?: Derivatives, l?: LiveS
     await paper().setPolicy(a.deriv_account_id, perpPolicy(a.universe, formatUnits(BigInt(a.capital_usdc), 6), b.risk, b.liftHalt ? null : acct.policy.halt));
     const [r] = await sql<PerpAgentRow[]>`update agents set risk = ${sql.json(b.risk as never)}, updated_at = now() where id = ${a.id} returning *`;
     await audit('agent.perp_risk', 'owner', { id: a.id, risk: b.risk, liftHalt: b.liftHalt });
+    await (await import('../agent-runtime/store.ts')).bumpConfig(a.id, 'owner', 'risk limits replaced by the owner');   // V11: every change is a configuration version
     return perpView(r!);
   });
 
@@ -215,8 +222,9 @@ export function perpAgentRoutes(app: FastifyInstance, d?: Derivatives, l?: LiveS
     const q = z.object({ account: z.uuid().optional(), locale: z.string().max(5).optional(), days: z.coerce.number().int().min(1).max(30).optional() }).parse(req.query);
     return liveReadiness(await param(req), rt(), { account: q.account, locale: liveLocale(q.locale), days: q.days });
   });
-  app.post('/api/v1/agents/:id/perp/live/prepare', async (req) => prepareLive(await param(req), rt(), LivePrepareBody.parse(req.body)));
-  app.post('/api/v1/agents/:id/perp/live/approve', async (req) => perpDetail(await approveLive(await param(req), rt(), LiveApproveBody.parse(req.body))));
+  // V11: the two mandate-writing functions live in mandate-write.ts, which only these owner routes import
+  app.post('/api/v1/agents/:id/perp/live/prepare', async (req) => (await import('./mandate-write.ts')).prepareLive(await param(req), rt(), LivePrepareBody.parse(req.body)));
+  app.post('/api/v1/agents/:id/perp/live/approve', async (req) => perpDetail(await (await import('./mandate-write.ts')).approveLive(await param(req), rt(), LiveApproveBody.parse(req.body))));
   app.post('/api/v1/agents/:id/perp/live/pause', async (req) => perpDetail(await pauseLive(await param(req))));
   app.post('/api/v1/agents/:id/perp/live/resume', async (req) => perpDetail(await resumeLive(await param(req), rt())));
   app.post('/api/v1/agents/:id/perp/live/stop', async (req) => {

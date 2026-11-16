@@ -7,5 +7,6 @@ if (!commit) { try { commit = execSync('git rev-parse --short HEAD', { stdio: ['
 const define = { __SPW_COMMIT__: JSON.stringify(commit) };
 const banner = { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" };
 for (const [entry, out] of [['services/api/src/main.ts', 'dist/api.mjs'], ['services/isolated-signer/src/main.ts', 'dist/signer.mjs'],
-  ['services/research-runner/src/main.ts', 'dist/research-runner.mjs']]) // v7: the research runner, a standalone bundle for a research node
+  ['services/research-runner/src/main.ts', 'dist/research-runner.mjs'], // v7: the research runner, a standalone bundle for a research node
+  ['services/api/src/agent-worker-main.ts', 'dist/agents.mjs']]) // v11: the agent workers as their own process (optional: SPW_WORKERS=agents)
   await build({ entryPoints: [entry], outfile: out, bundle: true, platform: 'node', target: 'node24', format: 'esm', banner, define, legalComments: 'none', logLevel: 'info' });
