@@ -466,7 +466,10 @@ describe('signer refusals: hold until the next bar, or leave LIVE', () => {
       expect(await a.pass()).toBe('stopped');
       const row = await a.row();
       expect(row.perp.live.exit).toMatchObject({ code: 'mandate_mainnet_disabled' });
-      expect(row.stop_reason).toMatch(/autonomous \(mandate\) trading on mainnet is switched off on the server.*1 position\(s\) REMAIN OPEN/);
+      // V11 (B-02): the lock stops new exposure, not the agent's way out — before, the position was left open ("1 position(s) REMAIN OPEN")
+      expect(row.stop_reason).toMatch(/autonomous \(mandate\) trading on mainnet is switched off on the server.*every position was closed with reduce-only orders/);
+      expect(w.m.user(w.ACCOUNT).positions.get('BTC')?.szi ?? '0').toMatch(/^0(\.0+)?$/);
+      expect(w.m.exchangeCalls('order')).toBe(2);                                                                         // the entry, and the reduce-only close sent with the lock closed
       expect(w.signer.status().venueMandates[0]).toMatchObject({ revoked: true });                                        // revoked on the signer all the same
       expect(w.t.exchangeCalls()).toBe(0);
     }
