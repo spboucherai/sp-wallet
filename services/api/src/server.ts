@@ -34,6 +34,7 @@ import { monitorRoutes } from './monitor/routes.ts'; // v6-alerts
 import { researchRoutes, RUNNER_PREFIX, runnerGate } from './research/routes.ts'; // v7 research runtime
 import { perpRuntime } from './agents/perp-live.ts'; // v7 research runtime (perp data for research jobs)
 import { planRoutes, type PlanDeps } from './plan-exec.ts'; // v7 any-to-any plans
+import { privateMarketsRoutes } from './private-markets/routes.ts'; // v11 private markets (read-only)
 import { apiKeyGate, OWNER, tradingApi } from './trading-api/index.ts'; // v11 trading API (machine authentication)
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
@@ -151,6 +152,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   perpAgentRoutes(app, opts.derivatives, opts.live); // v6 perp agents on paper accounts; v7: LIVE on a venue account under a signer-enforced mandate
   marketDataRoutes(app);
   derivativesRoutes(app, opts.derivatives);
+  privateMarketsRoutes(app, opts.derivatives); // v11: synthetic contracts on private companies — market data and sourced valuations, display only
   liveRoutes(app, opts.live); // controlled live trading: nothing trades until the owner authorizes a venue account with his passkey
   collateralRoutes(app, opts.collateral); // deposit to / withdraw from a venue account: passkey per operation, pinned bridge, own address only
   gmxRoutes(app, opts.gmx); // v8: GMX v2 orders as wallet transactions; off unless SPW_DERIV_GMX_LIVE=on and the owner approved a venue policy

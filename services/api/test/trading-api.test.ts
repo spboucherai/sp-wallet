@@ -356,6 +356,29 @@ describe('limits', () => {
   });
 });
 
+describe('private markets (v11) under the trading prefix', () => {
+  it('markets:read opens the three read-only routes; another scope is refused; venue restrictions narrow the answer', async () => {
+    const PM = `${T}/private-markets`;
+    const none = await newKey({ scopes: ['wallet:read'] });
+    for (const path of [PM, `${PM}/hyperliquid:io:ANTH`, `${PM}/companies/anthropic`]) expect((await call('GET', path, { key: none.secret })).json, path).toEqual({ error: 'insufficient_scope', message: 'this key lacks the scope markets:read' });
+    const k = await newKey({ scopes: ['markets:read'] });
+    const list = await call('GET', PM, { key: k.secret });
+    expect(list.status).toBe(200);
+    expect(spec.operation('listPrivateMarkets').response!.safeParse(list.json).success).toBe(true);
+    // this suite's Hyperliquid replays no builder-dex answer: its reviewed rows come back with the venue's error — never a 5xx, never a price
+    expect(list.json.venues.map((x: any) => x.venue)).toEqual(['hyperliquid']);
+    expect(list.json.markets.length).toBeGreaterThan(0);
+    expect(list.json.markets.every((m: any) => m.venue === 'hyperliquid' && m.error && m.market.price.value === null && m.valuation.impliedValuation.value === null && m.tradable === false)).toBe(true);
+    expect((await call('GET', `${PM}/companies/anthropic`, { key: k.secret })).status).toBe(200);
+    expect((await call('POST', PM, { key: k.secret, body: {}, headers: idem() })).status).toBe(404);             // read-only: no write route exists
+    const gmxOnly = await newKey({ scopes: ['markets:read'], restrictions: { venues: ['gmx'] } });
+    const narrowed = await call('GET', PM, { key: gmxOnly.secret });
+    expect(narrowed.status).toBe(200);
+    expect(narrowed.json.markets).toEqual([]); expect(narrowed.json.venues).toEqual([]); expect(narrowed.json.companies).toEqual([]);
+    expect((await call('GET', `${PM}/hyperliquid:io:ANTH`, { key: gmxOnly.secret })).json.error).toBe('restricted');
+  });
+});
+
 describe('read side', () => {
   let key = '';
   beforeAll(async () => { key = (await newKey({ rateLimitPerMin: 600 })).secret; });
@@ -723,7 +746,7 @@ describe('usage, status, retention', () => {
     expect(by['venue:hyperliquid'].ok).toBe(true);
     expect(by.execution).toMatchObject({ ok: false });
     expect(by['market-data'].ok).toBe(false);                                                            // nothing ingested in this database
-    expect(s.json.api).toMatchObject({ prefix: T, operations: spec.OPERATIONS.length, implemented: 14 });
+    expect(s.json.api).toMatchObject({ prefix: T, operations: spec.OPERATIONS.length, implemented: 17 });   // 14 reads + the 3 private-markets reads (v11)
     expect(s.json.api.notImplemented).toHaveLength(12);
     expect(s.json.rateLimits).toMatchObject({ defaultPerMin: 120, failedAuthPerMinPerAddress: 10 });
   });

@@ -15,6 +15,8 @@ import { DATA_BOUNDS, venueFailure, type CandleInterval } from '../derivatives/d
 import type { Derivatives } from '../derivatives/index.ts';
 import type { LiveService } from '../derivatives/exec.ts';
 import type { GmxService } from '../derivatives/gmx-exec.ts';
+import { positionOf } from '../private-markets/routes.ts';
+import { privateMarketsFor } from '../private-markets/service.ts';
 import { getSeries } from '../market/series.ts';
 import { listQuality } from '../market/store.ts';
 import { activeMarketConfig } from '../market/symbols.ts';
@@ -376,6 +378,28 @@ export function createReads(deps: ReadDeps) {
     return { items };
   }
 
-  return { markets, market, orderbook, candles, balances, portfolio, positions, orders, order, strategies, agents, risk, activity, resolve };
+  // -------------------------------------------------------------------------------------------------------------- private markets (v11)
+  // the answers of services/api/src/private-markets, narrowed to what the key may see (venues and instruments)
+  type PmQuery = { delisted?: 'true' | 'false'; size?: string; side?: 'long' | 'short'; interval?: '1h' | '1d'; limit?: number };
+  const pm = () => privateMarketsFor(deps.derivatives());
+  const pmPos = (q: PmQuery) => { const position = positionOf(q); return position ? { position } : {}; };
+  async function privateMarkets(p: Principal, q: PmQuery) {
+    const a = await pm().list({ delisted: q.delisted === 'true', ...pmPos(q) });
+    const keep = new Set(a.markets.filter((m) => marketAllowed(p, m.venue, m.id)).map((m) => m.id));
+    return { ...a, markets: a.markets.filter((m) => keep.has(m.id)), venues: a.venues.filter((v) => venueAllowed(p, v.venue)), excluded: a.excluded.filter((e) => marketAllowed(p, e.id.split(':')[0]!, e.id)),
+      companies: a.companies.map((c) => ({ ...c, contracts: c.contracts.filter((id) => keep.has(id)), divergence: c.divergence.filter((d) => d.contracts.every((k) => keep.has(k.id))) })).filter((c) => c.contracts.length > 0) };
+  }
+  async function privateMarket(p: Principal, id: string, q: PmQuery) {
+    if (!marketAllowed(p, id.split(':')[0]!, id)) throw restricted(`market ${id.slice(0, 80)}`);
+    const a = await pm().detail(id, { ...pmPos(q), ...(q.interval ? { interval: q.interval } : {}), ...(q.limit ? { limit: q.limit } : {}) });
+    return { ...a, sameCompany: a.sameCompany.filter((m) => marketAllowed(p, m.id.split(':')[0]!, m.id)) };
+  }
+  async function privateMarketCompany(p: Principal, slug: string, q: PmQuery) {
+    const a = await pm().company(slug, pmPos(q)), ok = (m: { venue: string; id: string }) => marketAllowed(p, m.venue, m.id);
+    const contracts = a.contracts.filter(ok), keep = new Set(contracts.map((m) => m.id));
+    return { ...a, contracts, delisted: a.delisted.filter(ok), venues: a.venues.filter((v) => venueAllowed(p, v.venue)), divergence: a.divergence.filter((d) => d.contracts.every((k) => keep.has(k.id))) };
+  }
+
+  return { markets, market, orderbook, candles, balances, portfolio, positions, orders, order, strategies, agents, risk, activity, resolve, privateMarkets, privateMarket, privateMarketCompany };
 }
 export type Reads = ReturnType<typeof createReads>;
