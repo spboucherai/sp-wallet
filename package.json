@@ -8,7 +8,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "typecheck": "tsc -p packages/core && tsc -p packages/swap && tsc -p packages/derivatives && tsc -p services/isolated-signer && tsc -p services/api && tsc -p services/research-runner && tsc -p apps/web",
+    "typecheck": "tsc -p packages/core && tsc -p packages/swap && tsc -p packages/derivatives && tsc -p packages/trading-sdk && tsc -p services/isolated-signer && tsc -p services/api && tsc -p services/research-runner && tsc -p apps/web",
     "test": "vitest run",
     "build": "node scripts/build.mjs && (cd apps/web && node_modules/.bin/vite build)",
     "e2e": "playwright test -c tests/e2e/playwright.config.ts"
