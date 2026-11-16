@@ -50,6 +50,7 @@ export function Notice({ tone = 'info', children }: { tone?: 'info' | 'warn' | '
 const TONE: Record<string, [string, string]> = {
   finalized: ['text-emerald bg-emerald/10', 'check'], confirming: ['text-blue bg-blue/10', 'clock'], broadcast: ['text-blue bg-blue/10', 'up'],
   signed: ['text-blue bg-blue/10', 'key'], approved: ['text-blue bg-blue/10', 'key'], pending_approval: ['text-warn bg-warn/12', 'clock'], draft: ['text-mute bg-elev', 'list'],
+  not_broadcast: ['text-warn bg-warn/12', 'warn'],
   failed: ['text-danger bg-danger/10', 'x'], rejected: ['text-danger bg-danger/10', 'x'], expired: ['text-mute bg-elev', 'clock'], replaced: ['text-warn bg-warn/12', 'warn'], reorged: ['text-warn bg-warn/12', 'warn'],
 };
 /** Status is always icon + text, never colour alone. */
@@ -101,8 +102,12 @@ export const fiat = (n: number, cur: string, locale: string) => new Intl.NumberF
 /** An agent's allocated capital: a USD figure whatever its cash leg (USDC, a bridged or pegged dollar, 6 or 18 decimals) — « 100,00 $ US » / "US$100.00". */
 export const usdCapital = (capital: string | number, locale: string): string => { const n = Number(capital); return Number.isFinite(n) ? fiat(n, 'USD', locale) : '—'; };
 export const when = (d: string | Date, locale: string) => new Date(d).toLocaleString(locale === 'fr' ? 'fr-CA' : 'en-CA', { dateStyle: 'medium', timeStyle: 'short' });
-/** A transfer signed on a server that does not broadcast (test stack): it will never confirm, and must not read as "sent". */
-export const testNotSent = (p: { state?: string; error?: string | null } | null | undefined): boolean => !!p && p.state === 'broadcast' && /broadcast disabled/i.test(p.error ?? '');
+/**
+ * A transfer signed on a server that does not broadcast: it will never confirm, and must not read as "sent".
+ * v11 (B2): keyed on the proposal's own terminal STATE `not_broadcast` (error code `broadcast_disabled`) — never on the
+ * wording of the server's English sentence, which may change or be translated.
+ */
+export const testNotSent = (p: { state?: string; errorCode?: string | null } | null | undefined): boolean => !!p && (p.state === 'not_broadcast' || p.errorCode === 'broadcast_disabled');
 export function Skeleton({ h = 'h-16', className = '' }: { h?: string; className?: string }) { return <div className={`skel ${h} ${className}`} aria-hidden="true" />; }
 
 // ── v9 design system: shared pieces every screen composes ────────────────────────────────────────────────────────────────

@@ -2105,6 +2105,126 @@ const D = {
   dzRjLoadFailed: ['Chargement impossible', 'Could not load'],
   dzRjLoadFailedBody: ['Le serveur n’a pas répondu. Les tâches en cours ne sont pas touchées.', 'The server did not answer. Running jobs are not affected.'],
   // <<< end of the `dz` block
+  // >>> `sv` block (v11 stabilisation): SERVER TEXTS. The API stores a code and its parameters next to its English sentence
+  // (services/api/src/sv-texts.ts); these are the sentences the owner reads. `sv_<code>` mirrors that catalogue one for one
+  // (apps/web/test/v11-stab.test.ts checks it); the other `sv*` keys belong to the screens that show them (sv.ts, execution.tsx).
+  // — why a proposal ended (proposals.error_code)
+  sv_broadcast_disabled: ['Signée, mais NON envoyée : la diffusion est désactivée sur ce serveur. Rien n’a quitté le portefeuille.', 'Signed, but NOT sent: broadcasting is disabled on this server. Nothing left the wallet.'],
+  sv_approval_expired: ['Le délai d’approbation est écoulé.', 'The approval window expired.'],
+  sv_expired_before_approval: ['Expirée avant d’être approuvée.', 'Expired before it was approved.'],
+  sv_interrupted_signing: ['Interrompue pendant la signature ; rien n’a été envoyé.', 'Interrupted during signing; nothing was sent.'],
+  sv_not_broadcast_in_time: ['N’a pas pu être envoyée à temps ; rien n’a été envoyé.', 'Could not be sent in time; nothing was sent.'],
+  sv_rejected_by_owner: ['Annulée par vous.', 'Cancelled by you.'],
+  sv_signer_refused: ['Le signataire a refusé : {detail}', 'The signer refused: {detail}'],
+  sv_signer_hash_mismatch: ['Le signataire a répondu pour une autre opération ; rien n’a été envoyé.', 'The signer answered for another operation; nothing was sent.'],
+  sv_broadcast_attempt_failed: ['L’envoi au réseau a échoué ({detail}) ; il sera retenté.', 'Sending to the network failed ({detail}); it will be tried again.'],
+  sv_tx_failed: ['La transaction a échoué sur le réseau : {detail}', 'The transaction failed on-chain: {detail}'],
+  sv_swap_late: ['L’échange n’a pas pu être envoyé à temps ; rien n’a été échangé.', 'The swap could not be sent in time; nothing was swapped.'],
+  sv_swap_approval_reverted: ['L’autorisation du jeton a échoué ; rien n’a été échangé.', 'The token approval reverted; nothing was swapped.'],
+  sv_swap_would_revert: ['L’échange échouerait maintenant ({detail}) ; il n’a pas été envoyé.', 'The swap would revert now ({detail}); it was not sent.'],
+  sv_swap_would_revert_approved: ['L’échange échouerait maintenant ({detail}) ; il n’a pas été envoyé. L’autorisation du montant exact reste en place pour la prochaine tentative.', 'The swap would revert now ({detail}); it was not sent. The exact-amount approval stays in place for the next attempt.'],
+  sv_bridge_late: ['Le transfert n’a pas pu être envoyé à temps ; rien n’a été brûlé.', 'The transfer could not be sent in time; nothing was burned.'],
+  sv_bridge_approval_reverted: ['L’autorisation du jeton a échoué ; rien n’a été brûlé.', 'The token approval reverted; nothing was burned.'],
+  sv_burn_would_revert: ['Le brûlage échouerait maintenant ({detail}) ; il n’a pas été envoyé.', 'The burn would revert now ({detail}); it was not sent.'],
+  sv_burn_would_revert_approved: ['Le brûlage échouerait maintenant ({detail}) ; il n’a pas été envoyé. L’autorisation du montant exact reste en place pour la prochaine tentative.', 'The burn would revert now ({detail}); it was not sent. The exact-amount approval stays in place for the next attempt.'],
+  sv_xswap_late: ['L’échange n’a pas pu être envoyé à temps ; rien n’a été envoyé au coffre.', 'The swap could not be sent in time; nothing was sent to the vault.'],
+  sv_xswap_vault_unconfirmed: ['Le coffre n’est plus confirmé ({detail}) ; rien ne lui a été envoyé.', 'The vault is no longer confirmed ({detail}); nothing was sent to it.'],
+  sv_xswap_approval_reverted: ['L’autorisation du jeton a échoué ; rien n’a été envoyé au coffre.', 'The token approval reverted; nothing was sent to the vault.'],
+  sv_deposit_would_revert: ['Le dépôt échouerait maintenant ({detail}) ; il n’a pas été envoyé.', 'The deposit would revert now ({detail}); it was not sent.'],
+  sv_deposit_would_revert_approved: ['Le dépôt échouerait maintenant ({detail}) ; il n’a pas été envoyé. L’autorisation du montant exact reste en place sur le routeur ; seul ce portefeuille peut s’en servir.', 'The deposit would revert now ({detail}); it was not sent. The exact-amount approval of the router stays in place; only this wallet can use it.'],
+  sv_sol_swap_unverified: ['L’échange enregistré ne se vérifie plus ; il n’a pas été envoyé.', 'The stored swap no longer verifies; it was not sent.'],
+  sv_sol_swap_expired: ['L’échange a expiré avant de pouvoir être envoyé (blockhash trop ancien) ; rien n’a été échangé.', 'The swap expired before it could be sent (blockhash too old); nothing was swapped.'],
+  sv_sol_swap_refused: ['Le nœud a refusé l’échange signé ({detail}) ; il n’a pas été envoyé.', 'The node refused the signed swap ({detail}); it was not sent.'],
+  sv_sol_swap_would_fail: ['L’échange échouerait maintenant ({detail}) ; il n’a pas été envoyé.', 'The swap would fail now ({detail}); it was not sent.'],
+  sv_sol_swap_below_min: ['En simulation, l’échange ne livre plus le minimum approuvé ; il n’a pas été envoyé.', 'In simulation the swap no longer delivers the approved minimum; it was not sent.'],
+  sv_sol_swap_no_balances: ['Le nœud n’a pas donné les soldes simulés ; l’échange n’a pas été envoyé.', 'The node did not report the simulated balances; the swap was not sent.'],
+  sv_sol_burn_mismatch: ['Le signataire a renvoyé une transaction qui n’est pas le brûlage approuvé ; elle n’a pas été envoyée.', 'The signer returned a transaction that is not the approved burn; it was not sent.'],
+  sv_sol_burn_expired: ['Le transfert a expiré avant de pouvoir être envoyé (blockhash trop ancien) ; rien n’a été brûlé.', 'The transfer expired before it could be sent (blockhash too old); nothing was burned.'],
+  sv_sol_burn_refused: ['Le nœud a refusé le brûlage signé ({detail}) ; il n’a pas été envoyé.', 'The node refused the signed burn ({detail}); it was not sent.'],
+  sv_sol_burn_would_fail: ['Le brûlage échouerait maintenant ({detail}) ; il n’a pas été envoyé.', 'The burn would fail now ({detail}); it was not sent.'],
+  // — why a CCTP transfer is waiting (bridge.holdCode)
+  sv_hold_destination_busy: ['Une autre transaction est en cours sur {net}.', 'Another transaction is in flight on {net}.'],
+  sv_hold_destination_pending: ['Une transaction précédente est encore en attente sur {net}.', 'A previous transaction is still pending on {net}.'],
+  sv_hold_mint_would_fail: ['L’émission échouerait sur {net} maintenant : {detail}', 'The mint would revert on {net} now: {detail}'],
+  sv_hold_fee_above_policy: ['Les frais du réseau {net} dépassent en ce moment le plafond du signataire.', 'The network fee on {net} is above the signer’s ceiling right now.'],
+  sv_hold_destination_gas: ['Ajoutez du {sym} sur {net} : il en faut {need} pour recevoir les USDC, le portefeuille en détient {have}.', 'Add {sym} on {net}: {need} is needed to receive the USDC, the wallet holds {have}.'],
+  sv_hold_attestation_late: ['Circle n’a pas encore attesté ce brûlage. Les fonds ne sont pas perdus : l’émission reste possible dès que l’attestation arrive.', 'Circle has not attested this burn yet. The funds are not lost: the mint stays possible whenever the attestation arrives.'],
+  sv_hold_message_mismatch: ['La réponse de Circle ne décrit pas le transfert approuvé ({detail}) ; elle n’a pas été utilisée.', 'Circle’s answer does not describe the approved transfer ({detail}); it was not used.'],
+  sv_hold_attestation_expired: ['L’attestation rapide a expiré ; une nouvelle a été demandée à Circle.', 'The Fast attestation expired; a new one was requested from Circle.'],
+  sv_hold_mint_reverted: ['La transaction d’émission a échoué sur {net} ; les USDC attendent toujours. Approuvez une nouvelle tentative avec la clé d’accès.', 'The mint transaction reverted on {net}; the USDC is still waiting. Approve a new attempt with the passkey.'],
+  sv_hold_mint_replaced: ['Une autre transaction a pris la place de l’émission sur {net} ; les USDC attendent toujours. Approuvez une nouvelle tentative avec la clé d’accès.', 'Another transaction took the place of the mint on {net}; the USDC is still waiting. Approve a new attempt with the passkey.'],
+  sv_hold_mint_expired: ['La transaction d’émission n’a pas été incluse à temps sur {net} ; les USDC attendent toujours. Approuvez une nouvelle tentative avec la clé d’accès.', 'The mint transaction was not included in time on {net}; the USDC is still waiting. Approve a new attempt with the passkey.'],
+  sv_hold_technical: ['Détail technique : {detail}', 'Technical detail: {detail}'],
+  // — why a THORChain swap is waiting (xswap.holdCode)
+  sv_hold_vault_churned: ['Le coffre n’est plus confirmé comme actif et la transaction n’est pas encore confirmée. Elle ne peut pas être annulée ; THORChain surveille encore un coffre qui se retire, sans que ce soit garanti.', 'The vault is no longer confirmed as active and the transaction is not confirmed yet. It cannot be cancelled; THORChain still watches a retiring vault, but this is not guaranteed.'],
+  sv_hold_not_observed: ['THORChain n’a pas encore signalé ce dépôt. Rien n’est marqué comme reçu tant que le portefeuille ne voit pas lui-même la transaction de sortie.', 'THORChain has not reported this deposit yet. Nothing is marked as received until the wallet sees the outbound transaction itself.'],
+  sv_hold_outbound_late: ['THORChain a observé le dépôt mais n’a pas encore envoyé la transaction de sortie.', 'THORChain has observed the deposit but has not sent the outbound transaction yet.'],
+  sv_hold_outbound_mismatch: ['La transaction de sortie annoncée par THORChain ne paie pas à ce portefeuille ce qui était attendu ; elle n’est pas comptée comme reçue.', 'The outbound transaction THORChain names does not pay this wallet what was expected; it is not counted as received.'],
+  sv_hold_below_minimum: ['Le montant reçu est inférieur au minimum approuvé.', 'The amount received is below the approved minimum.'],
+  sv_hold_outbound_not_seen: ['THORChain annonce une transaction de sortie que les sources du portefeuille ne montrent pas encore comme confirmée.', 'THORChain reports an outbound transaction that the wallet’s own data sources do not show as confirmed yet.'],
+  // — why a plan paused, why a step ended
+  sv_plan_no_funds: ['Le portefeuille ne détient plus les {sym} de ce plan sur {net}.', 'The wallet no longer holds the {sym} of this plan on {net}.'],
+  sv_plan_floor: ['Le résultat final estimé maintenant est de {estimate} {sym}, sous le plancher de {floor}. Rien n’a été préparé ; les fonds sont où ils étaient.', 'The final result estimated now is {estimate} {sym}, below the floor of {floor}. Nothing was prepared; the funds are where they were.'],
+  sv_plan_proposal_gone: ['La demande de cette étape n’existe plus.', 'The request of this step no longer exists.'],
+  sv_plan_replaced: ['Remplacée par une nouvelle préparation.', 'Replaced by a fresh preparation.'],
+  sv_plan_withdrawn: ['Retirée : le plan a été arrêté.', 'Withdrawn: the plan was stopped.'],
+  sv_plan_refunded: ['THORChain a remboursé l’échange : l’actif de départ est revenu au portefeuille, moins les frais de réseau.', 'THORChain refunded the swap: the source asset came back to the wallet, less the network fees.'],
+  sv_plan_tx_ended: ['La transaction s’est terminée sans aboutir ({state}).', 'The transaction ended without going through ({state}).'],
+  // — risk flag details (figures as parameters) and why a route is not executed here
+  svFlagD_high_price_impact: ['{bps} pb', '{bps} bps'], svFlagD_price_impact: ['{bps} pb', '{bps} bps'],
+  svFlagD_multi_step: ['{n} étapes', '{n} steps'], svFlagD_fee_unpriced: ['{n} frais sans prix de référence', '{n} fee item(s) without a reference price'],
+  svFlagD_better_than_market: ['le montant reçu vaudrait {pct} % du montant envoyé', 'the output would be worth {pct} % of the input'],
+  svFlagD_far_below_market: ['le montant reçu vaudrait {pct} % du montant envoyé', 'the output would be worth {pct} % of the input'],
+  svFlagD_below_market: ['le montant reçu vaudrait {pct} % du montant envoyé', 'the output would be worth {pct} % of the input'],
+  svFlagD_outlier_vs_peers: ['plus de {pct} % au-dessus de la médiane des autres fournisseurs', 'more than {pct} % above the median of the other providers'],
+  svExec_comparison_only: ['Source de comparaison seulement : ce portefeuille ne construit ni ne signe rien à partir de cette cotation.', 'Comparison source only: this wallet builds and signs nothing from this quote.'],
+  svExec_kyber_calldata: ['KyberSwap fournit les données d’appel de son routeur ; le signataire peut vérifier le routeur, l’autorisation, le destinataire et le minimum, pas reconstruire la route.', 'KyberSwap returns its router’s calldata; the signer can check the router, the approval, the recipient and the minimum, not rebuild the route.'],
+  svExec_jupiter_instructions: ['Jupiter fournit des instructions que le signataire ne peut pas reconstruire ; il ne pourrait que les contraindre par leur structure et par simulation.', 'Jupiter returns instructions the signer cannot rebuild; it could only constrain them structurally and by simulation.'],
+  svExec_lifi_diamond: ['LI.FI construit les données d’appel de son contrat ; le signataire ne peut pas recalculer seul le destinataire, le minimum ni la charge du pont.', 'LI.FI builds the calldata of its contract; the signer cannot recompute the recipient, the minimum or the bridge payload by itself.'],
+  svExec_dln_order: ['deBridge construit la transaction de l’ordre ; le signataire ne reconstruit pas l’ordre (destinataire, montant, expiration).', 'deBridge builds the order transaction; the signer does not rebuild the order (recipient, amount, expiry).'],
+  svExec_cctp_pair_not_wired: ['Cotation de Circle pour une paire que ce portefeuille n’exécute pas encore.', 'Circle’s quote for a pair this wallet does not execute yet.'],
+  svExec_cctp_eurc: ['Les transferts d’EURC par CCTP ne sont pas exécutés par ce portefeuille.', 'EURC transfers through CCTP are not executed by this wallet.'],
+  svExec_native_vault: ['Échange natif vers un coffre tournant : exécuté seulement sur les paires vérifiées par le signataire.', 'Native swap to a rotating vault: executed only on the pairs the signer verifies.'],
+  svExec_thor_verified: ['Le mémo et la transaction sont construits par le signataire ; l’adresse du coffre est confirmée par au moins trois opérateurs THORNode indépendants qu’il interroge lui-même.', 'The memo and the transaction are built by the signer; the vault address is confirmed by at least three independent THORNode operators it asks itself.'],
+  // — the normalized route card
+  svCardSent: ['Envoyé', 'Sent'], svCardEst: ['Reçu (estimé)', 'Received (estimated)'], svCardMin: ['Reçu au minimum', 'Minimum received'],
+  svCardNetFee: ['Frais de réseau', 'Network fee'], svCardProtoFee: ['Frais du protocole', 'Protocol fee'],
+  svCardSlip: ['Écart au prix de référence', 'Against the reference price'], svCardTolerance: ['Tolérance demandée', 'Tolerance asked'],
+  svCardEta: ['Durée estimée', 'Estimated time'], svCardAge: ['Cotation', 'Quote'], svCardExec: ['Exécution', 'Execution'],
+  svCardNotReported: ['non communiqué par le fournisseur', 'not reported by the provider'], svCardNoRef: ['sans prix de référence', 'no reference price'],
+  svCardIncluded: ['déjà inclus dans le montant reçu', 'already included in the amount received'], svCardEstimated: ['estimation', 'estimate'],
+  svCardBps: ['{pct} %', '{pct} %'], svCardCost: ['coût de {pct} %', 'costs {pct} %'], svCardGain: ['{pct} % au-dessus', '{pct} % above'],
+  svCardAgeS: ['il y a {n} s', '{n} s ago'], svCardAgeMin: ['il y a {n} min', '{n} min ago'], svCardExpired: ['expirée — relancez la recherche', 'expired — search again'],
+  svCardExecHere: ['par ce portefeuille, via {via}', 'by this wallet, through {via}'], svCardExecNo: ['comparaison seulement', 'comparison only'],
+  // — what is prepared is what was shown (B1, B6)
+  svHeroVia: ['via {via} — exécuté par ce portefeuille', 'through {via} — executed by this wallet'],
+  svHeroCctp: ['Circle CCTP · {speed}', 'Circle CCTP · {speed}'],
+  svHeroBestOther: ['Meilleure cotation, en comparaison seulement : {amount} {sym} ({via}).', 'Best quote, comparison only: {amount} {sym} ({via}).'],
+  svQuoteMoved: ['Le prix a bougé depuis l’affichage : {fresh} {sym} attendus maintenant, sous le minimum affiché de {min} {sym}. Rien n’a été préparé ; les cotations ont été relancées.', 'The price moved since it was displayed: {fresh} {sym} expected now, below the displayed minimum of {min} {sym}. Nothing was prepared; the quotes were refreshed.'],
+  svQuoteStale: ['Cette cotation ne correspond plus à la paire, au montant ou à la tolérance affichés. Les cotations ont été relancées.', 'This quote no longer matches the pair, the amount or the tolerance shown. The quotes were refreshed.'],
+  svQuoteNotExec: ['Cette cotation vient d’une source de comparaison : ce portefeuille ne l’exécute pas.', 'This quote comes from a comparison source: this wallet does not execute it.'],
+  svQuoteFirm: ['Affiché {quoted} · préparé {firm} ({dev})', 'Shown {quoted} · prepared {firm} ({dev})'], svQuoteFirmK: ['Cotation affichée', 'Quote shown'],
+  svExecNoQuote: ['Ce portefeuille exécute cette paire via {via}, qui n’a pas donné de cotation à l’instant. Relancez la recherche.', 'This wallet executes this pair through {via}, which gave no quote just now. Search again.'],
+  svNeedsKey: ['Non interrogés (clé API non configurée) : {list}.', 'Not asked (API key not configured): {list}.'],
+  svTooManyStreams: ['Trop de recherches de cotations en même temps. Fermez un onglet ou patientez un instant.', 'Too many quote searches at once. Close a tab or wait a moment.'],
+  // — unified execution status
+  svExTitle: ['Étapes', 'Steps'],
+  svExStep_approval: ['Autorisation du jeton', 'Token approval'], svExStep_send: ['Envoi', 'Send'], svExStep_swap: ['Échange', 'Swap'], svExStep_burn: ['Brûlage sur {net}', 'Burn on {net}'],
+  svExStep_attestation: ['Attestation de Circle', 'Circle’s attestation'], svExStep_mint: ['Émission sur {net}', 'Mint on {net}'], svExStep_deposit: ['Dépôt au coffre sur {net}', 'Vault deposit on {net}'],
+  svExStep_observation: ['Observation par THORChain', 'Observed by THORChain'], svExStep_outbound: ['Sortie sur {net}', 'Outbound on {net}'], svExStep_order: ['Ordre GMX', 'GMX order'],
+  svExState_pending: ['À venir', 'Not started'], svExState_awaiting_approval: ['En attente de votre approbation', 'Awaiting your approval'], svExState_signing: ['Signée, envoi en cours', 'Signed, being sent'],
+  svExState_broadcast: ['Envoyée au réseau', 'Sent to the network'], svExState_confirming: ['En confirmation', 'Confirming'], svExState_confirmed: ['Confirmée', 'Confirmed'],
+  svExState_failed: ['Non aboutie', 'Did not go through'], svExState_refunded: ['Remboursée', 'Refunded'], svExState_unknown: ['Issue non enregistrée', 'Outcome not recorded'],
+  svExTx: ['Voir la transaction', 'View the transaction'],
+  // — activity
+  svKind_gmx: ['Ordre GMX', 'GMX order'], svKindSub_gmx: ['Transaction d’ordre vers le routeur GMX', 'Order transaction to the GMX router'],
+  // — resilience: signer unreachable, price freshness
+  svSignerDown: ['Le signataire est injoignable. Les soldes sont lus par le serveur aux adresses connues le {date} ; aucune opération ne peut être signée pour l’instant.', 'The signer is unreachable. Balances are read by the server at the addresses known on {date}; nothing can be signed for now.'],
+  svAddrFromCache: ['Adresse connue le {date} : le signataire est injoignable et n’a pas pu la confirmer à l’instant.', 'Address known on {date}: the signer is unreachable and could not confirm it just now.'],
+  svPriceAt: ['Prix : {age}', 'Prices: {age}'], svPriceStale: ['Prix non à jour ({age})', 'Prices out of date ({age})'],
+  svPriceOneSource: ['Source unique : CoinGecko.', 'Single source: CoinGecko.'],
+  svAgoNow: ['à l’instant', 'just now'], svAgoMin: ['il y a {n} min', '{n} min ago'], svAgoH: ['il y a {n} h', '{n} h ago'], svAgoD: ['il y a {n} j', '{n} d ago'],
+  // <<< end of the `sv` block
 } as const;
 export type Key = keyof typeof D;
 // v10 performance pass — ONE language at a time in the browser. `D` above (both languages side by side, the form every
@@ -2120,6 +2240,8 @@ const textOf = (k: string, locale: Locale): string | undefined => {
   const row = (D as Record<string, readonly [string, string]>)[k]; return row ? row[locale === 'fr' ? 0 : 1] : undefined;
 };
 const hasKey = (k: string): boolean => { const tb = TABLES.fr ?? TABLES.en; return tb ? k in tb : k in D; };
+/** Is there a text for this key? (v11: server codes are translated when a `sv_<code>` text exists, shown as sent otherwise — sv.ts) */
+export const hasText = hasKey;
 export const I18n = createContext<{ locale: Locale; setLocale: (l: Locale) => void }>({ locale: 'fr', setLocale: () => {} });
 export function useT() {
   const { locale } = useContext(I18n);
@@ -2139,4 +2261,5 @@ export function errText(t: (k: Key) => string, e: unknown): string {
   if (/account is not activated yet/.test(detail)) return t('qaErrNotActivated');
   return hasKey(k) ? (detail && /\d/.test(detail) && x?.code !== 'bad_address' ? `${t(k as Key)} (${detail})` : t(k as Key)) : detail || String(x?.code ?? 'error');
 }
-export const stateKey = (s: string) => (hasKey(`s_${s}`) ? (`s_${s}` as Key) : 's_draft');
+// v11: `not_broadcast` (signed on a server that does not broadcast) reads « Signée, non envoyée » — the wording the QA pass already used for it
+export const stateKey = (s: string) => (s === 'not_broadcast' ? 'qaSignedNotSent' : hasKey(`s_${s}`) ? (`s_${s}` as Key) : 's_draft');

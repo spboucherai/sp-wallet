@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { post } from './api';
 import { errText, useT, type Key } from './i18n';
-import { Btn, exactAmt, Fact, Icon, NetworkIcon, Notice, Tag, Timeline, trimAmt, type StepState, type Tone } from './ui';
+import { holdDetail, propError } from './sv';
+import { Btn, exactAmt, Fact, Icon, NetworkIcon, Notice, Tag, testNotSent, Timeline, trimAmt, type StepState, type Tone } from './ui';
 import { ExplorerLink, LongFact, ReviewAmount, ReviewArrow } from './bridge';
 
 export interface XswapV {
@@ -11,7 +12,7 @@ export interface XswapV {
   stage: 'review' | 'sending' | 'sent' | 'observed' | 'outbound' | 'received' | 'refunded' | 'failed';
   expectedOutDisplay: string; minOutDisplay: string; outboundFeeDisplay: string; liquidityFeeDisplay: string; estimatedSeconds: number | null; slippageBps: number;
   vault: string; vaultExplorer: string; memo: string; router: string | null; operators: string[]; quoteOperators: string[]; vaultMembers: number; evidenceMultiple: number; evidenceTransfersOut: number | null;
-  needsApproval: boolean; approvalState: string | null; hold: string | null; holdDetail: string | null; refundPlanned: boolean;
+  needsApproval: boolean; approvalState: string | null; hold: string | null; holdDetail: string | null; holdCode?: string | null; holdParams?: Record<string, string | number> | null; refundPlanned: boolean;
   outTxid: string | null; outKind: 'out' | 'refund' | null; outExplorer: string | null; receivedDisplay: string | null; refundedDisplay: string | null; done: boolean;
 }
 const dur = (s: number | null) => (s === null ? '—' : s < 90 ? `${Math.max(1, Math.round(s))} s` : `${Math.round(s / 60)} min`);
@@ -56,7 +57,7 @@ export function XswapProgress({ id, x, symbol, onUpdate }: { id: string; x: Xswa
           stateLabel: done ? (back ? t('xsStage_refunded') : t('dzBrStepDone')) : cur ? t('dzBrStepNow') : t('dzBrStepNext') }; })} /></div>
       {x.stage === 'refunded' && <Notice tone="warn">{t('xsRefundedNote', { amount: trimAmt(x.refundedDisplay ?? '0', 10), sym: symbol })}</Notice>}
       {x.refundPlanned && !x.done && <Notice tone="warn">{t('xsRefundPlanned')}</Notice>}
-      {x.hold && <Notice tone={['vault_churned', 'outbound_mismatch', 'below_minimum'].includes(x.hold) ? 'danger' : 'warn'}>{t(`xsHold_${x.hold}` as Key)}{x.holdDetail ? <span className="block text-mute">{x.holdDetail}</span> : null}</Notice>}
+      {x.hold && <Notice tone={['vault_churned', 'outbound_mismatch', 'below_minimum'].includes(x.hold) ? 'danger' : 'warn'}>{t(`xsHold_${x.hold}` as Key)}{x.holdDetail ? <span className="block text-mute" data-testid="hold-detail">{holdDetail(t, x)}</span> : null}</Notice>}
       {!x.done && <p className="text-[12.5px] text-mute">{t('xsWait', { time: dur(x.estimatedSeconds) })}</p>}
       {err && <Notice tone="danger">{err}</Notice>}
       {x.outExplorer && <ExplorerLink href={x.outExplorer}>{t(x.outKind === 'refund' ? 'xsViewRefund' : 'xsViewOut', { net: x.toNetworkName })}</ExplorerLink>}
@@ -88,7 +89,9 @@ export function XswapSheet({ prop, left, onUpdate }: { prop: any; left: number; 
       {x.needsApproval && <Notice tone="info">{t('swNeedsApproval', { sym: prop.symbol })}</Notice>}
       <Notice tone="info">{t('xsIrreversible')} {t('expiresIn')} {left} s.</Notice>
     </div>}
-    {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{prop.error}</Notice></div>}
-    {prop.state !== 'pending_approval' && <div className="mt-4"><XswapProgress id={prop.id} x={x} symbol={prop.symbol} onUpdate={onUpdate} /></div>}
+    {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{propError(t, prop)}</Notice></div>}
+    {/* v11: signed on a server that does not broadcast — nothing was sent to the vault, so there is no progress to show */}
+    {testNotSent(prop) ? <div className="mt-3"><Notice tone="warn">{t('qaTestNotSent')}</Notice></div>
+      : prop.state !== 'pending_approval' && <div className="mt-4"><XswapProgress id={prop.id} x={x} symbol={prop.symbol} onUpdate={onUpdate} /></div>}
   </>;
 }
