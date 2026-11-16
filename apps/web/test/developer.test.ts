@@ -58,7 +58,9 @@ describe('OpenAPI viewer', () => {
     expect(markets.params.find((p) => p.name === 'limit')!.type).toBe('integer 1…5000 (default 2000)');
     const place = ops.find((o) => o.id === 'placeOrder')!;
     expect(place).toMatchObject({ method: 'POST', scope: 'orders:execute', needsMandate: true });
-    expect(JSON.parse(place.body!).required).toEqual(expect.arrayContaining(['mode', 'instrument', 'side', 'type', 'size']));
+    // an order is sized by exactly one of `size` and `notional` (the server converts a notional): neither is required alone
+    expect(JSON.parse(place.body!).required).toEqual(['mode', 'instrument', 'side', 'type']);
+    expect(Object.keys(JSON.parse(place.body!).properties)).toEqual(expect.arrayContaining(['size', 'notional']));
     expect(docTags(ops).map((g) => g.tag)).toEqual(['Meta', 'Markets', 'Portfolio', 'Positions', 'Orders', 'Strategies', 'Agents', 'Risk']);
     expect(docTags(ops).reduce((n, g) => n + g.ops.length, 0)).toBe(32);
   });
