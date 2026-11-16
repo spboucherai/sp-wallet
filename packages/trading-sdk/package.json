@@ -1,0 +1,27 @@
+{
+  "name": "@sp-wallet/trading-sdk",
+  "version": "0.1.0",
+  "description": "Official TypeScript client of the SP Wallet Trading API (zero runtime dependencies; Node >= 20 and browsers)",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./src": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "generate": "node scripts/gen-types.mts",
+    "build": "node scripts/build.mts",
+    "typecheck": "tsc -p ."
+  }
+}
