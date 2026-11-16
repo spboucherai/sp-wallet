@@ -16,7 +16,7 @@
 //   - kill switch, a mandate that is not `active`, a tripped breaker: quotes are pulled at once; reductions stay possible.
 import { D, type DecStr } from '@spw/derivatives';
 import {
-  breakersInit, cycleBudget, markoutAddFill, markoutInit, markoutOnMid, markouts10s, markoutSummary, midOf, planQuotes, pnlInit, pnlOnFill, pnlOnMid, pnlReport, stepBreakers, volBps, volInit, volUpdate,
+  breakersInit, cycleBudget, markoutAddFill, markoutInit, markoutOnMid, markouts10s, markoutSummary, midOf, planQuotes, pnlInit, pnlOnFill, pnlOnFunding, pnlOnMid, pnlReport, stepBreakers, volBps, volInit, volUpdate,
   type BreakerCode, type BreakerConfig, type BreakerState, type MarkoutState, type MarkoutSummary, type PlanMode, type PlannerConfig, type PnlReport, type PnlState, type QuotePolicy, type QuoteRounder, type RateConfig, type RestingOrder,
   type Side, type VolConfig, type VolState,
 } from '@spw/trading/mm';
@@ -38,11 +38,15 @@ export interface MmEngineConfig {
   /** what a breaker in `flatten` mode and the shutdown do with the inventory */
   flattenOnStop: boolean;
   round: QuoteRounder; roundReduce: QuoteRounder;
+  /** PnL of the UTC day for the day-drawdown breaker, given the session's own total; absent = the session's PnL is the day's */
+  dayPnlUsd?: (sessionTotalUsd: DecStr) => DecStr;
 }
 export type EnginePhase = 'idle' | 'starting' | 'quoting' | 'pulled' | 'halted' | 'stopping' | 'stopped';
 interface Tracked extends RestingOrder { venueOrderId: string | null; /** when its batch was sent (unix ms) */ sentAt: number; reduce: boolean }
 export interface EngineStatus {
-  phase: EnginePhase; reason: string | null; position: DecStr; orders: { clientId: string; side: Side; price: DecStr; size: DecStr; state: RestingOrder['state'] }[]; blockedSides: Side[];
+  phase: EnginePhase; reason: string | null; position: DecStr; orders: { clientId: string; side: Side; price: DecStr; size: DecStr; state: RestingOrder['state']; placedAt: number }[]; blockedSides: Side[];
+  /** the owner's standing instruction: quotes pulled (until `resume`), or pulled and the inventory being unwound reduce-only */
+  manual: 'pull' | 'flatten' | null; sessionId: string; lastMid: DecStr | null; lastBookTs: number | null; lastReconcileAt: number | null; addressRemaining: number | null;
   switchDeadline: number | null; activeBreakers: BreakerCode[]; halted: BreakerCode | null; consecutiveRejects: number;
   counters: Record<string, number>; pnl: PnlReport; markouts: MarkoutSummary[];
 }
@@ -72,6 +76,8 @@ export class MmEngine {
   /** the mids this session saw, newest last (five minutes): a fill learnt at a reconcile is attributed at the mid of ITS time */
   private mids: [number, DecStr][] = [];
   private seenFills = new Set<string>();
+  /** client ids of the reduce-only orders of this session (a fill of one of them is an unwind, not a quote fill) */
+  private reduceIds = new Set<string>();
   private consecutiveRejects = 0;
   private seq = 0;
   private addressRemaining: number | null = null;
@@ -80,6 +86,10 @@ export class MmEngine {
   private counters: Record<string, number> = { ticks: 0, quoteBatches: 0, quotesPlaced: 0, cancels: 0, reduces: 0, fills: 0, heartbeats: 0, reconciles: 0, unknownOutcomes: 0, signerRefusals: 0, riskRefusals: 0, venueRejects: 0, aloRejects: 0, lockRefusals: 0 };
   private busy = false;
   private stopAskedAt: number | null = null;
+  private manual: 'pull' | 'flatten' | null = null;
+  private flattenAtStop: boolean | null = null;
+  private external: string | null = null;
+  private lastBookTs: number | null = null;
 
   constructor(private cfg: MmEngineConfig, private policy: QuotePolicy, private p: { market: MarketDataPort; orders: OrderPort; risk: RiskPort; mandate: MandatePort; clock: ClockPort; journal: JournalPort }) {
     if (!/^[0-9a-f]{16}$/.test(cfg.sessionId)) throw new Error('sessionId must be 16 hex characters');
@@ -90,7 +100,8 @@ export class MmEngine {
   private count(k: string, n = 1): void { this.counters[k] = (this.counters[k] ?? 0) + n; }
 
   status(): EngineStatus {
-    return { phase: this.phase, reason: this.reason, position: this.position, orders: [...this.orders.values()].filter((o) => !o.reduce).map((o) => ({ clientId: o.clientId, side: o.side, price: o.price, size: o.size, state: o.state })),
+    return { phase: this.phase, reason: this.reason, position: this.position, orders: [...this.orders.values()].filter((o) => !o.reduce).map((o) => ({ clientId: o.clientId, side: o.side, price: o.price, size: o.size, state: o.state, placedAt: o.placedAt })),
+      manual: this.manual, sessionId: this.cfg.sessionId, lastMid: this.mids.length ? this.mids[this.mids.length - 1]![1] : null, lastBookTs: this.lastBookTs, lastReconcileAt: Number.isFinite(this.lastReconcileAt) ? this.lastReconcileAt : null, addressRemaining: this.addressRemaining,
       blockedSides: [...this.blocked], switchDeadline: this.switchDeadline, activeBreakers: [...this.active], halted: this.breakers.halted, consecutiveRejects: this.consecutiveRejects, counters: { ...this.counters },
       pnl: pnlReport(this.pnl), markouts: markoutSummary(this.markout) };
   }
@@ -99,16 +110,37 @@ export class MmEngine {
   start(): void {
     if (this.phase !== 'idle' && this.phase !== 'stopped') return;
     this.phase = 'starting'; this.reason = null; this.needReconcile = true;
+    // the fills of THIS session only: the account's earlier history (the venue's userFills snapshot, userFillsByTime from 0) is
+    // not this session's — the position it left is read from the venue at the first reconcile
+    this.lastFillsAt = Math.max(this.lastFillsAt, this.p.clock.now());
     this.log('mm.start', { policy: this.policy.id, policyVersion: this.policy.version, sessionId: this.cfg.sessionId });
   }
   /** end the session: pull everything; the following ticks finish the sequence (reconcile to nothing resting, then disarm) */
-  stop(why = 'stop requested'): void {
+  stop(why = 'stop requested', o: { flatten?: boolean } = {}): void {
     if (this.phase === 'idle' || this.phase === 'stopped' || this.phase === 'stopping') return;
-    this.phase = 'stopping'; this.reason = why; this.needReconcile = true;
-    this.log('mm.stopping', { why });
+    this.phase = 'stopping'; this.reason = why; this.needReconcile = true; this.flattenAtStop = o.flatten ?? null;
+    this.log('mm.stopping', { why, flatten: o.flatten ?? this.cfg.flattenOnStop });
   }
-  /** an operator's decision after a halt (drawdown, rejects): the session may quote again */
-  resume(): void { if (this.phase !== 'halted') return; this.breakers = breakersInit(); this.consecutiveRejects = 0; this.phase = 'pulled'; this.reason = null; this.log('mm.resumed'); }
+  /** an operator's decision after a halt (drawdown, rejects) or after his own pull: the session may quote again */
+  resume(): void {
+    if (this.manual) { this.manual = null; this.log('mm.manual', { command: 'resume' }); }
+    if (this.phase !== 'halted') return;
+    this.breakers = breakersInit(); this.consecutiveRejects = 0; this.phase = 'pulled'; this.reason = null; this.log('mm.resumed');
+  }
+  /** a funding settlement of the position this session holds (positive = received): it enters the attribution, nothing else */
+  funding(usd: DecStr): void { this.pnl = pnlOnFunding(this.pnl, usd); this.log('mm.funding', { usd }); }
+  /**
+   * A reason OUTSIDE the engine for which nothing may be quoted now (a server lock that was closed, hours outside the session's
+   * schedule): quotes are pulled while it is set and come back by themselves when it is cleared. null clears it.
+   */
+  hold(why: string | null): void { if (why === this.external) return; this.external = why; this.log(why ? 'mm.hold' : 'mm.hold_cleared', why ? { why } : {}); }
+  /**
+   * The owner's "pull quotes now": every quote is cancelled at the next cycle and none is placed until `resume()`. Cancels are
+   * signed under every lock, during a halt and during the wind-down, so this works whenever the signer and the venue answer.
+   */
+  pull(why = 'pulled by the owner'): void { if (this.phase === 'idle' || this.phase === 'stopped') return; if (this.manual !== 'flatten') this.manual = 'pull'; this.log('mm.manual', { command: 'pull', why }); }
+  /** The owner's "flatten": quotes pulled, and the whole inventory unwound with reduce-only orders (never an opening). Then it stays pulled. */
+  flatten(why = 'flatten asked by the owner'): void { if (this.phase === 'idle' || this.phase === 'stopped') return; this.manual = 'flatten'; this.log('mm.manual', { command: 'flatten', why }); }
 
   // -----------------------------------------------------------------------------------------------------------------------------
   /** one cycle. Calls overlap never: a tick that arrives while one runs is dropped. */
@@ -120,7 +152,7 @@ export class MmEngine {
 
   private async cycle(): Promise<void> {
     const now = this.p.clock.now(), snap = this.p.market.snapshot(this.cfg.instrument), book = snap.book;
-    this.count('ticks');
+    this.count('ticks'); this.lastBookTs = book?.ts ?? this.lastBookTs;
     const usable = book !== null && D.isPos(D.from(book.bid)) && D.gt(D.from(book.ask), D.from(book.bid));
     if (usable && snap.status === 'connected') {
       const mid = midOf(book), m = Number(mid);
@@ -144,10 +176,15 @@ export class MmEngine {
       if (this.needReconcile) return;                                                             // the venue could not be read: nothing is assumed
       const resting = [...this.orders.values()];
       if (resting.length) { await this.cancelIds(resting.filter((o) => o.state !== 'cancelling').map((o) => o.clientId), 'start-up'); this.needReconcile = true; return; }
-      if (!mandate || mandate.phase !== 'active') { this.note(`start-up waits: ${mandate ? `the mandate is in ${mandate.phase}` : 'no quoting mandate'}`); return; }
-      if (now - this.lastHeartbeatAt < 5000) return;                                             // a refused or lost arming is retried, not hammered
-      if (!(await this.heartbeat(now, mandate, true))) return;
-      this.phase = 'quoting'; this.log('mm.quoting');
+      if (!mandate) { this.note('start-up waits: no quoting mandate'); return; }
+      if (mandate.phase !== 'active') {
+        // a mandate in its wind-down signs no quote: nothing to arm. The session exists only to pull and to reduce.
+        this.phase = 'pulled'; this.log('mm.started_without_quoting', { mandate: mandate.phase });
+      } else {
+        if (now - this.lastHeartbeatAt < 5000) return;                                           // a refused or lost arming is retried, not hammered
+        if (!(await this.heartbeat(now, mandate, true))) return;
+        this.phase = 'quoting'; this.log('mm.quoting');
+      }
     }
 
     // ---- shutdown sequence: cancel-all → reconcile → (flatten) → disarm ----
@@ -155,7 +192,7 @@ export class MmEngine {
       if (this.needReconcile) return;
       const live = [...this.orders.values()].filter((o) => !o.reduce);
       if (live.length) { await this.cancelIds(live.filter((o) => o.state === 'resting').map((o) => o.clientId), 'shutdown'); this.needReconcile = true; return; }
-      if (this.cfg.flattenOnStop && !D.isZero(D.from(this.position)) && usable) { await this.plan(now, book!, 'flatten', mandate); if (!D.isZero(D.from(this.position))) { this.needReconcile = true; return; } }
+      if ((this.flattenAtStop ?? this.cfg.flattenOnStop) && !D.isZero(D.from(this.position)) && usable) { await this.plan(now, book!, 'flatten', mandate); if (!D.isZero(D.from(this.position))) { this.needReconcile = true; return; } }
       if (this.orders.size === 0) {
         // removing the switch: the signer agrees only once nothing rests and nothing it signed can still land — a quote signed
         // seconds ago may make it wait. It is asked again for a while; if it never agrees the switch fires by itself on nothing.
@@ -172,12 +209,12 @@ export class MmEngine {
     // ---- dead man's switch heartbeat: while anything of ours can rest ----
     const wantsQuotes = this.phase === 'quoting' || this.phase === 'pulled';
     let switchOk = this.switchDeadline !== null && this.switchDeadline - now > this.p.orders.actionTtlMs + 3000;
-    if (mandate && (wantsQuotes || this.orders.size > 0) && now - this.lastHeartbeatAt >= (mandate.deadManSeconds * 1000) / 3) switchOk = (await this.heartbeat(now, mandate, false)) || switchOk;
+    if (mandate && mandate.phase !== 'ended' && (wantsQuotes || this.orders.size > 0) && now - this.lastHeartbeatAt >= (mandate.deadManSeconds * 1000) / 3) switchOk = (await this.heartbeat(now, mandate, false)) || switchOk;
 
     // ---- breakers ----
     const v = stepBreakers(this.breakers, { nowMs: now, venueStatus: snap.status, bookTs: book?.ts ?? null, bid: book?.bid ?? null, bidSize: book?.bidSize ?? null, ask: book?.ask ?? null, askSize: book?.askSize ?? null,
       volBps: volBps(this.vol, this.cfg.vol), baselineVolBps: volBps(this.baseline, { ...this.cfg.vol, lambda: this.cfg.baselineLambda }), fillTimes: this.fillTimes, markouts10s: markouts10s(this.markout),
-      consecutiveRejects: this.consecutiveRejects, sessionPnlUsd: pnlReport(this.pnl).totalUsd, dayPnlUsd: pnlReport(this.pnl).totalUsd, killSwitch: kill }, this.cfg.breakers);
+      consecutiveRejects: this.consecutiveRejects, sessionPnlUsd: pnlReport(this.pnl).totalUsd, dayPnlUsd: this.cfg.dayPnlUsd ? this.cfg.dayPnlUsd(pnlReport(this.pnl).totalUsd) : pnlReport(this.pnl).totalUsd, killSwitch: kill }, this.cfg.breakers);
     for (const c of v.tripped) if (!this.active.includes(c)) this.log('mm.breaker', { code: c, action: v.flatten ? 'flatten' : v.halted === c ? 'halt' : 'pull' });
     this.breakers = v.state; this.active = v.active;
     if (v.halted && this.phase !== 'halted') { this.phase = 'halted'; this.reason = v.halted; this.log('mm.halted', { code: v.halted }); }
@@ -189,6 +226,12 @@ export class MmEngine {
     else if (v.pull) { mode = v.flatten ? 'flatten' : 'pull'; why = `breaker ${v.active.join(', ')}`; }
     else if (!switchOk) { mode = 'pull'; why = 'the dead man\'s switch could not be renewed'; }
     else if (this.phase === 'halted') { mode = 'pull'; why = `halted: ${this.reason}`; }
+    else if (this.external) { mode = 'pull'; why = this.external; }
+    // the owner's own instruction comes on top of everything: it can only pull or reduce
+    if (this.manual) {
+      if (mode === 'quote') { mode = 'pull'; why = 'pulled by the owner'; }
+      if (this.manual === 'flatten') { if (D.isZero(D.from(this.position)) && !this.needReconcile) { this.manual = 'pull'; this.log('mm.flat', {}); } else mode = 'flatten'; }
+    }
     if (this.phase !== 'halted') this.phase = mode === 'quote' ? 'quoting' : 'pulled';
     this.note(mode === 'quote' ? '' : why);
     if (!usable) { if (this.orders.size) await this.cancelIds([...this.orders.values()].filter((o) => o.state === 'resting').map((o) => o.clientId), 'no usable book'); return; }
@@ -241,7 +284,7 @@ export class MmEngine {
         let at = mid ?? f.price; for (let k = this.mids.length - 1; k >= 0; k--) if (this.mids[k]![0] <= f.ts) { at = this.mids[k]![1]; break; }
         this.pnl = pnlOnFill(this.pnl, { side: f.side, price: f.price, size: f.size, fee: f.fee, mid: at });
         if (f.maker) this.markout = markoutAddFill(this.markout, { id: f.id, ts: f.ts, side: f.side, price: f.price, size: f.size });
-        this.log('mm.fill', { id: f.id, clientId: f.clientId, side: f.side, price: f.price, size: f.size, fee: f.fee, maker: f.maker });
+        this.log('mm.fill', { id: f.id, clientId: f.clientId, venueOrderId: f.venueOrderId, side: f.side, price: f.price, size: f.size, fee: f.fee, maker: f.maker, fillTs: f.ts, mid: at, reduce: this.reduceIds.has(f.clientId ?? '') });
       }
       if (this.position !== account.position) this.log('mm.position', { from: this.position, to: account.position });
       this.position = account.position;
@@ -291,10 +334,11 @@ export class MmEngine {
       const orders: QuoteOrder[] = plan.reduce.map((r) => ({ clientId: this.nextId(), side: r.side, price: r.price, size: r.size }));
       const risk = await this.riskOf('reduce', orders);
       if (risk) {
-        for (const o of orders) this.orders.set(o.clientId, { ...o, state: 'pending', placedAt: now, venueOrderId: null, sentAt: now, reduce: true });
-        this.log('mm.reduce', { orders });
+        for (const o of orders) { this.orders.set(o.clientId, { ...o, state: 'pending', placedAt: now, venueOrderId: null, sentAt: now, reduce: true }); this.reduceIds.add(o.clientId); }
+        this.log('mm.reduce', { orders, why: mode === 'flatten' ? 'flatten' : 'hard_limit' });
         const r = await this.p.orders.submitReduces(inst, orders);
         this.count('reduces', orders.length);
+        this.log('mm.reduce_result', { clientIds: orders.map((o) => o.clientId), outcome: r.kind, ...(r.kind === 'done' ? { results: r.results } : r.kind === 'refused' ? { stage: r.stage, code: r.code, message: r.message.slice(0, 200) } : { message: r.message.slice(0, 160) }) });
         this.settle(r, orders, true);
         this.needReconcile = true;                                                                // a reduction changes the position: read it back
       }

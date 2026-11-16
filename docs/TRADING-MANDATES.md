@@ -451,6 +451,66 @@ approved.
 A paper mandate lasts at most 90 days: a paper agent that runs longer is started again (the mandate is renewed then —
 never by the agent).
 
+## Quoting mandates (market making, V11)
+
+A quoting mandate is a trading mandate with a **quoting section**: ONE row of `trading_mandates` (`quoting` not null),
+ONE lifecycle (created → `pending_signer` → `active` → revoked, at the signer first), the same owner-only routes
+(`/api/v1/mandates`), the same integrity check each time the row is used. It is always `live`, for an **agent** of family
+`market_making`, on **one** Hyperliquid venue account and **one** pinned instrument (the agent's).
+
+**Where the quote rates live.** `frequency` caps at 500 orders a day (`TRADING_MANDATE_BOUNDS.maxOrdersPerDay`) and applies
+to the orders that are not quotes (the reduce-only unwinds). Quote rates and quote geometry cannot be expressed by a field
+of `SPW-TRADING-MANDATE-v1`, so they are a SIBLING record, `SPW-QUOTING-SECTION-v1`
+(`packages/trading/src/mandate/quoting-mandate.ts`), bound to the mandate by its id and its hash:
+
+| Part | Fields | Enforced by |
+|---|---|---|
+| `terms` | `levelsPerSide`, `minHalfSpreadBps`, `maxDistanceBps`, `burstActions`, `actionsPerMinute`, `quotesPerHour`, `quotesPerDay`, `dailyTurnoverUsd`, `deadManSeconds` | the **signer**, each compiled one to one into `SPW-VENUE-QUOTING-MANDATE-v1` (`compileToQuotingMandate`); `deadManSeconds` partly (the signer knows it signed the switch, not that the venue took it) |
+| `engine` | `policy`, `configSha256`, `quoteSizeUsd`, `softInventoryUsd`, `hardInventoryUsd`, `maxSessionMinutes`, `hours`, `maxSessionLossUsd`, `stopBeforeExpiryS`, `breakers`, `flattenOnStop` | the **API only** (the engine); said so, row by row, in the table the approval sheet shows |
+
+Why a sibling and not a new field of the trading mandate: the canonical bytes of `SPW-TRADING-MANDATE-v1` are pinned by
+tests and mirrored by the two SDKs; a new field would move every hash. The sibling has its own canonical bytes (same
+length-prefixed encoding, domain `SPW-QUOTING-SECTION-v1`) and its own hash.
+
+**What the passkey covers.** Two prompts, as for any live mandate. (1) The signer verifies the passkey over the hash of the
+quoting mandate it stores and enforces. (2) The API verifies the passkey over ONE intent
+(`SPW-TRADING-MANDATE-APPROVAL-v1`) that names the **full trading mandate hash**, the **quoting section hash**
+(`quotingSectionHash`) and the **signer mandate hash**. The assertion is stored and verified again at every use; a section
+changed after the approval makes the mandate unusable (`mandate_integrity`). Nothing the owner approved lives outside what
+the passkey covers; as for every mandate, (2) is checked by the API and is not a defence against a compromised API.
+
+**Bounds.** Every value is checked against a compiled constant, the venue authorization and the mandate itself, and an
+out-of-bounds value is **refused with a code, never clamped** (`value_not_expressible`, `exceeds_authorization`,
+`duration_not_expressible`, `quoting_config_mismatch`, `quoting_instrument_mismatch`, `strategy_hash_mismatch`,
+`quoting_requires_agent`, `quoting_requires_live`). The form shows each field's maximum (`GET /api/v1/mm/bounds`,
+`quoting.maxima`): signer ceilings `QUOTING_MANDATE_BOUNDS` (7 days, 3 instruments, 2 000 USD per quote, 5 quotes per side,
+20 in total, 20 000 USD of inventory, 1…500 bps, 60 batches a minute, 3 600 quotes an hour, 20 000 a day, 2 000 000 USD of
+turnover, `deadManSeconds` 10…120), and `QUOTING_SECTION_BOUNDS` for the API-only part (quote size ≥ 10 USD, a session of
+5…1 440 minutes, a session loss limit ≤ 5 000 USD and ≤ the mandate's daily loss, stop 60 s…24 h before expiry). The section
+must say what the agent's configuration says (`policy`, `quoteSizeUsd`; the rule's minimum half-spread ≥ the mandate's), and
+`hardInventoryUsd + quoteSizeUsd × levelsPerSide ≤ maxPositionNotionalUsd` — otherwise the signer would refuse the quotes
+that reach the engine's own limit.
+
+**Exclusivity.** A venue account carries ONE standing authority: `quoting_excludes_directional` (409) when a directional
+mandate is active on the account, `directional_excludes_quoting` (409) the other way round — both before anything is stored;
+the signer refuses the second one itself (`conflict`). One principal per account still holds (`account_has_active_mandate`).
+
+**Locks.** Creating, preparing and approving need the two mainnet locks of the live engine and `SPW_DERIV_MM_MAINNET`
+(mainnet) or `SPW_DERIV_MM_TESTNET` (testnet): `mainnet_disabled`, `mandate_mainnet_disabled`, `mm_mainnet_disabled`,
+`mm_testnet_disabled`. `SPW_TRADING_API_EXECUTION` gates the session (the start, every quote), not the approval.
+
+**A lost answer of the approval.** If the signer stored the mandate and its answer never came back, the approval answers
+503 `quoting_approval_unknown` and the row stays `pending_signer` (the verified full-hash approval is already stored).
+`POST /api/v1/mandates/recover-quoting` (or `/api/v1/mm/recover`) asks the signer: a mandate it holds active with the
+compiled hash is adopted; one it holds that no record accounts for — or whose stored approval does not verify — is revoked
+at the signer.
+
+**Use, stop, revoke.** A session runs only under an `active` mandate in its `active` phase whose row verifies. The engine
+stops `stopBeforeExpiryS` before the expiry; stopping the agent revokes the mandate **at the signer first**
+(`venueQuotingRevoke`, no passkey), then the session cancels, unwinds if `flattenOnStop`, and removes the dead man's
+switch; reductions and cancels stay signable for the 24 h wind-down. The supervisor's stop conditions apply as for any
+mandate (its equity read of a quoting mandate's account is made once a minute: IP weight).
+
 ## Open points
 
 - **One account per signer mandate.** A trading mandate may name several accounts; the live path accepts

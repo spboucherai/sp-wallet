@@ -22,6 +22,7 @@
 //   simulation, labelled as such everywhere.
 import { D, type Book, type DecStr, type Instrument, type Ticker } from '@spw/derivatives';
 import { crossVenueDiscrepancy, type DiscrepancyResult, type FeeSchedule, type VenueCostInput } from '@spw/trading';
+import { AS_STUDY_DEFAULTS, avellanedaStoikov, type DesiredQuote, type PolicyInput, type PolicyOutput, type QuotePolicy } from '@spw/trading/mm';
 
 export interface MarketView {
   id: string; venue: string; symbol: string; instrument: Instrument;
@@ -100,8 +101,8 @@ export function volBps(mids: number[]): number {
   const m = r.reduce((s, x) => s + x, 0) / r.length;
   return Math.sqrt(r.reduce((s, x) => s + (x - m) ** 2, 0) / (r.length - 1)) * 1e4;
 }
-const toTick = (price: number, tick: number, dir: 'down' | 'up'): number => { const n = price / tick; return Number(((dir === 'down' ? Math.floor(n + 1e-9) : Math.ceil(n - 1e-9)) * tick).toPrecision(12)); };
-const toLot = (size: number, lot: number): number => Number((Math.floor(size / lot + 1e-9) * lot).toPrecision(12));
+const toTick = (price: number, tick: number, dir: 'down' | 'up'): number => { if (!(tick > 0)) return price;   /* no grid given: the caller's own rounder puts the price on the venue's grid */ const n = price / tick; return Number(((dir === 'down' ? Math.floor(n + 1e-9) : Math.ceil(n - 1e-9)) * tick).toPrecision(12)); };
+const toLot = (size: number, lot: number): number => (lot > 0 ? Number((Math.floor(size / lot + 1e-9) * lot).toPrecision(12)) : size);
 
 export function mmQuotes(cfg: MmConfig, v: Pick<MarketView, 'bid' | 'ask' | 'instrument'>, mids: number[], inventoryBase: number): MmQuotes {
   const m = mid(v), vol = volBps(mids.slice(-cfg.volWindow)), notes: string[] = [];
@@ -119,6 +120,41 @@ export function mmQuotes(cfg: MmConfig, v: Pick<MarketView, 'bid' | 'ask' | 'ins
   const bid = ok && q < 1 ? { price: bidPx, size } : null, ask = ok && q > -1 ? { price: askPx, size } : null;
   if (ok && q >= 1) notes.push('inventory at its long limit: no bid'); if (ok && q <= -1) notes.push('inventory at its short limit: no ask');
   return { bid, ask, mid: m, volBps: vol, halfSpreadBps: half, skewBps: skew, inventoryUsd: invUsd, notes };
+}
+
+// ONE quoting rule for paper and live. `mmQuotes` above IS the rule `spread_inventory`; `spreadInventoryPolicy` is that same
+// function behind the `QuotePolicy` interface of @spw/trading/mm, which is what the market-making engine (services/api/src/mm)
+// runs in paper and in live mode. The research mode of the stream engine and the replay on recorded data call `mmQuotes` directly.
+// The only state is the window of recent mids the rule's volatility is computed on: one mid per `decisionEveryMs`, as before.
+const decStr = (n: number, dp = 10): string => { const t = n.toFixed(dp); return t.includes('.') ? t.replace(/0+$/, '').replace(/\.$/, '') : t; };
+export const QUOTE_POLICIES = ['spread_inventory', 'avellaneda_stoikov'] as const;
+export type QuotePolicyId = (typeof QUOTE_POLICIES)[number];
+export function spreadInventoryPolicy(cfg: MmConfig & { decisionEveryMs?: number }, instrument: Pick<Instrument, 'tickSize' | 'lotSize' | 'minNotional'>, seed: { mids?: number[] } = {}): QuotePolicy & { mids(): number[] } {
+  const mids = [...(seed.mids ?? [])], every = Number(cfg.decisionEveryMs ?? 5000);
+  let sampledAt = -Infinity;
+  return {
+    id: 'spread_inventory', version: '1', mids: () => [...mids],
+    quotes(input: PolicyInput): PolicyOutput {
+      const bid = Number(input.book.bid), ask = Number(input.book.ask);
+      if (!(bid > 0) || !(ask > bid)) return { quotes: [], diagnostics: {}, notes: ['no two-sided, uncrossed book'] };
+      if (input.nowMs - sampledAt >= every) { sampledAt = input.nowMs; mids.push((bid + ask) / 2); if (mids.length > 240) mids.splice(0, mids.length - 240); }
+      const q = mmQuotes(cfg, { bid, ask, instrument: instrument as Instrument }, mids, Number(input.inventory));
+      const quotes: DesiredQuote[] = [];
+      if (q.bid) quotes.push({ side: 'buy', price: decStr(q.bid.price), size: decStr(q.bid.size), level: 0 });
+      if (q.ask) quotes.push({ side: 'sell', price: decStr(q.ask.price), size: decStr(q.ask.size), level: 0 });
+      return { quotes, notes: q.notes, diagnostics: { mid: decStr(q.mid), volBps: decStr(q.volBps, 4), halfSpreadBps: decStr(q.halfSpreadBps, 4), skewBps: decStr(q.skewBps, 4), inventoryUsd: decStr(q.inventoryUsd, 4) } };
+    },
+  };
+}
+/** the configuration keys of an agent → the policy the engine runs. `policy` absent = the family's rule, `spread_inventory`. */
+export function quotePolicyOf(config: Record<string, unknown>, instrument: Pick<Instrument, 'tickSize' | 'lotSize' | 'minNotional'>, maxPositionUsd: number, seed: { mids?: number[] } = {}): QuotePolicy & { mids?: () => number[] } {
+  const c = config as unknown as MmConfig & { policy?: string; decisionEveryMs?: number; asGamma?: unknown; asTauIntervals?: unknown; asKappa?: unknown; maxHalfSpreadBps?: unknown };
+  const maxInventoryUsd = Math.min(Number(c.maxInventoryUsd), maxPositionUsd), size = Number(c.quoteSizeUsd);
+  if ((c.policy ?? 'spread_inventory') === 'avellaneda_stoikov')
+    return avellanedaStoikov({ gamma: Number(c.asGamma ?? AS_STUDY_DEFAULTS.gamma), tauIntervals: Number(c.asTauIntervals ?? AS_STUDY_DEFAULTS.tauIntervals), kappa: Number(c.asKappa ?? 0.69), lotUsd: String(c.quoteSizeUsd),
+      maxLots: Math.max(1, Math.floor(maxInventoryUsd / size)), minHalfSpreadBps: String(c.minHalfSpreadBps), maxHalfSpreadBps: String(c.maxHalfSpreadBps ?? 150), fallbackVolBps: null });
+  if (c.policy !== undefined && c.policy !== 'spread_inventory') throw new Error(`unknown quoting policy ${String(c.policy)}`);
+  return spreadInventoryPolicy({ quoteSizeUsd: size, minHalfSpreadBps: Number(c.minHalfSpreadBps), volMultiplier: Number(c.volMultiplier), skewBps: Number(c.skewBps), maxInventoryUsd, volWindow: Number(c.volWindow), ...(c.decisionEveryMs ? { decisionEveryMs: Number(c.decisionEveryMs) } : {}) }, instrument, seed);
 }
 
 /** Which resting quotes the book `v` (observed at `v.bookTs`) fills, by the paper fill model above. Pure: it changes nothing. */

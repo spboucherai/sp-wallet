@@ -16,8 +16,9 @@
 //   - cancellations ahead of it move it up only when the displayed size falls below its queue position.
 // No latency, no market impact, no priority fees of competitors. It is the conservative rule of the paper engine
 // (`mmFills`: only a price trading strictly through the quote) plus an explicit queue for trades AT the quote.
-// This file is also what a paper `OrderPort` is made of: the integration step decides whether the stream runtime keeps its own
-// fill model or adopts this one (docs/v11/work/mm-core.md) — until then nothing imports it but tests.
+// A TEST DOUBLE OF THE VENUE, not a paper model: the product's ONE paper fill model is `mmFills` (agent-runtime/families.ts),
+// behind src/mm/paper-venue.ts. The fills modelled here exist to exercise the LIVE path (real signer code, the live adapter,
+// the stream reconcile) deterministically. `onUser` delivers what the venue's user streams would: order updates and fills.
 import { D, type DecStr } from '@spw/derivatives';
 import { hlFormatPrice, hlFormatSize, l1SignPayload, recoverTypedDataSigner, type HlAsset, type HlNetwork, type MsgpackValue } from '@spw/derivatives/hyperliquid';
 
@@ -59,6 +60,14 @@ export class SimVenue {
   /** what the NEXT exchange request does: answer lost after it was applied, lost before, or an unreadable answer */
   failNextExchange: 'lost_after_apply' | 'lost_before_apply' | 'garbage' | null = null;
   readonly log: { t: number; type: string; n: number; result: string }[] = [];
+  /** the venue's user streams (orderUpdates, userFills) as the stream client would deliver them; set by a test */
+  onUser: ((ev: { type: 'orders'; orders: { instrument: string; venueOrderId: string; clientId: string | null; side: 'buy' | 'sell'; price: string; size: string; remaining: string; status: 'open' | 'filled' | 'cancelled' | 'rejected'; venueStatus: string; createdAt: number; updatedAt: number }[] }
+    | { type: 'fills'; snapshot: boolean; fills: { instrument: string; orderId: string; clientId: string | null; side: 'buy' | 'sell'; price: string; size: string; fee: string; feeAsset: string; closedPnl: string; ts: number; id: string; liquidation: boolean }[] }) => void) | null = null;
+  /** every info and exchange request the venue saw, with its documented IP weight (packages/derivatives http.ts) */
+  readonly requests: { t: number; kind: 'info' | 'exchange'; type: string; weight: number }[] = [];
+  private emitOrder(o: SimOrder, status: 'open' | 'filled' | 'cancelled' | 'rejected', venueStatus: string): void {
+    this.onUser?.({ type: 'orders', orders: [{ instrument: `hyperliquid:${this.o.coin}`, venueOrderId: String(o.oid), clientId: o.cloid, side: o.side === 'B' ? 'buy' : 'sell', price: o.px, size: o.origSz, remaining: o.sz, status, venueStatus, createdAt: o.timestamp, updatedAt: this.now }] });
+  }
   readonly maker: string; readonly taker: string;
   private asset: HlAsset;
 
@@ -106,7 +115,7 @@ export class SimVenue {
     this.orders = [];
     this.log.push({ t: this.now, type: 'scheduleCancel.fired', n, result: 'ok' });
   }
-  private close(o: SimOrder, status: string): void { const rec = { order: { ...o }, status, statusTimestamp: this.now }; if (o.cloid) this.history.set(o.cloid, rec); this.history.set(`oid:${o.oid}`, rec); }
+  private close(o: SimOrder, status: string): void { if (!o.reduceOnly || status !== 'filled') this.emitOrder(o, status === 'filled' ? 'filled' : /Rejected$|^rejected$/.test(status) ? 'rejected' : 'cancelled', status); const rec = { order: { ...o }, status, statusTimestamp: this.now }; if (o.cloid) this.history.set(o.cloid, rec); this.history.set(`oid:${o.oid}`, rec); }
   private onBook(): void {
     for (const o of [...this.orders]) {
       // the market moved to or through the order: it would have traded
@@ -136,6 +145,7 @@ export class SimVenue {
     this.fills.push({ coin: this.o.coin, px: s(price), sz: s(sz), side: o.side, time: this.now, startPosition: s(before), dir: buy ? 'Open Long' : 'Open Short', closedPnl: '0', hash: `0x${(this.tid).toString(16).padStart(64, '0')}`, oid: o.oid, crossed: taker,
       fee: s(D.div(fee, D.one, 8, 'half_even')), tid: this.tid++, feeToken: 'USDC', ...(o.cloid ? { cloid: o.cloid } : {}) });
     this.position = s(after); this.volume += Number(s(D.mul(price, sz)));
+    { const f = this.fills[this.fills.length - 1]!; this.onUser?.({ type: 'fills', snapshot: false, fills: [{ instrument: `hyperliquid:${f.coin}`, orderId: String(f.oid), clientId: f.cloid ?? null, side: f.side === 'B' ? 'buy' : 'sell', price: f.px, size: f.sz, fee: f.fee, feeAsset: 'USDC', closedPnl: '0', ts: f.time, id: `${f.hash}-${f.tid}`, liquidation: false }] }); }
     o.sz = s(D.sub(d(o.sz), sz));
     if (D.isZero(d(o.sz))) { this.orders = this.orders.filter((x) => x !== o); this.close(o, 'filled'); }
     void this.entry;
@@ -144,6 +154,7 @@ export class SimVenue {
   // ---- info -----------------------------------------------------------------------------------------------------------------
   async info(body: any): Promise<unknown> {
     if (this.down || this.infoDown) throw new Error('fetch failed');
+    this.requests.push({ t: this.now, kind: 'info', type: String(body?.type), weight: ['l2Book', 'allMids', 'clearinghouseState', 'orderStatus', 'spotClearinghouseState', 'exchangeStatus'].includes(String(body?.type)) ? 2 : 20 });
     if (typeof body?.user === 'string' && body.user.toLowerCase() !== this.o.account) throw new Error('HTTP 422');
     const row = (o: SimOrder) => ({ coin: this.o.coin, side: o.side, limitPx: o.px, sz: o.sz, oid: o.oid, timestamp: o.timestamp, origSz: o.origSz, triggerCondition: 'N/A', isTrigger: false, triggerPx: '0.0', children: [], isPositionTpsl: false,
       reduceOnly: o.reduceOnly, orderType: 'Limit', tif: o.tif, cloid: o.cloid });
@@ -174,6 +185,7 @@ export class SimVenue {
   async exchange(body: any): Promise<unknown> {
     if (this.down) throw new Error('fetch failed');
     const mode = this.failNextExchange; this.failNextExchange = null;
+    this.requests.push({ t: this.now, kind: 'exchange', type: String(body?.action?.type), weight: 1 });
     if (mode === 'lost_before_apply') throw new Error('The operation was aborted due to timeout');
     const answer = await this.apply(body);
     if (mode === 'lost_after_apply') throw new Error('The operation was aborted due to timeout');
@@ -243,7 +255,7 @@ export class SimVenue {
     if (tif === 'Alo') {
       if (crosses) return reject('badAloPxRejected', `Post only order would have immediately matched, bbo was ${this.bid}@${this.ask}.`);
       order.queueAhead = buy ? (w.p === this.bid ? this.bidSz : '0') : (w.p === this.ask ? this.askSz : '0');   // behind what is displayed at that price
-      this.orders.push(order);
+      this.orders.push(order); this.emitOrder(order, 'open', 'open');
       return { resting: { oid: order.oid, ...(order.cloid ? { cloid: order.cloid } : {}) } };
     }
     if (tif === 'Ioc') {

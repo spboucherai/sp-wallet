@@ -130,15 +130,19 @@ export function createAgentRuntime(h: RuntimeHandlers, o: RuntimeOptions = {}) {
   /** stream agents: a lease held across passes (renewed every pass), then the stream engine's own pass */
   const streamPass = async (): Promise<Record<string, string>> => {
     if (!stream) return {};
-    const agents = await sql<StreamAgentRow[]>`select id, name, state, mode, kind, engine, family, universe, risk, capital_usdc::text as capital_usdc, config_version, runtime from agents where engine = 'stream' and state in ('PAPER_TRADING', 'RUNNING') order by created_at`;
+    const agents = await sql<StreamAgentRow[]>`select id, name, state, mode, kind, engine, family, universe, risk, capital_usdc::text as capital_usdc, config_version, runtime from agents
+      where engine = 'stream' and (state in ('PAPER_TRADING', 'RUNNING', 'LIVE', 'STOPPING')
+        -- a market-making agent that was paused or stopped still gets its passes while a quoting session of its own is open: the session's shutdown (cancel-all, disarm) needs them
+        or (family = 'market_making' and exists (select 1 from mm_sessions s where s.agent_id = agents.id and s.state = 'running'))) order by created_at`;
     const active = new Set(agents.map((a) => a.id)), t = o.now ? now() : undefined;
-    for (const [id, l] of streamLeases) if (!active.has(id)) { await releaseLease(l, t).catch(() => {}); streamLeases.delete(id); }
+    for (const [id, l] of streamLeases) if (!active.has(id)) { await releaseLease(l, t).catch(() => {}); streamLeases.delete(id); stream.mm.forget(id); }
     const mine: StreamAgentRow[] = [];
     for (const a of agents) {
       let l = streamLeases.get(a.id);
-      if (l && !(await renewLease(l, { ttlMs: 30_000, ...(t === undefined ? {} : { now: t }) }))) { streamLeases.delete(a.id); l = undefined; }
+      // a lease that could not be renewed went to another worker: the quoting session of this process is forgotten WITHOUT acting (exactly one worker quotes an agent)
+      if (l && !(await renewLease(l, { ttlMs: 30_000, ...(t === undefined ? {} : { now: t }) }))) { streamLeases.delete(a.id); l = undefined; stream.mm.forget(a.id); }
       if (!l) { l = (await acquireLease(a.id, worker, { ttlMs: 30_000, ...(t === undefined ? {} : { now: t }) })) ?? undefined; if (l) streamLeases.set(a.id, l); }
-      if (l) mine.push(a);
+      if (l) mine.push(a); else stream.mm.forget(a.id);
     }
     if (!agents.length) stream.retain(new Set());
     return stream.pass(mine);

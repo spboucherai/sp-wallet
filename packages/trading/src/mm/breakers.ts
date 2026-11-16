@@ -3,9 +3,9 @@
 // These are API-side controls: the signer knows none of them (docs/V11-MARKET-MAKING.md §5).
 import { D, type DecStr } from '@spw/derivatives';
 
-export type BreakerCode =
-  | 'data_stale' | 'venue_disconnected' | 'book_crossed' | 'book_thin' | 'spread_blowout' | 'vol_spike'
-  | 'fill_burst' | 'adverse_selection' | 'consecutive_rejects' | 'drawdown_session' | 'drawdown_day' | 'kill_switch';
+export const BREAKER_CODES = ['data_stale', 'venue_disconnected', 'book_crossed', 'book_thin', 'spread_blowout', 'vol_spike',
+  'fill_burst', 'adverse_selection', 'consecutive_rejects', 'drawdown_session', 'drawdown_day', 'kill_switch'] as const;
+export type BreakerCode = (typeof BREAKER_CODES)[number];
 export type BreakerAction = 'pull' | 'flatten' | 'halt';
 export interface BreakerConfig {
   /** book or trade data older than this is not quoted on */

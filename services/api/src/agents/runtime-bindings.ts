@@ -12,6 +12,7 @@ import type { OrderGatewayFactory } from '../agent-runtime/gateway.ts';
 import type { KillSwitchPort } from '../agent-runtime/kill-switch.ts';
 import type { Execution } from '../orders/index.ts';
 import { bindExecution } from './execution-bind.ts';
+import { mmStreamOptions } from '../mm/bind.ts';
 import { RULES } from '../agent-runtime/model.ts';
 import type { JobRow } from '../agent-runtime/queue.ts';
 import { createAgentRuntime, derivFeed, type AgentRuntime, type RuntimeHandlers, type RuntimeOptions, type SnapshotAgent } from '../agent-runtime/scheduler.ts';
@@ -138,7 +139,10 @@ export function bindAgentRuntime(o: BindOptions): AgentRuntime {
   // tests may pass their own gateway factory or kill switch port; production passes neither
   bindExecution(o.execution, { ...(o.gateway ? { gateway: o.gateway } : {}), ...(o.killSwitch ? { killSwitch: o.killSwitch } : {}) });
   onAgentChange(async (a) => { await emit('agent.updated', { agentId: a.id, kind: a.kind ?? 'spot', state: a.state, mode: a.mode }); });
-  current = createAgentRuntime(runtimeHandlers(o), o.runtime);
+  // V11 live market making: the stream engine's quoting sessions get their live ports from the execution layer (mm/bind.ts), unless a test gave its own
+  const stream = { ...(o.runtime?.stream ?? {}) };
+  if (o.stream !== false && !stream.mm) stream.mm = mmStreamOptions(o.execution, o.runtime?.workerId ?? `mm@${process.pid}`);
+  current = createAgentRuntime(runtimeHandlers(o), { ...(o.runtime ?? {}), stream });
   return current;
 }
 export const agentRuntime = (): AgentRuntime | null => current;

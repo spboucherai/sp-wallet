@@ -63,7 +63,7 @@ export function mandateRef(a: RuntimeAgentRow): { kind: 'spot' | 'derivative'; i
   return null;
 }
 export async function agentSummary(a: RuntimeAgentRow) {
-  const family = (a.family ?? 'custom') as Family, kind = a.kind ?? 'spot', lv = liveVerdict(family, kind, a.universe);
+  const family = (a.family ?? 'custom') as Family, kind = a.kind ?? 'spot', lv = liveVerdict(family, kind, a.universe, (a.runtime as { venues?: string[] } | null)?.venues);
   return { id: a.id, name: a.name, mission: a.mission, kind, family, template: a.template, engine: a.engine, state: lifecycleOf(a.state), phase: a.state, mode: modeOf(a), venue: kind === 'spot' ? 'spot' : kind === 'perp' ? 'hyperliquid' : (a.runtime?.venues as string[] | undefined)?.join('+') ?? 'all',
     network: a.network, universe: a.universe, interval: a.interval, capitalUsd: formatUnits(BigInt(a.capital_usdc), 6), riskLimits: a.risk, configVersion: a.config_version, strategy: await strategyOf(a), mandate: mandateRef(a),
     pausedFrom: (a.runtime as { pausedFrom?: string } | null)?.pausedFrom ?? null, live: lv.capable ? { capable: true as const, code: null, reason: null } : { capable: false as const, code: lv.code, reason: lv.reason },

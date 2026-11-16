@@ -50,7 +50,7 @@ a venue, GMX orders (increase, decrease, cancellation), a Hyperliquid order or l
 from a venue to the wallet's own address, and every grant of standing authority: an agent mandate, a venue authorization, a
 derivative mandate, a GMX venue policy, the enrolment of another passkey.
 
-### Without a per-operation passkey — exactly six paths
+### Without a per-operation passkey — exactly seven paths
 
 | # | Signer route | Key that signs | Standing authority it rests on | What bounds it, enforced by the signer alone |
 |---|---|---|---|---|
@@ -60,8 +60,9 @@ derivative mandate, a GMX venue policy, the enrolment of another passkey.
 | 4 | `POST /venue/sign` — a **cancel** on Hyperliquid | the venue trading key (a dedicated key that can only sign orders, cancels and leverage changes) | a venue authorization approved with the passkey, not revoked, not expired | the action is read by the signer (`describe`, pinned asset table); allowed instruments only; a venue expiry ≤ 120 s; nonce never reused. A cancel can only remove an order. Signed under the emergency halt |
 | 5 | `POST /venue/mandate/sign` — an order, a cancel or a leverage change on Hyperliquid for an automated strategy | the venue trading key | a derivative mandate approved with the passkey, extending an authorization | cancel: as row 4. Reduce-only order: instrument, order notional, price rule, client id never signed twice — also under halt and during the 24 h wind-down. Order that can add exposure: mandate active and not halted; orders per day and per hour; daily turnover; **the signer's own read of the venue account** (fresh, consistent, valued at its own prices): account value ≥ the mandate's floor, leverage setting ≤ the mandate's, worst-case position and gross exposure within the mandate. Leverage change: ≤ the mandate's, ≤ 20 a day, never a margin-mode change on an open position. The trading key cannot withdraw, transfer or approve another key |
 | 6 | `POST /bridge/mint` — the **first** `receiveMessage` of a bridge | the owner's wallet key | the burn of that bridge, approved with the passkey | only the message that matches the stored approved bridge; mints the wallet's own burned USDC to the wallet's own address; one signature per bridge (an identical request gets the same bytes again; any other needs the passkey); fee ceiling of the destination network; not halted |
+| 7 | `POST /venue/quoting/sign` (V11 market making) — a batch of post-only quotes, a batch of reduce-only orders, a cancel batch, or the venue's `scheduleCancel` | the venue trading key | a QUOTING mandate (`SPW-VENUE-QUOTING-MANDATE-v1`) approved with the passkey, extending a venue authorization; it excludes a derivative mandate on the same authorization (row 5) and the other way round | **cancel**: as row 4 (instruments of the authorization), never counted. **`scheduleCancel` with a time**: now + 6 s ≤ time ≤ now + `deadManSeconds` (≤ 120 s), validity ≤ 30 s; **without a time** (removal): only when the signer's own read shows no open order and its ledger holds no order that can still land. **Reduce-only batch** (≤ 20): one instrument of the mandate, limit orders only, every order reduce-only with a client id that is not live, each price within `maxReduceDeviationBps` of the signer's own mid, each notional ≤ `maxQuoteNotional`; no counter. **Quote batch** (≤ 20): mandate active (not in its wind-down), not halted, validity ≤ 30 s; every order `Alo` + limit + client id, one instrument of the mandate; each price in [`minHalfSpreadBps`, `maxDistanceBps`] on its own side of the signer's own mid (two exchanges, fail closed) — never at or through it; notional per quote; resting count and notional per side, resting total, worst-case inventory and gross (≤ the authorization's too) from the signer's OWN read of the venue plus everything it signed that can still land; account value ≥ `floorEquity`; the venue's leverage setting ≤ `maxLeverage`; a persisted token bucket, quotes per hour and per day, daily turnover; a `scheduleCancel` signed before, whose deadline is ≥ the batch's own venue expiry + 2 s; fewer than 8 presumed triggers of that switch today. Anything else — a trigger order, a `Gtc`/`Ioc` opening, `updateLeverage`, `modify`, a transfer, a withdrawal, a builder or vault field, a batch mixing quotes and reductions or two instruments — is refused. Verified against `services/isolated-signer/src/venue-quoting.ts` at the integration (2026-11-16). Worst case for a compromised API: `docs/V11-SECURITY-REVIEW.md`, "Live market making" |
 
-Three properties hold for all six: the request content is checked against state the signer stored after a passkey approval;
+Three properties hold for all seven: the request content is checked against state the signer stored after a passkey approval;
 counters and replay markers are saved before a signature is returned; revoking the standing authority needs no passkey and is
 final.
 
@@ -104,8 +105,10 @@ Verified against public test vectors in `services/isolated-signer/test`.
   disclosure, not a seized or rooted machine.
 - The review screen is rendered by the web app. A compromised API/web could show one operation and submit the hash of another;
   the passkey prompt does not display transaction details. Loss is bounded by the signer limits.
-- A compromised API can use the six paths above at any time, up to the bounds of the table, for as long as the standing
-  authorities live (spot mandate ≤ 90 days, venue authorization ≤ 90 days, derivative mandate ≤ 30 days).
+- A compromised API can use the seven paths above at any time, up to the bounds of the table, for as long as the standing
+  authorities live (spot mandate ≤ 90 days, venue authorization ≤ 90 days, derivative mandate ≤ 30 days, quoting mandate
+  ≤ 7 days). Path 7 is the highest-frequency one: it is bounded per signature and by persisted rates, not by a per-order
+  count of the authorization (`maxOrdersPerDay` does not count quotes).
 - One Bitcoin address is reused for receive and change (privacy trade-off, simpler recovery).
 - No independent audit or penetration test has been performed. No derivative order was ever accepted by a venue on a funded
   account from this code (`docs/V11-AUDIT.md`, section 10).
