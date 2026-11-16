@@ -7,6 +7,7 @@ import { useNetworks, usePortfolio, useSettings } from '../hooks';
 import { I18n, useT } from '../i18n';
 import { Addr, Card, Change, Coin, CopyBtn, fiat, H, Icon, Money, NetDot, Notice, numFmt, Seg, Skeleton, SkeletonRows, StatePill, trimAmt, when } from '../ui';
 import { issuerOf } from '../issuer';
+import { PriceFreshness } from '../freshness'; // v11
 
 const RANGES = [['1', '1J', '1D'], ['7', '1S', '1W'], ['30', '1M', '1M'], ['365', '1A', '1Y']] as const;
 const compact = (n: number | null, cur: string, locale: string) => (n === null ? '—' : new Intl.NumberFormat(locale === 'fr' ? 'fr-CA' : 'en-CA', { style: 'currency', currency: cur, notation: 'compact', maximumFractionDigits: 2 }).format(n));
@@ -44,6 +45,7 @@ export function Asset({ network, asset, nav }: { network: string; asset: string;
         <button onClick={() => nav({ tab: 'home' })} aria-label={t('back')} className="press -ml-2.5 grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink"><Icon n="chev" className="h-6 w-6 rotate-180" /></button>
         <Coin sym={b.symbol} net={b.network} size={48} />
         <div className="min-w-0"><h1 className="truncate text-[21px] font-semibold leading-tight tracking-[-0.02em]">{b.name}</h1><div className="mt-0.5 flex items-center gap-1.5 text-[13px] text-mute"><span>{b.symbol}</span><span aria-hidden="true">·</span><NetDot net={b.network} size={15} /><span className="truncate">{b.networkName}</span></div></div>
+        {m?.priceAt && <span className="ml-auto shrink-0"><PriceFreshness at={m.priceAt} stale={!!m.stale} /></span>}
       </div>
 
       {iss && <div data-testid="asset-issuer"><Notice tone="warn">{t('qaPegNote', { name: b.name, sym: b.symbol, issuer: iss.text })}</Notice></div>}
@@ -64,7 +66,7 @@ export function Asset({ network, asset, nav }: { network: string; asset: string;
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <button onClick={() => nav({ tab: 'receive', network })} className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-[15.5px] font-semibold text-onprimary"><Icon n="down" className="h-[18px] w-[18px]" />{t('receive')}</button>
-          <button onClick={() => nav({ tab: 'send', network, asset })} disabled={pf.data.halted} className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl bg-elev px-4 text-[15.5px] font-semibold disabled:opacity-40"><Icon n="up" className="h-[18px] w-[18px]" />{t('send')}</button>
+          <button onClick={() => nav({ tab: 'send', network, asset })} disabled={!!pf.data.halted} className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl bg-elev px-4 text-[15.5px] font-semibold disabled:opacity-40"><Icon n="up" className="h-[18px] w-[18px]" />{t('send')}</button>
         </div>
       </Card>
 

@@ -18,7 +18,10 @@ import { config, UserError } from './config.ts';
 import { audit, sql } from './db.ts';
 import { rpcOverridden } from './rpc-override.ts';
 import { addressFor, signer } from './signer-client.ts';
-import { broadcastNow, move, view, type ProposalRow } from './transfers.ts';
+import { broadcastNow, failure, move, view, type ProposalRow } from './transfers.ts';
+import type { SvCode, SvParams } from './sv-texts.ts';
+import { checkQuoteRef, lostRace, type Idem, type QuoteRef } from './prepare-common.ts';
+import { assetKey } from '@spw/swap';
 
 /** The label Jupiter's licence requires for any use of the API other than Ultra (SDK & API License Agreement §2.3). */
 export const JUPITER_LABEL = 'Jupiter (Metis)';
@@ -237,7 +240,7 @@ function decodeKept(msg: Uint8Array, me: string, src: AssetDef, dst: AssetDef): 
 
 const U = z.string().min(1).max(60);
 /** POST /api/v1/swap/proposals for a Solana network: prepare, then offer the swap for passkey approval. */
-export async function createSolSwapProposal(b: { network: string; fromAsset: string; toAsset: string; amount: string; slippageBps: number }, idem: string) {
+export async function createSolSwapProposal(b: { network: string; fromAsset: string; toAsset: string; amount: string; slippageBps: number; quote?: QuoteRef }, idem: Idem) {
   const n = getNetwork(b.network);
   let src, dst;
   try { src = getAsset(n.id, b.fromAsset); dst = getAsset(n.id, b.toAsset); } catch { throw new UserError('unsupported_asset', 'asset is not in the wallet registry'); }
@@ -254,6 +257,7 @@ export async function createSolSwapProposal(b: { network: string; fromAsset: str
   const id = randomUUID();
   const ps = await prepareJupiterSwap({ n, me, keyId: st.keyId, fromAsset: src.id, toAsset: dst.id, amount, slippageBps: b.slippageBps, policyVersion: st.policy.version, proposalId: id, feeCeiling: ceiling });
   const { intent } = ps, now = intent.createdAt;
+  const quote = checkQuoteRef(b.quote, { executor: 'jupiter', fromKey: assetKey({ network: n.id, asset: src.id }), toKey: assetKey({ network: n.id, asset: dst.id }), amountIn: amount, slippageBps: b.slippageBps, firmOut: ps.expected, firmMinOut: ps.minOut, toDecimals: dst.decimals, toSymbol: dst.symbol }); // v11 (B6)
   const verdict = checkPolicy(st.policy, intent, BigInt(st.spentToday[`${n.id}:${src.symbol}`] ?? '0'), now, st.halted);
   if (!verdict.ok) throw new UserError('policy', verdict.reason, 422);
   const hash = intentHash(intent);
@@ -261,11 +265,11 @@ export async function createSolSwapProposal(b: { network: string; fromAsset: str
     detail: { label: JUPITER_LABEL, venues: ps.labels, instruction: ps.facts.kind, rewritten: ps.converted, simulatedOut: ps.simulatedOut.toString(), networkFee: ps.networkFee.toString(), priorityFee: (ps.networkFee - SOL_SIGNATURE_FEE).toString(),
       rent: ps.rent.toString(), createsAccount: ps.rent > 0n,
       simulatedOutDisplay: formatUnits(ps.simulatedOut, dst.decimals), networkFeeDisplay: formatUnits(ps.networkFee, 9), priorityFeeDisplay: formatUnits(ps.networkFee - SOL_SIGNATURE_FEE, 9), rentDisplay: formatUnits(ps.rent, 9), computeUnits: intent.sol!.computeUnitLimit, lastValidBlockHeight: intent.sol!.lastValidBlockHeight } };
-  const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, state, kind, network, asset, symbol, decimals, amount, from_addr, to_addr, note, fee_estimate, max_fee, warnings, intent, intent_hash, aux, swap, expires_at)
-    values (${id}, ${idem}, 'pending_approval', 'swap', ${n.id}, ${src.id}, ${src.symbol}, ${src.decimals}, ${amount.toString()}, ${me}, ${me}, ${`swap → ${dst.symbol}`}, ${(ps.networkFee + ps.rent).toString()}, ${ps.maxFee.toString()},
+  const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, request_hash, quote_ref, state, kind, network, asset, symbol, decimals, amount, from_addr, to_addr, note, fee_estimate, max_fee, warnings, intent, intent_hash, aux, swap, expires_at)
+    values (${id}, ${idem.key}, ${idem.hash}, ${quote ? sql.json(quote as never) : null}, 'pending_approval', 'swap', ${n.id}, ${src.id}, ${src.symbol}, ${src.decimals}, ${amount.toString()}, ${me}, ${me}, ${`swap → ${dst.symbol}`}, ${(ps.networkFee + ps.rent).toString()}, ${ps.maxFee.toString()},
       ${sql.json(ps.rent > 0n ? ['creates_token_account'] : [])}, ${sql.json(intent as never)}, ${toHex(hash)}, ${sql.json({ swapMessage: ps.message })}, ${sql.json(swap)}, ${new Date(intent.expiresAt * 1000)})
     on conflict (idempotency_key) do nothing returning *`;
-  if (!p) throw new UserError('conflict', 'duplicate request', 409);
+  if (!p) return lostRace(idem);
   await audit('swap.prepared', 'owner', { id, network: n.id, provider: 'jupiter', from: src.symbol, to: dst.symbol, amount: amount.toString(), minOut: swap.minOut, venues: ps.labels, rewritten: ps.converted, networkFee: swap.detail.networkFee, rent: swap.detail.rent, hash: toHex(hash) });
   const creds = await listCreds();
   const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge: new Uint8Array(hash), timeout: 45_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
@@ -286,21 +290,21 @@ const factsOf = (p: ProposalRow): JupiterSwapFacts | null => {
 export async function advanceSolSwap(p: ProposalRow): Promise<ProposalRow> {
   if (p.state !== 'signed' || !p.raw || !p.intent?.sol) return p;
   const n = getNetwork(p.network);
-  const fail = async (error: string) => { const r = await move(p, 'failed', { error }); await audit('swap.not_sent', 'system', { id: p.id, reason: error.slice(0, 160) }); return r; };
+  const fail = async (code: SvCode, params?: SvParams) => { const f = failure(code, params), r = await move(p, 'failed', f); await audit('swap.not_sent', 'system', { id: p.id, reason: f.error.slice(0, 160) }); return r; };
   if (!config.broadcast) return broadcastNow(p);
   const facts = factsOf(p);
-  if (!facts) return fail('the stored swap no longer verifies; it was not sent');
+  if (!facts) return fail('sol_swap_unverified');
   let height: number, sim: SolMeta;
   try {
     height = await rpcAny<number>(n.rpc, 'getBlockHeight', [{ commitment: 'confirmed' }]);
-    if (height > p.intent.sol.lastValidBlockHeight) return await fail('the swap expired before it could be sent (blockhash too old); nothing was swapped');
+    if (height > p.intent.sol.lastValidBlockHeight) return await fail('sol_swap_expired');
     sim = await simulate(n, p.raw, { sigVerify: true, replaceRecentBlockhash: false });
-  } catch (e) { if ((e as { rpcCode?: number }).rpcCode === undefined) return p; return fail(`the node refused the signed swap (${(e as Error).message.slice(0, 100)}); it was not sent`); }
-  if (sim.err) return fail(`the swap would fail now (${simError(sim)}); it was not sent`);
+  } catch (e) { if ((e as { rpcCode?: number }).rpcCode === undefined) return p; return fail('sol_swap_refused', { detail: (e as Error).message.slice(0, 100) }); }
+  if (sim.err) return fail('sol_swap_would_fail', { detail: simError(sim) });
   try {
     const fx = swapEffects(facts, sim);
-    if (fx.received < BigInt(p.swap!.minOut) || fx.otherLosses.length || fx.spent !== BigInt(p.amount)) return await fail('the swap no longer delivers the approved minimum in simulation; it was not sent');
-  } catch { return fail('the node did not report the simulated balances; the swap was not sent'); }
+    if (fx.received < BigInt(p.swap!.minOut) || fx.otherLosses.length || fx.spent !== BigInt(p.amount)) return await fail('sol_swap_below_min');
+  } catch { return fail('sol_swap_no_balances'); }
   return broadcastNow(p);
 }
 

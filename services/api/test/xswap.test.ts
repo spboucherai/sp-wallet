@@ -7,7 +7,7 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTestDb } from './test-db.ts';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NETWORKS, THORNODE_OPERATORS, thorVaultAddress, utxoPaymentTo, type Intent, type ThorVaultWant } from '@spw/core';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
 import { deriveKeys } from '../../isolated-signer/src/keys.ts';
@@ -268,5 +268,102 @@ describe('the rules, without I/O', () => {
     expect(xs.agreeThorStatus([a, b, c])).toBeNull(); expect(xs.agreeThorStatus([a, a, b])).toEqual(a); expect(xs.agreeThorStatus([a, a, b, b])).toEqual(b); expect(xs.agreeThorStatus([])).toBeNull();
     expect(b.outs[0]!.id).toBe(OUT); expect(xs.reduceThorStatus(raw(true, [{ id: '0'.repeat(64), chain: 'THOR', to_address: 'x', memo: 'OUT:x' }])).outs).toEqual([]);
     expect(() => xs.reduceThorStatus({ stages: {} })).toThrow();
+  });
+});
+
+// ── v11 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+describe('v11 — idempotent preparation, the quote the owner saw, restart of the API', () => {
+  const steps = (e: any) => e.steps.map((s: any) => `${s.kind}:${s.state}`);
+  const approveWith = (id: string, options: any) => api('POST', `/api/v1/transfers/proposals/${id}/approve`, { assertion: owner.assert(Buffer.from(options.challenge, 'base64url')) });
+
+  it('B4: the same key and body answer the same swap with its challenge, without asking any operator again; another body is refused', async () => {
+    const key = crypto.randomUUID();
+    const a = await api('POST', '/api/v1/xswap/proposals', BODY, key); expect(a.status, JSON.stringify(a.json)).toBe(200);
+    const prepared = chain.prepared.length;
+    for (let k = 0; k < HOSTS.length; k++) net.down.add(k);                                                // every THORNode operator is now unreachable
+    const b = await api('POST', '/api/v1/xswap/proposals', BODY, key);
+    expect(b.status, JSON.stringify(b.json)).toBe(200);
+    expect(b.json).toMatchObject({ replayed: true, proposal: { id: a.json.proposal.id, state: 'pending_approval', kind: 'xswap' } });
+    expect(b.json.options.challenge).toBe(a.json.options.challenge); expect(chain.prepared).toHaveLength(prepared);
+    expect((await prepare()).json.error).toBe('provider_unavailable');                                    // a NEW request does need them
+    net.down.clear();
+    const other = await api('POST', '/api/v1/xswap/proposals', { ...BODY, amount: '0.0007' }, key);
+    expect(other.status).toBe(409); expect(other.json.error).toBe('idempotency_mismatch');
+    expect(await sql`select 1 from proposals where idempotency_key = ${key}`).toHaveLength(1);
+    const ap = await approveWith(a.json.proposal.id, b.json.options);                                     // the challenge issued again is the same fingerprint: it approves
+    expect(ap.status, JSON.stringify(ap.json)).toBe(200); expect(ap.json.state).toBe('broadcast');
+    expect((await api('POST', '/api/v1/xswap/proposals', BODY, key)).json).toMatchObject({ replayed: true, options: null, proposal: { id: a.json.proposal.id, state: 'broadcast' } });
+    expect(chain.sent).toHaveLength(1);
+  });
+
+  it('B6: the firm quote of two operators is compared with what was displayed — recorded within the tolerance, refused with the fresh figures beyond it', async () => {
+    const pc = await import('../src/prepare-common.ts');
+    const ref = (amountOut: string, minAmountOut: string, provider = 'thorchain') => ({ id: 'thorchain-1', provider, amountOut, minAmountOut, quotedAt: Date.now(),
+      fingerprint: pc.quoteFingerprint({ provider, fromKey: 'bitcoin:native', toKey: 'ethereum:native', amountIn: '60000', slippageBps: 100, amountOut, minAmountOut }) });
+    const ok = await prepare({ quote: ref('21200000000000000', '20988000000000000') });                    // shown 0.0212, firm 0.02119: inside the 1 % that was asked
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    expect(ok.json.proposal.quote).toMatchObject({ provider: 'thorchain', quotedOut: '21200000000000000', firmOut: '21190000000000000', firmMinOut: '20978100000000000', deviationBps: -5, quotedOutDisplay: '0.0212', firmOutDisplay: '0.02119' });
+    await api('POST', `/api/v1/transfers/proposals/${ok.json.proposal.id}/reject`, {});
+    const before = (await sql`select count(*)::int as n from proposals`)[0].n;
+    const moved = await prepare({ quote: ref('21500000000000000', '21285000000000000') });                 // shown 0.0215 (minimum 0.021285); the operators now agree on 0.02119
+    expect(moved.status).toBe(409);
+    expect(moved.json).toMatchObject({ error: 'quote_moved', data: { slippageBps: 100, quoted: { amountOutDisplay: '0.0215', minAmountOutDisplay: '0.021285' }, fresh: { provider: 'thorchain', amountOut: '21190000000000000', amountOutDisplay: '0.02119', minAmountOutDisplay: '0.0209781', symbol: 'ETH' } } });
+    expect(moved.json.data.deviationBps).toBeLessThan(-100);
+    expect((await sql`select count(*)::int as n from proposals`)[0].n).toBe(before);                      // nothing prepared, nothing to approve
+    expect((await prepare({ quote: ref('21200000000000000', '20988000000000000', 'maya') })).json.error).toBe('quote_not_executable'); // a comparison-only quote cannot be prepared
+    expect((await prepare({ amount: '0.0007', quote: ref('21200000000000000', '20988000000000000') })).json.error).toBe('quote_mismatch');
+    expect((await prepare({ quote: { ...ref('21200000000000000', '20988000000000000'), minAmountOut: '1' } })).json.error).toBe('quote_mismatch');
+  });
+
+  it('B3: holds and failures carry codes; with broadcast refused late in the window the proposal fails with its code', async () => {
+    const { id } = await send(); chain.track = { state: 'finalized', confirmations: 6, blockRef: 'b' }; await worker.reconcile();
+    await sql`update proposals set xswap = jsonb_set(jsonb_set(xswap, '{nextAt}', '0'), '{sentAt}', to_jsonb(${Date.now() - 3 * 3600_000}::bigint)) where id = ${id}`;
+    const held = await xs.advanceXswap(await row(id), deps());                                            // two hours without THORChain reporting the deposit
+    expect(held.xswap).toMatchObject({ hold: 'not_observed', holdCode: 'hold_not_observed', holdParams: {} }); expect(held.xswap!.holdDetail).toMatch(/has not reported this deposit/);
+    const v = (await api('GET', `/api/v1/transfers/proposals/${id}`)).json;
+    expect(v.xswap).toMatchObject({ hold: 'not_observed', holdCode: 'hold_not_observed' }); expect(v.execution.steps[1]).toMatchObject({ kind: 'observation', state: 'confirming', code: 'not_observed' });
+    await sql`update proposals set xswap = jsonb_set(xswap, '{nextAt}', '0') where id = ${id}`;
+    expect((await xs.advanceXswap(await row(id), deps({ observed: true }))).xswap).toMatchObject({ phase: 'observed', hold: null, holdCode: null, holdDetail: null });
+    await sql`update proposals set xswap = jsonb_set(xswap, '{phase}', '"received"') where id = ${id}`;
+    const late = await prepare(); await sql`update proposals set xswap = jsonb_set(xswap, '{expiry}', '1') where id = ${late.json.proposal.id}`;
+    await approveWith(late.json.proposal.id, late.json.options);
+    expect((await api('GET', `/api/v1/transfers/proposals/${late.json.proposal.id}`)).json).toMatchObject({ state: 'failed', errorCode: 'xswap_late', error: 'the swap could not be sent in time; nothing was sent to the vault', execution: { state: 'failed', steps: [{ kind: 'deposit', state: 'failed', code: 'xswap_late' }, { state: 'pending' }, { state: 'pending' }] } });
+    expect(chain.sent).toHaveLength(1);                                                                   // only the first swap ever left
+  });
+
+  // LAST in this file: it replaces the module instances (vi.resetModules), as a new API process would
+  it('restart of the API during outbound tracking: a fresh process (new modules, only the database) resumes at the stored phase and reconciles "received" from the wallet\'s own chain data', async () => {
+    const { id } = await send(); chain.track = { state: 'finalized', confirmations: 6, blockRef: 'b' }; await worker.reconcile();
+    const poke = () => sql`update proposals set xswap = jsonb_set(xswap, '{nextAt}', '0') where id = ${id}`;
+    await poke(); await xs.advanceXswap(await row(id), deps({ observed: true }));
+    await poke(); await xs.advanceXswap(await row(id), deps({ observed: true, out: 'OUT' }));              // THORChain names the outbound; the wallet has not seen it yet
+    const before = (await api('GET', `/api/v1/transfers/proposals/${id}`)).json.execution;
+    expect(steps(before)).toEqual(['deposit:confirmed', 'observation:confirmed', 'outbound:confirming']);
+    expect(before.steps[2]).toMatchObject({ network: 'ethereum', provider: 'thorchain', txid: OUT, startedAt: expect.any(String), endedAt: null }); expect(before.steps[2].explorer).toContain(`0x${OUT.toLowerCase()}`);
+
+    // ── the process dies. A new one: other module instances, nothing in memory, the same database ──
+    vi.resetModules();
+    const db2 = await import('../src/db.ts'), xs2 = await import('../src/xswap.ts'), tr2 = await import('../src/transfers.ts');
+    expect(xs2).not.toBe(xs);
+    try {
+      const load = async () => (await db2.sql`select * from proposals where id = ${id}`)[0] as never;
+      expect(tr2.view(await load()).execution).toEqual(before);                                           // the status is rebuilt from the row alone
+      // the operators are silent on its first look: nothing moves, nothing is lost
+      await db2.sql`update proposals set xswap = jsonb_set(xswap, '{nextAt}', '0') where id = ${id}`;
+      expect((await xs2.advanceXswap(await load(), deps({ agree: false }))).xswap).toMatchObject({ phase: 'outbound', outTxid: OUT });
+      // then its own chain data shows the outbound, first unconfirmed, then confirmed
+      await db2.sql`update proposals set xswap = jsonb_set(xswap, '{nextAt}', '0') where id = ${id}`;
+      expect((await xs2.advanceXswap(await load(), deps({ observed: true, out: 'OUT', seen: { amount: 21_100_000_000_000_000n, confirmed: false } }))).xswap!.phase).toBe('outbound');
+      await db2.sql`update proposals set xswap = jsonb_set(xswap, '{nextAt}', '0') where id = ${id}`;
+      const done = await xs2.advanceXswap(await load(), deps({ observed: true, out: 'OUT', seen: { amount: 21_100_000_000_000_000n, confirmed: true } }));
+      expect(done.xswap).toMatchObject({ phase: 'received', received: '21100000000000000', outTxid: OUT });
+      const after = tr2.view(await load());
+      expect(after.execution).toMatchObject({ kind: 'xswap', state: 'confirmed', steps: [{ kind: 'deposit', state: 'confirmed' }, { kind: 'observation', state: 'confirmed' }, { kind: 'outbound', state: 'confirmed', txid: OUT, endedAt: expect.any(String) }] });
+      expect(after.swap!.received).toBe('21100000000000000');
+      await xs2.advanceXswaps();                                                                          // a later worker tick of the new process has nothing left to do
+      expect((await load() as any).xswap.polls).toBe(done.xswap!.polls);
+    } finally { await db2.sql.end(); }
+    expect((await api('GET', `/api/v1/transfers/proposals/${id}`)).json).toMatchObject({ xswap: { stage: 'received', done: true }, execution: { state: 'confirmed' } }); // the first process reads the same row
+    expect((await prepare()).status).toBe(200);                                                           // and the source network is free again
   });
 });

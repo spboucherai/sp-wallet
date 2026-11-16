@@ -251,6 +251,42 @@ describe('preparation', () => {
   });
 });
 
+describe('v11 — idempotent preparation and the quote the owner saw (Jupiter)', () => {
+  const body = (f: JupFixture, o: Record<string, unknown> = {}) => ({ network: 'solana', fromAsset: solToken(f.from).id, toAsset: solToken(f.to).id, amount: amountOf(f), slippageBps: 50, ...o });
+  it('B4: the same key and body answer the same swap and its challenge without asking Jupiter or the cluster again; another body is refused', async () => {
+    const f = chain.f, key = crypto.randomUUID();
+    const a = await api('POST', '/api/v1/swap/proposals', body(f), key); expect(a.status, JSON.stringify(a.json)).toBe(200);
+    const calls = jup.calls.length, sims = chain.sims;
+    const b = await api('POST', '/api/v1/swap/proposals', body(f), key);
+    expect(b.status).toBe(200); expect(b.json).toMatchObject({ replayed: true, proposal: { id: a.json.proposal.id, state: 'pending_approval', swap: { provider: 'jupiter' } } });
+    expect(b.json.options.challenge).toBe(a.json.options.challenge);
+    expect(jup.calls).toHaveLength(calls); expect(chain.sims).toBe(sims);                                  // before v11: a second build, a second simulation, then 409
+    const other = await api('POST', '/api/v1/swap/proposals', body(f, { slippageBps: 100 }), key);
+    expect(other.status).toBe(409); expect(other.json.error).toBe('idempotency_mismatch');
+    expect(await sql`select 1 from proposals where idempotency_key = ${key}`).toHaveLength(1);
+    await api('POST', `/api/v1/transfers/proposals/${a.json.proposal.id}/reject`, {});
+    expect((await api('POST', '/api/v1/swap/proposals', body(f), key)).json).toMatchObject({ replayed: true, options: null, proposal: { state: 'rejected', errorCode: 'rejected_by_owner' } });
+  });
+  it('B6: the firm Jupiter build against the quote displayed — recorded within the tolerance, refused with the fresh figures beyond it, never for a provider that does not execute', async () => {
+    const pc = await import('../src/prepare-common.ts'), { assetKey } = await import('@spw/swap');
+    const f = chain.f, firm = BigInt(f.build.outAmount), firmMin = jupiterMinOut(firm, 50);
+    const keys = { fromKey: assetKey({ network: 'solana', asset: solToken(f.from).id }), toKey: assetKey({ network: 'solana', asset: solToken(f.to).id }), amountIn: f.intent.amount, slippageBps: 50 };
+    const ref = (out: bigint, provider = 'jupiter') => { const amountOut = out.toString(), minAmountOut = ((out * 9950n) / 10_000n).toString();
+      return { id: 'jupiter-1', provider, amountOut, minAmountOut, quotedAt: Date.now(), fingerprint: pc.quoteFingerprint({ provider, ...keys, amountOut, minAmountOut }) }; };
+    const ok = await prepare(f, { quote: ref((firm * 1002n) / 1000n) });                                   // shown 0.2 % more than the firm build: inside the 0.5 % asked
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    expect(ok.json.proposal.quote).toMatchObject({ provider: 'jupiter', firmOut: firm.toString(), firmMinOut: firmMin.toString() }); expect(ok.json.proposal.quote.deviationBps).toBeLessThan(0); expect(ok.json.proposal.quote.deviationBps).toBeGreaterThanOrEqual(-20);
+    await api('POST', `/api/v1/transfers/proposals/${ok.json.proposal.id}/reject`, {});
+    const before = (await sql`select count(*)::int as n from proposals`)[0].n;
+    const moved = await prepare(f, { quote: ref((firm * 102n) / 100n) });                                  // shown 2 % more: the firm output is below the minimum that was displayed
+    expect(moved.status).toBe(409);
+    expect(moved.json).toMatchObject({ error: 'quote_moved', data: { slippageBps: 50, fresh: { provider: 'jupiter', amountOut: firm.toString(), minAmountOut: firmMin.toString(), symbol: solToken(f.to).symbol } } });
+    expect((await sql`select count(*)::int as n from proposals`)[0].n).toBe(before);
+    expect((await prepare(f, { quote: ref(firm, 'lifi') })).json.error).toBe('quote_not_executable');
+    expect((await prepare(f, { quote: { ...ref(firm), amountOut: (firm + 1n).toString() } })).json.error).toBe('quote_mismatch'); // figures edited after the fingerprint was made
+  });
+});
+
 describe('approval, sending and outcome', () => {
   it('approve → signed by the signer → simulated with its signature → sent once → confirmed: the outcome is the real balance change', async () => {
     const f = chain.f, prep = await prepare(f), id = prep.json.proposal.id;

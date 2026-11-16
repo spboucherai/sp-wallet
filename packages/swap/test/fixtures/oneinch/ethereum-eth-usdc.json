@@ -1,0 +1,25 @@
+{
+  "source": "documentation",
+  "notRecorded": "DOCUMENTATION-DERIVED, NOT A RECORDED ANSWER. No 1inch API key was available on 2026-11-15, so no live call was made. The body follows the documented QuoteResponse of GET /swap/v6.1/{chainId}/quote (the reference's own example is a placeholder: 1INCH to 1INCH). Every value is constructed to respect that schema for a real pair of the wallet's registry; it proves the field mapping, nothing about real prices.",
+  "docUrl": "https://business.1inch.com/portal/documentation/apis/swap/classic-swap/methods/v6.1/chainId/quote/method/get",
+  "constructed": ["*"],
+  "recordedAt": "2026-11-15T18:00:00.000Z",
+  "request": { "from": "ethereum:native", "to": "ethereum:USDC", "amountIn": "10000000000000000", "slippageBps": 50 },
+  "url": "https://api.1inch.com/swap/v6.1/1/quote?src=0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee&dst=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&amount=10000000000000000&includeTokensInfo=true&includeProtocols=true&includeGas=true",
+  "status": 200,
+  "body": {
+    "srcToken": { "address": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "symbol": "ETH", "name": "Ether", "decimals": 18, "logoURI": "https://tokens.1inch.io/0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.png", "eip2612": false, "isFoT": false, "tags": ["native"] },
+    "dstToken": { "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "symbol": "USDC", "name": "USD Coin", "decimals": 6, "logoURI": "https://tokens.1inch.io/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.png", "domainVersion": "2", "eip2612": true, "isFoT": false, "tags": ["tokens"] },
+    "dstAmount": "34561234",
+    "protocols": [
+      {
+        "token": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "hops": [
+          { "part": 100, "dst": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "fromTokenId": 0, "toTokenId": 1,
+            "protocols": [{ "name": "UNISWAP_V3", "part": 60 }, { "name": "PMM11", "part": 40 }] }
+        ]
+      }
+    ],
+    "gas": 181000
+  }
+}

@@ -103,9 +103,9 @@ export function createKyberswapProvider(env: ProviderEnv = {}): SwapProvider {
         amountOut, minAmountOut, fees,
         estimatedSeconds: null,
         priceImpactBps: impact !== null && impact >= -10_000 && impact <= 10_000 ? impact : null,
-        expiresAt: now + VALIDITY_MS,
+        quotedAt: now, expiresAt: now + VALIDITY_MS,
         firmness: 'indicative',
-        executability: { class: 'opaque', reason: 'KyberSwap returns router calldata (MetaAggregationRouterV2) built by its API; the signer can pin the router, the allowance, the recipient and the minimum output but cannot rebuild the route' },
+        executability: { class: 'opaque', code: 'kyber_calldata', reason: 'KyberSwap returns router calldata (MetaAggregationRouterV2) built by its API; the signer can pin the router, the allowance, the recipient and the minimum output but cannot rebuild the route' },
         refundable: true, // one transaction: it settles in full or reverts, the input never leaves the sender otherwise
         atomic: true,
         raw: parsed.data.data,

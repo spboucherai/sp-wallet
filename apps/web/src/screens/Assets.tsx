@@ -4,6 +4,7 @@ import { useNetworks, usePortfolio, useSettings } from '../hooks';
 import { I18n, useT } from '../i18n';
 import { Card, Chips, EmptyState, Icon, inputCls, PageTitle, Skeleton, SkeletonRows } from '../ui';
 import { AssetRow } from './Home';
+import { PriceFreshness } from '../freshness'; // v11
 
 /** Every supported asset, searchable, filterable by network; what the wallet holds comes first, under its own heading. */
 export function Assets({ nav }: { nav: Nav }) {
@@ -23,7 +24,7 @@ export function Assets({ nav }: { nav: Nav }) {
   const row = (b: (typeof rows)[number], k: number) => <AssetRow key={b.network + b.asset} b={b} border={k > 0} nav={nav} cur={cur} ck={ck} hidden={settings.hideBalances} prices={pf.data!.prices} locale={locale} />;
   return (
     <div className="space-y-4">
-      <PageTitle onBack={() => nav({ tab: 'home' })} backLabel={t('back')}>{t('allAssets')}</PageTitle>
+      <PageTitle onBack={() => nav({ tab: 'home' })} backLabel={t('back')} right={pf.data?.prices ? <PriceFreshness at={pf.data.pricesAsOf} stale={pf.data.pricesStale} /> : undefined}>{t('allAssets')}</PageTitle>
       <div className="relative"><Icon n="search" className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-mute" />
         <input className={`${inputCls} !pl-11`} type="search" placeholder={t('search')} aria-label={t('search')} value={q} onChange={(e) => setQ(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="search" /></div>
       <Chips label={t('network')} value={net} onChange={setNet} options={[{ id: '', label: t('all') }, ...(nets.data ?? []).map((n) => ({ id: n.id, label: n.name, net: n.id }))]} />

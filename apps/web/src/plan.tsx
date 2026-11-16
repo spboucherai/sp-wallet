@@ -10,6 +10,8 @@ import { AssetIcon, Btn, Card, ErrorState, Fact, Field, Icon, inputCls, Notice, 
 import { amountInputText, amountLocale, amountOf, formatAmount, sanitizeAmountText } from './amount'; // v8 hardening: one rule for typed amounts
 import { AmountProblem } from './amountUi';
 import { LongFact } from './bridge';
+import { ExecutionTimeline, type ExecutionV } from './execution'; // v11: the unified status of the leg's proposal
+import { pauseText, svText } from './sv';                          // v11: server texts by code
 
 interface AssetV { key: string; network: string; networkName: string; asset: string; symbol: string; decimals: number }
 interface FeeV { kind: string; symbol: string; network: string; networkName: string; display: string; usd: number | null; includedInOutput: boolean; estimated: boolean }
@@ -24,10 +26,10 @@ export interface PlanQ {
 interface QuoteR { plans: PlanQ[]; notExecutable: { code: string; network?: string } | null; skipped: { id: string; leg: number; code: string; message: string }[] }
 export interface PlanV {
   id: string; state: 'active' | 'paused' | 'done' | 'stopped'; next: 'prepare' | 'approve' | 'wait' | 'paused' | 'done' | 'stopped'; current: number; steps: number; replans: number; createdAt: string;
-  from: AssetV; to: AssetV; amountInDisplay: string; floorDisplay: string | null; holding: AssetV & { amountDisplay: string }; pause: { code: string; message: string; leg: number } | null;
+  from: AssetV; to: AssetV; amountInDisplay: string; floorDisplay: string | null; holding: AssetV & { amountDisplay: string }; pause: { code: string; message: string; leg: number; params?: Record<string, string | number> | null; reason?: { code: string; params?: Record<string, string | number> | null } | null } | null;
   estimate: { expectedOutDisplay: string; worstOutDisplay: string } | null; plannedExpectedDisplay: string; plannedWorstDisplay: string; receivedDisplay: string | null;
   legs: { index: number; state: 'pending' | 'ready' | 'proposed' | 'in_flight' | 'settled'; kind: string; label: string; speed: string | null; from: AssetV; to: AssetV; seconds: number | null;
-    planned: { expectedInDisplay: string; expectedOutDisplay: string; worstOutDisplay: string }; actual: { inDisplay: string | null; outDisplay: string | null }; attempts: { outcome: string | null; error: string | null }[] }[];
+    planned: { expectedInDisplay: string; expectedOutDisplay: string; worstOutDisplay: string }; actual: { inDisplay: string | null; outDisplay: string | null }; attempts: { outcome: string | null; error: string | null; errorCode?: string | null; errorParams?: Record<string, string | number> | null }[]; proposalId?: string | null; execution?: ExecutionV }[];
   proposal: any | null;
 }
 type T = (k: Key, v?: Record<string, string | number>) => string;
@@ -76,7 +78,7 @@ export function PlanCards({ from, to, amount, slip, routes, money, pname, onCoun
       {ok && (q.isLoading || deb !== amount) && <div className="space-y-3" role="status" aria-label={t('pnSearching')}><p className="flex items-center gap-2 px-1 text-[13px] text-mute"><Icon n="spin" className="h-4 w-4 shrink-0" />{t('pnSearching')}</p><PlanSkeleton /><PlanSkeleton /></div>}
       {q.error ? <Notice tone="danger">{errText(t, q.error)}</Notice> : null}
       {ok && q.data?.notExecutable && <Notice tone="warn"><span data-testid="plan-not-executable"><b>{t('pnNotExecTitle')}</b> {t(`pnNo_${q.data.notExecutable.code}` as Key, { net: q.data.notExecutable.network ?? '' })}</span></Notice>}
-      {ok && q.data && !q.data.notExecutable && plans.length === 0 && q.data.plans.length === 0 && q.data.skipped.length > 0 && <Notice tone="warn">{t('pnNoQuote')} {q.data.skipped[0]!.message}</Notice>}
+      {ok && q.data && !q.data.notExecutable && plans.length === 0 && q.data.plans.length === 0 && q.data.skipped.length > 0 && <Notice tone="warn">{t('pnNoQuote')} {svText(t, q.data.skipped[0]!.code, null, q.data.skipped[0]!.message)}</Notice>}
       {ok && plans.length > 0 && <Section title={t('pnTitle')}>
         <div className="space-y-3">
         <p className="px-1 text-[13px] text-mute">{t('pnIntro')}</p>
@@ -223,7 +225,9 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
               ? <dl className="sw-pva"><div><dt>{t('dzPnActual')}</dt><dd className="text-ink">{trimAmt(l.actual.inDisplay ?? '', 8)} {l.from.symbol} → <span className="font-semibold">{trimAmt(l.actual.outDisplay ?? '', 8)} {l.to.symbol}</span></dd></div><div><dt>{t('pnPlanned')}</dt><dd>{trimAmt(l.planned.expectedOutDisplay, 8)} {l.to.symbol}</dd></div></dl>
               : <div>{t('pnPlanned')} {trimAmt(l.planned.expectedInDisplay, 8)} {l.from.symbol} → {trimAmt(l.planned.expectedOutDisplay, 8)} {l.to.symbol} · {t('pnWorstShort')} {trimAmt(l.planned.worstOutDisplay, 8)} · {dur(l.seconds)}</div>}
             {sign && <div className="sw-sign" data-testid="plan-signs"><Icon n="key" className="mt-0.5 h-4 w-4 shrink-0 text-blue" /><span className="min-w-0">{sign}</span></div>}
-            {l.attempts.filter((a) => a.outcome && a.outcome !== 'settled' && a.error).slice(-1).map((a, n) => <div key={n} className="flex gap-1.5 text-[13px]"><Icon n="warn" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" /><span className="min-w-0">{t('pnLastAttempt')} {a.error}</span></div>)}
+            {l.attempts.filter((a) => a.outcome && a.outcome !== 'settled' && a.error).slice(-1).map((a, n) => <div key={n} className="flex gap-1.5 text-[13px]"><Icon n="warn" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" /><span className="min-w-0">{t('pnLastAttempt')} {svText(t, a.errorCode, a.errorParams, a.error)}</span></div>)}
+            {/* the step in flight, transaction by transaction — the same status object as a single swap or transfer */}
+            {here && l.proposalId && l.execution && l.execution.steps.some((s) => s.txid) && <ExecutionTimeline exec={l.execution} testid="plan-leg-execution" />}
           </div> }; })} /></div>
 
       {p.next === 'prepare' && cur && <div className="space-y-3">
@@ -251,7 +255,7 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
       {p.next === 'wait' && <div className="flex items-start gap-3 rounded-[20px] bg-elev/60 p-4 text-[13.5px] leading-snug text-mute" data-testid="plan-wait"><Icon n="spin" className="mt-0.5 h-4 w-4 shrink-0 text-blue" /><span className="min-w-0">{t('pnWaiting', { k: step, n: p.steps })}{wait ? ` — ${wait}` : pr ? ` — ${t(`s_${pr.state}` as Key)}` : ''}. {t('pnWaitingNote')}</span></div>}
 
       {p.state === 'paused' && p.pause && <div className="space-y-3" data-testid="plan-paused" data-code={p.pause.code}>
-        <Notice tone="warn"><b>{t(`pnPause_${['floor', 'refused', 'refunded', 'no_funds'].includes(p.pause.code) ? p.pause.code : 'other'}` as Key, { k: p.pause.leg + 1 })}</b> {p.pause.message} {t('pnPausedFunds', { amt: trimAmt(p.holding.amountDisplay, 8), sym: p.holding.symbol, net: p.holding.networkName })}</Notice>
+        <Notice tone="warn"><b>{t(`pnPause_${['floor', 'refused', 'refunded', 'no_funds'].includes(p.pause.code) ? p.pause.code : 'other'}` as Key, { k: p.pause.leg + 1 })}</b> <span data-testid="plan-pause-text">{pauseText(t, p.pause)}</span> {t('pnPausedFunds', { amt: trimAmt(p.holding.amountDisplay, 8), sym: p.holding.symbol, net: p.holding.networkName })}</Notice>
         {p.pause.code === 'floor' && <Field label={t('pnFloorChange', { sym: p.to.symbol })}>
           <input className={inputCls} inputMode="decimal" placeholder={amountInputText(p.floorDisplay ?? '', amountLocale())} aria-label={t('pnFloorChange', { sym: p.to.symbol })} value={floor} onChange={(e) => setFloor(sanitizeAmountText(e.target.value))} autoComplete="off" /><AmountProblem text={floor} /></Field>}
         <Btn full busy={busy === 'retry'} disabled={!!busy || (p.pause.code === 'floor' && floor.trim() !== '' && amountOf(floor, amountLocale()) === null)} onClick={() => { const f = amountOf(floor, amountLocale()); void simple('retry', p.pause?.code === 'floor' && f !== null ? { floor: /[1-9]/.test(f) ? f : null } : {}); }} data-testid="plan-retry"><Icon n="refresh" className="h-4 w-4" />{t('pnRetry')}</Btn>

@@ -183,9 +183,9 @@ export function createJupiterProvider(env: ProviderEnv = {}): SwapProvider {
         amountOut, minAmountOut, fees,
         estimatedSeconds: null,
         priceImpactBps: Number.isFinite(impact) ? Math.round(impact * 100) / 100 : null,
-        expiresAt: Math.min(now, b.blockhashWithMetadata.fetchedAt.secs_since_epoch * 1000) + QUOTE_TTL_MS,
+        quotedAt: now, expiresAt: Math.min(now, b.blockhashWithMetadata.fetchedAt.secs_since_epoch * 1000) + QUOTE_TTL_MS,
         firmness: 'indicative',
-        executability: { class: 'opaque', reason: 'Jupiter returns provider-built instructions (route data for many AMM programs, dozens of accounts, address lookup tables) that the isolated signer cannot rebuild; it could only constrain them structurally and by simulation' },
+        executability: { class: 'opaque', code: 'jupiter_instructions', reason: 'Jupiter returns provider-built instructions (route data for many AMM programs, dozens of accounts, address lookup tables) that the isolated signer cannot rebuild; it could only constrain them structurally and by simulation' },
         refundable: true, // a single transaction: it either settles in full or reverts, funds never leave the wallet otherwise
         atomic: true,
         raw: b,

@@ -6,7 +6,8 @@ import type { Nav, Tab } from '../App';
 import { AllocationBar, Spark } from '../chart';
 import { useNetworks, usePortfolio, useSettings, type Bal } from '../hooks';
 import { I18n, useT } from '../i18n';
-import { AnimatedNumber, Card, Change, Coin, fiat, H, haptic, Icon, Money, NetDot, Notice, numFmt, short, Skeleton, SkeletonRows, StatePill, testNotSent, trimAmt } from '../ui';
+import { AnimatedNumber, Card, Change, Coin, fiat, H, haptic, Icon, Money, NetDot, Notice, numFmt, short, Skeleton, SkeletonRows, StatePill, testNotSent, trimAmt, when } from '../ui';
+import { PriceFreshness } from '../freshness'; // v11
 
 const FEATURED = ['USDC', 'BTC', 'ETH', 'SOL', 'USDT'];
 
@@ -66,6 +67,8 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
   return (
     <div className="space-y-5">
       {d.halted && <Notice tone="danger">{t('haltedBanner')}</Notice>}
+      {/* v11: the signer node is unreachable — the page still renders from the server's own balance reads, and says what that means */}
+      {d.signer && !d.signer.reachable && <Notice tone="warn"><span data-testid="signer-down">{t('svSignerDown', { date: when(d.signer.addressesAsOf, locale) })}</span></Notice>}
       <section className="hero px-6 pb-6 pt-5" data-mood={mood}>
         <span className="hero-edge" aria-hidden="true" />
         <div className="flex items-center justify-between">
@@ -80,8 +83,9 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
             <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden="true"><path d={dayPct >= 0 ? 'M6 2l4.5 7h-9z' : 'M6 10L1.5 3h9z'} fill="currentColor" /></svg>{dayPct >= 0 ? '+' : '−'}{numFmt(Math.abs(dayPct), locale, 2, 2)} % {t('today')}</span>}
           <span className="inline-flex items-center gap-2"><span className={`inline-block h-2 w-2 rounded-full ${netState === 'ok' ? 'bg-[#35e7ac]' : netState === 'checking' ? 'pulse-dot bg-white/60' : 'bg-[#f4b65b]'}`} />
             {netState === 'checking' ? t('checking') : t('netsUp', { up, n: list.length })}</span>
+          {d.prices && <PriceFreshness hero at={d.pricesAsOf} stale={d.pricesStale} />}
         </div>
-        <div className="mt-6 flex gap-2">{action('receive', 'down', t('receive'), true)}{action('send', 'up', t('send'), false, d.halted)}{action('swap', 'swap', t('swap'))}{action('agents', 'robot', t('agents'))}</div>
+        <div className="mt-6 flex gap-2">{action('receive', 'down', t('receive'), true)}{action('send', 'up', t('send'), false, !!d.halted || d.signer?.reachable === false)}{action('swap', 'swap', t('swap'))}{action('agents', 'robot', t('agents'))}</div>
       </section>
 
       {d.pending.length > 0 && <Card><H>{t('pending')}</H>

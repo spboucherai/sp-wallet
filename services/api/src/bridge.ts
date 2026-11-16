@@ -18,7 +18,11 @@ import { http, rpcAny, rpcQuorum } from './chains/rpc.ts';
 import { config, UserError } from './config.ts';
 import { audit, sql } from './db.ts';
 import { addressFor, signer } from './signer-client.ts';
-import { broadcastNow, move, view, type ProposalRow } from './transfers.ts';
+import { broadcastNow, failure, move, view, type ProposalRow } from './transfers.ts';
+import { checkQuoteRef, idemOf, lostRace, QuoteRef, quoteFingerprint, replayOf } from './prepare-common.ts';
+import { assetKey } from '@spw/swap';
+import { cctpSolUsdc } from '@spw/core';
+import { svHold, svTechnical, type SvCode, type SvParams, type SvHold } from './sv-texts.ts';
 // v8 — Solana as source or destination (domain 5): everything Solana-specific lives in bridge-sol.ts
 import { cctpEnd, type SolBudget } from '@spw/core';
 import { advanceSolBurn, advanceSolMint, advanceSolReclaims, bridgeSolRoutes, cctpSolGuards, createSolBurnProposal, solBurnFacts, solDestination, solMintRetryOptions, solQuoteExtras, solStandardMinFee, type SolBridgeInfo } from './bridge-sol.ts';
@@ -39,6 +43,8 @@ export interface BridgeState {
   destGasNeed: string; phase: BridgePhase;
   /** why the transfer is waiting, when it is (machine code + detail for the owner) */
   hold?: string | null; holdDetail?: string | null;
+  /** v11: the detail as a code of sv-texts.ts + its parameters (the UI translates it; `holdDetail` stays the English sentence) */
+  holdCode?: string | null; holdParams?: SvParams | null;
   polls: number; nextAt: number; attestingSince?: number; irisStatus?: string | null; delayReason?: string | null;
   message?: string; attestation?: string; nonce?: string; messageHash?: string; feeExecuted?: string; minted?: string; expirationBlock?: string;
   /** gas parameters are stored BEFORE the signer is asked, so that a crash in between repeats the identical request */
@@ -126,8 +132,19 @@ export async function destinationGas(dst: NetworkDef, me: string): Promise<{ nee
 export const noGas = (dst: NetworkDef, need: bigint, have: bigint) => new UserError('destination_gas',
   `the wallet holds ${formatUnits(have, dst.native.decimals)} ${dst.native.symbol} on ${dst.name}; about ${formatUnits(need, dst.native.decimals)} is needed there to receive the USDC. Nothing was burned: add ${dst.native.symbol} on ${dst.name} first`, 422);
 
-const Create = z.strictObject({ fromNetwork: z.string().max(24), toNetwork: z.string().max(24), amount: z.string().min(1).max(60), speed: z.enum(['standard', 'fast']).default('standard') });
+const Create = z.strictObject({ fromNetwork: z.string().max(24), toNetwork: z.string().max(24), amount: z.string().min(1).max(60), speed: z.enum(['standard', 'fast']).default('standard'), /** v11: the option the owner selected (prepare-common.ts) */ quote: QuoteRef.optional() });
 const Quote = z.object({ from: z.string().max(24), to: z.string().max(24), amount: z.string().min(1).max(60) });
+
+/** A CCTP transfer as a quote: USDC in, USDC out less Circle's fee — the fee is a ceiling, so expected = guaranteed. Tolerance 0. */
+export const cctpKeys = (from: string, to: string) => ({ fromKey: assetKey({ network: from, asset: cctpEndUsdc(from) }), toKey: assetKey({ network: to, asset: cctpEndUsdc(to) }) });
+const cctpEndUsdc = (network: string) => (getNetwork(network).family === 'sol' ? cctpSolUsdc().id : cctpUsdc(network).id);
+export const cctpFirm = (from: string, to: string, amount: bigint, fee: bigint) => ({ executor: 'cctp', ...cctpKeys(from, to), amountIn: amount, slippageBps: 0, firmOut: amount - fee, firmMinOut: amount - fee, toDecimals: 6, toSymbol: 'USDC' });
+/** The reference of one option of /bridge/quote, in the same shape a route of the swap stream carries. */
+export const cctpQuoteRef = (from: string, to: string, amount: bigint, fee: bigint, speed: string, quotedAt: number) => {
+  const out = (amount - fee).toString();
+  return { id: `cctp-${speed}-${from}-${to}-${amount}`, provider: 'cctp', amountOut: out, minAmountOut: out, quotedAt,
+    fingerprint: quoteFingerprint({ provider: 'cctp', ...cctpKeys(from, to), amountIn: amount.toString(), slippageBps: 0, amountOut: out, minAmountOut: out }) };
+};
 
 function route(from: string, to: string): { n: NetworkDef; dst: NetworkDef } {
   if (!cctpEnd(from) || !cctpEnd(to)) throw new UserError('bridge_not_enabled', 'CCTP transfers are not enabled between these networks', 422); // v8: the seven EVM networks and Solana
@@ -148,7 +165,9 @@ export function bridgeRoutes(app: FastifyInstance): void {
     const destMe = addressFor(st, dst.id); // v8: the wallet's own address on the destination (the same one between EVM networks)
     const [dg, stdFee, fastFee, allowance, solana] = await Promise.all([dst.family === 'sol' ? solDestination(dst, destMe) : destinationGas(dst, destMe), cctpFee(n, dst, amount, 'standard'), pin.fastSource ? cctpFee(n, dst, amount, 'fast') : Promise.resolve(null), pin.fastSource ? fastAllowance() : Promise.resolve(null),
       solQuoteExtras(n, dst, st)]);
-    const opt = (speed: 'standard' | 'fast', fee: bigint, seconds: number, available: boolean) => ({ speed, available, fee: fee.toString(), feeDisplay: formatUnits(fee, usdc.decimals), minReceive: (amount - fee).toString(), minReceiveDisplay: formatUnits(amount - fee, usdc.decimals), seconds });
+    const quotedAt = now();
+    const opt = (speed: 'standard' | 'fast', fee: bigint, seconds: number, available: boolean) => ({ speed, available, fee: fee.toString(), feeDisplay: formatUnits(fee, usdc.decimals), minReceive: (amount - fee).toString(), minReceiveDisplay: formatUnits(amount - fee, usdc.decimals), seconds,
+      /** v11: what to send back as `quote` when preparing this option */ quote: fee < amount ? cctpQuoteRef(n.id, dst.id, amount, fee, speed, quotedAt) : null });
     return { from: n.id, to: dst.id, fromName: n.name, toName: dst.name, amount: amount.toString(), symbol: 'USDC',
       options: [opt('standard', stdFee, pin.standardSeconds, stdFee < amount), ...(fastFee !== null && pin.fastSeconds !== null ? [opt('fast', fastFee, pin.fastSeconds, fastFee < amount && fastFee > 0n && allowance !== null && allowance >= amount)] : [])],
       destinationGas: { symbol: dst.native.symbol, need: dg.need.toString(), needDisplay: formatUnits(dg.need, dst.native.decimals), balance: dg.balance.toString(), balanceDisplay: formatUnits(dg.balance, dst.native.decimals), enough: dg.balance >= dg.need },
@@ -157,10 +176,11 @@ export function bridgeRoutes(app: FastifyInstance): void {
 
   // Prepare a firm transfer and offer it for passkey approval. The approval covers both legs.
   app.post('/api/v1/bridge/proposals', async (req) => {
-    const idem = String(req.headers['idempotency-key'] ?? '');
-    if (!/^[A-Za-z0-9-]{16,64}$/.test(idem)) throw new UserError('idempotency', 'Idempotency-Key header required');
-    const b = Create.parse(req.body); const { n, dst } = route(b.fromNetwork, b.toNetwork);
-    if (n.family === 'sol') return createSolBurnProposal({ n, dst, amount: b.amount, speed: b.speed }, idem); // v8: the burn is a Solana transaction (bridge-sol.ts)
+    if (!/^[A-Za-z0-9-]{16,64}$/.test(String(req.headers['idempotency-key'] ?? ''))) throw new UserError('idempotency', 'Idempotency-Key header required');
+    const b = Create.parse(req.body), idem = idemOf(req.headers, 'bridge', b);
+    const again = await replayOf(idem); if (again) return again; // v11 (B4): the same key answers the same transfer
+    const { n, dst } = route(b.fromNetwork, b.toNetwork);
+    if (n.family === 'sol') return createSolBurnProposal({ n, dst, amount: b.amount, speed: b.speed, quote: b.quote }, idem); // v8: the burn is a Solana transaction (bridge-sol.ts)
     const toSol = dst.family === 'sol'; // v8: the mint will be a Solana transaction, to the wallet's own USDC token account
     const usdc = cctpUsdc(n.id), pin = CCTP_ENABLED[n.id]!, dpin = cctpEnd(dst.id)!;
     let amount: bigint;
@@ -193,6 +213,7 @@ export function bridgeRoutes(app: FastifyInstance): void {
       if (allowance === null || allowance < amount) throw new UserError('fast_unavailable', 'Circle\'s Fast Transfer allowance does not cover this amount right now; use Standard', 422);
     }
     if (fee >= amount) throw new UserError('bad_amount', 'the amount does not cover Circle\'s fee');
+    const quote = checkQuoteRef(b.quote, cctpFirm(n.id, dst.id, amount, fee)); // v11 (B6): Circle's fee now against the option that was displayed
     const allowance = hexToBigInt(await rpcAny<`0x${string}`>(n.rpc, 'eth_call', [{ to: usdc.id, data: encodeFunctionData({ abi: erc20Abi, functionName: 'allowance', args: [me as `0x${string}`, CCTP_TOKEN_MESSENGER as `0x${string}`] }) }, 'latest']));
     const needApprove = allowance < amount;
     const nonce = hexToNumber(await rpcQuorum<`0x${string}`>(n.rpc, 'eth_getTransactionCount', [me, 'pending']));
@@ -219,11 +240,11 @@ export function bridgeRoutes(app: FastifyInstance): void {
     const state: BridgeState = { provider: 'cctp', toNetwork: dst.id, fromDomain: pin.domain, toDomain: dpin.domain, speed: b.speed, maxFee: fee.toString(), minFinalityThreshold: intent.bridge!.minFinalityThreshold,
       expectedSeconds: b.speed === 'fast' ? pin.fastSeconds! : pin.standardSeconds, needsApproval: needApprove, simulated, destGasNeed: dg.need.toString(), phase: 'burn', polls: 0, nextAt: 0,
       ...(sd ? { sol: { recipient: destMe, tokenAccount: sd.tokenAccount.address, nonceRent: sd.nonceRent.toString() } } : {}) };
-    const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, state, kind, network, asset, symbol, decimals, amount, from_addr, to_addr, note, fee_estimate, max_fee, warnings, intent, intent_hash, bridge, expires_at)
-      values (${id}, ${idem}, 'pending_approval', 'bridge', ${n.id}, ${usdc.id}, 'USDC', ${usdc.decimals}, ${amount.toString()}, ${me}, ${me}, ${`bridge → ${dst.name}`}, ${((gas + (needApprove ? GAS.approve : 0n)) * (price.baseFee + price.tip)).toString()}, ${maxFee.toString()},
+    const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, request_hash, quote_ref, state, kind, network, asset, symbol, decimals, amount, from_addr, to_addr, note, fee_estimate, max_fee, warnings, intent, intent_hash, bridge, expires_at)
+      values (${id}, ${idem.key}, ${idem.hash}, ${quote ? sql.json(quote as never) : null}, 'pending_approval', 'bridge', ${n.id}, ${usdc.id}, 'USDC', ${usdc.decimals}, ${amount.toString()}, ${me}, ${me}, ${`bridge → ${dst.name}`}, ${((gas + (needApprove ? GAS.approve : 0n)) * (price.baseFee + price.tip)).toString()}, ${maxFee.toString()},
         ${sql.json(needApprove ? ['swap_needs_approval'] : [])}, ${sql.json(intent as never)}, ${toHex(hash)}, ${sql.json(state as never)}, ${new Date(intent.expiresAt * 1000)})
       on conflict (idempotency_key) do nothing returning *`;
-    if (!p) throw new UserError('conflict', 'duplicate request', 409);
+    if (!p) return lostRace(idem);
     await audit('bridge.prepared', 'owner', { id, from: n.id, to: dst.id, amount: amount.toString(), speed: b.speed, cctpMaxFee: fee.toString(), hash: toHex(hash) });
     const creds = await listCreds();
     const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge: new Uint8Array(hash), timeout: 70_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
@@ -265,7 +286,7 @@ export function bridgeRoutes(app: FastifyInstance): void {
     const b = p.bridge!;
     if (b.phase !== 'mint_failed' || !b.retry || b.retry.expiresAt < now() || !b.message || !b.attestation) throw new UserError('bad_state', 'ask for a new approval first', 409);
     const signed = await signer.bridgeMint({ proposalId: p.id, message: b.message, attestation: b.attestation, ...(b.retry.sol ? { sol: b.retry.sol } : { evm: b.retry.evm! }), assertion: body.assertion });
-    p = await save(p, { ...b, retry: undefined, hold: null, holdDetail: null, phase: 'mint_sent', mint: { ...(b.retry.sol ? { sol: b.retry.sol } : { evm: b.retry.evm }), txid: signed.txid, raw: signed.raw, sentAt: now(), lastBroadcastAt: now(), signatures: (b.mint?.signatures ?? 1) + 1 } });
+    p = await save(p, { ...b, retry: undefined, ...NO_HOLD, phase: 'mint_sent', mint: { ...(b.retry.sol ? { sol: b.retry.sol } : { evm: b.retry.evm }), txid: signed.txid, raw: signed.raw, sentAt: now(), lastBroadcastAt: now(), signatures: (b.mint?.signatures ?? 1) + 1 } });
     await audit('bridge.mint_resigned', 'owner', { id: p.id, txid: signed.txid });
     if (config.broadcast) await adapterFor(b.toNetwork).broadcast(signed.raw).catch(() => {});
     return view(p);
@@ -280,21 +301,21 @@ export async function advanceBridgeBurn(p: ProposalRow): Promise<ProposalRow> {
   if (p.kind !== 'bridge' || p.state !== 'signed' || !p.raw || !p.intent) return p;
   if (getNetwork(p.network).family === 'sol') return advanceSolBurn(p); // v8
   const n = getNetwork(p.network), a = adapterFor(p.network);
-  const fail = (error: string) => move(p, 'failed', { error });
+  const fail = (code: SvCode, params?: SvParams) => move(p, 'failed', failure(code, params));
   if (!config.broadcast) return broadcastNow(p);
-  if (p.expires_at && Date.now() - p.expires_at.getTime() > 8 * 60_000) return fail('the transfer could not be sent in time; nothing was burned');
+  if (p.expires_at && Date.now() - p.expires_at.getTime() > 8 * 60_000) return fail('bridge_late');
   if (p.pre_raw && p.pre_state !== 'confirmed') {
     await a.broadcast(p.pre_raw).catch(() => {});
     const rc = await rpcAny<{ status: `0x${string}` } | null>(n.rpc, 'eth_getTransactionReceipt', [p.pre_txid]).catch(() => null);
     if (!rc) { if (p.pre_state !== 'sent') await sql`update proposals set pre_state = 'sent', updated_at = now() where id = ${p.id}`; return p; }
-    if (hexToNumber(rc.status) !== 1) return fail('the token approval reverted; nothing was burned');
+    if (hexToNumber(rc.status) !== 1) return fail('bridge_approval_reverted');
     await sql`update proposals set pre_state = 'confirmed', updated_at = now() where id = ${p.id}`;
     await audit('bridge.approval_confirmed', 'chain', { id: p.id, txid: p.pre_txid });
   }
   // last gate before the burn leaves: it must succeed against the current chain state
   const sim = await rpcAny<string>(n.rpc, 'eth_call', [{ from: p.from_addr, to: CCTP_TOKEN_MESSENGER, data: cctpBurnData(p.intent) }, 'latest']).then(() => null, (e: Error & { rpcCode?: number }) => (e.rpcCode !== undefined ? e.message : 'unreachable'));
   if (sim === 'unreachable') return p; // try again on the next tick
-  if (sim !== null) return fail(`the burn would revert now (${sim.slice(0, 100)}); it was not sent${p.pre_raw ? '. The exact-amount approval stays in place for the next attempt' : ''}`);
+  if (sim !== null) return fail(p.pre_raw ? 'burn_would_revert_approved' : 'burn_would_revert', { detail: sim.slice(0, 100) });
   return broadcastNow(p);
 }
 
@@ -306,7 +327,10 @@ export async function save(p: ProposalRow, b: BridgeState): Promise<ProposalRow>
   const [r] = await sql<ProposalRow[]>`update proposals set bridge = ${sql.json(b as never)}, updated_at = now() where id = ${p.id} returning *`;
   return r!;
 }
-export const wait = (p: ProposalRow, b: BridgeState, hold: string, detail: string, ms: number) => save(p, { ...b, hold, holdDetail: detail.slice(0, 300), nextAt: now() + ms });
+/** No hold: clears the code, the detail and their parameters together. */
+export const NO_HOLD = { hold: null, holdDetail: null, holdCode: null, holdParams: null } as const;
+/** Wait with a reason. `h` is a catalogued hold (sv-texts.ts), or a hold code with a free technical message kept as data. */
+export const wait = (p: ProposalRow, b: BridgeState, h: string | SvHold, detail: string, ms: number) => save(p, { ...b, ...(typeof h === 'string' ? svTechnical(h, detail) : h), nextAt: now() + ms });
 /** 5 s at first, then slower, never above five minutes — and never giving up: burned funds stay mintable for ever. */
 const backoff = (polls: number, speed: string) => Math.min(300_000, (speed === 'fast' ? 4_000 : 15_000) * Math.ceil((polls + 1) / 8));
 
@@ -327,7 +351,7 @@ async function findMint(dst: NetworkDef, nonce: string): Promise<string | null> 
 export async function done(p: ProposalRow, b: BridgeState, by: 'wallet' | 'other', txid: string | null): Promise<ProposalRow> {
   const minted = b.minted ?? null;
   await sql`update proposals set out_amount = ${minted} where id = ${p.id}`;
-  const r = await save(p, { ...b, phase: 'done', hold: null, holdDetail: null, retry: undefined, mintedBy: by, mintTxid: txid, doneAt: now() });
+  const r = await save(p, { ...b, phase: 'done', ...NO_HOLD, retry: undefined, mintedBy: by, mintTxid: txid, doneAt: now() });
   await audit('bridge.done', 'chain', { id: p.id, to: b.toNetwork, minted, feeExecuted: b.feeExecuted ?? null, mintedBy: by, txid });
   return r;
 }
@@ -335,23 +359,24 @@ export async function done(p: ProposalRow, b: BridgeState, by: 'wallet' | 'other
 /** v8: the wallet's address on the destination network — the source address between EVM networks, the named recipient when Solana is one end. */
 const destAddr = (p: ProposalRow): string => p.intent?.bridge?.recipient ?? p.from_addr;
 /** Gas parameters for a mint right now, or the reason why it cannot be sent yet. */
-async function mintGas(p: ProposalRow, b: BridgeState): Promise<{ evm: CctpMintGas } | { hold: string; detail: string }> {
+async function mintGas(p: ProposalRow, b: BridgeState): Promise<{ evm: CctpMintGas } | { hold: string; detail: string; sv: SvHold }> {
+  const held = (sv: SvHold) => ({ hold: sv.hold, detail: sv.holdDetail, sv });
   const dst = getNetwork(b.toNetwork), me = destAddr(p);
   const [busy] = await sql<{ id: string }[]>`select id from proposals where network = ${dst.id} and state in ('approved', 'signed', 'broadcast') limit 1`;
-  if (busy) return { hold: 'destination_busy', detail: `another transaction is in flight on ${dst.name}` };
+  if (busy) return held(svHold('destination_busy', 'hold_destination_busy', { net: dst.name }));
   const nonce = hexToNumber(await rpcQuorum<`0x${string}`>(dst.rpc, 'eth_getTransactionCount', [me, 'pending']));
-  if (nonce !== hexToNumber(await rpcAny<`0x${string}`>(dst.rpc, 'eth_getTransactionCount', [me, 'latest']))) return { hold: 'destination_busy', detail: `a previous transaction is still pending on ${dst.name}` };
+  if (nonce !== hexToNumber(await rpcAny<`0x${string}`>(dst.rpc, 'eth_getTransactionCount', [me, 'latest']))) return held(svHold('destination_busy', 'hold_destination_pending', { net: dst.name }));
   const data = encodeFunctionData({ abi: CCTP_ABI, functionName: 'receiveMessage', args: [b.message as `0x${string}`, b.attestation as `0x${string}`] });
   const est = await rpcAny<`0x${string}`>(dst.rpc, 'eth_estimateGas', [{ from: me, to: CCTP_MESSAGE_TRANSMITTER, data }]).then(hexToBigInt, (e: Error & { rpcCode?: number }) => { if (e.rpcCode === undefined) throw e; return e.message; });
-  if (typeof est === 'string') return { hold: 'mint_would_fail', detail: `the mint would revert on ${dst.name} now: ${est.slice(0, 140)}` };
+  if (typeof est === 'string') return held(svHold('mint_would_fail', 'hold_mint_would_fail', { net: dst.name, detail: est.slice(0, 140) }));
   let gas = (est * 13n) / 10n + 20_000n; if (gas > GAS.mintCap) gas = GAS.mintCap;
   const price = await gasPrice(dst), st = await signer.status();
   const ceiling = BigInt(st.policy.maxFee[dst.id] ?? '0');
   let maxFeePerGas = price.maxFeePerGas;
   if (gas * maxFeePerGas > ceiling) maxFeePerGas = ceiling / gas; // stay under the signer's ceiling when the current price still fits
-  if (maxFeePerGas < price.baseFee + price.tip) return { hold: 'fee_above_policy', detail: `the network fee on ${dst.name} is above the signer's fee ceiling right now` };
+  if (maxFeePerGas < price.baseFee + price.tip) return held(svHold('fee_above_policy', 'hold_fee_above_policy', { net: dst.name }));
   const balance = await nativeBalance(dst, me);
-  if (balance < gas * maxFeePerGas) return { hold: 'destination_gas', detail: `add ${dst.native.symbol} on ${dst.name}: ${formatUnits(gas * maxFeePerGas, 18)} is needed to receive the USDC, the wallet holds ${formatUnits(balance, 18)}` };
+  if (balance < gas * maxFeePerGas) return held(svHold('destination_gas', 'hold_destination_gas', { sym: dst.native.symbol, net: dst.name, need: formatUnits(gas * maxFeePerGas, 18), have: formatUnits(balance, 18) }));
   return { evm: { nonce, gasLimit: gas.toString(), maxFeePerGas: maxFeePerGas.toString(), maxPriorityFeePerGas: (price.tip > maxFeePerGas ? maxFeePerGas : price.tip).toString() } };
 }
 
@@ -371,7 +396,7 @@ export async function advanceBridge(p: ProposalRow, o: { manual?: boolean } = {}
     const parsed = MsgResp.safeParse(r.json);
     const late = now() - (b.attestingSince ?? now()) > (b.expectedSeconds * 3 + 1800) * 1000;
     const pending = (status: string, reason: string | null) => save(p, { ...b, polls: b.polls + 1, nextAt: now() + backoff(b.polls, b.speed), irisStatus: status, delayReason: reason,
-      hold: late ? 'attestation_late' : null, holdDetail: late ? 'Circle has not attested this burn yet. The funds are not lost: the mint stays possible whenever the attestation arrives' : null });
+      ...(late ? svHold('attestation_late', 'hold_attestation_late') : NO_HOLD) });
     if (r.status === 404 || !parsed.success) return pending(r.status === 404 ? 'not_found' : `http_${r.status}`, null);
     // the answer is untrusted: keep only a message that is exactly the approved burn (the signer re-checks the same way)
     let hit: { message: string; attestation: string; v: ReturnType<typeof verifyCctpMint> } | null = null, why = '';
@@ -381,10 +406,10 @@ export async function advanceBridge(p: ProposalRow, o: { manual?: boolean } = {}
     }
     if (!hit) {
       const m0 = parsed.data.messages[0];
-      if (why) return save(p, { ...b, polls: b.polls + 1, nextAt: now() + 120_000, irisStatus: 'mismatch', hold: 'message_mismatch', holdDetail: `Circle's answer does not describe the approved transfer (${why}); it was not used` });
+      if (why) return save(p, { ...b, polls: b.polls + 1, nextAt: now() + 120_000, irisStatus: 'mismatch', ...svHold('message_mismatch', 'hold_message_mismatch', { detail: why.slice(0, 160) }) });
       return pending(m0?.status ?? 'empty', m0?.delayReason ?? null);
     }
-    p = await save(p, b = { ...b, phase: 'ready', hold: null, holdDetail: null, irisStatus: 'complete', delayReason: null, nextAt: 0, message: hit.message, attestation: hit.attestation, nonce: hit.v.msg.nonce, messageHash: hit.v.messageHash,
+    p = await save(p, b = { ...b, phase: 'ready', ...NO_HOLD, irisStatus: 'complete', delayReason: null, nextAt: 0, message: hit.message, attestation: hit.attestation, nonce: hit.v.msg.nonce, messageHash: hit.v.messageHash,
       feeExecuted: hit.v.msg.body.feeExecuted.toString(), minted: hit.v.minted.toString(), expirationBlock: hit.v.msg.body.expirationBlock.toString(), mint: undefined });
     await audit('bridge.attested', 'circle', { id: p.id, messageHash: b.messageHash, nonce: b.nonce, feeExecuted: b.feeExecuted });
   }
@@ -402,16 +427,16 @@ export async function advanceBridge(p: ProposalRow, o: { manual?: boolean } = {}
       if (head !== null && head >= BigInt(b.expirationBlock) && !b.mint?.evm) {
         await iris(`/v2/reattest/0x${b.nonce}`, { method: 'POST' }).catch(() => null);
         await audit('bridge.reattest', 'system', { id: p.id, nonce: b.nonce });
-        return save(p, { ...b, phase: 'attesting', expiredHash: b.messageHash, polls: 0, nextAt: now() + 10_000, hold: 'attestation_expired', holdDetail: 'the Fast attestation expired; a new one was requested from Circle' });
+        return save(p, { ...b, phase: 'attesting', expiredHash: b.messageHash, polls: 0, nextAt: now() + 10_000, ...svHold('attestation_expired', 'hold_attestation_expired') });
       }
     }
     // gas parameters are chosen once and stored before the signer is asked: an interrupted attempt repeats the same request
     let evm = b.mint?.evm;
     if (!evm) {
       let g; try { g = await mintGas(p, b); } catch (e) { return wait(p, b, (e as UserError).code ?? 'rpc_degraded', (e as Error).message, 20_000); }
-      if ('hold' in g) return wait(p, b, g.hold, g.detail, g.hold === 'destination_gas' ? 60_000 : 30_000);
+      if ('hold' in g) return wait(p, b, g.sv, g.detail, g.hold === 'destination_gas' ? 60_000 : 30_000);
       try { buildCctpMintTx(bridge, b.message!, b.attestation!, g.evm, BigInt((await signer.status()).policy.maxFee[dst.id] ?? '0')); } catch (e) { return wait(p, b, 'mint_would_fail', (e as Error).message, 120_000); }
-      evm = g.evm; p = await save(p, b = { ...b, hold: null, holdDetail: null, mint: { evm } });
+      evm = g.evm; p = await save(p, b = { ...b, ...NO_HOLD, mint: { evm } });
     }
     let signed;
     try { signed = await signer.bridgeMint({ proposalId: p.id, message: b.message!, attestation: b.attestation!, evm }); }
@@ -419,9 +444,9 @@ export async function advanceBridge(p: ProposalRow, o: { manual?: boolean } = {}
       const code = (e as UserError).code ?? '';
       if (code === 'signer_unreachable') return wait(p, b, code, (e as Error).message, 15_000);
       // the signer refuses a second passkey-free signature and anything that is not the approved transfer
-      return save(p, { ...b, phase: 'mint_failed', hold: code || 'signer_refused', holdDetail: (e as Error).message.slice(0, 300), nextAt: now() + 60_000 });
+      return save(p, { ...b, phase: 'mint_failed', ...svTechnical(code || 'signer_refused', (e as Error).message), nextAt: now() + 60_000 });
     }
-    p = await save(p, b = { ...b, phase: 'mint_sent', hold: null, holdDetail: null, nextAt: 0, mint: { evm, txid: signed.txid, raw: signed.raw, sentAt: now(), lastBroadcastAt: now(), signatures: b.mint?.signatures ?? 1 } });
+    p = await save(p, b = { ...b, phase: 'mint_sent', ...NO_HOLD, nextAt: 0, mint: { evm, txid: signed.txid, raw: signed.raw, sentAt: now(), lastBroadcastAt: now(), signatures: b.mint?.signatures ?? 1 } });
     await audit('bridge.mint_signed', 'system', { id: p.id, to: dst.id, txid: signed.txid, messageHash: signed.messageHash, replayed: signed.replayed });
     if (config.broadcast) await adapterFor(dst.id).broadcast(signed.raw).catch(() => {});
   }
@@ -442,7 +467,7 @@ export async function advanceBridge(p: ProposalRow, o: { manual?: boolean } = {}
     if (rc) { // our transaction reverted: either someone minted first (success) or it must be signed again
       if (used) return done(p, b, 'other', await findMint(dst, b.nonce!));
       await audit('bridge.mint_reverted', 'chain', { id: p.id, txid: m.txid });
-      return save(p, { ...b, phase: 'mint_failed', hold: 'mint_reverted', holdDetail: `the mint transaction reverted on ${dst.name}; the USDC is still waiting. Approve a new attempt with the passkey` });
+      return save(p, { ...b, phase: 'mint_failed', ...svHold('mint_reverted', 'hold_mint_reverted', { net: dst.name }) });
     }
     if (used) { // minted, and no receipt for our transaction a moment ago: it may just have been included — look again before crediting someone else
       const again = await rpcAny<{ status: `0x${string}` } | null>(dst.rpc, 'eth_getTransactionReceipt', [m.txid]).catch(() => undefined);
@@ -451,7 +476,7 @@ export async function advanceBridge(p: ProposalRow, o: { manual?: boolean } = {}
     }
     const latest =await rpcAny<`0x${string}`>(dst.rpc, 'eth_getTransactionCount', [destAddr(p), 'latest']).then(hexToNumber, () => null);
     if (latest !== null && latest > m.evm!.nonce && now() - (m.sentAt ?? 0) > 90_000)
-      return save(p, { ...b, phase: 'mint_failed', hold: 'mint_replaced', holdDetail: `another transaction took the place of the mint on ${dst.name}; the USDC is still waiting. Approve a new attempt with the passkey` });
+      return save(p, { ...b, phase: 'mint_failed', ...svHold('mint_replaced', 'hold_mint_replaced', { net: dst.name }) });
     if (now() - (m.lastBroadcastAt ?? 0) > 45_000) { await adapterFor(dst.id).broadcast(m.raw!).catch(() => {}); return save(p, { ...b, mint: { ...m, lastBroadcastAt: now() }, nextAt: now() + 5_000 }); }
     return save(p, { ...b, nextAt: now() + 4_000 });
   }

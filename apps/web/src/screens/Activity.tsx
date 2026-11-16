@@ -8,16 +8,18 @@ import { XswapFacts, XswapPill, XswapProgress, type XswapV } from '../xswap';
 import { useQueryClient } from '@tanstack/react-query';
 import { PlanList } from '../plan'; // v7 any-to-any plans
 import { Addr, Card, Coin, EmptyState, exactAmt, Icon, inputCls, Money, PageTitle, Seg, short, SkeletonRows, StatePill, testNotSent, trimAmt } from '../ui';
+import { ExecutionTimeline, type ExecutionV } from '../execution'; // v11
+import { propError } from '../sv';                                 // v11
 
-interface Item { swap?: { toSymbol: string; receivedDisplay: string | null; minOutDisplay: string } | null; bridge?: BridgeV | null; xswap?: XswapV | null; kind: 'send' | 'receive' | 'swap' | 'bridge'; at: string; id: string; network: string; networkName: string; symbol: string; amount: string; amountDisplay: string; state: string; txid: string | null; explorer: string | null;
-  to?: string; from?: string; feeDisplay?: string | null; feeSymbol?: string; error?: string | null; note?: string; confirmations?: number }
+interface Item { swap?: { toSymbol: string; receivedDisplay: string | null; minOutDisplay: string } | null; bridge?: BridgeV | null; xswap?: XswapV | null; kind: 'send' | 'receive' | 'swap' | 'bridge' | /* v11: a GMX order transaction */ 'gmx'; at: string; id: string; network: string; networkName: string; symbol: string; amount: string; amountDisplay: string; state: string; txid: string | null; explorer: string | null;
+  to?: string; from?: string; feeDisplay?: string | null; feeSymbol?: string; error?: string | null; errorCode?: string | null; errorParams?: Record<string, string | number> | null; execution?: ExecutionV; note?: string; confirmations?: number }
 
 export function Activity() {
   const t = useT(); const { locale } = useContext(I18n); const { settings } = useSettings(); const nets = useNetworks();
   const q = useQuery({ queryKey: ['activity'], queryFn: () => get<{ items: Item[] }>('/activity?limit=200'), refetchInterval: 20_000 });
   const qc = useQueryClient();
   const [kind, setKind] = useState<'all' | 'send' | 'receive'>('all'), [net, setNet] = useState(''), [open, setOpen] = useState('');
-  const items = (q.data?.items ?? []).filter((i) => (kind === 'all' || i.kind === kind || (kind === 'send' && (i.kind === 'swap' || i.kind === 'bridge'))) && (!net || i.network === net));
+  const items = (q.data?.items ?? []).filter((i) => (kind === 'all' || i.kind === kind || (kind === 'send' && (i.kind === 'swap' || i.kind === 'bridge' || i.kind === 'gmx'))) && (!net || i.network === net));
   // grouped by calendar day (the device's own): "Aujourd'hui", "Hier", then the date in full
   const loc = locale === 'fr' ? 'fr-CA' : 'en-CA', dayKey = (d: string) => new Date(d).toLocaleDateString('en-CA');
   const today = dayKey(new Date().toISOString()), yesterday = dayKey(new Date(Date.now() - 86_400_000).toISOString());
@@ -39,7 +41,7 @@ export function Activity() {
           <li key={i.id}>
             <button className="row-press flex min-h-[68px] w-full items-center gap-3 px-4 py-3 text-left" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '' : i.id)}>
               <Coin sym={i.symbol} net={i.network} size={42} />
-              <span className="min-w-0 flex-1"><span className="block font-medium">{i.kind === 'bridge' ? `${t('brActivity')} · ${i.symbol} → ${i.bridge?.toNetworkName ?? ''}` : i.kind === 'swap' ? `${t('swap')} · ${i.symbol} → ${i.swap?.toSymbol ?? ''}` : `${i.kind === 'receive' ? t('received') : t('sent')} · ${i.symbol}`}</span>
+              <span className="min-w-0 flex-1"><span className="block font-medium">{i.kind === 'bridge' ? `${t('brActivity')} · ${i.symbol} → ${i.bridge?.toNetworkName ?? ''}` : i.kind === 'swap' ? `${t('swap')} · ${i.symbol} → ${i.swap?.toSymbol ?? ''}` : i.kind === 'gmx' ? `${t('svKind_gmx')} · ${i.symbol}` : `${i.kind === 'receive' ? t('received') : t('sent')} · ${i.symbol}`}</span>
                 <span className="block truncate text-xs text-mute">{i.networkName} · {time(i.at)}</span></span>
               <span className="text-right"><span className={`block font-semibold ${i.kind === 'receive' ? 'text-emerald' : ''}`}><Money hidden={settings.hideBalances}>{i.kind === 'receive' ? '+' : '−'}{trimAmt(i.amountDisplay)}</Money></span>{testNotSent(i) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : i.kind === 'bridge' && i.bridge ? <BridgePill b={i.bridge} /> : i.xswap ? <XswapPill x={i.xswap} /> : <StatePill state={i.state} />}</span>
             </button>
@@ -50,12 +52,15 @@ export function Activity() {
               {i.kind === 'swap' && i.swap && !i.xswap && <D k={i.swap.receivedDisplay ? t('swReceived') : t('swMinGuaranteed')}>{exactAmt(i.swap.receivedDisplay ?? i.swap.minOutDisplay)} {i.swap.toSymbol}</D>}
               {i.kind === 'bridge' && i.bridge && <dl className="space-y-1.5"><BridgeFacts b={i.bridge} symbol={i.symbol} /></dl>}
               {i.kind === 'bridge' && i.bridge && !testNotSent(i) && <BridgeProgress id={i.id} b={i.bridge} onUpdate={() => void qc.invalidateQueries({ queryKey: ['activity'] })} />}
+              {i.kind === 'gmx' && <D k={t('svKind_gmx')}><span className="text-mute">{t('svKindSub_gmx')}</span></D>}
               {i.to && i.kind !== 'swap' && i.kind !== 'bridge' && <D k={t('to')}><Addr value={i.to} /></D>}
               {i.from && i.kind === 'receive' && <D k={t('from')}><span className="font-mono">{short(i.from)}</span></D>}
               {i.feeDisplay && <D k={t('fee')}>≈ {trimAmt(i.feeDisplay, 9)} {i.feeSymbol}</D>}
               <D k={t('time')}>{new Date(i.at).toISOString()}</D>
               {i.note && <D k={t('note')}>{i.note}</D>}
-              {testNotSent(i) ? <D k={t('status')}><span className="text-warn">{t('qaTestNotSent')}</span></D> : i.error && <D k={t('error')}><span className="text-danger">{i.error}</span></D>}
+              {testNotSent(i) ? <D k={t('status')}><span className="text-warn">{t('qaTestNotSent')}</span></D> : i.error && <D k={t('error')}><span className="text-danger" data-testid="activity-error">{propError(t, i)}</span></D>}
+              {/* v11: the same steps as on the review sheet — a CCTP transfer and a THORChain swap keep their own, richer progress above */}
+              {i.execution && i.kind !== 'receive' && i.kind !== 'bridge' && !i.xswap && !testNotSent(i) && i.state !== 'pending_approval' && <ExecutionTimeline exec={i.execution} />}
               {i.txid && <D k={t('txid')}><span className="break-all font-mono text-[11.5px]">{i.txid}</span></D>}
               {i.explorer && !testNotSent(i) && <a className="inline-flex min-h-11 items-center gap-1.5 text-blue" href={i.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
             </div>}

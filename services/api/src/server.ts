@@ -8,8 +8,8 @@ import { z, ZodError } from 'zod';
 import { formatUnits, getNetwork, NETWORKS, normalizeAddress, type NetworkDef, type NetworkId } from '@spw/core';
 import { authRoutes, deviceRoutes, isAuthed, listCreds } from './auth.ts';
 import { adapterFor } from './chains/index.ts';
-import { http } from './chains/rpc.ts';
-import { createGecko } from './gecko.ts';
+import { http, rpcEndpointHealth } from './chains/rpc.ts';
+import { createGecko, priceStamp } from './gecko.ts';
 import { config, secureCookies, UserError } from './config.ts';
 import { audit, auditList, getSetting, setSetting, sql } from './db.ts';
 import { marketDataRoutes } from './market/routes.ts';
@@ -40,6 +40,17 @@ const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/au
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
 const NETS = Object.values(NETWORKS) as NetworkDef[];
+/** What a proposal is in the activity feed: a native cross-chain swap is shown with the swaps; a GMX order transaction is its own kind. */
+export const activityKind = (k: ProposalRow['kind'] | null | undefined): 'send' | 'swap' | 'bridge' | 'gmx' => (k === 'swap' || k === 'xswap' ? 'swap' : k === 'bridge' ? 'bridge' : k === 'gmx' ? 'gmx' : 'send');
+/** The kind written in the CSV: the stored kind, with `send` for a plain transfer. */
+export const csvKind = (k: ProposalRow['kind'] | null | undefined): string => (!k || k === 'transfer' ? 'send' : k);
+/** What a swap or a cross-chain transfer delivered, when the chain said it (never the expected amount). */
+export function csvOutcome(p: ProposalRow): { toNetwork: string; toSymbol: string; received: string } {
+  if (p.kind === 'xswap' && p.xswap) return { toNetwork: p.xswap.toNetwork, toSymbol: p.xswap.toSymbol, received: p.xswap.received ? formatUnits(BigInt(p.xswap.received), p.xswap.toDecimals) : '' };
+  if (p.kind === 'bridge' && p.bridge) return { toNetwork: p.bridge.toNetwork, toSymbol: p.symbol, received: p.bridge.phase === 'done' && p.out_amount ? formatUnits(BigInt(p.out_amount), p.decimals) : '' };
+  if (p.kind === 'swap' && p.swap) return { toNetwork: p.network, toSymbol: p.swap.toSymbol, received: p.out_amount ? formatUnits(BigInt(p.out_amount), p.swap.toDecimals) : '' };
+  return { toNetwork: '', toSymbol: '', received: '' };
+}
 const cache = new Map<string, { at: number; v: unknown }>();
 async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
   const c = cache.get(key);
@@ -73,28 +84,54 @@ const COINGECKO: Record<string, string> = {
   BRETT: 'based-brett', TOSHI: 'toshi', DEGEN: 'degen-base', JTO: 'jito-governance-token', PYTH: 'pyth-network', HNT: 'helium', ORCA: 'orca',
   mSOL: 'msol', jitoSOL: 'jito-staked-sol', bSOL: 'blazestake-staked-sol',
 };
-interface Market { usd: number; cad: number; change24h: number | null; change7d: number | null; marketCap: number | null; volume24h: number | null; high24h: number | null; low24h: number | null; ath: number | null; rank: number | null; spark: number[] }
+/** v11: `priceAt` = when the source last updated THIS price (CoinGecko's own `last_updated`, else the time it was fetched); `stale` = served past its refresh window or older than PRICE_STALE_MS */
+interface Market { priceAt: string | null; stale: boolean; usd: number; cad: number; change24h: number | null; change7d: number | null; marketCap: number | null; volume24h: number | null; high24h: number | null; low24h: number | null; ath: number | null; rank: number | null; spark: number[] }
 // CoinGecko GET with stale-on-error and a short retry after a failure: gecko.ts (v10)
 const gecko = createGecko((url, init) => http(url, init));
-type GeckoRow = { id: string; current_price: number; price_change_percentage_24h_in_currency?: number; price_change_percentage_7d_in_currency?: number; market_cap?: number; total_volume?: number; high_24h?: number; low_24h?: number; ath?: number; market_cap_rank?: number; sparkline_in_7d?: { price: number[] } };
+type GeckoRow = { id: string; last_updated?: string; current_price: number; price_change_percentage_24h_in_currency?: number; price_change_percentage_7d_in_currency?: number; market_cap?: number; total_volume?: number; high_24h?: number; low_24h?: number; ath?: number; market_cap_rank?: number; sparkline_in_7d?: { price: number[] } };
 const thin = (a: number[], max: number) => (a.length <= max ? a : Array.from({ length: max }, (_, k) => a[Math.round((k * (a.length - 1)) / (max - 1))]!));
 async function markets(): Promise<Record<string, Market> | null> {
   if (!(await getSetting('prices', true))) return null;
   const ids = [...new Set(Object.values(COINGECKO))].join(',');
-  const q = (cur: string) => gecko<GeckoRow[]>(`markets:${cur}`, 4 * 60_000, `/coins/markets?vs_currency=${cur}&ids=${ids}&per_page=250&sparkline=${cur === 'usd'}&price_change_percentage=24h,7d`);
+  const q = (cur: string) => gecko<GeckoRow[]>(`markets:${cur}`, PRICE_TTL_MS, `/coins/markets?vs_currency=${cur}&ids=${ids}&per_page=250&sparkline=${cur === 'usd'}&price_change_percentage=24h,7d`);
   const [usd, cad] = await Promise.all([q('usd'), q('cad')]);
   if (!usd || !cad) return null;
+  // freshness (v11): the answer may be a stale-on-error value; each price also carries the source's own update time
+  const mu = gecko.meta('markets:usd', PRICE_TTL_MS), mc = gecko.meta('markets:cad', PRICE_TTL_MS), now = Date.now();
+  const fetched = mu.fetchedAt !== null && mc.fetchedAt !== null ? Math.min(mu.fetchedAt, mc.fetchedAt) : null, servedStale = mu.stale || mc.stale;
+  const stamp = (u: GeckoRow, c: GeckoRow) => priceStamp([u.last_updated, c.last_updated], fetched, servedStale, now, PRICE_STALE_MS);
   const out: Record<string, Market> = {};
   for (const [sym, id] of Object.entries(COINGECKO)) {
     const u = usd.find((r) => r.id === id), c = cad.find((r) => r.id === id);
     if (!u || !c) continue;
-    out[sym] = { usd: u.current_price, cad: c.current_price, change24h: u.price_change_percentage_24h_in_currency ?? null, change7d: u.price_change_percentage_7d_in_currency ?? null,
+    out[sym] = { ...stamp(u, c), usd: u.current_price, cad: c.current_price, change24h: u.price_change_percentage_24h_in_currency ?? null, change7d: u.price_change_percentage_7d_in_currency ?? null,
       marketCap: u.market_cap ?? null, volume24h: u.total_volume ?? null, high24h: u.high_24h ?? null, low24h: u.low_24h ?? null, ath: u.ath ?? null, rank: u.market_cap_rank ?? null,
       spark: thin(u.sparkline_in_7d?.price ?? [], 42) };
   }
   return out;
 }
 async function prices(): Promise<Record<string, Market> | null> { return markets(); }
+/** Refresh window of the price list, and the age past which a price is flagged even when the list itself is fresh. */
+const PRICE_TTL_MS = 4 * 60_000, PRICE_STALE_MS = 15 * 60_000;
+
+// v11 resilience: the wallet's addresses as last given by the signer. Home, Assets and Receive are built from them when the signer
+// node is unreachable (balances come from the API's own chain reads); nothing can be signed meanwhile and the answer says so.
+let knownAddresses: { keyId: string; addresses: Record<string, string>; at: string } | null = null;
+async function rememberAddresses(st: { keyId: string; addresses: Record<string, string> }): Promise<void> {
+  if (knownAddresses && knownAddresses.keyId === st.keyId && JSON.stringify(knownAddresses.addresses) === JSON.stringify(st.addresses)) { knownAddresses.at = new Date().toISOString(); return; }
+  knownAddresses = { keyId: st.keyId, addresses: st.addresses, at: new Date().toISOString() };
+  await setSetting('signerAddresses', knownAddresses).catch(() => {});
+}
+/** The signer's status, or — when it cannot be reached — the last addresses it gave (memory, then the settings table). */
+async function walletAddresses(): Promise<{ st: Awaited<ReturnType<typeof signer.status>> | null; keyId: string; addresses: Record<string, string>; addressesAsOf: string }> {
+  try { const st = await signer.status(); await rememberAddresses(st); return { st, keyId: st.keyId, addresses: st.addresses, addressesAsOf: knownAddresses!.at }; }
+  catch (e) {
+    if ((e as UserError).code !== 'signer_unreachable') throw e;
+    knownAddresses ??= await getSetting<typeof knownAddresses>('signerAddresses', null);
+    if (!knownAddresses) throw e; // never seen: there is nothing honest to show
+    return { st: null, keyId: knownAddresses.keyId, addresses: knownAddresses.addresses, addressesAsOf: knownAddresses.at };
+  }
+}
 
 export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService; collateral?: import('./derivatives/collateral.ts').CollateralService; gmx?: import('./derivatives/gmx-exec.ts').GmxService; plan?: Partial<PlanDeps> } = {}): Promise<FastifyInstance> {
   const swapProviders = opts.swapProviders;
@@ -130,7 +167,8 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
 
   app.setErrorHandler((err, req, reply) => {
     const e = err as Error & { statusCode?: number };
-    if (e instanceof UserError) return reply.status(e.status).send({ error: e.code, message: e.message });
+    // `data` (v11): machine-readable detail of a refusal — e.g. the fresh quote of `quote_moved` (prepare-common.ts)
+    if (e instanceof UserError) return reply.status(e.status).send({ error: e.code, message: e.message, ...((e as { data?: unknown }).data !== undefined ? { data: (e as { data?: unknown }).data } : {}) });
     if (e instanceof ZodError) return reply.status(400).send({ error: 'bad_request', message: 'invalid request' });
     if (e.statusCode === 429) return reply.status(429).send({ error: 'rate_limited', message: 'too many requests' });
     if (e.statusCode && e.statusCode < 500) return reply.status(e.statusCode).send({ error: 'bad_request', message: 'invalid request' });
@@ -141,11 +179,11 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   authRoutes(app);
   deviceRoutes(app);
   transferRoutes(app);
-  swapRoutes(app, { providers: swapProviders, prices: markets });
+  const swapRuntimes = swapRoutes(app, { providers: swapProviders, prices: markets });
   swapExecRoutes(app);
   bridgeRoutes(app);
   xswapRoutes(app);
-  planRoutes(app, { prices: markets, ...opts.plan }); // v7 any-to-any plans: a saga over the routes above; signs nothing itself
+  planRoutes(app, { prices: markets, runtimes: swapRuntimes, ...opts.plan }); // v7 any-to-any plans: a saga over the routes above; signs nothing itself
   agentRoutes(app, { prices: markets });
   strategyRoutes(app);
   perpAgentRoutes(app, opts.derivatives, opts.live); // v6 perp agents on paper accounts; v7: LIVE on a venue account under a signer-enforced mandate
@@ -163,7 +201,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   app.get('/api/v1/health/ready', async () => {
     const db = await sql`select 1`.then(() => true, () => false);
     const s = await signer.status().then((x) => ({ ok: true, halted: x.halted }), () => ({ ok: false, halted: null }));
-    return { db, signer: s, networks: [...healthCache.values()] };
+    return { db, signer: s, networks: [...healthCache.values()], rpcEndpoints: rpcEndpointHealth() };
   });
 
   const liveTokens = (n: NetworkDef) => { const off = new Set(adapterFor(n.id).disabledAssets?.() ?? []); return n.tokens.filter((t) => !off.has(t.id)); };
@@ -177,15 +215,15 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
 
   // One vault, one signer-derived address per chain family. Addresses come from the signer, never from the client.
   app.get('/api/v1/accounts', async () => {
-    const st = await signer.status();
-    return { keyId: st.keyId, accounts: NETS.filter((n) => st.addresses[n.id]).map((n) => ({ network: n.id, name: n.name, family: n.family, address: st.addresses[n.id]!, explorer: n.explorerAddr + st.addresses[n.id] })) };
+    const w = await walletAddresses();
+    return { keyId: w.keyId, signerReachable: !!w.st, addressesAsOf: w.addressesAsOf, accounts: NETS.filter((n) => w.addresses[n.id]).map((n) => ({ network: n.id, name: n.name, family: n.family, address: w.addresses[n.id]!, explorer: n.explorerAddr + w.addresses[n.id] })) };
   });
 
   app.get('/api/v1/portfolio', async () => {
-    const st = await signer.status();
+    const w = await walletAddresses(), st = w.st;
     const px = await prices();
-    const rows = await Promise.all(NETS.filter((n) => st.addresses[n.id]).map(async (n) => {
-      const address = addressFor(st, n.id);
+    const rows = await Promise.all(NETS.filter((n) => w.addresses[n.id]).map(async (n) => {
+      const address = w.addresses[n.id]!;
       try {
         const b = await cached(`bal:${n.id}`, 12_000, () => adapterFor(n.id).balances(address));
         return [n.native, ...liveTokens(n)].map((a) => (b[a.id] === undefined
@@ -193,11 +231,16 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
           : { network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals,
               amount: b[a.id]!.toString(), display: formatUnits(b[a.id]!, a.decimals), error: null as string | null }));
       } catch {
-        return [n.native, ...n.tokens].map((a) => ({ network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals, amount: null, display: null, error: 'unavailable' }));
+        return [n.native, ...liveTokens(n)].map((a) => ({ network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals, amount: null, display: null, error: 'unavailable' }));
       }
     }));
     const pending = await sql<ProposalRow[]>`select * from proposals where state in ('pending_approval','approved','signed','broadcast','confirming','reorged') order by created_at desc`;
-    return { asOf: new Date().toISOString(), prices: px, balances: rows.flat(), pending: pending.map(view), halted: st.halted };
+    // v11: `asOf` is the time of this answer; the prices have their own dates (`prices[sym].priceAt`, `pricesAsOf` = the oldest one)
+    const stamps = px ? Object.values(px).map((m) => m.priceAt).filter((x): x is string => !!x).sort() : [];
+    return { asOf: new Date().toISOString(), prices: px, priceSource: px ? 'coingecko' : null, pricesAsOf: stamps[0] ?? null, pricesStale: px ? Object.values(px).some((m) => m.stale) : false,
+      balances: rows.flat(), pending: pending.map(view), halted: st ? st.halted : null,
+      // the signer could not be reached: balances are the API's own reads of the last known addresses; nothing can be signed meanwhile
+      signer: { reachable: !!st, addressesAsOf: w.addressesAsOf } };
   });
 
   // price history for one asset (chart). `symbol` must be in the pinned map; nothing about the wallet is sent upstream.
@@ -220,7 +263,8 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     const dep = await sql<{ network: string; txid: string; idx: number; asset: string; amount: string; from_addr: string; block: string; block_time: Date | null; seen_at: Date; finalized: string | null }[]>`
       select d.*, c.finalized from deposits d left join scan_cursor c on c.network = d.network order by coalesce(d.block_time, d.seen_at) desc limit ${q.limit}`;
     const items = [
-      ...out.map((p) => ({ ...view(p), kind: (p.kind === 'swap' || p.kind === 'xswap' ? 'swap' : p.kind === 'bridge' ? 'bridge' : 'send') as 'send' | 'swap' | 'bridge', at: p.created_at })),
+      // `kind` is what the row IS (v11): a GMX order transaction is `gmx`, not a send to the GMX router; `rawKind` keeps the stored kind (xswap vs swap)
+      ...out.map((p) => ({ ...view(p), kind: activityKind(p.kind), rawKind: p.kind ?? 'transfer', at: p.created_at })),
       ...dep.map((d) => {
         const n = getNetwork(d.network), a = d.asset === 'native' ? n.native : n.tokens.find((t) => t.id === d.asset)!;
         return { kind: 'receive' as const, at: d.block_time ?? d.seen_at, id: `${d.network}:${d.txid}:${d.idx}`, network: d.network, networkName: n.name, asset: d.asset, symbol: a.symbol,
@@ -235,10 +279,13 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     const out = await sql<ProposalRow[]>`select * from proposals where state <> 'draft' order by created_at`;
     const dep = await sql`select * from deposits order by seen_at`;
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""').replace(/^([=+\-@])/, "'$1")}"`;
-    const lines = ['time_utc,direction,network,symbol,amount_base_units,amount,counterparty,state,txid,fee_estimate_base_units'];
-    for (const p of out) lines.push([p.created_at.toISOString(), 'send', p.network, p.symbol, p.amount, formatUnits(BigInt(p.amount), p.decimals), p.to_addr, p.state, p.txid, p.fee_estimate].map(esc).join(','));
+    // v11: `direction` is the real kind of the row (send | swap | bridge | xswap | gmx | receive) and three columns say what a swap or a
+    // cross-chain transfer delivered; they are appended, so the positions of the earlier columns do not change
+    const lines = ['time_utc,direction,network,symbol,amount_base_units,amount,counterparty,state,txid,fee_estimate_base_units,to_network,to_symbol,received'];
+    for (const p of out) { const o = csvOutcome(p);
+      lines.push([p.created_at.toISOString(), csvKind(p.kind), p.network, p.symbol, p.amount, formatUnits(BigInt(p.amount), p.decimals), p.to_addr, p.state, p.txid, p.fee_estimate, o.toNetwork, o.toSymbol, o.received].map(esc).join(',')); }
     for (const d of dep) { const n = getNetwork(d.network), a = d.asset === 'native' ? n.native : n.tokens.find((t) => t.id === d.asset)!;
-      lines.push([(d.block_time ?? d.seen_at).toISOString(), 'receive', d.network, a.symbol, d.amount, formatUnits(BigInt(d.amount), a.decimals), d.from_addr, 'confirmed', d.txid, ''].map(esc).join(',')); }
+      lines.push([(d.block_time ?? d.seen_at).toISOString(), 'receive', d.network, a.symbol, d.amount, formatUnits(BigInt(d.amount), a.decimals), d.from_addr, 'confirmed', d.txid, '', '', '', ''].map(esc).join(',')); }
     return reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', 'attachment; filename="sp-wallet-activity.csv"').send(lines.join('\n') + '\n');
   });
 
@@ -265,7 +312,6 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   app.put('/api/v1/settings', async (req) => {
     const b = Settings.partial().parse(req.body);
     for (const [k, v] of Object.entries(b)) await setSetting(k, v);
-    cache.delete('prices');
     return readSettings();
   });
 

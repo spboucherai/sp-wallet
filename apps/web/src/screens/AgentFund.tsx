@@ -8,6 +8,7 @@ import { get, post } from '../api';
 import type { Nav } from '../App';
 import { useAccounts, useNetworks, usePortfolio, type Net, type Proposal } from '../hooks';
 import { errText, I18n, useT, type Key } from '../i18n';
+import { svText } from '../sv'; // v11: server texts by code
 import { Addr, Btn, Coin, CopyBtn, Fact, Icon, NetDot, Notice, ProgressRing, Sheet, Tag, trimAmt, usdCapital, type Tone } from '../ui';
 import { amountInputText, amountLocale, amountOf, sanitizeAmountText } from '../amount'; // v8 hardening: one rule for typed amounts
 import { AmountProblem } from '../amountUi';
@@ -29,7 +30,8 @@ const minBig = (...xs: bigint[]) => xs.reduce((a, b) => (b < a ? b : a));
 /** Round a base-unit amount UP to `keep` significant decimals (a gas top-up must not fall one wei short). */
 const ceilTo = (v: bigint, dec: number, keep: number): bigint => { if (dec <= keep) return v; const q = 10n ** BigInt(dec - keep); return ((v + q - 1n) / q) * q; };
 const sameAsset = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-const TEST_NOT_SENT = /broadcast disabled/i;
+/** v11 (B2): a transfer signed on a server that does not broadcast is in the terminal state `not_broadcast` — the state says it, not the wording of a sentence */
+const NOT_SENT = 'not_broadcast';
 const OK = ['confirming', 'finalized'], BAD = ['failed', 'rejected', 'expired', 'replaced'];
 
 /** Plain words for a refusal of the transfer flow; the server's English detail is only used when no code is known. */
@@ -70,11 +72,11 @@ function AmountBox({ id, sym, net, value, onChange, right }: { id: string; sym: 
 }
 
 // ── funding ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-interface Leg { key: 'cash' | 'gas'; asset: string; symbol: string; amount: string; idem: string; proposalId?: string; state?: string; error?: string; txError?: string | null; explorer?: string | null }
+interface Leg { key: 'cash' | 'gas'; asset: string; symbol: string; amount: string; idem: string; proposalId?: string; state?: string; error?: string; txError?: string | null; txCode?: string | null; txParams?: Record<string, string | number> | null; explorer?: string | null }
 const store = (id: string) => `spw-fund-${id}`;
 const loadLegs = (id: string): Leg[] | null => { try { const j = JSON.parse(localStorage.getItem(store(id)) ?? 'null') as { at: number; legs: Leg[] } | null; return j && Date.now() - j.at < 86_400_000 && Array.isArray(j.legs) ? j.legs : null; } catch { return null; } };
 const legDone = (l: Leg) => OK.includes(l.state ?? '');
-const legTest = (l: Leg) => l.state === 'broadcast' && TEST_NOT_SENT.test(l.txError ?? '');
+const legTest = (l: Leg) => l.state === NOT_SENT;
 /** True when a funding run of this agent was started and is not finished (the agent page offers to resume it). */
 export const fundingInProgress = (id: string): boolean => { const l = loadLegs(id); return !!l && l.some((x) => !!x.proposalId || !!x.error) && !l.every(legDone); };
 
@@ -122,7 +124,7 @@ export function FundSheet({ a, gas, nav, onClose }: { a: FundAgent; gas: GasInfo
   const live = useQuery({ queryKey: ['proposal', cur?.proposalId], enabled: !!cur?.proposalId, refetchInterval: 3000, queryFn: () => get<Proposal>(`/transfers/proposals/${cur!.proposalId}`) });
   useEffect(() => { const p = live.data; if (!p || !legs || !cur || p.id !== cur.proposalId) return;
     if (p.state === cur.state && (p.error ?? null) === (cur.txError ?? null)) return;
-    setLegs(legs.map((l) => (l.proposalId === p.id ? { ...l, state: p.state, txError: p.error, explorer: p.explorer } : l)));
+    setLegs(legs.map((l) => (l.proposalId === p.id ? { ...l, state: p.state, txError: p.error, txCode: p.errorCode, txParams: p.errorParams, explorer: p.explorer } : l)));
     if (OK.includes(p.state)) { void qc.invalidateQueries({ queryKey: ['agent', a.id] }); void qc.invalidateQueries({ queryKey: ['portfolio'] }); }
   }, [live.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const ctxOf = (l: Leg) => ({ sym: l.symbol, net: a.networkName, native: natSym, perTx: (l.key === 'cash' ? capCash : capNat)?.perD, left: (l.key === 'cash' ? capCash : capNat)?.leftD });
@@ -131,7 +133,7 @@ export function FundSheet({ a, gas, nav, onClose }: { a: FundAgent; gas: GasInfo
     const patch = (p: Partial<Leg>) => { next = next.map((x, i) => (i === k ? { ...x, ...p } : x)); setLegs(next); };
     try {
       const p = await sendTransfer({ network: a.network, asset: l.asset, to: a.vaultAddress, amount: l.amount, note: `Agent ${a.name}`, idem: l.idem, onDraft: (id) => patch({ proposalId: id, state: 'draft' }) });
-      patch({ proposalId: p.id, state: p.state, txError: p.error, explorer: p.explorer });
+      patch({ proposalId: p.id, state: p.state, txError: p.error, txCode: p.errorCode, txParams: p.errorParams, explorer: p.explorer });
       void qc.invalidateQueries({ queryKey: ['security'] });
     } catch (e) {
       // a draft left behind is cancelled so that a retry starts clean (a new idempotency key)
@@ -165,7 +167,7 @@ export function FundSheet({ a, gas, nav, onClose }: { a: FundAgent; gas: GasInfo
             <span className="min-w-0 flex-1"><span className="block text-[15.5px] font-semibold leading-snug">{k + 1}/{legs.length} · {trimAmt(l.amount, 8)} {l.symbol}{l.key === 'gas' ? ` (${t('agGasRole')})` : ''}</span>
               <span className="mt-1 block"><Tag tone={tone} icon={done ? 'check' : test ? 'warn' : bad || l.error ? 'x' : waiting ? 'clock' : 'minus'}><span className="whitespace-normal">{done ? (l.state === 'finalized' ? t('qaFundLegFinal') : t('qaFundLegConfirming')) : test ? t('qaFundLegTest') : bad ? t('qaFundLegFailed') : waiting ? (l.state === 'broadcast' || l.state === 'signed' ? t('qaFundLegSent') : t('qaFundLegSigning')) : isNext && busy ? t('qaFundLegPasskey') : t('qaFundLegTodo')}</span></Tag></span></span></div>
           {l.error && <div className="mt-2.5"><Notice tone="danger">{l.error}</Notice></div>}
-          {bad && l.txError && <div className="mt-2.5"><Notice tone="danger">{l.txError}</Notice></div>}
+          {bad && l.txError && <div className="mt-2.5"><Notice tone="danger">{svText(t, l.txCode, l.txParams, l.txError)}</Notice></div>}
           {l.explorer && !test && <a className="mt-2 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-blue" href={l.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
         </li>; })}</ol>
       {stuck && <div className="mt-3"><Notice tone="warn">{t('qaFundTestMode')}</Notice></div>}
@@ -269,7 +271,7 @@ export function ElsewhereFunds({ a }: { a: FundAgent }) {
   const ov = useQuery({ queryKey: ['security'], queryFn: () => get<Overview>('/security/overview'), staleTime: 15_000 });
   const [busy, setBusy] = useState(''), [msg, setMsg] = useState<Record<string, { ok: boolean; text: string }>>({});
   const [top, setTop] = useState<Record<string, { id: string; state: string; error: string | null }>>({});
-  const pending = Object.entries(top).find(([, v]) => !OK.includes(v.state) && !BAD.includes(v.state) && !TEST_NOT_SENT.test(v.error ?? ''));
+  const pending = Object.entries(top).find(([, v]) => !OK.includes(v.state) && !BAD.includes(v.state) && v.state !== NOT_SENT);
   const live = useQuery({ queryKey: ['proposal', pending?.[1].id], enabled: !!pending, refetchInterval: 3000, queryFn: () => get<Proposal>(`/transfers/proposals/${pending![1].id}`) });
   useEffect(() => { const p = live.data; if (!p || !pending || p.id !== pending[1].id) return; if (p.state === pending[1].state && p.error === pending[1].error) return;
     setTop((m) => ({ ...m, [pending[0]]: { id: p.id, state: p.state, error: p.error } })); if (OK.includes(p.state)) void qc.invalidateQueries({ queryKey: ['agent-elsewhere', a.id] });
@@ -294,7 +296,7 @@ export function ElsewhereFunds({ a }: { a: FundAgent }) {
       // enough for every token of this network, with a margin for a fee that moves; rounded up
       const send = ceilTo((need * BigInt(tokens.length) * 3n) / 2n - held, dec, 6), sendD = fromUnits(send > 0n ? send : 0n, dec);
       const mainNat = BigInt(pf.data?.balances.find((b) => b.network === net && b.asset === 'native')?.amount ?? '0');
-      const tp = top[net], tpTest = !!tp && TEST_NOT_SENT.test(tp.error ?? '');
+      const tp = top[net], tpTest = !!tp && tp.state === NOT_SENT;
       const topUp = async () => { setBusy(`gas${net}`); setMsg((m) => ({ ...m, [`gas${net}`]: { ok: true, text: '' } }));
         try { const p = await sendTransfer({ network: net, asset: 'native', to: a.vaultAddress, amount: sendD, note: `Agent ${a.name}`, idem: crypto.randomUUID() }); setTop((m) => ({ ...m, [net]: { id: p.id, state: p.state, error: p.error } })); }
         catch (e) { setMsg((m) => ({ ...m, [`gas${net}`]: { ok: false, text: fundErr(t, e, { sym: h0.gas, net: h0.networkName, native: h0.gas }) } })); } finally { setBusy(''); } };

@@ -2,6 +2,7 @@
 // No I/O here: services/api/src/xswap.ts gathers the observations and stores the result. Every step is decided only by what
 // is stored and what was observed, so a swap resumes after a restart, hours later, exactly where it was.
 import { formatUnits, getNetwork } from '@spw/core';
+import { svHold, type SvCode, type SvParams } from './sv-texts.ts';
 
 export type XswapPhase = 'sending' | 'sent' | 'observed' | 'outbound' | 'received' | 'refunded';
 export interface XswapState {
@@ -14,7 +15,7 @@ export interface XswapState {
   /** second line: what the wallet's own chain data sources say the vault holds, in the source asset (base units), and recent router activity */
   evidence: { holds: string; multiple: number; transfersOut: number | null };
   needsApproval: boolean; simulated: boolean;
-  phase: XswapPhase; hold?: string | null; holdDetail?: string | null; polls: number; nextAt: number;
+  phase: XswapPhase; hold?: string | null; holdDetail?: string | null; holdCode?: string | null; holdParams?: SvParams | null; polls: number; nextAt: number;
   sentAt?: number; observedAt?: number; outboundAt?: number; doneAt?: number; refundPlanned?: boolean;
   outTxid?: string; outKind?: 'out' | 'refund'; received?: string; refunded?: string;
 }
@@ -42,8 +43,9 @@ export type XswapEvent = [type: string, data: Record<string, unknown>];
 export function xswapNext(b0: XswapState, o: XswapObs, inTxid: string): { b: XswapState; events: XswapEvent[] } {
   let b = { ...b0 }; const events: XswapEvent[] = [];
   if (xswapTerminal(b) || b.phase === 'sending') return { b, events };
-  const hold = (code: string, detail: string) => { if (b.hold !== code) events.push(['xswap.hold', { hold: code }]); b = { ...b, hold: code, holdDetail: detail }; };
-  const clear = () => { b = { ...b, hold: null, holdDetail: null }; };
+  // the detail sentence of each hold is the catalogue entry `hold_<code>` (sv-texts.ts): the UI translates the code, API clients read the English text
+  const hold = (code: string, _detail?: string) => { if (b.hold !== code) events.push(['xswap.hold', { hold: code }]); b = { ...b, ...svHold(code, `hold_${code}` as SvCode) }; };
+  const clear = () => { b = { ...b, hold: null, holdDetail: null, holdCode: null, holdParams: null }; };
   if (b.phase === 'sent') {
     if (o.status?.observed) { b = { ...b, phase: 'observed', observedAt: o.now, polls: 0 }; clear(); events.push(['xswap.observed', {}]); }
     else if (o.sourceState === 'broadcast' && o.vaultActive === false) hold('vault_churned', 'the vault is no longer confirmed as active and the transaction is not confirmed yet. It cannot be cancelled; THORChain still watches a retiring vault, but this is not guaranteed');
@@ -83,7 +85,7 @@ export function xswapView(p: { state: string; network: string; decimals: number;
     vault: b.vault, vaultExplorer: s.explorerAddr + b.vault, memo: b.memo, router: b.router, operators: b.operators, quoteOperators: b.quoteOperators, vaultMembers: b.vaultMembers, churnHeight: b.churnHeight,
     evidenceMultiple: b.evidence.multiple, evidenceTransfersOut: b.evidence.transfersOut, needsApproval: b.needsApproval, simulated: b.simulated,
     approvalTxid: p.pre_txid, approvalState: p.pre_raw ? (p.pre_state ?? 'pending') : null,
-    hold: b.hold ?? null, holdDetail: b.holdDetail ?? null, refundPlanned: !!b.refundPlanned,
+    hold: b.hold ?? null, holdDetail: b.holdDetail ?? null, holdCode: b.hold ? b.holdCode ?? null : null, holdParams: b.hold ? b.holdParams ?? null : null, refundPlanned: !!b.refundPlanned,
     outTxid: b.outTxid ?? null, outKind: b.outKind ?? null, outExplorer: b.outTxid ? (b.outKind === 'refund' ? s : d).explorerTx + (getNetwork((b.outKind === 'refund' ? s : d).id).family === 'evm' ? `0x${b.outTxid.toLowerCase()}` : b.outTxid.toLowerCase()) : null,
     receivedDisplay: out(b.received, b.toDecimals), refundedDisplay: out(b.refunded, p.decimals), done: xswapTerminal(b) };
 }

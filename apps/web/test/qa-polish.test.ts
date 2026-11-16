@@ -48,9 +48,10 @@ describe('errText', () => {
 
 describe('display helpers', () => {
   it('signed on a server that does not broadcast is not "sent"', () => {
-    expect(testNotSent({ state: 'broadcast', error: 'broadcast disabled (test mode)' })).toBe(true);
-    expect(testNotSent({ state: 'broadcast', error: null })).toBe(false);
-    expect(testNotSent({ state: 'failed', error: 'broadcast disabled (test mode)' })).toBe(false);
+    // v11 (B2): the server gives such a transfer its own terminal state; the app reads the state, not the wording of an English sentence
+    expect(testNotSent({ state: 'not_broadcast', errorCode: 'broadcast_disabled' })).toBe(true);
+    expect(testNotSent({ state: 'broadcast', errorCode: null })).toBe(false);
+    expect(testNotSent({ state: 'failed', errorCode: 'swap_would_revert' })).toBe(false);
     expect(testNotSent(null)).toBe(false);
   });
   it('numbers follow the locale', () => {

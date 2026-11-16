@@ -35,6 +35,17 @@ alter table proposals add column if not exists pre_state text;
 alter table proposals add column if not exists out_amount numeric(78,0);
 alter table proposals add column if not exists bridge jsonb;
 alter table proposals add column if not exists xswap jsonb;
+-- >>> v11 stabilisation: why a proposal ended as a code + parameters (the UI translates them; the error column stays the English sentence),
+-- the request fingerprint behind an idempotency key (same key + same body = same proposal; another body = 409), and the
+-- quote the owner was looking at when he asked for the preparation (B6)
+alter table proposals add column if not exists error_code text;
+alter table proposals add column if not exists error_params jsonb;
+alter table proposals add column if not exists request_hash text;
+alter table proposals add column if not exists quote_ref jsonb;
+-- rows left in 'broadcast' by a server that does not broadcast (B2) become what they are: signed, never sent
+update proposals set state = 'not_broadcast', error_code = 'broadcast_disabled', broadcast_at = null, last_broadcast_at = null
+  where state = 'broadcast' and error like 'broadcast disabled%';
+-- <<< v11 stabilisation
 create unique index if not exists proposals_txid on proposals (network, txid) where txid is not null;
 create table if not exists deposits (
   network text not null, txid text not null, idx int not null, asset text not null, amount numeric(78,0) not null,

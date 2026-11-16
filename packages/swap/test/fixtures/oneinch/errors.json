@@ -1,0 +1,11 @@
+{
+  "source": "documentation",
+  "notRecorded": "NOT RECORDED ANSWERS. The method reference lists the statuses 200, 400, 403 and 500 without publishing their bodies. The bodies below use the error shape 1inch's API has answered publicly ({ error, description, statusCode, requestId, meta }); it was NOT confirmed on 2026-11-15 (no key). The adapter therefore relies on one thing only: an HTTP 400 whose text says \"insufficient liquidity\" is a no-route answer; every other error is a provider failure.",
+  "docUrl": "https://business.1inch.com/portal/documentation/apis/swap/classic-swap/methods/v6.1/chainId/quote/method/get",
+  "recordedAt": "2026-11-15T18:00:00.000Z",
+  "insufficientLiquidity": { "status": 400, "body": { "error": "Bad Request", "description": "insufficient liquidity", "statusCode": 400, "requestId": "00000000-0000-4000-8000-000000000001", "meta": [] } },
+  "badToken": { "status": 400, "body": { "error": "Bad Request", "description": "dst token is not valid", "statusCode": 400, "requestId": "00000000-0000-4000-8000-000000000002", "meta": [{ "type": "dst", "value": "0x0" }] } },
+  "unauthorized": { "status": 401, "body": { "error": "Unauthorized" } },
+  "forbidden": { "status": 403, "body": { "error": "Forbidden", "description": "Access denied", "statusCode": 403 } },
+  "internal": { "status": 500, "body": { "error": "Internal Server Error", "description": "internal error", "statusCode": 500 } }
+}
