@@ -776,6 +776,9 @@
    "licence": "CC-BY-4.0 — cosmos/chain-registry (images each chain publishes about itself)",
    "verified": "published by the dYdX chain in the chain registry",
    "retrieved": "2026-11-11"
+  },
+  "edgex": {
+   "fallback": "no official edgeX mark was found in a licensed, address- or project-keyed registry on 2026-11-15 (Web3Icons has a ticker-keyed EDGE token logo whose owner could not be verified; edgeX publishes no brand kit under a redistribution licence): the venue is shown with its initials"
   }
  },
  "providers": {

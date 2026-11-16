@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-16T00:01:47.206Z",
+ "url": "https://edgex-prod-v2.edgex.exchange/api/v2/public/quote/getTicker?contractId=30000005",
+ "status": 200,
+ "text": "{\"code\":\"SUCCESS\",\"data\":[{\"close\":\"3900.2\",\"contractId\":\"30000005\",\"contractName\":\"XAUUSDC\",\"endTime\":\"1794787200000\",\"fundingRate\":\"0.00000598\",\"fundingTime\":\"1794787200000\",\"high\":\"3903.5\",\"highTime\":\"1794786919043\",\"indexPrice\":\"3891.4991813551\",\"lastPrice\":\"3900.2\",\"low\":\"3800.9\",\"lowTime\":\"1794705024051\",\"markPrice\":\"3877.326018368796025311\",\"nextFundingTime\":\"1794801600000\",\"open\":\"3812.3\",\"openInterest\":\"3075.585\",\"oraclePrice\":\"3877.326018368796025311\",\"priceChange\":\"87.9\",\"priceChangePercent\":\"0.023056\",\"size\":\"4918.372\",\"startTime\":\"1794699000000\",\"trades\":\"31823\",\"value\":\"18951950.4224\"}],\"errorParam\":null,\"msg\":null,\"requestTime\":\"1794787307088\",\"responseTime\":\"1794787307111\",\"traceId\":\"\"}"
+}

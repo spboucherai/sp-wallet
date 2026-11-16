@@ -219,6 +219,8 @@ function VenueFacts({ instrument: i }: { instrument: Instrument; store: MarketSt
       <div><dt className={dt}>{t('fxMaxLeverage')} · {t('fxMarginModes')}</dt><dd className={dd}>{nf(i.maxLeverage)}× · {i.marginModes.map((m) => t(m === 'cross' ? 'fxCross' : 'fxIsolated')).join(', ')}</dd></div>
       <div><dt className={dt}>{t('fxTickLot')}</dt><dd className={dd}>{nf(i.tickSize)} · {nf(i.lotSize)} {i.base}</dd></div>
       <div><dt className={dt}>{t('fxMinOrder')}</dt><dd className={dd}>{i.minNotional ? `${nf(i.minNotional)} USD` : i.minOrderSize ? `${nf(i.minOrderSize)} ${i.base}` : '—'}</dd></div>
+      {i.category && <div data-testid="contract-category"><dt className={dt}>{t('exCategory')}</dt><dd className={dd}>{t(`exCategory_${i.category}`)}{i.venue === 'edgex' && i.category === 'pre_ipo' ? <span className="mt-0.5 block text-[12px] font-normal text-mute">{t('exPreIpoNote')}</span> : null}</dd></div>}
+      {i.venue === 'edgex' && <div data-testid="edgex-unavailable"><dt className={dt}>{t('exTrading')}</dt><dd className={`${dd} text-warn`}>{t('exTradingUnavailable')}</dd></div>}
       <div className="sm:col-span-2"><dt className={dt}>{t('fxSettlement')}</dt><dd className={dd}>{i.settlement}</dd></div>
       <div className="sm:col-span-2"><dt className={dt}>{t('fxMarkMethod')}</dt><dd className={dd}>{i.markPriceMethod}</dd></div>
     </dl>

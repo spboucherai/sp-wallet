@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-16T00:01:46.973Z",
+ "url": "https://edgex-prod-v2.edgex.exchange/api/v2/public/quote/getTicker?contractId=30000010",
+ "status": 200,
+ "text": "{\"code\":\"SUCCESS\",\"data\":[{\"close\":\"756.87\",\"contractId\":\"30000010\",\"contractName\":\"SPYUSDC\",\"endTime\":\"1794787200000\",\"fundingRate\":\"0.00009409\",\"fundingTime\":\"1794787200000\",\"high\":\"757.57\",\"highTime\":\"1794786912586\",\"indexPrice\":\"755.7830121057\",\"lastPrice\":\"756.87\",\"low\":\"745.44\",\"lowTime\":\"1794708157584\",\"markPrice\":\"756.491222804648435945\",\"nextFundingTime\":\"1794801600000\",\"open\":\"748.17\",\"openInterest\":\"815.588\",\"oraclePrice\":\"756.491222804648435945\",\"priceChange\":\"8.70\",\"priceChangePercent\":\"0.011628\",\"size\":\"293.730\",\"startTime\":\"1794699000000\",\"trades\":\"3151\",\"value\":\"220412.41318\"}],\"errorParam\":null,\"msg\":null,\"requestTime\":\"1794787306876\",\"responseTime\":\"1794787306877\",\"traceId\":\"\"}"
+}

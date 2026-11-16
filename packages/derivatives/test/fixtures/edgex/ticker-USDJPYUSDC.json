@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-16T00:01:47.413Z",
+ "url": "https://edgex-prod-v2.edgex.exchange/api/v2/public/quote/getTicker?contractId=30000174",
+ "status": 200,
+ "text": "{\"code\":\"SUCCESS\",\"data\":[{\"close\":\"159.64\",\"contractId\":\"30000174\",\"contractName\":\"USDJPYUSDC\",\"endTime\":\"1794787200000\",\"fundingRate\":\"-0.00003182\",\"fundingTime\":\"1794787200000\",\"high\":\"159.83\",\"highTime\":\"1794773823597\",\"indexPrice\":\"159.7568303516\",\"lastPrice\":\"159.64\",\"low\":\"159.54\",\"lowTime\":\"1794781238597\",\"markPrice\":\"159.68592205576035568\",\"nextFundingTime\":\"1794801600000\",\"open\":\"159.74\",\"openInterest\":\"5.84\",\"oraclePrice\":\"159.68592205576035568\",\"priceChange\":\"-0.10\",\"priceChangePercent\":\"-0.000626\",\"size\":\"865.18\",\"startTime\":\"1794700800000\",\"trades\":\"5534\",\"value\":\"138212.8613\"}],\"errorParam\":null,\"msg\":null,\"requestTime\":\"1794787307318\",\"responseTime\":\"1794787307318\",\"traceId\":\"\"}"
+}

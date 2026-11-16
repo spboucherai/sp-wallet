@@ -1,0 +1,6 @@
+{
+ "recordedAt": "2026-11-16T00:01:48.136Z",
+ "url": "https://edgex-prod-v2.edgex.exchange/api/v2/public/quote/getTicker",
+ "status": 200,
+ "text": "{\"code\":\"SUCCESS\",\"data\":[],\"errorParam\":null,\"msg\":null,\"requestTime\":\"1794787308042\",\"responseTime\":\"1794787308042\",\"traceId\":\"\"}"
+}

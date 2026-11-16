@@ -19,8 +19,8 @@ export function PaperTag({ className = '' }: { className?: string }) {
   const t = useT();
   return <span className={`inline-flex shrink-0 items-center rounded-md border border-blue/35 bg-blue/8 px-1.5 py-px text-[10.5px] font-bold uppercase tracking-[0.06em] text-blue ${className}`} title={t('fxPaperTitle')}>{t('fxPaper')}</span>;
 }
-export const VENUE_NAME: Record<VenueId, string> = { hyperliquid: 'Hyperliquid', dydx: 'dYdX v4', gmx: 'GMX v2' };
-const VENUE_DOT: Record<VenueId, string> = { hyperliquid: '#1f9e8f', dydx: '#6966ff', gmx: '#2d6be0' };
+export const VENUE_NAME: Record<VenueId, string> = { hyperliquid: 'Hyperliquid', dydx: 'dYdX v4', gmx: 'GMX v2', edgex: 'edgeX' };
+const VENUE_DOT: Record<VenueId, string> = { hyperliquid: '#1f9e8f', dydx: '#6966ff', gmx: '#2d6be0', edgex: '#8a8f98' };
 export function VenueBadge({ venue, className = '' }: { venue: VenueId; className?: string }) {
   return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full bg-elev py-[3px] pl-[3px] pr-2.5 text-[12px] font-semibold leading-none text-ink ${className}`}>
     <VenueIcon venue={venue} size={18} />{VENUE_NAME[venue] ?? venue}</span>;

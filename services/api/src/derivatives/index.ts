@@ -38,4 +38,4 @@ export { DerivData, DATA_BOUNDS } from './data.ts';
 export { PaperService, defaultPolicy } from './paper.ts';
 export { RouteService, type LivePort, type RouteAnswer } from './route.ts';
 export { createChainCostsReader, type ChainCostsReader } from './chain-costs.ts';
-export { createDefaultRegistry, createRegistry, VenueRegistry, DYDX_RESTRICTION } from './venues.ts';
+export { createDefaultRegistry, createRegistry, VenueRegistry, DYDX_RESTRICTION, EDGEX_RESTRICTION } from './venues.ts';

@@ -11,7 +11,7 @@ export const DecStrSchema = z.string().max(MAX_DIGITS + 2).regex(DEC_RE, 'not a 
   .refine((x) => x.replace(/[-.]/g, '').length <= MAX_DIGITS, `more than ${MAX_DIGITS} digits`);
 const Ts = z.number().int().nonnegative();          // milliseconds since the Unix epoch
 
-export const VENUE_IDS = ['hyperliquid', 'dydx', 'gmx'] as const;
+export const VENUE_IDS = ['hyperliquid', 'dydx', 'gmx', 'edgex'] as const;   // v11: edgex (market data only)
 export const VenueIdSchema = z.enum(VENUE_IDS);
 export type VenueId = z.infer<typeof VenueIdSchema>;
 
@@ -23,6 +23,10 @@ export type OrderSide = z.infer<typeof OrderSideSchema>;
 export const MarginModeSchema = z.enum(['cross', 'isolated']);
 export type MarginMode = z.infer<typeof MarginModeSchema>;
 export const SourceSchema = z.enum(['venue', 'paper']);
+/** v11: what the underlying of an instrument is, when the venue's own metadata says it (optional; absent = not stated) */
+export const INSTRUMENT_CATEGORIES = ['crypto', 'equity', 'pre_ipo', 'commodity', 'fx'] as const;
+export const InstrumentCategorySchema = z.enum(INSTRUMENT_CATEGORIES);
+export type InstrumentCategory = z.infer<typeof InstrumentCategorySchema>;
 
 export const InstrumentSchema = z.object({
   venue: VenueIdSchema,
@@ -42,6 +46,7 @@ export const InstrumentSchema = z.object({
   fundingIntervalSec: z.number().int().positive(),
   markPriceMethod: z.string(),
   status: z.enum(['active', 'reduce_only', 'halted']),
+  category: InstrumentCategorySchema.optional(),     // v11, optional: set only where the venue's metadata states it
 }).refine((i) => i.id === `${i.venue}:${i.symbol}`, { message: 'id must be `${venue}:${symbol}`', path: ['id'] });
 export type Instrument = z.infer<typeof InstrumentSchema>;
 
@@ -55,6 +60,10 @@ export const TickerSchema = z.object({
   volume24h: DecStrSchema.nullable(),
   change24h: DecStrSchema.nullable(),
   ts: Ts,
+  // v11, optional: published by some venues only (edgeX)
+  last: DecStrSchema.optional(),                    // last traded price
+  volumeBase24h: DecStrSchema.optional(),           // 24 h volume in base units (`volume24h` is in the quote currency)
+  nextFundingTs: Ts.optional(),                     // next funding settlement
 });
 export type Ticker = z.infer<typeof TickerSchema>;
 
@@ -177,5 +186,18 @@ export class VenueError extends Error {
     this.code = code;
     this.venue = o.venue ?? null;
     this.detail = o.detail;
+  }
+}
+
+/**
+ * v11: a part of a venue that the wallet does not offer, with a stable machine-readable reason (e.g.
+ * `edgex_account_restricted_jurisdiction`). A VenueError (`unsupported` by default), so existing handlers keep working.
+ */
+export class VenueUnavailable extends VenueError {
+  readonly reason: string;
+  constructor(reason: string, o: { venue?: VenueId | null; code?: VenueErrorCode; message?: string; detail?: unknown } = {}) {
+    super(o.code ?? 'unsupported', o.message ?? reason, { venue: o.venue ?? null, detail: o.detail });
+    this.name = 'VenueUnavailable';
+    this.reason = reason;
   }
 }

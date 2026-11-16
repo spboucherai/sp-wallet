@@ -87,7 +87,7 @@ export function VenueStrip({ venues, compact }: { venues: VenueInfo[]; compact?:
     <VenueIcon venue={v.id} size={40} />
     <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="text-[15.5px] font-semibold">{VENUE_NAME[v.id] ?? v.name}</span><VenuePill v={v} /></div>
       <p className="mt-0.5 text-[12.5px] text-mute">{v.network}{v.lastOkAt ? ` · ${t('fxLastOk', { age: ageText(Date.now() - v.lastOkAt) })}` : ''}</p>
-      <p className="mt-1.5 text-[13.5px] leading-snug">{t(`fxVenueWhat_${v.id}` as Key)}</p>
+      <p className="mt-1.5 text-[13.5px] leading-snug">{t((v.id === 'edgex' ? 'exVenueWhat' : `fxVenueWhat_${v.id}`) as Key)}</p>
       {v.restriction && <ServerSays text={v.restriction} className="mt-1 text-[12px] leading-snug text-mute" />}</div></li>)}</ul>;
 }
 const VenueSkeleton = () => <div className="space-y-5" aria-hidden="true">{[0, 1, 2].map((k) => <div key={k} className="flex gap-3.5"><div className="skel h-10 w-10 !rounded-full" /><div className="flex-1 space-y-2 pt-1"><div className="skel h-4 w-36 !rounded-md" /><div className="skel h-3 w-24 !rounded-md" /><div className="skel h-3 w-[85%] !rounded-md" /></div></div>)}</div>;

@@ -17,7 +17,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const ICON_DIR = join(HERE, '../src/logos'), GEN_FILE = join(HERE, '../src/icons.gen.ts');
 /** Networks that feature code is adding while this set was built: they must have a logo before they land. */
 export const UPCOMING_NETWORKS = ['cardano', 'polkadot'];
-export const VENUE_IDS = ['hyperliquid', 'gmx', 'dydx'], PROVIDER_IDS = ['kyberswap', 'jupiter', 'cctp', 'thorchain', 'lifi', 'debridge', 'maya'];
+export const VENUE_IDS = ['hyperliquid', 'gmx', 'dydx', 'edgex'], PROVIDER_IDS = ['kyberswap', 'jupiter', 'cctp', 'thorchain', 'lifi', 'debridge', 'maya'];
 
 interface Entry { file?: string; source?: string; licence?: string; verified?: string; retrieved?: string; plate?: string; scale?: number; of?: string; asset?: string; note?: string; fallback?: string }
 interface Manifest { note: string; licences: Record<string, { name: string; licence: string; url: string }>; assets: Record<string, Entry>; networks: Record<string, Entry>; venues: Record<string, Entry>; providers: Record<string, Entry> }

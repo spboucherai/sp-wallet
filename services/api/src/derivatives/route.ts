@@ -43,6 +43,7 @@ const WALLET: Record<VenueId, { trading: 'paper' | 'none'; note: string }> = {
   hyperliquid: { trading: 'paper', note: 'this wallet trades Hyperliquid in simulation (paper account); live trading exists and stays off until the owner authorizes a venue account with his passkey' },
   gmx: { trading: 'none', note: 'GMX trading is not enabled on this wallet now (server settings, venue policy, or a market outside the pinned table): it only reads GMX' },
   dydx: { trading: 'none', note: 'market data only on this venue' },
+  edgex: { trading: 'none', note: 'market data only on this venue' },   // v11
 };
 
 export class RouteService {

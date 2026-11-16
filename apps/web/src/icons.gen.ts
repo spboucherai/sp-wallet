@@ -140,4 +140,4 @@ export const PROVIDER_ICONS: Record<string, IconDef> = {
   "maya": {file: 'provider/maya.webp'},
 };
 /** registry entries that deliberately keep the generic letter disc (no legitimate logo source) */
-export const ICON_FALLBACKS: string[] = [];
+export const ICON_FALLBACKS: string[] = ["venue:edgex"];

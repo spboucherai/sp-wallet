@@ -82,7 +82,8 @@ const NETWORKS: Record<string, Src | { asset: string }> = {
   bitcoincash: { asset: 'BCH' }, solana: { asset: 'SOL' }, stellar: { asset: 'XLM' }, xrpl: { asset: 'XRP' }, tron: { asset: 'TRX' }, aptos: { asset: 'APT' }, cosmos: { asset: 'ATOM' }, sui: { asset: 'SUI' },
   near: { asset: 'NEAR' }, ton: { asset: 'TON' }, cardano: { asset: 'ADA' }, polkadot: { asset: 'DOT' },
 };
-const VENUES: Record<string, Src | { asset: string }> = {
+const VENUES: Record<string, Src | { asset: string } | { fallback: string }> = {
+  edgex: { fallback: 'no official edgeX mark was found in a licensed, address- or project-keyed registry on 2026-11-15 (Web3Icons has a ticker-keyed EDGE token logo whose owner could not be verified; edgeX publishes no brand kit under a redistribution licence): the venue is shown with its initials' },   // v11
   hyperliquid: { asset: 'HYPE' }, gmx: { asset: 'GMX' },
   dydx: cr('dydx/images/dydx-circle.svg', 'published by the dYdX chain in the chain registry'),
 };
