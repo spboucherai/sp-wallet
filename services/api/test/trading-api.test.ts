@@ -51,6 +51,32 @@ async function newKey(body: Record<string, unknown> = {}): Promise<{ id: string;
   return { id: c.json.key.id, secret: c.json.secret, view: c.json.key };
 }
 const audits = (type: string) => sql`select * from audit_events where type = ${type} order by seq` as Promise<any[]>;
+/** a paper account of the wallet (created once), for the mandates of this suite */
+let paperForMandates = '';
+async function mandateAccount(): Promise<string> {
+  if (paperForMandates) return paperForMandates;
+  const a = await call('POST', '/api/v1/derivatives/accounts', { body: { venue: 'hyperliquid', label: 'Mandates', collateral: '10000' } });
+  expect(a.status, JSON.stringify(a.json)).toBe(200);
+  return (paperForMandates = a.json.id as string);
+}
+/** an approved, active PAPER trading mandate for a key (the owner's session creates and approves it; a paper mandate needs no passkey) */
+async function paperMandate(keyId: string, over: Record<string, unknown> = {}): Promise<string> {
+  const m = await call('POST', '/api/v1/mandates', { body: { principal: { kind: 'api_key', id: keyId }, mode: 'paper', accountIds: [await mandateAccount()], instruments: [BTC], orderTypes: ['market', 'limit'], maxCapitalUsd: '5000', maxOrderNotionalUsd: '2000',
+    maxPositionNotionalUsd: '4000', maxLeverage: '3', maxDailyLossUsd: '500', floorEquityUsd: '1000', days: 7, frequency: { perMinute: 20, perHour: 100, perDay: 200 }, maxSlippageBps: 100, maxFeeUsd: '10', label: 'suite mandate', ...over } });
+  expect(m.status, JSON.stringify(m.json)).toBe(200);
+  const a = await call('POST', `/api/v1/mandates/${m.json.mandate.id}/approve`, { body: {} });
+  expect(a.status, JSON.stringify(a.json)).toBe(200);
+  return m.json.mandate.id as string;
+}
+/** a key bound to an approved mandate: created without one (its id does not exist before), then bound with the passkey */
+async function boundKey(body: Record<string, unknown> = {}): Promise<{ id: string; secret: string; view: any; mandateId: string }> {
+  const k = await newKey(body), mandateId = await paperMandate(k.id);
+  const p = await call('POST', `${DEV}/keys/${k.id}/update/prepare`, { body: { changes: { mandateId } } });
+  expect(p.status, JSON.stringify(p.json)).toBe(200);
+  const u = await call('POST', `${DEV}/keys/${k.id}/update`, { body: { intentId: p.json.intentId, assertion: assertion(p.json.options) } });
+  expect(u.status, JSON.stringify(u.json)).toBe(200);
+  return { ...k, view: u.json.key, mandateId };
+}
 
 /** every (method, path) registered on the Fastify instance, from its route tree */
 function allRoutes(): { method: string; path: string }[] {
@@ -164,10 +190,10 @@ describe('API keys', () => {
     const mixed = await call('GET', `${T}/markets`, { key: k.secret, cookie });
     expect(mixed.status).toBe(403);
     expect(mixed.json.error).toBe('mixed_credentials');
-    // a POST with the key needs neither Origin nor the CSRF header (it reaches the handler: 501 after the checks)
+    // a POST with the key needs neither Origin nor the CSRF header (it reaches the handler: the wallet has no paper account yet)
     const kw = await newKey({ scopes: ['orders:prepare'] });
     const post = await call('POST', `${T}/orders/preview`, { key: kw.secret, headers: idem(), body: { mode: 'paper', instrument: BTC, side: 'buy', type: 'market', size: '0.01' } });
-    expect(post.status).toBe(501);
+    expect([post.status, post.json.error]).toEqual([422, 'no_account']);
     principal.authFailures.reset();
   });
 
@@ -226,7 +252,12 @@ describe('API keys', () => {
       expect(r.json.error).toBe('passkey_required');
     }
     expect((await call('POST', `${DEV}/keys/${k.id}/update`, { body: { changes: { expiresAt: new Date(k.view.createdAt + 366 * 86_400_000).toISOString() } } })).json.error).toBe('expiry_too_far');
-    const mandateId = randomUUID();
+    // a mandate that does not exist, or one approved for another key, cannot be bound
+    expect((await call('POST', `${DEV}/keys/${k.id}/update/prepare`, { body: { changes: { mandateId: randomUUID() } } })).json.error).toBe('mandate_not_found');
+    const other = await newKey();
+    expect((await call('POST', `${DEV}/keys/${k.id}/update/prepare`, { body: { changes: { mandateId: await paperMandate(other.id) } } })).json.error).toBe('mandate_principal_mismatch');
+    expect((await call('POST', `${DEV}/keys/prepare`, { body: { name: 'x', scopes: READS, expiresInDays: 30, mandateId: await paperMandate(other.id) } })).json.error).toBe('mandate_principal_mismatch');
+    const mandateId = await paperMandate(k.id);
     const p = await call('POST', `${DEV}/keys/${k.id}/update/prepare`, { body: { changes: { scopes: ['markets:read', 'orders:execute'], mandateId } } });
     expect(p.json.intent).toMatchObject({ action: 'update', keyId: k.id, widening: ['scopes', 'mandateId'] });
     const u = await call('POST', `${DEV}/keys/${k.id}/update`, { body: { intentId: p.json.intentId, assertion: assertion(p.json.options) } });
@@ -238,7 +269,7 @@ describe('API keys', () => {
 
 describe('default deny', () => {
   it('a valid key with EVERY scope is refused on every route of the application outside /api/v1/trading/', async () => {
-    const k = await newKey({ scopes: ALL, mandateId: randomUUID() });
+    const k = await boundKey({ scopes: ALL });
     const routes = allRoutes();
     expect(routes.length).toBeGreaterThan(190);
     expect(routes.some((r) => r.path === '/api/v1/security/emergency-halt') && routes.some((r) => r.path === '/api/v1/developer/keys') && routes.some((r) => r.path.startsWith('/api/v1/research/runner/'))).toBe(true);
@@ -503,7 +534,8 @@ describe('read side', () => {
     const orders = await get('/orders');
     parsed('listOrders', orders.json);
     const mine = orders.json.orders.find((x: any) => x.clientId === clientId);
-    expect(mine).toMatchObject({ id: `deriv:${id}:${clientId}`, mode: 'paper', venue: 'hyperliquid', instrument: BTC, side: 'buy', type: 'market', status: 'filled', final: true });
+    // served from the unified order table: the order placed through the EXISTING paper route is there, in the unified state (the engine's own word is `engineStatus`)
+    expect(mine).toMatchObject({ id: `deriv:${id}:${clientId}`, mode: 'paper', venue: 'hyperliquid', instrument: BTC, side: 'buy', type: 'market', status: 'FILLED', engineStatus: 'filled', final: true, origin: 'legacy', filled: '0.01' });
     expect((await get('/orders?mode=live')).json.orders.find((x: any) => x.clientId === clientId)).toBeUndefined();
     expect((await get('/orders?open=true')).json.orders.find((x: any) => x.clientId === clientId)).toBeUndefined();
     const one = await get(`/orders/${mine.id}`);
@@ -514,7 +546,7 @@ describe('read side', () => {
     for (const bad of ['deriv:nope:x', `deriv:${id}:missing`, `gmx:${randomUUID()}`, `agent:${randomUUID()}`, 'x']) expect((await get(`/orders/${bad}`)).status, bad).toBe(404);
 
     const p = await get('/portfolio');
-    expect(p.json.accounts).toEqual([expect.objectContaining({ mode: 'paper', venue: 'hyperliquid', accountId: id })]);
+    expect(p.json.accounts.filter((a: any) => a.accountId !== paperForMandates)).toEqual([expect.objectContaining({ mode: 'paper', venue: 'hyperliquid', accountId: id })]);   // (the other paper account is the suite's mandate account)
     expect(p.json.totals.liveVenueEquity).toBeNull();                                                    // no venue account: no live figure, and the paper equity is not put in its place
     expect(Number(p.json.totals.paperEquity)).toBeGreaterThan(9_900);
     const act = await get('/activity');
@@ -528,8 +560,9 @@ describe('read side', () => {
     parsed('getRisk', r.json);
     expect(r.json.killSwitch).toMatchObject({ signerReachable: true, signerHalted: false });
     expect(r.json.capabilityLocks.map((c: any) => c.id)).toEqual(expect.arrayContaining(['deriv_live_mainnet', 'deriv_mandate_mainnet', 'deriv_gmx_live']));
-    expect(r.json.accounts).toEqual([expect.objectContaining({ mode: 'paper', venue: 'hyperliquid' })]);
-    expect(r.json.key).toMatchObject({ limitsEnforced: false, mandateId: null });
+    expect(r.json.accounts.filter((a: any) => a.accountId !== paperForMandates)).toEqual([expect.objectContaining({ mode: 'paper', venue: 'hyperliquid' })]);
+    expect(r.json.engine).toMatchObject({ killSwitch: { on: false }, readOnly: { on: false } });
+    expect(r.json.key).toMatchObject({ limitsEnforced: true, mandateId: null });
     const agentId = randomUUID();
     await sql`insert into agents (id, name, universe, risk, vault_index, vault_address, state, mode) values (${agentId}, 'Agent one', ${sql.json(['BTC', 'ETH'])}, ${sql.json({})}, 9001, '0x0', 'PAPER_TRADING', 'PAPER')`;
     await sql`insert into strategy_versions (id, agent_id, name, version, code_sha256, path, status) values (${randomUUID()}, ${agentId}, 'momentum', '1', ${'ab'.repeat(32)}, 'momentum/1', 'approved')`;
@@ -576,10 +609,10 @@ describe('write surface (not wired)', () => {
     stopStrategy: {}, createAgent: { kind: 'spot', name: 'Agent', universe: ['BTC'] }, startAgent: { mode: 'paper' }, stopAgent: {} };
   const send = (op: any, o: Record<string, unknown>) => call(op.method, T + concrete(op.path), { ...(op.method === 'POST' ? { body: BODY[op.id] } : {}), ...o });
 
-  it('every write operation answers 501 execution_not_wired — never 2xx — for a key bound to a mandate and for the owner', async () => {
-    const k = await newKey({ scopes: ALL, mandateId: randomUUID(), rateLimitPerMin: 600 });
+  it('the strategy and agent operations (not wired yet) answer 501 execution_not_wired — never 2xx — for a key bound to a mandate and for the owner', async () => {
+    const k = await boundKey({ scopes: ALL, rateLimitPerMin: 600 });
     const writes = spec.OPERATIONS.filter((o) => !o.implemented);
-    expect(writes.map((o) => o.id).sort()).toEqual(['backtestStrategy', 'cancelOrder', 'closePosition', 'createAgent', 'createStrategy', 'placeOrder', 'previewOrder', 'reducePosition', 'startAgent', 'startStrategy', 'stopAgent', 'stopStrategy']);
+    expect(writes.map((o) => o.id).sort()).toEqual(['backtestStrategy', 'createAgent', 'createStrategy', 'startAgent', 'startStrategy', 'stopAgent', 'stopStrategy']);
     const before = (await sql`select count(*)::int as n from deriv_orders`)[0].n;
     for (const op of writes) {
       for (const who of [{ key: k.secret }, {}]) {
@@ -639,7 +672,7 @@ describe('replay protection (middleware)', () => {
     expect((await call('POST', `${DEV}/webhooks/${id}`, { body: { label: 't' }, headers: { 'idempotency-key': `idem-${randomUUID()}`, 'x-spw-timestamp': String(now) } })).status).toBe(200);
     // the namespace of a key is its own: the owner's Idempotency-Key does not collide with a key's
     const k = await newKey({ scopes: ['orders:prepare'] });
-    expect((await call('POST', `${T}/orders/preview`, { key: k.secret, headers: { 'idempotency-key': key }, body: { mode: 'paper', instrument: BTC, side: 'buy', type: 'market', size: '0.01' } })).status).toBe(501);
+    expect((await call('POST', `${T}/orders/preview`, { key: k.secret, headers: { 'idempotency-key': key }, body: { mode: 'paper', instrument: BTC, side: 'buy', type: 'market', size: '0.01', surprise: 1 } })).status).toBe(400);   // not 409: another namespace
     await call('DELETE', `${DEV}/webhooks/${id}`);
   });
 });
@@ -737,17 +770,18 @@ describe('usage, status, retention', () => {
     expect((await sql`select count(*)::int as n from api_key_usage where route = '/old'`)[0].n).toBe(0);
   });
 
-  it('GET /developer/status: the services as they are — execution is reported NOT wired', async () => {
+  it('GET /developer/status: the services as they are — orders are wired, live execution through the API is off by default', async () => {
     const s = await call('GET', `${DEV}/status`);
     expect(s.status).toBe(200);
     const by = Object.fromEntries(s.json.services.map((x: any) => [x.id, x]));
     expect(by.database.ok).toBe(true);
     expect(by.signer.ok).toBe(true);
     expect(by['venue:hyperliquid'].ok).toBe(true);
-    expect(by.execution).toMatchObject({ ok: false });
+    expect(by.execution.ok).toBe(true);
+    expect(by.execution.detail).toMatch(/live execution through the API is disabled/);
     expect(by['market-data'].ok).toBe(false);                                                            // nothing ingested in this database
-    expect(s.json.api).toMatchObject({ prefix: T, operations: spec.OPERATIONS.length, implemented: 18 });   // 14 reads + the 3 private-markets reads + compareMarkets (v11)
-    expect(s.json.api.notImplemented).toHaveLength(12);
+    expect(s.json.api).toMatchObject({ prefix: T, operations: spec.OPERATIONS.length, implemented: spec.OPERATIONS.length - 7 });
+    expect(s.json.api.notImplemented).toHaveLength(7);
     expect(s.json.rateLimits).toMatchObject({ defaultPerMin: 120, failedAuthPerMinPerAddress: 10 });
   });
 

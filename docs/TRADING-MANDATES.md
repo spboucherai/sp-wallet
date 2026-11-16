@@ -16,7 +16,10 @@ The compilers below derive those shapes from a trading mandate and report, field
 then enforces and what remains enforced by the API only. A field enforced by the API only is one a
 compromised API could ignore. That report is data: it is meant to be shown to the owner at approval.
 
-Status: schema, checks and compilers exist and are tested. Nothing is wired to the API or the signer yet.
+Status: schema, checks and compilers are the core. Since Phase F the API service stores mandates, has them
+approved and checks every order of an agent or an API key against them (`services/api/src/mandates/`); the
+section "In the API service" describes it. The isolated signer was not changed: a live mandate is approved
+there through the derivative-mandate flow it already had.
 
 ## Schema
 
@@ -184,14 +187,140 @@ than the signer does? They return `{ ok, violations: [{ field, message }] }`. Wh
 of its own compilation (property-tested). For a spot mandate the comparison depends on current prices: if an
 asset falls, the same USD limit is more base units than the signer's fixed cap, and the helper reports it.
 
+## In the API service (Phase F)
+
+Code: `services/api/src/mandates/service.ts`, routes in `services/api/src/orders/index.ts`
+(`/api/v1/mandates`). Tables: `trading_mandates`, `trading_mandate_usage`.
+
+### Who may do what
+
+Only the owner's session creates, approves or revokes a mandate. The routes are outside `/api/v1/trading`:
+an API key is refused on each of them with 403 `key_path_forbidden`, whatever its scopes. A key can do
+nothing to a mandate, its own included. There is no route that changes a mandate: it is immutable, and a
+change is a new mandate plus the revocation of the old one.
+
+### Lifecycle
+
+| State | Meaning |
+|---|---|
+| `created` | stored, validated, and for a live mandate already compiled. It has no effect |
+| `pending_signer` | live: the approval was prepared at the signer and waits for the passkey |
+| `active` | approved. Its phase is `pending`, `active`, `wind_down` or `ended`, from its dates |
+| `revoked` | by the owner (`owner_request`) or by the supervisor (`stop_condition`). Final. Reductions pass for the wind-down period (24 h) |
+| `failed` | the signer refused the approval. Create a new mandate |
+
+Creation (`POST /api/v1/mandates`) takes the principal, the wallet's own account ids, the instruments, the
+order types, the limits, a duration in days and the stop conditions. The server stamps `mandateId`,
+`createdAt`, `notBefore` and `notAfter`, derives `venues` and `networks` from the accounts, and checks that the
+principal exists (an API key that is not revoked, or an agent).
+
+Refused at creation:
+
+| Case | Answer |
+|---|---|
+| a venue restricted for the owner's jurisdiction (dYdX, edgeX), in any mode | 403 `venue_restricted` |
+| a live mandate that names a venue with no signer-side mandate (GMX, anything else) | 422 `no_signer_mandate_for_venue` |
+| a live spot mandate (KyberSwap vault) | 422 `spot_mandate_via_agent_vault`: it is approved through an agent vault, by the agents workstream |
+| a live mandate that does not compile | 422 with the compiler's code and field (`value_not_expressible`, `exceeds_authorization`, `duration_not_expressible`, …) |
+| a live mandate behind a closed server lock | 403 `mainnet_disabled` or `mandate_mainnet_disabled` |
+| an invalid mandate | 400 `invalid_mandate` with the field |
+
+API-only enforcement is not accepted for live autonomous trading. GMX stays one passkey per order, by the
+owner.
+
+### Approval
+
+**Paper.** No signer and no passkey: `POST /mandates/:id/approve` activates it. The enforcement table says
+"API only" for every field, because nothing is signed in paper mode.
+
+**Live (Hyperliquid).** One passkey ceremony:
+
+1. `POST /mandates/:id/approve/prepare` compiles the mandate again against the venue authorization as it is
+   now (`compileToVenueMandate`) and prepares the result at the Hyperliquid engine
+   (`exec.ts` `prepareCompiledMandate`). The engine applies the checks it applies to any derivative mandate:
+   the mandate is for this account and its authorization, `validateVenueMandate`, the pinned asset table, the
+   acknowledgement that is displayed, no other mandate active on the account, the signer not halted.
+2. The answer is the approval sheet: every field of the trading mandate, its hash, the compiled derivative
+   mandate, the enforcement table (one row per field, verbatim from the compiler), the derived values, the
+   jurisdiction acknowledgement and the WebAuthn request.
+3. `POST /mandates/:id/approve { assertion, acknowledged: true }` goes through the engine's existing
+   `approveMandate`: the signer verifies the passkey and stores the derivative mandate.
+4. The API activates the trading mandate only if the mandate the signer approved has the same id and the same
+   hash as the one compiled from it.
+
+**What the passkey signs.** The challenge is the hash of the compiled derivative mandate
+(`SPW-VENUE-MANDATE-v1`), the object the signer stores and enforces. The fields marked "API only" are not in
+that hash. They are bound by the API's record (an immutable row, and the audit event `mandate.approved` with
+the trading mandate's hash), not by the passkey. This is listed for review in `V11-SECURITY-REVIEW.md`.
+
+A live mandate must be approved within about ten minutes of its creation: the signer requires a current
+creation time. After that, create it again.
+
+One derivative mandate per venue account: the signer holds one active mandate per authorization. An API-key
+mandate and a perp agent's mandate cannot be active on the same venue account at the same time.
+
+### An API-key principal in the signer shape
+
+Both signer shapes carry `strategySha256`. An API key has no strategy. For an API-key principal the field
+carries the SHA-256 of the canonical principal descriptor
+
+```
+spw-principal-v1|api_key|<key id>
+```
+
+and `agentId` carries the key id. The signer records both fields for the audit trail and never interpreted
+them. The Hyperliquid engine compares both with what the caller presents (`mandate_mismatch`).
+
+### Binding a key
+
+`api_keys.mandate_id` is verified when it is set (`verifyKeyBinding`): the mandate exists, is approved and
+active, and was approved for this key. A key is created without a mandate, because its id does not exist
+before; the owner then approves a mandate for it and binds it with a key update, which needs the passkey
+(binding is a widening). At each order the mandate is loaded again: a mandate that is not approved, or was
+approved for another principal, refuses with 403.
+
+### Checking an order
+
+`checkOrder` runs for every order of an agent or an API key, after the risk engine (which decides
+`reducing`). The usage it needs is measured by the service:
+
+| Input | Source |
+|---|---|
+| account | the mandate's account that matches the order's account |
+| position after, reference price | the risk evaluation |
+| capital in use after | margin used on the mandated accounts, plus the margin the order adds at its leverage |
+| equity | the mandated accounts, as the risk context read them |
+| realised loss today | stored fills of the mandated accounts |
+| total loss | equity at approval minus equity now |
+| drawdown | from the highest equity seen since approval |
+| orders in the last minute, hour, day | the `orders` table, for this mandate, reduce-only and refused orders excluded |
+| consecutive refusals | counted per mandate: a refused order adds one, an accepted one resets |
+| data age | age of the ticker the order is priced on |
+| signer unreachable for | measured by the supervisor |
+
+A denial is HTTP 403 `mandate_denied` with every deny code, and the order is `REJECTED / MANDATE_DENIED`.
+
+### Stop conditions and wind-down
+
+The supervisor (the `orders` loop, every 5 s) evaluates the stop conditions of the active mandates:
+`loss_gte`, `drawdown_gte`, `consecutive_rejects_gte`, `signer_unreachable_gte`. `data_stale_gte` is judged
+per order. When one is met the mandate is revoked with the reason `stop_condition`:
+
+- at the signer first, for a live mandate. If the signer cannot be reached the API still stops accepting
+  orders under the mandate at once, records `signerRevoked: false`, and the supervisor asks the signer again
+  until it has revoked its copy;
+- the orders that rest under the mandate and could add risk are cancelled;
+- strictly reducing orders pass for the wind-down period, then nothing.
+
+Revocation by the owner (`POST /mandates/:id/revoke`) does the same.
+
 ## Open points
 
-- **API keys cannot be compiled.** Both signer shapes require a strategy hash, and an API key has none. A
-  signer-side shape for API keys is needed, or a defined placeholder.
-- **GMX and any new venue** have no signer-side mandate. Until one exists, a live mandate that names them
-  does not compile, and their orders need a passkey approval each.
-- **One account per signer mandate.** A trading mandate may name several accounts; each signer shape covers
-  one. A mandate spanning a vault and a venue account compiles to two signer mandates with the same id.
+- **One account per signer mandate.** A trading mandate may name several accounts; the live path accepts
+  exactly one Hyperliquid venue account.
+- **GMX and any new venue** have no signer-side mandate. A live mandate that names them is refused.
 - **Signer shapes have no start time, no per-minute rate, no daily-loss limit and no stop conditions.**
   These stay API-only until the signer shapes are extended.
+- **The API-only fields are not covered by the passkey signature** (see "What the passkey signs").
+- **Live spot mandates** are not created here.
 - **Spot USD limits** are enforced in base units fixed at approval prices.

@@ -320,11 +320,11 @@ export function createReads(deps: ReadDeps) {
     catch (e) { errors.push({ source: 'live', message: msg(e) }); }
     return {
       killSwitch: { signerReachable: st !== null, signerHalted: st?.halted ?? null,
-        note: 'the signer halt is the only global stop today: one-way from the app (re-enabled on the signer machine); it also blocks closes and cancels (V11 audit, High). A kill switch that blocks new risk only is part of the risk engine being built.' },
+        note: 'the signer halt stops signing (reduce-only exits and cancels are still signed since V11) and is lifted on the signer machine only. The global kill switch of the risk engine (`engine.killSwitch`) blocks new risk for every principal and is released with the owner\'s passkey.' },
       signerPolicy: st ? { perTx: st.policy.perTx, daily: st.policy.daily, maxFee: st.policy.maxFee, spentToday: st.spentToday } : null,
       capabilityLocks: capabilities().filter((c) => ['deriv_live_mainnet', 'deriv_mandate_mainnet', 'deriv_gmx_live', 'broadcast', 'workers'].includes(c.id)).map((c) => ({ id: c.id, on: c.on, why: c.why })),
       accounts: accts,
-      key: p.kind === 'api_key' ? { limits: p.limits, mandateId: p.mandateId, limitsEnforced: false, note: 'key limits are recorded; they are enforced when execution is wired, inside the bound mandate' } : null,
+      key: p.kind === 'api_key' ? { limits: p.limits, mandateId: p.mandateId, limitsEnforced: true, note: 'the key\'s notional limits and its venue / instrument / network restrictions are applied to every order it places, before the mandate and the risk engine' } : null,
       errors, ts: now(),
     };
   }
@@ -370,6 +370,6 @@ export function createReads(deps: ReadDeps) {
     return { ...a, contracts, delisted: a.delisted.filter(ok), venues: a.venues.filter((v) => venueAllowed(p, v.venue)), divergence: a.divergence.filter((d) => d.contracts.every((k) => keep.has(k.id))) };
   }
 
-  return { markets, compare, market, orderbook, candles, balances, portfolio, positions, orders, order, strategies, agents, risk, activity, resolve, privateMarkets, privateMarket, privateMarketCompany };
+  return { markets, compare, market, orderbook, candles, balances, portfolio, positions, orders, order, strategies, agents, risk, activity, resolve, privateMarkets, privateMarket, privateMarketCompany, now };
 }
 export type Reads = ReturnType<typeof createReads>;

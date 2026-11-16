@@ -18,7 +18,9 @@ Consequences:
 - The passkey approval of a key (section 4) is verified by the API, not by the signer. It protects against a stolen
   session. It does not protect against a compromised API process, which could insert a key row directly.
 
-Today no key can execute anything: the twelve write operations answer 501.
+Since Phase F a key can execute: paper orders under a paper mandate, and — with `SPW_TRADING_API_EXECUTION=on` on the
+server — live Hyperliquid orders under a live mandate the signer enforces. What bounds a stolen key, the confused-deputy
+analysis and the items for review are in `V11-SECURITY-REVIEW.md`, section "Execution through the trading API".
 
 ## 2. What a key can reach
 

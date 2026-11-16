@@ -1,7 +1,8 @@
 # SP Trading API — architecture (V11)
 
-Status on branch `v11-trading-api`: machine authentication and the **read side** are implemented and connected to the
-real services. The **write side** is registered (scope, validation, replay protection) and answers
+Status: machine authentication and the **read side** are implemented and connected to the real services. Since
+Phase F (branch `v11-exec`) the **order operations of the write side** are wired to the order service (section 7); the
+strategy and agent operations are registered (scope, validation, replay protection) and answer
 `501 execution_not_wired`. Security model: `docs/TRADING-API-SECURITY.md`. Reference: `docs/TRADING-API-OPENAPI.md`.
 
 ## 1. Where it sits
@@ -31,7 +32,8 @@ All code is in `services/api/src/trading-api/`. Outside it, three files changed:
 | `principal.ts` | `Principal`, `apiKeyGate` (onRequest), `scopeGuard` (the single preHandler), limiters, usage log, retention |
 | `idempotency.ts` | `withIdempotency`, `replayHeaders` |
 | `read.ts` | the read services and key restrictions |
-| `routes.ts` | registers `/api/v1/trading/*` from `spec.ts`; `requireMandate`; the 501 handler |
+| `routes.ts` | registers `/api/v1/trading/*` from `spec.ts`; `requireMandate`; the order handlers (calls to the order service); the 501 handler |
+| `commands.ts` | `POST /commands`: the command grammar, the owner's resolution defaults |
 | `developer-routes.ts` | `/api/v1/developer/*` (owner session only) |
 | `webhooks.ts` | endpoints, `emitWebhook`, delivery with retries |
 | `index.ts` | `tradingApi(app, deps)` and the exports for integrators |
@@ -66,10 +68,13 @@ type Principal =
 - Fields: name, scopes, `expires_at` (required, at most 365 days after creation), limits (max order notional, max
   daily notional), restrictions (networks, venues, instruments, source CIDRs), `rate_limit_per_min`, `mandate_id`,
   `last_used_at`, `revoked_at`.
-- Limits are **recorded, not enforced**: nothing can be executed yet. `GET /risk` says `limitsEnforced: false`.
-- `mandate_id` is stored as given (a UUID). Its existence and state are **not checked** in this wave: the trading
-  mandate table belongs to `packages/trading`, which is not merged here. Without a `mandate_id`, execution scopes
-  answer 403 `mandate_required`. With one, they reach the 501 handler.
+- Limits (`maxOrderNotionalUsd`, `maxDailyNotionalUsd`) and restrictions (venues, instruments, networks) are
+  **enforced on every order** the key places, before the mandate and the risk engine. A reduce-only exit is not
+  stopped by the notional limits. `GET /risk` says `limitsEnforced: true`.
+- `mandate_id` is **verified** when it is set: the mandate exists, is approved and active, and was approved for this
+  key (`mandates/service.ts` `verifyKeyBinding`). A key is created without one — its id does not exist before — and
+  bound with an update, which needs the passkey. Without a `mandate_id`, execution scopes answer 403
+  `mandate_required`, except a cancel of the key's own order and the kill switch.
 
 ### Owner approval
 
@@ -132,13 +137,33 @@ Known limits of the read side:
 - `/positions` for GMX calls the signer and Arbitrum RPCs on each request (no cache of its own).
 - `/orders` merges four tables in memory after a per-table `limit`; there is no cursor pagination.
 
-## 7. Write side (not wired)
+## 7. Write side
 
-Twelve operations answer 501: `POST /orders/preview`, `POST /orders`, `DELETE /orders/{id}`,
-`POST /positions/{id}/close|reduce`, `POST /strategies`, `POST /strategies/{id}/backtest|start|stop`, `POST /agents`,
-`POST /agents/{id}/start|stop`. Order of checks: authentication → scope → `mandate_required` → body validation →
-`Idempotency-Key` → 501. To wire one, replace its `notWired` entry in `routes.ts` with a handler and set
-`implemented: true` in `spec.ts` (a start-up check refuses a mismatch), then regenerate the OpenAPI files.
+Since Phase F the order operations are wired to the order service (`services/api/src/orders/`; see
+`V11-EXECUTION-ENGINE.md` section 8). Nothing in `trading-api/` talks to a venue or to the signer.
+
+| Operation | Scope | Mandate on a key | What it does |
+|---|---|---|---|
+| `POST /orders/preview` | `orders:prepare` | checked, not required | every check the order would meet, an estimate; creates nothing; no `Idempotency-Key` |
+| `POST /orders` | `orders:execute` | required, must cover the order | owner: `AWAITING_APPROVAL` then the passkey in the app (paper: executed). Key: mandate, risk engine, the engine's mandate path |
+| `DELETE /orders/{id}` | `orders:cancel` | not required | the key's own orders only |
+| `POST /positions/{id}/close`, `/reduce` | `positions:manage` | required | strictly reduce-only |
+| `POST /commands` | the resolved operation's | as that operation | one line of the command grammar; the owner's defaults (`GET/PUT /api/v1/developer/command-defaults`); 409 `ambiguous_command` executes nothing |
+| `POST /risk/kill-switch` | `positions:manage` | not required | engages the global kill switch; a key cannot release it |
+
+`requireMandate` skips the operations declared `noMandate` in `spec.ts`: they can only remove risk, or (the
+command router) check per resolved operation.
+
+Order of checks for `POST /orders`: authentication → scope → `mandate_required` → body validation →
+`Idempotency-Key` → instrument resolution and the key's restrictions → idempotent replay → `execution_disabled`
+→ key limits → the order exists → risk engine → mandate → engine. The key of the order is the body's
+`clientOrderId` when given, else the `Idempotency-Key` header.
+
+Seven operations still answer 501: `POST /strategies`, `POST /strategies/{id}/backtest|start|stop`,
+`POST /agents`, `POST /agents/{id}/start|stop` (agents runtime).
+
+Spot: 403 `spot_execution_requires_agent_vault` for a key, 422 `spot_via_swap_screen` for the owner. Live
+orders on GMX: 422 `venue_not_wired`.
 
 ## 8. Webhooks
 
@@ -175,5 +200,6 @@ status. Texts: the `dv` block of `i18n.ts`.
 | `SPW_API_KEY_PEPPER` | unset | ≥ 32 characters: replaces the pepper of the secrets file |
 | `SPW_DATA_DIR` | `~/.config/sp-wallet` | directory of `trading-api-secrets.json` (shared with the alerts secrets) |
 | `SPW_API_USAGE_RETENTION_DAYS` | 90 | usage log retention |
+| `SPW_TRADING_API_EXECUTION` | off | `on`: live orders can be placed through the trading API. Off: 403 `execution_disabled` for new live risk; paper works; cancels and strictly reducing orders pass |
 
 Deployment note: the pepper file must be in the secrets backup. Losing it invalidates every key.

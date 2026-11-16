@@ -89,6 +89,8 @@ export const pinDraft = (what: string, reason: string, ts: Date): Draft => ({ ki
 
 async function fromAudit(e: AlertEvent, c: RuleCtx): Promise<Draft[]> {
   const d = e.data, t = e.type;
+  // V11 risk engine: the global kill switch was engaged or released (risk/service.ts writes the audit event)
+  if (t === 'risk.kill_switch') return [{ kind: d.engaged === true ? 'security.kill_switch_on' : 'security.kill_switch_off', params: { what: str(d.by, 80), state: str(d.reason, 120) }, subject: { type: 'none' }, dedupe: `kill_switch:${e.id}` }];
   if (t.startsWith('transfer.')) {
     const state = t.slice('transfer.'.length);
     if (state !== 'finalized' && state !== 'failed') return [];

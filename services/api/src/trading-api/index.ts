@@ -18,6 +18,7 @@ import { developerRoutes } from './developer-routes.ts';
 import { recordUsage, scopeGuard } from './principal.ts';
 import { createReads, type ReadDeps } from './read.ts';
 import { tradingRoutes } from './routes.ts';
+import { setMandateVerifier } from './keys.ts';
 import { emitWebhook, startWebhookWorker } from './webhooks.ts';
 
 export { apiKeyGate, OWNER, actorOf, scopeGuard, type Principal, type ApiKeyPrincipal, type OwnerPrincipal } from './principal.ts';
@@ -29,6 +30,8 @@ export { TRADING_PREFIX, DEVELOPER_PREFIX, SCOPES, EXECUTION_SCOPES, OPERATIONS,
 export interface TradingApiDeps {
   derivatives?: Derivatives; live?: LiveService; gmx?: Pick<GmxService, 'status'>;
   prices: ReadDeps['prices']; library?: ReadDeps['library'];
+  /** the order service, the risk service and the mandates of this server (orders/index.ts) */
+  execution: import('../orders/index.ts').Execution;
 }
 
 /** owner actions that already exist and are event sources: seen at the HTTP layer (like the alerts hook), without a call inside their code */
@@ -58,7 +61,8 @@ export async function tradingApi(app: FastifyInstance, o: TradingApiDeps): Promi
     gmx: () => o.gmx ?? { status: async (locale) => (await import('../derivatives/gmx-live.ts')).gmx().status(locale) },
     prices: o.prices, ...(o.library ? { library: o.library } : {}),
   });
-  tradingRoutes(app, reads);
+  tradingRoutes(app, reads, o.execution);
   developerRoutes(app, { derivatives: d });
+  setMandateVerifier((keyId, mandateId) => o.execution.mandates.verifyKeyBinding(keyId, mandateId));
   if (config.workers) { const stop = startWebhookWorker(); app.addHook('onClose', async () => { stop(); }); }
 }

@@ -37,11 +37,16 @@ export function developerRoutes(app: FastifyInstance, deps: { derivatives: () =>
   const keyId = (req: FastifyRequest): string => z.string().regex(KEY_ID_RE).parse((req.params as { id: string }).id);
   const hookId = (req: FastifyRequest): string => z.string().regex(/^wh_[0-9a-f]{12}$/).parse((req.params as { id: string }).id);
 
+  // ------------------------------------------------------------------------------------------------------------ command defaults (V11)
+  // what POST /trading/commands may assume when a command does not say it: the owner's choice, never a key's. Absent = asked.
+  app.get(`${P}/command-defaults`, async (req) => { owner(req); const m = await import('./commands.ts'); return { defaults: await m.commandDefaults() }; });
+  app.put(`${P}/command-defaults`, async (req) => { owner(req); const m = await import('./commands.ts'); return { defaults: await m.setCommandDefaults((req.body as { defaults?: unknown } | undefined)?.defaults) }; });
+
   // ------------------------------------------------------------------------------------------------------------ keys
   app.get(`${P}/keys`, async (req) => {
     owner(req);
     return { keys: (await listKeys()).map(keyView), scopes: SCOPES.map((s) => ({ scope: s, execution: (EXECUTION_SCOPES as readonly string[]).includes(s) })), bounds: KEY_BOUNDS,
-      execution: { wired: false, code: 'execution_not_wired', note: 'execution scopes can be granted now; they act only when execution is wired AND a trading mandate is bound to the key' } };
+      execution: { wired: true, liveEnabled: process.env.SPW_TRADING_API_EXECUTION === 'on', code: null, note: 'orders, cancels and position reductions are wired (paper always; live needs SPW_TRADING_API_EXECUTION=on and the mainnet locks). An execution scope acts only with an approved, active trading mandate bound to the key — except a cancel of the key\'s own order and the kill switch, which only remove risk. The strategy and agent operations still answer 501.' } };
   });
   app.post(`${P}/keys/prepare`, strict, async (req) => { owner(req); return prepareCreate(KeyCreateSchema.parse(req.body)); });
   app.post(`${P}/keys`, strict, async (req) => { owner(req); const b = Approval.parse(req.body); return createKey(b.intentId, b.assertion, req.ip); });
@@ -99,7 +104,7 @@ export function developerRoutes(app: FastifyInstance, deps: { derivatives: () =>
         { id: 'signer', ok: st.reachable && st.halted === false, detail: !st.reachable ? 'unreachable: balances and the portfolio answer 503' : st.halted ? 'halted (emergency stop)' : 'reachable' },
         ...d.registry.list().map((v) => { const h = d.registry.health(v.id); return { id: `venue:${v.id}`, ok: h.status === 'ok', detail: h.lastOkAt === null && h.status === 'ok' ? 'not read yet' : h.status === 'ok' ? 'ok' : `${h.status}: ${h.lastError ?? ''}`.slice(0, 200), lastOkAt: h.lastOkAt }; }),
         { id: 'market-data', ok: quality !== null && q1h.length > 0 && q1h.every((x) => x.fresh), detail: quality === null ? 'unreadable' : `${q1h.filter((x) => x.fresh).length}/${q1h.length} symbols fresh (1h)` },
-        { id: 'execution', ok: false, detail: 'not wired: write endpoints answer 501 execution_not_wired' },
+        { id: 'execution', ok: true, detail: `orders are wired (unified order table, risk engine, trading mandates); live execution through the API is ${process.env.SPW_TRADING_API_EXECUTION === 'on' ? 'ENABLED (SPW_TRADING_API_EXECUTION=on)' : 'disabled (SPW_TRADING_API_EXECUTION is not "on"): paper works, new live risk answers execution_disabled'}; strategy and agent operations answer 501` },
         { id: 'webhooks', ok: hooks !== null && (hooks.endpoints === 0 || hooks.worker), detail: hooks === null ? 'unreadable' : `${hooks.endpoints} endpoint(s), ${hooks.pending} pending, ${hooks.failed24h} failed in 24 h${hooks.worker ? '' : ', retry worker not running'}` },
       ],
       keys: keys ? { total: keys.length, active: keys.filter((k) => keyView(k).status === 'active').length } : null,

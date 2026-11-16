@@ -139,6 +139,12 @@ export const ALERT_DEFS: readonly AlertDef[] = [
     ['L’arrêt d’urgence est actif : plus rien n’est signé.', 'The emergency halt is on: nothing is signed any more.'], ['L’arrêt d’urgence est actif.', 'The emergency halt is on.']),
   d('security.signer_unhalted', 'security', 'warning', true, ['Signataire réactivé', 'Signer resumed'],
     ['L’arrêt d’urgence a été levé sur la machine du signataire.', 'The emergency halt was lifted on the signer machine.'], ['L’arrêt d’urgence a été levé.', 'The emergency halt was lifted.']),
+  // V11 risk engine: the global kill switch (services/api/src/risk; rule in alerts/rules.ts on the audit event `risk.kill_switch`). `what` = who engaged it, `state` = the reason given
+  d('security.kill_switch_on', 'security', 'critical', true, ['Coupe-circuit global activé', 'Global kill switch engaged'],
+    ['Plus aucun nouveau risque n’est pris, sur aucune plateforme ({what}). {state} Les annulations et les réductions restent possibles.', 'No new risk is taken on any venue ({what}). {state} Cancels and reductions still pass.'],
+    ['Le coupe-circuit global est activé.', 'The global kill switch is engaged.'], true),
+  d('security.kill_switch_off', 'security', 'warning', true, ['Coupe-circuit global levé', 'Global kill switch released'],
+    ['Le coupe-circuit global a été levé avec la clé d’accès.', 'The global kill switch was released with the passkey.'], ['Le coupe-circuit global a été levé.', 'The global kill switch was released.']),
   d('security.signer_refused', 'security', 'warning', true, ['Demandes refusées par le signataire', 'Requests refused by the signer'],
     ['{count} refus, dernier : {reason}', '{count} refusal(s), last: {reason}'], ['{count} demande(s) refusée(s).', '{count} request(s) refused.']),
   d('security.pin_mismatch', 'security', 'critical', true, ['Contrat épinglé modifié', 'Pinned contract changed'],

@@ -9,8 +9,9 @@ The tables between `GENERATED` markers are rendered from the code by `packages/t
 `packages/trading/test/docs.test.ts` fails when a table differs from what the code renders;
 `UPDATE_DOCS=1 pnpm vitest run packages/trading/test/docs.test.ts` rewrites them. Do not edit them by hand.
 
-Status: this is the core only. Nothing here is wired into the API, the signer or the web app yet; the
-integration points are listed at the end.
+Status: sections 1 to 7 describe the core. Section 8 describes how the API service uses it since Phase F
+(`services/api/src/orders/`): one order table for every principal, mode and venue. Nothing is wired into the
+isolated signer: it signs what it signed before, under the rules it had before.
 
 ## 1. Canonical order (`orders/canonical.ts`)
 
@@ -421,10 +422,144 @@ including the French and English spellings of one command).
   per-share only with a sourced diluted share count). An optional venue `multiplier` gives the contract value and the
   exposure of valuation-quoted contracts. Used by the Private Markets module (`docs/V11-SYNTHETIC-MARKETS.md`).
 
-## 8. Integration points (not done here)
+## 8. Integration in the API service (Phase F)
 
-- A store for `OrderRecord` and its history table, with `version` as the compare-and-set token.
-- The Hyperliquid and GMX engines emit `OrderEvent`s instead of writing states; the mapping functions serve
-  the migration of existing rows and the read side until then.
-- The idempotency record `(principal, key) → { clientOrderId, bodyHash }` in the API.
-- `VENUE_RECONCILE` entries for each new tradable venue.
+Code: `services/api/src/orders/{store,projection,service,index}.ts`. Tests:
+`services/api/test/execution-{unit,paper,live}.test.ts`. Work note: `docs/v11/work/exec.md`.
+
+### 8.1 What was decided
+
+There is **no second engine**. The paper engine (`derivatives/paper.ts`), the Hyperliquid engine
+(`derivatives/exec.ts`) and the GMX engine (`derivatives/gmx-exec.ts`) stay the executors, with their own rows
+and vocabularies. Above them there is one **order service**:
+
+- every order — owner, API key, agent; paper or live; any venue — is one row of `orders`;
+- that row is changed only by `transition()` (`store.ts` is the only writer; an event the table does not allow
+  throws `IllegalTransitionError` and nothing is written);
+- every applied event appends one row to `order_events`, which a database trigger makes append-only;
+- the engines' rows are linked by `orders.engine` and `orders.engine_ref`.
+
+### 8.2 Tables
+
+| Table | Content |
+|---|---|
+| `orders` | `id` (the client order id), the principal, the idempotency key and body hash, mode, venue, network, instrument, side, type, the canonical order and its hash (null for an adopted row), `record` (the `OrderRecord` of the core), `state` / `reason` / `version` copied from it, `reject_code` (the precise machine code of a refusal, e.g. `mainnet_disabled`), `engine`, `engine_ref`, `engine_sig`, `request_expires_at`, `notional_usd`, `origin` (`trading_api`, `command`, `agent`, `legacy`), `projection_error`, `next_reconcile_at` |
+| `order_events` | `(order_id, seq)`, `from_state`, `to_state`, `event`, the event body, `reason`, `detail`, `at`. Updates and deletes raise `order_events is append-only` |
+| `order_projection_queue` | `(engine, ref)` of every engine row that was inserted or updated, written by triggers on `deriv_orders` and `deriv_gmx_ops` |
+| `risk_decisions` | every evaluation of the risk engine, linked to the order (`V11-RISK-MODEL.md`) |
+
+Unique indexes: `(principal_kind, principal_id, idempotency_key)` and `(engine, engine_ref)`.
+
+### 8.3 Placing an order (`OrderService.submit`, `submitCanonical`)
+
+1. The account and the engine are resolved. A venue restricted for the owner's jurisdiction (dYdX, edgeX) is
+   refused for everybody, in any mode (`venue_restricted`). Live orders are placed on Hyperliquid only.
+2. The canonical order is built; its `clientOrderId` is `clientOrderIdFor(venue, principal, key)`. For
+   Hyperliquid it is the venue's cloid (`0x` + 32 hex), which the adapter passes through unchanged: the unified
+   order id, the engine's client id and the venue's client order id are the same string.
+3. Idempotency: an order already stored for `(principal, key)` is returned as it is now when its body hash is
+   the same, and refused with `idempotency_conflict` otherwise. No engine is called.
+4. Refused before an order exists: `mandate_required`, `execution_disabled` (section 8.7), a key's notional
+   limits (`key_limit_exceeded`) and restrictions (`restricted`), `not_reducing` for a close.
+5. The order is stored `CREATED`. From here every outcome is a state of it.
+6. The risk engine evaluates it; the decision is stored and linked.
+7. A principal that is not the owner: the mandate is checked (`TRADING-MANDATES.md`). A denial is
+   `REJECTED / MANDATE_DENIED`, HTTP 403 with every deny code.
+8. A risk denial is `REJECTED` with `RISK_DENIED`, `KILL_SWITCH_ACTIVE` or `READ_ONLY_MODE`.
+9. `validated`, then the engine's own path:
+
+| Who, where | Events applied by the service | Engine call | Then |
+|---|---|---|---|
+| owner, paper | `approval_requested`, `approved{owner}`, `submit_started` | `paper.order` | projected from the paper row |
+| key or agent, paper | `approved{mandate}`, `submit_started` | `paper.order` | projected |
+| owner, live | none | `live.propose` | projected: `AWAITING_APPROVAL`. The owner approves with the passkey through the existing route `POST /derivatives/live/accounts/:id/orders/:clientId/approve`; the answer names it |
+| key or agent, live | `approved{mandate}`, `submit_started` | `live.placeMandateOrder` | the signer applies the derivative mandate it stores; projected |
+
+10. When the engine throws: if it stored a row, the row is projected (it says the truth, `unknown` included).
+    If it stored nothing, nothing was signed and nothing left — the engines insert their row before they ask
+    the signer — so a refusal becomes `REJECTED` with the engine's code in `reject_code`, and anything else
+    `FAILED / INTERNAL_ERROR`.
+
+The answer carries the order in its real state. A refusal after step 5 answers 4xx with the order in
+`data.order`.
+
+### 8.4 Projection of the engines (`projection.ts`)
+
+A unified order is never written from an engine state. `advance(record, snapshot, now)` computes the events
+that lead from the record as it is to the state the engine row maps to (section 5), and applies each with
+`transition()`. A step the table refuses is not forced: the record stays where it is and `projection_error`
+says why.
+
+| Engine | Row | Mapping | Notes |
+|---|---|---|---|
+| Hyperliquid | `deriv_orders` with `state` set | `mapHyperliquidOrder`, plus the refusals of the risk gate written as `kill_switch_active: …`, `read_only_mode: …`, `risk_denied: …` | a row the engine has not settled (`final` false) is not terminal here either, except a whole fill, which cannot change |
+| paper | `deriv_orders` with `state` null | `mapPaperOrder` (in `projection.ts`: the paper engine is the venue of a paper order) | `pending`, `triggered`, `open` → `SUBMITTED`; a cancelled order with fills → `REMAINDER_CANCELLED` |
+| GMX | `deriv_gmx_ops`, kinds `increase` and `decrease` | `mapGmxOp`; a `failed` operation is classified from its text by `gmxFailure` (`TX_REVERTED`, `TX_REPLACED`, `NO_ORDER_EVENT`, `SIGNER_HASH_MISMATCH`, a signer refusal), otherwise `INTERNAL_ERROR` with the text | a `cancel` operation acts on another order and is not an order |
+
+Rules that follow from the state machine:
+
+- `PARTIALLY_FILLED` and `FILLED` are reached only through `reconciled_found`, built from what the engine read
+  at the venue. The answer of a submission never fills a unified order.
+- An engine "never placed" becomes `FAILED / NEVER_PLACED` only through `reconciled_absent` with
+  `VENUE_RECONCILE` and the expiry of the signed request. Inside the grace window the order stays `UNKNOWN /
+  ABSENT_WITHIN_GRACE`.
+- Past `SUBMITTING` no local event may close an order. A GMX operation that fails after its outcome was
+  unknown is recorded as `REJECTED / VENUE_REJECTED` (what the chain said), not `FAILED`.
+- A terminal record never moves.
+
+**Why it cannot drift.** The projector is fed by database triggers on the engine tables, not by calls placed
+in the engines' code: any write to an engine row, by any code path — the trading API, the routes that existed
+before, a perp agent, a reconciliation worker — queues the row. The queue is drained after every call of the
+order service, before every read of the order list, and by the supervisor loop. A row placed through a route
+that existed before is adopted the first time it is seen (`origin = legacy`, id `adopt-…`; the API shows it
+under its former id `deriv:<account>:<clientId>` or `gmx:<id>`). Tests assert that no engine row is without
+its unified order and that no `projection_error` is left.
+
+Not projected: the spot agents' swaps (`agent_orders`). `GET /orders` still lists them beside the unified
+orders; they are owned by the agents workstream.
+
+### 8.5 Reconciler and restart (`OrderService.reconcile`)
+
+One pass, run every 5 s by the `orders` loop when workers are on. It keeps nothing in memory.
+
+1. Drains the projection queue.
+2. `UNKNOWN` orders that are due: for Hyperliquid the engine's own reconciliation of the account is run (it
+   asks the venue for the client order id), and the row is projected again. The order becomes `SUBMITTED`,
+   `PARTIALLY_FILLED`, `FILLED`, `CANCELLED` or `REJECTED` from what the venue says, or `FAILED / NEVER_PLACED`
+   once the absence is conclusive. Otherwise the next lookup is scheduled. A submission is never sent again.
+3. Orders of the service left in `CREATED`, `VALIDATED`, `APPROVED` or `SUBMITTING` for more than 30 s: if the
+   engine holds a row, it is projected; if it holds none, the order is `FAILED / INTERNAL_ERROR` ("interrupted
+   before the engine stored the order; nothing was signed or sent").
+4. `AWAITING_APPROVAL`, `SUBMITTED` and `PARTIALLY_FILLED` orders follow their engine row, which the engine's
+   own worker keeps current (expiry of the approval window, fills, cancellations).
+
+### 8.6 Cancel, close, reduce
+
+- `cancel`: a key cancels its own orders only. An order that never reached an engine is withdrawn at once. At
+  the venue, `cancel_requested` is recorded first (so that the final reason is `CANCELLED_BY_REQUEST`), the
+  engine's cancel is called, and the order is `CANCELLED` when the venue says so. A GMX order is cancelled in
+  the app (a wallet transaction with a passkey).
+- `reducePosition` (close = fraction 1): a reduce-only market order sized from the position the account
+  reports. It is refused with `not_reducing` unless the risk engine itself finds it strictly reducing.
+
+### 8.7 Locks
+
+| Lock | Default | Closes |
+|---|---|---|
+| `SPW_TRADING_API_EXECUTION` | off | every new live risk asked through the order service: 403 `execution_disabled`, nothing is created. Cancels and strictly reducing orders pass; paper is not concerned |
+| `SPW_DERIV_LIVE_MAINNET` | off | unchanged: new mainnet risk on Hyperliquid (`mainnet_disabled`) |
+| `SPW_DERIV_MANDATE_MAINNET` | off | unchanged: orders under a mandate on mainnet (`mandate_mainnet_disabled`) |
+| `SPW_DERIV_GMX_LIVE` | off | unchanged: GMX increases (`gmx_disabled`) |
+
+The three existing locks are applied by the engines, as before. The order service adds no path around them:
+a lock that is off rejects the order with its code, and the preview lists it under `refusals` with the stage
+`lock`.
+
+### 8.8 What is not done
+
+- Spot orders through the order service. For the owner the answer is 422 `spot_via_swap_screen`; for an API
+  key or an agent 403 `spot_execution_requires_agent_vault`.
+- Live orders on GMX through the order service (422 `venue_not_wired`). GMX orders placed in the app are
+  projected into the unified table.
+- The stop-loss and take-profit orders a command attaches (`SL`, `TP`) are returned, not placed.
+- The spot agents' swaps are not unified orders.

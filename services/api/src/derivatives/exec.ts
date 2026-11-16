@@ -25,6 +25,7 @@ import {
 } from '@spw/derivatives/live';
 import { UserError } from '../config.ts';
 import { audit, getSetting, sql } from '../db.ts';
+import type { NewRiskBlock, PreTradeGate, PreTradeRequest } from './gate.ts';
 import { LIVE_REASONS, liveReason, liveTexts, revokeWarning, type LiveLocale } from './live-texts.ts';
 import { LIVE_ACTION_TTL_MS, type LiveVenue, type LiveVenues } from './live-venue.ts';
 import { CloseBodySchema, DEFAULT_SLIPPAGE_BPS, OrderBodySchema, worstPrice, type OrderBody } from './paper.ts';
@@ -181,6 +182,10 @@ export class LiveService {
   private readonly listeners = new Map<string, Set<(ev: LiveEvent) => void>>();
   /** proposals being built right now, by account and idempotency key: a concurrent duplicate waits for the first instead of answering half-built */
   private readonly building = new Map<string, Promise<unknown>>();
+  /** V11: the unified risk gate (derivatives/gate.ts), set by the server; null = this engine alone judges (tests that build it bare) */
+  preTrade: PreTradeGate | null = null;
+  /** V11: the global kill switch / read-only mode, asked again when a proposal made earlier is approved */
+  newRiskBlock: NewRiskBlock | null = null;
   constructor(deps: LiveDeps) { this.deps = deps; this.now = deps.now; }
 
   // ------------------------------------------------------------------ stream (same shape as the market hub: event + data)
@@ -653,7 +658,8 @@ export class LiveService {
   }
 
   /** live market + the account's REAL state from the venue, then the risk engine with the account's policy */
-  private async check(a: AccountRow, venue: LiveVenue, body: OrderBody, clientId: string, over: RiskPolicy | null = null, /** price band of the signer's rule; default: the authorization's */ bandBps?: number) {
+  private async check(a: AccountRow, venue: LiveVenue, body: OrderBody, clientId: string, over: RiskPolicy | null = null, /** price band of the signer's rule; default: the authorization's */ bandBps?: number,
+    who: Pick<PreTradeRequest, 'origin' | 'agentId' | 'mandateId' | 'preview'> = { origin: 'owner' }) {
     const inst = await venue.instrument(body.instrument);
     const read = async <T>(fn: () => Promise<T>): Promise<T> => { try { return await fn(); } catch (e) { if (e instanceof VenueError) throw new UserError('venue_unavailable', msg(e), 503); throw e; } };
     const [m, state, positions, openOrders, lev] = await Promise.all([venue.market(inst), read(() => venue.adapter.account(a.account)), read(() => venue.adapter.positions(a.account)),
@@ -675,6 +681,11 @@ export class LiveService {
       const off = venueOrderPriceError({ side: req.side, type, price: req.price, triggerPrice: req.triggerPrice, reduceOnly: req.reduceOnly }, canon(m.ticker.mark), band);
       if (off) risk = { ok: false, code: 'price_deviation', reason: `${off.reason} the mark ${canon(m.ticker.mark)} (the signer applies this rule with its own price and would refuse the order)` };
     }
+    // V11: the unified risk engine (every venue and account of the book, the owner's limits, the kill switch) — after this engine's own checks, before anything is stored for approval or signed
+    if (risk.ok && this.preTrade) {
+      const g = await this.preTrade({ mode: 'live', venue: a.venue, network: a.network, accountId: a.id, req, instrument: inst, ...who, known: { ticker: m.ticker, book: m.book, account: state, positions, leverage: lev.leverage } });
+      if (!g.ok) risk = { ok: false, code: g.code as never, reason: g.reason };
+    }
     return { inst, m, state, positions, openOrders, lev, req, risk, now };
   }
 
@@ -691,7 +702,7 @@ export class LiveService {
     if (stop) throw stop;
     const venue = this.deps.venues.get(a.network);
     await venue.assertPinned();
-    const c = await this.check(a, venue, body, 'preview');
+    const c = await this.check(a, venue, body, 'preview', null, undefined, { origin: 'owner', preview: true });
     return { risk: c.risk, estimate: this.estimate(c), request: c.req, venueState: { state: c.state, positions: c.positions, source: 'venue' as const }, ts: c.now };
   }
 
@@ -731,7 +742,7 @@ export class LiveService {
     if (stop) throw stop;
     const venue = this.deps.venues.get(a.network);
     await venue.assertPinned();
-    const c = await this.check(a, venue, body, key), { req, inst, now } = c, at = new Date(now);
+    const c = await this.check(a, venue, body, key, null, undefined, { origin }), { req, inst, now } = c, at = new Date(now);
     const ins = await sql`insert into deriv_orders (account_id, client_id, cloid, instrument, side, type, size, price, trigger_price, reduce_only, tif, status, state, origin, created_at, updated_at)
       values (${id}, ${key}, ${hlCloid(key)}, ${req.instrument}, ${req.side}, ${req.type}, ${req.size}, ${req.price}, ${req.triggerPrice}, ${req.reduceOnly}, ${req.tif}, 'pending', 'proposed', ${origin}, ${at}, ${at})
       on conflict (account_id, client_id) do nothing returning client_id`;
@@ -793,6 +804,12 @@ export class LiveService {
       // the proposal ends here: it must not stay approvable until its window closes
       await this.setOrder(id, key, { state: 'cancelled', final: true, reason: `withdrawn: trading was halted before the approval (${halt}); nothing was signed`.slice(0, 500) });
       throw new UserError('halted', `trading is halted: ${halt}`, 423);
+    }
+    // V11: the global kill switch (new risk) or read-only mode (everything but a cancel), engaged after the proposal was made
+    const blk = this.newRiskBlock ? await this.newRiskBlock() : null;
+    if (blk && (!row.reduce_only || blk.code === 'read_only_mode')) {
+      await this.setOrder(id, key, { state: 'cancelled', final: true, reason: `withdrawn: trading was halted before the approval (${blk.code}); nothing was signed` });
+      throw new UserError(blk.code, blk.reason, 423);
     }
     if (row.expires_at.getTime() <= this.now() + 2_000) {
       await this.setOrder(id, key, { state: 'cancelled', final: true, reason: 'the approval window expired before the passkey approval; nothing was signed' });
@@ -1243,6 +1260,13 @@ export class LiveService {
       strategySha256: body.strategySha256, agentId: body.agentId, instruments: body.instruments, maxOrderNotional: body.maxOrderNotional, maxGrossExposure: body.maxGrossExposure, maxOrdersPerDay: body.maxOrdersPerDay,
       maxOrdersPerHour: body.maxOrdersPerHour, maxDailyTurnover: body.maxDailyTurnover, floorEquity: body.floorEquity, maxPriceDeviationBps: body.maxPriceDeviationBps ?? auth.policy.maxPriceDeviationBps,
       createdAt: nowS, expiresAt: nowS + body.days * 86400, ackSha256: ack.sha256 };
+    return this.storePrepared(a, mandate, body.locale);
+  }
+
+  /** the tail of both preparations: validation against the authorization and the pinned table, the stored `prepared` row, what is shown, the WebAuthn request */
+  private async storePrepared(a: AccountRow, mandate: VenueMandate, locale: LiveLocale) {
+    const id = a.id, auth = a.venue_authorization!, nowMs = this.now(), nowS = Math.floor(nowMs / 1000), ack = jurisdictionAck('hyperliquid', locale), body = { locale };
+    if (mandate.ackSha256 !== ack.sha256) throw new UserError('bad_policy', 'the mandate does not carry the acknowledgement that is displayed', 400);
     try { validateVenueMandate(mandate, auth, nowS); } catch (e) { throw new UserError('bad_policy', msg(e), 400); }
     for (const i of mandate.instruments) { const pin = hlPinnedAsset(a.network, i.instrument); if (!pin || i.maxLeverage > pin.maxLeverage) throw new UserError('bad_policy', `${i.instrument}: not in the pinned ${a.network} asset table, or leverage above the venue maximum`, 400); }
     const hash = venueMandateHash(mandate), at = new Date(nowMs);
@@ -1257,6 +1281,37 @@ export class LiveService {
       windDown: { seconds: VENUE_MANDATE_WIND_DOWN_S, text: t.windDown }, whatIsSigned: { byPasskey: t.mandateByPasskey },
       venueState: v, options: await this.options(hash), ts: nowMs,
     };
+  }
+
+  /**
+   * V11 trading mandates: what a trading mandate needs to be compiled for this venue account (`compileToVenueMandate` of
+   * @spw/trading) — the authorization the owner approved and the acknowledgement that will be displayed. Reads only.
+   */
+  async mandateBinding(id: string, locale: LiveLocale = 'en') {
+    const a = await this.account(id);
+    this.mandateSigner();
+    const lock = this.mandateLock(a) ?? this.blocked(a, 'trade');
+    if (lock) throw lock;
+    return { accountId: a.id, venue: a.venue, network: a.network, account: a.account, authorization: a.venue_authorization!, authorizationId: a.authorization_id!, ack: jurisdictionAck('hyperliquid', locale) };
+  }
+
+  /**
+   * V11 trading mandates: step 1 of the SAME approval flow for a derivative mandate that was compiled from a trading mandate
+   * (same id, same creation time). Nothing is taken on trust from the caller: the mandate must be for this account and its
+   * authorization, pass `validateVenueMandate` and the pinned asset table, exactly like one built by `prepareMandate`.
+   */
+  async prepareCompiledMandate(id: string, mandate: VenueMandate, locale: LiveLocale = 'en') {
+    const a = await this.account(id);
+    this.mandateSigner();
+    const lock = this.mandateLock(a) ?? this.blocked(a, 'trade');
+    if (lock) throw lock;
+    const st = await this.deps.signer.status(true);
+    if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
+    if ((await this.currentMandate(a))?.phase === 'active') throw new UserError('bad_state', 'a mandate is already active on this venue account: revoke it to change its limits', 409);
+    await this.deps.venues.get(a.network).assertPinned();
+    const m = VenueMandateSchema.parse(mandate), auth = a.venue_authorization!;
+    if (m.authorizationId !== a.authorization_id || m.keyId !== auth.keyId || m.network !== a.network || m.account !== a.account || m.agentAddress !== a.agent_address) throw new UserError('bad_policy', 'the compiled mandate is not for this venue account and its authorization', 400);
+    return this.storePrepared(a, m, locale);
   }
 
   /** step 2: the signer judges the passkey and stores the mandate. No key signs anything here, and nothing is sent to the venue. */
@@ -1369,7 +1424,7 @@ export class LiveService {
     const venue = this.deps.venues.get(a.network);
     await venue.assertPinned();
     const body = OrderBodySchema.parse({ instrument: r0.instrument, side: r0.side, type: r0.type, size: r0.size, price: r0.price, triggerPrice: r0.triggerPrice, reduceOnly: r0.reduceOnly, tif: r0.tif });
-    const chk = await this.check(a, venue, body, key, this.mandatePolicy(a, m, r0.instrument), m.maxPriceDeviationBps), { req: order, inst, now } = chk, at = new Date(now);
+    const chk = await this.check(a, venue, body, key, this.mandatePolicy(a, m, r0.instrument), m.maxPriceDeviationBps, { origin: 'mandate', agentId: c.agentId, mandateId: m.mandateId }), { req: order, inst, now } = chk, at = new Date(now);
     let refusal: { code: string; reason: string } | null = chk.risk.ok ? null : { code: chk.risk.code, reason: chk.risk.reason };
     const notional = order.price === null ? null : venueOrderNotional({ size: order.size, price: order.price, triggerPrice: order.triggerPrice });
     // what the signer will refuse is said here first, from the venue state the API just read

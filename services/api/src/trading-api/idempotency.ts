@@ -51,7 +51,8 @@ export async function withIdempotency<T>(req: FastifyRequest, reply: FastifyRepl
     await done(200, out ?? null);
     return out;
   } catch (e) {
-    if (e instanceof UserError && e.status < 500) await done(e.status, { error: e.code, message: e.message }).catch(() => {});
+    // `data` (the order a refusal is about, the questions of an ambiguous command) is part of the answer a replay gives back
+    if (e instanceof UserError && e.status < 500) await done(e.status, { error: e.code, message: e.message, ...((e as { data?: unknown }).data !== undefined ? { data: (e as { data?: unknown }).data } : {}) }).catch(() => {});
     else await forget();
     throw e;
   }

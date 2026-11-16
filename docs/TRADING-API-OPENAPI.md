@@ -12,7 +12,7 @@ Version 1.0.0. Machine-readable document: [`docs/openapi/trading-v1.json`](opena
 
 ## Scopes
 
-| Scope | Execution scope (inert without a mandate bound to the key) |
+| Scope | Execution scope (inert without an approved trading mandate bound to the key — except a cancel of the key's own order and the kill switch, which only remove risk) |
 |---|---|
 | `wallet:read` | no |
 | `markets:read` | no |
@@ -49,11 +49,13 @@ Version 1.0.0. Machine-readable document: [`docs/openapi/trading-v1.json`](opena
 | GET | `/api/v1/trading/strategies` | `strategies:read` | implemented | — | Strategy library and the versions pinned to agents |
 | GET | `/api/v1/trading/agents` | `agents:read` | implemented | — | Trading agents |
 | GET | `/api/v1/trading/risk` | `positions:read` | implemented | — | Risk state: kill switch, signer limits, capability locks, account policies |
-| POST | `/api/v1/trading/orders/preview` | `orders:prepare` | **501** `execution_not_wired` | required | Preview an order (risk check and estimate) |
-| POST | `/api/v1/trading/orders` | `orders:execute` | **501** `execution_not_wired` | required | Place an order |
-| DELETE | `/api/v1/trading/orders/{id}` | `orders:cancel` | **501** `execution_not_wired` | required | Cancel an order |
-| POST | `/api/v1/trading/positions/{id}/close` | `positions:manage` | **501** `execution_not_wired` | required | Close a position |
-| POST | `/api/v1/trading/positions/{id}/reduce` | `positions:manage` | **501** `execution_not_wired` | required | Reduce a position |
+| POST | `/api/v1/trading/orders/preview` | `orders:prepare` | implemented | — | Preview an order: every check it would meet, and an estimate |
+| POST | `/api/v1/trading/orders` | `orders:execute` | implemented | required | Place an order |
+| DELETE | `/api/v1/trading/orders/{id}` | `orders:cancel` | implemented | required | Cancel an order |
+| POST | `/api/v1/trading/positions/{id}/close` | `positions:manage` | implemented | required | Close a position |
+| POST | `/api/v1/trading/positions/{id}/reduce` | `positions:manage` | implemented | required | Reduce a position |
+| POST | `/api/v1/trading/commands` | `orders:prepare` | implemented | required | Run one line of the trading command grammar |
+| POST | `/api/v1/trading/risk/kill-switch` | `positions:manage` | implemented | — | Engage the global kill switch |
 | POST | `/api/v1/trading/strategies` | `strategies:manage` | **501** `execution_not_wired` | required | Register a strategy version |
 | POST | `/api/v1/trading/strategies/{id}/backtest` | `strategies:manage` | **501** `execution_not_wired` | required | Run a backtest |
 | POST | `/api/v1/trading/strategies/{id}/start` | `strategies:manage` | **501** `execution_not_wired` | required | Start a strategy |
@@ -253,7 +255,18 @@ Request body (JSON):
       "minimum": 1,
       "maximum": 500
     },
+    "leverage": {
+      "description": "paper only: leverage setting of the instrument on the account. On a venue account the leverage is a venue setting",
+      "type": "string",
+      "pattern": "^\\d+(\\.\\d+)?$"
+    },
+    "maxFeeUsd": {
+      "description": "highest fee accepted, USD; default: 10 bps of the notional",
+      "type": "string",
+      "pattern": "^\\d+(\\.\\d+)?$"
+    },
     "clientOrderId": {
+      "description": "idempotency key of the ORDER; default: the Idempotency-Key header. The order id is derived from it and from the principal",
       "type": "string",
       "pattern": "^[A-Za-z0-9._:-]{8,100}$"
     }
@@ -348,7 +361,18 @@ Request body (JSON):
       "minimum": 1,
       "maximum": 500
     },
+    "leverage": {
+      "description": "paper only: leverage setting of the instrument on the account. On a venue account the leverage is a venue setting",
+      "type": "string",
+      "pattern": "^\\d+(\\.\\d+)?$"
+    },
+    "maxFeeUsd": {
+      "description": "highest fee accepted, USD; default: 10 bps of the notional",
+      "type": "string",
+      "pattern": "^\\d+(\\.\\d+)?$"
+    },
     "clientOrderId": {
+      "description": "idempotency key of the ORDER; default: the Idempotency-Key header. The order id is derived from it and from the principal",
       "type": "string",
       "pattern": "^[A-Za-z0-9._:-]{8,100}$"
     }
@@ -418,6 +442,66 @@ Request body (JSON):
   "required": [
     "fraction"
   ],
+  "additionalProperties": false
+}
+```
+
+### POST `/api/v1/trading/commands`
+
+Request body (JSON):
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "description": "one line of the trading command grammar, English or French: LONG BTC-PERP 500 x2, CLOSE BTC-PERP 50%, CANCEL ORDER <id>, SHOW POSITIONS, KILL …"
+    },
+    "mode": {
+      "default": "paper",
+      "type": "string",
+      "enum": [
+        "paper",
+        "live"
+      ],
+      "description": "paper = simulated, live = a venue or on-chain account. The two are never merged in one figure."
+    },
+    "accountId": {
+      "description": "paper account or venue account; required when the wallet has several on the venue",
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+    },
+    "dryRun": {
+      "default": false,
+      "description": "true: answer the canonical order (or the control) the command resolves to, and do nothing",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "additionalProperties": false
+}
+```
+
+### POST `/api/v1/trading/risk/kill-switch`
+
+Request body (JSON):
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "reason": {
+      "default": "",
+      "type": "string",
+      "maxLength": 200
+    }
+  },
   "additionalProperties": false
 }
 ```
@@ -663,16 +747,17 @@ Request body (JSON):
 
 ## Errors
 
-Every error is `{ "error": "<code>", "message": "<sentence>" }`.
+Every error is `{ "error": "<code>", "message": "<sentence>" }`; a refusal about an order also carries `data` (`data.order`, `data.reasons`, `data.failed`, `data.checks`, `data.questions`).
 
 | Status | Codes |
 |---|---|
-| 400 | `bad_request`, `idempotency`, `stale_request` |
+| 400 | `bad_request`, `invalid_order`, `parse_error`, `idempotency`, `stale_request` |
 | 401 | `unauthenticated` |
-| 403 | `key_path_forbidden`, `mixed_credentials`, `insufficient_scope`, `scope_undeclared`, `restricted`, `ip_not_allowed`, `mandate_required` |
-| 404 | `unknown_market`, `unknown_order`, `not_found` |
-| 409 | `ambiguous_symbol`, `idempotency_conflict`, `idempotency_in_progress` |
-| 422 | `no_orderbook`, `venue_rejected` |
+| 403 | `key_path_forbidden`, `mixed_credentials`, `insufficient_scope`, `scope_undeclared`, `restricted`, `ip_not_allowed`, `mandate_required`, `mandate_not_approved`, `mandate_denied`, `execution_disabled`, `key_limit_exceeded`, `not_your_order`, `mainnet_disabled`, `mandate_mainnet_disabled`, `venue_restricted`, `spot_execution_requires_agent_vault` |
+| 404 | `unknown_market`, `unknown_order`, `unknown_account`, `unknown_position`, `not_found` |
+| 409 | `ambiguous_symbol`, `ambiguous_command`, `account_required`, `idempotency_conflict`, `idempotency_in_progress`, `bad_state` |
+| 422 | `no_orderbook`, `venue_rejected`, `risk_denied`, `not_reducing`, `no_position`, `no_account`, `below_min_size`, `leverage_mismatch`, `venue_not_wired`, `spot_via_swap_screen`, `cancel_in_app`, `close_in_app`, the risk codes of the venue engine |
+| 423 | `kill_switch_active`, `read_only_mode` |
 | 429 | `rate_limited`, `auth_throttled` |
 | 501 | `execution_not_wired` |
 | 503 | `signer_unreachable`, `venue_unavailable`, `venue_rate_limited`, `markets_unavailable`, `stale_data`, `service_unavailable` |
@@ -682,6 +767,6 @@ Every error is `{ "error": "<code>", "message": "<sentence>" }`.
 | Event | Emitted in this version | Payload (`data`) | Description |
 |---|---|---|---|
 | `key.revoked` | yes | `{ keyId, name, reason }` | an API key was revoked (or replaced by a rotation) |
-| `risk.kill_switch` | yes | `{ source: "signer", halted: true }` | the owner triggered the emergency halt of the signer |
+| `risk.kill_switch` | yes | `{ source: "signer", halted: true } | { source: "risk_engine", engaged, by, reason }` | the emergency halt of the signer was triggered (source "signer"), or the global kill switch of the risk engine was engaged or released (source "risk_engine") |
 | `agent.updated` | yes | `{ agentId, kind, state, mode }` | an agent changed mode through an owner action (engine-side transitions: pending wiring) |
-| `order.updated` | no — pending wiring | `{ orderId, mode, venue, instrument, status }` | an order changed state (pending wiring: emitted by the unified order state machine) |
+| `order.updated` | yes | `{ orderId, mode, venue, instrument, status, previous, event, reason, seq, principal, mandateId }` | an order changed state: one event per transition of the unified order state machine, for every principal, mode and venue |

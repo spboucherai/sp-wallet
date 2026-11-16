@@ -102,7 +102,9 @@ describe('contract', () => {
     expect(new Set(OPERATIONS.map((o) => `${o.method} ${o.path}`)).size).toBe(OPERATIONS.length);
     for (const o of OPERATIONS) {
       expect(o.scope === ANY_SCOPE || SCOPES.includes(o.scope), o.id).toBe(true);
-      if (o.method !== 'GET') expect(o.idempotent, o.id).toBe(true);
+      // (a preview creates nothing and the kill switch is idempotent by nature: the two POSTs that take no Idempotency-Key)
+      if (o.method !== 'GET') expect(o.idempotent, o.id).toBe(!['previewOrder', 'engageKillSwitch'].includes(o.id));
+      if (o.noMandate) expect(['cancelOrder', 'runCommand', 'engageKillSwitch'], o.id).toContain(o.id);            // only what can remove risk, and the command router
       if (!o.implemented) expect(o.method, o.id).not.toBe('GET');
       if (o.method === 'GET') expect(o.scope === ANY_SCOPE || /:read$/.test(o.scope), o.id).toBe(true);
     }
@@ -126,7 +128,7 @@ describe('OpenAPI', () => {
         expect(op.security).toEqual([{ bearerKey: spec.scope === ANY_SCOPE ? [] : [spec.scope] }]);
         expect(op.responses['401'].content['application/json'].schema).toEqual({ $ref: '#/components/schemas/Error' });
         const idem = op.parameters.find((p: any) => p.name === 'Idempotency-Key');
-        if (method === 'get') expect(idem).toBeUndefined(); else expect(idem).toMatchObject({ in: 'header', required: true });
+        if (method === 'get' || !spec.idempotent) expect(idem).toBeUndefined(); else expect(idem).toMatchObject({ in: 'header', required: true });
         if (spec.implemented) { expect(op.responses['200']).toBeDefined(); expect(op.responses['501']).toBeUndefined(); }
         else { expect(op.responses['501']).toBeDefined(); expect(Object.keys(op.responses).some((c) => c.startsWith('2'))).toBe(false); }  // an unwired operation documents no success
         for (const p of op.parameters.filter((x: any) => x.in === 'path')) expect(path).toContain(`{${p.name}}`);
