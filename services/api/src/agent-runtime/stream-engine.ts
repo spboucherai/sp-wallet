@@ -239,7 +239,8 @@ export class StreamEngine {
       rt.lastSignalAt = now; rt.lastCode = code;
       const [row] = await sql<{ id: string }[]>`insert into agent_signals (agent_id, bar, mode, kind, config_version, strategy_sha256, inputs_digest, status, reason, decision, reason_code, weights, equity)
         values (${a.id}, ${new Date(now)}, ${mode}, 'stream', ${a.config_version}, ${ruleHash(rule)}, ${inputsDigest(inputs)}, 'done', ${reason.slice(0, 300)}, ${decision}, ${code}, ${sql.json(output as never)}, ${paper ? dec(equity, 6) : null})
-        on conflict (agent_id, mode, bar) do update set updated_at = now() returning id`;
+        on conflict (agent_id, mode, bar) do update set status = excluded.status, reason = excluded.reason, decision = excluded.decision, reason_code = excluded.reason_code, weights = excluded.weights, equity = excluded.equity,
+          inputs_digest = excluded.inputs_digest, config_version = excluded.config_version, updated_at = now() returning id`;   // two decisions in the same millisecond: the later one is the record of that instant
       return row ? String(row.id) : null;
     };
 
@@ -308,7 +309,7 @@ export class StreamEngine {
       rt.hold = { code, since: now };
       await journal(a.id, { mode, kind: 'hold', code, severity: 'warning', title: code === 'data_gap' ? 'Data gap: quoting and decisions paused' : code === 'no_market' ? 'No market on a venue' : 'Data too old: no decision', body: reason, configVersion: a.config_version });
       await sql`insert into agent_signals (agent_id, bar, mode, kind, config_version, strategy_sha256, status, reason, decision, reason_code) values (${a.id}, ${new Date(now)}, ${mode}, 'stream', ${a.config_version}, ${ruleHash(rt.rule)}, 'hold', ${reason.slice(0, 300)}, 'skipped', ${code})
-        on conflict (agent_id, mode, bar) do nothing`;
+        on conflict (agent_id, mode, bar) do update set status = 'hold', reason = excluded.reason, decision = 'skipped', reason_code = excluded.reason_code, weights = null, updated_at = now()`;
     }
     await save();
     return `hold: ${reason.slice(0, 120)}`;

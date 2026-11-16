@@ -18,6 +18,7 @@ import { AgentChecklist, ElsewhereFunds, FundSheet, fundingInProgress, WithdrawS
 import { ResearchPanel } from './Research'; // v7 research runtime
 import { PaperBookCard, showPaperBook } from './AgentPaper'; // v8 hardening: simulated positions, apart from the real vault
 import { EquityCard, FormGroup, Journal, LogoStack, Metric, NetworkChips, UnitInput } from './agentBits'; // v10 design pass
+import { AgentPanel, FAMILY_KEY, TemplateSheet } from './agentPanel'; // v11: the agent panel (any agent kind) and creation from a template
 
 interface AgentV { id: string; name: string; mission: string; state: string; mode: string; network: string; networkName: string; cash: string; universe: string[]; interval: string; capitalUsdc: string; vaultAddress: string;
   risk: { maxExposurePct: number; maxLossPct: number; maxOrderUsd: number; maxDailyUsd: number; maxOrdersPerDay: number; mandateDays: number; slippageBps: number }; strategyVersionId: string | null; mandateId: string | null; stopReason: string | null; lastBar: string | null }
@@ -45,6 +46,7 @@ export function Agents({ nav }: { nav: Nav }) {
   const q = useQuery({ queryKey: ['agents'], queryFn: () => get<{ agents: AgentV[] }>('/agents'), refetchInterval: 30_000 });
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState('');
   const [kind, setKind] = useState<'spot' | 'perp'>('spot'); // v6: which kind of agent the form creates
+  const [tpl, setTpl] = useState(false); // v11: creation from one of the seven templates
   const nets = useQuery({ queryKey: ['agent-networks'], queryFn: () => get<{ networks: Net[]; maxSymbols: number; maxLiveSymbols: number }>('/agents/networks'), staleTime: 60_000, enabled: open });
   const [f, setF] = useState({ name: '', mission: '', capital: '100', network: 'base', cash: '', universe: [] as string[], assets: {} as Record<string, string>, interval: '1h', maxExposurePct: 50, maxLossPct: 5, maxOrderUsd: 25, maxDailyUsd: 100, maxOrdersPerDay: 12 });
   const net = nets.data?.networks.find((n) => n.id === f.network), maxSym = nets.data?.maxSymbols ?? 12;
@@ -75,6 +77,9 @@ export function Agents({ nav }: { nav: Nav }) {
     <div className="space-y-4">
       <PageTitle right={(open || count > 0) && <Btn kind={open ? 'ghost' : 'primary'} className="!min-h-11 shrink-0 !px-4 !text-[14.5px]" onClick={() => setOpen(!open)}><Icon n={open ? 'x' : 'plus'} className="h-4 w-4" />{open ? t('cancel') : t('agNew')}</Btn>}>{t('agents')}</PageTitle>
       <Notice tone="info">{t('agIntro')}</Notice>
+      {/* v11: the seven built-in agents */}
+      {!open && <button data-testid="ag2-from-template" onClick={() => setTpl(true)} className="card row-press flex w-full items-center gap-3.5 px-4 py-3.5 text-left"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-elev"><Icon n="plus" /></span><span className="min-w-0 flex-1"><span className="block text-[15.5px] font-semibold">{t('ag2FromTemplate')}</span><span className="block text-[13px] leading-snug text-mute">{t('ag2FromTemplateSub')}</span></span><Icon n="chev" className="h-4 w-4 shrink-0 text-mute" /></button>}
+      {tpl && <TemplateSheet onClose={() => setTpl(false)} onCreated={(id) => { setTpl(false); void qc.invalidateQueries({ queryKey: ['agents'] }); nav({ tab: 'agent', asset: id }); }} />}
       {/* >>> v6 perp agents: the kind of agent; a perp agent has its own form */}
       {open && <Seg<'spot' | 'perp'> value={kind} onChange={setKind} label={t('paKindLabel')} options={[{ id: 'spot', label: t('paKindSpot') }, { id: 'perp', label: t('paKindPerp') }]} />}
       {open && kind === 'perp' && <Card><PerpAgentForm nav={nav} onCreated={async () => { await qc.invalidateQueries({ queryKey: ['agents'] }); setOpen(false); }} /></Card>}
@@ -145,7 +150,7 @@ export function Agents({ nav }: { nav: Nav }) {
         <Btn full busy={busy} disabled={f.name.trim().length < 2 || !f.universe.length || f.universe.length > maxSym || undecided || !net?.enabled || !/[1-9]/.test(amountOf(f.capital, locale) ?? '')} onClick={() => void create()}>{t('agCreate')}</Btn>
       </Card>}
       {q.isLoading ? <AgentCardsSkeleton /> : count === 0 ? !open && <EmptyState icon="robot" title={t('agNone')} action={<Btn onClick={() => setOpen(true)}><Icon n="plus" className="h-4 w-4" />{t('agNew')}</Btn>}>{t('dzAgEmpty')}</EmptyState> :
-        <div className="grid gap-3">{q.data!.agents.map((a) => { const perp = (a as { kind?: string }).kind === 'perp'; return <button key={a.id} onClick={() => nav({ tab: 'agent', asset: a.id })} className="card row-press block w-full p-4 text-left">
+        <div className="grid gap-3">{q.data!.agents.map((a) => { const perp = (a as { kind?: string }).kind === 'perp', rt = ['stream', 'supervisor'].includes((a as { kind?: string }).kind ?? ''); return <button key={a.id} onClick={() => nav({ tab: 'agent', asset: a.id })} className="card row-press block w-full p-4 text-left">
           <span className="flex items-center gap-3.5"><LogoStack syms={a.universe} size={40} />
             <span className="min-w-0 flex-1"><span className="block text-[16.5px] font-semibold leading-snug [overflow-wrap:anywhere]">{a.name}</span><span className="block text-[13px] text-mute">{a.universe.join(' · ')}</span></span>
             <Icon n="chev" className="h-4 w-4 shrink-0 text-mute" /></span>
@@ -153,7 +158,8 @@ export function Agents({ nav }: { nav: Nav }) {
             <span className="min-w-0"><span className="block text-[12px] text-mute">{t('dzAgCapital')}</span><span className="t-num block text-[20px]">{usdCapital(a.capitalUsdc, locale)}</span></span>
             <span className="inline-flex min-w-0 items-center gap-1.5 pb-0.5 text-[13.5px] font-medium text-mute">{perp ? <VenueIcon venue="hyperliquid" size={20} /> : <NetDot net={a.network} size={20} />}<span className="min-w-0 [overflow-wrap:anywhere]">{a.networkName}</span></span></span>
           <span className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            {perp && agentTone(a) !== 'paper' ? <PerpLiveState a={a} /> : <AgentState state={a.state} />}
+            {perp && agentTone(a) !== 'paper' ? <PerpLiveState a={a} /> : rt ? <Tag tone={a.state === 'PAPER_TRADING' || a.state === 'RUNNING' ? 'ok' : a.state === 'PAUSED' ? 'warn' : 'mute'} icon={a.state === 'PAUSED' ? 'clock' : a.state === 'PAPER_TRADING' || a.state === 'RUNNING' ? 'check' : 'stop'}>{t(a.state === 'PAPER_TRADING' || a.state === 'RUNNING' ? 'ag2LifeActive' : a.state === 'PAUSED' ? 'ag2LifePaused' : 'ag2LifeStopped')}</Tag> : <AgentState state={a.state} />}
+            {rt && <Tag tone="info" icon="eye">{t(FAMILY_KEY((a as { family?: string }).family ?? 'custom'))}</Tag>}
             {/* a perp agent says what it trades; « simulation » only while it is one (a live agent is named by its mode tag) */}
             {perp && (agentTone(a) === 'paper' ? <Tag tone="info" icon="eye">{t('paListTag')}</Tag> : <Tag tone="mute" icon="bars">{t('paPerps')}</Tag>)}</span></button>; })}</div>}
       {/* v7 research runtime */}<button data-testid="rj-open" onClick={() => nav({ tab: 'research' })} className="card row-press flex w-full items-center gap-3.5 px-4 py-3.5 text-left"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-elev"><Icon n="search" /></span><span className="min-w-0 flex-1 text-[15px] font-semibold">{t('rjTitle')}</span><Icon n="chev" className="h-4 w-4 shrink-0 text-mute" /></button>
@@ -178,9 +184,14 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
   const [sheet, setSheet] = useState<'' | 'fund' | 'withdraw'>('');
   const lib = useQuery({ queryKey: ['strategies'], queryFn: () => get<{ strategies: any[] }>('/strategies'), staleTime: 300_000, enabled: spot });
   const [busy, setBusy] = useState(''), [err, setErr] = useState(''), [mandate, setMandate] = useState<any>(null), [note, setNote] = useState('');
+  const [panel, setPanel] = useState(false); // v11: the agent panel, for any kind of agent
   if (q.isLoading || !q.data) return <div className="space-y-4" aria-hidden="true"><div className="pt-2"><div className="skel h-9 w-56 !rounded-xl" /><div className="skel mt-3 h-4 w-40 !rounded-md" /></div><SkeletonCard lines={2} /><SkeletonCard lines={4} /><SkeletonRows n={3} /></div>;
   const a = q.data;
-  if (a.kind === 'perp') return <PerpAgentDetail a={a} id={id} nav={nav} />; // v6: simulation-only detail page
+  // v11: stream and supervisor agents have no page of their own — the panel is their page; spot and perp agents open it from theirs
+  if (a.kind === 'stream' || a.kind === 'supervisor') return <AgentPanel id={id} nav={nav} />;
+  if (panel) return <AgentPanel id={id} nav={nav} onLegacy={() => setPanel(false)} />;
+  const panelEntry = <button data-testid="ag2-open-panel" onClick={() => setPanel(true)} className="card row-press flex w-full items-center gap-3.5 px-4 py-3.5 text-left"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-elev"><Icon n="chart" /></span><span className="min-w-0 flex-1"><span className="block text-[15.5px] font-semibold">{t('ag2OpenPanel')}</span><span className="block text-[13px] leading-snug text-mute">{t('ag2OpenPanelSub')}</span></span><Icon n="chev" className="h-4 w-4 shrink-0 text-mute" /></button>;
+  if (a.kind === 'perp') return <div className="space-y-4"><PerpAgentDetail a={a} id={id} nav={nav} />{panelEntry}</div>; // v6: simulation-only detail page
   const act = async (name: string, fn: () => Promise<unknown>) => { setBusy(name); setErr(''); setNote(''); try { await fn(); await qc.invalidateQueries({ queryKey: ['agent', id] }); await qc.invalidateQueries({ queryKey: ['agents'] }); } catch (e) { const m = errText(t, e); if (m) setErr(m); } finally { setBusy(''); } };
   const prepare = async () => { setBusy('prepare'); setErr(''); setNote('');
     try { setMandate(await post(`/agents/${id}/mandate/prepare`)); }
@@ -332,6 +343,8 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
       </Card>
 
       {/* the go-live mandate: an APPROVAL sheet — it closes only through its own buttons, every field in full */}
+      {/* v11: signals, orders, performance per mode, backtests, pause / resume / stop — for this agent as for any other */}
+      {panelEntry}
       {mandate && <Sheet title={t('agMandateTitle')} onClose={() => setMandate(null)} dismissable={false} busy={busy === 'mandate'} testid="agent-mandate"
         footer={<div className="space-y-2.5 pb-1"><Btn full busy={busy === 'mandate'} onClick={() => void approveMandate()}><Icon n="key" />{t('agApproveMandate')}</Btn>
           <Btn full kind="ghost" disabled={busy === 'mandate'} onClick={() => setMandate(null)}>{t('cancel')}</Btn></div>}>

@@ -252,6 +252,9 @@ export class SeamOrderGateway implements AgentOrderGateway {
     try { res = await this.b.seam.lookup(row.order_json); } catch { return row; }       // cannot be asked now: unchanged, asked again on the next pass
     const before = row.record.state;
     const next = await this.settle(row, res, row.record.createdAt);
+    // an execution found by the reconciliation is a fill like any other: its own journal line
+    if (D.gt(D.from(next.record.filledSize), D.from(row.record.filledSize))) await journal(row.agent_id, { mode: row.mode, kind: 'fill', code: 'FILL', title: `Filled ${next.record.filledSize} at ${next.record.avgFillPrice ?? '?'}`,
+      body: `${row.order_json.side} ${row.order_json.instrument} (${row.id})${row.mode === 'LIVE' ? '' : ' — SIMULATED fill'}`, data: { fills: next.fills }, ref: { order: row.id, signal: row.signal_id }, configVersion: row.config_version });
     if (next.record.state !== before) await journal(row.agent_id, { mode: row.mode, kind: 'order', code: next.record.state, title: `Order reconciled: ${before} → ${next.record.state}`, body: `${row.order_json.side} ${row.order_json.instrument} (${row.id}) — ${next.record.reason}${next.record.detail ? `: ${next.record.detail}` : ''}`, ref: { order: row.id } });
     return next;
   }

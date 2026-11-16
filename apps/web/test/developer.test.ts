@@ -47,9 +47,9 @@ describe('key form', () => {
 describe('OpenAPI viewer', () => {
   const ops = docOps(doc);
   it('lists every operation of the committed document with its scope, state and parameters', () => {
-    expect(ops).toHaveLength(26);
+    expect(ops).toHaveLength(35);
     expect(ops.every((o) => o.scope && o.summary && o.path.startsWith('/api/v1/trading/') && o.responses.length > 0)).toBe(true);
-    expect(ops.filter((o) => !o.implemented).map((o) => o.id).sort()).toEqual(['backtestStrategy', 'cancelOrder', 'closePosition', 'createAgent', 'createStrategy', 'placeOrder', 'previewOrder', 'reducePosition', 'startAgent', 'startStrategy', 'stopAgent', 'stopStrategy']);
+    expect(ops.filter((o) => !o.implemented).map((o) => o.id).sort()).toEqual(['cancelOrder', 'closePosition', 'placeOrder', 'previewOrder', 'reducePosition'])   /* v11 agents: the strategies and agents operations are wired */;
     for (const o of ops.filter((x) => !x.implemented)) { expect(o.idempotent, o.id).toBe(true); expect(o.responses.some((r) => r.code.startsWith('2')), o.id).toBe(false); expect(o.responses.some((r) => r.code === '501'), o.id).toBe(true); }
     const markets = ops.find((o) => o.id === 'listMarkets')!;
     expect(markets).toMatchObject({ method: 'GET', scope: 'markets:read', implemented: true, idempotent: false, needsMandate: false, body: null });
@@ -60,7 +60,7 @@ describe('OpenAPI viewer', () => {
     expect(place).toMatchObject({ method: 'POST', scope: 'orders:execute', needsMandate: true });
     expect(JSON.parse(place.body!).required).toEqual(expect.arrayContaining(['mode', 'instrument', 'side', 'type', 'size']));
     expect(docTags(ops).map((g) => g.tag)).toEqual(['Meta', 'Markets', 'Portfolio', 'Positions', 'Orders', 'Strategies', 'Agents', 'Risk']);
-    expect(docTags(ops).reduce((n, g) => n + g.ops.length, 0)).toBe(26);
+    expect(docTags(ops).reduce((n, g) => n + g.ops.length, 0)).toBe(35);
   });
   it('never throws on a missing or odd document', () => {
     expect(docOps(null)).toEqual([]);
@@ -106,7 +106,7 @@ describe('i18n: the dv block', () => {
   it('every key the screen uses exists, and every key of the block is used', () => {
     const used = new Set<string>([...(screen + settings).matchAll(/'(dv[A-Za-z0-9_]+)'/g)].map((m) => m[1]!));
     const families: Record<string, string[]> = { dvTab_: ['keys', 'usage', 'webhooks', 'docs', 'status'], dvStatus_: ['active', 'expired', 'revoked'], dvAxis_: ['venues', 'instruments', 'networks', 'ipAllow'],
-      dvFieldErr_: ['name', 'scopes', 'rate', 'maxOrder', 'maxDaily', 'ips', 'mandate'], dvGroup_: ['read', 'prepare', 'execute'], dvDel_: ['delivered', 'pending', 'failed'],
+      dvFieldErr_: ['name', 'scopes', 'rate', 'maxOrder', 'maxDaily', 'ips', 'mandate'], dvGroup_: ['read', 'prepare', 'manage', 'execute'], dvDel_: ['delivered', 'pending', 'failed'],
       dvSvc_: ['database', 'signer', 'market_data', 'execution', 'webhooks'], dvScope_: SCOPES.map((s) => s.replace(':', '_')), dvErr_: [...DV_ERRORS] };
     for (const [prefix, members] of Object.entries(families)) {
       expect(screen.includes(`\`${prefix}\${`) || pure.includes(`\`${prefix}\${`), prefix).toBe(true);   // the family is really built in the code
