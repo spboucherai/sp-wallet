@@ -10,3 +10,7 @@ export { SDK_VERSION, USER_AGENT } from './version.ts';
 export { API_VERSION, SCOPES, EXECUTION_SCOPES, WEBHOOK_EVENTS, OPERATIONS, OPERATION_ERRORS, ORDER_STATES, FINAL_ORDER_STATES, MANDATE_DENY_REASONS, RISK_CHECK_IDS, type Scope, type WebhookEventName, type OperationId, type ApiErrorBody,
   type OrderState, type Order, type CanonicalOrder, type RiskCheck } from './generated/openapi.ts';
 export type * from './generated/openapi.ts';
+// live market data over a websocket (the quote engine): quotes, order books, trades, candles, venue statuses — read-only
+export { SPWalletStream, StreamError, OrderBook, bookChecksum, channelKey, STREAM_PROTOCOL_VERSION, STREAM_PATH, STREAM_TICKET_PATH, type StreamOptions, type StreamState, type StreamChannel, type StreamChannelType,
+  type StreamDataMessage, type StreamServerMessage, type QuoteMessage, type BookMessage, type TradeMessage, type CandleMessage, type StatusMessage, type DroppedMessage, type StreamErrorMessage, type SubscribedMessage,
+  type HelloMessage, type BookLevel, type WebSocketLike, type WebSocketCtor } from './stream.ts';

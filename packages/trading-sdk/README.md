@@ -46,7 +46,7 @@ Rotating a key unbinds its mandate (the mandate names the old key id): see "Key 
 src/        client.ts, errors.ts, util.ts (canonical JSON, decimals, order states), webhooks.ts, generated/openapi.ts
 scripts/    gen-types.mts (types from the OpenAPI document), build.mts, test-stack.mts (the real API for the
             integration tests of both SDKs), gen-fixtures.mts (server-made vectors for the Python SDK's tests)
-examples/   read-only.ts, preview-order.ts, paper-order.ts (executed by the integration test), webhook-receiver.ts
+examples/   read-only.ts, preview-order.ts, paper-order.ts, stream-quotes.ts (executed by the integration tests), webhook-receiver.ts
 test/       unit tests (mocked fetch) + integration.test.ts (the real API)
 ```
 
