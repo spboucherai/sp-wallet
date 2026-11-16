@@ -13,8 +13,8 @@
  * Pure: the clock is `request.now`.
  */
 import {
-  D, initialMargin, liquidationPriceAtLeverage, notional as notionalOf, ROUTER_FACTS, ROUTER_FACTS_CHECKED, walkBook,
-  type Book, type Dec, type DecStr, type Instrument, type Side, type Ticker, type VenueId,
+  D, gmxBalanceOi, gmxPriceImpact, initialMargin, liquidationPriceAtLeverage, notional as notionalOf, ROUTER_FACTS, ROUTER_FACTS_CHECKED, walkBook,
+  type Book, type Dec, type DecStr, type GmxLiquidity, type Instrument, type Side, type Ticker, type VenueId,
 } from '@spw/derivatives';
 import { bpsStr, ratioBps, SCALE, usd } from '../dec.ts';
 
@@ -36,6 +36,20 @@ export interface VenueCostInput {
   funding: FundingInput | null;
   /** maintenance margin as a fraction of notional; null = unknown (then no liquidation estimate) */
   maintenanceMarginFraction: DecStr | null;
+  /** a venue WITHOUT an order book (GMX): how a trade is priced against its pool. Used only when `book` is null. */
+  pool?: PoolExecution | null;
+  /** when shorts do not simply receive what longs pay (GMX: each side has its own net rate): the rate used for a SHORT, in the
+   *  same convention as `funding` (a positive rate is one the short RECEIVES). Absent = `funding` applies to both sides. */
+  fundingShort?: FundingInput | null;
+}
+/** execution against a liquidity pool at an oracle price (no book): the oracle range and the pool's price impact */
+export interface PoolExecution {
+  /** signed oracle range: a buy executes at the max, a sell at the min */
+  oracleMin: DecStr; oracleMax: DecStr;
+  /** unix ms of the reading */
+  ts: number; source: string;
+  /** price impact in USD of moving `sizeUsd` on `side` (positive = in favour of the trader); `usd: null` = it cannot be estimated, `basis` says why */
+  impact(sizeUsd: Dec, side: Side, action: 'open' | 'close'): { usd: Dec | null; basis: string };
 }
 export interface CostRequest {
   side: Side;
@@ -62,7 +76,9 @@ export type CostComponentId = (typeof COST_COMPONENTS)[number];
 
 export interface VenueCostRow {
   venue: string; instrument: string;
-  /** reference: the book's mid */
+  /** how the venue executes: against an order book, or against a pool at an oracle price */
+  executionModel: 'order_book' | 'pool';
+  /** reference: the book's mid (pool: the oracle mid) */
   midPrice: Figure;
   /** (best ask − best bid) / mid, basis points */
   spreadBps: Figure;
@@ -113,25 +129,44 @@ export const COST_ASSUMPTIONS = [
   'initial margin is notional / leverage (no size tiers); the liquidation price is the isolated-margin estimate at that leverage, with no fee and no funding accrual',
 ] as const;
 
+const NO_BOOK = 'this venue has no order book: trades execute against a liquidity pool at the oracle price';
+export const POOL_ASSUMPTIONS = [
+  'no order book on this venue: the entry and the exit are priced at the signed oracle range of NOW (max for a buy, min for a sell), plus the pool\'s price impact computed on the pool\'s current open interest',
+  'the order is executed later by a keeper, at the oracle price of that moment: the price can differ from the one shown; the execution fee and the network gas are not counted',
+] as const;
+
 /** one row of the comparison table. Never throws on market conditions: what cannot be computed is null with its reason. */
 export function venueCost(input: VenueCostInput, req: CostRequest, o: { /** size in base units, instead of notional / mid (used to give two venues the same size) */ sizeBase?: DecStr } = {}): VenueCostRow {
   const i = input.instrument, n = D.from(req.notionalUsd), lev = D.from(req.leverage), hours = D.from(req.horizonHours), depthB = D.from(req.depthBps);
   if (!D.isPos(n) || !D.isPos(lev) || D.isNeg(hours) || D.isNeg(depthB)) throw new RangeError('notional and leverage must be positive; horizon and depth must not be negative');
   if (!Number.isSafeInteger(req.now) || !Number.isInteger(req.maxAgeMs) || req.maxAgeMs < 0) throw new RangeError('bad clock or maximum age');
   const book = input.book, age = (ts: number) => Math.abs(req.now - ts);
-  const bookWhy = book === null ? 'no order book was supplied' : book.instrument !== i.id ? 'the order book is for another instrument' : age(book.ts) > req.maxAgeMs ? `the order book is ${age(book.ts)} ms old (limit ${req.maxAgeMs})`
+  // a venue without a book is priced against its pool: the oracle range stands in for the best bid and the best ask
+  const pool = book === null ? input.pool ?? null : null;
+  const bookWhy = pool !== null ? (age(pool.ts) > req.maxAgeMs ? `the pool figures are ${age(pool.ts)} ms old (limit ${req.maxAgeMs})` : null)
+    : book === null ? 'no order book was supplied' : book.instrument !== i.id ? 'the order book is for another instrument' : age(book.ts) > req.maxAgeMs ? `the order book is ${age(book.ts)} ms old (limit ${req.maxAgeMs})`
     : book.bids.length === 0 || book.asks.length === 0 ? 'the order book has an empty side' : null;
-  const bid = bookWhy === null ? D.from(book!.bids[0]![0]) : null, ask = bookWhy === null ? D.from(book!.asks[0]![0]) : null;
+  const bid = bookWhy !== null ? null : pool !== null ? D.from(pool.oracleMin) : D.from(book!.bids[0]![0]), ask = bookWhy !== null ? null : pool !== null ? D.from(pool.oracleMax) : D.from(book!.asks[0]![0]);
   const crossed = bid !== null && ask !== null && (!D.isPos(bid) || D.gt(bid, ask));
-  const why = bookWhy ?? (crossed ? 'the order book is crossed or has a non-positive price' : null);
+  const why = bookWhy ?? (crossed ? (pool !== null ? 'the oracle range is empty or has a non-positive price' : 'the order book is crossed or has a non-positive price') : null);
   const mid = why === null && bid !== null && ask !== null ? D.div(D.add(bid, ask), TWO, SCALE, 'half_even') : null;
 
   const lot = D.from(i.lotSize);
   const size = mid === null ? null : D.isPos(lot) ? D.quantize(o.sizeBase !== undefined ? D.from(o.sizeBase) : D.div(n, mid, SCALE, 'down'), lot, 'down') : null;
   const sizeWhy = why ?? (size === null ? 'the lot size is not positive' : !D.isPos(size) ? 'the notional is below one lot' : null);
   const entrySide = req.side === 'long' ? 'buy' as const : 'sell' as const, exitSide = req.side === 'long' ? 'sell' as const : 'buy' as const;
-  const leg = (side: 'buy' | 'sell'): { avg: Dec | null; cost: Dec | null; why: string | null } => {
-    if (sizeWhy !== null || size === null || mid === null || book === null) return { avg: null, cost: null, why: sizeWhy };
+  const leg = (side: 'buy' | 'sell'): { avg: Dec | null; cost: Dec | null; why: string | null; basis?: string } => {
+    if (sizeWhy !== null || size === null || mid === null) return { avg: null, cost: null, why: sizeWhy };
+    if (pool !== null) {
+      // oracle max for a buy, min for a sell; the pool's price impact is added when it is against the trade
+      const imp = pool.impact(D.mul(size, mid), req.side, side === entrySide ? 'open' : 'close');
+      if (imp.usd === null) return { avg: null, cost: null, why: imp.basis };
+      const half = D.mul(side === 'buy' ? D.sub(ask!, mid) : D.sub(mid, bid!), size), cost = D.add(half, D.isNeg(imp.usd) ? D.neg(imp.usd) : D.zero);
+      const perUnit = D.div(cost, size, SCALE, 'half_even');
+      return { avg: side === 'buy' ? D.add(mid, perUnit) : D.sub(mid, perUnit), cost, why: null,
+        basis: `no order book: the oracle ${side === 'buy' ? 'max' : 'min'} price vs the oracle mid, plus the pool's price impact when it is against the trade (${imp.basis}); a favourable impact is not credited — ${pool.source}` };
+    }
+    if (book === null) return { avg: null, cost: null, why: sizeWhy };
     const w = walkBook(side === 'buy' ? book.asks : book.bids, size, side, null);
     if (w.stoppedBy !== 'filled' || w.avg === null) return { avg: null, cost: null, why: `the supplied book fills only ${D.str(w.filled)} of ${D.str(size)} on the ${side === 'buy' ? 'ask' : 'bid'} side` };
     // slippage from the mid, in USD: |avg − mid| · size on the adverse side (never negative)
@@ -147,7 +182,8 @@ export function venueCost(input: VenueCostInput, req: CostRequest, o: { /** size
 
   // funding: per-hour rate that longs pay, from the input or from the ticker
   const tickerOk = input.ticker !== null && input.ticker.instrument === i.id && age(input.ticker.ts) <= req.maxAgeMs;
-  const f: FundingInput | null = input.funding ?? (tickerOk && input.ticker!.funding !== null ? { rate: input.ticker!.funding, intervalSec: i.fundingIntervalSec, ts: input.ticker!.ts, source: 'ticker.funding of the venue' } : null);
+  const given = req.side === 'short' && input.fundingShort !== undefined ? input.fundingShort : input.funding;
+  const f: FundingInput | null = given ?? (input.fundingShort !== undefined && req.side === 'short' ? null : tickerOk && input.ticker!.funding !== null ? { rate: input.ticker!.funding, intervalSec: i.fundingIntervalSec, ts: input.ticker!.ts, source: 'ticker.funding of the venue' } : null);
   const fundingWhy = f === null ? (input.ticker === null ? 'no funding rate and no ticker were supplied' : !tickerOk ? 'the ticker is stale or for another instrument, and no funding rate was supplied' : 'the venue publishes no funding rate in its ticker')
     : !Number.isInteger(f.intervalSec) || f.intervalSec <= 0 ? 'the funding interval is not a positive number of seconds' : age(f.ts) > req.maxAgeMs ? `the funding rate is ${age(f.ts)} ms old (limit ${req.maxAgeMs})` : null;
   const perHour = f !== null && fundingWhy === null ? D.div(D.mul(D.from(f.rate), HOUR), D.from(BigInt(f.intervalSec)), 30, 'half_even') : null;
@@ -172,13 +208,13 @@ export function venueCost(input: VenueCostInput, req: CostRequest, o: { /** size
     }
   }
 
-  const slip = (l: { cost: Dec | null; why: string | null }, what: string): Figure => (l.cost === null ? none(l.why ?? 'the book cannot be walked') : fig(usd(l.cost), `${what}: average price of walking the book for the whole size vs the mid, half the spread included (router.walkBook)`));
+  const slip = (l: { cost: Dec | null; why: string | null; basis?: string }, what: string): Figure => (l.cost === null ? none(l.why ?? 'the book cannot be walked') : l.basis !== undefined ? fig(usd(l.cost), `${what}: ${l.basis}`) : fig(usd(l.cost), `${what}: average price of walking the book for the whole size vs the mid, half the spread included (router.walkBook)`));
   const row: VenueCostRow = {
-    venue: i.venue, instrument: i.id,
-    midPrice: mid === null ? none(why!) : fig(D.str(D.div(mid, D.one, 10, 'half_even')), '(best bid + best ask) / 2'),
-    spreadBps: mid === null || bid === null || ask === null ? none(why!) : fig(bpsStr(ratioBps(D.sub(ask, bid), mid)), '(best ask − best bid) / mid'),
-    depthBidUsd: mid === null ? none(why!) : fig(usd(depthUsd(book!.bids, mid, depthB, 'bid')), `Σ price × size of the bids within ${req.depthBps} bps of the mid, in the supplied book`),
-    depthAskUsd: mid === null ? none(why!) : fig(usd(depthUsd(book!.asks, mid, depthB, 'ask')), `Σ price × size of the asks within ${req.depthBps} bps of the mid, in the supplied book`),
+    venue: i.venue, instrument: i.id, executionModel: pool !== null ? 'pool' : 'order_book',
+    midPrice: mid === null ? none(why!) : fig(D.str(D.div(mid, D.one, 10, 'half_even')), pool !== null ? '(oracle min + oracle max) / 2' : '(best bid + best ask) / 2'),
+    spreadBps: mid === null || bid === null || ask === null ? none(why!) : fig(bpsStr(ratioBps(D.sub(ask, bid), mid)), pool !== null ? '(oracle max − oracle min) / mid: a buy executes at the max, a sell at the min' : '(best ask − best bid) / mid'),
+    depthBidUsd: mid === null ? none(why!) : pool !== null ? none(NO_BOOK) : fig(usd(depthUsd(book!.bids, mid, depthB, 'bid')), `Σ price × size of the bids within ${req.depthBps} bps of the mid, in the supplied book`),
+    depthAskUsd: mid === null ? none(why!) : pool !== null ? none(NO_BOOK) : fig(usd(depthUsd(book!.asks, mid, depthB, 'ask')), `Σ price × size of the asks within ${req.depthBps} bps of the mid, in the supplied book`),
     sizeBase: size === null || sizeWhy !== null ? none(sizeWhy!) : fig(D.str(size), o.sizeBase !== undefined ? 'the size given, rounded down to the lot' : 'notional / mid, rounded down to the lot'),
     entryAvgPrice: entry.avg === null ? none(entry.why ?? 'the book cannot be walked') : fig(D.str(D.div(entry.avg, D.one, 10, 'half_even')), 'average price of walking the book for the whole size'),
     entrySlippageBps: entry.avg === null || mid === null ? none(entry.why ?? 'the book cannot be walked') : fig(bpsStr(ratioBps(D.max(entrySide === 'buy' ? D.sub(entry.avg, mid) : D.sub(mid, entry.avg), D.zero), mid)), '|average entry price − mid| / mid'),
@@ -188,7 +224,7 @@ export function venueCost(input: VenueCostInput, req: CostRequest, o: { /** size
     fundingRatePerHour: perHour === null ? none(fundingWhy!) : fig(D.str(D.div(perHour, D.one, 12, 'half_even')), `rate per ${f!.intervalSec} s × 3600 / ${f!.intervalSec}`),
     collateralRequiredUsd: collateral, liquidationPrice: liq, liquidationDistanceBps: liqDist,
     maxLeverage: fig(i.maxLeverage, 'the venue\'s maximum for the instrument'),
-    totalCostUsd: none(''), totalCostBps: none(''), missing: [], assumptions: [...COST_ASSUMPTIONS],
+    totalCostUsd: none(''), totalCostBps: none(''), missing: [], assumptions: pool !== null ? [...COST_ASSUMPTIONS.filter((a) => !a.startsWith('the book supplied')), ...POOL_ASSUMPTIONS] : [...COST_ASSUMPTIONS],
   };
   row.missing = COST_COMPONENTS.filter((c) => row[c].value === null);
   if (row.missing.length) row.totalCostUsd = row.totalCostBps = none(`incomplete: ${row.missing.map((c) => `${c} (${row[c].reason})`).join('; ')}`);
@@ -277,4 +313,73 @@ export function findDiscrepancies(inputs: readonly VenueCostInput[], req: Omit<C
   for (let x = 0; x < inputs.length; x++) for (let y = 0; y < inputs.length; y++) if (x !== y) out.push(crossVenueDiscrepancy(inputs[x]!, inputs[y]!, req, minNetEdgeBps));
   const key = (r: DiscrepancyResult): Dec | null => (r.netEdgeEstimateBps === null ? null : D.from(r.netEdgeEstimateBps));
   return out.sort((p, q) => { const a = key(p), b = key(q); return a === null ? (b === null ? 0 : 1) : b === null ? -1 : D.cmp(b, a); });
+}
+
+// ------------------------------------------------------------------------------------------------------------------ depth
+
+export interface DepthLevel {
+  bps: DecStr; bidUsd: DecStr; askUsd: DecStr;
+  /** false when the supplied book ends before that distance on a side: the figure is then a LOWER BOUND */
+  bidComplete: boolean; askComplete: boolean;
+}
+/** USD resting within each distance of the mid, per side, from the supplied book. null when the book has no mid. */
+export function depthWithin(book: Book, bpsList: readonly DecStr[]): DepthLevel[] | null {
+  const bb = book.bids[0], ba = book.asks[0];
+  if (!bb || !ba) return null;
+  const bid = D.from(bb[0]), ask = D.from(ba[0]);
+  if (!D.isPos(bid) || D.gt(bid, ask)) return null;
+  const mid = D.div(D.add(bid, ask), TWO, SCALE, 'half_even');
+  const lastBid = D.mul(D.from(book.bids[book.bids.length - 1]![0]), TEN_K), lastAsk = D.mul(D.from(book.asks[book.asks.length - 1]![0]), TEN_K);
+  return bpsList.map((b) => {
+    const bps = D.from(b);
+    if (D.isNeg(bps)) throw new RangeError('a depth distance must not be negative');
+    // the book reaches the bound when its last level is at or beyond it
+    return { bps: b, bidUsd: usd(depthUsd(book.bids, mid, bps, 'bid')), askUsd: usd(depthUsd(book.asks, mid, bps, 'ask')),
+      bidComplete: D.lte(lastBid, D.mul(mid, D.sub(TEN_K, bps))), askComplete: D.gte(lastAsk, D.mul(mid, D.add(TEN_K, bps))) };
+  });
+}
+
+// ------------------------------------------------------------------------------------------------------------------ GMX (pool venue)
+
+const GMX_SOURCE = 'GMX v2 market figures read from the venue (open interest, impact factors, oracle range)';
+/** how a trade is priced on a GMX v2 market: the functions are the router's (`gmxBalanceOi`, `gmxPriceImpact`), imported, not copied */
+export function gmxPoolExecution(l: GmxLiquidity): PoolExecution {
+  return {
+    oracleMin: l.oracleMin, oracleMax: l.oracleMax, ts: l.ts, source: GMX_SOURCE,
+    impact(sizeUsd, side, action) {
+      const long = side === 'long';
+      if (action === 'open' && D.gt(sizeUsd, D.from(long ? l.capacityLongUsd : l.capacityShortUsd))) return { usd: null, basis: `the size is above what can still be opened on the ${side} side of this pool (${long ? l.capacityLongUsd : l.capacityShortUsd} USD)` };
+      const oi = gmxBalanceOi(l), p = l.priceImpact;
+      const imp = gmxPriceImpact({ longOi: oi.long, shortOi: oi.short, sizeDeltaUsd: sizeUsd, isLong: long, increase: action === 'open', virtualInventoryUsd: oi.virtualUsd,
+        factorPositive: D.from(p.factorPositive), factorNegative: D.from(p.factorNegative), exponentPositive: D.from(p.exponentPositive), exponentNegative: D.from(p.exponentNegative) });
+      // capped at the market's maximum factors, as a fraction of the size
+      const neg = D.isNeg(imp.impactUsd), cap = D.mul(sizeUsd, D.from(neg ? p.maxFactorNegative : p.maxFactorPositive));
+      const capped = neg ? D.max(imp.impactUsd, D.neg(cap)) : D.min(imp.impactUsd, cap);
+      return { usd: capped, basis: `GMX price-impact formula on the open interest of now (${oi.basis}${oi.virtual === 'unknown' ? '; the virtual inventory could not be read: a negative impact can be worse' : imp.fromVirtualInventory ? '; from the virtual inventory' : ''}), for the ${action === 'open' ? 'opening' : 'closing'} of ${usd(sizeUsd)} USD` };
+    },
+  };
+}
+/** GMX has no maker / taker schedule: the market's position fee factors. The higher one (the trade does not improve the pool's balance) is the "taker" rate. */
+export function gmxFeeSchedule(l: GmxLiquidity): FeeSchedule {
+  return { takerRate: l.positionFeeFactor.balanceNotImproved, makerRate: l.positionFeeFactor.balanceImproved,
+    source: 'GMX position fee factors of the market, read from the venue: "taker" = the trade does not improve the long/short balance, "maker" = it does' };
+}
+/**
+ * The carry of each side on a GMX market, per hour: the venue's NET rate of the side (funding and borrowing fee together;
+ * positive = the side receives), restated in the convention of FundingInput — for a long, the rate longs pay; for a short,
+ * the rate shorts receive.
+ */
+export function gmxFunding(l: GmxLiquidity): { long: FundingInput; short: FundingInput } {
+  const source = 'GMX net rate of the side per hour (funding and borrowing fee together), read from the venue';
+  return { long: { rate: D.str(D.neg(D.from(l.netRateLongPerHour))), intervalSec: 3600, ts: l.ts, source }, short: { rate: l.netRateShortPerHour, intervalSec: 3600, ts: l.ts, source } };
+}
+
+// ------------------------------------------------------------------------------------------------------------------ funding, annualised
+
+export const HOURS_PER_YEAR = 8760;
+/** a per-interval rate as a per-hour and a per-year fraction (simple, not compounded: rate × intervals in the period) */
+export function annualiseFunding(rate: DecStr, intervalSec: number): { perHour: DecStr; perYear: DecStr } {
+  if (!Number.isInteger(intervalSec) || intervalSec <= 0) throw new RangeError('the funding interval must be a positive number of seconds');
+  const perHour = D.div(D.mul(D.from(rate), HOUR), D.from(BigInt(intervalSec)), 30, 'half_even');
+  return { perHour: D.str(D.div(perHour, D.one, 12, 'half_even')), perYear: D.str(D.div(D.mul(perHour, D.from(BigInt(HOURS_PER_YEAR))), D.one, 8, 'half_even')) };
 }

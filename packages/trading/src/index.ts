@@ -11,5 +11,6 @@ export * from './mandate/trading-mandate.ts';
 export { checkOrder as checkTradingMandateOrder } from './mandate/trading-mandate.ts';
 export * from './commands/parse.ts';
 export * from './compare/cost.ts';
+export * from './compare/symbols.ts';
 export * from './valuation/implied.ts';
 export * from './docs.ts';
