@@ -16,6 +16,9 @@ dependencies = [
     "statsmodels==0.15.0",
 ]
 
+[project.scripts]
+spq = "spq.__main__:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
