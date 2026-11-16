@@ -17,11 +17,20 @@ import { compactUsd, fmt, priceDp } from '../derivatives/dec';
 import type { VenueId } from '../derivatives/types';
 import { errText, I18n, useT, type Key } from '../i18n';
 import { ageLabel, CATEGORIES, defaultFilters, freshness, HUB_VENUES, mapi, nextSort, pctText, reasonKey, rowTarget, unmappedKey, type Category, type HubFilters, type HubRow, type HubSort } from '../markets';
+import { useConn, useQuoteSubscriptions, type LiveQuote } from '../quotes';   // v11 live quotes
+import { LiveCell, LiveStatus, QuoteDot } from '../quotes-ui';
 import { Btn, Card, Chips, Coin, ErrorState, Fact, Icon, inputCls, Notice, numFmt, PageTitle, Sheet, Stat, StatGrid, Tag } from '../ui';
 
 export type MarketsView = 'explorer' | 'compare';
 const PAGE = 50;
 const TONE = { fresh: 'ok', aging: 'mute', stale: 'warn', none: 'mute' } as const;
+// v11 live quotes. The id a row ticks on: its own for a perpetual; for a spot asset, the symbol it is priced as (WBTC ticks as BTC).
+// A row without one (a cash leg) keeps the listing's figure.
+export const liveIdOf = (r: Pick<HubRow, 'id' | 'kind' | 'underlying'>): string | null => (r.kind === 'perp' ? r.id : r.underlying ? `spot:${r.underlying}` : null);
+/** the price a row shows from a quote: the mark for a perpetual (as the listing does), the last trade for spot — null when the source gives neither */
+export const livePriceOf = (r: Pick<HubRow, 'kind'>, q: Pick<LiveQuote, 'mark' | 'mid' | 'last'>): string | null => (r.kind === 'perp' ? q.mark ?? q.mid ?? q.last : q.last ?? q.mid);
+/** the venue's funding rate per interval as a simple yearly fraction (the listing's `annualised`), for the live cell */
+export const annualisedOf = (rate: string, intervalSec: number): string => ((Number(rate) * 31_536_000) / intervalSec).toFixed(8);
 
 /** freshness of one row: a dot is never alone — the age is written next to it, and « périmé » in words when it is */
 function Fresh({ r }: { r: HubRow }) {
@@ -43,7 +52,11 @@ export function Markets({ view, underlying, nav }: { view: MarketsView; underlyi
   const [f, setF] = useState<HubFilters>(() => ({ ...defaultFilters('perp'), limit: PAGE }));
   const [sheet, setSheet] = useState<HubRow | null>(null);
   const set = (patch: Partial<HubFilters>) => setF((x) => ({ ...x, offset: 0, ...patch }));
-  const q = useQuery({ queryKey: ['mh', 'list', f], queryFn: () => mapi.list(f), refetchInterval: 10_000, placeholderData: (prev) => prev, enabled: view === 'explorer' });
+  // v11 live quotes: the rows tick from the websocket; the listing itself (order, pages, volumes) is re-read less often while the stream is live,
+  // and at the cadence it always had when the stream cannot connect
+  const conn = useConn();
+  const q = useQuery({ queryKey: ['mh', 'list', f], queryFn: () => mapi.list(f), refetchInterval: conn === 'live' ? 30_000 : 10_000, placeholderData: (prev) => prev, enabled: view === 'explorer' });
+  useQuoteSubscriptions(useMemo(() => (view === 'explorer' ? (q.data?.rows ?? []).map(liveIdOf).filter((x): x is string => x !== null) : []), [q.data, view]));
   const instruments = useQuery({ queryKey: ['deriv', 'instruments', locale], queryFn: () => dapi.instruments(undefined, locale), staleTime: 60_000, enabled: view === 'compare' });
   const open = (r: HubRow) => { const to = rowTarget(r); if (to.kind === 'asset') nav({ tab: 'asset', network: to.network, asset: to.asset }); else if (to.kind === 'futures') nav({ tab: 'futures', asset: to.instrument }); else setSheet(r); };
   const base = (underlying ?? 'BTC').toUpperCase();
@@ -59,15 +72,17 @@ export function Markets({ view, underlying, nav }: { view: MarketsView; underlyi
       {r.kind === 'perp' && r.underlying === null && <span className="max-w-[240px] whitespace-normal text-[11.5px] font-normal leading-snug text-mute" data-testid="mk-unmapped">{t(unmappedKey(r.mapping.unmapped) as Key)}</span>}
       <NotTradable r={r} /></span> },
     ...(perp ? [{ id: 'v', label: t('fxVenue'), head: true, cell: (r: HubRow) => <VenueBadge venue={r.venue as VenueId} /> } satisfies Col<HubRow>] : []),
-    { id: 'px', label: t('mkPrice'), num: true, cell: (r) => (r.price ? <span className="font-semibold tabular-nums">{fmt(r.price, { dp: priceDp('0.01', r.price), locale })}</span> : <span className="text-mute">—</span>) },
-    { id: 'chg', label: sortHead('change', t('mkChange')), num: true, cell: (r) => (r.change24h === null ? <span className="text-mute">—</span> : <span className={Number(r.change24h) < -0.00005 ? 'text-danger' : 'text-emerald'}>{pctText(r.change24h, 2, locale, true)}</span>) },
+    { id: 'px', label: t('mkPrice'), num: true, cell: (r) => <LiveCell id={liveIdOf(r)} flash={(q) => livePriceOf(r, q)} render={(q) => { const p = livePriceOf(r, q); return p ? <span className="font-semibold tabular-nums">{fmt(p, { dp: priceDp('0.01', p), locale })}</span> : null; }}>
+      {r.price ? <span className="font-semibold tabular-nums">{fmt(r.price, { dp: priceDp('0.01', r.price), locale })}</span> : <span className="text-mute">—</span>}</LiveCell> },
+    { id: 'chg', label: sortHead('change', t('mkChange')), num: true, cell: (r) => <LiveCell id={liveIdOf(r)} render={(q) => (q.change24h === null ? null : <span className={Number(q.change24h) < -0.00005 ? 'text-danger' : 'text-emerald'}>{pctText(q.change24h, 2, locale, true)}</span>)}>
+      {r.change24h === null ? <span className="text-mute">—</span> : <span className={Number(r.change24h) < -0.00005 ? 'text-danger' : 'text-emerald'}>{pctText(r.change24h, 2, locale, true)}</span>}</LiveCell> },
     { id: 'vol', label: sortHead('volume', t('mkVolume')), num: true, cell: (r) => compactUsd(r.volume24hUsd, locale) },
     ...(perp ? [
       { id: 'oi', label: sortHead('openInterest', t('mkOpenInterest')), num: true, cell: (r: HubRow) => compactUsd(r.openInterestUsd, locale) },
-      { id: 'fund', label: sortHead('funding', t('mkFunding')), num: true, cell: (r: HubRow) => (r.funding ? <>{pctText(r.funding.annualised, 2, locale, true)}<span className="block text-[11.5px] font-normal text-mute" data-testid="mk-funding-raw">{t('mkFundingRaw', { rate: pctText(r.funding.rate, 4, locale, true), interval: r.funding.intervalSec % 3600 === 0 ? `${r.funding.intervalSec / 3600} h` : `${Math.round(r.funding.intervalSec / 60)} min` })}</span></> : <span className="text-mute">—</span>) },
+      { id: 'fund', label: sortHead('funding', t('mkFunding')), num: true, cell: (r: HubRow) => (r.funding ? <LiveCell id={r.id} render={(q) => (q.funding === null ? null : <>{pctText(annualisedOf(q.funding, r.funding!.intervalSec), 2, locale, true)}<span className="block text-[11.5px] font-normal text-mute" data-testid="mk-funding-raw">{t('mkFundingRaw', { rate: pctText(q.funding, 4, locale, true), interval: r.funding!.intervalSec % 3600 === 0 ? `${r.funding!.intervalSec / 3600} h` : `${Math.round(r.funding!.intervalSec / 60)} min` })}</span></>)}><>{pctText(r.funding.annualised, 2, locale, true)}<span className="block text-[11.5px] font-normal text-mute" data-testid="mk-funding-raw">{t('mkFundingRaw', { rate: pctText(r.funding.rate, 4, locale, true), interval: r.funding.intervalSec % 3600 === 0 ? `${r.funding.intervalSec / 3600} h` : `${Math.round(r.funding.intervalSec / 60)} min` })}</span></></LiveCell> : <span className="text-mute">—</span>) },
       { id: 'lev', label: t('fxMaxLeverage'), num: true, cell: (r: HubRow) => (r.maxLeverage ? `${fmt(r.maxLeverage, { dp: 1, locale, trim: true })}×` : '—') },
     ] satisfies Col<HubRow>[] : []),
-    { id: 'age', label: t('mkFreshness'), num: true, cell: (r) => <Fresh r={r} /> },
+    { id: 'age', label: t('mkFreshness'), num: true, cell: (r) => { const id = liveIdOf(r); return id ? <QuoteDot id={id}><Fresh r={r} /></QuoteDot> : <Fresh r={r} />; } },
   ];
   const d = q.data, from = d ? (d.total === 0 ? 0 : d.offset + 1) : 0, to = d ? Math.min(d.total, d.offset + d.rows.length) : 0;
   return (
@@ -90,6 +105,7 @@ export function Markets({ view, underlying, nav }: { view: MarketsView; underlyi
             <div className="mt-3"><Chips label={t('mkTradable')} value={f.tradable} onChange={(tradable) => set({ tradable: tradable as HubFilters['tradable'] })}
               options={[{ id: '', label: t('mkTradableAll') }, { id: 'yes', label: t(perp ? 'mkTradableYes' : 'mkSwappableYes') }, { id: 'no', label: t(perp ? 'mkTradableNo' : 'mkSwappableNo') }]} /></div>
           </Card>
+          <div className="px-1"><LiveStatus venues={perp ? [...HUB_VENUES] : ['spot']} names={{ ...VENUE_NAME, spot: t('mkSpotSource') }} /></div>
           {d && <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1 text-[12.5px] text-mute" data-testid="mk-venues" aria-label={t('mkSources')}>{d.venues.filter((v) => (perp ? v.id !== 'spot' : v.id === 'spot')).map((v) =>
             <span key={v.id} className="inline-flex items-center gap-1.5" title={v.error ?? undefined}>{v.id === 'spot' ? t('mkSpotSource') : VENUE_NAME[v.id as VenueId] ?? v.name}
               <Tag tone={v.status === 'ok' ? 'ok' : v.status === 'stale' ? 'warn' : 'danger'} testid={`mk-venue-${v.id}`}>{t(`mkVenue_${v.status}` as Key)}{v.ageMs !== null && v.status !== 'error' ? ` · ${ageLabel(v.ageMs, locale)}` : ''}</Tag></span>)}</div>}

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useContext } from 'react';
+import { useContext, useMemo } from 'react';
 import { useUnread } from '../alerts';
 import { get } from '../api';
 import type { Nav, Tab } from '../App';
@@ -8,6 +8,7 @@ import { useNetworks, usePortfolio, useSettings, type Bal } from '../hooks';
 import { I18n, useT } from '../i18n';
 import { AnimatedNumber, Card, Change, Coin, fiat, H, haptic, Icon, Money, NetDot, Notice, numFmt, short, Skeleton, SkeletonRows, StatePill, testNotSent, trimAmt, when } from '../ui';
 import { PriceFreshness } from '../freshness'; // v11
+import { LiveSpotTag, overlaySpot, useLiveSpot } from '../quotes-spot'; // v11 live quotes (the quote client itself is fetched on demand)
 
 const FEATURED = ['USDC', 'BTC', 'ETH', 'SOL', 'USDT'];
 
@@ -36,9 +37,13 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
   const ag = useQuery({ queryKey: ['agents'], queryFn: () => get<{ agents: { id: string; state: string }[] }>('/agents'), staleTime: 30_000 });
   const cur = settings.currency, ck = cur === 'USD' ? 'usd' : 'cad';
   const hidden = settings.hideBalances;
+  // v11 live quotes: streamed USD prices on top of the polled ones (held assets first, 40 symbols at most). Without the stream nothing changes.
+  const liveSyms = useMemo(() => [...new Set([...(pf.data?.balances ?? [])].sort((a, b) => Number(b.amount !== null && b.amount !== '0') - Number(a.amount !== null && a.amount !== '0')).map((b) => b.symbol))].slice(0, 40), [pf.data?.balances]);
+  const live = useLiveSpot(pf.data?.prices ? liveSyms : []);
   if (pf.isLoading) return <div className="space-y-5" aria-busy="true"><Skeleton h="h-[272px]" className="!rounded-[30px]" /><SkeletonRows n={3} /><SkeletonRows n={4} /></div>;
   if (!pf.data) return <Notice tone="warn">{t('offline')}</Notice>;
-  const d = pf.data;
+  const d = { ...pf.data, prices: overlaySpot(pf.data.prices, live) };
+  const nLive = d.prices ? Object.values(d.prices).filter((m) => m.live).length : 0;
   const value = (b: Bal) => (d.prices?.[b.symbol] && b.display !== null ? Number(b.display) * d.prices[b.symbol]![ck] : 0);
   const total = d.balances.reduce((s, b) => s + value(b), 0);
   // 24 h change of the whole portfolio, from each holding's own 24 h change
@@ -84,6 +89,7 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
           <span className="inline-flex items-center gap-2"><span className={`inline-block h-2 w-2 rounded-full ${netState === 'ok' ? 'bg-[#35e7ac]' : netState === 'checking' ? 'pulse-dot bg-white/60' : 'bg-[#f4b65b]'}`} />
             {netState === 'checking' ? t('checking') : t('netsUp', { up, n: list.length })}</span>
           {d.prices && <PriceFreshness hero at={d.pricesAsOf} stale={d.pricesStale} />}
+          {nLive > 0 && <LiveSpotTag hero n={nLive} converted={ck !== 'usd'} />}
         </div>
         <div className="mt-6 flex gap-2">{action('receive', 'down', t('receive'), true)}{action('send', 'up', t('send'), false, !!d.halted || d.signer?.reachable === false)}{action('swap', 'swap', t('swap'))}{action('agents', 'robot', t('agents'))}</div>
       </section>

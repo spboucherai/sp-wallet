@@ -8,6 +8,7 @@ import { I18n, useT } from '../i18n';
 import { Addr, Card, Change, Coin, CopyBtn, fiat, H, Icon, Money, NetDot, Notice, numFmt, Seg, Skeleton, SkeletonRows, StatePill, trimAmt, when } from '../ui';
 import { issuerOf } from '../issuer';
 import { PriceFreshness } from '../freshness'; // v11
+import { LiveSpotTag, useLiveSpot } from '../quotes-spot'; // v11 live quotes (the quote client itself is fetched on demand)
 
 const RANGES = [['1', '1J', '1D'], ['7', '1S', '1W'], ['30', '1M', '1M'], ['365', '1A', '1Y']] as const;
 const compact = (n: number | null, cur: string, locale: string) => (n === null ? '—' : new Intl.NumberFormat(locale === 'fr' ? 'fr-CA' : 'en-CA', { style: 'currency', currency: cur, notation: 'compact', maximumFractionDigits: 2 }).format(n));
@@ -18,15 +19,18 @@ export function Asset({ network, asset, nav }: { network: string; asset: string;
   const [days, setDays] = useState<'1' | '7' | '30' | '365'>('7'), [hover, setHover] = useState<Pt | null>(null);
   const cur = settings.currency, ck = cur === 'USD' ? 'usd' : 'cad';
   const b = pf.data?.balances.find((x) => x.network === network && x.asset === asset);
+  const live = useLiveSpot(b ? [b.symbol] : [])[b?.symbol ?? ''];   // v11 live quotes: the streamed USD price of this symbol, when there is one
   const mk = useQuery({ queryKey: ['market', b?.symbol, days, ck], enabled: !!b, staleTime: 120_000,
     queryFn: () => get<{ points: Pt[]; market: any }>(`/market/${encodeURIComponent(b!.symbol)}?days=${days}&currency=${ck}`) });
   const act = useQuery({ queryKey: ['activity'], queryFn: () => get<{ items: any[] }>('/activity?limit=200'), staleTime: 15_000 });
   if (!b || !pf.data) return <div className="space-y-5" aria-busy="true"><Skeleton h="h-12" className="!w-56 !rounded-xl" /><Skeleton h="h-[420px]" /><Skeleton h="h-40" /><SkeletonRows n={3} /></div>;
   const n = nets.data?.find((x) => x.id === network);
   const m = pf.data.prices?.[b.symbol] ?? mk.data?.market ?? null;
-  const price: number | null = m ? m[ck] : null;
+  // v11 live quotes: the streamed price when there is one; in another currency than USD it is converted at the rate of the polled reading (said on screen)
+  const livePrice: number | null = live && m && m.usd > 0 ? (ck === 'usd' ? live.usd : live.usd * (m.cad / m.usd)) : null;
+  const price: number | null = livePrice ?? (m ? m[ck] : null);
   const pts = mk.data?.points ?? [];
-  const shown = hover?.p ?? (pts.length ? pts[pts.length - 1]!.p : price);
+  const shown = hover?.p ?? livePrice ?? (pts.length ? pts[pts.length - 1]!.p : price);
   const base = pts.length ? pts[0]!.p : null;
   const delta = shown !== null && base ? ((shown - base) / base) * 100 : null;
   const money = (v: number) => fiat(v, cur, locale);
@@ -45,7 +49,7 @@ export function Asset({ network, asset, nav }: { network: string; asset: string;
         <button onClick={() => nav({ tab: 'home' })} aria-label={t('back')} className="press -ml-2.5 grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink"><Icon n="chev" className="h-6 w-6 rotate-180" /></button>
         <Coin sym={b.symbol} net={b.network} size={48} />
         <div className="min-w-0"><h1 className="truncate text-[21px] font-semibold leading-tight tracking-[-0.02em]">{b.name}</h1><div className="mt-0.5 flex items-center gap-1.5 text-[13px] text-mute"><span>{b.symbol}</span><span aria-hidden="true">·</span><NetDot net={b.network} size={15} /><span className="truncate">{b.networkName}</span></div></div>
-        {m?.priceAt && <span className="ml-auto shrink-0"><PriceFreshness at={m.priceAt} stale={!!m.stale} /></span>}
+        {livePrice !== null ? <span className="ml-auto shrink-0"><LiveSpotTag converted={ck !== 'usd'} /></span> : m?.priceAt && <span className="ml-auto shrink-0"><PriceFreshness at={m.priceAt} stale={!!m.stale} /></span>}
       </div>
 
       {iss && <div data-testid="asset-issuer"><Notice tone="warn">{t('qaPegNote', { name: b.name, sym: b.symbol, issuer: iss.text })}</Notice></div>}

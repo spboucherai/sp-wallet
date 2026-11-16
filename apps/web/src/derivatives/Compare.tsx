@@ -11,7 +11,9 @@ import { fundingSeries, gapToMedianBps, type SeriesPoint } from '../chart-geom';
 import { MultiSeriesChart } from '../chart-multi';
 import { errText, I18n, useT, type Key } from '../i18n';
 import { ageLabel, compareParams, costItems, defaultCompareForm, mapi, pctText, reasonKey, textKey, topDiscrepancies, type Coded, type CompareForm, type CompareRow as CostRow, type Figure } from '../markets';
-import { Card, Coin, H, inputCls, Notice, numFmt, VenueIcon } from '../ui';
+import { useQuoteSubscriptions } from '../quotes';   // v11 live quotes: prices and spreads tick; the cost comparison is recomputed on its own cadence or on demand, never per tick
+import { LiveCell, LiveStatus } from '../quotes-ui';
+import { Btn, Card, Coin, H, inputCls, Notice, numFmt, VenueIcon } from '../ui';
 import { dapi } from './api';
 import { DataTable, Seg, timeOf, VENUE_NAME, VenueBadge, type Col } from './bits';
 import { compactUsd, D, dec, fmt, pct, priceDp, usd } from './dec';
@@ -25,6 +27,12 @@ const FIELDS = ['collateral', 'settlement', 'funding', 'leverage', 'fee', 'price
  * (min-h-11 and min-w-11 = 2.75 rem), the text stays left-aligned with the column.
  */
 export const COMPARE_OPEN_CLS = '-my-2 inline-flex min-h-11 min-w-11 items-center text-left font-semibold underline decoration-line underline-offset-4';
+/** spread of a live best bid / offer in basis points of their mid — null unless the source gives both sides (decimal strings in, a decimal string out) */
+export function liveSpreadBps(bid: string | null, ask: string | null): string | null {
+  const b = dec(bid ?? ''), a = dec(ask ?? '');
+  if (!b || !a || !D.gt(b, D.zero) || !D.gt(a, b)) return null;
+  return D.str(D.div(D.mul(D.sub(a, b), D.from(20000n)), D.add(a, b), 4, 'half_even'));
+}
 const intervalText = (sec: number | null) => (sec === null ? '—' : sec % 3600 === 0 ? `${sec / 3600} h` : `${Math.round(sec / 60)} min`);
 
 export function CompareView({ instruments, base, onBase, onOpen }: { instruments: Instrument[]; base: string; onBase: (b: string) => void; onOpen: (id: string) => void }) {
@@ -37,10 +45,10 @@ export function CompareView({ instruments, base, onBase, onOpen }: { instruments
   const cols: Col<CompareRow>[] = [
     { id: 'v', label: t('fxVenue'), head: true, cell: (r) => <><VenueBadge venue={r.venue} />{r.restriction ? <span className="mt-1 block text-[11.5px] font-normal text-warn" data-testid={r.venue === 'edgex' ? 'edgex-unavailable' : undefined}>{t(r.venue === 'edgex' ? 'exTradingUnavailable' : 'fxDataOnly')}</span> : null}</> },
     { id: 'i', label: t('fxInstrument'), head: true, cell: (r) => <button type="button" onClick={() => onOpen(r.instrument)} className={COMPARE_OPEN_CLS} data-testid="compare-open" aria-label={t('fxOpenMarket', { symbol: r.instrument })}>{r.instrument.slice(r.instrument.indexOf(':') + 1)}</button> },
-    { id: 'mark', label: t('fxMark'), num: true, cell: (r) => <span className="font-semibold">{fmt(r.mark, { dp: priceDp('0.01', r.mark), locale })}</span> },
-    { id: 'index', label: t('fxIndex'), num: true, cell: (r) => (r.index ? fmt(r.index, { dp: priceDp('0.01', r.index), locale }) : '—') },
+    { id: 'mark', label: t('fxMark'), num: true, cell: (r) => <LiveCell id={r.instrument} flash={(q) => q.mark} render={(q) => (q.mark ? <span className="font-semibold">{fmt(q.mark, { dp: priceDp('0.01', q.mark), locale })}</span> : null)}><span className="font-semibold">{fmt(r.mark, { dp: priceDp('0.01', r.mark), locale })}</span></LiveCell> },
+    { id: 'index', label: t('fxIndex'), num: true, cell: (r) => <LiveCell id={r.instrument} render={(q) => (q.index ? fmt(q.index, { dp: priceDp('0.01', q.index), locale }) : null)}>{r.index ? fmt(r.index, { dp: priceDp('0.01', r.index), locale }) : '—'}</LiveCell> },
     { id: 'fund', label: t('fxFundingPerHour'), num: true, cell: (r) => (r.funding ? <>{pct(r.funding, 5, locale, true)}<span className="block text-[11.5px] font-normal text-mute">{r.venue === 'gmx' ? t('fxContinuousShort') : t('fxEveryShort', { interval: intervalText(r.fundingVenue.intervalSec) })}</span></> : '—') },
-    { id: 'spread', label: t('fxSpreadBps'), num: true, cell: (r) => (r.spreadBps ? fmt(r.spreadBps, { dp: 2, locale }) : <span className="font-normal text-mute">{r.venue === 'gmx' ? t('fxNoBookShort') : '—'}</span>) },
+    { id: 'spread', label: t('fxSpreadBps'), num: true, cell: (r) => <LiveCell id={r.instrument} render={(q) => { const s = liveSpreadBps(q.bid, q.ask); return s === null ? null : fmt(s, { dp: 2, locale }); }}>{r.spreadBps ? fmt(r.spreadBps, { dp: 2, locale }) : <span className="font-normal text-mute">{r.venue === 'gmx' ? t('fxNoBookShort') : '—'}</span>}</LiveCell> },
     { id: 'depth', label: t('fxDepth1pct'), num: true, cell: (r) => (r.depthUsd1pct ? compactUsd(r.depthUsd1pct, locale) : <span className="font-normal text-mute">{r.venue === 'gmx' ? t('fxNoBookShort') : '—'}</span>) },
     { id: 'fee', label: t('fxTakerFeeBps'), num: true, cell: (r) => (r.takerFeeBps ? fmt(r.takerFeeBps, { dp: 2, locale, trim: true }) : '—') },
     { id: 'lev', label: t('fxMaxLeverage'), num: true, cell: (r) => `${fmt(r.maxLeverage, { dp: 1, locale, trim: true })}×` },
@@ -51,12 +59,14 @@ export function CompareView({ instruments, base, onBase, onOpen }: { instruments
   ];
   const present = ORDER.filter((v) => rows.some((r) => r.venue === v));
   const shown = bases.includes(base) ? bases : [base, ...bases];
+  useQuoteSubscriptions(useMemo(() => rows.map((r) => r.instrument), [rows]));
   return (
     <div className="space-y-4" data-testid="compare-view">
       {/* v11: what the position would cost on each venue (estimates from real books), above the table of contract facts */}
       <CostCompare underlying={base} onUnderlying={onBase} onOpen={onOpen} />
       <Card>
         <H>{t('fxCompareTitle', { base })}</H>
+        <div className="mb-3"><LiveStatus venues={present} names={VENUE_NAME} /></div>
         {bases.length > 0 && <Seg size="sm" label={t('fxBaseAsset')} value={base} onChange={onBase} options={shown.map((b) => ({ id: b, label: <span className="inline-flex items-center gap-1.5"><Coin sym={b} size={18} />{b}</span>, aria: b }))} className="mb-3 max-w-2xl" />}
         <div className="mb-3"><Notice tone="warn"><b className="font-semibold">{t('fxNotInterchangeable')}</b> {t('fxNotInterchangeableBody')}</Notice></div>
         {(q.data?.errors.length ?? 0) > 0 && <div className="mb-3"><Notice tone="warn">{t('fxVenueErrors', { venues: q.data!.errors.map((e) => VENUE_NAME[e.venue as VenueId] ?? e.venue).join(', ') })}</Notice></div>}
@@ -113,6 +123,7 @@ export function CostCompare({ underlying, onUnderlying, onOpen }: { underlying: 
   const list = useQuery({ queryKey: ['mh', 'underlyings'], queryFn: mapi.underlyings, staleTime: 60_000 });
   const q = useQuery({ queryKey: ['mh', 'compare', params], queryFn: () => mapi.compare(params!), enabled: params !== null, refetchInterval: 15_000, placeholderData: (prev) => prev });
   const rows = q.data?.rows ?? [];
+  useQuoteSubscriptions(useMemo(() => (q.data?.rows ?? []).map((r) => r.instrument), [q.data]));
   const picks = useMemo(() => { const c = (list.data ?? []).filter((u) => u.comparable).map((u) => u.underlying).slice(0, 10); return c.includes(underlying) ? c : [underlying, ...c]; }, [list.data, underlying]);
   const more = useMemo(() => (list.data ?? []).filter((u) => !picks.includes(u.underlying)), [list.data, picks]);
 
@@ -138,7 +149,9 @@ export function CostCompare({ underlying, onUnderlying, onOpen }: { underlying: 
     { id: 'v', label: t('fxVenue'), head: true, cell: (r) => <><VenueBadge venue={r.venue as VenueId} /><RowFlags r={r} /></> },
     { id: 'i', label: t('fxInstrument'), head: true, cell: (r) => <><button type="button" onClick={() => onOpen(r.instrument)} className={COMPARE_OPEN_CLS} data-testid="cp-open" aria-label={t('fxOpenMarket', { symbol: r.instrument })}>{r.symbol}</button>
       {r.multiplier !== '1' && <span className="block text-[11.5px] font-normal text-mute">{t('mkMultiplier', { n: r.multiplier, u: r.underlying })}</span>}{r.alternatives.length > 0 && <span className="block text-[11.5px] font-normal text-mute">{t('cpAlternatives', { n: r.alternatives.length })}</span>}</> },
-    { id: 'px', label: t('cpPrice'), num: true, cell: (r) => <Fig f={r.cost?.midPrice}>{(v) => <span className="font-semibold">{fmt(v, { dp: priceDp('0.01', v), locale })}</span>}</Fig> },
+    { id: 'px', label: t('cpPrice'), num: true, cell: (r) => <><Fig f={r.cost?.midPrice}>{(v) => <span className="font-semibold">{fmt(v, { dp: priceDp('0.01', v), locale })}</span>}</Fig>
+      {/* v11 live quotes: the price NOW, next to the one the estimate was computed on — the estimate itself is not recomputed per tick */}
+      <LiveCell id={r.instrument} flash={(q) => q.mid ?? q.mark} render={(q) => { const p = q.mid ?? q.mark; return p ? <span className="block text-[11.5px] font-normal text-mute" data-testid="cp-live">{t('qtLiveNow', { value: fmt(p, { dp: priceDp('0.01', p), locale }) })}</span> : null; }}>{null}</LiveCell></> },
     { id: 'spread', label: t('fxSpreadBps'), num: true, cell: (r) => <Fig f={r.cost?.spreadBps}>{(v) => fmt(v, { dp: 2, locale })}</Fig> },
     { id: 'depth', label: t('cpDepth'), num: true, cell: (r) => (r.depth ? <span className="block text-[12.5px] leading-snug">{r.depth.map((l) => <span key={l.bps} className="block whitespace-nowrap"><span className="text-mute">{l.bps} {t('cpBps')}</span> {compactUsd(l.bidUsd, locale)}{l.bidComplete ? '' : '+'} / {compactUsd(l.askUsd, locale)}{l.askComplete ? '' : '+'}</span>)}</span>
       : <span className="block max-w-[200px] whitespace-normal text-[11.5px] font-normal leading-snug text-mute">{r.cost?.executionModel === 'pool' ? t('cpNoBook') : r.depthReason ?? '—'}</span>) },
@@ -173,7 +186,8 @@ export function CostCompare({ underlying, onUnderlying, onOpen }: { underlying: 
         <p className="mt-2 text-[12px] leading-snug text-mute">{t('cpFormNote')}</p>
       </Card>
       <Card>
-        <H right={q.data ? <span className="text-[12px] font-normal text-mute">{t('cpAsOfNow', { time: timeOf(q.data.ts, locale) })}</span> : undefined}>{t('cpTableTitle')}</H>
+        <H right={q.data ? <span className="inline-flex flex-wrap items-center justify-end gap-2 text-[12px] font-normal text-mute">{t('cpAsOfNow', { time: timeOf(q.data.ts, locale) })}
+          <Btn kind="soft" onClick={() => void q.refetch()} disabled={q.isFetching} data-testid="cp-recompute">{t('qtRecompute')}</Btn></span> : undefined}>{t('cpTableTitle')}</H>
         <div className="mb-3"><Notice tone="info">{t('cpDisclaimer')}</Notice></div>
         {(q.data?.errors.length ?? 0) > 0 && <div className="mb-3"><Notice tone="warn">{t('fxVenueErrors', { venues: q.data!.errors.map((e) => venueName(e.source)).join(', ') })}</Notice></div>}
         {q.isLoading ? <div className="space-y-3 py-1" aria-hidden="true">{[0, 1, 2, 3].map((k) => <div key={k} className="flex items-center gap-3"><div className="skel h-6 w-28 !rounded-full" /><div className="skel h-4 flex-1 !rounded-md" /></div>)}</div>
