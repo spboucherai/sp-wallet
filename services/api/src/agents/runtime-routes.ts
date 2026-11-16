@@ -1,20 +1,21 @@
 // V11 agent panel — the owner's routes (session cookie + CSRF, like every /api/v1 route outside the trading API).
 // Every read that touches a table shared by paper and live takes `mode` and answers ONE mode. No route here approves a mandate:
-// going live hands over to the mandate approval surface (`/risk?mandate=agent:<id>`, the execution workstream's; until it is
-// merged the existing passkey flows of the agent pages are named in the draft).
+// going live hands over to the Risk screen — `/risk?mandate=<trading mandate id>` once the mandate was created from the draft
+// (POST /agents/:id/perp/live/mandate, perp-routes.ts), `/risk?mandate=agent:<id>` before — or to the agent page's own passkey
+// step, which approves the SAME trading mandate through the mandate service.
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { formatUnits } from '@spw/core';
 import { UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
 import { loopStats } from '../loop-stats.ts';
-import { killSwitch, killSwitchState } from '../agent-runtime/kill-switch.ts';
-import { releaseKillSwitch } from '../agent-runtime/kill-switch-admin.ts';
+import { killSwitchState } from '../agent-runtime/kill-switch.ts';
 import { listLeases } from '../agent-runtime/leases.ts';
 import { FAMILY_MODES, liveVerdict, type Family } from '../agent-runtime/model.ts';
 import { enqueue, getJob, jobView, queueStats } from '../agent-runtime/queue.ts';
 import { agentJournal, agentOrders, agentPerformance, agentSignals, agentSummary, agentTimeline, configVersions, loadAgent, parseMode, type RuntimeAgentRow } from '../agent-runtime/store.ts';
 import { pauseAgent, resumeAgent, startAgent, stopAgent, type Actor } from './lifecycle.ts';
+import { bindExecution, executionBound } from './execution-bind.ts';
 import { agentRuntime } from './runtime-bindings.ts';
 import { createFromTemplate, templatesView, updateRuntimeConfig } from './templates.ts';
 
@@ -31,7 +32,13 @@ export async function mandateDraft(a: RuntimeAgentRow, locale: 'fr' | 'en' = 'en
   if (kind === 'perp') {
     const { liveReadiness } = await import('./perp-live-cycle.ts'), { perpRuntime } = await import('./perp-live.ts');
     const r = await liveReadiness(a as never, perpRuntime(), { locale }).catch((e: Error) => ({ error: e.message.slice(0, 200) }));
-    return { ...base, available: !('error' in r), kind: 'derivative' as const, shape: 'SPW-VENUE-MANDATE-v1', readiness: 'error' in r ? null : { next: r.next, steps: r.steps, accounts: r.accounts }, fields: 'error' in r ? null : r.proposal, reason: 'error' in r ? r.error : null,
+    // a trading mandate already created for this agent and not approved yet: the Risk screen shows it under its id
+    const pend = (a as unknown as { perp?: { livePending?: { mandateId: string; accountId: string; unified?: boolean } } }).perp?.livePending;
+    const [tm] = pend?.unified ? await sql<{ id: string; state: string }[]>`select id, state from trading_mandates where id = ${pend.mandateId} and principal_kind = 'agent' and principal_id = ${a.id}` : [];
+    const pending = tm && ['created', 'pending_signer', 'active'].includes(tm.state) ? { mandateId: tm.id, state: tm.state, accountId: pend!.accountId } : null;
+    return { ...base, approval: { ...base.approval, route: pending ? `/risk?mandate=${pending.mandateId}` : base.approval.route }, pending,
+      create: !pending && !('error' in r) && r.next === 'mandate' && r.accountId ? { method: 'POST' as const, path: `/api/v1/agents/${a.id}/perp/live/mandate`, body: { accountId: r.accountId, locale } } : null,
+      available: !('error' in r), kind: 'derivative' as const, shape: 'SPW-TRADING-MANDATE-v1 → SPW-VENUE-MANDATE-v1', readiness: 'error' in r ? null : { next: r.next, steps: r.steps, accounts: r.accounts }, fields: 'error' in r ? null : r.proposal, reason: 'error' in r ? r.error : null,
       existingFlow: 'agent page → Live: venue account, funding, then the mandate (one passkey)' };
   }
   if (kind === 'spot') {
@@ -66,6 +73,9 @@ export async function overview(a: RuntimeAgentRow) {
 }
 
 export function runtimeRoutes(app: FastifyInstance): void {
+  // a server instance binds the agents to ITS execution layer (orders, risk, mandates) once it is ready — unless the process
+  // already bound that same instance (main.ts: bindAgentRuntime)
+  app.addHook('onReady', async () => { if (app.hasDecorator('execution') && executionBound() !== app.execution) bindExecution(app.execution); });
   app.get('/api/v1/agents/templates', async () => ({ templates: await templatesView(), families: FAMILY_MODES }));
   app.post('/api/v1/agents/from-template', async (req) => createFromTemplate(req.body, 'owner'));
 
@@ -103,8 +113,9 @@ export function runtimeRoutes(app: FastifyInstance): void {
     loops: [...loopStats.values()].filter((l) => l.name.startsWith('agent') || l.name === 'perp-agent-engine').map((l) => ({ name: l.name, everyMs: l.everyMs, runs: l.runs, lastOkAt: l.lastOkAt, lastErrorAt: l.lastErrorAt, lastError: l.lastError, failures: l.failures })),
     leases: await listLeases(), queue: await queueStats(), killSwitch: await killSwitchState(), streams: agentRuntime()?.stream?.marketStatus() ?? [], streamStats: agentRuntime()?.stream?.stats ?? null }));
 
-  // the agents' kill switch: engaging is free (it only removes the ability to add risk); releasing is the owner's, here and nowhere else
-  app.post('/api/v1/agents/kill-switch/engage', async (req) => { const b = z.strictObject({ reason: z.string().min(3).max(200) }).parse(req.body); await killSwitch().engage(`owner: ${b.reason}`); return killSwitchState(); });
-  app.post('/api/v1/agents/kill-switch/release', async () => releaseKillSwitch('owner'));
+  // THE kill switch (the risk engine's — there is no other). Engaging from the Agents panel is a thin alias of
+  // POST /api/v1/risk/kill-switch: it only removes the ability to add risk. There is NO release here: the switch is released
+  // with the owner's passkey in the Risk screen (/api/v1/risk/kill-switch/release/prepare → release).
+  app.post('/api/v1/agents/kill-switch/engage', async (req) => { const b = z.strictObject({ reason: z.string().min(3).max(200) }).parse(req.body); await app.execution.risk.engageKillSwitch({ kind: 'owner', id: 'owner' }, b.reason); return killSwitchState(); });
 }
 export const capitalUsd = (a: RuntimeAgentRow): string => formatUnits(BigInt(a.capital_usdc), 6);

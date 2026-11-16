@@ -86,7 +86,9 @@ export async function createPerpAgent(body: unknown) {
 }
 
 const pick = (o: Record<string, unknown> | undefined, keys: string[]): Record<string, unknown> | null => (o ? Object.fromEntries(keys.map((k) => [k, o[k] ?? null])) : null);
-const SPLIT_KEYS = ['total_return', 'sharpe', 'max_drawdown', 'worst_intrabar_drawdown', 'trades', 'fees_paid', 'slippage_paid', 'funding_pnl', 'liquidations', 'wiped_out', 'gross_leverage_max', 'margin_utilisation_max', 'orders_cut', 'orders_refused'];
+const SPLIT_KEYS = ['total_return', 'sharpe', 'max_drawdown', 'worst_intrabar_drawdown', 'trades', 'fees_paid', 'slippage_paid', 'funding_pnl', 'liquidations', 'wiped_out', 'gross_leverage_max', 'margin_utilisation_max', 'orders_cut', 'orders_refused',
+  // version 3: price PnL → funding → fees → slippage → latency → net (an exact identity), with gross and net Sharpe; null in a version-2 report
+  'gross_to_net'];
 /** What the owner must read before approving: the figures, and every reason to distrust them. */
 export function perpReportSummary(report: any, sha256: string, symbols: string[]) {
   if (!report) return null;
@@ -104,6 +106,16 @@ export function perpReportSummary(report: any, sha256: string, symbols: string[]
     robustness: pick(report.robustness, ['trials_tested', 'deflated_sharpe', 'bootstrap_sharpe_ci']),
     checks: pick(report.checks, ['lookahead', 'data_quality', 'ledger', 'funding_alignment']),
     liquidations: { train: liq('train'), validation: liq('validation'), test: liq('test') },
+    // V11, version-3 reports only (null for the version-2 reports stored before V11 — they stay readable as they are):
+    /** latency bound, size-dependent slippage, fee table per venue, funding interval per venue, one account per venue */
+    executionModel: report.execution_model ?? null,
+    /** the live engine's sizing and stop rules applied to the backtest; `observed.<split>.stop` non-null = the engine's own
+     *  loss limit (or a liquidation) ended that split and its equity is flat afterwards */
+    engineParity: report.engine_parity ?? null,
+    /** survivorship, listing-date truncation, missing / stale bars, common-clock drop */
+    dataBias: report.data_bias ?? null,
+    /** strategy hash, laboratory code hash, data snapshot hash, parameters, seed */
+    journal: report.journal ?? null,
     /** non-null: the version cannot be approved */
     problem: perpReportProblem(report, sha256, symbols),
   };
@@ -146,6 +158,9 @@ export async function perpMode(a: PerpAgentRow, mode: 'PAPER' | 'PAUSED' | 'STOP
     if (!a.strategy_version_id) throw new UserError('no_strategy', 'approve a strategy version first', 409);
     const acct = await paper().get(a.deriv_account_id);
     if (acct.policy.halt !== null) throw new UserError('halted', `the paper account is halted (${acct.policy.halt}); replace the limits and lift the halt, or reset the account in the Futures terminal`, 409);
+    // V11.2: the unified order service executes an agent's order only under a trading mandate — the PAPER mandate of this agent,
+    // created here by whoever starts it (the owner, or a key holding agents:manage inside its own limits). Nothing is signed.
+    await (await import('./paper-mandate.ts')).ensurePaperMandate(a, actor);
   }
   // V11 (D11): RESEARCH is a mode, not a state — the agent goes back to its pre-trading state
   const state = mode === 'PAPER' ? 'PAPER_TRADING' : mode === 'RESEARCH' ? (a.strategy_version_id ? 'AWAITING_APPROVAL' : 'CREATED') : mode;
@@ -157,7 +172,7 @@ export async function perpMode(a: PerpAgentRow, mode: 'PAPER' | 'PAUSED' | 'STOP
   return perpView(r!);
 }
 
-/** Approval of a perp version: the report must be a version-2 report for this hash and these instruments, with its integrity checks passing. */
+/** Approval of a perp version: the report must be a version-2 or version-3 report (version 3: with engine parity applied) for this hash and these instruments, with its integrity checks passing. */
 export function assertPerpApprovable(a: PerpAgentRow, v: { code_sha256: string; report: unknown; meta: { kind?: string } }): void {
   if (v.meta?.kind !== 'perp') throw new UserError('wrong_kind', 'this version is not a perpetual-futures strategy', 409);
   const why = perpReportProblem(v.report, v.code_sha256, a.universe);
@@ -223,6 +238,10 @@ export function perpAgentRoutes(app: FastifyInstance, d?: Derivatives, l?: LiveS
     return liveReadiness(await param(req), rt(), { account: q.account, locale: liveLocale(q.locale), days: q.days });
   });
   // V11: the two mandate-writing functions live in mandate-write.ts, which only these owner routes import
+  // V11.2: the Risk-screen way — the live trading mandate is CREATED from the agent's limits (nothing is approved); the owner
+  // approves it in /risk?mandate=<id> with the passkey, then starts the agent live
+  app.post('/api/v1/agents/:id/perp/live/mandate', async (req) => { const r = await (await import('./mandate-write.ts')).createLiveMandate(await param(req), rt(), LivePrepareBody.parse(req.body));
+    return { mandateId: r.created.id, state: r.created.state, hash: r.created.hash, enforcement: r.created.enforcement, derived: r.created.derived, proposal: r.proposal, approval: { route: `/risk?mandate=${r.created.id}`, passkey: true } }; });
   app.post('/api/v1/agents/:id/perp/live/prepare', async (req) => (await import('./mandate-write.ts')).prepareLive(await param(req), rt(), LivePrepareBody.parse(req.body)));
   app.post('/api/v1/agents/:id/perp/live/approve', async (req) => perpDetail(await (await import('./mandate-write.ts')).approveLive(await param(req), rt(), LiveApproveBody.parse(req.body))));
   app.post('/api/v1/agents/:id/perp/live/pause', async (req) => perpDetail(await pauseLive(await param(req))));

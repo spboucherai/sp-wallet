@@ -35,6 +35,7 @@ describe('migration of a pre-V11 database', () => {
     expect(after).toEqual(before);
     expect(after.map((a: any) => [a.name, a.state, a.mode])).toEqual([['Test', 'STOPPED', 'LIVE'], ['Perp fixture', 'STOPPED', 'LIVE'], ['Eth test', 'PAPER_TRADING', 'PAPER']]);
     store = await import('../src/agent-runtime/store.ts'); eng = await import('../src/agents/engine.ts'); gwm = await import('../src/agent-runtime/gateway.ts');
+    (await import('../src/agents/execution-bind.ts')).bindExecution((await import('../src/orders/index.ts')).createExecution());   // V11.2: bound as a process binds it (spot swaps stay on the seam gateway)
   });
 
   it('every agent gets a family (from its strategy), the bar engine, and configuration version 1 — once', async () => {

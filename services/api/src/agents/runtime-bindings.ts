@@ -2,14 +2,16 @@
 // gateway factory and to the kill switch port. main.ts (in-process workers) and agent-worker-main.ts (separate process) call
 // `bindAgentRuntime()` and nothing else.
 //
-// MERGE POINTS with the execution workstream — the only two lines to change:
-//   setOrderGatewayFactory(seamGatewayFactory)   →  the unified order service's factory (an `AgentOrderGateway` per agent)
-//   setKillSwitch(localKillSwitch({ … }))         →  the risk service's `KillSwitchPort`
+// BOUND TO THE EXECUTION LAYER (V11.2): `execution` is required. `bindExecution` (execution-bind.ts) binds
+//   the order gateway factory  →  `unifiedGatewayFactory(execution)`: perp agents through orders.submitCanonical
+//   the kill switch            →  `riskKillSwitch(execution)`: the risk engine's switch — the only one
 import type { Position } from '@spw/derivatives';
 import { sql } from '../db.ts';
 import { derivatives } from '../derivatives/index.ts';
-import { seamGatewayFactory, setOrderGatewayFactory, type OrderGatewayFactory } from '../agent-runtime/gateway.ts';
-import { localKillSwitch, setKillSwitch, type KillSwitchPort } from '../agent-runtime/kill-switch.ts';
+import type { OrderGatewayFactory } from '../agent-runtime/gateway.ts';
+import type { KillSwitchPort } from '../agent-runtime/kill-switch.ts';
+import type { Execution } from '../orders/index.ts';
+import { bindExecution } from './execution-bind.ts';
 import { RULES } from '../agent-runtime/model.ts';
 import type { JobRow } from '../agent-runtime/queue.ts';
 import { createAgentRuntime, derivFeed, type AgentRuntime, type RuntimeHandlers, type RuntimeOptions, type SnapshotAgent } from '../agent-runtime/scheduler.ts';
@@ -23,7 +25,9 @@ import { perpRuntime, type PerpRuntime } from './perp-live.ts';
 import { tickLivePerpAgent } from './perp-live-cycle.ts';
 import type { AgentRow } from './routes.ts';
 
-export interface BindOptions { market: MarketDeps; perp?: () => PerpRuntime; gateway?: OrderGatewayFactory; killSwitch?: KillSwitchPort; emit?: (event: 'agent.updated' | 'risk.kill_switch' | 'risk.proposal', data: Record<string, unknown>) => Promise<unknown>; runtime?: RuntimeOptions; stream?: boolean }
+export interface BindOptions { market: MarketDeps;
+  /** the execution layer of this process (orders, risk, mandates): the agents' ONE order path and ONE kill switch */
+  execution: Execution; perp?: () => PerpRuntime; gateway?: OrderGatewayFactory; killSwitch?: KillSwitchPort; emit?: (event: 'agent.updated' | 'risk.kill_switch' | 'risk.proposal', data: Record<string, unknown>) => Promise<unknown>; runtime?: RuntimeOptions; stream?: boolean }
 
 const symbolOf = (instrument: string): string => instrument.slice(instrument.indexOf(':') + 1);
 function exposure(positions: Position[]): { grossUsd: number; minLiquidationDistanceBps: number | null } {
@@ -131,17 +135,8 @@ let current: AgentRuntime | null = null;
 /** Bind the gateway, the kill switch and the webhook emitter, and build the runtime. Idempotent per process. */
 export function bindAgentRuntime(o: BindOptions): AgentRuntime {
   const emit = o.emit ?? (async () => {});
-  setOrderGatewayFactory(o.gateway ?? seamGatewayFactory);
-  setKillSwitch(o.killSwitch ?? localKillSwitch({
-    // the existing API-side halt of every venue account an agent trades on: stops new orders, never a reduce-only one
-    haltAccounts: async (reason) => {
-      const rows = await sql<{ account: string }[]>`select distinct perp->'live'->>'accountId' as account from agents where kind = 'perp' and mode = 'LIVE' and state in ('LIVE', 'PAUSED') and perp->'live'->>'accountId' is not null`;
-      const done: string[] = [], svc = (o.perp ?? perpRuntime)().live();
-      for (const r of rows) { try { await svc.halt(r.account, { reason: `kill switch: ${reason}`.slice(0, 200) }); done.push(r.account); } catch { /* the gateway refuses new exposure anyway */ } }
-      return done;
-    },
-    notify: async (s) => { await emit('risk.kill_switch', { source: 'agents', halted: true, reason: s.reason, by: s.by, haltedAccounts: s.haltedAccounts }); },
-  }));
+  // tests may pass their own gateway factory or kill switch port; production passes neither
+  bindExecution(o.execution, { ...(o.gateway ? { gateway: o.gateway } : {}), ...(o.killSwitch ? { killSwitch: o.killSwitch } : {}) });
   onAgentChange(async (a) => { await emit('agent.updated', { agentId: a.id, kind: a.kind ?? 'spot', state: a.state, mode: a.mode }); });
   current = createAgentRuntime(runtimeHandlers(o), o.runtime);
   return current;

@@ -166,6 +166,69 @@ export class LivePerpExecutor implements PerpExecutor {
     return this.refuse(instrument, 'leverage_not_set', `the venue did not confirm ${want}x ${mode} on ${symbol} (it reports ${r.venue.leverage ? `${r.venue.leverage.leverage}x ${r.venue.leverage.marginMode}` : 'nothing'}; ${r.action.error ?? r.action.state}): no order that can add exposure is sent on it`);
   }
 
+  /**
+   * V11.2 — everything this executor decides BEFORE an order exists (steps 1 to 5 below). Nothing is signed or sent here.
+   * `place` (the seam path) and the unified order gateway (`perpSeam.prepare`) both pass through it: the order then goes to the
+   * signer through `placeMandateOrder`, called here or by the unified order service.
+   */
+  async prepare(req: OrderRequest, leverage: DecStr): Promise<{ proceed: true; size: DecStr } | { proceed: false; result: PlaceResult }> {
+    const instrument = req.instrument, stop = (result: PlaceResult) => ({ proceed: false as const, result });
+    if (req.price === null) return stop(this.refuse(instrument, 'bad_request', 'a live order names its worst acceptable price'));
+    if (!this.reconciled) await this.reconcilePending();
+    // 1 — an earlier order on this instrument that the venue has not confirmed: nothing more on it until it resolves
+    const waiting = this.pending.get(instrument);
+    if (waiting) return stop(this.defer(instrument, 'live_unknown_pending', `order ${waiting} on ${instrument} is still being checked on the venue; nothing more is sent on this instrument until it resolves`));
+    let s: MandateAccountState;
+    try { s = await this.state(); } catch (e) { return stop(this.refused(instrument, e)); }
+    const m = s.mandate;
+    // V11 (B-02): a server lock (`blocked`) stops what can add exposure; the agent's way out — a reduce-only order — still goes
+    // when the account says it can reduce (authorization alive, mandate active or winding down)
+    if (s.blocked && !(req.reduceOnly && s.canReduce)) return stop(this.refuse(instrument, s.blocked.code, s.blocked.message));
+    if (!m || m.phase === 'ended') return stop(this.refuse(instrument, 'mandate_none', 'no derivative mandate is in force on this venue account'));
+    let size = req.size;
+    try {
+      if (!req.reduceOnly) {
+        if (m.phase !== 'active') return stop(this.refuse(instrument, 'mandate_wind_down', 'the mandate is being wound down: only reduce-only orders are placed'));
+        if (s.halted) return stop(this.refuse(instrument, 'halted', `trading is halted on the venue account: ${s.halted}`));
+        // 2 — the signer still counts the last signed order: wait for the next pass before adding exposure
+        const since = new Date(this.svc.now() - LIVE_COOLDOWN_MS);
+        const [recent] = await sql<{ client_id: string }[]>`select client_id from deriv_orders where account_id = ${this.o.accountId} and origin = 'mandate' and signature is not null
+          and created_at > ${since} and (not reduce_only or instrument = ${instrument}) order by created_at desc limit 1`;
+        if (recent) return stop(this.defer(instrument, 'live_cooldown', `order ${recent.client_id} reached the signer less than ${LIVE_COOLDOWN_MS / 1000} s ago, and the signer counts a signed order as exposure until it has expired: an order that can add exposure waits for the next pass`));
+        // 3 — the mandate's floor on the account value: stop adding exposure well before the signer refuses
+        const floor = D.from(m.limits.floorEquity), budget = D.max(D.zero, D.sub(D.from(this.o.capital), floor)), guard = D.add(floor, D.mul(budget, D.from(FLOOR_GUARD_FRACTION)));
+        if (D.lt(D.from(s.state!.equity), guard)) {
+          return stop(this.refuse(instrument, 'floor_guard', `account value ${s.state!.equity} is within ${Number(FLOOR_GUARD_FRACTION) * 100} % of the loss budget above the mandate's floor ${m.limits.floorEquity} (guard ${D.str(D.quantize(guard, D.from('0.01'), 'up'))}): no exposure is added; reduce-only orders still pass`));
+        }
+        // 4 — the venue's leverage setting, once
+        const lev = await this.ensureLeverage(s, instrument, leverage);
+        if (lev) return stop(lev);
+      }
+      // 5 — the mandate bounds every order by its notional, closes included: cut, never refuse a close for its size
+      const cap = D.mul(D.from(m.limits.maxOrderNotional), D.from(ORDER_CAP_HEADROOM)), price = D.from(req.price);
+      if (D.gt(D.mul(D.from(size), price), cap)) {
+        const inst = await this.svc.deps.venues.get(s.network).instrument(instrument);
+        const fit = D.quantize(D.div(cap, price, 18, 'down'), D.from(inst.lotSize), 'down');
+        if (!D.isPos(fit)) return stop(this.refuse(instrument, 'order_notional_exceeded', `the mandate's notional per order (${m.limits.maxOrderNotional}) is below one lot of ${instrument}`));
+        size = D.str(fit);
+      }
+      return { proceed: true, size };
+    } catch (e) {
+      this.dirty = true;
+      if (!(e instanceof UserError)) throw new Error(`live order ${req.clientId} could not be attempted: ${msg(e)}`);
+      return stop(this.refused(instrument, e));
+    }
+  }
+
+  /** V11.2 — the unified order service handed the order to the venue engine (or refused it): this executor's view of the
+   *  account follows — what is unconfirmed, what was refused, and whether the refusal means the mandate is over. */
+  async observe(req: Pick<OrderRequest, 'instrument' | 'clientId' | 'size' | 'side' | 'type' | 'price' | 'triggerPrice' | 'reduceOnly' | 'tif'>, outcome: { state: string; rejectCode: string | null; detail: string | null }): Promise<void> {
+    this.dirty = true; this.stats.orders += 1;
+    const o = await mandateOrder(this.o.accountId, req.clientId, this.svc).catch(() => null);
+    if (o) { this.result(req as OrderRequest, req.size, o, true); if (outcome.rejectCode && LIVE_EXIT_CODES.has(outcome.rejectCode)) this.exit ??= { code: outcome.rejectCode, reason: outcome.detail ?? outcome.rejectCode }; return; }
+    if ((outcome.state === 'REJECTED' || outcome.state === 'FAILED') && outcome.rejectCode) this.refuse(req.instrument, outcome.rejectCode, outcome.detail ?? outcome.rejectCode);
+  }
+
   async place(req: OrderRequest, leverage: DecStr): Promise<PlaceResult> {
     const ctx = { strategySha256: this.o.strategySha256, agentId: this.o.agentId, clientId: req.clientId }, instrument = req.instrument;
     if (req.price === null) return this.refuse(instrument, 'bad_request', 'a live order names its worst acceptable price');
@@ -173,45 +236,11 @@ export class LivePerpExecutor implements PerpExecutor {
     // 0 — this key already has an order: its state on the venue is the answer, whatever is asked now (never a second order)
     const prior = await mandateOrder(this.o.accountId, req.clientId, this.svc);
     if (prior) { this.dirty = true; return this.result(req, req.size, prior, true); }
-    // 1 — an earlier order on this instrument that the venue has not confirmed: nothing more on it until it resolves
-    const waiting = this.pending.get(instrument);
-    if (waiting) return this.defer(instrument, 'live_unknown_pending', `order ${waiting} on ${instrument} is still being checked on the venue; nothing more is sent on this instrument until it resolves`);
-    let s: MandateAccountState;
-    try { s = await this.state(); } catch (e) { return this.refused(instrument, e); }
-    const m = s.mandate;
-    // V11 (B-02): a server lock (`blocked`) stops what can add exposure; the agent's way out — a reduce-only order — still goes
-    // when the account says it can reduce (authorization alive, mandate active or winding down)
-    if (s.blocked && !(req.reduceOnly && s.canReduce)) return this.refuse(instrument, s.blocked.code, s.blocked.message);
-    if (!m || m.phase === 'ended') return this.refuse(instrument, 'mandate_none', 'no derivative mandate is in force on this venue account');
-    let size = req.size;
+    const p = await this.prepare(req, leverage);
+    if (!p.proceed) return p.result;
     try {
-      if (!req.reduceOnly) {
-        if (m.phase !== 'active') return this.refuse(instrument, 'mandate_wind_down', 'the mandate is being wound down: only reduce-only orders are placed');
-        if (s.halted) return this.refuse(instrument, 'halted', `trading is halted on the venue account: ${s.halted}`);
-        // 2 — the signer still counts the last signed order: wait for the next pass before adding exposure
-        const since = new Date(this.svc.now() - LIVE_COOLDOWN_MS);
-        const [recent] = await sql<{ client_id: string }[]>`select client_id from deriv_orders where account_id = ${this.o.accountId} and origin = 'mandate' and signature is not null
-          and created_at > ${since} and (not reduce_only or instrument = ${instrument}) order by created_at desc limit 1`;
-        if (recent) return this.defer(instrument, 'live_cooldown', `order ${recent.client_id} reached the signer less than ${LIVE_COOLDOWN_MS / 1000} s ago, and the signer counts a signed order as exposure until it has expired: an order that can add exposure waits for the next pass`);
-        // 3 — the mandate's floor on the account value: stop adding exposure well before the signer refuses
-        const floor = D.from(m.limits.floorEquity), budget = D.max(D.zero, D.sub(D.from(this.o.capital), floor)), guard = D.add(floor, D.mul(budget, D.from(FLOOR_GUARD_FRACTION)));
-        if (D.lt(D.from(s.state!.equity), guard)) {
-          return this.refuse(instrument, 'floor_guard', `account value ${s.state!.equity} is within ${Number(FLOOR_GUARD_FRACTION) * 100} % of the loss budget above the mandate's floor ${m.limits.floorEquity} (guard ${D.str(D.quantize(guard, D.from('0.01'), 'up'))}): no exposure is added; reduce-only orders still pass`);
-        }
-        // 4 — the venue's leverage setting, once
-        const lev = await this.ensureLeverage(s, instrument, leverage);
-        if (lev) return lev;
-      }
-      // 5 — the mandate bounds every order by its notional, closes included: cut, never refuse a close for its size
-      const cap = D.mul(D.from(m.limits.maxOrderNotional), D.from(ORDER_CAP_HEADROOM)), price = D.from(req.price);
-      if (D.gt(D.mul(D.from(size), price), cap)) {
-        const inst = await this.svc.deps.venues.get(s.network).instrument(instrument);
-        const fit = D.quantize(D.div(cap, price, 18, 'down'), D.from(inst.lotSize), 'down');
-        if (!D.isPos(fit)) return this.refuse(instrument, 'order_notional_exceeded', `the mandate's notional per order (${m.limits.maxOrderNotional}) is below one lot of ${instrument}`);
-        size = D.str(fit);
-      }
       this.stats.orders += 1; this.dirty = true;
-      const r = await placeMandateOrder(this.o.accountId, { ...req, size }, ctx, this.svc);
+      const r = await placeMandateOrder(this.o.accountId, { ...req, size: p.size }, ctx, this.svc);
       return this.result(req, req.size, r.order, r.idempotent);
     } catch (e) {
       this.dirty = true;

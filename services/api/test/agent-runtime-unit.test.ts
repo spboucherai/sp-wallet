@@ -9,7 +9,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Instrument } from '@spw/derivatives';
 import { REPO_ROOT } from './test-db.ts';
-import { apiMode, configHash, dbMode, FAMILIES, FAMILY_MODES, inLibraryManifest, lifecycleOf, liveVerdict, matchesStrategyName, modeOf, NO_LIVE_ONE_VENUE, ruleHash, RULES, TEMPLATES } from '../src/agent-runtime/model.ts';
+import { apiMode, configHash, dbMode, FAMILIES, FAMILY_MODES, inLibraryManifest, LAB_RESEARCH_ONLY, lifecycleOf, liveVerdict, matchesStrategy, matchesStrategyName, modeOf, NO_LIVE_ONE_VENUE, ruleHash, RULES, strategyNamesOf, TEMPLATES } from '../src/agent-runtime/model.ts';
 import { computePerformance, maxDrawdown, MIN_POINTS_FOR_RATIOS, spotTrades, stdev } from '../src/agent-runtime/performance.ts';
 import { accrueFunding, applyFill, crossDecision, fundingDecision, hourlyBps, mmFills, mmQuotes, needsRequote, newPaperBook, paperEquity, volBps, type MarketView, type Quote } from '../src/agent-runtime/families.ts';
 import { evaluatePortfolio, supervise, type AgentSnapshot, type Finding, type SupervisorLimits, type SupervisorPorts } from '../src/agent-runtime/risk-supervisor.ts';
@@ -58,19 +58,33 @@ describe('agent model', () => {
       else { expect(t.strategies, t.id).toEqual([]); expect(RULES[t.rule!], t.id).toBeDefined(); expect(RULES[t.rule!]!.family).toBe(t.family); expect(ruleHash(t.rule!)).toMatch(/^[0-9a-f]{64}$/); }
       expect(t.name.fr && t.name.en && t.summary.fr && t.summary.en, t.id).toBeTruthy();
     }
-    // the names the laboratory workstream is adding come first; the versions present today follow
-    expect(TEMPLATES.find((t) => t.id === 'momentum')!.strategies).toEqual(['momentum_xs_perp', 'ts_momentum_perp', 'ma_trend_perp', 'vol_breakout_perp']);
-    expect(TEMPLATES.find((t) => t.id === 'stat-arb')!.strategies).toEqual(['statarb_basket_perp', 'pairs_coint_perp']);
-    expect(TEMPLATES.find((t) => t.id === 'mean-reversion')!.strategies).toEqual(['mean_reversion_bands_perp', 'zscore_reversion_perp']);
+    // the V11 laboratory strategies come first — the BTC/ETH/SOL version (`/2`, the one the signer can execute) before the generic `/1` —
+    // then the older library versions
+    const of = (id: string) => TEMPLATES.find((t) => t.id === id)!;
+    expect(of('momentum').strategies).toEqual(['momentum_xs_perp/2', 'momentum_xs_perp/1', 'momentum_xs_perp', 'ts_momentum_perp', 'ma_trend_perp', 'vol_breakout_perp']);
+    expect(strategyNamesOf(of('momentum').strategies)).toEqual(['momentum_xs_perp', 'ts_momentum_perp', 'ma_trend_perp', 'vol_breakout_perp']);
+    expect(of('stat-arb').strategies).toEqual(['statarb_basket_perp', 'pairs_coint_perp']);
+    expect(of('mean-reversion').strategies).toEqual(['mean_reversion_bands_perp/2', 'mean_reversion_bands_perp/1', 'mean_reversion_bands_perp', 'zscore_reversion_perp']);
+    // references no agent runs: the cross-venue strategy and the spot-leg one are backtest-only; studies and the policy are not strategies
+    expect(of('funding-arb').backtestStrategies).toEqual(['funding_arb_cross_venue', 'basis_cash_carry']);
+    expect(Object.fromEntries(TEMPLATES.filter((t) => t.labStudies.length).map((t) => [t.id, t.labStudies.map((x) => `${x.kind}:${x.name}`)]))).toEqual({
+      'market-making': ['study:market_making_as', 'study:vol_forecast'], 'cross-exchange': ['study:cross_exchange_spread'], 'risk-manager': ['policy:risk_supervisor', 'study:vol_forecast'] });
+    for (const t of TEMPLATES) for (const n of [...t.backtestStrategies, ...t.labStudies.map((x) => x.name)]) expect(strategyNamesOf(t.strategies), `${t.id}: ${n} is never bound to an agent`).not.toContain(n);
+    expect([matchesStrategy('momentum_xs_perp/2', 'momentum_xs_perp/2'), matchesStrategy('momentum_xs_perp/1', 'momentum_xs_perp/2'), matchesStrategy('momentum_xs_perp/1', 'momentum_xs_perp'), matchesStrategy('momentum_xs_perp_bes/1', 'momentum_xs_perp'), matchesStrategy('ts_momentum_perp/1', 'momentum_xs_perp')]).toEqual([true, false, true, true, false]);
     expect([matchesStrategyName('momentum_xs_perp', 'momentum_xs_perp'), matchesStrategyName('momentum_xs_perp_bes', 'momentum_xs_perp'), matchesStrategyName('ts_momentum_perp', 'momentum_xs_perp')]).toEqual([true, true, false]);
   });
 
   it('D10: the library manifest lists production strategies; a fixture, a scratch copy or a research job is not in it', () => {
-    for (const ok of ['ma_trend', 'pairs_coint_perp', 'momentum_xs_perp', 'momentum_xs_perp_btc_eth_sol', 'risk_supervisor', 'vol_forecast']) expect(inLibraryManifest(ok), ok).toBe(true);
+    for (const ok of ['ma_trend', 'pairs_coint_perp', 'momentum_xs_perp', 'momentum_xs_perp_btc_eth_sol', 'mean_reversion_bands_perp', 'statarb_basket_perp', 'basis_cash_carry']) expect(inLibraryManifest(ok), ok).toBe(true);
     for (const no of ['zz_forktest', 'rj_0eb9b833115a', 'fake_perp', 'tmp', 'ma_trend_copy', 'pairs_coint_perp2']) expect(inLibraryManifest(no), no).toBe(false);
+    // V11: the cross-venue strategy (research/strategies_xvenue), the model studies and the policy are research only — never agent-runnable, even if a directory of that name appeared
+    expect([...LAB_RESEARCH_ONLY].sort()).toEqual(['cross_exchange_spread', 'funding_arb_cross_venue', 'market_making_as', 'risk_supervisor', 'vol_forecast']);
+    for (const no of LAB_RESEARCH_ONLY) expect(inLibraryManifest(no), no).toBe(false);
     const before = process.env.SPW_LAB_EXTRA_STRATEGIES;
     process.env.SPW_LAB_EXTRA_STRATEGIES = 'zz_forktest, ../etc';
     expect([inLibraryManifest('zz_forktest'), inLibraryManifest('../etc')]).toEqual([true, false]);
+    process.env.SPW_LAB_EXTRA_STRATEGIES = 'funding_arb_cross_venue';
+    expect(inLibraryManifest('funding_arb_cross_venue')).toBe(false);                                   // not even by the deployment's extra list
     if (before === undefined) delete process.env.SPW_LAB_EXTRA_STRATEGIES; else process.env.SPW_LAB_EXTRA_STRATEGIES = before;
   });
 
@@ -435,10 +449,25 @@ describe('module boundaries — an agent cannot create, widen or approve its own
     const callers = [...files('agents'), ...files('agent-runtime')].filter((f) => calls.test(code(read(f))));
     expect(callers).toEqual(['agents/mandate-write.ts']);
   });
-  it('the agent runtime never reaches the signer client, and only its admin module can release the kill switch', () => {
+  it('the agent runtime never reaches the signer client; NOTHING in the agent code can release the kill switch, and it holds no switch state of its own', () => {
     for (const f of runtime) expect(imports(read(f)).filter((s) => /signer-client/.test(s)), f).toEqual([]);
-    const releasers = [...files('agents'), ...files('agent-runtime')].filter((f) => /releaseKillSwitch/.test(code(read(f))));
-    expect(releasers.sort()).toEqual(['agent-runtime/kill-switch-admin.ts', 'agents/runtime-routes.ts']);
+    // V11.2 — ONE switch, the risk engine's. No agent file releases anything (risk.release / prepareRelease / a release route),
+    // none writes the risk engine's record or keeps a flag of its own, and the admin module is gone.
+    const all = [...files('agents'), ...files('agent-runtime')];
+    expect(all).not.toContain('agent-runtime/kill-switch-admin.ts');
+    const releasers = all.filter((f) => /releaseKillSwitch|prepareRelease|\.release\s*\(|kill-switch\/release|read-only\/release/.test(code(read(f))));
+    expect(releasers).toEqual([]);
+    const writers = all.filter((f) => /setSetting\s*\(\s*(RISK_SWITCHES_KEY|LEGACY_AGENTS_KILL_SWITCH_KEY|KILL_SWITCH_KEY|'risk\.switches'|'agents\.kill_switch')/.test(code(read(f))));
+    expect(writers).toEqual([]);
+    expect(/setSetting/.test(code(read('agent-runtime/kill-switch.ts')))).toBe(false);
+    // the only engage in the agent code goes to the risk service
+    expect(all.filter((f) => /engageKillSwitch\s*\(/.test(code(read(f)))).sort()).toEqual(['agents/execution-bind.ts', 'agents/runtime-routes.ts']);
+    // the paper-mandate module can only ever say `paper`, and the engines / the runtime / the gateway do not import it
+    expect(/mode: 'paper' as const/.test(read('agents/paper-mandate.ts')) && !/mode: 'live'/.test(code(read('agents/paper-mandate.ts')))).toBe(true);
+    expect([...runtime, ...['engine.ts', 'live.ts', 'perp-engine.ts', 'perp-live.ts', 'perp-exec.ts', 'perp-exec-live.ts', 'perp-gateway.ts', 'unified-gateway.ts', 'execution-bind.ts', 'spot-seam.ts', 'perp-live-cycle.ts', 'runtime-bindings.ts'].map((f) => path.join('agents', f))]
+      .filter((f) => imports(read(f)).some((s) => /paper-mandate/.test(s)))).toEqual([]);
+    // main.ts and the worker bind the agents to an execution layer: there is no other gateway binding in a process
+    for (const f of ['main.ts', 'agent-worker-main.ts']) expect(/bindAgentRuntime\(\{\s*(\/\/[^\n]*\n\s*)*execution/.test(read(f)), f).toBe(true);
     // the supervisor module itself: types of the kill switch port and of the model, nothing else
     expect(imports(read('agent-runtime/risk-supervisor.ts')).sort()).toEqual(['./kill-switch.ts', './model.ts']);
     expect(/import type \{ KillSwitchPort \}/.test(read('agent-runtime/risk-supervisor.ts'))).toBe(true);

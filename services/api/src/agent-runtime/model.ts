@@ -66,7 +66,7 @@ export function liveVerdict(family: Family, kind: string, universe: readonly str
   if (family === 'risk_manager') return { capable: true };
   if (kind === 'perp') {
     const off = universe.filter((s) => !(LIVE_PINNED as readonly string[]).includes(s));
-    if (off.length) return { capable: false, code: 'universe_not_pinned', reason: `the instruments of a live perp agent must all be among ${LIVE_PINNED.join(', ')} (the signer's pinned asset table); ${off.join(', ')} ${off.length > 1 ? 'are' : 'is'} not. A perp strategy runs only on its exact universe, so this agent cannot go live with this strategy.` };
+    if (off.length) return { capable: false, code: 'universe_not_pinned', reason: `the instruments of a live perp agent must all be among ${LIVE_PINNED.join(', ')} (the signer's pinned asset table); ${off.join(', ')} ${off.length > 1 ? 'are' : 'is'} not. A fixed-universe strategy runs only on its exact universe, and a generic one on the agent's instruments: with these instruments this agent cannot go live.` };
   }
   return { capable: true };
 }
@@ -76,12 +76,16 @@ export function liveVerdict(family: Family, kind: string, universe: readonly str
 export interface RiskDefaults { [k: string]: number | string | boolean }
 export interface AgentTemplate {
   id: string; family: Family; engine: EngineKind; name: { fr: string; en: string }; summary: { fr: string; en: string };
-  /** bar templates: strategy NAMES of the laboratory, in order of preference. The first installed one that fits is bound; none installed → "strategy not installed". */
+  /** bar templates: strategies of the laboratory BY NAME, in order of preference — `name` (every installed version of that
+   *  directory) or `name/version` (that version). The first installed one is bound; none installed → "strategy not installed". */
   strategies: readonly string[];
   /** stream / supervisor templates: the TypeScript rule (agent-runtime/families) */
   rule: string | null;
-  /** laboratory strategies used for the BACKTEST of a stream family (optional: absent → the template says so) */
+  /** laboratory strategies that are the BACKTEST / research reference of the family and that NO agent can run (two venues, or
+   *  spot legs): shown with their results, never bound to an agent */
   backtestStrategies: readonly string[];
+  /** model studies and policies of the laboratory (research/studies and the lab's studies package) that document the family: not strategies */
+  labStudies: readonly { name: string; kind: 'study' | 'policy' }[];
   kind: 'perp' | 'stream' | 'supervisor';
   defaults: { universe: string[]; venues: string[]; interval: string; capitalUsdc: string; config: Record<string, unknown>; risk: RiskDefaults };
 }
@@ -89,43 +93,45 @@ export interface AgentTemplate {
 const PERP_RISK: RiskDefaults = { maxLeverage: 2, maxGrossExposureX: 1.5, maxPositionX: 1, maxDailyLossPct: 3, maxTotalLossPct: 10, slippageBps: 30, minTradePct: 2 };
 const STREAM_RISK: RiskDefaults = { maxPositionUsd: 500, maxGrossUsd: 1000, maxDailyLossPct: 2, maxTotalLossPct: 5, maxDataAgeMs: 5000 };
 
-/** The seven built-in agents. Strategy names of the laboratory are bound BY NAME through the library discovery: the names the
- *  quant-lab workstream is adding come first, the library versions that exist today follow. Nothing here is a placeholder. */
+/** The seven built-in agents, bound BY NAME to what the quant lab installed (research/strategies, research/strategies_xvenue,
+ *  research/studies): the V11 strategies first — the BTC/ETH/SOL version before the generic one, because it is the one whose
+ *  universe the signer can execute live — then the older library versions. Nothing here is a placeholder, and nothing here
+ *  says how a strategy performed: the laboratory's results are read from its files (agents/lab-verdicts.ts). */
 export const TEMPLATES: readonly AgentTemplate[] = [
-  { id: 'stat-arb', family: 'stat_arb', engine: 'bar', kind: 'perp', rule: null, backtestStrategies: [],
+  { id: 'stat-arb', family: 'stat_arb', engine: 'bar', kind: 'perp', rule: null, backtestStrategies: [], labStudies: [],
     name: { fr: 'Arbitrage statistique', en: 'Statistical Arbitrage' },
     summary: { fr: 'Paire ou panier co-intégré de contrats perpétuels Hyperliquid : achète l\'écart quand il s\'éloigne de sa moyenne, le revend quand il y revient.', en: 'A co-integrated pair or basket of Hyperliquid perpetuals: buys the spread when it is far from its mean, sells it back when it returns.' },
     strategies: ['statarb_basket_perp', 'pairs_coint_perp'],
     defaults: { universe: ['BTC', 'ETH'], venues: ['hyperliquid'], interval: '1h', capitalUsdc: '1000', config: {}, risk: PERP_RISK } },
-  { id: 'funding-arb', family: 'funding_arb', engine: 'stream', kind: 'stream', rule: 'funding_differential', backtestStrategies: ['funding_arb_cross_venue', 'basis_cash_carry'],
+  { id: 'funding-arb', family: 'funding_arb', engine: 'stream', kind: 'stream', rule: 'funding_differential', backtestStrategies: ['funding_arb_cross_venue', 'basis_cash_carry'], labStudies: [],
     name: { fr: 'Arbitrage de financement', en: 'Funding Arbitrage' },
     summary: { fr: 'Compare le taux de financement du même contrat sur deux plateformes, ramené à l\'heure avec l\'intervalle réel de chacune, net des frais des quatre jambes.', en: 'Compares the funding rate of the same contract on two venues, per hour with each venue\'s real interval, net of the fees of four legs.' },
     strategies: [],
     defaults: { universe: ['BTC'], venues: ['hyperliquid', 'dydx'], interval: 'stream', capitalUsdc: '1000',
       config: { notionalUsd: '250', horizonHours: '24', minNetCarryBps: '5', exitNetCarryBps: '0', decisionEveryMs: 60_000 }, risk: STREAM_RISK } },
-  { id: 'market-making', family: 'market_making', engine: 'stream', kind: 'stream', rule: 'spread_inventory', backtestStrategies: ['market_making_as'],
+  { id: 'market-making', family: 'market_making', engine: 'stream', kind: 'stream', rule: 'spread_inventory', backtestStrategies: [], labStudies: [{ name: 'market_making_as', kind: 'study' }, { name: 'vol_forecast', kind: 'study' }],
     name: { fr: 'Tenue de marché', en: 'Market Making' },
     summary: { fr: 'Cote un prix acheteur et un prix vendeur autour du milieu du carnet ; l\'écart s\'élargit avec la volatilité et se décale contre l\'inventaire.', en: 'Quotes a bid and an ask around the mid; the spread widens with volatility and skews against the inventory.' },
     strategies: [],
     defaults: { universe: ['BTC'], venues: ['hyperliquid'], interval: 'stream', capitalUsdc: '1000',
       config: { quoteSizeUsd: '50', minHalfSpreadBps: '2', volMultiplier: '1.5', skewBps: '4', maxInventoryUsd: '250', volWindow: 30, decisionEveryMs: 5_000 }, risk: STREAM_RISK } },
-  { id: 'momentum', family: 'momentum', engine: 'bar', kind: 'perp', rule: null, backtestStrategies: [],
+  { id: 'momentum', family: 'momentum', engine: 'bar', kind: 'perp', rule: null, backtestStrategies: [], labStudies: [],
     name: { fr: 'Momentum', en: 'Momentum' },
     summary: { fr: 'Suit la tendance : acheteur quand le rendement passé est positif, vendeur quand il est négatif.', en: 'Follows the trend: long when the past return is positive, short when it is negative.' },
-    strategies: ['momentum_xs_perp', 'ts_momentum_perp', 'ma_trend_perp', 'vol_breakout_perp'],
+    strategies: ['momentum_xs_perp/2', 'momentum_xs_perp/1', 'momentum_xs_perp', 'ts_momentum_perp', 'ma_trend_perp', 'vol_breakout_perp'],
     defaults: { universe: ['BTC', 'ETH', 'SOL'], venues: ['hyperliquid'], interval: '1h', capitalUsdc: '1000', config: {}, risk: PERP_RISK } },
-  { id: 'mean-reversion', family: 'mean_reversion', engine: 'bar', kind: 'perp', rule: null, backtestStrategies: [],
+  { id: 'mean-reversion', family: 'mean_reversion', engine: 'bar', kind: 'perp', rule: null, backtestStrategies: [], labStudies: [],
     name: { fr: 'Retour à la moyenne', en: 'Mean Reversion' },
     summary: { fr: 'Prend le contre-pied des écarts extrêmes à la moyenne, avec un stop.', en: 'Fades extreme deviations from the mean, with a stop.' },
-    strategies: ['mean_reversion_bands_perp', 'zscore_reversion_perp'],
+    strategies: ['mean_reversion_bands_perp/2', 'mean_reversion_bands_perp/1', 'mean_reversion_bands_perp', 'zscore_reversion_perp'],
     defaults: { universe: ['BTC', 'ETH', 'SOL'], venues: ['hyperliquid'], interval: '1h', capitalUsdc: '1000', config: {}, risk: PERP_RISK } },
-  { id: 'cross-exchange', family: 'cross_exchange', engine: 'stream', kind: 'stream', rule: 'net_spread', backtestStrategies: ['cross_exchange_spread'],
+  { id: 'cross-exchange', family: 'cross_exchange', engine: 'stream', kind: 'stream', rule: 'net_spread', backtestStrategies: [], labStudies: [{ name: 'cross_exchange_spread', kind: 'study' }],
     name: { fr: 'Inter-plateformes', en: 'Cross-Exchange' },
     summary: { fr: 'Mesure l\'écart de prix du même contrat entre deux plateformes, net des frais, du glissement de sortie et du financement.', en: 'Measures the price gap of the same contract between two venues, net of fees, exit slippage and funding.' },
     strategies: [],
     defaults: { universe: ['BTC'], venues: ['hyperliquid', 'edgex'], interval: 'stream', capitalUsdc: '1000',
       config: { notionalUsd: '250', horizonHours: '8', minNetEdgeBps: '5', exitGapBps: '1', decisionEveryMs: 5_000 }, risk: STREAM_RISK } },
-  { id: 'risk-manager', family: 'risk_manager', engine: 'supervisor', kind: 'supervisor', rule: 'portfolio_supervisor', backtestStrategies: ['risk_supervisor'],
+  { id: 'risk-manager', family: 'risk_manager', engine: 'supervisor', kind: 'supervisor', rule: 'portfolio_supervisor', backtestStrategies: [], labStudies: [{ name: 'risk_supervisor', kind: 'policy' }, { name: 'vol_forecast', kind: 'study' }],
     name: { fr: 'Gestion du risque', en: 'Risk Management' },
     summary: { fr: 'Surveille l\'exposition, les pertes, la distance de liquidation et le coût de financement de tous les agents, par mode. Propose des réductions ; ne peut que mettre en pause et déclencher l\'arrêt d\'urgence.', en: 'Watches exposure, losses, liquidation distance and funding cost of every agent, per mode. Proposes reductions; can only pause agents and engage the kill switch.' },
     strategies: [],
@@ -139,25 +145,36 @@ export const template = (id: string): AgentTemplate | null => TEMPLATES.find((t)
 
 /** The production strategy library is this explicit list of names — a directory under research/strategies that is not here
  *  (a research job's `rj_*`, a test fixture such as `zz_forktest`, a scratch copy) is never listed. Research-job strategies keep
- *  their own listing (research routes). The names the quant-lab workstream is adding are listed so that they appear the day
- *  they are installed; a name without a directory is simply absent. */
+ *  their own listing (research routes). A name without a directory is simply absent. The listing reads research/strategies ONLY:
+ *  `funding_arb_cross_venue` lives in research/strategies_xvenue (two venues: research only) and the studies / the policy live
+ *  in research/studies — none of those is ever offered to an agent (LAB_RESEARCH_ONLY). */
 export const LIBRARY_MANIFEST: readonly string[] = [
   // spot
   'ma_trend', 'ts_momentum', 'xs_momentum', 'donchian_breakout', 'vol_target_trend', 'garch_regime', 'mean_reversion', 'pairs_rotation',
   // perp, present today
   'ts_momentum_perp', 'ma_trend_perp', 'vol_breakout_perp', 'zscore_reversion_perp', 'pairs_coint_perp', 'funding_carry_perp', 'funding_carry_neutral_perp', 'har_rv_perp',
-  // perp, quant-lab workstream (base names; `<name>_<suffix>` variants are accepted, e.g. the BTC/ETH/SOL ones)
-  'statarb_basket_perp', 'funding_arb_cross_venue', 'basis_cash_carry', 'market_making_as', 'momentum_xs_perp', 'mean_reversion_bands_perp', 'cross_exchange_spread', 'vol_forecast', 'risk_supervisor',
+  // perp, V11 quant lab, installed in research/strategies (versions: `/1` generic or wide, `/2` BTC/ETH/SOL; `<name>_<suffix>` variants are accepted)
+  'statarb_basket_perp', 'momentum_xs_perp', 'mean_reversion_bands_perp',
+  // spot + perp legs: listed (with `spotLegs: true`) so that its backtest is reachable; a perp agent refuses it
+  'basis_cash_carry',
 ];
-const VARIANT_BASES = ['statarb_basket_perp', 'momentum_xs_perp', 'mean_reversion_bands_perp', 'ts_momentum_perp', 'ma_trend_perp', 'vol_breakout_perp', 'zscore_reversion_perp', 'funding_carry_perp', 'har_rv_perp', 'vol_forecast'];
+/** Laboratory names that are NOT agent-runnable strategies and are therefore never in the library, wherever a directory of
+ *  that name might appear: the cross-venue strategy (research/strategies_xvenue), the model studies and the policy. */
+export const LAB_RESEARCH_ONLY: readonly string[] = ['funding_arb_cross_venue', 'market_making_as', 'cross_exchange_spread', 'vol_forecast', 'risk_supervisor'];
+const VARIANT_BASES = ['statarb_basket_perp', 'momentum_xs_perp', 'mean_reversion_bands_perp', 'ts_momentum_perp', 'ma_trend_perp', 'vol_breakout_perp', 'zscore_reversion_perp', 'funding_carry_perp', 'har_rv_perp'];
 /** extra names for a deployment or a test: SPW_LAB_EXTRA_STRATEGIES=name1,name2 */
 const extra = (): string[] => (process.env.SPW_LAB_EXTRA_STRATEGIES ?? '').split(',').map((s) => s.trim()).filter((s) => /^[a-z0-9_]{1,40}$/.test(s));
 export function inLibraryManifest(name: string): boolean {
+  if (LAB_RESEARCH_ONLY.includes(name)) return false;
   if (LIBRARY_MANIFEST.includes(name) || extra().includes(name)) return true;
   return VARIANT_BASES.some((b) => name.startsWith(`${b}_`) && /^[a-z0-9_]{1,40}$/.test(name));
 }
 /** does a library directory name satisfy a template's strategy name (the name itself, or one of its variants)? */
 export const matchesStrategyName = (dir: string, wanted: string): boolean => dir === wanted || dir.startsWith(`${wanted}_`);
+/** does a library path `dir/version` satisfy a template entry — `name` (any version, variants included) or `name/version` (that one)? */
+export const matchesStrategy = (rel: string, wanted: string): boolean => (wanted.includes('/') ? rel === wanted : matchesStrategyName(rel.split('/')[0] ?? '', wanted));
+/** the distinct strategy NAMES of a template's entries, in order (`momentum_xs_perp/2` and `momentum_xs_perp/1` → one name) */
+export const strategyNamesOf = (entries: readonly string[]): string[] => [...new Set(entries.map((e) => e.split('/')[0]!))];
 
 // ------------------------------------------------------------------------------------------------------------------ configuration versions
 

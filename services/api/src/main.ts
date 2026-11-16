@@ -35,11 +35,12 @@ if (config.workers) {
   startGmxWorker(); // v8 GMX: tracks the wallet's own orders on-chain until executed, cancelled or frozen (reads; relays only already signed transactions)
   await startAlerts(); // v6-alerts: ONE dispatcher tailing the audit chain, risk events and research log; read-only on those tables
 }
-// v11 trading agents. The order gateway and the kill switch are BOUND here (dependency injection): `bindAgentRuntime` binds the
-// adapter over the existing engine seams and the local kill switch; the execution workstream passes its own `gateway` /
-// `killSwitch` in this call and nothing else changes. The workers run in this process when SPW_WORKERS=on (default, as before),
-// or in the separate `sp-wallet-agents` process (agent-worker-main.ts, SPW_WORKERS=agents) when this one runs with SPW_WORKERS=api.
+// v11 trading agents, BOUND to the execution layer of this server (`app.execution`: orders, risk, mandates): ONE order path —
+// a perp agent's order is `orders.submitCanonical` (unified table, risk engine, trading mandate, `order.updated`) — and ONE kill
+// switch, the risk engine's. The workers run in this process when SPW_WORKERS=on (default, as before), or in the separate
+// `sp-wallet-agents` process (agent-worker-main.ts, SPW_WORKERS=agents) when this one runs with SPW_WORKERS=api.
 const agents = bindAgentRuntime({
+  execution: app.execution,
   // decisions only on bars the market engine declares fresh, complete and consistent across sources
   market: { series: async (s, i, limit) => (await getSeries(s as MarketSymbol, i as Interval, { limit })).bars, assertFresh: async (s, i) => { await assertFresh(s as MarketSymbol, i as Interval); } },
   emit: (event, data) => emitWebhook(event, data),

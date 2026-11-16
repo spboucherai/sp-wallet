@@ -401,6 +401,56 @@ per order. When one is met the mandate is revoked with the reason `stop_conditio
 
 Revocation by the owner (`POST /mandates/:id/revoke`) does the same.
 
+## Agents
+
+How the agents runtime uses this service (V11.2, `docs/v11/work/agents-bind.md`).
+
+| Agent | Mode | Mandate | Created by | Approved | Enforced by |
+|---|---|---|---|---|---|
+| perp (bar engine) | paper | trading mandate, mode `paper` (`agents/paper-mandate.ts`) | the owner, or a key holding `agents:manage`, when paper starts — from the agent's own limits, inside the key's restrictions and per-order limit | no passkey (nothing is signed) | the API, on every order (`checkOrder`), with the usage counters of this service |
+| perp (bar engine) | live | trading mandate, mode `live` (`agents/mandate-write.ts` `createLiveMandate`) → compiled into the signer's `SPW-VENUE-MANDATE-v1` | the owner: agent page (prepare) or the agent's mandate draft, then `/risk?mandate=<id>` | two passkey prompts (the signer's, the API's binding), on the agent page or in the Risk screen | the signer (compiled fields) and the API (every field) |
+| spot (agent vault) | live | the signer's spot mandate `SPW-MANDATE-v1` — **not a trading mandate** | the owner, agent page | one passkey, judged by the signer | the signer (per-asset base-unit caps, the provider, the vault) |
+| spot | paper | none | — | — | the agent's own limits; the kill switch |
+| stream (market making, cross-exchange, funding arbitrage) | paper | none | — | — | the agent's own limits on its simulated book; the kill switch |
+| risk management | — | none (it places no order) | — | letting it act on LIVE agents is the owner's `start live` | — |
+
+**The asymmetry, stated.** A live spot agent does not hold a trading mandate: this service refuses one
+(`spot_mandate_via_agent_vault`), because the signer enforces spot through the vault mandate it already has and a
+second, API-only mandate would add nothing the signer checks. A spot agent's swaps are still unified orders (projected
+from `agent_orders`), are stopped by the kill switch, and do not appear under "mandates" in the Risk screen. Usage
+counters, stop conditions and the wind-down of this document therefore exist for perp agents and API keys only; a spot
+agent's limits and loss limit are the engine's and the signer's (`docs/TRADING-AGENTS-AUDIT.md`, D3 and D13).
+
+**Lifecycle of a live perp agent's mandate.**
+
+1. `createLiveMandate` — from the agent's limits and the venue account's value (`deriveMandate`, unchanged): state
+   `created`. One pending mandate per agent (a second creation supersedes the first).
+2. Approval — agent page (`perp/live/prepare` → `perp/live/approve`) or Risk screen (`/api/v1/mandates/:id/approve…`).
+   The signer receives the compiled derivative mandate under the SAME id as the trading mandate.
+3. Start — the agent page's approval starts the agent; after an approval in the Risk screen the owner starts it
+   (`POST /agents/:id/start { mode: 'live' }` → `activateLive`, which only reads the mandate service: active, live, for
+   this agent, this venue account, this strategy version). A key cannot do that first start.
+4. Use — every order is `submitCanonical` under the mandate: counters, `checkOrder`, provenance.
+5. End — the agent's stop or a loss limit revokes at the signer, then here (`owner_request` / `stop_condition`); a
+   revocation or a stop condition from this service revokes the signer's copy, and the agent winds down on its next pass
+   (`mandate_revoked`). Pause keeps the mandate.
+
+**What the compilation changes for an agent** (compared with the derivative mandate the agents derived themselves
+before V11.2; the approval sheet shows the compiled values):
+
+- leverage: the signer's gross bound is capital × leverage and the floor must be below the capital; the mandate takes
+  the largest whole leverage for which gross ÷ leverage stays above the floor — 1× with the default limits (gross
+  1.5 × capital, floor 0.9 × capital);
+- daily turnover: order limit × orders per day;
+- stop conditions: `loss_gte` at the agent's total-loss limit, `consecutive_rejects_gte` 25.
+
+A live agent whose derivative mandate was approved before V11.2 has no trading mandate: it places nothing that adds
+risk; its reduce-only orders still go through the seam it was approved on, until it is stopped and a new mandate is
+approved.
+
+A paper mandate lasts at most 90 days: a paper agent that runs longer is started again (the mandate is renewed then —
+never by the agent).
+
 ## Open points
 
 - **One account per signer mandate.** A trading mandate may name several accounts; the live path accepts

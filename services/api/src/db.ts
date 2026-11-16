@@ -446,6 +446,41 @@ create table if not exists market_snapshots (
 create table if not exists market_snapshot_gaps (
   id bigserial primary key, venue text not null, symbol text not null, ts timestamptz not null, kind text not null, detail text not null default '', duration_ms bigint);
 create index if not exists market_snapshot_gaps_recent on market_snapshot_gaps (venue, symbol, ts desc);
+-- v11.2 (agents bound to the execution layer). ONE ORDER TRUTH: when an agent's order is a row of the unified "orders" table
+-- (order_id is set), its agent_order_intents row is CONTEXT ONLY — signal, configuration version, strategy hash — and carries no
+-- state, no record, no history and no fills: those are READ from "orders" / "order_events". The constraint makes the two unable
+-- to disagree: a row cannot both point to a unified order and hold a state of its own. Rows without order_id are the seam
+-- gateway's ledger (spot swaps, the stream agents' simulated books), which are not unified orders.
+alter table agent_order_intents add column if not exists order_id text;
+alter table agent_order_intents alter column record drop not null;
+alter table agent_order_intents alter column state drop not null;
+alter table agent_order_intents alter column reason drop not null;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'agent_order_intents_one_truth') then
+    alter table agent_order_intents add constraint agent_order_intents_one_truth check (
+      (order_id is null and state is not null and record is not null and reason is not null)
+      or (order_id is not null and order_id = id and state is null and record is null and reason is null and history = '[]'::jsonb and fills = '[]'::jsonb and venue_status is null));
+  end if;
+end $$;
+create index if not exists agent_order_intents_order on agent_order_intents (order_id) where order_id is not null;
+-- v11.2 ONE KILL SWITCH: the agents-side flag (settings 'agents.kill_switch', released without a passkey) no longer exists.
+-- A flag that was engaged is carried into the risk engine's switch (released with the passkey only), then the key is deleted.
+do $$ declare old jsonb; cur jsonb; begin
+  select value into old from settings where key = 'agents.kill_switch';
+  if old is not null then
+    if coalesce((old->>'engaged')::boolean, false) then
+      select value into cur from settings where key = 'risk.switches';
+      if not coalesce((cur->'killSwitch'->>'on')::boolean, false) then
+        insert into settings (key, value) values ('risk.switches', jsonb_build_object(
+          'killSwitch', jsonb_build_object('on', true, 'at', coalesce(old->'at', to_jsonb((extract(epoch from now()) * 1000)::bigint)), 'by', jsonb_build_object('kind', 'system', 'id', 'migration:agents.kill_switch'),
+            'reason', left(coalesce(old->>'reason', '') || ' (engaged on the agents-side switch, by ' || coalesce(old->>'by', '?') || ')', 200)),
+          'readOnly', coalesce(cur->'readOnly', '{"on":false,"at":null,"by":null,"reason":null}'::jsonb)))
+        on conflict (key) do update set value = excluded.value;
+      end if;
+    end if;
+    delete from settings where key = 'agents.kill_switch';
+  end if;
+end $$;
 -- <<< v11 trading agents runtime
 `;
 

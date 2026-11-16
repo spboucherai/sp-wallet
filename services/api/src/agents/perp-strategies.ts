@@ -11,6 +11,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { MAX_AGENT_SYMBOLS } from '@spw/core';
 import type { Instrument } from '@spw/derivatives';
 import { UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
@@ -26,13 +27,20 @@ const ROOT = path.join(RESEARCH_DIR, 'strategies');
 const Rel = z.string().regex(/^[a-z0-9_]{1,40}\/[a-z0-9_]{1,12}$/);
 const Info = z.object({ sha256: z.string().regex(/^[0-9a-f]{64}$/), kind: z.enum(['spot', 'perp']), contract: z.number().int(),
   meta: z.object({ name: z.string(), version: z.string(), kind: z.string().optional(), universe: z.array(z.string()).min(1), interval: z.string(), lookback: z.number().int().positive(),
-    max_leverage: z.number().positive().optional(), max_gross_exposure: z.number().positive().optional(), params: z.record(z.string(), z.unknown()) }) });
+    max_leverage: z.number().positive().optional(), max_gross_exposure: z.number().positive().optional(), params: z.record(z.string(), z.unknown()),
+    min_symbols: z.number().int().min(1).max(64).optional(), max_symbols: z.number().int().min(1).max(64).optional() }) });
+/** the most instruments a perp agent can hold (perp-routes.ts MAX_PERP_INSTRUMENTS; repeated here: that module imports this one) */
+const PERP_MAX_INSTRUMENTS = Math.min(8, MAX_AGENT_SYMBOLS);
+/** Generic = exactly ['*'] (decided here from META, as strategies.ts does for spot). */
+export const isGenericPerp = (universe: string[]): boolean => universe.length === 1 && universe[0] === '*';
 
 export interface PerpStrategyInfo {
   path: string; sha256: string; kind: 'perp';
   /** has 'X.SPOT' legs: a perp agent's paper account cannot hold them */
   spotLegs: boolean;
-  meta: { name: string; version: string; kind: 'perp'; universe: string[]; interval: string; lookback: number; max_leverage: number; max_gross_exposure: number; params: Record<string, unknown> };
+  /** universe-generic: META['universe'] == ['*'] — the instruments are the AGENT's (between minSymbols and maxSymbols of them) */
+  generic: boolean; minSymbols: number; maxSymbols: number;
+  meta: { name: string; version: string; kind: 'perp'; universe: string[]; interval: string; lookback: number; max_leverage: number; max_gross_exposure: number; params: Record<string, unknown>; min_symbols?: number; max_symbols?: number };
 }
 
 /** Describe a library version under contract 2 and require a perpetual-futures strategy. */
@@ -45,7 +53,11 @@ export async function describePerp(rel: string): Promise<PerpStrategyInfo> {
   const p = Info.parse(JSON.parse(r.out));
   if (p.kind !== 'perp' || p.contract !== 2 || p.meta.kind !== 'perp') throw new UserError('wrong_kind', 'this is a spot strategy (long-only weights in [0, 1]): it cannot be attached to a perp agent', 422);
   if (p.meta.max_leverage === undefined || p.meta.max_gross_exposure === undefined) throw new UserError('bad_strategy', 'a perp strategy declares max_leverage and max_gross_exposure', 422);
-  return { path: `strategies/${rel}`, sha256: p.sha256, kind: 'perp', spotLegs: p.meta.universe.some((s) => s.endsWith('.SPOT')),
+  const generic = isGenericPerp(p.meta.universe);
+  if (!generic && p.meta.universe.includes('*')) throw new UserError('bad_strategy', 'a universe is a list of instruments or exactly ["*"]', 422);
+  const minSymbols = generic ? p.meta.min_symbols ?? 1 : p.meta.universe.length, maxSymbols = generic ? Math.min(p.meta.max_symbols ?? PERP_MAX_INSTRUMENTS, PERP_MAX_INSTRUMENTS) : p.meta.universe.length;
+  if (minSymbols > maxSymbols) throw new UserError('bad_strategy', `this strategy needs at least ${minSymbols} instruments; a perp agent holds ${PERP_MAX_INSTRUMENTS} at most`, 422);
+  return { path: `strategies/${rel}`, sha256: p.sha256, kind: 'perp', spotLegs: p.meta.universe.some((s) => s.endsWith('.SPOT')), generic, minSymbols, maxSymbols,
     meta: { ...p.meta, kind: 'perp', max_leverage: p.meta.max_leverage, max_gross_exposure: p.meta.max_gross_exposure } };
 }
 
@@ -63,21 +75,34 @@ export async function perpLibrary(): Promise<(PerpStrategyInfo & { readme: strin
 }
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
-/** Can this perp version run on an agent trading these instruments at this interval? Pure. */
-export function fitsPerpAgent(info: Pick<PerpStrategyInfo, 'spotLegs' | 'meta'>, symbols: string[], interval: string): { ok: true } | { ok: false; code: string; message: string } {
+/** Can this perp version run on an agent trading these instruments at this interval? Pure. A fixed universe must equal the
+ *  agent's instruments; a generic one (['*']) fits any agent whose number of instruments is within its bounds. `generic`,
+ *  `minSymbols` and `maxSymbols` are read from META when the caller did not derive them (describePerp does). */
+export function fitsPerpAgent(info: Pick<PerpStrategyInfo, 'spotLegs' | 'meta'> & Partial<Pick<PerpStrategyInfo, 'generic' | 'minSymbols' | 'maxSymbols'>>, symbols: string[], interval: string): { ok: true } | { ok: false; code: string; message: string } {
   if (info.spotLegs) return { ok: false, code: 'spot_leg_unsupported', message: 'this strategy holds spot legs (X.SPOT) next to the perpetuals; a perp agent\'s paper account holds perpetuals only' };
   if (info.meta.interval !== interval) return { ok: false, code: 'interval_mismatch', message: `this strategy decides every ${info.meta.interval}; the agent is set to ${interval}` };
+  if (info.generic ?? isGenericPerp(info.meta.universe)) {
+    const min = info.minSymbols ?? info.meta.min_symbols ?? 1, max = info.maxSymbols ?? Math.min(info.meta.max_symbols ?? PERP_MAX_INSTRUMENTS, PERP_MAX_INSTRUMENTS);
+    if (symbols.length < min || symbols.length > max) return { ok: false, code: 'universe_size', message: `this strategy needs between ${min} and ${max} instruments; the agent trades ${symbols.length} (${symbols.join(', ')})` };
+    if (symbols.some((s) => s.endsWith('.SPOT') || s.includes('@'))) return { ok: false, code: 'universe_mismatch', message: 'a perp agent trades the perpetuals of ONE venue: no spot leg, no second venue' };
+    return { ok: true };
+  }
   if (!sameSet(info.meta.universe, symbols)) return { ok: false, code: 'universe_mismatch', message: `this strategy trades ${info.meta.universe.join(', ')}; the agent's instruments are ${symbols.join(', ')}` };
   return { ok: true };
 }
 
+/** Report schema versions a perp agent accepts: 2 (pre-V11, still stored in existing databases) and 3 (V11: execution model,
+ *  engine parity, gross-to-net, data bias, journal — research/schema/backtest-report-v3.schema.json, additive over 2). */
+export const isPerpReportVersion = (v: unknown): v is 2 | 3 => v === 2 || v === 3;
 /** What a perp report must be before the owner can approve the version (the report's own integrity checks must pass). */
 export function perpReportProblem(report: unknown, sha256: string, symbols: string[]): string | null {
-  const r = report as { schema_version?: number; kind?: string; strategy_sha256?: string; config?: { symbols?: string[] }; checks?: Record<string, unknown> } | null;
-  if (!r || r.schema_version !== 2 || r.kind !== 'perp') return 'the report is not a version-2 (perpetual futures) report';
+  const r = report as { schema_version?: number; kind?: string; strategy_sha256?: string; config?: { symbols?: string[] }; checks?: Record<string, unknown>; engine_parity?: { applied?: unknown } } | null;
+  if (!r || !isPerpReportVersion(r.schema_version) || r.kind !== 'perp') return 'the report is not a version-2 or version-3 (perpetual futures) report';
   if (r.strategy_sha256 !== sha256) return 'the report is for another code hash';
   if (!Array.isArray(r.config?.symbols) || !sameSet(r.config.symbols, symbols)) return 'the report is for other instruments than the agent\'s';
   for (const k of ['lookahead', 'ledger', 'funding_alignment']) if (r.checks?.[k] !== 'pass') return `the report's own check "${k}" did not pass: it is not evidence of anything`;
+  // V11: a version-3 report is evidence about THIS engine only when the engine's own sizing and stop rules were applied to it
+  if (r.schema_version === 3 && r.engine_parity?.applied !== true) return 'this version-3 report was produced WITHOUT engine parity (the live engine\'s sizing, order pacing and loss-limit stops were not applied): its figures are not those of an agent run';
   return null;
 }
 
@@ -86,7 +111,8 @@ const sizeDecimals = (lot: string): number => { const i = lot.indexOf('.'); retu
 const fail = (versionId: string, why: string) => sql`update strategy_versions set status = 'draft', notes = ${`backtest failed: ${why}`.slice(0, 400)} where id = ${versionId} and status = 'backtesting'`;
 
 const running = new Set<string>();
-/** Backtest a registered perp version on the venue's own data and attach the version-2 report. Never throws. */
+/** Backtest a registered perp version on the venue's own data and attach the version-3 report (V11 execution model + engine
+ *  parity). Never throws. */
 export async function perpBacktest(versionId: string, info: PerpStrategyInfo, symbols: string[], interval: PerpInterval, d: PerpLabDeps): Promise<void> {
   if (running.has(versionId)) return; running.add(versionId);
   const tmp = scratchDir(), out = path.join(tmp, 'report.json'), bundle = path.join(tmp, 'bundle.json'), store = path.join(tmp, 'data');
@@ -117,12 +143,13 @@ export async function perpBacktest(versionId: string, info: PerpStrategyInfo, sy
     if (imp.code !== 0) return void (await fail(versionId, imp.err.trim().split('\n').pop()?.slice(0, 300) ?? 'import'));
     const ledger = stageLedger(tmp), dir = path.join(RESEARCH_DIR, info.path); // v8: the sandboxed process works on a copy of the ledger
     const r = await py(['spq.perp_backtest', '--strategy', dir, '--sha256', info.sha256, '--symbols', symbols.join(','), '--interval', interval, '--data-dir', store, '--out', out,
-      '--ledger', ledger.copy], { timeoutMs: 20 * 60_000, strategyDir: dir, scratch: tmp });
+      '--ledger', ledger.copy, '--report-version', '3'], { timeoutMs: 20 * 60_000, strategyDir: dir, scratch: tmp });
     if (r.code !== 0 || !existsSync(out)) return void (await fail(versionId, r.err.trim().split('\n').pop()?.slice(0, 300) ?? 'no report'));
     ledger.merge();
     const report = JSON.parse(readFileSync(out, 'utf8')) as Record<string, unknown>;
-    const r0 = report as { schema_version?: number; kind?: string; strategy_sha256?: string; config?: { symbols?: string[] } };
-    if (r0.schema_version !== 2 || r0.kind !== 'perp' || r0.strategy_sha256 !== info.sha256 || !Array.isArray(r0.config?.symbols) || !sameSet(r0.config.symbols, symbols)) return void (await fail(versionId, 'the report is not a version-2 report for this code hash and these instruments'));
+    const r0 = report as { schema_version?: number; kind?: string; strategy_sha256?: string; config?: { symbols?: string[] }; engine_parity?: { applied?: unknown } };
+    if (!isPerpReportVersion(r0.schema_version) || r0.kind !== 'perp' || r0.strategy_sha256 !== info.sha256 || !Array.isArray(r0.config?.symbols) || !sameSet(r0.config.symbols, symbols)) return void (await fail(versionId, 'the report is not a version-2 or version-3 report for this code hash and these instruments'));
+    if (r0.schema_version === 3 && r0.engine_parity?.applied !== true) return void (await fail(versionId, 'the version-3 report was produced without engine parity: refused'));
     await sql`update strategy_versions set status = 'draft', report = ${sql.json(report as never)}, notes = '' where id = ${versionId} and status = 'backtesting'`;
     await audit('strategy.backtested', 'engine', { version: versionId, sha256: info.sha256, kind: 'perp' });
   } catch (e) { await fail(versionId, (e as Error).message.slice(0, 200)).catch(() => {}); }
@@ -135,9 +162,9 @@ export async function registerPerpStrategy(a: PerpAgentRow, rel: string, d: Perp
   const symbols = a.universe, fit = fitsPerpAgent(info, symbols, a.interval);
   if (!fit.ok) throw new UserError(fit.code, fit.message, 422);
   const [row] = await sql<{ id: string; status: string; has_report: boolean }[]>`insert into strategy_versions (id, agent_id, name, version, code_sha256, path, meta)
-    values (${randomUUID()}, ${a.id}, ${info.meta.name}, ${info.meta.version}, ${info.sha256}, ${info.path}, ${sql.json({ ...info.meta, symbols } as never)})
+    values (${randomUUID()}, ${a.id}, ${info.meta.name}, ${info.meta.version}, ${info.sha256}, ${info.path}, ${sql.json({ ...info.meta, generic: info.generic, symbols } as never)})
     on conflict (agent_id, code_sha256) do update set path = excluded.path returning id, status, report is not null as has_report`;
-  await audit('strategy.registered', 'owner', { agent: a.id, version: row!.id, path: info.path, sha256: info.sha256, kind: 'perp', symbols });
+  await audit('strategy.registered', 'owner', { agent: a.id, version: row!.id, path: info.path, sha256: info.sha256, kind: 'perp', generic: info.generic, symbols });
   if (!row!.has_report && row!.status !== 'approved') void perpBacktest(row!.id, info, symbols, a.interval as PerpInterval, d);
   return { id: row!.id, sha256: info.sha256, kind: 'perp', symbols, status: row!.has_report ? row!.status : 'backtesting' };
 }

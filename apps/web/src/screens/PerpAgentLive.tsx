@@ -192,10 +192,12 @@ function MandateSheet({ id, r, account, onClose }: { id: string; r: Readiness; a
   const approve = () => once(async () => {
     if (phase !== 'review' || !prep || !read || integrity) return;
     setPhase('passkey'); setErr(null);
-    let assertion: unknown;
-    try { assertion = await startAuthentication({ optionsJSON: prep.options }); } catch (e) { setErr(liveError(e, 'approve')); setPhase('void'); return; }
+    let assertion: unknown, bindingAssertion: unknown;
+    // V11.2: two prompts — the signer's (the derivative mandate it will enforce), then the API's (the full trading mandate hash)
+    try { assertion = await startAuthentication({ optionsJSON: prep.options }); const b = (prep as unknown as { binding?: { options: Parameters<typeof startAuthentication>[0]['optionsJSON'] } }).binding; if (b) bindingAssertion = await startAuthentication({ optionsJSON: b.options }); }
+    catch (e) { setErr(liveError(e, 'approve')); setPhase('void'); return; }
     setPhase('sending');
-    try { await post(`/agents/${id}/perp/live/approve`, { accountId: account.id, assertion, acknowledged: true }); setPhase('done'); }
+    try { await post(`/agents/${id}/perp/live/approve`, { accountId: account.id, assertion, ...(bindingAssertion ? { bindingAssertion } : {}), acknowledged: true }); setPhase('done'); }
     catch (e) { setErr(liveError(e, 'approve')); setPhase('void'); }      // a refused approval consumes the preparation
   });
   const m = prep?.mandate, lockCode = err && (err.code === 'mandate_mainnet_disabled' || err.code === 'mainnet_disabled') ? err.code : null;

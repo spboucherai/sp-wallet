@@ -76,7 +76,7 @@ export function installGates(ex: Execution, o: ExecutionOpts): void {
   const hookGmx = (g: GmxService): void => { g.preTrade = ex.risk.gate; g.newRiskBlock = ex.risk.newRiskBlock; };
   if (o.gmx) hookGmx(o.gmx); else void import('../derivatives/gmx-live.ts').then((m) => hookGmx(m.gmx())).catch((e: Error) => console.error(`[orders] GMX gate not installed: ${e.message}`));
   // spot agents: the API asks the signer for a swap under a vault mandate only while new risk is allowed
-  signerGuards.beforeMandateSign = async () => { const b = await ex.risk.newRiskBlock(); if (b) throw new UserError(b.code, b.reason, 423); };
+  signerGuards.beforeMandateSign = async (g) => { const b = await ex.risk.newRiskBlock(); if (b && !(b.code === 'kill_switch_active' && g?.reducesRisk === true)) throw new UserError(b.code, b.reason, 423); };   // the kill switch never blocks a reduction: a sale into the agent's cash leg is still signed (read-only mode blocks it)
 }
 
 const Assertion = z.strictObject({ assertion: z.record(z.string(), z.unknown()).optional() });

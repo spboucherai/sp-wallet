@@ -2,11 +2,16 @@
 //
 //   interface AgentOrderGateway   submit / cancel / get / list for an agent principal; answers order records in the unified
 //                                 states of @spw/trading (CREATED … FILLED | CANCELLED | REJECTED | FAILED | UNKNOWN).
-//   class SeamOrderGateway        the implementation of THIS branch: an adapter over the existing engine seams (the perp
-//                                 `PerpExecutor` of a paper or a venue account, the spot paper book and the vault's live swap),
-//                                 with its own ledger (`agent_order_intents`) written BEFORE the seam is called.
-//   setOrderGatewayFactory()      dependency injection. main.ts binds `seamGatewayFactory`; the execution workstream's unified
-//                                 order service binds its own factory there, and nothing else in the agent code changes.
+//   UnifiedOrderGateway           (agents/unified-gateway.ts) the implementation for every order that the unified order service
+//                                 executes — today the perp agents, paper and live: the order is a row of `orders`, judged by
+//                                 the risk engine and the trading mandate; `agent_order_intents` keeps the agent's CONTEXT only.
+//   class SeamOrderGateway        the adapter over an agent-side seam, for the two families whose orders are NOT unified orders:
+//                                 the spot swaps of an agent vault and the stream agents' simulated books. Its ledger rows
+//                                 (`agent_order_intents` with order_id null) are the record of those orders.
+//   setOrderGatewayFactory()      dependency injection: `bindAgentRuntime` binds `unifiedGatewayFactory` (agents/execution-bind.ts).
+//
+// ONE TRUTH PER ORDER (constraint agent_order_intents_one_truth): a row either points to a unified order and holds no state, or
+// holds the state of an order that exists nowhere else. `listAgentOrders` reads the first kind THROUGH `orders`.
 //
 // Before the seam is called, in this order: the canonical order is validated; the agent's mode allows orders (research never
 // does); the kill switch is consulted (only an order that reduces risk passes); a LIVE order must name the mandate that is in
@@ -38,6 +43,11 @@ export interface AgentOrderRecord {
   signalId: string | null; configVersion: number | null; strategySha256: string | null;
   /** the venue's own word for the order's status, when the implementation knows it (informative; `state` is the truth) */
   venueStatus?: string | null;
+  /** 'orders' = a row of the unified order table (the state was read from it); 'ledger' = the seam gateway's own record;
+   *  'none' = refused or deferred before any order existed: nothing is stored, the same key may be submitted again */
+  source?: 'orders' | 'ledger' | 'none';
+  /** the refusal code of the execution side, when there is one (`orders.reject_code`) */
+  rejectCode?: string | null;
 }
 export interface SubmitOptions {
   /** required; one order per (agent, key). The engines use their deterministic client id */
@@ -78,15 +88,26 @@ export interface OrderSeam {
   /** unix ms after which "no trace" proves that the order never reached the venue; null = it can never be proven */
   absenceConclusiveAt(order: CanonicalOrder, submittedAt: number): number | null;
   cancel?(order: CanonicalOrder): Promise<SeamResult | null>;
+  /** UNIFIED path only — what the agent's own executor checks BEFORE an order exists (a cool-down, an earlier order still
+   *  unconfirmed, the venue's leverage setting, the mandate's per-order bound): nothing is sent here. `size`: the order is cut to it. */
+  prepare?(order: CanonicalOrder, ctx: SeamContext): Promise<{ proceed: true; size?: DecStr } | { proceed: false; result: Exclude<SeamResult, { status: 'accepted' }> }>;
+  /** UNIFIED path only — told what the order service answered, so that the executor's view of the account follows */
+  observe?(order: CanonicalOrder, outcome: { state: OrderState; rejectCode: string | null; detail: string | null }): Promise<void>;
 }
 export interface GatewayAgent { id: string; state: string; mode: string; kind?: string | undefined; universe: string[]; config_version?: number | undefined }
 export interface RiskGate { check(agent: GatewayAgent, order: CanonicalOrder): Promise<{ ok: true } | { ok: false; code: 'RISK_DENIED' | 'INSTRUMENT_NOT_ALLOWED' | 'VENUE_NOT_ALLOWED'; reason: string }> }
-export interface KillSwitchRead { engaged(): Promise<{ engaged: boolean; reason: string | null }> }
+/** the ONE switch (the risk engine's), read. `readOnly`: the engine's read-only mode — nothing but a cancel passes */
+export interface KillSwitchRead { engaged(): Promise<{ engaged: boolean; reason: string | null; readOnly?: boolean }> }
 export interface SeamBinding {
   agent: GatewayAgent; seam: OrderSeam;
   /** the authority a LIVE order must name: the mandate in force for this agent (null = none: every live order is refused);
    *  in PAPER the id of the simulated account, which is not a mandate and signs nothing */
   authorityId: string | null;
+  /** the wallet account the orders go to (a paper account or a venue account): required by the unified order service */
+  accountId?: string | null;
+  /** LIVE, transition only: a derivative mandate approved before the trading mandates existed. It authorises NOTHING that adds
+   *  risk any more; a reduce-only order naming it still goes through the seam it was approved on, so the agent can always exit. */
+  legacyAuthorityId?: string | null;
   risk?: RiskGate; killSwitch?: KillSwitchRead; now?: () => number;
 }
 export type OrderGatewayFactory = (binding: SeamBinding) => AgentOrderGateway;
@@ -102,17 +123,44 @@ const OPEN_STATES: string[] = [...AT_VENUE, 'CREATED', 'VALIDATED', 'APPROVED'];
 export const reducesRisk = (o: Pick<CanonicalOrder, 'reduceOnly' | 'marketKind' | 'side'>): boolean => o.reduceOnly || (o.marketKind === 'spot' && o.side === 'sell');
 
 interface IntentRow { id: string; client_order_id: string; attempt: number; agent_id: string; mode: DbMode; idempotency_key: string; body_hash: string; venue: string; instrument: string; side: 'buy' | 'sell'; reduce_only: boolean;
-  order_json: CanonicalOrder; record: OrderRecord; state: OrderState; reason: ReasonCode; history: OrderHistoryEntry[]; fills: AgentFill[]; signal_id: string | null; config_version: number | null; strategy_sha256: string | null; venue_status: string | null; created_at: Date; updated_at: Date }
+  order_json: CanonicalOrder; order_id: string | null; record: OrderRecord; state: OrderState; reason: ReasonCode; history: OrderHistoryEntry[]; fills: AgentFill[]; signal_id: string | null; config_version: number | null; strategy_sha256: string | null; venue_status: string | null; created_at: Date; updated_at: Date }
 const view = (r: IntentRow, idempotent: boolean): AgentOrderRecord => ({ id: r.id, clientOrderId: r.client_order_id, attempt: r.attempt, agentId: r.agent_id, mode: apiMode(r.mode) as 'paper' | 'live', venue: r.venue, instrument: r.instrument, side: r.side,
   reduceOnly: r.reduce_only, state: r.record.state, reason: r.record.reason, detail: r.record.detail, size: r.record.size, filledSize: r.record.filledSize, avgFillPrice: r.record.avgFillPrice, venueOrderId: r.record.venueOrderId,
-  fills: r.fills, order: r.order_json, history: r.history, createdAt: r.record.createdAt, updatedAt: r.record.updatedAt, idempotent, signalId: r.signal_id === null ? null : String(r.signal_id), configVersion: r.config_version, strategySha256: r.strategy_sha256, venueStatus: r.venue_status });
+  fills: r.fills, order: r.order_json, history: r.history, createdAt: r.record.createdAt, updatedAt: r.record.updatedAt, idempotent, signalId: r.signal_id === null ? null : String(r.signal_id), configVersion: r.config_version, strategySha256: r.strategy_sha256, venueStatus: r.venue_status, source: 'ledger' });
 
-/** Read side shared by every implementation on this branch: the ledger, always filtered by agent and (when given) by mode. */
+/** A row of the unified `orders` table of an agent principal, with the agent's context when it was recorded. */
+export interface UnifiedAgentRow { id: string; principal_id: string; mode: string; venue: string; instrument: string; side: 'buy' | 'sell'; reduce_only: boolean; canonical: CanonicalOrder | null; record: OrderRecord; state: OrderState; reason: ReasonCode;
+  reject_code: string | null; detail: { engineState?: string | null } | null; created_at: Date; updated_at: Date; signal_id: string | null; config_version: number | null; strategy_sha256: string | null }
+/** The agent's view of a unified order. EVERY state field comes from `orders`; the context columns come from the agent's table. */
+export function unifiedView(r: UnifiedAgentRow, idempotent: boolean, extra: { fills?: AgentFill[]; history?: OrderHistoryEntry[] } = {}): AgentOrderRecord {
+  const rec = r.record;
+  return { id: r.id, clientOrderId: r.canonical?.clientOrderId ?? r.id, attempt: 1, agentId: r.principal_id, mode: r.mode === 'live' ? 'live' : 'paper', venue: r.venue, instrument: r.instrument, side: r.side, reduceOnly: r.reduce_only,
+    state: r.state, reason: r.reason, detail: r.reject_code && rec.detail && !rec.detail.startsWith(`${r.reject_code}: `) ? `${r.reject_code}: ${rec.detail}` : rec.detail, size: rec.size, filledSize: rec.filledSize, avgFillPrice: rec.avgFillPrice,
+    venueOrderId: rec.venueOrderId, fills: extra.fills ?? [], order: r.canonical as CanonicalOrder, history: extra.history ?? [], createdAt: rec.createdAt, updatedAt: rec.updatedAt, idempotent,
+    signalId: r.signal_id === null ? null : String(r.signal_id), configVersion: r.config_version, strategySha256: r.strategy_sha256, venueStatus: r.detail?.engineState ?? null, source: 'orders', rejectCode: r.reject_code };
+}
+const UNIFIED_COLUMNS = sql`o.id, o.principal_id, o.mode, o.venue, o.instrument, o.side, o.reduce_only, o.canonical, o.record, o.state, o.reason, o.reject_code, o.detail, o.created_at, o.updated_at, i.signal_id, i.config_version, i.strategy_sha256`;
+export async function unifiedAgentOrder(agentId: string, orderId: string): Promise<UnifiedAgentRow | null> {
+  return (await sql<UnifiedAgentRow[]>`select ${UNIFIED_COLUMNS} from orders o left join agent_order_intents i on i.order_id = o.id where o.id = ${orderId} and o.principal_kind = 'agent' and o.principal_id = ${agentId}`)[0] ?? null;
+}
+
+/** Read side shared by every implementation: the orders of ONE agent, always filtered by agent and (when given) by mode —
+ *  its unified orders (state read from `orders`) and the seam ledger's own orders (spot, stream). */
 export async function listAgentOrders(agentId: string, f: ListFilter = {}): Promise<AgentOrderRecord[]> {
-  const mode = f.mode ? dbMode(f.mode) : null, before = f.before ? new Date(f.before) : null;
-  const rows = await sql<IntentRow[]>`select * from agent_order_intents where agent_id = ${agentId} and (${mode}::text is null or mode = ${mode}) and (${before}::timestamptz is null or created_at < ${before})
-    and (${f.open ?? false} = false or state in ${sql(OPEN_STATES)}) order by created_at desc, id desc limit ${Math.min(f.limit ?? 100, 500)}`;
-  return rows.map((r) => view(r, true));
+  const mode = f.mode ? dbMode(f.mode) : null, before = f.before ? new Date(f.before) : null, limit = Math.min(f.limit ?? 100, 500);
+  const ledger = await sql<IntentRow[]>`select * from agent_order_intents where agent_id = ${agentId} and order_id is null and (${mode}::text is null or mode = ${mode}) and (${before}::timestamptz is null or created_at < ${before})
+    and (${f.open ?? false} = false or state in ${sql(OPEN_STATES)}) order by created_at desc, id desc limit ${limit}`;
+  const unified = f.mode === 'research' ? [] : await sql<UnifiedAgentRow[]>`select ${UNIFIED_COLUMNS} from orders o left join agent_order_intents i on i.order_id = o.id
+    where o.principal_kind = 'agent' and o.principal_id = ${agentId} and (${f.mode ?? null}::text is null or o.mode = ${f.mode ?? null}) and (${before}::timestamptz is null or o.created_at < ${before})
+    and (${f.open ?? false} = false or o.state not in ('FILLED', 'CANCELLED', 'REJECTED', 'FAILED')) order by o.created_at desc, o.id desc limit ${limit}`;
+  return [...ledger.map((r) => view(r, true)), ...unified.map((r) => unifiedView(r, true))].sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? 1 : -1)).slice(0, limit);
+}
+
+/** A refusal or a deferral that happened BEFORE any order existed: an answer for the engine, stored nowhere (`source: 'none'`). */
+export function newEphemeral(agentId: string, order: CanonicalOrder, state: 'REJECTED' | 'FAILED', reason: ReasonCode, detail: string, now: number, ctx: Pick<SeamContext, 'signalId' | 'configVersion' | 'strategySha256'>): AgentOrderRecord {
+  return { id: order.clientOrderId, clientOrderId: order.clientOrderId, attempt: 0, agentId, mode: order.mode === 'live' ? 'live' : 'paper', venue: order.venue, instrument: order.instrument, side: order.side, reduceOnly: order.reduceOnly, state, reason, detail,
+    size: order.size, filledSize: '0', avgFillPrice: null, venueOrderId: null, fills: [], order, history: [], createdAt: now, updatedAt: now, idempotent: false, signalId: ctx.signalId, configVersion: ctx.configVersion, strategySha256: ctx.strategySha256,
+    venueStatus: null, source: 'none', rejectCode: detail.split(': ')[0] ?? null };
 }
 
 export class SeamOrderGateway implements AgentOrderGateway {
@@ -123,7 +171,7 @@ export class SeamOrderGateway implements AgentOrderGateway {
   private inFlight(row: IntentRow): boolean { return row.record.state === 'SUBMITTING' && this.now() - row.record.updatedAt < IN_FLIGHT_GRACE_MS; }
   private own(p: AgentPrincipal): void { if (p.kind !== 'agent' || p.id !== this.b.agent.id) throw new GatewayError('wrong_principal', 'this gateway is bound to another agent'); }
   private async latest(key: string): Promise<IntentRow | null> {
-    return (await sql<IntentRow[]>`select * from agent_order_intents where agent_id = ${this.b.agent.id} and idempotency_key = ${key} order by attempt desc limit 1`)[0] ?? null;
+    return (await sql<IntentRow[]>`select * from agent_order_intents where agent_id = ${this.b.agent.id} and idempotency_key = ${key} and order_id is null order by attempt desc limit 1`)[0] ?? null;
   }
   /** apply events to a stored record and persist (optimistic on the record's version) */
   private async apply(row: IntentRow, events: OrderEvent[], fills: AgentFill[] = [], venueStatus: string | null = null): Promise<IntentRow> {
@@ -131,7 +179,7 @@ export class SeamOrderGateway implements AgentOrderGateway {
     for (const e of events) { const t = transition(rec, e, this.now()); rec = t.order; hist.push(t.entry); }
     const all = [...row.fills, ...fills.filter((f) => !row.fills.some((x) => x.id === f.id))];
     const [r] = await sql<IntentRow[]>`update agent_order_intents set record = ${sql.json(rec as never)}, state = ${rec.state}, reason = ${rec.reason}, history = ${sql.json(hist as never)}, fills = ${sql.json(all as never)}, venue_status = coalesce(${venueStatus}, venue_status), updated_at = now()
-      where id = ${row.id} and (record->>'version')::int = ${row.record.version} returning *`;
+      where id = ${row.id} and order_id is null and (record->>'version')::int = ${row.record.version} returning *`;
     if (!r) throw new GatewayError('concurrent_update', `order ${row.id} was changed by another worker`);
     return r;
   }
@@ -212,6 +260,7 @@ export class SeamOrderGateway implements AgentOrderGateway {
     if (order.mode !== agentMode) return reject('READ_ONLY_MODE', `the order says ${order.mode} and the agent is in ${agentMode}`);
     // 4 — kill switch: only what reduces risk
     const ks = await this.b.killSwitch?.engaged();
+    if (ks?.readOnly) return reject('READ_ONLY_MODE', 'read-only mode is on: only cancels are permitted');
     if (ks?.engaged && !reducesRisk(order)) return reject('KILL_SWITCH_ACTIVE', `the kill switch is engaged (${ks.reason ?? 'no reason recorded'}): only orders that reduce risk are placed`);
     // 5 — authority: a live order names the mandate in force for this agent — and the agent cannot make one
     if (!this.b.authorityId || order.mandateId !== this.b.authorityId) {
@@ -273,7 +322,7 @@ export class SeamOrderGateway implements AgentOrderGateway {
 
   /** Ask the execution side about every order of this agent whose outcome is open. Called at the start of a tick. */
   async reconcile(): Promise<AgentOrderRecord[]> {
-    const rows = await sql<IntentRow[]>`select * from agent_order_intents where agent_id = ${this.b.agent.id} and state in ${sql(AT_VENUE as string[])} order by created_at`;
+    const rows = await sql<IntentRow[]>`select * from agent_order_intents where agent_id = ${this.b.agent.id} and order_id is null and state in ${sql(AT_VENUE as string[])} order by created_at`;
     const out: AgentOrderRecord[] = [];
     for (const r of rows) out.push(view(this.inFlight(r) ? r : await this.reconcileRow(r), true));
     return out;
@@ -281,7 +330,7 @@ export class SeamOrderGateway implements AgentOrderGateway {
 
   async cancel(p: AgentPrincipal, orderId: string): Promise<AgentOrderRecord> {
     this.own(p);
-    const [row] = await sql<IntentRow[]>`select * from agent_order_intents where id = ${orderId} and agent_id = ${this.b.agent.id}`;
+    const [row] = await sql<IntentRow[]>`select * from agent_order_intents where id = ${orderId} and agent_id = ${this.b.agent.id} and order_id is null`;
     if (!row) throw new GatewayError('not_found', 'order not found');
     if (isTerminal(row.record.state)) return view(row, true);
     let next = await this.apply(row, [{ type: 'cancel_requested', detail: 'cancel requested by the agent' }]);
@@ -290,7 +339,7 @@ export class SeamOrderGateway implements AgentOrderGateway {
   }
   async get(p: AgentPrincipal, orderId: string): Promise<AgentOrderRecord | null> {
     this.own(p);
-    const [row] = await sql<IntentRow[]>`select * from agent_order_intents where id = ${orderId} and agent_id = ${this.b.agent.id}`;
+    const [row] = await sql<IntentRow[]>`select * from agent_order_intents where id = ${orderId} and agent_id = ${this.b.agent.id} and order_id is null`;
     return row ? view(row, true) : null;
   }
   list(p: AgentPrincipal, filter: ListFilter = {}): Promise<AgentOrderRecord[]> { this.own(p); return listAgentOrders(this.b.agent.id, filter); }
@@ -306,8 +355,12 @@ export const agentRiskGate: RiskGate = {
 };
 
 export const seamGatewayFactory: OrderGatewayFactory = (b) => new SeamOrderGateway(b);
-let factory: OrderGatewayFactory = seamGatewayFactory;
-/** THE integration point: main.ts (and agent-worker-main.ts) bind the factory; the unified order service replaces this binding. */
-export function setOrderGatewayFactory(f: OrderGatewayFactory | null): void { factory = f ?? seamGatewayFactory; }
-export const orderGateway = (b: SeamBinding): AgentOrderGateway => factory(b);
+let factory: OrderGatewayFactory | null = null;
+/** THE integration point: `bindAgentRuntime` binds `unifiedGatewayFactory` (agents/execution-bind.ts). Unbound, an order is
+ *  refused: there is no silent second path. Tests of a seam alone pass their gateway to the engine explicitly. */
+export function setOrderGatewayFactory(f: OrderGatewayFactory | null): void { factory = f; }
+export const orderGateway = (b: SeamBinding): AgentOrderGateway => {
+  if (!factory) throw new GatewayError('gateway_unbound', 'the order gateway is not bound to the execution layer in this process (bindAgentRuntime): no order can be placed');
+  return factory(b);
+};
 export { CanonicalOrderSchema };
