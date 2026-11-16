@@ -72,7 +72,12 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution)
       if (!o) throw new UserError('unknown_order', 'unknown order', 404);
       return o;
     },
-    previewOrder: async (p, i, req) => shapePreview(p, await ex.orders.preview(callerOf(p), await orderInput(p, i.body), previewKey(req, i.body))),
+    previewOrder: async (p, i, req) => {
+      // A key previews the order it could PLACE, and that order names the mandate it would be checked against: without one there is
+      // no such order (the order service would answer 400 `invalid_order` about a `mandateId` the caller never sent). Say what is missing.
+      if (p.kind === 'api_key' && !p.mandateId) throw new UserError('mandate_required', 'no trading mandate is bound to this key: there is no order it could place, so nothing to preview', 403);
+      return shapePreview(p, await ex.orders.preview(callerOf(p), await orderInput(p, i.body), previewKey(req, i.body)));
+    },
     placeOrder: (p, i, req, reply) => withIdempotency(req, reply, async () => ex.orders.submit(callerOf(p), await orderInput(p, i.body), orderKey(req, i.body))),
     cancelOrder: (p, i, req, reply) => withIdempotency(req, reply, () => ex.orders.cancel(callerOf(p), i.params.id)),
     closePosition: (p, i, req, reply) => withIdempotency(req, reply, () => ex.orders.reducePosition(callerOf(p), i.params.id, '1', i.body.slippageBps, orderKey(req))),

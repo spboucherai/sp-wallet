@@ -249,6 +249,8 @@ describe('3, 4 — the error codes each operation really answers are declared', 
     await flatten();
     const k = await tradingKey(), unbound = await newKey();
     expect((await post('placeOrder', '/orders', unbound.secret, ORDER)).json.error).toBe('mandate_required');
+    const upv = await post('previewOrder', '/orders/preview', unbound.secret, ORDER, {});
+    expect([upv.status, upv.json.error]).toEqual([403, 'mandate_required']);                       // not 400 invalid_order about a mandateId the caller never sent
     expect((await post('closePosition', `/positions/paper:hyperliquid:${acct}:${BTC}/close`, unbound.secret, {})).json.error).toBe('mandate_required');
     expect((await post('placeOrder', '/orders', k.secret, ORDER, {})).json.error).toBe('idempotency');
     expect((await post('placeOrder', '/orders', k.secret, ORDER, { ...idem(), 'x-spw-timestamp': '1000000000' })).json.error).toBe('stale_request');

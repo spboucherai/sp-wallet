@@ -970,7 +970,7 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 |---|---|
 | 400 | `bad_request`, `invalid_order` |
 | 401 | `unauthenticated` |
-| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mandate_required`, `mixed_credentials`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted` |
 | 404 | `unknown_account`, `unknown_instrument`, `unknown_market`, `unknown_venue` |
 | 409 | `account_required`, `ambiguous_symbol` |
 | 422 | `below_min_size`, `no_account`, `spot_via_swap_screen`, `venue_not_wired`, `venue_rejected` |

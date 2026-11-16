@@ -8781,7 +8781,7 @@
           "Orders"
         ],
         "summary": "Preview an order: every check it would meet, and an estimate",
-        "description": "Resolves the instrument and the account, then runs the key limits, the server locks, the trading mandate (keys and agents), the independent risk engine and the venue engine's own checks on the market as it is now. Answers the canonical order and its hash, every check with what was observed and its limit, an estimate (fees, slippage against the real book, liquidation price) and whether an owner passkey approval would be required. Never creates, signs or sends anything; takes no Idempotency-Key. What WOULD refuse the order is in `refusals` (HTTP 200), not an error answer. Account figures (equity, free collateral, positions) are answered only to a key that also holds `wallet:read` or `positions:read` (`account.withheld`).",
+        "description": "Resolves the instrument and the account, then runs the key limits, the server locks, the trading mandate (keys and agents), the independent risk engine and the venue engine's own checks on the market as it is now. Answers the canonical order and its hash, every check with what was observed and its limit, an estimate (fees, slippage against the real book, liquidation price) and whether an owner passkey approval would be required. Never creates, signs or sends anything; takes no Idempotency-Key. What WOULD refuse the order is in `refusals` (HTTP 200), not an error answer. A key previews the order it could place: a key with no trading mandate bound to it answers 403 `mandate_required` (the scope itself needs no mandate; the previewed order does). Account figures (equity, free collateral, positions) are answered only to a key that also holds `wallet:read` or `positions:read` (`account.withheld`).",
         "security": [
           {
             "bearerKey": [
@@ -8811,6 +8811,10 @@
           {
             "status": 403,
             "code": "ip_not_allowed"
+          },
+          {
+            "status": 403,
+            "code": "mandate_required"
           },
           {
             "status": 403,
@@ -9398,7 +9402,7 @@
             }
           },
           "403": {
-            "description": "Authenticated, and refused: `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted`",
+            "description": "Authenticated, and refused: `insufficient_scope`, `ip_not_allowed`, `mandate_required`, `mixed_credentials`, `restricted`, `spot_execution_requires_agent_vault`, `venue_restricted`",
             "content": {
               "application/json": {
                 "schema": {

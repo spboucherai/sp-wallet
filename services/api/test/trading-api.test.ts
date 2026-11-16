@@ -191,10 +191,11 @@ describe('API keys', () => {
     const mixed = await call('GET', `${T}/markets`, { key: k.secret, cookie });
     expect(mixed.status).toBe(403);
     expect(mixed.json.error).toBe('mixed_credentials');
-    // a POST with the key needs neither Origin nor the CSRF header (it reaches the handler: the wallet has no paper account yet)
+    // a POST with the key needs neither Origin nor the CSRF header: it reaches the handler, which answers that this key has no mandate
+    // (a key previews the order it could place)
     const kw = await newKey({ scopes: ['orders:prepare'] });
     const post = await call('POST', `${T}/orders/preview`, { key: kw.secret, headers: idem(), body: { mode: 'paper', instrument: BTC, side: 'buy', type: 'market', size: '0.01' } });
-    expect([post.status, post.json.error]).toEqual([422, 'no_account']);
+    expect([post.status, post.json.error]).toEqual([403, 'mandate_required']);
     principal.authFailures.reset();
   });
 
