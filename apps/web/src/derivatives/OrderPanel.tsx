@@ -6,6 +6,7 @@
  * v10: the preview and the confirmation are receipts (`Fact` rows, every value whole); the confirmation is the shared sheet as an
  * APPROVAL sheet — it closes only through its two buttons, and the figures on it are never animated.
  */
+import { OrderChecksSlot } from './orderChecks';   // v11 Trade
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { errText, I18n, useT, type Key } from '../i18n';
@@ -229,6 +230,8 @@ export function OrderPanel({ store, instrument, account, accounts, venue, onAcco
         <div className="space-y-3 pt-1">
           <dl className="receipt fx-receipt rounded-2xl bg-elev/70 px-4 py-1">{summary}</dl>
           {est && <dl className="fx-receipt rounded-2xl border border-line px-4 py-1">{estimates}</dl>}
+          {/* v11 Trade: every check of the unified risk engine for this exact order (rendered by the terminal; nothing outside it) */}
+          <OrderChecksSlot mode="paper" accountId={account.id} body={built.body} />
           <Notice tone="info">{t('fxConfirmNote')}</Notice>
         </div>
       </Sheet>}

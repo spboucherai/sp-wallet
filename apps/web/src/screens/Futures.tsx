@@ -6,8 +6,8 @@
  * the right. Desktop: chart | book + trades | order panel, blotter underneath. This component never listens to the stream:
  * the header, the book, the trades and the chart each subscribe to their own slice of the market store.
  */
-import { useQuery } from '@tanstack/react-query';
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { lazy, Suspense, useContext, useEffect, useMemo, useState } from 'react';
 import type { Nav } from '../App';
 import { errText, I18n, useT } from '../i18n';
 import { Btn, Card, Fold, Notice, PageTitle, VenueIcon } from '../ui';
@@ -35,6 +35,28 @@ import { GmxActivity } from '../derivatives/GmxActivity';
 import { GmxCard, GmxLocked } from '../derivatives/GmxCard';
 import { GmxOrderPanel } from '../derivatives/GmxOrderPanel';
 // <<< v8 GMX trading
+// >>> v11 Trade: the terminal shell around the existing panels — unified orders, checks before confirmation, command line, hub-fed picker
+import { OrderChecksContext, type OrderChecksProps } from '../derivatives/orderChecks';
+import type { HubFlag } from '../derivatives/Market';
+import { defaultFilters, mapi, type HubRow } from '../markets';
+import type { Mode } from '../trade';
+// the unified orders, the checks and the command line are a chunk of their own: the terminal draws its chart, book and order
+// form first, as before; this arrives right after (asked for when the terminal mounts)
+const tradeUnified = () => import('./TradeUnified');
+const CommandLine = lazy(() => tradeUnified().then((m) => ({ default: m.CommandLine })));
+const UnifiedBlotter = lazy(() => tradeUnified().then((m) => ({ default: m.UnifiedBlotter })));
+const UnifiedChecks = lazy(() => tradeUnified().then((m) => ({ default: m.UnifiedChecks })));
+const PanelSkeleton = () => <div className="space-y-2.5" aria-hidden="true"><div className="skel h-5 w-40 !rounded-md" /><div className="skel h-11 !rounded-2xl" /><div className="skel h-16 !rounded-2xl" /></div>;
+// the read-only market sheet belongs to the Markets screen: fetched only when a market that cannot be traded is opened from the picker
+const MarketSheet = lazy(() => import('./Markets').then((m) => ({ default: m.MarketSheet })));
+const renderChecks = (p: OrderChecksProps) => <Suspense fallback={<div className="skel h-24 !rounded-2xl" aria-hidden="true" />}><UnifiedChecks {...p} /></Suspense>;
+/** every perpetual of the markets hub (three pages at most), by id — asked when the picker opens */
+async function hubPerps(): Promise<Map<string, HubRow>> {
+  const out = new Map<string, HubRow>();
+  for (let offset = 0; offset < 1500; offset += 500) { const page = await mapi.list({ ...defaultFilters('perp'), limit: 500, offset }); for (const r of page.rows) out.set(r.id, r); if (offset + page.rows.length >= page.total || page.rows.length === 0) break; }
+  return out;
+}
+// <<< v11 Trade
 import { venueOf, type DerivAccount, type Instrument, type Interval, type Order, type Position, type VenueInfo } from '../derivatives/types';
 
 export type FuturesView = 'terminal' | 'compare' | 'accounts' | 'router';
@@ -122,6 +144,11 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
   const [interval, setIntervalV] = useLocalState<Interval>('spw-fut-interval', '1h');
   const [tab, setTab] = useState<'chart' | 'book' | 'trade' | 'positions'>(() => (hasPaperPrefill(id) || /* v8 GMX trading */ peekGmxPrefill(id) !== null ? 'trade' : 'chart'));   // coming from the router: the order panel first
   const [pick, setPick] = useState(false);
+  // v11 Trade: the picker is fed by the markets hub — what is tradable, what is paper-only, what is read-only and why
+  const hubQ = useQuery({ queryKey: ['mh', 'perps-all'], queryFn: hubPerps, enabled: pick, staleTime: 60_000, retry: 0 });
+  const hubFlags = useMemo(() => (hubQ.data ? new Map<string, HubFlag>([...hubQ.data].map(([k, r]) => [k, { tradable: r.tradable, paper: r.paper, reason: r.tradableReason }])) : undefined), [hubQ.data]);
+  const [info, setInfo] = useState<HubRow | null>(null);
+  const qc = useQueryClient();
   const instrument = meta.instrument ?? instruments.find((i) => i.id === id) ?? null;
   const byId = useMemo(() => new Map(instruments.map((i) => [i.id, i])), [instruments]);
   const venue = venues.find((v) => v.id === instrument?.venue);
@@ -165,12 +192,18 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
   }
   // <<< v8 GMX trading
   const head = (s: string) => <h3 className="t-eyebrow mb-2.5">{s}</h3>;
-  const picker = pick && <MarketPicker instruments={instruments} current={id} onClose={() => setPick(false)} onPick={(m) => { setPick(false); onMarket(m); }} />;
+  const picker = <>{pick && <MarketPicker instruments={instruments} current={id} onClose={() => setPick(false)} onPick={(m) => { setPick(false); onMarket(m); }} hub={hubFlags} hubDown={hubQ.isError} onInfo={(m) => { const r = hubQ.data?.get(m); if (r) { setPick(false); setInfo(r); } }} />}
+    {info && <Suspense fallback={null}><MarketSheet row={info} onClose={() => setInfo(null)} /></Suspense>}</>;
+  // v11 Trade: every account's positions and orders (unified), and the command line — the mode is the selected account's
+  const toneFor = (o: { mode: Mode; accountId: string | null; network?: string }): Tone => { if (o.mode === 'paper') return 'paper'; const a = liveAccounts.find((x) => x.id === o.accountId); return a ? toneOf(a) : o.network === 'testnet' ? 'testnet' : 'mainnet'; };
+  const unified = <Suspense fallback={<PanelSkeleton />}><UnifiedBlotter instruments={byId} toneOf={toneFor} onSelect={onMarket} /></Suspense>;
+  const cmdMode: Mode = venueAccount ? 'live' : 'paper';
+  const command = <Suspense fallback={<PanelSkeleton />}><CommandLine mode={cmdMode} accountId={chosen?.id ?? null} tone={chosen ? toneOf(chosen) : 'paper'} onSelect={onMarket} onDone={() => { void qc.invalidateQueries({ queryKey: ['trade'] }); void qc.invalidateQueries({ queryKey: ['deriv'] }); }} /></Suspense>;
   const error = meta.error && !store.ticker ? <Notice tone="danger">{t('fxMarketError')}</Notice> : null;
   const facts = instrument && <VenueFacts instrument={instrument} store={store} />;
 
   if (phone) return (
-    <div className="space-y-3" data-testid="terminal" data-layout="phone" data-tone={tone}>
+    <OrderChecksContext.Provider value={renderChecks}><div className="space-y-3" data-testid="terminal" data-layout="phone" data-tone={tone}>
       <div className="nav-glass sticky top-[calc(env(safe-area-inset-top)+64px)] z-[5] -mx-5 space-y-2 border-b border-line px-5 pb-2 pt-2">
         {band}
         <MarketHeader store={store} instrument={instrument} onPick={() => setPick(true)} compact />
@@ -181,14 +214,14 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
       <div role="tabpanel" aria-label={t('fxPanels')}>
         {tab === 'chart' && <div className="space-y-3"><Card className="!p-4">{chart}</Card><Card className="!p-4"><MarketStats store={store} instrument={instrument} /></Card>{facts}</div>}
         {tab === 'book' && <div className="space-y-3"><Card className="!p-4">{head(t(hasBook ? 'fxBook' : 'fxGmxLiquidity'))}{book}</Card>{trades && <Card className="!p-4">{head(t('fxTrades'))}{trades}</Card>}</div>}
-        {tab === 'trade' && <Card className="!p-4">{order}</Card>}
-        {tab === 'positions' && <Card className="!p-4">{blotter}</Card>}
+        {tab === 'trade' && <div className="space-y-3"><Card className="!p-4">{order}</Card><Card className="!p-4">{command}</Card></div>}
+        {tab === 'positions' && <div className="space-y-3"><Card className="!p-4">{blotter}</Card><Card className="!p-4">{unified}</Card></div>}
       </div>
       {picker}
-    </div>
+    </div></OrderChecksContext.Provider>
   );
   return (
-    <div className="space-y-3" data-testid="terminal" data-layout={wide ? 'desktop' : 'tablet'} data-tone={tone}>
+    <OrderChecksContext.Provider value={renderChecks}><div className="space-y-3" data-testid="terminal" data-layout={wide ? 'desktop' : 'tablet'} data-tone={tone}>
       {/* the band stays on screen while the terminal scrolls; the page colour behind it keeps what scrolls underneath from showing through its wash */}
       <div className="sticky top-[calc(env(safe-area-inset-top)+64px)] z-[5] rounded-xl bg-bg lg:top-2">{band}</div>
       <Card className="!p-4"><MarketHeader store={store} instrument={instrument} onPick={() => setPick(true)} compact={false} /></Card>
@@ -196,15 +229,16 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
       {wide ? <div className="grid grid-cols-[minmax(0,1fr)_292px_324px] items-start gap-3">
         <div className="space-y-3"><Card className="!p-4">{chart}</Card>{facts}</div>
         <div className="space-y-3"><Card className="!p-3.5">{head(t(hasBook ? 'fxBook' : 'fxGmxLiquidity'))}{book}</Card>{trades && <Card className="!p-3.5">{head(t('fxTrades'))}{trades}</Card>}</div>
-        <Card className="!p-4">{order}</Card>
+        <div className="space-y-3"><Card className="!p-4">{order}</Card><Card className="!p-4">{command}</Card></div>
       </div> : <div className="grid grid-cols-[minmax(0,1fr)_324px] items-start gap-3">
         <div className="space-y-3"><Card className="!p-4">{chart}</Card>
           <div className={`grid gap-3 ${trades ? 'grid-cols-2' : 'grid-cols-1'}`}><Card className="!p-3.5">{head(t(hasBook ? 'fxBook' : 'fxGmxLiquidity'))}{book}</Card>{trades && <Card className="!p-3.5">{head(t('fxTrades'))}{trades}</Card>}</div>{facts}</div>
-        <Card className="!p-4">{order}</Card>
+        <div className="space-y-3"><Card className="!p-4">{order}</Card><Card className="!p-4">{command}</Card></div>
       </div>}
       <Card className="!p-4">{blotter}</Card>
+      <Card className="!p-4">{unified}</Card>
       {picker}
-    </div>
+    </div></OrderChecksContext.Provider>
   );
 }
 

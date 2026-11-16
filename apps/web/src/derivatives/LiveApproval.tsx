@@ -15,6 +15,7 @@
  * nothing folded before the approval, nothing animated. The sheet is `LiveSheet` (the shared `Sheet`): the mode tag sits in
  * its title area, the mode band stays the first thing in it.
  */
+import { OrderChecksSlot } from './orderChecks';   // v11 Trade
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
@@ -109,6 +110,8 @@ export function ApprovalSheet({ account, instrument, request, orders, ttlMs, onC
 
       {c && phase !== 'proposing' && phase !== 'done' && <>
         <Group title={t('flSignedExactly')}><div className={`${TICKET} ${dim}`}><CanonicalRows c={c} instrument={instrument} /></div></Group>
+        {/* v11 Trade: every check of the unified risk engine and of the mandate for this order, before the passkey prompts (rendered by the terminal) */}
+        {request.kind === 'order' && phase !== 'void' && <OrderChecksSlot mode="live" accountId={account.id} body={request.body} />}
         {request.kind === 'close' && p?.slippageBoundBps ? <p className="text-[12.5px] leading-snug text-mute">{t('flCloseBound', { bps: p.slippageBoundBps, pct: fmt(String(p.slippageBoundBps / 100), { locale, trim: true }) })}</p> : null}
         {est && <Group title={t('flEstimate')} right={<SourceTag source="estimate" />} className={dim}>
           <div className="rounded-[18px] border border-line px-4 py-1.5"><dl className="receipt">
