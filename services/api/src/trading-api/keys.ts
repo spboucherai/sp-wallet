@@ -150,6 +150,7 @@ const auditFacts = (k: KeyRow) => ({ key: k.id, name: k.name, scopes: k.scopes, 
 export async function createKey(intentId: string, assertion: unknown, ip: string) {
   const i = await approveIntent<CreateIntent>(intentId, 'create', assertion, ip);
   if (Date.parse(i.key.expiresAt) <= Date.now()) throw new UserError('intent_expired', 'this approval request expired; start again', 409);
+  await checkBinding(i.key.id, i.key.mandateId); // the mandate as it is NOW (prepare checked it when the intent was built)
   const { row, token } = await insertKey(i.key, null);
   await audit('apikey.created', 'owner', { ...auditFacts(row), ip });
   return { key: keyView(row), secret: token };
@@ -159,11 +160,21 @@ export async function rotateKey(id: string, intentId: string, assertion: unknown
   if (i.keyId !== id) throw new UserError('intent_mismatch', 'this approval was prepared for another key', 409);
   const old = await getKey(id);
   if (keyStatus(old) !== 'active') throw new UserError('key_not_active', 'only an active key can be rotated', 409);
-  // same authority, same expiry, a new id and a new secret; the old key stops working in the same statement sequence
-  const { row, token } = await insertKey({ id: i.newKeyId, name: old.name, scopes: old.scopes, expiresAt: old.expires_at.toISOString(), limits: old.limits, restrictions: old.restrictions, rateLimitPerMin: old.rate_limit_per_min, mandateId: old.mandate_id }, old.id);
+  // A trading mandate names ONE principal — the key id it was approved for — and a rotation gives the key a new id: the binding is
+  // verified for the new id like any other binding, and a mandate that does not name it is NOT carried over. The new key then has
+  // no mandate (its execution scopes are inert: `mandate_required`) until the owner approves a mandate for it and binds it.
+  let mandateId = old.mandate_id, notCarried: { mandateId: string; code: string } | null = null;
+  if (mandateId) {
+    try { if (!verifyMandate) throw new UserError('mandate_unverified', 'no mandate verifier is installed', 503); await verifyMandate(i.newKeyId, mandateId); }
+    catch (e) { if (!(e instanceof UserError)) throw e; notCarried = { mandateId, code: e.code }; mandateId = null; }
+  }
+  // same scopes, limits, restrictions and expiry, a new id and a new secret; the old key stops working in the same statement sequence
+  const { row, token } = await insertKey({ id: i.newKeyId, name: old.name, scopes: old.scopes, expiresAt: old.expires_at.toISOString(), limits: old.limits, restrictions: old.restrictions, rateLimitPerMin: old.rate_limit_per_min, mandateId }, old.id);
   await sql`update api_keys set revoked_at = now(), revoked_reason = ${`rotated to ${row.id}`} where id = ${old.id} and revoked_at is null`;
-  await audit('apikey.rotated', 'owner', { from: old.id, to: row.id, name: old.name, ip });
-  return { key: keyView(row), secret: token, revoked: old.id };
+  await audit('apikey.rotated', 'owner', { from: old.id, to: row.id, name: old.name, mandateNotCarried: notCarried, ip });
+  return { key: keyView(row), secret: token, revoked: old.id,
+    /** null: the old key had no mandate. `carried: false`: the mandate named the old key; the new key is unbound */
+    mandate: old.mandate_id === null ? null : notCarried ? { carried: false, mandateId: notCarried.mandateId, code: notCarried.code, note: 'the mandate was approved for the rotated key id: approve a mandate for the new key and bind it; until then its execution scopes are inert' } : { carried: true, mandateId } };
 }
 async function saveFacts(id: string, f: KeyFacts): Promise<KeyRow> {
   const [row] = await sql<KeyRow[]>`update api_keys set name = ${f.name}, scopes = ${f.scopes}, limits = ${sql.json(f.limits as never)}, restrictions = ${sql.json(f.restrictions as never)},

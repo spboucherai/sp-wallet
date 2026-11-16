@@ -14,7 +14,8 @@ import { IDEMPOTENCY_RE, replayHeaders, withIdempotency } from './idempotency.ts
 import { buildOpenApi } from './openapi.ts';
 import { requirePrincipal, type Principal } from './principal.ts';
 import { AmbiguousSymbol, type Reads } from './read.ts';
-import { ANY_SCOPE, isExecutionScope, OPERATIONS, TRADING_PREFIX, type OperationSpec } from './spec.ts';
+import { shapePreview } from './shaping.ts';
+import { ANY_SCOPE, NOT_FOUND, OPERATIONS, requiresMandate, TRADING_PREFIX, type OperationSpec } from './spec.ts';
 
 interface Input { params: any; query: any; body: any } // eslint-disable-line @typescript-eslint/no-explicit-any -- validated by the operation's zod schemas
 type Handler = (p: Principal, i: Input, req: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
@@ -26,7 +27,7 @@ type Handler = (p: Principal, i: Input, req: FastifyRequest, reply: FastifyReply
  * the order is decided by the order service, order by order.
  */
 export function requireMandate(p: Principal, op: Pick<OperationSpec, 'scope' | 'noMandate'>): void {
-  if (p.kind === 'api_key' && op.scope !== ANY_SCOPE && isExecutionScope(op.scope) && !op.noMandate && !p.mandateId)
+  if (p.kind === 'api_key' && requiresMandate(op) && !p.mandateId)
     throw new UserError('mandate_required', `the scope ${op.scope} is inert on this key: no trading mandate is bound to it`, 403);
 }
 const notWired = (op: OperationSpec): Handler => async (_p, _i, req, reply) =>
@@ -41,7 +42,9 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution)
   /** `venue:symbol` after the read side resolved a bare symbol (409 `ambiguous_symbol`) and applied the key's restrictions */
   const orderInput = async (p: Principal, b: Input['body']): Promise<OrderInput> => {
     const r = await reads.resolve(p, b.instrument);
-    return { mode: b.mode, accountId: b.accountId, instrument: r.id, side: b.side, type: b.type, size: b.size, price: b.price, triggerPrice: b.triggerPrice, reduceOnly: b.reduceOnly, tif: b.tif, slippageBps: b.slippageBps, leverage: b.leverage, maxFeeUsd: b.maxFeeUsd };
+    // `notional` is turned into a size HERE, by the server, from the price the order itself names or the venue's mark read now
+    const size: string = b.size ?? await reads.sizeForNotional(r, b);
+    return { mode: b.mode, accountId: b.accountId, instrument: r.id, side: b.side, type: b.type, size, price: b.price, triggerPrice: b.triggerPrice, reduceOnly: b.reduceOnly, tif: b.tif, slippageBps: b.slippageBps, leverage: b.leverage, maxFeeUsd: b.maxFeeUsd };
   };
   /** the idempotency key of the ORDER: the body's clientOrderId when given, else the Idempotency-Key header */
   const orderKey = (req: FastifyRequest, b?: { clientOrderId?: string }): string => b?.clientOrderId ?? replayHeaders(req).key;
@@ -61,19 +64,15 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution)
     getBalances: (p, i) => reads.balances(p, i.query),
     getActivity: (p, i) => reads.activity(p, i.query),
     listPositions: (p, i) => reads.positions(p, i.query),
-    // orders: the unified table (every principal, mode and venue), plus the spot agents' swaps, which have their own table
-    listOrders: async (p, i) => {
-      const unified = i.query.venue === 'spot' ? [] : await ex.orders.list(callerOf(p), i.query);
-      const agents = (await reads.orders(p, i.query)).orders.filter((o) => AGENT_ID.test(o.id));
-      return { orders: [...unified, ...agents].sort((a, b) => b.createdAt - a.createdAt).slice(0, i.query.limit), ts: reads.now() };
-    },
+    // orders: the unified table (every principal, mode and venue) and the spot agents' swaps, in one keyset-paginated list (read.ts)
+    listOrders: (p, i) => reads.orders(p, i.query),
     getOrder: async (p, i) => {
-      if (AGENT_ID.test(i.params.id)) return reads.order(p, i.params.id);
+      if (AGENT_ID.test(i.params.id)) return reads.agentSwap(p, i.params.id);
       const o = await ex.orders.get(callerOf(p), i.params.id);
       if (!o) throw new UserError('unknown_order', 'unknown order', 404);
       return o;
     },
-    previewOrder: async (p, i, req) => ex.orders.preview(callerOf(p), await orderInput(p, i.body), previewKey(req, i.body)),
+    previewOrder: async (p, i, req) => shapePreview(p, await ex.orders.preview(callerOf(p), await orderInput(p, i.body), previewKey(req, i.body))),
     placeOrder: (p, i, req, reply) => withIdempotency(req, reply, async () => ex.orders.submit(callerOf(p), await orderInput(p, i.body), orderKey(req, i.body))),
     cancelOrder: (p, i, req, reply) => withIdempotency(req, reply, () => ex.orders.cancel(callerOf(p), i.params.id)),
     closePosition: (p, i, req, reply) => withIdempotency(req, reply, () => ex.orders.reducePosition(callerOf(p), i.params.id, '1', i.body.slippageBps, orderKey(req))),
@@ -107,4 +106,12 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution)
       },
     });
   }
+  // Anything else under the prefix — an unknown path, or a known path with another method — answers the API's own error model,
+  // whether or not the server also serves the web app (whose not-found handler exists only when a web directory is configured).
+  // Authentication still comes first (401), and the answer is counted against the key's rate limit like any other.
+  app.route({
+    method: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], url: `${TRADING_PREFIX}/*`,
+    config: { scope: ANY_SCOPE, rateLimit: { allowList: (req: FastifyRequest) => req.principal?.kind === 'api_key' } },
+    handler: async (req, reply) => { requirePrincipal(req); return reply.status(NOT_FOUND.status).send({ error: NOT_FOUND.code, message: NOT_FOUND.message }); },
+  });
 }
