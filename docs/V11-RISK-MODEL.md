@@ -10,8 +10,9 @@ Pure: no clock (the caller's `context.now`), no network, no state. The same inpu
 answer. It lists every check, not only the first that fails. `evaluateRisk` is the same function under a
 name that does not collide with the risk engine of `packages/derivatives`.
 
-Status: the engine exists and is tested. It is not called by the API or the signer yet; see
-"Enforcement points" below.
+Status: the engine is called by the API service for every order of every principal since Phase F
+(`services/api/src/risk/`). It is not called by the isolated signer, which keeps its own, older checks. The
+section "Enforcement points" states exactly which check is enforced where.
 
 ## Principles
 
@@ -154,9 +155,8 @@ reduce-only limit order.
 - A cancel passes with no limit configured, with the signer down, in any mode: it can only lower what may
   still execute.
 
-Open point: the brief says both that a reducing order passes the read-only check and that read-only blocks
-everything except a cancel. The engine implements the second reading. Changing it is one line
-(`RISK_CHECKS` entry `read_only` and the check in `run`).
+Decided at integration: under `readOnly` only cancels pass; under the kill switch reductions pass. This is
+what the engine implemented.
 
 ## What the engine does not do
 
@@ -169,37 +169,154 @@ everything except a cancel. The engine implements the second reading. Changing i
 - It does not verify the marks of positions on other instruments; they are taken as the venue reported them.
 - It holds no state: usage counters, PnL, peak equity and statuses are the caller's.
 
+## Integration in the API service (Phase F)
+
+Code: `services/api/src/risk/{service,limits,passkey}.ts`, `services/api/src/derivatives/gate.ts`. Operator
+view: `TRADING-RISK-ENGINE.md`.
+
+### Who calls `evaluate`
+
+- The order service, for every order it places and for every preview.
+- The three venue engines, through a gate (`PreTradeGate`) set on the instances the server uses: the paper
+  engine (`paper.ts` `risk`), the Hyperliquid engine (`exec.ts` `check`, used by previews, manual proposals
+  and mandate orders) and the GMX engine (`gmx-exec.ts` `prepareOrder`). An order placed through a route that
+  existed before, or by a perp agent, therefore passes the same engine. The gate runs after the venue engine's
+  own checks and before anything is stored for approval or handed to the signer. An order the order service
+  has just evaluated is not evaluated twice (the decision is found by its client order id).
+- At approval time the Hyperliquid and GMX engines ask again whether new risk is blocked, so that a proposal
+  made before the kill switch cannot be approved after it.
+- The API asks before requesting a spot agent's signature (`signerGuards.beforeMandateSign` in
+  `signer-client.ts`): with the kill switch or read-only mode on, `/mandate/sign` is not called.
+
+A denial is final for the path that asked. No caller can override it.
+
+### Context
+
+The context is assembled by the API from what it reads itself. Nothing a caller says enters it.
+
+- **Books.** A context is built for one book: `paper`, `live-mainnet` (Hyperliquid mainnet accounts and GMX)
+  or `live-testnet`. A live context never contains a paper position, balance or PnL figure, and the reverse.
+- **Accounts and positions.** Paper: the stored accounts. Live: the venue is read for every authorized venue
+  account; GMX positions are read from the chain through the GMX service when the wallet has ever used GMX. A
+  part that cannot be read is listed, and the service adds the check `context_complete`: new risk is denied on
+  an incomplete book. A strictly reducing order is exempt.
+- **One account per venue.** The engine reads one account per venue and instrument. With several accounts on
+  a venue, the order's own account is presented under the venue's name and each sibling under
+  `<venue>@<account id prefix>`. Gross, net and per-asset exposure and the account leverage count every
+  account. The per-venue exposure and the collateral-share limits then apply to the order's own account.
+- **Prices.** The venue's mark and, when the venue publishes one, its index (an oracle price, not the book),
+  each with the venue's timestamp; plus the wallet's spot price list (CoinGecko) under the source `coingecko`,
+  with the time that source gives. Live needs two fresh sources by default.
+- **Book.** The venue's order book. A venue without one (GMX, a liquidity pool) cannot answer `slippage` and
+  `min_liquidity`: the service marks both "not applicable" with the reason, in the stored check list. The
+  order's acceptable price bounds its execution there, checked by the GMX engine and the signer.
+- **PnL.** Stored fills (closed PnL minus fees) and funding of the book's accounts, today and in total; for
+  the mainnet book also the realised PnL of executed GMX orders. Unrealised PnL is the sum over the open
+  positions; the same figure is used for "today" (no intraday baseline is stored).
+- **Equity and peak.** The sum of the readable accounts' equity; the peak is stored per book and raised when
+  the equity exceeds it.
+- **Usage.** Counted on the `orders` table for the book: orders that are not reduce-only and not `REJECTED`
+  or `FAILED`, in the last minute, hour and day, and today's notional.
+- **Signer and connection.** `signer.status()` (reachable, halted); the venue counts as connected when its
+  ticker was read for this evaluation.
+
+Every evaluation is stored in `risk_decisions`: decision, `reducing`, the failing check ids, the full check
+list, the derived values, the limit set used and a summary of the context. Previews are stored with
+`preview = true` and are never reused as the decision of an order.
+
+### Limits and defaults (`limits.ts`)
+
+Stored per mode in `settings` (`risk.limits.live`, `risk.limits.paper`). The engine is given the defaults of
+the mode overridden by what the owner stored.
+
+- **Live.** The defaults cover data quality, order rates and execution quality: price age 10 s (15 min for
+  the spot price list), book age 10 s, two fresh sources, 200 bps between sources, 100 bps slippage, depth of
+  twice the order within 100 bps, liquidation distance 1 000 bps, 6 / 60 / 200 orders per minute / hour / day.
+  **Every limit on capital is absent** — allow-lists, order and daily notional, position, order and account
+  leverage, gross, net, per-asset and per-venue exposure, collateral share, daily and total loss, drawdown.
+  An absent limit denies. A live order that is not strictly reducing is refused until the owner has set them.
+- **Paper.** The same engine with a complete, finite default set. Allow-lists the owner did not set mean
+  "every venue and instrument".
+
+Tightening is free. A change that loosens anything is refused with `passkey_required`; it goes through
+`prepare` and `approve`, where the passkey signs the hash of the whole new limit set
+(`SPW-RISK-LIMITS-INTENT-v1`). This is the Phase B mechanism (`verifyOwnerAssertion`): a check against a
+stolen session, verified by the API. It is not the signer's judgement.
+
+### Kill switch and read-only mode
+
+Stored in `settings` (`risk.switches`). Both are global: every principal, every venue, every mode.
+
+| | Engage | Release |
+|---|---|---|
+| Kill switch | the owner's session; an API key with `positions:manage` (`POST /trading/risk/kill-switch`, or the command `KILL`); the supervisor, on a declared automatic stop | the owner's passkey only (`SPW-RISK-SWITCH-INTENT-v1`, bound to the instant the switch was engaged) |
+| Read-only | the owner's session | the owner's passkey only |
+
+- Kill switch: no order that is not strictly reducing. Cancels pass. Strictly reducing orders pass. It does
+  not cancel resting orders and does not close positions. The owner's transfers, swaps and withdrawals are not
+  orders of this layer and are not concerned.
+- Read-only: only cancels pass.
+- Engaging emits the webhook `risk.kill_switch` (`source: "risk_engine"`), an audit event `risk.kill_switch`
+  and the alert `risk.kill_switch_on`.
+- Automatic stops (`risk.auto`, default: total loss and drawdown on, daily loss off): when the live mainnet
+  book reaches the owner's `maxTotalLoss` or `maxDrawdownBps`, the supervisor engages the kill switch.
+  Switching one off needs the passkey. An unreadable book does not trip it.
+
+The kill switch is separate from the signer's emergency halt. The halt stops signing, on the signer; it is
+lifted on the signer machine. The kill switch stops new risk, in the API; it is released with the passkey.
+A compromised API ignores the kill switch.
+
 ## Enforcement points (API / signer)
 
-**To be completed at integration.** The engine is pure code and is enforced nowhere yet. The table states
-what exists today (from `docs/v11/audit-parts/derivatives-exec-signer.md` section 5.1) and what is planned.
+"Signer" means: the isolated signer refuses to sign, whatever the API asks. "API" means: only the API
+service refuses; a compromised API process could skip it.
 
-| Control | Engine check | API today | Signer today | After integration |
+| Control | Engine check | API (unified risk engine) | API (venue engine, unchanged) | Signer |
 |---|---|---|---|---|
-| Order notional | `order_notional` | `risk.ts`, `exec.ts` | HL manual, HL mandate, GMX increase | _to be completed_ |
-| Position per instrument | `position_size` | `risk.ts` (positions only) | HL mandate only | _to be completed_ |
-| Gross / net exposure | `gross_exposure`, `net_exposure` | `risk.ts` (gross, one account) | HL mandate only (gross) | _to be completed_ |
-| Exposure per asset, across venues | `asset_exposure` | none | none | _to be completed_ |
-| Exposure per venue | `venue_exposure` | per venue account only | none | _to be completed_ |
-| Collateral concentration | `collateral_concentration` | none | none | _to be completed_ |
-| Leverage | `order_leverage`, `account_leverage` | `risk.ts`, `exec.ts` | HL setting, GMX per increase | _to be completed_ |
-| Daily and total loss | `daily_loss`, `total_loss` | HL only; GMX disabled | HL mandate floor only | _to be completed_ |
-| Drawdown from peak | `drawdown` | none | none | _to be completed_ |
-| Liquidation distance | `liquidation_distance` | pre-trade, HL and GMX | none | _to be completed_ |
-| Slippage | `slippage` | worst price, deviation vs mark | price band vs own mid | _to be completed_ |
-| Price freshness and consistency | `price_freshness`, `price_consistency` | data age, mark vs index | own prices, two sources | _to be completed_ |
-| Order rate | `order_rate_*` | per minute, per day | per day; per hour (mandate) | _to be completed_ |
-| Daily notional | `daily_notional` | none | daily turnover (HL mandate) | _to be completed_ |
-| Minimum liquidity | `min_liquidity` | none | none | _to be completed_ |
-| Allow-lists | `venue_allowed`, `instrument_allowed` | per account | per authorization / mandate | _to be completed_ |
-| Kill switch | `kill_switch` | per HL account `halt` | global `halted`, which also blocks manual reductions | _to be completed_ |
-| Read-only | `read_only` | per HL account mode | absence of an authorization | _to be completed_ |
+| Order notional | `order_notional` | every order | `risk.ts` per account | Hyperliquid manual order (authorization), Hyperliquid mandate, GMX increase |
+| Daily notional | `daily_notional` | every order | none | Hyperliquid mandate only (daily turnover) |
+| Position per instrument | `position_size` | every order (positions; resting orders not counted) | `risk.ts` per account | Hyperliquid mandate only (worst case, resting orders counted) |
+| Gross exposure | `gross_exposure` | every order, all venues of the book | `risk.ts`, one account | Hyperliquid mandate only |
+| Net exposure | `net_exposure` | every order | none | none |
+| Exposure per asset, across venues | `asset_exposure` | every order | none | none |
+| Exposure per venue | `venue_exposure` | every order (the order's own account when a venue has several) | none | none |
+| Collateral concentration | `collateral_concentration` | every order | none | none |
+| Order leverage | `order_leverage` | every order | `exec.ts`, paper policy | Hyperliquid leverage setting ≤ authorization; mandate refuses to add exposure above its leverage; GMX per increase |
+| Account leverage | `account_leverage` | every order | `risk.ts` | none |
+| Daily and total loss | `daily_loss`, `total_loss` | every order | per account (Hyperliquid, GMX, paper) | Hyperliquid mandate only: `floorEquity` on the venue's account value |
+| Drawdown from peak | `drawdown` | every order | none | none |
+| Liquidation distance | `liquidation_distance` | every order | pre-trade, per account | none |
+| Slippage | `slippage` | every order on a venue with a book | worst price, deviation from the mark | price band around the signer's own mid on every Hyperliquid order; GMX acceptable price |
+| Minimum liquidity | `min_liquidity` | every order on a venue with a book | none | none |
+| Price freshness and consistency | `price_freshness`, `price_consistency` | every order: venue mark, venue index, spot price list | data age, mark against index | its own prices: two sources, both fresh |
+| Order rate | `order_rate_*` | per book: minute, hour, day | per account: minute, day | per day (authorization and mandate); per hour (mandate) |
+| Allow-lists | `venue_allowed`, `instrument_allowed` | every order | per account policy | per authorization and per mandate |
+| Instrument status | `instrument_status` | every order | `risk.ts` | none |
+| Signer and venue status | `signer_status`, `venue_connection` | live orders | implicit (the call fails) | — |
+| Reduce-only validity | `reduce_only_valid` | every reduce-only order | `risk.ts` 5b; the venue enforces the flag | the reduce-only flag is read from the payload it signs |
+| Kill switch | `kill_switch` | global, every principal and venue; also asked at approval | per-account `halt` | none: the signer's `halted` flag is another control (it stops signing; reduce-only exits and cancels are still signed) |
+| Read-only | `read_only` | global | per-account mode | none (absence of an authorization) |
+| Trading mandate of a key or an agent | — | `checkOrder`, every field | — | the fields marked `signer` or `signer (partly)` in `TRADING-MANDATES.md`, for Hyperliquid |
+| Key limits and restrictions | — | order service: notional per order and per day; venues, instruments, networks | — | none |
 
-Questions to settle at integration:
+What the unified engine adds is API-side. On the signer nothing changed in this phase:
 
-- which process calls `evaluate`, and whether a denial is final for every path (manual, mandate, API key);
-- who computes the context — in particular the cross-venue position list, the symbol normalization and the
-  peak equity — and how stale each part may be;
-- where the limits are stored, who may change them, and whether a change needs a passkey;
-- how the global kill switch relates to the signer's `halted` flag, which today also blocks reductions;
-- which of these checks the signer can re-derive itself, and which remain API-only.
+- a manual Hyperliquid order: passkey, instrument, notional per order, daily count, price band;
+- an order under a derivative mandate: every limit of the mandate, from the signer's own read of the venue
+  account and its own prices;
+- GMX: one passkey per order, the venue policy, pinned contracts.
+
+Consequences, stated plainly:
+
+- The cross-venue limits (per asset, net, venue concentration, drawdown), the kill switch, read-only mode and
+  the owner's limit set are enforced by the API only.
+- For live trading by an API key or an agent, what holds if the API is compromised is the derivative mandate
+  in the signer, and nothing else.
+- For the owner's manual orders, what holds is the passkey per order and the authorization.
+
+Not done by the service:
+
+- Resting orders are not counted in exposure (the convention of the engine).
+- The marks of positions on other instruments are taken as the venue reported them.
+- A second account on a venue is judged per account for the per-venue limits.
+- Unrealised PnL has no intraday baseline.

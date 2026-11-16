@@ -15,7 +15,7 @@ import type { GmxService } from '../derivatives/gmx-exec.ts';
 import { live } from '../derivatives/live.ts';
 import { MandateService } from '../mandates/service.ts';
 import { RiskService, type BookKey } from '../risk/service.ts';
-import { signer, signerGuards } from '../signer-client.ts';
+import { signerGuards } from '../signer-client.ts';
 import { emitWebhook } from '../trading-api/webhooks.ts';
 import { loop } from '../worker.ts';
 import { OrderService } from './service.ts';
@@ -38,11 +38,11 @@ export const SUPERVISOR_STEP_MS = 5_000;
 export function createExecution(o: ExecutionOpts = {}): Execution {
   const d = (): Derivatives => o.derivatives ?? derivatives(), l = (): LiveService => o.live ?? live(), now = (): number => d().data.now();
   const gmx = (): Pick<GmxService, 'status'> => o.gmx ?? { status: async (locale) => (await import('../derivatives/gmx-live.ts')).gmx().status(locale) };
-  const signerStatus = o.signerStatus ?? (() => signer.status());
+  // the signer the live engine itself talks to (in production the one signer client; a test's in-process signer otherwise)
+  const signerStatus = o.signerStatus ?? (() => l().deps.signer.status());
   const risk = new RiskService({ now, rpId: config.rpId, credentials: async () => (await listCreds()).map((c) => ({ id: c.id, transports: c.transports })), verifyOwner: o.verifyOwner ?? verifyOwnerAssertion,
     derivatives: d, live: l, gmx, signerStatus, ...(o.prices ? { prices: o.prices } : {}),
-    emit: (event, data) => emitWebhook(event, data),
-    alert: async (kind, params, dedupe) => { const a = await import('../alerts/dispatcher.ts'); await (await import('../alerts/store.ts')).migrateAlerts(); return (await a.alerts()).raise({ kind, params, dedupe }, { source: 'risk' }); } });
+    emit: (event, data) => emitWebhook(event, data) });
   // the order service and the mandates need each other (wind-down cancels what rests): the mandate service gets the cancel late
   const mdeps: ConstructorParameters<typeof MandateService>[0] = { now, derivatives: d, live: l, signerStatus };
   const mandates = new MandateService(mdeps);

@@ -139,3 +139,16 @@ export async function useDatabase(label: string): Promise<void> {
   await useTestDatabase(label);
 }
 export type { Book };
+
+/**
+ * V11: with a server (`buildServer`) the unified risk engine stands in front of every engine path, and a LIVE order is refused
+ * until the owner has set his limits (services/api/src/risk/limits.ts). The suites written before it exercise the venue engine,
+ * not the owner's limits: they store this set — every limit present, none binding — as the owner would in the Risk screen.
+ */
+export const OPEN_LIVE_LIMITS = { allowedVenues: ['hyperliquid', 'gmx'], allowedInstruments: ['hyperliquid:BTC', 'hyperliquid:ETH'], maxOrderNotional: '100000000', maxDailyNotional: '1000000000', maxPositionNotional: { per: {}, default: '100000000' },
+  maxOrderLeverage: '100', maxAccountLeverage: '100', maxGrossExposure: '1000000000', maxNetExposure: '1000000000', maxAssetExposure: { per: {}, default: '1000000000' }, maxVenueExposure: { per: {}, default: '1000000000' },
+  maxVenueCollateralShareBps: '10000', maxDailyLoss: '1000000000', maxTotalLoss: '1000000000', maxDrawdownBps: '10000', minLiquidationDistanceBps: '0', maxSlippageBps: '10000', minLiquidity: { withinBps: '10000', multiple: '0.000001' },
+  maxPriceAgeMs: { per: {}, default: 3_600_000 }, maxBookAgeMs: 3_600_000, minPriceSources: 1, maxSourceDeviationBps: '10000', maxOrdersPerMinute: 100000, maxOrdersPerHour: 100000, maxOrdersPerDay: 100000 };
+export async function openLiveLimits(sql: any): Promise<void> { // eslint-disable-line @typescript-eslint/no-explicit-any -- the postgres.js handle of the suite
+  await sql`insert into settings (key, value) values ('risk.limits.live', ${sql.json(OPEN_LIVE_LIMITS)}) on conflict (key) do update set value = excluded.value`;
+}

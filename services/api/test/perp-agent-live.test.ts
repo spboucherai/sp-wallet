@@ -587,6 +587,7 @@ describe('through the API routes: the owner\'s session, CSRF, no route that plac
     const w = await liveWorld(), ORIGIN = 'https://wallet.test';
     const dv = mod.createDerivatives({ registry: mod.createRegistry(fixtureVenues(w.clock as never).adapters, w.clock.now), now: w.clock.now });
     const app = await (await import('../src/server.ts')).buildServer({ derivatives: dv, live: w.svc });
+    await (await import('./derivatives-helpers.ts')).openLiveLimits(sql);   // V11: the owner's limits of the unified risk engine (absent = every new live order is denied)
     const script = { bar: Math.floor(w.clock.now() / H) * H - H, weights: { BTC: 0.5 } as Record<string, number> };
     const rt = pl.createPerpRuntime(dv, { live: w.svc, gate: async () => ({ bar: script.bar, data: {} }), signal: async () => ({ weights: script.weights, maxLeverage: 2, maxGrossExposure: 2 }) });
     pl.setPerpRuntime(rt);

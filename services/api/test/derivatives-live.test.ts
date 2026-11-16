@@ -670,6 +670,7 @@ describe('routes', () => {
     await sql`insert into sessions (id_hash, expires_at) values (${createHash('sha256').update(token).digest('hex')}, now() + interval '1 hour')`;
     const cookie = `${(await import('../src/auth.ts')).COOKIE}=${token}`;
     const app = await (await import('../src/server.ts')).buildServer({ live: w.svc });
+    await (await import('./derivatives-helpers.ts')).openLiveLimits(sql);   // V11: the owner's limits of the unified risk engine (absent = every new live order is denied)
     const api = async (method: 'GET' | 'POST', path: string, payload?: unknown, o: { cookie?: string | null; idem?: string; csrf?: boolean } = {}) => {
       const headers: Record<string, string> = {};
       if (o.cookie !== null) headers.cookie = o.cookie ?? cookie;
@@ -711,7 +712,7 @@ describe('routes', () => {
       expect((await api('POST', `/accounts/${id}/orders`, { instrument: BTC, ...LIMIT })).status).toBe(400);                 // no Idempotency-Key
       expect((await api('POST', `/accounts/${id}/orders`, { instrument: BTC, ...LIMIT, clientId: 'x' }, { idem: key() })).status).toBe(400);
       const k = key(), prop = await api('POST', `/accounts/${id}/orders`, { instrument: BTC, ...LIMIT }, { idem: k });
-      expect(prop.status).toBe(200); expect(prop.json.order.state).toBe('risk_checked');
+      expect(prop.status, JSON.stringify(prop.json)).toBe(200); expect(prop.json.order.state).toBe('risk_checked');
       const too = await api('POST', `/accounts/${id}/orders`, { instrument: BTC, ...LIMIT, size: '0.01' }, { idem: key() });
       expect(too.status).toBe(422); expect(too.json.error).toBe('order_notional_exceeded');
       expect((await api('POST', `/accounts/${id}/orders/${k}/approve`, {})).status).toBe(400);
@@ -971,6 +972,7 @@ describe('V11 B-08: loosening an API-side limit or lifting a halt needs the pass
     await sql`insert into sessions (id_hash, expires_at) values (${createHash('sha256').update(token).digest('hex')}, now() + interval '1 hour')`;
     const cookie = `${(await import('../src/auth.ts')).COOKIE}=${token}`;
     const app = await (await import('../src/server.ts')).buildServer({ live: w.svc });
+    await (await import('./derivatives-helpers.ts')).openLiveLimits(sql);   // V11: the owner's limits of the unified risk engine (absent = every new live order is denied)
     const api = async (path: string, payload: unknown = {}) => { const r = await app.inject({ method: 'POST', url: `${P}/accounts/${id}${path}`, headers: { cookie, origin: ORIGIN, 'x-spw-csrf': '1', 'content-type': 'application/json' }, payload: JSON.stringify(payload) }); return { status: r.statusCode, json: r.json() }; };
     try {
       const p = (await w.svc.get(id)).policy;

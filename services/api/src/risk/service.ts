@@ -43,7 +43,6 @@ export interface RiskDeps extends PasskeyDeps {
   /** throws when the signer cannot be reached */
   signerStatus: () => Promise<{ halted: boolean }>;
   emit?: (event: 'risk.kill_switch', data: Record<string, unknown>) => Promise<unknown>;
-  alert?: (kind: string, params: Record<string, string | number | boolean | null>, dedupe: string) => Promise<unknown>;
 }
 
 export interface ServiceCheck { id: string; ok: boolean; observed: string | null; limit: string | null; detail: string; exempt: boolean }
@@ -67,6 +66,11 @@ export class RiskService {
   readonly deps: RiskDeps;
   readonly now: () => number;
   constructor(deps: RiskDeps) { this.deps = deps; this.now = deps.now; }
+  /**
+   * The clock an evaluation is made on: the one of the engine that will execute the order, because the ages of its prices and
+   * of its book are measured against the clock that stamped them (the live engine's for a live order, the data service's otherwise).
+   */
+  clockOf(mode: string): number { return mode === 'live' ? this.deps.live().now() : this.deps.derivatives().data.now(); }
 
   // ------------------------------------------------------------------ switches
   async switches(): Promise<Switches> {
@@ -83,10 +87,8 @@ export class RiskService {
   private async notifySwitch(kind: 'kill_switch' | 'read_only', on: boolean, by: Actor, reason: string): Promise<void> {
     const by2 = `${by.kind}:${by.id}`;
     await audit(`risk.${kind}`, by.kind === 'owner' ? 'owner' : by2, { engaged: on, by: by2, reason }).catch((e: Error) => console.error(`[risk] audit failed: ${e.message}`));
-    if (kind === 'kill_switch') {
-      await this.deps.emit?.('risk.kill_switch', { source: 'risk_engine', engaged: on, by: by2, reason }).catch(() => {});
-      await this.deps.alert?.(on ? 'risk.kill_switch_on' : 'risk.kill_switch_off', { what: by2, state: reason.slice(0, 120) }, `risk.kill_switch:${on ? 'on' : 'off'}:${this.now()}`).catch(() => {});
-    }
+    // the alert is derived from the audit event above by the alert dispatcher (alerts/rules.ts), like every other alert
+    if (kind === 'kill_switch') await this.deps.emit?.('risk.kill_switch', { source: 'risk_engine', engaged: on, by: by2, reason }).catch(() => {});
   }
   /** engaging is free: the owner's session, an API key holding `positions:manage`, or the supervisor on a declared stop condition */
   async engageKillSwitch(by: Actor, reason = ''): Promise<Switches> {
@@ -214,9 +216,9 @@ export class RiskService {
             equity = D.add(equity, D.add(D.from(position.margin), D.from(position.unrealizedPnl)));
           }
           const eq = D.str(equity);
-          out.accounts.push({ venue: 'gmx', label: 'gmx', accountId, state: { venue: 'gmx', account: accountId, equity: eq, collateral: eq, freeCollateral: '0', marginUsed: eq, maintenanceMargin: null, withdrawable: null, ts: this.now(), source: 'venue' } });
+          out.accounts.push({ venue: 'gmx', label: 'gmx', accountId, state: { venue: 'gmx', account: accountId, equity: eq, collateral: eq, freeCollateral: '0', marginUsed: eq, maintenanceMargin: null, withdrawable: null, ts: this.clockOf('live'), source: 'venue' } });
           const rows = await sql<{ pnl: string | null; fee: string | null; done_at: Date | null }[]>`select outcome->>'pnlUsd' as pnl, outcome->>'positionFeeUsd' as fee, done_at from deriv_gmx_ops where state = 'executed' and kind <> 'cancel' and outcome is not null`;
-          const day = new Date(dayStart(this.now()));
+          const day = new Date(dayStart(this.clockOf('live')));
           let today = D.zero, total = D.zero;
           for (const r of rows) { try { const v = D.sub(D.from(r.pnl ?? '0'), D.from(r.fee ?? '0')); total = D.add(total, v); if (r.done_at && r.done_at >= day) today = D.add(today, v); } catch { /* an outcome without figures */ } }
           out.gmxRealized = { today: D.str(today), total: D.str(total) };
@@ -271,7 +273,7 @@ export class RiskService {
 
   /** the context of one order, and what was read to build it */
   async context(order: CanonicalOrder, o: { accountId: string | null; orderId?: string | null; known?: Known; instrument?: Instrument } = { accountId: null }) {
-    const now = this.now(), mode: 'paper' | 'live' = order.mode === 'live' ? 'live' : 'paper', book = bookOf(mode, order.network);
+    const mode: 'paper' | 'live' = order.mode === 'live' ? 'live' : 'paper', now = this.clockOf(mode), book = bookOf(mode, order.network);
     const [sw, view, signerSt] = await Promise.all([this.switches(), this.readBook(book), this.deps.signerStatus().then((s) => ({ reachable: true, halted: s.halted }), () => ({ reachable: false, halted: false }))]);
     const m = o.known ? { instrument: o.instrument ?? null, ticker: o.known.ticker, book: o.known.book, hasBook: o.known.book !== null || order.venue === 'hyperliquid', error: null as string | null }
       : await this.market(mode, order.venue, order.network, order.instrument);
@@ -325,7 +327,7 @@ export class RiskService {
   // ------------------------------------------------------------------ evaluation
   private async record(e: Omit<Evaluated, 'decisionId'>, r: { kind: 'order' | 'cancel'; preview: boolean; orderId: string | null; clientOrderId: string | null; principal: { kind: string; id: string }; mode: string; venue: string; instrument: string | null; limits: unknown; context: unknown }): Promise<number> {
     const [row] = await sql<{ id: string }[]>`insert into risk_decisions (at, order_id, client_order_id, kind, preview, principal_kind, principal_id, mode, venue, instrument, decision, reducing, failed, checks, derived, limits, context)
-      values (${new Date(this.now())}, ${r.orderId}, ${r.clientOrderId}, ${r.kind}, ${r.preview}, ${r.principal.kind}, ${r.principal.id}, ${r.mode}, ${r.venue}, ${r.instrument}, ${e.decision}, ${e.reducing}, ${e.failed},
+      values (${new Date(this.clockOf(r.mode))}, ${r.orderId}, ${r.clientOrderId}, ${r.kind}, ${r.preview}, ${r.principal.kind}, ${r.principal.id}, ${r.mode}, ${r.venue}, ${r.instrument}, ${e.decision}, ${e.reducing}, ${e.failed},
         ${sql.json(e.checks as never)}, ${sql.json(e.derived as never)}, ${sql.json(r.limits as never)}, ${sql.json(r.context as never)}) returning id`;
     return Number(row!.id);
   }
@@ -368,7 +370,7 @@ export class RiskService {
 
   /** the gate the venue engines call (derivatives/gate.ts). An order the order service has just evaluated is not evaluated twice. */
   gate: PreTradeGate = async (r) => {
-    const now = this.now(), req = r.req;
+    const now = this.clockOf(r.mode), req = r.req;
     const cid = /^[A-Za-z0-9._:-]{8,128}$/.test(req.clientId) ? req.clientId : `legacy-${createHash('sha256').update(req.clientId).digest('hex').slice(0, 32)}`;
     const [seen] = await sql<{ decision: string }[]>`select decision from risk_decisions where client_order_id = ${cid} and not preview and kind = 'order' and mode = ${r.mode} and at > ${new Date(now - 60_000)} order by id desc limit 1`;
     if (seen?.decision === 'allow') return { ok: true };
@@ -419,7 +421,7 @@ export class RiskService {
       byVenue: [...byVenue].map(([venue, x]) => ({ venue, gross: D.str(x) })),
       collateral: readable.map((a) => ({ venue: a.venue, accountId: a.accountId, equity: a.state!.equity, collateral: a.state!.collateral, freeCollateral: a.state!.freeCollateral, marginUsed: a.state!.marginUsed,
         shareBps: D.isPos(D.from(equity)) ? D.str(D.div(D.mul(D.from(a.state!.equity), D.from(10000n)), D.from(equity), 0, 'half_even')) : null })),
-      positions, errors: v.errors, pnl: await this.pnl(v.accounts.map((a) => a.accountId), v, this.now()),
+      positions, errors: v.errors, pnl: await this.pnl(v.accounts.map((a) => a.accountId), v, this.clockOf(book === 'paper' ? 'paper' : 'live')),
     };
   }
 

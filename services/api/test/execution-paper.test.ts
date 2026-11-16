@@ -410,7 +410,12 @@ describe('risk engine', () => {
     for (let n = 0; n < 40 && received.filter((e) => e.event === 'risk.kill_switch').length < 2; n++) { await hooks.deliverDue(); await new Promise((r) => setTimeout(r, 20)); }
     expect(received.filter((e) => e.event === 'risk.kill_switch').map((e) => e.data)).toEqual([expect.objectContaining({ source: 'risk_engine', engaged: true, by: `api_key:${plain.id}`, reason: 'test' }), expect.objectContaining({ source: 'risk_engine', engaged: false })]);
     expect((await sql`select data from audit_events where type = 'risk.kill_switch' order by seq`).map((a: any) => a.data.engaged)).toEqual([true, false]);
-    expect((await sql`select kind, severity from alerts where kind like 'risk.kill_switch%' order by id`)).toEqual([{ kind: 'risk.kill_switch_on', severity: 'critical' }, { kind: 'risk.kill_switch_off', severity: 'warning' }]);
+    // the alert comes from the audit event, through the rules of the existing alert dispatcher
+    const { deriveAlerts } = await import('../src/alerts/rules.ts'), { alertDef, renderAlert } = await import('@spw/core');
+    const rows = await sql`select seq, ts, type, actor, data from audit_events where type = 'risk.kill_switch' order by seq`;
+    const drafts = (await Promise.all(rows.map((a: any) => deriveAlerts({ source: 'audit', id: Number(a.seq), ts: a.ts, type: a.type, actor: a.actor, data: a.data }, { q: sql, settings: {} as never })))).flat();
+    expect(drafts.map((x: any) => [x.kind, alertDef(x.kind)?.severity])).toEqual([['security.kill_switch_on', 'critical'], ['security.kill_switch_off', 'warning']]);
+    expect(renderAlert(drafts[0].kind, drafts[0].params, 'en').body).toMatch(/No new risk is taken on any venue \(api_key:spk_[0-9a-f]{12}\)\. test/);
   });
 
   it('read-only mode: only a cancel passes — not an opening order, not even a reduce-only close', async () => {
