@@ -3,8 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   DEPOSIT_STATES, GMX_OP_STATES, HL_ORDER_STATES, mapDeposit, mapGmxOp, mapHyperliquidOrder, mapVenueAction, mapWithdraw, ORDER_STATES, REASON_CODES, renderVocabularyTables, TERMINAL_STATES, VENUE_ACTION_STATES,
-  VOCABULARIES, WITHDRAW_STATES, type OrderState, type ReasonCode,
+  VOCABULARIES, WITHDRAW_STATES, mapPaperOrder, PAPER_ORDER_STATUSES, type OrderState, type ReasonCode,
 } from '../src/index.ts';
+import { ORDER_STATUSES } from '@spw/derivatives';
 
 const api = (f: string) => fileURLToPath(new URL(`../../../services/api/src/derivatives/${f}`, import.meta.url));
 const read = (f: string) => readFileSync(api(f), 'utf8');
@@ -138,9 +139,24 @@ describe('all mappings', () => {
     expect(ORDER_STATES.filter((s) => !seen.has(s))).toEqual(['VALIDATED']);
     for (const t of TERMINAL_STATES) expect(seen.has(t)).toBe(true);
   });
-  it('the rendering lists the five tables and every legacy state', () => {
+  it('the rendering lists the six tables and every legacy state', () => {
     const md = renderVocabularyTables();
-    expect(VOCABULARIES).toHaveLength(5);
+    expect(VOCABULARIES).toHaveLength(6);
     for (const v of VOCABULARIES) { expect(md).toContain(v.title); for (const s of v.states) expect(md).toContain(`\`${s}`); }
+  });
+});
+
+describe('paper order statuses (the paper engine is the venue of a paper order)', () => {
+  const rows: [string, OrderState, ReasonCode][] = [['pending', 'SUBMITTED', 'VENUE_ACCEPTED'], ['triggered', 'SUBMITTED', 'VENUE_RESTING'], ['open', 'SUBMITTED', 'VENUE_RESTING'], ['partially_filled', 'PARTIALLY_FILLED', 'VENUE_FILL'],
+    ['filled', 'FILLED', 'VENUE_FILLED'], ['cancelled', 'CANCELLED', 'CANCELLED_AT_VENUE'], ['rejected', 'REJECTED', 'VENUE_REJECTED']];
+  it('is the vocabulary of @spw/derivatives (Order.status), whole', () => { expect([...PAPER_ORDER_STATUSES].sort()).toEqual([...ORDER_STATUSES].sort()); expect(rows.map((r) => r[0]).sort()).toEqual([...PAPER_ORDER_STATUSES].sort()); });
+  it.each(rows)('%s → %s (%s)', (legacy, state, reason) => { expect(mapPaperOrder(legacy as (typeof PAPER_ORDER_STATUSES)[number])).toMatchObject({ state, reason }); });
+  it('a cancel after a partial fill is a cancelled remainder; with nothing filled it is a cancel at the venue', () => {
+    for (const filled of ['0.01', '1', '0.000001']) expect(mapPaperOrder('cancelled', { filled })).toMatchObject({ state: 'CANCELLED', reason: 'REMAINDER_CANCELLED' });
+    for (const filled of ['0', '0.000', '', null, undefined, 'abc', '-1']) expect(mapPaperOrder('cancelled', { filled })).toMatchObject({ state: 'CANCELLED', reason: 'CANCELLED_AT_VENUE' });
+  });
+  it('no status is ambiguous or before the venue: nothing maps to UNKNOWN, CREATED, VALIDATED, AWAITING_APPROVAL or FAILED', () => {
+    const states = PAPER_ORDER_STATUSES.flatMap((s) => [mapPaperOrder(s).state, mapPaperOrder(s, { filled: '1' }).state]);
+    for (const s of ['UNKNOWN', 'CREATED', 'VALIDATED', 'AWAITING_APPROVAL', 'APPROVED', 'SUBMITTING', 'FAILED']) expect(states).not.toContain(s);
   });
 });

@@ -22,7 +22,7 @@ import type { Derivatives } from '../derivatives/index.ts';
 import type { LiveService } from '../derivatives/exec.ts';
 import type { NewRiskBlock, PreTradeGate, PreTradeRequest } from '../derivatives/gate.ts';
 import type { GmxService } from '../derivatives/gmx-exec.ts';
-import { defaultLimits, effectiveLimits, loosenedLimits, type RiskMode } from './limits.ts';
+import { defaultLimits, effectiveLimits, LIVE_REQUIRED, loosenedLimits, seedFromV10, type LimitSeed, type RiskMode } from './limits.ts';
 import { prepareIntent, takeIntent, type PasskeyDeps } from './passkey.ts';
 
 export type BookKey = 'paper' | 'live-mainnet' | 'live-testnet';
@@ -32,7 +32,9 @@ export interface Switch { on: boolean; at: number | null; by: Actor | null; reas
 export interface Switches { killSwitch: Switch; readOnly: Switch }
 const OFF: Switch = { on: false, at: null, by: null, reason: null };
 const SWITCHES_KEY = 'risk.switches', limitsKey = (m: RiskMode) => `risk.limits.${m}`, peakKey = (b: BookKey) => `risk.peak.${b}`, AUTO_KEY = 'risk.auto';
-export const AutoKillSchema = z.strictObject({ totalLoss: z.boolean().default(true), drawdown: z.boolean().default(true), dailyLoss: z.boolean().default(false) });
+const SEED_KEY = 'risk.limits.live.seed';
+export interface StoredSeed extends LimitSeed { at: number; accounts: { id: string; venue: string; network: string }[] }
+export const AutoKillSchema =z.strictObject({ totalLoss: z.boolean().default(true), drawdown: z.boolean().default(true), dailyLoss: z.boolean().default(false) });
 export type AutoKill = z.infer<typeof AutoKillSchema>;
 
 export interface RiskDeps extends PasskeyDeps {
@@ -54,7 +56,7 @@ export interface Evaluated {
   /** the accounts of the book as the context saw them (the order's own account carries the venue's name) */
   accounts: { accountId: string; venue: string; equity: DecStr; marginUsed: DecStr; freeCollateral: DecStr }[];
 }
-interface BookView { accounts: { venue: string; label: string; accountId: string; state: AccountState | null }[]; positions: { venue: string; label: string; accountId: string; asset: string; position: Position }[]; errors: string[]; gmxRealized: { today: DecStr; total: DecStr } }
+interface BookView { /** read with an account that is not part of the standing book (see readBook): never recorded as the book's peak */ provisional?: boolean; accounts: { venue: string; label: string; accountId: string; state: AccountState | null }[]; positions: { venue: string; label: string; accountId: string; asset: string; position: Position }[]; errors: string[]; gmxRealized: { today: DecStr; total: DecStr } }
 type Known = PreTradeRequest['known'];
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 200);
 const dayStart = (now: number): number => Math.floor(now / 86_400_000) * 86_400_000;
@@ -62,17 +64,65 @@ const dayStart = (now: number): number => Math.floor(now / 86_400_000) * 86_400_
 export const assetOf = (instrument: string): string => (instrument.slice(instrument.indexOf(':') + 1).split(/[-/ ]/)[0] ?? '').toUpperCase() || instrument;
 const sumDec = (xs: DecStr[]): DecStr => D.str(xs.reduce((a, x) => D.add(a, D.from(x)), D.zero));
 /**
- * What a stored decision is about. The engines' gate reuses the decision the order service has just made for a client order id
- * ONLY when it is for the same account, instrument, side, size and reduce-only flag: a client id used again for another order
- * is evaluated on its own.
+ * What a stored decision is about: the ENGINE REQUEST it was made for, whole. The engines' gate reuses the decision the order
+ * service has just made for a client order id ONLY when every one of these is the same — account, instrument, side, type, size,
+ * price (the limit price, or the worst acceptable price of a market order), trigger price, reduce-only flag, time in force and
+ * the leverage setting the order runs under. The notional is size × price: both are in the key. A client id presented again
+ * with ANY other order is evaluated on its own. A decision made without an engine request (a preview, a cancel) has no
+ * fingerprint and is never reused.
  */
-const fingerprint = (o: { mode: string; venue: string; accountId: string | null; instrument: string; side: string; size: DecStr | null; reduceOnly: boolean }): string =>
-  createHash('sha256').update([o.mode, o.venue, o.accountId ?? '', o.instrument, o.side, o.size === null ? '' : D.str(D.from(o.size)), o.reduceOnly ? '1' : '0'].join('|')).digest('hex');
+export interface DecisionKey { mode: string; venue: string; network: string; accountId: string | null; instrument: string; side: string; type: string; size: DecStr | null; price: DecStr | null; triggerPrice: DecStr | null; reduceOnly: boolean; tif: string; leverage: DecStr | null }
+const dec = (x: DecStr | null | undefined): string => { if (x === null || x === undefined) return ''; try { return D.str(D.from(x)); } catch { return `!${x}`; } };
+export const fingerprint = (o: DecisionKey): string =>
+  createHash('sha256').update(['v2', o.mode, o.venue, o.network, o.accountId ?? '', o.instrument, o.side, o.type, dec(o.size), dec(o.price), dec(o.triggerPrice), o.reduceOnly ? '1' : '0', o.tif, dec(o.leverage)].join('|')).digest('hex');
+/** the engine request a decision is made for (what the venue engine will hand to its gate) */
+export type EngineReq = Pick<PreTradeRequest['req'], 'type' | 'size' | 'price' | 'triggerPrice' | 'tif'>;
+
+/** how long the engines' gate may reuse the decision the order service made for the very same engine request */
+export const GATE_REUSE_MS = 60_000;
+/**
+ * How long the venue reads of a LIVE book (every authorized venue account, GMX) and the signer's status are shared between
+ * evaluations: a preview, the two evaluations of a creation and the next order of a busy key then cost one read of each venue
+ * account instead of one per evaluation. A cached book is dropped at once when any engine order row changes (a fill, a cancel,
+ * a new order: the sequence of the projection queue moves) and when the engine clock moves by more than this. Paper books are
+ * read from the database and are never cached. `SPW_RISK_CONTEXT_TTL_MS` overrides it (0 = no sharing).
+ */
+export const CONTEXT_TTL_MS = 2_000;
+const contextTtl = (): number => { const n = Number(process.env.SPW_RISK_CONTEXT_TTL_MS ?? CONTEXT_TTL_MS); return Number.isFinite(n) && n >= 0 ? Math.min(n, 30_000) : CONTEXT_TTL_MS; };
 
 export class RiskService {
   readonly deps: RiskDeps;
   readonly now: () => number;
+  /** tests and the Risk screen: how often the gate reused a decision, and how often a live book was read from the venues or taken from the shared copy */
+  readonly gateStats = { reused: 0, evaluated: 0 };
+  readonly bookReads = { fresh: 0, shared: 0 };
+  private readonly books = new Map<BookKey, { clock: number; wall: number; seq: string; view: BookView }>();
+  private signerSeen: { wall: number; value: { reachable: boolean; halted: boolean } } | null = null;
+  private readonly levs = new Map<string, { wall: number; value: DecStr }>();
   constructor(deps: RiskDeps) { this.deps = deps; this.now = deps.now; }
+  /** drops the shared reads (a fill was seen, a position changed, a leverage setting was changed): the next evaluation reads the venues again */
+  invalidate(book?: BookKey): void { if (book) this.books.delete(book); else this.books.clear(); this.signerSeen = null; this.levs.clear(); }
+  private async engineSeq(): Promise<string> { const [r] = await sql<{ v: string }[]>`select last_value::text || ':' || is_called::text as v from order_projection_queue_id_seq`; return r?.v ?? '0'; }
+  /** the book as read from the venues, shared for CONTEXT_TTL_MS while nothing changed (see above). A read with an error is never kept. */
+  private async bookView(book: BookKey, wantGmx = false): Promise<BookView> {
+    const ttl = contextTtl();
+    if (book === 'paper') return this.readBook(book, wantGmx);
+    if (ttl === 0) { this.bookReads.fresh += 1; return this.readBook(book, wantGmx); }
+    const seq = await this.engineSeq(), clock = this.clockOf('live'), wall = Date.now(), c = this.books.get(book);
+    // (an order on GMX needs the GMX account in the book: a shared copy read without it is not used for that order)
+    if (c && c.seq === seq && wall - c.wall < ttl && Math.abs(clock - c.clock) < ttl && (!wantGmx || book !== 'live-mainnet' || c.view.accounts.some((a) => a.venue === 'gmx'))) { this.bookReads.shared += 1; return c.view; }
+    const view = await this.readBook(book, wantGmx);
+    this.bookReads.fresh += 1;
+    if (view.errors.length === 0 && view.provisional !== true) this.books.set(book, { clock, wall, seq, view }); else this.books.delete(book);
+    return view;
+  }
+  private async signerState(): Promise<{ reachable: boolean; halted: boolean }> {
+    const ttl = contextTtl(), wall = Date.now();
+    if (this.signerSeen && ttl > 0 && wall - this.signerSeen.wall < ttl && this.signerSeen.value.reachable && !this.signerSeen.value.halted) return this.signerSeen.value;
+    const value = await this.deps.signerStatus().then((s) => ({ reachable: true, halted: s.halted }), () => ({ reachable: false, halted: false }));
+    this.signerSeen = { wall, value };
+    return value;
+  }
   /**
    * The clock an evaluation is made on: the one of the engine that will execute the order, because the ages of its prices and
    * of its book are measured against the clock that stamped them (the live engine's for a live order, the data service's otherwise).
@@ -135,11 +185,44 @@ export class RiskService {
 
   // ------------------------------------------------------------------ limits
   async storedLimits(mode: RiskMode): Promise<RiskLimits> { return RiskLimitsSchema.parse(await getSetting<RiskLimits>(limitsKey(mode), {})); }
+  /**
+   * One-time migration (V11): the part of the live limit set that the limits the owner ALREADY approved before V11 express —
+   * the policy of each authorized venue account and its venue authorization (limits.ts `seedFromV10`). Written once under
+   * `risk.limits.live.seed` and never recomputed. It applies to the OWNER's own orders only (`limitsFor`).
+   */
+  async seedLiveLimits(): Promise<StoredSeed> {
+    const cur = await getSetting<StoredSeed | null>(SEED_KEY, null);
+    if (cur) return cur;
+    const rows = await sql<{ id: string; venue: string; network: string; policy: Record<string, unknown> | null; venue_authorization: { policy?: { maxLeverage?: unknown } } | null }[]>`select id, venue, network, policy, venue_authorization from deriv_accounts where authorization_id is not null and revoked_at is null order by created_at`;
+    const seed = seedFromV10(rows.map((r) => ({ id: r.id, venue: r.venue, network: r.network, policy: r.policy, authorizationPolicy: r.venue_authorization?.policy ?? null })));
+    const stored: StoredSeed = { ...seed, at: this.now(), accounts: rows.map((r) => ({ id: r.id, venue: r.venue, network: r.network })) };
+    const done = await sql`insert into settings (key, value) values (${SEED_KEY}, ${sql.json(stored as never)}) on conflict (key) do nothing returning key`;
+    if (!done.length) return (await getSetting<StoredSeed | null>(SEED_KEY, null)) ?? stored;
+    await audit('risk.limits_seeded', 'system', { accounts: stored.accounts.map((a) => a.id), fields: seed.sources.map((s) => s.field), notSeeded: seed.notSeeded, limits: seed.limits }).catch(() => {});
+    return stored;
+  }
+  /** the STORED limits a principal is judged on: what the owner stored — and, for the owner's own live orders only, the V10 seed underneath it */
+  async limitsFor(mode: RiskMode, principalKind: string): Promise<RiskLimits> {
+    const stored = await this.storedLimits(mode);
+    if (mode !== 'live' || principalKind !== 'owner') return stored;
+    return RiskLimitsSchema.parse({ ...(await this.seedLiveLimits()).limits, ...stored });
+  }
   async limits(mode: RiskMode) {
     const stored = await this.storedLimits(mode);
-    return { mode, stored, defaults: defaultLimits(mode), effective: { ...defaultLimits(mode), ...stored },
-      missing: mode === 'live' ? (['allowedVenues', 'allowedInstruments', 'maxOrderNotional', 'maxDailyNotional', 'maxPositionNotional', 'maxOrderLeverage', 'maxAccountLeverage', 'maxGrossExposure', 'maxNetExposure',
-        'maxAssetExposure', 'maxVenueExposure', 'maxVenueCollateralShareBps', 'maxDailyLoss', 'maxTotalLoss', 'maxDrawdownBps'] as const).filter((k) => stored[k] === undefined) : [] };
+    if (mode !== 'live') return { mode, stored, defaults: defaultLimits(mode), effective: { ...defaultLimits(mode), ...stored }, missing: [] as string[] };
+    const seed = await this.seedLiveLimits(), owner: RiskLimits = { ...seed.limits, ...stored };
+    const missingForAutomation = LIVE_REQUIRED.filter((k) => stored[k] === undefined), missing = LIVE_REQUIRED.filter((k) => owner[k] === undefined);
+    return { mode, stored, defaults: defaultLimits(mode),
+      /** what an API key or an agent is judged on: the defaults and what the owner stored himself — nothing else */
+      effective: { ...defaultLimits(mode), ...stored },
+      /** what the owner's OWN orders are judged on: the same, over the limits he had already approved before V11 (the seed) */
+      effectiveOwner: { ...defaultLimits(mode), ...owner },
+      seed: { at: seed.at, limits: seed.limits, sources: seed.sources, notSeeded: seed.notSeeded, accounts: seed.accounts },
+      /** capital limits that are absent for the owner's own orders: while this list is not empty, his real orders that add risk are refused */
+      missing,
+      /** capital limits the owner never stored himself: while this list is not empty, real orders of an API key or an agent that add risk are refused */
+      missingForAutomation,
+      ownerOrdersRefused: missing.length > 0, automationOrdersRefused: missingForAutomation.length > 0 };
   }
   private async writeLimits(mode: RiskMode, next: RiskLimits, loosened: string[], passkey: boolean) {
     await setSetting(limitsKey(mode), next);
@@ -186,7 +269,8 @@ export class RiskService {
   }
 
   // ------------------------------------------------------------------ context
-  private async readBook(book: BookKey): Promise<BookView> {
+  /** `wantGmx`: the order being judged is on GMX — its account is read even when the wallet never used GMX before (the first order) */
+  private async readBook(book: BookKey, wantGmx = false): Promise<BookView> {
     const out: BookView = { accounts: [], positions: [], errors: [], gmxRealized: { today: '0', total: '0' } };
     if (book === 'paper') {
       for (const a of await this.deps.derivatives().paper.list()) {
@@ -210,7 +294,11 @@ export class RiskService {
     if (!testnet) {
       const gmx = this.deps.gmx();
       const [used] = await sql`select 1 as x from deriv_gmx_ops limit 1`;
-      if (gmx && used) {
+      // a wallet that never used GMX has no GMX account in its standing book: one read only because THIS order is on GMX is
+      // provisional — it judges the order, and never becomes the recorded peak equity of the book (the next evaluation of an
+      // order elsewhere would not contain it, and would read the difference as a drawdown)
+      if (gmx && !used && wantGmx) out.provisional = true;
+      if (gmx && (used || wantGmx)) {
         try {
           const s = await gmx.status();
           if (s.positionsError) out.errors.push(`gmx: ${s.positionsError}`);
@@ -222,8 +310,13 @@ export class RiskService {
             out.positions.push({ venue: 'gmx', label: 'gmx', accountId, asset: assetOf(position.instrument), position });
             equity = D.add(equity, D.add(D.from(position.margin), D.from(position.unrealizedPnl)));
           }
-          const eq = D.str(equity);
-          out.accounts.push({ venue: 'gmx', label: 'gmx', accountId, state: { venue: 'gmx', account: accountId, equity: eq, collateral: eq, freeCollateral: '0', marginUsed: eq, maintenanceMargin: null, withdrawable: null, ts: this.clockOf('live'), source: 'venue' } });
+          // GMX has no venue account: the collateral of the next order is the wallet's own USDC on Arbitrum, sent WITH the order.
+          // It is counted as the account's free collateral — the view the GMX engine itself judges an order on (gmx-exec.ts
+          // `compute`: equity = wallet USDC + the collateral of the open positions). Without it the equity of a wallet that holds
+          // no GMX position yet is zero and every first increase is denied (account_leverage, collateral share, drawdown).
+          const margin = D.str(equity), free = (() => { try { const u = (s as { wallet?: { usdc?: string } | null }).wallet?.usdc; return u !== undefined && D.isValid(u) ? D.from(u) : D.zero; } catch { return D.zero; } })();
+          const eq = D.str(D.add(equity, free));
+          out.accounts.push({ venue: 'gmx', label: 'gmx', accountId, state: { venue: 'gmx', account: accountId, equity: eq, collateral: eq, freeCollateral: D.str(free), marginUsed: margin, maintenanceMargin: null, withdrawable: D.str(free), ts: this.clockOf('live'), source: 'venue' } });
           const rows = await sql<{ pnl: string | null; fee: string | null; done_at: Date | null }[]>`select outcome->>'pnlUsd' as pnl, outcome->>'positionFeeUsd' as fee, done_at from deriv_gmx_ops where state = 'executed' and kind <> 'cancel' and outcome is not null`;
           const day = new Date(dayStart(this.clockOf('live')));
           let today = D.zero, total = D.zero;
@@ -271,17 +364,17 @@ export class RiskService {
       from orders where mode = ${mode} and (${mode === 'paper'} or (network = 'testnet') = ${testnet}) and not reduce_only and state not in ('REJECTED', 'FAILED') and id <> ${exceptId ?? ''} and created_at > ${new Date(now - 86_400_000)}`;
     return { ordersLastMinute: c!.minute, ordersLastHour: c!.hour, ordersToday: c!.today, notionalToday: D.str(D.from(c!.notional)) };
   }
-  private async peak(book: BookKey, current: DecStr): Promise<DecStr> {
+  private async peak(book: BookKey, current: DecStr, record = true): Promise<DecStr> {
     const stored = await getSetting<{ equity: DecStr } | null>(peakKey(book), null);
     if (stored && D.gte(D.from(stored.equity), D.from(current))) return stored.equity;
-    if (D.isPos(D.from(current))) await setSetting(peakKey(book), { equity: current, at: this.now() });
+    if (D.isPos(D.from(current)) && record) await setSetting(peakKey(book), { equity: current, at: this.now() });
     return current;
   }
 
   /** the context of one order, and what was read to build it */
-  async context(order: CanonicalOrder, o: { accountId: string | null; orderId?: string | null; known?: Known; instrument?: Instrument } = { accountId: null }) {
+  async context(order: CanonicalOrder, o: { accountId: string | null; orderId?: string | null; exceptOrderId?: string | null; known?: Known; instrument?: Instrument } = { accountId: null }) {
     const mode: 'paper' | 'live' = order.mode === 'live' ? 'live' : 'paper', now = this.clockOf(mode), book = bookOf(mode, order.network);
-    const [sw, view, signerSt] = await Promise.all([this.switches(), this.readBook(book), this.deps.signerStatus().then((s) => ({ reachable: true, halted: s.halted }), () => ({ reachable: false, halted: false }))]);
+    const [sw, view, signerSt] = await Promise.all([this.switches(), this.bookView(book, order.venue === 'gmx'), this.signerState()]);
     const m = o.known ? { instrument: o.instrument ?? null, ticker: o.known.ticker, book: o.known.book, hasBook: o.known.book !== null || order.venue === 'hyperliquid', error: null as string | null }
       : await this.market(mode, order.venue, order.network, order.instrument);
     const inst = m.instrument ?? o.instrument ?? null;
@@ -311,8 +404,8 @@ export class RiskService {
       asset: inst ? inst.base.toUpperCase() : null,
       positions: positions.map((p) => ({ venue: p.label, account: p.accountId, asset: p.asset, position: p.position })),
       accounts: readable.map((a) => ({ venue: a.label, account: a.accountId, equity: a.state!.equity, collateral: a.state!.collateral, freeCollateral: a.state!.freeCollateral, marginUsed: a.state!.marginUsed, ts: a.state!.ts })),
-      marks, book: m.book, pnl: await this.pnl(accounts.map((a) => a.accountId), view, now), equity: { current: equity, peak: await this.peak(book, equity) },
-      signer: signerSt, connections: { [order.venue]: { connected: m.ticker !== null } }, usage: await this.usage(book, now, o.orderId ?? null),
+      marks, book: m.book, pnl: await this.pnl(accounts.map((a) => a.accountId), view, now), equity: { current: equity, peak: await this.peak(book, equity, view.provisional !== true) },
+      signer: signerSt, connections: { [order.venue]: { connected: m.ticker !== null } }, usage: await this.usage(book, now, o.orderId ?? o.exceptOrderId ?? null),
       ...(leverageSetting !== null ? { leverageSetting } : {}),
       ...(o.known?.maintenanceMarginFraction !== undefined ? { maintenanceMarginFraction: o.known.maintenanceMarginFraction } : {}),
     };
@@ -327,8 +420,13 @@ export class RiskService {
       return a.settings.leverageByInstrument[inst.id] ?? D.str(D.min(D.from(a.settings.leverage), D.from(inst.maxLeverage)));
     }
     if (order.venue !== 'hyperliquid') return null;
+    // the venue's leverage setting is one more venue request: shared like the book (the engine reads it again itself, and the signer refuses above the mandate's)
+    const ttl = contextTtl(), key = `${order.network}|${accountId}|${inst.symbol}`, wall = Date.now(), c = this.levs.get(key);
+    if (c && ttl > 0 && wall - c.wall < ttl) return c.value;
     const [row] = await sql<{ account: string }[]>`select account from deriv_accounts where id::text = ${accountId}`;
-    return row ? (await this.deps.live().deps.venues.get(order.network).leverageOf(row.account, inst.symbol)).leverage : null;
+    const value = row ? (await this.deps.live().deps.venues.get(order.network).leverageOf(row.account, inst.symbol)).leverage : null;
+    if (value !== null) this.levs.set(key, { wall, value }); else this.levs.delete(key);
+    return value;
   }
 
   // ------------------------------------------------------------------ evaluation
@@ -340,9 +438,9 @@ export class RiskService {
   }
 
   /** every order of every principal passes here before any approval prompt or signature. The evaluation is stored, allowed or denied. */
-  async evaluateOrder(input: CanonicalOrderInput, o: { accountId: string | null; orderId?: string | null; preview?: boolean; known?: Known; instrument?: Instrument } = { accountId: null }): Promise<Evaluated> {
+  async evaluateOrder(input: CanonicalOrderInput, o: { accountId: string | null; orderId?: string | null; preview?: boolean; known?: Known; instrument?: Instrument; /** an order already in the table that must not count in the usage */ exceptOrderId?: string | null; /** the request the engine will receive: only then can its gate reuse this decision */ engineReq?: EngineReq } = { accountId: null }): Promise<Evaluated> {
     const order = canonicalOrder(input), mode: RiskMode = order.mode === 'live' ? 'live' : 'paper';
-    const c = await this.context(order, o), limits = effectiveLimits(mode, await this.storedLimits(mode), order);
+    const c = await this.context(order, o), limits = effectiveLimits(mode, await this.limitsFor(mode, order.principal.kind), order);
     const ev = evaluateRisk({ kind: 'order', order }, c.ctx, limits);
     let checks: ServiceCheck[] = ev.checks.map((x) => ({ ...x }));
     // a venue without an order book (a liquidity pool): the two book checks cannot be answered from a book that does not exist.
@@ -360,7 +458,8 @@ export class RiskService {
     const e: Omit<Evaluated, 'decisionId'> = { decision, reducing: ev.reducing, checks, failed, derived: ev.derived, code, reason: pick ? `${pick.id}: ${pick.detail}` : null, market: c.market, leverage: c.leverage, equity: c.equity, book: c.book,
       accounts: c.ctx.accounts.map((a) => ({ accountId: a.account, venue: a.venue, equity: a.equity, marginUsed: a.marginUsed, freeCollateral: a.freeCollateral })) };
     const decisionId = await this.record(e, { kind: 'order', preview: o.preview === true, orderId: o.orderId ?? null, clientOrderId: order.clientOrderId, principal: order.principal, mode: order.mode, venue: order.venue, instrument: order.instrument, limits,
-      fingerprint: fingerprint({ mode: order.mode, venue: order.venue, accountId: o.accountId, instrument: order.instrument, side: order.side, size: order.size, reduceOnly: order.reduceOnly }),
+      ...(o.engineReq && o.preview !== true ? { fingerprint: fingerprint({ mode: order.mode, venue: order.venue, network: order.network, accountId: o.accountId, instrument: order.instrument, side: order.side, type: o.engineReq.type, size: o.engineReq.size,
+        price: o.engineReq.price, triggerPrice: o.engineReq.triggerPrice, reduceOnly: order.reduceOnly, tif: o.engineReq.tif, leverage: c.leverage }) } : {}),
       context: { book: c.book, equity: c.ctx.equity, pnl: c.ctx.pnl, usage: c.ctx.usage, marks: c.ctx.marks, positions: c.ctx.positions.length, accounts: c.ctx.accounts.length, signer: c.ctx.signer, killSwitch: c.ctx.killSwitch, readOnly: c.ctx.readOnly, incomplete: c.incomplete, marketError: c.marketError } });
     return { ...e, decisionId };
   }
@@ -380,9 +479,10 @@ export class RiskService {
   gate: PreTradeGate = async (r) => {
     const now = this.clockOf(r.mode), req = r.req;
     const cid = /^[A-Za-z0-9._:-]{8,128}$/.test(req.clientId) ? req.clientId : `legacy-${createHash('sha256').update(req.clientId).digest('hex').slice(0, 32)}`;
-    const fp = fingerprint({ mode: r.mode, venue: r.venue, accountId: r.accountId, instrument: req.instrument, side: req.side, size: req.size, reduceOnly: req.reduceOnly });
-    const [seen] = r.preview ? [] : await sql<{ decision: string; fingerprint: string | null }[]>`select decision, fingerprint from risk_decisions where client_order_id = ${cid} and not preview and kind = 'order' and mode = ${r.mode} and at > ${new Date(now - 60_000)} order by id desc limit 1`;
-    if (seen?.decision === 'allow' && seen.fingerprint === fp) return { ok: true };
+    const fp = fingerprint({ mode: r.mode, venue: r.venue, network: r.network, accountId: r.accountId, instrument: req.instrument, side: req.side, type: req.type, size: req.size, price: req.price, triggerPrice: req.triggerPrice, reduceOnly: req.reduceOnly, tif: req.tif, leverage: r.known.leverage });
+    const [seen] = r.preview ? [] : await sql<{ decision: string; fingerprint: string | null }[]>`select decision, fingerprint from risk_decisions where client_order_id = ${cid} and not preview and kind = 'order' and mode = ${r.mode} and at > ${new Date(now - GATE_REUSE_MS)} order by id desc limit 1`;
+    if (seen?.decision === 'allow' && seen.fingerprint !== null && seen.fingerprint === fp) { this.gateStats.reused += 1; return { ok: true }; }
+    this.gateStats.evaluated += 1;
     const triggered = req.type !== 'market' && req.type !== 'limit', limited = req.type === 'limit' || req.type === 'stop_limit' || req.type === 'take_profit_limit';
     const ref = triggered && req.triggerPrice ? req.triggerPrice : r.known.ticker.mid ?? r.known.ticker.mark;
     let slip = 500;
@@ -395,7 +495,10 @@ export class RiskService {
         maxFeeUsd: D.str(D.div(notional, D.from(1000n), 6, 'up')), leverage: null, marginMode: null, clientOrderId: cid, mode: r.mode,
         principal: r.origin === 'mandate' ? { kind: 'agent', id: (r.agentId ?? 'agent').slice(0, 80) } : { kind: 'owner', id: 'owner' }, mandateId: r.origin === 'mandate' ? r.mandateId ?? null : null, createdAt: now, expiresAt: now + 120_000 });
     } catch (e) { return { ok: false, code: 'risk_denied', reason: `the order cannot be expressed as a canonical order (${msg(e)})` }; }
-    const ev = await this.evaluateOrder(order, { accountId: r.accountId, known: r.known, instrument: r.instrument, preview: r.preview === true });
+    // an order of the order service that is evaluated again here (its request is not the one that was judged) must not count itself in the usage
+    const ev = await this.evaluateOrder(order, { accountId: r.accountId, known: r.known, instrument: r.instrument, preview: r.preview === true, orderId: null,
+      // (the GMX engine hands its idempotency key as `gmx-<key>`; for an order of the order service that key is the order's id)
+      exceptOrderId: r.venue === 'gmx' && cid.startsWith('gmx-') ? cid.slice(4) : cid });
     return ev.decision === 'allow' ? { ok: true } : { ok: false, code: ev.code ?? 'risk_denied', reason: (ev.reason ?? 'denied by the risk engine').slice(0, 400) };
   };
 
@@ -438,7 +541,7 @@ export class RiskService {
   async superviseAuto(): Promise<string | null> {
     const sw = await this.switches();
     if (sw.killSwitch.on) return null;
-    const auto = await this.autoKill(), lim = { ...defaultLimits('live'), ...(await this.storedLimits('live')) };
+    const auto = await this.autoKill(), lim = { ...defaultLimits('live'), ...(await this.limitsFor('live', 'owner')) };
     if (!auto.totalLoss && !auto.drawdown && !auto.dailyLoss) return null;
     const [any] = await sql`select 1 as x from deriv_accounts where authorization_id is not null limit 1`;
     if (!any) return null;

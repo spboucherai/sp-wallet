@@ -166,7 +166,67 @@ without a passkey, withdraw collateral, or approve a mandate.
 Phase F adds no signer endpoint and no signing power. It adds reasons for a derivative mandate to exist (an
 API key can now have one), so more of them may be active.
 
+### The review items after exec2 (2026-11-15): closed, changed or restated
+
+Branch `v11-exec2`. **No file of `services/isolated-signer` was changed.** The list below takes the eleven items
+of the list that follows it ("Items for human review …", kept as it was written), in its order, and says for
+each what was done and what the evidence is. "Closed" means the concern no longer exists as stated; "changed"
+means it was narrowed and a residual remains; "restated" means nothing changed and the statement was checked
+again.
+
+| # | Item | Status | What was done, and the evidence |
+|---|---|---|---|
+| 1 | The API-only fields of a live mandate are not covered by the passkey | **Changed** — residual below | The approval of a live mandate now takes a second passkey assertion, verified by the API, over an intent that names the FULL `tradingMandateHash` and the derivative mandate's hash (`SPW-TRADING-MANDATE-APPROVAL-v1`). Intent and assertion are stored (`trading_mandates.approval`) and verified again whenever the row is loaded for enforcement, for a key binding and by the supervisor (`MandateService.integrity`); a row that fails is unusable (403 `mandate_integrity`) and revoked, at the signer too. Tests: `execution-exec2-live.test.ts` "the sheet shows it; without the second assertion …" and "an approved mandate whose row is altered …" (an API-only field; the hash rewritten; the intent rewritten; the intent and its hash rewritten; the approval removed; another principal; the passkey removed; restored → usable; supervisor revocation reaching the signer); `execution-exec2-paper.test.ts` "a paper mandate whose stored row was altered is unusable". What it does and does not protect against: `TRADING-MANDATES.md`, "What the passkey signs" |
+| 2 | The `strategySha256` convention for API keys | **Restated**, checked in the signer source | The signer stores and journals the field and never reads it for a decision: it is one of the hashed fields (`packages/derivatives/src/live/mandate.ts:75`), logged at approval (`services/isolated-signer/src/venue-mandate.ts:82`), and appears on no line of `venueMandateSign`. Only the Hyperliquid engine compares it with what the caller presents. With one principal per live account now refused at creation (item 8), a key's mandate and an agent's cannot coexist on an account. Pinned by `enforcement-pin.test.ts` ("the principal and the strategy hash are recorded, not verified") |
+| 3 | Default-deny of live limits changes existing behaviour | **Changed** | The owner's own orders are judged on a one-time seed of the limits he had already approved before V11 (venue account policies and the venue authorization); six limits with no earlier equivalent stay absent and are named by the API and the Risk screen. API keys and agents stay deny-by-default. `V11-RISK-MODEL.md`, "Limits and defaults"; tests `execution-exec2-live.test.ts` "seedFromV10 (pure) …" and "a wallet that comes from V10 …". **For review:** the rule "minimum over the accounts", the fact that a policy set by a session before V11 Phase B (when loosening needed no passkey) is carried over as approved, and that GMX is not seeded |
+| 4 | The kill switch is API-side | **Restated**, extended | Still API-side; release still verified by the API. New enforcement points: spot orders of the owner through the trading API, and spot agents' orders (a database trigger on `agent_orders`) — see the spot section of `V11-EXECUTION-ENGINE.md`. The automatic kill now has a test (`execution-exec2-live.test.ts` "the automatic kill (superviseAuto) …") |
+| 5 | Exits pass `SPW_TRADING_API_EXECUTION=off` | **Restated**, narrowed | Unchanged by design. What an exit of a key can touch is narrower: only its own lot (item 8). GMX: a decrease and a cancellation pass under the kill switch and with `SPW_DERIV_GMX_LIVE` off, each with its own passkey (`execution-gmx.test.ts`, test 5) |
+| 6 | Reads at evaluation time (rate budget) | **Changed** | The venue reads of a live book, the signer's status and the leverage setting are shared for 2 s between evaluations and dropped at once on any engine row change. `V11-RISK-MODEL.md`, "Venue reads are shared between evaluations"; test "rate budget: a preview and a creation share ONE read of the venue account …" (counts the venue's requests with the sharing on and off). **For review:** up to 2 s of staleness for changes made at the venue outside this wallet |
+| 7 | Projection by database trigger | **Restated**, extended | Two more tables are projected the same way (swap proposals, spot agents' orders), and one trigger now REFUSES an insert (a spot agent's buy under the kill switch). `order_events` is still append-only by trigger |
+| 8 | Two principals, one venue account | **Changed** | (a) A second principal on a live venue account is refused at creation and at approval with 409 `account_has_active_mandate` and the holder — a trading mandate or a perp agent's derivative mandate. (b) Position provenance: a key or an agent can close or reduce only what its own fills opened, never what the owner opened by hand nor another principal's part (`orders/provenance.ts`). Tests: `execution-exec2-paper.test.ts` "the ledger (pure) …", "a key cannot close, reduce or sell into what the owner opened by hand …", "a position the key opened and the OWNER then closed by hand …"; `execution-exec2-live.test.ts` "one principal per live venue account …". **For review:** the ledger's rules (an unattributed fill is the owner's; a shortfall is taken from keys first) and the fact that it is API-side — the signer signs any reduce-only order inside the mandate |
+| 9 | A preview shows whether funds suffice | **Restated** | Unchanged: `orders:prepare` still reveals the equity and free collateral of the account an order names. Not changed here because the answer shape belongs to the contract workstream; the options are to require `wallet:read` for those two fields or to drop them for a key |
+| 10 | Reuse of a decision by the engines' gate | **Closed** | The reuse key is now the whole engine request (type, price, trigger price, time in force, network and leverage setting were added to account, instrument, side, size, reduce-only); a decision without an engine request (a preview) is never reused. Test "the engines' gate reuses the decision … only for the very same engine request" (nine variants, each evaluated again; under a limit the altered order breaks, it is denied; a decision older than 60 s is not reused) |
+| 11 | Not verified against the real venue | **Restated** | Still true. Every test of this branch runs against scripted venues, fixtures, the paper engine and the real signer class in process |
+
+`runCommand` (listed under "Confused deputy" above): **closed.** The scope and mandate check of a command is now
+one function (`CommandGrant.authorize`) that every executor needs a grant from; the operation table and the
+executor table are exhaustive over the command kinds at compile time. Test: `execution-exec2-paper.test.ts`
+"every command kind against every scope …" (12 lines × dry-run and not × 12 scopes: only the scope of the
+resolved operation opens a command, and nothing of the wallet is touched before the guard).
+
+**The signer-enforcement tables were written from second-hand descriptions in Phase F.** They were checked
+against the signer's source here and corrected (`V11-RISK-MODEL.md`, "Enforcement points"; `TRADING-MANDATES.md`,
+"Where the signer enforces each row"), and `enforcement-pin.test.ts` now asks the real signer directly, with no
+API check in front of it.
+
+#### New items for human review (introduced by exec2)
+
+1. **Proposal, not implemented (needs a signer change): `tradingMandateSha256` in `SPW-VENUE-MANDATE-v1`.**
+   Add the field to the schema and to `venueMandateBytes` (so that it is part of the hash the passkey signs at
+   the signer), log it in `venue.mandate.approved`, expose it in `status().venueMandates`. The signer would not
+   enforce the API-only fields, but: one passkey prompt would commit to everything; the commitment would be
+   held by the signer, out of reach of a compromised API or of someone who can rewrite the API's `credentials`
+   table; and the API could compare its row with the signer's record instead of with its own. It changes the
+   canonical bytes of a mandate: a version bump (`SPW-VENUE-MANDATE-v2`) or an optional trailing field, to be
+   decided with the migration of stored mandates. Until then the API-side binding of item 1 is what exists.
+2. **The full-hash binding is verified by the API against its own passkey table.** It defeats alteration of the
+   mandate row by anything that cannot produce a passkey assertion. It does not defeat a compromised API
+   process, nor someone who can also write the `credentials` table. A mandate approved with a passkey that is
+   later removed becomes unusable and is revoked.
+3. **Provenance is bookkeeping.** It depends on the fills the wallet stored. A fill not yet published makes a
+   key wait; a fill never attributed counts as the owner's. Perp agents place live orders through the
+   Hyperliquid engine directly and are not bound by it (they hold the account alone, by item 8).
+4. **GMX equity in the risk book** is now the wallet's USDC on Arbitrum plus position margin and PnL (it was
+   position margin only, which made every first GMX increase fail the leverage, concentration and drawdown
+   checks). It changes the leverage and collateral-share figures of a book that contains GMX.
+5. **Live GMX orders are reachable through the trading API by the owner's session** (one passkey each, the
+   engine's locks unchanged). Keys and agents are refused.
+6. **The seed of the live limits** (item 3 above).
+7. **Shared venue reads** (item 6 above).
+
 ### Items for human review before `SPW_TRADING_API_EXECUTION` is enabled
+
+(The list as written at the end of Phase F. Its status after exec2 is the table above.)
 
 1. **The API-only fields of a live mandate are not covered by the passkey.** The passkey signs the hash of
    the compiled derivative mandate. Order types, the daily-loss limit, the per-minute rate, the fee cap, the

@@ -3,7 +3,7 @@
 // table (auth.ts `verifyOwnerAssertion`), and the intent is taken exactly once. This is a check against a stolen session; it is
 // not the signer's judgement and nothing is signed on its strength.
 import { randomUUID } from 'node:crypto';
-import { generateAuthenticationOptions } from '@simplewebauthn/server';
+import { generateAuthenticationOptions, verifyAuthenticationResponse, type AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { toB64u } from '@spw/core';
 import { hex } from '@spw/derivatives/live';
 import { UserError } from '../config.ts';
@@ -49,4 +49,21 @@ export async function takeIntent<T extends Record<string, unknown>>(d: PasskeyDe
   const taken = await sql`delete from settings where key = ${key} and value->>'hash' = ${stash.hash} returning key`;
   if (!taken.length) throw new UserError('bad_state', 'this change was already applied or replaced', 409);
   return stash.intent;
+}
+
+/**
+ * A passkey assertion that was verified and STORED earlier, verified again: the signature of an enrolled passkey over exactly
+ * `challenge`, with user verification. The signature counter is not judged (it has moved on since) and nothing is written.
+ * Used each time a trading mandate is loaded for enforcement, to check that the row is still the one the owner approved
+ * (mandates/service.ts). It shows that the stored record was not altered by anything that cannot produce a passkey assertion.
+ * It is verified by the API against ITS OWN credentials table: it is not a defence against a compromised API process, nor
+ * against someone who can rewrite both the mandate row and the credentials table.
+ */
+export async function verifyStoredAssertion(assertion: unknown, challenge: Uint8Array, o: { rpId: string; origin: string }): Promise<void> {
+  const response = assertion as AuthenticationResponseJSON;
+  const [cred] = await sql<{ id: string; public_key: string; transports: unknown }[]>`select id, public_key, transports from credentials where id = ${String(response?.id ?? '')}`;
+  if (!cred) throw new Error('the passkey that approved this record is no longer enrolled');
+  const v = await verifyAuthenticationResponse({ response, expectedChallenge: toB64u(challenge), expectedOrigin: o.origin, expectedRPID: o.rpId, requireUserVerification: true,
+    credential: { id: cred.id, publicKey: new Uint8Array(Buffer.from(cred.public_key, 'base64url')), counter: 0, transports: cred.transports as never } });
+  if (!v.verified || !v.authenticationInfo.userVerified) throw new Error('the stored approval does not verify');
 }

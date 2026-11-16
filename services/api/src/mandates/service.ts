@@ -19,7 +19,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { D, type DecStr } from '@spw/derivatives';
-import type { VenueMandate } from '@spw/derivatives/live';
+import { hex, type VenueMandate } from '@spw/derivatives/live';
 import {
   checkTradingMandateOrder, compileToVenueMandate, revokeTradingMandate, SIGNER_MANDATE_SHAPES, StopConditionSchema, TRADING_MANDATE_WIND_DOWN_S, TradingMandateError, tradingMandateHashHex, tradingMandatePhase, TradingMandateSchema,
   validateTradingMandate, type CanonicalOrder, type FieldEnforcement, type MandateAccount, type MandateDecision, type TradingMandate, type TradingMandatePhase, type TradingMandateUsage,
@@ -27,8 +27,9 @@ import {
 import { UserError } from '../config.ts';
 import { audit, sql } from '../db.ts';
 import type { Derivatives } from '../derivatives/index.ts';
-import type { LiveService } from '../derivatives/exec.ts';
+import { canonicalIntentHash, type LiveService } from '../derivatives/exec.ts';
 import { DYDX_RESTRICTION, EDGEX_RESTRICTION } from '../derivatives/venues.ts';
+import { prepareIntent, takeIntent, type PasskeyDeps, type Stamped } from '../risk/passkey.ts';
 import type { Evaluated } from '../risk/service.ts';
 
 /** the convention of an API-key principal in the signer's `strategySha256` field */
@@ -54,10 +55,20 @@ export const MandateCreateSchema = z.strictObject({
 export type MandateCreate = z.infer<typeof MandateCreateSchema>;
 
 export type MandateState = 'created' | 'pending_signer' | 'active' | 'revoked' | 'failed';
+/**
+ * What the owner's passkey commits to at the approval of a LIVE mandate, on the API side: the FULL trading mandate hash — every
+ * field, the API-only ones included — and the hash of the derivative mandate compiled from it. The challenge of the assertion is
+ * the hash of this intent (domain below). The intent and the assertion are stored with the mandate and verified again every time
+ * the row is loaded for enforcement (`integrity`).
+ */
+export const MANDATE_APPROVAL_DOMAIN = 'SPW-TRADING-MANDATE-APPROVAL-v1';
+export interface MandateApprovalIntent { [k: string]: unknown; v: 1; kind: 'trading_mandate_approval'; mandateId: string; tradingMandateHash: string; principal: string; mode: 'live'; signer: { shape: string; mandateHash: string } }
+export interface MandateApproval { v: 1; domain: typeof MANDATE_APPROVAL_DOMAIN; intent: Stamped<MandateApprovalIntent>; hash: string; assertion: unknown; credentialId: string | null; approvedAt: number }
+const approvalKey = (id: string): string => `mandate.intent.approve.${id}`;
 interface Row {
   id: string; principal_kind: 'agent' | 'api_key'; principal_id: string; mode: 'paper' | 'live'; mandate: TradingMandate; hash: string; state: MandateState; enforcement: FieldEnforcement[];
   compiled: { accounts: { accountId: string; account: MandateAccount }[]; venue?: { accountId: string; mandate: VenueMandate; hash?: string; derived: { field: string; value: string; from: string }[] } } | null;
-  signer: { shape: string; accountId: string; mandateId: string; hash: string } | null; revocation: Record<string, unknown> | null; stop: { code: string; at: number; detail: string } | null;
+  signer: { shape: string; accountId: string; mandateId: string; hash: string } | null; approval: MandateApproval | null; revocation: Record<string, unknown> | null; stop: { code: string; at: number; detail: string } | null;
   created_at: Date; approved_at: Date | null; revoked_at: Date | null; updated_at: Date;
 }
 interface UsageRow { mandate_id: string; orders_accepted: number; orders_rejected: number; consecutive_rejects: number; notional_total: string; peak_equity: string | null; start_equity: string | null; last_order_at: Date | null; signer_unreachable_since: Date | null }
@@ -68,6 +79,10 @@ export interface MandateDeps {
   signerStatus: () => Promise<{ halted: boolean }>;
   /** wind-down: cancel what rests under a mandate (the order service); returns how many cancels were requested */
   cancelResting?: (mandateId: string) => Promise<number>;
+  /** the API's own passkey step (risk/passkey.ts): the approval of a live mandate commits to the full trading mandate hash */
+  passkey?: PasskeyDeps;
+  /** verifies again an assertion stored at approval (signature of an enrolled passkey over the challenge; no counter) */
+  reverify?: (assertion: unknown, challenge: Uint8Array) => Promise<void>;
 }
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 300);
 const dayStart = (now: number): number => Math.floor(now / 86_400_000) * 86_400_000;
@@ -103,10 +118,52 @@ export class MandateService {
       id: r.id, principal: { kind: r.principal_kind, id: r.principal_id }, mode: r.mode, state: r.state, phase: this.phase(r), hash: r.hash, mandate: r.mandate, label: r.mandate.label,
       /** field by field: enforced by the isolated signer, partly, or by the API only (a compromised API could ignore an API-only field) */
       enforcement: r.enforcement, derived: r.compiled?.venue?.derived ?? [], signer: r.signer, stop: r.stop, revocation: r.revocation,
+      /** live: the passkey approval of the FULL mandate hash, as stored (never the assertion itself), and whether the row still verifies against it */
+      approval: r.approval ? { domain: r.approval.domain, hash: r.approval.hash, tradingMandateHash: r.approval.intent.tradingMandateHash, signerMandateHash: r.approval.intent.signer.mandateHash, credentialId: r.approval.credentialId, approvedAt: r.approval.approvedAt } : null,
+      integrity: r.state === 'active' || r.state === 'revoked' ? await this.integrity(r).then((reason) => ({ ok: reason === null, reason })) : null,
       usage: { ordersAccepted: u.orders_accepted, ordersRejected: u.orders_rejected, consecutiveRejects: u.consecutive_rejects, notionalTotal: D.str(D.from(u.notional_total)), peakEquity: u.peak_equity, startEquity: u.start_equity,
         lastOrderAt: u.last_order_at?.getTime() ?? null, ordersLastMinute: c!.minute, ordersLastHour: c!.hour, ordersToday: c!.today, openOrders: c!.open },
       createdAt: r.created_at.getTime(), approvedAt: r.approved_at?.getTime() ?? null, revokedAt: r.revoked_at?.getTime() ?? null, notBefore: r.mandate.notBefore * 1000, notAfter: r.mandate.notAfter * 1000,
     };
+  }
+  /**
+   * Is the stored row still the mandate the owner approved? null = yes; otherwise the reason, and the mandate is unusable.
+   * Every mode: the stored object hashes to the recorded hash, and the columns the service filters on say what the hashed object says.
+   * LIVE: in addition the stored passkey assertion verifies again over the stored approval intent, and that intent names this
+   * mandate's FULL hash and the derivative mandate the signer holds. See docs/TRADING-MANDATES.md ("What the passkey signs").
+   */
+  async integrity(r: Row): Promise<string | null> {
+    let hash: string;
+    try { hash = tradingMandateHashHex(r.mandate); } catch (e) { return `the stored mandate is not a valid trading mandate (${msg(e)})`; }
+    if (hash !== r.hash) return 'the stored mandate does not hash to its recorded hash';
+    if (r.mandate.mandateId !== r.id || r.mandate.principal.kind !== r.principal_kind || r.mandate.principal.id !== r.principal_id || r.mandate.mode !== r.mode) return 'the row names another id, principal or mode than the mandate it stores';
+    const named = new Set(r.mandate.accounts.map((a) => JSON.stringify(a, Object.keys(a).sort())));
+    for (const a of r.compiled?.accounts ?? []) if (!named.has(JSON.stringify(a.account, Object.keys(a.account).sort()))) return 'the row maps the mandate to an account the mandate does not name';
+    if (r.mode !== 'live') return null;
+    const a = r.approval;
+    if (!a || a.domain !== MANDATE_APPROVAL_DOMAIN) return 'no passkey approval of the full mandate hash is stored with this live mandate';
+    if (a.intent.kind !== 'trading_mandate_approval' || a.intent.mandateId !== r.id || a.intent.tradingMandateHash !== r.hash) return 'the stored passkey approval is for another mandate or another hash';
+    if (!r.signer || a.intent.signer.mandateHash !== r.signer.hash || a.intent.signer.shape !== r.signer.shape) return 'the stored passkey approval names another signer mandate than the one recorded';
+    if (hex(canonicalIntentHash(MANDATE_APPROVAL_DOMAIN, a.intent)) !== a.hash) return 'the stored approval intent is not intact';
+    if (!this.deps.reverify) return 'this server cannot verify a stored passkey approval';
+    try { await this.deps.reverify(a.assertion, Buffer.from(a.hash, 'hex')); } catch (e) { return `the stored passkey approval does not verify (${msg(e)})`; }
+    return null;
+  }
+  /** the first holder of a LIVE venue account other than `except`: a trading mandate (approved or at the signer) or a perp agent's derivative mandate */
+  async accountHolder(accountId: string, except: { mandateId: string | null; principal: { kind: string; id: string } }): Promise<{ via: 'trading_mandate' | 'derivative_mandate'; mandateId: string; principal: string } | null> {
+    const nowSec = Math.floor(this.now() / 1000);
+    for (const o of await sql<Row[]>`select * from trading_mandates where mode = 'live' and state in ('active', 'pending_signer') and id::text <> ${except.mandateId ?? ''}`) {
+      if (!(o.compiled?.accounts ?? []).some((a) => a.accountId === accountId) || o.mandate.notAfter <= nowSec) continue;
+      if (o.principal_kind === except.principal.kind && o.principal_id === except.principal.id && o.state !== 'active') continue;   // the same principal preparing again
+      return { via: 'trading_mandate', mandateId: o.id, principal: `${o.principal_kind}:${o.principal_id}` };
+    }
+    const [dm] = await sql<{ id: string; mandate: VenueMandate }[]>`select id, mandate from deriv_mandates where account_id::text = ${accountId} and state = 'active' and id::text <> ${except.mandateId ?? ''} order by approved_at desc limit 1`;
+    if (dm && dm.mandate.expiresAt > nowSec) return { via: 'derivative_mandate', mandateId: dm.id, principal: `agent:${dm.mandate.agentId}` };
+    return null;
+  }
+  private async refuseSecondPrincipal(accountId: string, mandateId: string | null, principal: { kind: string; id: string }): Promise<void> {
+    const h = await this.accountHolder(accountId, { mandateId, principal });
+    if (h) throw Object.assign(new UserError('account_has_active_mandate', `this venue account already carries the mandate ${h.mandateId} of ${h.principal}: one venue account serves one principal at a time (the signer holds one derivative mandate per account, and positions on a venue are not separable by principal). Revoke that mandate first, or use another venue account.`, 409), { data: { holder: h } });
   }
   async get(id: string) { return this.view(await this.row(id)); }
   async list() { const rows = await sql<Row[]>`select * from trading_mandates order by created_at desc limit 200`; return Promise.all(rows.map((r) => this.view(r))); }
@@ -168,6 +225,8 @@ export class MandateService {
     if (b.mode === 'live') {
       // refused NOW if it cannot be compiled for the signer: a live mandate never exists in a form the signer does not bound
       const c = await this.compile(mandate, accounts, b.locale);
+      // one venue account serves one principal at a time: a second principal is refused before anything is stored
+      for (const a of accounts) await this.refuseSecondPrincipal(a.accountId, null, b.principal);
       enforcement = c.enforcement; compiled = { accounts, venue: { accountId: c.accountId, mandate: c.mandate, derived: c.derived } };
     } else enforcement = (Object.keys(TradingMandateSchema.shape) as (keyof TradingMandate)[]).map((field) => ({ field, enforcedBy: 'api_only' as const, signerField: null, note: PAPER_ENFORCEMENT_NOTE }));
     const hash = tradingMandateHashHex(mandate);
@@ -201,26 +260,44 @@ export class MandateService {
     if (r.state !== 'created' && r.state !== 'pending_signer') throw new UserError('bad_state', `the mandate is ${r.state}`, 409);
     const base = { mandateId: r.id, mandate: r.mandate, hash: r.hash, mode: r.mode, enforcement: r.enforcement, derived: r.compiled?.venue?.derived ?? [], principalDescriptor: r.principal_kind === 'api_key' ? principalDescriptor({ kind: 'api_key', id: r.principal_id }) : null };
     if (r.mode === 'paper') return { ...base, passkey: false as const, signer: null, note: 'a paper mandate needs no signer and no passkey: nothing is signed in paper mode' };
+    if (tradingMandateHashHex(r.mandate) !== r.hash) throw new UserError('mandate_integrity', 'the stored mandate does not hash to its recorded hash: create it again', 409);
+    for (const a of r.compiled!.accounts) await this.refuseSecondPrincipal(a.accountId, r.id, { kind: r.principal_kind, id: r.principal_id });
+    if (!this.deps.passkey?.verifyOwner) throw new UserError('passkey_unavailable', 'this server cannot verify a passkey approval: a live mandate cannot be approved', 503);
     // compiled again against the authorization as it is now: the stored compilation must still be exactly what the signer will be asked to approve
     const c = await this.compile(r.mandate, r.compiled!.accounts, locale);
     const p = await this.deps.live().prepareCompiledMandate(c.accountId, c.mandate, locale);
     await sql`update trading_mandates set state = 'pending_signer', compiled = ${sql.json({ accounts: r.compiled!.accounts, venue: { accountId: c.accountId, mandate: c.mandate, hash: p.hash, derived: c.derived } } as never)}, enforcement = ${sql.json(c.enforcement as never)}, updated_at = now() where id = ${r.id}`;
+    // the API's own passkey step: ONE intent that names the full trading mandate hash and the hash of the derivative mandate compiled from it
+    const b = await prepareIntent<MandateApprovalIntent>(this.deps.passkey, MANDATE_APPROVAL_DOMAIN, approvalKey(r.id), { v: 1, kind: 'trading_mandate_approval', mandateId: r.id, tradingMandateHash: r.hash,
+      principal: `${r.principal_kind}:${r.principal_id}`, mode: 'live', signer: { shape: 'SPW-VENUE-MANDATE-v1', mandateHash: p.hash } });
     return { ...base, enforcement: c.enforcement, derived: c.derived, passkey: true as const,
       signer: { shape: 'SPW-VENUE-MANDATE-v1', accountId: c.accountId, mandate: p.mandate, hash: p.hash, acknowledgement: p.acknowledgement, warning: p.warning, enforcedBySigner: p.enforcedBySigner, trustedBySigner: p.trustedBySigner, notEnforced: p.notEnforced,
         windDown: p.windDown, options: p.options },
-      note: 'the passkey signs the hash of the compiled derivative mandate — what the signer stores and enforces. The fields marked "API only" are bound by the API\'s immutable record and its audit chain, not by the passkey.' };
+      /** the second passkey prompt: its challenge is the hash of `intent`, which names the FULL mandate hash shown on the sheet */
+      binding: { domain: MANDATE_APPROVAL_DOMAIN, intent: b.intent, hash: b.hash, options: b.options, expiresAt: b.expiresAt },
+      note: 'two passkey prompts. (1) The isolated signer verifies the passkey over the hash of the compiled derivative mandate — what it stores and enforces. (2) The API verifies the passkey over an intent that names the FULL trading mandate hash (every field, the "API only" ones included) and that derivative mandate; the assertion is stored and verified again each time the mandate is used. (2) is checked by the API: it protects the record against alteration, not against a compromised API.' };
   }
 
-  async approve(id: string, body: { assertion?: Record<string, unknown>; acknowledged?: boolean }) {
+  async approve(id: string, body: { assertion?: Record<string, unknown>; bindingAssertion?: Record<string, unknown>; acknowledged?: boolean }) {
     const r = await this.row(id), nowSec = Math.floor(this.now() / 1000);
     if (r.state === 'active') return this.view(r);
     if (r.mandate.notAfter <= nowSec) throw new UserError('mandate_expired', 'the mandate has expired before its approval: create a new one', 410);
+    if (tradingMandateHashHex(r.mandate) !== r.hash) throw new UserError('mandate_integrity', 'the stored mandate does not hash to its recorded hash: create it again', 409);
     if (r.mode === 'paper') {
       if (r.state !== 'created') throw new UserError('bad_state', `the mandate is ${r.state}`, 409);
     } else {
       if (r.state !== 'pending_signer' || !r.compiled?.venue) throw new UserError('bad_state', 'prepare the approval first', 409);
-      if (!body.assertion || body.acknowledged !== true) throw new UserError('passkey_required', 'a live mandate is approved with the owner\'s passkey, after the acknowledgement was displayed', 403);
+      if (!body.assertion || !body.bindingAssertion || body.acknowledged !== true) throw new UserError('passkey_required', 'a live mandate is approved with the owner\'s passkey, twice — once for the isolated signer (the derivative mandate), once for the full mandate hash (`bindingAssertion`) — after the acknowledgement was displayed', 403);
+      if (!this.deps.passkey?.verifyOwner) throw new UserError('passkey_unavailable', 'this server cannot verify a passkey approval: a live mandate cannot be approved', 503);
       const v = r.compiled.venue, live = this.deps.live();
+      for (const a of r.compiled.accounts) await this.refuseSecondPrincipal(a.accountId, r.id, { kind: r.principal_kind, id: r.principal_id });
+      // (2) first: the full-hash approval is verified, taken once, and stored BEFORE the signer is asked — a mandate can reach the
+      // signer only together with the owner's commitment to every one of its fields
+      const intent = await takeIntent<MandateApprovalIntent>(this.deps.passkey, MANDATE_APPROVAL_DOMAIN, approvalKey(r.id), body.bindingAssertion, 'mandate.binding_refused');
+      if (intent.kind !== 'trading_mandate_approval' || intent.mandateId !== r.id || intent.tradingMandateHash !== r.hash || intent.signer.mandateHash !== v.hash) throw new UserError('bad_state', 'the prepared approval is not for this mandate as it is stored: prepare it again', 409);
+      const approval: MandateApproval = { v: 1, domain: MANDATE_APPROVAL_DOMAIN, intent, hash: hex(canonicalIntentHash(MANDATE_APPROVAL_DOMAIN, intent)), assertion: body.bindingAssertion,
+        credentialId: typeof body.bindingAssertion.id === 'string' ? body.bindingAssertion.id.slice(0, 1024) : null, approvedAt: this.now() };
+      await sql`update trading_mandates set approval = ${sql.json(approval as never)}, updated_at = now() where id = ${r.id} and state = 'pending_signer'`;
       try { await live.approveMandate(v.accountId, { assertion: body.assertion, acknowledged: true }); }
       catch (e) {
         await sql`update trading_mandates set state = 'failed', updated_at = now() where id = ${r.id} and state = 'pending_signer'`;
@@ -282,6 +359,8 @@ export class MandateService {
     if (!r) throw new UserError('mandate_not_found', 'no trading mandate with this id', 422);
     if (r.principal_kind !== 'api_key' || r.principal_id !== keyId) throw new UserError('mandate_principal_mismatch', 'this mandate was approved for another principal', 422);
     if (r.state !== 'active' || this.phase(r) !== 'active') throw new UserError('mandate_not_active', `this mandate is ${r.state === 'active' ? this.phase(r) : r.state}: only an approved, active mandate can be bound`, 422);
+    const bad = await this.integrity(r);
+    if (bad) throw new UserError('mandate_integrity', `this mandate cannot be used: ${bad}`, 422);
   }
 
   /** the mandate a principal acts under, or the refusal. Revoked and expired mandates are returned: `checkOrder` decides (reductions pass during the wind-down). */
@@ -290,6 +369,12 @@ export class MandateService {
     const [r] = await sql<Row[]>`select * from trading_mandates where id = ${mandateId}`;
     if (!r || r.principal_kind !== p.kind || r.principal_id !== p.id) throw new UserError('mandate_required', 'the mandate bound to this principal does not exist or was approved for another principal', 403);
     if (r.state !== 'active' && r.state !== 'revoked') throw new UserError('mandate_not_approved', 'the mandate bound to this principal was never approved', 403);
+    // the row is used for enforcement from here: it must still be exactly what the owner approved (a tampered row is unusable)
+    const bad = await this.integrity(r);
+    if (bad) {
+      await audit('mandate.integrity_failed', 'system', { mandateId: r.id, reason: bad }).catch(() => {});
+      throw new UserError('mandate_integrity', `the mandate bound to this principal cannot be used: ${bad}`, 403);
+    }
     return r;
   }
 
@@ -352,6 +437,13 @@ export class MandateService {
     }
     for (const r of rows) {
       if (this.phase(r) !== 'active') continue;
+      // a row that is no longer what the owner approved: stopped for good, at the signer too (it signs nothing more that adds exposure)
+      const bad = await this.integrity(r);
+      if (bad) {
+        try { await this.revoke(r.id, { by: 'system', reason: 'key_compromise', detail: `MANDATE_INTEGRITY: ${bad}`, cancelOpenOrders: true }); stopped.push(r.id); }
+        catch (e) { console.error(`[mandates] ${r.id} failed its integrity check and could not be revoked: ${msg(e)}`); }
+        continue;
+      }
       const u = await this.usageRow(r.id);
       if (r.mode === 'live') {
         if (signerUp && u.signer_unreachable_since) await sql`update trading_mandate_usage set signer_unreachable_since = null where mandate_id = ${r.id}`;

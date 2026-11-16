@@ -14,8 +14,8 @@
 //  - a terminal unified order is never changed.
 import { D, RISK_CODES, type DecStr } from '@spw/derivatives';
 import {
-  absenceConclusiveAt, IllegalTransitionError, isTerminal, mapGmxOp, mapHyperliquidOrder, transition, VENUE_RECONCILE,
-  type GmxOpState, type HlOrderState, type OrderEvent, type OrderHistoryEntry, type OrderRecord, type OrderState, type ReasonCode, type UnifiedState,
+  absenceConclusiveAt, IllegalTransitionError, isTerminal, mapGmxOp, mapHyperliquidOrder, mapPaperOrder, transition, VENUE_RECONCILE,
+  type GmxOpState, type HlOrderState, type PaperOrderStatus, type OrderEvent, type OrderHistoryEntry, type OrderRecord, type OrderState, type ReasonCode, type UnifiedState,
 } from '@spw/trading';
 
 export interface EngineSnapshot {
@@ -38,24 +38,8 @@ const canonN = (x: string | null | undefined): DecStr | null => (x === null || x
 const posOrNull = (x: DecStr | null): DecStr | null => (x !== null && D.isPos(D.from(x)) ? x : null);
 
 // ------------------------------------------------------------------------------------------------------------------ paper
-export const PAPER_ORDER_STATUSES = ['pending', 'open', 'filled', 'partially_filled', 'cancelled', 'rejected', 'triggered'] as const;
-export type PaperOrderStatus = (typeof PAPER_ORDER_STATUSES)[number];
-/**
- * The paper engine's order status (`Order.status` of @spw/derivatives, stored in `deriv_orders.status` with `state` null).
- * The paper engine is the venue of a paper order: it has no approval step and no signer, so the first state seen is at the venue.
- */
-export function mapPaperOrder(status: PaperOrderStatus, row: { filled?: string | null; rejectReason?: string | null } = {}): UnifiedState {
-  const some = D.isPos(D.from(canon(row.filled)));
-  switch (status) {
-    case 'pending': return u('SUBMITTED', 'VENUE_ACCEPTED', 'a trigger order the paper engine accepted and holds until its trigger');
-    case 'triggered': return u('SUBMITTED', 'VENUE_RESTING', 'triggered; waits for the next book');
-    case 'open': return u('SUBMITTED', 'VENUE_RESTING');
-    case 'partially_filled': return u('PARTIALLY_FILLED', 'VENUE_FILL');
-    case 'filled': return u('FILLED', 'VENUE_FILLED');
-    case 'cancelled': return some ? u('CANCELLED', 'REMAINDER_CANCELLED') : u('CANCELLED', 'CANCELLED_AT_VENUE', 'cancelled in the paper engine (by request, by a loss-limit halt, or an IOC remainder)');
-    case 'rejected': return u('REJECTED', 'VENUE_REJECTED', 'refused by the paper engine\'s own rules');
-  }
-}
+// the paper vocabulary lives with the others (packages/trading/src/orders/vocabulary.ts); re-exported for the callers of this module
+export { mapPaperOrder, PAPER_ORDER_STATUSES, type PaperOrderStatus } from '@spw/trading';
 
 // ------------------------------------------------------------------------------------------------------------------ snapshots
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any -- a database row
