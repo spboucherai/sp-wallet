@@ -152,7 +152,7 @@ each cell is the `note` the owner would see.
 | `accounts` | **signer** — `account, agentAddress, authorizationId`. the signer signs for this one venue account only; the mandate's 1 other account(s) are outside this shape | **signer** — `vaultIndex, vault, network`. orders spend from and deliver to this vault only; the mandate's 1 other account(s) are outside this shape |
 | `venues` | **signer** — `venue`. the shape is for hyperliquid only; kyberswap need their own signer mandate or stay API-enforced | **signer** — `provider`. swaps through kyberswap only; hyperliquid need their own signer mandate or stay API-enforced |
 | `networks` | **signer** — `network`. the venue network of the authorization | **signer** — `network`. one network per spot mandate: the vault's |
-| `instruments` | **signer** — `instruments[].instrument`. the signer refuses any other instrument | **signer (partly)** — `assets, maxOrder`. the signer enforces the SET of assets (both legs of every swap) and which can be sold; it does not know instruments, so any pair between mandated assets passes |
+| `instruments` | **signer** — `instruments[].instrument`. the signer refuses an order or a leverage change on any other instrument; a cancel is bounded by the instruments of the venue authorization, which may be wider | **signer (partly)** — `assets, maxOrder`. the signer enforces the SET of assets (both legs of every swap) and which can be sold; it does not know instruments, so any pair between mandated assets passes |
 | `marketKinds` | **signer**. structural: this shape signs perpetual orders only | **signer**. structural: this shape signs spot swaps only |
 | `orderTypes` | **API only**. the signer signs any order type the venue adapter can build; the allowed types are checked by the API | **signer (partly)**. structural: the signer signs an immediate swap with a minimum output — a market order with a slippage bound; resting or trigger orders do not exist here and are handled (or refused) by the API |
 | `maxCapitalUsd` | **signer (partly)** — `maxGrossExposure`. enforced as worst-case gross exposure ≤ capital × leverage; the capital itself (collateral on the venue) is not capped by the signer | **API only**. the vault is bounded only by what the owner sends to it; the capital limit is checked by the API |
@@ -162,15 +162,15 @@ each cell is the `note` the owner would see.
 | `maxDailyLossUsd` | **API only**. the signer has no daily-loss limit; it only knows the floor | **API only**. the signer has no loss limit for a vault |
 | `floorEquityUsd` | **signer** — `floorEquity`. below the floor the signer signs reduce-only orders and cancels only (the venue's own account value) | **API only**. the signer has no loss limit for a vault |
 | `createdAt` | **signer** — `createdAt`. must be current at approval | **signer** — `createdAt`. must be current at approval |
-| `notBefore` | **signer** — `createdAt`. the mandate starts at its creation | **signer** — `createdAt`. the mandate starts at its creation |
+| `notBefore` | **signer (partly)** — `createdAt`. the signer has no start time: it signs from the approval on, and accepts an approval only while createdAt is within 10 minutes before and 2 minutes after its own clock; the start itself is checked by the API | **signer (partly)** — `createdAt`. the signer has no start time: it signs from the approval on, and accepts an approval only while createdAt is within 10 minutes before and 2 minutes after its own clock; the start itself is checked by the API |
 | `notAfter` | **signer** — `expiresAt`. after it the signer signs only cancels and reduce-only orders for 24 h, then nothing | **signer** — `expiresAt`. the signer refuses any order after it |
-| `frequency` | **signer (partly)** — `maxOrdersPerDay, maxOrdersPerHour`. per day and per hour are enforced by the signer (orders that can add exposure); per minute is enforced by the API only | **signer (partly)** — `maxOrdersPerDay, maxDaily`. orders per day and a daily volume per sold asset are enforced by the signer; per hour and per minute by the API only |
-| `maxSlippageBps` | **signer (partly)** — `maxPriceDeviationBps`. the signer enforces a price band around its own mid on every price of an order; realised slippage is checked by the API | **signer** — `maxSlippageBps`. the guaranteed output must be worth at least (1 − this) of the input at the signer's own prices |
+| `frequency` | **signer (partly)** — `maxOrdersPerDay, maxOrdersPerHour`. per day and per hour are enforced by the signer (orders that can add exposure; the venue authorization's own daily count applies as well); per minute is enforced by the API only | **signer (partly)** — `maxOrdersPerDay, maxDaily`. orders per day and a daily volume per sold asset are enforced by the signer; per hour and per minute by the API only |
+| `maxSlippageBps` | **signer (partly)** — `maxPriceDeviationBps`. the signer enforces a price band around its own mid on every price of an order — except a reduce-only trigger order, whose trigger may rest between one third and three times the mid, its worst price then being held within the band of the trigger; realised slippage is checked by the API | **signer** — `maxSlippageBps`. the guaranteed output must be worth at least (1 − this) of the input at the signer's own prices |
 | `maxFeeUsd` | **API only**. the signer does not see venue fees | **API only**. the signer applies the fee ceiling of its own policy, not the mandate's |
 | `stopConditions` | **API only**. declarative conditions are evaluated by the API; the signer only stops on the floor, the expiry, a revocation and its own halt | **API only**. declarative conditions are evaluated by the API; the signer only stops on the expiry, a revocation and its own halt |
-| `mode` | **signer** — `network`. a live mandate; the venue network (mainnet / testnet) is the authorization's | **signer**. a live mandate |
+| `mode` | **n/a**. the signer has no notion of paper or live: a mandate reaches it only when it is live (a paper mandate is never compiled); the venue network is the row `networks` | **n/a**. the signer has no notion of paper or live: a mandate reaches it only when it is live (a paper mandate is never compiled) |
 | `strategySha256` | **signer (partly)** — `strategySha256`. recorded by the signer for the audit trail; the signer cannot verify what code runs | **signer (partly)** — `strategySha256`. recorded by the signer for the audit trail; the signer cannot verify what code runs |
-| `label` | **API only**. a display name; not part of the signer shape | **signer** — `label`. part of the approved hash |
+| `label` | **API only**. a display name; not part of the signer shape | **signer (partly)** — `label`. part of the hash the passkey approved and recorded by the signer; a name has nothing to enforce |
 <!-- /GENERATED:enforced-by -->
 
 Reading the table: on the derivative shape the signer enforces the instruments, the order and position
@@ -178,6 +178,47 @@ limits, the leverage, the floor, the expiry and the account. It enforces the cap
 exposure bound, the frequency per day and per hour only, and the slippage only as a price band. The daily
 loss limit, the allowed order types, the fee cap and every declarative stop condition are API-only. On the
 spot shape the signer has no capital, position or loss limit at all.
+
+### Where the signer enforces each row (verified against its source, 2026-11-15)
+
+`S` = `services/isolated-signer/src`, `L` = `packages/derivatives/src/live`, `C` = `packages/core/src`.
+"recorded" = stored and part of the approved hash, with nothing to enforce. "none" = no line of the signer
+looks at it.
+
+| Trading mandate field | Derivative mandate (Hyperliquid) | Spot mandate (KyberSwap vault) |
+|---|---|---|
+| `mandateId` | the stored mandate is looked up by it: `S/venue-mandate.ts:152-154`; approved once: `:75` | `S/signer.ts:154-155`; approved once: `:127` |
+| `principal` | recorded (`agentId`, `L/mandate.ts:75`, `S/venue-mandate.ts:82`); no line checks who calls | none |
+| `accounts` | the authorization's account is the wallet's own address and the trading key the signer's own (`S/venue.ts:67-69`); the mandate must name them (`L/mandate.ts:90`); no sub-account or vault (`S/venue-mandate.ts:175`); the signer's venue read is of that account (`:107`) | `C/mandate.ts:79`, `:82`; `S/signer.ts:163-164` |
+| `venues` | `S/venue-mandate.ts:167` (and the schema: `venue` is the literal `hyperliquid`) | `C/mandate.ts:81` |
+| `networks` | `S/venue-mandate.ts:167` | `C/mandate.ts:80` |
+| `instruments` | orders: `S/venue-mandate.ts:209-210`; leverage: `:251-252`; cancels: the AUTHORIZATION's list, `:187` | the asset set, both legs: `C/mandate.ts:83`; sellable assets: `:87` |
+| `marketKinds` | structural (the pinned asset table read by `describe`, `S/venue-mandate.ts:170-173`) | structural (`S/signer.ts:170`: a swap or nothing) |
+| `orderTypes` | none | structural only |
+| `maxCapitalUsd` | as gross exposure: `S/venue-mandate.ts:240` | none |
+| `maxOrderNotionalUsd` | `S/venue-mandate.ts:211-212` (before the reduce-only branch: reduce-only orders included) | per sold asset, base units: `C/mandate.ts:88` |
+| `maxPositionNotionalUsd` | `S/venue-mandate.ts:238-239` | none |
+| `maxLeverage` | `S/venue-mandate.ts:237` (the venue's setting), `:254` (a change) | n/a |
+| `maxDailyLossUsd` | none | none |
+| `floorEquityUsd` | `S/venue-mandate.ts:232` | none |
+| `createdAt` | at approval: `L/mandate.ts:109` (called from `S/venue-mandate.ts:68`) | at approval: `C/mandate.ts:66` |
+| `notBefore` | none at signing; only the window on `createdAt` above | the same |
+| `notAfter` | `S/venue-mandate.ts:163-164` (ended), `:224` and `:248` (wind-down) | `C/mandate.ts:78` |
+| `frequency` | per day `S/venue-mandate.ts:226` (+ the authorization's count `:227`), per hour `:228`; per minute: none | orders per day `C/mandate.ts:90`, daily volume `:89`; per hour and per minute: none |
+| `maxSlippageBps` | `S/venue-mandate.ts:219` (rule `L/canonical.ts:226-237`) | `C/mandate.ts:105-106`, called from `S/signer.ts:182` |
+| `maxFeeUsd` | none | the signer's own policy ceiling, `C/mandate.ts:91` — not the mandate's value |
+| `stopConditions` | none | none |
+| `mode` | n/a | n/a |
+| `strategySha256` | recorded (`L/mandate.ts:75`, `S/venue-mandate.ts:82`) | recorded (`C/mandate.ts:46`, `S/signer.ts:139`) |
+| `label` | not in the shape | recorded (`C/mandate.ts:46`) |
+
+Cells of the generated table corrected by this verification: `notBefore` (was "signer": the signer has no
+start time — signer partly), `mode` (was "signer": the signer has no notion of paper or live — n/a, both
+shapes), spot `label` (was "signer": recorded, nothing to enforce — signer partly), `instruments` (a cancel
+is bounded by the authorization's instruments), `maxSlippageBps` (the reduce-only trigger exception),
+`frequency` (the authorization's daily count applies too). `services/api/test/enforcement-pin.test.ts` asks
+the real signer directly: every `signer` / `signer (partly)` row of the derivative shape has a refusal case,
+and every `API only` row a case where the signer signs although the trading mandate forbids it.
 
 ## Subset helpers
 
@@ -233,31 +274,77 @@ owner.
 **Paper.** No signer and no passkey: `POST /mandates/:id/approve` activates it. The enforcement table says
 "API only" for every field, because nothing is signed in paper mode.
 
-**Live (Hyperliquid).** One passkey ceremony:
+**Live (Hyperliquid).** One ceremony, two passkey prompts:
 
 1. `POST /mandates/:id/approve/prepare` compiles the mandate again against the venue authorization as it is
    now (`compileToVenueMandate`) and prepares the result at the Hyperliquid engine
    (`exec.ts` `prepareCompiledMandate`). The engine applies the checks it applies to any derivative mandate:
    the mandate is for this account and its authorization, `validateVenueMandate`, the pinned asset table, the
    acknowledgement that is displayed, no other mandate active on the account, the signer not halted.
-2. The answer is the approval sheet: every field of the trading mandate, its hash, the compiled derivative
-   mandate, the enforcement table (one row per field, verbatim from the compiler), the derived values, the
-   jurisdiction acknowledgement and the WebAuthn request.
-3. `POST /mandates/:id/approve { assertion, acknowledged: true }` goes through the engine's existing
-   `approveMandate`: the signer verifies the passkey and stores the derivative mandate.
+2. The answer is the approval sheet: every field of the trading mandate, its **full hash**
+   (`tradingMandateHash`), the compiled derivative mandate and its hash, the enforcement table (one row per
+   field, verbatim from the compiler), the derived values, the jurisdiction acknowledgement, and two WebAuthn
+   requests: `signer.options` and `binding.options`.
+3. `POST /mandates/:id/approve { assertion, bindingAssertion, acknowledged: true }`:
+   - `bindingAssertion` is verified first, by the API (`verifyOwnerAssertion`, single use). Its challenge is
+     the hash of the intent `SPW-TRADING-MANDATE-APPROVAL-v1`
+     `{ mandateId, tradingMandateHash, principal, mode, signer: { shape, mandateHash }, nonce, createdAt, expiresAt }`.
+     The intent and the assertion are stored with the mandate (`trading_mandates.approval`) before the signer
+     is asked;
+   - `assertion` then goes through the engine's existing `approveMandate`: the signer verifies the passkey
+     over the hash of the derivative mandate and stores it.
 4. The API activates the trading mandate only if the mandate the signer approved has the same id and the same
-   hash as the one compiled from it.
+   hash as the one compiled from it — the hash the stored intent names.
 
-**What the passkey signs.** The challenge is the hash of the compiled derivative mandate
+**What the passkey signs.** Two things. (1) At the signer: the hash of the compiled derivative mandate
 (`SPW-VENUE-MANDATE-v1`), the object the signer stores and enforces. The fields marked "API only" are not in
-that hash. They are bound by the API's record (an immutable row, and the audit event `mandate.approved` with
-the trading mandate's hash), not by the passkey. This is listed for review in `V11-SECURITY-REVIEW.md`.
+that hash. (2) At the API: the intent above, which names the full trading mandate hash — every field, the
+API-only ones included — and ties it to that derivative mandate.
+
+**The row is verified at every use.** Each time a mandate is loaded to judge an order, to bind a key, or by
+the supervisor (`MandateService.integrity`): the stored object must hash to the recorded hash; the columns
+the service filters on (id, principal, mode, account mapping) must say what the hashed object says; and for a
+live mandate the stored assertion must verify again — the signature of a passkey that is still enrolled, over
+the stored intent, which must name this mandate's full hash and the signer mandate recorded. A row that fails
+is unusable: orders answer 403 `mandate_integrity` (reductions included — the owner closes), the mandate
+view shows `integrity: { ok: false, reason }`, and the supervisor revokes it, at the signer too. A paper
+mandate has no passkey: only the hash and column checks apply.
+
+**What this protects against, and what it does not.**
+
+| Scenario | Protected? |
+|---|---|
+| A stolen owner session, a bug or an injection that can write the `trading_mandates` row but cannot produce a passkey assertion: raising the daily-loss limit, adding an order type, removing a stop condition, pointing the mandate at another key | yes — the altered row no longer matches the approved hash, and a recomputed hash is not the one the passkey signed |
+| The same, rewriting the mandate AND its `hash` AND copying the `approval` of another mandate | yes — the intent names the mandate id and its hash |
+| A restored or edited database in which a mandate was replaced by an older, wider one under the same id | yes when the hash differs; an older row with its own valid approval and the same id cannot exist (ids are single-use, mandates immutable) |
+| A mandate created `active` directly in the database, never approved | yes for live (no approval); a paper mandate has no passkey and moves no funds |
+| Someone who can also rewrite the `credentials` table (enrol his own passkey in the API's copy) | **no** — the API verifies against its own copy of the passkeys. The signer has its own pinned copy and still bounds what can be signed |
+| A compromised API process | **no** — it skips the check. It remains bounded only by the signer-enforced subset of the mandate (the table above), exactly as before |
+| Replay of the stored assertion for another purpose | the challenge is domain-separated and names the mandate; the signer never accepts it (another challenge) |
+
+Side effect, by design: a mandate approved with a passkey that is later removed from the wallet stops being
+usable (and is revoked by the supervisor). Approve it again with a current passkey.
+
+**Still open for human review.** One prompt instead of two, and a record the API cannot forge, would need
+the signer to carry the hash: add `tradingMandateSha256` to `SPW-VENUE-MANDATE-v1`, part of its hash, recorded
+by the signer like `strategySha256`. It was not done here (no signer change in this phase); see
+`V11-SECURITY-REVIEW.md`.
 
 A live mandate must be approved within about ten minutes of its creation: the signer requires a current
 creation time. After that, create it again.
 
-One derivative mandate per venue account: the signer holds one active mandate per authorization. An API-key
-mandate and a perp agent's mandate cannot be active on the same venue account at the same time.
+**One principal per live venue account.** The signer holds one active mandate per authorization, and a
+venue's position is not separable by principal. A live mandate for a venue account that already carries an
+approved or pending trading mandate, or a perp agent's active derivative mandate, is refused at creation and
+again at the approval: 409 `account_has_active_mandate`, with `data.holder` (`via`, `mandateId`, `principal`).
+Nothing is stored. Revoke the holder first (its wind-down does not block a new mandate), or use another venue
+account. On a paper account several principals may hold a mandate: the provenance ledger keeps their lots
+apart.
+
+**Whose position a key may reduce.** `checkOrder` binds a reduction to the mandate's account and instrument;
+the order service adds provenance (`orders/provenance.ts`, described in `V11-RISK-MODEL.md`): a key or an
+agent reduces only what its own fills opened — not what the owner opened by hand on the same account and
+instrument, and not another principal's part.
 
 ### An API-key principal in the signer shape
 
@@ -321,6 +408,10 @@ Revocation by the owner (`POST /mandates/:id/revoke`) does the same.
 - **GMX and any new venue** have no signer-side mandate. A live mandate that names them is refused.
 - **Signer shapes have no start time, no per-minute rate, no daily-loss limit and no stop conditions.**
   These stay API-only until the signer shapes are extended.
-- **The API-only fields are not covered by the passkey signature** (see "What the passkey signs").
+- **The API-only fields are covered by a passkey assertion the API verifies, not by the signer** (see "What
+  the passkey signs"): a compromised API is bound by the signer-enforced subset only.
+- **Perp agents place live orders through the Hyperliquid engine directly** (`placeMandateOrder`), not through
+  the order service: provenance is not applied to them (one principal per account makes it moot while the rule
+  above holds).
 - **Live spot mandates** are not created here.
 - **Spot USD limits** are enforced in base units fixed at approval prices.
