@@ -292,7 +292,10 @@ describe('default deny', () => {
     expect((await call('GET', `${T}/nope`, { key: k.secret })).status).toBe(404);
     // the routes a key can reach are exactly the declared operations, and each one declares its scope
     const inside = routes.filter((r) => r.path.startsWith(`${T}/`)).map((r) => `${r.method} ${r.path.slice(T.length)}`).sort();
-    expect(inside).toEqual(spec.OPERATIONS.map((o) => `${o.method} ${o.path}`).sort());
+    // … plus the two routes of the quote engine (services/api/src/quotes): a websocket cannot be described by the OpenAPI document,
+    // so they are not operations of the spec — both declare the scope markets:read (docs/V11-QUOTE-ENGINE.md, services/api/test/quotes-stream.test.ts)
+    const STREAMING = ['GET /stream', 'POST /stream/ticket'];
+    expect(inside).toEqual([...spec.OPERATIONS.map((o) => `${o.method} ${o.path}`), ...STREAMING].sort());
   });
 
   it('a route without a declared scope is closed, to a key and to the owner', async () => {

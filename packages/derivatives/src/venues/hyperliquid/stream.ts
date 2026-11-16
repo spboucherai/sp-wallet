@@ -1,4 +1,4 @@
-// Hyperliquid websocket client: l2Book, trades, activeAssetCtx, allMids and the user feeds (userFills, orderUpdates, userEvents).
+// Hyperliquid websocket client: l2Book, trades, activeAssetCtx, allMids, bbo, candle (v11 quote engine) and the user feeds (userFills, orderUpdates, userEvents).
 // https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket (+ /subscriptions, /timeouts-and-heartbeats)
 //   "The server will close any connection if it hasn't sent a message to it in the last 60 seconds" → { "method": "ping" } /
 //   { "channel": "pong" }.   "all automated users should handle disconnects from the server side and gracefully reconnect …
@@ -9,11 +9,11 @@
 // de-duplicated by id across messages, snapshots and reconnects.
 import type { z } from 'zod';
 import type { DecStr } from '../../decimal.ts';
-import type { Book, Fill, FundingPayment, PublicTrade, Ticker } from '../../models.ts';
+import type { Book, Candle, Fill, FundingPayment, PublicTrade, Ticker } from '../../models.ts';
 import { VenueError } from './error.ts';
 import { hlAccount, hlBook, hlFillId, hlFillOf, hlOrderStatus, hlPublicTrade, hlTicker, hlTradeId } from './mappers.ts';
 import { HL_WS } from './http.ts';
-import { hlL2Book, hlTrades, hlWsActiveAssetCtx, hlWsAllMids, hlWsEnvelope, hlWsOrders, hlWsUserEvent, hlWsUserFills } from './schemas.ts';
+import { hlCandle, hlL2Book, hlTrades, hlWsActiveAssetCtx, hlWsAllMids, hlWsBbo, hlWsEnvelope, hlWsOrders, hlWsUserEvent, hlWsUserFills } from './schemas.ts';
 import type { HlNetwork } from './signing.ts';
 
 /** the part of the WHATWG WebSocket that is used; tests inject a fake */
@@ -48,6 +48,10 @@ export type HlStreamEvent =
   | { type: 'trades'; trades: PublicTrade[] }
   | { type: 'ticker'; ticker: Ticker }
   | { type: 'mids'; mids: Record<string, DecStr>; ts: number }
+  /** v11: best bid / offer as [price, size]; a side is null when the book has none. `ts` is the venue's own time. */
+  | { type: 'bbo'; symbol: string; bid: [DecStr, DecStr] | null; ask: [DecStr, DecStr] | null; ts: number }
+  /** v11: the bar in progress (or just closed) of one interval, as the venue streams it */
+  | { type: 'candle'; symbol: string; interval: string; candle: Candle }
   | { type: 'fills'; fills: Fill[]; snapshot: boolean }
   | { type: 'orders'; orders: HlOrderUpdate[] }
   | { type: 'funding'; payment: FundingPayment }
@@ -58,7 +62,7 @@ export type HlStreamEvent =
   /** a message that failed validation was dropped */
   | { type: 'invalid'; channel: string; reason: string };
 
-export type HlStreamSub = { type: 'book' | 'trades' | 'ticker'; symbol: string } | { type: 'account'; account: string } | { type: 'mids' };
+export type HlStreamSub = { type: 'book' | 'trades' | 'ticker' | 'bbo'; symbol: string } | { type: 'candle'; symbol: string; interval: string } | { type: 'account'; account: string } | { type: 'mids' };
 export type HlStreamStatus = 'connected' | 'reconnecting' | 'stale';
 
 export interface HlStream {
@@ -72,7 +76,7 @@ interface Consumer { keys: string[]; on: (ev: HlStreamEvent) => void; onStatus: 
 
 /** a connection must have lasted this long before the reconnect backoff starts again from its minimum */
 const STABLE_MS = 10_000;
-const keyOf = (s: WireSub): string => `${s.type}:${s.coin ?? s.user ?? ''}`;
+const keyOf = (s: WireSub): string => `${s.type}:${s.coin ?? s.user ?? ''}${s.interval ? `:${s.interval}` : ''}`;
 
 class Seen {
   private readonly set = new Set<string>(); private readonly max: number;
@@ -172,6 +176,16 @@ export function createHlStream(o: HlStreamOptions): HlStream {
           return;
         }
         case 'activeAssetCtx': { const p = parse(hlWsActiveAssetCtx, data, channel, (d) => `activeAssetCtx:${d.coin}`); if (p) emit(p.key, { type: 'ticker', ticker: hlTicker(p.data.coin, p.data.ctx, now()) }); return; }
+        case 'bbo': {
+          const p = parse(hlWsBbo, data, channel, (d) => `bbo:${d.coin}`);
+          if (p) { const [b, a] = p.data.bbo; emit(p.key, { type: 'bbo', symbol: p.data.coin, bid: b ? [b.px, b.sz] : null, ask: a ? [a.px, a.sz] : null, ts: p.data.time }); }
+          return;
+        }
+        case 'candle': {
+          const p = parse(hlCandle, data, channel, (d) => `candle:${d.s}:${d.i}`);
+          if (p) { const c = p.data; emit(p.key, { type: 'candle', symbol: c.s, interval: c.i, candle: { ts: c.t, open: c.o, high: c.h, low: c.l, close: c.c, volume: c.v } }); }
+          return;
+        }
         case 'allMids': { const p = parse(hlWsAllMids, data, channel, () => 'allMids:'); if (p) emit(p.key, { type: 'mids', mids: p.data.mids, ts: now() }); return; }
         case 'userFills': { const p = parse(hlWsUserFills, data, channel, (d) => `userFills:${d.user}`); if (p && p.data.user === user) fillsOut(p.data.fills, p.data.isSnapshot === true); return; }
         case 'orderUpdates': {
@@ -240,6 +254,11 @@ export function createHlStream(o: HlStreamOptions): HlStream {
     if (sub.type === 'book') return [{ type: 'l2Book', coin: sub.symbol }];
     if (sub.type === 'trades') return [{ type: 'trades', coin: sub.symbol }];
     if (sub.type === 'ticker') return [{ type: 'activeAssetCtx', coin: sub.symbol }];
+    if (sub.type === 'bbo') return [{ type: 'bbo', coin: sub.symbol }];
+    if (sub.type === 'candle') {
+      if (!/^(1m|3m|5m|15m|30m|1h|2h|4h|8h|12h|1d|3d|1w|1M)$/.test(sub.interval)) throw new VenueError('hyperliquid', 'unsupported', 'bad candle interval');
+      return [{ type: 'candle', coin: sub.symbol, interval: sub.interval }];
+    }
     throw new VenueError('hyperliquid', 'unsupported', `unknown subscription type '${String((sub as { type: unknown }).type)}'`);
   };
 

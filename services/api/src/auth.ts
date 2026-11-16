@@ -59,6 +59,14 @@ export async function isAuthed(req: FastifyRequest): Promise<boolean> {
   return !!s;
 }
 
+/** v11 quote engine: is this session token still valid? READ-ONLY — it does not refresh `last_seen`: an open websocket re-checks
+ *  its session with it and must not keep an idle session alive by itself. */
+export async function sessionAlive(token: string | undefined): Promise<boolean> {
+  if (!token || token.length > 100) return false;
+  const [s] = await sql`select 1 as ok from sessions where id_hash = ${h(token)} and not revoked and expires_at > now() and last_seen > now() - ${IDLE_MIN + ' minutes'}::interval`;
+  return !!s;
+}
+
 const RegBody = z.object({ challengeId: z.uuid(), response: z.any(), setupToken: z.string().min(8).max(100).optional(), label: z.string().max(40).optional() });
 const AuthBody = z.object({ challengeId: z.uuid(), response: z.any() });
 const regOptions = async (exclude: Cred[]) => generateRegistrationOptions({
