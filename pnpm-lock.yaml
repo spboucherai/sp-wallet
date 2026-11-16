@@ -68,6 +68,9 @@ importers:
       '@spw/swap':
         specifier: workspace:*
         version: link:packages/swap
+      '@spw/trading':
+        specifier: workspace:*
+        version: link:packages/trading
       '@stellar/stellar-base':
         specifier: 15.0.0
         version: 15.0.0
@@ -195,6 +198,21 @@ importers:
       '@spw/core':
         specifier: workspace:*
         version: link:../core
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+
+  packages/trading:
+    dependencies:
+      '@noble/hashes':
+        specifier: 2.4.0
+        version: 2.4.0
+      '@spw/core':
+        specifier: workspace:*
+        version: link:../core
+      '@spw/derivatives':
+        specifier: workspace:*
+        version: link:../derivatives
       zod:
         specifier: 4.6.7
         version: 4.6.7

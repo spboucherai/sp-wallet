@@ -1,0 +1,13 @@
+{
+  "name": "@spw/trading",
+  "version": "11.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@spw/core": "workspace:*",
+    "@spw/derivatives": "workspace:*",
+    "@noble/hashes": "2.4.0",
+    "zod": "4.6.7"
+  }
+}
