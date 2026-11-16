@@ -402,6 +402,23 @@ describe('a live session through the runtime', () => {
     w1 = w3;
   }, 120_000);
 
+  it('NO WORKER runs the session (it died): the owner\'s FLATTEN is executed directly — cancel-all, reduce-only unwind, switch removed — and it never quotes', async () => {
+    expect(w.resting().buy.length + w.resting().sell.length).toBeGreaterThan(0);
+    (w.sim as unknown as { position: string }).position = '0.0004';                                   // inventory left behind
+    const mm = w1.stream!.mm, calls = w.quotingCalls.length, row = (await sql`select id, name, state, mode, universe, risk, capital_usdc::text as capital_usdc, config_version, runtime from agents where id = ${agentId}`)[0];
+    mm.forget(agentId);                                                                               // the worker is gone: nothing was cancelled, nothing released
+    w.flags.locks.SPW_TRADING_API_EXECUTION = 'off'; w.flags.kill = true;                             // and every lock is closed, the kill switch engaged
+    const r = await mm.emergency(row, 'flatten', 'owner', { maxMs: 40_000, stepMs: 0, sleep: async () => { w.sim.advance(w.sim.now + 1000); w.clock.t = w.sim.now; w.pushBook(); } });
+    expect(r).toMatchObject({ done: true, position: '0', resting: 0, phase: 'stopped' });
+    expect(w.resting().buy.length + w.resting().sell.length).toBe(0); expect(D.isZero(D.from(w.sim.positionSize()))).toBe(true); expect(w.sim.scheduledAt()).toBeNull();
+    const signed = w.quotingCalls.slice(calls).filter((c) => c.ok).map((c) => c.kind);
+    expect(signed).not.toContain('quotes'); expect(signed).toEqual(expect.arrayContaining(['cancel', 'reduce']));
+    expect((await sql`select detail->>'why' as why, state from orders where principal_id = ${agentId} order by created_at desc limit 1`)[0]).toMatchObject({ why: 'flatten', state: 'FILLED' });
+    w.flags.locks.SPW_TRADING_API_EXECUTION = 'on'; w.flags.kill = false;
+    await w.run(8000, [w1]);                                                                          // the worker is back: a new session, quoting
+    expect((await session()).status.phase).toBe('quoting');
+  }, 120_000);
+
   it('WIND-DOWN AT EXPIRY: inside stopBeforeExpiryS the session cancels, removes the switch and ends; the agent is stopped and the mandate REVOKED at the signer; live needs a new mandate', async () => {
     const m: any = await w.execution.mandates.get(mandateId), triggers = w.sim.triggersToday();
     // 24 h later, 200 s before the expiry (the tape has ended: the book is old — stopping needs no fresh data)
@@ -421,5 +438,8 @@ describe('a live session through the runtime', () => {
     expect(live.mode).toBe('live'); expect(live.sessions).toBeGreaterThanOrEqual(3); expect(live.fills).toBeGreaterThanOrEqual(3);
     expect(Number(live.attribution.totalUsd)).toBeCloseTo(Number(live.attribution.spreadCaptureUsd) + Number(live.attribution.inventoryPnlUsd) + Number(live.attribution.feesUsd) + Number(live.attribution.fundingUsd), 9);
     expect([paper.mode, paper.sessions]).toEqual(['paper', 1]);
+    // a session counts only ITS fills: no fill of the account is recorded under two sessions
+    const [dup] = await sql`select count(*)::int as n, count(distinct fill_id)::int as d from mm_fills where agent_id = ${agentId}`;
+    expect(dup.n).toBe(dup.d);
   }, 120_000);
 });

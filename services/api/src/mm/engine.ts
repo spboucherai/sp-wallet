@@ -16,7 +16,7 @@
 //   - kill switch, a mandate that is not `active`, a tripped breaker: quotes are pulled at once; reductions stay possible.
 import { D, type DecStr } from '@spw/derivatives';
 import {
-  breakersInit, cycleBudget, markoutAddFill, markoutInit, markoutOnMid, markouts10s, markoutSummary, midOf, planQuotes, pnlInit, pnlOnFill, pnlOnMid, pnlReport, stepBreakers, volBps, volInit, volUpdate,
+  breakersInit, cycleBudget, markoutAddFill, markoutInit, markoutOnMid, markouts10s, markoutSummary, midOf, planQuotes, pnlInit, pnlOnFill, pnlOnFunding, pnlOnMid, pnlReport, stepBreakers, volBps, volInit, volUpdate,
   type BreakerCode, type BreakerConfig, type BreakerState, type MarkoutState, type MarkoutSummary, type PlanMode, type PlannerConfig, type PnlReport, type PnlState, type QuotePolicy, type QuoteRounder, type RateConfig, type RestingOrder,
   type Side, type VolConfig, type VolState,
 } from '@spw/trading/mm';
@@ -127,6 +127,8 @@ export class MmEngine {
     if (this.phase !== 'halted') return;
     this.breakers = breakersInit(); this.consecutiveRejects = 0; this.phase = 'pulled'; this.reason = null; this.log('mm.resumed');
   }
+  /** a funding settlement of the position this session holds (positive = received): it enters the attribution, nothing else */
+  funding(usd: DecStr): void { this.pnl = pnlOnFunding(this.pnl, usd); this.log('mm.funding', { usd }); }
   /**
    * A reason OUTSIDE the engine for which nothing may be quoted now (a server lock that was closed, hours outside the session's
    * schedule): quotes are pulled while it is set and come back by themselves when it is cleared. null clears it.

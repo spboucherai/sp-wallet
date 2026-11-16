@@ -67,7 +67,7 @@ interface Session {
   row: SessionRow; mode: MmMode; agentId: string; instrument: string; inst: Instrument; network: HlNetwork; engine: MmEngine; cfg: MmEngineConfig; policy: QuotePolicy; port: OrderPort; paper: PaperVenue | null; stream: StreamReconciledPort | null;
   budget: MmBudget; mandate: QuotingMandateInfo | null; queue: JournalEvent[]; refusals: Record<string, number>; breakers: SessionRow['breakers']; unwinds: Map<string, { order: QuoteOrder; why: string }>;
   startedAt: number; lastSaveAt: number; lastSlowAt: number; lastTapeAt: number; lastMandateAt: number; lastNote: Record<string, number>; dayBefore: DecStr; priorTotal: DecStr; capital: number; ending: string | null; endState: 'STOPPED' | 'PAUSED' | null;
-  lapses: number; view: MandateView | null; lockCode: string | null; cleanup: boolean; paperSeq: number; riskCache: Map<string, { at: number; d: RiskDecision }>;
+  lapses: number; fundedAt: number | null; view: MandateView | null; lockCode: string | null; cleanup: boolean; paperSeq: number; riskCache: Map<string, { at: number; d: RiskDecision }>;
 }
 
 const dec = (n: number, dp = 10): string => { const t = n.toFixed(dp); return t.includes('.') ? t.replace(/0+$/, '').replace(/\.$/, '') : t; };
@@ -126,7 +126,7 @@ const TITLES: Record<string, [kind: 'state' | 'risk' | 'fill' | 'error' | 'order
   'mm.pulled': ['hold', 'warning', 'Quotes pulled'], 'mm.quoting_again': ['state', 'info', 'Quoting again'], 'mm.stopping': ['stop', 'info', 'Session stopping: quotes cancelled'], 'mm.stopped': ['stop', 'info', 'Session stopped'],
   'mm.breaker': ['risk', 'warning', 'Circuit breaker tripped'], 'mm.halted': ['risk', 'error', 'Session halted: waiting for the owner'], 'mm.resumed': ['state', 'info', 'Session resumed'], 'mm.manual': ['state', 'warning', 'Owner instruction'],
   'mm.hold': ['hold', 'warning', 'Quoting on hold'], 'mm.hold_cleared': ['state', 'info', 'Hold cleared'], 'mm.flat': ['state', 'info', 'Inventory flat'],
-  'mm.fill': ['fill', 'info', 'Fill'], 'mm.reduce': ['order', 'warning', 'Reduce-only unwind'], 'mm.batch_refused': ['risk', 'warning', 'Batch refused'], 'mm.risk_refused': ['risk', 'warning', 'Refused by the risk engine'],
+  'mm.fill': ['fill', 'info', 'Fill'], 'mm.funding': ['fill', 'info', 'Funding settlement'], 'mm.reduce': ['order', 'warning', 'Reduce-only unwind'], 'mm.batch_refused': ['risk', 'warning', 'Batch refused'], 'mm.risk_refused': ['risk', 'warning', 'Refused by the risk engine'],
   'mm.switch_failed': ['error', 'warning', 'Dead man\'s switch not renewed'], 'mm.outcome_unknown': ['error', 'warning', 'Outcome of a batch unknown: reconciling, nothing is resent'], 'mm.reconcile_failed': ['error', 'warning', 'Reconcile failed'],
   'mm.reconciled_order': ['order', 'info', 'Order settled by reconcile'], 'mm.cancel_failed': ['error', 'warning', 'Cancel not confirmed'], 'mm.adopted_order': ['order', 'warning', 'Resting order adopted (left by a previous session)'],
   'mm.foreign_orders': ['risk', 'warning', 'Foreign orders rest on the account'], 'mm.cycle_error': ['error', 'error', 'Engine cycle error'], 'mm.degraded': ['risk', 'warning', 'Rate budget: quoting reduced'], 'mm.order_rejected': ['risk', 'info', 'Order rejected by the venue'],
@@ -163,6 +163,7 @@ export class MmRuntime {
     if (!s.ending) await this.supervise(a, s, now);
 
     if (s.paper) s.paper.step();
+    this.settleFunding(s, now);
     this.limits(s);
     await s.engine.tick();
     await this.flush(a, s);
@@ -261,7 +262,7 @@ export class MmRuntime {
       dayPnlUsd: (t) => D.str(D.add(D.from(dayBefore), D.from(t))),
     };
     const s: Session = { row, mode, agentId: a.id, instrument: inst.id, inst, network, engine: null as never, cfg, policy, port, paper, stream, budget, mandate, queue, refusals: {}, breakers: [], unwinds: new Map(), startedAt: now, lastSaveAt: -Infinity, lastSlowAt: -Infinity, lastTapeAt: -Infinity,
-      lastMandateAt: now, lastNote: {}, dayBefore, priorTotal: prior?.t ?? '0', capital, ending: null, endState: null, lapses: -1, view: null, lockCode: null, cleanup, paperSeq: paper?.state.seq ?? 0, riskCache: new Map() };
+      lastMandateAt: now, lastNote: {}, dayBefore, priorTotal: prior?.t ?? '0', capital, ending: null, endState: null, lapses: -1, fundedAt: null, view: null, lockCode: null, cleanup, paperSeq: paper?.state.seq ?? 0, riskCache: new Map() };
     s.engine = new MmEngine(cfg, policy, { market, orders: port, clock: { now: this.deps.now }, journal: { record: (e) => { queue.push(e); } },
       risk: { killSwitch: () => this.deps.killSwitch(), evaluate: (i) => this.evaluate(a, s, i) },
       mandate: { current: () => this.mandateView(s) } });
@@ -271,6 +272,24 @@ export class MmRuntime {
     return s;
   }
 
+  /**
+   * Funding of the position, into the attribution. LIVE: the settlements the venue's user stream delivered (its own signed
+   * amount). PAPER: at each boundary of the instrument's funding interval, −position × mark × the venue's published rate
+   * (longs pay a positive rate), with the rate and the mark the source last received — ONE settlement per boundary, never a
+   * rate applied to intervals it was not published for; nothing when the source has no ticker.
+   */
+  private settleFunding(s: Session, now: number): void {
+    if (s.stream) { for (const f of s.stream.takeFunding(s.instrument)) s.engine.funding(f.amount); return; }
+    if (!s.paper) return;
+    const step = (s.inst.fundingIntervalSec || 3600) * 1000, boundary = Math.floor(now / step) * step;
+    if (s.fundedAt === null) { s.fundedAt = boundary; return; }
+    if (boundary <= s.fundedAt) return;
+    s.fundedAt = boundary;
+    const f = this.deps.books(s.network).read(s.instrument)?.funding, pos = D.from(s.paper.state.position);
+    if (!f || D.isZero(pos) || now - f.receivedAt > 2 * step) return;
+    const usd = D.str(D.div(D.neg(D.mul(D.mul(pos, D.from(f.mark)), D.from(f.rate))), D.one, 8, 'half_even'));
+    s.paper.funding(usd); s.engine.funding(usd);
+  }
   /** soft and hard inventory limits in base units, from their USD values at the current mid (they follow the price) */
   private limits(s: Session): void {
     const mid = s.engine.status().lastMid ?? null;

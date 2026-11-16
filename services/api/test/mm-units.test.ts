@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createHlStream, D, type HlStreamEvent, type HlWebSocketLike } from '@spw/derivatives';
 import { hlPinnedAssets } from '@spw/derivatives/live';
-import { markoutAddFill, markoutInit, markoutOnMid, pnlInit, pnlMarkToMarket, pnlOnFill, pnlOnMid, pnlReport, type QuotePolicy } from '@spw/trading/mm';
+import { markoutAddFill, markoutInit, markoutOnMid, pnlInit, pnlMarkToMarket, pnlOnFill, pnlOnFunding, pnlOnMid, pnlReport, type QuotePolicy } from '@spw/trading/mm';
 import { spreadInventoryPolicy, mmQuotes, quotePolicyOf } from '../src/agent-runtime/families.ts';
 import { MmBudget, signerQuoteReadWeight } from '../src/mm/budget.ts';
 import { MmEngine } from '../src/mm/engine.ts';
@@ -50,6 +50,9 @@ describe('markouts and attribution — hand-checked', () => {
     expect([r.spreadCaptureUsd, r.inventoryPnlUsd, r.feesUsd, r.fundingUsd, r.totalUsd, r.position, r.fills, r.volumeUsd]).toEqual(['0.08', '0.2', '-0.06', '0', '0.22', '0', 2, '400.2']);
     expect(pnlMarkToMarket(p)).toBe('0.22');                                                      // cash: −199.96 − 0.03 + 200.24 − 0.03 = 0.22
     expect(r.bpsOfVolume).toBe('5.4973');                                                         // 0.22 / 400.2 × 10 000
+    // a funding settlement paid on the way (−0.01): its own line of the attribution, and the identity still holds
+    const f = pnlReport(pnlOnFunding(p, '-0.01'));
+    expect([f.fundingUsd, f.totalUsd, pnlMarkToMarket(pnlOnFunding(p, '-0.01'))]).toEqual(['-0.01', '0.21', '0.21']);
   });
 });
 
@@ -224,6 +227,9 @@ describe('reconcile from the venue\'s user streams', () => {
     now += 2000; await tick();
     expect(calls.filter((c) => c === 'openOrders').length - before).toBe(4);                          // the snapshot after the reconnect
     expect(port.stats()).toMatchObject({ status: 'connected', synced: true });
+    // funding settlements of the stream are handed over once, per instrument (they go into the session's attribution)
+    onEv({ type: 'funding', payment: { instrument: INSTRUMENT, amount: '-0.0123', ts: now } }); onEv({ type: 'funding', payment: { instrument: 'hyperliquid:ETH', amount: '0.5', ts: now } });
+    expect(port.takeFunding(INSTRUMENT)).toEqual([{ amount: '-0.0123', ts: now }]); expect(port.takeFunding(INSTRUMENT)).toEqual([]);
   });
 });
 

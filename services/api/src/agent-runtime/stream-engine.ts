@@ -111,7 +111,8 @@ export class StreamEngine {
       const m = this.markets.get(instrument);
       if (!m) return null;
       const b = m.book?.bids[0], a = m.book?.asks[0];
-      return { status: m.status, top: b && a ? { bid: b[0], bidSize: b[1], ask: a[0], askSize: a[1] } : null, venueTs: m.book?.ts ?? 0, receivedAt: m.bookAt };
+      return { status: m.status, top: b && a ? { bid: b[0], bidSize: b[1], ask: a[0], askSize: a[1] } : null, venueTs: m.book?.ts ?? 0, receivedAt: m.bookAt,
+        funding: m.ticker?.funding != null && m.ticker.mark != null ? { rate: m.ticker.funding, mark: m.ticker.mark, receivedAt: m.tickerAt } : null };
     } };
   }
 

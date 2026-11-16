@@ -30,6 +30,7 @@ export type UserFeedEvent =
   | { type: 'fills'; fills: Fill[]; snapshot: boolean }
   | { type: 'orders'; orders: HlOrderUpdate[] }
   | { type: 'cancelled_by_venue'; orders: { instrument: string; venueOrderId: string }[] }
+  | { type: 'funding'; payment: { instrument: string; amount: string; ts: number } }
   | { type: 'gap'; reason: string }
   | { type: string };
 export interface UserFeed { subscribe(account: string, on: (ev: UserFeedEvent) => void, onStatus: (s: 'connected' | 'reconnecting' | 'stale') => void): () => void }
@@ -40,7 +41,7 @@ export interface UserStreamOptions {
 }
 interface Entry { instrument: string; clientId: string | null; venueOrderId: string; side: 'buy' | 'sell'; price: string; remaining: string; state: 'open' | 'filled' | 'cancelled' | 'rejected'; reduceOnly: boolean; createdAt: number; updatedAt: number }
 export interface UserStreamStats { status: VenueStatus; synced: boolean; rest: { openOrders: number; fills: number; account: number; lookup: number }; streamOrders: number; streamFills: number; audits: number; divergences: number; gaps: number; lastAuditAt: number | null; lastRestAt: number | null }
-export type StreamReconciledPort = OrderPort & { status(): VenueStatus; stats(): UserStreamStats; close(): void; /** the venue cancelled orders by itself (liquidation, the dead man's switch): they are gone */ };
+export type StreamReconciledPort = OrderPort & { status(): VenueStatus; stats(): UserStreamStats; close(): void; /** funding settlements of an instrument the stream delivered since the last call (the venue's signed USDC amount: negative = paid) */ takeFunding(instrument: string): { amount: string; ts: number }[]; /** the venue cancelled orders by itself (liquidation, the dead man's switch): they are gone */ };
 
 const FINAL = new Set(['filled', 'cancelled', 'rejected']);
 
@@ -48,6 +49,7 @@ export function streamReconciled(inner: OrderPort, o: UserStreamOptions): Stream
   const auditEvery = o.auditEveryMs ?? 60_000, restMin = o.restMinIntervalMs ?? 10_000, accountMaxAge = o.accountMaxAgeMs ?? 15_000;
   const byOid = new Map<string, Entry>(), byClient = new Map<string, Entry>();
   const fills = new Map<string, VenueFill>(), reduceIds = new Set<string>();
+  let fundings: { instrument: string; amount: string; ts: number }[] = [];
   let status: VenueStatus = 'idle', synced = false, lastAuditAt = -Infinity, lastRestAt = -Infinity, buffering: UserFeedEvent[] | null = null;
   let everSynced = false;
   let account: AccountRead | null = null, accountAt = -Infinity, accountDirty = true, fillsCursor = 0;
@@ -76,7 +78,8 @@ export function streamReconciled(inner: OrderPort, o: UserStreamOptions): Stream
     } else if (ev.type === 'cancelled_by_venue') for (const c of (ev as Extract<UserFeedEvent, { type: 'cancelled_by_venue' }>).orders) {
       const cur = byOid.get(c.venueOrderId);
       if (cur) put({ ...cur, state: 'cancelled', updatedAt: o.now() });
-    } else if (ev.type === 'gap') { st.gaps += 1; synced = false; }
+    } else if (ev.type === 'funding') { const p = (ev as Extract<UserFeedEvent, { type: 'funding' }>).payment; fundings.push({ instrument: p.instrument, amount: p.amount, ts: p.ts }); if (fundings.length > 200) fundings.shift(); }
+    else if (ev.type === 'gap') { st.gaps += 1; synced = false; }
   };
   const off = o.feed.subscribe(o.account, (ev) => { if (buffering) buffering.push(ev); else apply(ev); }, (s) => { if (s !== 'connected' && status === 'connected') { st.gaps += 1; synced = false; lastRestAt = -Infinity; /* nothing the stream said is trusted any more: the next read is a REST read, at once */ } if (s === 'connected' && status !== 'connected') synced = false; status = s; });
 
@@ -126,6 +129,7 @@ export function streamReconciled(inner: OrderPort, o: UserStreamOptions): Stream
     status: () => status,
     stats: () => ({ status, synced, rest: { ...st.rest }, streamOrders: st.streamOrders, streamFills: st.streamFills, audits: st.audits, divergences: st.divergences, gaps: st.gaps, lastAuditAt: Number.isFinite(lastAuditAt) ? lastAuditAt : null, lastRestAt: Number.isFinite(lastRestAt) ? lastRestAt : null }),
     close: () => off(),
+    takeFunding(instrument) { const mine = fundings.filter((f) => f.instrument === instrument); fundings = fundings.filter((f) => f.instrument !== instrument); return mine.map((f) => ({ amount: f.amount, ts: f.ts })); },
     async submitQuotes(instrument, quotes): Promise<BatchOutcome> {
       const r = await inner.submitQuotes(instrument, quotes);
       if (r.kind === 'done') for (const x of r.results) {
