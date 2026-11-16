@@ -11,7 +11,7 @@ says nothing about whether the strategy is any good.
 
 V11: `--report-version 3` writes the version-3 report (schema/backtest-report-v3.schema.json) with the V11 execution
 model (latency bound, size-dependent slippage, fees and accounts per venue) and ENGINE PARITY (the live engine's
-default sizing and stop rules from research/params/engine-parity.json); `--ledger` is then mandatory. The default
+default sizing and stop rules from research/src/spq/params/engine-parity.json); `--ledger` is then mandatory. The default
 stays version 2, unchanged. Symbols may then be 'BTC@EDGEX' (another venue's store) next to 'BTC' and 'BTC.SPOT'.
 """
 from __future__ import annotations

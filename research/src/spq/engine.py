@@ -38,7 +38,7 @@ class BacktestConfig:
     min_order: float = 0.0            # USD; smaller orders are not sent
     rebalance_threshold: float = 0.0  # do not trade a symbol whose weight is within this distance of its target
     decision_every: int = 1           # ask the strategy every N bars (anchored on the UTC epoch)
-    # v11 engine parity (spq.execution.SpotParity, research/params/engine-parity.json). None = as before.
+    # v11 engine parity (spq.execution.SpotParity, research/src/spq/params/engine-parity.json). None = as before.
     parity: object | None = None
 
     def __post_init__(self):

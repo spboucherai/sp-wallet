@@ -186,7 +186,8 @@ def _validate_perp_meta(meta: dict) -> None:
         if s.endswith(SPOT_LEG_SUFFIX) and s[: -len(SPOT_LEG_SUFFIX)] not in perps:
             raise StrategyError(f"spot leg {s!r} has no perpetual {s[: -len(SPOT_LEG_SUFFIX)]!r} in the universe")
     n_spot = len(u) - len(perps)
-    if meta["max_gross_exposure"] > meta["max_leverage"] * len(perps) + n_spot + WEIGHT_TOL:
+    n_perps = symbol_bounds(meta)[1] if u == GENERIC else len(perps)   # v11: a generic perp universe (['*'])
+    if meta["max_gross_exposure"] > meta["max_leverage"] * n_perps + n_spot + WEIGHT_TOL:
         raise StrategyError("META['max_gross_exposure'] cannot exceed max_leverage x number of perpetuals "
                             "(+ 1 per spot leg)")
 

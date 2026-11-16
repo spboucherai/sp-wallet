@@ -56,7 +56,7 @@ def code_sha256() -> str:
     """Hash of the lab's own source: every src/spq/**/*.py, the parameter files (engine parity, book calibration)
     and the v3 schema."""
     h = hashlib.sha256()
-    files = sorted((LAB_ROOT / "src" / "spq").rglob("*.py")) + sorted((LAB_ROOT / "params").glob("*.json")) + [SCHEMA_V3_PATH]
+    files = sorted((LAB_ROOT / "src" / "spq").rglob("*.py")) + sorted((LAB_ROOT / "src" / "spq" / "params").glob("*.json")) + [SCHEMA_V3_PATH]
     for f in files:
         h.update(str(f.relative_to(LAB_ROOT)).encode() + b"\0" + f.read_bytes() + b"\0")
     return h.hexdigest()

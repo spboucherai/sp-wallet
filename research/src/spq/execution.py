@@ -32,7 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
-PARITY_PATH = Path(__file__).resolve().parents[2] / "params" / "engine-parity.json"
+PARITY_PATH = Path(__file__).resolve().parent / "params" / "engine-parity.json"
 
 
 @dataclass(frozen=True)
@@ -110,7 +110,7 @@ def sqrt_impact_bps(notional: float, sigma: float, usd_volume: float, coefficien
 
 @dataclass(frozen=True)
 class PerpParity:
-    """Defaults of the live perp engine (research/params/engine-parity.json, section "perp")."""
+    """Defaults of the live perp engine (research/src/spq/params/engine-parity.json, section "perp")."""
 
     max_leverage: float
     max_gross_exposure_x: float
@@ -192,7 +192,7 @@ def calibrated_execution(symbols, path=None, **kwargs) -> ExecutionModel:
         profiles[s] = c["depth_profile"]
     rec = cal.get("recorded") or ["?", "?"]
     return ExecutionModel(half_spread_bps=half, book_profiles=profiles,
-                          calibration=f"research/params/{path.name}: order books recorded {rec[0]} to {rec[1]}, "
+                          calibration=f"research/src/spq/params/{path.name}: order books recorded {rec[0]} to {rec[1]}, "
                                       f"{len(profiles)} of {len(list(symbols))} symbols", **kwargs)
 
 
@@ -210,7 +210,7 @@ def load_parity(path=None) -> tuple[PerpParity, SpotParity, dict]:
 
 def parity_report(raw: dict, section: str) -> dict:
     """What a report prints: every value with its file:line and its rule."""
-    return {"file": "research/params/engine-parity.json", "checked_against_commit": raw["checked_against_commit"],
+    return {"file": "research/src/spq/params/engine-parity.json", "checked_against_commit": raw["checked_against_commit"],
             "checked": raw["checked"],
             "parameters": {k: {"value": v["value"], "source": v["source"], "rule": v["rule"]}
                            for k, v in raw[section].items()}}

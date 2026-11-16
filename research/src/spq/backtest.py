@@ -54,7 +54,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--source", default=None, help="candle source (default: coinbase for files)")
     p.add_argument("--engine-parity", action="store_true",
                    help="v11: apply the live spot engine's default sizing rules (exposure cap, per-order and per-day "
-                        "USD caps, orders per day, minimum trade, loss-limit stop) from research/params/engine-parity.json")
+                        "USD caps, orders per day, minimum trade, loss-limit stop) from research/src/spq/params/engine-parity.json")
     p.add_argument("--out", required=True, help="report path (JSON)")
     return p
 
@@ -80,7 +80,7 @@ def main(argv=None) -> int:
         aligned = len(next(iter(data.values())))
         notes = []
         if config.parity is not None:
-            notes.append("v11 engine parity: the live spot engine's DEFAULT rules were applied (research/params/"
+            notes.append("v11 engine parity: the live spot engine's DEFAULT rules were applied (research/src/spq/params/"
                          f"engine-parity.json): {json.dumps(config.parity.to_dict(), sort_keys=True)}; one order per "
                          "engine pass, all orders of a bar filled at its open")
         if any(n != aligned for n in raw_bars.values()):
