@@ -102,7 +102,7 @@ export const venueAgentWireName = (a: Pick<VenueAuthorization, 'agentName' | 'ex
 
 /** Structural validity at approval time. The signer additionally checks the key id, both addresses, the pinned asset table and the acknowledgement hash. */
 export function validateVenueAuthorization(a: VenueAuthorization, nowSec: number): void {
-  if (a.mode !== 'MANUAL_LIVE') throw new Error('MANDATE_LIVE (agents trading derivatives without a passkey per order) is not part of this delivery: only MANUAL_LIVE can be authorized');
+  if (a.mode !== 'MANUAL_LIVE') throw new Error('a venue authorization is always MANUAL_LIVE: trading without a passkey per order (MANDATE_LIVE) is not granted by an authorization but by a derivative mandate that extends one, approved separately with the passkey');
   if (a.account === a.agentAddress) throw new Error('the trading key must differ from the account key');
   if (new Set(a.policy.allowedInstruments).size !== a.policy.allowedInstruments.length) throw new Error('duplicate instrument');
   const order = D.from(a.policy.maxOrderNotional), position = D.from(a.policy.maxPositionNotional), gross = D.from(a.policy.maxGrossExposure);
@@ -197,6 +197,43 @@ export function withinBand(price: DecStr, mid: DecStr, bps: number): boolean {
   const p = D.from(price), m = D.from(mid);
   if (!D.isPos(p) || !D.isPos(m)) return false;
   return D.lte(D.mul(D.abs(D.sub(p, m)), D.from(10000n)), D.mul(D.from(BigInt(bps)), m));
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Price rule of one order against a reference mid — ONE function for the signer (its own Coinbase + Kraken mid) and for the
+// API's pre-check (the venue's mark), so that what the signer will refuse is refused before the passkey prompt (V11, B-07).
+
+/** a resting protective trigger may sit this far from the mid: mid ÷ 3 ≤ trigger ≤ mid × 3 (a typo of one order of magnitude is refused) */
+export const VENUE_TRIGGER_SANITY_RATIO = 3;
+const isStopType = (t: VenueOrder['type']): boolean => t === 'stop_market' || t === 'stop_limit';
+/**
+ * Does the trigger rest (true) or fire at once (false) at this mid? A stop fires when the market moves AGAINST the closing side
+ * (sell stop: at or below its trigger; buy stop: at or above), a take-profit when it moves in its favour.
+ */
+export function venueTriggerRests(o: Pick<VenueOrder, 'side' | 'type' | 'triggerPrice'>, mid: DecStr): boolean {
+  if (o.triggerPrice === null || o.type === 'limit') return false;
+  const t = D.from(o.triggerPrice), m = D.from(mid), below = D.lt(t, m), above = D.gt(t, m);
+  return isStopType(o.type) ? (o.side === 'sell' ? below : above) : (o.side === 'sell' ? above : below);
+}
+/**
+ * Why the prices of an order are not acceptable against `mid`; null when they are.
+ *  - Every order: limit/worst price and trigger price within `bandBps` of the mid (the rule of every version before V11).
+ *  - In addition, and ONLY for a reduce-only trigger order (a stop-loss or a take-profit that can only shrink a position): the
+ *    trigger may rest anywhere on its protective side inside the sanity band, and its limit/worst price is then compared with
+ *    the TRIGGER (where it will execute), not with today's mid. A trigger that would fire at once gets no such latitude.
+ * `reason` ends where the caller names its reference ("… the signer's own BTC price 70000").
+ */
+export function venueOrderPriceError(o: Pick<VenueOrder, 'side' | 'type' | 'price' | 'triggerPrice' | 'reduceOnly'>, mid: DecStr, bandBps: number): { what: 'price' | 'trigger price'; reason: string } | null {
+  const far = (what: 'price' | 'trigger price', px: DecStr) => ({ what, reason: `${what} ${canon(px)} is more than ${bandBps} bps away from` });
+  const priceOk = withinBand(o.price, mid, bandBps), triggerOk = o.triggerPrice === null || withinBand(o.triggerPrice, mid, bandBps);
+  if (priceOk && triggerOk) return null;
+  if (o.triggerPrice === null || o.type === 'limit' || !o.reduceOnly) return !priceOk ? far('price', o.price) : far('trigger price', o.triggerPrice!);
+  // a reduce-only trigger order outside the plain band
+  if (!venueTriggerRests(o, mid)) return !triggerOk ? { what: 'trigger price', reason: `trigger price ${canon(o.triggerPrice)} would fire at once and is more than ${bandBps} bps away from` } : far('price', o.price);
+  const t = D.from(o.triggerPrice), m = D.from(mid), k = D.from(BigInt(VENUE_TRIGGER_SANITY_RATIO));
+  if (!D.isPos(t) || !D.isPos(m) || D.gt(t, D.mul(m, k)) || D.lt(D.mul(t, k), m)) return { what: 'trigger price', reason: `trigger price ${canon(o.triggerPrice)} is outside the sanity band (÷${VENUE_TRIGGER_SANITY_RATIO} to ×${VENUE_TRIGGER_SANITY_RATIO}) around` };
+  if (!withinBand(o.price, o.triggerPrice, bandBps)) return { what: 'price', reason: `price ${canon(o.price)} is more than ${bandBps} bps away from its own trigger price ${canon(o.triggerPrice)}, which rests against` };
+  return null;
 }
 
 /** the serialization above, for the other canonical objects of live trading (mandate.ts) */

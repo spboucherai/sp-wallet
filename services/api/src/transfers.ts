@@ -14,6 +14,13 @@ import { listCreds } from './auth.ts';
 import { addressFor, signer } from './signer-client.ts';
 import type { BridgeState } from './bridge.ts';
 import { xswapView, type XswapState } from './xswap-state.ts';
+import { svText, type SvCode, type SvParams } from './sv-texts.ts';
+import { existingFor, idemOf, type QuoteRecord } from './prepare-common.ts';
+import { executionOf } from './exec-status.ts';
+
+/** The patch that records WHY a proposal ended: English sentence (API clients), code and parameters (the UI translates them). */
+export const failure = (code: SvCode | (string & {}), params: SvParams = {}, message?: string) => ({
+  error: (message ?? svText(code as SvCode, params)).slice(0, 300), error_code: code, error_params: Object.keys(params).length ? sql.json(params as never) : null });
 
 export interface ProposalRow {
   id: string; state: ProposalState; version: number; network: string; asset: string; symbol: string; decimals: number; amount: string;
@@ -21,6 +28,10 @@ export interface ProposalRow {
   kind: 'transfer' | 'swap' | 'bridge' | 'xswap' | 'gmx' /* v8: a GMX order action, followed by derivatives/gmx-exec.ts */; xswap?: XswapState | null; bridge: BridgeState | null; swap: { provider: string; toAsset: string; toSymbol: string; toDecimals: number; expectedOut: string; minOut: string; slippageBps: number; needsApproval: boolean; simulated: boolean } | null;
   pre_raw: string | null; pre_txid: string | null; pre_state: string | null; out_amount: string | null; fee_estimate: string | null; max_fee: string | null; warnings: string[];
   intent: Intent | null; intent_hash: string | null; raw: string | null; txid: string | null; block_ref: string | null; confirmations: number; error: string | null;
+  /** v11: machine-readable reason behind `error` (the UI translates it; `error` stays the English fallback for API clients) */
+  error_code?: string | null; error_params?: Record<string, string | number> | null;
+  /** v11: the quote the owner was shown, next to the firm figures of the preparation (prepare-common.ts) */
+  quote_ref?: QuoteRecord | null;
   created_at: Date; updated_at: Date; expires_at: Date | null; broadcast_at: Date | null; last_broadcast_at: Date | null; finalized_at: Date | null;
 }
 
@@ -32,8 +43,8 @@ export function view(p: ProposalRow) {
     feeEstimate: p.fee_estimate, maxFee: p.max_fee, feeSymbol: n.native.symbol, feeDecimals: n.native.decimals,
     feeDisplay: p.fee_estimate ? formatUnits(BigInt(p.fee_estimate), n.native.decimals) : null,
     maxFeeDisplay: p.max_fee ? formatUnits(BigInt(p.max_fee), n.native.decimals) : null,
-    warnings: p.warnings, intentHash: p.intent_hash, txid: p.txid, explorer: p.txid ? n.explorerTx + p.txid : null,
-    confirmations: p.confirmations, error: p.error, createdAt: p.created_at, updatedAt: p.updated_at, expiresAt: p.expires_at,
+    warnings: p.warnings, intentHash: p.intent_hash, txid: p.txid, explorer: p.txid && p.state !== 'not_broadcast' ? n.explorerTx + p.txid : null,
+    confirmations: p.confirmations, error: p.error, errorCode: p.error_code ?? null, errorParams: p.error_params ?? null, createdAt: p.created_at, updatedAt: p.updated_at, expiresAt: p.expires_at,
     broadcastAt: p.broadcast_at, finalizedAt: p.finalized_at,
     kind: p.kind ?? 'transfer',
     swap: p.swap ? { provider: p.swap.provider, toAsset: p.swap.toAsset, toSymbol: p.swap.toSymbol, slippageBps: p.swap.slippageBps, needsApproval: p.swap.needsApproval, simulated: p.swap.simulated,
@@ -44,8 +55,14 @@ export function view(p: ProposalRow) {
       detail: (p.swap as { detail?: Record<string, unknown> }).detail ?? null } : null,
     bridge: p.bridge ? bridgeView(p, p.bridge) : null,
     xswap: p.xswap ? xswapView(p, p.xswap) : null,
+    // v11, additive: one status shape for every kind (exec-status.ts), and the quote the owner was shown next to the firm figures
+    execution: executionOf(p),
+    quote: p.quote_ref ? { ...p.quote_ref, quotedOutDisplay: formatUnits(BigInt(p.quote_ref.quotedOut), outDecimals(p)), firmOutDisplay: formatUnits(BigInt(p.quote_ref.firmOut), outDecimals(p)) } : null,
   };
 }
+
+/** Decimals of what the proposal delivers: the destination asset of a swap, the asset itself for a transfer or a CCTP transfer. */
+const outDecimals = (p: ProposalRow): number => p.xswap?.toDecimals ?? p.swap?.toDecimals ?? p.decimals;
 
 /** A cross-chain transfer as shown to the owner: route, Circle's fee, progress of the second leg. Message bytes stay server-side. */
 function bridgeView(p: ProposalRow, b: BridgeState) {
@@ -59,7 +76,7 @@ function bridgeView(p: ProposalRow, b: BridgeState) {
     receivedDisplay: b.phase === 'done' && (p.out_amount ?? b.minted) ? formatUnits(BigInt((p.out_amount ?? b.minted)!), p.decimals) : null,
     destGasSymbol: d.native.symbol, destGasNeedDisplay: formatUnits(BigInt(b.destGasNeed), d.native.decimals), needsApproval: b.needsApproval, simulated: b.simulated,
     approvalTxid: p.pre_txid, approvalState: p.pre_raw ? (p.pre_state ?? 'pending') : null,
-    hold: b.hold ?? null, holdDetail: b.holdDetail ?? null, irisStatus: b.irisStatus ?? null, delayReason: b.delayReason ?? null, polls: b.polls, attested: !!b.message,
+    hold: b.hold ?? null, holdDetail: b.holdDetail ?? null, holdCode: b.hold ? b.holdCode ?? null : null, holdParams: b.hold ? b.holdParams ?? null : null, irisStatus: b.irisStatus ?? null, delayReason: b.delayReason ?? null, polls: b.polls, attested: !!b.message,
     mintTxid: b.mintTxid ?? b.mint?.txid ?? null, mintExplorer: (b.mintTxid ?? b.mint?.txid) ? d.explorerTx + (b.mintTxid ?? b.mint!.txid) : null, mintedBy: b.mintedBy ?? null,
     canFinish: !['failed', 'review', 'done', 'burning'].includes(stage), needsPasskey: b.phase === 'mint_failed',
     sol: b.sol ? solBridgeView(p, b) : null };
@@ -84,6 +101,8 @@ function solBridgeView(p: ProposalRow, b: BridgeState) {
 /** Optimistic state change: only succeeds from the expected state and version. */
 export async function move(p: ProposalRow, to: ProposalState, patch: Record<string, unknown> = {}): Promise<ProposalRow> {
   assertTransition(p.state, to);
+  // an `error` written without a code (or cleared) never keeps the code of an earlier one
+  if ('error' in patch && !('error_code' in patch)) patch = { ...patch, error_code: null, error_params: null };
   const [r] = await sql<ProposalRow[]>`update proposals set ${sql({ ...patch, state: to, version: p.version + 1, updated_at: new Date() } as never)}
     where id = ${p.id} and state = ${p.state} and version = ${p.version} returning *`;
   if (!r) throw new UserError('conflict', 'proposal changed concurrently; reload', 409);
@@ -117,9 +136,10 @@ export function transferRoutes(app: FastifyInstance): void {
   app.post('/api/v1/transfers/proposals', async (req) => {
     const idem = String(req.headers['idempotency-key'] ?? '');
     if (!/^[A-Za-z0-9-]{16,64}$/.test(idem)) throw new UserError('idempotency', 'Idempotency-Key header required');
-    const [dup] = await sql<ProposalRow[]>`select * from proposals where idempotency_key = ${idem}`;
+    const b = Create.parse(req.body), key = idemOf(req.headers, 'transfer', b);
+    // the same key answers the same draft; since v11 the same key with ANOTHER body is refused instead of answering a transfer that was not asked for
+    const dup = await existingFor(key);
     if (dup) return view(dup);
-    const b = Create.parse(req.body);
     const n = getNetwork(b.network);
     const asset = (() => { try { return getAsset(n.id, b.asset); } catch { throw new UserError('unsupported_asset', 'asset is not supported on this network'); } })();
     let to: string, amount: bigint;
@@ -143,14 +163,14 @@ export function transferRoutes(app: FastifyInstance): void {
     if (!verdict.ok) throw new UserError('policy', verdict.reason, 422);
     const warnings = [...prep.warnings, ...(await destinationWarnings(n.id, to))];
     const id = randomUUID();
-    const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, state, network, asset, symbol, decimals, amount, from_addr, to_addr, note, memo, fee_estimate, max_fee, warnings, expires_at)
-      values (${id}, ${idem}, 'draft', ${n.id}, ${asset.id}, ${asset.symbol}, ${asset.decimals}, ${amount.toString()}, ${from}, ${to}, ${b.note}, ${memo ?? null}, ${prep.feeEstimate.toString()}, ${prep.maxFee.toString()}, ${sql.json(warnings)}, now() + interval '15 minutes') returning *`;
+    const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, request_hash, state, network, asset, symbol, decimals, amount, from_addr, to_addr, note, memo, fee_estimate, max_fee, warnings, expires_at)
+      values (${id}, ${idem}, ${key.hash}, 'draft', ${n.id}, ${asset.id}, ${asset.symbol}, ${asset.decimals}, ${amount.toString()}, ${from}, ${to}, ${b.note}, ${memo ?? null}, ${prep.feeEstimate.toString()}, ${prep.maxFee.toString()}, ${sql.json(warnings)}, now() + interval '15 minutes') returning *`;
     await audit('transfer.draft', 'owner', { id, network: n.id, symbol: asset.symbol, amount: amount.toString(), to });
     return view(p!);
   });
 
   app.get('/api/v1/transfers/proposals/:id', async (req) => view(await load((req.params as { id: string }).id)));
-  app.get('/api/v1/transfers/:id/status', async (req) => { const v = view(await load((req.params as { id: string }).id)); return { id: v.id, state: v.state, txid: v.txid, confirmations: v.confirmations, error: v.error, explorer: v.explorer }; });
+  app.get('/api/v1/transfers/:id/status', async (req) => { const v = view(await load((req.params as { id: string }).id)); return { id: v.id, state: v.state, txid: v.txid, confirmations: v.confirmations, error: v.error, errorCode: v.errorCode, errorParams: v.errorParams, explorer: v.explorer, kind: v.kind, execution: v.execution }; });
 
   // freeze the exact chain parameters, re-simulate, and issue the approval challenge = intent hash
   app.post('/api/v1/transfers/proposals/:id/request-approval', async (req) => {
@@ -201,7 +221,7 @@ export function transferRoutes(app: FastifyInstance): void {
     const body = z.object({ assertion: z.record(z.string(), z.unknown()) }).parse(req.body);
     let p = await load((req.params as { id: string }).id);
     if (p.state !== 'pending_approval' || !p.intent) throw new UserError('bad_state', `proposal is ${p.state}`, 409);
-    if (p.expires_at && p.expires_at.getTime() < Date.now()) { await move(p, 'expired', { error: 'approval window expired' }); throw new UserError('expired', 'approval window expired; start again', 410); }
+    if (p.expires_at && p.expires_at.getTime() < Date.now()) { await move(p, 'expired', failure('approval_expired')); throw new UserError('expired', 'approval window expired; start again', 410); }
     // one transfer or swap in flight per network, checked again at the moment of approval
     const [busy] = await sql<{ id: string }[]>`select id from proposals where network = ${p.network} and id <> ${p.id} and state in ('approved', 'signed', 'broadcast') limit 1`;
     if (busy) throw new UserError('pending_tx', 'a previous transfer or swap on this network is not confirmed yet', 409);
@@ -211,8 +231,8 @@ export function transferRoutes(app: FastifyInstance): void {
     p = await move(p, 'approved');
     let signed: { raw: string; txid: string; hash: string; pre?: { raw: string; txid: string } };
     try { signed = await signer.sign(p.intent, body.assertion, p.aux ?? undefined); }
-    catch (e) { await move(p, 'failed', { error: (e as Error).message.slice(0, 300) }); throw e; }
-    if (signed.hash !== p.intent_hash) { await move(p, 'failed', { error: 'signer hash mismatch' }); throw new UserError('hash_mismatch', 'signer returned a different intent hash', 500); }
+    catch (e) { const code = (e as { code?: string }).code; await move(p, 'failed', failure(code && /^signer_/.test(code) ? code : 'signer_refused', { detail: (e as Error).message.slice(0, 200) }, (e as Error).message)); throw e; }
+    if (signed.hash !== p.intent_hash) { await move(p, 'failed', failure('signer_hash_mismatch')); throw new UserError('hash_mismatch', 'signer returned a different intent hash', 500); }
     p = await move(p, 'signed', { raw: signed.raw, txid: signed.txid, ...(signed.pre ? { pre_raw: signed.pre.raw, pre_txid: signed.pre.txid } : {}) });
     if (p.kind === 'swap') { const { advanceSwap } = await import('./swap-exec.ts'); return view(await advanceSwap(p)); }
     if (p.kind === 'bridge') { const { advanceBridgeBurn } = await import('./bridge.ts'); return view(await advanceBridgeBurn(p)); }
@@ -223,19 +243,22 @@ export function transferRoutes(app: FastifyInstance): void {
   app.post('/api/v1/transfers/proposals/:id/reject', async (req) => {
     const p = await load((req.params as { id: string }).id);
     if (p.state !== 'draft' && p.state !== 'pending_approval') throw new UserError('bad_state', `proposal is ${p.state}`, 409);
-    return view(await move(p, 'rejected', { error: 'rejected by owner' }));
+    return view(await move(p, 'rejected', failure('rejected_by_owner')));
   });
 }
 
 /** Relay signed bytes. A returned hash is not success: state stays "broadcast" until the chain confirms. */
 export async function broadcastNow(p: ProposalRow): Promise<ProposalRow> {
   if (!p.raw) return p;
-  if (!config.broadcast) return move(p, 'broadcast', { broadcast_at: new Date(), last_broadcast_at: new Date(), error: 'broadcast disabled (test mode)' });
+  // v11 (B2): broadcasting disabled = the transaction was signed and deliberately NOT relayed. That is its own terminal state:
+  // it is not "broadcast" (nothing left this server), it never confirms, and it does not hold the network's in-flight slot.
+  if (!config.broadcast) return move(p, 'not_broadcast', failure('broadcast_disabled'));
   try {
     await adapterFor(p.network).broadcast(p.raw);
     return await move(p, 'broadcast', { broadcast_at: new Date(), last_broadcast_at: new Date(), error: null });
   } catch (e) {
-    await sql`update proposals set error = ${'broadcast attempt failed: ' + (e as Error).message.slice(0, 200)}, updated_at = now() where id = ${p.id}`;
+    const f = failure('broadcast_attempt_failed', { detail: (e as Error).message.slice(0, 200) });
+    await sql`update proposals set error = ${f.error}, error_code = ${f.error_code}, error_params = ${f.error_params}, updated_at = now() where id = ${p.id}`;
     return (await sql<ProposalRow[]>`select * from proposals where id = ${p.id}`)[0]!;
   }
 }

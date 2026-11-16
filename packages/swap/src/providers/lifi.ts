@@ -173,9 +173,9 @@ function toQuote(route: LifiRoute, req: SwapQuoteRequest, now: number): SwapQuot
   const sameChain = req.from.network === req.to.network && steps.every((s) => s.kind === 'swap');
   return {
     id: `${ID}:${route.id}`, provider: ID, request: req, steps, amountOut, minAmountOut, fees,
-    estimatedSeconds: Math.ceil(step.estimate.executionDuration), priceImpactBps: null, expiresAt: now + VALIDITY_MS,
+    estimatedSeconds: Math.ceil(step.estimate.executionDuration), priceImpactBps: null, quotedAt: now, expiresAt: now + VALIDITY_MS,
     firmness: 'indicative',
-    executability: { class: 'opaque', reason: 'LI.FI builds the calldata for its Diamond contract (bridge and DEX facets, per-bridge data); the signer can pin the target contract and the exact allowance but cannot recompute the recipient, the minimum output or the bridge payload by itself' },
+    executability: { class: 'opaque', code: 'lifi_diamond', reason: 'LI.FI builds the calldata for its Diamond contract (bridge and DEX facets, per-bridge data); the signer can pin the target contract and the exact allowance but cannot recompute the recipient, the minimum output or the bridge payload by itself' },
     // same chain: one transaction that reverts as a whole. Cross-chain: refund depends on the bridge LI.FI picked (status REFUNDED / PARTIAL), not stated per route
     refundable: sameChain ? true : null, atomic: sameChain,
     raw: route,

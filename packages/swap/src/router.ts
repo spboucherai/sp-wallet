@@ -37,7 +37,7 @@ export class SwapRouter {
       request: { ...first.request, to: last.request.to, recipient: last.request.recipient }, steps: legs.flatMap((l) => l.steps), fees: legs.flatMap((l) => l.fees),
       estimatedSeconds: legs.every((l) => l.estimatedSeconds !== null) ? legs.reduce((s, l) => s + l.estimatedSeconds!, 0) : null,
       priceImpactBps: legs.every((l) => l.priceImpactBps !== null) ? legs.reduce((s, l) => s + l.priceImpactBps!, 0) : null,
-      expiresAt: Math.min(...legs.map((l) => l.expiresAt)), executability: legs.map((l) => l.executability).reduce(worst), atomic: false,
+      quotedAt: Math.min(...legs.map((l) => l.quotedAt)), expiresAt: Math.min(...legs.map((l) => l.expiresAt)), executability: legs.map((l) => l.executability).reduce(worst), atomic: false,
       refundable: legs.some((l) => l.refundable === false) ? false : legs.some((l) => l.refundable === null) ? null : true };
     const valuation = valueQuote(composite, this.value);
     return { id: composite.id, legs, providers: legs.map((l) => l.provider), path: [first.request.from, ...legs.map((l) => l.request.to)], amountIn: first.request.amountIn,

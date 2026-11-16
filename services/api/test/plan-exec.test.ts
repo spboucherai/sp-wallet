@@ -300,3 +300,66 @@ describe('execution as a saga', () => {
     expect((await api('POST', `/api/v1/plans/${three.id}/prepare`, {})).json.plan).toMatchObject({ state: 'paused', pause: { code: 'no_funds' } });
   });
 });
+
+// ── v11 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+describe('v11 — a plan resumes instead of sticking on `conflict` (B5), and speaks in codes (B3)', () => {
+  it('B5: the process stopped between "proposal created" and "plan saved": the next preparation finds that proposal under the same key and attaches it', async () => {
+    const { r } = await create('10'); const id = r.json.id as string;
+    const saved = (await sql`select legs, meta from plans where id = ${id}`)[0];
+    const first = (await api('POST', `/api/v1/plans/${id}/prepare`, {})).json;
+    expect(first.proposal.state).toBe('pending_approval');
+    const key = (await row(first.proposal.id)).idempotency_key;
+    // rewind the PLAN to what it was before the proposal was attached — the proposal itself exists: exactly the state a crash leaves
+    await sql`update plans set legs = ${sql.json(saved.legs)}, meta = ${sql.json(saved.meta)} where id = ${id}`;
+    expect((await getPlan(id)).legs[0]).toMatchObject({ state: 'ready', proposalId: null, attempts: [] });
+    const again = await api('POST', `/api/v1/plans/${id}/prepare`, {});
+    expect(again.status, JSON.stringify(again.json).slice(0, 300)).toBe(200);                              // before v11: 409 conflict, on every retry, for ever
+    expect(again.json.proposal.id).toBe(first.proposal.id);                                               // the SAME proposal: no second one was created
+    expect(again.json.options.challenge).toBe(first.options.challenge);
+    expect(await sql`select 1 from proposals where idempotency_key = ${key}`).toHaveLength(1);
+    expect(again.json.plan).toMatchObject({ state: 'active', next: 'approve' }); expect(again.json.plan.legs[0]).toMatchObject({ state: 'proposed', proposalId: first.proposal.id, attempts: [{ proposalId: first.proposal.id }] });
+    // and the plan goes on from there: the resumed challenge approves the leg
+    expect((await approve(again.json)).status).toBe(200);
+    for (let k = 0; k < 4 && (await row(first.proposal.id)).state !== 'finalized'; k++) { chains.base!.mine(); await tick(); }
+    expect((await getPlan(id)).legs[0].state).toBe('in_flight');
+    // the leg of a plan carries the unified execution status of its proposal; a leg not started yet is one pending step
+    const p = await getPlan(id);
+    expect(p.legs[0].execution).toMatchObject({ kind: 'bridge', steps: [{ kind: 'approval', state: 'confirmed' }, { kind: 'burn', state: 'confirmed' }, { kind: 'attestation' }, { kind: 'mint', state: 'pending' }] });
+    expect(p.legs[1].execution).toMatchObject({ state: 'pending', steps: [{ kind: 'swap', network: 'arbitrum', state: 'pending', txid: null }] });
+    iris.messages.set((await row(first.proposal.id)).txid, attested((await row(first.proposal.id)).intent)); await tick(); chains.arbitrum!.mine(); await tick(); await tick();
+    expect((await getPlan(id)).legs[0]).toMatchObject({ state: 'settled', execution: { state: 'confirmed' } });
+    await api('POST', `/api/v1/plans/${id}/stop`, {});
+  });
+
+  it('B5: when the orphan proposal has expired meanwhile, the plan attaches it, sees it expired and prepares a fresh one — it never loops', async () => {
+    const { r } = await create('10'); const id = r.json.id as string;
+    const saved = (await sql`select legs, meta from plans where id = ${id}`)[0];
+    const first = (await api('POST', `/api/v1/plans/${id}/prepare`, {})).json;
+    await sql`update plans set legs = ${sql.json(saved.legs)}, meta = ${sql.json(saved.meta)} where id = ${id}`;
+    await sql`update proposals set expires_at = now() - interval '1 minute' where id = ${first.proposal.id}`; await worker.expireStale();
+    const again = (await api('POST', `/api/v1/plans/${id}/prepare`, {})).json;                             // answers the expired proposal: no challenge
+    expect(again.proposal).toMatchObject({ id: first.proposal.id, state: 'expired' }); expect(again.options).toBeNull();
+    const p = await getPlan(id);                                                                           // reading the plan advances it: the attempt is recorded as expired, the leg is ready again
+    expect(p).toMatchObject({ state: 'active', next: 'prepare' }); expect(p.legs[0].attempts).toMatchObject([{ proposalId: first.proposal.id, outcome: 'expired', errorCode: 'expired_before_approval' }]);
+    const fresh = (await api('POST', `/api/v1/plans/${id}/prepare`, {})).json;
+    expect(fresh.proposal.id).not.toBe(first.proposal.id); expect(fresh.proposal.state).toBe('pending_approval');
+    expect((await row(fresh.proposal.id)).idempotency_key).toMatch(/-0-0-1$/);                              // the attempt counter moved: a new key
+    await api('POST', `/api/v1/plans/${id}/stop`, {});
+  });
+
+  it('B3: pauses carry a code with parameters, and the reason of the proposal that ended', async () => {
+    const { r } = await create('10', { floor: '0.9' }); const id = r.json.id as string;
+    const a = (await api('POST', `/api/v1/plans/${id}/prepare`, {})).json;
+    await api('POST', `/api/v1/transfers/proposals/${a.proposal.id}/reject`, {});
+    expect((await getPlan(id)).pause).toMatchObject({ code: 'refused', message: 'rejected by owner', reason: { code: 'rejected_by_owner' } });
+    await api('POST', `/api/v1/plans/${id}/retry`, { floor: '5' });                                         // a floor above what the route can give
+    const floor = (await api('POST', `/api/v1/plans/${id}/prepare`, {})).json.plan.pause;
+    expect(floor).toMatchObject({ code: 'floor', params: { estimate: '1', sym: 'LINK', floor: '5' } });
+    expect(floor.message).toBe('the final result estimated now is 1 LINK, below the floor of 5. Nothing was prepared; the funds are where they were');
+    await api('POST', `/api/v1/plans/${id}/retry`, { floor: null });
+    balances.set(assetKey(USDC_B), 0n);
+    try { expect((await api('POST', `/api/v1/plans/${id}/prepare`, {})).json.plan.pause).toMatchObject({ code: 'no_funds', params: { sym: 'USDC', net: 'Base' }, message: 'the wallet no longer holds the USDC of this plan on Base' }); }
+    finally { balances.set(assetKey(USDC_B), 100_000000n); }
+    await api('POST', `/api/v1/plans/${id}/stop`, {});
+  });
+});

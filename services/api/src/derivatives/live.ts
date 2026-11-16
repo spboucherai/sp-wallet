@@ -1,7 +1,7 @@
 // Controlled live trading — wiring for the rest of the API service: the process-wide execution engine on the real signer
 // client and the real venue, and its reconciliation worker. Disabled by construction: an account trades only after the owner's
 // passkey approved a venue authorization on the signer, and mainnet additionally needs SPW_DERIV_LIVE_MAINNET=on.
-import { listCreds } from '../auth.ts';
+import { listCreds, verifyOwnerAssertion } from '../auth.ts';
 import { config } from '../config.ts';
 import { signer } from '../signer-client.ts';
 import { loop } from '../worker.ts';
@@ -24,6 +24,8 @@ export function createLive(o: Partial<LiveDeps> & { fetch?: typeof fetch } = {})
     ...(o.mandateSigner ? { mandateSigner: o.mandateSigner } : o.signer ? {} : { mandateSigner: signer }), mandateMainnetEnabled: o.mandateMainnetEnabled ?? mandateMainnetEnabled,
     credentials: o.credentials ?? (async () => (await listCreds()).map((c) => ({ id: c.id, transports: c.transports }))),
     ...(o.confirmDelayMs !== undefined ? { confirmDelayMs: o.confirmDelayMs } : {}),
+    // V11: loosening an API-side limit or lifting a halt needs a passkey assertion; a test that injects its own signer port injects its own verifier
+    ...(o.verifyOwner ? { verifyOwner: o.verifyOwner } : o.signer ? {} : { verifyOwner: verifyOwnerAssertion }),
   });
 }
 

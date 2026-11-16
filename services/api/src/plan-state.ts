@@ -5,10 +5,14 @@
 // A plan never signs, never approves and never holds funds: each leg is an ordinary proposal (swap, CCTP transfer, THORChain
 // swap) created when the previous leg has SETTLED, sized on what was actually received, approved with the owner's passkey.
 import type { PlanLegSpec } from '@spw/swap';
+import { svText, type SvParams } from './sv-texts.ts';
+
+/** v11 (B3): why something stopped, as a code of sv-texts.ts (or an API error code) + parameters; the English sentence stays next to it */
+export interface Reason { code: string; params?: SvParams }
 
 export type PlanStatus = 'active' | 'paused' | 'done' | 'stopped';
 export type LegStatus = 'pending' | 'ready' | 'proposed' | 'in_flight' | 'settled';
-export interface LegAttempt { proposalId: string; amountIn: string; at: number; outcome?: 'settled' | 'failed' | 'rejected' | 'expired' | 'refunded'; error?: string | null }
+export interface LegAttempt { proposalId: string; amountIn: string; at: number; outcome?: 'settled' | 'failed' | 'rejected' | 'expired' | 'refunded'; error?: string | null; errorCode?: string | null; errorParams?: SvParams | null }
 export interface PlanLeg {
   spec: PlanLegSpec; state: LegStatus;
   /** what the plan showed when it was started (or re-planned): base units */
@@ -17,7 +21,9 @@ export interface PlanLeg {
   /** what really happened */
   actualIn?: string; actualOut?: string; settledAt?: number;
 }
-export interface PlanPause { code: string; message: string; at: number; leg: number }
+export interface PlanPause { code: string; message: string; at: number; leg: number;
+  /** v11: parameters of the pause itself (`no_funds`, `floor`) and, for a step that ended, the reason of its proposal */
+  params?: SvParams | null; reason?: Reason | null }
 export interface PlanDoc {
   id: string; state: PlanStatus; current: number; legs: PlanLeg[];
   from: { network: string; asset: string }; to: { network: string; asset: string }; amountIn: string; slippageBps: number;
@@ -38,23 +44,28 @@ export type LegOutcome =
   | { kind: 'waiting_approval' } | { kind: 'in_flight' }
   | { kind: 'settled'; received: bigint }
   /** the proposal ended without moving the funds forward; `returned` = a THORChain refund came back (source asset, base units) */
-  | { kind: 'failed'; reason: string; outcome: 'failed' | 'rejected' | 'expired' | 'refunded'; returned?: bigint };
+  | { kind: 'failed'; reason: string; outcome: 'failed' | 'rejected' | 'expired' | 'refunded'; returned?: bigint; why?: Reason };
 
 export interface ProposalFacts {
-  state: string; kind: string; confirmations: number; minConf: number; error: string | null; out_amount: string | null;
+  state: string; kind: string; confirmations: number; minConf: number; error: string | null; out_amount: string | null; error_code?: string | null; error_params?: SvParams | null;
   bridge?: { phase: string } | null; xswap?: { phase: string; received?: string; refunded?: string } | null;
 }
 /** Read a proposal as a leg outcome. "Settled" needs the amount actually received, read from the chain by the existing flows. */
 export function legOutcome(p: ProposalFacts): LegOutcome {
   if (p.state === 'draft' || p.state === 'pending_approval') return { kind: 'waiting_approval' };
-  if (p.state === 'rejected') return { kind: 'failed', outcome: 'rejected', reason: p.error ?? 'rejected by owner' };
-  if (p.state === 'expired') return { kind: 'failed', outcome: 'expired', reason: p.error ?? 'expired before approval' };
-  if (p.state === 'failed' || p.state === 'replaced') return { kind: 'failed', outcome: 'failed', reason: p.error ?? `the transaction ${p.state}` };
+  // the proposal's own reason code travels with the sentence (v11): the plan screen translates it
+  // (a row written before v11 has a sentence and no code: no reason is invented for it, the sentence is shown as it is)
+  const why = (fallback: Reason): Reason | undefined => (p.error_code ? { code: p.error_code, ...(p.error_params ? { params: p.error_params } : {}) } : p.error ? undefined : fallback);
+  if (p.state === 'rejected') return { kind: 'failed', outcome: 'rejected', reason: p.error ?? svText('rejected_by_owner'), why: why({ code: 'rejected_by_owner' }) };
+  if (p.state === 'expired') return { kind: 'failed', outcome: 'expired', reason: p.error ?? svText('expired_before_approval'), why: why({ code: 'expired_before_approval' }) };
+  if (p.state === 'failed' || p.state === 'replaced') return { kind: 'failed', outcome: 'failed', reason: p.error ?? svText('plan_tx_ended', { state: p.state }), why: why({ code: 'plan_tx_ended', params: { state: p.state } }) };
+  // v11 (B2): signed on a server that does not broadcast — the step did not move the funds and never will; before, it stayed "in flight" for ever
+  if (p.state === 'not_broadcast') return { kind: 'failed', outcome: 'failed', reason: p.error ?? svText('broadcast_disabled'), why: { code: 'broadcast_disabled' } };
   const mined = p.state === 'finalized' || (p.state === 'confirming' && p.confirmations >= p.minConf);
   if (p.kind === 'bridge') return p.bridge?.phase === 'done' && p.out_amount !== null ? { kind: 'settled', received: BigInt(p.out_amount) } : { kind: 'in_flight' };
   if (p.kind === 'xswap') {
     if (p.xswap?.phase === 'received' && p.xswap.received !== undefined) return { kind: 'settled', received: BigInt(p.xswap.received) };
-    if (p.xswap?.phase === 'refunded') return { kind: 'failed', outcome: 'refunded', reason: 'THORChain refunded the swap: the source asset came back to the wallet, less the network fees', returned: BigInt(p.xswap.refunded ?? '0') };
+    if (p.xswap?.phase === 'refunded') return { kind: 'failed', outcome: 'refunded', reason: svText('plan_refunded'), why: { code: 'plan_refunded' }, returned: BigInt(p.xswap.refunded ?? '0') };
     return { kind: 'in_flight' };
   }
   // same-network swap: mined deep enough AND the router's own event (or the Solana balance change) was read
@@ -103,17 +114,17 @@ export function planAdvance(p: PlanDoc, o: LegOutcome, now: number): Step {
       events: [...events, ['plan.step_ready', { id: p.id, step: k + 2, steps: p.legs.length }]] };
   }
   // the proposal ended without moving the funds forward: they are where they were (or came back, for a THORChain refund)
-  const legs = setLeg(p, k, { state: 'ready', proposalId: null, attempts: lastAttempt(l, { outcome: o.outcome, error: o.reason }) });
+  const legs = setLeg(p, k, { state: 'ready', proposalId: null, attempts: lastAttempt(l, { outcome: o.outcome, error: o.reason, errorCode: o.why?.code ?? null, errorParams: o.why?.params ?? null }) });
   const holding = o.returned !== undefined ? { ...p.holding, amount: o.returned.toString() } : p.holding;
   // an approval window that simply ran out is not a failure: the leg is ready again, the plan stays active
   if (o.outcome === 'expired') return { plan: touch(p, now, { legs, holding }), events: [['plan.step_expired', { id: p.id, step: k + 1 }]] };
-  return planPause(touch(p, now, { legs, holding }), o.outcome === 'rejected' ? 'refused' : o.outcome === 'refunded' ? 'refunded' : 'leg_failed', o.reason, now);
+  return planPause(touch(p, now, { legs, holding }), o.outcome === 'rejected' ? 'refused' : o.outcome === 'refunded' ? 'refunded' : 'leg_failed', o.reason, now, { reason: o.why ?? null });
 }
 
 /** Pause: nothing more happens until the owner chooses to retry, re-plan from the asset held, or stop. */
-export function planPause(p: PlanDoc, code: string, message: string, now: number): Step {
+export function planPause(p: PlanDoc, code: string, message: string, now: number, extra: { params?: SvParams | null; reason?: Reason | null } = {}): Step {
   if (p.state !== 'active') return { plan: p, events: [] };
-  return { plan: touch(p, now, { state: 'paused', pause: { code, message: message.slice(0, 300), at: now, leg: p.current } }), events: [['plan.paused', { id: p.id, step: p.current + 1, code, reason: message.slice(0, 200) }]] };
+  return { plan: touch(p, now, { state: 'paused', pause: { code, message: message.slice(0, 300), at: now, leg: p.current, params: extra.params ?? null, reason: extra.reason ?? null } }), events: [['plan.paused', { id: p.id, step: p.current + 1, code, reason: message.slice(0, 200) }]] };
 }
 
 /** "Réessayer": the same leg becomes ready again. Allowed only while no proposal of the plan is alive. */

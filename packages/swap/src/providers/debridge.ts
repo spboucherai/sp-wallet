@@ -152,8 +152,8 @@ function toQuote(p: z.infer<typeof Estimate>, req: SwapQuoteRequest, now: number
     estimatedSeconds: Math.ceil(p.order.approximateFulfillmentDelay),
     // deBridge reports the USD value lost between input and output (all fees included), in percent, negative = loss
     priceImpactBps: p.usdPriceImpact == null ? null : Math.round(-p.usdPriceImpact * 100),
-    expiresAt: now + VALIDITY_MS, firmness: 'firm',
-    executability: { class: 'opaque', reason: 'the DLN API builds the order transaction (calldata for DlnSource or DeBridgeRouter, a serialized transaction on Solana); the signer can pin the target contract, the value and the allowance but does not rebuild the order struct (recipient, take amount, authorities) by itself yet' },
+    quotedAt: now, expiresAt: now + VALIDITY_MS, firmness: 'firm',
+    executability: { class: 'opaque', code: 'dln_order', reason: 'the DLN API builds the order transaction (calldata for DlnSource or DeBridgeRouter, a serialized transaction on Solana); the signer can pin the target contract, the value and the allowance but does not rebuild the order struct (recipient, take amount, authorities) by itself yet' },
     // an unfilled order can be cancelled from the destination chain by the order authority; the input and both fees return on the source chain
     refundable: true, atomic: false,
     raw: p,

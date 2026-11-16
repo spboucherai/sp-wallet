@@ -11,12 +11,15 @@ import {
   parseUnits, swapDataHash, toB64u, toHex, verifyKyberSwap, type Intent, type NetworkDef,
 } from '@spw/core';
 import { listCreds } from './auth.ts';
+import { assetKey } from '@spw/swap';
 import { adapterFor } from './chains/index.ts';
 import { http, rpcAny, rpcQuorum } from './chains/rpc.ts';
 import { config, UserError } from './config.ts';
 import { audit, sql } from './db.ts';
 import { addressFor, signer } from './signer-client.ts';
-import { broadcastNow, move, view, type ProposalRow } from './transfers.ts';
+import { broadcastNow, failure, move, view, type ProposalRow } from './transfers.ts';
+import type { SvCode, SvParams } from './sv-texts.ts';
+import { checkQuoteRef, idemOf, lostRace, QuoteRef, replayOf } from './prepare-common.ts';
 import { advanceSolSwap, createSolSwapProposal, recordSolSwapOutcome, solSwapExecInfo } from './swap-exec-sol.ts';
 
 const KYBER_API = 'https://aggregator-api.kyberswap.com';
@@ -110,16 +113,18 @@ export async function prepareKyberSwap(o: { n: NetworkDef; me: string; keyId: st
   return { intent, data, expected, minOut: desc.minReturnAmount, needApprove, simulated, feeEstimate: (gas + approveGas) * (baseFee + tip), maxFee, fn: desc.functionName };
 }
 
-const Create = z.strictObject({ network: z.string().max(24), fromAsset: z.string().max(80), toAsset: z.string().max(80), amount: z.string().min(1).max(60), slippageBps: z.number().int().min(1).max(300).default(50) });
+const Create = z.strictObject({ network: z.string().max(24), fromAsset: z.string().max(80), toAsset: z.string().max(80), amount: z.string().min(1).max(60), slippageBps: z.number().int().min(1).max(300).default(50),
+  /** v11: the route the owner was looking at (prepare-common.ts) — optional; without it nothing is compared */ quote: QuoteRef.optional() });
 
 export function swapExecRoutes(app: FastifyInstance): void {
   app.get('/api/v1/swap/execution', async () => ({ enabled: true, provider: 'kyberswap', networks: Object.keys(KYBER_ENABLED), router: KYBER_ROUTER, solana: solSwapExecInfo() }));
 
   // Prepare a firm swap for the owner's wallet, then offer it for passkey approval.
   app.post('/api/v1/swap/proposals', async (req) => {
-    const idem = String(req.headers['idempotency-key'] ?? '');
-    if (!/^[A-Za-z0-9-]{16,64}$/.test(idem)) throw new UserError('idempotency', 'Idempotency-Key header required');
-    const b = Create.parse(req.body);
+    if (!/^[A-Za-z0-9-]{16,64}$/.test(String(req.headers['idempotency-key'] ?? ''))) throw new UserError('idempotency', 'Idempotency-Key header required');
+    const b = Create.parse(req.body), idem = idemOf(req.headers, 'swap', b);
+    // v11 (B4): a repeated key answers the proposal it already produced — before any provider or chain is asked again
+    const again = await replayOf(idem); if (again) return again;
     const n = getNetwork(b.network);
     if (n.family === 'sol') return createSolSwapProposal(b, idem); // Jupiter: services/api/src/swap-exec-sol.ts
     if (n.family !== 'evm') throw new UserError('swap_not_enabled', 'swap execution is only available on EVM networks and Solana for now', 422);
@@ -137,16 +142,18 @@ export function swapExecRoutes(app: FastifyInstance): void {
     const id = randomUUID();
     const ps = await prepareKyberSwap({ n, me, keyId: st.keyId, fromAsset: src.id, toAsset: dst.id, amount, slippageBps: b.slippageBps, policyVersion: st.policy.version, proposalId: id });
     const { intent, data } = ps, now = intent.createdAt;
+    // v11 (B6): the firm route against the quote the owner was shown — refuses with the fresh figures when it moved beyond his tolerance
+    const quote = checkQuoteRef(b.quote, { executor: 'kyberswap', fromKey: assetKey({ network: n.id, asset: src.id }), toKey: assetKey({ network: n.id, asset: dst.id }), amountIn: amount, slippageBps: b.slippageBps, firmOut: ps.expected, firmMinOut: ps.minOut, toDecimals: dst.decimals, toSymbol: dst.symbol });
     const verdict = checkPolicy(st.policy, intent, BigInt(st.spentToday[`${n.id}:${src.symbol}`] ?? '0'), now, st.halted);
     if (!verdict.ok) throw new UserError('policy', verdict.reason, 422);
     const hash = intentHash(intent);
     const swap = { provider: 'kyberswap', toAsset: dst.id, toSymbol: dst.symbol, toDecimals: dst.decimals, expectedOut: ps.expected.toString(), minOut: ps.minOut.toString(), slippageBps: b.slippageBps,
       needsApproval: ps.needApprove, simulated: ps.simulated, fn: ps.fn };
-    const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, state, kind, network, asset, symbol, decimals, amount, from_addr, to_addr, note, fee_estimate, max_fee, warnings, intent, intent_hash, aux, swap, expires_at)
-      values (${id}, ${idem}, 'pending_approval', 'swap', ${n.id}, ${src.id}, ${src.symbol}, ${src.decimals}, ${amount.toString()}, ${me}, ${me}, ${`swap → ${dst.symbol}`}, ${ps.feeEstimate.toString()}, ${ps.maxFee.toString()},
+    const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, request_hash, quote_ref, state, kind, network, asset, symbol, decimals, amount, from_addr, to_addr, note, fee_estimate, max_fee, warnings, intent, intent_hash, aux, swap, expires_at)
+      values (${id}, ${idem.key}, ${idem.hash}, ${quote ? sql.json(quote as never) : null}, 'pending_approval', 'swap', ${n.id}, ${src.id}, ${src.symbol}, ${src.decimals}, ${amount.toString()}, ${me}, ${me}, ${`swap → ${dst.symbol}`}, ${ps.feeEstimate.toString()}, ${ps.maxFee.toString()},
         ${sql.json(ps.needApprove ? ['swap_needs_approval'] : [])}, ${sql.json(intent as never)}, ${toHex(hash)}, ${sql.json({ swapData: data })}, ${sql.json(swap)}, ${new Date(intent.expiresAt * 1000)})
       on conflict (idempotency_key) do nothing returning *`;
-    if (!p) throw new UserError('conflict', 'duplicate request', 409);
+    if (!p) return lostRace(idem);
     await audit('swap.prepared', 'owner', { id, network: n.id, from: src.symbol, to: dst.symbol, amount: amount.toString(), minOut: swap.minOut, hash: toHex(hash) });
     const creds = await listCreds();
     const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge: new Uint8Array(hash), timeout: 70_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
@@ -160,14 +167,14 @@ export async function advanceSwap(p: ProposalRow): Promise<ProposalRow> {
   if (p.state !== 'signed' || !p.raw || !p.intent) return p;
   if (getNetwork(p.network).family === 'sol') return advanceSolSwap(p);
   const n = getNetwork(p.network), a = adapterFor(p.network);
-  const fail = (error: string) => move(p, 'failed', { error });
+  const fail = (code: SvCode, params?: SvParams) => move(p, 'failed', failure(code, params));
   if (!config.broadcast) return broadcastNow(p);
-  if (p.expires_at && Date.now() - p.expires_at.getTime() > 8 * 60_000) return fail('the swap could not be sent in time; nothing was swapped');
+  if (p.expires_at && Date.now() - p.expires_at.getTime() > 8 * 60_000) return fail('swap_late');
   if (p.pre_raw && p.pre_state !== 'confirmed') {
     await a.broadcast(p.pre_raw).catch(() => {});
     const rc = await rpcAny<{ status: `0x${string}` } | null>(n.rpc, 'eth_getTransactionReceipt', [p.pre_txid]).catch(() => null);
     if (!rc) { if (p.pre_state !== 'sent') await sql`update proposals set pre_state = 'sent', updated_at = now() where id = ${p.id}`; return p; }
-    if (hexToNumber(rc.status) !== 1) return fail('the token approval reverted; nothing was swapped');
+    if (hexToNumber(rc.status) !== 1) return fail('swap_approval_reverted');
     await sql`update proposals set pre_state = 'confirmed', updated_at = now() where id = ${p.id}`;
     await audit('swap.approval_confirmed', 'chain', { id: p.id, txid: p.pre_txid });
   }
@@ -175,7 +182,7 @@ export async function advanceSwap(p: ProposalRow): Promise<ProposalRow> {
   const data = (p.aux as { swapData?: string } | null)?.swapData;
   const sim = await rpcAny<string>(n.rpc, 'eth_call', [{ from: p.from_addr, to: KYBER_ROUTER, data, value: numberToHex(p.asset === 'native' ? BigInt(p.amount) : 0n) }, 'latest']).then(() => null, (e: Error & { rpcCode?: number }) => (e.rpcCode !== undefined ? e.message : 'unreachable'));
   if (sim === 'unreachable') return p; // try again on the next tick
-  if (sim !== null) return fail(`the swap would revert now (${sim.slice(0, 100)}); it was not sent${p.pre_raw ? '. The exact-amount approval stays in place for the next attempt' : ''}`);
+  if (sim !== null) return fail(p.pre_raw ? 'swap_would_revert_approved' : 'swap_would_revert', { detail: sim.slice(0, 100) });
   return broadcastNow(p);
 }
 

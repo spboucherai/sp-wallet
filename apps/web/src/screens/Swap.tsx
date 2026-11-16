@@ -12,15 +12,25 @@ import { useQueryClient } from '@tanstack/react-query';
 import { BridgeFacts, BridgePill, BridgeProgress, bridgeDur, ExplorerLink, LongFact, ReviewAmount, ReviewArrow, scErrText } from '../bridge';
 import { XswapPill, XswapSheet } from '../xswap';
 import { PlanCards } from '../plan'; // v7 any-to-any plans
+import { ExecutionTimeline } from '../execution';                 // v11: unified execution status
+import { execReason, flagDetail, propError } from '../sv';       // v11: server texts by code
+import type { ApiError } from '../api';
+import { heroOf, prepareOf, type Executor, type QuoteRefV } from '../swapLogic'; // v11: what is shown is what is executed (B1, B6)
 
 interface SAsset { key: string; network: string; networkName: string; asset: string; symbol: string; name: string; decimals: number; native?: boolean }
 interface Fee { kind: string; symbol: string; network: string; display: string; includedInOutput: boolean; estimated: boolean; usd: number | null }
-interface BridgeQuote { options: { speed: 'standard' | 'fast'; available: boolean; feeDisplay: string; minReceiveDisplay: string; seconds: number }[]; destinationGas: { symbol: string; needDisplay: string; balanceDisplay: string; enough: boolean }; toName: string; fromName: string;
+interface BridgeQuote { options: { speed: 'standard' | 'fast'; available: boolean; feeDisplay: string; minReceiveDisplay: string; seconds: number; quote?: QuoteRefV | null }[]; destinationGas: { symbol: string; needDisplay: string; balanceDisplay: string; enough: boolean }; toName: string; fromName: string;
   /** v8: Solana as source (refundable deposit) or destination (the wallet's USDC token account, which must exist) */
   solana?: { role: 'source'; depositDisplay: string; networkFeeDisplay: string } | { role: 'destination'; recipient: string; tokenAccount: string; tokenAccountExists: boolean; tokenAccountRentDisplay: string; nonceRentDisplay: string } }
-interface RouteV { id: string; executable: boolean; exec?: { via: 'kyberswap' | 'cctp' | 'jupiter' | 'thorchain'; speed?: 'standard' | 'fast' | null } | null; providers: string[]; path: SAsset[]; tags: string[]; pareto: boolean; amountOutDisplay: string; minAmountOutDisplay: string; estimatedSeconds: number | null; expiresAt: number;
-  executability: { class: 'verified' | 'opaque' | 'quote_only'; reason?: string }; valuation: { inUsd: number | null; outUsd: number | null; minOutUsd: number | null; extraFeesUsd: number; netUsd: number | null };
-  risk: { level: 'low' | 'medium' | 'high'; score: number; flags: { code: string; level: string; detail?: string }[] }; atomic: boolean; refundable: boolean | null; priceImpactBps: number | null;
+/** v11: the normalized route card — the same object for every route; a figure the provider does not give is null (packages/swap/src/card.ts) */
+interface CardFeeV { usd: number | null; estimated?: boolean; includedInOutput: boolean; bps?: number | null; items: { kind: string; network: string; symbol: string; display: string; estimated: boolean; includedInOutput: boolean; usd: number | null }[] }
+interface CardV { quoteId: string; fingerprint: string; fromSymbol: string; toSymbol: string; amountInDisplay: string; estimatedOutDisplay: string; minimumOutDisplay: string; networkFee: CardFeeV | null; protocolFee: CardFeeV | null;
+  toleranceBps: number; effectiveSlippageBps: number | null; etaSeconds: number | null; riskFlags: string[]; steps: { kind: string; network: string; toNetwork: string; provider: string; descriptionCode: string }[];
+  quotedAt: number; expiresAt: number; executable: boolean; executor: string | null; reasonCode: string | null }
+interface RouteV { id: string; executable: boolean; /** v11: who executes it — stated by the server from its pinned tables, never inferred here */ executor?: Executor | null; fingerprint?: string; quotedAt?: number; amountOut?: string; minAmountOut?: string; card?: CardV;
+  exec?: { via: Executor; speed?: 'standard' | 'fast' | null } | null; providers: string[]; path: SAsset[]; tags: string[]; pareto: boolean; amountOutDisplay: string; minAmountOutDisplay: string; estimatedSeconds: number | null; expiresAt: number;
+  executability: { class: 'verified' | 'opaque' | 'quote_only'; reason?: string; code?: string }; valuation: { inUsd: number | null; outUsd: number | null; minOutUsd: number | null; extraFeesUsd: number; netUsd: number | null };
+  risk: { level: 'low' | 'medium' | 'high'; score: number; flags: { code: string; level: string; detail?: string; params?: Record<string, string | number> }[] }; atomic: boolean; refundable: boolean | null; priceImpactBps: number | null;
   steps: { kind: string; provider: string; from: SAsset; to: SAsset; via: string[]; contracts: { network: string; address: string; role: string }[] }[]; fees: Fee[] }
 interface Prov { provider: string; status: string; code: string | null; ms: number }
 type Mode = 'best_price' | 'fastest' | 'balanced';
@@ -60,7 +70,7 @@ function RouteSkeleton() {
 export function Swap() {
   const t = useT(); const { locale } = useContext(I18n); const { settings } = useSettings(); const pf = usePortfolio();
   const assetsQ = useQuery({ queryKey: ['swap-assets'], queryFn: () => get<{ assets: SAsset[] }>('/swap/assets'), staleTime: 600_000 });
-  const provQ = useQuery({ queryKey: ['swap-providers'], queryFn: () => get<{ executionEnabled: boolean; providers: { id: string; name: string; state: string; enabled: boolean; p50: number | null; capabilities: { needsKey: boolean; configured: boolean } }[] }>('/swap/providers'), staleTime: 30_000 });
+  const provQ = useQuery({ queryKey: ['swap-providers'], queryFn: () => get<{ executionEnabled: boolean; providers: { id: string; name: string; state: string; enabled: boolean; p50: number | null; capabilities: { needsKey: boolean; configured: boolean } }[]; needsKey?: string[] }>('/swap/providers'), staleTime: 30_000 });
   const assets = assetsQ.data?.assets ?? [];
   const [fromKey, setFromKey] = useState(''), [toKey, setToKey] = useState(''), [amountText, setAmount] = useState(''), [slip, setSlip] = useState(50), [mode, setMode] = useState<Mode>('best_price');
   // v8 hardening: the field keeps what was typed (comma or point); `amount` is its canonical reading (amount.ts) — '' while it is empty, invalid or ambiguous
@@ -69,6 +79,10 @@ export function Swap() {
   const [routes, setRoutes] = useState<RouteV[]>([]), [best, setBest] = useState<Partial<Record<Mode, string>>>({}), [provs, setProvs] = useState<Prov[]>([]);
   const [phase, setPhase] = useState<'idle' | 'loading' | 'done' | 'error'>('idle'), [reachable, setReachable] = useState(true), [took, setTook] = useState<number | null>(null), [first, setFirst] = useState<number | null>(null);
   const es = useRef<EventSource | null>(null);
+  // v11: the executors the SERVER states for this pair (`start` event), a slow clock for the age of the quotes, and one
+  // Idempotency-Key per attempt — repeated after a lost answer, so that the retry finds the proposal instead of making a second one
+  const [pairExec, setPairExec] = useState<Executor[]>([]), [now, setNow] = useState(() => Date.now()); const attempt = useRef<{ sig: string; key: string } | null>(null);
+  useEffect(() => { const h = setInterval(() => setNow(Date.now()), 5000); return () => clearInterval(h); }, []);
   const qc = useQueryClient();
   const [exec, setExec] = useState<{ proposal: any; options: any } | null>(null), [busy, setBusy] = useState(''), [execErr, setExecErr] = useState(''), [left, setLeft] = useState(0);
   const live = useQuery({ queryKey: ['proposal', exec?.proposal.id], enabled: !!exec && !['pending_approval'].includes(exec.proposal.state), refetchInterval: 3000, queryFn: () => get<any>(`/transfers/proposals/${exec!.proposal.id}`) });
@@ -117,14 +131,14 @@ export function Swap() {
 
   // live quotes: one server-sent stream per (pair, amount, slippage), restarted after a short pause in typing
   useEffect(() => {
-    es.current?.close(); setRoutes([]); setBest({}); setProvs([]); setTook(null); setFirst(null); setOpen('');
+    es.current?.close(); setRoutes([]); setBest({}); setProvs([]); setTook(null); setFirst(null); setOpen(''); setPairExec([]);
     if (!from || !to || !/^\d+(\.\d+)?$/.test(amount) || Number(amount) <= 0) { setPhase('idle'); return; }
     setPhase('loading');
     const h = setTimeout(() => {
       const t0 = performance.now();
       const s = new EventSource(`/api/v1/swap/quote/stream?from=${encodeURIComponent(from.key)}&to=${encodeURIComponent(to.key)}&amount=${encodeURIComponent(amount)}&slippageBps=${slip}`);
       es.current = s;
-      s.addEventListener('start', (e) => setReachable(JSON.parse((e as MessageEvent).data).reachable));
+      s.addEventListener('start', (e) => { const d = JSON.parse((e as MessageEvent).data) as { reachable: boolean; executors?: Executor[] }; setReachable(d.reachable); setPairExec(d.executors ?? []); });
       s.addEventListener('route', (e) => { const r = JSON.parse((e as MessageEvent).data) as RouteV; setFirst((f) => f ?? Math.round(performance.now() - t0)); setRoutes((rs) => [...rs.filter((x) => x.id !== r.id), r]); });
       s.addEventListener('provider', (e) => setProvs((p) => [...p, JSON.parse((e as MessageEvent).data)]));
       s.addEventListener('done', (e) => { const d = JSON.parse((e as MessageEvent).data); setRoutes(d.routes); setBest(d.best); setTook(Math.round(performance.now() - t0)); setPhase('done'); s.close(); });
@@ -135,14 +149,26 @@ export function Swap() {
 
   const prepare = async () => {
     if (!from || !to) return;
+    // v11 (B6): what is prepared is the route that is displayed. The executor comes from that route as the SERVER stated it (it used
+    // to be guessed from which routes happened to be in the stream), and its reference travels with the request: the server refuses
+    // with the fresh figures when its firm route is worse than the minimum shown here.
+    const req = prepareOf({ from, to, amount, slippageBps: slip, isBridge, speed: brSpeed, option: brQ.data?.options.find((o) => o.speed === brSpeed), ex: ex ?? null });
+    if (!req) return;
+    const { path, body } = req;
+    // the same key for the same request until it is answered: a retry after a lost answer gets the proposal that was created (B4)
+    const sig = `${path}|${JSON.stringify(body)}`; if (attempt.current?.sig !== sig) attempt.current = { sig, key: crypto.randomUUID() };
     setBusy('prepare'); setExecErr('');
-    // a THORChain native swap (two different networks) has its own preparation: vault confirmation, quotes of two operators, memo
-    const thor = routes.find((r) => r.executable)?.exec?.via === 'thorchain' && !routes.some((r) => r.executable && r.exec?.via !== 'thorchain');
-    try { setExec(isBridge ? await post('/bridge/proposals', { fromNetwork: from.network, toNetwork: to.network, amount, speed: brSpeed }, { 'idempotency-key': crypto.randomUUID() })
-      : thor ? await post('/xswap/proposals', { fromNetwork: from.network, fromAsset: from.asset, toNetwork: to.network, toAsset: to.asset, amount, slippageBps: slip }, { 'idempotency-key': crypto.randomUUID() })
-      : await post('/swap/proposals', { network: from.network, fromAsset: from.asset, toAsset: to.asset, amount, slippageBps: slip }, { 'idempotency-key': crypto.randomUUID() })); }
-    // an address that never received SOL does not exist on Solana: the server reports it as "not a plain account"
-    catch (e) { setExecErr((e as { code?: string }).code === 'account_not_plain' && from.network === 'solana' && ['0', undefined].includes(balances.get('solana:native')) ? t('qaSolNotFunded') : scErrText(t, e)); } finally { setBusy(''); }
+    try { setExec(await post(path, body, { 'idempotency-key': attempt.current.key })); attempt.current = null; }
+    catch (e) {
+      const x = e as ApiError, d = (x.body as { data?: { fresh?: { amountOutDisplay: string; symbol: string }; quoted?: { minAmountOutDisplay: string } } } | undefined)?.data;
+      if (x.code !== 'offline') attempt.current = null; // answered (even by a refusal): the next click is a new request
+      const requote = () => { setAgain((n) => n + 1); void qc.invalidateQueries({ queryKey: ['bridge-quote'] }); };
+      if (x.code === 'quote_moved' && d?.fresh && d.quoted) { setExecErr(t('svQuoteMoved', { fresh: trimAmt(d.fresh.amountOutDisplay, 8), min: trimAmt(d.quoted.minAmountOutDisplay, 8), sym: d.fresh.symbol })); requote(); }
+      else if (x.code === 'quote_mismatch') { setExecErr(t('svQuoteStale')); requote(); }
+      else if (x.code === 'quote_not_executable') setExecErr(t('svQuoteNotExec'));
+      // an address that never received SOL does not exist on Solana: the server reports it as "not a plain account"
+      else setExecErr(x.code === 'account_not_plain' && from.network === 'solana' && ['0', undefined].includes(balances.get('solana:native')) ? t('qaSolNotFunded') : scErrText(t, e));
+    } finally { setBusy(''); }
   };
   const approve = async () => {
     if (!exec) return;
@@ -172,6 +198,32 @@ export function Swap() {
   // comparison-only quotes (never a fee or a warning of what is executed) are folded under their own title
   const shown = isBridge ? [] : sorted.filter((r, k) => r.executable || k === 0), folded = sorted.filter((r) => !shown.includes(r));
   const sep = locale === 'fr' ? ' : ' : ': ';
+  // v11 (B1): « Vous recevez » is the option the action EXECUTES — the selected CCTP speed on a CCTP pair, the executable route
+  // otherwise — never the top-ranked quote of another provider. With nothing executable the figure stays empty and the best
+  // comparison quote is named as what it is, underneath.
+  const shownHero = heroOf({ isBridge, option: brQ.data?.options.find((o) => o.speed === brSpeed), sorted }) as { hero: ReturnType<typeof heroOf>['hero']; bestOther: RouteV | null };
+  const hero = shownHero.hero && { ...shownHero.hero, via: shownHero.hero.source === 'cctp' && isBridge ? t('svHeroCctp', { speed: t(brSpeed === 'fast' ? 'pnFast' : 'pnStandard') }) : t('svHeroVia', { via: pname(shownHero.hero.provider) }) };
+  const heroWait = isBridge ? brQ.isLoading : phase === 'loading' && !ex;
+  const bestOther = shownHero.bestOther;
+  // the age of a quote, and whether it is still usable
+  const quoteAge = (c: CardV) => (now >= c.expiresAt ? t('svCardExpired') : now - c.quotedAt < 90_000 ? t('svCardAgeS', { n: Math.max(0, Math.round((now - c.quotedAt) / 1000)) }) : t('svCardAgeMin', { n: Math.round((now - c.quotedAt) / 60_000) }));
+  const pct = (bps: number) => numFmt(Math.abs(bps) / 100, locale, 2, 2);
+  const feeLine = (f: CardFeeV | null) => (f === null ? <span className="text-mute">{t('svCardNotReported')}</span> : <>
+    {f.items.map((i) => `${trimAmt(i.display, 8)} ${i.symbol}`).join(' + ')}{f.usd != null ? ` · ≈ ${money(f.usd)}` : ''}{f.bps != null ? ` (${t('svCardBps', { pct: pct(f.bps) })})` : ''}
+    {(f.estimated || f.includedInOutput) && <span className="block font-normal text-mute">{[f.estimated ? t('svCardEstimated') : '', f.includedInOutput ? t('svCardIncluded') : ''].filter(Boolean).join(' · ')}</span>}</>);
+  /** The normalized card of a route: the same lines, in the same order, for every provider. */
+  const cardFacts = (r: RouteV) => { const c = r.card; if (!c) return null; return (
+    <dl className="receipt" data-testid="route-facts" data-executable={c.executable} data-executor={c.executor ?? ''}>
+      <Fact k={t('svCardSent')}>{trimAmt(c.amountInDisplay, 8)} {c.fromSymbol}</Fact>
+      <Fact k={t('svCardEst')}>{trimAmt(c.estimatedOutDisplay, 8)} {c.toSymbol}</Fact>
+      <Fact k={t('svCardMin')}>{trimAmt(c.minimumOutDisplay, 8)} {c.toSymbol} <span className="font-normal text-mute">· {t('svCardTolerance')} {numFmt(c.toleranceBps / 100, locale, 2)} %</span></Fact>
+      <Fact k={t('svCardNetFee')} testid="fact-network-fee">{feeLine(c.networkFee)}</Fact>
+      <Fact k={t('svCardProtoFee')} testid="fact-protocol-fee">{feeLine(c.protocolFee)}</Fact>
+      <Fact k={t('svCardSlip')}>{c.effectiveSlippageBps === null ? <span className="text-mute">{t('svCardNoRef')}</span> : c.effectiveSlippageBps >= 0 ? t('svCardCost', { pct: pct(c.effectiveSlippageBps) }) : t('svCardGain', { pct: pct(c.effectiveSlippageBps) })}</Fact>
+      <Fact k={t('svCardEta')}>{c.etaSeconds === null ? <span className="text-mute">{t('svCardNotReported')}</span> : dur(c.etaSeconds, t)}</Fact>
+      <Fact k={t('svCardAge')} testid="fact-quote-age">{quoteAge(c)}</Fact>
+      <Fact k={t('svCardExec')}>{c.executable && c.executor ? t('svCardExecHere', { via: pname(c.executor) }) : t('svCardExecNo')}</Fact>
+    </dl>); };
 
   const side = (label: string, a: SAsset | undefined, which: 'from' | 'to', body: React.ReactNode) => (
     <div className={`rounded-[20px] bg-elev/60 px-4 pb-3.5 pt-3 ${which === 'from' ? 'sw-pay' : ''}`}>
@@ -188,7 +240,7 @@ export function Swap() {
     const fees = r.fees.length > 0 && <div><div className="t-eyebrow mb-0.5">{t('swFees')}</div>
       <dl>{r.fees.map((f, i) => <Fact key={i} k={<>{t(`swFee_${f.kind}` as Key)}{f.estimated ? ` (${t('estimate')})` : ''}{f.includedInOutput ? ` · ${t('swIncluded')}` : ''}</>}>{trimAmt(f.display, 8)} {f.symbol}{f.usd != null ? ` · ${money(f.usd)}` : ''}</Fact>)}</dl></div>;
     const risks = <div><div className="t-eyebrow mb-1.5">{t('swRisk')}</div>
-      {r.risk.flags.length === 0 ? <span className="text-mute">—</span> : <ul className="space-y-1.5">{r.risk.flags.map((f, i) => <li key={i} className="flex gap-2"><Icon n={f.level === 'low' ? 'check' : 'warn'} className={`mt-0.5 h-4 w-4 shrink-0 ${f.level === 'high' ? 'text-danger' : f.level === 'medium' ? 'text-warn' : 'text-mute'}`} /><span className="min-w-0">{t(`swFlag_${f.code}` as Key)}{f.detail ? <span className="text-mute"> — {f.detail}</span> : null}</span></li>)}</ul>}</div>;
+      {r.risk.flags.length === 0 ? <span className="text-mute">—</span> : <ul className="space-y-1.5">{r.risk.flags.map((f, i) => <li key={i} className="flex gap-2"><Icon n={f.level === 'low' ? 'check' : 'warn'} className={`mt-0.5 h-4 w-4 shrink-0 ${f.level === 'high' ? 'text-danger' : f.level === 'medium' ? 'text-warn' : 'text-mute'}`} /><span className="min-w-0">{t(`swFlag_${f.code}` as Key)}{flagDetail(t, f) ? <span className="text-mute"> — {flagDetail(t, f)}</span> : null}</span></li>)}</ul>}</div>;
     return (
       <section key={r.id} className={`card overflow-hidden ${top ? 'sw-chosen' : ''} ${here ? '' : 'sw-cmp'}`} data-testid="route-card" data-executable={here}>
         <button className="row-press w-full p-4 text-left" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '' : r.id)}>
@@ -212,14 +264,14 @@ export function Swap() {
           <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px]">{r.path.map((p, i) => <span key={i} className="inline-flex items-center gap-1.5">{i > 0 && <Icon n="chev" className="h-3 w-3 text-mute" />}<span className="inline-flex items-center gap-1.5 rounded-full bg-elev py-0.5 pl-0.5 pr-2.5 font-medium"><Coin sym={p.symbol} net={p.network} size={22} />{p.symbol}</span></span>)}</div>
         </button>
         {/* the route the wallet executes keeps its fees and its risks in view; a comparison quote shows them when opened */}
-        {here && <div className="space-y-3.5 border-t border-line px-4 py-3.5 text-[13.5px]">{fees}{risks}</div>}
+        {here && <div className="space-y-3.5 border-t border-line px-4 py-3.5 text-[13.5px]">{cardFacts(r)}{fees}{risks}</div>}
         {isOpen && <div className="space-y-3.5 border-t border-line px-4 py-3.5 text-[13.5px]">
           <div><div className="t-eyebrow mb-2">{t('swSteps')}</div>
             <ol className="space-y-2.5">{r.steps.map((s, i) => <li key={i} className="flex gap-3"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-elev text-[12px] font-semibold">{i + 1}</span>
               <span className="min-w-0"><span className="font-semibold">{t(`swKind_${s.kind}` as Key)}</span> {s.from.symbol} ({s.from.networkName}) → {s.to.symbol} ({s.to.networkName})
                 <span className="mt-0.5 flex items-center gap-1.5 text-mute"><ProviderIcon provider={s.provider} size={16} /><span className="min-w-0">{pname(s.provider)}{s.via.length ? ` · ${s.via.slice(0, 4).join(', ')}` : ''}</span></span></span></li>)}</ol></div>
-          {!here && fees}{!here && risks}
-          <div className="text-mute">{t(`swExec_${r.executability.class}` as Key)}{r.executability.reason ? ` — ${r.executability.reason}` : ''}</div>
+          {!here && cardFacts(r)}{!here && fees}{!here && risks}
+          <div className="text-mute" data-testid="route-exec-reason">{execReason(t, r.executability) || t(`swExec_${r.executability.class}` as Key)}</div>
         </div>}
       </section>); };
 
@@ -230,6 +282,8 @@ export function Swap() {
     : phase === 'idle' ? <Btn full disabled>{t('dzSwEnterAmount')}</Btn>
     : ex ? <><Btn full busy={busy === 'prepare'} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('swExecute', { via: pname(ex.providers[0]!) })}</Btn>
         {ex.id !== sorted[0]!.id && <p className="flex gap-2 px-1 text-[13px] leading-snug text-mute"><Icon n="warn" className="mt-0.5 h-4 w-4 shrink-0 text-warn" /><span className="min-w-0">{t('swExecNotBest')}</span></p>}</>
+    // v11: the server says this pair IS executed here (pinned tables) but the executor gave no quote in this search — say that, not "comparison only"
+    : phase === 'done' && pairExec.length > 0 ? <Notice tone="warn"><span data-testid="exec-no-quote">{t('svExecNoQuote', { via: pairExec.map(pname).join(', ') })}</span></Notice>
     : crossNet ? (planCount > 0 || sorted.length === 0 ? null /* a startable plan is offered below */ : locked)
     : sorted.length === 0 ? (phase === 'loading' ? <Btn full busy>{t('swSearching')}</Btn> : phase === 'done' ? <Btn full disabled>{t('dzSwNoRouteBtn')}</Btn> : null)
     : locked;
@@ -254,8 +308,9 @@ export function Swap() {
             {bal !== undefined && (bal === '?' ? <span className="shrink-0 text-warn">{t('qaBalUnknown')}</span> : <button className="-my-2.5 min-h-11 shrink-0 font-medium text-blue" onClick={() => setAmount(amountInputText(bal, locale))}>{t('available')}{sep}{trimAmt(bal, 6)}</button>)}</div></>)}
         <div className="relative z-[1] -my-[19px] flex justify-center"><button onClick={flip} aria-label={t('swFlip')} className="press grid h-11 w-11 place-items-center rounded-full border border-line bg-surface text-ink shadow-e2"><Icon n="swap" className="h-[18px] w-[18px] rotate-90" /></button></div>
         {side(t('swYouReceive'), to, 'to', <>
-          <div className={`t-display mt-1 flex min-h-12 items-center break-all py-0.5 ${chosen ? heroSize(trimAmt(chosen.amountOutDisplay, 8).length) : 'text-[40px] text-mute/45'}`} aria-live="polite">{chosen ? trimAmt(chosen.amountOutDisplay, 8) : phase === 'loading' ? <span className="skel block h-9 w-40 !rounded-xl" style={{ background: 'color-mix(in srgb, var(--mute) 14%, transparent)' }} role="img" aria-label={t('swSearching')} /> : '0'}</div>
-          <div className="mt-0.5 min-h-6 text-[13px] leading-6 text-mute">{chosen ? <>{t('swMin')} <span className="font-semibold text-ink">{trimAmt(chosen.minAmountOutDisplay, 8)}</span>{chosen.valuation.outUsd != null ? ` · ≈ ${money(chosen.valuation.outUsd)}` : ''}</> : ' '}</div></>)}
+          <div className={`t-display mt-1 flex min-h-12 items-center break-all py-0.5 ${hero ? heroSize(trimAmt(hero.out, 8).length) : 'text-[40px] text-mute/45'}`} aria-live="polite" data-testid="you-receive" data-source={hero ? hero.source : 'none'}>{hero ? trimAmt(hero.out, 8) : heroWait ? <span className="skel block h-9 w-40 !rounded-xl" style={{ background: 'color-mix(in srgb, var(--mute) 14%, transparent)' }} role="img" aria-label={t('swSearching')} /> : '0'}</div>
+          <div className="mt-0.5 min-h-6 text-[13px] leading-6 text-mute">{hero ? <>{t('swMin')} <span className="font-semibold text-ink">{trimAmt(hero.min, 8)}</span>{hero.usd != null ? ` · ≈ ${money(hero.usd)}` : ''} · <span data-testid="you-receive-via">{hero.via}</span></> : ' '}</div>
+          {bestOther && <div className="text-[13px] leading-snug text-mute" data-testid="best-comparison">{t('svHeroBestOther', { amount: trimAmt(bestOther.amountOutDisplay, 8), sym: bestOther.path[bestOther.path.length - 1]!.symbol, via: bestOther.providers.map(pname).join(' → ') })}</div>}</>)}
         <div className="flex items-center justify-between gap-3 px-3 pb-1 pt-2.5 text-[13px]">
           <span className="min-w-0 leading-snug text-mute">{t('swSlippage')}</span>
           <div className="sw-slip w-[186px] shrink-0"><Seg label={t('swSlippage')} value={String(slip)} onChange={(v) => setSlip(Number(v))} options={[30, 50, 100].map((b) => [String(b), `${numFmt(b / 100, locale, 1)} %`] as const)} /></div>
@@ -315,7 +370,8 @@ export function Swap() {
 
       {(phase === 'done' || provs.length > 0) && <p className="px-1 text-[12.5px] leading-snug text-mute">
         {took !== null && <>{(() => { const n = provs.length + new Set(routes.flatMap((r) => r.providers)).size; return n === 1 ? t('qaSwProviders1', { ms: took }) : t('swTook', { n, ms: took }); })()}{first !== null ? ` · ${t('swFirst', { ms: first })}` : ''}. </>}
-        {provs.filter((p) => p.status !== 'no_route').map((p) => `${pname(p.provider)}${sep}${p.status === 'skipped' ? t('swSkipped') : ['unavailable', 'timeout', 'error', 'unsupported'].includes(p.status) ? t(`qaSwSt_${p.status}` as Key) : p.code ?? p.status}`).join(' · ')}</p>}
+        {provs.filter((p) => p.status !== 'no_route').map((p) => `${pname(p.provider)}${sep}${p.status === 'skipped' ? t('swSkipped') : ['unavailable', 'timeout', 'error', 'unsupported'].includes(p.status) ? t(`qaSwSt_${p.status}` as Key) : p.code ?? p.status}`).join(' · ')}
+        {(provQ.data?.needsKey?.length ?? 0) > 0 && <span data-testid="needs-key"> {t('svNeedsKey', { list: provQ.data!.needsKey!.map(pname).join(', ') })}</span>}</p>}
 
       {/* what this screen does and does not execute — the same text as before, after the pair instead of above it */}
       <div className="flex gap-2.5 px-1 text-[12.5px] leading-snug text-mute" role="note"><Icon n="shield" className="mt-0.5 h-4 w-4 shrink-0" /><p className="min-w-0">{t('swIntro')}</p></div>
@@ -339,6 +395,7 @@ export function Swap() {
           </>}
           <Fact k={t('feeMax')}>{prop.maxFeeDisplay ? `${trimAmt(prop.maxFeeDisplay, 9)} ${prop.feeSymbol}` : '—'}</Fact>
           {prop.swap.approvalState && <Fact k={t('swApproval')}>{t(`swAppr_${prop.swap.approvalState}` as Key)}</Fact>}
+          {prop.quote && <Fact k={t('svQuoteFirmK')} testid="quote-vs-firm">{t('svQuoteFirm', { quoted: `${trimAmt(prop.quote.quotedOutDisplay, 8)} ${prop.swap.toSymbol}`, firm: `${trimAmt(prop.quote.firmOutDisplay, 8)} ${prop.swap.toSymbol}`, dev: `${prop.quote.deviationBps > 0 ? '+' : prop.quote.deviationBps < 0 ? '−' : ''}${numFmt(Math.abs(prop.quote.deviationBps) / 100, locale, 2, 2)} %` })}</Fact>}
           {prop.intentHash && <LongFact k={t('fingerprint')} mute>{prop.intentHash}</LongFact>}
           {prop.txid && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <LongFact k={t('txid')}>{prop.txid}</LongFact>}
         </dl>
@@ -349,14 +406,16 @@ export function Swap() {
           {prop.swap.needsApproval && <Notice tone="info">{t('swNeedsApproval', { sym: prop.symbol })}</Notice>}
           <Notice tone="info">{t('irreversible')} {t('expiresIn')} {left} s.</Notice>
         </div>}
-        {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{prop.error}</Notice></div>}
+        {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{propError(t, prop)}</Notice></div>}
         {testNotSent(prop) ? <div className="mt-3"><Notice tone="warn">{t('qaTestNotSent')}</Notice></div> : ['signed', 'broadcast', 'confirming'].includes(prop.state) && <p className="mt-3 flex items-center gap-2 text-[13px] text-mute"><Icon n="spin" className="h-4 w-4 shrink-0" />{t('broadcastNote')}</p>}
+        {/* v11: the steps of this swap (approval when there is one, then the swap), each with its state and its transaction */}
+        {prop.state !== 'pending_approval' && !testNotSent(prop) && <div className="mt-4"><ExecutionTimeline exec={prop.execution} /></div>}
         {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
         {prop.explorer && !testNotSent(prop) && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <div className="mt-2"><ExplorerLink href={prop.explorer}>{t('viewExplorer')}</ExplorerLink></div>}
         {reviewActions}
       </Sheet>}
 
-      {review && prop.bridge && <Sheet title={prop.state === 'pending_approval' ? t('brReview') : t('brTracking')} onClose={() => void closeExec()} dismissable={false} busy={!!busy} wide sub={reviewPill(<BridgePill b={prop.bridge} />)}>
+      {review && prop.bridge && <Sheet title={prop.state === 'pending_approval' ? t('brReview') : t('brTracking')} onClose={() => void closeExec()} dismissable={false} busy={!!busy} wide sub={reviewPill(testNotSent(prop) ? <Tag tone="warn" icon="warn">{t('qaSignedNotSent')}</Tag> : <BridgePill b={prop.bridge} />)}>
         <div className="rounded-[20px] bg-elev/60 p-4">
           <ReviewAmount sym={prop.symbol} net={prop.network} label={<span className="inline-flex flex-wrap items-center gap-1.5"><NetDot net={prop.network} size={16} />{prop.networkName} → <NetDot net={prop.bridge.toNetwork} size={16} />{prop.bridge.toNetworkName}</span>}>{exactAmt(prop.amountDisplay)} <span className="text-mute">{prop.symbol}</span></ReviewAmount>
         </div>
@@ -371,7 +430,7 @@ export function Swap() {
           {prop.bridge.needsApproval && <Notice tone="info">{t('qaBrNeedsApproval', { sym: prop.symbol })}</Notice>}
           <Notice tone="info">{t('brIrreversible', { from: prop.networkName, to: prop.bridge.toNetworkName })} {t('expiresIn')} {left} s.</Notice>
         </div>}
-        {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{prop.error}</Notice></div>}
+        {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{propError(t, prop)}</Notice></div>}
         {testNotSent(prop) && <div className="mt-3"><Notice tone="warn">{t('qaTestNotSent')}</Notice></div>}
         {prop.state !== 'pending_approval' && !testNotSent(prop) && <div className="mt-4"><BridgeProgress id={prop.id} b={prop.bridge} fromNetwork={prop.network} onUpdate={(p) => { setExec({ ...exec, proposal: p }); void qc.invalidateQueries({ queryKey: ['proposal', p.id] }); }} /></div>}
         {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
@@ -379,10 +438,10 @@ export function Swap() {
         {reviewActions}
       </Sheet>}
 
-      {review && prop.xswap && <Sheet title={prop.state === 'pending_approval' ? t('xsReview') : t('xsTracking')} onClose={() => void closeExec()} dismissable={false} busy={!!busy} wide sub={reviewPill(<XswapPill x={prop.xswap} />)}>
+      {review && prop.xswap && <Sheet title={prop.state === 'pending_approval' ? t('xsReview') : t('xsTracking')} onClose={() => void closeExec()} dismissable={false} busy={!!busy} wide sub={reviewPill(testNotSent(prop) ? <Tag tone="warn" icon="warn">{t('qaSignedNotSent')}</Tag> : <XswapPill x={prop.xswap} />)}>
         <XswapSheet prop={prop} left={left} onUpdate={(p) => { setExec({ ...exec, proposal: p }); void qc.invalidateQueries({ queryKey: ['proposal', p.id] }); }} />
         {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}
-        {prop.explorer && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <div className="mt-2"><ExplorerLink href={prop.explorer}>{t('viewExplorer')}</ExplorerLink></div>}
+        {prop.explorer && !testNotSent(prop) && ['broadcast', 'confirming', 'finalized', 'failed'].includes(prop.state) && <div className="mt-2"><ExplorerLink href={prop.explorer}>{t('viewExplorer')}</ExplorerLink></div>}
         {reviewActions}
       </Sheet>}
 

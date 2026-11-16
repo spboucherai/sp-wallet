@@ -23,8 +23,10 @@ import { config, UserError } from './config.ts';
 import { audit, sql } from './db.ts';
 import { rpcOverriddenNetworks } from './rpc-override.ts';
 import { addressFor, signer, type SignerStatus } from './signer-client.ts';
-import { broadcastNow, move, view, type ProposalRow } from './transfers.ts';
-import { cctpFee, cctpGuards, destinationGas, done, fastAllowance, iris, noGas, save, wait, type BridgeState } from './bridge.ts';
+import { broadcastNow, failure, move, view, type ProposalRow } from './transfers.ts';
+import { checkQuoteRef, lostRace, type Idem, type QuoteRef } from './prepare-common.ts';
+import { svHold, svTechnical, type SvCode, type SvParams, type SvHold } from './sv-texts.ts';
+import { cctpFee, cctpFirm, cctpGuards, destinationGas, done, fastAllowance, iris, NO_HOLD, noGas, save, wait, type BridgeState } from './bridge.ts';
 
 /** What a bridge row keeps about its Solana side. */
 export interface SolBridgeInfo {
@@ -238,7 +240,7 @@ export async function prepareSolBurn(o: { n: NetworkDef; dst: NetworkDef; me: st
 }
 
 /** POST /api/v1/bridge/proposals with Solana as the source: prepare, then offer the transfer for passkey approval (it covers burn and mint). */
-export async function createSolBurnProposal(b: { n: NetworkDef; dst: NetworkDef; amount: string; speed: 'standard' | 'fast' }, idem: string) {
+export async function createSolBurnProposal(b: { n: NetworkDef; dst: NetworkDef; amount: string; speed: 'standard' | 'fast'; quote?: QuoteRef }, idem: Idem) {
   const { n, dst } = b, end = cctpEnd(dst.id)!, src = cctpEnd(n.id)!;
   let amount: bigint;
   try { amount = parseUnits(b.amount, 6); } catch (e) { throw new UserError('bad_amount', (e as Error).message); }
@@ -254,14 +256,15 @@ export async function createSolBurnProposal(b: { n: NetworkDef; dst: NetworkDef;
   const verdict = checkPolicy(st.policy, intent, BigInt(st.spentToday[`${n.id}:USDC`] ?? '0'), t0, st.halted);
   if (!verdict.ok) throw new UserError('policy', verdict.reason, 422);
   const hash = intentHash(intent);
+  const quote = checkQuoteRef(b.quote, cctpFirm(n.id, dst.id, amount, ps.fee)); // v11 (B6)
   const state: BridgeState = { provider: 'cctp', toNetwork: dst.id, fromDomain: CCTP_SOL_DOMAIN, toDomain: end.domain, speed: b.speed, maxFee: ps.fee.toString(), minFinalityThreshold: intent.bridge!.minFinalityThreshold,
     expectedSeconds: b.speed === 'fast' ? src.fastSeconds! : src.standardSeconds, needsApproval: false, simulated: true, destGasNeed: ps.destGasNeed.toString(), phase: 'burn', polls: 0, nextAt: 0,
     sol: { recipient, deposit: ps.deposit.toString() } };
-  const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, state, kind, network, asset, symbol, decimals, amount, from_addr, to_addr, note, fee_estimate, max_fee, warnings, intent, intent_hash, bridge, expires_at)
-    values (${id}, ${idem}, 'pending_approval', 'bridge', ${n.id}, ${intent.asset}, 'USDC', 6, ${amount.toString()}, ${me}, ${me}, ${`bridge → ${dst.name}`}, ${ps.networkFee.toString()}, ${intent.maxFee},
+  const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, request_hash, quote_ref, state, kind, network, asset, symbol, decimals, amount, from_addr, to_addr, note, fee_estimate, max_fee, warnings, intent, intent_hash, bridge, expires_at)
+    values (${id}, ${idem.key}, ${idem.hash}, ${quote ? sql.json(quote as never) : null}, 'pending_approval', 'bridge', ${n.id}, ${intent.asset}, 'USDC', 6, ${amount.toString()}, ${me}, ${me}, ${`bridge → ${dst.name}`}, ${ps.networkFee.toString()}, ${intent.maxFee},
       ${sql.json([])}, ${sql.json(intent as never)}, ${toHex(hash)}, ${sql.json(state as never)}, ${new Date(intent.expiresAt * 1000)})
     on conflict (idempotency_key) do nothing returning *`;
-  if (!p) throw new UserError('conflict', 'duplicate request', 409);
+  if (!p) return lostRace(idem);
   await audit('bridge.prepared', 'owner', { id, from: n.id, to: dst.id, amount: amount.toString(), speed: b.speed, cctpMaxFee: ps.fee.toString(), deposit: ps.deposit.toString(), networkFee: ps.networkFee.toString(), hash: toHex(hash) });
   const creds = await listCreds();
   const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge: new Uint8Array(hash), timeout: 45_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
@@ -277,23 +280,23 @@ export async function createSolBurnProposal(b: { n: NetworkDef; dst: NetworkDef;
 export async function advanceSolBurn(p: ProposalRow): Promise<ProposalRow> {
   if (p.kind !== 'bridge' || p.state !== 'signed' || !p.raw || !p.intent?.sol || !p.bridge) return p;
   const n = getNetwork(p.network), intent = p.intent, raw = p.raw, lastValid = p.intent.sol.lastValidBlockHeight, deposit = BigInt(p.bridge.sol?.deposit ?? CCTP_SOL_EVENT_RENT);
-  const fail = async (error: string) => { const r = await move(p, 'failed', { error }); await audit('bridge.not_sent', 'system', { id: p.id, reason: error.slice(0, 160) }); return r; };
+  const fail = async (code: SvCode, params?: SvParams) => { const f = failure(code, params), r = await move(p, 'failed', f); await audit('bridge.not_sent', 'system', { id: p.id, reason: f.error.slice(0, 160) }); return r; };
   const wire = new Uint8Array(Buffer.from(raw, 'base64'));
   let eventAccount: string, msg: Uint8Array;
   try {
     msg = wire.subarray(0, wire.length - 128);
     const d = decodeSolV1Message(msg); eventAccount = d.keys[1]!;
     if (d.numSigners !== 2 || Buffer.compare(Buffer.from(buildCctpSolBurnMessage(intent, eventAccount)), Buffer.from(msg)) !== 0) throw new Error('not the approved burn');
-  } catch { return fail('the signer returned a transaction that is not the approved burn; it was not sent'); }
+  } catch { return fail('sol_burn_mismatch'); }
   if (p.bridge.sol?.eventAccount !== eventAccount) { p = await save(p, { ...p.bridge, sol: { ...p.bridge.sol, eventAccount } }); await audit('bridge.event_account', 'system', { id: p.id, eventAccount }); }
   if (!config.broadcast) return broadcastNow(p);
   let sim: SimValue;
   try {
     const height = await rpcAny<number>(n.rpc, 'getBlockHeight', [{ commitment: 'confirmed' }]);
-    if (height > lastValid) return await fail('the transfer expired before it could be sent (blockhash too old); nothing was burned');
+    if (height > lastValid) return await fail('sol_burn_expired');
     sim = await simulate(n, raw, { sigVerify: true, accounts: [eventAccount] });
-  } catch (e) { if ((e as { rpcCode?: number }).rpcCode === undefined) return p; return fail(`the node refused the signed burn (${(e as Error).message.slice(0, 100)}); it was not sent`); }
-  try { checkBurnSimulation(intent, msg, eventAccount, sim, deposit); } catch (e) { return fail(`${(e as Error).message}; it was not sent`); }
+  } catch (e) { if ((e as { rpcCode?: number }).rpcCode === undefined) return p; return fail('sol_burn_refused', { detail: (e as Error).message.slice(0, 100) }); }
+  try { checkBurnSimulation(intent, msg, eventAccount, sim, deposit); } catch (e) { return fail('sol_burn_would_fail', { detail: (e as Error).message.slice(0, 200) }); }
   return broadcastNow(p);
 }
 
@@ -317,21 +320,22 @@ const findMint = async (n: NetworkDef, nonce: string): Promise<string | null> =>
   rpcAny<{ signature: string }[]>(n.rpc, 'getSignaturesForAddress', [cctpSolPda.usedNonce(nonce), { limit: 1 }]).then((r) => r[0]?.signature ?? null, () => null);
 
 /** Compute budget and lifetime for a mint right now, from a simulation of the signer-built transaction, or why it cannot be sent yet. */
-async function mintBudget(p: ProposalRow, b: BridgeState, bridge: CctpBridge): Promise<{ sol: SolBudget } | { hold: string; detail: string }> {
+async function mintBudget(p: ProposalRow, b: BridgeState, bridge: CctpBridge): Promise<{ sol: SolBudget } | { hold: string; detail: string; sv: SvHold }> {
+  const held = (sv: SvHold) => ({ hold: sv.hold, detail: sv.holdDetail, sv });
   const dst = getNetwork(b.toNetwork), me = bridge.recipient!;
   const st = await signer.status(), ceiling = BigInt(st.policy.maxFee[dst.id] ?? '0');
   const [bh, price0, lamports, keep, nonceRent] = await Promise.all([blockhash(dst), cuPrice(dst, me), lamportsOf(dst, me), rent(dst, 0), rent(dst, CCTP_SOL_NONCE_BYTES)]);
-  if (nonceRent > CCTP_SOL_NONCE_RENT) return { hold: 'contract_changed', detail: 'Solana\'s rent rate is above the reviewed one' };
+  if (nonceRent > CCTP_SOL_NONCE_RENT) return held(svTechnical('contract_changed', 'Solana\'s rent rate is above the reviewed one'));
   const g0: SolBudget = { recentBlockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight, computeUnitLimit: CCTP_SOL_CU.mintMax, computeUnitPrice: '0' };
-  let probe; try { probe = buildCctpSolMintMessage(bridge, b.message!, b.attestation!, g0, ceiling); } catch (e) { return { hold: 'mint_would_fail', detail: (e as Error).message }; }
+  let probe; try { probe = buildCctpSolMintMessage(bridge, b.message!, b.attestation!, g0, ceiling); } catch (e) { return held(svTechnical('mint_would_fail', (e as Error).message)); }
   const s = await simulate(dst, unsigned(probe.msg), { sigVerify: false });
-  if (s.err) return { hold: /insufficient (lamports|funds)/i.test(simError(s)) ? 'destination_gas' : 'mint_would_fail', detail: `the mint would fail on ${dst.name} now: ${simError(s).slice(0, 160)}` };
+  if (s.err) return held(svHold(/insufficient (lamports|funds)/i.test(simError(s)) ? 'destination_gas' : 'mint_would_fail', 'hold_mint_would_fail', { net: dst.name, detail: simError(s).slice(0, 160) }));
   const limit = Math.min(CCTP_SOL_CU.mintMax, Math.max(CCTP_SOL_CU.mintMin, Math.ceil((s.unitsConsumed ?? CCTP_SOL_CU.mintMax) * 1.2) + 20_000));
   const room = ceiling - SOL_SIGNATURE_FEE - CCTP_SOL_NONCE_RENT;
-  if (room < 0n) return { hold: 'fee_above_policy', detail: 'the used-nonce record does not fit under the signer\'s fee ceiling for Solana' };
+  if (room < 0n) return held(svHold('fee_above_policy', 'hold_fee_above_policy', { net: dst.name }));
   let price = price0; if (priorityOf(limit, price) > room) price = (room * 1_000_000n) / BigInt(limit);
   const need = SOL_SIGNATURE_FEE + priorityOf(limit, price) + nonceRent;
-  if (lamports < need + keep) return { hold: 'destination_gas', detail: `add SOL on ${dst.name}: ${formatUnits(need, 9)} is needed to receive the USDC (and ${formatUnits(keep, 9)} must remain), the wallet holds ${formatUnits(lamports, 9)}` };
+  if (lamports < need + keep) return held(svHold('destination_gas', 'hold_destination_gas', { sym: 'SOL', net: dst.name, need: formatUnits(need + keep, 9), have: formatUnits(lamports, 9) }));
   return { sol: { ...g0, computeUnitLimit: limit, computeUnitPrice: price.toString() } };
 }
 
@@ -351,7 +355,7 @@ export async function advanceSolMint(p: ProposalRow, b: BridgeState, bridge: Cct
       if (slot !== null && slot >= BigInt(b.expirationBlock)) {
         await iris(`/v2/reattest/0x${b.nonce}`, { method: 'POST' }).catch(() => null);
         await audit('bridge.reattest', 'system', { id: p.id, nonce: b.nonce });
-        return save(p, { ...b, phase: 'attesting', expiredHash: b.messageHash, polls: 0, nextAt: now() + 10_000, hold: 'attestation_expired', holdDetail: 'the Fast attestation expired; a new one was requested from Circle' });
+        return save(p, { ...b, phase: 'attesting', expiredHash: b.messageHash, polls: 0, nextAt: now() + 10_000, ...svHold('attestation_expired', 'hold_attestation_expired') });
       }
     }
     // the transaction parameters are chosen once and stored before the signer is asked: an interrupted attempt repeats the same request
@@ -360,17 +364,17 @@ export async function advanceSolMint(p: ProposalRow, b: BridgeState, bridge: Cct
       const [busy] = await sql<{ id: string }[]>`select id from proposals where network = ${dst.id} and state in ('approved', 'signed', 'broadcast') limit 1`;
       if (busy) return wait(p, b, 'destination_busy', `another transaction is in flight on ${dst.name}`, 30_000);
       let g; try { g = await mintBudget(p, b, bridge); } catch (e) { return wait(p, b, (e as UserError).code ?? 'rpc_degraded', (e as Error).message, 20_000); }
-      if ('hold' in g) return wait(p, b, g.hold, g.detail, g.hold === 'destination_gas' ? 60_000 : 30_000);
-      sol = g.sol; p = await save(p, b = { ...b, hold: null, holdDetail: null, mint: { sol } });
+      if ('hold' in g) return wait(p, b, g.sv, g.detail, g.hold === 'destination_gas' ? 60_000 : 30_000);
+      sol = g.sol; p = await save(p, b = { ...b, ...NO_HOLD, mint: { sol } });
     }
     let signed;
     try { signed = await signer.bridgeMint({ proposalId: p.id, message: b.message!, attestation: b.attestation!, sol }); }
     catch (e) {
       const code = (e as UserError).code ?? '';
       if (code === 'signer_unreachable') return wait(p, b, code, (e as Error).message, 15_000);
-      return save(p, { ...b, phase: 'mint_failed', hold: code || 'signer_refused', holdDetail: (e as Error).message.slice(0, 300), nextAt: now() + 60_000 });
+      return save(p, { ...b, phase: 'mint_failed', ...svTechnical(code || 'signer_refused', (e as Error).message), nextAt: now() + 60_000 });
     }
-    p = await save(p, b = { ...b, phase: 'mint_sent', hold: null, holdDetail: null, nextAt: 0, mint: { sol, txid: signed.txid, raw: signed.raw, sentAt: now(), lastBroadcastAt: now(), signatures: b.mint?.signatures ?? 1 } });
+    p = await save(p, b = { ...b, phase: 'mint_sent', ...NO_HOLD, nextAt: 0, mint: { sol, txid: signed.txid, raw: signed.raw, sentAt: now(), lastBroadcastAt: now(), signatures: b.mint?.signatures ?? 1 } });
     await audit('bridge.mint_signed', 'system', { id: p.id, to: dst.id, txid: signed.txid, messageHash: signed.messageHash, replayed: signed.replayed });
     if (config.broadcast) await adapterFor(dst.id).broadcast(signed.raw).catch(() => {});
   }
@@ -392,7 +396,7 @@ export async function advanceSolMint(p: ProposalRow, b: BridgeState, bridge: Cct
     if (s?.err) { // our transaction failed: either someone minted first (success) or it must be signed again
       if (used) return done(p, b, 'other', await findMint(dst, b.nonce!));
       await audit('bridge.mint_reverted', 'chain', { id: p.id, txid: m.txid });
-      return save(p, { ...b, phase: 'mint_failed', hold: 'mint_reverted', holdDetail: `the mint transaction failed on ${dst.name}; the USDC is still waiting. Approve a new attempt with the passkey` });
+      return save(p, { ...b, phase: 'mint_failed', ...svHold('mint_reverted', 'hold_mint_reverted', { net: dst.name }) });
     }
     if (used) { // received, and our transaction not visible a moment ago: look again before crediting someone else
       const again = await status().catch(() => undefined);
@@ -401,7 +405,7 @@ export async function advanceSolMint(p: ProposalRow, b: BridgeState, bridge: Cct
     }
     const height = await rpcAny<number>(dst.rpc, 'getBlockHeight', [{ commitment: 'finalized' }]).catch(() => null);
     if (height !== null && height > m.sol!.lastValidBlockHeight) // a Solana transaction lives about a minute: not included in time, it never will be
-      return save(p, { ...b, phase: 'mint_failed', hold: 'mint_expired', holdDetail: `the mint transaction was not included in time on ${dst.name}; the USDC is still waiting. Approve a new attempt with the passkey` });
+      return save(p, { ...b, phase: 'mint_failed', ...svHold('mint_expired', 'hold_mint_expired', { net: dst.name }) });
     if (now() - (m.lastBroadcastAt ?? 0) > 15_000) { await adapterFor(dst.id).broadcast(m.raw!).catch(() => {}); return save(p, { ...b, mint: { ...m, lastBroadcastAt: now() }, nextAt: now() + 4_000 }); }
     return save(p, { ...b, nextAt: now() + 3_000 });
   }

@@ -33,23 +33,34 @@ only) and `~/sp-wallet-signer-data` (keystore, `state.json`, `policy.json`). Com
 
    | Variable | Without it |
    |---|---|
-   | `SPW_DERIV_LIVE_MAINNET=on` | mainnet derivatives orders and collateral moves answer `mainnet_disabled` |
+   | `SPW_DERIV_LIVE_MAINNET=on` | NEW mainnet derivatives risk answers `mainnet_disabled` (orders that open or add, leverage changes, authorizations, collateral moves). Since V11 cancels and reduce-only closes of what already exists still work without it |
    | `RESEARCH_DATABASE_URL` | backtest candles are read with the API's own role instead of the read-only one |
    | `SPW_RESEARCH_RUNNER_SECRET` (≥ 32 chars) | the research runner routes answer 404; research jobs stay queued |
 
-   (`SPW_DERIV_MANDATE_MAINNET=on` as well if perp agents trade on mainnet. `SPW_DERIV_GMX_LIVE` is OFF by default and is
-   meant to stay off until GMX trading is deliberately opened: `deriv_gmx_live=OFF(missing SPW_DERIV_GMX_LIVE)` is then the expected line.) Then:
+   (`SPW_DERIV_MANDATE_MAINNET=on` as well if perp agents trade on mainnet; without it an agent already live can only
+   reduce. `SPW_DERIV_GMX_LIVE` is OFF by default; without it no new GMX position is prepared, closing and cancelling
+   still work.) Which of these three belong in the environment is the owner's decision about what is open on mainnet —
+   this runbook does not state it. **Before restarting, write down what the running process has**
+   (`scripts/preflight.sh --env-from-pm2 sp-wallet` prints the variable names, never a value), and compare after. Then:
    ```bash
    pm2 restart sp-wallet            # (confirm) keeps the stored environment
    pm2 logs sp-wallet --lines 30 --nostream
    ```
-5. **Read the start-up lines** (v8). The API prints, without any value:
+5. **Read the start-up lines** (v8). The API prints, without any value, one `name=on` or `name=OFF(missing VARIABLE)` per
+   capability:
    ```
-   sp-wallet api listening on … broadcast=on
-   [startup] capabilities: deriv_live_mainnet=on deriv_mandate_mainnet=on deriv_gmx_live=OFF(missing SPW_DERIV_GMX_LIVE) research_runner=on research_readonly_db=on broadcast=on workers=on strategy_sandbox_enforced=on web_app=on
+   sp-wallet api listening on … broadcast=<on|off>
+   [startup] capabilities: deriv_live_mainnet=<…> deriv_mandate_mainnet=<…> deriv_gmx_live=<…> research_runner=<…> research_readonly_db=<…> broadcast=<…> workers=<…> strategy_sandbox_enforced=<…> web_app=<…>
    [startup] strategy sandbox: sandbox-exec (confined, self-test passed)
    ```
-   An `=OFF(missing NAME)` there is the variable that was forgotten. `strategy sandbox: unavailable — …` means no signal
+   There is no universally "expected" line: the right one is **the same as before the restart** (step 4), unless this
+   deployment was meant to change a setting. A capability that turned from `on` to `OFF(missing NAME)` is a variable that
+   was lost by the restart; one that turned from `OFF` to `on` opened something nobody decided to open — treat both as a
+   failed deployment. For the three derivative settings, `on` means that code path can place orders with real funds on
+   mainnet: the project's own documents state that no order was ever accepted by a venue on a funded account from this
+   code (`docs/V11-AUDIT.md`, section 10), so `on` is a decision to take knowingly, not a default to restore.
+   A derivative setting that is `OFF` no longer strands anything (V11): positions can still be closed and orders cancelled.
+   `strategy sandbox: unavailable — …` means no signal
    and no backtest will run (agents hold) until it is fixed — usually the virtualenv of step 2.
 6. **Check.** `https://wallet.spboucher.ai/api/v1/health/live`; in the app: Monitoring → *Système* (every loop has a
    recent heartbeat, including `agent-engine`, `perp-agent-engine`, `withdrawals`; *Bac à sable des stratégies: confiné*;
@@ -77,11 +88,25 @@ never touched by a deployment.
    a limit cannot be sent (default deny). Only in that case: `mv policy.json policy.json.v<N>` and re-apply by hand any
    limit that had been changed (see `operations.md`, "After a release that adds assets").
 4. `pm2 restart sp-wallet-signer` *(confirm)*, then in the app: Security → the signer answers, **the key id is the same
-   as in step 1**, the policy version is the expected one, not halted. A different key id means the signer started on
+   as in step 1**, the policy version is the one it was, the halt is as it was. A different key id means the signer started on
    another keystore: stop, put `signer.mjs.bak-*` back, restart, and investigate before anything is signed.
 
-**Rollback (signer):** put back `signer.mjs.bak-*` (and `state.json.bak-*` only if the new version rewrote the state in a
-format the old one refuses), `pm2 restart sp-wallet-signer`.
+**First start of a V11 signer on an older data directory.** Nothing to do by hand. `policy.json` is read, never
+rewritten. `state.json` is read in its old format; at the first save the journal it contained is moved, record for record,
+to `journal.jsonl` next to it, and `state.json` keeps a reference to the last record (`journalRef`). Three new files appear
+in the data directory: `journal.jsonl` (append-only; closed segments are named `journal-<first>-<last>.jsonl`),
+`state.json.lock` (the daemon's pid: a second daemon, or a CLI command writing under it, is refused) and `control.sock`
+(the operator's commands reach the running daemon through it). `signer.mjs status` shows `journalIntact: true` and the same
+`journalLength` as before plus the records written since. The daemon refuses to start on a broken journal, as before.
+Back up `journal*.jsonl` with `state.json` from now on (step 1): the state alone no longer holds the journal.
+
+**Rollback (signer):** put back `signer.mjs.bak-*` and `pm2 restart sp-wallet-signer`. **Do not put `state.json.bak-*`
+back** unless the state file itself is damaged: it would erase the replay markers, counters and revocations written
+since — a revoked mandate would be in force again. The older binary starts on the V11 `state.json` as it is (every field
+it knows is unchanged; it finds an empty journal and starts a new one inside the state file). Going forward again later is
+supported: V11 moves what the older binary journaled to `journal-rollback-<time>.jsonl` and records that file's last hash
+in the main journal. `state.json.lock` and `control.sock` are ignored by the older binary. A `state.json.lock` left by a daemon that was
+killed needs no cleaning: V11 takes over a lock whose process no longer exists.
 
 ## 3. Research node — only when `services/research-runner` or `research/` changed
 

@@ -417,7 +417,9 @@ including the French and English spellings of one command).
   `crossVenueDiscrepancy` returns `netEdgeEstimateBps` with `assumptions[]` and `risks[]`.
 - `valuation/implied.ts` — `impliedValuation`: keeps the synthetic price, the contract's market value, a
   position's notional exposure and the implied company valuation apart. A valuation is given only when the
-  price unit defines it (valuation units directly; per-share only with a sourced diluted share count).
+  price unit defines it (valuation units only when a document of the venue backs the unit — `formulaSource`;
+  per-share only with a sourced diluted share count). An optional venue `multiplier` gives the contract value and the
+  exposure of valuation-quoted contracts. Used by the Private Markets module (`docs/V11-SYNTHETIC-MARKETS.md`).
 
 ## 8. Integration points (not done here)
 

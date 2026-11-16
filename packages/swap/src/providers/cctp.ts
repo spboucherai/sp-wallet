@@ -330,8 +330,8 @@ async function quoteUsdc(req: SwapQuoteRequest, src: Leg, dst: Leg, ctx: Provide
       }],
       amountOut: req.amountIn - fee, minAmountOut: req.amountIn - maxFee,
       fees: [{ kind: 'protocol', asset: req.to, amount: fee, includedInOutput: true, estimated: false }, ...srcCost.fees, ...dstCost.fees],
-      estimatedSeconds: seconds, priceImpactBps: 0, expiresAt: now + 30_000, firmness: 'indicative',
-      executability: { class: 'quote_only', reason: QUOTE_ONLY_USDC },
+      estimatedSeconds: seconds, priceImpactBps: 0, quotedAt: now, expiresAt: now + 30_000, firmness: 'indicative',
+      executability: { class: 'quote_only', code: 'cctp_pair_not_wired', reason: QUOTE_ONLY_USDC },
       // burned, not escrowed: nothing ever returns to the sender. If the mint is not submitted the funds stay
       // mintable — by anyone holding the attestation, only ever to mintRecipient — with no deadline.
       refundable: false, recoverable: true, atomic: false,
@@ -409,8 +409,8 @@ async function quoteEurc(req: SwapQuoteRequest, src: Leg, dst: Leg, ctx: Provide
       // fees are paid upfront in the source chain's coin: the full amount is minted
       amountOut: req.amountIn, minAmountOut: req.amountIn,
       fees: [...q.items.map((i): FeeItem => ({ kind: 'protocol', asset: native(src), amount: BigInt(i.amount), includedInOutput: false, estimated: false })), ...srcCost.fees, ...dstCost.fees],
-      estimatedSeconds: seconds, priceImpactBps: 0, expiresAt: q.expiry.expiresAt * 1000, firmness: 'indicative',
-      executability: { class: 'quote_only', reason: QUOTE_ONLY_EURC },
+      estimatedSeconds: seconds, priceImpactBps: 0, quotedAt: now, expiresAt: q.expiry.expiresAt * 1000, firmness: 'indicative',
+      executability: { class: 'quote_only', code: 'cctp_eurc', reason: QUOTE_ONLY_EURC },
       refundable: false, recoverable: true, atomic: false,
       raw: {
         product: 'cctp-non-usdc', token: 'EURC', transfer: variant, sourceDomain: src.chain.domain, destinationDomain: dst.chain.domain, quote: q,

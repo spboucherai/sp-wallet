@@ -4,13 +4,14 @@ import { startAuthentication } from '@simplewebauthn/browser';
 import { post } from './api';
 import { useContext } from 'react';
 import { errText, I18n, useT, type Key } from './i18n';
+import { holdDetail } from './sv';
 import { AssetIcon, Btn, Fact, Icon, NetworkIcon, Notice, ProviderIcon, Tag, Timeline, trimAmt, type StepState, type Tone } from './ui';
 
 export interface BridgeV {
   provider: string; toNetwork: string; toNetworkName: string; speed: 'standard' | 'fast'; expectedSeconds: number;
   stage: 'review' | 'burning' | 'attesting' | 'ready' | 'minting' | 'mint_failed' | 'done' | 'failed';
   cctpMaxFeeDisplay: string; minReceiveDisplay: string; feeExecutedDisplay: string | null; receivedDisplay: string | null; destGasSymbol: string; destGasNeedDisplay: string;
-  needsApproval: boolean; approvalState: string | null; hold: string | null; holdDetail: string | null; irisStatus: string | null; delayReason: string | null;
+  needsApproval: boolean; approvalState: string | null; hold: string | null; holdDetail: string | null; holdCode?: string | null; holdParams?: Record<string, string | number> | null; irisStatus: string | null; delayReason: string | null;
   mintTxid: string | null; mintExplorer: string | null; mintedBy: 'wallet' | 'other' | null; canFinish: boolean; needsPasskey: boolean;
   /** v8: the Solana side of a Solana ↔ EVM transfer */
   sol?: { role: 'source' | 'destination'; symbol: string; recipient: string | null; tokenAccount: string | null; nonceRentDisplay: string | null; eventAccount: string | null; depositDisplay: string | null;
@@ -78,7 +79,7 @@ export function BridgeProgress({ id, b, onUpdate, fromNetwork }: { id: string; b
         const state: StepState = done ? 'done' : bad ? 'failed' : cur ? 'current' : 'next';
         return { key: s, state, node: node(s), title: t(`brStep_${s}` as Key, { net: b.toNetworkName }), stateLabel: bad ? t('brStage_mint_failed') : t(done ? 'dzBrStepDone' : cur ? 'dzBrStepNow' : 'dzBrStepNext') }; })} /></div>
       {b.stage === 'attesting' && !b.hold && <p className="text-[13px] text-mute">{t('brWaitAttest', { time: bridgeDur(b.expectedSeconds) })}{b.delayReason ? ` (${b.delayReason})` : ''}</p>}
-      {b.hold && b.stage !== 'done' && <Notice tone={b.stage === 'mint_failed' || b.hold === 'message_mismatch' || b.hold === 'contract_changed' ? 'danger' : 'warn'}>{t(holdKey(b.hold))}{b.holdDetail ? <span className="block text-mute">{b.holdDetail}</span> : null}</Notice>}
+      {b.hold && b.stage !== 'done' && <Notice tone={b.stage === 'mint_failed' || b.hold === 'message_mismatch' || b.hold === 'contract_changed' ? 'danger' : 'warn'}>{t(holdKey(b.hold))}{b.holdDetail ? <span className="block text-mute" data-testid="hold-detail">{holdDetail(t, b)}</span> : null}</Notice>}
       {b.stage !== 'done' && <p className="text-[12.5px] text-mute">{t('brSafe')}</p>}
       {b.stage === 'done' && b.mintedBy === 'other' && <p className="text-[13px] text-mute">{t('brMintedByOther')}</p>}
       {err && <Notice tone="danger">{err}</Notice>}

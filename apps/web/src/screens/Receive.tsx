@@ -34,6 +34,7 @@ export function Receive({ initial }: { initial?: string }) {
           {canShare && <Btn kind="soft" aria-label={t('dsShare')} onClick={() => { haptic(); void navigator.share({ text: a.address }).catch(() => {}); }}><Icon n="share" className="h-[18px] w-[18px]" /></Btn>}
           <a href={a.explorer} target="_blank" rel="noreferrer noopener" className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl border border-line px-4 text-[15.5px] font-medium"><Icon n="ext" className="h-4 w-4" />{t('explorer')}</a></div>
       </Card>
+      {acc.data?.signerReachable === false && <Notice tone="warn"><span data-testid="addr-cached">{t('svAddrFromCache', { date: acc.data.addressesAsOf ? new Date(acc.data.addressesAsOf).toLocaleString() : '—' })}</span></Notice>}
       <Notice tone="warn">{t('onlySend', { assets: assets.length > 4 ? `${assets.slice(0, 3).join(' / ')}… (${assets.length})` : assets.join(' / '), network: n.name })}</Notice>
       {n.family === 'evm' && <Notice tone="info">{t('evmSame')}</Notice>}
       {n.activation && n.family !== 'cardano' && n.family !== 'polkadot' && <Notice tone="info">{t('activationNote', { network: n.name, amount: trimAmt(n.activation, 12), sym: n.native.symbol })}</Notice>}

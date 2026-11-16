@@ -81,7 +81,9 @@ export function VenueIcon({ venue, size = 20, className = '' }: { venue: string;
   const id = VENUE_ALIAS[venue.toLowerCase()] ?? venue.toLowerCase();
   return <span className={`logo ${className}`} style={{ width: size, height: size }} aria-hidden="true"><Plate def={VENUE_ICONS[id]} size={size} letters={venue.slice(0, 2).toUpperCase()} /></span>;
 }
+/** Providers without a logo file show two letters; these two would otherwise read "ZE" and "ON". */
+const PROVIDER_LETTERS: Record<string, string> = { zerox: '0x', oneinch: '1in' };
 export function ProviderIcon({ provider, size = 20, className = '' }: { provider: string; size?: number; className?: string }) {
   const id = provider.toLowerCase();
-  return <span className={`logo ${className}`} style={{ width: size, height: size }} aria-hidden="true"><Plate def={PROVIDER_ICONS[id]} size={size} letters={provider.slice(0, 2).toUpperCase()} /></span>;
+  return <span className={`logo ${className}`} style={{ width: size, height: size }} aria-hidden="true"><Plate def={PROVIDER_ICONS[id]} size={size} letters={PROVIDER_LETTERS[id] ?? provider.slice(0, 2).toUpperCase()} /></span>;
 }

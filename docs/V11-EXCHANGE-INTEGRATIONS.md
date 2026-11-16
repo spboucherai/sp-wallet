@@ -306,7 +306,7 @@ adapter without `trading` (`services/api/src/derivatives/venues.ts`), and the sm
 | Paper trading | yes — the only venue with a paper account |
 | Live trading | wired end to end: build, signer-side reading of the payload, submit, cancel, TP/SL, reduce-only, leverage, collateral deposit and withdrawal (audit §1.1). Manual mode needs a passkey per order; a derivative mandate allows passkey-less orders inside signer-enforced bounds |
 | Tradable instruments | **BTC, ETH, SOL** only: the pinned asset table `packages/derivatives/src/live/hl-assets.ts` (checked against the venue's `meta` on 2026-11-15, identical). Every other instrument is shown with `tradableReason: hl_asset_not_pinned` |
-| Builder dexes (HIP-3) | not read by this adapter. A symbol with a `dex:` prefix would be listed with `hl_builder_dex` and never mapped to an underlying; reading them is the Private Markets work stream |
+| Builder dexes (HIP-3) | read through `adapter.builder` by the Private Markets work stream (`/api/v1/private-markets`), market data only. The hub lists the main dex (the adapter's `instruments()`); a symbol with a `dex:` prefix reaching it would be flagged `hl_builder_dex` and never mapped to an underlying |
 
 Symbol normalisation: the base is the venue's own `name`. The main perp dex lists crypto assets under their ticker, so they map by
 venue metadata. `kPEPE`, `kSHIB`, `kBONK`, `kFLOKI` are reviewed rows with multiplier 1 000; `kLUNC`, `kNEIRO`, `kDOGS` are not

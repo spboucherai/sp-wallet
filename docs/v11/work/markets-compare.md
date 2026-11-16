@@ -211,6 +211,15 @@ generic and covered by `trading-api.test.ts` for every declared operation).
 | `node scripts/build.mjs && vite build` | exit 0; first chunk 258.47 kB |
 | `npx tsx scripts/smoke-markets-hub.mts` | OK (output below) |
 
+After merging the current `v11` (private markets, SDKs, signer stabilisation) into this branch — conflicts in six shared files, all of the "both sides added a line" kind (`App.tsx`, `i18n.ts`, `server.ts`, `trading-api/read.ts`, two operation counts in tests); the trade switch now has four entries (Spot, Futures, Markets, Private markets) and scrolls sideways when it does not fit:
+
+| Command | Result |
+|---|---|
+| `pnpm typecheck` | exit 0 |
+| `pnpm test` | 155 files, 3 782 tests: 3 721 passed, 59 skipped, **2 failed** — both in `packages/trading-sdk/test/generated.test.ts` (the SDK's generated types and its hard-coded count of 26 operations). They already fail on `v11` itself: its OpenAPI document has 29 operations since the private-markets merge and the SDK was generated at 26. Not touched here (the SDK is another work stream); the fix is `node packages/trading-sdk/scripts/gen-types.mts` plus the count in that test (30 with `compareMarkets`) |
+| `node scripts/gen-openapi.mts --check` | up to date (30 operations, 18 implemented) |
+| `vite build` | first chunk 260.29 kB with both new trade-area screens wired (258.47 kB on this branch alone) |
+
 New test files: `packages/trading/test/symbols.test.ts` (10), `cost-pool.test.ts` (8), `services/api/test/markets-hub.test.ts`
 (23), `apps/web/test/markets.test.ts` (22). Fixtures: `services/api/test/fixtures/markets-hub/{hyperliquid,gmx,dydx,edgex}.json`
 — the adapters' normalised answers recorded read-only on 2026-11-15 (every instrument and ticker, BTC and ETH books, GMX pool

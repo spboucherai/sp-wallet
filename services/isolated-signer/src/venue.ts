@@ -11,7 +11,7 @@ import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { sign } from 'viem/accounts';
 import {
   createHlTrading, D, HL_KIND_L1, hex, hlPinnedAsset, hlPinnedAssets, jurisdictionAckOf, signatureFromHex, typedDataDigest, validateVenueAuthorization, venueAgentWireName,
-  venueAuthorizationHash, VenueAuthorizationSchema, VENUE_PENDING_GRACE_MS, venueLeverageHash, VenueLeverageSchema, venueOrderHash, venueOrderNotional, VenueOrderSchema, venueWindowError, withinBand,
+  venueAuthorizationHash, VenueAuthorizationSchema, VENUE_PENDING_GRACE_MS, venueLeverageHash, VenueLeverageSchema, venueOrderHash, venueOrderNotional, venueOrderPriceError, VenueOrderSchema, venueWindowError,
   type HlDescription, type HlL1SignPayload, type HlSignature, type HlUserSignPayload, type SignRequest, type VenueAuthorization,
 } from '@spw/derivatives/live';
 import type { Keys } from './keys.ts';
@@ -99,6 +99,20 @@ export async function venueAuthorize(ctx: VenueCtx, raw: unknown, assertion: Aut
   return { authorizationId: id, hash: rec.hash, agentAddress: agent.address, approve: rec.approve };
 }
 
+/**
+ * V11 (B-04) — the answer of an authorization the signer ALREADY stored, given again. When the answer of /venue/authorize is lost
+ * (timeout, crash, relay drop) the API holds no authorization while the signer refuses a second one for up to 90 days. This
+ * returns the same bytes that were returned then: no key signs anything here, no passkey is needed, and nothing is returned for
+ * a revoked or expired authorization. The approveAgent signature it carries names the signer's own trading key only.
+ */
+export function venueAuthorizationAgain(ctx: VenueCtx, authorizationId: string): VenueAuthorizeResult & { authorization: VenueAuthorization } {
+  const r = ctx.store.state.venues?.[authorizationId];
+  if (!r) throw ctx.fail('not_found', 'unknown venue authorization');
+  if (r.revoked) throw ctx.fail('revoked', 'authorization revoked');
+  if (ctx.now() >= r.authorization.expiresAt) throw ctx.fail('expired', 'authorization expired');
+  return { authorizationId, hash: r.hash, agentAddress: r.authorization.agentAddress, approve: r.approve, authorization: r.authorization };
+}
+
 /** Stopping never needs a passkey. A revoked authorization signs nothing, ever again (the record is kept, so a restart changes nothing). */
 export function venueRevoke(ctx: VenueCtx, authorizationId: string): { revoked: true; revokedAt: string } {
   const r = ctx.store.state.venues?.[authorizationId];
@@ -156,9 +170,12 @@ export async function venueSign(ctx: VenueCtx, req: VenueSignRequest): Promise<V
     usage.cancels += cancels.length; hash = p.connectionId.slice(2);
     summary = { cancels: cancels.length, instruments: [...new Set(cancels.map((c) => c.instrument))] };
   } else if (d.kind === 'order') {
-    if (st.state.halted) deny('policy', 'emergency halt is active');
     if (!d.orders || d.orders.length !== 1) deny('unsupported', 'exactly one order per signature');
     const o = d.orders![0]!;
+    // V11 (B-01): the halt stops new risk, never the way out. Whether the order is reduce-only is read HERE, from the payload the
+    // trading key would sign (`describe`), not from anything the API says; the venue never lets such an order open or add to a
+    // position. Every other check below — the passkey included — applies to it unchanged.
+    if (st.state.halted && o.reduceOnly !== true) deny('policy', 'emergency halt is active: only cancels and reduce-only orders are signed');
     const cp = VenueOrderSchema.safeParse(req.context?.order);
     if (!cp.success) deny('bad_request', 'malformed order context');
     const c = cp.data!;
@@ -181,9 +198,9 @@ export async function venueSign(ctx: VenueCtx, req: VenueSignRequest): Promise<V
     let mid: string;
     try { const px = (await ctx.prices.get([symbol]))[symbol]; if (!(typeof px === 'number' && px > 0 && Number.isFinite(px))) throw new Error('no price'); mid = canon(px.toFixed(8)); }
     catch (e) { return deny('no_price', `the signer could not establish its own market price for ${symbol} (${(e as Error).message.slice(0, 80)}); order refused`); }
-    for (const [what, px] of [['price', c.price], ['trigger price', c.triggerPrice]] as const) {
-      if (px !== null && !withinBand(px, mid, a.policy.maxPriceDeviationBps)) deny('price', `${what} ${canon(px)} is more than ${a.policy.maxPriceDeviationBps} bps away from the signer's own ${symbol} price ${mid}`);
-    }
+    // V11 (B-07): a reduce-only stop-loss / take-profit may rest away from the market (venueOrderPriceError, shared with the API's pre-check)
+    const off = venueOrderPriceError(c, mid, a.policy.maxPriceDeviationBps);
+    if (off) deny('price', `${off.reason} the signer's own ${symbol} price ${mid}`);
     if (!req.assertion) deny('bad_approval', 'MANUAL_LIVE: every order needs the owner\'s passkey approval');
     const oh = venueOrderHash(c);
     try { await ctx.verify(req.assertion!, oh); } catch (e) { deny((e as { code?: string }).code ?? 'bad_approval', (e as Error).message); }

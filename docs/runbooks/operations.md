@@ -7,8 +7,19 @@
 - The API reaches the signer by LAN IP written at deploy time. After a DHCP renumbering: `mld deploy sp-wallet-signer && mld deploy sp-wallet`.
 
 ## Emergency halt
-Phone: Security → Emergency halt → type STOP. Or on the signer node: `node ~/apps/sp-wallet-signer/signer.mjs halt && pm2 restart sp-wallet-signer`.
-Resume: `node ~/apps/sp-wallet-signer/signer.mjs unhalt && pm2 restart sp-wallet-signer`. Balances stay visible while halted.
+Phone: Security → Emergency halt → type STOP. Or on the signer node: `node ~/apps/sp-wallet-signer/signer.mjs halt`.
+Resume, on the signer node only: `node ~/apps/sp-wallet-signer/signer.mjs unhalt`. Balances stay visible while halted.
+
+Since V11 no restart is needed and none should be chained: the command is applied by the running daemon itself (it answers
+`applied by the running daemon: in force now`) through a socket in the signer's data directory, so the daemon's next save
+cannot undo it. When no daemon runs, the command writes the state file under a lock (`no daemon is running: written to the
+state file`). If it answers that the state is in use but the control socket did not answer, nothing was changed: check the
+daemon (`pm2 logs sp-wallet-signer`) before trying again. The same holds for `reset-passkeys` and `setup-token`.
+
+What the halt stops: transfers, swaps, bridges, deposits, withdrawals from a venue, new positions, orders that can add
+exposure, leverage changes, new authorizations and mandates. What it never stops (V11): cancelling an order, closing or
+reducing a position (Hyperliquid reduce-only orders, GMX decreases and cancellations — the passkey is still asked where it
+was before), and bringing agent-vault funds back to your own address.
 
 ## Paper backup of the recovery phrase (do this first)
 In your own Terminal (not through an assistant, no screen sharing): `ssh -t <signer-node> /opt/homebrew/bin/node apps/sp-wallet-signer/signer.mjs export-recovery`,
@@ -21,7 +32,7 @@ There is deliberately no import command yet. Quickest safe path: import the 24 w
 (`init`), run owner setup again and deposit to the new addresses.
 
 ## Lost passkey
-On the signer node: `signer.mjs reset-passkeys`, `signer.mjs setup-token`, restart the signer; on the API node
+On the signer node: `signer.mjs reset-passkeys`, `signer.mjs setup-token` (applied by the running daemon: no restart); on the API node
 `psql sp_wallet -c 'delete from credentials; update sessions set revoked = true'`; open the site and run setup again.
 
 ## Changing limits

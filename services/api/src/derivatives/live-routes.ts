@@ -15,6 +15,7 @@ import { CloseBodySchema, OrderBodySchema } from './paper.ts';
 const P = '/api/v1/derivatives/live';
 export const MAX_LIVE_STREAMS = 8;
 const IDEMPOTENCY = /^[A-Za-z0-9._:-]{8,100}$/;
+const OptionalAssertion = z.strictObject({ assertion: z.record(z.string(), z.unknown()).optional() });
 
 export function liveRoutes(app: FastifyInstance, svc: LiveService = live()): void {
   let streams = 0;
@@ -48,7 +49,12 @@ export function liveRoutes(app: FastifyInstance, svc: LiveService = live()): voi
   app.post(`${P}/accounts/:id/authorization/prepare`, run(async (req) => svc.prepareAuthorization(id(req), AuthorizationBodySchema.parse(req.body))));
   app.post(`${P}/accounts/:id/authorization/approve`, run(async (req) => svc.approveAuthorization(id(req), ApproveAuthorizationSchema.parse(req.body))));
   app.post(`${P}/accounts/:id/authorization/revoke`, run(async (req) => svc.revoke(id(req), RevokeBodySchema.parse(req.body ?? {}))));
+  // V11: a lost answer of the signer no longer locks the account — adopt what the passkey approved, or revoke it (no passkey: it only takes or removes)
+  app.post(`${P}/accounts/:id/authorization/recover`, run(async (req) => svc.recover(id(req))));
+  // the API-side policy: tightening is free; a change that loosens anything is refused with `passkey_required` and goes through prepare → approve
   app.post(`${P}/accounts/:id/policy`, run(async (req) => svc.setPolicy(id(req), RiskPolicySchema.strict().parse(req.body))));
+  app.post(`${P}/accounts/:id/policy/prepare`, run(async (req) => svc.prepareRisk(id(req), 'policy', RiskPolicySchema.strict().parse(req.body))));
+  app.post(`${P}/accounts/:id/policy/approve`, run(async (req) => svc.approvePolicy(id(req), AssertionBodySchema.parse(req.body).assertion)));
 
   // MANDATE_LIVE: prepare (canonical mandate + acknowledgement text + WebAuthn request) → approve (assertion) ; revoke (no passkey).
   // There is NO route that places a mandate order: only the server-side agent runtime can (derivatives/mandate.ts).
@@ -69,10 +75,13 @@ export function liveRoutes(app: FastifyInstance, svc: LiveService = live()): voi
 
   // kill switch: three separate, explicit actions
   app.post(`${P}/accounts/:id/halt`, run(async (req) => svc.halt(id(req), HaltBodySchema.parse(req.body ?? {}))));
-  app.post(`${P}/accounts/:id/resume`, run(async (req) => svc.resume(id(req))));
+  // V11: halting is free; lifting the owner's halt and re-basing a divergence need the passkey (prepare → the same route with the assertion)
+  app.post(`${P}/accounts/:id/resume/prepare`, run(async (req) => svc.prepareRisk(id(req), 'resume')));
+  app.post(`${P}/accounts/:id/resume`, run(async (req) => svc.resume(id(req), OptionalAssertion.parse(req.body ?? {}).assertion)));
   app.post(`${P}/accounts/:id/cancel-all`, run(async (req) => svc.cancelAll(id(req))));
   app.post(`${P}/accounts/:id/close`, run(async (req) => svc.close(id(req), CloseBodySchema.parse(req.body), idempotencyKey(req, false))));
-  app.post(`${P}/accounts/:id/rebase`, run(async (req) => svc.rebase(id(req))));
+  app.post(`${P}/accounts/:id/rebase/prepare`, run(async (req) => svc.prepareRisk(id(req), 'rebase')));
+  app.post(`${P}/accounts/:id/rebase`, run(async (req) => svc.rebase(id(req), OptionalAssertion.parse(req.body ?? {}).assertion)));
   /** one reconciliation pass now (the worker runs one every few seconds) */
   app.post(`${P}/accounts/:id/reconcile`, run(async (req) => { const r = await svc.reconcile(id(req)); return { ...r, account: await svc.get(id(req)) }; }));
 

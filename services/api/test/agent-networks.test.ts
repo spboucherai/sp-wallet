@@ -1,14 +1,14 @@
 // V5 through the real API and a real signer process boundary (own database, own fake JSON-RPC node, no outside network):
 // agents on several networks, the tradable-symbols endpoint, vault indices, the gas reserve gate, mandates per network,
 // registration of universe-generic strategies (the laboratory is called for real when its environment is installed).
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdtempSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTestDb } from './test-db.ts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { cashLegs, DEFAULT_POLICY, getNetwork, hasMarketData, MANDATE_NETWORKS, MARKET_LISTINGS, NETWORKS, tradableSymbols } from '@spw/core';
+import { cashLegs, DEFAULT_POLICY, getNetwork, hasMarketData, mandateHash, MANDATE_NETWORKS, MARKET_LISTINGS, NETWORKS, tradableSymbols } from '@spw/core';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
 import { deriveKeys } from '../../isolated-signer/src/keys.ts';
 import { createSignerServer } from '../../isolated-signer/src/server.ts';
@@ -300,4 +300,134 @@ describe.skipIf(!LAB)('registration of library strategies (the laboratory descri
     expect(early.status).toBe(409); // approval still needs the report
     for (let k = 0; k < 120; k++) { const left = await sql`select 1 from strategy_versions where status = 'backtesting'`; if (!left.length) break; await new Promise((r) => setTimeout(r, 500)); }
   }, 180_000);
+});
+
+// =========================================================================================================================
+// V11 Phase B — D2 (a mandate must not outlive its agent on the signer), D4 (no approval on a failed look-ahead check)
+
+describe('V11 D2: when an agent leaves LIVE, its mandate is revoked AT THE SIGNER', () => {
+  const signerMandates = async () => ((await (await import('../src/signer-client.ts')).signer.status(true)).mandates ?? []) as { mandate: { mandateId: string; vaultIndex: number }; revoked: boolean; expired: boolean; approvedAt: string }[];
+  const liveAgain = async (id: string) => {
+    const p = await api('POST', `/agents/${id}/mandate/prepare`);
+    expect(p.status).toBe(200);
+    const r = await api('POST', `/agents/${id}/mandate/approve`, { assertion: owner.assert(Buffer.from(p.json.options.challenge, 'base64url')) });
+    expect(r.status).toBe(200); expect(r.json.state).toBe('LIVE');
+    return p.json.mandate.mandateId as string;
+  };
+  /** the Arbitrum agent of the tests above: vault 2, LIVE under its first mandate */
+  const arb = { id: '' };
+  beforeAll(async () => { arb.id = (await sql`select id from agents where vault_index = 2`)[0].id; });
+  const active = async (vault = 2) => (await signerMandates()).filter((m) => m.mandate.vaultIndex === vault && !m.revoked && !m.expired).map((m) => m.mandate.mandateId);
+
+  it('paused or stopped by the owner: revoked on the signer at once; a new mandate is then the only one in force on the vault', async () => {
+    // (when the laboratory is installed, the registration test above has set this agent STOPPED in the database: it is made LIVE again here)
+    if ((await sql`select state from agents where id = ${arb.id}`)[0].state !== 'LIVE') await liveAgain(arb.id);
+    const [row] = await sql`select state, mandate_id from agents where id = ${arb.id}`;
+    expect(row.state).toBe('LIVE');
+    const first = row.mandate_id as string;
+    expect(await active()).toEqual([first]);
+    // PAUSED used to leave the mandate in force for up to 90 days
+    expect((await api('POST', `/agents/${arb.id}/mode`, { mode: 'PAUSED' })).json.state).toBe('PAUSED');
+    expect(await active()).toEqual([]);
+    expect((await api('GET', `/agents/${arb.id}`)).json.mandateStatus).toMatchObject({ active: false, revoked: true });
+    expect((await sql`select type, actor, data from audit_events where type = 'mandate.revoked' order by seq desc limit 1`)[0]).toMatchObject({ actor: 'engine', data: { agent: arb.id, mandateId: first } });
+    // back to paper is allowed now — and signs nothing: the mandate is gone
+    expect((await api('POST', `/agents/${arb.id}/mode`, { mode: 'PAPER' })).json.state).toBe('PAPER_TRADING');
+    const second = await liveAgain(arb.id);
+    expect(second).not.toBe(first);
+    expect(await active()).toEqual([second]);
+    expect((await api('POST', `/agents/${arb.id}/mode`, { mode: 'STOPPED' })).json.state).toBe('STOPPED');
+    expect(await active()).toEqual([]);
+    const third = await liveAgain(arb.id);
+    expect((await api('POST', `/agents/${arb.id}/mode`, { mode: 'RESEARCH' })).status).toBe(200);
+    expect(await active()).toEqual([]);
+    expect((await signerMandates()).filter((m) => [first, second, third].includes(m.mandate.mandateId)).every((m) => m.revoked)).toBe(true);
+  });
+
+  it('the signer refuses a second mandate on the vault; the approve route ends the previous one first, so a replacement is never two mandates', async () => {
+    const one = await liveAgain(arb.id);
+    // the API state is forced back (a bug, a restore): the route would let a second mandate be prepared while the first is in force
+    await sql`update agents set state = 'PAPER_TRADING' where id = ${arb.id}`;
+    const p = await api('POST', `/agents/${arb.id}/mandate/prepare`);
+    expect(p.status).toBe(200);
+    // straight to the signer, as a compromised API would: refused
+    const client = (await import('../src/signer-client.ts')).signer;
+    await expect(client.mandateApprove(p.json.mandate, owner.assert(Buffer.from(p.json.options.challenge, 'base64url')))).rejects.toMatchObject({ code: 'signer_conflict' });
+    expect(await active()).toEqual([one]);
+    // through the route: the previous mandate is revoked first, then the new one is approved
+    const r = await api('POST', `/agents/${arb.id}/mandate/approve`, { assertion: owner.assert(Buffer.from(p.json.options.challenge, 'base64url')) });
+    expect(r.status).toBe(200);
+    expect(await active()).toEqual([p.json.mandate.mandateId]);
+  });
+
+  it('stopped by the ENGINE (loss limit, strategy no longer the approved one, expiry): revoked on the signer by the engine itself', async () => {
+    const live = await import('../src/agents/live.ts'), engine = await import('../src/agents/engine.ts');
+    const [a0] = await sql`select * from agents where id = ${arb.id}`;
+    expect(a0.state).toBe('LIVE');
+    const bars = Array.from({ length: 60 }, (_, k) => ({ ts: Math.floor(Date.now() / 3_600_000) * 3_600_000 - (60 - k) * 3_600_000, open: 2000, high: 2000, low: 2000, close: 2000, volume: 1 }));
+    // 50 USD left of the 100 allocated, all in the cash leg: far past the 5 % loss limit, and nothing left to sell
+    const held = (a0.mandate.assets as string[]).map((id, k) => ({ symbol: ['USDC', 'ETH', 'LINK', 'UNI', 'AAVE'][k]!, id, decimals: k === 0 ? 6 : 18, units: k === 0 ? 50 : 0 }));
+    const deps = { series: async () => bars, assertFresh: async () => {}, signal: async () => ({}), holdings: async () => held, quote: async () => 0n, placeLive: async () => { throw new Error('no order is expected'); },
+      inFlight: async () => false, halted: async () => false, now: () => Date.now(), revokeMandate: async (a: never, reason: string) => { await live.revokeAgentMandate(a, reason); } };
+    // (1) loss limit
+    expect(await engine.tickAgent(a0, deps as never)).toBe('stopped: loss limit');
+    expect((await sql`select state, stop_reason from agents where id = ${arb.id}`)[0]).toMatchObject({ state: 'STOPPED', stop_reason: expect.stringMatching(/^loss limit reached/) });
+    expect(await active()).toEqual([]);                                                                                    // before V11 the mandate stayed in force on the signer
+    expect((await sql`select data from audit_events where type = 'mandate.revoked' order by seq desc limit 1`)[0].data).toMatchObject({ agent: arb.id, reason: expect.stringMatching(/^loss limit reached/) });
+    // (2) the approved code is no longer the code of the mandate
+    await liveAgain(arb.id);
+    await sql`update strategy_versions set code_sha256 = ${'99'.repeat(32)} where id = (select strategy_version_id from agents where id = ${arb.id})`;
+    expect(await engine.tickAgent((await sql`select * from agents where id = ${arb.id}`)[0], deps as never)).toBe('stopped');
+    expect(await active()).toEqual([]);
+    await sql`update strategy_versions set code_sha256 = ${'ab'.repeat(32)} where id = (select strategy_version_id from agents where id = ${arb.id})`;
+    // (3) the engine could not reach the signer when it stopped the agent: the next pass does it (the signer's own list decides)
+    const kept = await liveAgain(arb.id);
+    await sql`update agents set state = 'STOPPED', stop_reason = 'stopped while the signer was unreachable' where id = ${arb.id}`;
+    const down = { status: async () => { throw new Error('unreachable'); }, mandateRevoke: async () => { throw new Error('unreachable'); } };
+    expect(await live.revokeAgentMandate({ id: arb.id, mandate_id: kept }, 'x', down)).toBe(false);
+    expect(await live.revokeStaleMandates(down)).toEqual([]);
+    expect(await active()).toEqual([kept]);
+    expect((await sql`select type from audit_events where type = 'mandate.revoke_failed' order by seq desc limit 1`)).toHaveLength(1);
+    expect(await live.revokeStaleMandates()).toEqual([kept]);
+    expect(await active()).toEqual([]);
+    expect(await live.revokeStaleMandates()).toEqual([]);                                                                  // nothing left
+  });
+
+  it('a mandate no agent holds (an approval whose answer was lost) is revoked after the grace; a LIVE agent\'s mandate and a just-approved one are left alone', async () => {
+    const live = await import('../src/agents/live.ts'), client = (await import('../src/signer-client.ts')).signer;
+    const mine = await liveAgain(arb.id);
+    // an approval that reached the signer but never the database: vault 7, no agent
+    const [a0] = await sql`select * from agents where id = ${arb.id}`;
+    const now = Math.floor(Date.now() / 1000), st = await client.status(true);
+    const orphan = { ...a0.mandate, mandateId: randomUUID(), vaultIndex: 7, vault: keys.vault(7).address, createdAt: now, expiresAt: now + 86400, keyId: st.keyId };
+    await client.mandateApprove(orphan, owner.assert(mandateHash(orphan)));
+    expect(await live.revokeStaleMandates(client, Date.now())).toEqual([]);                                                // inside the grace: its database write may still be on its way
+    expect(await active(7)).toEqual([orphan.mandateId]);
+    expect(await live.revokeStaleMandates(client, Date.now() + 121_000)).toEqual([orphan.mandateId]);
+    expect(await active(7)).toEqual([]);
+    expect(await active()).toEqual([mine]);                                                                                // the LIVE agent keeps its mandate
+    expect((await sql`select state from agents where id = ${arb.id}`)[0].state).toBe('LIVE');
+  });
+});
+
+describe('V11 D4: a spot strategy is not approved on a failed look-ahead check', () => {
+  it('refuses a report whose look-ahead check failed or is missing; approves one that passed', async () => {
+    const a = (await create({ name: 'D4', network: 'base', universe: ['ETH'] })).json;
+    expect(a.id).toBeTruthy();
+    const version = async (report: unknown) => {
+      const id = randomUUID();
+      await sql`insert into strategy_versions (id, agent_id, name, version, code_sha256, path, status, report) values (${id}, ${a.id}, 'x', ${id.slice(0, 8)}, ${createHash('sha256').update(id).digest('hex')}, 'strategies/ts_momentum/3', 'draft', ${report === null ? null : sql.json(report as never)})`;
+      return api('POST', `/agents/${a.id}/strategies/${id}/approve`);
+    };
+    expect((await version(null)).json).toMatchObject({ error: 'no_report' });
+    for (const bad of [{ metrics: {} }, { metrics: {}, checks: {} }, { metrics: {}, checks: { lookahead: 'fail', data_quality: 'pass' } }, { metrics: {}, checks: { lookahead: 'skipped' } }, { metrics: {}, checks: { lookahead: true } }, { metrics: {}, checks: { data_quality: 'pass' } }]) {
+      const r = await version(bad);
+      expect(r.status, JSON.stringify(bad)).toBe(409);
+      expect(r.json).toMatchObject({ error: 'bad_report', message: expect.stringMatching(/look-ahead check did not pass/) });
+    }
+    expect((await sql`select 1 from strategy_versions where agent_id = ${a.id} and status = 'approved'`)).toHaveLength(0);
+    expect((await sql`select strategy_version_id from agents where id = ${a.id}`)[0].strategy_version_id).toBeNull();
+    const ok = await version({ metrics: {}, checks: { lookahead: 'pass', data_quality: 'fail' } });
+    expect(ok.status).toBe(200); expect(ok.json.state).toBe('AWAITING_APPROVAL');
+  });
 });

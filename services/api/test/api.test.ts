@@ -17,7 +17,7 @@ const ORIGIN = 'https://wallet.test', RP = 'wallet.test', SECRET = 'k'.repeat(48
 const keys = deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
 const owner = new TestPasskey(RP, ORIGIN), attacker = new TestPasskey(RP, ORIGIN);
 let signerSrv: Server, app: any, sql: any, adapters: any, cookie = '';
-const swapSeen: any[] = [];
+const swapSeen: any[] = [], balanceReads: string[] = [];
 const USDC = NETWORKS.base.tokens[0]!.id, DEST = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
 
 async function api(method: string, path: string, body?: unknown, opts: { cookie?: string | null; origin?: string | null; csrf?: boolean; idem?: string } = {}) {
@@ -51,8 +51,10 @@ beforeAll(async () => {
     supportsPair: (a: any, b: any) => a.network === 'base' && b.network === 'base',
     quote: async (r: any) => { swapSeen.push(r); const out = (r.amountIn * 2000n * (10_000n - bps)) / 10_000n / 10n ** 12n;
       return [{ id: `${id}-${swapSeen.length}`, provider: id, request: recipient ? { ...r, recipient } : r, steps: [{ kind: 'swap' as const, provider: id, from: r.from, to: r.to, via: ['pool'], contracts: [] }],
-        amountOut: out, minAmountOut: (out * 995n) / 1000n, fees: [], estimatedSeconds: 12, priceImpactBps: 4, expiresAt: Date.now() + 30_000, firmness: 'indicative' as const,
+        amountOut: out, minAmountOut: (out * 995n) / 1000n, fees: [], estimatedSeconds: 12, priceImpactBps: 4, quotedAt: Date.now(), expiresAt: Date.now() + 30_000, firmness: 'indicative' as const,
         executability: { class: 'opaque' as const, reason: 'test' }, refundable: true, atomic: true }]; } });
+  await db.setSetting('prices', false); // the suite never contacts the price source
+  for (const k of Object.keys(adapters)) adapters[k].balances = async (a: string) => { balanceReads.push(`${k}:${a}`); return { native: 5n }; }; // nor a chain
   app = await (await import('../src/server.ts')).buildServer({ swapProviders: [fake('alpha', 10n), fake('beta', 30n), fake('evil', 0n, '0x000000000000000000000000000000000000dEaD')] });
 });
 afterAll(async () => { await app?.close(); signerSrv?.close(); await sql?.end(); });
@@ -148,7 +150,10 @@ describe('transfer lifecycle', () => {
     const assertion = owner.assert(Buffer.from(ra.options.challenge, 'base64url'));
     const ok = await api('POST', `/api/v1/transfers/proposals/${d.id}/approve`, { assertion });
     expect(ok.status).toBe(200);
-    expect(ok.json.state).toBe('broadcast');
+    // v11 (B2): this server does not broadcast — the transfer is signed and honestly reported as NOT sent, with a code, never as "broadcast"
+    expect(ok.json).toMatchObject({ state: 'not_broadcast', errorCode: 'broadcast_disabled', explorer: null, broadcastAt: null });
+    expect(ok.json.error).toMatch(/NOT broadcast/); expect(ok.json.txid).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(ok.json.execution).toMatchObject({ kind: 'transfer', state: 'failed', steps: [{ kind: 'send', state: 'failed', code: 'broadcast_disabled', explorer: null }] });
     const [row] = await sql`select raw, txid from proposals where id = ${d.id}`;
     const tx = parseTransaction(row.raw);
     expect(await recoverTransactionAddress({ serializedTransaction: row.raw })).toBe(keys.addresses.evm);
@@ -160,15 +165,38 @@ describe('transfer lifecycle', () => {
     expect(JSON.stringify(ok.json)).not.toContain(row.raw);
   });
 
-  it('refuses a second transfer on a network while the first is still unconfirmed', async () => {
-    // the previous test left a proposal in "broadcast" (test mode never confirms it)
+  it('v11 (B2): a transfer signed with broadcast off does NOT hold the network; a transfer really in flight still does', async () => {
+    // the previous test left a signed, never-sent transfer: before v11 it stayed in "broadcast" for ever and every later transfer on Base answered pending_tx
+    const [left] = await sql`select id, state from proposals where state = 'not_broadcast'`;
+    expect(left).toBeTruthy();
     const d = (await draft('1')).json;
+    const free = await api('POST', `/api/v1/transfers/proposals/${d.id}/request-approval`, {});
+    expect(free.status, JSON.stringify(free.json)).toBe(200);
+    // it is not listed as pending on Home, and its destination did not become a "known" address
+    const pf = (await api('GET', '/api/v1/portfolio')).json; // (prices are off for the suite: see beforeAll)
+    expect(pf.pending.map((p: any) => p.id)).toContain(d.id); expect(pf.pending.map((p: any) => p.id)).not.toContain(left.id);
+    await sql`delete from address_book`; const again = (await draft('1')).json; expect(again.warnings).toContain('new_destination');
+    await api('POST', `/api/v1/transfers/proposals/${again.id}/reject`, {});
+    // the status route carries the same state, the code, and the unified execution status
+    expect((await api('GET', `/api/v1/transfers/${left.id}/status`)).json).toMatchObject({ state: 'not_broadcast', errorCode: 'broadcast_disabled', explorer: null, kind: 'transfer', execution: { state: 'failed' } });
+    // a transfer that IS in flight (signed and relayed, not confirmed) blocks the next one, as before
+    await sql`update proposals set state = 'broadcast', error = null, error_code = null where id = ${left.id}`;
     const blocked = await api('POST', `/api/v1/transfers/proposals/${d.id}/request-approval`, {});
-    expect(blocked.status).toBe(409);
-    expect(blocked.json.error).toBe('pending_tx');
-    await sql`update proposals set state = 'finalized' where state = 'broadcast'`; // the chain confirmed it
+    expect(blocked.status).toBe(409); expect(blocked.json.error).toBe('pending_tx');
+    await sql`update proposals set state = 'finalized' where id = ${left.id}`; // the chain confirmed it
     expect((await api('POST', `/api/v1/transfers/proposals/${d.id}/request-approval`, {})).status).toBe(200);
     await api('POST', `/api/v1/transfers/proposals/${d.id}/reject`, {});
+    expect((await api('GET', `/api/v1/transfers/proposals/${d.id}`)).json).toMatchObject({ state: 'rejected', errorCode: 'rejected_by_owner', error: 'rejected by owner' });
+  });
+
+  it('v11 (B4): the same Idempotency-Key answers the same draft; the same key with another body is refused', async () => {
+    const key = crypto.randomUUID(), body = { network: 'base', asset: USDC, to: DEST, amount: '3' };
+    const a = await api('POST', '/api/v1/transfers/proposals', body, { idem: key }), b = await api('POST', '/api/v1/transfers/proposals', body, { idem: key });
+    expect(a.status).toBe(200); expect(b.json.id).toBe(a.json.id);
+    const other = await api('POST', '/api/v1/transfers/proposals', { ...body, amount: '4' }, { idem: key });
+    expect(other.status).toBe(409); expect(other.json.error).toBe('idempotency_mismatch');
+    expect((await sql`select count(*)::int as n from proposals where idempotency_key = ${key}`)[0].n).toBe(1);
+    await api('POST', `/api/v1/transfers/proposals/${a.json.id}/reject`, {});
   });
 
   it('reject, tampered stored intent, daily limit and emergency halt all fail closed', async () => {
@@ -244,6 +272,99 @@ describe('transfer lifecycle', () => {
     const rows = await sql`select provider, ok, code from swap_quotes`;
     expect(rows.length).toBeGreaterThanOrEqual(4);
   });
+
+  it('v11: every route carries the normalized card, the server states the executor, the stream has a retry field', async () => {
+    const q = (await api('POST', '/api/v1/swap/quote', { from: 'base:native', to: `base:${USDC}`, amount: '0.01' })).json;
+    expect(q.executors).toEqual(['kyberswap']); // from the pinned tables, whatever the providers answered
+    for (const r of q.routes) {
+      // alpha / beta are not executors of this wallet: comparison only, stated by the server
+      expect(r).toMatchObject({ executable: false, executor: null });
+      expect(r.card).toMatchObject({ routeId: r.id, quoteId: r.id, providers: r.providers, fingerprint: r.fingerprint, amountIn: '10000000000000000', amountInDisplay: '0.01', fromSymbol: 'ETH', toSymbol: 'USDC',
+        estimatedOut: r.amountOut, minimumOut: r.minAmountOut, estimatedOutDisplay: r.amountOutDisplay, minimumOutDisplay: r.minAmountOutDisplay,
+        networkFee: null, protocolFee: null, // the scripted providers report no fee: null, not zero
+        toleranceBps: 50, etaSeconds: 12, executable: false, executor: null, reasonCode: 'opaque', steps: [{ kind: 'swap', network: 'base', toNetwork: 'base', provider: r.providers[0], descriptionCode: 'step_swap' }] });
+      expect(r.fingerprint).toMatch(/^[0-9a-f]{32}$/);
+      expect(typeof r.card.quotedAt).toBe('number'); expect(r.card.expiresAt).toBeGreaterThan(r.card.quotedAt); expect(Date.now() - r.card.quotedAt).toBeLessThan(10_000);
+      expect(r.card.riskFlags).toEqual(r.risk.flags.map((f: any) => f.code)); expect(r.card.riskLevel).toBe(r.risk.level);
+      expect(r.card.effectiveSlippageBps).toBeNull(); // prices are off: no reference price, so no figure — never a guess
+    }
+    expect(new Set(q.routes.map((r: any) => r.fingerprint)).size).toBe(q.routes.length);
+    const sse = await app.inject({ method: 'GET', url: `/api/v1/swap/quote/stream?from=base:native&to=base:${USDC}&amount=0.01`, headers: { cookie } });
+    expect(sse.body).toMatch(/^event: start\nretry: 3000\ndata: /);
+    const blocks = sse.body.split('\n\n').filter(Boolean), data = (b: string) => JSON.parse(b.split('\n').find((l: string) => l.startsWith('data: '))!.slice(6));
+    expect(data(blocks[0]!).executors).toEqual(['kyberswap']);
+    for (const b of blocks.filter((x: string) => x.startsWith('event: route'))) expect(data(b).card.fingerprint).toMatch(/^[0-9a-f]{32}$/);
+    expect(data(blocks[blocks.length - 1]!).executors).toEqual(['kyberswap']);
+    // a comparison-only quote cannot be prepared: the reference names a provider this wallet does not execute (checked after the halt in this suite, so only the schema is exercised here)
+    const bad = await api('POST', '/api/v1/swap/proposals', { network: 'base', fromAsset: 'native', toAsset: USDC, amount: '0.01', quote: { id: 'x', provider: 'alpha', fingerprint: 'nope', amountOut: '1', minAmountOut: '1', quotedAt: 1 } }, { idem: crypto.randomUUID() });
+    expect(bad.status).toBe(400); expect(bad.json.error).toBe('bad_request');
+  });
+
+  it('v11: quote streams send a heartbeat and are capped', async () => {
+    // a second, bare Fastify instance over the same modules: only the swap routes, a provider that takes its time, a short heartbeat, room for one stream
+    const Fastify = (await import('fastify')).default, { swapRoutes } = await import('../src/swap.ts'), { UserError } = await import('../src/config.ts');
+    let release: () => void = () => {}; const gate = new Promise<void>((r) => { release = r; });
+    const slow = { id: 'slow', name: 'slow', policy: { timeoutMs: 4000 }, capabilities: () => ({ networks: ['base'], crossChain: false, needsKey: false, configured: true, kinds: ['swap' as const], docs: '' }),
+      supportsPair: () => true, quote: async () => { await gate; return []; } };
+    const f = Fastify(); f.setErrorHandler((e: any, _q, r) => r.status(e instanceof UserError ? e.status : 500).send({ error: e.code ?? 'internal' }));
+    swapRoutes(f, { providers: [slow as never], prices: async () => null, heartbeatMs: 25, maxStreams: 1 });
+    const url = `/api/v1/swap/quote/stream?from=base:native&to=base:${USDC}&amount=0.01`;
+    const first = f.inject({ method: 'GET', url });
+    await new Promise((r) => setTimeout(r, 150));
+    const second = await f.inject({ method: 'GET', url });
+    expect(second.statusCode).toBe(429); expect(second.json().error).toBe('too_many_streams');
+    release(); const done = await first;
+    expect(done.body.match(/^: keep-alive$/gm)!.length).toBeGreaterThanOrEqual(3); // comment lines while the provider was silent
+    expect(done.body).toMatch(/event: done/);
+    expect((await f.inject({ method: 'GET', url })).statusCode).toBe(200); // the slot was given back
+    expect((await f.inject({ method: 'GET', url: '/api/v1/swap/quote/stream?from=base:native&to=base:native&amount=1' })).statusCode).toBe(400); // a refused request holds no slot
+    expect((await f.inject({ method: 'GET', url })).statusCode).toBe(200);
+    await f.close();
+  });
+
+  it('v11: activity and CSV say what each row is (a GMX order is not a "send"); a swap\'s CSV line says what was received', async () => {
+    const mk = (id: string, kind: string, out: string | null, swap: unknown) => sql`insert into proposals (id, idempotency_key, state, kind, network, asset, symbol, decimals, amount, from_addr, to_addr, txid, out_amount, swap)
+      values (${id}, ${`act-${id}`}, 'finalized', ${kind}, 'arbitrum', 'native', 'ETH', 18, '1000000000000000', ${keys.addresses.evm}, '0x1C3fa76e6E1088bCE750f23a5BFcffa1efEF6A41', ${'0x' + id.replace(/-/g, '').padEnd(64, '0')}, ${out}, ${swap ? sql.json(swap) : null})`;
+    await mk('00000000-0000-4000-8000-00000000a001', 'gmx', null, null);
+    await mk('00000000-0000-4000-8000-00000000a002', 'swap', '2500000', { provider: 'kyberswap', toAsset: 'x', toSymbol: 'USDC', toDecimals: 6, expectedOut: '2500000', minOut: '2400000', slippageBps: 50, needsApproval: false, simulated: true });
+    const items = (await api('GET', '/api/v1/activity?limit=500')).json.items;
+    expect(items.find((i: any) => i.id === '00000000-0000-4000-8000-00000000a001')).toMatchObject({ kind: 'gmx', rawKind: 'gmx', execution: { kind: 'gmx', steps: [{ kind: 'order', state: 'confirmed' }] } });
+    expect(items.find((i: any) => i.id === '00000000-0000-4000-8000-00000000a002')).toMatchObject({ kind: 'swap', rawKind: 'swap' });
+    expect(items.filter((i: any) => i.kind === 'send').every((i: any) => i.rawKind === 'transfer')).toBe(true);
+    const csv = (await app.inject({ method: 'GET', url: '/api/v1/export/activity.csv', headers: { cookie } })).body.split('\n');
+    expect(csv[0]).toBe('time_utc,direction,network,symbol,amount_base_units,amount,counterparty,state,txid,fee_estimate_base_units,to_network,to_symbol,received');
+    const line = (needle: string) => csv.find((l: string) => l.includes(needle))!.split(',').map((c: string) => c.replace(/^"|"$/g, ''));
+    expect(line('a001')[1]).toBe('gmx');
+    expect(line('a002')).toMatchObject({ 1: 'swap', 10: 'arbitrum', 11: 'USDC', 12: '2.5' });
+    expect(csv.filter((l: string) => l.split(',')[1] === '"send"').length).toBeGreaterThan(3); // plain transfers are still `send`
+    await sql`delete from proposals where idempotency_key like 'act-%'`;
+  });
+
+  it('v11: Home is served with the signer unreachable — last known addresses, the API\'s own balance reads, and it says so', async () => {
+    const sc = await import('../src/signer-client.ts'), { UserError } = await import('../src/config.ts'), status = sc.signer.status;
+    const seen = balanceReads;
+    const up = (await api('GET', '/api/v1/portfolio')).json;
+    expect(up).toMatchObject({ signer: { reachable: true }, halted: true, priceSource: null, pricesAsOf: null, pricesStale: false });
+    const accounts = (await api('GET', '/api/v1/accounts')).json; expect(accounts.signerReachable).toBe(true);
+    sc.signer.status = async () => { throw new UserError('signer_unreachable', 'the signer is unreachable; nothing was signed', 503); };
+    try {
+      await new Promise((r) => setTimeout(r, 12_100)); seen.length = 0; // past the 12 s balance cache: the balances below are fresh reads by the API itself
+      const down = await api('GET', '/api/v1/portfolio');
+      expect(down.status, JSON.stringify(down.json).slice(0, 200)).toBe(200);
+      expect(down.json).toMatchObject({ signer: { reachable: false, addressesAsOf: accounts.addressesAsOf }, halted: null }); // the halt flag is unknown, not "false"
+      expect(down.json.balances.find((b: any) => b.network === 'base' && b.asset === 'native')).toMatchObject({ amount: '5', error: null });
+      expect(seen).toContain(`base:${keys.addresses.evm}`); // read at the address the signer gave earlier
+      const acc = (await api('GET', '/api/v1/accounts')).json;
+      expect(acc).toMatchObject({ signerReachable: false, keyId: accounts.keyId }); expect(acc.accounts).toEqual(accounts.accounts);
+      expect((await sql`select value from settings where key = 'signerAddresses'`)[0].value.addresses.base).toBe(keys.addresses.evm); // kept across a restart of the API
+      // nothing that needs the signer pretends to work
+      expect((await api('POST', '/api/v1/transfers/proposals', { network: 'base', asset: USDC, to: DEST, amount: '1' }, { idem: crypto.randomUUID() })).json.error).toBe('signer_unreachable');
+      // another signer failure (a refusal, not an outage) is not swallowed
+      sc.signer.status = async () => { throw new UserError('signer_error', 'refused', 422); };
+      expect((await api('GET', '/api/v1/portfolio')).status).toBe(422);
+    } finally { sc.signer.status = status; }
+    expect((await api('GET', '/api/v1/portfolio')).json.signer.reachable).toBe(true);
+  }, 30_000);
 
   it('logout and revoke-all end access', async () => {
     expect((await api('POST', '/api/v1/security/sessions/revoke-all', {})).status).toBe(200);

@@ -1374,6 +1374,2888 @@
         }
       }
     },
+    "/api/v1/trading/private-markets": {
+      "get": {
+        "operationId": "listPrivateMarkets",
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Synthetic contracts on private companies, venue by venue, with sourced valuations",
+        "description": "Live discovery (Hyperliquid builder dexes categorised `preipo`, edgeX `pre_ipo`) joined with a reviewed contract table. Five quantities are separate fields: synthetic price, contract market value, notional exposure, implied valuation estimate (or null + reason), last known private valuation. A venue that cannot be read gives rows with `error`; the others answer. Venues are never averaged.",
+        "security": [
+          {
+            "bearerKey": [
+              "markets:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "markets:read",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "delisted",
+            "in": "query",
+            "required": false,
+            "description": "true: only delisted markets (frozen prices)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "hypothetical position size, contracts (default 1)",
+            "schema": {
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"
+            }
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "long",
+                "short"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "markets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "venue": {
+                            "type": "string"
+                          },
+                          "platform": {
+                            "type": "string"
+                          },
+                          "symbol": {
+                            "type": "string"
+                          },
+                          "company": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "slug": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "slug",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "live",
+                              "delisted",
+                              "halted",
+                              "reduce_only"
+                            ]
+                          },
+                          "review": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "reviewed",
+                                  "under_review",
+                                  "not_reviewed"
+                                ]
+                              },
+                              "reasons": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "state",
+                              "reasons"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "contract": {
+                            "type": "object",
+                            "properties": {
+                              "nature": {
+                                "type": "string"
+                              },
+                              "unit": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "usd_per_share",
+                                      "valuation_usd_billions",
+                                      "unknown"
+                                    ]
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "label"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "quoteCurrency": {
+                                "type": "string"
+                              },
+                              "settlement": {
+                                "type": "string"
+                              },
+                              "oracle": {
+                                "type": "string"
+                              },
+                              "liquidation": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "nature",
+                              "unit",
+                              "quoteCurrency",
+                              "settlement",
+                              "oracle",
+                              "liquidation"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "market": {
+                            "type": "object",
+                            "properties": {
+                              "price": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "ts": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "milliseconds since the Unix epoch"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "stale": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "source",
+                                  "ts",
+                                  "stale"
+                                ],
+                                "additionalProperties": false,
+                                "description": "one figure with where it comes from, when it was read, and whether it is older than its freshness bound"
+                              },
+                              "funding": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "ts": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "milliseconds since the Unix epoch"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "stale": {
+                                    "type": "boolean"
+                                  },
+                                  "intervalSec": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "source",
+                                  "ts",
+                                  "stale",
+                                  "intervalSec"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "openInterest": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "ts": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "milliseconds since the Unix epoch"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "stale": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "source",
+                                  "ts",
+                                  "stale"
+                                ],
+                                "additionalProperties": false,
+                                "description": "one figure with where it comes from, when it was read, and whether it is older than its freshness bound"
+                              },
+                              "volume24h": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "ts": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "milliseconds since the Unix epoch"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "stale": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "source",
+                                  "ts",
+                                  "stale"
+                                ],
+                                "additionalProperties": false,
+                                "description": "one figure with where it comes from, when it was read, and whether it is older than its freshness bound"
+                              }
+                            },
+                            "required": [
+                              "price",
+                              "funding",
+                              "openInterest",
+                              "volume24h"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "valuation": {
+                            "type": "object",
+                            "properties": {
+                              "syntheticPrice": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "contractMarketValue": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "reason"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "notionalExposure": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "hypothetical": {
+                                    "type": "boolean",
+                                    "const": true
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "hypothetical"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "impliedValuation": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "formula": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "reasonCode": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "formula",
+                                  "reason",
+                                  "reasonCode"
+                                ],
+                                "additionalProperties": {},
+                                "description": "null + reason unless the reviewed definition gives the formula"
+                              },
+                              "lastPrivateValuation": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "value": {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      "kind": {
+                                        "type": "string"
+                                      },
+                                      "date": {
+                                        "type": "string"
+                                      },
+                                      "sourceUrl": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "value",
+                                      "kind",
+                                      "date",
+                                      "sourceUrl"
+                                    ],
+                                    "additionalProperties": {}
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "premiumDiscount": {
+                                "type": "object",
+                                "properties": {
+                                  "premiumBps": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "premiumBps"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "caveats": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "code": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "code",
+                                    "text"
+                                  ],
+                                  "additionalProperties": {}
+                                }
+                              }
+                            },
+                            "required": [
+                              "syntheticPrice",
+                              "contractMarketValue",
+                              "notionalExposure",
+                              "impliedValuation",
+                              "lastPrivateValuation",
+                              "premiumDiscount",
+                              "caveats"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "tradable": {
+                            "type": "boolean",
+                            "const": false
+                          },
+                          "notTradable": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "reasons": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "reasons"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "error": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "venue",
+                          "platform",
+                          "symbol",
+                          "company",
+                          "status",
+                          "review",
+                          "contract",
+                          "market",
+                          "valuation",
+                          "tradable",
+                          "notTradable",
+                          "error"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "companies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "contracts": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "slug",
+                          "name",
+                          "contracts"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "excluded": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "reason"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "venues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "venue": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "ok",
+                              "stale",
+                              "error"
+                            ]
+                          },
+                          "error": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "venue",
+                          "status",
+                          "error"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "notice": {
+                      "type": "object",
+                      "properties": {
+                        "tradable": {
+                          "type": "boolean",
+                          "const": false
+                        },
+                        "code": {
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "tradable",
+                        "code",
+                        "text"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "ts": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "milliseconds since the Unix epoch"
+                    }
+                  },
+                  "required": [
+                    "markets",
+                    "companies",
+                    "excluded",
+                    "venues",
+                    "notice",
+                    "ts"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "a backing service is unavailable: `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/private-markets/companies/{slug}": {
+      "get": {
+        "operationId": "getPrivateMarketCompany",
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Every contract on one private company, side by side (never merged)",
+        "security": [
+          {
+            "bearerKey": [
+              "markets:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "markets:read",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]{1,40}$"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"
+            }
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "long",
+                "short"
+              ]
+            }
+          },
+          {
+            "name": "interval",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1h",
+                "1d"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "company": {
+                      "type": "object",
+                      "properties": {
+                        "slug": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "slug",
+                        "name"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "contracts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "venue": {
+                            "type": "string"
+                          },
+                          "platform": {
+                            "type": "string"
+                          },
+                          "symbol": {
+                            "type": "string"
+                          },
+                          "company": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "slug": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "slug",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "live",
+                              "delisted",
+                              "halted",
+                              "reduce_only"
+                            ]
+                          },
+                          "review": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "reviewed",
+                                  "under_review",
+                                  "not_reviewed"
+                                ]
+                              },
+                              "reasons": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "state",
+                              "reasons"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "contract": {
+                            "type": "object",
+                            "properties": {
+                              "nature": {
+                                "type": "string"
+                              },
+                              "unit": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "usd_per_share",
+                                      "valuation_usd_billions",
+                                      "unknown"
+                                    ]
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "label"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "quoteCurrency": {
+                                "type": "string"
+                              },
+                              "settlement": {
+                                "type": "string"
+                              },
+                              "oracle": {
+                                "type": "string"
+                              },
+                              "liquidation": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "nature",
+                              "unit",
+                              "quoteCurrency",
+                              "settlement",
+                              "oracle",
+                              "liquidation"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "market": {
+                            "type": "object",
+                            "properties": {
+                              "price": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "ts": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "milliseconds since the Unix epoch"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "stale": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "source",
+                                  "ts",
+                                  "stale"
+                                ],
+                                "additionalProperties": false,
+                                "description": "one figure with where it comes from, when it was read, and whether it is older than its freshness bound"
+                              },
+                              "funding": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "ts": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "milliseconds since the Unix epoch"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "stale": {
+                                    "type": "boolean"
+                                  },
+                                  "intervalSec": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "source",
+                                  "ts",
+                                  "stale",
+                                  "intervalSec"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "openInterest": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "ts": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "milliseconds since the Unix epoch"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "stale": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "source",
+                                  "ts",
+                                  "stale"
+                                ],
+                                "additionalProperties": false,
+                                "description": "one figure with where it comes from, when it was read, and whether it is older than its freshness bound"
+                              },
+                              "volume24h": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "ts": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "milliseconds since the Unix epoch"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "stale": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "source",
+                                  "ts",
+                                  "stale"
+                                ],
+                                "additionalProperties": false,
+                                "description": "one figure with where it comes from, when it was read, and whether it is older than its freshness bound"
+                              }
+                            },
+                            "required": [
+                              "price",
+                              "funding",
+                              "openInterest",
+                              "volume24h"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "valuation": {
+                            "type": "object",
+                            "properties": {
+                              "syntheticPrice": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "contractMarketValue": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "reason"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "notionalExposure": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "hypothetical": {
+                                    "type": "boolean",
+                                    "const": true
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "hypothetical"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "impliedValuation": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "formula": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "reasonCode": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "formula",
+                                  "reason",
+                                  "reasonCode"
+                                ],
+                                "additionalProperties": {},
+                                "description": "null + reason unless the reviewed definition gives the formula"
+                              },
+                              "lastPrivateValuation": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "value": {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      "kind": {
+                                        "type": "string"
+                                      },
+                                      "date": {
+                                        "type": "string"
+                                      },
+                                      "sourceUrl": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "value",
+                                      "kind",
+                                      "date",
+                                      "sourceUrl"
+                                    ],
+                                    "additionalProperties": {}
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "premiumDiscount": {
+                                "type": "object",
+                                "properties": {
+                                  "premiumBps": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "premiumBps"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "caveats": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "code": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "code",
+                                    "text"
+                                  ],
+                                  "additionalProperties": {}
+                                }
+                              }
+                            },
+                            "required": [
+                              "syntheticPrice",
+                              "contractMarketValue",
+                              "notionalExposure",
+                              "impliedValuation",
+                              "lastPrivateValuation",
+                              "premiumDiscount",
+                              "caveats"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "tradable": {
+                            "type": "boolean",
+                            "const": false
+                          },
+                          "notTradable": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "reasons": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "reasons"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "error": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "venue",
+                          "platform",
+                          "symbol",
+                          "company",
+                          "status",
+                          "review",
+                          "contract",
+                          "market",
+                          "valuation",
+                          "tradable",
+                          "notTradable",
+                          "error"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "delisted": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "venue": {
+                            "type": "string"
+                          },
+                          "platform": {
+                            "type": "string"
+                          },
+                          "symbol": {
+                            "type": "string"
+                          },
+                          "company": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "slug": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "slug",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "live",
+                              "delisted",
+                              "halted",
+                              "reduce_only"
+                            ]
+                          },
+                          "review": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "reviewed",
+                                  "under_review",
+                                  "not_reviewed"
+                                ]
+                              },
+                              "reasons": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "state",
+                              "reasons"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "contract": {
+                            "type": "object",
+                            "properties": {
+                              "nature": {
+                                "type": "string"
+                              },
+                              "unit": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "usd_per_share",
+                                      "valuation_usd_billions",
+                                      "unknown"
+                                    ]
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "label"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "quoteCurrency": {
+                                "type": "string"
+                              },
+                              "settlement": {
+                                "type": "string"
+                              },
+                              "oracle": {
+                                "type": "string"
+                              },
+                              "liquidation": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "nature",
+                              "unit",
+                              "quoteCurrency",
+                              "settlement",
+                              "oracle",
+                              "liquidation"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "market": {
+                            "type": "object",
+                            "properties": {
+                              "price": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "ts": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "milliseconds since the Unix epoch"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "stale": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "source",
+                                  "ts",
+                                  "stale"
+                                ],
+                                "additionalProperties": false,
+                                "description": "one figure with where it comes from, when it was read, and whether it is older than its freshness bound"
+                              },
+                              "funding": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "ts": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "milliseconds since the Unix epoch"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "stale": {
+                                    "type": "boolean"
+                                  },
+                                  "intervalSec": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "source",
+                                  "ts",
+                                  "stale",
+                                  "intervalSec"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "openInterest": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "ts": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "milliseconds since the Unix epoch"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "stale": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "source",
+                                  "ts",
+                                  "stale"
+                                ],
+                                "additionalProperties": false,
+                                "description": "one figure with where it comes from, when it was read, and whether it is older than its freshness bound"
+                              },
+                              "volume24h": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "ts": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "milliseconds since the Unix epoch"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "stale": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "source",
+                                  "ts",
+                                  "stale"
+                                ],
+                                "additionalProperties": false,
+                                "description": "one figure with where it comes from, when it was read, and whether it is older than its freshness bound"
+                              }
+                            },
+                            "required": [
+                              "price",
+                              "funding",
+                              "openInterest",
+                              "volume24h"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "valuation": {
+                            "type": "object",
+                            "properties": {
+                              "syntheticPrice": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "contractMarketValue": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "reason"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "notionalExposure": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "hypothetical": {
+                                    "type": "boolean",
+                                    "const": true
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "hypothetical"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "impliedValuation": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "formula": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "reasonCode": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "formula",
+                                  "reason",
+                                  "reasonCode"
+                                ],
+                                "additionalProperties": {},
+                                "description": "null + reason unless the reviewed definition gives the formula"
+                              },
+                              "lastPrivateValuation": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "value": {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      "kind": {
+                                        "type": "string"
+                                      },
+                                      "date": {
+                                        "type": "string"
+                                      },
+                                      "sourceUrl": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "value",
+                                      "kind",
+                                      "date",
+                                      "sourceUrl"
+                                    ],
+                                    "additionalProperties": {}
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "premiumDiscount": {
+                                "type": "object",
+                                "properties": {
+                                  "premiumBps": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "decimal number as a string (never a float)"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "premiumBps"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "caveats": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "code": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "code",
+                                    "text"
+                                  ],
+                                  "additionalProperties": {}
+                                }
+                              }
+                            },
+                            "required": [
+                              "syntheticPrice",
+                              "contractMarketValue",
+                              "notionalExposure",
+                              "impliedValuation",
+                              "lastPrivateValuation",
+                              "premiumDiscount",
+                              "caveats"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "tradable": {
+                            "type": "boolean",
+                            "const": false
+                          },
+                          "notTradable": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "reasons": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "reasons"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "error": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "venue",
+                          "platform",
+                          "symbol",
+                          "company",
+                          "status",
+                          "review",
+                          "contract",
+                          "market",
+                          "valuation",
+                          "tradable",
+                          "notTradable",
+                          "error"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "references": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": {}
+                      }
+                    },
+                    "merged": {
+                      "type": "null",
+                      "description": "always null: venues are never merged"
+                    },
+                    "ts": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "milliseconds since the Unix epoch"
+                    }
+                  },
+                  "required": [
+                    "company",
+                    "contracts",
+                    "delisted",
+                    "references",
+                    "merged",
+                    "ts"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "unknown market, order or object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "a backing service is unavailable: `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/private-markets/{id}": {
+      "get": {
+        "operationId": "getPrivateMarket",
+        "tags": [
+          "Markets"
+        ],
+        "summary": "One private-company contract: definition, valuation breakdown, candles, top of book",
+        "security": [
+          {
+            "bearerKey": [
+              "markets:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "markets:read",
+        "x-spw-implemented": true,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "`venue:symbol`, e.g. `hyperliquid:io:ANTH`, `edgex:ANTHROPICUSDC`",
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 120,
+              "pattern": "^[a-z]+:[A-Za-z0-9:._-]+$"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"
+            }
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "long",
+                "short"
+              ]
+            }
+          },
+          {
+            "name": "interval",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1h",
+                "1d"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "market": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "venue": {
+                          "type": "string"
+                        },
+                        "platform": {
+                          "type": "string"
+                        },
+                        "symbol": {
+                          "type": "string"
+                        },
+                        "company": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "slug": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "slug",
+                                "name"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "live",
+                            "delisted",
+                            "halted",
+                            "reduce_only"
+                          ]
+                        },
+                        "review": {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "reviewed",
+                                "under_review",
+                                "not_reviewed"
+                              ]
+                            },
+                            "reasons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "reasons"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        "contract": {
+                          "type": "object",
+                          "properties": {
+                            "nature": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "usd_per_share",
+                                    "valuation_usd_billions",
+                                    "unknown"
+                                  ]
+                                },
+                                "label": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "label"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "quoteCurrency": {
+                              "type": "string"
+                            },
+                            "settlement": {
+                              "type": "string"
+                            },
+                            "oracle": {
+                              "type": "string"
+                            },
+                            "liquidation": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "unit",
+                            "quoteCurrency",
+                            "settlement",
+                            "oracle",
+                            "liquidation"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        "market": {
+                          "type": "object",
+                          "properties": {
+                            "price": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "description": "decimal number as a string (never a float)"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "source": {
+                                  "type": "string"
+                                },
+                                "ts": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991,
+                                      "description": "milliseconds since the Unix epoch"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "stale": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "source",
+                                "ts",
+                                "stale"
+                              ],
+                              "additionalProperties": false,
+                              "description": "one figure with where it comes from, when it was read, and whether it is older than its freshness bound"
+                            },
+                            "funding": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "description": "decimal number as a string (never a float)"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "source": {
+                                  "type": "string"
+                                },
+                                "ts": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991,
+                                      "description": "milliseconds since the Unix epoch"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "stale": {
+                                  "type": "boolean"
+                                },
+                                "intervalSec": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "source",
+                                "ts",
+                                "stale",
+                                "intervalSec"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "openInterest": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "description": "decimal number as a string (never a float)"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "source": {
+                                  "type": "string"
+                                },
+                                "ts": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991,
+                                      "description": "milliseconds since the Unix epoch"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "stale": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "source",
+                                "ts",
+                                "stale"
+                              ],
+                              "additionalProperties": false,
+                              "description": "one figure with where it comes from, when it was read, and whether it is older than its freshness bound"
+                            },
+                            "volume24h": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "description": "decimal number as a string (never a float)"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "source": {
+                                  "type": "string"
+                                },
+                                "ts": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991,
+                                      "description": "milliseconds since the Unix epoch"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "stale": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "source",
+                                "ts",
+                                "stale"
+                              ],
+                              "additionalProperties": false,
+                              "description": "one figure with where it comes from, when it was read, and whether it is older than its freshness bound"
+                            }
+                          },
+                          "required": [
+                            "price",
+                            "funding",
+                            "openInterest",
+                            "volume24h"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        "valuation": {
+                          "type": "object",
+                          "properties": {
+                            "syntheticPrice": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "description": "decimal number as a string (never a float)"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "value"
+                              ],
+                              "additionalProperties": {}
+                            },
+                            "contractMarketValue": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "description": "decimal number as a string (never a float)"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "reason": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "reason"
+                              ],
+                              "additionalProperties": {}
+                            },
+                            "notionalExposure": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "description": "decimal number as a string (never a float)"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "hypothetical": {
+                                  "type": "boolean",
+                                  "const": true
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "hypothetical"
+                              ],
+                              "additionalProperties": {}
+                            },
+                            "impliedValuation": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "description": "decimal number as a string (never a float)"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "formula": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "reason": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "reasonCode": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "formula",
+                                "reason",
+                                "reasonCode"
+                              ],
+                              "additionalProperties": {},
+                              "description": "null + reason unless the reviewed definition gives the formula"
+                            },
+                            "lastPrivateValuation": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "value": {
+                                      "type": "string",
+                                      "description": "decimal number as a string (never a float)"
+                                    },
+                                    "kind": {
+                                      "type": "string"
+                                    },
+                                    "date": {
+                                      "type": "string"
+                                    },
+                                    "sourceUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "value",
+                                    "kind",
+                                    "date",
+                                    "sourceUrl"
+                                  ],
+                                  "additionalProperties": {}
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "premiumDiscount": {
+                              "type": "object",
+                              "properties": {
+                                "premiumBps": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "description": "decimal number as a string (never a float)"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "premiumBps"
+                              ],
+                              "additionalProperties": {}
+                            },
+                            "caveats": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "text"
+                                ],
+                                "additionalProperties": {}
+                              }
+                            }
+                          },
+                          "required": [
+                            "syntheticPrice",
+                            "contractMarketValue",
+                            "notionalExposure",
+                            "impliedValuation",
+                            "lastPrivateValuation",
+                            "premiumDiscount",
+                            "caveats"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        "tradable": {
+                          "type": "boolean",
+                          "const": false
+                        },
+                        "notTradable": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "reasons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "reasons"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "error": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "venue",
+                        "platform",
+                        "symbol",
+                        "company",
+                        "status",
+                        "review",
+                        "contract",
+                        "market",
+                        "valuation",
+                        "tradable",
+                        "notTradable",
+                        "error"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "book": {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": {}
+                    },
+                    "candles": {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": {}
+                    },
+                    "references": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string"
+                          },
+                          "date": {
+                            "type": "string"
+                          },
+                          "sourceUrl": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "date",
+                          "sourceUrl"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "ts": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "milliseconds since the Unix epoch"
+                    }
+                  },
+                  "required": [
+                    "market",
+                    "book",
+                    "candles",
+                    "references",
+                    "ts"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `idempotency`, `stale_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`: missing, malformed, unknown, expired or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope`, `restricted`, `ip_not_allowed`, `mandate_required`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "unknown market, order or object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` (see the `RateLimit-*` headers) or `auth_throttled`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "a backing service is unavailable: `signer_unreachable`, `venue_unavailable`, `markets_unavailable`, `stale_data`…",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/trading/portfolio": {
       "get": {
         "operationId": "getPortfolio",

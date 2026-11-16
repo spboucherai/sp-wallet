@@ -19,7 +19,10 @@ import { rpcAny, rpcOne, rpcQuorum } from './chains/rpc.ts';
 import { config, UserError } from './config.ts';
 import { audit, sql } from './db.ts';
 import { addressFor, signer } from './signer-client.ts';
-import { broadcastNow, move, view, type ProposalRow } from './transfers.ts';
+import { broadcastNow, failure, move, view, type ProposalRow } from './transfers.ts';
+import type { SvCode, SvParams } from './sv-texts.ts';
+import { checkQuoteRef, idemOf, lostRace, QuoteRef, replayOf } from './prepare-common.ts';
+import { assetKey } from '@spw/swap';
 import { xswapNext, xswapTerminal, type OutboundSeen, type ThorStatus, type XswapObs, type XswapState } from './xswap-state.ts';
 
 /** Second line of defence: the vault must hold, on-chain, at least this many times the amount in the source asset. */
@@ -151,7 +154,7 @@ async function routerGuards(n: NetworkDef, me: string): Promise<void> {
 // ---------------------------------------------------------------------------------------------------------------------
 // Preparation
 
-const Create = z.strictObject({ fromNetwork: z.string().max(24), fromAsset: z.string().max(80), toNetwork: z.string().max(24), toAsset: z.string().max(80), amount: z.string().min(1).max(60), slippageBps: z.number().int().min(1).max(300).default(100) });
+const Create = z.strictObject({ fromNetwork: z.string().max(24), fromAsset: z.string().max(80), toNetwork: z.string().max(24), toAsset: z.string().max(80), amount: z.string().min(1).max(60), slippageBps: z.number().int().min(1).max(300).default(100), /** v11: the route the owner was looking at (prepare-common.ts) */ quote: QuoteRef.optional() });
 const GAS = { approve: 70_000n, depositUnsimulated: 160_000n };
 
 export function xswapRoutes(app: FastifyInstance): void {
@@ -159,9 +162,9 @@ export function xswapRoutes(app: FastifyInstance): void {
     assets: THOR_ASSETS.map((a) => ({ network: a.network, asset: a.asset, symbol: a.symbol, source: a.source })), routers: Object.fromEntries(Object.entries(THOR_ROUTERS).map(([k, v]) => [k, v.address])) }));
 
   app.post('/api/v1/xswap/proposals', async (req) => {
-    const idem = String(req.headers['idempotency-key'] ?? '');
-    if (!/^[A-Za-z0-9-]{16,64}$/.test(idem)) throw new UserError('idempotency', 'Idempotency-Key header required');
-    const b = Create.parse(req.body);
+    if (!/^[A-Za-z0-9-]{16,64}$/.test(String(req.headers['idempotency-key'] ?? ''))) throw new UserError('idempotency', 'Idempotency-Key header required');
+    const b = Create.parse(req.body), idem = idemOf(req.headers, 'xswap', b);
+    const again = await replayOf(idem); if (again) return again; // v11 (B4): the same key answers the same swap, without asking the operators again
     let src: ThorAsset, dst: ThorAsset;
     try { src = thorAsset(b.fromNetwork, b.fromAsset); dst = thorAsset(b.toNetwork, b.toAsset); } catch { throw new UserError('xswap_not_enabled', 'this pair cannot be swapped through THORChain by this wallet', 422); }
     if (!src.source) throw new UserError('xswap_not_enabled', `${src.symbol} cannot be the input of a THORChain swap in this wallet`, 422);
@@ -201,6 +204,8 @@ export function xswapRoutes(app: FastifyInstance): void {
     if (amount1e8 < agreed.minAmountIn) throw new UserError('below_minimum', `THORChain's minimum for this swap is ${formatUnits(fromThorAmount(agreed.minAmountIn, src.decimals), src.decimals)} ${src.symbol}: below it, a refund could not pay its own fee and the amount would be lost`, 422);
     const minOut = fromThorAmount(agreed.limit, dst.decimals), expectedOut = fromThorAmount(agreed.expected, dst.decimals);
     if (minOut <= 0n) throw new UserError('no_route', 'the amount is too small for this pair', 422);
+    // v11 (B6): what two operators agree on now, against the quote the owner was shown
+    const quote = checkQuoteRef(b.quote, { executor: 'thorchain', fromKey: assetKey({ network: src.network, asset: src.asset }), toKey: assetKey({ network: dst.network, asset: dst.asset }), amountIn: amount, slippageBps: b.slippageBps, firmOut: expectedOut, firmMinOut: minOut, toDecimals: dst.decimals, toSymbol: dst.symbol });
 
     // 3. second line: what the chain itself shows about that address
     const evidence = await vaultEvidence(n, src, vault, amount);
@@ -252,11 +257,11 @@ export function xswapRoutes(app: FastifyInstance): void {
       estimatedSeconds: agreed.seconds, slippageBps: b.slippageBps, operators: verdict.operators, quoteOperators: agreed.operators, churnHeight: verdict.statusSince, vaultMembers: verdict.members, evidence,
       needsApproval: needApprove, simulated, phase: 'sending', polls: 0, nextAt: 0 };
     const swap = { provider: 'thorchain', toAsset: dst.asset, toSymbol: dst.symbol, toDecimals: dst.decimals, expectedOut: expectedOut.toString(), minOut: minOut.toString(), slippageBps: b.slippageBps, needsApproval: needApprove, simulated };
-    const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, state, kind, network, asset, symbol, decimals, amount, from_addr, to_addr, note, fee_estimate, max_fee, warnings, intent, intent_hash, aux, swap, xswap, expires_at)
-      values (${id}, ${idem}, 'pending_approval', 'xswap', ${n.id}, ${src.asset}, ${src.symbol}, ${src.decimals}, ${amount.toString()}, ${me}, ${vault}, ${`swap → ${dst.symbol} (${dn.name})`}, ${feeEstimate.toString()}, ${intent.maxFee},
+    const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, request_hash, quote_ref, state, kind, network, asset, symbol, decimals, amount, from_addr, to_addr, note, fee_estimate, max_fee, warnings, intent, intent_hash, aux, swap, xswap, expires_at)
+      values (${id}, ${idem.key}, ${idem.hash}, ${quote ? sql.json(quote as never) : null}, 'pending_approval', 'xswap', ${n.id}, ${src.asset}, ${src.symbol}, ${src.decimals}, ${amount.toString()}, ${me}, ${vault}, ${`swap → ${dst.symbol} (${dn.name})`}, ${feeEstimate.toString()}, ${intent.maxFee},
         ${sql.json(needApprove ? ['swap_needs_approval'] : [])}, ${sql.json(intent as never)}, ${toHex(hash)}, ${aux ? sql.json(aux as never) : null}, ${sql.json(swap)}, ${sql.json(state as never)}, ${new Date(intent.expiresAt * 1000)})
       on conflict (idempotency_key) do nothing returning *`;
-    if (!p) throw new UserError('conflict', 'duplicate request', 409);
+    if (!p) return lostRace(idem);
     await audit('xswap.prepared', 'owner', { id, from: `${n.id}:${src.symbol}`, to: `${dn.id}:${dst.symbol}`, amount: amount.toString(), minOut: minOut.toString(), vault, vaultPubKey, memo: agreed.memo, operators: verdict.operators, quoteOperators: agreed.operators, churnHeight: verdict.statusSince, hash: toHex(hash) });
     const creds = await listCreds();
     const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge: new Uint8Array(hash), timeout: 110_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
@@ -285,16 +290,16 @@ export const xswapMayBroadcast = (p: { xswap?: XswapState | null }, nowMs = Date
 export async function advanceXswapSend(p: ProposalRow, check: (w: ThorVaultWant) => Promise<ThorVaultVerdict> = vaultCheck): Promise<ProposalRow> {
   if (p.kind !== 'xswap' || p.state !== 'signed' || !p.raw || !p.intent?.xswap || !p.xswap) return p;
   const n = getNetwork(p.network), b = p.xswap;
-  const fail = (error: string) => move(p, 'failed', { error });
+  const fail = (code: SvCode, params?: SvParams) => move(p, 'failed', failure(code, params));
   const sent = async (q: ProposalRow) => (q.state === 'broadcast' ? save(q, { ...b, phase: 'sent', sentAt: now(), nextAt: 0 }) : q);
   if (!config.broadcast) return sent(await broadcastNow(p));
-  if (!xswapMayBroadcast(p)) return fail('the swap could not be sent in time; nothing was sent to the vault');
+  if (!xswapMayBroadcast(p)) return fail('xswap_late');
   // the vault must still be the confirmed active vault of the same churn, on a chain that is not halted
   const { want, dest } = wantOf(p);
   try { const v = await check(want); if (v.statusSince !== b.churnHeight) throw new Error('the vault set changed (churn) since the swap was prepared'); }
   catch (e) {
     if (/^only \d+ THORNode/.test((e as Error).message)) return p; // operators unreachable: try again on the next tick, until the window closes
-    return fail(`the vault is no longer confirmed (${(e as Error).message.slice(0, 160)}); nothing was sent to it`);
+    return fail('xswap_vault_unconfirmed', { detail: (e as Error).message.slice(0, 160) });
   }
   if (n.family === 'evm') {
     const router = THOR_ROUTERS[n.id]!.address;
@@ -302,14 +307,14 @@ export async function advanceXswapSend(p: ProposalRow, check: (w: ThorVaultWant)
       await adapterFor(p.network).broadcast(p.pre_raw).catch(() => {});
       const rc = await rpcAny<{ status: `0x${string}` } | null>(n.rpc, 'eth_getTransactionReceipt', [p.pre_txid]).catch(() => null);
       if (!rc) { if (p.pre_state !== 'sent') await sql`update proposals set pre_state = 'sent', updated_at = now() where id = ${p.id}`; return p; }
-      if (hexToNumber(rc.status) !== 1) return fail('the token approval reverted; nothing was sent to the vault');
+      if (hexToNumber(rc.status) !== 1) return fail('xswap_approval_reverted');
       await sql`update proposals set pre_state = 'confirmed', updated_at = now() where id = ${p.id}`;
       await audit('xswap.approval_confirmed', 'chain', { id: p.id, txid: p.pre_txid });
     }
     const sim = await rpcAny<string>(n.rpc, 'eth_call', [{ from: p.from_addr, to: router, data: xswapDepositData(p.intent, dest), value: numberToHex(p.asset === 'native' ? BigInt(p.amount) : 0n) }, 'latest'])
       .then(() => null, (e: Error & { rpcCode?: number }) => (e.rpcCode !== undefined ? e.message : 'unreachable'));
     if (sim === 'unreachable') return p;
-    if (sim !== null) return fail(`the deposit would revert now (${sim.slice(0, 100)}); it was not sent${p.pre_raw ? '. The exact-amount approval of the router stays in place; only this wallet can use it' : ''}`);
+    if (sim !== null) return fail(p.pre_raw ? 'deposit_would_revert_approved' : 'deposit_would_revert', { detail: sim.slice(0, 100) });
   }
   return sent(await broadcastNow(p));
 }

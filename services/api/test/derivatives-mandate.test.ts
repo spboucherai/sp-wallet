@@ -14,7 +14,7 @@ import { deriveKeys } from '../../isolated-signer/src/keys.ts';
 import { Signer, SignerError } from '../../isolated-signer/src/signer.ts';
 import { Store } from '../../isolated-signer/src/store.ts';
 import { hyperliquidReader } from '../../isolated-signer/src/venue-read.ts';
-import { Clock, useDatabase } from './derivatives-helpers.ts';
+import { Clock, passkeyVerifier, useDatabase } from './derivatives-helpers.ts';
 import { FakeHl, routeFetch } from './hl-fake.ts';
 
 const RP = 'wallet.test', ORIGIN = 'https://wallet.test', BTC = 'hyperliquid:BTC', P = '/api/v1/derivatives/live';
@@ -76,16 +76,20 @@ function world() {
   const port: import('../src/derivatives/exec.ts').LiveSignerPort = {
     status: () => call(() => signer.status()), venueKey: (v, n) => call(() => signer.venueKey(v, n)),
     venueAuthorize: (a, s) => call(() => signer.venueAuthorize(a, s as never)), venueRevoke: (id) => call(() => signer.venueRevoke(id)),
+    venueAuthorization: (id) => call(() => signer.venueAuthorization(id)),
     venueSign: (p) => { signs.push(p); return call(() => signer.venueSign(p as never)); },
   };
+  /** V11: `lost` = the signer stores the mandate, but its answer never reaches the API */
+  const lost = { mandate: false };
   const mandatePort: import('../src/derivatives/exec.ts').MandateSignerPort = {
-    venueMandateApprove: (x, s) => call(() => signer.venueMandateApprove(x, s as never)), venueMandateRevoke: (id) => call(() => signer.venueMandateRevoke(id)),
+    venueMandateApprove: async (x, s) => { const r = await call(() => signer.venueMandateApprove(x, s as never)); if (lost.mandate) { lost.mandate = false; throw new UserError('signer_unreachable', 'the signer is unreachable; nothing was signed', 503); } return r; },
+    venueMandateRevoke: (id) => call(() => signer.venueMandateRevoke(id)),
     venueMandateSign: (p) => { mandateSigns.push(p); return call(() => signer.venueMandateSign(p as never)); },
   };
   const flags = { mainnet: false, mandateMainnet: false };
   const build = (): Svc => lv.createLive({ fetch: failing('info'), signer: port, mandateSigner: mandatePort, now: clock.now, rpId: RP, mainnetEnabled: () => flags.mainnet, mandateMainnetEnabled: () => flags.mandateMainnet,
-    credentials: async () => [{ id: pk.id, transports: ['internal'] }], confirmDelayMs: 0 });
-  const w = { clock, t, m, signer, store, pk, px, port, flags, faults, signs, mandateSigns, signerInfoCalls, svc: build(),
+    credentials: async () => [{ id: pk.id, transports: ['internal'] }], confirmDelayMs: 0, verifyOwner: passkeyVerifier(pk, RP, ORIGIN) });
+  const w = { clock, t, m, signer, store, pk, px, port, flags, faults, signs, mandateSigns, signerInfoCalls, lost, svc: build(),
     /** a minute later (the adapter's local rate budget is a one-minute window on the test clock) */
     next: (ms = 61_000) => clock.advance(ms) };
   return w;
@@ -95,6 +99,10 @@ const refusal = async (p: Promise<unknown>) => { const e = await p.then(() => nu
 const audits = async (id: string) => (await sql`select type from audit_events where data->>'account' = ${id} order by seq`).map((r: { type: string }) => r.type) as string[];
 const events = async (id: string, kind: string) => sql`select * from deriv_risk_events where account_id = ${id} and kind = ${kind} order by id` as Promise<any[]>;
 const row = async (id: string, k: string) => (await sql`select * from deriv_orders where account_id = ${id} and client_id = ${k}`)[0];
+
+/** V11: lifting the owner's halt and re-basing need the passkey over the prepared intent */
+async function resume(w: World, id: string) { const p = await w.svc.prepareRisk(id, 'resume'); return w.svc.resume(id, p.needed ? w.pk.assert(b64(p.hash)) : undefined); }
+async function rebase(w: World, id: string) { const p = await w.svc.prepareRisk(id, 'rebase'); return w.svc.rebase(id, w.pk.assert(b64(p.hash!))); }
 
 /** an authorized (MANUAL_LIVE) account, funded on the fake venue, with the venue's leverage setting inside the mandate */
 async function live(w: World, o: { network?: 'testnet' | 'mainnet'; leverage?: number | null } = {}) {
@@ -408,7 +416,7 @@ describe('stopping: kill switch, divergence, revocation, expiry, wind-down', () 
     expect(await mm.mandateAccountState(id, w.svc)).toMatchObject({ canOpen: false, canReduce: true, halted: expect.stringMatching(/halted by the owner/) });
     expect(await refusal(mm.setMandateLeverage(id, { instrument: BTC, leverage: 2, marginMode: 'cross' }, { strategySha256: SHA, agentId: AGENT_ID }, w.svc))).toMatchObject({ code: 'halted', status: 423 });
     expect((await place(w, id, { ...CLOSE, size: '0.001' })).order.state).toBe('filled');
-    await w.svc.resume(id);
+    await resume(w, id);
     w.next();
     expect((await place(w, id)).order.state).toBe('open');
 
@@ -422,7 +430,7 @@ describe('stopping: kill switch, divergence, revocation, expiry, wind-down', () 
 
     // the signer's emergency halt: refused by the signer; reduce-only still signed
     w.t.forcePosition(ACCOUNT, 'BTC', '0.002');
-    await w.svc.rebase(id);
+    await rebase(w, id);
     w.next();
     w.signer.halt();
     expect(await refusal(place(w, id))).toMatchObject({ code: 'signer_halted' });
@@ -502,7 +510,7 @@ describe('mainnet: autonomous trading needs BOTH server settings', () => {
     w.flags.mandateMainnet = false;
     expect(await refusal(place(w, id))).toMatchObject({ code: 'mandate_mainnet_disabled' });
     expect(await refusal(mm.setMandateLeverage(id, { instrument: BTC, leverage: 2, marginMode: 'cross' }, { strategySha256: SHA, agentId: AGENT_ID }, w.svc))).toMatchObject({ code: 'mandate_mainnet_disabled' });
-    expect(await mm.mandateAccountState(id, w.svc)).toMatchObject({ canOpen: false, canReduce: false, blocked: { code: 'mandate_mainnet_disabled' } });
+    expect(await mm.mandateAccountState(id, w.svc)).toMatchObject({ canOpen: false, canReduce: true, blocked: { code: 'mandate_mainnet_disabled' } });   // V11: the way out is not behind the lock
     w.flags.mandateMainnet = true; w.flags.mainnet = false;
     expect(await refusal(place(w, id))).toMatchObject({ code: 'mainnet_disabled', status: 403 });
     expect(await refusal(w.svc.approveMandate(id, { assertion: {} as never, acknowledged: true }))).toMatchObject({ code: 'mainnet_disabled' });
@@ -669,7 +677,7 @@ describe('routes', () => {
       await w.svc.halt(id, { reason: 'stream test' });
       const second = (await statuses(2))[1];
       expect(second.halt).toMatch(/halted by the owner: stream test/); expect(second.halted).toBe(second.halt);
-      await w.svc.resume(id);
+      await resume(w, id);
       const third = (await statuses(3))[2];
       expect(third.halt).toBeNull(); expect(third.halted).toMatch(/records differ/);
       abort.abort();
@@ -677,5 +685,74 @@ describe('routes', () => {
       const rv = await api('POST', `/accounts/${id}/mandate/revoke`, { locale: 'fr' });
       expect(rv.status).toBe(200); expect(rv.json).toMatchObject({ modes: ['MANUAL_LIVE'], mandate: { phase: 'wind_down' }, cancelled: null, cancelError: null, locale: 'fr' });
     } finally { app.server.closeAllConnections?.(); await app.close(); }
+  });
+});
+
+// =========================================================================================================================
+// V11 Phase B
+
+describe('V11 B-02: the mainnet locks stop a mandate from adding exposure, never from reducing it', () => {
+  it('with either mainnet setting off, a reduce-only mandate order and a cancel still reach the venue; an order that can add, and a leverage change, do not', async () => {
+    const w = world();
+    w.flags.mainnet = true; w.flags.mandateMainnet = true;
+    const id = await live(w, { network: 'mainnet' });
+    await mandate(w, id);
+    expect((await place(w, id, MARKET_BUY)).order).toMatchObject({ state: 'filled', filled: '0.002' });                    // the agent holds 0.002 BTC on the (fake) mainnet venue
+    w.next();
+    const resting = await place(w, id);
+    expect(resting.order.state).toBe('open');
+    for (const off of [{ mainnet: true, mandateMainnet: false }, { mainnet: false, mandateMainnet: true }, { mainnet: false, mandateMainnet: false }]) {
+      Object.assign(w.flags, off); w.next();
+      const sent = w.m.exchangeCalls('order');
+      expect(await refusal(place(w, id)), JSON.stringify(off)).toMatchObject({ code: off.mainnet ? 'mandate_mainnet_disabled' : 'mainnet_disabled', status: 403 });
+      expect(await refusal(mm.setMandateLeverage(id, { instrument: BTC, leverage: 2, marginMode: 'cross' }, { strategySha256: SHA, agentId: AGENT_ID }, w.svc))).toMatchObject({ status: 403 });
+      expect(await refusal(place(w, id, { ...CLOSE, side: 'buy', price: '70350' }))).toMatchObject({ code: 'reduce_only_would_increase' });   // "reduce-only" on the wrong side is not a way through
+      expect(w.m.exchangeCalls('order')).toBe(sent);
+      expect(await mm.mandateAccountState(id, w.svc)).toMatchObject({ canOpen: false, canReduce: true });
+      expect((await place(w, id, { ...CLOSE, size: '0.0005' })).order, JSON.stringify(off)).toMatchObject({ state: 'filled', reduceOnly: true });
+      expect(w.m.exchangeCalls('order')).toBe(sent + 1);
+    }
+    expect((await w.svc.cancelOrder(id, resting.order.clientId)).order).toMatchObject({ state: 'cancelled', final: true });
+    expect((await w.svc.get(id)).venueState.positions[0]).toMatchObject({ size: '0.0005' });
+  });
+});
+
+describe('V11 B-04: a derivative mandate whose approval answer was lost', () => {
+  it('is adopted when it is the very mandate that was submitted (the passkey approved it); an unknown one is revoked on the signer', async () => {
+    const w = world(), id = await live(w);
+    const prep = await w.svc.prepareMandate(id, ex.MandateBodySchema.parse(MANDATE));
+    w.lost.mandate = true;
+    expect(await refusal(w.svc.approveMandate(id, { assertion: w.pk.assert(b64(prep.hash)) as never, acknowledged: true }))).toMatchObject({ code: 'signer_unreachable' });
+    // the signer holds an active mandate; the API recorded a failure: a new mandate would be refused by the signer ("another mandate is active")
+    expect(w.signer.status().venueMandates[0]).toMatchObject({ phase: 'active' });
+    expect((await w.svc.get(id)).mandate).toBeNull();
+    expect(await refusal(place(w, id))).toMatchObject({ code: 'mandate_none' });
+    const r = await w.svc.recover(id);
+    expect(r.recovered).toEqual([expect.objectContaining({ what: 'mandate', outcome: 'adopted', id: prep.mandate.mandateId })]);
+    expect(r.mandate).toMatchObject({ id: prep.mandate.mandateId, active: true });
+    expect((await place(w, id)).order.state).toBe('open');
+    expect((await w.svc.recover(id)).recovered).toEqual([]);
+    // an active mandate on the signer that the API has no row for at all
+    await w.svc.revokeMandate(id, { cancelOpenOrders: true });
+    w.clock.advance(86400_000 + 1000);                                                                                     // past the wind-down of the first
+    const p2 = await w.svc.prepareMandate(id, ex.MandateBodySchema.parse(MANDATE));
+    w.lost.mandate = true;
+    await refusal(w.svc.approveMandate(id, { assertion: w.pk.assert(b64(p2.hash)) as never, acknowledged: true }));
+    await sql`delete from deriv_mandates where id = ${p2.mandate.mandateId}`;
+    expect((await w.svc.recover(id)).recovered).toEqual([expect.objectContaining({ what: 'mandate', outcome: 'revoked', id: p2.mandate.mandateId })]);
+    expect(w.signer.status().venueMandates.find((x) => x.mandate.mandateId === p2.mandate.mandateId)).toMatchObject({ revoked: true });
+  });
+});
+
+describe('V11 B-08: the loss limits a mandate trades under cannot be loosened by a session alone', () => {
+  it('the mandate order is checked against the account policy; raising its loss limits needs the passkey', async () => {
+    const w = world(), { id } = await mandated(w);
+    const p = (await w.svc.get(id)).policy;
+    expect(await refusal(w.svc.setPolicy(id, { ...p, maxDailyLoss: '1000000000', maxTotalLoss: '1000000000' }))).toMatchObject({ code: 'passkey_required' });
+    expect(await refusal(w.svc.setPolicy(id, { ...p, minLiquidationDistanceBps: '0' }))).toMatchObject({ code: 'passkey_required' });
+    expect((await w.svc.get(id)).policy).toEqual(p);
+    await w.svc.halt(id, { reason: 'stop the agent' });
+    expect(await refusal(w.svc.resume(id))).toMatchObject({ code: 'passkey_required' });                                    // the halt the agent runs under stays
+    expect(await refusal(place(w, id))).toMatchObject({ code: 'halted' });
   });
 });

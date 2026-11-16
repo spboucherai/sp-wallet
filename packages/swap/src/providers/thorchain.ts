@@ -280,9 +280,9 @@ export function createNativeSwapProvider(cfg: NativeSwapConfig): SwapProvider & 
         fees: [feeItem('protocol', fee.liquidity), feeItem('network', fee.outbound)],
         estimatedSeconds: r.total_swap_seconds ?? null,
         priceImpactBps: r.fees.slippage_bps,
-        expiresAt: r.expiry * 1000,
+        quotedAt: ctx.now(), expiresAt: r.expiry * 1000,
         firmness: 'indicative',
-        executability: { class: 'quote_only', reason: `${cfg.name} swaps are a transfer to a rotating vault address that only the network's API can name; the isolated signer cannot yet verify that address or rebuild the memo itself (docs/swap/providers/${cfg.id}.md)` },
+        executability: { class: 'quote_only', code: 'native_vault', reason: `${cfg.name} swaps are a transfer to a rotating vault address that only the network's API can name; the isolated signer cannot yet verify that address or rebuild the memo itself (docs/swap/providers/${cfg.id}.md)` },
         refundable: true, // amount ≥ recommended_min_amount_in: a failed swap is refunded to the sender, less the source-chain outbound fee
         atomic: false,
         raw: { quote: r, request: Object.fromEntries(q), amount1e8: amount.toString(), limit1e8: limit.toString(), guaranteed1e8: floor1e8.toString(),

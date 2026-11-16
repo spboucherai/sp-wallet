@@ -7,9 +7,10 @@ import { audit, sql } from './db.ts';
 import { signer } from './signer-client.ts';
 import { advanceSwap, recordSwapOutcome } from './swap-exec.ts';
 import { advanceBridgeBurn, advanceBridges } from './bridge.ts';
-import { broadcastNow, move, type ProposalRow } from './transfers.ts';
+import { broadcastNow, failure, move, type ProposalRow } from './transfers.ts';
 import { advanceXswapSend, advanceXswaps, xswapMayBroadcast } from './xswap.ts';
 import { advancePlans } from './plan-exec.ts'; // v7 any-to-any plans
+import { pruneSwapQuotes } from './swap.ts'; // v11
 import { advanceWithdrawals } from './agents/withdrawals.ts'; // v8
 
 export const healthCache = new Map<string, Health>();
@@ -17,10 +18,10 @@ const log = (m: string) => console.log(`[worker] ${m}`);
 
 async function expireStale(): Promise<void> {
   const rows = await sql<ProposalRow[]>`select * from proposals where state in ('draft','pending_approval') and expires_at < now()`;
-  for (const p of rows) await move(p, 'expired', { error: 'expired before approval' }).catch(() => {});
+  for (const p of rows) await move(p, 'expired', failure('expired_before_approval')).catch(() => {});
   // an "approved" row older than a minute means the process died mid-sign: the signer's replay cache makes a retry impossible, so fail it
   const stuck = await sql<ProposalRow[]>`select * from proposals where state = 'approved' and updated_at < now() - interval '1 minute'`;
-  for (const p of stuck) await move(p, 'failed', { error: 'interrupted during signing; nothing was broadcast' }).catch(() => {});
+  for (const p of stuck) await move(p, 'failed', failure('interrupted_signing')).catch(() => {});
 }
 
 async function reconcile(): Promise<void> {
@@ -29,7 +30,7 @@ async function reconcile(): Promise<void> {
     try {
       if (p.state === 'signed') {
         // never relay a transaction whose approval window is long gone
-        if (p.expires_at && Date.now() - p.expires_at.getTime() > 10 * 60_000) { await move(p, 'failed', { error: 'could not be broadcast in time; nothing was sent' }); continue; }
+        if (p.expires_at && Date.now() - p.expires_at.getTime() > 10 * 60_000) { await move(p, 'failed', failure('not_broadcast_in_time')); continue; }
         p = p.kind === 'swap' ? await advanceSwap(p) : p.kind === 'bridge' ? await advanceBridgeBurn(p) : p.kind === 'xswap' ? await advanceXswapSend(p)
           : p.kind === 'gmx' ? await (await import('./derivatives/gmx-live.ts')).gmx().advanceSend(p) /* v8: approval mined first, then the order transaction, simulated */ : await broadcastNow(p);
         if (p.state !== 'broadcast') continue;
@@ -44,7 +45,7 @@ async function reconcile(): Promise<void> {
         await sql`update proposals set last_broadcast_at = now() where id = ${p.id}`;
       }
       if (t.state !== p.state) {
-        const patch: Record<string, unknown> = { confirmations: t.confirmations, block_ref: t.blockRef ?? null, error: t.error ?? null };
+        const patch: Record<string, unknown> = { confirmations: t.confirmations, block_ref: t.blockRef ?? null, ...(t.error ? failure('tx_failed', { detail: t.error.slice(0, 200) }, t.error) : { error: null }) };
         if (t.state === 'finalized') patch.finalized_at = new Date();
         const moved = await move(p, t.state, patch);
         if (t.state === 'finalized' || t.state === 'confirming') await recordSwapOutcome(moved).catch(() => {});
@@ -105,6 +106,7 @@ export function startWorkers(): void {
   loop('xswaps', advanceXswaps, 10_000);
   loop('plans', advancePlans, 6_000); // v7: reads the proposals of open plans and moves the plans; never signs
   loop('deposits', scanDeposits, 75_000);
+  loop('swap-quotes-prune', async () => { await pruneSwapQuotes(); }, 6 * 3600_000); // v11: retention of the quote log (swap.ts)
   loop('withdrawals', () => advanceWithdrawals(), 8_000); // v8: agent-vault withdrawals — receipt and arrival at the owner's address; never signs
 }
 export { refreshHealth, reconcile, expireStale, isTerminal, advanceBridges };

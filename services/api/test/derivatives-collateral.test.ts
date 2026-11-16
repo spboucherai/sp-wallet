@@ -196,7 +196,7 @@ describe('deposit', () => {
     expect(w.seen.sign).toHaveLength(0);
 
     const done = await w.svc.approveDeposit(id, prep.operation.id, w.pk.assert(intentHash(prep.intent)));
-    expect(done.operation).toMatchObject({ state: 'sent', final: false, proposalState: 'broadcast' });
+    expect(done.operation).toMatchObject({ state: 'sent', final: false, proposalState: 'not_broadcast' }); // v11 (B2): this suite runs with SPW_BROADCAST=off — the wallet transaction is signed and honestly reported as not broadcast (transfers.ts)
     const p = await proposal(prep.operation.id);
     const tx = parseTransaction(p.raw), callData = decodeFunctionData({ abi: erc20Abi, data: tx.data! });
     expect([tx.chainId, tx.to?.toLowerCase(), callData.functionName, callData.args]).toEqual([42161, PIN.usdc.toLowerCase(), 'transfer', [PIN.bridge, 10_000_000n]]);

@@ -37,6 +37,9 @@ Version 1.0.0. Machine-readable document: [`docs/openapi/trading-v1.json`](opena
 | GET | `/api/v1/trading/markets/{symbol}` | `markets:read` | implemented | — | One market: instrument, ticker and data quality |
 | GET | `/api/v1/trading/markets/{symbol}/orderbook` | `markets:read` | implemented | — | Order book of one market |
 | GET | `/api/v1/trading/markets/{symbol}/candles` | `markets:read` | implemented | — | Closed bars of one market |
+| GET | `/api/v1/trading/private-markets` | `markets:read` | implemented | — | Synthetic contracts on private companies, venue by venue, with sourced valuations |
+| GET | `/api/v1/trading/private-markets/companies/{slug}` | `markets:read` | implemented | — | Every contract on one private company, side by side (never merged) |
+| GET | `/api/v1/trading/private-markets/{id}` | `markets:read` | implemented | — | One private-company contract: definition, valuation breakdown, candles, top of book |
 | GET | `/api/v1/trading/portfolio` | `wallet:read` | implemented | — | Wallet value and derivative accounts, per mode |
 | GET | `/api/v1/trading/balances` | `wallet:read` | implemented | — | On-chain balances of the wallet |
 | GET | `/api/v1/trading/activity` | `wallet:read` | implemented | — | Wallet activity and fills, newest first |
@@ -102,6 +105,34 @@ Version 1.0.0. Machine-readable document: [`docs/openapi/trading-v1.json`](opena
 | `symbol` | path | yes | `{"type":"string","minLength":1,"maxLength":120}` | `venue:symbol` (e.g. `hyperliquid:BTC`, `spot:ETH`); a bare symbol is accepted when it is not ambiguous |
 | `interval` | query | no | `{"default":"1h","type":"string","enum":["1m","5m","15m","1h","4h","1d"]}` |  |
 | `limit` | query | no | `{"default":200,"type":"integer","minimum":1,"maximum":1000}` |  |
+
+### GET `/api/v1/trading/private-markets`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `delisted` | query | no | `{"type":"string","enum":["true","false"]}` | true: only delisted markets (frozen prices) |
+| `size` | query | no | `{"type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` | hypothetical position size, contracts (default 1) |
+| `side` | query | no | `{"type":"string","enum":["long","short"]}` |  |
+
+### GET `/api/v1/trading/private-markets/companies/{slug}`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `slug` | path | yes | `{"type":"string","pattern":"^[a-z0-9-]{1,40}$"}` |  |
+| `size` | query | no | `{"type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` |  |
+| `side` | query | no | `{"type":"string","enum":["long","short"]}` |  |
+| `interval` | query | no | `{"type":"string","enum":["1h","1d"]}` |  |
+| `limit` | query | no | `{"type":"integer","minimum":1,"maximum":500}` |  |
+
+### GET `/api/v1/trading/private-markets/{id}`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `id` | path | yes | `{"type":"string","minLength":3,"maxLength":120,"pattern":"^[a-z]+:[A-Za-z0-9:._-]+$"}` | `venue:symbol`, e.g. `hyperliquid:io:ANTH`, `edgex:ANTHROPICUSDC` |
+| `size` | query | no | `{"type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` |  |
+| `side` | query | no | `{"type":"string","enum":["long","short"]}` |  |
+| `interval` | query | no | `{"type":"string","enum":["1h","1d"]}` |  |
+| `limit` | query | no | `{"type":"integer","minimum":1,"maximum":500}` |  |
 
 ### GET `/api/v1/trading/balances`
 

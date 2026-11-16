@@ -59,6 +59,8 @@ export const signer = {
   venueAuthorize: (authorization: unknown, assertion: unknown) => { cached = null; return call<{ authorizationId: string; hash: string; agentAddress: string; approve: { action: unknown; signature: { r: string; s: string; v: number }; nonce: number } }>('POST', '/venue/authorize', { authorization, assertion }); },
   venueSign: (p: { authorizationId: string; sign: unknown; context?: unknown; assertion?: unknown }) => { cached = null; return call<{ signature: { r: string; s: string; v: number }; signer: string; kind: string; hash: string }>('POST', '/venue/sign', p); },
   venueRevoke: (authorizationId: string) => { cached = null; return call<{ revoked: true; revokedAt: string }>('POST', '/venue/revoke', { authorizationId }); },
+  // V11: the stored answer of an active authorization, again (its first answer was lost); nothing is signed
+  venueAuthorization: (authorizationId: string) => call<{ authorizationId: string; hash: string; agentAddress: string; approve: { action: unknown; signature: { r: string; s: string; v: number }; nonce: number } }>('POST', '/venue/authorization', { authorizationId }),
   // collateral: withdraw3 to the wallet's own address, signed by the main key after the passkey approved the canonical withdrawal
   venueWithdraw: (withdrawal: unknown, assertion: unknown) => { cached = null; return call<{ withdrawalId: string; hash: string; action: unknown; signature: { r: string; s: string; v: number }; nonce: number; signer: string }>('POST', '/venue/withdraw', { withdrawal, assertion }); },
   // derivative mandates: approval (passkey), one signature per venue action WITHOUT a passkey inside the limits the signer enforces, revocation

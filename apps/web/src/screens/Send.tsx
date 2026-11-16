@@ -7,6 +7,7 @@ import { useNetworks, usePortfolio, type Proposal } from '../hooks';
 import { amountInputText, amountOf, sanitizeAmountText } from '../amount';
 import { AmountProblem } from '../amountUi';
 import { errText, I18n, useT, type Key } from '../i18n';
+import { propError } from '../sv'; // v11: why a transfer ended, by code
 import { Addr, Btn, Card, Chips, Coin, exactAmt, Field, H, Icon, inputCls, NetworkIcon, Notice, PageTitle, short, StatePill, testNotSent, trimAmt } from '../ui';
 import { AgentRecipientNotice } from './AgentFund';
 
@@ -99,7 +100,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
         {n?.family === 'cardano' && <Notice tone="info">{t('cdSendHint')}</Notice>}
         {n?.family === 'polkadot' && <Notice tone="info">{t('dtSendHint', { amount: trimAmt(n.activation ?? '0.01', 12) })}</Notice>}
         {err && <Notice tone="danger">{err}</Notice>}
-        <Btn full busy={busy === 'review'} disabled={!to || !amountOf(amount, locale) || pf.data?.halted} onClick={review}>{busy === 'review' ? t('preparing') : t('review')}</Btn>
+        <Btn full busy={busy === 'review'} disabled={!to || !amountOf(amount, locale) || !!pf.data?.halted} onClick={review}>{busy === 'review' ? t('preparing') : t('review')}</Btn>
       </Card>
     </div>
   );
@@ -147,7 +148,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
           return <li key={s} className={`flex items-center gap-3 text-[14.5px] ${done ? 'text-emerald' : now ? 'text-ink' : 'text-mute'}`}>
             <span className={`grid h-6 w-6 place-items-center rounded-full border ${done ? 'border-emerald' : now ? 'border-blue text-blue' : 'border-line'}`}><Icon n={done ? 'check' : now ? 'spin' : 'clock'} className="h-3.5 w-3.5" /></span>
             {t(`s_${s}` as Key)}{s === 'confirming' && cur.confirmations > 0 ? ` · ${cur.confirmations} ${t('confirmations')}` : ''}</li>; })}</ol>}
-        {cur.error && bad && <Notice tone="danger">{cur.error}</Notice>}
+        {cur.error && bad && <Notice tone="danger">{propError(t, cur)}</Notice>}
         {!bad && cur.state !== 'finalized' && !testNotSent(cur) && <p className="text-xs text-mute">{t('broadcastNote')}</p>}
         {cur.txid && <Row k={t('txid')}><span className="break-all font-mono text-[11.5px]">{cur.txid}</span></Row>}
         {cur.explorer && !testNotSent(cur) && <a className="inline-flex min-h-11 items-center gap-1.5 text-sm text-blue" href={cur.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}

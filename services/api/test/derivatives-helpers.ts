@@ -17,6 +17,23 @@ const hlFx = (name: string): { status: number; body: unknown; request: { user?: 
 export const HL_ACCOUNT = hlFx('clearinghouseState').request.user!;
 export const GMX_ACCOUNT = '0x46a3BA57e146A4906bc68759Fb7ad1E74d3B66f6';
 
+/**
+ * V11 (B-08): what `verifyOwnerAssertion` (auth.ts) does against the API's credentials table, against ONE software passkey:
+ * a real WebAuthn verification of the assertion over `challenge`, user verification required.
+ */
+export function passkeyVerifier(pk: { id: string; publicKey: string }, rpId: string, origin: string) {
+  let counter = 0;
+  return async (assertion: unknown, challenge: Uint8Array): Promise<void> => {
+    const { verifyAuthenticationResponse } = await import('@simplewebauthn/server');
+    const response = assertion as { id?: string };
+    if (response?.id !== pk.id) throw new Error('unknown credential');
+    const v = await verifyAuthenticationResponse({ response: assertion as never, expectedChallenge: Buffer.from(challenge).toString('base64url'), expectedOrigin: origin, expectedRPID: rpId, requireUserVerification: true,
+      credential: { id: pk.id, publicKey: new Uint8Array(Buffer.from(pk.publicKey, 'base64url')), counter } });
+    if (!v.verified || !v.authenticationInfo.userVerified) throw new Error('approval not verified');
+    counter = v.authenticationInfo.newCounter;
+  };
+}
+
 export class Clock { t: number; constructor(t = T0) { this.t = t; } now = (): number => this.t; advance(ms: number): number { this.t += ms; return this.t; } }
 
 export interface FakeStream {

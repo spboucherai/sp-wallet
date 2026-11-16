@@ -39,6 +39,22 @@ async function kraken(get: JsonGet, pair: string): Promise<number> {
   if (ask < bid || (ask - bid) / bid > 0.02) throw new Error('abnormal spread');
   return (ask + bid) / 2;
 }
+export const KRAKEN_STATUS_URL = 'https://api.kraken.com/0/public/SystemStatus';
+/**
+ * V11 (B-18) — freshness of the Kraken side. Kraken's ticker carries no time of its own, so a book frozen by a maintenance or a
+ * cancel-only / post-only phase used to be caught only when it drifted 1 % from Coinbase — and never for USDC, which is priced
+ * from Kraken alone. Before a Kraken quote is used, the exchange must now say itself that it is `online`, in an answer dated
+ * (its own clock) within MAX_AGE_MS of the signer's. This also refuses a replayed or cached answer path and a signer clock that
+ * is minutes off. What it does NOT prove: that the one pair's book moved recently — Kraken publishes no per-quote time on this
+ * endpoint; the two-source agreement (and, for the cash legs, the peg test) remains the check on the price itself.
+ */
+async function krakenOnline(get: JsonGet, now: number): Promise<void> {
+  const j = await get(KRAKEN_STATUS_URL) as { error?: unknown[]; result?: { status?: unknown; timestamp?: unknown } };
+  if (!Array.isArray(j.error) || j.error.length || !j.result) throw new Error('exchange error');
+  if (j.result.status !== 'online') throw new Error(`Kraken is not trading normally (${String(j.result.status).slice(0, 20)}): its quotes are not used`);
+  const at = typeof j.result.timestamp === 'string' ? Date.parse(j.result.timestamp) : NaN;
+  if (!(at > 0) || Math.abs(now - at) > MAX_AGE_MS) throw new Error('stale quote');
+}
 
 /** Cash legs: the price is taken as one US dollar, after checking on the exchange(s) that the peg currently holds.
  *  USDC is checked on Kraken (Coinbase has no USDC/USD book); USDT on both, which must also agree. */
@@ -49,6 +65,7 @@ export const pricedSymbols = (): string[] => Object.keys(MARKET_LISTINGS).filter
 
 export function exchangePrices(now: () => number = Date.now, get: JsonGet = json): PriceView {
   const cache = new Map<string, { at: number; p: number }>();
+  let krakenOkAt = -Infinity;
   const one = async (sym: string): Promise<number> => {
     const l = Object.hasOwn(MARKET_LISTINGS, sym) ? MARKET_LISTINGS[sym]! : null;
     if (!l) throw new Error(`no price source for ${sym}`);
@@ -56,6 +73,7 @@ export function exchangePrices(now: () => number = Date.now, get: JsonGet = json
     if (c && now() - c.at < CACHE_MS) return c.p;
     const need = Object.hasOwn(DOLLAR, sym) ? DOLLAR[sym]! : (['coinbase', 'kraken'] as const);
     for (const s of need) if (!l[s] || !PAIR.test(l[s])) throw new Error(`no price source for ${sym}: it is not listed on ${s}`);
+    if (need.includes('kraken') && now() - krakenOkAt >= CACHE_MS) { await krakenOnline(get, now()); krakenOkAt = now(); } // only a positive answer is remembered, as long as a price
     const quotes = await Promise.all(need.map((s) => (s === 'coinbase' ? coinbase(get, l.coinbase!, now()) : kraken(get, l.kraken!)))); // every source must answer
     const lo = Math.min(...quotes), hi = Math.max(...quotes);
     if ((hi - lo) / lo > MAX_SPREAD) throw new Error(`price sources disagree on ${sym} (${quotes.join(' vs ')})`);

@@ -1,0 +1,12 @@
+{
+  "source": "documentation",
+  "notRecorded": "DOCUMENTATION-DERIVED, NOT RECORDED ANSWERS. Shapes from the documented responses of GET /swap/allowance-holder/price: the 200 answer without liquidity carries only `liquidityAvailable: false` and `zid`; errors are `{ name, message, data }` (the reference gives the type definitions, not literal examples — the messages below are placeholders). The 401 is the one answer observed without a key on 2026-11-15 (\"No API key found in request\"); its exact body was not recorded, so only its status is relied on.",
+  "docUrl": "https://docs.0x.org/api-reference/evm-ap-is/swap/allowanceholder-getprice.md",
+  "recordedAt": "2026-11-15T18:00:00.000Z",
+  "noLiquidity": { "status": 200, "body": { "liquidityAvailable": false, "zid": "0x00000000000000000000d0c6" } },
+  "tokenNotSupported": { "status": 400, "body": { "name": "TOKEN_NOT_SUPPORTED", "message": "The token is not supported", "data": { "zid": "0x00000000000000000000d0c7", "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" } } },
+  "buyTokenNotAuthorized": { "status": 422, "body": { "name": "BUY_TOKEN_NOT_AUTHORIZED_FOR_TRADE", "message": "The buy token is not authorized for trade", "data": { "zid": "0x00000000000000000000d0c8" } } },
+  "inputInvalid": { "status": 400, "body": { "name": "INPUT_INVALID", "message": "The input is invalid", "data": { "zid": "0x00000000000000000000d0c9", "details": [{ "field": "sellAmount", "reason": "Invalid" }] } } },
+  "unauthorized": { "status": 401, "body": { "message": "No API key found in request" } },
+  "internal": { "status": 500, "body": { "name": "INTERNAL_SERVER_ERROR", "message": "An internal server error occurred", "data": { "zid": "0x00000000000000000000d0ca" } } }
+}

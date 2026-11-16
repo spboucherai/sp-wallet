@@ -31,14 +31,14 @@ export class ProviderRuntime {
     this.tokens -= 1; return true;
   }
   /** Quote with the provider's own deadline. Never throws anything but ProviderError. */
-  async quote(req: SwapQuoteRequest, outer?: AbortSignal): Promise<SwapQuote[]> {
+  async quote(req: SwapQuoteRequest, outer?: AbortSignal, /** v11: a caller that can wait longer (plan pricing) — the rate limit and the breaker stay the shared ones */ timeoutMs?: number): Promise<SwapQuote[]> {
     const id = this.provider.id;
     if (!this.enabled) throw new ProviderError(id, 'unavailable', 'provider disabled');
     if (this.state() === 'open') throw new ProviderError(id, 'unavailable', 'circuit open after repeated failures');
     if (!this.take()) throw new ProviderError(id, 'rate_limited', 'local rate limit');
     const started = this.now(); this.calls += 1;
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), this.policy.timeoutMs);
+    const timer = setTimeout(() => ac.abort(), timeoutMs ?? this.policy.timeoutMs);
     const onOuter = () => ac.abort(); outer?.addEventListener('abort', onOuter, { once: true });
     const ctx: ProviderContext = { signal: ac.signal, http: this.http, now: this.now };
     try {

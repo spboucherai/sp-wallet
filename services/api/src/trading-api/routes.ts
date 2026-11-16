@@ -32,6 +32,9 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads): void {
     getMarket: (p, i) => reads.market(p, i.params.symbol),
     getOrderbook: (p, i) => reads.orderbook(p, i.params.symbol, i.query.depth),
     getCandles: (p, i) => reads.candles(p, i.params.symbol, i.query.interval, i.query.limit),
+    listPrivateMarkets: (p, i) => reads.privateMarkets(p, i.query),                       // v11 private markets (read-only)
+    getPrivateMarketCompany: (p, i) => reads.privateMarketCompany(p, i.params.slug, i.query),
+    getPrivateMarket: (p, i) => reads.privateMarket(p, i.params.id, i.query),
     getPortfolio: (p) => reads.portfolio(p),
     getBalances: (p, i) => reads.balances(p, i.query),
     getActivity: (p, i) => reads.activity(p, i.query),

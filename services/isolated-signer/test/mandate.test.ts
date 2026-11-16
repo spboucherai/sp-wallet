@@ -189,3 +189,46 @@ describe('returning funds', () => {
     expect(decodeFunctionData({ abi: erc20Abi, data: tx.data! }).args).toEqual([keys.addresses.evm, 30_000000n]); // more than any order limit: returning is not limited
   });
 });
+
+// V11 Phase B (D2): one mandate in force per vault, and a revocation that needs no passkey
+describe('V11 — one active mandate per vault', () => {
+  it('a second mandate on the same vault is refused while the first is in force — also on another network; never after revocation or expiry', async () => {
+    const { signer, store, pk, t } = await setup();
+    const first = mandate(t.now); await signer.approveMandate(first, pk.assert(mandateHash(first)));
+    const second = mandate(t.now, { maxOrdersPerDay: 400 });
+    await expect(signer.approveMandate(second, pk.assert(mandateHash(second)))).rejects.toThrow(/another mandate is active on this vault: revoke it first/);
+    // the same vault address exists on every EVM network: a mandate there would add its caps to the first one's
+    const arb = mandate(t.now, { network: 'arbitrum', assets: ['native', NETWORKS.arbitrum.tokens.find((x) => x.symbol === 'USDC')!.id], maxOrder: { native: '10000000000000000' }, maxDaily: { native: '20000000000000000' } });
+    await expect(signer.approveMandate(arb, pk.assert(mandateHash(arb)))).rejects.toMatchObject({ code: 'conflict' });
+    expect(signer.status().mandates.filter((x) => !x.revoked)).toHaveLength(1);
+    expect(store.state.journal.filter((j) => j.type === 'mandate.denied').at(-1)!.data).toMatchObject({ code: 'conflict' });
+    // the first still signs, the refused ones never do
+    const o0 = order(t.now);
+    expect((await signer.signDelegated(first.mandateId, o0.intent, o0.aux)).txid).toMatch(/^0x/);
+    const ox = order(t.now);
+    await expect(signer.signDelegated(second.mandateId, ox.intent, ox.aux)).rejects.toThrow(/unknown mandate/);
+    // another vault is another matter
+    const other = mandate(t.now, { vaultIndex: 2, vault: keys.vault(2).address });
+    await signer.approveMandate(other, pk.assert(mandateHash(other)));
+    // revocation — no passkey — frees the vault; the revoked mandate never signs again, the new one does
+    signer.revokeMandate(first.mandateId);
+    const o1 = order(t.now);
+    await expect(signer.signDelegated(first.mandateId, o1.intent, o1.aux)).rejects.toThrow(/mandate revoked/);
+    await signer.approveMandate(second, pk.assert(mandateHash(second)));
+    const o2 = order(t.now);
+    expect((await signer.signDelegated(second.mandateId, o2.intent, o2.aux)).txid).toMatch(/^0x/);
+    // expiry frees it too
+    t.now += 31 * 86400;
+    const third = mandate(t.now);
+    await signer.approveMandate(third, pk.assert(mandateHash(third)));
+    expect(signer.status().mandates.filter((x) => x.mandate.vaultIndex === 1 && !x.revoked && !x.expired).map((x) => x.mandate.mandateId)).toEqual([third.mandateId]);
+  });
+  it('revoking is idempotent, needs no passkey, and an unknown id is an error — not a silent success', async () => {
+    const { signer, pk, t } = await setup();
+    const m = mandate(t.now); await signer.approveMandate(m, pk.assert(mandateHash(m)));
+    signer.revokeMandate(m.mandateId); const at = signer.status().mandates[0]!.revokedAt;
+    t.now += 50; signer.revokeMandate(m.mandateId);
+    expect(signer.status().mandates[0]).toMatchObject({ revoked: true, revokedAt: at });
+    expect(() => signer.revokeMandate(uuid())).toThrow(/unknown mandate/);
+  });
+});

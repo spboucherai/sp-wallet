@@ -177,7 +177,9 @@ export class LivePerpExecutor implements PerpExecutor {
     let s: MandateAccountState;
     try { s = await this.state(); } catch (e) { return this.refused(instrument, e); }
     const m = s.mandate;
-    if (s.blocked) return this.refuse(instrument, s.blocked.code, s.blocked.message);
+    // V11 (B-02): a server lock (`blocked`) stops what can add exposure; the agent's way out — a reduce-only order — still goes
+    // when the account says it can reduce (authorization alive, mandate active or winding down)
+    if (s.blocked && !(req.reduceOnly && s.canReduce)) return this.refuse(instrument, s.blocked.code, s.blocked.message);
     if (!m || m.phase === 'ended') return this.refuse(instrument, 'mandate_none', 'no derivative mandate is in force on this venue account');
     let size = req.size;
     try {

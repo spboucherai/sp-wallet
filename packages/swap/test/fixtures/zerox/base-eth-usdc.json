@@ -1,0 +1,32 @@
+{
+  "source": "documentation",
+  "notRecorded": "DOCUMENTATION-DERIVED, NOT A RECORDED ANSWER. No 0x API key was available on 2026-11-15. Every value below is constructed to respect the documented 200 schema of GET /swap/allowance-holder/price for a native-coin sell (allowanceTarget null: \"not needed for native sells\"; fees.zeroExFee null; gas as a number). It proves the field mapping, nothing about real prices.",
+  "docUrl": "https://docs.0x.org/api-reference/evm-ap-is/swap/allowanceholder-getprice.md",
+  "constructed": ["*"],
+  "recordedAt": "2026-11-15T18:00:00.000Z",
+  "request": { "from": "base:native", "to": "base:USDC", "amountIn": "10000000000000000", "slippageBps": 50 },
+  "url": "https://api.0x.org/swap/allowance-holder/price?chainId=8453&sellToken=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&buyToken=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913&sellAmount=10000000000000000&slippagePpm=5000",
+  "status": 200,
+  "body": {
+    "allowanceTarget": null,
+    "blockNumber": "38000000",
+    "buyAmount": "34512345",
+    "buyToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+    "fees": { "integratorFee": null, "integratorFees": null, "zeroExFee": null, "gasFee": null },
+    "gas": 285000,
+    "gasPrice": "12000000",
+    "issues": { "allowance": null, "balance": null, "simulationIncomplete": false, "invalidSourcesPassed": [] },
+    "liquidityAvailable": true,
+    "minBuyAmount": "34339783",
+    "mode": "exact-in",
+    "route": {
+      "fills": [{ "from": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "to": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", "source": "Aerodrome_V3", "proportionBps": "10000" }],
+      "tokens": [{ "address": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "symbol": "ETH" }, { "address": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", "symbol": "USDC" }]
+    },
+    "sellAmount": "10000000000000000",
+    "sellToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "tokenMetadata": { "buyToken": { "buyTaxBps": "0", "sellTaxBps": "0", "transferTaxBps": "0" }, "sellToken": { "buyTaxBps": null, "sellTaxBps": null, "transferTaxBps": null } },
+    "totalNetworkFee": null,
+    "zid": "0x00000000000000000000d0c5"
+  }
+}
