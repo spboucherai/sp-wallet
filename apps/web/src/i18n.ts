@@ -1762,9 +1762,7 @@ const D = {
   // >>> v9 design system — ONE contiguous block, every key prefixed `ds`: keep additions inside it
   dsOfflineBody: ['Vérifiez la connexion de cet appareil, puis réessayez. Rien n’a été envoyé.', 'Check this device’s connection, then retry. Nothing was sent.'],
   dsAllocation: ['Répartition de la valeur détenue', 'Split of the value held'], dsOther: ['Autres', 'Other'],
-  dsAgentsNone: ['Aucun agent', 'No agent'], dsAgents1: ['1 agent', '1 agent'], dsAgentsN: ['{n} agents', '{n} agents'],
-  dsFuturesSub: ['Marchés perpétuels', 'Perpetual markets'], dsAlertsUnread: ['{n} non lues', '{n} unread'], dsAlertsNone: ['Rien de nouveau', 'Nothing new'],
-  dsSecuritySub: ['Signataire et limites', 'Signer and limits'], dsSupported: ['Pris en charge', 'Supported'], dsShare: ['Partager l’adresse', 'Share the address'],
+  dsSupported: ['Pris en charge', 'Supported'], dsShare: ['Partager l’adresse', 'Share the address'],
   dsToday: ['Aujourd’hui', 'Today'], dsYesterday: ['Hier', 'Yesterday'],
   dsNoActivityBody: ['Vos envois, réceptions et échanges apparaîtront ici.', 'Your transfers, deposits and swaps will appear here.'],
   dsSteps: ['Étapes de l’envoi', 'Steps of the transfer'], dsStepDetails: ['Détails', 'Details'], dsStepReview: ['Vérification', 'Review'], dsStepTrack: ['Suivi', 'Tracking'],
@@ -2349,13 +2347,10 @@ const D = {
   rkReadOnlyEngage: ['Passer en lecture seule', 'Switch to read-only'],
   rkExposure: ['Exposition', 'Exposure'], rkBook_paper: ['Simulation', 'Paper'], rkBook_live: ['Réel', 'Live'], rkBook_liveTestnet: ['Réel (testnet)', 'Live (testnet)'],
   rkBooksNote: ['Simulation et réel sont deux mondes séparés : aucun chiffre ne les additionne.', 'Paper and live are separate worlds: no figure adds them together.'],
-  rkEquity: ['Valeur', 'Equity'], rkGross: ['Exposition brute', 'Gross exposure'], rkLeverage: ['Levier', 'Leverage'], rkNet: ['net', 'net'], rkLiq: ['liquidation est.', 'est. liquidation'], rkCollateral: ['Collatéral', 'Collateral'],
+  rkEquity: ['Valeur', 'Equity'], rkGross: ['Exposition brute', 'Gross exposure'], rkLeverage: ['Levier', 'Leverage'], rkNet: ['net', 'net'], rkLiq: ['liquidation est.', 'est. liquidation'], 
   rkNoPositions: ['Aucune position ouverte', 'No open position'],
   rkLimits: ['Limites', 'Limits'], rkModeLive: ['Réel', 'Live'], rkModePaper: ['Simulation', 'Paper'], rkDefault: ['valeur par défaut', 'default'],
-  rkMissingTitle: ['Limites non définies.', 'Limits not set.'],
-  rkMissingBody: ['Tant que vous ne les avez pas choisies, tout nouvel ordre réel est refusé (une limite absente n’est jamais lue comme « illimitée ») :', 'Until you choose them, every new live order is refused (a missing limit is never read as “unlimited”):'],
   rkEdit: ['Modifier les limites', 'Edit the limits'], rkSave: ['Enregistrer', 'Save'],
-  rkLimitsJson: ['Limites enregistrées (JSON)', 'Stored limits (JSON)'],
   rkLimitsHint: ['Resserrer une limite est immédiat. En desserrer une demande votre clé d’accès, sur l’ensemble du nouveau jeu de limites.', 'Tightening a limit is immediate. Loosening one needs your passkey, over the whole new limit set.'],
   rkLoosens: ['Ce changement desserre :', 'This change loosens:'], rkLoosensBody: ['approuvez-le avec votre clé d’accès.', 'approve it with your passkey.'],
   rkLocks: ['Verrous du serveur', 'Server locks'],
@@ -2364,15 +2359,15 @@ const D = {
   rkNoMandatesBody: ['Un mandat dit ce qu’un agent ou une clé d’API peut faire, dans quelles limites et jusqu’à quand. Sans mandat approuvé, rien de ce qu’il demande ne s’exécute.', 'A mandate says what an agent or an API key may do, inside which limits and until when. Without an approved mandate, nothing it asks executes.'],
   rkPhase_not_approved: ['à approuver', 'to approve'], rkPhase_pending: ['pas encore valide', 'not yet valid'], rkPhase_active: ['actif', 'active'], rkPhase_wind_down: ['réduction seulement', 'reductions only'], rkPhase_ended: ['terminé', 'ended'],
   rkUsage: ['Utilisation', 'Usage'], rkUsageBody: ['{accepted} acceptés · {rejected} refusés · {today} aujourd’hui · {open} ouverts', '{accepted} accepted · {rejected} refused · {today} today · {open} open'],
-  rkUntil: ['Valide jusqu’au', 'Valid until'], rkStopped: ['Arrêté', 'Stopped'], rkHash: ['Empreinte du mandat', 'Mandate hash'], rkSignerHash: ['Empreinte signée (signataire)', 'Signed hash (signer)'],
+  rkUntil: ['Valide jusqu’au', 'Valid until'], rkStopped: ['Arrêté', 'Stopped'], rkSignerHash: ['Empreinte signée (signataire)', 'Signed hash (signer)'],
   rkFields: ['Tous les champs', 'Every field'], rkEnforcement: ['Qui applique quoi', 'Who enforces what'],
   rkEnforcementBody: ['Champ par champ : ce que le signataire isolé applique lui-même, et ce que seule l’API applique. Un champ « API seulement » pourrait être ignoré par une API compromise.',
     'Field by field: what the isolated signer enforces itself, and what only the API enforces. An “API only” field could be ignored by a compromised API.'],
   rkEnf_signer: ['signataire', 'signer'], rkEnf_signer_partial: ['signataire (en partie)', 'signer (partly)'], rkEnf_api_only: ['API seulement', 'API only'], rkEnf_not_applicable: ['sans objet', 'n/a'],
   rkReview: ['Examiner et approuver', 'Review and approve'], rkRevoke: ['Révoquer', 'Revoke'],
-  rkSheetTitle: ['Approuver le mandat', 'Approve the mandate'], rkSheetPasskey: ['Approuver avec la clé d’accès', 'Approve with the passkey'], rkSheetApprove: ['Approuver (simulation)', 'Approve (paper)'],
+  rkSheetTitle: ['Approuver le mandat', 'Approve the mandate'], rkSheetApprove: ['Approuver (simulation)', 'Approve (paper)'],
   rkAck: ['Avertissement', 'Acknowledgement'], rkAckCheck: ['J’ai lu ce texte et le tableau ci-dessus.', 'I have read this text and the table above.'],
-  rkNewTitle: ['Nouveau mandat', 'New mandate'], rkNewJson: ['Mandat (JSON)', 'Mandate (JSON)'], rkCreate: ['Créer (sans effet avant approbation)', 'Create (no effect until approved)'],
+  rkNewTitle: ['Nouveau mandat', 'New mandate'], rkCreate: ['Créer (sans effet avant approbation)', 'Create (no effect until approved)'],
   rkNewBody: ['Un mandat est immuable : pour le changer, on en crée un autre et on révoque l’ancien. Un mandat réel doit pouvoir être appliqué par le signataire, sinon il est refusé ici.',
     'A mandate is immutable: to change it, create another one and revoke the old one. A live mandate must be enforceable by the signer, or it is refused here.'],
   rkDecisions: ['Dernières décisions', 'Last decisions'], rkNoDecisions: ['Aucune décision', 'No decision yet'], rkAllowed: ['autorisé', 'allowed'], rkDenied: ['refusé', 'denied'], rkReducing: ['réduction', 'reducing'], rkPreview: ['aperçu', 'preview'],
@@ -2779,6 +2774,206 @@ const D = {
   qtLivePrices: ['{n} prix en direct', '{n} live prices'],
   qtSpotConverted: ['Prix en direct de Coinbase en USD ; en CAD, il est converti au taux du dernier relevé de prix.', 'Live Coinbase price in USD; in CAD it is converted at the rate of the last price reading.'],
   // <<< end of the `qt` block
+  // >>> v11 interface pass — ONE contiguous block, every key prefixed `v11` (docs/v11/UI-ARCHITECTURE.md). Sub-areas, each
+  // under its own marker: `v11Nav*` shell and navigation, `v11Db*` Dashboard, `v11Tr*` Trade, `v11Ac*` Activity,
+  // `v11Lo*` audit leftovers (server sentences that had no text). apps/web/test/v11-ui.test.ts checks the block.
+  // v11Nav · shell and navigation
+  v11NavMain: ['Navigation principale', 'Main navigation'], v11NavMore: ['Réglages et outils', 'Settings and tools'], v11NavMenu: ['Menu', 'Menu'], v11NavSkip: ['Aller au contenu', 'Skip to content'],
+  v11NavTrade: ['Négocier', 'Trade'],
+  // the risk indicator of the header: one short word next to its icon, and the sentence a screen reader hears
+  v11NavRisk_ok: ['Risque', 'Risk'], v11NavRisk_kill: ['Arrêt', 'Halted'], v11NavRisk_readonly: ['Lecture seule', 'Read-only'], v11NavRisk_limits: ['Limites', 'Limits'], v11NavRisk_unknown: ['Risque', 'Risk'],
+  v11NavRiskAria: ['Risque : {state}. Ouvrir Risque.', 'Risk: {state}. Open Risk.'],
+  v11NavRiskLong_ok: ['aucun arrêt en cours', 'no halt in force'], v11NavRiskLong_kill: ['coupe-circuit global activé — aucun nouveau risque n’est accepté', 'global kill switch on — no new risk is accepted'],
+  v11NavRiskLong_readonly: ['lecture seule — seules les annulations passent', 'read-only mode — only cancels go through'],
+  v11NavRiskLong_limits: ['limites des ordres réels à définir — les ordres réels sont refusés', 'live order limits not set — live orders are refused'],
+  v11NavRiskLong_unknown: ['état non lu pour l’instant', 'state not read yet'],
+  // the Risk entry of Settings
+  v11NavRiskCard: ['Risque et coupe-circuit', 'Risk and kill switch'],
+  // v11Db · dashboard
+  // v11Db · modes — the three books are never added together; every block carries its tag
+  v11DbMode_live: ['Réel', 'Real'], v11DbMode_liveTestnet: ['Testnet', 'Testnet'], v11DbMode_paper: ['Simulation', 'Simulation'],
+  v11DbUnavailable: ['Indisponible : {reason}', 'Unavailable: {reason}'], v11DbUnreadable: ['{n} compte(s) illisible(s) pour le moment : leurs chiffres ne sont pas dans ce bloc.', '{n} account(s) cannot be read right now: their figures are not in this block.'],
+  v11DbErr_timeout: ['la source n’a pas répondu à temps', 'the source did not answer in time'], v11DbErr_source_failed: ['la source n’a pas pu être lue', 'the source could not be read'],
+  v11DbErr_service_unavailable: ['le service est momentanément indisponible', 'the service is temporarily unavailable'], v11DbErr_signer_unreachable: ['le signataire ne répond pas', 'the signer does not answer'],
+  v11DbErr_offline: ['l’appareil est hors ligne', 'the device is offline'], v11DbErr_other: ['la source n’a pas pu être lue', 'the source could not be read'],
+  v11DbLoadError: ['Tableau de bord indisponible', 'Dashboard unavailable'], v11DbLoadErrorBody: ['La synthèse n’a pas pu être lue. Vos actifs ci-dessus ne sont pas concernés.', 'The summary could not be read. Your assets above are not affected.'],
+  // v11Db · accounts and positions
+  v11DbAccounts: ['Comptes dérivés', 'Derivative accounts'], v11DbPositions: ['Positions ouvertes', 'Open positions'], v11DbOpenTrade: ['Comptes', 'Accounts'],
+  v11DbEquity: ['Valeur des comptes', 'Account value'], v11DbFree: ['Libre', 'Free'], v11DbMargin: ['Marge', 'Margin'],
+  v11DbNoAccounts: ['Aucun compte.', 'No account.'], v11DbNoPositions: ['Aucune position ouverte.', 'No open position.'],
+  v11DbLong: ['Achat', 'Long'], v11DbShort: ['Vente', 'Short'], v11DbMark: ['Marque', 'Mark'], v11DbNet: ['Net', 'Net'],
+  v11DbLiqAway: ['Liquidation à {pct}', 'Liquidation {pct} away'], v11DbNoLiq: ['Pas de prix de liquidation', 'No liquidation price'],
+  // v11Db · P&L
+  v11DbPnl: ['Résultat', 'P&L'], v11DbRealizedToday: ['Réalisé aujourd’hui', 'Realized today'], v11DbUnrealized: ['Non réalisé', 'Unrealized'], v11DbRealizedInception: ['Réalisé depuis l’origine', 'Realized since inception'],
+  v11DbNoPnl: ['Aucun compte : pas de résultat.', 'No account: no P&L.'],
+  v11DbPnlNote: ['Réalisé : gains et pertes des positions fermées, frais déduits, financement compris. Non réalisé : positions ouvertes, au prix de marque. Chaque mode a ses propres chiffres ; ils ne sont jamais additionnés.',
+    'Realized: gains and losses of closed positions, net of fees, funding included. Unrealized: open positions at the mark price. Each mode has its own figures; they are never added together.'],
+  // v11Db · risk
+  v11DbRisk: ['Risque', 'Risk'], v11DbOpenRisk: ['Ouvrir', 'Open'],
+  v11DbKillOn: ['Arrêt d’urgence activé', 'Kill switch on'], v11DbKillOff: ['Arrêt d’urgence désactivé', 'Kill switch off'],
+  v11DbReadOnlyOn: ['Lecture seule activée', 'Read-only on'], v11DbReadOnlyOff: ['Lecture seule désactivée', 'Read-only off'],
+  v11DbLimitsMissing: ['Limites réelles non définies ({n})', 'Live limits not set ({n})'], v11DbLimitsMissingAuto: ['Limites des automates non définies ({n})', 'Automation limits not set ({n})'], v11DbLimitsSet: ['Limites réelles définies', 'Live limits set'],
+  v11DbKillBody: ['Aucun nouvel ordre qui ajoute du risque n’est accepté. Les annulations et les réductions passent toujours.', 'No new order that adds risk is accepted. Cancels and reductions still pass.'],
+  v11DbReadOnlyBody: ['Seules les annulations passent. Rien d’autre n’est envoyé.', 'Only cancels pass. Nothing else is sent.'],
+  v11DbLimitsBody: ['Tant que ces limites ne sont pas définies, les ordres réels qui ajoutent du risque sont refusés.', 'Until these limits are set, real orders that add risk are refused.'],
+  v11DbGross: ['Exposition brute', 'Gross exposure'], v11DbLeverage: ['Levier', 'Leverage'], v11DbNearestLiq: ['Liquidation la plus proche', 'Nearest liquidation'],
+  v11DbExposureDetail: ['Exposition par actif et par plateforme', 'Exposure per asset and venue'], v11DbNoExposure: ['Aucune exposition.', 'No exposure.'],
+  // v11Db · agents
+  v11DbAgents: ['Agents', 'Agents'], v11DbOpenAgents: ['Ouvrir', 'Open'], v11DbNoAgents: ['Aucun agent', 'No agent'], v11DbNoAgentsBody: ['Les agents créés apparaîtront ici, par mode.', 'Agents you create will show here, per mode.'],
+  v11DbAgentsActive: ['Actifs', 'Active'], v11DbAgentsPaused: ['En pause', 'Paused'], v11DbAgentsStopped: ['Arrêtés', 'Stopped'],
+  v11DbAgentMode_live: ['Réel', 'Real'], v11DbAgentMode_paper: ['Simulation', 'Simulation'], v11DbAgentMode_research: ['Recherche', 'Research'],
+  v11DbAgentCounts: ['{active} actif(s) · {paused} en pause', '{active} active · {paused} paused'], v11DbPnlToday: ['Résultat du jour :', 'Today’s P&L:'], v11DbPartial: ['journée incomplète', 'partial day'],
+  v11DbPnlWhy_research_no_pnl: ['sans objet (aucun ordre en recherche)', 'not applicable (no order in research)'], v11DbPnlWhy_no_snapshot: ['pas encore de relevé', 'no reading yet'],
+  v11DbAgentsNote: ['Résultat du jour : variation de la valeur des agents entre deux relevés ; un dépôt ou un retrait dans la journée y est compté.', 'Today’s P&L: change in the agents’ value between two readings; a deposit or a withdrawal during the day is counted in it.'],
+  // v11Db · system status and freshness
+  v11DbSystem: ['État du système', 'System status'], v11DbOpenMonitor: ['Détail', 'Details'],
+  v11DbSigner: ['Signataire', 'Signer'], v11DbSignerOk: ['Joignable', 'Reachable'], v11DbSignerDown: ['Injoignable', 'Unreachable'], v11DbSignerHalted: ['Joignable, signatures suspendues', 'Reachable, signing halted'],
+  v11DbConnectors: ['Connecteurs', 'Connectors'], v11DbConnectorsOk: ['{ok} sur {n} en service', '{ok} of {n} in service'], v11DbConnectorsFailing: ['{n} en défaut', '{n} failing'], v11DbLoopsLate: ['{n} tâche(s) de fond en retard', '{n} background task(s) late'],
+  v11DbAudit: ['Journal d’audit', 'Audit journal'], v11DbAuditOk: ['Chaîne d’audit intacte', 'Audit chain intact'], v11DbAuditBroken: ['Chaîne d’audit rompue', 'Audit chain broken'], v11DbAuditEvents: ['{n} événements vérifiés', '{n} events verified'],
+  v11DbStreams: ['Flux des plateformes', 'Venue streams'],
+  v11DbFreshness: ['Fraîcheur des prix', 'Price freshness'], v11DbFreshWallet: ['Prix du portefeuille', 'Wallet prices'], v11DbFreshNone: ['Aucun prix', 'No price'],
+  v11DbFreshSummary: ['Comptes et positions', 'Accounts and positions'], v11DbReadAgo: ['lus {age}', 'read {age}'],
+  v11DbFreshMarks: ['Prix de marque', 'Mark prices'], v11DbFreshNoMarks: ['Aucune position à suivre', 'No position to follow'], v11DbFreshMark: ['{symbol} · {venue}', '{symbol} · {venue}'],
+  v11DbFreshPolled: ['relu toutes les 20 s', 're-read every 20 s'],
+  // v11Tr · trade
+  // — the twelve states of the unified order machine. UNKNOWN is never worded as a failure: the venue has not answered yet.
+  v11TrOs_CREATED: ['Créé', 'Created'], v11TrOs_VALIDATED: ['Validé', 'Validated'], v11TrOs_AWAITING_APPROVAL: ['En attente de votre approbation', 'Awaiting your approval'], v11TrOs_APPROVED: ['Approuvé', 'Approved'],
+  v11TrOs_SUBMITTING: ['Envoi en cours', 'Being sent'], v11TrOs_SUBMITTED: ['Transmis à la plateforme', 'Sent to the venue'], v11TrOs_PARTIALLY_FILLED: ['Partiellement exécuté', 'Partially filled'], v11TrOs_FILLED: ['Exécuté', 'Filled'],
+  v11TrOs_CANCELLED: ['Annulé', 'Cancelled'], v11TrOs_REJECTED: ['Refusé', 'Rejected'], v11TrOs_FAILED: ['Échoué', 'Failed'], v11TrOs_UNKNOWN: ['En vérification auprès de la plateforme', 'Being verified with the venue'],
+  v11TrUnknownNote: ['Le résultat à la plateforme n’est pas encore connu. L’ordre n’est ni terminé ni en échec : le portefeuille le vérifie et mettra son état à jour.', 'The outcome at the venue is not known yet. The order is neither done nor failed: the wallet is checking it and will update its state.'],
+  // — every account, every venue
+  v11TrAll: ['Tous les comptes', 'All accounts'], v11TrAllSub: ['Positions et ordres de toutes les plateformes. Réel et simulation sont deux listes : rien n’est additionné entre elles.', 'Positions and orders on every venue. Live and paper are two lists: nothing is added across them.'],
+  v11TrLive: ['Réel', 'Live'], v11TrPaper: ['Simulation', 'Paper'],
+  v11TrNoPositions: ['Aucune position ouverte', 'No open position'], v11TrNoOpen: ['Aucun ordre ouvert', 'No open order'], v11TrNoHistory: ['Aucun ordre terminé', 'No finished order'],
+  v11TrLoadError: ['Les ordres unifiés ne sont pas disponibles', 'Unified orders are unavailable'], v11TrErrCode: ['Code : {code}', 'Code: {code}'], v11TrSourceErrors: ['Comptes non lus pour l’instant : {sources}. Les autres sont à jour.', 'Accounts not read for now: {sources}. The others are current.'],
+  v11TrTrigger: ['déclenchement {px}', 'trigger {px}'], v11TrFilled: ['exécuté {n}', 'filled {n}'],
+  v11TrNoProtection: ['Aucun stop ni prise de profit attaché', 'No stop or take-profit attached'], v11TrRole_stop_loss: ['Stop de protection', 'Stop loss'], v11TrRole_take_profit: ['Prise de profit', 'Take profit'],
+  v11TrAttachedPlaced: ['placé', 'placed'], v11TrAttachedPending: ['placé à l’exécution', 'placed on fill'],
+  v11TrClose: ['Fermer la position', 'Close position'], v11TrCloseConfirm: ['Confirmer la fermeture au marché (simulation)', 'Confirm the market close (paper)'], v11TrCloseConfirmLive: ['Créer l’ordre de fermeture réel', 'Create the live closing order'],
+  v11TrCloseDone: ['Ordre de fermeture : {state}.', 'Closing order: {state}.'], v11TrCloseAwaiting: ['L’ordre réel attend votre approbation par clé d’accès : ouvrez le compte réel dans le terminal pour l’approuver.', 'The live order awaits your passkey approval: open the venue account in the terminal to approve it.'],
+  v11TrCancel: ['Annuler l’ordre', 'Cancel order'], v11TrCancelDone: ['Ordre : {state}.', 'Order: {state}.'], v11TrActionError: ['Action refusée (code : {code}). Rien n’a changé.', 'Action refused (code: {code}). Nothing changed.'],
+  v11TrHistory: ['Historique de l’ordre', 'Order history'], v11TrHistoryEmpty: ['Aucune transition enregistrée pour cet ordre.', 'No transition recorded for this order.'], v11TrReason: ['Motif : {code}', 'Reason: {code}'],
+  // — checks before confirmation (unified preview)
+  v11TrChecks: ['Vérifications avant confirmation', 'Checks before confirmation'], v11TrChecksUnavailable: ['Les vérifications unifiées ne sont pas disponibles pour cet ordre (code : {code}). Les contrôles du compte s’appliquent toujours à l’envoi.', 'The unified checks are unavailable for this order (code: {code}). The account’s own controls still apply when it is sent.'],
+  v11TrChecksPassed: ['{n} vérifications réussies', '{n} checks passed'], v11TrChecksFailed: ['{n} en échec', '{n} failed'], v11TrChecksExempt: ['{n} sans objet', '{n} not applicable'], v11TrChecksAll: ['Voir les {n} vérifications', 'See the {n} checks'],
+  v11TrRiskEngine: ['Moteur de risque', 'Risk engine'], v11TrAllowed: ['Autorisé', 'Allowed'], v11TrDenied: ['Refusé', 'Refused'], v11TrReducing: ['l’ordre réduit le risque', 'the order reduces risk'],
+  v11TrMandate: ['Mandat', 'Mandate'], v11TrMandateOwner: ['Sans objet : c’est votre session, pas celle d’un agent ni d’une clé d’API.', 'Not applicable: this is your session, not an agent’s or an API key’s.'],
+  v11TrApproval: ['Approbation', 'Approval'], v11TrApproval_owner_passkey: ['Votre clé d’accès, à l’étape suivante', 'Your passkey, at the next step'], v11TrApproval_mandate: ['Par le mandat', 'By the mandate'], v11TrApproval_none: ['Aucune signature : compte simulé', 'No signature: paper account'],
+  v11TrCheckOk: ['réussie', 'passed'], v11TrCheckFail: ['en échec', 'failed'], v11TrCheckExempt: ['sans objet', 'not applicable'], v11TrObserved: ['observé {v}', 'observed {v}'], v11TrLimit: ['limite {v}', 'limit {v}'], v11TrDetailEn: ['Détail technique (en anglais)', 'Technical detail (English)'],
+  v11TrRefusal: ['Refus à l’étape « {stage} » :', 'Refused at the “{stage}” stage:'], v11TrStage_key: ['clé d’API', 'API key'], v11TrStage_lock: ['verrou du serveur', 'server lock'], v11TrStage_mandate: ['mandat', 'mandate'], v11TrStage_risk: ['moteur de risque', 'risk engine'], v11TrStage_engine: ['compte', 'account'],
+  v11TrCk_input_valid: ['Ordre bien formé', 'Well-formed order'], v11TrCk_read_only: ['Mode lecture seule désactivé', 'Read-only mode off'], v11TrCk_kill_switch: ['Coupe-circuit global désactivé', 'Global kill switch off'], v11TrCk_reduce_only_valid: ['Réduction seulement : réduit bien une position', 'Reduce-only: does reduce a position'],
+  v11TrCk_venue_allowed: ['Plateforme autorisée', 'Venue allowed'], v11TrCk_instrument_allowed: ['Marché autorisé', 'Market allowed'], v11TrCk_instrument_status: ['Marché ouvert à la plateforme', 'Market open at the venue'], v11TrCk_signer_status: ['Signataire joignable et non arrêté', 'Signer reachable and not halted'],
+  v11TrCk_venue_connection: ['Connexion à la plateforme', 'Venue connection'], v11TrCk_price_freshness: ['Fraîcheur du prix', 'Price freshness'], v11TrCk_price_consistency: ['Cohérence des prix', 'Price consistency'],
+  v11TrCk_order_notional: ['Valeur par ordre', 'Value per order'], v11TrCk_daily_notional: ['Valeur négociée par jour', 'Value traded per day'], v11TrCk_order_rate_minute: ['Ordres par minute', 'Orders per minute'], v11TrCk_order_rate_hour: ['Ordres par heure', 'Orders per hour'], v11TrCk_order_rate_day: ['Ordres par jour', 'Orders per day'],
+  v11TrCk_position_size: ['Taille de la position', 'Position size'], v11TrCk_order_leverage: ['Levier de l’ordre', 'Order leverage'], v11TrCk_account_leverage: ['Levier du compte', 'Account leverage'], v11TrCk_gross_exposure: ['Exposition brute', 'Gross exposure'], v11TrCk_net_exposure: ['Exposition nette', 'Net exposure'],
+  v11TrCk_asset_exposure: ['Exposition par actif', 'Exposure per asset'], v11TrCk_venue_exposure: ['Exposition par plateforme', 'Exposure per venue'], v11TrCk_collateral_concentration: ['Concentration de la garantie', 'Collateral concentration'],
+  v11TrCk_daily_loss: ['Perte du jour', 'Loss today'], v11TrCk_total_loss: ['Perte totale', 'Total loss'], v11TrCk_drawdown: ['Repli depuis le sommet', 'Drawdown from the peak'], v11TrCk_liquidation_distance: ['Distance à la liquidation', 'Distance to liquidation'],
+  v11TrCk_slippage: ['Glissement', 'Slippage'], v11TrCk_min_liquidity: ['Liquidité minimale', 'Minimum liquidity'], v11TrCk_context_complete: ['Toutes les données du compte ont été lues', 'Every account figure could be read'],
+  // — command line (deterministic grammar; keywords exist in French and English)
+  v11TrCmd: ['Ligne de commande', 'Command line'], v11TrCmdSub: ['Une ligne, une commande. Aperçu d’abord : rien n’est envoyé avant votre confirmation, et les mêmes vérifications s’appliquent.', 'One line, one command. Preview first: nothing is sent before you confirm, and the same checks apply.'],
+  v11TrCmdLabel: ['Commande de négociation', 'Trading command'], v11TrCmdExamples: ['Exemples de commandes', 'Command examples'], v11TrCmdPreview: ['Aperçu', 'Preview'], v11TrCmdDry: ['Aperçu — rien n’a été envoyé', 'Preview — nothing was sent'],
+  v11TrCmdRunPaper: ['Exécuter en simulation', 'Run on paper'], v11TrCmdRunLive: ['Créer l’ordre réel (clé d’accès ensuite)', 'Create the live order (passkey next)'], v11TrCmdRunControl: ['Exécuter', 'Run'], v11TrCmdClear: ['Effacer', 'Clear'],
+  v11TrCmdStale: ['La ligne a changé depuis cet aperçu : demandez un nouvel aperçu avant d’exécuter.', 'The line changed since this preview: preview again before running.'], v11TrCmdExecuted: ['Commande exécutée', 'Command executed'],
+  v11TrCmdQuestions: ['La commande ne dit pas tout. Répondez pour continuer — rien n’a été exécuté.', 'The command does not settle everything. Answer to go on — nothing was executed.'],
+  v11TrCmdRefused: ['Commande refusée, rien n’a été exécuté :', 'Command refused, nothing was executed:'],
+  v11TrQ_venue: ['Sur quelle plateforme ?', 'On which venue?'], v11TrQ_network: ['Sur quel réseau ?', 'On which network?'], v11TrQ_instrument: ['Plusieurs marchés correspondent. Lequel ?', 'Several markets match. Which one?'], v11TrQ_quote: ['Contre quel actif ?', 'For which asset?'],
+  v11TrQ_leverage: ['Avec quel levier ?', 'With which leverage?'], v11TrQ_marginMode: ['Marge croisée ou isolée ?', 'Cross or isolated margin?'], v11TrQ_maxFeeBps: ['Frais maximaux acceptés, en points de base de la valeur de l’ordre ?', 'Highest fee accepted, in basis points of the order’s value?'],
+  v11TrQ_maxSlippageBps: ['Glissement maximal accepté, en points de base (1 à 500) ?', 'Worst slippage accepted, in basis points (1 to 500)?'], v11TrQ_orderTtlMs: ['Durée de validité d’un ordre, en secondes ?', 'How long an order stays valid, in seconds?'], v11TrQ_other: ['Précision manquante : {field}', 'Missing detail: {field}'],
+  v11TrQUse: ['Utiliser', 'Use'], v11TrQSaved: ['Enregistré dans vos valeurs par défaut des commandes.', 'Saved to your command defaults.'], v11TrQIntoLine: ['Ajouté à la commande.', 'Added to the command.'],
+  v11TrQDefaultHint: ['Cette réponse devient votre valeur par défaut pour les commandes.', 'This answer becomes your default for commands.'], v11TrQInvalid: ['Valeur non reconnue.', 'Value not recognised.'], v11TrOpt_cross: ['croisée', 'cross'], v11TrOpt_isolated: ['isolée', 'isolated'],
+  v11TrParseAt: ['(mot {n})', '(word {n})'], v11TrParse_empty: ['La commande est vide.', 'The command is empty.'], v11TrParse_too_long: ['La commande est trop longue.', 'The command is too long.'], v11TrParse_bad_character: ['Une commande est une ligne de texte simple.', 'A command is one line of plain text.'],
+  v11TrParse_unknown_command: ['Commande non reconnue. Exemples : LONG BTC-PERP 500 x2, CLOSE BTC-PERP 50%, SHOW POSITIONS.', 'Command not recognised. Examples: LONG BTC-PERP 500 x2, CLOSE BTC-PERP 50%, SHOW POSITIONS.'],
+  v11TrParse_expected_asset: ['Un symbole d’actif est attendu.', 'An asset symbol is expected.'], v11TrParse_expected_perp: ['Un contrat est attendu, sous la forme ACTIF-PERP.', 'A contract is expected, written ASSET-PERP.'], v11TrParse_expected_amount: ['Un montant est attendu.', 'An amount is expected.'],
+  v11TrParse_expected_quote: ['L’actif de paiement est attendu.', 'The quote asset is expected.'], v11TrParse_expected_price: ['Un prix est attendu.', 'A price is expected.'], v11TrParse_expected_venue: ['Le nom d’une plateforme est attendu.', 'A venue name is expected.'],
+  v11TrParse_expected_keyword: ['Un mot-clé manque dans la commande.', 'A keyword is missing from the command.'], v11TrParse_expected_id: ['L’identifiant de l’ordre est attendu.', 'The order id is expected.'],
+  v11TrParse_bad_number: ['Nombre non reconnu : un nombre décimal simple, sans signe ni séparateur de milliers, avec un point.', 'Number not recognised: a plain decimal number, no sign, no thousands separator, with a dot.'],
+  v11TrParse_bad_percent: ['Pourcentage non reconnu : un nombre suivi de %, de 0 à 100.', 'Percentage not recognised: a number followed by %, from 0 to 100.'], v11TrParse_bad_leverage: ['Levier non reconnu : x suivi d’un nombre, par exemple x2.', 'Leverage not recognised: x followed by a number, for example x2.'],
+  v11TrParse_duplicate_option: ['Une option est écrite deux fois.', 'An option is written twice.'], v11TrParse_unexpected_token: ['Un mot de trop dans la commande.', 'One word too many in the command.'],
+  v11TrUnres_no_instrument: ['Aucun marché négociable depuis ce portefeuille ne correspond.', 'No market tradable from this wallet matches.'], v11TrUnres_no_position: ['Aucune position ouverte sur ce marché.', 'No open position on this market.'],
+  v11TrUnres_missing_balance: ['Le solde de cet actif n’a pas pu être lu.', 'The balance of this asset could not be read.'], v11TrUnres_missing_reference_price: ['Aucun prix de référence récent pour ce marché.', 'No recent reference price for this market.'],
+  v11TrUnres_fee_cap_not_expressible: ['Le plafond de frais ne peut pas être exprimé pour cet ordre.', 'The fee cap cannot be expressed for this order.'], v11TrUnres_zero_size: ['Le montant est trop petit : la taille arrondie au lot serait nulle.', 'The amount is too small: the size rounded to the lot would be zero.'],
+  v11TrUnres_inconsistent_prices: ['Les prix de la commande sont incohérents (limite, stop, prise de profit).', 'The prices of the command are inconsistent (limit, stop, take-profit).'], v11TrUnres_no_client_id_format: ['L’identifiant de l’ordre n’a pas pu être dérivé.', 'The order’s id could not be derived.'],
+  v11TrUnres_invalid_order: ['La commande ne donne pas un ordre valide.', 'The command does not give a valid order.'],
+  v11TrNotional: ['Valeur', 'Notional'], v11TrLev: ['Levier', 'Leverage'], v11TrMaxSlip: ['Glissement maximal', 'Maximum slippage'], v11TrMaxFee: ['Frais maximaux', 'Maximum fee'],
+  v11TrCtl_cancel_order: ['Annulerait cet ordre.', 'Would cancel this order.'], v11TrCtl_cancel_all: ['Annulerait {n} ordre(s) ouvert(s).', 'Would cancel {n} open order(s).'],
+  v11TrCtl_kill_switch_on: ['Activerait le coupe-circuit global : plus aucun nouveau risque n’est accepté. Le lever demandera votre clé d’accès.', 'Would engage the global kill switch: no new risk is accepted. Releasing it will need your passkey.'],
+  v11TrCtl_stop_all_agents: ['Arrêterait tous les agents.', 'Would stop every agent.'], v11TrCtlDone: ['Fait.', 'Done.'], v11TrQueryRows: ['{n} élément(s)', '{n} item(s)'], v11TrQueryRaw: ['Réponse complète', 'Full answer'],
+  // — the market picker, fed by the markets hub
+  v11TrPickLiveOff: ['Réel indisponible', 'Live unavailable'], v11TrPickPaperOnly: ['simulation seulement', 'paper only'], v11TrPickReadOnly: ['lecture seule', 'read-only'], v11TrPickInfo: ['Fiche du marché {symbol} (lecture seule)', '{symbol} market sheet (read-only)'],
+  v11TrPickHubDown: ['Le répertoire des marchés ne répond pas : la liste vient des plateformes, sans la mention de ce qui est négociable.', 'The markets directory does not answer: the list comes from the venues, without the mention of what is tradable.'],
+  // v11Ac · activity
+  // v11Ac · the audit chain, the filters
+  v11AcAuditOk: ['Chaîne d’audit intacte', 'Audit chain intact'], v11AcAuditUnknown: ['Chaîne d’audit : vérification en cours', 'Audit chain: being verified'],
+  v11AcAuditSub: ['vérifiée le {date}', 'verified {date}'],
+  v11AcAuditBroken: ['Chaîne d’audit rompue à l’événement {seq}', 'Audit chain broken at event {seq}'],
+  v11AcAuditBrokenBody: ['Le journal a été modifié ou il lui manque un événement : ce qui suit cet événement n’est plus vérifiable. Ouvrez Sécurité pour le détail.', 'The journal was altered or an event is missing: what follows that event can no longer be verified. Open Security for the detail.'],
+  v11AcKinds: ['Type d’opération', 'Kind of operation'],
+  v11AcKind_transfer: ['Envois', 'Transfers'], v11AcKind_receive: ['Réceptions', 'Receipts'], v11AcKind_swap: ['Échanges', 'Swaps'], v11AcKind_bridge: ['Ponts', 'Bridges'], v11AcKind_plan: ['Plans', 'Plans'], v11AcKind_order: ['Ordres', 'Orders'],
+  v11AcKind_agent: ['Agents', 'Agents'], v11AcKind_mandate: ['Mandats', 'Mandates'], v11AcKind_risk: ['Risque', 'Risk'], v11AcKind_key: ['Clés d’API', 'API keys'], v11AcKind_security: ['Sécurité', 'Security'],
+  v11AcMode: ['Mode', 'Mode'], v11AcMode_live: ['Réel', 'Live'], v11AcMode_paper: ['Simulation', 'Paper'],
+  v11AcModeLiveLong: ['Réel — argent réel', 'Live — real money'], v11AcModePaperLong: ['Simulation — aucun argent réel', 'Paper — no real money'],
+  v11AcTagPaper: ['Simulation', 'Paper'], v11AcTagLive: ['Réel', 'Live'], v11AcTagResearch: ['Recherche', 'Research'],
+  v11AcVenue: ['Plateforme ou réseau', 'Venue or network'], v11AcVenueAll: ['Toutes les plateformes', 'All venues'], v11AcVenues: ['Plateformes', 'Venues'], v11AcVenueOne: ['Plateforme', 'Venue'],
+  v11AcPrincipal: ['Auteur', 'Principal'], v11AcPrincipal_all: ['Tous les auteurs', 'All principals'], v11AcPrincipal_owner: ['Propriétaire', 'Owner'], v11AcPrincipal_agent: ['Agent', 'Agent'], v11AcPrincipal_api_key: ['Clé d’API', 'API key'], v11AcPrincipal_system: ['Système', 'System'],
+  v11AcRange: ['Période', 'Period'], v11AcRange_all: ['Toute la période', 'Any date'], v11AcRange_today: ['Aujourd’hui', 'Today'], v11AcRange_7d: ['7 derniers jours', 'Last 7 days'], v11AcRange_30d: ['30 derniers jours', 'Last 30 days'], v11AcRange_custom: ['Dates au choix…', 'Custom dates…'],
+  v11AcFrom: ['Du', 'From'], v11AcTo: ['Au', 'To'],
+  v11AcNoTotals: ['Les opérations en simulation sont étiquetées. Aucun total n’est calculé ici : le réel et la simulation ne sont jamais additionnés.', 'Paper operations are labelled. No total is computed here: live and paper are never added together.'],
+  v11AcReset: ['Réinitialiser les filtres', 'Reset filters'], v11AcCsv: ['Exporter (CSV)', 'Export (CSV)'], v11AcMore: ['Charger plus', 'Load more'],
+  v11AcBound: ['Fin de l’historique affiché (les {n} opérations les plus récentes de chaque source).', 'End of the history shown (the {n} most recent operations of each source).'],
+  // v11Ac · loading, empty, errors
+  v11AcEmptyBody: ['Vos envois, réceptions, échanges, ordres et événements de sécurité apparaîtront ici.', 'Your transfers, deposits, swaps, orders and security events will appear here.'],
+  v11AcEmptyFiltered: ['Aucune opération ne correspond à ces filtres.', 'No operation matches these filters.'], v11AcEmptyFilteredBody: ['Élargissez la période ou retirez un filtre.', 'Widen the period or remove a filter.'],
+  v11AcLoadError: ['L’historique n’a pas pu être lu.', 'The history could not be read.'], v11AcLoadErrorBody: ['Rien n’a été modifié. Réessayez dans un instant.', 'Nothing was changed. Try again in a moment.'],
+  v11AcSourceError: ['Source momentanément illisible : {sources}. Le reste de l’historique est affiché.', 'Source unreadable for now: {sources}. The rest of the history is shown.'],
+  v11AcSrc_wallet: ['mouvements du portefeuille', 'wallet movements'], v11AcSrc_plans: ['plans', 'plans'], v11AcSrc_orders: ['ordres', 'orders'], v11AcSrc_decisions: ['décisions de risque', 'risk decisions'], v11AcSrc_audit: ['journal d’audit', 'audit journal'],
+  // v11Ac · unified orders: the twelve states. UNKNOWN is a verification in progress, never a failure.
+  v11AcOs_CREATED: ['Créé', 'Created'], v11AcOs_VALIDATED: ['Validé', 'Validated'], v11AcOs_AWAITING_APPROVAL: ['En attente d’approbation', 'Awaiting approval'], v11AcOs_APPROVED: ['Approuvé', 'Approved'],
+  v11AcOs_SUBMITTING: ['Envoi en cours', 'Submitting'], v11AcOs_SUBMITTED: ['Envoyé à la plateforme', 'Sent to the venue'], v11AcOs_PARTIALLY_FILLED: ['Partiellement exécuté', 'Partially filled'], v11AcOs_FILLED: ['Exécuté', 'Filled'],
+  v11AcOs_CANCELLED: ['Annulé', 'Cancelled'], v11AcOs_REJECTED: ['Refusé', 'Rejected'], v11AcOs_FAILED: ['Échoué', 'Failed'], v11AcOs_UNKNOWN: ['En vérification auprès de la plateforme', 'Being verified with the venue'],
+  v11AcUnknownNote: ['L’issue de cet ordre auprès de la plateforme n’est pas encore connue : elle est en cours de vérification. Ce n’est pas un échec.', 'The outcome of this order at the venue is not known yet: it is being verified. This is not a failure.'],
+  v11AcSize: ['Taille', 'Size'], v11AcOrderType: ['Type', 'Type'], v11AcReduceOnly: ['réduction seulement', 'reduce-only'], v11AcPrice: ['Prix limite', 'Limit price'], v11AcTrigger: ['Prix de déclenchement', 'Trigger price'],
+  v11AcFilled: ['Exécuté', 'Filled'], v11AcReason: ['Code du refus', 'Refusal code'], v11AcEngine: ['État du moteur', 'Engine state'], v11AcMandate: ['Mandat', 'Mandate'], v11AcRef: ['Référence', 'Reference'], v11AcBy: ['Auteur', 'Principal'],
+  v11AcHistory: ['Transitions d’état', 'State transitions'], v11AcHistoryEmpty: ['Aucune transition enregistrée pour cet ordre.', 'No transition recorded for this order.'], v11AcHistoryError: ['Les transitions n’ont pas pu être lues.', 'The transitions could not be read.'],
+  // v11Ac · plans, risk denials
+  v11AcPlanTitle: ['Plan · {from} → {to}', 'Plan · {from} → {to}'], v11AcPlan_active: ['En cours', 'In progress'], v11AcPlan_paused: ['En pause', 'Paused'], v11AcPlan_done: ['Terminé', 'Done'], v11AcPlan_stopped: ['Arrêté', 'Stopped'],
+  v11AcSteps: ['Étape', 'Step'], v11AcOpenPlan: ['Ouvrir le plan', 'Open the plan'],
+  v11AcRiskDenied: ['Ordre refusé par le moteur de risque', 'Order refused by the risk engine'], v11AcDenied: ['Refusé', 'Denied'], v11AcFailed: ['Contrôles en échec', 'Failed checks'],
+  v11AcChk_input_valid: ['Ordre valide', 'Valid order'], v11AcChk_read_only: ['Mode lecture seule', 'Read-only mode'], v11AcChk_kill_switch: ['Arrêt d’urgence', 'Kill switch'], v11AcChk_reduce_only_valid: ['Réduction réelle de la position', 'Really reduces the position'],
+  v11AcChk_venue_allowed: ['Plateforme autorisée', 'Venue allowed'], v11AcChk_instrument_allowed: ['Instrument autorisé', 'Instrument allowed'], v11AcChk_instrument_status: ['État de l’instrument', 'Instrument status'], v11AcChk_signer_status: ['État du signataire', 'Signer status'],
+  v11AcChk_venue_connection: ['Connexion à la plateforme', 'Venue connection'], v11AcChk_price_freshness: ['Fraîcheur du prix', 'Price freshness'], v11AcChk_price_consistency: ['Cohérence du prix', 'Price consistency'],
+  v11AcChk_order_notional: ['Valeur de l’ordre', 'Order value'], v11AcChk_daily_notional: ['Valeur négociée dans la journée', 'Value traded today'], v11AcChk_order_rate_minute: ['Ordres par minute', 'Orders per minute'], v11AcChk_order_rate_hour: ['Ordres par heure', 'Orders per hour'], v11AcChk_order_rate_day: ['Ordres par jour', 'Orders per day'],
+  v11AcChk_position_size: ['Taille de la position', 'Position size'], v11AcChk_order_leverage: ['Levier de l’ordre', 'Order leverage'], v11AcChk_account_leverage: ['Levier du compte', 'Account leverage'], v11AcChk_gross_exposure: ['Exposition brute', 'Gross exposure'], v11AcChk_net_exposure: ['Exposition nette', 'Net exposure'],
+  v11AcChk_asset_exposure: ['Exposition par actif', 'Exposure per asset'], v11AcChk_venue_exposure: ['Exposition par plateforme', 'Exposure per venue'], v11AcChk_collateral_concentration: ['Concentration du collatéral', 'Collateral concentration'],
+  v11AcChk_daily_loss: ['Perte de la journée', 'Loss of the day'], v11AcChk_total_loss: ['Perte totale', 'Total loss'], v11AcChk_drawdown: ['Repli depuis le sommet', 'Drawdown'], v11AcChk_liquidation_distance: ['Distance à la liquidation', 'Distance to liquidation'],
+  v11AcChk_slippage: ['Glissement', 'Slippage'], v11AcChk_min_liquidity: ['Liquidité minimale', 'Minimum liquidity'], v11AcChk_context_complete: ['Données du compte complètes', 'Account data complete'],
+  // v11Ac · events of the audit chain (the code of an event without a sentence is shown as it is)
+  v11AcEvent: ['Événement', 'Event'], v11AcAuditSeq: ['N° dans le journal d’audit', 'No. in the audit journal'], v11AcTechnical: ['Détails techniques', 'Technical details'],
+  v11AcEvGeneric_agent: ['Action d’un agent', 'Agent action'], v11AcEvGeneric_mandate: ['Événement de mandat', 'Mandate event'], v11AcEvGeneric_risk: ['Événement de risque', 'Risk event'], v11AcEvGeneric_key: ['Événement de clé d’API', 'API key event'], v11AcEvGeneric_security: ['Événement de sécurité', 'Security event'],
+  v11AcEv_risk_kill_switch_on: ['Arrêt d’urgence activé', 'Kill switch engaged'], v11AcEv_risk_kill_switch_off: ['Arrêt d’urgence levé', 'Kill switch released'], v11AcEv_risk_read_only_on: ['Mode lecture seule activé', 'Read-only mode engaged'], v11AcEv_risk_read_only_off: ['Mode lecture seule levé', 'Read-only mode released'],
+  v11AcEv_risk_limits_replaced: ['Limites de risque modifiées', 'Risk limits changed'], v11AcEv_risk_limits_seeded: ['Limites de risque initialisées', 'Risk limits initialised'], v11AcEv_risk_limits_change_prepared: ['Modification des limites préparée', 'Limits change prepared'], v11AcEv_risk_auto_replaced: ['Arrêt automatique modifié', 'Automatic stop changed'],
+  v11AcEv_halt_on: ['Arrêt d’urgence du signataire activé', 'Signer emergency halt engaged'],
+  v11AcEv_mandate_created: ['Mandat créé', 'Mandate created'], v11AcEv_mandate_approved: ['Mandat approuvé', 'Mandate approved'], v11AcEv_mandate_revoked: ['Mandat révoqué', 'Mandate revoked'], v11AcEv_mandate_approval_refused: ['Approbation du mandat refusée', 'Mandate approval refused'],
+  v11AcEv_mandate_integrity_failed: ['Intégrité du mandat en défaut', 'Mandate integrity failed'], v11AcEv_mandate_revoke_failed: ['Révocation du mandat non confirmée', 'Mandate revocation not confirmed'],
+  v11AcEv_apikey_created: ['Clé d’API créée', 'API key created'], v11AcEv_apikey_revoked: ['Clé d’API révoquée', 'API key revoked'], v11AcEv_apikey_rotated: ['Secret de clé d’API renouvelé', 'API key secret rotated'], v11AcEv_apikey_updated: ['Clé d’API modifiée', 'API key updated'],
+  v11AcEv_apikey_denied: ['Demande d’une clé d’API refusée', 'API key request denied'], v11AcEv_apikey_approval_failed: ['Approbation de clé d’API échouée', 'API key approval failed'],
+  v11AcEv_webhook_created: ['Webhook créé', 'Webhook created'], v11AcEv_webhook_deleted: ['Webhook supprimé', 'Webhook deleted'], v11AcEv_webhook_secret_rotated: ['Secret de webhook renouvelé', 'Webhook secret rotated'],
+  v11AcEv_agent_created: ['Agent créé', 'Agent created'], v11AcEv_agent_start: ['Agent démarré', 'Agent started'], v11AcEv_agent_stop: ['Arrêt d’un agent demandé', 'Agent stop requested'], v11AcEv_agent_stopped: ['Agent arrêté', 'Agent stopped'], v11AcEv_agent_mode: ['Mode d’un agent modifié', 'Agent mode changed'],
+  v11AcEv_agent_backtest_requested: ['Backtest d’un agent demandé', 'Agent backtest requested'], v11AcEv_agent_order_filled: ['Ordre d’un agent exécuté', 'Agent order filled'], v11AcEv_agent_order_refused: ['Ordre d’un agent refusé', 'Agent order refused'], v11AcEv_agent_withdraw: ['Retrait depuis un agent', 'Withdrawal from an agent'],
+  v11AcEv_strategy_registered: ['Stratégie enregistrée', 'Strategy registered'], v11AcEv_strategy_approved: ['Stratégie approuvée', 'Strategy approved'], v11AcEv_strategy_backtested: ['Stratégie testée (backtest)', 'Strategy backtested'],
+  v11AcEv_login_ok: ['Session ouverte', 'Session opened'], v11AcEv_login_failed: ['Ouverture de session échouée', 'Sign-in failed'], v11AcEv_owner_setup: ['Portefeuille configuré', 'Wallet set up'], v11AcEv_device_added: ['Appareil ajouté', 'Device added'], v11AcEv_sessions_revoked: ['Sessions révoquées', 'Sessions revoked'],
+  v11AcEv_deriv_paper_account_created: ['Compte de simulation créé', 'Paper account created'], v11AcEv_deriv_paper_liquidation: ['Liquidation sur un compte de simulation', 'Liquidation on a paper account'], v11AcEv_deriv_paper_reset: ['Compte de simulation réinitialisé', 'Paper account reset'],
+  v11AcEv_deriv_paper_halt: ['Compte de simulation suspendu', 'Paper account halted'], v11AcEv_deriv_paper_policy_replaced: ['Limites d’un compte de simulation modifiées', 'Paper account limits changed'], v11AcEv_deriv_live_account_created: ['Compte de plateforme créé', 'Venue account created'], v11AcEv_deriv_live_authorized: ['Compte de plateforme autorisé', 'Venue account authorized'], v11AcEv_deriv_live_revoked: ['Autorisation de plateforme révoquée', 'Venue authorization revoked'],
+  // v11Lo · audit leftovers
+  v11LoEnTag: ['cité en anglais', 'quoted'],
+  v11LoMandateUnknown: ['Le mandat de ce lien n’existe pas ou n’existe plus. Les mandats de ce portefeuille sont ci-dessous.', 'The mandate of this link does not exist, or no longer exists. This wallet’s mandates are below.'],
+  v11LoPmNT_builder_dex_read_only: ['Marché d’un déployeur indépendant sur Hyperliquid (HIP-3) : le portefeuille n’en lit que les données. Son chemin de négociation ne couvre que le marché exploité par les validateurs.', 'A builder-deployed (HIP-3) Hyperliquid market: the wallet reads its data only. Its trading path covers the validator-operated market alone.'],
+  v11LoPmNT_venue_restricted: ['Les conditions de cette plateforme excluent le Canada, et elle ne publie pas la définition de ses contrats pré-introduction en bourse.', 'This venue’s terms exclude Canada, and it publishes no specification for its pre-IPO contracts.'],
+  v11LoPmNT_other: ['Ce contrat n’est pas négociable depuis ce portefeuille.', 'This contract cannot be traded from this wallet.'],
+  v11LoSrvQuote: ['Message du serveur (en anglais) : « {text} »', '{text}'],
+  v11LoSrvDetail: ['détail du serveur, en anglais : « {detail} »', '{detail}'],
+  v11LoSrvRefused: ['Demande refusée par le serveur. Message d’origine (en anglais) : « {detail} »', '{detail}'],
+  v11LoSrvCode: ['Demande refusée par le serveur (code {code}).', 'Request refused by the server (code {code}).'],
+  // <<< end of the `v11` block
 } as const;
 export type Key = keyof typeof D;
 // v10 performance pass — ONE language at a time in the browser. `D` above (both languages side by side, the form every
@@ -2806,14 +3001,17 @@ export function useT() {
   };
 }
 /** Localized message for an API error code, followed by the server detail. */
-export function errText(t: (k: Key) => string, e: unknown): string {
+export function errText(t: (k: Key, v?: Record<string, string | number>) => string, e: unknown): string {
   const x = e as { code?: string; message?: string; name?: string };
   if (x?.name === 'NotAllowedError') return '';
   const k = `e_${x?.code}`;
   const detail = x?.message && x.message !== 'error' && x.message !== x.code ? x.message : '';
-  // a translated code speaks for itself; the server's English sentence is appended only when it carries a figure (an amount, a limit)
+  // a translated code speaks for itself; the server's English sentence is appended only when it carries a figure (an amount, a limit).
+  // v11 interface (audit B3): the server's sentence is English — on a French screen it is shown as a QUOTATION of the server, marked as
+  // English (`v11LoSrvDetail`, `v11LoSrvRefused`), never as if it were a sentence of the interface; on an English screen it is unchanged.
   if (/account is not activated yet/.test(detail)) return t('qaErrNotActivated');
-  return hasKey(k) ? (detail && /\d/.test(detail) && x?.code !== 'bad_address' ? `${t(k as Key)} (${detail})` : t(k as Key)) : detail || String(x?.code ?? 'error');
+  if (hasKey(k)) return detail && /\d/.test(detail) && x?.code !== 'bad_address' ? `${t(k as Key)} (${t('v11LoSrvDetail', { detail })})` : t(k as Key);
+  return detail ? t('v11LoSrvRefused', { detail }) : x?.code ? t('v11LoSrvCode', { code: x.code }) : String(x?.code ?? 'error');
 }
 // v11: `not_broadcast` (signed on a server that does not broadcast) reads « Signée, non envoyée » — the wording the QA pass already used for it
 export const stateKey = (s: string) => (s === 'not_broadcast' ? 'qaSignedNotSent' : hasKey(`s_${s}`) ? (`s_${s}` as Key) : 's_draft');

@@ -69,6 +69,9 @@ const REF_KIND: Record<string, Key> = { primary_round: 'pmKind_primary_round', t
 export const referenceKindKey = (kind: string): Key => REF_KIND[kind] ?? 'pmKind_other';
 const CAVEAT: Record<string, Key> = { synthetic: 'pmCav_synthetic', arithmetic: 'pmCav_arithmetic', thin_market: 'pmCav_thin', cross_venue: 'pmCav_cross', unit_mismatch: 'pmCav_units', frozen: 'pmCav_frozen',
   unconfirmed_convention: 'pmCav_convention', company_note: 'pmCav_company', reference_kind: 'pmCav_reference', stale: 'pmCav_stale' };
+/** v11 interface: why a contract cannot be traded from this wallet, by the server's code (`notTradable.code`) */
+const NOT_TRADABLE: Record<string, Key> = { builder_dex_read_only: 'v11LoPmNT_builder_dex_read_only', venue_restricted: 'v11LoPmNT_venue_restricted' };
+export const notTradableKey = (code: string | null | undefined): Key => NOT_TRADABLE[code ?? ''] ?? 'v11LoPmNT_other';
 export const caveatKey = (code: string): Key => CAVEAT[code] ?? 'pmCav_other';
 /** caveats that change how a figure must be read come first; the two standing ones last */
 export function orderCaveats(list: PmCaveat[]): PmCaveat[] {

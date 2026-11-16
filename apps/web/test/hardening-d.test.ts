@@ -166,8 +166,8 @@ describe('D2 — server reasons the UI knows are shown in French', () => {
     expect(errText(t, { code: 'not_found', message: 'agent not found' })).toBe('e_not_found');
     expect(errText(t, { code: 'conflict', message: 'proposal changed concurrently; reload' })).toBe('e_conflict');
     expect(errText(t, { code: 'proposal_expired', message: 'this proposal has expired; propose it again' })).toBe('e_proposal_expired');
-    expect(errText(t, { code: 'too_many_symbols', message: 'at most 8 perpetuals' })).toBe('e_too_many_symbols (at most 8 perpetuals)');   // a figure is still shown
-    expect(errText(t, { code: 'bad_strategy', message: 'the laboratory refused this strategy: SyntaxError' })).toBe('the laboratory refused this strategy: SyntaxError');   // free text stays whole
+    expect(errText(t, { code: 'too_many_symbols', message: 'at most 8 perpetuals' })).toBe('e_too_many_symbols (v11LoSrvDetail)');   // a figure is still shown
+    expect(errText(t, { code: 'bad_strategy', message: 'the laboratory refused this strategy: SyntaxError' })).toBe('v11LoSrvRefused');   // free text stays whole
   });
   it('the Compare, Router and instrument queries ask the server for the screen\'s language', () => {
     expect(src('../src/derivatives/Compare.tsx')).toMatch(/dapi\.compare\(base, locale\)/);

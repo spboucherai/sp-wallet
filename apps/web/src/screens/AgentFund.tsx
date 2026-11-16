@@ -8,6 +8,7 @@ import { get, post } from '../api';
 import type { Nav } from '../App';
 import { useAccounts, useNetworks, usePortfolio, type Net, type Proposal } from '../hooks';
 import { errText, I18n, useT, type Key } from '../i18n';
+import { srvText } from '../srvText';
 import { svText } from '../sv'; // v11: server texts by code
 import { Addr, Btn, Coin, CopyBtn, Fact, Icon, NetDot, Notice, ProgressRing, Sheet, Tag, trimAmt, usdCapital, type Tone } from '../ui';
 import { amountInputText, amountLocale, amountOf, sanitizeAmountText } from '../amount'; // v8 hardening: one rule for typed amounts
@@ -40,7 +41,7 @@ export function fundErr(t: T, e: unknown, ctx: { sym: string; net: string; nativ
   if (x?.name === 'NotAllowedError' || x?.name === 'AbortError') return t('qaFundPasskeyCancelled');
   const m = x?.message ?? '';
   switch (x?.code) {
-    case 'policy': return /per-transaction/.test(m) ? t('qaFundErrPerTx', { max: ctx.perTx ?? '?', sym: ctx.sym }) : /daily limit/.test(m) ? t('qaFundErrDaily', { left: ctx.left ?? '0', sym: ctx.sym }) : /fee ceiling/.test(m) ? t('qaFundErrFee', { net: ctx.net }) : /halt/.test(m) ? t('e_halted') : `${t('e_policy')} (${m})`;
+    case 'policy': return /per-transaction/.test(m) ? t('qaFundErrPerTx', { max: ctx.perTx ?? '?', sym: ctx.sym }) : /daily limit/.test(m) ? t('qaFundErrDaily', { left: ctx.left ?? '0', sym: ctx.sym }) : /fee ceiling/.test(m) ? t('qaFundErrFee', { net: ctx.net }) : /halt/.test(m) ? t('e_halted') : `${t('e_policy')} (${t('v11LoSrvDetail', { detail: m })})`;
     case 'insufficient_funds': return t('qaFundErrBalance', { sym: ctx.sym, net: ctx.net });
     case 'insufficient_gas': return t('qaFundErrGas', { native: ctx.native, net: ctx.net });
     case 'pending_tx': return t('qaFundErrPending', { net: ctx.net });
@@ -257,9 +258,9 @@ export function WithdrawSheet({ a, onClose }: { a: FundAgent; onClose: () => voi
 
 /** One withdrawal as the server reports it. Green only when it is mined AND arrived at the owner's address. */
 export function WdNotice({ w }: { w: Wd }) {
-  const t = useT(), n = withdrawalNotice(w);
+  const t = useT(), n = withdrawalNotice(w); const { locale } = useContext(I18n);
   return <Notice tone={n.tone}><span data-testid="wd-state" data-state={w.state} className="flex items-start gap-2">{n.pending && <Icon n="spin" className="mt-0.5 h-4 w-4 shrink-0" />}
-    <span>{t(n.key, { amount: trimAmt(w.amount, 8), sym: w.symbol })}{(w.state === 'failed' || (w.state === 'confirmed' && !w.arrived)) && w.error ? <span className="mt-1 block text-[12.5px] opacity-80">{w.error}</span> : null}</span></span>
+    <span>{t(n.key, { amount: trimAmt(w.amount, 8), sym: w.symbol })}{(w.state === 'failed' || (w.state === 'confirmed' && !w.arrived)) && w.error ? <span className="mt-1 block text-[12.5px] opacity-80">{srvText(t, locale, w.error)}</span> : null}</span></span>
     {w.explorer && <a className="mt-1 flex min-h-11 items-center gap-1.5 font-medium text-blue" href={w.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}</Notice>;
 }
 

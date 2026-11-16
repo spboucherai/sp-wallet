@@ -33,6 +33,7 @@ import { PaperAccount } from '../../../../packages/derivatives/src/paper.ts';
 import { checkOrder } from '../../../../packages/derivatives/src/risk.ts';
 import { stepAt, worstPrice as worstPriceOf } from './dec';
 import { createLiveMock, type LiveHooks } from './mockLive';
+import { isQuoteStream, MockQuoteSocket, v11Route } from './mockV11';   // v11 interface: Markets, Private markets, Risk, Dashboard, Activity and the quote websocket in mock mode
 import { createRouterMock } from './mockRouter';   // router (simulation): POST /derivatives/route, GET /derivatives/route/assets
 import { createPerpMock, type PerpHooks } from './mockPerpLive';   // v7 perp live: the perp-agent routes
 import { createGmxMock, type GmxHooks, type GmxScenario } from './mockGmx';   // >>> v8 GMX trading <<<
@@ -525,6 +526,9 @@ async function route(method: string, path: string, q: URLSearchParams, b: any, h
   if (path === '/settings') return json(200, { locale: 'fr', currency: 'CAD', hideBalances: false, prices: true });
   if (path === '/alerts/unread') return json(200, MOCK_UNREAD);   // v10: the shell asks for it on every screen; the mock has no alert
   if (PERP.handles(path)) return out(PERP.route(method, path, b, q));   // v7 perp live
+  // v11 interface: the V11 sections (mockV11.ts) — the mock's own perpetuals in the explorer, empty or « not simulated » answers elsewhere
+  if (!path.startsWith('/derivatives')) { const v = v11Route(method, path, q, { now, markets: () => SEEDS.map((s) => { const live = SIMS.get(s.inst.id); return { inst: s.inst, ticker: live ? fresh(live).ticker : s.ticker }; }), venueName: (id) => VENUES.find((x) => x.id === id)?.name ?? id });
+    if (v) return out(v); }
   if (!path.startsWith('/derivatives')) return json(503, { error: 'mock', message: 'mock mode: only the Futures terminal is simulated' });
   if (path.startsWith('/derivatives/live/')) return out(LIVE.route(method, path, b, headers, q));
   // >>> v8 GMX trading
@@ -660,6 +664,9 @@ export function installMock(): void {
     if (new URL(url, location.origin).pathname === '/api/v1/alerts/stream') return new MockAlertsStream(url) as unknown as EventSource;
     return url.includes('/api/v1/derivatives/stream') ? (new MockStream(url) as unknown as EventSource) : new target(...args);
   } });
+  // v11 interface: the quote websocket never opens in mock mode (no dev proxy behind it) — closed without touching the network (mockV11.ts)
+  const RealWS = window.WebSocket;
+  window.WebSocket = new Proxy(RealWS, { construct(target, args: [string | URL, (string | string[])?]) { return isQuoteStream(String(args[0])) ? (new MockQuoteSocket(String(args[0])) as unknown as WebSocket) : new target(...args); } });
   setInterval(worker, 1000);
   setInterval(LIVE.step, 1000);
   setInterval(PERP.step, 1000);   // v7 perp live: a stopping agent closes its positions

@@ -9,6 +9,7 @@ import { D, dec, fmt, usd } from '../derivatives/dec';
 import type { Fill, FundingPayment, Order, Position, RiskPolicy } from '../derivatives/types';
 import { errText, I18n, useT, type Key } from '../i18n';
 import { AssetIcon, Btn, Card, Fact, Field, H, Icon, inputCls, Notice, PageTitle, Stat, StatGrid, Tag, usdCapital, when, type Tone } from '../ui';
+import { srvText } from '../srvText'; // v11 interface (audit B3): a server sentence without a code is translated when known, quoted as English otherwise
 import { amountLocale, amountOf, sanitizeAmountText } from '../amount'; // v8 hardening
 import { AmountProblem } from '../amountUi';
 import { AgentState, VersionTag } from './Agents';
@@ -142,7 +143,7 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
   const evCols: Col<{ id: number; ts: number; kind: string; code: string | null; message: string }>[] = [
     { id: 't', label: t('paColTime'), cell: (x) => timeOf(x.ts, locale, true) },
     { id: 'k', label: t('paColKind'), head: true, cell: (x) => <span className="font-semibold">{x.kind}{x.code ? ` · ${x.code}` : ''}</span> },
-    { id: 'm', label: '', full: true, cell: (x) => <span className="whitespace-normal text-mute">{x.message}</span> },
+    { id: 'm', label: '', full: true, cell: (x) => <span className="whitespace-normal text-mute" lang="en">{x.message}</span> },
   ];
 
   const have = new Set((a.versions as any[]).map((v) => v.code_sha256)), uni = [...(a.universe as string[])].sort().join();
@@ -159,10 +160,10 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
           {isLive ? <PerpLiveState a={a} /> : <AgentState state={a.state} />}</div>
         {a.mission && <p className="mt-2.5 text-[14.5px] leading-snug text-mute">{a.mission}</p>}</div>
       {isLive ? <AgentModeBand a={a} /> : <SimulationBanner />}
-      {a.stopReason && !(isLive && a.live?.exit) && <Notice tone="warn">{a.stopReason}</Notice>}{/* v7: a live agent's stop is said in the screen's language by LivePanel; the server's sentence is its detail */}
-      {a.flattening && a.state !== 'STOPPED' && <Notice tone="danger">{t('paFlattening')} {a.flattening.reason}</Notice>}
-      {a.flag && <Notice tone="warn">{t('paFlag')} {a.flag.message} ({when(new Date(a.flag.ts), locale)})</Notice>}
-      {a.hold && (a.state === 'PAPER_TRADING' || a.state === 'LIVE') && <Notice tone="info">{t('paHold')} {a.hold.reason}</Notice>}
+      {a.stopReason && !(isLive && a.live?.exit) && <Notice tone="warn">{srvText(t, locale, a.stopReason)}</Notice>}{/* v7: a live agent's stop is said in the screen's language by LivePanel; the server's sentence is its detail */}
+      {a.flattening && a.state !== 'STOPPED' && <Notice tone="danger">{t('paFlattening')} {srvText(t, locale, a.flattening.reason)}</Notice>}
+      {a.flag && <Notice tone="warn">{t('paFlag')} {srvText(t, locale, a.flag.message)} ({when(new Date(a.flag.ts), locale)})</Notice>}
+      {a.hold && (a.state === 'PAPER_TRADING' || a.state === 'LIVE') && <Notice tone="info">{t('paHold')} {srvText(t, locale, a.hold.reason)}</Notice>}
       {err && <Notice tone="danger">{err}</Notice>}{note && <Notice tone="ok">{note}</Notice>}
 
       {/* 2 — the money: the venue account in real mode, the paper account in simulation; then its curve */}
@@ -253,7 +254,7 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
       <Card><H>{t('paSignals')}</H>
         {(a.signals as any[]).length === 0 ? <p className="text-[14px] leading-snug text-mute">{t('paNoSignals')}</p> : <ul className="divide-y divide-line text-[13px]">{(a.signals as any[]).slice(0, 24).map((s) => { const [tone, icon] = SIG_TONE[s.status] ?? (['mute', 'minus'] as [Tone, string]); return <li key={s.bar} className="py-3 first:pt-0 last:pb-0">
           <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[14px] font-semibold">{when(s.bar, locale)}</span><Tag tone={tone} icon={icon}>{s.status === 'decided' ? t('plSig_decided') : t(`paSig_${s.status}` as Key)}</Tag></div>
-          {s.reason && <div className="mt-1 leading-snug text-mute">{s.reason}</div>}
+          {s.reason && <div className="mt-1 leading-snug text-mute">{srvText(t, locale, s.reason)}</div>}
           {s.weights && <div className="mt-1 font-mono text-[11.5px] text-mute [overflow-wrap:anywhere]">{t('paWeights')} {Object.entries(s.weights as Record<string, number>).map(([k, w]) => `${k} ${w >= 0 ? '+' : ''}${w.toFixed(3)}`).join('  ')}{s.scale && s.scale !== '1' ? `  × ${Number(s.scale).toFixed(3)} (${s.orders?.binding})` : ''}</div>}
           {s.targets && <div className="font-mono text-[11.5px] text-mute [overflow-wrap:anywhere]">{t('paTargets')} {Object.entries(s.targets as Record<string, string>).map(([k, z]) => `${k} ${z}`).join('  ')}</div>}
           {(s.orders?.list ?? []).length > 0 && <ul className="mt-1.5 space-y-1">{(s.orders.list as any[]).map((o, k) => <li key={k} className="text-[12.5px]"><SideTag side={o.side} /> {o.symbol} {o.size}{o.reduceOnly ? ` · ${t('paReduceOnly')}` : ''} → <span className="font-medium">{o.status === 'deferred' ? t('plSig_deferred') : o.status}</span>{o.code && isLive ? <span className="mt-0.5 block text-mute"><Refusal code={String(o.code)} reason={o.why ? String(o.why).slice(0, 200) : undefined} /></span> : o.why ? <span className="text-mute"> — {String(o.why).slice(0, 160)}</span> : null}</li>)}</ul>}

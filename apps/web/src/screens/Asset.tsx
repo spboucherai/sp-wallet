@@ -103,7 +103,7 @@ export function Asset({ network, asset, nav }: { network: string; asset: string;
         {mine.length === 0 ? <p className="px-5 pb-4 text-[14px] text-mute">{t('noActivity')}</p> :
           <ul>{mine.map((i, k) => <li key={i.id} className={`flex items-center gap-3 px-5 py-3 ${k ? 'border-t border-line' : ''}`}>
             <span className={`grid h-9 w-9 place-items-center rounded-full ${i.kind === 'receive' ? 'bg-emerald/10 text-emerald' : 'bg-blue/10 text-blue'}`}><Icon n={i.kind === 'receive' ? 'down' : 'up'} className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-[14.5px] font-medium">{i.kind === 'receive' ? t('received') : t('sent')}</span><span className="block text-[12px] text-mute">{when(i.at, locale)}</span></span>
+            <span className="min-w-0 flex-1"><span className="block text-[14.5px] font-medium">{/* v11 interface: a swap, a cross-chain transfer and a GMX order are not « sent » */ i.kind === 'receive' ? t('received') : i.kind === 'gmx' ? t('svKind_gmx') : i.kind === 'bridge' ? t('brActivity') : i.kind === 'swap' ? t('swap') : t('sent')}</span><span className="block text-[12px] text-mute">{when(i.at, locale)}</span></span>
             <span className="text-right"><span className="block text-[14.5px] font-semibold"><Money hidden={hidden}>{i.kind === 'receive' ? '+' : '−'}{trimAmt(i.amountDisplay)}</Money></span><StatePill state={i.state} /></span></li>)}</ul>}</Card>
     </div>
   );
