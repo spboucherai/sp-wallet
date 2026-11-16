@@ -150,10 +150,15 @@ export class UnifiedOrderGateway implements AgentOrderGateway {
     await this.context(order, o.idempotencyKey, ctx);
     // the paper engine marks who placed the order on its own row, as the paper executor always did
     if (order.mode === 'paper') await sql`update deriv_orders set origin = 'agent' where account_id::text = ${this.b.accountId} and client_id = ${order.clientOrderId} and origin <> 'agent'`.catch(() => {});
-    rec = await this.read(order.clientOrderId, false, true);
+    const withCode = (r: AgentOrderRecord): AgentOrderRecord => (thrown && !r.rejectCode && (r.state === 'REJECTED' || r.state === 'FAILED') ? { ...r, rejectCode: thrown.code, detail: `${thrown.code}: ${r.detail ?? thrown.message}`.slice(0, 500) } : r);
+    rec = await this.read(order.clientOrderId, false);
     if (!rec) throw new GatewayError('concurrent_update', 'the order could not be read back');
-    if (thrown && !rec.rejectCode && (rec.state === 'REJECTED' || rec.state === 'FAILED')) rec = { ...rec, rejectCode: thrown.code, detail: `${thrown.code}: ${rec.detail ?? thrown.message}`.slice(0, 500) };
+    rec = withCode(rec);
+    // the executor follows (LIVE: it asks the venue account about the order, which is how a signed order becomes a confirmed one)…
     await this.b.seam.observe?.(order, { state: rec.state, rejectCode: rec.rejectCode ?? null, detail: rec.detail }).catch(() => {});
+    // …and the unified order is read again once the order service has projected what its engine now says
+    if (!isTerminal(rec.state)) await this.refresh(order.clientOrderId);
+    rec = withCode({ ...(await this.read(order.clientOrderId, false, true))!, idempotent: false });
     await this.note(rec, mode, what, ctx);
     return rec;
   }

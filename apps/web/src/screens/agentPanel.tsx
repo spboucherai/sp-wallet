@@ -41,7 +41,9 @@ export interface Overview { id: string; name: string; kind: string; family: stri
     lastPass: { ts: number; findings: number } | null; book: null | { simulated: boolean; positions: Record<string, { size: number; avgPrice: number }>; quotes: { id: string; side: string; price: number; size: number; instrument: string }[]; pair: { longInstrument: string; shortInstrument: string; sizeBase: number } | null; realizedPnl: number; fees: number; funding: number } };
   worker: { lease: { owner: string; active: boolean } | null; tick: { state: string; last_error: string | null } | null };
   jobs: { id: string; kind: string; status: string; error: string | null }[]; killSwitch: { engaged: boolean; reason: string | null; at: number | null; by: string | null } }
-export interface Draft { draft: string; available: boolean; kind?: string; reason: string | null; fields: Record<string, unknown> | null; approval: { route: string; note: string }; existingFlow?: string }
+export interface Draft { draft: string; available: boolean; kind?: string; reason: string | null; fields: Record<string, unknown> | null; approval: { route: string; note: string }; existingFlow?: string;
+  /** V11.2 perp: a trading mandate already created for the agent (approve it in Risk), or how to create it from this draft */
+  pending?: { mandateId: string; state: string } | null; create?: { path: string; body: Record<string, unknown> } | null }
 
 // ------------------------------------------------------------------------------------------------------------------ pure helpers (tested)
 /** every mode-scoped read names exactly ONE mode */
@@ -264,6 +266,9 @@ function MandateSheet({ o, onClose, onLegacy }: { o: Overview; onClose: () => vo
   const t = useT(); const { locale } = useContext(I18n);
   const q = useQuery({ queryKey: ['ag2-draft', o.id], queryFn: () => get<Draft>(`/agents/${o.id}/mandate-draft?locale=${locale}`) });
   const block = liveBlock(o), d = q.data;
+  const [busy, setBusy] = useState(false), [err, setErr] = useState('');
+  // the mandate is CREATED from the draft (nothing is approved), then the Risk screen opens on it: the passkey step is there
+  const create = async () => { if (!d?.create) return; setBusy(true); setErr(''); try { const r = await post<{ approval: { route: string } }>(d.create.path.replace('/api/v1', ''), d.create.body); window.location.assign(r.approval.route); } catch (e) { setErr(errText(t, e)); setBusy(false); } };
   const flat = (v: unknown): string => (v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
   return <Sheet title={t('ag2MandateTitle')} sub={t('ag2MandateSub')} onClose={onClose} wide testid="ag2-mandate-sheet">
     {block !== null ? <Notice tone="warn"><span data-testid="ag2-live-reason">{block || t('ag2LiveUnavailable')}</span></Notice> : q.isLoading ? <SkeletonRows n={4} /> : !d ? <ErrorState title={t('ag2LoadErr')} onRetry={() => void q.refetch()} /> : <div className="space-y-4">
@@ -273,7 +278,10 @@ function MandateSheet({ o, onClose, onLegacy }: { o: Overview; onClose: () => vo
       {d.fields && <dl className="receipt">{Object.entries(d.fields).filter(([, v]) => typeof v !== 'object' || v === null || Array.isArray(v)).map(([k, v]) => <Fact key={k} k={k} mono>{Array.isArray(v) ? v.map(flat).join(', ') : flat(v)}</Fact>)}</dl>}
       {d.fields && Object.entries(d.fields).some(([, v]) => v && typeof v === 'object' && !Array.isArray(v)) && <Fold summary={t('ag2MandateDetail')}><pre className="overflow-x-auto whitespace-pre-wrap text-[12px] text-mute">{JSON.stringify(d.fields, null, 2)}</pre></Fold>}
       <dl><Fact k={t('ag2MandateDraft')} mono>{d.draft}</Fact></dl>
-      <a className="press inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-[15.5px] font-semibold text-onprimary" href={d.approval.route} data-testid="ag2-mandate-link">{t('ag2MandateOpen')}</a>
+      {d.pending && <Notice tone="info"><span data-testid="ag2-mandate-pending">{t(d.pending.state === 'active' ? 'ag2MandateApproved' : 'ag2MandatePending', { id: d.pending.mandateId.slice(0, 8) })}</span></Notice>}
+      {err && <Notice tone="danger">{err}</Notice>}
+      {d.create && <Btn full busy={busy} onClick={() => void create()} data-testid="ag2-mandate-create">{t('ag2MandateCreate')}</Btn>}
+      <a className={`press inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl px-5 text-[15.5px] font-semibold ${d.create ? 'border border-line' : 'bg-primary text-onprimary'}`} href={d.approval.route} data-testid="ag2-mandate-link">{t('ag2MandateOpen')}</a>
       <p className="text-[12.5px] leading-snug text-mute">{t('ag2MandateUntilMerge')}{d.existingFlow ? ` ${d.existingFlow}.` : ''}</p>
       {onLegacy && (o.kind === 'spot' || o.kind === 'perp') && <Btn kind="ghost" full onClick={onLegacy}>{t('ag2MandateLegacy')}</Btn>}
     </div>}
@@ -357,7 +365,8 @@ export function AgentPanel({ id, nav, onLegacy }: { id: string; nav: Nav; onLega
     {o.engine === 'supervisor' && <Section title={t('ag2KillSwitch')}><Card className="space-y-3">
       <div className="flex flex-wrap items-center gap-2"><Tag tone={o.killSwitch.engaged ? 'danger' : 'ok'} icon={o.killSwitch.engaged ? 'stop' : 'check'} testid="ag2-kill-state">{t(o.killSwitch.engaged ? 'ag2KillEngaged' : 'ag2KillOff')}</Tag>{o.runtime?.lastPass && <span className="text-[12.5px] text-mute">{t('ag2SupLast', { n: o.runtime.lastPass.findings, at: when(new Date(o.runtime.lastPass.ts), locale) })}</span>}</div>
       <p className="text-[12.5px] leading-snug text-mute">{t('ag2SupNote')}</p>
-      {o.killSwitch.engaged ? <Btn kind="ghost" full busy={busy === 'release'} onClick={() => void act('release', () => post('/agents/kill-switch/release'))}>{t('ag2KillRelease')}</Btn> : <Btn kind="danger" full onClick={() => setSheet('kill')}>{t('ag2KillEngage')}</Btn>}</Card></Section>}
+      {/* V11.2: ONE kill switch, the risk engine's. It is engaged from here; it is released in Risk, with the passkey — never here */}
+      {o.killSwitch.engaged ? <a className="press inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl border border-line px-5 text-[15.5px] font-semibold" href="/risk" data-testid="ag2-kill-release-link">{t('ag2KillRelease')}</a> : <Btn kind="danger" full onClick={() => setSheet('kill')}>{t('ag2KillEngage')}</Btn>}</Card></Section>}
 
     <BacktestCard o={o} id={id} refresh={refresh} />
 

@@ -589,6 +589,76 @@ describe('stop, pause, wind-down', () => {
   });
 });
 
+describe('V11.2 — bound to the execution layer: unified orders, the trading-mandate lifecycle, the ONE kill switch', () => {
+  it('a live order is a unified order under the agent\'s TRADING mandate: same id as the signer\'s derivative mandate, usage counted, revoked through the mandate service at stop', async () => {
+    const { w, a, acct } = await liveAgent(), bind = await import('../src/agents/execution-bind.ts'), ex = bind.execution();
+    const lb = (await a.row()).perp.live;
+    expect(lb.unified).toBe(true);
+    const m = await ex.mandates.get(lb.mandateId);
+    expect(m).toMatchObject({ mode: 'live', state: 'active', phase: 'active', principal: { kind: 'agent', id: a.id }, signer: { shape: 'SPW-VENUE-MANDATE-v1', accountId: acct, mandateId: lb.mandateId } });
+    expect(w.signer.status().venueMandates[0]).toMatchObject({ mandate: { mandateId: lb.mandateId } });             // ONE mandate, known to the API's mandate service and to the signer under the same id
+    expect(m.enforcement.filter((e: any) => e.enforcedBy === 'signer').map((e: any) => e.field)).toEqual(expect.arrayContaining(['maxOrderNotionalUsd', 'floorEquityUsd', 'notAfter']));
+    expect(await a.tick()).toBe('1 order(s)');
+    const [o] = await sql`select * from orders where principal_kind = 'agent' and principal_id = ${a.id}`;
+    expect(o).toMatchObject({ mode: 'live', origin: 'agent', engine: 'hyperliquid', mandate_id: lb.mandateId, state: 'FILLED', account_id: acct });
+    expect((await sql`select decision from risk_decisions where order_id = ${o.id} and not preview`)[0].decision).toBe('allow');
+    expect((await sql`select order_id, state from agent_order_intents where agent_id = ${a.id}`)).toEqual([{ order_id: o.id, state: null }]);
+    expect((await ex.mandates.get(lb.mandateId)).usage).toMatchObject({ ordersAccepted: 1, ordersToday: 1 });
+    // stop: the mandate is revoked at the signer AND in the mandate service (reason recorded), the position is closed reduce-only
+    await cyc.stopLive(await a.row(), a.rt, 'en');
+    for (let i = 0; i < 4 && (await a.row()).state !== 'STOPPED'; i++) await a.pass();
+    expect((await a.row()).state).toBe('STOPPED'); expect(pos(w)).toBe('0');
+    const after = await ex.mandates.get(lb.mandateId);
+    expect(after).toMatchObject({ state: 'revoked' }); expect(after.revocation.signerRevoked).toBe(true); expect(after.revocation.record.reason).toBe('owner_request');
+    await w.svc.reconcile(acct);                                                                         // the live worker's reconciliation: the venue's own record of the closing order
+    await ex.orders.reconcile();                                                                         // the `orders` loop of the API process (every 5 s): what the venue engine learned since is projected
+    expect((await sql`select reduce_only, state from orders where principal_id = ${a.id} order by created_at, id`).map((x: any) => [x.reduce_only, x.state])).toEqual([[false, 'FILLED'], [true, 'FILLED']]);
+  });
+
+  it('the Risk-screen way: the mandate is CREATED from the agent\'s limits, approved through the mandate service (as /risk does), then "start live" records it — a key or the engine can not', async () => {
+    const w = await liveWorld(), acct = await w.authorise('testnet', '1000'), a = await agent(w), bind = await import('../src/agents/execution-bind.ts'), ex = bind.execution(), life = await import('../src/agents/lifecycle.ts');
+    pl.setPerpRuntime(a.rt as never);
+    await expect(life.startAgent(a.id, 'live', { kind: 'owner' })).rejects.toMatchObject({ code: 'mandate_required' });
+    const { created } = await mw.createLiveMandate(await a.row(), a.rt, { accountId: acct, locale: 'en' });
+    expect(created).toMatchObject({ state: 'created', mode: 'live', principal: { kind: 'agent', id: a.id } });
+    expect(w.signer.status().venueMandates).toEqual([]);                                                 // nothing reached the signer: a created mandate authorises nothing
+    await expect(life.startAgent(a.id, 'live', { kind: 'owner' })).rejects.toMatchObject({ code: 'mandate_required' });   // created, not approved
+    const draft = await (await import('../src/agents/runtime-routes.ts')).mandateDraft(await (await import('../src/agent-runtime/store.ts')).loadAgent(a.id));
+    expect(draft).toMatchObject({ pending: { mandateId: created.id, state: 'created' }, approval: { route: `/risk?mandate=${created.id}` } });
+    // what the Risk screen does: prepare the approval sheet, one passkey
+    const sheet = await ex.mandates.prepareApproval(created.id, 'en');
+    expect(sheet.passkey).toBe(true);
+    await ex.mandates.approve(created.id, { assertion: w.pk.assert(w.b64(sheet.signer!.hash)) as never, acknowledged: true });
+    expect((await a.row()).state).not.toBe('LIVE');                                                      // approving in Risk does not start anything
+    await expect(life.startAgent(a.id, 'live', { kind: 'api_key', id: 'spk_x' })).rejects.toMatchObject({ code: 'mandate_required' });
+    const started = await life.startAgent(a.id, 'live', { kind: 'owner' });
+    expect(started).toMatchObject({ state: 'LIVE', mode: 'LIVE' });
+    expect((await a.row()).perp.live).toMatchObject({ mandateId: created.id, accountId: acct, unified: true });
+    expect(await a.tick()).toBe('1 order(s)');
+    // revoked from the Risk screen: the signer's copy is revoked, and the agent leaves LIVE by itself on its next pass
+    await ex.mandates.revoke(created.id, { by: 'owner', reason: 'owner_request', cancelOpenOrders: true });
+    for (let i = 0; i < 4 && (await a.row()).state !== 'STOPPED'; i++) await a.pass();
+    const row = await a.row();
+    expect(row.state).toBe('STOPPED'); expect(row.perp.live.exit.code).toBe('mandate_revoked'); expect(pos(w)).toBe('0');
+  });
+
+  it('kill switch engaged (the risk engine\'s): a LIVE agent\'s order that adds risk is refused before the signer, as a REJECTED unified order; its reduce-only exit is signed', async () => {
+    const { w, a } = await liveAgent(), bind = await import('../src/agents/execution-bind.ts'), ex = bind.execution(), ks = await import('../src/agent-runtime/kill-switch.ts');
+    expect(await a.tick()).toBe('1 order(s)');
+    const signs = w.orderSigns();
+    await ks.killSwitch().engage('drill', { kind: 'agent', id: 'risk-manager-1' });
+    expect((await ex.risk.switches()).killSwitch).toMatchObject({ on: true, by: { kind: 'agent', id: 'risk-manager-1' } });
+    expect(await a.nextBar({ BTC: 0.9 })).toBe('1 order(s) not sent');
+    expect((await statuses(a)).at(-1)).toEqual(['buy refused:kill_switch_active']);
+    expect(w.orderSigns()).toBe(signs);                                                                  // the signer was not asked
+    expect((await sql`select state, reason from orders where principal_id = ${a.id} order by created_at desc limit 1`)[0]).toEqual({ state: 'REJECTED', reason: 'KILL_SWITCH_ACTIVE' });
+    expect((await a.row()).state).toBe('LIVE');
+    expect(await a.nextBar({ BTC: 0 })).toBe('1 order(s)');                                               // the exit: reduce-only, signed under the mandate
+    expect([pos(w), w.orderSigns()]).toEqual(['0', signs + 1]);
+    await sql`delete from settings where key = 'risk.switches'`;
+  });
+});
+
 describe('the engine pass: paper agents are unaffected', () => {
   it('a paper agent and a live agent in the same pass: the paper one never reaches the signer or the venue account', async () => {
     const { w, a, acct } = await liveAgent();
