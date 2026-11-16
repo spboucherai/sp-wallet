@@ -16,6 +16,10 @@ const POLICY: Record<string, SwapProvider['policy']> = {
   debridge: { timeoutMs: 4500 },
   // the only keyless THORNode gateway answers in 2–5 s and is sometimes stale: give it time rather than report a timeout
   thorchain: { timeoutMs: 6500, ratePerSec: 0.5, burst: 4 },
+  // v11, keyed comparison sources: the documentation states no figure for the free tiers (they are shown in each provider's dashboard).
+  // One request per second is a deliberately low default; raise it only after reading the plan's real limit.
+  zerox: { ratePerSec: 1, burst: 2, timeoutMs: 3000 },
+  oneinch: { ratePerSec: 1, burst: 2, timeoutMs: 3000 },
 };
 export function createEnabledProviders(env: ProviderEnv = {}): SwapProvider[] {
   const on = new Set((env.SPW_SWAP_ENABLE ?? '').split(',').map((s) => s.trim()).filter(Boolean));

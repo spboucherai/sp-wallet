@@ -7,10 +7,14 @@ import { createJupiterProvider } from './jupiter.ts';
 import { createKyberswapProvider } from './kyberswap.ts';
 import { createLifiProvider } from './lifi.ts';
 import { createMayaProvider } from './maya.ts';
+import { createOneinchProvider } from './oneinch.ts';
 import { createThorchainProvider } from './thorchain.ts';
+import { createZeroxProvider } from './zerox.ts';
 
 export interface ProviderEnv { [key: string]: string | undefined }
 /** Every real provider adapter, in a fixed order. A provider that needs a key reports `configured: false` without one. */
 export function createProviders(env: ProviderEnv = {}): SwapProvider[] {
-  return [createCctpProvider(env), createDebridgeProvider(env), createJupiterProvider(env), createKyberswapProvider(env), createLifiProvider(env), createMayaProvider(env), createThorchainProvider(env)];
+  return [createCctpProvider(env), createDebridgeProvider(env), createJupiterProvider(env), createKyberswapProvider(env), createLifiProvider(env), createMayaProvider(env), createThorchainProvider(env),
+    // v11: quote-only comparison sources that need a key (ZEROX_API_KEY, ONEINCH_API_KEY); without one they are listed as `needsKey` and never asked
+    createOneinchProvider(env), createZeroxProvider(env)];
 }

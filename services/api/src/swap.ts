@@ -130,6 +130,10 @@ export function swapRoutes(app: FastifyInstance, deps: SwapDeps): ProviderRuntim
   app.get('/api/v1/swap/providers', async () => ({
     executionEnabled: true,
     providers: runtimes.map((r) => ({ ...r.stats(), name: r.provider.name, capabilities: r.provider.capabilities() })),
+    // v11: providers that exist in the code but are not asked because their API key is not configured (0x, 1inch) — reported, never faked
+    needsKey: runtimes.filter((r) => { const c = r.provider.capabilities(); return c.needsKey && !c.configured; }).map((r) => r.provider.id),
+    // the executors of this wallet; every other provider is a comparison source
+    executors: ['kyberswap', 'jupiter', 'cctp', 'thorchain'],
   }));
   app.get('/api/v1/swap/stats', async () => {
     const rows = await sql`select provider, count(*)::int as calls, count(*) filter (where ok)::int as ok, count(*) filter (where amount_out is not null)::int as quotes,
