@@ -17,6 +17,7 @@ from .data import DataError, load_universe
 from .engine import BacktestConfig
 from .report import build_report, write_report
 from .research import cartesian_grid
+from .execution import load_parity
 from .strategy import StrategyError, load_strategy
 
 
@@ -51,6 +52,9 @@ def parser() -> argparse.ArgumentParser:
                         "its trials are added to the trial count of the deflated Sharpe ratio")
     p.add_argument("--data-dir", default=None, help="root of local candle files (<root>/<source>/<SYM>_<interval>)")
     p.add_argument("--source", default=None, help="candle source (default: coinbase for files)")
+    p.add_argument("--engine-parity", action="store_true",
+                   help="v11: apply the live spot engine's default sizing rules (exposure cap, per-order and per-day "
+                        "USD caps, orders per day, minimum trade, loss-limit stop) from research/params/engine-parity.json")
     p.add_argument("--out", required=True, help="report path (JSON)")
     return p
 
@@ -66,7 +70,8 @@ def main(argv=None) -> int:
         interval = a.interval or strategy.meta["interval"]
         config = BacktestConfig(interval=interval, fee_bps=a.fee_bps, slippage_bps=a.slippage_bps,
                                 initial_cash=a.initial_cash, min_order=a.min_order,
-                                rebalance_threshold=a.rebalance_threshold, decision_every=a.decision_every)
+                                rebalance_threshold=a.rebalance_threshold, decision_every=a.decision_every,
+                                parity=load_parity()[1] if a.engine_parity else None)
         fractions = tuple(float(x) for x in a.split.split(","))
         grid = cartesian_grid(strategy.params, json.loads(a.grid)) if a.grid else None
         kwargs = {"root": a.data_dir} if a.data_dir else {}
@@ -74,6 +79,10 @@ def main(argv=None) -> int:
         raw_bars = {s: q.n_bars for s, q in quality.items()}
         aligned = len(next(iter(data.values())))
         notes = []
+        if config.parity is not None:
+            notes.append("v11 engine parity: the live spot engine's DEFAULT rules were applied (research/params/"
+                         f"engine-parity.json): {json.dumps(config.parity.to_dict(), sort_keys=True)}; one order per "
+                         "engine pass, all orders of a bar filled at its open")
         if any(n != aligned for n in raw_bars.values()):
             notes.append(f"bars per symbol before alignment {raw_bars}, common bars kept: {aligned}")
         source = next(iter(quality.values())).source
