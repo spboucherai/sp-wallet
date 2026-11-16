@@ -10,7 +10,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { UserError } from '../config.ts';
 import { OWNER_CALLER, type Caller, type Execution, type OrderInput } from '../orders/index.ts';
 import { runCommand } from './commands.ts';
-import { IDEMPOTENCY_RE, replayHeaders, withIdempotency } from './idempotency.ts';
+import { IDEMPOTENCY_RE, replayHeaders, withIdempotency, withOrderKey } from './idempotency.ts';
 import { buildOpenApi } from './openapi.ts';
 import { requirePrincipal, type Principal } from './principal.ts';
 import { AmbiguousSymbol, type Reads } from './read.ts';
@@ -98,11 +98,16 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution)
       if (spotBuy(i.body)) return shapePreview(p, (await runCommand(ex, reads, p, callerOf(p, req), { text: spotBuyText(i.body), mode: i.body.mode, dryRun: true }, previewKey(req, i.body))).preview as never);
       return shapePreview(p, await ex.orders.preview(callerOf(p, req), await orderInput(p, i.body), previewKey(req, i.body)));
     },
-    placeOrder: (p, i, req, reply) => withIdempotency(req, reply, shaped(p, async () => {
-      if (!spotBuy(i.body)) return ex.orders.submit(callerOf(p, req), await orderInput(p, i.body), orderKey(req, i.body));
-      const r = await runCommand(ex, reads, p, callerOf(p, req), { text: spotBuyText(i.body), mode: i.body.mode, dryRun: false }, orderKey(req, i.body));
-      return { order: r.order, idempotent: r.idempotent, approval: r.approval ?? null };
-    })),
+    placeOrder: (p, i, req, reply) => {
+      const place = shaped(p, async () => {
+        if (!spotBuy(i.body)) return ex.orders.submit(callerOf(p, req), await orderInput(p, i.body), orderKey(req, i.body));
+        const r = await runCommand(ex, reads, p, callerOf(p, req), { text: spotBuyText(i.body), mode: i.body.mode, dryRun: false }, orderKey(req, i.body));
+        return { order: r.order, idempotent: r.idempotent, approval: r.approval ?? null };
+      });
+      // an order sized by a notional and named by its own clientOrderId is replayed from the stored answer, before any price is read again
+      const named = i.body.notional !== undefined && i.body.clientOrderId !== undefined;
+      return withIdempotency(req, reply, named ? () => withOrderKey(req, reply, i.body.clientOrderId, place) : place);
+    },
     cancelOrder: (p, i, req, reply) => withIdempotency(req, reply, () => ex.orders.cancel(callerOf(p, req), i.params.id)),
     closePosition: (p, i, req, reply) => withIdempotency(req, reply, shaped(p, () => ex.orders.reducePosition(callerOf(p), i.params.id, '1', i.body.slippageBps, orderKey(req)))),
     reducePosition: (p, i, req, reply) => withIdempotency(req, reply, shaped(p, () => ex.orders.reducePosition(callerOf(p), i.params.id, i.body.fraction, i.body.slippageBps, orderKey(req)))),

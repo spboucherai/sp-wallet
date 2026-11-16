@@ -70,6 +70,7 @@ async function tradingKey(keyBody: Record<string, unknown> = {}) {
 const ORDER: Record<string, unknown> = { mode: 'paper', instrument: BTC, side: 'buy', type: 'market', size: '0.01' };
 /** the suite shares one paper account: each scenario starts without a BTC position (the owner closes it; paper executes at once) */
 async function flatten(): Promise<void> {
+  clock.advance(1_000);
   const r = await call('POST', `${T}/positions/${encodeURIComponent(`paper:hyperliquid:${acct}:${BTC}`)}/close`, { body: {}, headers: idem() });
   expect([200, 422], JSON.stringify(r.json)).toContain(r.status);
 }
@@ -116,7 +117,11 @@ function check(id: string, r: Res): Res {
   return r;
 }
 const get = (id: string, path: string, key: string) => call('GET', T + path, { key }).then((r) => check(id, r));
-const post = (id: string, path: string, key: string | null, body: unknown, headers: Record<string, string> = idem()) => call('POST', T + path, { ...(key ? { key } : {}), body, headers }).then((r) => check(id, r));
+/** The fixture clock is frozen; position provenance (orders/provenance.ts) replays fills oldest first, so two fills of different
+ *  principals on one timestamp have no order. Every write of this file is therefore one second after the previous one — except
+ *  where a test wants rows on the same instant (`tick = false`). */
+let tick = true;
+const post = (id: string, path: string, key: string | null, body: unknown, headers: Record<string, string> = idem()) => { if (tick) clock.advance(1_000); return call('POST', T + path, { ...(key ? { key } : {}), body, headers }).then((r) => check(id, r)); };
 
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spw-contract-'));
@@ -361,6 +366,17 @@ describe('6, 7, 9, 12 — the write side answers what the document declares', ()
     expect(stale.status, JSON.stringify(stale.json)).toBe(503);                                    // a stale or unreadable mark is never used to size an order
     v.hl.down = false; clock.advance(120_000); setMarket(v, 50_000);                               // past the data service's failure back-off
 
+    // an order named by its clientOrderId and sized by a notional: sent again under another header key after the price moved, it is
+    // the SAME order (the stored answer), not a conflict caused by a size computed at another price
+    const named = { ...ORDER, size: undefined, notional: '300', clientOrderId: `contract-coid-${randomUUID()}` };
+    const n1 = await post('placeOrder', '/orders', k.secret, named);
+    expect(n1.status, JSON.stringify(n1.json)).toBe(200);
+    setMarket(v, 50_900); clock.advance(5_000);
+    const n2 = await post('placeOrder', '/orders', k.secret, named);
+    expect([n2.status, n2.json.order?.id, n2.json.order?.size, n2.headers['idempotent-replay']]).toEqual([200, n1.json.order.id, n1.json.order.size, 'true']);
+    const n3 = await post('placeOrder', '/orders', k.secret, { ...named, notional: '310' });
+    expect([n3.status, n3.json.error]).toEqual([409, 'idempotency_conflict']);
+    setMarket(v, 50_000); clock.advance(5_000);
     const o = await post('placeOrder', '/orders', k.secret, { ...ORDER, size: undefined, notional: '777' });
     expect(o.status, JSON.stringify(o.json)).toBe(200);
     expect(o.json).toMatchObject({ idempotent: false, approval: null, order: { status: 'FILLED', final: true, engineStatus: 'filled', size: pn.json.order.size, filled: pn.json.order.size, mode: 'paper' } });
@@ -461,6 +477,7 @@ describe('6, 7, 9, 12 — the write side answers what the document declares', ()
     expect((await cmd('LONG BTC-PERP 500', {}, reader.secret)).json.error).toBe('insufficient_scope');
 
     // the kill switch, engaged by a key (no Idempotency-Key, no mandate needed)
+    try {
     const ks = check('engageKillSwitch', await call('POST', `${T}/risk/kill-switch`, { key: k.secret, body: { reason: 'contract test' } }));
     expect(ks.status).toBe(200); expect(ks.json.killSwitch).toMatchObject({ on: true, reason: 'contract test', by: { kind: 'api_key', id: k.id } });
     const risk = await get('getRisk', '/risk', k.secret);
@@ -472,8 +489,10 @@ describe('6, 7, 9, 12 — the write side answers what the document declares', ()
     const pos = (await call('GET', `${T}/positions?mode=paper`, { key: k.secret })).json.positions.find((x: any) => x.instrument === BTC);
     const exit = await post('closePosition', `/positions/${encodeURIComponent(pos.id)}/close`, k.secret, {});
     expect(exit.status, JSON.stringify(exit.json)).toBe(200); expect(exit.json.order.status).toBe('FILLED');           // an exit still passes
-    const p = await call('POST', '/api/v1/risk/kill-switch/release/prepare');
-    expect((await call('POST', '/api/v1/risk/kill-switch/release', { body: p.json.needed ? { assertion: assertion(p.json.options) } : {} })).status).toBe(200);
+    } finally {
+      const p = await call('POST', '/api/v1/risk/kill-switch/release/prepare');
+      expect((await call('POST', '/api/v1/risk/kill-switch/release', { body: p.json.needed ? { assertion: assertion(p.json.options) } : {} })).status).toBe(200);
+    }
     expect((await post('placeOrder', '/orders', k.secret, ORDER)).status).toBe(200);
   });
 });
@@ -626,6 +645,11 @@ describe('8 — a key is bound only to a mandate approved for it', () => {
 describe('11 — cursor pagination', () => {
   it('GET /orders: pages of 3 over the whole list — unified orders and agent swaps, many with the same timestamp — are the unpaged list, once each', async () => {
     const k = (await newKey()).secret;
+    clock.advance(120_000); setMarket(v, 50_000);                                                  // out of the paper account's orders-per-minute window
+    await flatten();
+    const same = await tradingKey();
+    tick = false;                                                                                   // four orders on ONE instant: the id breaks the tie
+    try { for (let i = 0; i < 4; i++) expect((await post('placeOrder', '/orders', same.secret, { ...ORDER, type: 'limit', price: '49500', size: '0.001' })).status).toBe(200); } finally { tick = true; }
     const full = (await get('listOrders', '/orders?limit=500', k)).json;
     expect(full.nextCursor).toBeNull(); expect(full.orders.length).toBeGreaterThan(12);
     expect(new Set(full.orders.map((o: any) => o.createdAt)).size).toBeLessThan(full.orders.length);          // ties on the timestamp: the id breaks them
