@@ -109,6 +109,8 @@ export interface HlTradingOptions {
   expiresAfterMs?: number | null;
   /** `submit` refuses the mainnet exchange endpoint unless this is true (live trading is enabled by the owner, not by the build) */
   allowMainnetExchange?: boolean;
+  /** V11: with the mainnet endpoint closed (above), `submit` still sends what can only reduce risk — cancels, and order actions whose orders are all reduce-only */
+  allowMainnetExits?: boolean;
 }
 
 export interface HlDescription { kind: 'order' | 'cancel' | 'leverage' | 'approve_agent' | 'other'; orders?: OrderRequest[]; detail: Record<string, unknown> }
@@ -313,15 +315,19 @@ export function createHlTrading(o: HlTradingOptions): HlTrading {
     async submit(action, signature, nonce) {
       if (!o.http) throw err('unsupported', 'submit needs an http client');
       if (o.http.network !== network) throw err('unsupported', 'http client is for another network');
-      if (network === 'mainnet' && o.allowMainnetExchange !== true) throw err('unsupported', 'the mainnet exchange endpoint is disabled (allowMainnetExchange is not set)');
       const type = (action as { type?: unknown } | null)?.type;
-      let batch = 1, isUser = false;
-      if (type === 'order') batch = strict(orderAction, action, 'order action').orders.length;
+      let batch = 1, isUser = false, exit = type === 'cancel' || type === 'cancelByCloid';
+      if (type === 'order') { const orders = strict(orderAction, action, 'order action').orders; batch = orders.length; exit = orders.every((x) => x.r === true); }
       else if (type === 'cancel') batch = strict(cancelAction, action, 'cancel action').cancels.length;
       else if (type === 'cancelByCloid') batch = strict(cancelByCloidAction, action, 'cancelByCloid action').cancels.length;
       else if (type === 'updateLeverage') strict(updateLeverageAction, action, 'updateLeverage action');
       else if (type === 'approveAgent') { isUser = true; if (strict(approveAgentAction, action, 'approveAgent action').nonce !== nonce) throw reject('approveAgent: the nonce of the action and of the request differ'); }
       else throw err('unsupported', `action type '${String(type).slice(0, 40)}' is not submitted by this adapter`);
+      // the mainnet lock stops NEW risk. With `allowMainnetExits`, what can only reduce it — a cancel, or orders that are ALL
+      // reduce-only (read here from the action itself) — still leaves; everything else needs the lock open.
+      if (network === 'mainnet' && o.allowMainnetExchange !== true && !(o.allowMainnetExits === true && exit)) {
+        throw err('unsupported', o.allowMainnetExits === true ? 'the mainnet exchange endpoint is closed to new risk (allowMainnetExchange is not set): only cancels and reduce-only orders are sent' : 'the mainnet exchange endpoint is disabled (allowMainnetExchange is not set)');
+      }
       if (!hlNonceInWindow(nonce, now())) throw reject('nonce is outside the venue\'s window (T − 2 days, T + 1 day)');
       let sig: HlSignature;
       try { sig = normalizeSignature(signature); } catch (e) { throw reject((e as Error).message); }

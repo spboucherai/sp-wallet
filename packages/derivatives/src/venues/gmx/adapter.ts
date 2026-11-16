@@ -28,11 +28,13 @@ export const GMX_SETTLEMENT = 'isolated position against a GM liquidity pool; Pn
 export const GMX_MARK_METHOD = 'no order book and no separate mark price: orders execute at the Chainlink Data Streams signed min/max oracle price (longs open at max, close at min) adjusted by price impact; the displayed mark is (min + max) / 2';
 
 export const GMX_CAPABILITIES: Capabilities = {
-  marketData: true, account: true, orders: false, orderTypes: [], tif: [], modify: false, leverage: false,
+  // V11 (B-14): `orders` says what the VENUE integration of this wallet can do, and GMX orders exist — market increase and market
+  // decrease, built by the isolated signer (live/gmx.ts) and driven by the API's GMX engine. This adapter is their read side only.
+  marketData: true, account: true, orders: true, orderTypes: ['market'], tif: [], modify: false, leverage: false,
   marginModes: ['isolated'], subaccounts: false, testnet: false, stream: false,
   notes: [
-    'Read-only delivery: no order, approval or transaction is built or sent.',
-    'Trading would require two on-chain steps: ExchangeRouter.multicall([sendWnt, sendTokens, createOrder]) signed by the account (or by a registered GMX subaccount, or relayed through GMX Express), then execution by a keeper at a signed oracle price; an order can be cancelled or frozen instead of filled — see docs/v4/venues/gmx.md.',
+    'THIS ADAPTER is read-only: it builds and sends no order, approval or transaction. Orders on this venue go through the wallet\'s GMX engine: MarketIncrease and MarketDecrease only (no limit, stop-loss or take-profit, no modification), isolated margin, one passkey approval per order, the transaction built by the isolated signer.',
+    'Trading takes two on-chain steps: ExchangeRouter.multicall([sendWnt, sendTokens, createOrder]) signed by the account (or by a registered GMX subaccount, or relayed through GMX Express), then execution by a keeper at a signed oracle price; an order can be cancelled or frozen instead of filled — see docs/v4/venues/gmx.md.',
     'NO ORDER BOOK: book() throws "unsupported". Use liquidity(symbol): available liquidity and open interest per side, price-impact parameters, funding and borrowing rates.',
     'One instrument per GM market: the same index (e.g. BTC/USD) is listed against several pools with different collateral, liquidity and rates; they are distinct instruments.',
     'Instrument.tickSize is the price precision of the contracts (10^-(30 − token decimals)), lotSize the token precision; orders are sized in USD (30 decimals), minNotional is the venue minimum position size. Instrument.maxLeverage is the contract bound published by the API; the effective maximum is lower and falls as open interest grows.',

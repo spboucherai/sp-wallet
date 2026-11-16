@@ -62,7 +62,9 @@ export class LiveVenues {
       network, adapter,
       trading: (ttlMs = LIVE_ACTION_TTL_MS) => createHlTrading({ network, assets: hlPinnedAssets(network), http: adapter.http, now, expiresAfterMs: ttlMs,
         // two locks on the mainnet exchange endpoint: the adapter's own flag, set only from the server setting
-        allowMainnetExchange: network === 'mainnet' && mainnetEnabled() }),
+        allowMainnetExchange: network === 'mainnet' && mainnetEnabled(),
+        // V11 (B-02): with the server lock closed, cancels and reduce-only orders of an EXISTING position still leave (the adapter reads the action itself)
+        allowMainnetExits: network === 'mainnet' }),
       async instrument(id) {
         if (!instruments || now() - instruments.at > INSTRUMENTS_TTL_MS) instruments = { at: now(), list: await wrap(() => adapter.instruments()) };
         const inst = instruments.list.find((i) => i.id === id);

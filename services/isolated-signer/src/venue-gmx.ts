@@ -21,7 +21,8 @@ import type { VenueCtx } from './venue.ts';
 /** `usage`: per UTC day — increases signed, and decreases + cancellations signed */
 export interface StoredGmxAuthorization { authorization: GmxAuthorization; hash: string; approvedAt: string; revoked: boolean; revokedAt?: string; usage: Record<string, { increases: number; reduces: number }> }
 /** what `Signer.sign` signs with the wallet key after the passkey, and the bookkeeping to do first */
-export interface GmxReady { approve: TransactionSerializableEIP1559 | null; main: TransactionSerializableEIP1559; /** counts the action and journals it; called once, right before signing */ commit(txid: string): void }
+export interface GmxReady { approve: TransactionSerializableEIP1559 | null; main: TransactionSerializableEIP1559; /** counts the action and journals it; called once, right before signing */ commit(txid: string): void;
+  /** what the transaction BUILT HERE does (V11: the halt lets a decrease or a cancellation through, never an increase) */ action: 'increase' | 'decrease' | 'cancel'; /** true when the built transaction can only reduce risk: a MarketDecrease or a cancelOrder, no token leaves, no approval */ reducesOnly: boolean }
 const day = (sec: number) => new Date(sec * 1000).toISOString().slice(0, 10);
 const lc = (s: string) => s.toLowerCase();
 
@@ -99,7 +100,10 @@ export async function gmxPrepare(ctx: VenueCtx, i: Intent, own: string): Promise
   if (verdict) throw ctx.fail(verdict === 'no price' ? 'no_price' : /acceptable price/.test(verdict) ? 'price' : 'policy', verdict);
   if (plan.action === 'increase' ? usage.increases >= a.policy.maxOrdersPerDay : usage.reduces >= GMX_POLICY_BOUNDS.reduceActionsPerDay) throw ctx.fail('policy', 'daily order count reached');
 
-  return { approve: built.approve, main: built.main, commit: (txid) => {
+  // established from the plan the builder derived and the transactions it produced — not from a flag: no collateral amount, no
+  // token approval, and (for an order) the MarketDecrease parameters; a cancellation only returns an order's collateral to the wallet
+  const reducesOnly = plan.action !== 'increase' && plan.amount === 0n && built.approve === null && (plan.action === 'cancel' ? plan.orderKey !== null && plan.params === null : i.gmx!.orderType === 'MarketDecrease');
+  return { approve: built.approve, main: built.main, action: plan.action, reducesOnly, commit: (txid) => {
     // counted and journaled before the signature leaves; `Signer.sign` saves the store before it returns
     if (plan.action === 'increase') usage.increases += 1; else usage.reduces += 1;
     rec.usage[today] = usage;

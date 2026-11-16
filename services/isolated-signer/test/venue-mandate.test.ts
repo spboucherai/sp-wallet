@@ -257,7 +257,15 @@ describe('/venue/mandate/sign — an order without a passkey', () => {
     expect(await buy(w, m, { side: 'sell', price: '72100', size: '0.001' })).toBe('ok');
     expect(await buy(w, m, { side: 'sell', price: '72101', size: '0.001' })).toMatch(/^price/);
     expect(await buy(w, m, { side: 'sell', reduceOnly: true, type: 'market', tif: 'ioc', price: '67899', size: '0.001' })).toMatch(/^price/);   // a give-away close is refused too
-    expect(await buy(w, m, { type: 'stop_market', side: 'sell', reduceOnly: true, size: '0.001', price: '68000', triggerPrice: '67899' })).toMatch(/^price: trigger price/);
+    // V11 (B-07): a trigger order that is NOT reduce-only stays inside the band, trigger included
+    expect(await buy(w, m, { type: 'stop_market', side: 'sell', size: '0.001', price: '68000', triggerPrice: '67899' })).toMatch(/^price: trigger price 67899 is more than 300 bps away/);
+    // a reduce-only stop-loss / take-profit may rest away from the market — its worst price near its own trigger — and nothing more
+    expect(await buy(w, m, { type: 'stop_market', side: 'sell', reduceOnly: true, size: '0.001', price: '59000', triggerPrice: '60000' })).toBe('ok');
+    expect(await buy(w, m, { type: 'take_profit_market', side: 'sell', reduceOnly: true, size: '0.001', price: '88000', triggerPrice: '90000' })).toBe('ok');
+    expect(await buy(w, m, { type: 'stop_market', side: 'sell', reduceOnly: true, size: '0.001', price: '50000', triggerPrice: '60000' })).toMatch(/^price: price 50000 is more than 300 bps away from its own trigger price 60000/);
+    expect(await buy(w, m, { type: 'stop_market', side: 'sell', reduceOnly: true, size: '0.001', price: '79000', triggerPrice: '80000' })).toMatch(/^price: trigger price 80000 would fire at once/);
+    expect(await buy(w, m, { type: 'take_profit_market', side: 'sell', reduceOnly: true, size: '0.001', price: '59000', triggerPrice: '60000' })).toMatch(/would fire at once/);
+    expect(await buy(w, m, { type: 'stop_market', side: 'sell', reduceOnly: true, size: '0.001', price: '22800', triggerPrice: '23000' })).toMatch(/outside the sanity band/);
     w.px.BTC = 75_000;                                                                               // the market moved: the same order is now outside
     expect(await buy(w, m, { price: '70000', size: '0.001' })).toMatch(/^price/);
     w.pxFail.why = 'price sources disagree on BTC';

@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { decodeFunctionData, erc20Abi, parseTransaction, recoverTransactionAddress, type Hex } from 'viem';
 import { intentHash, verifyAuditChain, type Intent } from '@spw/core';
-import { decodeGmxCalldata, GMX_MARKETS, GMX_PINS, GMX_POLICY_BOUNDS, gmxAcceptablePrice, gmxAuthorizationHash, gmxUsdToRaw, jurisdictionAck, ZERO_ADDRESS, type GmxAuthorization, type GmxCreateOrderParams, type GmxSection } from '@spw/derivatives/live';
+import { decodeGmxCalldata, GMX_EXCHANGE_ROUTER_ABI, GMX_MARKETS, GMX_PINS, GMX_POLICY_BOUNDS, gmxAcceptablePrice, gmxAuthorizationHash, gmxUsdToRaw, jurisdictionAck, ZERO_ADDRESS, type GmxAuthorization, type GmxCreateOrderParams, type GmxSection } from '@spw/derivatives/live';
 import { TestPasskey } from '../../../tests/helpers/passkey.ts';
 import { deriveKeys } from '../src/keys.ts';
 import type { PriceView } from '../src/prices.ts';
@@ -173,7 +173,32 @@ describe('a GMX order is built by the signer', () => {
     const r = setup(); await r.ready; r.signer.gmxRevoke(r.authId);
     expect(await refused(r.sign(r.intent()))).toMatch(/revoked/); expect(await refused(r.sign(r.cancel()))).toMatch(/revoked/);
     const h = setup(); await h.ready; h.signer.halt();
-    expect(await refused(h.sign(h.intent()))).toMatch(/policy: emergency halt/); expect(await refused(h.sign(h.decrease()))).toMatch(/policy: emergency halt/);
+    expect(await refused(h.sign(h.intent()))).toMatch(/policy: emergency halt/);
+    // V11 (B-01): the halt never blocks the way out — a decrease and a cancellation are still signed (with the passkey), an increase never
+    const dec = h.decrease(), out = await h.sign(dec);
+    expect(out.pre).toBeUndefined();
+    const dtx = parseTransaction(out.raw as `0x${string}`), calls = decodeFunctionData({ abi: GMX_EXCHANGE_ROUTER_ABI, data: dtx.data! });
+    expect(dtx.to!.toLowerCase()).toBe(P.exchangeRouter.address.toLowerCase());
+    expect(calls.functionName).toBe('multicall');
+    const inner = (calls.args![0] as `0x${string}`[]).map((d) => decodeFunctionData({ abi: GMX_EXCHANGE_ROUTER_ABI, data: d }));
+    expect(inner.map((x) => x.functionName)).toEqual(['sendWnt', 'createOrder']);                      // no sendTokens: no collateral leaves
+    expect((inner[1]!.args![0] as { orderType: number }).orderType).toBe(4);                            // MarketDecrease
+    expect((await h.sign(h.cancel())).txid).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(h.signer.status().gmx[0]!.today).toEqual({ increases: 0, reduces: 2 });
+    expect(await refused(h.signer.sign(h.decrease(), h.pk.assert(new Uint8Array(32))))).toMatch(/bad_approval/);          // the passkey is still required
+    expect(await refused(h.signer.sign(h.decrease(), undefined as never))).toMatch(/bad_approval|unknown_credential/);
+    // an intent that calls itself a decrease or a cancellation but is not one never passes: the signer builds the transaction itself
+    expect(await refused(h.sign(h.intent({ action: 'decrease' })))).toMatch(/policy: this intent moves an amount|unsupported/);                 // still sends collateral
+    expect(await refused(h.sign(h.intent({ action: 'decrease', orderType: 'MarketIncrease', approveGas: '0' }, { amount: '0' })))).toMatch(/unsupported: a decrease is a MarketDecrease order/);
+    expect(await refused(h.sign(h.intent({ action: 'decrease', orderType: 'MarketDecrease' }, { amount: '0' })))).toMatch(/unsupported: a decrease needs no token approval/);
+    expect(await refused(h.sign(h.intent({ action: 'increase', orderType: 'MarketDecrease', approveGas: '0' }, { amount: '0' })))).toMatch(/policy: emergency halt/);
+    expect(await refused(h.sign(h.cancel(undefined, { sizeDeltaUsd: '1' })))).toMatch(/unsupported: a cancellation carries no order field/);
+    expect(await refused(h.sign(h.decrease({ market: BTC.market, indexToken: BTC.indexToken })))).toMatch(/policy: .*not allowed by the authorization/);   // the venue policy still applies
+    // everything else of the wallet stays blocked under halt: a transfer, and a withdrawal of nothing to do with GMX
+    expect(await refused(h.sign({ v: 1, proposalId: uuid(), keyId: keys.keyId, network: 'arbitrum', chainRef: '42161', asset: USDC, symbol: 'USDC', decimals: 6, amount: '5000000', from: ME, to: '0x000000000000000000000000000000000000dEaD',
+      maxFee: '3690000000000', createdAt: NOW, expiresAt: NOW + 120, policyVersion: h.store.policy.version, evm: { nonce: 4, gasLimit: '90000', maxFeePerGas: '41000000', maxPriorityFeePerGas: '1000000' } }))).toMatch(/policy: emergency halt/);
+    h.signer.gmxRevoke(h.authId);
+    expect(await refused(h.sign(h.decrease()))).toMatch(/revoked/);                                     // a revoked authorization signs nothing, halt or not
     const c = setup(); await c.ready; c.store.state.gmx![c.authId]!.authorization = { ...c.auth, contracts: 'gmx-v2-arbitrum-2026-01-01' }; // an authorization given to an older build's table
     expect(await refused(c.sign(c.intent()))).toMatch(/contract_changed: .*a new review and a new authorization are needed/);
     expect(c.signer.status().gmx[0]!.current).toBe(false);

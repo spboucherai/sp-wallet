@@ -519,6 +519,7 @@ export function createLiveMock(env: LiveMockEnv) {
       for (const o of a.orders) if (!o.final && PRE.includes(o.state) && !o.reduceOnly) { setOrder(a, o, { state: 'cancelled', final: true, reason: 'withdrawn: trading was halted before approval' }); n += 1; }
       riskEvent(a, 'halt', 'halted', text, { withdrawnProposals: n }); emit(a.id, 'status', { halt: text, ts: t });
       return ok({ ...detail(a), note: 'New orders are stopped. Resting orders are still on the venue (cancel-all is a separate action) and positions are still open (close is a separate action).' }); }
+    if (rest === '/resume/prepare' || rest === '/rebase/prepare') return ok({ needed: false, hash: null, options: null, expiresAt: null });   // the mock has no passkey: nothing to approve
     if (rest === '/resume') { a.halt = null; a.updatedAt = t; riskEvent(a, 'resume', null, 'owner halt lifted'); emit(a.id, 'status', { halt: null, ts: t }); return ok(detail(a)); }
     if (rest === '/cancel-all') return ok(cancelAll(a));
     if (rest === '/close') return ok(close(a, b, key && IDEM.test(key) ? key : `close-${crypto.randomUUID()}`));

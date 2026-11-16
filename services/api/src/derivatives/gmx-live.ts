@@ -1,7 +1,7 @@
 // GMX v2 trading (v8) — wiring for the rest of the API service: the process-wide engine on the real signer client, the
 // registry RPC endpoints and the read adapter's market data, and its tracking worker. Disabled by construction: nothing is
 // prepared unless SPW_DERIV_LIVE_MAINNET=on AND SPW_DERIV_GMX_LIVE=on, and the owner approved a venue policy with a passkey.
-import { listCreds } from '../auth.ts';
+import { listCreds, verifyOwnerAssertion } from '../auth.ts';
 import { config } from '../config.ts';
 import { signer } from '../signer-client.ts';
 import { loop } from '../worker.ts';
@@ -23,7 +23,8 @@ export function createGmx(o: Partial<GmxDeps> = {}): GmxService {
   const now = o.now ?? Date.now;
   return new GmxService({ chain: o.chain ?? realGmxChain(now), signer: o.signer ?? signer, market: o.market ?? realMarket(), now, rpId: o.rpId ?? config.rpId,
     credentials: o.credentials ?? (async () => (await listCreds()).map((c) => ({ id: c.id, transports: c.transports }))),
-    settings: o.settings ?? (() => ({ liveMainnet: mainnetLiveEnabled(), gmxLive: gmxLiveEnabled() })) });
+    settings: o.settings ?? (() => ({ liveMainnet: mainnetLiveEnabled(), gmxLive: gmxLiveEnabled() })),
+    ...(o.verifyOwner ? { verifyOwner: o.verifyOwner } : o.signer ? {} : { verifyOwner: verifyOwnerAssertion }) });
 }
 
 let shared: GmxService | null = null;

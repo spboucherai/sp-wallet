@@ -4,21 +4,21 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
-import { verifyAuditChain } from '@spw/core';
 import dns from 'node:dns';
 import net from 'node:net';
 import { deriveKeys } from './keys.ts';
 import { exchangePrices } from './prices.ts';
 import { hyperliquidReader } from './venue-read.ts';
 import { initKeystore, loadMnemonic } from './keystore.ts';
-import { createSignerServer } from './server.ts';
+import { applyControl, controlCall, startControlServer, type ControlRequest } from './control.ts';
+import { createQueue, createSignerServer } from './server.ts';
 import { Signer } from './signer.ts';
-import { Store } from './store.ts';
+import { acquireStateLock, Store, StoreLockedError } from './store.ts';
 import { thorVaults } from './vaults.ts';
 
 const dir = process.env.SPW_SIGNER_DIR ?? join(homedir(), 'sp-wallet-signer-data');
 const wrapKey = process.env.SPW_SIGNER_WRAP_KEY ?? join(homedir(), '.config', 'sp-wallet-signer', 'wrap.key');
-const paths = { keystore: join(dir, 'keystore.json'), state: join(dir, 'state.json'), policy: join(dir, 'policy.json'), secret: join(dir, 'gateway.secret') };
+const paths = { keystore: join(dir, 'keystore.json'), state: join(dir, 'state.json'), policy: join(dir, 'policy.json'), secret: join(dir, 'gateway.secret'), control: join(dir, 'control.sock') };
 const need = (k: string) => { const v = process.env[k]; if (!v) { console.error(`missing env ${k}`); process.exit(2); } return v; };
 process.umask(0o077);
 
@@ -28,6 +28,21 @@ const open = () => {
   const store = new Store(paths.state, paths.policy);
   return { keys, store };
 };
+/**
+ * V11: a command that changes the state. A running daemon applies it itself (control.ts) — the change is then in force at once
+ * and cannot be undone by the daemon's next save. Without a daemon, this process takes the state lock and writes the file.
+ */
+async function change(req: ControlRequest): Promise<{ halted: boolean; via: 'daemon' | 'file' }> {
+  let a = await controlCall(paths.control, req).catch((e: Error) => { console.error(e.message); process.exit(1); });
+  if (a === null) {
+    let release: () => void;
+    try { release = acquireStateLock(paths.state); }
+    catch (e) { console.error(e instanceof StoreLockedError ? `${e.message}: the daemon is running but its control socket (${paths.control}) did not answer; nothing was changed` : (e as Error).message); process.exit(1); }
+    try { a = applyControl(new Store(paths.state, paths.policy), req, 'file'); } finally { release(); }
+  }
+  if (!a.ok) { console.error(a.error); process.exit(1); }
+  return a;
+}
 
 if (cmd === 'init') {
   initKeystore(paths.keystore, wrapKey);
@@ -35,29 +50,19 @@ if (cmd === 'init') {
   console.log(JSON.stringify({ ok: true, keyId: keys.keyId, addresses: keys.addresses }, null, 2));
   console.log('Keystore created. The recovery phrase was NOT displayed. Run `export-recovery` yourself in a private terminal and write it on paper.');
 } else if (cmd === 'setup-token') {
-  const { store } = open();
-  if (store.state.credentials.length > 0) { console.error('a passkey is already enrolled; setup token refused'); process.exit(1); }
   const token = randomBytes(18).toString('base64url');
-  store.state.setupTokenHash = createHash('sha256').update(token).digest('hex');
-  store.log('setup_token.issued', {});
-  store.save();
+  await change({ cmd: 'setup-token', tokenHash: createHash('sha256').update(token).digest('hex') });
   console.log(token);
 } else if (cmd === 'status') {
   const { keys, store } = open();
   const s = new Signer(keys, store, { rpId: 'unused', origin: 'unused' }).status();
-  console.log(JSON.stringify({ ...s, journalIntact: verifyAuditChain(store.state.journal) === null }, null, 2));
+  console.log(JSON.stringify({ ...s, journalIntact: store.journalBrokenAt === null }, null, 2));
 } else if (cmd === 'halt' || cmd === 'unhalt') {
-  const { store } = open();
-  store.state.halted = cmd === 'halt';
-  store.log(cmd === 'halt' ? 'halt.on' : 'halt.off', { via: 'cli' });
-  store.save();
-  console.log(`halted=${store.state.halted} (restart the signer daemon to apply)`);
+  const r = await change({ cmd });
+  console.log(`halted=${r.halted} (${r.via === 'daemon' ? 'applied by the running daemon: in force now' : 'no daemon is running: written to the state file'})`);
 } else if (cmd === 'reset-passkeys') {
-  const { store } = open();
-  store.state.credentials = [];
-  store.log('credentials.reset', { via: 'cli' });
-  store.save();
-  console.log('all passkeys removed; issue a new setup-token and restart the daemon');
+  const r = await change({ cmd: 'reset-passkeys' });
+  console.log(`all passkeys removed (${r.via === 'daemon' ? 'applied by the running daemon' : 'no daemon is running: written to the state file'}); issue a new setup-token`);
 } else if (cmd === 'export-recovery') {
   if (!process.stdin.isTTY || !process.stdout.isTTY) { console.error('export-recovery only runs in an interactive terminal (never piped, logged or run by an agent)'); process.exit(1); }
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -68,8 +73,13 @@ if (cmd === 'init') {
   console.log('\n' + words.map((w, k) => `${String(k + 1).padStart(2)}. ${w}`).join('\n') + '\n\nWrite it on paper, store it offline, then clear this terminal (Cmd-K).');
 } else if (cmd === 'serve') {
   if (!existsSync(paths.keystore)) { console.error('no keystore: run `init` first'); process.exit(1); }
+  // the daemon owns the state for its whole life: a second daemon, or a CLI command writing under it, is refused
+  let release: () => void;
+  try { release = acquireStateLock(paths.state); } catch (e) { console.error((e as Error).message); process.exit(1); }
+  process.on('exit', () => release());
+  for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => process.exit(0));
   const { keys, store } = open();
-  const broken = verifyAuditChain(store.state.journal);
+  const broken = store.journalBrokenAt;
   if (broken !== null) { console.error(`signer journal hash chain broken at seq ${broken} — refusing to start`); process.exit(1); }
   const secret = existsSync(paths.secret) ? readFileSync(paths.secret, 'utf8').trim() : need('SPW_SIGNER_SECRET');
   // outbound HTTPS is used for two things only: reading public exchange prices to check agent orders and live venue orders, and —
@@ -80,7 +90,10 @@ if (cmd === 'init') {
     thorVaults()); // further outbound use: asking independent THORNode operators whether a vault is genuine before signing a cross-chain swap (vaults.ts)
   const host = process.env.SPW_SIGNER_HOST ?? '127.0.0.1', port = Number(process.env.SPW_SIGNER_PORT ?? 8651);
   const allowed = (process.env.SPW_SIGNER_ALLOW_IPS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  createSignerServer(signer, secret, allowed).listen(port, host, () => console.log(`signer ${keys.keyId} listening on ${host}:${port} halted=${store.state.halted}`));
+  const enqueue = createQueue();
+  // the operator's commands (halt, unhalt, reset-passkeys, setup-token) reach the running daemon through a socket in its own directory
+  startControlServer(paths.control, (req) => enqueue(() => applyControl(store, req, 'daemon')));
+  createSignerServer(signer, secret, allowed, enqueue).listen(port, host, () => console.log(`signer ${keys.keyId} listening on ${host}:${port} halted=${store.state.halted}`));
   process.on('uncaughtException', (e) => { console.error('fatal:', e.message); process.exit(1); });
 } else {
   console.error('usage: signer init | setup-token | status | serve | halt | unhalt | reset-passkeys | export-recovery');

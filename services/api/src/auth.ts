@@ -36,6 +36,21 @@ async function startSession(req: FastifyRequest, reply: FastifyReply): Promise<v
   reply.setCookie(COOKIE, token, { httpOnly: true, secure: secureCookies, sameSite: 'strict', path: '/', maxAge: ABSOLUTE_H * 3600 });
 }
 
+/**
+ * V11: a WebAuthn assertion of an enrolled passkey over `challenge`, with user verification. Used where an API-side decision must
+ * not rest on the session cookie alone (loosening a risk limit, lifting a halt). Throws when it does not verify. This is the
+ * API's own check against a stolen session; it is NOT the signer's judgement and nothing is signed on its strength.
+ */
+export async function verifyOwnerAssertion(assertion: unknown, challenge: Uint8Array): Promise<void> {
+  const response = assertion as AuthenticationResponseJSON;
+  const [cred] = await sql<Cred[]>`select * from credentials where id = ${String(response?.id ?? '')}`;
+  if (!cred) throw new Error('unknown credential');
+  const v = await verifyAuthenticationResponse({ response, expectedChallenge: Buffer.from(challenge).toString('base64url'), expectedOrigin: config.origin, expectedRPID: config.rpId, requireUserVerification: true,
+    credential: { id: cred.id, publicKey: new Uint8Array(Buffer.from(cred.public_key, 'base64url')), counter: Number(cred.counter), transports: cred.transports as never } });
+  if (!v.verified || !v.authenticationInfo.userVerified) throw new Error('approval not verified');
+  await sql`update credentials set counter = ${v.authenticationInfo.newCounter}, last_used_at = now() where id = ${cred.id}`;
+}
+
 export async function isAuthed(req: FastifyRequest): Promise<boolean> {
   const token = req.cookies[COOKIE];
   if (!token || token.length > 100) return false;

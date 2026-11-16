@@ -105,11 +105,13 @@ export const lapi = {
   leverage: (id: string, body: { instrument: string; leverage: number; marginMode: 'cross' | 'isolated' }) => post<LeverageProposal>(`${A(id)}/leverage`, body),
   approveLeverage: (id: string, actionId: string, assertion: unknown) => post<LeverageResult>(`${A(id)}/leverage/${encodeURIComponent(actionId)}/approve`, { assertion }),
   halt: async (id: string, reason = ''): Promise<LiveDetail & { note: string }> => normDetail(await post(`${A(id)}/halt`, { reason })),
-  resume: async (id: string): Promise<LiveDetail> => normDetail(await post(`${A(id)}/resume`)),
+  /** V11: lifting the owner's halt needs the passkey — `prepareRisk` gives the WebAuthn request over the canonical intent (null options = nothing to approve) */
+  prepareRisk: (id: string, kind: 'resume' | 'rebase') => post<{ needed: boolean; hash: string | null; options: PasskeyOptions | null; expiresAt: number | null }>(`${A(id)}/${kind}/prepare`),
+  resume: async (id: string, assertion?: unknown): Promise<LiveDetail> => normDetail(await post(`${A(id)}/resume`, assertion ? { assertion } : {})),
   cancelAll: (id: string) => post<CancelAll>(`${A(id)}/cancel-all`),
   /** a reduce-only market order on a fraction of the VENUE's position: a proposal, approved like any order */
   close: (id: string, instrument: string, fraction: DecStr, key: string) => post<Proposal>(`${A(id)}/close`, { instrument, fraction }, { 'idempotency-key': key }),
-  rebase: async (id: string): Promise<LiveDetail> => normDetail(await post(`${A(id)}/rebase`)),
+  rebase: async (id: string, assertion?: unknown): Promise<LiveDetail> => normDetail(await post(`${A(id)}/rebase`, assertion ? { assertion } : {})),
   reconcile: async (id: string): Promise<{ reconciled: number; fills: number; funding: number; divergence: string | null; account: LiveDetail }> => { const j = await post(`${A(id)}/reconcile`); return { ...j, account: normDetail(j.account) }; },
   streamUrl: (id: string): string => `/api/v1${A(id)}/stream`,
 };

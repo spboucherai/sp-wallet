@@ -8,6 +8,7 @@
  * testnet account trades at testnet prices — a USD amount converted at the wrong network's price would be the wrong size.
  */
 import { AgentOnAccount } from './LiveAgentNote';   // v7 perp live
+import { startAuthentication } from '@simplewebauthn/browser';   // V11: lifting a halt and re-basing need the owner's passkey
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { I18n, useT, type Key } from '../i18n';
@@ -26,6 +27,13 @@ function useDebounced<T>(v: T, ms: number): T { const [d, setD] = useState(v); u
 const num = (s: string) => s.replace(/[^0-9.,\s ]/g, '');
 const MINI = 'press min-h-11 rounded-xl border border-line bg-surface px-3.5 text-[13.5px] font-semibold text-ink disabled:opacity-45';
 
+/** V11: the server prepares the canonical intent; the passkey signs its hash; the same route then carries the assertion. Halting needs none. */
+async function withPasskey(id: string, kind: 'resume' | 'rebase') {
+  const p = await lapi.prepareRisk(id, kind);
+  const assertion = p.options ? await startAuthentication({ optionsJSON: p.options }) : undefined;
+  return kind === 'resume' ? lapi.resume(id, assertion) : lapi.rebase(id, assertion);
+}
+
 /** why new orders are stopped, and the ways out — a divergence is explained in plain words, with its two actions */
 export function HaltBanner({ account, onDone }: { account: LiveSummary | LiveDetail; onDone?: () => void }) {
   const t = useT(); const qc = useQueryClient();
@@ -43,13 +51,13 @@ export function HaltBanner({ account, onDone }: { account: LiveSummary | LiveDet
     </Notice> : <Notice tone="danger">
       <b className="font-semibold">{t('flHaltTitle')}</b> {t('flHaltBody')}
       <span className={`mt-1.5 ${WORDS}`}>{account.halted}</span></Notice>}
-    {account.halt && <Btn full kind="soft" busy={busy === 'resume'} onClick={() => void run('resume', () => lapi.resume(account.id))}>{t('flResume')}</Btn>}
+    {account.halt && <Btn full kind="soft" busy={busy === 'resume'} onClick={() => void run('resume', () => withPasskey(account.id, 'resume'))}>{t('flResume')}</Btn>}
     {note && <Notice tone="info">{note}</Notice>}
     {err && <LiveErrNotice err={err} />}
     {ask && <LiveSheet title={t('flRebaseTitle')} tone={toneOf(account)} label={account.label} busy={!!busy} onClose={() => setAsk(false)}><div className="min-w-0 space-y-4">
       <Notice tone="warn">{t('flRebaseBody')}</Notice>
       <p className={WORDS}>{account.divergence}</p>
-      <div className="space-y-2.5"><Btn full kind="danger" busy={busy === 'rebase'} onClick={() => void run('rebase', async () => { await lapi.rebase(account.id); setAsk(false); })}>{t('flRebaseConfirm')}</Btn>
+      <div className="space-y-2.5"><Btn full kind="danger" busy={busy === 'rebase'} onClick={() => void run('rebase', async () => { await withPasskey(account.id, 'rebase'); setAsk(false); })}>{t('flRebaseConfirm')}</Btn>
         <Btn full kind="ghost" disabled={!!busy} onClick={() => setAsk(false)}>{t('cancel')}</Btn></div></div></LiveSheet>}
   </div>;
 }
