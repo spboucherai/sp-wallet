@@ -249,6 +249,18 @@ describe('quote hub: validation, isolation, bounds', () => {
     expect(() => big.subscribe({ type: 'quote', id: 'hyperliquid:C' }, () => {})).toThrow(/already serves 2 channels/);
   });
 
+  it('new upstream subscriptions are rate-limited per venue (a venue counts the messages it is sent): a churning client cannot get the venue to drop the shared connection', () => {
+    const hl = fakeUpstream('hyperliquid', { known: async () => true }), ed = fakeUpstream('edgex', { known: async () => true });
+    const hub = new QuoteHub({ upstreams: [hl.up, ed.up], maxFeedOpensPerMin: 5, idleGraceMs: 0 });
+    for (let k = 0; k < 5; k++) { hub.subscribe({ type: 'quote', id: `hyperliquid:M${k}` }, () => {}).unsubscribe(); vi.advanceTimersByTime(1); }
+    expect(() => hub.subscribe({ type: 'quote', id: 'hyperliquid:M5' }, () => {})).toThrow(/too many new upstream subscriptions this minute \(5\); try again in 60 s/);
+    expect(hl.log.filter((l) => l.startsWith('open')).length).toBe(5); expect(hub.stats()).toMatchObject({ channels: 0, feeds: 0 });
+    hub.subscribe({ type: 'quote', id: 'edgex:M0' }, () => {});                      // another venue has its own budget
+    vi.advanceTimersByTime(60_000);
+    hub.subscribe({ type: 'quote', id: 'hyperliquid:M5' }, () => {});               // a minute later: allowed again
+    hub.close();
+  });
+
   it('close() releases every feed and closes every upstream', () => {
     const hl = fakeUpstream('hyperliquid'), hub = hubOf(hl);
     hub.subscribe({ type: 'quote', id: 'hyperliquid:BTC' }, () => {}); hub.subscribe({ type: 'trades', id: 'hyperliquid:BTC' }, () => {});
@@ -418,10 +430,11 @@ describe('edgeX and dYdX upstreams: the real stream clients, the frames recorded
     hub.close();
   });
 
-  it('a venue without a stream (GMX) is polled through the data service: a quote only when the figures change, `stale` on a last-good answer, `down` after three failures', async () => {
-    let n = 0, mode: 'ok' | 'stale' | 'fail' = 'ok';
+  it('a venue without a stream (GMX) is polled through the data service: one quote per fresh read, nothing on a last-good answer (status `stale`), `down` after three failures', async () => {
+    let n = 0, mode: 'ok' | 'cached' | 'stale' | 'fail' = 'ok';
     const data = { registry: { get: () => ({ id: 'gmx', adapter: { capabilities: { stream: false } }, facts: { hasOrderBook: false } }) }, instruments: async () => ({ value: [{ symbol: 'BTC/USD [BTC-USDC]' }] }),
-      tickers: async () => { if (mode === 'fail') throw new Error('gmx did not answer within 4000 ms'); n += 1; return { value: [{ instrument: 'gmx:BTC/USD [BTC-USDC]', mark: n < 3 ? '65000' : '65010', index: null, mid: null, funding: '0.00001', openInterest: '10', volume24h: null, change24h: null, ts: 1 }], ts: 1, stale: mode === 'stale' }; } } as never;
+      // `cached`: the data service answers from its 3 s cache (the same read, the same `ts`); otherwise a new read of the venue
+      tickers: async () => { if (mode === 'fail') throw new Error('gmx did not answer within 4000 ms'); if (mode === 'ok') n += 1; return { value: [{ instrument: 'gmx:BTC/USD [BTC-USDC]', mark: n < 3 ? '65000' : '65010', index: null, mid: null, funding: '0.00001', openInterest: '10', volume24h: null, change24h: null, ts: 1000 + n }], ts: 1000 + n, stale: mode === 'stale' }; } } as never;
     const up = venueUpstream({ venue: 'gmx', data, pollMs: 3_000 }), hub = new QuoteHub({ upstreams: [up], quoteMinIntervalMs: 0 }), c = collect(), id = 'gmx:BTC/USD [BTC-USDC]';
     expect(up.feedsFor('book', 'x', '1m')).toEqual([]); expect(up.feedsFor('trades', 'x', '1m')).toEqual([]);
     await hub.validate({ type: 'quote', id });
@@ -429,10 +442,11 @@ describe('edgeX and dYdX upstreams: the real stream clients, the frames recorded
     expect(sub.info).toMatchObject({ source: 'gmx-rest', transport: 'poll', staleAfterMs: QUOTE_CADENCE_MS['gmx-rest'] });
     await vi.advanceTimersByTimeAsync(0);
     expect(c.of('quote').length).toBe(1); expect(hub.statuses()[0]).toMatchObject({ status: 'connected', transport: 'poll' });
-    await vi.advanceTimersByTimeAsync(3_000); expect(c.of('quote').length).toBe(1);   // same figures: nothing sent
-    await vi.advanceTimersByTimeAsync(3_000); expect(c.of('quote').at(-1)).toMatchObject({ mark: '65010', seq: 2 });
+    await vi.advanceTimersByTimeAsync(3_000); expect(c.of('quote').map((q) => [q.mark, q.seq])).toEqual([['65000', 1], ['65000', 2]]);   // the venue confirmed the same price: a fresh quote
+    mode = 'cached'; await vi.advanceTimersByTimeAsync(3_000); expect(c.of('quote').length).toBe(2);   // the same read served from the cache: not a new quote
+    mode = 'ok'; await vi.advanceTimersByTimeAsync(3_000); expect(c.of('quote').at(-1)).toMatchObject({ mark: '65010', seq: 3 });
     mode = 'stale'; await vi.advanceTimersByTimeAsync(3_000);
-    expect(hub.statuses()[0]).toMatchObject({ status: 'stale' }); expect(c.of('quote').length).toBe(2);   // a last-good answer is not re-published as new
+    expect(hub.statuses()[0]).toMatchObject({ status: 'stale' }); expect(c.of('quote').length).toBe(3);   // a last-good answer is not re-published as new
     mode = 'fail'; await vi.advanceTimersByTimeAsync(9_000);
     expect(hub.statuses()[0]).toMatchObject({ status: 'down' });
     mode = 'ok'; await vi.advanceTimersByTimeAsync(3_000);

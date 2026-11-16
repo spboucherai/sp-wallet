@@ -17,7 +17,12 @@ import type { FeedInfo, FeedSpec, Interval, QuotePatch, TradeRow, UpStatus, Upst
 import { createReconnectingWs, type ReconnectingWs, type WsCtor } from './ws-client.ts';
 import type { Level } from './shared.ts';
 
-/** a quote older than this is stale, per source — from how often each source really sends (measured, docs/v11/work/quotes.md) */
+/**
+ * a quote older than this is stale, per source — from how often each source really sends. Measured on BTC, 2026-11-15
+ * (docs/v11/work/quotes.md): Hyperliquid ≈ 9 quotes/s after conflation (its asset context alone comes about once a second, also
+ * when nothing moved); edgeX ≈ 2/s; dYdX only when the oracle price or the funding estimate moves (4 in a minute); GMX one per
+ * read, every 3 s; Coinbase on every trade (5/s on BTC, far less on a quiet pair); CoinGecko a few minutes between two prices.
+ */
 export const QUOTE_CADENCE_MS = { 'hyperliquid-ws': 15_000, 'edgex-ws': 15_000, 'dydx-ws': 60_000, 'gmx-rest': 20_000, 'coinbase-ws': 30_000, 'coingecko-rest': 15 * 60_000 } as const;
 export const POLL_MS = { gmxTickers: 3_000, candles: 10_000, gecko: 60_000 } as const;
 
@@ -116,7 +121,9 @@ export function venueUpstream(o: VenueUpstreamOptions): Upstream {
         p.onStatus(all.stale ? 'stale' : 'connected', all.stale ? 'served from the last good read' : undefined);
         const t = all.value.find((x) => x.instrument === `${venue}:${symbol}`);
         if (!t || all.stale) continue;                    // no data → no message
-        const sig = `${t.mark}|${t.index}|${t.funding}|${t.openInterest}|${t.ts}`;
+        // one quote per READ of the venue (`ts` is the time the adapter read it; the data service caches a read for 3 s): an unchanged
+        // price that the venue just confirmed is a fresh quote, the same cached read seen twice is not
+        const sig = String(t.ts);
         if (sig === p.last) continue;
         p.last = sig; p.sink.quote(tickerPatch(t));
       }

@@ -91,7 +91,7 @@ export class SPWalletStream implements AsyncIterable<StreamDataMessage> {
 
   constructor(o: StreamOptions) {
     this.o = o;
-    this.key = o.apiKey ?? (typeof process !== 'undefined' ? process.env?.SP_WALLET_API_KEY : undefined);
+    this.key = o.apiKey ?? ((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.SP_WALLET_API_KEY || undefined);   // no Node typing here: the package builds without @types/node
     if (!o.baseUrl || !/^https?:\/\//.test(o.baseUrl)) throw new StreamError('configuration', 'baseUrl must be an http(s) URL');
     if (!this.key && !o.ticket) throw new StreamError('configuration', 'an API key (apiKey or SP_WALLET_API_KEY) or a ticket function is required');
   }

@@ -86,7 +86,7 @@ interface Chan {
   bids: Level[]; asks: Level[]; hasBook: boolean; needSnapshot: boolean; bookVenueTs: number | null; bookSeq: number | null;
   trades: TradeRow[]; tradesPrimed: boolean; candle: CandleMsg | null;
 }
-interface VenueState { venue: string; status: UpStatus | 'idle'; since: number; lastMessageAt: number | null; detail: string | null; transport: 'stream' | 'poll'; source: string; feeds: number;
+interface VenueState { opens: number; opensResetAt: number; venue: string; status: UpStatus | 'idle'; since: number; lastMessageAt: number | null; detail: string | null; transport: 'stream' | 'poll'; source: string; feeds: number;
   messages: number; reconnects: number; gaps: number; errors: number; lastError: string | null; troubledSince: number | null }
 
 export interface HubOptions {
@@ -96,6 +96,8 @@ export interface HubOptions {
   /** a venue that stays reconnecting or stale this long is reported `down`. Default 30 s. */ downAfterMs?: number;
   /** channels held at once, all listeners together. Default 3000. */ maxChannels?: number;
   /** upstream feeds held at once per venue (Hyperliquid allows 1000 subscriptions per address). Default 800. */ maxFeedsPerVenue?: number;
+  /** NEW upstream feeds per venue and per minute. Each one is a subscribe message to the venue, and later an unsubscribe: Hyperliquid
+   *  allows 2000 messages a minute per address over all its websockets. Default 800 (800 subscribes + 800 unsubscribes). */ maxFeedOpensPerMin?: number;
   log?: (ev: Record<string, unknown>) => void;
 }
 export const TRADES_KEPT = 50;
@@ -113,11 +115,11 @@ export class QuoteHub {
   readonly counters = { quote: 0, book: 0, bookSnapshots: 0, trade: 0, candle: 0, status: 0, upstreamMessages: 0, gaps: 0, feedsOpened: 0, feedsClosed: 0, listenerErrors: 0 };
 
   constructor(o: HubOptions) {
-    this.o = { now: o.now ?? Date.now, idleGraceMs: o.idleGraceMs ?? 10_000, quoteMinIntervalMs: o.quoteMinIntervalMs ?? 100, downAfterMs: o.downAfterMs ?? 30_000, maxChannels: o.maxChannels ?? 3000, maxFeedsPerVenue: o.maxFeedsPerVenue ?? 800 };
+    this.o = { now: o.now ?? Date.now, idleGraceMs: o.idleGraceMs ?? 10_000, quoteMinIntervalMs: o.quoteMinIntervalMs ?? 100, downAfterMs: o.downAfterMs ?? 30_000, maxChannels: o.maxChannels ?? 3000, maxFeedsPerVenue: o.maxFeedsPerVenue ?? 800, maxFeedOpensPerMin: o.maxFeedOpensPerMin ?? 800 };
     this.log = o.log ?? (() => {});
     for (const u of o.upstreams) {
       this.ups.set(u.venue, u);
-      this.venues.set(u.venue, { venue: u.venue, status: 'idle', since: this.o.now(), lastMessageAt: null, detail: null, transport: 'stream', source: u.venue, feeds: 0, messages: 0, reconnects: 0, gaps: 0, errors: 0, lastError: null, troubledSince: null });
+      this.venues.set(u.venue, { opens: 0, opensResetAt: 0, venue: u.venue, status: 'idle', since: this.o.now(), lastMessageAt: null, detail: null, transport: 'stream', source: u.venue, feeds: 0, messages: 0, reconnects: 0, gaps: 0, errors: 0, lastError: null, troubledSince: null });
     }
   }
 
@@ -215,6 +217,10 @@ export class QuoteHub {
     if (f) { f.chans.add(c); return f; }
     const vs = this.venues.get(up.venue)!;
     if (vs.feeds >= this.o.maxFeedsPerVenue) throw new QuoteError('upstream_unavailable', `${up.venue}: ${this.o.maxFeedsPerVenue} upstream subscriptions are already open`);
+    const t = this.o.now();
+    if (t >= vs.opensResetAt) { vs.opens = 0; vs.opensResetAt = t + 60_000; }
+    if (vs.opens >= this.o.maxFeedOpensPerMin) throw new QuoteError('upstream_unavailable', `${up.venue}: too many new upstream subscriptions this minute (${this.o.maxFeedOpensPerMin}); try again in ${Math.ceil((vs.opensResetAt - t) / 1000)} s`);
+    vs.opens += 1;
     const info = up.info(spec);
     const feed: Feed = { key, spec, info, up, chans: new Set([c]), close: () => {} };
     this.feeds.set(key, feed);
