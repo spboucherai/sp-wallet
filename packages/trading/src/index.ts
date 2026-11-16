@@ -6,3 +6,10 @@ export * from './orders/state.ts';
 export * from './orders/idempotency.ts';
 export * from './orders/vocabulary.ts';
 export * from './risk/engine.ts';
+// `checkOrder` of the mandate is also exported as `checkTradingMandateOrder`: the derivatives package already exports a `checkOrder` (risk.ts)
+export * from './mandate/trading-mandate.ts';
+export { checkOrder as checkTradingMandateOrder } from './mandate/trading-mandate.ts';
+export * from './commands/parse.ts';
+export * from './compare/cost.ts';
+export * from './valuation/implied.ts';
+export * from './docs.ts';
