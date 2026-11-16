@@ -1,3 +1,4 @@
+import { navTo } from './v11-helpers.ts';   // v11 interface: the shell's navigation (five areas, header menu)
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -223,9 +224,9 @@ for (const size of SIZES) {
 
     test('language switch', async ({ page }) => {
       await open(page);
-      await page.getByRole('navigation').getByRole('button', { name: 'Réglages' }).click();
+      await navTo(page, 'settings');
       await page.getByRole('radio', { name: 'English' }).click();
-      await page.getByRole('navigation').getByRole('button', { name: 'Swap' }).click();
+      await navTo(page, 'swap');
       await page.getByRole('tab', { name: 'Futures' }).click();
       await expect(page.getByTestId('paper-banner')).toContainText('live trading is not enabled');
       await expect(page.getByTestId('freshness')).toHaveText('Live', { timeout: 15_000 });

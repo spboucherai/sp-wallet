@@ -1,3 +1,4 @@
+import { navTo } from './v11-helpers.ts';   // v11 interface: the shell's navigation (five areas, header menu)
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 
@@ -42,14 +43,14 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   // lock, then unlock with the passkey
-  await page.getByRole('button', { name: 'Verrouiller' }).first().click();
+  await navTo(page, 'lock');
   await expect(page.getByRole('button', { name: /Déverrouiller/ })).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/03-lock.png` });
   await page.getByRole('button', { name: /Déverrouiller/ }).click();
   await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 30_000 });
 
   // receive: signer-derived address + QR
-  await page.getByRole('navigation').getByRole('button', { name: 'Accueil' }).click();
+  await navTo(page, 'home');
   await page.getByRole('main').getByRole('button', { name: 'Recevoir' }).click();
   await expect(page.locator('img[alt^="QR 0x"]')).toBeVisible();
   await expect(page.getByText(/Envoyez uniquement ETH \/ USDC \/ .*sur le réseau Base/)).toBeVisible();
@@ -66,7 +67,7 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await page.screenshot({ path: `${SHOTS}/04b-receive-stellar.png`, fullPage: true });
 
   // swap: route comparison screen (no provider is wired in this build: it must say so, and execution must be visibly disabled)
-  await page.getByRole('navigation').getByRole('button', { name: 'Échanger' }).click();
+  await navTo(page, 'swap');
   await expect(page.getByText(/Devis en direct de plusieurs fournisseurs/)).toBeVisible();
   await page.getByLabel('Montant').fill('25');
   // live quotes from real providers (USDC -> ETH on Base); the empty test wallet cannot execute, and must be told why
@@ -78,7 +79,7 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   // send: invalid address is refused, then an empty wallet cannot draft a transfer (live mainnet balance check)
-  await page.getByRole('navigation').getByRole('button', { name: 'Envoyer' }).click();
+  await navTo(page, 'send');
   await page.locator('textarea').fill('0x1234');
   await page.getByRole('radio', { name: 'USDC', exact: true }).click();
   await page.getByPlaceholder('0.00').fill('5');
@@ -89,33 +90,33 @@ test('owner setup, lock/unlock, every screen on a phone viewport, send guarded b
   await expect(page.getByRole('alert')).toContainText(/Solde insuffisant/, { timeout: 30_000 });
   await page.screenshot({ path: `${SHOTS}/05-send.png`, fullPage: true });
 
-  await page.getByRole('navigation').getByRole('button', { name: 'Activité' }).click();
+  await navTo(page, 'activity');
   await expect(page.getByText('Aucune activité')).toBeVisible();
-  await page.getByRole('banner').getByRole('button', { name: 'Sécurité' }).click();
+  await navTo(page, 'security');
   await expect(page.getByText('Signature active')).toBeVisible();
   await expect(page.getByText('Chaîne d’empreintes intacte')).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/06-security.png`, fullPage: true });
 
   // English + light theme
-  await page.getByRole('navigation').getByRole('button', { name: 'Réglages' }).click();
+  await navTo(page, 'settings');
   await page.getByRole('radio', { name: 'English' }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await page.getByRole('radio', { name: 'Dark' }).click();
   await page.screenshot({ path: `${SHOTS}/07-settings-en-dark.png`, fullPage: true });
-  await page.getByRole('navigation').getByRole('button', { name: 'Home' }).click();
+  await navTo(page, 'home');
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${SHOTS}/08-home-dark.png`, fullPage: true });
-  await page.getByRole('navigation').getByRole('button', { name: 'Settings' }).click();
+  await navTo(page, 'settings');
   await page.getByRole('radio', { name: 'Light' }).click();
   await page.getByRole('radio', { name: 'Français' }).click();
 
   // emergency halt from the phone
-  await page.getByRole('banner').getByRole('button', { name: 'Sécurité' }).click();
+  await navTo(page, 'security');
   await page.getByRole('button', { name: 'Arrêt d’urgence' }).click();
   await page.getByLabel('STOP').fill('stop');
   await page.getByRole('button', { name: 'Arrêt d’urgence' }).click();
   await expect(page.getByText('Signature arrêtée')).toBeVisible();
-  await page.getByRole('navigation').getByRole('button', { name: 'Accueil' }).click();
+  await navTo(page, 'home');
   await expect(page.getByText(/Arrêt d’urgence actif/)).toBeVisible();
   await expect(page.getByRole('main').getByRole('button', { name: 'Envoyer' })).toBeDisabled();
 

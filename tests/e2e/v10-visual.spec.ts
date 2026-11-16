@@ -8,6 +8,7 @@
 //
 //   (cd apps/web && node_modules/.bin/vite build) && npx playwright test -c tests/e2e/playwright.config.ts v10-visual
 //   … --update-snapshots      after an intended visual change (look at the new pictures before committing them)
+import { navTo } from './v11-helpers.ts';   // v11 interface: the shell's navigation (five areas, header menu)
 import { spawn, type ChildProcess } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -91,11 +92,11 @@ test('first load: only the first screen\'s code and ONE language; the other scre
   expect(first.some((s) => s.includes('spw-i18n-en')), 'the English table is not fetched on a French screen').toBe(false);
   for (const s of ['Swap', 'Agents', 'Futures', 'Research', 'Send', 'Security']) expect(first, `${s} is not part of the first load`).not.toContain(s);
   // opened: the screen's own chunk comes, and the screen is there
-  await page.getByRole('navigation').getByRole('button', { name: 'Échanger' }).click();
+  await navTo(page, 'swap');
   await expect(page.getByRole('heading', { name: 'Échanger' })).toBeVisible();
   expect(scripts).toContain('Swap');
   // a change of language fetches the other table, then takes effect
-  await page.getByRole('navigation').getByRole('button', { name: 'Réglages' }).click();
+  await navTo(page, 'settings');
   await page.getByRole('radio', { name: 'English' }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   expect(scripts.some((s) => s.includes('spw-i18n-en'))).toBe(true);

@@ -1,3 +1,4 @@
+import { navTo } from './v11-helpers.ts';   // v11 interface: the shell's navigation (five areas, header menu)
 import { readFileSync } from 'node:fs';
 import { expect, request as playwrightRequest, test } from '@playwright/test';
 
@@ -21,8 +22,7 @@ test('Developer / API: create a key with the passkey, use it without a session, 
   await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 30_000 });
 
   // Settings → Developer / API
-  await page.getByRole('navigation').getByRole('button', { name: 'Réglages' }).click();
-  await page.getByRole('button', { name: 'Développeur / API' }).click();
+  await navTo(page, 'developer');   // v11 interface: Developer / API is in the header menu
   await expect(page).toHaveURL(/\/developer$/);
   await expect(page.getByRole('heading', { name: 'Développeur / API' })).toBeVisible();
   await expect(page.getByText('Aucune clé d’API')).toBeVisible();

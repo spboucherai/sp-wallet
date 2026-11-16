@@ -5,6 +5,7 @@
 //
 //   (cd apps/web && node_modules/.bin/vite build) && npx playwright test -c tests/e2e/playwright.config.ts v9-visual
 //   … --update-snapshots      after an intended visual change (look at the new pictures before committing them)
+import { navTo } from './v11-helpers.ts';   // v11 interface: the shell's navigation (five areas, header menu)
 import { spawn, type ChildProcess } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -32,7 +33,12 @@ async function open(page: Page, path: string, o: { theme?: 'light' | 'dark'; aut
     const u = new URL(route.request().url()), key = u.pathname.replace('/api/v1', '') + u.search;
     if (key === '/auth/state') return route.fulfill({ json: { setupRequired: false, authenticated: o.authenticated !== false } });
     if (key.startsWith('/alerts/stream')) return route.abort();
-    const hit = FIX.answers[key] ?? (key.startsWith('/market/') ? FIX.answers['/market/ETH?days=7&currency=cad'] : undefined);
+    // v11: Activity reads the unified timeline; its wallet rows are the recorded /activity rows, each carried under `wallet` (services/api/src/dashboard/activity.ts walletItem)
+    if (key.startsWith('/dashboard/activity')) { const rows = ((FIX.answers['/activity?limit=200'] as { items: Record<string, any>[] } | undefined)?.items ?? []);
+      return route.fulfill({ json: { items: rows.map((w) => ({ id: `w:${w.id}`, kind: ({ send: 'transfer', gmx: 'order' } as Record<string, string>)[w.kind] ?? w.kind, source: 'wallet', at: w.at, mode: 'live', venue: null, network: w.network, principal: { kind: 'owner', id: 'owner' }, code: `wallet.${w.kind}`, params: {},
+        status: w.state, instrument: w.symbol, side: null, amount: { value: w.amountDisplay, symbol: w.symbol }, received: null, ref: { type: w.kind === 'receive' ? 'deposit' : 'proposal', id: w.id }, txid: w.txid ?? null, explorer: w.explorer ?? null, wallet: w })),
+        nextCursor: null, errors: [], audit: { intact: true, brokenAt: null, total: 128, checkedAt: Date.parse(FIX.recordedAt) }, bounds: { perSource: 500, plans: 50 }, ts: Date.parse(FIX.recordedAt) } }); }
+    const hit =FIX.answers[key] ?? (key.startsWith('/market/') ? FIX.answers['/market/ETH?days=7&currency=cad'] : undefined);
     return hit !== undefined && route.request().method() === 'GET' ? route.fulfill({ json: hit }) : route.fulfill({ status: 404, json: { error: 'not_found', message: 'not in the v9 fixtures' } });
   });
   await page.goto(path);
@@ -50,9 +56,9 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: /USD Coin/ }).first().click(); await expect(page.getByText('Votre solde')).toBeVisible(); await settled(page); await shot(page, `asset-${theme}.png`);
     await page.getByRole('button', { name: 'Retour' }).click();
     await page.getByRole('main').getByRole('button', { name: 'Recevoir' }).click(); await expect(page.locator('img[alt^="QR 0x"]')).toBeVisible(); await settled(page); await shot(page, `receive-${theme}.png`);
-    await page.getByRole('navigation').getByRole('button', { name: 'Envoyer' }).click(); await expect(page.getByTestId('send-steps')).toBeVisible(); await settled(page); await shot(page, `send-${theme}.png`);
-    await page.getByRole('navigation').getByRole('button', { name: 'Activité' }).click(); await expect(page.getByRole('heading', { name: 'Activité' })).toBeVisible(); await settled(page); await shot(page, `activity-${theme}.png`);
-    await page.getByRole('navigation').getByRole('button', { name: 'Réglages' }).click(); await expect(page.getByRole('radio', { name: 'Français' })).toBeVisible(); await shot(page, `settings-${theme}.png`);
+    await navTo(page, 'send'); await expect(page.getByTestId('send-steps')).toBeVisible(); await settled(page); await shot(page, `send-${theme}.png`);
+    await navTo(page, 'activity'); await expect(page.getByRole('heading', { name: 'Activité' })).toBeVisible(); await settled(page); await shot(page, `activity-${theme}.png`);
+    await navTo(page, 'settings'); await expect(page.getByRole('radio', { name: 'Français' })).toBeVisible(); await shot(page, `settings-${theme}.png`);
     expect(remote, 'no request leaves the origin (logos are self-hosted)').toEqual([]);
   });
 }
@@ -98,7 +104,7 @@ test('phone ergonomics: touch targets, no horizontal overflow, long French strin
 
 test('the header condenses on scroll and the tab bar keeps its five entries', async ({ page }) => {
   await open(page, '/'); await settled(page);
-  await expect(page.getByRole('navigation').getByRole('button')).toHaveText(['Accueil', 'Échanger', 'Envoyer', 'Activité', 'Réglages']);
+  await expect(page.getByTestId('nav-tabbar').getByRole('button')).toHaveText(['Accueil', 'Marchés', 'Négocier', 'Agents', 'Activité']);
   await expect(page.locator('header.app-header')).not.toHaveAttribute('data-scrolled', '');
   await page.evaluate(() => scrollTo(0, 400));
   await expect(page.locator('header.app-header')).toHaveAttribute('data-scrolled', '');
