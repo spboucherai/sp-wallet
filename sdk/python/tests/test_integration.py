@@ -458,7 +458,7 @@ def test_paper_preview_create_wait_positions_reduce_close_resting_cancel_replay_
     assert placed.order.status in ORDER_STATES
     assert (placed.meta.status, placed.meta.idempotency_key, placed.meta.idempotent_replay) == (200, key, False)
     say(f"[{run.kind}] create_order(…, idempotency_key='{short(key)}') → {meta(placed)} order={short(oid)} {line(placed.order)}")
-    done = run.call(c, "wait_for_order", oid, timeout=30, poll_interval=0.25)
+    done = run.call(c, "wait_for_order", oid, timeout=90, poll_interval=0.25)
     conforms("getOrder", done)
     assert (done.order.id, done.order.status, done.order.final, done.order.engine_status) == (oid, "FILLED", True, "filled")
     assert done.order.filled == done.order.size

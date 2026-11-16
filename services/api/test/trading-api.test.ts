@@ -760,8 +760,21 @@ describe('webhooks', () => {
 describe('usage, status, retention', () => {
   it('the usage log holds route patterns and statuses — no query string, no body, no secret; old rows are pruned', async () => {
     const k = await newKey();
+    // a usage row is written by the onResponse hook, after the answer has left: the test waits for each row (bounded poll,
+    // it returns as soon as the row is there) before the next call, so the two rows exist and are in the order of the calls
+    const logged = async (n: number): Promise<void> => {
+      const deadline = Date.now() + 30_000;
+      for (;;) {
+        const [{ c }] = await sql<{ c: number }[]>`select count(*)::int as c from api_key_usage where key_id = ${k.id}`;
+        if (c === n) return;
+        if (c > n || Date.now() > deadline) throw new Error(`the usage log holds ${c} row(s) for this key, ${n} expected`);
+        await new Promise((r) => setTimeout(r, 5));
+      }
+    };
     await call('GET', `${T}/markets?venue=hyperliquid&q=SECRETQUERY&limit=1`, { key: k.secret });
+    await logged(1);
     await call('GET', `${T}/markets/${BTC}/candles?limit=2`, { key: k.secret });
+    await logged(2);
     const u = await call('GET', `${DEV}/usage?key=${k.id}`);
     expect(u.status).toBe(200);
     expect(u.json.items.map((x: any) => `${x.method} ${x.route} ${x.status}`)).toEqual([`GET ${T}/markets/:symbol/candles 200`, `GET ${T}/markets 200`]);
