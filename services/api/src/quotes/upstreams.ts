@@ -20,8 +20,8 @@ import type { Level } from './shared.ts';
 /**
  * a quote older than this is stale, per source — from how often each source really sends. Measured on BTC, 2026-11-15
  * (docs/v11/work/quotes.md): Hyperliquid ≈ 9 quotes/s after conflation (its asset context alone comes about once a second, also
- * when nothing moved); edgeX ≈ 2/s; dYdX only when the oracle price or the funding estimate moves (4 in a minute); GMX one per
- * read, every 3 s; Coinbase on every trade (5/s on BTC, far less on a quiet pair); CoinGecko a few minutes between two prices.
+ * when nothing moved); edgeX ≈ 2/s; dYdX only when the oracle price or the funding estimate moves (5 in a minute); GMX one per
+ * fresh read — a 3 s poll over the data service's 3 s cache: about every 6 s; Coinbase on every trade (5/s on BTC, far less on a quiet pair); CoinGecko a few minutes between two prices.
  */
 export const QUOTE_CADENCE_MS = { 'hyperliquid-ws': 15_000, 'edgex-ws': 15_000, 'dydx-ws': 60_000, 'gmx-rest': 20_000, 'coinbase-ws': 30_000, 'coingecko-rest': 15 * 60_000 } as const;
 export const POLL_MS = { gmxTickers: 3_000, candles: 10_000, gecko: 60_000 } as const;

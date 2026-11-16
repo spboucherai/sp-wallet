@@ -50,5 +50,6 @@ const i18nSplit = (): Plugin => {
 export default defineConfig({
   plugins: [i18nSplit(), iconsCheck(), react(), tailwindcss(), serviceWorker()],
   build: { outDir: '../../dist/web', emptyOutDir: true, sourcemap: false, assetsInlineLimit: 0, modulePreload: { polyfill: false } },
-  server: { port: 5173, proxy: { '/api': 'http://127.0.0.1:8650' } },
+  // v11 live quotes: `ws: true` so that the dev server also proxies the websocket of the quote engine (/api/v1/stream)
+  server: { port: 5173, proxy: { '/api': { target: 'http://127.0.0.1:8650', ws: true } } },
 });

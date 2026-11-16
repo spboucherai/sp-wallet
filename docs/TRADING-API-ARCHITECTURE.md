@@ -187,6 +187,16 @@ At-least-once; a receiver deduplicates on `id`. The retry worker starts with the
 fails when they are stale, and so does a unit test. Served at `GET /api/v1/trading/openapi.json`. Response schemas are
 loose objects (main fields declared, others allowed); the tests parse real answers against them.
 
+### Streaming (not in the OpenAPI document)
+
+Live market data is served over a websocket, which OpenAPI cannot describe: `GET /api/v1/trading/stream` (an API key with
+the scope `markets:read` in the `Authorization` header of the handshake — never in the URL — or a single-use ticket from
+`POST /api/v1/trading/stream/ticket` for clients that cannot set a header), with the key's venue and instrument restrictions
+applied per subscription. The two routes are registered by the quote engine (`services/api/src/quotes`), declare their scope
+like every trading route, and are the only routes under `/api/v1/trading/` that are not operations of the spec. Protocol
+(version 1: `quote`, `book`, `trade`, `candle`, `status`), authentication, limits, backpressure and the SDK stream classes:
+[`docs/V11-QUOTE-ENGINE.md`](V11-QUOTE-ENGINE.md).
+
 ## 10. Web
 
 `apps/web/src/screens/Developer.tsx` (own chunk, 32 kB; route `/developer`, opened from Settings) with
