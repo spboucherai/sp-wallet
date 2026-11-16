@@ -78,7 +78,7 @@ export function streamReconciled(inner: OrderPort, o: UserStreamOptions): Stream
       if (cur) put({ ...cur, state: 'cancelled', updatedAt: o.now() });
     } else if (ev.type === 'gap') { st.gaps += 1; synced = false; }
   };
-  const off = o.feed.subscribe(o.account, (ev) => { if (buffering) buffering.push(ev); else apply(ev); }, (s) => { if (s !== 'connected' && status === 'connected') { st.gaps += 1; synced = false; } if (s === 'connected' && status !== 'connected') synced = false; status = s; });
+  const off = o.feed.subscribe(o.account, (ev) => { if (buffering) buffering.push(ev); else apply(ev); }, (s) => { if (s !== 'connected' && status === 'connected') { st.gaps += 1; synced = false; lastRestAt = -Infinity; /* nothing the stream said is trusted any more: the next read is a REST read, at once */ } if (s === 'connected' && status !== 'connected') synced = false; status = s; });
 
   /** the full REST read: the reference. What the stream said while it was in flight is applied on top. */
   const rest = async (instrument: string): Promise<void> => {

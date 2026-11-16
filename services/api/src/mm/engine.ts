@@ -110,6 +110,9 @@ export class MmEngine {
   start(): void {
     if (this.phase !== 'idle' && this.phase !== 'stopped') return;
     this.phase = 'starting'; this.reason = null; this.needReconcile = true;
+    // the fills of THIS session only: the account's earlier history (the venue's userFills snapshot, userFillsByTime from 0) is
+    // not this session's — the position it left is read from the venue at the first reconcile
+    this.lastFillsAt = Math.max(this.lastFillsAt, this.p.clock.now());
     this.log('mm.start', { policy: this.policy.id, policyVersion: this.policy.version, sessionId: this.cfg.sessionId });
   }
   /** end the session: pull everything; the following ticks finish the sequence (reconcile to nothing resting, then disarm) */
