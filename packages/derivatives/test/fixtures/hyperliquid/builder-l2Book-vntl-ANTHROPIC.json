@@ -1,0 +1,17 @@
+{
+ "recordedAt": "2026-11-16T00:42:46.246Z",
+ "network": "mainnet",
+ "request": {
+  "type": "l2Book",
+  "coin": "vntl:ANTHROPIC"
+ },
+ "status": 200,
+ "body": {
+  "coin": "vntl:ANTHROPIC",
+  "time": 1794789765534,
+  "levels": [
+   [],
+   []
+  ]
+ }
+}
