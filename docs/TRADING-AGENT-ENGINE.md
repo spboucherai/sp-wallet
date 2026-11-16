@@ -176,53 +176,115 @@ Deployment steps for the separate process (NOT done; production is untouched)
    other process) — watch its PM2 log and the leases' `heartbeatAt`.
 5. Rollback: stop `sp-wallet-agents`, set `SPW_WORKERS=on` on the API, restart it.
 
-## 5. Order path
+PM2 / mld notes (V11.2 — still NOT deployed)
+
+- The app stays ONE mld app (`sp-wallet`, node and directory unchanged); the manifest `M1M32:~/dispatch/apps/sp-wallet.json`
+  gets a second PM2 process next to the API's:
+
+  ```json
+  { "name": "sp-wallet-agents", "script": "dist/agents.mjs", "cwd": "<app dir>", "interpreter": "node",
+    "env": { "SPW_WORKERS": "agents" }, "kill_timeout": 15000, "max_restarts": 20, "restart_delay": 5000 }
+  ```
+
+  and `"SPW_WORKERS": "api"` in the API process's env. Both processes read the same environment file (database URL,
+  signer URL and secret, `SPW_DATA_DIR`, `SPW_RESEARCH_*`, `SPW_DERIV_*`, `SPW_TRADING_API_EXECUTION`, `SPW_BROADCAST`).
+  No port, no tunnel route and no health URL for the worker: its health is the leases' heartbeat
+  (`GET /api/v1/agents/runtime/status` on the API) and its PM2 log line `sp-wallet agents worker … started`.
+- Order: `mld deploy sp-wallet` restarts the API first (it migrates), then the worker; the worker exits 3 on a database
+  that was not migrated and PM2 restarts it until the API is up.
+- `kill_timeout`: on SIGTERM the worker stops its loops and closes the database; a tick that is running is abandoned —
+  its job is reaped after its lock (180 s) and its lease expires (30 s), then the next worker re-runs it
+  (`agent-worker-process.test.ts`). Order outcomes are in `orders`, not in the worker's memory.
+- The worker has its own execution layer (order service, risk gates, mandates): the `orders` supervisor loop
+  (reconciliation of UNKNOWN orders, mandate stop conditions, attached orders) runs in the API process only — the API
+  must be up for an UNKNOWN order to be settled.
+- Optional cadence settings of the worker, milliseconds: `SPW_AGENT_BAR_MS` (60 000), `SPW_AGENT_JOBS_MS` (5 000),
+  `SPW_AGENT_SUPERVISOR_MS` (60 000).
+- Live agents need `SPW_TRADING_API_EXECUTION=on` in BOTH processes (the order service of each applies it).
+- `mld heal` restarts a missing PM2 process of the manifest; nothing else is needed for the worker.
+
+## 5. Order path (V11.2: bound to the execution layer)
 
 ```
-engine (bar / stream)  ──▶  AgentOrderGateway.submit(principal, canonicalOrder, { idempotencyKey })
-                               1 canonical order valid (@spw/trading)        4 kill switch: only what reduces risk
-                               2 record written (agent_order_intents)        5 LIVE: names the mandate in force for THIS agent
-                               3 mode: research never; order mode = agent    6 the agent's own limits (RiskGate)
-                            ──▶ seam (this branch) ─ perp: PaperPerpExecutor → derivatives risk engine → paper engine
-                                                   │       LivePerpExecutor  → account policy → signer's derivative mandate → venue
-                                                   └ spot: paper book at a live quote · placeLive → signer's spot mandate → chain
+perp agents (bar engine), PAPER and LIVE
+engine ──▶ AgentOrderGateway.submit(principal, canonicalOrder, { idempotencyKey })        agents/unified-gateway.ts
+             1 this key already has an order → the stored order, read from `orders` (nothing is submitted)
+             2 mode: research never; order mode = agent mode          → READ_ONLY_MODE   ┐ refused before an order exists:
+             3 names the mandate in force for THIS agent              → MANDATE_DENIED   │ journaled, nothing stored,
+             4 the agent's own instruments                            → INSTRUMENT_…     ┘ `source: 'none'`
+             5 LIVE: the executor's own conditions (cool-down, unconfirmed order, floor guard, leverage, per-order bound)
+           ──▶ execution.orders.submitCanonical({ principal: agent, mandateId }, order, key, { origin: 'agent', accountId })
+                 unified `orders` row (transition()) → risk engine `evaluate` (kill switch, read-only, the owner's limits)
+                 → trading mandate `checkOrder` → provenance → paper engine | Hyperliquid engine → signer's derivative mandate
+                 → `order.updated`
+           ──▶ context row in agent_order_intents (signal, configuration version, strategy hash — NO state)
+
+spot agents        engine ──▶ SeamOrderGateway ──▶ agent_orders ──▶ signer's spot mandate            (unified by projection: orders/spot.ts)
+stream agents      engine ──▶ SeamOrderGateway ──▶ the agent's simulated book                        (not unified orders)
 ```
 
-- The gateway is the ONLY way an engine places an order (`agent-runtime-unit.test.ts` reads the engines' code).
-- The record exists before the seam is called, in the unified states of `@spw/trading` (`transition`).
-- An exception from the seam = outcome not known → `UNKNOWN`, journaled as an error. `submit` with the same key then
-  answers the stored record after asking the seam (`lookup`); it sends again only when the previous attempt is `FAILED`
-  with `NOT_SENT` or `NEVER_PLACED` (proven: nothing left), reusing the same venue client id.
-- A record in SUBMITTING that changed less than 60 s ago belongs to the worker executing it: no other worker asks about it
-  or settles it (`IN_FLIGHT_GRACE_MS`) — "no trace yet" must never be read as "never placed".
-- An agent cannot create, widen or approve its mandate: the only functions that ask the signer to store a mandate are in
-  `agents/mandate-write.ts`, imported by the two owner route files and by nothing else — not the engines, not the
-  runtime, not the life cycle, not the trading-API handlers (import-graph test).
+- The gateway is the ONLY way an engine places an order (`agent-runtime-unit.test.ts` reads the engines' code), and the
+  gateway factory is bound to an execution layer or throws (`gateway_unbound`): `bindAgentRuntime({ execution, … })`.
+- **One truth per order.** For a unified order, `agent_order_intents` holds context only; the constraint
+  `agent_order_intents_one_truth` refuses a row that both points to a unified order (`order_id`) and carries a state, a
+  record, a reason, a history or fills. Every state the agent's routes answer for such an order is read from `orders`
+  (`listAgentOrders`, `agentOrders`); a spot swap that the execution layer projected is answered from `orders` too and
+  no longer from the ledger. Rows without `order_id` are the seam gateway's own record of an order that exists nowhere
+  else (the stream agents' simulated orders; the gateway-level record of a spot swap).
+- **Same key, never a second order.** The order of (agent, key) is looked up first; `submitCanonical` is not called for
+  a key that has one.
+- **Unknown outcome.** The order service stores the order before its engine is called and the engine stores its row
+  before anything is signed. After an exception the stored order (`SUBMITTING` / `UNKNOWN`) is the answer; the order
+  service's reconciler settles it; the gateway re-reads it and asks the venue account about it — it never sends again.
+- **A new attempt only when nothing left.** Deferrals of the live executor (`LivePerpExecutor.prepare`) and refusals
+  the order service raises before it creates anything leave no order: the same key and the same venue client id are
+  submitted again on a later pass. A unified order that ended `FAILED` is final for its key: the instrument is held
+  until the next bar.
+- **Paper needs a mandate too.** `agents/paper-mandate.ts`: a `SPW-TRADING-MANDATE-v1` in mode `paper`, created when
+  paper starts by the owner or by a key holding `agents:manage` (inside the key's restrictions and per-order limit),
+  superseded when the agent's limits, instruments, capital or strategy version change; 90 days at most.
+- **Provenance.** An agent reduces only what its own fills opened; a closing order larger than its lot is cut to its
+  lot, and the engine reports the rest of the position as still open (it is the owner's).
+- An agent cannot create, widen or approve a mandate: live mandates are written in `agents/mandate-write.ts` (owner
+  routes only), paper mandates in `agents/paper-mandate.ts` (owner or key, mode `paper` as a literal); neither is
+  imported by the engines, the runtime or the gateways (import-graph tests).
 
-**Binding** (`agents/runtime-bindings.ts`, called by `main.ts` and `agent-worker-main.ts`):
+**Binding** (`agents/runtime-bindings.ts` → `agents/execution-bind.ts`):
 
 ```ts
-bindAgentRuntime({ market, emit, gateway?: OrderGatewayFactory, killSwitch?: KillSwitchPort })
-//   gateway     default seamGatewayFactory  → the execution workstream passes the unified order service's factory
-//   killSwitch  default localKillSwitch(…)  → the execution workstream passes its risk service's port
+bindAgentRuntime({ execution, market, emit, gateway?, killSwitch? })      // gateway / killSwitch: tests only
+//   main.ts               execution = app.execution (registerExecution of the server)
+//   agent-worker-main.ts  execution = createExecution() + installGates() + the order.updated emitter
+//   a server instance     binds itself when it becomes ready (runtime-routes.ts)
 ```
 
-Limits of the adapter on this branch
+Limits
 
-- The risk engines are the seams' own (the derivatives risk engine for paper, the account policy and the signer for
-  live); `@spw/trading` `evaluate` is not called by the adapter. The gateway adds the kill switch, the mode rule, the
-  mandate-presence rule and an instrument gate.
-- A canonical order of an agent must carry a `mandateId`. In PAPER it carries the id of the simulated account (the paper
-  account, or the agent id): it is not a mandate and signs nothing. In LIVE it must equal the mandate in force.
-- `maxFeeUsd` is informative on this adapter.
+- Stream agents' orders are not unified orders (their books are simulated, on venues the order service refuses in any
+  mode, with no wallet account a mandate could name): no `evaluate`, no mandate check, no `order.updated` for them.
+  They read the one kill switch.
+- `SPW_TRADING_API_EXECUTION` (default off) is applied by the order service to every caller: with it off a live agent
+  only reduces.
+- A live perp agent's signer mandate is compiled from its trading mandate: 1× leverage with the default limits, daily
+  turnover = order limit × orders per day (`docs/TRADING-MANDATES.md`, section "Agents").
 
-## 6. Kill switch
+## 6. Kill switch (V11.2: one)
 
-`KillSwitchPort { engage(reason) }` — nothing else. The local implementation records the switch (settings
-`agents.kill_switch`; from that write on the gateway refuses whatever adds risk) and then halts every venue account an
-agent trades on with the existing API-side account halt (which stops new orders, never a reduce-only one). The signer's
-emergency halt is not touched. Releasing is an owner route (`POST /api/v1/agents/kill-switch/release`, session; never an
-API key, never an agent); the account halts it set keep their own passkey flow.
+There is ONE kill switch: the risk engine's (`risk/service.ts`, settings `risk.switches`). The agents hold no state.
+
+- `KillSwitchPort { engage(reason, by) }` → `risk.engageKillSwitch({ kind: 'agent', id }, reason)` — the only thing the
+  risk-management agent can do to it. `POST /api/v1/agents/kill-switch/engage` is a thin alias of
+  `POST /api/v1/risk/kill-switch` for the owner.
+- **No release in the agent code**: no function, no route. The switch is released with the owner's passkey on
+  `/api/v1/risk/kill-switch/release/prepare` → `release` (the Risk screen); the Agents panel links there.
+- Who is stopped: every unified order is judged by the risk engine itself (`kill_switch_active`; reductions and cancels
+  pass); the seam gateway reads the same record (`KillSwitchRead`: a purchase or a new quote is refused, a spot sale
+  into cash and a reduce-only order pass; in read-only mode nothing passes); the `agent_orders` gate trigger and the
+  signer guard of the execution layer stand behind it for spot (a sale into the cash leg is still signed).
+- Migration: an agents-side flag that was engaged (`settings['agents.kill_switch']`) is carried into `risk.switches`,
+  then the key is deleted.
+- `STOP ALL AGENTS` (command engine) → `execution.agents.stopAll` → `agents/control.ts`: every trading agent through
+  `stopAgent`.
 
 ## 7. Stream engine
 

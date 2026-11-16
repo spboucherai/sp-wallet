@@ -428,3 +428,25 @@ describe('kill switch port — bound to the risk engine (the ONE switch)', () =>
     bind.bindExecution(null);
   });
 });
+
+describe('STOP ALL AGENTS — the port the execution layer consumes (agents/control.ts)', () => {
+  it('every trading agent is stopped through the runtime\'s own stop — spot included; the risk-management agent keeps watching; the bound execution layer answers with this port', async () => {
+    const ctl = await import('../src/agents/control.ts'), bind = await import('../src/agents/execution-bind.ts'), ord = await import('../src/orders/index.ts'), { randomUUID: uuid } = await import('node:crypto');
+    await sql`update agents set state = 'STOPPED' where state in ('PAPER_TRADING', 'LIVE', 'PAUSED', 'RUNNING', 'STOPPING')`;   // what earlier tests of this file left running
+    const spot = uuid(), stream = uuid(), sup = uuid(), idle = uuid();
+    await sql`insert into agents (id, kind, name, universe, risk, vault_index, vault_address, state, mode, engine, family) values
+      (${spot}, 'spot', 'spot paper', ${sql.json(['ETH'])}, ${sql.json({})}, 9701, '0x0', 'PAPER_TRADING', 'PAPER', 'bar', 'custom'),
+      (${stream}, 'stream', 'mm paper', ${sql.json(['BTC'])}, ${sql.json({})}, 9702, '0x0', 'PAPER_TRADING', 'PAPER', 'stream', 'market_making'),
+      (${sup}, 'supervisor', 'risk', ${sql.json([])}, ${sql.json({})}, 9703, '0x0', 'RUNNING', 'PAPER', 'supervisor', 'risk_manager'),
+      (${idle}, 'spot', 'never started', ${sql.json(['ETH'])}, ${sql.json({})}, 9704, '0x0', 'CREATED', 'RESEARCH', 'bar', 'custom')`;
+    const ex = ord.createExecution({ signerStatus: async () => ({ halted: false }) });
+    bind.bindExecution(ex);
+    expect(Object.keys(ctl.agentControlPort())).toEqual(['stopAll']);
+    const r = await ex.agents.stopAll('drill');
+    expect([...r.stopped].sort()).toEqual([spot, stream].sort()); expect(r.notStopped).toBeUndefined();
+    expect(Object.fromEntries((await sql`select id, state from agents where id in ${sql([spot, stream, sup, idle])}`).map((a: any) => [a.id, a.state]))).toEqual({ [spot]: 'STOPPED', [stream]: 'STOPPED', [sup]: 'RUNNING', [idle]: 'CREATED' });
+    expect((await sql`select actor, data->>'reason' as reason from audit_events where type = 'agent.stop' order by seq desc limit 1`)[0]).toMatchObject({ actor: 'owner', reason: 'STOP ALL AGENTS: drill' });
+    expect((await ex.agents.stopAll('again')).stopped).toEqual([]);
+    bind.bindExecution(null);
+  });
+});

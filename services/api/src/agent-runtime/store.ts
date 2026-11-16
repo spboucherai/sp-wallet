@@ -93,17 +93,26 @@ const PAPER_STATUS: Record<string, OrderState> = { filled: 'FILLED', partially_f
 /** the account whose orders, fills and funding belong to ONE mode of a perp agent */
 export function perpAccount(a: RuntimeAgentRow, mode: Mode): string | null { return mode === 'paper' ? a.deriv_account_id : mode === 'live' ? a.perp?.live?.accountId ?? null : null; }
 
-/** Orders of ONE mode: the gateway's ledger, then the orders placed before the ledger existed (same unified states). */
+/** Orders of ONE mode, each from ONE place: a unified order is read from `orders` (`source: 'orders'` — perp agents through the
+ *  order service, and spot swaps through the execution layer's projection of `agent_orders`); what is not a unified order is read
+ *  from the seam gateway's ledger (`gateway`: the stream agents' simulated orders) or from the engine tables of before (`legacy`).
+ *  An order that exists as a unified order is never also answered from the ledger or from an engine table. */
 export async function agentOrders(a: RuntimeAgentRow, mode: Mode, q: { limit?: number; before?: number; open?: boolean } = {}) {
   const m = dbMode(mode), p = page(q), kind = a.kind ?? 'spot';
-  const ledger = (await listAgentOrders(a.id, { mode, limit: p.limit, ...(q.before ? { before: q.before } : {}), ...(q.open ? { open: true } : {}) })).map((o) => ({ id: o.id, source: 'gateway' as const, mode: o.mode, ts: o.createdAt, updatedAt: o.updatedAt, venue: o.venue, instrument: o.instrument, side: o.side,
-    reduceOnly: o.reduceOnly, size: o.size, notional: o.order.notional, filledSize: o.filledSize, avgFillPrice: o.avgFillPrice, state: o.state, reason: o.reason, detail: o.detail, venueOrderId: o.venueOrderId, fills: o.fills,
+  // spot: the swaps the execution layer projected into `orders` (engine 'spot', engine_ref 'agent:<agent_orders.id>'), with the context the engine wrote on its row
+  const projected = kind === 'spot' ? await sql<{ ao_id: string; client_order_id: string | null; order_id: string; signal_id: string | null; config_version: number | null; strategy_sha256: string | null }[]>`select ao.id::text as ao_id, ao.client_order_id, o.id as order_id, ao.signal_id::text as signal_id, ao.config_version, ao.strategy_sha256
+    from agent_orders ao join orders o on o.engine = 'spot' and o.engine_ref = 'agent:' || ao.id::text where ao.agent_id = ${a.id} and ao.mode = ${m}` : [];
+  const byOrder = new Map(projected.map((x) => [x.order_id, x])), seenClient = new Set(projected.map((x) => x.client_order_id).filter(Boolean)), seenRow = new Set(projected.map((x) => x.ao_id));
+  const all = (await listAgentOrders(a.id, { mode, limit: p.limit, ...(q.before ? { before: q.before } : {}), ...(q.open ? { open: true } : {}) })).filter((o) => !(o.source === 'ledger' && seenClient.has(o.clientOrderId)));
+  const ledger = all.map((o) => ({ ...o, signalId: o.signalId ?? byOrder.get(o.id)?.signal_id ?? null, configVersion: o.configVersion ?? byOrder.get(o.id)?.config_version ?? null, strategySha256: o.strategySha256 ?? byOrder.get(o.id)?.strategy_sha256 ?? null }))
+    .map((o) => ({ id: o.id, source: (o.source === 'orders' ? 'orders' : 'gateway') as 'orders' | 'gateway', mode: o.mode, ts: o.createdAt, updatedAt: o.updatedAt, venue: o.venue, instrument: o.instrument, side: o.side,
+    reduceOnly: o.reduceOnly, size: o.size, notional: o.order?.notional ?? null, filledSize: o.filledSize, avgFillPrice: o.avgFillPrice, state: o.state, reason: o.reason, detail: o.detail, venueOrderId: o.venueOrderId, fills: o.fills,
     signalId: o.signalId, configVersion: o.configVersion, strategySha256: o.strategySha256, history: o.history.map((h) => ({ at: h.at, from: h.from, to: h.to, event: h.event, reason: h.reason })) }));
   let legacy: typeof ledger = [];
   if (kind === 'spot') {
     const rows = await sql`select id, ts, updated_at, from_symbol, to_symbol, amount_in::text as amount_in, received::text as received, state, reason, txid, mode from agent_orders
       where agent_id = ${a.id} and mode = ${m} and client_order_id is null and (${p.before}::timestamptz is null or ts < ${p.before}) order by ts desc limit ${p.limit}`;
-    legacy = rows.map((r) => { const sell = r.to_symbol === (a.cash ?? 'USDC'); return { id: r.id, source: 'gateway' as const, mode: apiMode(r.mode) as 'paper' | 'live', ts: (r.ts as Date).getTime(), updatedAt: (r.updated_at as Date).getTime(), venue: 'kyberswap', instrument: `kyberswap:${sell ? r.from_symbol : r.to_symbol}`,
+    legacy = rows.filter((r) => !seenRow.has(String(r.id))).map((r) => { const sell = r.to_symbol === (a.cash ?? 'USDC'); return { id: r.id, source: 'gateway' as const, mode: apiMode(r.mode) as 'paper' | 'live', ts: (r.ts as Date).getTime(), updatedAt: (r.updated_at as Date).getTime(), venue: 'kyberswap', instrument: `kyberswap:${sell ? r.from_symbol : r.to_symbol}`,
       side: sell ? 'sell' as const : 'buy' as const, reduceOnly: false, size: null, notional: null, filledSize: '0', avgFillPrice: null, state: SPOT_STATE[r.state] ?? 'UNKNOWN', reason: 'LEGACY_UNSPECIFIED' as never, detail: r.reason, venueOrderId: r.txid, fills: [],
       signalId: null, configVersion: null, strategySha256: null, history: [] }; }).map((x) => ({ ...x, source: 'legacy' as never }));
   } else if (kind === 'perp') {
@@ -111,6 +120,7 @@ export async function agentOrders(a: RuntimeAgentRow, mode: Mode, q: { limit?: n
     if (acct) {
       const rows = await sql`select client_id, instrument, side, size::text as size, filled::text as filled, avg_fill_price::text as avg, status, state, final, reject_reason, reduce_only, venue_order_id, created_at, updated_at from deriv_orders
         where account_id = ${acct} and origin in ('agent', 'mandate') and (${p.before}::timestamptz is null or created_at < ${p.before}) and client_id not in (select client_order_id from agent_order_intents where agent_id = ${a.id} and mode = ${m})
+          and not exists (select 1 from orders o where o.principal_kind = 'agent' and o.principal_id = ${a.id} and o.engine_ref = ${acct} || ':' || deriv_orders.client_id)
         order by created_at desc limit ${p.limit}`;
       legacy = rows.map((r) => { const u = r.state ? mapHyperliquidOrder(r.state as HlOrderState, { final: r.final, rejectReason: r.reject_reason }) : { state: PAPER_STATUS[r.status] ?? 'UNKNOWN', reason: 'LEGACY_UNSPECIFIED', note: null };
         return { id: r.client_id, source: 'legacy' as never, mode: mode as 'paper' | 'live', ts: (r.created_at as Date).getTime(), updatedAt: (r.updated_at as Date).getTime(), venue: 'hyperliquid', instrument: r.instrument, side: r.side, reduceOnly: r.reduce_only, size: r.size, notional: null,
