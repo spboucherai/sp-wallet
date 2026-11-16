@@ -584,3 +584,170 @@ Nothing under `agents/**`, `agent-runtime/**`, `orders/**`, `risk/**`, `mandates
 10. **Rotation unbinds a trading key** — kept on purpose; documented and tested, with the way back.
 11. **Position provenance on equal timestamps** (section 5) — the execution workstream's.
 12. `halted: null` is declared, not provoked. The documents' code snippets are not executed as such; the examples are.
+
+---
+
+# Part 3 — the last resync (branch `v11-contract2`, from `v11` @ `035b966`)
+
+`v11` now holds the quote engine (with the streaming clients of both SDKs) and the agents bound to the execution layer
+(`v11-agents-bind`). Nothing under `agents/**`, `agent-runtime/**`, `orders/**`, `risk/**`, `mandates/**`,
+`derivatives/**`, `quotes/**` or `apps/web` was edited.
+
+## 1. Streaming clients
+
+**Initial state.** `packages/trading-sdk/src/stream.ts` and `sdk/python/src/sp_wallet/stream.py` existed and were not
+exported by their packages; their integration tests ran on a stack of their own (`stream-stack.mts`).
+
+**Change.**
+- TypeScript: `src/index.ts` exports `SPWalletStream`, `StreamError`, `OrderBook`, `bookChecksum`, `channelKey`, the
+  protocol constants and the message types. `StreamError` declared its fields as constructor parameter properties, which
+  Node's type stripping refuses: once exported from the index, **every example run with `node` failed to load**
+  (`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`). The class now has plain fields (same public shape).
+- Python: `sp_wallet/__init__.py` exports `SPWalletStream`, `OrderBook`, `StreamError`, `book_checksum`, `channel_key`
+  and the module `stream` through a module-level `__getattr__`: nothing of the stream is loaded by `import sp_wallet`,
+  and `websockets` (the extra `stream`) is imported only when a stream connects.
+- Both stream integration tests run on the shared `scripts/test-stack.mts`, which gained two keys: `venues`
+  (`markets:read`, restricted to Hyperliquid) and `agentsOnly` (no `markets:read`). `stream-stack.mts` and
+  `test/stream-stack.ts` are deleted (`docs/v11/work/quotes.md` still names them: that note is the quote workstream's
+  record and was left as written).
+- Examples `packages/trading-sdk/examples/stream-quotes.ts` and `sdk/python/examples/stream_quotes.py`: a quote
+  subscription with reconnection reporting, bounded (N quotes or 20 s).
+- Documents: a "Streaming" section in `docs/sdk/typescript.md` and `docs/sdk/python.md` (channels, reconnection, order
+  books, the ticket flow for browsers with the backend route and the browser side), and a "Streaming" section in the
+  generated reference plus a paragraph in the OpenAPI `info.description`: the websocket is outside the document, and **a
+  stream connection writes no row in the key's usage log** (the ticket request, an ordinary call, does — `recordUsage`
+  is an `onResponse` hook of every route).
+
+**Tests.** `stream.integration.test.ts` "examples/stream-quotes.ts runs against the real stream, stops by itself and
+prints no secret" (and the same example with a key without `markets:read`: it prints the refusal and ends);
+`test_stream_integration.py::test_the_example_stream_quotes_runs_against_the_real_stream_and_prints_no_secret`;
+`test_stream_lazy_import.py` (a subprocess where `import websockets` fails: the package imports, the names resolve, a
+client is built, the stream module is loaded only on first use).
+
+**Result.** TypeScript stream tests 14 passed; Python stream tests 6 passed, the lazy-import test 1. The quotes in both example tests came
+from Hyperliquid's public feed, on this machine, during the run. **Limitation.** The example test is skipped — not
+failed — when no quote arrives within 20 s. The ticket flow of the documents is two snippets, not an executed example
+(the ticket path itself is covered by the stream tests with `auth: 'ticket'`).
+
+## 2. Agents bound to the execution layer
+
+**Initial state.** The contract's notes and error lists described the agents before `v11-agents-bind`.
+
+**What changed in the server, as read in the code.** (a) No file of `trading-api/` was changed by that branch, and the
+kill switch of the trading API was already the risk engine's (`POST /risk/kill-switch`): the removed agents-side release
+route and the `engage` alias are owner routes outside `/api/v1/trading/`. (b) A paper start of a PERP agent now creates
+its paper trading mandate (`agents/paper-mandate.ts`), with the caller as actor: a key needs `agents:manage` (so
+`startStrategy`, whose scope is `strategies:manage`, answers 403 `insufficient_scope` for a key that lacks it), and a
+key restricted away from Hyperliquid or from one of the agent's instruments answers 403 `restricted`. (c) A halted paper
+account answers 409 `halted` (`perp-routes.ts perpMode`). (d) A live start of a perp agent needs a trading mandate that
+only the owner activates: a key always gets 409 `mandate_required`.
+
+**Change.** `A.start` declares 409 `halted`; `START_NOTE` says (b), (c), (d). `restricted`, `insufficient_scope`,
+`mandate_required`, `owner_required` were already declared on the start operations (asserted now). SDK mapping is
+unchanged and stated: every 409 of the agent operations is a `Conflict` whose `code` says which — an agent's
+`mandate_required` is not the key's 403 `MandateRequired`, an agent's `halted` is not the order's 423 `RiskDenied`
+(four rows added to each SDK's status/code table test).
+
+**Limitation.** `halted` and the paper-mandate `restricted` are declared from the code, **not provoked** by a test of
+this workstream: they need a perp agent with a backtested strategy version (the laboratory), which the contract test
+does not run. `agent-bind.test.ts` (agents workstream) covers the paper mandate itself. `mode_unavailable` exists in
+`lifecycle.ts` and cannot be reached (every family runs in research and paper; live answers `live_unavailable`): not
+declared.
+
+## 3. The three mismatches
+
+| Mismatch | Now |
+|---|---|
+| `open` declared on `listAgentSignals` / `listAgentJournal` | removed: `AgentPage` has `mode`, `limit`, `before`; `AgentOrdersPage` adds `open`. The exception in `sdk/python/tests/test_models_drift.py` is gone |
+| `mode` optional in the contract, required in the SDKs | the contract says what the server does — optional, default the mode the agent is in now (for a stopped agent, the one it last ran in), and the answer names it. The SDKs keep it required; both SDK documents say so and why |
+| `createAgent.mode` accepted `live` | the schema is `research` \| `paper`; `live` answers 400 `bad_request` (before: accepted and ignored — the agent was created in research). The description says what `paper` does per engine: stream and supervisor agents start at once, a bar agent is created and not started |
+
+**Tests.** `trading-contract.test.ts`, agents test: `createAgent` with `mode: 'live'` → 400 and no agent created; with
+`mode: 'paper'` → active on paper; the four per-agent reads without `mode` answer `mode: 'paper'`; the query parameter
+names of the three lists; the 409 / 403 codes of the start operations.
+
+**Observed on the way.** A stopped agent keeps the mode it last ran in: my first assertion expected `research` and was
+wrong; the description was written from what the server answered.
+
+## 4. Tests under full-suite load
+
+- `trading-api.test.ts › the usage log holds route patterns…`: the row is written by `onResponse`, after the answer has
+  left. The test now waits for each row with a bounded poll on the table (5 ms steps, 30 s bound, fails with the count it
+  saw) before the next call — which also fixes the order of the two rows. Every assertion is unchanged.
+- `trading-contract.test.ts` and `packages/trading-sdk/test/integration.test.ts`: an explicit `vi.setConfig({ testTimeout:
+  240_000 })` at the top of each file (the suite default is 30 s), the nine explicit per-test timeouts of the
+  integration file raised to 300 s, `waitForOrder` / `wait_for_order` bounds raised from 30 s to 90 s (polls that return
+  as soon as the order is final). No sleep was added and no assertion depends on a duration.
+
+**Limitation.** A timeout bound is not a cause removed: under load these files are slow because they drive a whole stack
+through hundreds of calls. They were not made faster.
+
+## 5. Refusal shaping over HTTP
+
+`trading-contract.test.ts` "9 (HTTP)": the owner's paper risk limits are set in `settings` (`risk.limits.paper`:
+`maxGrossExposure` 100, `maxOrderNotional` 100); two keys with a mandate place the same order — one with
+`positions:read`, one without `wallet:read` / `positions:read`. Both get 422 `risk_denied` with the same failed checks
+and the same `ok` per check; the first reads `observed` and the sentence of `gross_exposure`, the second gets
+`observed: null` and the withheld sentence on every account-level check, keeps the order's own check
+(`order_notional`) whole, and its `data.order` is `REJECTED`. The replay of its `Idempotency-Key` is the same shaped
+answer, and its rows in `api_idempotency` do not hold the sentence. The limits are put back in a `finally`, and the same
+order is then accepted.
+
+## The three full runs (`pnpm test`, laboratory interpreter exported)
+
+The worktree has no `research/.venv`: the laboratory files gated on its presence in the checkout are skipped in every run
+(3 files, 67 tests), as in Parts 1 and 2.
+
+**First series** — at commit `9d838d8` (everything of sections 1–5 except the last test commit):
+
+| Run | Files | Tests | Failures |
+|---|---|---|---|
+| 1 | 182 passed, 3 skipped | 4 283 passed, 67 skipped | none (exit 0, 67 s) |
+| 2 | 180 passed, 2 failed, 3 skipped | 4 281 passed, 2 failed | `api.test.ts › swap: quotes are for the wallet's own addresses…` (`swap_quotes` held 0 rows, ≥ 4 expected); `trading-api.test.ts › API keys › expiry and revocation close the key at once…` (the usage log of the key held 0 rows, 4 expected) |
+| 3 | 181 passed, 1 failed, 3 skipped | 4 282 passed, 1 failed | `api.test.ts › swap: quotes…` (same) |
+
+Neither `trading-contract.test.ts` nor the SDK integration files timed out or failed in any run. Both failures are the
+race of section 4 in two more places: a log row written after the answer (`recordUsage` in `onResponse`; `swap.ts`
+inserts its quote rows without awaiting them) and read at once by the test. Commit `23c0a23`: `trading-api.test.ts`
+has one helper `usageOf(keyId, n)` (bounded poll) used by the three tests that read a key's usage rows — two of them
+asserted the insertion order of rows written by concurrent hooks, they now assert the number and the statuses;
+`api.test.ts` waits for the quote rows the same way (the swap workstream's test: five lines, same assertion).
+
+**Second series** — at that commit:
+
+| Run | Files | Tests | Failures |
+|---|---|---|---|
+| 1 | 182 passed, 3 skipped | 4 283 passed, 67 skipped | none (exit 0, 79 s) |
+| 2 | 182 passed, 3 skipped | 4 283 passed, 67 skipped | none (exit 0, 71 s) |
+| 3 | 181 passed, 1 failed, 3 skipped | 4 282 passed, 1 failed | `agent-worker-process.test.ts › … the worker process ticks the agents; with two workers every tick is run by exactly one` — "timed out waiting for worker 1 to be in the middle of its ticks" |
+
+The failure of the last run is a wait on a child process in the agents workstream's test (three node processes started
+by the test while every core runs the suite). It was not seen in the five other runs, it is not this workstream's file,
+and it was **not fixed here**. The two log races did not come back in the second series; three runs do not prove they
+cannot.
+
+## Files touched outside the owned set (Part 3)
+
+- `packages/trading-sdk/src/stream.ts` — the error class's fields (quote workstream's file; see section 1).
+- `packages/trading-sdk/test/stream.integration.test.ts`, `sdk/python/tests/test_stream_integration.py` — moved to the
+  shared stack, one example test each; `stream-stack.mts`, `test/stream-stack.ts` deleted.
+- `services/api/test/trading-api.test.ts` — the usage-log test only.
+
+## Remaining mismatches (current list — it replaces the list of Part 2)
+
+1. **`OrderInput` has no `notional`** (`orders/service.ts`) — unchanged.
+2. **A long and a short GMX position on one market** cannot be closed through the path — unchanged.
+3. **The agent answers and `agent.updated` are loose** (`looseObject`) — unchanged.
+4. **`halted` and `restricted` on a perp agent's paper start are declared, not provoked** (section 2).
+5. **A preview needs a mandate on the key** although `orders:prepare` is not an execution scope — unchanged.
+6. **`StartRequest.agentId`** on `POST /agents/{id}/start` — unchanged (agents workstream).
+7. **Rotation unbinds a trading key** — kept on purpose; documented and tested.
+8. **Position provenance on equal timestamps** — unchanged (execution workstream).
+9. **The stream has no machine-readable contract**: its protocol is `docs/V11-QUOTE-ENGINE.md`; the SDK message types
+   are written by hand in `stream.ts` / `stream.py`, and no test compares them with the server's.
+10. `halted: null` on the balances is declared, not provoked. The documents' code snippets are not executed as such; the
+    examples are.
+
+Closed since Part 2: `open` on signals and journal; `mode` optional vs required (documented both ways);
+`createAgent.mode`; refusal shaping over HTTP.
+
