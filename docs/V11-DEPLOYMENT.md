@@ -394,11 +394,16 @@ production rollback: no PM2, no mld, a database of a few dozen rows.
    market-making session (its quoting mandate is revoked at the signer by the stop); note which live agents hold a V11
    trading mandate.
 2. Runbook: `git checkout <previous commit>`, `pnpm install --frozen-lockfile && pnpm build`, `pm2 restart sp-wallet`.
-3. If step 1 could not be done because V11 no longer starts:
+3. **If any V11-only agent exists** (a stream agent or the risk supervisor — running or stopped):
+   `psql -v ON_ERROR_STOP=1 -v park_agents=1 -d sp_wallet -f scripts/v11-rollback-triggers.sql`, or V10's Agents list
+   answers 500 (observed). The same command drops the trigger of step 4.
+4. If step 1 could not be done because V11 no longer starts:
    `psql -v ON_ERROR_STOP=1 -d sp_wallet -f scripts/v11-rollback-triggers.sql` — it drops the one trigger that would
    otherwise refuse the spot agents' buys under V10 (tested in the rehearsal: the refused row is accepted after it, the
    switch stays recorded and V11 applies it again at its next start).
-4. Going forward again needs nothing: V11 re-creates its triggers at start-up and catches up.
+5. Going forward again: if step 3 was used, first
+   `psql -v ON_ERROR_STOP=1 -v unpark_agents=1 -d sp_wallet -f scripts/v11-rollback-triggers.sql`; nothing else — V11
+   re-creates its triggers at start-up and catches up.
 
 ### 9.2 API — what was observed
 
@@ -420,9 +425,15 @@ Also unchanged from the earlier reading: the live-limit seed is written once (`r
 by a later re-deployment; `perp_agent_signals` written by V10 during a rollback is copied forward at the next V11 start.
 Restore the database dump only if data were damaged (runbook).
 
-**V11-only agents under V10 code** — see `docs/v11/work/final-validation.md` §8 for what was observed on a copy of the
-soak's database (a paper market-making agent and a bar perp agent created by V11, then V10 started on it):
-@@V11_ONLY_AGENTS@@
+**V11-only agents under V10 code — observed** on a copy of the soak's database (a paper market-making agent and a bar perp
+agent created by V11; `docs/v11/work/final-validation.md` §10):
+
+| Question | Observed |
+|---|---|
+| Does V10 tick a V11-only agent? | No: its engines select `kind = 'spot'` / `kind = 'perp'`; a stream agent (`kind = 'stream'`) is never ticked |
+| **V10's Agents list with ONE V11-only agent row in the table** | **`GET /api/v1/agents` answers 500 (`unknown network: hyperliquid`) and the Agents screen shows nothing**, whatever the state of that agent — stopping it in V11 does not help. Its own detail route answers 500 too; every other route is unaffected |
+| The remedy | `psql -v ON_ERROR_STOP=1 -v park_agents=1 -d sp_wallet -f scripts/v11-rollback-triggers.sql` — the V11-only rows get a network V10 knows (the original is kept in the row) and V10 lists them again, as agents it does not understand: **do not act on them under V10**. **Before V11 is started again: the same script with `-v unpark_agents=1`** (tested both ways) |
+| A bar perp agent created by V11 (template, laboratory strategy `momentum_xs_perp/2`) | listed and readable under V10 (200). It was **not** seen through a bar close: V10's perp engine would drive it through its own paper path, and its strategy file does not exist in the V10 checkout — by reading, it holds with a strategy error. Stop such agents in V11 first |
 
 **Not rehearsed:** a live agent holding a V11 trading mandate when V10 starts (it needs a venue account; by reading, V10
 would drive it through its direct mandate path — the signer's derivative mandate is the same shape and stays in force —

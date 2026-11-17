@@ -338,3 +338,100 @@ event exists for the version (one backtest ran, not two). Not tested: the cross-
 `jobView` passed the queue's own state through. The OpenAPI document's enum is `queued | running | done | failed | cancelled`;
 the Python SDK, strict by design, refused the whole answer. The owner's overview route already mapped it. `jobView` now answers
 `failed` with `deadLettered: true`. Test: `agent-workers.test.ts` (the dead-letter case).
+
+## 9. Soak — paper, 30 minutes, local (two runs)
+
+Driver: `scripts/soak-v11.py` (Python SDK) on the stack of the SDK tests (`packages/trading-sdk/scripts/test-stack.mts`,
+with three options added for this: the API's log kept, the database kept, an owner READ through the control endpoint) — the
+real API and signer bundles from `dist/`, an own database, a software passkey, API keys bound to paper mandates; workers in
+the API process. What runs: a bar perp agent created from the Momentum template on `momentum_xs_perp/2` (backtest through
+the job queue, then PAPER); a market-making agent from its template on BTC in PAPER; one websocket client of the quote
+stream (Python SDK: BTC on Hyperliquid, BTC spot, the venue status); every 30 s through the Python SDK a resting limit
+order 1.5 % under the mark, cancelled 10 s later, and every fourth round a market order of 0.001 BTC. Sampled every minute.
+"Event-loop lag" is measured from outside: the latency of `GET /health/live`, 20 calls 250 ms apart per sample (the API
+exposes no lag figure of its own).
+
+### Run 1 — 2026-11-17 07:50–08:24 UTC, tree `b08b417` (before defect 13)
+
+| Measure | First sample | Last sample (t + 1 800 s) | Range over 31 samples |
+|---|---|---|---|
+| RSS of the API process | 274.3 MB | 276.5 MB | 261.3 – 303.6 MB, **no trend** |
+| CPU time of the API process | 7.9 s | 89.5 s | ≈ 4.5 % of one core |
+| Open file descriptors | 132 | 134 | 132 – 142 |
+| Database connections of the stack | 5 | 6 | 4 – 6 |
+| `GET /health/live` latency | p50 3.6, p95 4.1, max 14.7 ms | p50 1.4, p95 1.8, max 2.3 ms | worst p95 9.1 ms, worst single call 15.6 ms |
+
+Client: 18 983 quotes and 123 status messages received, 0 stream error, 0 close; 60 limit orders placed, 59 cancelled (the
+last was resting when the run ended), 14 market orders, **0 order error**. Server stream statistics at the end: 19 232
+messages sent (7.1 MB), 10.9 a second, 0 conflated, 0 trade dropped, 0 book resync, 0 slow consumer; lag venue timestamp →
+socket write p50 291 ms, p95 390 ms; **1 upstream reconnect** (one gap counted by the hub), Hyperliquid `connected` at the end.
+Runtime loops: `agent-engine` 33 runs, `perp-agent-engine` 33, `agent-supervisor` 33, `agent-stream-engine` 2 022,
+`agent-jobs` 375 — 0 failure each (the jobs loop keeps one `lastError` "timed out after 150000 ms" from the backtest of
+the start). Both agents `active`, mode `paper`, at the end; kill switch and read-only off.
+
+Rows per table, start → end (30 minutes):
+
+| Table | Rows | Per hour | Pruned by |
+|---|---|---|---|
+| `orders` / `deriv_orders` | 0 → 76 | ≈ 150 | never (history) |
+| `order_events` | 0 → 422 | ≈ 840 | never (append-only) |
+| `risk_decisions` | 0 → 211 | ≈ 420 | previews after 30 days (since `d88f1da`); real decisions never |
+| `order_projection_queue` | 0 → 0 (at most 2 in a sample) | — | drained |
+| `market_snapshots` | 0 → 179 | ≈ 360 | 7 days |
+| `mm_tape` | 0 → 1 632 | ≈ 3 260 | 2 days |
+| `mm_sessions` / `mm_fills` | 1 / 0 | — | never |
+| `api_key_usage` | 49 → 240 | ≈ 380 | 90 days |
+| `api_idempotency` | 5 → 137 | ≈ 260 | 1 day |
+| `agent_signals` | 0 → 296 | ≈ 590 | never |
+| `agent_jobs` | 1 → 31 | ≈ 60 | 14 days once finished (since `7df3ed1`) |
+| `research_log` | 8 → 78 | ≈ 140 | never |
+| `agent_equity`, `deriv_equity` | 0 → 32, 2 → 64 | ≈ 64, 124 | never |
+| `audit_events` | 37 → 175 | ≈ 275 | never (hash chain) |
+| `candles` | 144 012 → 1 359 784 | — | not a growth of the soak: the market engine's initial BACKFILL of a fresh database (40 symbols; « backfill: 160 requests, ≈ 100 000 bars written » about once a minute, still running at the end) |
+
+API log: 45 lines. Error lines: 3, all in the first second (`[signer-client] GET /status failed … ECONNREFUSED`: the stack
+starts the API before its signer listens). Nothing else — no unhandled rejection, no `level 50`.
+
+### Defect 13 — a market-making session on the REAL feed stopped quoting after seven seconds, for good (fixed, `42f44d1`)
+
+The run above reported the session `running` and both agents `active`. Its own status said otherwise:
+
+```
+counters: ticks 1802, quoteBatches 1, quotesPlaced 2, cancels 2, fills 0        status.phase: "pulled"
+status.reason: "breaker data_stale, venue_disconnected"       breakers: data_stale at +7 s, venue_disconnected at +8 s
+```
+
+**In thirty minutes the paper session placed one quote batch.** Cause: the sessions' top of book came from the stream engine's
+market state on mainnet (and from the `l2Book` stream of the venue client on testnet) — the venue's ORDER-BOOK channel.
+Measured the same day with the data service's own subscription (`hyperliquid:BTC`, 90 s): **9 books, median gap 12.3 s**.
+The agent's freshness bound is 5 s and a tripped breaker keeps quotes pulled for 15 s: the session was stale 7 seconds out of
+every 12 and never left its cool-down. It failed closed — nothing was quoted on stale data — and it did not work. LIVE uses
+the same source on mainnet: a live session would have behaved the same way (never observed: nothing live was ever run).
+Why no test saw it: the suites replay recorded books and stamp a fresh one every second; `mm.spec.ts` asserts that a paper
+session reaches `quoting` with two quotes — which it does, for seven seconds.
+**Fix.** The sessions read the venue's best-bid / offer channel (`bbo`, about ten messages a second) through the process's
+own Hyperliquid client, on both networks (`mm/market-data.ts` `bboBookSource`, `mm/bind.ts`); the stream engine's state
+remains the source of the funding rate and the fallback when no venue client is given (tests).
+**Tests.** `mm-units.test.ts` "market data of a session — best bid / offer, at the venue's real cadence" (4): the
+subscription, the mapping, no half book, a gap; at ten messages a second the port is `connected` for a whole minute, at one
+book every 12 s it is stale 345 samples of 600; the bindings. The four market-making suites: 93 / 93.
+**Verified on the real feed:** run 2 below.
+
+## 10. V11-only agents under V10 code (2026-11-17 08:26–08:32 UTC) — on a copy of the first soak's database
+
+`createdb -T <soak database> spw_soak_v10`; an owner session row inserted by SQL (the soak's passkey lived in its own process);
+`RB_DB=spw_soak_v10 scripts/rollback-rehearsal-stack.sh start /tmp/spw-v10/dist` (V10 bundles; its laboratory virtualenv
+created first). The database holds two agents created by V11 with an API key: "Soak momentum" (`kind perp`, bar engine,
+`PAPER_TRADING`) and "Soak market making" (`kind stream`, `PAPER_TRADING`, `network = hyperliquid`).
+
+| Under V10 | Observed |
+|---|---|
+| start-up, `/portfolio`, `/activity`, `/derivatives/accounts` | 200 |
+| **`GET /api/v1/agents`** | **500** — log: `"msg":"unknown network: hyperliquid","path":"/api/v1/agents"`. V10 reads every row of `agents` as a spot or a perp agent; the stream agent's `network` is a venue name. **One V11-only agent row breaks the whole list** — the Agents screen of V10 shows nothing — whatever the agent's state |
+| `GET /agents/<stream agent>` | 500, same cause |
+| `GET /agents/<perp agent created by V11>` | 200 (`kind: perp`, `PAPER_TRADING`, simulation) |
+| V10's engines over three minutes | no new row: its perp engine decides at bar closes (1 h), none fell in the window; its engines select `kind = 'spot'` / `'perp'`, so the stream agent is never ticked (read from `a118e3e`, consistent with what was seen). **Not observed:** V10 ticking the V11 perp agent at a bar close — its strategy `momentum_xs_perp/2` does not exist in the V10 checkout's library, so by reading it would hold with a strategy error |
+| `scripts/v11-rollback-triggers.sql -v park_agents=1` | the stream agent's network set to `base`, the original kept in `runtime.v11RollbackNetwork` → `GET /agents` **200** under V10 (the agent is listed as something V10 does not understand) |
+| `… -v unpark_agents=1` | the network is back to `hyperliquid` (and V10's list is 500 again, as expected) |
+
+Stack stopped, `spw_soak_v10` dropped.
