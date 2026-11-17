@@ -542,6 +542,13 @@ alter table proposals add column if not exists nft jsonb;
 create table if not exists nft_arrival_scan (chain text not null, contract text not null, cursor bigint not null, scanned_at timestamptz not null default now(), gap boolean not null default false, primary key (chain, contract));
 create table if not exists utxo_reviews (network text not null, outpoint text not null, verdict text not null, at timestamptz not null default now(), primary key (network, outpoint));
 -- <<< NFT delivery 2
+-- >>> NFT delivery 3 (docs/nft/NFT-ARCHITECTURE.md §8): additive. nft_market_cache keeps what a market provider answered (a
+-- cache: dropping it loses nothing that cannot be asked again). The key is provider + kind + reference — never a URL: a
+-- provider's URL may carry its key. nft_market_slug: the marketplace's own identifier of a collection, learnt from its answer
+-- about one of the collection's items.
+create table if not exists nft_market_cache (provider text not null, kind text not null, ref text not null, data jsonb not null, fetched_at timestamptz not null default now(), primary key (provider, kind, ref));
+create table if not exists nft_market_slug (collection_key text not null, provider text not null, slug text not null, learnt_at timestamptz not null default now(), primary key (collection_key, provider));
+-- <<< NFT delivery 3
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }

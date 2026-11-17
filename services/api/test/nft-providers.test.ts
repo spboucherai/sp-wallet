@@ -225,7 +225,7 @@ describe('EVM — ERC-721 / ERC-1155 reads on Ethereum mainnet', () => {
   it('no indexer configured: discovery is "blocked by provider" (named variable); manual additions are verified on-chain', async () => {
     const { p } = evm(), w = '0xf17017dD78887f7A6d03a81E36FfBdF67eac2B8a';
     const inv = await p.inventory('ethereum', w, { manual: ['0x0905b2277df5c7dd6c5e3399ece8a36621aebe85/5'], max: 50 });
-    expect(inv.sections).toEqual([{ section: 'indexer', status: 'blocked_by_provider', code: 'no_indexer_configured', unlockedBy: 'NFT_EVM_INDEXER_URLS', source: null, count: 0, truncated: false }, { section: 'manual', status: 'ok', code: null, unlockedBy: null, source: 'evm-rpc', count: 1, truncated: false }]);
+    expect(inv.sections).toEqual([{ section: 'indexer', status: 'blocked_by_provider', code: 'no_indexer_configured', unlockedBy: 'NFT_EVM_PROVIDER / NFT_EVM_INDEXER_URLS', source: null, count: 0, truncated: false }, { section: 'manual', status: 'ok', code: null, unlockedBy: null, source: 'evm-rpc', count: 1, truncated: false }]);
     expect(inv.assets.map((a) => [a.key, a.quantity, a.origin, a.ownership.heldByWallet])).toEqual([['evm:ethereum:0x0905b2277df5c7dd6c5e3399ece8a36621aebe85/5', '3', 'manual', true]]);
   });
   it('an indexer is a HINT: what it lists enters the inventory only if the chain confirms the wallet holds it', async () => {

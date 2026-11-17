@@ -33,6 +33,11 @@ CASES: dict[str, tuple[str, tuple[Any, ...], dict[str, Any], str, dict[str, str]
     "getPortfolio": ("get_portfolio", (), {}, "/portfolio", {}, None),
     "getBalances": ("get_balances", (), {"network": "ethereum"}, "/balances", {"network": "ethereum"}, None),
     "getActivity": ("get_activity", (), {"limit": 20, "cursor": "abc_-"}, "/activity", {"limit": "20", "cursor": "abc_-"}, None),
+    "listNfts": ("list_nfts", (), {"network": "solana", "status": "in_wallet", "sort": "name", "spam": "show", "limit": 10, "cursor": "48"}, "/nfts", {"network": "solana", "status": "in_wallet", "sort": "name", "spam": "show", "limit": "10", "cursor": "48"}, None),
+    "getNft": ("get_nft", ("evm:ethereum:0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d/1",), {}, "/nfts/item", {"key": "evm:ethereum:0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d/1"}, None),
+    "getNftActivity": ("get_nft_activity", ("sol:solana:CMhGwGHMbVaBmxebfU3t5eViSf6FKHnvFCBNiA1D659j",), {"limit": 5, "type": "transfer"}, "/nfts/activity", {"key": "sol:solana:CMhGwGHMbVaBmxebfU3t5eViSf6FKHnvFCBNiA1D659j", "limit": "5", "type": "transfer"}, None),
+    "getNftMarket": ("get_nft_market", (), {"network": "ethereum", "address": "0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d", "token_id": str(2**256 - 1)}, "/nfts/market", {"network": "ethereum", "address": "0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d", "tokenId": str(2**256 - 1)}, None),
+    "getNftMarketEvents": ("get_nft_market_events", (), {"network": "solana", "address": "CMhGwGHMbVaBmxebfU3t5eViSf6FKHnvFCBNiA1D659j", "provider": "opensea", "type": "sale,list", "limit": 20}, "/nfts/market/events", {"network": "solana", "address": "CMhGwGHMbVaBmxebfU3t5eViSf6FKHnvFCBNiA1D659j", "provider": "opensea", "type": "sale,list", "limit": "20"}, None),
     "listPositions": ("get_positions", (), {"mode": "paper", "venue": "hyperliquid"}, "/positions", {"mode": "paper", "venue": "hyperliquid"}, None),
     "listOrders": ("list_orders", (), {"mode": "live", "open": True, "limit": 7, "cursor": "abc_-"}, "/orders", {"mode": "live", "open": "true", "limit": "7", "cursor": "abc_-"}, None),
     "getOrder": ("get_order", ("deriv:acc:cid",), {}, "/orders/deriv%3Aacc%3Acid", {}, None),
@@ -104,6 +109,13 @@ AGENT = {"id": "a", "state": "active", "mode": "paper"}
 JOB = {"job": {"id": "j", "kind": "backtest", "status": "queued", "attempts": 0}, "label": "backtest"}
 
 #: a minimal valid answer per operation that has a success schema (the typed model must accept it)
+NFT_CUR = {"network": "solana", "asset": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "symbol": "USDC", "decimals": 6}
+NFT_STATUS = {"provider": "opensea", "name": "OpenSea", "state": "needs_key", "code": "no_api_key", "unlockedBy": "OPENSEA_API_KEY", "stale": False}
+NFT_ROW = {
+    "key": "evm:ethereum:0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d/1", "network": "ethereum", "family": "evm", "standard": "erc721", "assetId": "0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d/1",
+    "contractAddress": "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D", "tokenId": "1", "mintAddress": None, "quantity": "1", "name": None, "onchainName": None, "collection": None, "state": "in_wallet", "inWallet": True,
+    "transferable": True, "transferBlockedBy": [], "spam": None, "ownershipSource": {"category": "onchain", "source": "evm-rpc", "confidence": "chain_verified", "fetchedAt": "x", "stale": False},
+}  # fmt: skip
 SAMPLES: dict[str, Any] = {
     "getOpenApi": {"openapi": "3.1.0", "paths": {}},
     "listMarkets": {"markets": [MARKET], "total": 1, "truncated": False, "errors": [], "ts": 1},
@@ -122,6 +134,16 @@ SAMPLES: dict[str, Any] = {
     },
     "getBalances": {"asOf": "x", "balances": [{"network": "ethereum", "asset": "native", "symbol": "ETH", "decimals": 18, "amount": "1", "display": "0.000000000000000001", "error": None}], "errors": [], "halted": False},
     "getActivity": {"items": [{"kind": "fill", "at": "2026-11-16T00:00:00Z", "mode": "paper"}], "nextCursor": None},
+    "listNfts": {"items": [NFT_ROW], "total": 1, "hiddenSpam": 0, "nextCursor": None, "valuation": {"state": "unavailable", "reason": "no_reliable_valuation", "note": "n"}, "asOf": "x"},
+    "getNft": {"nft": {**NFT_ROW, "ownership": {"state": "in_wallet", "owner": {"state": "known", "value": "0xabc"}, "heldByWallet": True}, "metadata": {"status": "ok", "name": "n", "description": None, "attributes": [{"traitType": "Fur", "value": "Robot"}]},
+                       "sources": [{"category": "onchain", "source": "evm-rpc", "stale": False}]}, "marketActions": [{"id": "buy", "available": False, "reason": "market_writes_not_built"}]},
+    "getNftActivity": {"key": "k", "events": [{"id": "e", "type": "sale", "tx": "0x1", "at": None, "from": "a", "to": "b", "quantity": "1", "finality": "finalized",
+                                                "price": {"amount": str(2**200), "currency": NFT_CUR}, "interpretedBy": "spw:seaport-order-fulfilled"}], "nextCursor": None, "completeness": "recent_window", "note": None, "error": None},
+    "getNftMarket": {"key": "k", "network": "solana", "standard": "metaplex-core", "contradictions": [], "rates": {"solana:native": {"symbol": "SOL", "usd": None, "cad": None, "source": "apibricks", "priceAt": None, "stale": False, "withheld": "price_source_licence_internal_use_only"}},
+                     "sources": [{"status": NFT_STATUS, "url": None, "listed": {"state": "unknown"}, "ask": {"state": "unknown"}, "bestOffer": {"state": "unknown"}, "lastSale": {"state": "unknown"}, "collectionFloor": {"state": "unknown"}, "verification": None, "rarity": {"state": "unknown"}}],
+                     "value": {"state": "unavailable", "reason": "r"}, "marketActions": [], "asOf": "x"},
+    "getNftMarketEvents": {"key": "k", "sources": [{"status": NFT_STATUS, "events": [{"type": "sale", "providerType": "sale", "at": None, "tx": None, "from": None, "to": None, "quantity": "1",
+                                                                                         "price": {"amount": "14500000000", "currency": NFT_CUR, "precision": "exact"}, "flags": {"washTrade": {"state": "unknown"}}}], "nextCursor": None}], "rates": {}, "asOf": "x"},
     "listPositions": {"positions": [{"id": "p", "mode": "paper", "venue": "hyperliquid", "accountId": "a", "instrument": "hyperliquid:BTC", "side": "long", "size": "0.5", "entryPrice": "60000", "markPrice": None, "unrealizedPnl": None, "source": "paper"}], "errors": [], "ts": 1},
     "listOrders": {"orders": [ORDER_ROW], "nextCursor": "abc", "ts": 1},
     "getOrder": {"order": ORDER_ROW, "fills": [{"id": "f", "instrument": "hyperliquid:BTC", "side": "buy", "price": "1", "size": "1", "fee": "0", "feeAsset": "USDC", "closedPnl": None, "liquidation": False, "ts": 1}]},
@@ -150,6 +172,18 @@ SAMPLES: dict[str, Any] = {
     "createStrategy": {"strategy": {"id": "v", "agentId": "a", "sha256": "h", "status": "draft"}},
     "startStrategy": {"agent": AGENT}, "stopStrategy": {"agent": AGENT}, "createAgent": {"agent": AGENT}, "startAgent": {"agent": AGENT}, "pauseAgent": {"agent": AGENT}, "stopAgent": {"agent": AGENT},
 }  # fmt: skip
+
+
+def test_nft_amounts_and_token_ids_stay_strings(mock: Any) -> None:
+    """An NFT price and a token id are exact integers far beyond a float: they travel and are parsed as strings."""
+    h = mock([ok(SAMPLES["getNftActivity"])])
+    a = h.call("get_nft_activity", "k")
+    assert a.events[0].price.amount == str(2**200) and isinstance(a.events[0].price.amount, str)
+    h = mock([ok(SAMPLES["getNftMarket"])])
+    r = h.call("get_nft_market", network="ethereum", address="0x" + "a" * 40, token_id=str(2**256 - 1))
+    assert h.calls[0].query["tokenId"] == str(2**256 - 1)
+    assert r.sources[0].status.state == "needs_key" and r.sources[0].status.unlocked_by == "OPENSEA_API_KEY"
+    assert r.rates["solana:native"].usd is None and r.rates["solana:native"].withheld == "price_source_licence_internal_use_only"
 
 
 def test_every_operation_of_the_document_has_a_case() -> None:

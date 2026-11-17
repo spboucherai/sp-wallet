@@ -27,6 +27,8 @@ export { requireMandate } from './routes.ts';
 export { emitWebhook } from './webhooks.ts';
 export { TRADING_PREFIX, DEVELOPER_PREFIX, SCOPES, EXECUTION_SCOPES, OPERATIONS, type Scope } from './spec.ts';
 
+import { createNftReads, type NftReadDeps } from './nft-read.ts';
+
 export interface TradingApiDeps {
   derivatives?: Derivatives; live?: LiveService; gmx?: Pick<GmxService, 'status'>;
   prices: ReadDeps['prices']; library?: ReadDeps['library'];
@@ -61,7 +63,9 @@ export async function tradingApi(app: FastifyInstance, o: TradingApiDeps): Promi
     gmx: () => o.gmx ?? { status: async (locale) => (await import('../derivatives/gmx-live.ts')).gmx().status(locale) },
     orders: () => o.execution.orders, prices: o.prices, ...(o.library ? { library: o.library } : {}),
   });
-  tradingRoutes(app, reads, o.execution);
+  // the NFT module registers after this one: its services are read when a request comes (null = NFT_ENABLED=off)
+  const nfts = createNftReads({ nft: () => (app as unknown as { nftMarket?: ReturnType<NftReadDeps['nft']> }).nftMarket ?? null });
+  tradingRoutes(app, reads, o.execution, nfts);
   developerRoutes(app, { derivatives: d });
   setMandateVerifier((keyId, mandateId) => o.execution.mandates.verifyKeyBinding(keyId, mandateId));
   if (config.workers) { const stop = startWebhookWorker(); app.addHook('onClose', async () => { stop(); }); }

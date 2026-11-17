@@ -32,6 +32,7 @@ KNOWN = {
 RESPONSE_NAMES = {
     "getOpenApi": "OpenApiDocument", "listMarkets": "MarketList", "getMarket": "MarketDetail", "getOrderbook": "Orderbook",
     "getCandles": "Candles", "getPortfolio": "Portfolio", "getBalances": "Balances", "getActivity": "Activity",
+    "listNfts": "NftList", "getNft": "NftDetail", "getNftActivity": "NftActivity", "getNftMarket": "NftMarket", "getNftMarketEvents": "NftMarketEvents",
     "listPositions": "Positions", "listOrders": "Orders", "getOrder": "OrderDetail", "listStrategies": "Strategies",
     "listAgents": "Agents", "getRisk": "Risk", "compareMarkets": "MarketComparison", "listPrivateMarkets": "PrivateMarkets",
     "getPrivateMarketCompany": "PrivateMarketCompanyDetail", "getPrivateMarket": "PrivateMarketDetail", "previewOrder": "OrderPreview",
@@ -58,6 +59,7 @@ NESTED_NAMES = {
     "MarketListMarketsItem": "Market", "MarketListErrorsItem": "PartialError", "CandlesCandlesItem": "Candle",
     "PortfolioWalletBalancesItem": "PortfolioBalance", "PortfolioAccountsItem": "PortfolioAccount", "BalancesBalancesItem": "Balance",
     "ActivityItemsItem": "ActivityItem", "PositionsPositionsItem": "Position",
+    "NftListItemsItem": "Nft", "NftMarketSourcesItem": "NftMarketSource", "NftMarketEventsSourcesItemEventsItem": "NftMarketEvent", "NftMarketRatesValue": "NftRate", "NftActivityEventsItem": "NftEvent",
     "StrategiesLibraryItem": "StrategyLibraryEntry", "StrategiesVersionsItem": "StrategyVersion",
     "AgentsAgentsItem": "Agent", "RiskKillSwitch": "KillSwitch", "RiskCapabilityLocksItem": "CapabilityLock", "RiskAccountsItem": "RiskAccount",
     "MarketDetailInstrument": "Instrument", "MarketDetailTicker": "Ticker", "OrderDetailFillsItem": "Fill",

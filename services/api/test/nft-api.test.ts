@@ -138,21 +138,28 @@ describe('capabilities — the real matrix', () => {
     expect(chains).toHaveLength(23);
     const by = Object.fromEntries(chains.map((x) => [x.network, x]));
     expect(by.solana).toMatchObject({ inventory: 'supported', lookup: true, manualAdd: true, standards: ['metaplex-token-metadata', 'metaplex-pnft', 'spl-token-2022', 'metaplex-core', 'metaplex-bubblegum'] });
-    for (const n of ['ethereum', 'base', 'arbitrum', 'polygon', 'optimism', 'bsc', 'avalanche', 'hyperevm']) expect(by[n], n).toMatchObject({ inventory: 'blocked_by_provider', reason: 'no_keyless_discovery', unlockedBy: 'NFT_EVM_INDEXER_URLS', lookup: true, manualAdd: true, standards: ['erc721', 'erc1155'] });
+    for (const n of ['ethereum', 'base', 'arbitrum', 'polygon', 'optimism', 'bsc', 'avalanche', 'hyperevm']) expect(by[n], n).toMatchObject({ inventory: 'blocked_by_provider', reason: 'no_keyless_discovery', unlockedBy: 'NFT_EVM_PROVIDER / NFT_EVM_INDEXER_URLS', lookup: true, manualAdd: true, standards: ['erc721', 'erc1155'] });
     expect(by.bitcoin).toMatchObject({ inventory: 'blocked_by_provider', reason: 'ordinals_need_ord_indexer', lookup: false, manualAdd: false });
     for (const n of ['litecoin', 'dogecoin', 'bitcoincash', 'stellar', 'xrpl', 'tron', 'aptos', 'cosmos', 'sui', 'near', 'ton', 'cardano', 'polkadot']) expect(by[n], n).toMatchObject({ inventory: 'unsupported', reason: 'no_adapter', lookup: false, manualAdd: false, receive: false, standards: [] });
     expect(chains.every((x) => x.marketWrite === false)).toBe(true);
     expect(chains.filter((x) => x.transfer === 'supported').map((x) => x.network).sort()).toEqual(['arbitrum', 'avalanche', 'base', 'bsc', 'ethereum', 'hyperevm', 'optimism', 'polygon', 'solana']);
     expect(by.solana.transferStandards).toEqual(['spl-token-2022', 'metaplex-token-metadata', 'metaplex-pnft', 'metaplex-core']); expect(by.ethereum.transferStandards).toEqual(['erc721', 'erc1155']);
     expect(by.bitcoin).toMatchObject({ transfer: 'not_supported', transferReason: 'ordinals_transfer_not_supported', transferStandards: [] }); expect(by.cardano).toMatchObject({ transfer: 'not_supported', transferReason: 'no_adapter' });
-    expect(c.providers.find((p: { id: string }) => p.id === 'opensea')).toEqual({ id: 'opensea', on: false, unlockedBy: 'OPENSEA_API_KEY', sends: 'not_built' });
+    expect(c.providers.find((p: { id: string }) => p.id === 'opensea')).toEqual({ id: 'opensea', on: false, unlockedBy: 'OPENSEA_API_KEY', sends: 'nothing_until_enabled' }); // delivery 3: the adapter exists; without its key it is absent and never called
     expect(JSON.stringify(c)).not.toMatch(/api[-_]?key=|secret/i);
   });
   it('the server capability list names the variables, never a value', async () => {
     const { nftCapabilities, nftConfig } = await import('../src/nft/config.ts');
     const off = nftCapabilities({}), on = nftCapabilities({ NFT_SOLANA_DAS_URL: 'https://mainnet.helius-rpc.com/?api-key=SUPERSECRET', NFT_EVM_INDEXER_URLS: '{"ethereum":"https://eth.blockscout.com"}', NFT_MARKET_MAGICEDEN: 'on', OPENSEA_API_KEY: 'SUPERSECRET2' });
-    expect(off.map((c) => [c.id, c.on, c.missing])).toEqual([['nft_inventory', true, []], ['nft_solana_das', true, []], ['nft_evm_discovery', false, ['NFT_EVM_INDEXER_URLS']], ['nft_transfer', true, []], ['nft_ordinals', false, ['NFT_ORDINALS_API_URL']], ['nft_market_read', false, ['NFT_MARKET_MAGICEDEN']]]);
-    expect(on.filter((c) => c.on).map((c) => c.id)).toEqual(['nft_inventory', 'nft_solana_das', 'nft_evm_discovery', 'nft_transfer', 'nft_market_read']); expect(JSON.stringify(on)).not.toContain('SUPERSECRET');
+    expect(off.map((c) => [c.id, c.on, c.missing])).toEqual([['nft_inventory', true, []], ['nft_solana_das', true, []], ['nft_evm_discovery', false, ['NFT_EVM_INDEXER_URLS']], ['nft_transfer', true, []], ['nft_ordinals', false, ['NFT_ORDINALS_API_URL']],
+      // delivery 3: the keyed EVM discovery provider, the two market READ sources, and the market WRITE row that is never on
+      ['nft_evm_provider', false, ['NFT_EVM_PROVIDER']], ['nft_market_opensea', false, ['OPENSEA_API_KEY']], ['nft_market_read', false, ['NFT_MARKET_MAGICEDEN']], ['nft_market_write', false, []]]);
+    expect(nftCapabilities({ NFT_EVM_PROVIDER: 'alchemy' }).find((c) => c.id === 'nft_evm_provider')).toMatchObject({ on: false, missing: ['ALCHEMY_API_KEY'] });
+    expect(nftCapabilities({ NFT_EVM_PROVIDER: 'alchemy', ALCHEMY_API_KEY: 'SUPERSECRET3' }).find((c) => c.id === 'nft_evm_provider')).toMatchObject({ on: true, missing: [] });
+    expect(JSON.stringify(nftCapabilities({ NFT_EVM_PROVIDER: 'alchemy', ALCHEMY_API_KEY: 'SUPERSECRET3', OPENSEA_API_KEY: 'SUPERSECRET2' }))).not.toContain('SUPERSECRET');
+    expect(nftCapabilities({ OPENSEA_API_KEY: 'SUPERSECRET2', NFT_MARKET_OPENSEA: 'off' }).find((c) => c.id === 'nft_market_opensea')).toMatchObject({ on: false, missing: ['NFT_MARKET_OPENSEA'] });
+    expect(nftCapabilities({ NFT_EVM_PROVIDER: 'moralis' })[0]).toMatchObject({ id: 'nft', on: false }); expect(nftCapabilities({ OPENSEA_API_KEY: 'has space' })[0]).toMatchObject({ id: 'nft', on: false, missing: ['OPENSEA_API_KEY'] });
+    expect(on.filter((c) => c.on).map((c) => c.id)).toEqual(['nft_inventory', 'nft_solana_das', 'nft_evm_discovery', 'nft_transfer', 'nft_market_opensea', 'nft_market_read']); expect(JSON.stringify(on)).not.toContain('SUPERSECRET');
     expect(nftCapabilities({ NFT_EVM_INDEXER_URLS: '{"solana":"https://x"}' })[0]).toMatchObject({ id: 'nft', on: false });
     expect(() => nftConfig({ NFT_SOLANA_DAS_URL: 'http://plain.example/' })).toThrow(); expect(() => nftConfig({ NFT_IPFS_GATEWAYS: 'http://gw.example/ipfs/' })).toThrow(); expect(() => nftConfig({ NFT_EVM_INDEXER_URLS: 'not json' })).toThrow();
   });
@@ -393,6 +400,6 @@ describe('retention — everything that grows is pruned', () => {
     for (const [id, bytes, at] of [['a', 600, 3], ['b', 600, 2], ['c', 600, 1]] as const) await sql`insert into nft_media (id, source_uri, status, mime, kind, bytes, fetched_at, last_access, expires_at) values (${`m${id.repeat(40)}`}, ${`https://x.example/${id}`}, 'available', 'image/png', 'image', ${bytes}, ${t}, ${new Date(t.getTime() - at * 1000)}, ${new Date(t.getTime() + 1e9)})`;
     expect(await store.mediaOverCap(1300)).toEqual([`m${'a'.repeat(40)}`]); expect((await sql`select status from nft_media where id = ${`m${'a'.repeat(40)}`}`)[0].status).toBe('not_fetched');
   });
-  it('the schema is additive and idempotent', async () => { const db = await import('../src/db.ts'); await db.migrate(); await db.migrate(); expect((await sql`select count(*)::int as n from information_schema.tables where table_name like 'nft\_%'`)[0].n).toBe(10); // delivery 2: + nft_arrival_scan
+  it('the schema is additive and idempotent', async () => { const db = await import('../src/db.ts'); await db.migrate(); await db.migrate(); expect((await sql`select count(*)::int as n from information_schema.tables where table_name like 'nft\_%'`)[0].n).toBe(12); // delivery 2: + nft_arrival_scan; delivery 3: + nft_market_cache, nft_market_slug
     expect((await sql`select count(*)::int as n from information_schema.columns where table_name = 'proposals' and column_name = 'nft'`)[0].n).toBe(1); expect((await sql`select count(*)::int as n from information_schema.tables where table_name = 'utxo_reviews'`)[0].n).toBe(1); });
 });

@@ -359,6 +359,45 @@ const A = {
   start: [...E(403, 'owner_required'), ...E(409, 'bad_state', 'mandate_required', 'live_unavailable', 'halted', 'no_strategy', 'no_report', 'bad_report')],
   stop: E(409, 'bad_state'),
 };
+
+// ---------------------------------------------------------------------------------------------------------------- NFT (delivery 3, read-only)
+const Units = z.string().regex(/^(0|[1-9][0-9]{0,77})$/).describe('exact integer of base units, as a string');
+const NftKnown = z.looseObject({ state: z.enum(['known', 'none', 'unknown', 'unsupported']) }).describe('`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value');
+const NftCurrency = z.object({ network: z.string(), asset: z.string().describe('`native`, or the exact mint / contract'), symbol: z.string(), decimals: z.number().int() });
+const NftMoney = z.object({ amount: Units, currency: NftCurrency, precision: z.enum(['exact', 'source_decimal']).describe('`source_decimal`: the source gave a decimal number, converted digit by digit') });
+const NftSourceStatus = z.looseObject({ provider: z.string(), name: z.string(), state: z.enum(['ok', 'needs_key', 'off', 'not_covered', 'error']), code: z.string().nullable(), unlockedBy: z.string().nullable().describe('NAME of the server variable that turns the source on'), stale: z.boolean().describe('true: the last answer of a source that is failing now') });
+const NftRate = z.looseObject({ symbol: z.string(), usd: Dec.nullable(), cad: Dec.nullable(), source: z.string(), priceAt: z.string().nullable(), stale: z.boolean(), withheld: z.string().nullable().describe('set, with `usd` and `cad` null, when the price source is licensed for internal use and the caller is an API key') });
+const NftActions = z.array(z.object({ id: z.string(), available: z.literal(false), reason: z.string() })).describe('the market actions, none of which exists in this version: every one is `available: false` with its reason');
+const NftRow = z.looseObject({ key: z.string().describe('`family:network:asset-id` — the id every NFT operation takes'), network: z.string(), family: z.string(), standard: z.string(), assetId: z.string(), contractAddress: z.string().nullable(), tokenId: z.string().nullable().describe('decimal string (up to 2^256 − 1), never a number'), mintAddress: z.string().nullable(),
+  quantity: Units, name: z.string().nullable().describe('declared by the creator — not chain truth'), onchainName: z.string().nullable(), collection: z.looseObject({ key: z.string(), id: z.string(), name: z.string().nullable(), verifiedOnChain: NftKnown }).nullable(),
+  state: z.string(), inWallet: z.boolean(), transferable: z.boolean(), transferBlockedBy: z.array(z.string()), spam: z.object({ by: z.string() }).nullable().describe('an indexer\'s signal, named — never a verdict of this wallet'),
+  ownershipSource: z.looseObject({ category: z.string(), source: z.string(), confidence: z.string(), fetchedAt: z.string(), stale: z.boolean() }) });
+const NftMarketSource = z.looseObject({ status: NftSourceStatus, url: z.string().nullable(), listed: NftKnown, ask: NftKnown.describe('asking price of a live listing'), bestOffer: NftKnown, lastSale: NftKnown.describe('last sale the source reports'), collectionFloor: NftKnown.describe('a statistic of the COLLECTION — never the value of this item'),
+  verification: z.looseObject({ state: z.enum(['verified', 'not_verified', 'unknown']), providerValue: z.string().nullable(), by: z.string() }).nullable().describe('the marketplace\'s own badge, named — not an on-chain verification'), rarity: NftKnown });
+const NftMarketEvent = z.looseObject({ type: z.enum(['sale', 'list', 'delist', 'offer', 'cancel-offer', 'accept-offer', 'transfer', 'mint', 'unknown']), providerType: z.string(), at: z.string().nullable(), tx: z.string().nullable(), from: z.string().nullable(), to: z.string().nullable(), quantity: Units, price: NftMoney.nullable(),
+  flags: z.looseObject({ washTrade: NftKnown.describe('as the SOURCE reports it; `unknown` when it has no such flag — never filtered') }) });
+const NFT = {
+  list: z.object({ network: z.string().max(24).optional(), collection: z.string().max(260).optional().describe('collection key'), status: z.enum(['in_wallet', 'left', 'tracked']).optional(), q: z.string().max(80).optional(), sort: z.enum(['recent', 'name']).default('recent'),
+    spam: z.enum(['hide', 'show', 'only']).default('hide').describe('items an indexer flags as spam are hidden by default, never deleted'), limit: Limit(48, 100), cursor: Cursor }),
+  key: z.object({ key: z.string().min(5).max(260).describe('`family:network:asset-id`, as returned by GET /nfts') }),
+  activity: z.object({ key: z.string().min(5).max(260), limit: Limit(20, 50), cursor: z.string().max(400).optional(), type: z.enum(['mint', 'transfer', 'transfer-in', 'transfer-out', 'burn', 'sale', 'unknown']).optional() }),
+  item: z.object({ network: z.string().max(24), address: z.string().min(26).max(64).describe('EVM: the contract; Solana: the mint / asset address'), tokenId: z.string().max(80).optional().describe('EVM: required, decimal or 0x-hex') }),
+  listAnswer: z.object({ items: z.array(NftRow), total: z.number().int(), hiddenSpam: z.number().int(), nextCursor: NextCursor, valuation: z.object({ state: z.literal('unavailable'), reason: z.string(), note: z.string() }).describe('NFTs have no value in this API: never zero, never a floor'), asOf: z.string() }),
+  itemAnswer: z.looseObject({ nft: NftRow.extend({ ownership: z.looseObject({ state: z.string(), owner: NftKnown, heldByWallet: z.boolean() }), metadata: z.looseObject({ status: z.string(), name: z.string().nullable(), description: z.string().nullable(), attributes: z.array(z.looseObject({ traitType: z.string().nullable(), value: z.string() })) }).describe('declared by the creator: text, never chain truth'),
+    sources: z.array(z.looseObject({ category: z.enum(['onchain', 'creator_metadata', 'indexed', 'market', 'computed']), source: z.string(), stale: z.boolean() })) }), marketActions: NftActions }),
+  activityAnswer: z.object({ key: z.string(), events: z.array(z.looseObject({ id: z.string(), type: z.string(), tx: z.string(), at: z.string().nullable(), from: z.string().nullable(), to: z.string().nullable(), quantity: z.string(), finality: z.string(),
+    price: z.looseObject({ amount: Units, currency: NftCurrency }).nullable().describe('set ONLY when a payment of the same transaction was linked by a decoded marketplace event; a transfer alone never has one'), interpretedBy: z.string() })), nextCursor: NextCursor, completeness: z.string(), note: z.string().nullable(), error: z.string().nullable() }),
+  marketAnswer: z.looseObject({ key: z.string(), network: z.string(), standard: z.string(), sources: z.array(NftMarketSource).describe('ONE ROW PER SOURCE: never merged, never averaged'), contradictions: z.array(z.looseObject({ field: z.string(), providers: z.array(z.string()), note: z.string() })),
+    rates: z.record(z.string(), NftRate).describe('fiat rates of the currencies quoted, keyed `network:asset` — secondary information with its own source and date'), value: z.object({ state: z.literal('unavailable'), reason: z.string() }), marketActions: NftActions, asOf: z.string() }),
+  events: z.object({ network: z.string().max(24), address: z.string().min(26).max(64), tokenId: z.string().max(80).optional(), provider: z.string().regex(/^[a-z][a-z0-9-]{1,30}$/).optional(), type: z.string().max(120).regex(/^[a-z,-]+$/).optional().describe('comma-separated: sale, list, delist, offer, cancel-offer, transfer, mint'),
+    after: z.iso.datetime().optional(), before: z.iso.datetime().optional(), cursor: z.string().max(600).optional().describe('a position in ONE source\'s list: send it with `provider`'), limit: Limit(20, 50) }),
+  eventsAnswer: z.object({ key: z.string(), sources: z.array(z.object({ status: NftSourceStatus, events: z.array(NftMarketEvent), nextCursor: NextCursor })), rates: z.record(z.string(), NftRate), asOf: z.string() }),
+};
+const XN = {
+  own: [...E(400, 'invalid_cursor'), ...E(403, 'restricted'), ...E(404, 'unknown_nft', 'unknown_network'), ...E(503, 'nft_disabled', 'signer_unreachable')],
+  lookup: [...E(400, 'nft_bad_identifier'), ...E(403, 'restricted'), ...E(404, 'unknown_network', 'nft_not_found'), ...E(422, 'nft_unsupported_chain', 'nft_unsupported_standard'), ...E(429, 'nft_provider_rate_limited', 'nft_budget_exhausted'),
+    ...E(502, 'nft_provider_bad_answer', 'nft_provider_disagreement'), ...E(503, 'nft_disabled', 'nft_provider_unavailable', 'nft_provider_not_configured', 'nft_provider_method_unsupported', 'signer_unreachable')],
+};
 const ENGINE_NOTE = ' The venue engine that executes the order can refuse it with a code of its own rules that this list does not name (`x-spw-errors-open`): the HTTP status still tells the class, and the order is in `data.order`.';
 
 // ---------------------------------------------------------------------------------------------------------------- operations
@@ -366,7 +405,7 @@ export interface OperationSpec {
   /** operationId, and the key of the handler in routes.ts */
   id: string; method: 'GET' | 'POST' | 'DELETE';
   /** Fastify path relative to TRADING_PREFIX (`:name` parameters) */
-  path: string; tag: 'Markets' | 'Portfolio' | 'Orders' | 'Positions' | 'Strategies' | 'Agents' | 'Risk' | 'Meta';
+  path: string; tag: 'Markets' | 'Portfolio' | 'Orders' | 'Positions' | 'Strategies' | 'Agents' | 'Risk' | 'Meta' | 'Nfts';
   scope: RouteScope; summary: string; description?: string;
   params?: z.ZodObject; query?: z.ZodObject; body?: z.ZodType; response?: z.ZodType;
   /** mutating call: `Idempotency-Key` is required (replay protection) */
@@ -420,6 +459,17 @@ export const OPERATIONS: readonly OperationSpec[] = [
     { query: z.object({ network: z.string().max(24).optional() }), response: R.balances, errors: [...E(403, 'restricted'), ...E(404, 'unknown_network'), ...E(503, 'signer_unreachable', 'service_unavailable')] }),
   read('getActivity', '/activity', 'Portfolio', 'wallet:read', 'Wallet activity and fills, newest first', { query: z.object({ limit: Limit(100, 500), cursor: Cursor }), response: R.activity, errors: E(400, 'invalid_cursor'),
     description: 'Sends, swaps, bridges, receipts and derivative fills, newest first, in one stable order (time, then id). Paginated: `nextCursor` of a page is the `cursor` of the next; null at the end. An item that appears after the first page was read is not inserted into the pages that follow.' }),
+  // --- NFT (delivery 3): READ ONLY. Transfers are owner-only (passkey) and are not in this API; market writes do not exist.
+  read('listNfts', '/nfts', 'Nfts', 'wallet:read', 'NFTs of the wallet (what the chain confirmed as held)', { query: NFT.list, response: NFT.listAnswer, errors: XN.own,
+    description: 'The inventory as last synchronised: Solana (Token Metadata, programmable, Token-2022, Core, compressed through an index) and the EVM networks (ERC-721, ERC-1155). Every row names the source and confidence of its ownership. NFTs carry NO value: `valuation.state` is `unavailable` (never zero, never a floor) and they are not part of GET /portfolio. Paginated: `nextCursor` of a page is the `cursor` of the next.' }),
+  read('getNft', '/nfts/item', 'Nfts', 'wallet:read', 'One NFT of the wallet: identity, ownership, creator metadata, sources', { query: NFT.key, response: NFT.itemAnswer, errors: XN.own,
+    description: 'Only an NFT of the inventory (404 `unknown_nft` otherwise — a looked-up item is not the wallet\'s). On-chain facts, creator-declared metadata and indexed data are separate fields, each with its source. `marketActions` lists the market actions: none exists in this version.' }),
+  read('getNftActivity', '/nfts/activity', 'Nfts', 'wallet:read', 'On-chain events of one NFT of the wallet', { query: NFT.activity, response: NFT.activityAnswer, errors: [...XN.own, ...XN.lookup],
+    description: 'Mints, transfers and burns read from the chain. A transfer is never a sale: `price` is null unless SP Wallet linked a payment of the SAME transaction through a decoded marketplace event (Seaport `OrderFulfilled`), in which case the event is a `sale` and `interpretedBy` names the decoder. `completeness` says how much history the sources gave.' }),
+  read('getNftMarket', '/nfts/market', 'Nfts', 'markets:read', 'Market data of any NFT, one row per source', { query: NFT.item, response: NFT.marketAnswer, errors: XN.lookup,
+    description: 'The item is named by its chain identifiers and read on-chain first. Then every configured market source answers on its own row: asking price, best offer, last sale, collection floor — five different notions, each in its own currency (network + exact mint / contract + decimals), with the source, its date and `stale`. A source without its key answers `needs_key` with the variable name; nothing is ever filled in. Sources are never merged: disagreements are listed in `contradictions`. Says nothing about the wallet. `rates` are secondary; a rate from a price source licensed for internal use is withheld from an API key.' }),
+  read('getNftMarketEvents', '/nfts/market/events', 'Nfts', 'markets:read', 'Market events of any NFT (sales, listings, offers), per source', { query: NFT.events, response: NFT.eventsAnswer, errors: XN.lookup,
+    description: 'What each market source reports, newest first, with the payment token and quantity when the source gives them. Filter by `type`, `after`, `before`. One list per source: a `nextCursor` is passed back as `cursor` together with `provider`. A wash-trade flag is passed through when a source has one (`unknown` otherwise). These are market statements, listed apart from the chain\'s transfers (GET /nfts/activity).' }),
   read('listPositions', '/positions', 'Positions', 'positions:read', 'Open positions, paper and live separated by `mode`',
     { query: z.object({ mode: Mode.optional(), venue: Venue }), response: R.positions, errors: [...E(403, 'restricted'), ...E(503, 'service_unavailable')] }),
   read('listOrders', '/orders', 'Orders', 'orders:read', 'Orders, newest first',

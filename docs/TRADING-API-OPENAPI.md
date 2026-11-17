@@ -53,6 +53,11 @@ logged like any other.
 | GET | `/api/v1/trading/portfolio` | `wallet:read` | implemented | — | Wallet value and derivative accounts, per mode |
 | GET | `/api/v1/trading/balances` | `wallet:read` | implemented | — | On-chain balances of the wallet |
 | GET | `/api/v1/trading/activity` | `wallet:read` | implemented | — | Wallet activity and fills, newest first |
+| GET | `/api/v1/trading/nfts` | `wallet:read` | implemented | — | NFTs of the wallet (what the chain confirmed as held) |
+| GET | `/api/v1/trading/nfts/item` | `wallet:read` | implemented | — | One NFT of the wallet: identity, ownership, creator metadata, sources |
+| GET | `/api/v1/trading/nfts/activity` | `wallet:read` | implemented | — | On-chain events of one NFT of the wallet |
+| GET | `/api/v1/trading/nfts/market` | `markets:read` | implemented | — | Market data of any NFT, one row per source |
+| GET | `/api/v1/trading/nfts/market/events` | `markets:read` | implemented | — | Market events of any NFT (sales, listings, offers), per source |
 | GET | `/api/v1/trading/positions` | `positions:read` | implemented | — | Open positions, paper and live separated by `mode` |
 | GET | `/api/v1/trading/orders` | `orders:read` | implemented | — | Orders, newest first |
 | GET | `/api/v1/trading/orders/{id}` | `orders:read` | implemented | — | One order and its fills |
@@ -167,6 +172,56 @@ logged like any other.
 |---|---|---|---|---|
 | `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
 | `cursor` | query | no | `{"type":"string","minLength":1,"maxLength":400,"pattern":"^[A-Za-z0-9_-]+$"}` | opaque position returned as `nextCursor` by the previous page; send it with the same filters |
+
+### GET `/api/v1/trading/nfts`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `network` | query | no | `{"type":"string","maxLength":24}` |  |
+| `collection` | query | no | `{"type":"string","maxLength":260}` | collection key |
+| `status` | query | no | `{"type":"string","enum":["in_wallet","left","tracked"]}` |  |
+| `q` | query | no | `{"type":"string","maxLength":80}` |  |
+| `sort` | query | no | `{"default":"recent","type":"string","enum":["recent","name"]}` |  |
+| `spam` | query | no | `{"default":"hide","type":"string","enum":["hide","show","only"]}` | items an indexer flags as spam are hidden by default, never deleted |
+| `limit` | query | no | `{"default":48,"type":"integer","minimum":1,"maximum":100}` |  |
+| `cursor` | query | no | `{"type":"string","minLength":1,"maxLength":400,"pattern":"^[A-Za-z0-9_-]+$"}` | opaque position returned as `nextCursor` by the previous page; send it with the same filters |
+
+### GET `/api/v1/trading/nfts/item`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `key` | query | yes | `{"type":"string","minLength":5,"maxLength":260}` | `family:network:asset-id`, as returned by GET /nfts |
+
+### GET `/api/v1/trading/nfts/activity`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `key` | query | yes | `{"type":"string","minLength":5,"maxLength":260}` |  |
+| `limit` | query | no | `{"default":20,"type":"integer","minimum":1,"maximum":50}` |  |
+| `cursor` | query | no | `{"type":"string","maxLength":400}` |  |
+| `type` | query | no | `{"type":"string","enum":["mint","transfer","transfer-in","transfer-out","burn","sale","unknown"]}` |  |
+
+### GET `/api/v1/trading/nfts/market`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `network` | query | yes | `{"type":"string","maxLength":24}` |  |
+| `address` | query | yes | `{"type":"string","minLength":26,"maxLength":64}` | EVM: the contract; Solana: the mint / asset address |
+| `tokenId` | query | no | `{"type":"string","maxLength":80}` | EVM: required, decimal or 0x-hex |
+
+### GET `/api/v1/trading/nfts/market/events`
+
+| Name | In | Required | Schema | Description |
+|---|---|---|---|---|
+| `network` | query | yes | `{"type":"string","maxLength":24}` |  |
+| `address` | query | yes | `{"type":"string","minLength":26,"maxLength":64}` |  |
+| `tokenId` | query | no | `{"type":"string","maxLength":80}` |  |
+| `provider` | query | no | `{"type":"string","pattern":"^[a-z][a-z0-9-]{1,30}$"}` |  |
+| `type` | query | no | `{"type":"string","maxLength":120,"pattern":"^[a-z,-]+$"}` | comma-separated: sale, list, delist, offer, cancel-offer, transfer, mint |
+| `after` | query | no | `{"type":"string","format":"date-time","pattern":"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"}` |  |
+| `before` | query | no | `{"type":"string","format":"date-time","pattern":"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"}` |  |
+| `cursor` | query | no | `{"type":"string","maxLength":600}` | a position in ONE source's list: send it with `provider` |
+| `limit` | query | no | `{"default":20,"type":"integer","minimum":1,"maximum":50}` |  |
 
 ### GET `/api/v1/trading/positions`
 
@@ -1067,6 +1122,72 @@ The codes each operation can answer (the document's `x-spw-errors`). "open": the
 | 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials` |
 | 429 | `auth_throttled`, `rate_limited` |
 | 500 | `internal` |
+
+### GET `/api/v1/trading/nfts`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request`, `invalid_cursor` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `unknown_network`, `unknown_nft` |
+| 429 | `auth_throttled`, `rate_limited` |
+| 500 | `internal` |
+| 503 | `nft_disabled`, `signer_unreachable` |
+
+### GET `/api/v1/trading/nfts/item`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request`, `invalid_cursor` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `unknown_network`, `unknown_nft` |
+| 429 | `auth_throttled`, `rate_limited` |
+| 500 | `internal` |
+| 503 | `nft_disabled`, `signer_unreachable` |
+
+### GET `/api/v1/trading/nfts/activity`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request`, `invalid_cursor`, `nft_bad_identifier` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `nft_not_found`, `unknown_network`, `unknown_nft` |
+| 422 | `nft_unsupported_chain`, `nft_unsupported_standard` |
+| 429 | `auth_throttled`, `nft_budget_exhausted`, `nft_provider_rate_limited`, `rate_limited` |
+| 500 | `internal` |
+| 502 | `nft_provider_bad_answer`, `nft_provider_disagreement` |
+| 503 | `nft_disabled`, `nft_provider_method_unsupported`, `nft_provider_not_configured`, `nft_provider_unavailable`, `signer_unreachable` |
+
+### GET `/api/v1/trading/nfts/market`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request`, `nft_bad_identifier` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `nft_not_found`, `unknown_network` |
+| 422 | `nft_unsupported_chain`, `nft_unsupported_standard` |
+| 429 | `auth_throttled`, `nft_budget_exhausted`, `nft_provider_rate_limited`, `rate_limited` |
+| 500 | `internal` |
+| 502 | `nft_provider_bad_answer`, `nft_provider_disagreement` |
+| 503 | `nft_disabled`, `nft_provider_method_unsupported`, `nft_provider_not_configured`, `nft_provider_unavailable`, `signer_unreachable` |
+
+### GET `/api/v1/trading/nfts/market/events`
+
+| Status | Codes |
+|---|---|
+| 400 | `bad_request`, `nft_bad_identifier` |
+| 401 | `unauthenticated` |
+| 403 | `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted` |
+| 404 | `nft_not_found`, `unknown_network` |
+| 422 | `nft_unsupported_chain`, `nft_unsupported_standard` |
+| 429 | `auth_throttled`, `nft_budget_exhausted`, `nft_provider_rate_limited`, `rate_limited` |
+| 500 | `internal` |
+| 502 | `nft_provider_bad_answer`, `nft_provider_disagreement` |
+| 503 | `nft_disabled`, `nft_provider_method_unsupported`, `nft_provider_not_configured`, `nft_provider_unavailable`, `signer_unreachable` |
 
 ### GET `/api/v1/trading/positions`
 

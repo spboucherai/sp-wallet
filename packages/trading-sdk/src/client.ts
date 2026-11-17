@@ -220,6 +220,24 @@ export class SPWallet {
   getPositions(query: T.ListPositionsQuery = {}, o?: RequestOptions): Promise<T.ListPositionsResponse> { return this.#get('/positions', query, o); }
   /** GET /activity — one page of wallet activity and fills, newest first; `nextCursor` is the `cursor` of the next page */
   getActivity(query: T.GetActivityQuery = {}, o?: RequestOptions): Promise<T.GetActivityResponse> { return this.#get('/activity', query, o); }
+
+  // ============================================================================================================== NFTs (read-only)
+  // There is no NFT write in this API: transfers are the owner's (passkey), and no marketplace action exists in this version.
+  /** GET /nfts — one page of the wallet's NFTs (what the chain confirmed as held). NFTs carry no value: `valuation.state` is `unavailable`. */
+  listNfts(query: T.ListNftsQuery = {}, o?: RequestOptions): Promise<T.ListNftsResponse> { return this.#get('/nfts', query, o); }
+  /** Every NFT of the wallet, page after page (`limit` is the page size; `maxItems` stops early). */
+  async *iterNfts(query: Omit<T.ListNftsQuery, 'cursor'> = {}, o: PageOptions = {}): AsyncGenerator<T.ListNftsResponse['items'][number], void, undefined> {
+    yield* this.#pages((cursor) => this.listNfts({ ...query, cursor }, o).then((r) => ({ items: r.items, nextCursor: r.nextCursor })), o.maxItems);
+  }
+  /** GET /nfts/item — one NFT of the wallet by its `key` (`family:network:asset-id`): on-chain facts, creator metadata and sources, kept apart */
+  getNft(key: string, o?: RequestOptions): Promise<T.GetNftResponse> { return this.#get('/nfts/item', { key }, o); }
+  /** GET /nfts/activity — on-chain events of one NFT of the wallet. A transfer is never a sale: `price` is set only when a payment of the same transaction was linked. */
+  getNftActivity(query: T.GetNftActivityQuery, o?: RequestOptions): Promise<T.GetNftActivityResponse> { return this.#get('/nfts/activity', query, o); }
+  /** GET /nfts/market — market data of ANY NFT named by its chain identifiers, ONE ROW PER SOURCE (asking price, best offer, last sale, collection floor;
+   *  a source without its key answers `needs_key`). Amounts are exact base-unit strings in a currency identified by network + mint / contract. */
+  getNftMarket(query: T.GetNftMarketQuery, o?: RequestOptions): Promise<T.GetNftMarketResponse> { return this.#get('/nfts/market', query, o); }
+  /** GET /nfts/market/events — sales, listings and offers each market source reports; a `nextCursor` goes back as `cursor` with its `provider` */
+  getNftMarketEvents(query: T.GetNftMarketEventsQuery, o?: RequestOptions): Promise<T.GetNftMarketEventsResponse> { return this.#get('/nfts/market/events', query, o); }
   /** Every activity item, newest first, page after page (`limit` is the page size). `for await (const item of client.iterateActivity())` */
   async *iterateActivity(query: Omit<T.GetActivityQuery, 'cursor'> = {}, o: PageOptions = {}): AsyncGenerator<ActivityItem, void, undefined> {
     yield* this.#pages((cursor) => this.getActivity({ ...query, cursor }, o).then((r) => ({ items: r.items, nextCursor: r.nextCursor })), o.maxItems);

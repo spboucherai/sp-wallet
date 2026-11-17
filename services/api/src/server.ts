@@ -210,7 +210,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   registerMm(app, execution); // v11 live market making (owner only): sessions, fills, performance, pull / flatten, the go-live checklist
   await tradingApi(app, { derivatives: opts.derivatives, live: opts.live, gmx: opts.gmx, prices: markets, execution }); // v11: /api/v1/trading (scoped API keys or the owner) and /api/v1/developer (owner only)
   dashboardRoutes(app, { execution }); // v11 interface: /api/v1/dashboard — read-only aggregates composed from the services above (owner session only)
-  registerNft(app, opts.nft); // NFT delivery 1: /api/v1/nfts — read-only (no transfer, no approval, no market write)
+  registerNft(app, { ...opts.nft, prices: opts.nft?.prices ?? markets }); // NFT: /api/v1/nfts — inventory, transfers (delivery 2), market READ (delivery 3; no market write). `prices`: fiat rates of market amounts, with their source and date
   quotes.routes(app); // v11 quote engine: /api/v1/stream (owner session + Origin), /api/v1/trading/stream (API key or ticket, markets:read), /api/v1/stream/stats
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));

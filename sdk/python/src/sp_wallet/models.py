@@ -639,6 +639,337 @@ class Activity(ApiModel):
     next_cursor: str | None = Field(alias='nextCursor', description='pass it as `cursor` to read the next (older) page; null when there is none')
 
 
+class NftCollectionVerifiedOnChain(ApiModel):
+    """`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value — extra members are allowed by the contract"""
+
+    state: Literal["known", "none", "unknown", "unsupported"]
+
+
+class NftCollection(ApiModel):
+    """extra members are allowed by the contract"""
+
+    key: str
+    id: str
+    name: str | None
+    verified_on_chain: NftCollectionVerifiedOnChain = Field(alias='verifiedOnChain', description='`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value')
+
+
+class NftSpam(ApiModel):
+    """closed object in the contract"""
+
+    by: str
+
+
+class NftOwnershipSource(ApiModel):
+    """extra members are allowed by the contract"""
+
+    category: str
+    source: str
+    confidence: str
+    fetched_at: str = Field(alias='fetchedAt')
+    stale: bool
+
+
+class Nft(ApiModel):
+    """extra members are allowed by the contract"""
+
+    key: str = Field(description='`family:network:asset-id` — the id every NFT operation takes')
+    network: str
+    family: str
+    standard: str
+    asset_id: str = Field(alias='assetId')
+    contract_address: str | None = Field(alias='contractAddress')
+    token_id: str | None = Field(alias='tokenId', description='decimal string (up to 2^256 − 1), never a number')
+    mint_address: str | None = Field(alias='mintAddress')
+    quantity: str = Field(description='exact integer of base units, as a string')
+    name: str | None = Field(description='declared by the creator — not chain truth')
+    onchain_name: str | None = Field(alias='onchainName')
+    collection: NftCollection | None
+    state: str
+    in_wallet: bool = Field(alias='inWallet')
+    transferable: bool
+    transfer_blocked_by: list[str] = Field(alias='transferBlockedBy')
+    spam: NftSpam | None = Field(description="an indexer's signal, named — never a verdict of this wallet")
+    ownership_source: NftOwnershipSource = Field(alias='ownershipSource')
+
+
+class NftListValuation(ApiModel):
+    """NFTs have no value in this API: never zero, never a floor — closed object in the contract"""
+
+    state: Literal['unavailable']
+    reason: str
+    note: str
+
+
+class NftList(ApiModel):
+    """closed object in the contract"""
+
+    items: list[Nft]
+    total: int
+    hidden_spam: int = Field(alias='hiddenSpam')
+    next_cursor: str | None = Field(alias='nextCursor', description='pass it as `cursor` to read the next (older) page; null when there is none')
+    valuation: NftListValuation = Field(description='NFTs have no value in this API: never zero, never a floor')
+    as_of: str = Field(alias='asOf')
+
+
+class NftDetailNftOwnership(ApiModel):
+    """extra members are allowed by the contract"""
+
+    state: str
+    owner: NftCollectionVerifiedOnChain = Field(description='`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value')
+    held_by_wallet: bool = Field(alias='heldByWallet')
+
+
+class NftDetailNftMetadataAttributesItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    trait_type: str | None = Field(alias='traitType')
+    value: str
+
+
+class NftDetailNftMetadata(ApiModel):
+    """declared by the creator: text, never chain truth — extra members are allowed by the contract"""
+
+    status: str
+    name: str | None
+    description: str | None
+    attributes: list[NftDetailNftMetadataAttributesItem]
+
+
+class NftDetailNftSourcesItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    category: Literal["onchain", "creator_metadata", "indexed", "market", "computed"]
+    source: str
+    stale: bool
+
+
+class NftDetailNft(ApiModel):
+    """extra members are allowed by the contract"""
+
+    key: str = Field(description='`family:network:asset-id` — the id every NFT operation takes')
+    network: str
+    family: str
+    standard: str
+    asset_id: str = Field(alias='assetId')
+    contract_address: str | None = Field(alias='contractAddress')
+    token_id: str | None = Field(alias='tokenId', description='decimal string (up to 2^256 − 1), never a number')
+    mint_address: str | None = Field(alias='mintAddress')
+    quantity: str = Field(description='exact integer of base units, as a string')
+    name: str | None = Field(description='declared by the creator — not chain truth')
+    onchain_name: str | None = Field(alias='onchainName')
+    collection: NftCollection | None
+    state: str
+    in_wallet: bool = Field(alias='inWallet')
+    transferable: bool
+    transfer_blocked_by: list[str] = Field(alias='transferBlockedBy')
+    spam: NftSpam | None = Field(description="an indexer's signal, named — never a verdict of this wallet")
+    ownership_source: NftOwnershipSource = Field(alias='ownershipSource')
+    ownership: NftDetailNftOwnership
+    metadata: NftDetailNftMetadata = Field(description='declared by the creator: text, never chain truth')
+    sources: list[NftDetailNftSourcesItem]
+
+
+class NftDetailMarketActionsItem(ApiModel):
+    """closed object in the contract"""
+
+    id: str
+    available: Literal[False]
+    reason: str
+
+
+class NftDetail(ApiModel):
+    """extra members are allowed by the contract"""
+
+    nft: NftDetailNft
+    market_actions: list[NftDetailMarketActionsItem] = Field(alias='marketActions', description='the market actions, none of which exists in this version: every one is `available: false` with its reason')
+
+
+class NftEventPriceCurrency(ApiModel):
+    """closed object in the contract"""
+
+    network: str
+    asset: str = Field(description='`native`, or the exact mint / contract')
+    symbol: str
+    decimals: int
+
+
+class NftEventPrice(ApiModel):
+    """extra members are allowed by the contract"""
+
+    amount: str = Field(description='exact integer of base units, as a string')
+    currency: NftEventPriceCurrency
+
+
+class NftEvent(ApiModel):
+    """extra members are allowed by the contract"""
+
+    id: str
+    type: str
+    tx: str
+    at: str | None
+    from_: str | None = Field(alias='from')
+    to: str | None
+    quantity: str
+    finality: str
+    price: NftEventPrice | None = Field(description='set ONLY when a payment of the same transaction was linked by a decoded marketplace event; a transfer alone never has one')
+    interpreted_by: str = Field(alias='interpretedBy')
+
+
+class NftActivity(ApiModel):
+    """closed object in the contract"""
+
+    key: str
+    events: list[NftEvent]
+    next_cursor: str | None = Field(alias='nextCursor', description='pass it as `cursor` to read the next (older) page; null when there is none')
+    completeness: str
+    note: str | None
+    error: str | None
+
+
+class NftMarketSourceStatus(ApiModel):
+    """extra members are allowed by the contract"""
+
+    provider: str
+    name: str
+    state: Literal["ok", "needs_key", "off", "not_covered", "error"]
+    code: str | None
+    unlocked_by: str | None = Field(alias='unlockedBy', description='NAME of the server variable that turns the source on')
+    stale: bool = Field(description='true: the last answer of a source that is failing now')
+
+
+class NftMarketSourceAsk(ApiModel):
+    """asking price of a live listing — extra members are allowed by the contract"""
+
+    state: Literal["known", "none", "unknown", "unsupported"]
+
+
+class NftMarketSourceLastSale(ApiModel):
+    """last sale the source reports — extra members are allowed by the contract"""
+
+    state: Literal["known", "none", "unknown", "unsupported"]
+
+
+class NftMarketSourceCollectionFloor(ApiModel):
+    """a statistic of the COLLECTION — never the value of this item — extra members are allowed by the contract"""
+
+    state: Literal["known", "none", "unknown", "unsupported"]
+
+
+class NftMarketSourceVerification(ApiModel):
+    """extra members are allowed by the contract"""
+
+    state: Literal["verified", "not_verified", "unknown"]
+    provider_value: str | None = Field(alias='providerValue')
+    by: str
+
+
+class NftMarketSource(ApiModel):
+    """extra members are allowed by the contract"""
+
+    status: NftMarketSourceStatus
+    url: str | None
+    listed: NftCollectionVerifiedOnChain = Field(description='`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value')
+    ask: NftMarketSourceAsk = Field(description='asking price of a live listing')
+    best_offer: NftCollectionVerifiedOnChain = Field(alias='bestOffer', description='`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value')
+    last_sale: NftMarketSourceLastSale = Field(alias='lastSale', description='last sale the source reports')
+    collection_floor: NftMarketSourceCollectionFloor = Field(alias='collectionFloor', description='a statistic of the COLLECTION — never the value of this item')
+    verification: NftMarketSourceVerification | None = Field(description="the marketplace's own badge, named — not an on-chain verification")
+    rarity: NftCollectionVerifiedOnChain = Field(description='`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value')
+
+
+class NftMarketContradictionsItem(ApiModel):
+    """extra members are allowed by the contract"""
+
+    field: str
+    providers: list[str]
+    note: str
+
+
+class NftRate(ApiModel):
+    """extra members are allowed by the contract"""
+
+    symbol: str
+    usd: str | None
+    cad: str | None
+    source: str
+    price_at: str | None = Field(alias='priceAt')
+    stale: bool
+    withheld: str | None = Field(description='set, with `usd` and `cad` null, when the price source is licensed for internal use and the caller is an API key')
+
+
+class NftMarketValue(ApiModel):
+    """closed object in the contract"""
+
+    state: Literal['unavailable']
+    reason: str
+
+
+class NftMarket(ApiModel):
+    """extra members are allowed by the contract"""
+
+    key: str
+    network: str
+    standard: str
+    sources: list[NftMarketSource] = Field(description='ONE ROW PER SOURCE: never merged, never averaged')
+    contradictions: list[NftMarketContradictionsItem]
+    rates: dict[str, NftRate] = Field(description='fiat rates of the currencies quoted, keyed `network:asset` — secondary information with its own source and date')
+    value: NftMarketValue
+    market_actions: list[NftDetailMarketActionsItem] = Field(alias='marketActions', description='the market actions, none of which exists in this version: every one is `available: false` with its reason')
+    as_of: str = Field(alias='asOf')
+
+
+class NftMarketEventPrice(ApiModel):
+    """closed object in the contract"""
+
+    amount: str = Field(description='exact integer of base units, as a string')
+    currency: NftEventPriceCurrency
+    precision: Literal["exact", "source_decimal"] = Field(description='`source_decimal`: the source gave a decimal number, converted digit by digit')
+
+
+class NftMarketEventFlagsWashTrade(ApiModel):
+    """as the SOURCE reports it; `unknown` when it has no such flag — never filtered — extra members are allowed by the contract"""
+
+    state: Literal["known", "none", "unknown", "unsupported"]
+
+
+class NftMarketEventFlags(ApiModel):
+    """extra members are allowed by the contract"""
+
+    wash_trade: NftMarketEventFlagsWashTrade = Field(alias='washTrade', description='as the SOURCE reports it; `unknown` when it has no such flag — never filtered')
+
+
+class NftMarketEvent(ApiModel):
+    """extra members are allowed by the contract"""
+
+    type: Literal["sale", "list", "delist", "offer", "cancel-offer", "accept-offer", "transfer", "mint", "unknown"]
+    provider_type: str = Field(alias='providerType')
+    at: str | None
+    tx: str | None
+    from_: str | None = Field(alias='from')
+    to: str | None
+    quantity: str = Field(description='exact integer of base units, as a string')
+    price: NftMarketEventPrice | None
+    flags: NftMarketEventFlags
+
+
+class NftMarketEventsSourcesItem(ApiModel):
+    """closed object in the contract"""
+
+    status: NftMarketSourceStatus
+    events: list[NftMarketEvent]
+    next_cursor: str | None = Field(alias='nextCursor', description='pass it as `cursor` to read the next (older) page; null when there is none')
+
+
+class NftMarketEvents(ApiModel):
+    """closed object in the contract"""
+
+    key: str
+    sources: list[NftMarketEventsSourcesItem]
+    rates: dict[str, NftRate]
+    as_of: str = Field(alias='asOf')
+
+
 class Position(ApiModel):
     """extra members are allowed by the contract"""
 
@@ -1268,6 +1599,11 @@ OPERATIONS: dict[str, tuple[str, str, str, bool, bool, bool]] = {
     'getPortfolio': ('GET', '/api/v1/trading/portfolio', 'wallet:read', True, False, False),
     'getBalances': ('GET', '/api/v1/trading/balances', 'wallet:read', True, False, False),
     'getActivity': ('GET', '/api/v1/trading/activity', 'wallet:read', True, False, False),
+    'listNfts': ('GET', '/api/v1/trading/nfts', 'wallet:read', True, False, False),
+    'getNft': ('GET', '/api/v1/trading/nfts/item', 'wallet:read', True, False, False),
+    'getNftActivity': ('GET', '/api/v1/trading/nfts/activity', 'wallet:read', True, False, False),
+    'getNftMarket': ('GET', '/api/v1/trading/nfts/market', 'markets:read', True, False, False),
+    'getNftMarketEvents': ('GET', '/api/v1/trading/nfts/market/events', 'markets:read', True, False, False),
     'listPositions': ('GET', '/api/v1/trading/positions', 'positions:read', True, False, False),
     'listOrders': ('GET', '/api/v1/trading/orders', 'orders:read', True, False, False),
     'placeOrder': ('POST', '/api/v1/trading/orders', 'orders:execute', True, True, True),
@@ -1312,6 +1648,11 @@ OPERATION_ERRORS: dict[str, tuple[tuple[int, str], ...]] = {
     'getPortfolio': ((401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'service_unavailable'), (503, 'signer_unreachable'),),
     'getBalances': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'unknown_network'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'service_unavailable'), (503, 'signer_unreachable'),),
     'getActivity': ((400, 'bad_request'), (400, 'invalid_cursor'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
+    'listNfts': ((400, 'bad_request'), (400, 'invalid_cursor'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'unknown_network'), (404, 'unknown_nft'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'nft_disabled'), (503, 'signer_unreachable'),),
+    'getNft': ((400, 'bad_request'), (400, 'invalid_cursor'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'unknown_network'), (404, 'unknown_nft'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'nft_disabled'), (503, 'signer_unreachable'),),
+    'getNftActivity': ((400, 'bad_request'), (400, 'invalid_cursor'), (400, 'nft_bad_identifier'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'nft_not_found'), (404, 'unknown_network'), (404, 'unknown_nft'), (422, 'nft_unsupported_chain'), (422, 'nft_unsupported_standard'), (429, 'auth_throttled'), (429, 'nft_budget_exhausted'), (429, 'nft_provider_rate_limited'), (429, 'rate_limited'), (500, 'internal'), (502, 'nft_provider_bad_answer'), (502, 'nft_provider_disagreement'), (503, 'nft_disabled'), (503, 'nft_provider_method_unsupported'), (503, 'nft_provider_not_configured'), (503, 'nft_provider_unavailable'), (503, 'signer_unreachable'),),
+    'getNftMarket': ((400, 'bad_request'), (400, 'nft_bad_identifier'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'nft_not_found'), (404, 'unknown_network'), (422, 'nft_unsupported_chain'), (422, 'nft_unsupported_standard'), (429, 'auth_throttled'), (429, 'nft_budget_exhausted'), (429, 'nft_provider_rate_limited'), (429, 'rate_limited'), (500, 'internal'), (502, 'nft_provider_bad_answer'), (502, 'nft_provider_disagreement'), (503, 'nft_disabled'), (503, 'nft_provider_method_unsupported'), (503, 'nft_provider_not_configured'), (503, 'nft_provider_unavailable'), (503, 'signer_unreachable'),),
+    'getNftMarketEvents': ((400, 'bad_request'), (400, 'nft_bad_identifier'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (404, 'nft_not_found'), (404, 'unknown_network'), (422, 'nft_unsupported_chain'), (422, 'nft_unsupported_standard'), (429, 'auth_throttled'), (429, 'nft_budget_exhausted'), (429, 'nft_provider_rate_limited'), (429, 'rate_limited'), (500, 'internal'), (502, 'nft_provider_bad_answer'), (502, 'nft_provider_disagreement'), (503, 'nft_disabled'), (503, 'nft_provider_method_unsupported'), (503, 'nft_provider_not_configured'), (503, 'nft_provider_unavailable'), (503, 'signer_unreachable'),),
     'listPositions': ((400, 'bad_request'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (503, 'service_unavailable'),),
     'listOrders': ((400, 'bad_request'), (400, 'invalid_cursor'), (401, 'unauthenticated'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'mixed_credentials'), (403, 'restricted'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'),),
     'placeOrder': ((400, 'bad_policy'), (400, 'bad_request'), (400, 'idempotency'), (400, 'invalid_order'), (400, 'stale_request'), (401, 'unauthenticated'), (403, 'execution_disabled'), (403, 'gmx_disabled'), (403, 'gmx_requires_owner_passkey'), (403, 'insufficient_scope'), (403, 'ip_not_allowed'), (403, 'key_limit_exceeded'), (403, 'mainnet_disabled'), (403, 'mandate_denied'), (403, 'mandate_integrity'), (403, 'mandate_mainnet_disabled'), (403, 'mandate_not_approved'), (403, 'mandate_required'), (403, 'mixed_credentials'), (403, 'owner_session_required'), (403, 'position_not_attributable'), (403, 'restricted'), (403, 'spot_execution_requires_agent_vault'), (403, 'venue_restricted'), (404, 'unknown_account'), (404, 'unknown_instrument'), (404, 'unknown_market'), (404, 'unknown_venue'), (409, 'account_has_active_mandate'), (409, 'account_required'), (409, 'ambiguous_command'), (409, 'ambiguous_order'), (409, 'ambiguous_symbol'), (409, 'bad_state'), (409, 'idempotency_conflict'), (409, 'idempotency_in_progress'), (422, 'authorization_expired'), (422, 'bad_input'), (422, 'bad_mark'), (422, 'bad_order'), (422, 'bad_policy'), (422, 'below_min_notional'), (422, 'below_min_size'), (422, 'daily_loss_exceeded'), (422, 'data_mismatch'), (422, 'duplicate_client_id'), (422, 'fee_cap_not_expressible'), (422, 'gmx_leverage_required'), (422, 'gross_exposure_exceeded'), (422, 'halted'), (422, 'inconsistent_prices'), (422, 'instrument_halted'), (422, 'instrument_mismatch'), (422, 'instrument_not_allowed'), (422, 'instrument_reduce_only'), (422, 'insufficient_collateral'), (422, 'invalid_order'), (422, 'leverage_exceeded'), (422, 'leverage_mismatch'), (422, 'liquidation_too_close'), (422, 'live_not_available'), (422, 'mandate_mismatch'), (422, 'mandate_none'), (422, 'mandate_wind_down'), (422, 'mark_index_divergence'), (422, 'missing_balance'), (422, 'missing_reference_price'), (422, 'mode_read_only'), (422, 'no_account'), (422, 'no_client_id_format'), (422, 'no_instrument'), (422, 'no_position'), (422, 'order_notional_exceeded'), (422, 'order_rate_day'), (422, 'order_rate_minute'), (422, 'paper_unsupported'), (422, 'position_notional_exceeded'), (422, 'price_deviation'), (422, 'price_not_on_tick'), (422, 'price_required'), (422, 'reduce_only_would_flip'), (422, 'reduce_only_would_increase'), (422, 'risk_denied'), (422, 'size_not_on_lot'), (422, 'spot_buy_needs_quote_amount'), (422, 'spot_market_only'), (422, 'spot_paper_not_available'), (422, 'spot_via_swap_screen'), (422, 'stale_book'), (422, 'stale_ticker'), (422, 'swap_not_enabled'), (422, 'total_loss_exceeded'), (422, 'trigger_required'), (422, 'unknown_instrument'), (422, 'unsupported_asset'), (422, 'venue_not_wired'), (422, 'venue_rejected'), (422, 'zero_size'), (423, 'halted'), (423, 'kill_switch_active'), (423, 'read_only_mode'), (429, 'auth_throttled'), (429, 'rate_limited'), (500, 'internal'), (501, 'execution_not_wired'), (502, 'swap_flow_failed'), (503, 'authorization_unknown'), (503, 'mandate_unavailable'), (503, 'no_liquidity'), (503, 'signer_unreachable'), (503, 'stale_data'), (503, 'unknown_instrument'), (503, 'venue_rate_limited'), (503, 'venue_timeout'), (503, 'venue_unavailable'),),
@@ -1344,8 +1685,8 @@ OPERATION_ERRORS: dict[str, tuple[tuple[int, str], ...]] = {
 }
 #: operationId -> response model
 #: (a model class, or a union of model classes for an answer that has several shapes)
-RESPONSE_MODELS: dict[str, Any] = {'getOpenApi': OpenApiDocument, 'listMarkets': MarketList, 'compareMarkets': MarketComparison, 'getMarket': MarketDetail, 'getOrderbook': Orderbook, 'getCandles': Candles, 'listPrivateMarkets': PrivateMarkets, 'getPrivateMarketCompany': PrivateMarketCompanyDetail, 'getPrivateMarket': PrivateMarketDetail, 'getPortfolio': Portfolio, 'getBalances': Balances, 'getActivity': Activity, 'listPositions': Positions, 'listOrders': Orders, 'placeOrder': PlacedOrder, 'getOrder': OrderDetail, 'cancelOrder': CancelledOrder, 'listStrategies': Strategies, 'createStrategy': StrategyResult, 'listAgents': Agents, 'createAgent': AgentResult, 'getRisk': Risk, 'previewOrder': OrderPreview, 'closePosition': PlacedOrder, 'reducePosition': PlacedOrder, 'runCommand': CommandResult, 'engageKillSwitch': KillSwitchResult, 'backtestStrategy': JobResult, 'startStrategy': AgentResult, 'stopStrategy': AgentResult, 'listAgentTemplates': AgentTemplates, 'getAgent': AgentDetail, 'listAgentSignals': AgentSignals, 'listAgentJournal': AgentJournal, 'listAgentOrders': AgentOrders, 'getAgentPerformance': AgentPerformance, 'getJob': JobResult, 'startAgent': AgentResult, 'pauseAgent': AgentResult, 'stopAgent': AgentResult, 'backtestAgent': JobResult}
+RESPONSE_MODELS: dict[str, Any] = {'getOpenApi': OpenApiDocument, 'listMarkets': MarketList, 'compareMarkets': MarketComparison, 'getMarket': MarketDetail, 'getOrderbook': Orderbook, 'getCandles': Candles, 'listPrivateMarkets': PrivateMarkets, 'getPrivateMarketCompany': PrivateMarketCompanyDetail, 'getPrivateMarket': PrivateMarketDetail, 'getPortfolio': Portfolio, 'getBalances': Balances, 'getActivity': Activity, 'listNfts': NftList, 'getNft': NftDetail, 'getNftActivity': NftActivity, 'getNftMarket': NftMarket, 'getNftMarketEvents': NftMarketEvents, 'listPositions': Positions, 'listOrders': Orders, 'placeOrder': PlacedOrder, 'getOrder': OrderDetail, 'cancelOrder': CancelledOrder, 'listStrategies': Strategies, 'createStrategy': StrategyResult, 'listAgents': Agents, 'createAgent': AgentResult, 'getRisk': Risk, 'previewOrder': OrderPreview, 'closePosition': PlacedOrder, 'reducePosition': PlacedOrder, 'runCommand': CommandResult, 'engageKillSwitch': KillSwitchResult, 'backtestStrategy': JobResult, 'startStrategy': AgentResult, 'stopStrategy': AgentResult, 'listAgentTemplates': AgentTemplates, 'getAgent': AgentDetail, 'listAgentSignals': AgentSignals, 'listAgentJournal': AgentJournal, 'listAgentOrders': AgentOrders, 'getAgentPerformance': AgentPerformance, 'getJob': JobResult, 'startAgent': AgentResult, 'pauseAgent': AgentResult, 'stopAgent': AgentResult, 'backtestAgent': JobResult}
 #: operationId -> request-body model
 REQUEST_MODELS: dict[str, type[RequestModel]] = {'placeOrder': OrderRequest, 'createStrategy': CreateStrategyRequest, 'createAgent': CreateAgentRequest, 'previewOrder': OrderRequest, 'closePosition': ClosePositionRequest, 'reducePosition': ReducePositionRequest, 'runCommand': CommandRequest, 'engageKillSwitch': KillSwitchRequest, 'backtestStrategy': BacktestRequest, 'startStrategy': StartRequest, 'stopStrategy': StopRequest, 'startAgent': StartRequest, 'pauseAgent': StopRequest, 'stopAgent': StopRequest, 'backtestAgent': AgentBacktestRequest}
 
-__all__ = ['API_VERSION', 'Activity', 'ActivityItem', 'Agent', 'AgentBacktestRequest', 'AgentDetail', 'AgentDetailAgent', 'AgentJournal', 'AgentJournalEntriesItem', 'AgentOrders', 'AgentOrdersOrdersItem', 'AgentPerformance', 'AgentPerformanceWarningsItem', 'AgentResult', 'AgentResultAgent', 'AgentSignals', 'AgentSignalsSignalsItem', 'AgentTemplates', 'AgentTemplatesTemplatesItem', 'Agents', 'ApiErrorBody', 'BacktestRequest', 'Balance', 'Balances', 'CancelledOrder', 'Candle', 'Candles', 'CanonicalOrder', 'CanonicalOrderPrincipal', 'CapabilityLock', 'ClosePositionRequest', 'CommandControl', 'CommandControlControl', 'CommandControlResultsItem', 'CommandDryRun', 'CommandDryRunAttachedItem', 'CommandExecuted', 'CommandQuery', 'CommandRequest', 'CommandResult', 'ComparisonRow', 'CreateAgentRequest', 'CreateStrategyRequest', 'EXECUTION_SCOPES', 'ErrorData', 'ErrorDataQuestionsItem', 'FINAL_ORDER_STATES', 'Fill', 'Instrument', 'JobResult', 'JobResultJob', 'KillSwitch', 'KillSwitchRequest', 'KillSwitchResult', 'MANDATE_DENY_REASONS', 'Market', 'MarketComparison', 'MarketComparisonDiscrepanciesItem', 'MarketComparisonDiscrepanciesItemAssumptionsItem', 'MarketComparisonTexts', 'MarketDetail', 'MarketList', 'OPERATIONS', 'OPERATION_ERRORS', 'ORDER_STATES', 'OpenApiDocument', 'Order', 'OrderDetail', 'OrderPreview', 'OrderPreviewApproval', 'OrderPreviewEngine', 'OrderPreviewEngineRisk', 'OrderPreviewMandate', 'OrderPreviewResolved', 'OrderRequest', 'Orderbook', 'Orders', 'OwnerApproval', 'OwnerApprovalApprove', 'PartialError', 'PlacedOrder', 'Portfolio', 'PortfolioAccount', 'PortfolioBalance', 'PortfolioTotals', 'PortfolioWallet', 'Position', 'Positions', 'PreviewAccount', 'PreviewRisk', 'PreviewRiskDerived', 'PrivateCompany', 'PrivateMarket', 'PrivateMarketCompany', 'PrivateMarketCompanyDetail', 'PrivateMarketCompanyDetailCompany', 'PrivateMarketContract', 'PrivateMarketContractUnit', 'PrivateMarketDetail', 'PrivateMarketDetailReferencesItem', 'PrivateMarketMarket', 'PrivateMarketMarketFunding', 'PrivateMarketMarketPrice', 'PrivateMarketNotTradable', 'PrivateMarketReview', 'PrivateMarketValuation', 'PrivateMarketValuationCaveatsItem', 'PrivateMarketValuationContractMarketValue', 'PrivateMarketValuationImpliedValuation', 'PrivateMarketValuationLastPrivateValuation', 'PrivateMarketValuationNotionalExposure', 'PrivateMarketValuationPremiumDiscount', 'PrivateMarketValuationSyntheticPrice', 'PrivateMarkets', 'PrivateMarketsExcludedItem', 'PrivateMarketsNotice', 'PrivateMarketsVenuesItem', 'REQUEST_MODELS', 'RESPONSE_MODELS', 'RISK_CHECK_IDS', 'ReducePositionRequest', 'Refusal', 'Risk', 'RiskAccount', 'RiskCheck', 'RiskEngine', 'SCOPES', 'StartRequest', 'StopRequest', 'Strategies', 'StrategyLibraryEntry', 'StrategyResult', 'StrategyResultStrategy', 'StrategyVersion', 'Switch', 'SwitchBy', 'Ticker', 'WEBHOOK_EVENTS']
+__all__ = ['API_VERSION', 'Activity', 'ActivityItem', 'Agent', 'AgentBacktestRequest', 'AgentDetail', 'AgentDetailAgent', 'AgentJournal', 'AgentJournalEntriesItem', 'AgentOrders', 'AgentOrdersOrdersItem', 'AgentPerformance', 'AgentPerformanceWarningsItem', 'AgentResult', 'AgentResultAgent', 'AgentSignals', 'AgentSignalsSignalsItem', 'AgentTemplates', 'AgentTemplatesTemplatesItem', 'Agents', 'ApiErrorBody', 'BacktestRequest', 'Balance', 'Balances', 'CancelledOrder', 'Candle', 'Candles', 'CanonicalOrder', 'CanonicalOrderPrincipal', 'CapabilityLock', 'ClosePositionRequest', 'CommandControl', 'CommandControlControl', 'CommandControlResultsItem', 'CommandDryRun', 'CommandDryRunAttachedItem', 'CommandExecuted', 'CommandQuery', 'CommandRequest', 'CommandResult', 'ComparisonRow', 'CreateAgentRequest', 'CreateStrategyRequest', 'EXECUTION_SCOPES', 'ErrorData', 'ErrorDataQuestionsItem', 'FINAL_ORDER_STATES', 'Fill', 'Instrument', 'JobResult', 'JobResultJob', 'KillSwitch', 'KillSwitchRequest', 'KillSwitchResult', 'MANDATE_DENY_REASONS', 'Market', 'MarketComparison', 'MarketComparisonDiscrepanciesItem', 'MarketComparisonDiscrepanciesItemAssumptionsItem', 'MarketComparisonTexts', 'MarketDetail', 'MarketList', 'Nft', 'NftActivity', 'NftCollection', 'NftCollectionVerifiedOnChain', 'NftDetail', 'NftDetailMarketActionsItem', 'NftDetailNft', 'NftDetailNftMetadata', 'NftDetailNftMetadataAttributesItem', 'NftDetailNftOwnership', 'NftDetailNftSourcesItem', 'NftEvent', 'NftEventPrice', 'NftEventPriceCurrency', 'NftList', 'NftListValuation', 'NftMarket', 'NftMarketContradictionsItem', 'NftMarketEvent', 'NftMarketEventFlags', 'NftMarketEventFlagsWashTrade', 'NftMarketEventPrice', 'NftMarketEvents', 'NftMarketEventsSourcesItem', 'NftMarketSource', 'NftMarketSourceAsk', 'NftMarketSourceCollectionFloor', 'NftMarketSourceLastSale', 'NftMarketSourceStatus', 'NftMarketSourceVerification', 'NftMarketValue', 'NftOwnershipSource', 'NftRate', 'NftSpam', 'OPERATIONS', 'OPERATION_ERRORS', 'ORDER_STATES', 'OpenApiDocument', 'Order', 'OrderDetail', 'OrderPreview', 'OrderPreviewApproval', 'OrderPreviewEngine', 'OrderPreviewEngineRisk', 'OrderPreviewMandate', 'OrderPreviewResolved', 'OrderRequest', 'Orderbook', 'Orders', 'OwnerApproval', 'OwnerApprovalApprove', 'PartialError', 'PlacedOrder', 'Portfolio', 'PortfolioAccount', 'PortfolioBalance', 'PortfolioTotals', 'PortfolioWallet', 'Position', 'Positions', 'PreviewAccount', 'PreviewRisk', 'PreviewRiskDerived', 'PrivateCompany', 'PrivateMarket', 'PrivateMarketCompany', 'PrivateMarketCompanyDetail', 'PrivateMarketCompanyDetailCompany', 'PrivateMarketContract', 'PrivateMarketContractUnit', 'PrivateMarketDetail', 'PrivateMarketDetailReferencesItem', 'PrivateMarketMarket', 'PrivateMarketMarketFunding', 'PrivateMarketMarketPrice', 'PrivateMarketNotTradable', 'PrivateMarketReview', 'PrivateMarketValuation', 'PrivateMarketValuationCaveatsItem', 'PrivateMarketValuationContractMarketValue', 'PrivateMarketValuationImpliedValuation', 'PrivateMarketValuationLastPrivateValuation', 'PrivateMarketValuationNotionalExposure', 'PrivateMarketValuationPremiumDiscount', 'PrivateMarketValuationSyntheticPrice', 'PrivateMarkets', 'PrivateMarketsExcludedItem', 'PrivateMarketsNotice', 'PrivateMarketsVenuesItem', 'REQUEST_MODELS', 'RESPONSE_MODELS', 'RISK_CHECK_IDS', 'ReducePositionRequest', 'Refusal', 'Risk', 'RiskAccount', 'RiskCheck', 'RiskEngine', 'SCOPES', 'StartRequest', 'StopRequest', 'Strategies', 'StrategyLibraryEntry', 'StrategyResult', 'StrategyResultStrategy', 'StrategyVersion', 'Switch', 'SwitchBy', 'Ticker', 'WEBHOOK_EVENTS']

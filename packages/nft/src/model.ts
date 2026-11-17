@@ -204,6 +204,10 @@ export interface NftEvent {
   price: { amount: string; currency: NftCurrency } | null;
   finality: 'finalized' | 'confirmed' | 'pending' | 'reorged';
   source: DataSourceStamp;
+  /** delivery 3 (Solana): a recognised marketplace program was invoked in the transaction — named with where its id was read; never a price */
+  marketProgram?: { id: string; name: string; source: string };
+  /** delivery 3: set on an event that a market source reported, or that SP Wallet interpreted from a marketplace event of the transaction */
+  market?: { provider: string; venue: string | null; orderId: string | null; washTrade: Known<boolean>; fees: import('./market.ts').MarketFee[] | null };
 }
 
 export interface NftAsset {
@@ -241,6 +245,8 @@ export interface NftAsset {
   blockRef: BlockRef | null;
   /** how the asset entered the inventory */
   origin: 'discovered' | 'manual' | 'lookup';
+  /** delivery 3: what the discovery indexer SIGNALS about the item (category `indexed`) — e.g. its spam flag. Shown as that indexer's statement; an item is never dropped because of it */
+  indexerFlags?: { spam: boolean; by: string; classifications: string[] } | null;
   explorerUrl: string | null;
 }
 

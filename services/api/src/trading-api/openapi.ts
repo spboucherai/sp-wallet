@@ -91,7 +91,7 @@ export function buildOpenApi(): Json {
       ].join('\n\n'),
     },
     servers: [{ url: '/', description: 'the wallet\'s own origin' }],
-    tags: ['Meta', 'Markets', 'Portfolio', 'Positions', 'Orders', 'Strategies', 'Agents', 'Risk'].map((name) => ({ name })),
+    tags: ['Meta', 'Markets', 'Portfolio', 'Nfts', 'Positions', 'Orders', 'Strategies', 'Agents', 'Risk'].map((name) => ({ name })),
     paths,
     components: {
       securitySchemes: { bearerKey: { type: 'http', scheme: 'bearer', bearerFormat: 'spw_live_<key id>_<secret>', description: 'API key shown once at creation. Never sent together with a session cookie.' } },

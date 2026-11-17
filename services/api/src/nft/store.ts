@@ -28,13 +28,14 @@ export const getAsset = async (key: string): Promise<AssetRow | null> => (await 
 export async function saveAssetJson(a: NftAsset, o: { metadataRefreshed?: Date } = {}): Promise<void> {
   await sql`update nft_assets set asset = ${sql.json(a as never)}, name = ${nameOf(a)}, metadata_refreshed_at = coalesce(${o.metadataRefreshed ?? null}, metadata_refreshed_at) where key = ${a.key}`;
 }
-export interface ListFilter { chain?: string; collection?: string; status?: 'in_wallet' | 'left' | 'tracked'; q?: string; sort: 'recent' | 'name'; limit: number; offset: number }
+export interface ListFilter { chain?: string; collection?: string; status?: 'in_wallet' | 'left' | 'tracked'; q?: string; sort: 'recent' | 'name'; limit: number; offset: number; /** delivery 3 (trading API): only these networks — a key's restriction, applied in SQL so that paging stays exact */ chains?: string[]; /** delivery 3: items an indexer flags as spam are hidden unless asked for — never deleted */ spam?: 'hide' | 'show' | 'only' }
 export async function listAssets(f: ListFilter): Promise<{ rows: AssetRow[]; total: number }> {
   const q = f.q ? `%${f.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
   const where = sql`origin <> 'lookup'
-    ${f.chain ? sql`and chain = ${f.chain}` : sql``} ${f.collection ? sql`and collection_key = ${f.collection}` : sql``}
+    ${f.chain ? sql`and chain = ${f.chain}` : sql``} ${f.chains ? sql`and chain in ${sql(f.chains.length ? f.chains : [''])}` : sql``} ${f.collection ? sql`and collection_key = ${f.collection}` : sql``}
     ${f.status === 'in_wallet' ? sql`and in_wallet` : f.status === 'left' ? sql`and not in_wallet and origin = 'discovered'` : f.status === 'tracked' ? sql`and origin = 'manual'` : sql`and (in_wallet or origin = 'manual' or gone_at > now() - interval '30 days')`}
-    ${q ? sql`and (name ilike ${q} or key ilike ${q} or asset->'collection'->>'name' ilike ${q})` : sql``}`;
+    ${q ? sql`and (name ilike ${q} or key ilike ${q} or asset->'collection'->>'name' ilike ${q})` : sql``}
+    ${f.spam === 'show' ? sql`` : f.spam === 'only' ? sql`and coalesce((asset->'indexerFlags'->>'spam')::boolean, false)` : sql`and not coalesce((asset->'indexerFlags'->>'spam')::boolean, false)`}`;
   const [c] = await sql<{ n: number }[]>`select count(*)::int as n from nft_assets where ${where}`;
   const rows = await sql<AssetRow[]>`select * from nft_assets where ${where} order by ${f.sort === 'name' ? sql`(name = ''), lower(name), key` : sql`in_wallet desc, first_seen desc, key`} limit ${f.limit} offset ${f.offset}`;
   return { rows, total: c!.n };
@@ -119,3 +120,18 @@ export async function mediaOverCap(capBytes: number): Promise<string[]> {
 }
 export const getCollection = async (key: string) => (await sql<{ data: unknown; fetched_at: Date }[]>`select data, fetched_at from nft_collections where key = ${key}`)[0] ?? null;
 export const putCollection = (key: string, chain: string, data: unknown, now: Date) => sql`insert into nft_collections (key, chain, data, fetched_at) values (${key}, ${chain}, ${sql.json(data as never)}, ${now}) on conflict (key) do update set data = excluded.data, fetched_at = excluded.fetched_at`;
+
+// ── delivery 3: market cache (provider answers), collection slugs, the hidden-by-default spam filter ────────────────────
+export interface MarketCacheRow { data: unknown; fetched_at: Date }
+export const getMarketCache = async (provider: string, kind: string, ref: string): Promise<MarketCacheRow | null> => (await sql<MarketCacheRow[]>`select data, fetched_at from nft_market_cache where provider = ${provider} and kind = ${kind} and ref = ${ref}`)[0] ?? null;
+export const putMarketCache = (provider: string, kind: string, ref: string, data: unknown, now: Date) => sql`insert into nft_market_cache (provider, kind, ref, data, fetched_at) values (${provider}, ${kind}, ${ref}, ${sql.json(data as never)}, ${now})
+  on conflict (provider, kind, ref) do update set data = excluded.data, fetched_at = excluded.fetched_at`;
+export const pruneMarketCache = async (now: Date, maxAgeMs: number): Promise<number> => (await sql`delete from nft_market_cache where fetched_at < ${new Date(now.getTime() - maxAgeMs)} returning provider`).length;
+export const putMarketSlug = (collectionKey: string, provider: string, slug: string, now: Date) => sql`insert into nft_market_slug (collection_key, provider, slug, learnt_at) values (${collectionKey}, ${provider}, ${slug}, ${now})
+  on conflict (collection_key, provider) do update set slug = excluded.slug, learnt_at = excluded.learnt_at`;
+export const marketSlugs = async (collectionKey: string): Promise<Record<string, string>> => Object.fromEntries((await sql<{ provider: string; slug: string }[]>`select provider, slug from nft_market_slug where collection_key = ${collectionKey}`).map((r) => [r.provider, r.slug]));
+/** held items per collection (for the opt-in indicative estimate): only what the chain confirmed as held */
+export const heldByCollection = () => sql<{ collection_key: string; chain: string; n: number; name: string | null; sample: string }[]>`
+  select collection_key, chain, count(*)::int as n, max(asset->'collection'->>'name') as name, min(key) as sample from nft_assets where collection_key is not null and in_wallet and origin <> 'lookup' group by collection_key, chain order by n desc, collection_key limit 200`;
+export const spamCount = async (): Promise<number> => (await sql<{ n: number }[]>`select count(*)::int as n from nft_assets where in_wallet and origin <> 'lookup' and coalesce((asset->'indexerFlags'->>'spam')::boolean, false)`)[0]!.n;
+export const setBudget = (source: string, day: string, requests: number) => sql`insert into nft_budget (source, day, requests) values (${source}, ${day}, ${requests}) on conflict (source, day) do update set requests = greatest(nft_budget.requests, excluded.requests)`;

@@ -15,6 +15,7 @@ import { BUBBLEGUM_PROGRAM, CORE_PROGRAM, NftProviderError, capabilitiesOf, NONE
   type Confidence, type CoreAsset, type CoreCollection, type CorePlugins, type DataSourceStamp, type Known, type NftAsset, type NftCollectionRef, type NftEvent, type NftOwnershipRecord, type NftStandard, type TmMetadata } from '@spw/nft';
 import { buildAsset, emptyMetadata, rpcCodeOf, type CollectionInfo, type EventPage, type InventoryResult, type InventorySection, type NftDataProvider, type RpcFn } from './provider.ts';
 import { hostOnly } from './config.ts';
+import { solanaMarketProgram } from './market/seaport.ts';
 
 const FAMILY = 'sol', CHAIN = 'solana', COMMIT = 'finalized';
 const key = (id: string) => nftKey(FAMILY, CHAIN, id);
@@ -296,6 +297,7 @@ export function solanaProvider(deps: SolanaDeps): NftDataProvider {
         if (!tx?.meta) continue;
         const src: DataSourceStamp = { category: 'onchain', source: 'solana-rpc', detail: host, fetchedAt: iso(), blockRef: { slot: String(s.slot), commitment: COMMIT }, confidence: 'chain_single_source', freshness: 'fresh', covers: ['events'] };
         const base = { assetKey: asset.key, tx: s.signature, blockRef: { slot: String(s.slot), commitment: COMMIT }, at: s.blockTime ? new Date(s.blockTime * 1000).toISOString() : null, price: null, finality: 'finalized' as const, source: src };
+        const firstOfTx = events.length;
         if (core) {
           const outer: any[] = tx.transaction.message.instructions ?? [], inner: any[] = tx.meta.innerInstructions ?? []; // eslint-disable-line @typescript-eslint/no-explicit-any
           const all = [...outer.map((ix, k) => ({ ix, idx: String(k) })), ...inner.flatMap((g) => (g.instructions as any[]).map((ix, k) => ({ ix, idx: `${g.index}.${k}` })))]; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -321,6 +323,11 @@ export function solanaProvider(deps: SolanaDeps): NftDataProvider {
           events.push({ ...base, id: `${asset.key}|${s.signature}|0`, index: '0', type: type === 'transfer' && w ? (gained.includes(w) ? 'transfer-in' : lost.includes(w) ? 'transfer-out' : 'transfer') : type,
             interpretation: { by: 'spw:token-balance-delta', note: 'from the pre/post token balances of the transaction; a payment in the same transaction is not interpreted as a sale' }, from: lost[0] ?? null, to: gained[0] ?? null, quantity: '1' });
         }
+        // delivery 3: a known marketplace PROGRAM invoked in this transaction is NAMED — nothing more. No price is read: the
+        // instruction and event layouts of these programs are not decoded here, and a transfer stays a transfer.
+        const progs = new Set<string>([...(tx.transaction?.message?.instructions ?? []), ...((tx.meta.innerInstructions ?? []) as any[]).flatMap((g) => g.instructions ?? [])].map((ix: any) => String(ix?.programId ?? ''))); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const mp = [...progs].map(solanaMarketProgram).find((x) => x !== null) ?? null;
+        if (mp) for (const e of events.slice(firstOfTx)) e.marketProgram = { id: mp.id, name: mp.name, source: mp.source };
       }
       const more = sigs.length > LIMIT || sigs.length >= LIMIT * 3;
       return { events, cursor: more && page.length ? page[page.length - 1]!.signature : null, completeness: core ? 'full' : 'partial',
