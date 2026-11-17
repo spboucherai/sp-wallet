@@ -34,7 +34,7 @@ function Identity({ r, t, testid }: { r: Pick<NftReview, 'networkName' | 'networ
     <Fact k={t('nfStandard')}><span data-testid="nft-send-standard">{t(STANDARD_KEY[r.standard] ?? 'nfStd_unknown')}</span></Fact>
     <Fact k={t(evm ? 'nfTContract' : 'nfTMintOrAsset')}><CopyId value={r.asset} label={t(evm ? 'nfTContract' : 'nfTMintOrAsset')} /></Fact>
     {evm && <Fact k={t('nfTokenId')}><CopyId value={r.tokenId!} label={t('nfTokenId')} /></Fact>}
-    <Fact k={t('nfQuantity')}><span className="font-mono text-[15px] font-semibold" data-testid="nft-send-quantity">{r.quantity}</span></Fact>
+    <Fact k={t('nfTQuantity')}><span className="font-mono text-[15px] font-semibold" data-testid="nft-send-quantity">{r.quantity}</span></Fact>
     <Fact k={t(evm ? 'nfTCalledContract' : 'nfTCalledProgram')}><span className="break-all font-mono text-[12.5px]" data-testid="nft-send-program">{r.program}</span><div className="mt-0.5 text-[12.5px] text-mute" data-testid="nft-send-method">{r.method}</div></Fact>
   </dl>;
 }
@@ -92,8 +92,8 @@ export function NftSend({ item, onClose }: { item: NftItem; onClose: () => void 
       <Field label={t('nfTRecipient')} hint={t('nfTRecipientHint', { network: item.chainId })}>
         <input className={`${inputCls} font-mono text-[13.5px]`} value={to} onChange={(e) => setTo(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="off" aria-label={t('nfTRecipient')} data-testid="nft-send-to" /></Field>
       {(book.data ?? []).some((b) => b.network === item.chainId) && <div className="flex flex-wrap gap-2" data-testid="nft-send-book">{book.data!.filter((b) => b.network === item.chainId).map((b) => <button key={b.id} type="button" onClick={() => setTo(b.address)} className={`press min-h-11 rounded-full border px-3.5 py-1.5 text-[13px] ${to === b.address ? 'border-emerald bg-emerald/[0.07] text-emerald' : 'border-line'}`}><Icon n="book" className="mr-1 inline h-3.5 w-3.5" />{b.label}</button>)}</div>}
-      {multi && <Field label={t('nfQuantity')} hint={t('nfTQuantityHint', { held })}>
-        <input className={`${inputCls} text-[19px] font-semibold`} inputMode="numeric" pattern="[0-9]*" value={qty} onChange={(e) => setQty(e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 78))} aria-label={t('nfQuantity')} aria-invalid={!qtyOk} data-testid="nft-send-qty" />
+      {multi && <Field label={t('nfTQuantity')} hint={t('nfTQuantityHint', { held })}>
+        <input className={`${inputCls} text-[19px] font-semibold`} inputMode="numeric" pattern="[0-9]*" value={qty} onChange={(e) => setQty(e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 78))} aria-label={t('nfTQuantity')} aria-invalid={!qtyOk} data-testid="nft-send-qty" />
         {!qtyOk && qty !== '' && <p className="mt-1 text-[12.5px] text-warn" role="alert" data-testid="nft-send-qty-problem">{t('nfTQuantityProblem', { held })}</p>}</Field>}
       {err && <Notice tone="danger"><span role="alert" data-testid="nft-send-error">{err}</span></Notice>}
       <Btn full busy={busy === 'review'} disabled={!to.trim() || !qtyOk} onClick={review} data-testid="nft-send-review">{busy === 'review' ? t('nfTVerifying') : t('review')}</Btn>
