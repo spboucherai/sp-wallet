@@ -76,9 +76,10 @@ Send and receive on 23 mainnet networks, swap and bridge with signer-verified tr
 > Start with [`docs/V11-OVERVIEW.md`](docs/V11-OVERVIEW.md), then [`docs/V11-ARCHITECTURE.md`](docs/V11-ARCHITECTURE.md),
 > [`docs/V11-DEPLOYMENT.md`](docs/V11-DEPLOYMENT.md) and [`docs/V11-REMAINING-LIMITATIONS.md`](docs/V11-REMAINING-LIMITATIONS.md).
 >
-> **NFT (in development, not deployed).** Read-only inventory and item pages, and signer-verified transfers, on Solana and the
-> EVM networks: [`docs/nft/NFT-ARCHITECTURE.md`](docs/nft/NFT-ARCHITECTURE.md), [`docs/nft/NFT-TRANSFERS.md`](docs/nft/NFT-TRANSFERS.md),
-> [`docs/nft/NFT-AUDIT.md`](docs/nft/NFT-AUDIT.md).
+> **NFT (in development, not deployed).** Read-only inventory and item pages, signer-verified transfers, and read-only market
+> data (no market write) on Solana and the EVM networks: [`docs/nft/NFT-ARCHITECTURE.md`](docs/nft/NFT-ARCHITECTURE.md),
+> [`docs/nft/NFT-TRANSFERS.md`](docs/nft/NFT-TRANSFERS.md), [`docs/nft/NFT-AUDIT.md`](docs/nft/NFT-AUDIT.md),
+> [`docs/nft/NFT-MARKET-WRITES.md`](docs/nft/NFT-MARKET-WRITES.md).
 
 ## Contents
 

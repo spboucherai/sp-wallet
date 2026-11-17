@@ -14,6 +14,7 @@ import { IDEMPOTENCY_RE, replayHeaders, withIdempotency, withOrderKey } from './
 import { buildOpenApi } from './openapi.ts';
 import { requirePrincipal, type Principal } from './principal.ts';
 import { AmbiguousSymbol, type Reads } from './read.ts';
+import type { NftReads } from './nft-read.ts';
 import { shapePreview, shapeRefusal } from './shaping.ts';
 import { ANY_SCOPE, NOT_FOUND, OPERATIONS, requiresMandate, TRADING_PREFIX, type OperationSpec } from './spec.ts';
 import { agentTradingHandlers } from '../agents/trading-handlers.ts'; // v11 agents: the strategies and agents operations
@@ -44,7 +45,7 @@ const header = (req: FastifyRequest, name: string): string => { const v = req.he
 export const callerOf = (p: Principal, req?: FastifyRequest): Caller => (p.kind === 'owner' ? (req ? { ...OWNER_CALLER, session: { cookie: header(req, 'cookie'), origin: header(req, 'origin'), csrf: header(req, 'x-spw-csrf') } } : OWNER_CALLER)
   : { principal: { kind: 'api_key', id: p.id }, mandateId: p.mandateId, limits: p.limits, restrictions: { networks: p.restrictions.networks, venues: p.restrictions.venues, instruments: p.restrictions.instruments } });
 
-export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution): void {
+export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution, nfts: NftReads): void {
   let doc: unknown = null;
   /** `venue:symbol` after the read side resolved a bare symbol (409 `ambiguous_symbol`) and applied the key's restrictions */
   const orderInput = async (p: Principal, b: Input['body']): Promise<OrderInput> => {
@@ -82,6 +83,12 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution)
     getPortfolio: (p) => reads.portfolio(p),
     getBalances: (p, i) => reads.balances(p, i.query),
     getActivity: (p, i) => reads.activity(p, i.query),
+    // NFT (delivery 3): five reads — the owner's inventory (wallet:read) and market data of any item (markets:read). No write.
+    listNfts: (p, i) => nfts.listNfts(p, i.query),
+    getNft: (p, i) => nfts.getNft(p, i.query.key),
+    getNftActivity: (p, i) => nfts.getNftActivity(p, i.query),
+    getNftMarket: (p, i) => nfts.getNftMarket(p, i.query),
+    getNftMarketEvents: (p, i) => nfts.getNftMarketEvents(p, i.query),
     listPositions: (p, i) => reads.positions(p, i.query),
     // orders: ONE source, the unified table — every principal, mode and venue; the owner's swaps and the spot agents' swaps are projected
     // into it (orders/spot.ts) and `agent:<id>` still names the same order. Listed with keyset pagination by the read layer.

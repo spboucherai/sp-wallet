@@ -15,7 +15,7 @@ reference: [`docs/TRADING-API-OPENAPI.md`](../TRADING-API-OPENAPI.md)). Source: 
 > lets a key execute. Managing agents and strategies needs **no** mandate on the key (research and paper sign nothing):
 > an agent goes live only under its *own* mandate, approved by the owner.
 >
-> **State of the API in this version.** All 41 operations of the contract are implemented and answer typed results.
+> **State of the API in this version.** All 46 operations of the contract are implemented and answer typed results.
 > **Paper** orders are simulated by the wallet's paper engine against the venue's real order book. **Live** orders
 > additionally need `SPW_TRADING_API_EXECUTION=on` on the server (default off → `403 execution_disabled` →
 > `ExecutionDisabled`) and the wallet's mainnet locks. Spot orders and live GMX orders are the owner's (passkey): a key is
@@ -77,6 +77,11 @@ Each method takes a last argument `{ timeoutMs, maxRetries, signal }` (and `idem
 | `getPortfolio()` | `GET /portfolio` | `wallet:read` |
 | `getBalances({ network })` | `GET /balances` | `wallet:read` |
 | `getActivity({ limit, cursor })`, `iterateActivity({ limit }, { maxItems })` | `GET /activity` | `wallet:read` |
+| `listNfts({ network, collection, status, q, sort, spam, limit, cursor })`, `iterateNfts({ … }, { maxItems })` | `GET /nfts` | `wallet:read` |
+| `getNft(key)` | `GET /nfts/item` | `wallet:read` |
+| `getNftActivity({ key, limit, cursor, type })` | `GET /nfts/activity` | `wallet:read` |
+| `getNftMarket({ network, address, tokenId })` | `GET /nfts/market` | `markets:read` |
+| `getNftMarketEvents({ network, address, tokenId, provider, type, after, before, cursor, limit })` | `GET /nfts/market/events` | `markets:read` |
 | `getPositions({ mode, venue })` | `GET /positions` | `positions:read` |
 | `getRisk()` | `GET /risk` | `positions:read` |
 | `engageKillSwitch(reason)` | `POST /risk/kill-switch` | `positions:manage` (no mandate) |
@@ -451,3 +456,7 @@ keys, a paper account and paper mandates through the owner flow, calls every met
 path (preview → order → fill → reduce → close → resting order → cancel, replay and conflict, the refusals, the kill
 switch, commands) and an agent on paper (create from a template → start → signals, journal, orders, performance → pause → backtest job → stop). No live order is sent: the live case stops at `execution_disabled`. It is **skipped** (reported as
 skipped) when PostgreSQL is not reachable; a test whose venue cannot be read is skipped with that reason.
+
+## NFT reads
+
+Five read operations; **no NFT write exists in the API** (transfers are the owner's, with the passkey; no marketplace action is built). `listNfts` / `getNft` / `getNftActivity` read the wallet's own inventory. `getNftMarket` and `getNftMarketEvents` read market data of ANY item named by its chain identifiers and answer **one row per source** — a source without its key answers `status.state: 'needs_key'` with `status.unlockedBy`; nothing is filled in. Amounts are exact base-unit strings in a currency identified by network + mint / contract (`price.amount`, `price.currency`); a `tokenId` is a string (it can be as large as 2^256 − 1). NFTs carry no value: `valuation.state` / `value.state` is `'unavailable'`. A fiat `rates` entry can be `withheld` for a key (licence of the price source).

@@ -65,7 +65,20 @@ const hostile = { id: 'test', family: 'test', chains: () => ['testnet'], invento
 
 await migrate();
 const cfg = nftConfig(), rpc = (url: string, method: string, params: unknown) => rpcOne<unknown>(url, method, params as unknown[]);
-const app = await buildServer({ nft: { cfg, fetch: fetchDeps, providers: [solanaProvider({ rpc, now, dasUrl: cfg.solanaDasUrl }), evmProvider({ rpc, now, indexers: cfg.evmIndexers, http: fetch }), hostile] as never } });
+// delivery 3 — `--market scripted`: the REAL OpenSea adapter over its live-recorded answers (services/api/test/fixtures/nft/market-opensea-live.json)
+// and a Magic Eden source whose host does not answer (the "error" state). Default (`none`): no market provider at all, as on a server without keys.
+const marketMode = arg('market', 'none');
+let marketOpts: Record<string, unknown> = {};
+if (marketMode === 'scripted') {
+  const { readFileSync } = await import('node:fs');
+  const { openSeaMarket } = await import('../../services/api/src/nft/market/opensea.ts'), { magicEdenProvider } = await import('../../services/api/src/nft/market/magiceden.ts'), { createBudget } = await import('../../services/api/src/nft/market/budget.ts');
+  const os = JSON.parse(readFileSync(`${ROOT}/services/api/test/fixtures/nft/market-opensea-live.json`, 'utf8')) as { calls: { path: string; status: number; body: unknown }[] };
+  const osHttp = async (url: string) => { const c = os.calls.find((x) => x.path === url.slice('https://api.opensea.io/api/v2'.length)); if (!c) throw new Error('unrecorded'); return new Response(JSON.stringify(c.body), { status: c.status }); };
+  const budget = (id: string) => createBudget(id, { perMinute: 1000, perDay: 100000 }, { now });
+  marketOpts = { marketProviders: [openSeaMarket({ http: osHttp, now, apiKey: 'e2e-scripted-key', budget: budget('opensea') }), magicEdenProvider({ http: async () => { throw new Error('down'); }, now, budget: budget('magiceden') })], marketAbsent: [],
+    prices: async () => ({ USDC: { usd: 0.9996, priceAt: new Date(Date.now() - 300_000).toISOString(), source: 'coingecko', stale: false } }) };
+}
+const app = await buildServer({ nft: { ...marketOpts, cfg, fetch: fetchDeps, providers: [solanaProvider({ rpc, now, dasUrl: cfg.solanaDasUrl }), evmProvider({ rpc, now, indexers: cfg.evmIndexers, http: fetch }), hostile] as never } });
 (NETWORKS as Record<string, unknown>).testnet = { id: 'testnet', family: 'test', name: 'Test chain (e2e)', chainRef: 'x', native: { id: 'native', symbol: 'T', name: 'T', decimals: 0 }, tokens: [], rpc: [], explorerTx: '', explorerAddr: '', minConf: 1 };
 await app.listen({ port, host: '127.0.0.1' });
 console.log(`READY http://localhost:${port} SPW_DEV_DIR=${dir}`);

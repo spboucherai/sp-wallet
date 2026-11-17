@@ -189,6 +189,39 @@ class AsyncSPWallet(BaseClient):
             if cursor is None:
                 return
 
+    # ---------------------------------------------------------------------------------------------------- NFTs (read-only)
+    # There is no NFT write in this API: transfers are the owner's (passkey), and no marketplace action exists in this version.
+    async def list_nfts(
+        self, *, network: str | None = None, collection: str | None = None, status: Literal["in_wallet", "left", "tracked"] | None = None, q: str | None = None,
+        sort: Literal["recent", "name"] | None = None, spam: Literal["hide", "show", "only"] | None = None, limit: int | None = None, cursor: str | None = None,
+    ) -> m.NftList:
+        """GET /nfts — one page of the wallet's NFTs (what the chain confirmed as held). NFTs carry no value:
+        `valuation.state` is `unavailable` (never zero, never a floor)."""
+        return await self._get(m.NftList, "/nfts", {"network": network, "collection": collection, "status": status, "q": q, "sort": sort, "spam": spam, "limit": limit, "cursor": cursor})
+
+    async def get_nft(self, key: str) -> m.NftDetail:
+        """GET /nfts/item — one NFT of the wallet by its `key` (`family:network:asset-id`): on-chain facts, creator metadata and sources, kept apart."""
+        return await self._get(m.NftDetail, "/nfts/item", {"key": key})
+
+    async def get_nft_activity(self, key: str, *, limit: int | None = None, cursor: str | None = None, type: str | None = None) -> m.NftActivity:  # noqa: A002
+        """GET /nfts/activity — on-chain events of one NFT of the wallet. A transfer is never a sale: `price` is set only
+        when a payment of the same transaction was linked by a decoded marketplace event."""
+        return await self._get(m.NftActivity, "/nfts/activity", {"key": key, "limit": limit, "cursor": cursor, "type": type})
+
+    async def get_nft_market(self, *, network: str, address: str, token_id: str | None = None) -> m.NftMarket:
+        """GET /nfts/market — market data of ANY NFT named by its chain identifiers, ONE ROW PER SOURCE (asking price, best
+        offer, last sale, collection floor). A source without its key answers `needs_key`. Amounts are exact base-unit
+        strings; `token_id` is a string (it can be as large as 2**256 - 1)."""
+        return await self._get(m.NftMarket, "/nfts/market", {"network": network, "address": address, "tokenId": token_id})
+
+    async def get_nft_market_events(
+        self, *, network: str, address: str, token_id: str | None = None, provider: str | None = None, type: str | None = None,  # noqa: A002
+        after: str | None = None, before: str | None = None, cursor: str | None = None, limit: int | None = None,
+    ) -> m.NftMarketEvents:
+        """GET /nfts/market/events — sales, listings and offers each market source reports. A `next_cursor` goes back as
+        `cursor` together with its `provider`."""
+        return await self._get(m.NftMarketEvents, "/nfts/market/events", {"network": network, "address": address, "tokenId": token_id, "provider": provider, "type": type, "after": after, "before": before, "cursor": cursor, "limit": limit})
+
     async def get_risk(self) -> m.Risk:
         """GET /risk — kill switch, signer limits, capability locks, account policies."""
         return await self._get(m.Risk, "/risk")

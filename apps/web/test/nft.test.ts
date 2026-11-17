@@ -11,6 +11,8 @@ import { I18n } from '../src/i18n.ts';
 import { displayName, safeLink, shortId, STANDARD_KEY, unitsToText, type NftChainCap, type NftItem, type NftList, type NftSummary, type Stamp } from '../src/nft.ts';
 import { ChainStates, NftDetail, NftLookup, NftMediaView, Nfts } from '../src/screens/Nft.tsx';
 import { NftSend, UtxoLocks } from '../src/screens/NftSend.tsx';
+import { CollectionMarket, FloorEstimateView, MarketActions, MarketActivity, MarketPanel, MarketProviders, NftMarketScreen, TraitFrequencies } from '../src/screens/NftMarket.tsx';
+import { fiatText, verificationOf, type CollectionMarketAnswer, type FloorEstimate, type ItemMarketRow, type MarketEvents, type MarketProviderRow, type Money, type NftMarketAnswer, type SourceStatus, type TraitAnswer } from '../src/nft.ts';
 import { i18nTables } from '../scripts/i18n-split.mts';
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8');
@@ -51,13 +53,13 @@ describe('the reference item page — real fields, each with its provenance', ()
   });
   it('says it is not in this wallet, and what could not be established', () => {
     expect(html).toContain('data-testid="nft-not-in-wallet"'); expect(html).toContain('Ce NFT n’est pas dans ce portefeuille');
-    expect(html).toContain('Aucune donnée de marché'); expect(html).toContain('Valeur de cet objet : non disponible'); expect(html).toContain('Fréquence et rareté : non calculées'); expect(html).toContain('dénominateur inconnu');
+    expect(html).toContain('Actions de marché indisponibles dans cette version');        // delivery 3: the market panel is a lazy chunk (tested below on its own) expect(html).toContain('Valeur de cet objet : non disponible'); expect(html).toContain('Fréquence et rareté : non calculées'); expect(html).toContain('dénominateur inconnu');
     expect(html).not.toMatch(/rang|rank #|floor: [0-9]/i);
   });
   it('an asset that cannot be sent: Send is DISABLED with its exact reason (never "not built"); the market actions stay disabled', () => {
     for (const id of ['nft-send', 'nft-market-actions']) { const tag = new RegExp(`<button[^>]*data-testid="${id}"[^>]*>`).exec(html)?.[0] ?? ''; expect(tag, id).toContain('disabled=""'); }
     expect(html).toContain('data-reason="not_in_wallet"'); expect(html).not.toContain('transfer_not_built'); expect(html).not.toContain('pas pris en charge dans cette version.<');
-    expect(html).toContain('Ce NFT n’est pas détenu par ce portefeuille.'); expect(html).toContain('Actions de marché non prises en charge dans cette version');
+    expect(html).toContain('Ce NFT n’est pas détenu par ce portefeuille.'); expect(html).toContain('aucun ordre de place de marché n’est décodé, vérifié par le signataire et simulé'); expect(html).toContain('data-testid="nft-open-market"');
     expect(html + i18nSrc.slice(i18nSrc.indexOf('>>> NFT delivery 1'))).not.toMatch(/livraison suivante|prochaine livraison|next delivery|coming soon|bientôt/i);
   });
   it('external marketplaces are links opened outside, with the warning', () => {
@@ -73,13 +75,6 @@ describe('the reference item page — real fields, each with its provenance', ()
       ownership: { ...item().ownership, state: 'escrow_or_delegated', heldByWallet: true, frozen: { state: 'known', value: true }, delegate: { state: 'known', value: '94PEhc7PwL5fjpz7dQoienNWzyBTnupBWksEAjHxd5d9' }, tokenRecordState: { state: 'known', value: 'locked' }, tokenAccount: { state: 'known', value: '2vK6qEqvadYp151cBaMnxviSnargTwqcr6F3NgaJD9bg' } },
       capabilities: { ...item().capabilities, transferBlockedBy: ['pnft_locked', 'delegated'] }, transfer: { transferable: false, blockedBy: ['pnft_locked', 'delegated'], warnings: ['pnft_rule_set'], standard: 'metaplex-pnft', route: null } })));
     expect(p).toContain('NFT programmable VERROUILLÉ'); expect(p).toContain('data-reason="pnft_locked"'); expect(p).toContain('data-reason="delegated"'); expect(p).toContain('révoquez-le avant l’envoi'); expect(new RegExp('<button[^>]*data-testid="nft-send"[^>]*>').exec(p)![0]).toContain('disabled=""'); expect(p).toContain('Délégué ou verrouillé'); expect(p).not.toContain('data-testid="nft-not-in-wallet"'); expect(p).toContain('ARdHQ5FBBMyMaA5dzyJji6U8i7uwAK2TBsMHM8GTBUGn');
-  });
-  it('market data, when a source is on: "Marché — mis à jour à …", the seller is the marketplace\'s, the floor is not a value', () => {
-    const cur = { network: 'solana', asset: 'native', symbol: 'SOL', decimals: 9 };
-    const m = text(detail(item({ market: { source: stamp('market', 'magiceden', { detail: 'api-mainnet.magiceden.dev', confidence: 'market_reported' }), url: null, listed: { state: 'known', value: true }, seller: { state: 'known', value: 'EuVNEdz5yHiR9kY8KZHPbYfFzX9nS4CFQPmAdPngyH9P' }, marketCollection: 'thugbirdz',
-      listingPrice: { state: 'known', value: { amount: '915900000', currency: cur } }, bestOffer: { state: 'unknown' }, lastSale: { state: 'unknown' }, collectionFloor: { state: 'known', value: { amount: '4000000', currency: cur } } } })));
-    expect(m).toContain('Marché — mis à jour à'); expect(m).toContain('0.9159 SOL'); expect(m).toContain('0.004 SOL'); expect(m).toContain('Vendeur selon la place de marché'); expect(m).toContain('EuVNEdz5yHiR9kY8KZHPbYfFzX9nS4CFQPmAdPngyH9P');
-    expect(m).toContain('n’est pas une estimation de la valeur de cet objet'); expect(m).toContain('Valeur de cet objet : non disponible'); expect(m).toContain('Données de marché : Magic Eden.');
   });
 });
 
@@ -136,7 +131,7 @@ describe('gallery states', () => {
   const list = (items: NftSummary[], o: Partial<NftList> = {}): NftList => ({ items, total: items.length, cursor: null, sync: { running: [], lastSyncedAt: { solana: '2026-11-17T08:00:00Z' } }, valuation: { state: 'unavailable', reason: 'no_reliable_valuation' }, asOf: '2026-11-17T08:00:00Z', ...o });
   const cap = (network: string, inventory: NftChainCap['inventory'], o: Partial<NftChainCap> = {}): NftChainCap => ({ network, name: network, family: network === 'solana' ? 'sol' : 'evm', inventory, reason: inventory === 'supported' ? 'onchain_and_das' : inventory === 'unsupported' ? 'no_adapter' : 'no_keyless_discovery', unlockedBy: inventory === 'blocked_by_provider' ? 'NFT_EVM_INDEXER_URLS' : null, standards: [], lookup: inventory !== 'unsupported', manualAdd: true, receive: true, transfer: 'not_built', marketRead: false, marketWrite: false, sections: [], ...o });
   const caps = { chains: [cap('solana', 'supported'), cap('ethereum', 'blocked_by_provider'), cap('cardano', 'unsupported'), cap('bitcoin', 'blocked_by_provider', { reason: 'ordinals_need_ord_indexer', unlockedBy: null, lookup: false })], providers: [] };
-  const gallery = (l: NftList | null, locale: 'fr' | 'en' = 'fr') => text(render(createElement(Nfts, { nav: () => {} }), (qc) => { qc.setQueryData(['nft', 'caps'], caps); if (l) qc.setQueryData(['nft', 'list', '', '', 'in_wallet', '', 'recent'], { pages: [l], pageParams: [0] }); }, locale));
+  const gallery = (l: NftList | null, locale: 'fr' | 'en' = 'fr') => text(render(createElement(Nfts, { nav: () => {} }), (qc) => { qc.setQueryData(['nft', 'caps'], caps); if (l) qc.setQueryData(['nft', 'list', '', '', 'in_wallet', '', 'recent', false], { pages: [l], pageParams: [0] }); }, locale));
   it('loading: a skeleton, not an empty gallery', () => { const h = gallery(null); expect(h).toContain('data-testid="nft-skeleton"'); expect(h).toContain('aria-busy="true"'); expect(h).not.toContain('data-testid="nft-empty"'); });
   it('empty: says which networks were read — never "you have no NFT" for networks that were not', () => {
     const h = gallery(list([])); expect(h).toContain('Aucun NFT détecté sur les réseaux lus'); expect(h).toContain('cela ne veut pas dire qu’il ne contient aucun NFT'); expect(h).toContain('data-testid="nft-blocked-note"');
@@ -253,5 +248,110 @@ describe('Bitcoin protected outputs (delivery 2) — the heuristic is called a h
     expect(o).toContain('ord.local:8080'); expect(o).toContain('ord : porte une inscription.'); expect(o).toContain(`${T1}i0`); expect(o).toContain('data-testid="utxo-lock-all"'); expect(o).toContain('Verrouiller les 1 sorties signalées par ord'); expect(o).not.toContain('data-testid="utxo-review"');
     const down = html(view({ mode: 'ord_unavailable', ordConfigured: true, ordError: 'ord_unavailable', utxos: [{ txid: T1, vout: 0, outpoint: `${T1}:0`, value: 60000, signerLock: null, ord: null, excludedBy: ['ord_unavailable'], reviewed: false, spendable: false }] }));
     expect(down).toContain('aucun envoi Bitcoin ordinaire n’est préparé'); expect(down).toContain('Serveur ord injoignable'); expect(down).not.toContain('Dépensable');
+  });
+});
+
+// ── delivery 3: the market READ screens (screens/NftMarket.tsx), rendered directly — values are the live-recorded ones ───
+describe('market panel (delivery 3) — one block per source; a missing source says why; nothing is invented', () => {
+  const USDC = { network: 'solana', asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', symbol: 'USDC', decimals: 6 };
+  const usdc = (amount: string, precision: Money['precision'] = 'exact'): Money => ({ amount, currency: USDC, precision });
+  const st = (provider: string, name: string, state: SourceStatus['state'], o: Partial<SourceStatus> = {}): SourceStatus => ({ provider, name, state, code: null, unlockedBy: null, stale: false, stamp: state === 'ok' ? stamp('market', provider, { detail: name, confidence: 'market_reported' }) : null, attribution: state === 'ok' ? { text: `Market data: ${name}`, url: 'https://opensea.io' } : null, ...o });
+  const UNK = { state: 'unknown' } as const;
+  const row = (status: SourceStatus, o: Partial<ItemMarketRow> = {}): ItemMarketRow => ({ status, url: null, listed: UNK, ask: UNK, bestOffer: UNK, lastSale: UNK, collection: null, collectionFloor: UNK, verification: null, flags: { suspicious: UNK, disabled: UNK, nsfw: UNK }, rarity: UNK, ...o });
+  const ACTIONS = ['buy', 'sell', 'create_listing', 'cancel_listing', 'make_offer', 'cancel_offer', 'accept_offer'].map((id) => ({ id, available: false as const, reason: 'market_writes_not_built' }));
+  const NOTICE = { outsideWallet: true as const, walletConnect: false, keyExport: false, code: 'x' };
+  const answer = (sources: ItemMarketRow[], o: Partial<NftMarketAnswer> = {}): NftMarketAnswer => ({ key: KEY, sources, contradictions: [], rates: {}, asOf: '2026-11-17T12:00:00Z', actions: ACTIONS, external: { links: item().externalMarkets, notice: NOTICE }, value: { state: 'unavailable', reason: 'r' }, ...o });
+  const NEEDS = st('opensea', 'OpenSea', 'needs_key', { code: 'no_api_key', unlockedBy: 'OPENSEA_API_KEY' }), OFF = st('magiceden', 'Magic Eden', 'off', { code: 'not_enabled', unlockedBy: 'NFT_MARKET_MAGICEDEN' });
+  const panel = (a: NftMarketAnswer, locale: 'fr' | 'en' = 'fr') => text(render(createElement(MarketPanel, { id: KEY, onOpenMarket: () => {} }), (qc) => qc.setQueryData(['nft', 'market', KEY], a), locale));
+
+  it('NO provider configured — the reference item: each source is "unavailable" with its reason and its variable; no price, no badge, no rank appears', () => {
+    const h = panel(answer([row(NEEDS), row(OFF)]));
+    expect(h).toContain('data-provider="opensea" data-state="needs_key"'); expect(h).toContain('Marché indisponible : clé manquante'); expect(h).toContain('OPENSEA_API_KEY');
+    expect(h).toContain('data-provider="magiceden" data-state="off"'); expect(h).toContain('Marché indisponible : source désactivée'); expect(h).toContain('NFT_MARKET_MAGICEDEN');
+    expect(h).toContain('data-testid="nft-market-unavailable"'); expect(h).toContain('rien n’est inventé à leur place'); expect(h).toContain('Valeur de cet objet : non disponible');
+    for (const absent of ['nft-market-ask', 'nft-market-offer', 'nft-market-last-sale', 'nft-market-floor', 'nft-market-badge', 'nft-market-rank', 'nft-market-fiat', 'nft-market-listed']) expect(h, absent).not.toContain(`data-testid="${absent}"`);
+    expect(h).not.toMatch(/\d[\d.,]*\s?(SOL|USDC|ETH|USD)\b/);                                 // not one amount on the screen
+    const en = panel(answer([row(NEEDS), row(OFF)]), 'en'); expect(en).toContain('Market unavailable: key missing'); expect(en).toContain('nothing is made up in their place');
+  });
+  it('a source that answered: five notions, five lines, each in its own currency with its identifier — fiat is a secondary line with the rate\'s source and date', () => {
+    const os = row(st('opensea', 'OpenSea', 'ok'), { listed: { state: 'known', value: false }, ask: { state: 'none' }, bestOffer: { state: 'none' }, collectionFloor: { state: 'known', value: usdc('360000', 'source_decimal') },
+      lastSale: { state: 'known', value: { price: usdc('14500000000'), quantity: '1', at: '2026-11-10T16:38:56.000Z', tx: 't', buyer: 'b', seller: 's', venue: 'OpenSea' } }, verification: { state: 'verified', providerValue: 'verified', by: 'OpenSea' }, rarity: { state: 'none' } });
+    const h = panel(answer([os, row(OFF)], { rates: { [`solana:${USDC.asset}`]: { symbol: 'USDC', usd: '0.9996', cad: null, source: 'coingecko', priceAt: '2026-11-17T11:50:00.000Z', stale: false, withheld: null } } }));
+    expect(h).toContain('data-testid="nft-market-last-sale" data-amount="14500000000" data-currency="solana:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"'); expect(h).toContain('14500 USDC'); expect(h).toContain('EPjFWdd5…ZwyTDt1v');
+    expect(h).toContain('≈ 14 494.20 USD'); expect(h).toContain('taux coingecko'); expect(h).toContain('0.36 USDC'); expect(h).toContain('converti du nombre décimal de la source');
+    expect(h).toContain('Dernière vente (selon la source)'); expect(h).toContain('Prix plancher de la collection'); expect(h).toContain('aucun, selon la source'); expect(h).toContain('Collection vérifiée par OpenSea');
+    expect(h).toContain('n’est pas une estimation de la valeur de cet objet'); expect(h).toContain('Market data: OpenSea'); expect(h).not.toContain('data-testid="nft-market-unavailable"'); expect(h).not.toContain('data-testid="nft-market-rank"');
+    expect(h).toContain('data-provider="magiceden" data-state="off"');                         // the other source still says why it is absent
+  });
+  it('error, stale, not covered, contradictions, a licensed rate withheld, a rank only with its method', () => {
+    const cur = { network: 'solana', asset: 'native', symbol: 'SOL', decimals: 9 }, sol = (amount: string): Money => ({ amount, currency: cur, precision: 'exact' });
+    const a = row(st('opensea', 'OpenSea', 'ok', { stale: true, code: 'provider_rate_limited' }), { collectionFloor: { state: 'known', value: sol('4000000') }, rarity: { state: 'known', value: { rank: '2664', outOf: '9996', method: 'openrarity 1.0', calculatedAt: null } }, ask: { state: 'unknown', reason: 'currency_symbol_only' } });
+    const h = panel(answer([a, row(st('magiceden', 'Magic Eden', 'error', { code: 'provider_unavailable' })), row(st('x', 'X', 'not_covered', { code: 'chain_not_covered' }))],
+      { contradictions: [{ field: 'collection_floor', providers: ['opensea', 'magiceden'], note: 'n' }], rates: { 'solana:native': { symbol: 'SOL', usd: null, cad: null, source: 'apibricks', priceAt: null, stale: false, withheld: 'price_source_licence_internal_use_only' } } }));
+    expect(h).toContain('data-stale="true"'); expect(h).toContain('donnée possiblement périmée'); expect(h).toContain('La source ne répond plus (provider_rate_limited)');
+    expect(h).toContain('Marché indisponible : erreur de la source'); expect(h).toContain('La source ne répond pas.'); expect(h).toContain('Cette source ne couvre pas ce réseau.');
+    expect(h).toContain('Les sources divergent'); expect(h).toContain('prix plancher (opensea ≠ magiceden)'); expect(h).toContain('Conversion non fournie (licence de la source de prix)'); expect(h).not.toContain('data-testid="nft-market-fiat"');
+    expect(h).toContain('2664 sur 9996'); expect(h).toContain('méthode openrarity 1.0, selon OpenSea'); expect(h).toContain('non disponible (devise nommée par son seul symbole)');
+  });
+  it('actions: seven DISABLED controls with the exact reason; the external links are a separate group with what is true about this wallet', () => {
+    const h = render(createElement(MarketActions, { actions: ACTIONS, external: { links: item().externalMarkets, notice: NOTICE } }));
+    expect((h.match(/<button[^>]*data-available="false"[^>]*>/g) ?? []).length).toBe(7); expect((h.match(/<button[^>]*disabled=""/g) ?? []).length).toBe(7); expect(h).not.toMatch(/<button(?![^>]*disabled)[^>]*>/);
+    const tx = text(h); expect(tx).toContain('Mettre en vente'); expect(tx).toContain('Accepter une offre'); expect(tx).toContain('SP Wallet ne signe donc aucun ordre, aucune approbation de place de marché, aucune annulation');
+    expect(h).toMatch(/role="group" aria-label="Actions dans SP Wallet"/); expect(h).toMatch(/role="group" aria-label="Actions externes"/); expect(h.indexOf('Actions externes')).toBeGreaterThan(h.indexOf('nft-market-action-accept_offer'));
+    expect(tx).toContain('hors de SP Wallet'); expect(tx).toContain('SP Wallet n’a ni WalletConnect ni export de clé'); expect(tx).toContain('Ouvrir sur OpenSea'); expect(h).toMatch(/href="https:\/\/opensea\.io\/item\/solana\/CMhG[^"]+" target="_blank" rel="noreferrer noopener"/);
+    expect(render(createElement(MarketActions, { actions: ACTIONS, external: { links: [{ name: 'Evil', url: 'javascript:alert(1)' }], notice: NOTICE } }))).not.toContain('data-testid="nft-market-link"');
+  });
+  it('the Market screen: listings and offers per source; market events apart from transfers; a wash-trade flag only when the source gives one', () => {
+    const evs: MarketEvents = { rates: {}, sources: [{ status: st('opensea', 'OpenSea', 'ok'), cursor: 'c1', events: [
+      { type: 'sale', providerType: 'sale', at: '2026-11-10T16:38:56.000Z', tx: 't', from: 'H7NdPnwqwQkv2XdJaAWAEb3yH9Eg6YTkkwfX5Cz5Wyek', to: '8d56BJgENF7v9A6YJnMinXqrQb7KKLxMhe3WmUf1Pa4N', quantity: '1', price: usdc('14500000000'), venue: 'OpenSea', flags: { washTrade: { state: 'known', value: true } } },
+      { type: 'transfer', providerType: 'transfer', at: null, tx: 't2', from: 'a', to: 'b', quantity: '1', price: null, venue: 'OpenSea', flags: { washTrade: UNK } }] }, { status: OFF, cursor: null, events: [] }] };
+    const h = text(render(createElement(MarketActivity, { id: KEY }), (qc) => qc.setQueryData(['nft', 'market', 'activity', KEY, ''], evs)));
+    expect(h).toContain('data-type="sale"'); expect(h).not.toContain('data-type="transfer"'); expect(h).toContain('14500 USDC'); expect(h).toContain('Signalé comme transaction fictive par OpenSea'); expect(h).toContain('distincts des transferts lus sur la chaîne');
+    const sc = text(render(createElement(NftMarketScreen, { item: item(), onClose: () => {} }), (qc) => { qc.setQueryData(['nft', 'market', KEY], answer([row(NEEDS)]));
+      qc.setQueryData(['nft', 'market', 'listings', KEY], { sources: [{ status: st('opensea', 'OpenSea', 'ok'), items: [], cursor: null }], rates: {}, actions: ACTIONS });
+      qc.setQueryData(['nft', 'market', 'offers', KEY], { sources: [{ status: NEEDS, items: [], cursor: null }], rates: {}, actions: ACTIONS }); qc.setQueryData(['nft', 'market', 'activity', KEY, ''], evs); }));
+    expect(sc).toContain('data-testid="nft-market-screen"'); expect(sc).toContain(KEY); expect(sc).toContain('Aucune annonce pour cet objet selon cette source.'); expect(sc).toContain('data-testid="nft-market-actions-internal"'); expect(sc).toContain('Marché indisponible : clé manquante');
+  });
+  it('trait frequency: « 20,61 % de 344 673 objets indexés » with source and date — or "not computed" and why; never from a sample', () => {
+    const yes: TraitAnswer = { computed: true, reason: null, mutableMetadata: true, sources: [{ provider: 'opensea', name: 'OpenSea', computed: true, reason: null, total: '344673', fetchedAt: '2026-11-17T12:00:00Z', stale: false,
+      rows: [{ traitType: 'Grader', value: 'PSA', frequency: { count: '71052', total: '344673', percent: '20.61' } }, { traitType: 'Cert Number', value: '65475295', frequency: null }] }] };
+    const tr = (d: TraitAnswer, locale: 'fr' | 'en' = 'fr') => text(render(createElement(TraitFrequencies, { id: KEY }), (qc) => qc.setQueryData(['nft', 'market', 'traits', KEY], d), locale));
+    const h = tr(yes); expect(h).toContain('20,61 % de 344 673 objets indexés'); expect(h).toContain('Fréquences selon OpenSea — sur 344 673 objets'); expect(h).toContain('non compté par la source'); expect(h).toContain('Métadonnée modifiable'); expect(h).toContain('data-computed="true"');
+    expect(tr(yes, 'en')).toContain('20.61% of 344,673 indexed items');
+    const no = tr({ computed: false, reason: 'no_stated_item_total', mutableMetadata: null, sources: [{ provider: 'magiceden', name: 'Magic Eden', computed: false, reason: 'no_stated_item_total', rows: [] }] });
+    expect(no).toContain('Fréquence et rareté : non calculées.'); expect(no).toContain('pas de dénominateur'); expect(no).toContain('data-computed="false"'); expect(no).not.toContain('%');
+  });
+  it('collection: "verified by <source>" vs "known contract" vs "not verified"; floor and volume are separate figures; a volume named by symbol is shown as reported', () => {
+    const src = (o: Partial<CollectionMarketAnswer['sources'][number]> = {}): CollectionMarketAnswer['sources'][number] => ({ status: st('opensea', 'OpenSea', 'ok'), slug: 'phygitals', name: 'Phygitals', description: null, url: 'https://opensea.io/collection/phygitals', imageId: `m${'2'.repeat(40)}`, bannerId: `m${'3'.repeat(40)}`,
+      verification: { state: 'verified', providerValue: 'verified', by: 'OpenSea' }, floor: { state: 'known', value: usdc('360000', 'source_decimal') }, volumes: [{ interval: 'all', volume: null, reported: { value: '1412.138684', symbol: 'ETH' }, sales: '89244' }], listedCount: UNK, owners: { state: 'known', value: '31787' }, totalSupply: { state: 'known', value: '344673' },
+      fees: [{ kind: 'other', bps: 100, amount: null, recipient: '0x0000a26b00c1f0df003000390027140000faa719', required: true }], traits: { state: 'known', value: { total: '344673', categories: [{ type: 'Grader', values: [{ value: 'PSA', count: '71052' }] }], truncated: true } }, definitions: {}, ...o });
+    const coll = (a: CollectionMarketAnswer, onchain = true) => render(createElement(CollectionMarket, { id: 'c', onchainKnown: onchain }), (qc) => qc.setQueryData(['nft', 'market', 'collection', 'c'], a));
+    const h = coll({ sources: [src()], rates: {} }), tx = text(h);
+    expect(h).toContain('data-testid="nft-collection-verif" data-kind="verified_by"'); expect(tx).toContain('Collection vérifiée par OpenSea'); expect(tx).toContain('pas une vérification on-chain');
+    expect(h).toContain(`/api/v1/nfts/media/m${'3'.repeat(40)}`); expect(h).not.toMatch(/src="https?:/);                                  // banner and logo through the proxy only
+    expect(tx).toContain('0.36 USDC'); expect(tx).toContain('1412.138684 ETH'); expect(tx).toContain('tel que rapporté : unité nommée par symbole seulement'); expect(tx).toContain('89244 ventes'); expect(tx).toContain('1.00 %'); expect(tx).toContain('requis');
+    expect(tx).toContain('frais (nature non précisée par la source)'); expect(tx).toContain('Décomptes d’attributs sur 344673 objets, selon OpenSea'); expect(tx).toContain('PSA (71052)'); expect(tx).toContain('valeurs les plus fréquentes seulement');
+    const none = { sources: [src({ status: NEEDS, verification: null, imageId: null, bannerId: null, floor: UNK, volumes: [], traits: UNK })], rates: {} };
+    expect(coll(none)).toContain('data-kind="known_contract"'); expect(text(coll(none))).toContain('Contrat connu'); expect(coll(none, false)).toContain('data-kind="not_verified"'); expect(text(coll(none))).not.toContain('USDC');
+    // a badge is never promoted: "verified" needs a source that is OK and says `verified`
+    expect(verificationOf([{ status: st('a', 'A', 'error'), verification: { state: 'verified', providerValue: 'verified', by: 'A' } }], true)).toEqual({ kind: 'known_contract' });
+    expect(verificationOf([{ status: st('a', 'A', 'ok'), verification: { state: 'not_verified', providerValue: 'approved', by: 'A' } }], false)).toEqual({ kind: 'not_verified' });
+  });
+  it('sources and the opt-in estimate: what each key unlocks; the estimate is OFF by default, labelled, excluded from the total', () => {
+    const provs: MarketProviderRow[] = [{ id: 'opensea', name: 'OpenSea', state: 'needs_key', unlockedBy: 'OPENSEA_API_KEY', unlocks: 'x', chains: ['solana', 'ethereum'], sends: 'nothing_until_enabled', attribution: null, terms: null, verification: null, budget: null },
+      { id: 'magiceden', name: 'Magic Eden', state: 'on', unlockedBy: null, unlocks: '', chains: ['solana'], sends: 'mint_only', attribution: null, terms: { url: 'https://magiceden.io/legal-policies/api-terms', readAt: '2026-11-17', note: 'n' }, verification: 'live', budget: { minute: { used: 6, limit: 40 }, day: { used: 60, limit: 5000 }, refused: 2, upstreamLimited: 1 } }];
+    const p = text(render(createElement(MarketProviders), (qc) => qc.setQueryData(['nft', 'market', 'providers'], { providers: provs })));
+    expect(p).toContain('Clé manquante'); expect(p).toContain('OPENSEA_API_KEY'); expect(p).toContain('Apporterait :'); expect(p).toContain('badge de la place de marché'); expect(p).toContain('requêtes : 6/40 cette minute, 60/5000 aujourd’hui'); expect(p).toContain('3 refusées');
+    expect(p).toContain('jamais l’adresse du portefeuille'); expect(p).toContain('adaptateur vérifié en réel'); expect(p).toContain('magiceden.io');
+    const est = (d: FloorEstimate) => text(render(createElement(FloorEstimateView), (qc) => qc.setQueryData(['nft', 'valuation'], d)));
+    const off = est({ enabled: false, state: 'unavailable', excludedFromWalletTotal: true, estimate: null });
+    expect(off).toContain('data-enabled="false"'); expect(off).toContain('Désactivée par défaut'); expect(off).toContain('ce n’est pas la valeur de vos objets'); expect(off).not.toContain('data-testid="nft-estimate-label"');
+    const on = est({ enabled: true, state: 'unavailable', excludedFromWalletTotal: true, estimate: { label: 'indicative_floor_based_estimate', indicativeUsd: '0.35', collectionsCounted: 1, collectionsWithoutFloor: 0, rates: {},
+      collections: [{ collectionKey: 'c', chain: 'solana', name: 'Phygitals', items: 2, reason: null, floors: [], used: { provider: 'opensea', floor: usdc('360000'), fetchedAt: '2026-11-17T12:00:00Z', stale: false, indicative: usdc('720000') } }] } });
+    expect(on).toContain('ce n’est pas une évaluation, et elle n’entre dans aucun total du portefeuille'); expect(on).toContain('2 objet(s) détenu(s)'); expect(on).toContain('0.72 USDC'); expect(on).toContain('plancher 0.36 USDC — opensea'); expect(on).toContain('Exclue du total du portefeuille');
+  });
+  it('helpers: fiat is exact integer arithmetic; a spam tile names the indexer', () => {
+    expect(fiatText('14500000000', 6, '0.9996')).toBe('14 494.20'); expect(fiatText((2n ** 256n - 1n).toString(), 18, '1795.77')).toMatch(/^[\d ]+\.\d{2}$/); expect(fiatText('1', 6, null)).toBeNull(); expect(fiatText('1', 6, '1e3')).toBeNull(); expect(fiatText('1.5', 6, '1')).toBeNull();
+    expect(i18nSrc).toContain('nfSpamBy:'); expect(screen).toContain("t('nfSpamBy', { source: a.spam.by })"); expect(screen).toContain('data-testid="nft-spam-toggle"');
   });
 });

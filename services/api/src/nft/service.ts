@@ -10,12 +10,16 @@ import { externalMarketLinks, type MarketSource } from './market.ts';
 import type { CollectionInfo, InventorySection, NftDataProvider } from './provider.ts';
 import type { Resolver } from './resolver.ts';
 import * as store from './store.ts';
+import type { EvmHintSource } from './evm-hints.ts';
+import { UNLOCK_DISCOVERY } from './evm.ts';
+import type { MarketService } from './market/service.ts';
 
 export const TTL_SYNC_MS = 5 * 60_000, TTL_OWNERSHIP_MS = 60_000, TTL_MARKET_MS = 5 * 60_000, TTL_ONCHAIN_STALE_MS = 15 * 60_000, REFRESH_COOLDOWN_MS = 60_000, METADATA_PER_SYNC = 60;
 const NETS = () => Object.values(NETWORKS) as NetworkDef[];
 const SECTION_STANDARDS: Record<string, string[]> = { token: ['metaplex-token-metadata', 'metaplex-pnft', 'spl-token-2022', 'spl-token'], core: ['metaplex-core'], compressed: ['metaplex-bubblegum'], indexer: ['erc721', 'erc1155', 'evm-nonstandard'] };
 
-export interface NftDeps { cfg: NftConfig; providers: NftDataProvider[]; resolver: Resolver; market: MarketSource | null; addresses: () => Promise<Record<string, string>>; now: () => Date }
+export interface NftDeps { cfg: NftConfig; providers: NftDataProvider[]; resolver: Resolver; market: MarketSource | null; addresses: () => Promise<Record<string, string>>; now: () => Date;
+  /** delivery 3: the market READ layer (one row per source) and the keyed EVM discovery sources — both optional */ marketService?: MarketService; evmHints?: EvmHintSource[] }
 /** standards a transfer is built for (delivery 2), per family — the per-asset verdict and the signer's policy decide the rest */
 export const TRANSFER_STANDARDS: Record<string, string[]> = { evm: ['erc721', 'erc1155'], sol: ['spl-token-2022', 'metaplex-token-metadata', 'metaplex-pnft', 'metaplex-core'] };
 export type ChainSupport = 'supported' | 'partial' | 'blocked_by_provider' | 'unsupported';
@@ -29,12 +33,14 @@ export function createNftService(deps: NftDeps) {
   const running = new Map<string, Promise<void>>(), lastSync = new Map<string, number>(), lastRefresh = new Map<string, number>();
 
   /** freshness is decided when the asset is read, not when it was stored */
-  function present(row: store.AssetRow): NftAsset & { firstSeen: string; lastSeen: string; verifiedAt: string | null; goneAt: string | null; externalMarkets: { name: string; url: string }[] } {
+  function present(row: store.AssetRow): NftAsset & { firstSeen: string; lastSeen: string; verifiedAt: string | null; goneAt: string | null; externalMarkets: { name: string; url: string }[]; marketSources: { provider: string; name: string; state: 'on' | 'needs_key' | 'off'; unlockedBy: string | null }[] } {
     const now = deps.now().getTime(), a = row.asset;
     const age = (s: { fetchedAt: string }) => now - new Date(s.fetchedAt).getTime();
     const fresh = <T extends { category: string; fetchedAt: string; freshness: string }>(s: T): T => ({ ...s, freshness: s.category === 'onchain' || s.category === 'indexed' ? (age(s) > TTL_ONCHAIN_STALE_MS ? 'stale' : 'fresh') : s.category === 'market' ? (age(s) > TTL_MARKET_MS * 3 ? 'stale' : 'fresh') : s.freshness });
     // capabilities are derived from the stored FACTS each time the asset is read (a row stored by delivery 1 says "not built")
-    return { ...a, capabilities: capabilitiesOf(a), sources: a.sources.map(fresh), ownership: { ...a.ownership, source: fresh(a.ownership.source) }, market: a.market ? { ...a.market, source: fresh(a.market.source) } : null,
+    // delivery 3: which market sources concern this asset and in what state — static (no request is made to say it)
+    const marketSources = deps.marketService ? deps.marketService.providers().filter((m) => m.chains.includes(a.chainId)).map((m) => ({ provider: m.id, name: m.name, state: m.state === 'on' ? 'on' as const : m.state, unlockedBy: m.unlockedBy })) : [];
+    return { ...a, marketSources, capabilities: capabilitiesOf(a), sources: a.sources.map(fresh), ownership: { ...a.ownership, source: fresh(a.ownership.source) }, market: a.market ? { ...a.market, source: fresh(a.market.source) } : null,
       firstSeen: row.first_seen.toISOString(), lastSeen: row.last_seen.toISOString(), verifiedAt: row.verified_at?.toISOString() ?? null, goneAt: row.gone_at?.toISOString() ?? null, externalMarkets: externalMarketLinks(a) };
   }
   /** keep the creator metadata already resolved for the same URI (it has its own TTL); resolve it otherwise */
@@ -94,9 +100,11 @@ export function createNftService(deps: NftDeps) {
           marketWrite: false as const, sections, receive: !!addrs[n.id] && (!!p || n.id === 'bitcoin') };
         if (n.family === 'sol' && p) { const blocked = sections.filter((s) => s.status === 'blocked_by_provider');
           return { ...base, inventory: blocked.length ? 'partial' : 'supported', reason: blocked.length ? `sections_blocked:${blocked.map((s) => s.section).join(',')}` : 'onchain_and_das', unlockedBy: blocked[0]?.unlockedBy ?? null,
-            standards: ['metaplex-token-metadata', 'metaplex-pnft', 'spl-token-2022', 'metaplex-core', 'metaplex-bubblegum'], lookup: true, manualAdd: true, marketRead: !!deps.market }; }
-        if (n.family === 'evm' && p) { const idx = !!cfg.evmIndexers[n.id];
-          return { ...base, inventory: idx ? 'supported' : 'blocked_by_provider', reason: idx ? 'indexer_hint_verified_onchain' : 'no_keyless_discovery', unlockedBy: idx ? null : 'NFT_EVM_INDEXER_URLS', standards: ['erc721', 'erc1155'], lookup: true, manualAdd: true, marketRead: false }; }
+            standards: ['metaplex-token-metadata', 'metaplex-pnft', 'spl-token-2022', 'metaplex-core', 'metaplex-bubblegum'], lookup: true, manualAdd: true, marketRead: !!deps.market || !!deps.marketService?.readsChain(n.id) }; }
+        if (n.family === 'evm' && p) { const idx = !!cfg.evmIndexers[n.id] || (deps.evmHints ?? []).some((h) => h.notCovered(n.id) === null);
+          // a source is configured for the network, but its last answer may be a refusal for THIS network (a key whose plan does not enable it): that is blocked, with its reason
+          const refused = sections.find((s) => s.section === 'indexer' && s.status === 'blocked_by_provider');
+          return { ...base, inventory: idx && !refused ? 'supported' : 'blocked_by_provider', reason: refused ? (refused.code ?? 'blocked').split(':')[0]! : idx ? 'indexer_hint_verified_onchain' : 'no_keyless_discovery', unlockedBy: refused ? refused.unlockedBy : idx ? null : UNLOCK_DISCOVERY, standards: ['erc721', 'erc1155'], lookup: true, manualAdd: true, marketRead: !!deps.marketService?.readsChain(n.id) }; }
         if (n.id === 'bitcoin') return { ...base, inventory: 'blocked_by_provider', reason: 'ordinals_need_ord_indexer', unlockedBy: null, standards: ['ordinals-inscription'], lookup: false, manualAdd: false, marketRead: false };
         return { ...base, inventory: 'unsupported', reason: 'no_adapter', unlockedBy: null, standards: [], lookup: false, manualAdd: false, marketRead: false, receive: false };
       });
@@ -106,8 +114,9 @@ export function createNftService(deps: NftDeps) {
           { id: 'solana-das', on: cfg.solanaDasUrl !== 'off', unlockedBy: cfg.solanaDasUrl === 'off' ? 'NFT_SOLANA_DAS' : null, sends: cfg.solanaDasUrl && cfg.solanaDasUrl !== 'off' ? 'wallet_address_to_das_host' : 'wallet_address_to_rpc' },
           { id: 'evm-rpc', on: true, unlockedBy: null, sends: 'wallet_address_to_rpc' },
           { id: 'evm-indexer', on: Object.keys(cfg.evmIndexers).length > 0, unlockedBy: Object.keys(cfg.evmIndexers).length ? null : 'NFT_EVM_INDEXER_URLS', sends: 'wallet_address_to_indexer_host' },
-          { id: 'magiceden', on: !!deps.market, unlockedBy: deps.market ? null : 'NFT_MARKET_MAGICEDEN', sends: 'mint_only' },
-          { id: 'opensea', on: false, unlockedBy: 'OPENSEA_API_KEY', sends: 'not_built' },
+          // delivery 3: the keyed EVM discovery provider (hints only) and the market READ sources, as the market service reports them
+          { id: 'evm-provider', on: (deps.evmHints ?? []).length > 0, unlockedBy: (deps.evmHints ?? []).length ? null : !cfg.evmProvider ? 'NFT_EVM_PROVIDER' : cfg.evmProvider === 'opensea' ? 'OPENSEA_API_KEY' : 'ALCHEMY_API_KEY', sends: (deps.evmHints ?? []).length ? `wallet_address_to_${deps.evmHints![0]!.id}` : 'nothing_until_enabled' },
+          ...(deps.marketService ? deps.marketService.providers().map((m) => ({ id: m.id, on: m.state === 'on', unlockedBy: m.unlockedBy, sends: m.sends })) : [{ id: 'magiceden', on: !!deps.market, unlockedBy: deps.market ? null : 'NFT_MARKET_MAGICEDEN', sends: 'mint_only' }]),
           { id: 'ordinals', on: false, unlockedBy: null, sends: 'not_built' },
         ],
         limits: { inventoryMax: cfg.inventoryMax, mediaMaxBytes: cfg.mediaMaxBytes, dailyRequests: cfg.dailyRequests, dailyBytes: cfg.dailyBytes } };
@@ -122,7 +131,7 @@ export function createNftService(deps: NftDeps) {
     },
     syncState: () => ({ running: [...running.keys()], lastSyncedAt: Object.fromEntries([...lastSync].map(([c, t]) => [c, new Date(t).toISOString()])) }),
 
-    async list(f: store.ListFilter) { const r = await store.listAssets(f); return { total: r.total, items: r.rows.map(present) }; },
+    async list(f: store.ListFilter) { const r = await store.listAssets(f); return { total: r.total, items: r.rows.map(present), hiddenSpam: f.spam === 'show' || f.spam === 'only' ? 0 : await store.spamCount() }; },
 
     /** One asset of the inventory (or one already looked up). Ownership is re-read on-chain when it is older than a minute. */
     async get(key: string, o: { verify?: boolean } = {}): Promise<ReturnType<typeof present> | null> {

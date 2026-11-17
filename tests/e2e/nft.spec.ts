@@ -78,12 +78,24 @@ test.describe('NFT · phone · fr', () => {
     expect(api.metadata.onchainName).toBeTruthy();
     await expect(page.getByTestId('nft-name')).toHaveText(api.metadata.name ?? api.metadata.onchainName!);
     if (api.metadata.status === 'ok') await expect(page.getByTestId('nft-traits').locator('li')).toHaveCount(api.metadata.attributes.length); else await expect(page.getByTestId('nft-metadata-status')).toBeVisible();
-    expect(api.market).toBeNull(); await expect(page.getByTestId('nft-market-none')).toBeVisible(); await expect(detail).toContainText('Valeur de cet objet : non disponible');
+    // delivery 3 — NO market provider is configured on this stack: every market source says it is unavailable and WHY, with the
+    // variable that would turn it on; no price, offer, sale, floor, badge or rank is shown — and the value stays unavailable
+    expect(api.market).toBeNull();
+    const market = page.getByTestId('nft-market');
+    await expect(market).toBeVisible({ timeout: 30_000 }); await expect(market).toHaveAttribute('data-ok', '0');
+    await expect(market.locator('[data-testid=nft-market-source][data-provider=opensea]')).toHaveAttribute('data-state', 'needs_key');
+    await expect(market.locator('[data-testid=nft-market-row][data-provider=opensea]')).toContainText('Marché indisponible : clé manquante'); await expect(market.locator('[data-testid=nft-market-row][data-provider=opensea]')).toContainText('OPENSEA_API_KEY');
+    await expect(market.locator('[data-testid=nft-market-source][data-provider=magiceden]')).toHaveAttribute('data-state', 'off'); await expect(market.locator('[data-testid=nft-market-row][data-provider=magiceden]')).toContainText('NFT_MARKET_MAGICEDEN');
+    await expect(page.getByTestId('nft-market-unavailable')).toContainText('rien n’est inventé à leur place');
+    for (const id of ['nft-market-ask', 'nft-market-offer', 'nft-market-last-sale', 'nft-market-floor', 'nft-market-badge', 'nft-market-rank', 'nft-market-fiat']) await expect(page.getByTestId(id)).toHaveCount(0);
+    expect(await market.innerText()).not.toMatch(/\d[\d.,]*\s?(SOL|USDC|ETH|USD)\b/);
+    await expect(detail).toContainText('Valeur de cet objet : non disponible');
     await expect(page.getByTestId('nft-rarity')).toContainText('non calculées');
     await expect(page.getByTestId('nft-send')).toBeDisabled(); await expect(page.getByTestId('nft-market-actions')).toBeDisabled();
     await expect(page.getByTestId('nft-send-why').locator('[data-reason=not_in_wallet]')).toBeVisible();
     await expect(page.getByTestId('nft-send-why').locator('li')).toHaveCount(1); await expect(page.getByTestId('nft-send-why')).not.toContainText('pas pris en charge dans cette version'); // delivery 2: the factual reason only
-    await expect(page.getByTestId('nft-outside-warning')).toContainText('hors de SP Wallet');
+    await expect(page.getByTestId('nft-outside-warning').first()).toContainText('hors de SP Wallet'); await expect(page.getByTestId('nft-outside-warning').first()).toContainText('ni WalletConnect ni export de clé');
+    await expect(page.getByTestId('nft-market-why')).toContainText('aucun ordre de place de marché n’est décodé, vérifié par le signataire et simulé');
     await expect(page.getByTestId('nft-activity').or(page.getByTestId('nft-activity-error'))).toBeVisible({ timeout: 60_000 });
     await expectNoOverflow(page, 'detail');
     await page.screenshot({ path: 'test-results/shots/nft-reference-phone-fr.png', fullPage: true });

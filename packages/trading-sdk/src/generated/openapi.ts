@@ -976,6 +976,389 @@ export type GetActivityResponse = {
   nextCursor: string | null;
 };
 
+// ---------------------------------------------------------------------------------------------------- listNfts: GET /api/v1/trading/nfts
+export interface ListNftsQuery {
+  network?: string;
+  /** collection key */
+  collection?: string;
+  status?: "in_wallet" | "left" | "tracked";
+  q?: string;
+  /** default: "recent" */
+  sort?: "recent" | "name";
+  /** items an indexer flags as spam are hidden by default, never deleted — default: "hide" */
+  spam?: "hide" | "show" | "only";
+  /** default: 48 */
+  limit?: number;
+  /** opaque position returned as `nextCursor` by the previous page; send it with the same filters — pattern: ^[A-Za-z0-9_-]+$ */
+  cursor?: string;
+}
+export type ListNftsResponse = {
+  items: {
+    /** `family:network:asset-id` — the id every NFT operation takes */
+    key: string;
+    network: string;
+    family: string;
+    standard: string;
+    assetId: string;
+    contractAddress: string | null;
+    /** decimal string (up to 2^256 − 1), never a number */
+    tokenId: string | null;
+    mintAddress: string | null;
+    /** exact integer of base units, as a string — pattern: ^(0|[1-9][0-9]{0,77})$ */
+    quantity: string;
+    /** declared by the creator — not chain truth */
+    name: string | null;
+    onchainName: string | null;
+    collection: {
+      key: string;
+      id: string;
+      name: string | null;
+      /** `known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value */
+      verifiedOnChain: {
+        state: "known" | "none" | "unknown" | "unsupported";
+        [extra: string]: unknown;
+      };
+      [extra: string]: unknown;
+    } | null;
+    state: string;
+    inWallet: boolean;
+    transferable: boolean;
+    transferBlockedBy: string[];
+    /** an indexer's signal, named — never a verdict of this wallet */
+    spam: {
+      by: string;
+    } | null;
+    ownershipSource: {
+      category: string;
+      source: string;
+      confidence: string;
+      fetchedAt: string;
+      stale: boolean;
+      [extra: string]: unknown;
+    };
+    [extra: string]: unknown;
+  }[];
+  total: number;
+  hiddenSpam: number;
+  /** pass it as `cursor` to read the next (older) page; null when there is none */
+  nextCursor: string | null;
+  /** NFTs have no value in this API: never zero, never a floor */
+  valuation: {
+    state: "unavailable";
+    reason: string;
+    note: string;
+  };
+  asOf: string;
+};
+
+// ---------------------------------------------------------------------------------------------------- getNft: GET /api/v1/trading/nfts/item
+export interface GetNftQuery {
+  /** `family:network:asset-id`, as returned by GET /nfts */
+  key: string;
+}
+export type GetNftResponse = {
+  nft: {
+    /** `family:network:asset-id` — the id every NFT operation takes */
+    key: string;
+    network: string;
+    family: string;
+    standard: string;
+    assetId: string;
+    contractAddress: string | null;
+    /** decimal string (up to 2^256 − 1), never a number */
+    tokenId: string | null;
+    mintAddress: string | null;
+    /** exact integer of base units, as a string — pattern: ^(0|[1-9][0-9]{0,77})$ */
+    quantity: string;
+    /** declared by the creator — not chain truth */
+    name: string | null;
+    onchainName: string | null;
+    collection: {
+      key: string;
+      id: string;
+      name: string | null;
+      /** `known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value */
+      verifiedOnChain: {
+        state: "known" | "none" | "unknown" | "unsupported";
+        [extra: string]: unknown;
+      };
+      [extra: string]: unknown;
+    } | null;
+    state: string;
+    inWallet: boolean;
+    transferable: boolean;
+    transferBlockedBy: string[];
+    /** an indexer's signal, named — never a verdict of this wallet */
+    spam: {
+      by: string;
+    } | null;
+    ownershipSource: {
+      category: string;
+      source: string;
+      confidence: string;
+      fetchedAt: string;
+      stale: boolean;
+      [extra: string]: unknown;
+    };
+    ownership: {
+      state: string;
+      /** `known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value */
+      owner: {
+        state: "known" | "none" | "unknown" | "unsupported";
+        [extra: string]: unknown;
+      };
+      heldByWallet: boolean;
+      [extra: string]: unknown;
+    };
+    /** declared by the creator: text, never chain truth */
+    metadata: {
+      status: string;
+      name: string | null;
+      description: string | null;
+      attributes: {
+        traitType: string | null;
+        value: string;
+        [extra: string]: unknown;
+      }[];
+      [extra: string]: unknown;
+    };
+    sources: {
+      category: "onchain" | "creator_metadata" | "indexed" | "market" | "computed";
+      source: string;
+      stale: boolean;
+      [extra: string]: unknown;
+    }[];
+    [extra: string]: unknown;
+  };
+  /** the market actions, none of which exists in this version: every one is `available: false` with its reason */
+  marketActions: {
+    id: string;
+    available: false;
+    reason: string;
+  }[];
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- getNftActivity: GET /api/v1/trading/nfts/activity
+export interface GetNftActivityQuery {
+  key: string;
+  /** default: 20 */
+  limit?: number;
+  cursor?: string;
+  type?: "mint" | "transfer" | "transfer-in" | "transfer-out" | "burn" | "sale" | "unknown";
+}
+export type GetNftActivityResponse = {
+  key: string;
+  events: {
+    id: string;
+    type: string;
+    tx: string;
+    at: string | null;
+    from: string | null;
+    to: string | null;
+    quantity: string;
+    finality: string;
+    /** set ONLY when a payment of the same transaction was linked by a decoded marketplace event; a transfer alone never has one */
+    price: {
+      /** exact integer of base units, as a string — pattern: ^(0|[1-9][0-9]{0,77})$ */
+      amount: string;
+      currency: {
+        network: string;
+        /** `native`, or the exact mint / contract */
+        asset: string;
+        symbol: string;
+        decimals: number;
+      };
+      [extra: string]: unknown;
+    } | null;
+    interpretedBy: string;
+    [extra: string]: unknown;
+  }[];
+  /** pass it as `cursor` to read the next (older) page; null when there is none */
+  nextCursor: string | null;
+  completeness: string;
+  note: string | null;
+  error: string | null;
+};
+
+// ---------------------------------------------------------------------------------------------------- getNftMarket: GET /api/v1/trading/nfts/market
+export interface GetNftMarketQuery {
+  network: string;
+  /** EVM: the contract; Solana: the mint / asset address */
+  address: string;
+  /** EVM: required, decimal or 0x-hex */
+  tokenId?: string;
+}
+export type GetNftMarketResponse = {
+  key: string;
+  network: string;
+  standard: string;
+  /** ONE ROW PER SOURCE: never merged, never averaged */
+  sources: {
+    status: {
+      provider: string;
+      name: string;
+      state: "ok" | "needs_key" | "off" | "not_covered" | "error";
+      code: string | null;
+      /** NAME of the server variable that turns the source on */
+      unlockedBy: string | null;
+      /** true: the last answer of a source that is failing now */
+      stale: boolean;
+      [extra: string]: unknown;
+    };
+    url: string | null;
+    /** `known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value */
+    listed: {
+      state: "known" | "none" | "unknown" | "unsupported";
+      [extra: string]: unknown;
+    };
+    /** asking price of a live listing */
+    ask: {
+      state: "known" | "none" | "unknown" | "unsupported";
+      [extra: string]: unknown;
+    };
+    /** `known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value */
+    bestOffer: {
+      state: "known" | "none" | "unknown" | "unsupported";
+      [extra: string]: unknown;
+    };
+    /** last sale the source reports */
+    lastSale: {
+      state: "known" | "none" | "unknown" | "unsupported";
+      [extra: string]: unknown;
+    };
+    /** a statistic of the COLLECTION — never the value of this item */
+    collectionFloor: {
+      state: "known" | "none" | "unknown" | "unsupported";
+      [extra: string]: unknown;
+    };
+    /** the marketplace's own badge, named — not an on-chain verification */
+    verification: {
+      state: "verified" | "not_verified" | "unknown";
+      providerValue: string | null;
+      by: string;
+      [extra: string]: unknown;
+    } | null;
+    /** `known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value */
+    rarity: {
+      state: "known" | "none" | "unknown" | "unsupported";
+      [extra: string]: unknown;
+    };
+    [extra: string]: unknown;
+  }[];
+  contradictions: {
+    field: string;
+    providers: string[];
+    note: string;
+    [extra: string]: unknown;
+  }[];
+  /** fiat rates of the currencies quoted, keyed `network:asset` — secondary information with its own source and date */
+  rates: Record<string, {
+    symbol: string;
+    usd: string | null;
+    cad: string | null;
+    source: string;
+    priceAt: string | null;
+    stale: boolean;
+    /** set, with `usd` and `cad` null, when the price source is licensed for internal use and the caller is an API key */
+    withheld: string | null;
+    [extra: string]: unknown;
+  }>;
+  value: {
+    state: "unavailable";
+    reason: string;
+  };
+  /** the market actions, none of which exists in this version: every one is `available: false` with its reason */
+  marketActions: {
+    id: string;
+    available: false;
+    reason: string;
+  }[];
+  asOf: string;
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- getNftMarketEvents: GET /api/v1/trading/nfts/market/events
+export interface GetNftMarketEventsQuery {
+  network: string;
+  address: string;
+  tokenId?: string;
+  /** pattern: ^[a-z][a-z0-9-]{1,30}$ */
+  provider?: string;
+  /** comma-separated: sale, list, delist, offer, cancel-offer, transfer, mint — pattern: ^[a-z,-]+$ */
+  type?: string;
+  /** pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  after?: string;
+  /** pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  before?: string;
+  /** a position in ONE source's list: send it with `provider` */
+  cursor?: string;
+  /** default: 20 */
+  limit?: number;
+}
+export type GetNftMarketEventsResponse = {
+  key: string;
+  sources: {
+    status: {
+      provider: string;
+      name: string;
+      state: "ok" | "needs_key" | "off" | "not_covered" | "error";
+      code: string | null;
+      /** NAME of the server variable that turns the source on */
+      unlockedBy: string | null;
+      /** true: the last answer of a source that is failing now */
+      stale: boolean;
+      [extra: string]: unknown;
+    };
+    events: {
+      type: "sale" | "list" | "delist" | "offer" | "cancel-offer" | "accept-offer" | "transfer" | "mint" | "unknown";
+      providerType: string;
+      at: string | null;
+      tx: string | null;
+      from: string | null;
+      to: string | null;
+      /** exact integer of base units, as a string — pattern: ^(0|[1-9][0-9]{0,77})$ */
+      quantity: string;
+      price: {
+        /** exact integer of base units, as a string — pattern: ^(0|[1-9][0-9]{0,77})$ */
+        amount: string;
+        currency: {
+          network: string;
+          /** `native`, or the exact mint / contract */
+          asset: string;
+          symbol: string;
+          decimals: number;
+        };
+        /** `source_decimal`: the source gave a decimal number, converted digit by digit */
+        precision: "exact" | "source_decimal";
+      } | null;
+      flags: {
+        /** as the SOURCE reports it; `unknown` when it has no such flag — never filtered */
+        washTrade: {
+          state: "known" | "none" | "unknown" | "unsupported";
+          [extra: string]: unknown;
+        };
+        [extra: string]: unknown;
+      };
+      [extra: string]: unknown;
+    }[];
+    /** pass it as `cursor` to read the next (older) page; null when there is none */
+    nextCursor: string | null;
+  }[];
+  rates: Record<string, {
+    symbol: string;
+    usd: string | null;
+    cad: string | null;
+    source: string;
+    priceAt: string | null;
+    stale: boolean;
+    /** set, with `usd` and `cad` null, when the price source is licensed for internal use and the caller is an API key */
+    withheld: string | null;
+    [extra: string]: unknown;
+  }>;
+  asOf: string;
+};
+
 // ---------------------------------------------------------------------------------------------------- listPositions: GET /api/v1/trading/positions
 export interface ListPositionsQuery {
   /** paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. */
@@ -1778,6 +2161,11 @@ export const OPERATIONS = {
   getPortfolio: { method: "GET", path: "/api/v1/trading/portfolio", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 401, 403, 429, 500, 503], errorsOpen: false },
   getBalances: { method: "GET", path: "/api/v1/trading/balances", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500, 503], errorsOpen: false },
   getActivity: { method: "GET", path: "/api/v1/trading/activity", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500], errorsOpen: false },
+  listNfts: { method: "GET", path: "/api/v1/trading/nfts", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500, 503], errorsOpen: false },
+  getNft: { method: "GET", path: "/api/v1/trading/nfts/item", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 429, 500, 503], errorsOpen: false },
+  getNftActivity: { method: "GET", path: "/api/v1/trading/nfts/activity", scope: "wallet:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 422, 429, 500, 502, 503], errorsOpen: false },
+  getNftMarket: { method: "GET", path: "/api/v1/trading/nfts/market", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 422, 429, 500, 502, 503], errorsOpen: false },
+  getNftMarketEvents: { method: "GET", path: "/api/v1/trading/nfts/market/events", scope: "markets:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 404, 422, 429, 500, 502, 503], errorsOpen: false },
   listPositions: { method: "GET", path: "/api/v1/trading/positions", scope: "positions:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500, 503], errorsOpen: false },
   listOrders: { method: "GET", path: "/api/v1/trading/orders", scope: "orders:read", implemented: true, idempotent: false, requiresMandate: false, statuses: [200, 400, 401, 403, 429, 500], errorsOpen: false },
   placeOrder: { method: "POST", path: "/api/v1/trading/orders", scope: "orders:execute", implemented: true, idempotent: true, requiresMandate: true, statuses: [200, 400, 401, 403, 404, 409, 422, 423, 429, 500, 501, 502, 503], errorsOpen: true },
@@ -1824,6 +2212,11 @@ export const OPERATION_ERRORS: Record<OperationId, readonly (readonly [number, s
   getPortfolio: [[401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "service_unavailable"], [503, "signer_unreachable"]],
   getBalances: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "unknown_network"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "service_unavailable"], [503, "signer_unreachable"]],
   getActivity: [[400, "bad_request"], [400, "invalid_cursor"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
+  listNfts: [[400, "bad_request"], [400, "invalid_cursor"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "unknown_network"], [404, "unknown_nft"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "nft_disabled"], [503, "signer_unreachable"]],
+  getNft: [[400, "bad_request"], [400, "invalid_cursor"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "unknown_network"], [404, "unknown_nft"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "nft_disabled"], [503, "signer_unreachable"]],
+  getNftActivity: [[400, "bad_request"], [400, "invalid_cursor"], [400, "nft_bad_identifier"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "nft_not_found"], [404, "unknown_network"], [404, "unknown_nft"], [422, "nft_unsupported_chain"], [422, "nft_unsupported_standard"], [429, "auth_throttled"], [429, "nft_budget_exhausted"], [429, "nft_provider_rate_limited"], [429, "rate_limited"], [500, "internal"], [502, "nft_provider_bad_answer"], [502, "nft_provider_disagreement"], [503, "nft_disabled"], [503, "nft_provider_method_unsupported"], [503, "nft_provider_not_configured"], [503, "nft_provider_unavailable"], [503, "signer_unreachable"]],
+  getNftMarket: [[400, "bad_request"], [400, "nft_bad_identifier"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "nft_not_found"], [404, "unknown_network"], [422, "nft_unsupported_chain"], [422, "nft_unsupported_standard"], [429, "auth_throttled"], [429, "nft_budget_exhausted"], [429, "nft_provider_rate_limited"], [429, "rate_limited"], [500, "internal"], [502, "nft_provider_bad_answer"], [502, "nft_provider_disagreement"], [503, "nft_disabled"], [503, "nft_provider_method_unsupported"], [503, "nft_provider_not_configured"], [503, "nft_provider_unavailable"], [503, "signer_unreachable"]],
+  getNftMarketEvents: [[400, "bad_request"], [400, "nft_bad_identifier"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [404, "nft_not_found"], [404, "unknown_network"], [422, "nft_unsupported_chain"], [422, "nft_unsupported_standard"], [429, "auth_throttled"], [429, "nft_budget_exhausted"], [429, "nft_provider_rate_limited"], [429, "rate_limited"], [500, "internal"], [502, "nft_provider_bad_answer"], [502, "nft_provider_disagreement"], [503, "nft_disabled"], [503, "nft_provider_method_unsupported"], [503, "nft_provider_not_configured"], [503, "nft_provider_unavailable"], [503, "signer_unreachable"]],
   listPositions: [[400, "bad_request"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [503, "service_unavailable"]],
   listOrders: [[400, "bad_request"], [400, "invalid_cursor"], [401, "unauthenticated"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "mixed_credentials"], [403, "restricted"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"]],
   placeOrder: [[400, "bad_policy"], [400, "bad_request"], [400, "idempotency"], [400, "invalid_order"], [400, "stale_request"], [401, "unauthenticated"], [403, "execution_disabled"], [403, "gmx_disabled"], [403, "gmx_requires_owner_passkey"], [403, "insufficient_scope"], [403, "ip_not_allowed"], [403, "key_limit_exceeded"], [403, "mainnet_disabled"], [403, "mandate_denied"], [403, "mandate_integrity"], [403, "mandate_mainnet_disabled"], [403, "mandate_not_approved"], [403, "mandate_required"], [403, "mixed_credentials"], [403, "owner_session_required"], [403, "position_not_attributable"], [403, "restricted"], [403, "spot_execution_requires_agent_vault"], [403, "venue_restricted"], [404, "unknown_account"], [404, "unknown_instrument"], [404, "unknown_market"], [404, "unknown_venue"], [409, "account_has_active_mandate"], [409, "account_required"], [409, "ambiguous_command"], [409, "ambiguous_order"], [409, "ambiguous_symbol"], [409, "bad_state"], [409, "idempotency_conflict"], [409, "idempotency_in_progress"], [422, "authorization_expired"], [422, "bad_input"], [422, "bad_mark"], [422, "bad_order"], [422, "bad_policy"], [422, "below_min_notional"], [422, "below_min_size"], [422, "daily_loss_exceeded"], [422, "data_mismatch"], [422, "duplicate_client_id"], [422, "fee_cap_not_expressible"], [422, "gmx_leverage_required"], [422, "gross_exposure_exceeded"], [422, "halted"], [422, "inconsistent_prices"], [422, "instrument_halted"], [422, "instrument_mismatch"], [422, "instrument_not_allowed"], [422, "instrument_reduce_only"], [422, "insufficient_collateral"], [422, "invalid_order"], [422, "leverage_exceeded"], [422, "leverage_mismatch"], [422, "liquidation_too_close"], [422, "live_not_available"], [422, "mandate_mismatch"], [422, "mandate_none"], [422, "mandate_wind_down"], [422, "mark_index_divergence"], [422, "missing_balance"], [422, "missing_reference_price"], [422, "mode_read_only"], [422, "no_account"], [422, "no_client_id_format"], [422, "no_instrument"], [422, "no_position"], [422, "order_notional_exceeded"], [422, "order_rate_day"], [422, "order_rate_minute"], [422, "paper_unsupported"], [422, "position_notional_exceeded"], [422, "price_deviation"], [422, "price_not_on_tick"], [422, "price_required"], [422, "reduce_only_would_flip"], [422, "reduce_only_would_increase"], [422, "risk_denied"], [422, "size_not_on_lot"], [422, "spot_buy_needs_quote_amount"], [422, "spot_market_only"], [422, "spot_paper_not_available"], [422, "spot_via_swap_screen"], [422, "stale_book"], [422, "stale_ticker"], [422, "swap_not_enabled"], [422, "total_loss_exceeded"], [422, "trigger_required"], [422, "unknown_instrument"], [422, "unsupported_asset"], [422, "venue_not_wired"], [422, "venue_rejected"], [422, "zero_size"], [423, "halted"], [423, "kill_switch_active"], [423, "read_only_mode"], [429, "auth_throttled"], [429, "rate_limited"], [500, "internal"], [501, "execution_not_wired"], [502, "swap_flow_failed"], [503, "authorization_unknown"], [503, "mandate_unavailable"], [503, "no_liquidity"], [503, "signer_unreachable"], [503, "stale_data"], [503, "unknown_instrument"], [503, "venue_rate_limited"], [503, "venue_timeout"], [503, "venue_unavailable"]],

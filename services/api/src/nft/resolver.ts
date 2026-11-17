@@ -69,6 +69,8 @@ export function createResolver(deps: ResolverDeps) {
   const statusOf = (code: string): MetadataStatus => (['json_malformed', 'json_not_object', 'json_too_deep', 'json_too_many_nodes'].includes(code) ? 'malformed' : code === 'too_large' || code === 'json_too_large' || code === 'uri_too_long' ? 'too_large'
     : ['timeout', 'connect_failed', 'dns_failed', 'http_error', 'budget_exhausted', 'no_gateway', 'too_many_redirects'].includes(code) ? 'unreachable' : 'blocked');
 
+  /** delivery 3: an image a market source names (collection logo / banner). Same rules as a creator's media: opaque id, fetched by the pinned fetcher, sniffed, served inert */
+  async function registerExternalImage(url: string): Promise<string | null> { const m = await registerMediaFor('image', url, null); return m.status === 'blocked' ? null : m.id; }
   async function registerMediaFor(role: NftMediaRecord['role'], sourceUri: string, declaredMime: string | null): Promise<NftMediaRecord> {
     const id = mediaIdOf(sourceUri), r = resolveUri(sourceUri, cfg.gateways, 'media');
     const blocked = r.ok ? null : r.code;
@@ -82,6 +84,7 @@ export function createResolver(deps: ResolverDeps) {
   }
 
   return {
+    registerExternalImage,
     /** Fill `asset.metadata` and `asset.media` from the asset's metadata URI. Never throws: a failure is a status with a code. */
     async resolveMetadata(asset: NftAsset, o: { force?: boolean } = {}): Promise<NftAsset> {
       const md = asset.metadata, now = deps.now();

@@ -357,6 +357,22 @@ describe('Bitcoin inscription safety — the signer\'s outpoint lock list', () =
       from: keys.addresses.litecoin!, to: 'ltc1qg42tkwuuxefutzxezdkdel39gfstuap288mfea', maxFee: '100000', btc: { inputs: [{ ...INSCRIPTION, value: '5000000' }], change: '2990000', fee: '10000' } };
     expect(await go(ltc)).toBe('SIGNED');
   });
+  it('the lock list covers the three Bitcoin-style networks (Bitcoin, Litecoin, Dogecoin) — and, as stated, NOT Bitcoin Cash', async () => {
+    // delivery 3: delivery 2's note said Litecoin and Dogecoin are covered; this is the test of it. Bitcoin Cash is another family
+    // (its coins travel in the plugin section, and its NFTs are CashTokens, not inscriptions): a lock there is refused, not silently ignored
+    const { signer, pk, nowRef } = await setup(), t = nowRef.t, go = (i: Intent) => refusal(signer.sign(i, pk.assert(intentHash(i))));
+    const other = deriveKeys('legal winner thank year wave sausage worth useful legal winner thank yellow').addresses;
+    for (const [network, symbol] of [['litecoin', 'LTC'], ['dogecoin', 'DOGE']] as const) {
+      const l = lock(t, { network });
+      expect(await signer.utxoLocks(l, pk.assert(utxoLockHash(l))), network).toMatchObject({ network, action: 'lock', changed: 1, locked: 1 });
+      const send: Intent = { v: 1, proposalId: uuid(), keyId: keys.keyId, createdAt: t, expiresAt: t + 120, policyVersion: 4, network, chainRef: NETWORKS[network].chainRef, asset: 'native', symbol, decimals: 8, amount: '2000000',
+        from: keys.addresses[network]!, to: other[network]!, maxFee: '100000', btc: { inputs: [{ ...INSCRIPTION, value: '5000000' }], change: '2990000', fee: '10000' } };
+      expect(await go(send), network).toBe('utxo_locked');
+    }
+    expect(Object.keys(signer.status().utxoLocks).sort()).toEqual(['dogecoin', 'litecoin']);
+    const bch = lock(t, { network: 'bitcoincash' });
+    expect(await refusal(signer.utxoLocks(bch, pk.assert(utxoLockHash(bch))))).toBe('wrong_chain');
+  });
   it('the lock survives a restart, and a cross-chain swap from Bitcoin (THORChain) is refused on a locked input before anything else is looked at', async () => {
     const { signer, pk, nowRef, dir } = await setup(), t = nowRef.t, l = lock(t, { outpoints: [INSCRIPTION, COIN], reason: 'ord' });
     await signer.utxoLocks(l, pk.assert(utxoLockHash(l)));

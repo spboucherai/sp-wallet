@@ -41,7 +41,7 @@ authorization, an approved burn) and inside bounds the signer enforces itself: t
 API can do through each, in `docs/adr/0001-custody.md`. The risk engine, the kill switch and the server locks are
 API-side: they bound an honest API, not a compromised one.
 
-## NFTs (inventory and secure transfer — deliveries 1 and 2 of `docs/nft/NFT-BRIEF.md`)
+## NFTs (inventory, secure transfer, market READ — deliveries 1 to 3 of `docs/nft/NFT-BRIEF.md`)
 
 Assets → **NFT**: gallery, collection and item pages, each value with its source (on-chain / creator metadata / indexed /
 market) and its freshness. **Send** (delivery 2): one NFT transfer = one passkey approval over a canonical NFT intent; the
@@ -59,6 +59,13 @@ controls are shown disabled with the reason. NFT transfers were proven on local 
 | Ethereum, Base, Arbitrum, Polygon, Optimism, BNB Chain, Avalanche, HyperEVM | **blocked without an indexer** (`NFT_EVM_INDEXER_URLS`); add by contract + token id, verified on-chain | yes (ERC-721, ERC-1155 with exact quantity); arrivals detected on known contracts after finality | recent blocks only | **yes**: ERC-721, ERC-1155 (quantity). **No**: non-standard contracts | link to the marketplace only |
 | Bitcoin | no (inscriptions are not listed). Ordinary BTC sends keep away from outputs locked with the passkey (refused by the signer), reported by an ord server (`NFT_ORDINALS_API_URL`), or — without one — flagged by a heuristic (≤ 10 000 sat; not a detection) | no | no | **no** (no Ordinals transfer) | no |
 | Litecoin, Dogecoin, Bitcoin Cash, Stellar, XRP Ledger, TRON, Aptos, Cosmos Hub, Sui, NEAR, TON, Cardano, Polkadot | not supported (no adapter) | no | no | no | no |
+
+**Market data (delivery 3) is read-only.** With a key or a setting, each market source answers on its own row — asking
+price, best offer, last sale, collection floor, each in its own currency with source and age; without one, every market
+field reads "unavailable" with its reason and the variable that would turn it on (`OPENSEA_API_KEY`,
+`NFT_MARKET_MAGICEDEN`). EVM auto-discovery needs `NFT_EVM_PROVIDER` (Alchemy or OpenSea; hints re-verified on-chain).
+**No market write exists**: buy, sell, list, offer, accept and cancel are disabled with the reason; the decision document
+for a first one is `docs/nft/NFT-MARKET-WRITES.md`. Five NFT read operations are in the trading API and both SDKs.
 
 Details: `docs/nft/NFT-AUDIT.md` (matrix and audit), `NFT-TRANSFERS.md` (transfers: intents, what the signer verifies,
 policy keys, per-standard matrix, threats, rollback), `NFT-SOURCES.md` (sources, quotas, terms, variables),

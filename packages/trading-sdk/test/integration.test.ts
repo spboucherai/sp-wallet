@@ -171,10 +171,37 @@ describe.skipIf(skip !== null)('integration: reads against the real route handle
     const unknown = declared('getPrivateMarketCompany', await caught(c.getPrivateMarketCompany('no-such-company')));
     expect(unknown).toBeInstanceOf(NotFound); expect(unknown.code).toBe('unknown_company');
   }, 300_000);
+  it('NFT reads: listNfts / getNft / getNftActivity (the wallet\'s inventory) and getNftMarket / getNftMarketEvents (any item, one row per source)', async () => {
+    const c = client('reader', { timeoutMs: 90_000 }), REF = 'CMhGwGHMbVaBmxebfU3t5eViSf6FKHnvFCBNiA1D659j';
+    const l = await c.listNfts({ limit: 5 });
+    // the throwaway wallet of the stack holds no NFT; an NFT list never carries a value
+    expect(l).toMatchObject({ items: [], total: 0, nextCursor: null, valuation: { state: 'unavailable' } }); expect(typeof l.hiddenSpam).toBe('number');
+    say(`listNfts({limit:5}) → ${meta(l)} total=${l.total} valuation=${l.valuation.state} (${l.valuation.reason})`);
+    const items: unknown[] = []; for await (const x of c.iterateNfts({ limit: 2 }, { maxItems: 3 })) items.push(x); expect(items).toEqual([]);
+    const none = declared('getNft', await caught(c.getNft(`sol:solana:${REF}`)));
+    expect(none).toBeInstanceOf(NotFound); expect(none.code).toBe('unknown_nft'); say(`getNft(<an item the wallet does not hold>) → ${none.name} ${none.status} ${none.code}`);
+    const na = declared('getNftActivity', await caught(c.getNftActivity({ key: `sol:solana:${REF}` }))); expect(na.code).toBe('unknown_nft');
+    const bad = declared('getNftMarket', await caught(c.getNftMarket({ network: 'cardano', address: 'a'.repeat(40) }))); expect(bad.code).toBe('nft_unsupported_chain'); say(`getNftMarket({network:'cardano'}) → ${bad.name} ${bad.status} ${bad.code}`);
+    // the reference item is read on the public Solana endpoints: a market answer (no provider is configured on this stack: every
+    // source says why it is absent), or a declared failure of the chain source — never an invented figure
+    // (a client-side timeout — the keyless public endpoints can take minutes when they rate-limit — is not a server answer: it is reported, not judged)
+    const m = await c.getNftMarket({ network: 'solana', address: REF }).catch((e: unknown) => ((e as SPWalletError).status === null ? (e as SPWalletError) : declared('getNftMarket', e as SPWalletError)));
+    if (m instanceof SPWalletError) say(`getNftMarket(reference item) → ${m.name} ${m.status} ${m.code} (the public chain endpoints did not answer in time)`);
+    else {
+      expect(m.key).toBe(`sol:solana:${REF}`); expect(m.sources.map((s) => s.status.state).sort()).toEqual(['needs_key', 'off']); expect(m.sources.find((s) => s.status.provider === 'opensea')!.status.unlockedBy).toBe('OPENSEA_API_KEY');
+      for (const s of m.sources) for (const k of [s.listed, s.ask, s.bestOffer, s.lastSale, s.collectionFloor]) expect(k.state).toBe('unknown');
+      expect(m.rates).toEqual({}); expect(m.value.state).toBe('unavailable'); expect(m.marketActions.every((a) => a.available === false)).toBe(true); expect(JSON.stringify(m)).not.toMatch(/heldByWallet|inWallet/);
+      say(`getNftMarket(reference item) → ${meta(m)} sources=${m.sources.map((s) => `${s.status.provider}:${s.status.state}(${s.status.unlockedBy})`).join(', ')} value=${m.value.state}`);
+      const ev = await c.getNftMarketEvents({ network: 'solana', address: REF, type: 'sale', limit: 5 });
+      expect(ev.sources.every((s) => s.events.length === 0 && s.status.state !== 'ok')).toBe(true); say(`getNftMarketEvents(reference item) → ${meta(ev)} ${ev.sources.map((s) => `${s.status.provider}:${s.status.state}`).join(', ')}`);
+    }
+    const cur = declared('getNftMarketEvents', await caught(c.getNftMarketEvents({ network: 'solana', address: REF, cursor: 'abc' }))); expect(cur.code).toBe('bad_request');
+  }, 300_000);
   it('every read operation of the document is exercised in this file', () => {
     const reads = (Object.keys(OPERATIONS) as OperationId[]).filter((id) => OPERATIONS[id].method === 'GET');
-    expect(reads.sort()).toEqual(['compareMarkets', 'getActivity', 'getAgent', 'getAgentPerformance', 'getBalances', 'getCandles', 'getJob', 'getMarket', 'getOpenApi', 'getOrder', 'getOrderbook', 'getPortfolio', 'getPrivateMarket',
-      'getPrivateMarketCompany', 'getRisk', 'listAgentJournal', 'listAgentOrders', 'listAgentSignals', 'listAgentTemplates', 'listAgents', 'listMarkets', 'listOrders', 'listPositions', 'listPrivateMarkets', 'listStrategies']);
+    expect(reads.sort()).toEqual(['compareMarkets', 'getActivity', 'getAgent', 'getAgentPerformance', 'getBalances', 'getCandles', 'getJob', 'getMarket',
+      'getNft', 'getNftActivity', 'getNftMarket', 'getNftMarketEvents', 'getOpenApi', 'getOrder', 'getOrderbook', 'getPortfolio', 'getPrivateMarket',
+      'getPrivateMarketCompany', 'getRisk', 'listAgentJournal', 'listAgentOrders', 'listAgentSignals', 'listAgentTemplates', 'listAgents', 'listMarkets', 'listNfts', 'listOrders', 'listPositions', 'listPrivateMarkets', 'listStrategies']);
   });
   it('rate-limit headers are exposed on every answer', async () => {
     const c = client('reader');

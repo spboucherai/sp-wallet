@@ -30,6 +30,13 @@ export interface NftConfig {
   inventoryMax: number;
   /** delivery 2: base URL of a self-hosted `ord` server (inscription-aware coin selection for Bitcoin); null = heuristic only */
   ordinalsApiUrl: string | null;
+  /** delivery 3 — market READ sources and the keyed EVM discovery provider. Keys are secrets: they are read here and nowhere else, and never reported */
+  openSeaApiKey: string | null;
+  /** OpenSea market read: on when the key is set, unless NFT_MARKET_OPENSEA=off */
+  marketOpenSea: boolean;
+  /** NFT_EVM_PROVIDER: which keyed indexer names the NFTs of the wallet's EVM address (hints, re-verified on-chain). It receives that address: never on by default */
+  evmProvider: 'alchemy' | 'opensea' | null;
+  alchemyApiKey: string | null;
 }
 export function nftConfig(env: Env = process.env): NftConfig {
   let evmIndexers: Record<string, string> = {};
@@ -42,7 +49,13 @@ export function nftConfig(env: Env = process.env): NftConfig {
       evmIndexers[id] = httpsBase('NFT_EVM_INDEXER_URLS', String(u))!;
     }
   }
+  const key = (name: string, v: string | undefined): string | null => { if (!v) return null; if (!/^[A-Za-z0-9_-]{8,160}$/.test(v)) throw new Error(`${name}: unexpected format`); return v; };
+  const evmProvider = env.NFT_EVM_PROVIDER ? env.NFT_EVM_PROVIDER.toLowerCase() : null;
+  if (evmProvider !== null && evmProvider !== 'alchemy' && evmProvider !== 'opensea') throw new Error('NFT_EVM_PROVIDER: expected alchemy or opensea');
+  const openSeaApiKey = key('OPENSEA_API_KEY', env.OPENSEA_API_KEY);
   return {
+    openSeaApiKey, marketOpenSea: !!openSeaApiKey && env.NFT_MARKET_OPENSEA !== 'off', evmProvider,
+    alchemyApiKey: key('ALCHEMY_API_KEY', env.ALCHEMY_API_KEY) ?? key('NFT_EVM_PROVIDER_API_KEY', env.NFT_EVM_PROVIDER_API_KEY),
     enabled: env.NFT_ENABLED !== 'off',
     solanaDasUrl: env.NFT_SOLANA_DAS === 'off' ? 'off' : httpsBase('NFT_SOLANA_DAS_URL', env.NFT_SOLANA_DAS_URL),
     evmIndexers,
@@ -63,6 +76,7 @@ export function nftCapabilities(env: Env = process.env): Capability[] {
   let c: NftConfig;
   try { c = nftConfig(env); } catch (e) { return [{ id: 'nft', on: false, missing: [(e as Error).message.split(':')[0]!], why: `NFT configuration is invalid (${(e as Error).message.split(':')[0]}): the NFT routes answer nft_misconfigured` }]; }
   const evm = Object.keys(c.evmIndexers);
+  const provKey = c.evmProvider === 'alchemy' ? c.alchemyApiKey : c.evmProvider === 'opensea' ? c.openSeaApiKey : null, provVar = c.evmProvider === 'opensea' ? 'OPENSEA_API_KEY' : 'ALCHEMY_API_KEY';
   return [
     { id: 'nft_inventory', on: c.enabled, missing: c.enabled ? [] : ['NFT_ENABLED'], why: c.enabled ? 'read-only NFT inventory: Solana (Token Metadata, pNFT, Token-2022, Core) from the wallet\'s RPC endpoints; EVM by manual addition verified on-chain' : 'NFT_ENABLED=off: the NFT routes answer nft_disabled' },
     { id: 'nft_solana_das', on: c.solanaDasUrl !== 'off', missing: c.solanaDasUrl === 'off' ? ['NFT_SOLANA_DAS'] : [],
@@ -73,6 +87,13 @@ export function nftCapabilities(env: Env = process.env): Capability[] {
     { id: 'nft_transfer', on: c.enabled, missing: c.enabled ? [] : ['NFT_ENABLED'], why: c.enabled ? 'NFT transfers: ERC-721 and ERC-1155 safeTransferFrom on the EVM networks; Token-2022, Token Metadata (programmable NFTs included) and Core on Solana — each one built by the signer from a passkey-approved intent, inside the signer\'s NFT policy. Compressed NFTs and Bitcoin inscriptions are not transferable' : 'NFT_ENABLED=off' },
     // delivery 2: inscription SAFETY of ordinary BTC sends (no inscription is listed or transferred). With an ord server its report decides; without one a heuristic flags small outputs
     { id: 'nft_ordinals', on: !!c.ordinalsApiUrl, missing: c.ordinalsApiUrl ? [] : ['NFT_ORDINALS_API_URL'], why: c.ordinalsApiUrl ? 'ordinary BTC sends never select an output the ord server of NFT_ORDINALS_API_URL reports as carrying an inscription or a rune (or does not know); with that server unreachable Bitcoin sends are refused. Inscriptions are not listed and not transferable' : 'NFT_ORDINALS_API_URL is not set: Bitcoin outputs of at most 10 000 sat, or created by a transaction with an inscription envelope, are kept out of ordinary sends by a HEURISTIC (not a detection) until the owner reviews or locks them; outputs locked with the passkey are refused by the signer. Inscriptions are not listed and not transferable' },
-    { id: 'nft_market_read', on: c.marketMagicEden, missing: c.marketMagicEden ? [] : ['NFT_MARKET_MAGICEDEN'], why: c.marketMagicEden ? 'Solana listing state and collection floor are read from Magic Eden\'s public API (the mint is sent to Magic Eden, never the wallet address)' : 'NFT_MARKET_MAGICEDEN is not "on": no market data is requested; item pages link to the marketplace instead' },
+    // delivery 3: keyed EVM discovery (hints only — every item is re-read on-chain). The provider receives the wallet's EVM address
+    { id: 'nft_evm_provider', on: !!c.evmProvider && !!provKey, missing: !c.evmProvider ? ['NFT_EVM_PROVIDER'] : provKey ? [] : [provVar],
+      why: !c.evmProvider ? 'NFT_EVM_PROVIDER is not set (alchemy | opensea): no keyed indexer is asked which NFTs the wallet\'s EVM address holds' : !provKey ? `NFT_EVM_PROVIDER=${c.evmProvider} needs ${provVar}: the provider is absent` : `EVM NFT discovery hints come from ${c.evmProvider} (the wallet's EVM address is sent to it); every item is re-verified on-chain; a network the key does not cover is reported blocked by provider` },
+    // delivery 3: market READ sources. No market WRITE exists in this version (docs/nft/NFT-MARKET-WRITES.md)
+    { id: 'nft_market_opensea', on: c.marketOpenSea, missing: c.marketOpenSea ? [] : [c.openSeaApiKey ? 'NFT_MARKET_OPENSEA' : 'OPENSEA_API_KEY'],
+      why: c.marketOpenSea ? 'OpenSea API v2 market read (listing, best offer, last sale, events, collection statistics, the marketplace\'s badge) on Solana and 7 EVM networks; the contract + token id (or mint) of an opened item is sent to OpenSea, never the wallet address' : c.openSeaApiKey ? 'NFT_MARKET_OPENSEA=off: the OpenSea market source is turned off' : 'OPENSEA_API_KEY is not set: the OpenSea market source is absent (needsKey)' },
+    { id: 'nft_market_read', on: c.marketMagicEden, missing: c.marketMagicEden ? [] : ['NFT_MARKET_MAGICEDEN'], why: c.marketMagicEden ? 'Solana market data (listing, offers, activity, collection floor) is read from Magic Eden\'s public API (the mint is sent to Magic Eden, never the wallet address)' : 'NFT_MARKET_MAGICEDEN is not "on": Magic Eden is not asked (its API terms page could not be read from the official site by this server: read it before turning the source on)' },
+    { id: 'nft_market_write', on: false, missing: [], why: 'market writes (buy, sell, list, offer, accept, cancel) are not built: no order format is decoded, verified by the signer and simulated in this version; the screens link to the marketplaces\' own pages, outside SP Wallet' },
   ];
 }

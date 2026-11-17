@@ -26,7 +26,7 @@ describe('generated types', () => {
   it('the operation table, the scopes and the events are the document\'s', () => {
     const ids = Object.values(doc.paths as Record<string, Record<string, { operationId: string }>>).flatMap((p) => Object.values(p).map((o) => o.operationId));
     expect(Object.keys(OPERATIONS).sort()).toEqual(ids.sort());
-    expect(ids).toHaveLength(41);
+    expect(ids).toHaveLength(46);                                                               // 41 + the five NFT reads (delivery 3)
     const all = Object.keys(OPERATIONS) as OperationId[], writes = all.filter((id) => OPERATIONS[id].method !== 'GET');
     expect(all.filter((id) => !OPERATIONS[id].implemented)).toEqual([]);                       // every operation of the contract is implemented by the server
     expect(writes).toHaveLength(16);

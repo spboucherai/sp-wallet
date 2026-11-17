@@ -211,7 +211,7 @@ def test_every_schema_of_the_document_matches_its_model() -> None:
     assert not problems, "\n".join(problems)
     assert seen_resp == set(models.RESPONSE_MODELS)
     assert seen_req == set(models.REQUEST_MODELS)
-    assert len(seen_resp) == 41  # every operation has a success schema
+    assert len(seen_resp) == 46  # every operation has a success schema
     assert len(seen_req) == 15  # cancelOrder has no body
     # the components are walked too, and are the classes the answers use
     comp: list[str] = []
@@ -272,7 +272,7 @@ def test_constants_follow_the_document() -> None:
     assert list(models.WEBHOOK_EVENTS) == [e["event"] for e in OPENAPI["x-spw-webhook-events"]]
     ops = dict(_operations())
     assert set(models.OPERATIONS) == set(ops)
-    assert len(ops) == 41
+    assert len(ops) == 46
     assert all(o[3] for o in models.OPERATIONS.values())  # every operation is implemented
     assert sorted(k for k, o in models.OPERATIONS.items() if o[5]) == ["closePosition", "placeOrder", "reducePosition"]  # a mandate on the KEY
     assert list(models.EXECUTION_SCOPES) == ["orders:execute", "orders:cancel", "positions:manage"]

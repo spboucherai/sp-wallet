@@ -18,8 +18,12 @@ import { NftProviderError, NONE, UNSUPPORTED, evmAssetId, known, nftKey, parseTo
 import { decodeAbiParameters, encodeFunctionData, getAddress, keccak256, pad, parseAbi, toHex, type Hex } from 'viem';
 import { hostOnly } from './config.ts';
 import { buildAsset, emptyMetadata, rpcCodeOf, type CollectionInfo, type EventPage, type InventoryResult, type InventorySection, type NftDataProvider, type RpcFn } from './provider.ts';
+import { blockscoutHints, type EvmHintSource } from './evm-hints.ts';
+import { interpretSeaportSale, type ReceiptLog } from './market/seaport.ts';
 
 const FAMILY = 'evm';
+/** what turns EVM discovery on: a keyed provider, or a Blockscout-compatible instance per network */
+export const UNLOCK_DISCOVERY = 'NFT_EVM_PROVIDER / NFT_EVM_INDEXER_URLS';
 const ABI = parseAbi(['function supportsInterface(bytes4) view returns (bool)', 'function ownerOf(uint256) view returns (address)', 'function tokenURI(uint256) view returns (string)',
   'function balanceOf(address,uint256) view returns (uint256)', 'function uri(uint256) view returns (string)', 'function name() view returns (string)', 'function symbol() view returns (string)', 'function totalSupply(uint256) view returns (uint256)']);
 const IF_721 = '0x80ac58cd', IF_1155 = '0xd9b67a26';
@@ -28,13 +32,15 @@ export const TOPIC_SINGLE = keccak256(toHex('TransferSingle(address,address,addr
 export const TOPIC_BATCH = keccak256(toHex('TransferBatch(address,address,address,uint256[],uint256[])'));
 const ZERO = '0x0000000000000000000000000000000000000000';
 
-export interface EvmDeps { rpc: RpcFn; now: () => Date; indexers: Record<string, string>; http: (url: string, init?: RequestInit) => Promise<Response> }
+export interface EvmDeps { rpc: RpcFn; now: () => Date; indexers: Record<string, string>; http: (url: string, init?: RequestInit) => Promise<Response>;
+  /** delivery 3: keyed discovery hint sources (NFT_EVM_PROVIDER), asked before the Blockscout instances of `indexers`; every hint is re-verified on-chain */ hints?: EvmHintSource[] }
 type CallResult = { ok: true; data: Hex; stamp: (covers: DataSourceStamp['covers']) => DataSourceStamp } | { ok: false; reverted: true };
 
 export function evmProvider(deps: EvmDeps): NftDataProvider {
   const nets = () => (Object.values(NETWORKS) as NetworkDef[]).filter((n) => n.family === FAMILY);
   const netOf = (chain: string): NetworkDef => { const n = getNetwork(chain); if (n.family !== FAMILY) throw new NftProviderError('unsupported_chain', 'evm-rpc'); return n; };
   const iso = () => deps.now().toISOString();
+  const sources: EvmHintSource[] = [...(deps.hints ?? []), blockscoutHints({ http: deps.http, instances: deps.indexers })];
   const isRevert = (e: unknown): boolean => { const c = rpcCodeOf(e), m = String((e as Error).message ?? ''); return c !== undefined && (c === 3 || /revert|invalid opcode|out of gas|execution error|invalid jump|stack (under|over)flow|evm error|vm exception/i.test(m)); };
 
   /** One read on every endpoint. Agreement of two or more → chain_verified. A revert is an answer ("the contract refuses this call"). */
@@ -103,31 +109,36 @@ export function evmProvider(deps: EvmDeps): NftDataProvider {
 
     async inventory(chain, owner, o): Promise<InventoryResult> {
       netOf(chain);
-      const assets: NftAsset[] = [], sections: InventorySection[] = [], base = deps.indexers[chain];
-      if (!base) sections.push(section('indexer', { status: 'blocked_by_provider', code: 'no_indexer_configured', unlockedBy: 'NFT_EVM_INDEXER_URLS' }));
+      const assets: NftAsset[] = [], sections: InventorySection[] = [];
+      const able = sources.filter((x) => x.notCovered(chain) === null);
+      if (!able.length) sections.push(section('indexer', { status: 'blocked_by_provider', code: 'no_indexer_configured', unlockedBy: UNLOCK_DISCOVERY }));
       else {
-        try {
-          const hints: { contract: string; id: string }[] = []; let next: Record<string, unknown> | null = null, truncated = false;
-          for (let page = 0; page < 4; page++) {
-            const q = new URLSearchParams({ type: 'ERC-721,ERC-1155', ...(next ? Object.fromEntries(Object.entries(next).map(([k, v]) => [k, String(v)])) : {}) });
-            const r = await deps.http(`${base}/api/v2/addresses/${owner}/nft?${q}`, { headers: { accept: 'application/json', 'user-agent': 'sp-wallet-nft/1' }, signal: AbortSignal.timeout(15_000), redirect: 'error' });
-            if (r.status === 429) throw new NftProviderError('provider_rate_limited', 'evm-indexer');
-            if (!r.ok) throw new NftProviderError('provider_unavailable', 'evm-indexer', `http ${r.status}`);
-            const j = (await r.json()) as { items?: { id?: unknown; token?: { address_hash?: unknown; address?: unknown } }[]; next_page_params?: Record<string, unknown> | null };
-            if (!Array.isArray(j.items)) throw new NftProviderError('provider_bad_answer', 'evm-indexer');
-            for (const it of j.items) { const c = String(it.token?.address_hash ?? it.token?.address ?? ''), id = String(it.id ?? ''); if (/^0x[0-9a-fA-F]{40}$/.test(c) && /^[0-9]{1,78}$/.test(id)) hints.push({ contract: c, id }); }
-            next = j.next_page_params ?? null;
-            if (!next || hints.length >= o.max) { truncated = !!next; break; }
-            truncated = page === 3;
+        // the first source that answers is used; a source that refuses THIS network (a key whose plan does not enable it) is a
+        // "blocked by provider" with its reason — never an empty inventory — and the next source, if any, is asked
+        let done = false, lastFail: InventorySection | null = null;
+        for (const src of able) {
+          const label = `${src.id} (${src.host(chain)})`;
+          try {
+            const { hints, truncated } = await src.list(chain, owner, o.max);
+            let n = 0, unverified = 0;
+            for (const h of hints) {
+              // the indexer's list is a hint: only what the chain confirms as held enters the inventory
+              try { const a = await lookupOne(chain, h.contract, h.id, owner, 'discovered');
+                if (a.ownership.heldByWallet) { a.sources.push({ category: 'indexed', source: src.id, detail: src.host(chain), fetchedAt: iso(), confidence: 'indexer_reported', freshness: 'unknown', covers: ['identity'] });
+                  if (h.spam) a.indexerFlags = { spam: h.spam.flagged, by: src.name, classifications: h.spam.classifications };
+                  assets.push(a); n++; } else unverified++; }
+              catch { unverified++; }
+            }
+            sections.push(section('indexer', { source: label, count: n, truncated, code: unverified ? `not_confirmed_on_chain:${unverified}` : null }));
+            done = true; break;
+          } catch (e) {
+            const pe = e instanceof NftProviderError ? e : null, detail = pe ? /\(([a-z0-9_:]{1,80})\)$/.exec(pe.message)?.[1] ?? '' : '';
+            lastFail = detail.startsWith('network_not_enabled') ? section('indexer', { status: 'blocked_by_provider', code: `network_not_enabled_for_key:${detail.split(':')[1] ?? ''}`, unlockedBy: src.unlockedBy, source: label })
+              : pe?.code === 'provider_not_configured' ? section('indexer', { status: 'blocked_by_provider', code: `key_refused:${detail || 'forbidden'}`, unlockedBy: src.unlockedBy, source: label })
+              : section('indexer', { status: 'error', code: pe ? pe.code : 'provider_unavailable', source: label });
           }
-          let n = 0, unverified = 0;
-          for (const h of hints.slice(0, o.max)) {
-            // the indexer's list is a hint: only what the chain confirms as held enters the inventory
-            try { const a = await lookupOne(chain, h.contract, h.id, owner, 'discovered'); if (a.ownership.heldByWallet) { a.sources.push({ category: 'indexed', source: 'evm-indexer', detail: hostOnly(base), fetchedAt: iso(), confidence: 'indexer_reported', freshness: 'unknown', covers: ['identity'] }); assets.push(a); n++; } else unverified++; }
-            catch { unverified++; }
-          }
-          sections.push(section('indexer', { source: `evm-indexer (${hostOnly(base)})`, count: n, truncated: truncated || hints.length > o.max, code: unverified ? `not_confirmed_on_chain:${unverified}` : null }));
-        } catch (e) { sections.push(section('indexer', { status: 'error', code: e instanceof NftProviderError ? e.code : 'provider_unavailable', source: `evm-indexer (${hostOnly(base)})` })); }
+        }
+        if (!done && lastFail) sections.push(lastFail);
       }
       let m = 0;
       for (const id of o.manual) {
@@ -149,7 +160,7 @@ export function evmProvider(deps: EvmDeps): NftDataProvider {
       const head = BigInt(headR.data);
       const filterOf = (span: bigint) => ({ address: contract, fromBlock: toHex(head > span ? head - span : 0n), toBlock: 'latest',
         topics: asset.standard === 'erc1155' ? [[TOPIC_SINGLE, TOPIC_BATCH]] : [TOPIC_TRANSFER, null, null, pad(toHex(id), { size: 32 })] });
-      type Log = { topics: Hex[]; data: Hex; blockNumber: Hex; blockHash: Hex; transactionHash: Hex; logIndex: Hex; removed?: boolean };
+      type Log = { address?: string; topics: Hex[]; data: Hex; blockNumber: Hex; blockHash: Hex; transactionHash: Hex; logIndex: Hex; removed?: boolean };
       let logs: Log[] | null = null, span = 0n, host = '';
       for (const s of [1000n, 100n]) {
         for (const u of n.rpc) { try { logs = (await deps.rpc(u, 'eth_getLogs', [filterOf(s)])) as Log[]; host = hostOnly(u); span = s; break; } catch { /* next endpoint / smaller window */ } }
@@ -163,15 +174,48 @@ export function evmProvider(deps: EvmDeps): NftDataProvider {
         events.push({ id: `${asset.key}|${l.transactionHash}|${BigInt(l.logIndex)}${sub}`, assetKey: asset.key, type, interpretation: { by: 'spw:evm-transfer-log', note: 'a Transfer log; a payment in the same transaction is not interpreted as a sale' }, tx: l.transactionHash, index: `${BigInt(l.logIndex)}${sub}`,
           blockRef: { number: BigInt(l.blockNumber).toString(10), hash: l.blockHash }, at: null, from, to, quantity, price: null, finality: l.removed ? 'reorged' : head - BigInt(l.blockNumber) >= BigInt(n.minConf) ? 'finalized' : 'confirmed', source: src });
       };
-      for (const l of logs) {
+      const decode = (l: Log): void => {
         try {
-          if (asset.standard !== 'erc1155') { if (l.topics.length === 4 && l.topics[0] === TOPIC_TRANSFER && BigInt(l.topics[3]!) === id) push(l, '', addr(l.topics[1]), addr(l.topics[2]), '1'); continue; }
+          if (asset.standard !== 'erc1155') { if (l.topics.length === 4 && l.topics[0] === TOPIC_TRANSFER && BigInt(l.topics[3]!) === id) push(l, '', addr(l.topics[1]), addr(l.topics[2]), '1'); return; }
           if (l.topics[0] === TOPIC_SINGLE) { const [tid, v] = decodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], l.data); if (tid === id) push(l, '', addr(l.topics[2]), addr(l.topics[3]), v.toString(10)); }
           else if (l.topics[0] === TOPIC_BATCH) { const [ids, vs] = decodeAbiParameters([{ type: 'uint256[]' }, { type: 'uint256[]' }], l.data); ids.forEach((tid, k) => { if (tid === id) push(l, `.${k}`, addr(l.topics[2]), addr(l.topics[3]), (vs[k] ?? 0n).toString(10)); }); }
         } catch { /* a log that does not decode as the standard event is not an event of this token */ }
+      };
+      for (const l of logs) decode(l);
+      // delivery 3 — history beyond the window: a keyed provider names the transactions in which this contract's tokens moved to or
+      // from the wallet; each one is then READ FROM THE CHAIN (its receipt, on the wallet's own endpoints) and decoded like a log above
+      let extended = false;
+      const hs = asset.ownerAddress ? sources.find((x) => x.history && x.notCovered(asset.chainId) === null) : undefined;
+      const receiptOf = async (tx: string): Promise<{ logs: (Log & ReceiptLog)[]; blockNumber: Hex; blockHash: Hex } | null> => { for (const u of n.rpc) { try { const r = (await deps.rpc(u, 'eth_getTransactionReceipt', [tx])) as { logs?: (Log & ReceiptLog)[]; blockNumber: Hex; blockHash: Hex } | null; if (r && Array.isArray(r.logs)) return r as never; } catch { /* next endpoint */ } } return null; };
+      if (hs) { try {
+        const seen = new Set(events.map((e) => e.tx));
+        for (const h of (await hs.history!(asset.chainId, asset.ownerAddress!, contract)).filter((x) => !seen.has(x.tx)).sort((a, b) => Number(BigInt(b.block) - BigInt(a.block))).slice(0, 20)) {
+          const r = await receiptOf(h.tx); if (!r) continue;
+          const before = events.length;
+          for (const l of r.logs) if (l.address?.toLowerCase() === contract.toLowerCase()) decode({ ...l, blockNumber: r.blockNumber, blockHash: r.blockHash });
+          for (const e of events.slice(before)) e.source = { ...src, detail: `${host}; transaction named by ${hs.name}, read from the chain` };
+        }
+        extended = true;
+      } catch { /* the provider failing leaves the recent window as it is */ } }
+      // delivery 3 — sale interpretation, keyless: the receipt of a transfer's transaction is read, and a price is linked ONLY when it
+      // holds a Seaport OrderFulfilled naming this token and one payment currency (market/seaport.ts). At most 12 receipts per call.
+      if (asset.standard === 'erc721' || asset.standard === 'erc1155') {
+        const txs = [...new Set(events.filter((e) => e.type === 'transfer' || e.type === 'transfer-in' || e.type === 'transfer-out').map((e) => e.tx))].slice(0, 12);
+        for (const tx of txs) { try {
+          const r = await receiptOf(tx); if (!r) continue;
+          const sale = interpretSeaportSale(asset.chainId, r.logs, { contract, tokenId: id.toString(10), standard: asset.standard });
+          if (!sale) continue;
+          const t = sale.token === 'native' ? { asset: 'native', symbol: n.native.symbol, decimals: n.native.decimals } : (() => { const d = n.tokens.find((x) => x.id.toLowerCase() === sale.token.toLowerCase()); return d ? { asset: sale.token.toLowerCase(), symbol: d.symbol, decimals: d.decimals } : null; })();
+          if (!t) continue; // a payment token this wallet's registry does not know: its decimals are not guessed — no price
+          const base = events.find((e) => e.tx === tx)!;
+          events.push({ ...base, id: `${asset.key}|${tx}|seaport:${sale.logIndex}`, index: `seaport:${sale.logIndex}`, type: 'sale', from: sale.seller, to: sale.buyer, quantity: sale.quantity,
+            price: { amount: sale.amount, currency: { network: asset.chainId, ...t } },
+            interpretation: { by: 'spw:seaport-order-fulfilled', note: `interpreted from the transaction by SP Wallet: Seaport ${sale.seaport.version} OrderFulfilled ${sale.orderHash} (${sale.side === 'offer' ? 'an offer was accepted' : 'a listing was filled'}); ${sale.fees.length} payment item(s) went to other recipients than the seller` },
+            market: { provider: 'spw-seaport', venue: `Seaport ${sale.seaport.version}`, orderId: sale.orderHash, washTrade: { state: 'unknown', reason: 'not judged by SP Wallet' }, fees: sale.fees.map((f) => ({ kind: 'other' as const, bps: null, amount: { amount: f.amount, currency: { network: asset.chainId, ...t }, precision: 'exact' as const }, recipient: f.recipient, required: null })) } });
+        } catch { /* a receipt that cannot be read or decoded gives no price */ } }
       }
       events.sort((a, b) => Number(BigInt(b.blockRef.number!) - BigInt(a.blockRef.number!)));
-      return { events, cursor: null, completeness: 'recent_window', note: `last_${span}_blocks` };
+      return { events, cursor: null, completeness: extended ? 'partial' : 'recent_window', note: extended ? `last_${span}_blocks_and_provider_history` : `last_${span}_blocks` };
     },
 
     async collection(chain, id): Promise<CollectionInfo> {

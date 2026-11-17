@@ -22,6 +22,9 @@
       "name": "Portfolio"
     },
     {
+      "name": "Nfts"
+    },
+    {
       "name": "Positions"
     },
     {
@@ -5895,6 +5898,2674 @@
           },
           "500": {
             "description": "Server error; a mutating call may or may not have run: send it again with the same Idempotency-Key: `internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/nfts": {
+      "get": {
+        "operationId": "listNfts",
+        "tags": [
+          "Nfts"
+        ],
+        "summary": "NFTs of the wallet (what the chain confirmed as held)",
+        "description": "The inventory as last synchronised: Solana (Token Metadata, programmable, Token-2022, Core, compressed through an index) and the EVM networks (ERC-721, ERC-1155). Every row names the source and confidence of its ownership. NFTs carry NO value: `valuation.state` is `unavailable` (never zero, never a floor) and they are not part of GET /portfolio. Paginated: `nextCursor` of a page is the `cursor` of the next.",
+        "security": [
+          {
+            "bearerKey": [
+              "wallet:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "wallet:read",
+        "x-spw-implemented": true,
+        "x-spw-errors": [
+          {
+            "status": 400,
+            "code": "bad_request"
+          },
+          {
+            "status": 400,
+            "code": "invalid_cursor"
+          },
+          {
+            "status": 401,
+            "code": "unauthenticated"
+          },
+          {
+            "status": 403,
+            "code": "insufficient_scope"
+          },
+          {
+            "status": 403,
+            "code": "ip_not_allowed"
+          },
+          {
+            "status": 403,
+            "code": "mixed_credentials"
+          },
+          {
+            "status": 403,
+            "code": "restricted"
+          },
+          {
+            "status": 404,
+            "code": "unknown_network"
+          },
+          {
+            "status": 404,
+            "code": "unknown_nft"
+          },
+          {
+            "status": 429,
+            "code": "auth_throttled"
+          },
+          {
+            "status": 429,
+            "code": "rate_limited"
+          },
+          {
+            "status": 500,
+            "code": "internal"
+          },
+          {
+            "status": 503,
+            "code": "nft_disabled"
+          },
+          {
+            "status": 503,
+            "code": "signer_unreachable"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "network",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 24
+            }
+          },
+          {
+            "name": "collection",
+            "in": "query",
+            "required": false,
+            "description": "collection key",
+            "schema": {
+              "type": "string",
+              "maxLength": 260
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "in_wallet",
+                "left",
+                "tracked"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "recent",
+              "type": "string",
+              "enum": [
+                "recent",
+                "name"
+              ]
+            }
+          },
+          {
+            "name": "spam",
+            "in": "query",
+            "required": false,
+            "description": "items an indexer flags as spam are hidden by default, never deleted",
+            "schema": {
+              "default": "hide",
+              "type": "string",
+              "enum": [
+                "hide",
+                "show",
+                "only"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 48,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "opaque position returned as `nextCursor` by the previous page; send it with the same filters",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "description": "`family:network:asset-id` — the id every NFT operation takes"
+                          },
+                          "network": {
+                            "type": "string"
+                          },
+                          "family": {
+                            "type": "string"
+                          },
+                          "standard": {
+                            "type": "string"
+                          },
+                          "assetId": {
+                            "type": "string"
+                          },
+                          "contractAddress": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "tokenId": {
+                            "description": "decimal string (up to 2^256 − 1), never a number",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "mintAddress": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "quantity": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9][0-9]{0,77})$",
+                            "description": "exact integer of base units, as a string"
+                          },
+                          "name": {
+                            "description": "declared by the creator — not chain truth",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "onchainName": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "collection": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "verifiedOnChain": {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "known",
+                                          "none",
+                                          "unknown",
+                                          "unsupported"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ],
+                                    "additionalProperties": {},
+                                    "description": "`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value"
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "id",
+                                  "name",
+                                  "verifiedOnChain"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "inWallet": {
+                            "type": "boolean"
+                          },
+                          "transferable": {
+                            "type": "boolean"
+                          },
+                          "transferBlockedBy": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "spam": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "by": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "by"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "an indexer's signal, named — never a verdict of this wallet"
+                          },
+                          "ownershipSource": {
+                            "type": "object",
+                            "properties": {
+                              "category": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "confidence": {
+                                "type": "string"
+                              },
+                              "fetchedAt": {
+                                "type": "string"
+                              },
+                              "stale": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "category",
+                              "source",
+                              "confidence",
+                              "fetchedAt",
+                              "stale"
+                            ],
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "network",
+                          "family",
+                          "standard",
+                          "assetId",
+                          "contractAddress",
+                          "tokenId",
+                          "mintAddress",
+                          "quantity",
+                          "name",
+                          "onchainName",
+                          "collection",
+                          "state",
+                          "inWallet",
+                          "transferable",
+                          "transferBlockedBy",
+                          "spam",
+                          "ownershipSource"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "hiddenSpam": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "nextCursor": {
+                      "description": "pass it as `cursor` to read the next (older) page; null when there is none",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "valuation": {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "unavailable"
+                        },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "reason",
+                        "note"
+                      ],
+                      "additionalProperties": false,
+                      "description": "NFTs have no value in this API: never zero, never a floor"
+                    },
+                    "asOf": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "total",
+                    "hiddenSpam",
+                    "nextCursor",
+                    "valuation",
+                    "asOf"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid: `bad_request`, `invalid_cursor`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, unknown, expired or revoked key: `unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, and refused: `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The object named by the request does not exist: `unknown_network`, `unknown_nft`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests (see the `RateLimit-*` and `Retry-After` headers): `auth_throttled`, `rate_limited`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error; a mutating call may or may not have run: send it again with the same Idempotency-Key: `internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A backing service is unavailable; nothing was done: `nft_disabled`, `signer_unreachable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/nfts/item": {
+      "get": {
+        "operationId": "getNft",
+        "tags": [
+          "Nfts"
+        ],
+        "summary": "One NFT of the wallet: identity, ownership, creator metadata, sources",
+        "description": "Only an NFT of the inventory (404 `unknown_nft` otherwise — a looked-up item is not the wallet's). On-chain facts, creator-declared metadata and indexed data are separate fields, each with its source. `marketActions` lists the market actions: none exists in this version.",
+        "security": [
+          {
+            "bearerKey": [
+              "wallet:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "wallet:read",
+        "x-spw-implemented": true,
+        "x-spw-errors": [
+          {
+            "status": 400,
+            "code": "bad_request"
+          },
+          {
+            "status": 400,
+            "code": "invalid_cursor"
+          },
+          {
+            "status": 401,
+            "code": "unauthenticated"
+          },
+          {
+            "status": 403,
+            "code": "insufficient_scope"
+          },
+          {
+            "status": 403,
+            "code": "ip_not_allowed"
+          },
+          {
+            "status": 403,
+            "code": "mixed_credentials"
+          },
+          {
+            "status": 403,
+            "code": "restricted"
+          },
+          {
+            "status": 404,
+            "code": "unknown_network"
+          },
+          {
+            "status": 404,
+            "code": "unknown_nft"
+          },
+          {
+            "status": 429,
+            "code": "auth_throttled"
+          },
+          {
+            "status": 429,
+            "code": "rate_limited"
+          },
+          {
+            "status": 500,
+            "code": "internal"
+          },
+          {
+            "status": 503,
+            "code": "nft_disabled"
+          },
+          {
+            "status": 503,
+            "code": "signer_unreachable"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "query",
+            "required": true,
+            "description": "`family:network:asset-id`, as returned by GET /nfts",
+            "schema": {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 260
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "nft": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "description": "`family:network:asset-id` — the id every NFT operation takes"
+                        },
+                        "network": {
+                          "type": "string"
+                        },
+                        "family": {
+                          "type": "string"
+                        },
+                        "standard": {
+                          "type": "string"
+                        },
+                        "assetId": {
+                          "type": "string"
+                        },
+                        "contractAddress": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "tokenId": {
+                          "description": "decimal string (up to 2^256 − 1), never a number",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "mintAddress": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "quantity": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]{0,77})$",
+                          "description": "exact integer of base units, as a string"
+                        },
+                        "name": {
+                          "description": "declared by the creator — not chain truth",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "onchainName": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "collection": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "verifiedOnChain": {
+                                  "type": "object",
+                                  "properties": {
+                                    "state": {
+                                      "type": "string",
+                                      "enum": [
+                                        "known",
+                                        "none",
+                                        "unknown",
+                                        "unsupported"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "state"
+                                  ],
+                                  "additionalProperties": {},
+                                  "description": "`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "id",
+                                "name",
+                                "verifiedOnChain"
+                              ],
+                              "additionalProperties": {}
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "inWallet": {
+                          "type": "boolean"
+                        },
+                        "transferable": {
+                          "type": "boolean"
+                        },
+                        "transferBlockedBy": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "spam": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "by": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "by"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "an indexer's signal, named — never a verdict of this wallet"
+                        },
+                        "ownershipSource": {
+                          "type": "object",
+                          "properties": {
+                            "category": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "string"
+                            },
+                            "confidence": {
+                              "type": "string"
+                            },
+                            "fetchedAt": {
+                              "type": "string"
+                            },
+                            "stale": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "category",
+                            "source",
+                            "confidence",
+                            "fetchedAt",
+                            "stale"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        "ownership": {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "type": "string"
+                            },
+                            "owner": {
+                              "type": "object",
+                              "properties": {
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "known",
+                                    "none",
+                                    "unknown",
+                                    "unsupported"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "state"
+                              ],
+                              "additionalProperties": {},
+                              "description": "`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value"
+                            },
+                            "heldByWallet": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "owner",
+                            "heldByWallet"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "description": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "attributes": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "traitType": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "value": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "traitType",
+                                  "value"
+                                ],
+                                "additionalProperties": {}
+                              }
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "name",
+                            "description",
+                            "attributes"
+                          ],
+                          "additionalProperties": {},
+                          "description": "declared by the creator: text, never chain truth"
+                        },
+                        "sources": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "category": {
+                                "type": "string",
+                                "enum": [
+                                  "onchain",
+                                  "creator_metadata",
+                                  "indexed",
+                                  "market",
+                                  "computed"
+                                ]
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "stale": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "category",
+                              "source",
+                              "stale"
+                            ],
+                            "additionalProperties": {}
+                          }
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "network",
+                        "family",
+                        "standard",
+                        "assetId",
+                        "contractAddress",
+                        "tokenId",
+                        "mintAddress",
+                        "quantity",
+                        "name",
+                        "onchainName",
+                        "collection",
+                        "state",
+                        "inWallet",
+                        "transferable",
+                        "transferBlockedBy",
+                        "spam",
+                        "ownershipSource",
+                        "ownership",
+                        "metadata",
+                        "sources"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "marketActions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "available": {
+                            "type": "boolean",
+                            "const": false
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "available",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "the market actions, none of which exists in this version: every one is `available: false` with its reason"
+                    }
+                  },
+                  "required": [
+                    "nft",
+                    "marketActions"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid: `bad_request`, `invalid_cursor`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, unknown, expired or revoked key: `unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, and refused: `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The object named by the request does not exist: `unknown_network`, `unknown_nft`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests (see the `RateLimit-*` and `Retry-After` headers): `auth_throttled`, `rate_limited`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error; a mutating call may or may not have run: send it again with the same Idempotency-Key: `internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A backing service is unavailable; nothing was done: `nft_disabled`, `signer_unreachable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/nfts/activity": {
+      "get": {
+        "operationId": "getNftActivity",
+        "tags": [
+          "Nfts"
+        ],
+        "summary": "On-chain events of one NFT of the wallet",
+        "description": "Mints, transfers and burns read from the chain. A transfer is never a sale: `price` is null unless SP Wallet linked a payment of the SAME transaction through a decoded marketplace event (Seaport `OrderFulfilled`), in which case the event is a `sale` and `interpretedBy` names the decoder. `completeness` says how much history the sources gave.",
+        "security": [
+          {
+            "bearerKey": [
+              "wallet:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "wallet:read",
+        "x-spw-implemented": true,
+        "x-spw-errors": [
+          {
+            "status": 400,
+            "code": "bad_request"
+          },
+          {
+            "status": 400,
+            "code": "invalid_cursor"
+          },
+          {
+            "status": 400,
+            "code": "nft_bad_identifier"
+          },
+          {
+            "status": 401,
+            "code": "unauthenticated"
+          },
+          {
+            "status": 403,
+            "code": "insufficient_scope"
+          },
+          {
+            "status": 403,
+            "code": "ip_not_allowed"
+          },
+          {
+            "status": 403,
+            "code": "mixed_credentials"
+          },
+          {
+            "status": 403,
+            "code": "restricted"
+          },
+          {
+            "status": 404,
+            "code": "nft_not_found"
+          },
+          {
+            "status": 404,
+            "code": "unknown_network"
+          },
+          {
+            "status": 404,
+            "code": "unknown_nft"
+          },
+          {
+            "status": 422,
+            "code": "nft_unsupported_chain"
+          },
+          {
+            "status": 422,
+            "code": "nft_unsupported_standard"
+          },
+          {
+            "status": 429,
+            "code": "auth_throttled"
+          },
+          {
+            "status": 429,
+            "code": "nft_budget_exhausted"
+          },
+          {
+            "status": 429,
+            "code": "nft_provider_rate_limited"
+          },
+          {
+            "status": 429,
+            "code": "rate_limited"
+          },
+          {
+            "status": 500,
+            "code": "internal"
+          },
+          {
+            "status": 502,
+            "code": "nft_provider_bad_answer"
+          },
+          {
+            "status": 502,
+            "code": "nft_provider_disagreement"
+          },
+          {
+            "status": 503,
+            "code": "nft_disabled"
+          },
+          {
+            "status": 503,
+            "code": "nft_provider_method_unsupported"
+          },
+          {
+            "status": 503,
+            "code": "nft_provider_not_configured"
+          },
+          {
+            "status": 503,
+            "code": "nft_provider_unavailable"
+          },
+          {
+            "status": 503,
+            "code": "signer_unreachable"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 260
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 400
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "mint",
+                "transfer",
+                "transfer-in",
+                "transfer-out",
+                "burn",
+                "sale",
+                "unknown"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "tx": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "from": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "to": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "quantity": {
+                            "type": "string"
+                          },
+                          "finality": {
+                            "type": "string"
+                          },
+                          "price": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^(0|[1-9][0-9]{0,77})$",
+                                    "description": "exact integer of base units, as a string"
+                                  },
+                                  "currency": {
+                                    "type": "object",
+                                    "properties": {
+                                      "network": {
+                                        "type": "string"
+                                      },
+                                      "asset": {
+                                        "type": "string",
+                                        "description": "`native`, or the exact mint / contract"
+                                      },
+                                      "symbol": {
+                                        "type": "string"
+                                      },
+                                      "decimals": {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "required": [
+                                      "network",
+                                      "asset",
+                                      "symbol",
+                                      "decimals"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "amount",
+                                  "currency"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "set ONLY when a payment of the same transaction was linked by a decoded marketplace event; a transfer alone never has one"
+                          },
+                          "interpretedBy": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "tx",
+                          "at",
+                          "from",
+                          "to",
+                          "quantity",
+                          "finality",
+                          "price",
+                          "interpretedBy"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "nextCursor": {
+                      "description": "pass it as `cursor` to read the next (older) page; null when there is none",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "completeness": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "events",
+                    "nextCursor",
+                    "completeness",
+                    "note",
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid: `bad_request`, `invalid_cursor`, `nft_bad_identifier`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, unknown, expired or revoked key: `unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, and refused: `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The object named by the request does not exist: `nft_not_found`, `unknown_network`, `unknown_nft`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A valid request that cannot be carried out: `nft_unsupported_chain`, `nft_unsupported_standard`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests (see the `RateLimit-*` and `Retry-After` headers): `auth_throttled`, `nft_budget_exhausted`, `nft_provider_rate_limited`, `rate_limited`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error; a mutating call may or may not have run: send it again with the same Idempotency-Key: `internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Error: `nft_provider_bad_answer`, `nft_provider_disagreement`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A backing service is unavailable; nothing was done: `nft_disabled`, `nft_provider_method_unsupported`, `nft_provider_not_configured`, `nft_provider_unavailable`, `signer_unreachable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/nfts/market": {
+      "get": {
+        "operationId": "getNftMarket",
+        "tags": [
+          "Nfts"
+        ],
+        "summary": "Market data of any NFT, one row per source",
+        "description": "The item is named by its chain identifiers and read on-chain first. Then every configured market source answers on its own row: asking price, best offer, last sale, collection floor — five different notions, each in its own currency (network + exact mint / contract + decimals), with the source, its date and `stale`. A source without its key answers `needs_key` with the variable name; nothing is ever filled in. Sources are never merged: disagreements are listed in `contradictions`. Says nothing about the wallet. `rates` are secondary; a rate from a price source licensed for internal use is withheld from an API key.",
+        "security": [
+          {
+            "bearerKey": [
+              "markets:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "markets:read",
+        "x-spw-implemented": true,
+        "x-spw-errors": [
+          {
+            "status": 400,
+            "code": "bad_request"
+          },
+          {
+            "status": 400,
+            "code": "nft_bad_identifier"
+          },
+          {
+            "status": 401,
+            "code": "unauthenticated"
+          },
+          {
+            "status": 403,
+            "code": "insufficient_scope"
+          },
+          {
+            "status": 403,
+            "code": "ip_not_allowed"
+          },
+          {
+            "status": 403,
+            "code": "mixed_credentials"
+          },
+          {
+            "status": 403,
+            "code": "restricted"
+          },
+          {
+            "status": 404,
+            "code": "nft_not_found"
+          },
+          {
+            "status": 404,
+            "code": "unknown_network"
+          },
+          {
+            "status": 422,
+            "code": "nft_unsupported_chain"
+          },
+          {
+            "status": 422,
+            "code": "nft_unsupported_standard"
+          },
+          {
+            "status": 429,
+            "code": "auth_throttled"
+          },
+          {
+            "status": 429,
+            "code": "nft_budget_exhausted"
+          },
+          {
+            "status": 429,
+            "code": "nft_provider_rate_limited"
+          },
+          {
+            "status": 429,
+            "code": "rate_limited"
+          },
+          {
+            "status": 500,
+            "code": "internal"
+          },
+          {
+            "status": 502,
+            "code": "nft_provider_bad_answer"
+          },
+          {
+            "status": 502,
+            "code": "nft_provider_disagreement"
+          },
+          {
+            "status": 503,
+            "code": "nft_disabled"
+          },
+          {
+            "status": 503,
+            "code": "nft_provider_method_unsupported"
+          },
+          {
+            "status": 503,
+            "code": "nft_provider_not_configured"
+          },
+          {
+            "status": 503,
+            "code": "nft_provider_unavailable"
+          },
+          {
+            "status": 503,
+            "code": "signer_unreachable"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "network",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 24
+            }
+          },
+          {
+            "name": "address",
+            "in": "query",
+            "required": true,
+            "description": "EVM: the contract; Solana: the mint / asset address",
+            "schema": {
+              "type": "string",
+              "minLength": 26,
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "tokenId",
+            "in": "query",
+            "required": false,
+            "description": "EVM: required, decimal or 0x-hex",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "network": {
+                      "type": "string"
+                    },
+                    "standard": {
+                      "type": "string"
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "status": {
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "ok",
+                                  "needs_key",
+                                  "off",
+                                  "not_covered",
+                                  "error"
+                                ]
+                              },
+                              "code": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "unlockedBy": {
+                                "description": "NAME of the server variable that turns the source on",
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "stale": {
+                                "type": "boolean",
+                                "description": "true: the last answer of a source that is failing now"
+                              }
+                            },
+                            "required": [
+                              "provider",
+                              "name",
+                              "state",
+                              "code",
+                              "unlockedBy",
+                              "stale"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "url": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "listed": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "known",
+                                  "none",
+                                  "unknown",
+                                  "unsupported"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "state"
+                            ],
+                            "additionalProperties": {},
+                            "description": "`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value"
+                          },
+                          "ask": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "known",
+                                  "none",
+                                  "unknown",
+                                  "unsupported"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "state"
+                            ],
+                            "additionalProperties": {},
+                            "description": "asking price of a live listing"
+                          },
+                          "bestOffer": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "known",
+                                  "none",
+                                  "unknown",
+                                  "unsupported"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "state"
+                            ],
+                            "additionalProperties": {},
+                            "description": "`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value"
+                          },
+                          "lastSale": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "known",
+                                  "none",
+                                  "unknown",
+                                  "unsupported"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "state"
+                            ],
+                            "additionalProperties": {},
+                            "description": "last sale the source reports"
+                          },
+                          "collectionFloor": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "known",
+                                  "none",
+                                  "unknown",
+                                  "unsupported"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "state"
+                            ],
+                            "additionalProperties": {},
+                            "description": "a statistic of the COLLECTION — never the value of this item"
+                          },
+                          "verification": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "enum": [
+                                      "verified",
+                                      "not_verified",
+                                      "unknown"
+                                    ]
+                                  },
+                                  "providerValue": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "by": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "state",
+                                  "providerValue",
+                                  "by"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "the marketplace's own badge, named — not an on-chain verification"
+                          },
+                          "rarity": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "known",
+                                  "none",
+                                  "unknown",
+                                  "unsupported"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "state"
+                            ],
+                            "additionalProperties": {},
+                            "description": "`known` carries `value`; `none` = established as absent; `unknown` = could not be established (`reason` may say why); `unsupported` = the standard has no such notion. Zero is a value"
+                          }
+                        },
+                        "required": [
+                          "status",
+                          "url",
+                          "listed",
+                          "ask",
+                          "bestOffer",
+                          "lastSale",
+                          "collectionFloor",
+                          "verification",
+                          "rarity"
+                        ],
+                        "additionalProperties": {}
+                      },
+                      "description": "ONE ROW PER SOURCE: never merged, never averaged"
+                    },
+                    "contradictions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string"
+                          },
+                          "providers": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "note": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "field",
+                          "providers",
+                          "note"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "rates": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "symbol": {
+                            "type": "string"
+                          },
+                          "usd": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "decimal number as a string (never a float)"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "cad": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "decimal number as a string (never a float)"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "priceAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "stale": {
+                            "type": "boolean"
+                          },
+                          "withheld": {
+                            "description": "set, with `usd` and `cad` null, when the price source is licensed for internal use and the caller is an API key",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "symbol",
+                          "usd",
+                          "cad",
+                          "source",
+                          "priceAt",
+                          "stale",
+                          "withheld"
+                        ],
+                        "additionalProperties": {}
+                      },
+                      "description": "fiat rates of the currencies quoted, keyed `network:asset` — secondary information with its own source and date"
+                    },
+                    "value": {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "unavailable"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "reason"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "marketActions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "available": {
+                            "type": "boolean",
+                            "const": false
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "available",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "the market actions, none of which exists in this version: every one is `available: false` with its reason"
+                    },
+                    "asOf": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "network",
+                    "standard",
+                    "sources",
+                    "contradictions",
+                    "rates",
+                    "value",
+                    "marketActions",
+                    "asOf"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid: `bad_request`, `nft_bad_identifier`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, unknown, expired or revoked key: `unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, and refused: `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The object named by the request does not exist: `nft_not_found`, `unknown_network`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A valid request that cannot be carried out: `nft_unsupported_chain`, `nft_unsupported_standard`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests (see the `RateLimit-*` and `Retry-After` headers): `auth_throttled`, `nft_budget_exhausted`, `nft_provider_rate_limited`, `rate_limited`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error; a mutating call may or may not have run: send it again with the same Idempotency-Key: `internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Error: `nft_provider_bad_answer`, `nft_provider_disagreement`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A backing service is unavailable; nothing was done: `nft_disabled`, `nft_provider_method_unsupported`, `nft_provider_not_configured`, `nft_provider_unavailable`, `signer_unreachable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/nfts/market/events": {
+      "get": {
+        "operationId": "getNftMarketEvents",
+        "tags": [
+          "Nfts"
+        ],
+        "summary": "Market events of any NFT (sales, listings, offers), per source",
+        "description": "What each market source reports, newest first, with the payment token and quantity when the source gives them. Filter by `type`, `after`, `before`. One list per source: a `nextCursor` is passed back as `cursor` together with `provider`. A wash-trade flag is passed through when a source has one (`unknown` otherwise). These are market statements, listed apart from the chain's transfers (GET /nfts/activity).",
+        "security": [
+          {
+            "bearerKey": [
+              "markets:read"
+            ]
+          }
+        ],
+        "x-spw-scope": "markets:read",
+        "x-spw-implemented": true,
+        "x-spw-errors": [
+          {
+            "status": 400,
+            "code": "bad_request"
+          },
+          {
+            "status": 400,
+            "code": "nft_bad_identifier"
+          },
+          {
+            "status": 401,
+            "code": "unauthenticated"
+          },
+          {
+            "status": 403,
+            "code": "insufficient_scope"
+          },
+          {
+            "status": 403,
+            "code": "ip_not_allowed"
+          },
+          {
+            "status": 403,
+            "code": "mixed_credentials"
+          },
+          {
+            "status": 403,
+            "code": "restricted"
+          },
+          {
+            "status": 404,
+            "code": "nft_not_found"
+          },
+          {
+            "status": 404,
+            "code": "unknown_network"
+          },
+          {
+            "status": 422,
+            "code": "nft_unsupported_chain"
+          },
+          {
+            "status": 422,
+            "code": "nft_unsupported_standard"
+          },
+          {
+            "status": 429,
+            "code": "auth_throttled"
+          },
+          {
+            "status": 429,
+            "code": "nft_budget_exhausted"
+          },
+          {
+            "status": 429,
+            "code": "nft_provider_rate_limited"
+          },
+          {
+            "status": 429,
+            "code": "rate_limited"
+          },
+          {
+            "status": 500,
+            "code": "internal"
+          },
+          {
+            "status": 502,
+            "code": "nft_provider_bad_answer"
+          },
+          {
+            "status": 502,
+            "code": "nft_provider_disagreement"
+          },
+          {
+            "status": 503,
+            "code": "nft_disabled"
+          },
+          {
+            "status": 503,
+            "code": "nft_provider_method_unsupported"
+          },
+          {
+            "status": 503,
+            "code": "nft_provider_not_configured"
+          },
+          {
+            "status": 503,
+            "code": "nft_provider_unavailable"
+          },
+          {
+            "status": 503,
+            "code": "signer_unreachable"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "network",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 24
+            }
+          },
+          {
+            "name": "address",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 26,
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "tokenId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{1,30}$"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "comma-separated: sale, list, delist, offer, cancel-offer, transfer, mint",
+            "schema": {
+              "type": "string",
+              "maxLength": 120,
+              "pattern": "^[a-z,-]+$"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "a position in ONE source's list: send it with `provider`",
+            "schema": {
+              "type": "string",
+              "maxLength": 600
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "status": {
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "ok",
+                                  "needs_key",
+                                  "off",
+                                  "not_covered",
+                                  "error"
+                                ]
+                              },
+                              "code": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "unlockedBy": {
+                                "description": "NAME of the server variable that turns the source on",
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "stale": {
+                                "type": "boolean",
+                                "description": "true: the last answer of a source that is failing now"
+                              }
+                            },
+                            "required": [
+                              "provider",
+                              "name",
+                              "state",
+                              "code",
+                              "unlockedBy",
+                              "stale"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "sale",
+                                    "list",
+                                    "delist",
+                                    "offer",
+                                    "cancel-offer",
+                                    "accept-offer",
+                                    "transfer",
+                                    "mint",
+                                    "unknown"
+                                  ]
+                                },
+                                "providerType": {
+                                  "type": "string"
+                                },
+                                "at": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "tx": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "from": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "to": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "quantity": {
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9][0-9]{0,77})$",
+                                  "description": "exact integer of base units, as a string"
+                                },
+                                "price": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "amount": {
+                                          "type": "string",
+                                          "pattern": "^(0|[1-9][0-9]{0,77})$",
+                                          "description": "exact integer of base units, as a string"
+                                        },
+                                        "currency": {
+                                          "type": "object",
+                                          "properties": {
+                                            "network": {
+                                              "type": "string"
+                                            },
+                                            "asset": {
+                                              "type": "string",
+                                              "description": "`native`, or the exact mint / contract"
+                                            },
+                                            "symbol": {
+                                              "type": "string"
+                                            },
+                                            "decimals": {
+                                              "type": "integer",
+                                              "minimum": -9007199254740991,
+                                              "maximum": 9007199254740991
+                                            }
+                                          },
+                                          "required": [
+                                            "network",
+                                            "asset",
+                                            "symbol",
+                                            "decimals"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        "precision": {
+                                          "type": "string",
+                                          "enum": [
+                                            "exact",
+                                            "source_decimal"
+                                          ],
+                                          "description": "`source_decimal`: the source gave a decimal number, converted digit by digit"
+                                        }
+                                      },
+                                      "required": [
+                                        "amount",
+                                        "currency",
+                                        "precision"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "flags": {
+                                  "type": "object",
+                                  "properties": {
+                                    "washTrade": {
+                                      "type": "object",
+                                      "properties": {
+                                        "state": {
+                                          "type": "string",
+                                          "enum": [
+                                            "known",
+                                            "none",
+                                            "unknown",
+                                            "unsupported"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "state"
+                                      ],
+                                      "additionalProperties": {},
+                                      "description": "as the SOURCE reports it; `unknown` when it has no such flag — never filtered"
+                                    }
+                                  },
+                                  "required": [
+                                    "washTrade"
+                                  ],
+                                  "additionalProperties": {}
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "providerType",
+                                "at",
+                                "tx",
+                                "from",
+                                "to",
+                                "quantity",
+                                "price",
+                                "flags"
+                              ],
+                              "additionalProperties": {}
+                            }
+                          },
+                          "nextCursor": {
+                            "description": "pass it as `cursor` to read the next (older) page; null when there is none",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "status",
+                          "events",
+                          "nextCursor"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "rates": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "symbol": {
+                            "type": "string"
+                          },
+                          "usd": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "decimal number as a string (never a float)"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "cad": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "decimal number as a string (never a float)"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "priceAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "stale": {
+                            "type": "boolean"
+                          },
+                          "withheld": {
+                            "description": "set, with `usd` and `cad` null, when the price source is licensed for internal use and the caller is an API key",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "symbol",
+                          "usd",
+                          "cad",
+                          "source",
+                          "priceAt",
+                          "stale",
+                          "withheld"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "asOf": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "sources",
+                    "rates",
+                    "asOf"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid: `bad_request`, `nft_bad_identifier`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, unknown, expired or revoked key: `unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, and refused: `insufficient_scope`, `ip_not_allowed`, `mixed_credentials`, `restricted`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The object named by the request does not exist: `nft_not_found`, `unknown_network`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A valid request that cannot be carried out: `nft_unsupported_chain`, `nft_unsupported_standard`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests (see the `RateLimit-*` and `Retry-After` headers): `auth_throttled`, `nft_budget_exhausted`, `nft_provider_rate_limited`, `rate_limited`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error; a mutating call may or may not have run: send it again with the same Idempotency-Key: `internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Error: `nft_provider_bad_answer`, `nft_provider_disagreement`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A backing service is unavailable; nothing was done: `nft_disabled`, `nft_provider_method_unsupported`, `nft_provider_not_configured`, `nft_provider_unavailable`, `signer_unreachable`",
             "content": {
               "application/json": {
                 "schema": {

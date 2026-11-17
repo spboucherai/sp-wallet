@@ -19,6 +19,8 @@ import { createSignerServer } from '../../isolated-signer/src/server.ts';
 import { Signer } from '../../isolated-signer/src/signer.ts';
 import { Store } from '../../isolated-signer/src/store.ts';
 import { BTC, Clock, fixtureVenues, GMX_BTC, setMarket, useDatabase, type Venues } from './derivatives-helpers.ts';
+import { readFileSync } from 'node:fs';
+import { loadFixture, replay } from './nft-helpers.ts';
 
 const ORIGIN = 'https://wallet.test', RP = 'wallet.test', SECRET = 'k'.repeat(48), T = '/api/v1/trading', DEV = '/api/v1/developer';
 const owner = new TestPasskey(RP, ORIGIN);
@@ -29,6 +31,8 @@ let app: any, sql: any, cookie = '', clock: Clock, v: Venues, signerSrv: Server,
 let spec: typeof import('../src/trading-api/spec.ts'), read: typeof import('../src/trading-api/read.ts'), shaping: typeof import('../src/trading-api/shaping.ts');
 let ipSeq = 0;
 const GMX_ADDR = '0x00000000000000000000000000000000000000aa';
+/** the on-chain holder of BAYC #1 in the recorded fixture: the wallet's EVM address for the NFT operations of this file */
+const NFT_HOLDER = '0x46EFbAedc92067E6d60E84ED6395099723252496', NFT_REF = 'CMhGwGHMbVaBmxebfU3t5eViSf6FKHnvFCBNiA1D659j', BAYC1 = 'evm:ethereum:0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d/1';
 const gmxFake = { positions: [] as any[], status: async () => ({ network: 'arbitrum', account: { address: GMX_ADDR }, positionsError: null, positions: gmxFake.positions }) };
 
 interface Res { status: number; json: any; headers: Record<string, any> }
@@ -150,7 +154,18 @@ beforeAll(async () => {
   const mod = await import('../src/derivatives/index.ts');
   clock = new Clock(); v = fixtureVenues(clock);
   setMarket(v, 50_000);
-  app = await (await import('../src/server.ts')).buildServer({ derivatives: mod.createDerivatives({ registry: mod.createRegistry(v.adapters, clock.now), now: clock.now }), gmx: gmxFake as never });
+  // NFT (delivery 3): scripted sources — recorded chain answers, the live-recorded OpenSea answers behind the real adapter, Magic Eden
+  // absent, a price list in which USDC comes from the licensed second source. No network.
+  const { nftConfig } = await import('../src/nft/config.ts'), { openSeaMarket } = await import('../src/nft/market/opensea.ts'), { createBudget } = await import('../src/nft/market/budget.ts');
+  const world = replay(...['sol-core-reference', 'evm-lookups', 'evm-events'].map(loadFixture)), nftNow = () => new Date('2026-11-17T12:00:00Z');
+  const os = JSON.parse(readFileSync(new URL('./fixtures/nft/market-opensea-live.json', import.meta.url), 'utf8')) as { calls: { path: string; status: number; body: unknown }[] };
+  const osHttp = (async (url: string) => { const c = os.calls.find((x) => x.path === url.slice('https://api.opensea.io/api/v2'.length)); if (!c) throw new Error('unrecorded'); return new Response(JSON.stringify(c.body), { status: c.status }); }) as never;
+  const nft = { cfg: nftConfig({ NFT_CACHE_DIR: join(dir, 'nft') }), rpc: world.rpc, now: nftNow, autoSync: false, addresses: async () => ({ ethereum: NFT_HOLDER, solana: '62Q9eeDY3eM8A5CnprBGYMPShdBjAzdpBdr71QHsS8dS' }),
+    fetch: { resolve: async () => [{ address: '93.184.216.34', family: 4 as const }], transport: async () => ({ status: 404, headers: {}, body: new Uint8Array(), truncated: false }), now: () => nftNow().getTime() },
+    marketProviders: [openSeaMarket({ http: osHttp, now: nftNow, apiKey: 'contract-test-key', budget: createBudget('opensea', { perMinute: 1000, perDay: 100000 }, { now: nftNow }) })],
+    marketAbsent: [{ id: 'magiceden', name: 'Magic Eden', state: 'off' as const, code: 'not_enabled' as const, unlockedBy: 'NFT_MARKET_MAGICEDEN', unlocks: '', chains: ['solana'] }],
+    prices: async () => ({ USDC: { usd: 0.9996, cad: 1.39, priceAt: '2026-11-17T11:50:00.000Z', source: 'apibricks', stale: false }, SOL: { usd: 142.5, priceAt: '2026-11-17T11:55:00.000Z', source: 'coingecko', stale: false } }) };
+  app = await (await import('../src/server.ts')).buildServer({ derivatives: mod.createDerivatives({ registry: mod.createRegistry(v.adapters, clock.now), now: clock.now }), gmx: gmxFake as never, nft: nft as never });
   const a = await call('POST', '/api/v1/derivatives/accounts', { body: { venue: 'hyperliquid', label: 'Contract', collateral: '10000' } });
   expect(a.status, JSON.stringify(a.json)).toBe(200);
   acct = a.json.id; ORDER.accountId = acct;
@@ -188,7 +203,7 @@ describe('the document and the code agree on the closed lists', () => {
     for (const code of ['risk_denied', 'venue_rejected', 'spot_market_only', 'venue_not_wired']) expect(errs('placeOrder'), code).toContainEqual({ status: 422, code });
     for (const code of ['kill_switch_active', 'read_only_mode']) expect(errs('placeOrder'), code).toContainEqual({ status: 423, code });
     expect(opOf('placeOrder')['x-spw-errors-open']).toBe(true); expect(opOf('getMarket')['x-spw-errors-open']).toBeUndefined();
-    expect(spec.OPERATIONS).toHaveLength(41); expect(spec.OPERATIONS.filter((o) => !o.implemented)).toEqual([]);
+    expect(spec.OPERATIONS).toHaveLength(46); expect(spec.OPERATIONS.filter((o) => !o.implemented)).toEqual([]);
     for (const o of spec.OPERATIONS) expect(opOf(o.id).responses['200'].content['application/json'].schema, `${o.id} has a success schema`).toBeTruthy();
     for (const code of ['position_not_attributable', 'mandate_integrity', 'gmx_requires_owner_passkey']) expect(errs('placeOrder'), code).toContainEqual({ status: 403, code });
     expect(errs('placeOrder')).toContainEqual({ status: 409, code: 'account_has_active_mandate' });
@@ -765,6 +780,67 @@ describe('11 — cursor pagination', () => {
     expect(read.decodeCursor(read.encodeCursor(a), ['p', 'd'])).toEqual(a);
     expect(read.decodeCursor(undefined, ['o'])).toBeNull();
     expect(() => read.decodeCursor(read.encodeCursor(a), ['o'])).toThrow(/cursor/);
+  });
+});
+
+describe('NFT read operations (delivery 3) — every answer is the document\'s; no write exists', () => {
+  const USDC = 'solana:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', Q = `network=solana&address=${NFT_REF}`;
+  it('wallet:read — the inventory, one item, its on-chain events; a looked-up item is not the wallet\'s', async () => {
+    const k = await newKey();
+    const empty = (await get('listNfts', '/nfts', k.secret)).json;
+    expect(empty).toMatchObject({ items: [], total: 0, nextCursor: null, valuation: { state: 'unavailable' } });
+    // the owner tracks BAYC #1 — verified on-chain (recorded answers): the wallet's EVM address is its holder
+    const add = await call('POST', '/api/v1/nfts/manual', { body: { chain: 'ethereum', address: '0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d', tokenId: '1' } });
+    expect(add.status, JSON.stringify(add.json)).toBe(200);
+    const l = (await get('listNfts', '/nfts?limit=10', k.secret)).json;
+    expect(l.total).toBe(1); expect(l.items[0]).toMatchObject({ key: BAYC1, network: 'ethereum', standard: 'erc721', tokenId: '1', quantity: '1', inWallet: true, ownershipSource: { category: 'onchain', confidence: 'chain_verified' } });
+    expect(typeof l.items[0].tokenId).toBe('string'); expect(JSON.stringify(l.items)).not.toMatch(/valueUsd|floor|price/i);                             // no figure of value on an NFT row
+    const one = (await get('getNft', `/nfts/item?key=${encodeURIComponent(BAYC1)}`, k.secret)).json;
+    expect(one.nft).toMatchObject({ key: BAYC1, ownership: { heldByWallet: true, owner: { state: 'known', value: NFT_HOLDER } } }); expect(one.marketActions.every((a: any) => a.available === false && a.reason === 'market_writes_not_built')).toBe(true);
+    expect(one.marketActions.map((a: any) => a.id)).toEqual(['buy', 'sell', 'create_listing', 'cancel_listing', 'make_offer', 'cancel_offer', 'accept_offer']);
+    const act = (await get('getNftActivity', `/nfts/activity?key=${encodeURIComponent(BAYC1)}&limit=5`, k.secret)).json;
+    expect(act.key).toBe(BAYC1); expect(act.events.every((e: any) => e.price === null || e.type === 'sale')).toBe(true);       // a transfer never carries a price
+    // an item that was only looked up (through the market operation) is not in the inventory
+    expect((await get('getNftMarket', `/nfts/market?${Q}`, k.secret)).status).toBe(200);
+    expect((await get('getNft', `/nfts/item?key=sol:solana:${NFT_REF}`, k.secret)).json.error).toBe('unknown_nft');
+    expect((await get('getNftActivity', `/nfts/activity?key=sol:solana:${NFT_REF}`, k.secret)).json.error).toBe('unknown_nft');
+    expect((await get('listNfts', '/nfts?cursor=abc', k.secret)).json.error).toBe('invalid_cursor'); expect((await get('listNfts', '/nfts?network=nowhere', k.secret)).json.error).toBe('unknown_network');
+    expect((await get('listNfts', '/nfts?limit=0', k.secret)).json.error).toBe('bad_request'); expect((await get('getNft', '/nfts/item?key=x', k.secret)).json.error).toBe('bad_request');
+  });
+  it('markets:read — one row per source for ANY item; exact amounts; nothing about the wallet; a licensed price is withheld from a key, not from the owner', async () => {
+    const k = await newKey({ scopes: ['markets:read'] });
+    const m = (await get('getNftMarket', `/nfts/market?${Q}`, k.secret)).json;
+    expect(m.sources.map((s: any) => [s.status.provider, s.status.state, s.status.unlockedBy])).toEqual([['opensea', 'ok', null], ['magiceden', 'off', 'NFT_MARKET_MAGICEDEN']]);
+    expect(m.sources[0]).toMatchObject({ listed: { state: 'known', value: false }, ask: { state: 'none' }, bestOffer: { state: 'none' }, verification: { state: 'verified', by: 'OpenSea' },
+      lastSale: { state: 'known', value: { price: { amount: '14500000000', precision: 'exact', currency: { network: 'solana', asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6 } } } } });
+    expect(m.sources[1]).toMatchObject({ listed: { state: 'unknown' }, ask: { state: 'unknown' }, lastSale: { state: 'unknown' } });              // a source that is off says nothing — nothing is filled in
+    expect(m.value).toEqual({ state: 'unavailable', reason: 'no_valuation_from_floor_or_single_quote' });
+    expect(m.rates[USDC]).toMatchObject({ usd: null, cad: null, source: 'apibricks', withheld: 'price_source_licence_internal_use_only' });           // docs/V11-MARKET-DATA-SOURCES.md §2.6-9
+    const mine = (await call('GET', `${T}/nfts/market?${Q}`).then((r) => check('getNftMarket', r))).json;                                             // the owner session
+    expect(mine.rates[USDC]).toMatchObject({ usd: '0.9996', cad: '1.39', source: 'apibricks', priceAt: '2026-11-17T11:50:00.000Z', withheld: null });
+    const text = JSON.stringify(m); expect(text).not.toContain(NFT_HOLDER); expect(text).not.toMatch(/heldByWallet|inWallet|ownerAddress/);
+    const ev = (await get('getNftMarketEvents', `/nfts/market/events?${Q}&provider=opensea`, k.secret)).json;
+    expect(ev.sources).toHaveLength(1); const sales = ev.sources[0].events.filter((e: any) => e.type === 'sale');
+    expect(sales).toHaveLength(1); expect(sales[0]).toMatchObject({ price: { amount: '14500000000' }, flags: { washTrade: { state: 'unknown' } } }); expect(typeof ev.sources[0].nextCursor).toBe('string');
+    expect(ev.sources[0].events.filter((e: any) => e.type === 'transfer').every((e: any) => e.price === null)).toBe(true);
+    expect((await get('getNftMarketEvents', `/nfts/market/events?${Q}&cursor=abc`, k.secret)).json.error).toBe('bad_request');                          // a cursor without its source
+    expect((await get('getNftMarket', '/nfts/market?network=cardano&address=' + 'a'.repeat(40), k.secret)).json.error).toBe('nft_unsupported_chain');
+    expect((await get('getNftMarket', '/nfts/market?network=ethereum&address=0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d', k.secret)).json.error).toBe('nft_bad_identifier');   // an EVM item needs its token id
+    expect((await get('getNftMarket', '/nfts/market?network=nowhere&address=' + 'a'.repeat(40), k.secret)).json.error).toBe('unknown_network');
+  });
+  it('scopes and restrictions; and there is no NFT write under the trading API', async () => {
+    const market = await newKey({ scopes: ['markets:read'] }), wallet = await newKey({ scopes: ['wallet:read'] }), eth = await newKey({ restrictions: { networks: ['ethereum'], venues: [], instruments: [], ipAllow: [] } });
+    for (const [id, path] of [['listNfts', '/nfts'], ['getNft', `/nfts/item?key=${encodeURIComponent(BAYC1)}`], ['getNftActivity', `/nfts/activity?key=${encodeURIComponent(BAYC1)}`]] as const) expect((await get(id, path, market.secret)).json.error, id).toBe('insufficient_scope');
+    for (const [id, path] of [['getNftMarket', `/nfts/market?${Q}`], ['getNftMarketEvents', `/nfts/market/events?${Q}`]] as const) expect((await get(id, path, wallet.secret)).json.error, id).toBe('insufficient_scope');
+    expect((await get('getNftMarket', `/nfts/market?${Q}`, eth.secret)).json.error).toBe('restricted'); expect((await get('listNfts', '/nfts?network=solana', eth.secret)).json.error).toBe('restricted');
+    expect((await get('listNfts', '/nfts', eth.secret)).json.total).toBe(1);                                                                       // the Ethereum item is the key's to read
+    const sol = await newKey({ restrictions: { networks: ['solana'], venues: [], instruments: [], ipAllow: [] } });
+    expect((await get('listNfts', '/nfts', sol.secret)).json.total).toBe(0); expect((await get('getNft', `/nfts/item?key=${encodeURIComponent(BAYC1)}`, sol.secret)).json.error).toBe('restricted');
+    const all = await newKey();
+    for (const [m, p] of [['POST', '/nfts/market'], ['POST', '/nfts/transfer'], ['POST', '/nfts/market/listings'], ['POST', '/nfts/market/buy'], ['DELETE', '/nfts/item'], ['POST', '/nfts']] as const) {
+      const r = await call(m, T + p, { key: all.secret, body: {}, headers: idem() }); expect([r.status, r.json.error], `${m} ${p}`).toEqual([404, 'not_found']); }
+    expect(spec.OPERATIONS.filter((o) => o.tag === 'Nfts').map((o) => [o.id, o.method, o.scope])).toEqual([['listNfts', 'GET', 'wallet:read'], ['getNft', 'GET', 'wallet:read'], ['getNftActivity', 'GET', 'wallet:read'], ['getNftMarket', 'GET', 'markets:read'], ['getNftMarketEvents', 'GET', 'markets:read']]);
+    expect((await call('GET', `${T}/nfts`, { key: null, cookie: null })).status).toBe(401);
   });
 });
 

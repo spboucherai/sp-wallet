@@ -53,7 +53,8 @@ export interface NftReview {
   toKind: 'account' | 'contract' | 'new_account';
   fee: { estimate: string; max: string; symbol: string; decimals: number; /** Solana: lamports locked as rent in accounts this transfer creates (not a fee) */ rent: string | null };
   warnings: string[];
-  simulation: { ok: true; detail: string; /** compute units / gas the simulation used */ used: string | null; changes: { what: string; before: string; after: string }[] };
+  simulation: { ok: true; detail: string; /** compute units / gas the simulation used */ used: string | null; /** delivery 3: `code` (+ `params`, `beforeCode`, `afterCode`) is what the interface translates; `what` / `before` / `after` stay as the English sentence (reviews stored by delivery 2 have only those) */
+    changes: { what: string; before: string; after: string; code?: string; params?: Record<string, string>; beforeCode?: string; afterCode?: string }[] };
   verified: { standard: string; ownership: string; endpoints: number; at: string };
   /** every account of the main instruction (Solana), by role */ accounts: { role: string; address: string; derived: string }[];
   /** what the CREATOR declares — shown small, labelled unverified, never used to build anything */
@@ -156,7 +157,7 @@ async function prepareEvm(d: TransferDeps, n: NetworkDef, a: NftAsset, st: Signe
   return { intent, hash: toHex(nftIntentHash(intent)), feeEstimate, maxFee, ttlSec,
     review: { key: a.key, network: n.id, networkName: n.name, standard, method: NFT_TRANSFER_METHOD[standard], asset: contract, tokenId: tokenId.toString(), quantity: quantity.toString(), program: contract, from: wallet, to, toKind,
       fee: { estimate: feeEstimate.toString(), max: maxFee.toString(), symbol: n.native.symbol, decimals: n.native.decimals, rent: null }, warnings,
-      simulation: { ok: true, detail: 'eth_call from the wallet address succeeded', used: est.toString(), changes: [{ what: standard === 'erc721' ? `owner of token ${tokenId}` : `units of id ${tokenId} sent`, before: standard === 'erc721' ? wallet : '0', after: standard === 'erc721' ? to : quantity.toString() }] },
+      simulation: { ok: true, detail: 'eth_call from the wallet address succeeded', used: est.toString(), changes: [{ code: standard === 'erc721' ? 'evm_owner_of_token' : 'evm_units_sent', params: { tokenId: tokenId.toString() }, what: standard === 'erc721' ? `owner of token ${tokenId}` : `units of id ${tokenId} sent`, before: standard === 'erc721' ? wallet : '0', after: standard === 'erc721' ? to : quantity.toString() }] },
       verified: { standard: `ERC-165: ${standard === 'erc721' ? 'ERC-721' : 'ERC-1155'} declared, and ${standard === 'erc721' ? 'ownerOf' : 'balanceOf'} answers`, ownership, endpoints: n.rpc.length, at: d.now().toISOString() },
       accounts: [], creatorMetadata: creator(a) } };
 }
@@ -278,19 +279,20 @@ async function prepareSol(d: TransferDeps, n: NetworkDef, a: NftAsset, st: Signe
     const after = post[0] ? decodeCoreAsset(b64(post[0].data[0])) : null;
     if (!after || after.owner !== to) throw blocked('simulation_unexpected', 'the simulation did not end with the destination as owner of the asset');
     if (after.plugins.plugins.some((p) => p.type === 'TransferDelegate' && p.authority.type === 'Address')) throw blocked('simulation_unexpected', 'the simulation left a transfer delegate on the asset');
-    changes.push({ what: 'owner of the asset', before: wallet, after: after.owner });
+    changes.push({ code: 'sol_core_owner', what: 'owner of the asset', before: wallet, after: after.owner });
   } else {
     const s1 = post[0] ? decodeTokenAccount(b64(post[0].data[0])) : null, d1 = post[1] ? decodeTokenAccount(b64(post[1].data[0])) : null;
     if (!d1 || d1.owner !== to || d1.mint !== asset || d1.amount !== 1n) throw blocked('simulation_unexpected', 'the simulation did not end with the NFT in the destination\'s token account');
     if (s1 && s1.amount !== 0n) throw blocked('simulation_unexpected', 'the simulation did not empty the wallet\'s token account');
     if (d1.delegate || s1?.delegate) throw blocked('simulation_unexpected', 'the simulation left a delegate on a token account');
-    changes.push({ what: 'units in the wallet\'s token account', before: '1', after: s1 ? '0' : '0 (account closed)' }, { what: `units in the destination's token account (owner ${to})`, before: dstExists ? '0' : 'no account', after: '1' });
+    changes.push({ code: 'sol_wallet_token_units', what: 'units in the wallet\'s token account', before: '1', after: s1 ? '0' : '0 (account closed)', ...(s1 ? {} : { afterCode: 'account_closed' }) },
+      { code: 'sol_destination_token_units', params: { owner: to }, what: `units in the destination's token account (owner ${to})`, before: dstExists ? '0' : 'no account', after: '1', ...(dstExists ? {} : { beforeCode: 'no_account' }) });
   }
   const wi = watch.length - 1, lamBefore = lam(wi, before), lamAfter = lam(wi, post);
   // the fee payer's balance after a simulation has the fee deducted (measured on Agave 4.4.1, scripts/validator-nft-solana.mts: what the
   // wallet really spent equals this figure): what leaves beyond the fee is the rent locked in the accounts the transfer creates
   const out = lamBefore > lamAfter ? lamBefore - lamAfter : 0n, rent = out > fee ? out - fee : 0n;
-  changes.push({ what: 'SOL of the wallet (lamports), fee and rent of created accounts', before: lamBefore.toString(), after: lamAfter.toString() });
+  changes.push({ code: 'sol_wallet_lamports', what: 'SOL of the wallet (lamports), fee and rent of created accounts', before: lamBefore.toString(), after: lamAfter.toString() });
   precheck(st, intent, nowSec);
   const plan = planNftSol(intent);
   return { intent, hash: toHex(nftIntentHash(intent)), feeEstimate: fee, maxFee: fee, ttlSec,
