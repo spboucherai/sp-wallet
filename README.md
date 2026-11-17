@@ -41,6 +41,24 @@ authorization, an approved burn) and inside bounds the signer enforces itself: t
 API can do through each, in `docs/adr/0001-custody.md`. The risk engine, the kill switch and the server locks are
 API-side: they bound an honest API, not a compromised one.
 
+## NFTs (read-only — delivery 1 of `docs/nft/NFT-BRIEF.md`)
+
+Assets → **NFT**: gallery, collection and item pages, each value with its source (on-chain / creator metadata / indexed /
+market) and its freshness. **No NFT can be sent, approved, listed or bought from the wallet in this version**; those
+controls are shown disabled with the reason. Media never load from a third party: they pass through a server-side proxy
+(SSRF-safe fetch, content sniffing, sandboxed responses). NFTs add nothing to the portfolio total: their value is
+"unavailable", not zero and not a floor price.
+
+| Network | Discovery (what the wallet holds) | Item page (lookup / tracked) | Activity | Send | Market |
+|---|---|---|---|---|---|
+| Solana | Token Metadata, pNFT, Token-2022: on-chain · Metaplex Core: on-chain (needs an endpoint serving `getProgramAccounts`) · compressed: DAS index | yes (any mint / Core asset; compressed through DAS) | Core: on-chain; SPL: partial; compressed: no | no | read-only, optional (`NFT_MARKET_MAGICEDEN`) |
+| Ethereum, Base, Arbitrum, Polygon, Optimism, BNB Chain, Avalanche, HyperEVM | **blocked without an indexer** (`NFT_EVM_INDEXER_URLS`); add by contract + token id, verified on-chain | yes (ERC-721, ERC-1155 with exact quantity) | recent blocks only | no | link to the marketplace only |
+| Bitcoin | no (Ordinals need an ord-aware indexer) — **do not receive inscriptions on this wallet: BTC sends are not inscription-aware** | no | no | no | no |
+| Litecoin, Dogecoin, Bitcoin Cash, Stellar, XRP Ledger, TRON, Aptos, Cosmos Hub, Sui, NEAR, TON, Cardano, Polkadot | not supported (no adapter) | no | no | no | no |
+
+Details: `docs/nft/NFT-AUDIT.md` (matrix and audit), `NFT-SOURCES.md` (sources, quotas, terms, variables),
+`NFT-ARCHITECTURE.md`, `NFT-ADDING-A-PROVIDER.md`, `NFT-RUNBOOK.md`, `nft.env.example`. Smoke: `npx tsx scripts/smoke-nft.mts`.
+
 ## Layout
 
 | Path | Role |
@@ -48,6 +66,7 @@ API-side: they bound an honest API, not a compromised one.
 | `packages/core` | network / asset registry, exact amounts, canonical intents and hashes, transaction builders, policy, audit hash chain |
 | `packages/swap`, `packages/derivatives` | swap and bridge providers; venue adapters (Hyperliquid, GMX, edgeX, dYdX), live canonical forms, paper engine |
 | `packages/trading` | canonical order, order state machine, risk checks, mandates, command grammar, market-making rules (pure) |
+| `packages/nft` | NFT canonical model, URI resolver, address guard (SSRF), content sniffing, Solana NFT decoders — pure, read-only |
 | `packages/trading-sdk`, `sdk/python` | client SDKs of the trading API (not deployed) |
 | `services/isolated-signer` | keystore, key derivation, passkey verification, policy and mandate enforcement, signing; CLI |
 | `services/api` | Fastify API: auth, chains, transfers, swaps, derivatives, order service, risk, mandates, trading API, quote hub, agents runtime, market making, monitoring; serves the web app |

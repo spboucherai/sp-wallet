@@ -1,0 +1,8 @@
+{
+  "name": "@spw/nft",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@scure/base": "2.4.0", "@spw/core": "workspace:*" }
+}
