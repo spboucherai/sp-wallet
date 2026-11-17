@@ -6,7 +6,7 @@ import { useContext, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { api, get, post, type ApiError } from '../api';
-import { codeExamples, daysLeft, docOps, docTags, draftBody, emptyDraft, errKey, SCOPE_GROUPS, scopeKey, type ApiKey, type DocOp, type DraftError, type KeyDraft, type KeysAnswer, type StatusAnswer, type UsageAnswer, type WebhooksAnswer } from '../developer';
+import { codeExamples, daysLeft, docOps, docTags, draftBody, emptyDraft, errKey, REFERENCE_URL, SCOPE_GROUPS, scopeKey, type ApiKey, type DocOp, type DraftError, type KeyDraft, type KeysAnswer, type StatusAnswer, type UsageAnswer, type WebhooksAnswer } from '../developer';
 import { I18n, useT, type Key } from '../i18n';
 import { Btn, Card, CopyBtn, EmptyState, ErrorState, Fact, Field, Fold, H, Icon, inputCls, Notice, PageTitle, Section, Seg, Sheet, SkeletonCard, SkeletonRows, Stat, StatGrid, Tag, Timeline, when, type Tone } from '../ui';
 import { srvText } from '../srvText';
@@ -280,6 +280,10 @@ function Docs() {
   const info = q.data?.info as { title?: string; version?: string } | undefined;
   return (
     <div className="space-y-4">
+      {/* the full reference, served by the wallet itself under the session: getting started (EN + FR), concepts, a worked example per operation, every error code */}
+      <Card className="space-y-3" data-testid="dev-reference"><H>{t('dvTab_docs')}</H>
+        <p className="text-[14px] leading-snug text-mute">{t('dvRefLead')}</p>
+        <a href={REFERENCE_URL} target="_blank" rel="noreferrer" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-4 text-[15px] font-semibold text-[var(--onprimary)]"><Icon n="list" className="h-4 w-4" />{t('dvRefTitle')}</a></Card>
       <Card className="space-y-3"><H>{t('dvAuthTitle')}</H>
         <p className="text-[14px] leading-snug">{t('dvAuthHow')}</p>
         <Code label={t('dvAuthTitle')}>{'Authorization: Bearer spw_live_<key id>_<secret>'}</Code>

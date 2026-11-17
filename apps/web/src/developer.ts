@@ -124,9 +124,12 @@ export function codeExamples(origin: string): { id: 'curl' | 'python' | 'typescr
       'positions = get("/positions")["positions"]          # each row carries mode: "paper" | "live"',
       'risk = get("/risk")',
       '',
-      '# a mutating call always carries an Idempotency-Key (execution is not wired yet: this answers 501)',
-      'r = S.post(BASE + "/orders/preview", headers={"Idempotency-Key": str(uuid.uuid4())}, timeout=15,',
-      '           json={"mode": "paper", "instrument": "hyperliquid:BTC", "side": "buy", "type": "market", "size": "0.01"})',
+      'ORDER = {"mode": "paper", "instrument": "hyperliquid:BTC", "side": "buy", "type": "market", "notional": "100"}',
+      '# preview: every check the order would meet (wouldExecute, refusals); creates nothing, takes no Idempotency-Key',
+      'r = S.post(BASE + "/orders/preview", timeout=15, json=ORDER)',
+      'print(r.status_code, r.json())',
+      '# place it on paper: a mutating call always carries an Idempotency-Key, and the key needs a trading mandate bound to it',
+      'r = S.post(BASE + "/orders", headers={"Idempotency-Key": str(uuid.uuid4())}, timeout=15, json=ORDER)',
       'print(r.status_code, r.json())',
     ].join('\n') },
     { id: 'typescript', title: 'TypeScript', code: [
@@ -146,10 +149,11 @@ export function codeExamples(origin: string): { id: 'curl' | 'python' | 'typescr
       'const orders = await get(\'/orders\', { open: \'true\' });',
       'const agents = await get(\'/agents\');',
       '',
-      '// a mutating call always carries an Idempotency-Key (execution is not wired yet: this answers 501)',
-      'const r = await fetch(`${BASE}/orders/preview`, { method: \'POST\',',
+      '// place a paper order: a mutating call always carries an Idempotency-Key, and the key needs a trading mandate bound to it',
+      '// (POST /orders/preview takes the same body, creates nothing and says what would refuse the order)',
+      'const r = await fetch(`${BASE}/orders`, { method: \'POST\',',
       '  headers: { authorization: `Bearer ${KEY}`, \'content-type\': \'application/json\', \'idempotency-key\': crypto.randomUUID() },',
-      '  body: JSON.stringify({ mode: \'paper\', instrument: \'hyperliquid:BTC\', side: \'buy\', type: \'market\', size: \'0.01\' }) });',
+      '  body: JSON.stringify({ mode: \'paper\', instrument: \'hyperliquid:BTC\', side: \'buy\', type: \'market\', notional: \'100\' }) });',
       'console.log(r.status, await r.json());',
     ].join('\n') },
   ];
@@ -159,4 +163,6 @@ export const examplePaths = (code: string): string[] => [...new Set([...code.mat
 
 /** known error codes of the developer routes that have their own sentence (`dvErr_<code>`) */
 export const DV_ERRORS = ['approval_failed', 'intent_expired', 'intent_mismatch', 'too_many_keys', 'key_not_active', 'key_revoked', 'passkey_required', 'bad_webhook_url', 'too_many_webhooks', 'no_passkey', 'rate_limited', 'expiry_too_far', 'bad_request'] as const;
+/** the full reference served by the wallet itself (services/api/src/trading-api/reference.ts): getting started, concepts, one worked example per operation, error catalogue */
+export const REFERENCE_URL = '/api/v1/trading/docs';
 export const errKey = (code: string | undefined): string => ((DV_ERRORS as readonly string[]).includes(code ?? '') ? `dvErr_${code}` : 'dvErrOther');
