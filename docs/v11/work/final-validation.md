@@ -250,3 +250,59 @@ once; and a logo plate finishing to load. Neither is the list being redrawn by a
 changed. The test now counts a cell going live on its own and **fails if the same cell swaps twice** (that would be a redraw),
 ignores a logo plate, and still fails on any other mutation outside a live cell (a row, another column, the table). Four runs of
 the test alone, then the whole spec: 25 / 25.
+
+### The QA specs on anvil forks (never run in V11 before) — 2026-11-17 07:18–07:35 UTC
+
+Stack: `tsx tests/e2e/qa-real-server.mts --port <p> --db <db> --fork base,arbitrum` — the real API and the real signer class,
+a throwaway seed in memory, **private anvil forks of Base and Arbitrum on 127.0.0.1**, broadcasting forced off and every relay
+of a signed transaction refused before it leaves the process. One stack at a time, `pkill -f anvil; sleep 3` between them.
+
+| Run | Spec | Result |
+|---|---|---|
+| 1 (07:19) | `qa-agent-fund` + `qa-real` (one stack, port 8690) | **2 failed, 5 did not run** — "Votre portefeuille principal détient 250 USDC sur Base" not found; `USDC · Base` not among the held assets |
+| 1 (07:20) | `qa-plan` (fresh stack, port 8760) | **1 failed** — the plan card is not executable |
+| 2 (07:24), after defect 9 | `qa-agent-fund` + `qa-real` | 4 passed (all of `qa-real`), **1 failed, 2 did not run** — `qa-agent-fund`: "no signed transfer to settle" |
+| 2 (07:26) | `qa-plan` | **1 failed** — after the approval the plan is `paused`, the spec expected `wait` |
+| 3 (07:30), after defect 10 | `qa-agent-fund` + `qa-real` | **7 passed** (3.1 min) |
+| 5 (07:35) | `qa-plan` | **1 passed** (1.1 min) — after two more adaptations of the spec (runs 3 and 4 failed on the plan's pause code, then on the resume) |
+
+### Defect 9 — the forks were funded from a USDC holder that no longer holds any (environment; funding made independent of any holder)
+
+`qa-real-server.mts`, `fork-swap-kyber.mts` and `fork-swap-api.mts` took the test wallet's USDC from one hard-coded address
+(`0xF977…aceC`) by an impersonated transfer whose result was never checked. Read on Base mainnet on 2026-11-17: that address
+holds **0 USDC**. The transfer reverted silently and every funded flow ran on a balance of zero. **Not a V11 regression** (the
+same code on `a118e3e` would fail the same way today). The balance is now written in the token's storage and read back through
+`balanceOf` (`dealTokenRpc` in `scripts/lib/fork-helpers.mts`, the technique `dealToken` already used), with an explicit
+failure if it did not land; `USDC_WHALE=<holder>` keeps the old way, now checked.
+
+### Defect 10 — two QA specs still described the V10 behaviour of a transfer signed while broadcasting is off (specs adapted)
+
+V11 (stabilisation B2) made such a transfer end in the state `not_broadcast` — it was `broadcast` with an error sentence — and
+made a plan PAUSE on a leg that was not sent (`leg_failed`, reason `broadcast_disabled`, « Signée, mais NON envoyée », with
+retry / re-plan / stop) instead of waiting for ever. Both changes are intended and tested server-side (`v11-stab.test.ts`,
+`plan-exec.test.ts`); the two specs had not been run since.
+- `qa-agent-fund.spec.ts`, `qa-plan.spec.ts`: the test's stand-in for the network looks for `not_broadcast` (or `broadcast`).
+- `qa-plan.spec.ts`: after each approval it now ASSERTS the pause (code, sentence, the three buttons). To walk the second leg
+  all the same, its stand-in — scratch database and fork only — puts the plan back where a broadcasting server would have left
+  it. So the browser evidence for the second leg of a plan is: reached through a test stand-in, on a fork, never broadcast.
+- The spec's documentation pictures (`docs/v7/screens/plan-*.png`) are rewritten by every run; they were restored, not committed.
+
+## 7. Fork proof scripts of the swap / bridge stack (2026-11-17 07:35–07:42 UTC)
+
+**Private anvil forks on 127.0.0.1, fresh throwaway keys, nothing sent to a real network: a fork run is not a mainnet
+execution.** One script at a time, `pkill -f anvil; sleep 3` before and after each. Real KyberSwap routes and calldata for the
+day's chain state, the real Signer with a software passkey, the real bytecode on the fork.
+
+| Script | Exit | Observed (excerpts) |
+|---|---|---|
+| `tsx scripts/fork-swap-kyber.mts` | 0 (13 s) | "router bytecode matches the pinned hash"; ETH → USDC: spent 0.01 ETH, received 18.272398 USDC (quoted 18.273659, approved minimum 18.182289), leftover allowance 0; USDC → ETH: received 0.01367927 ETH (minimum 0.01361110); USDC → LINK through two pools: received 1.08863 LINK (minimum 1.07778); "refused (higher minimum than the calldata guarantees)"; **FORK TEST OK** |
+| `tsx scripts/fork-swap-api.mts` (full stack: API, signer over HMAC, worker) | 0 (55 s) | ETH → USDC: finalized, minimum 18.189108, received per router event 18.271547 USDC, simulated before approval; USDC → ETH: finalized, approval confirmed, received 0.013675098814060654 ETH; leftover allowance 0; **FULL-STACK FORK TEST OK** |
+| `tsx scripts/fork-swap-net.mts base` | 0 (22 s) | ETH → USDC received 18.280334 (minimum 18.097839); USDC → ETH received 0.004999241 (minimum 0.004949335); **FORK TEST OK on Base** |
+| `tsx scripts/fork-swap-net.mts ethereum` | 0 (12 s) | fork at block 26 433 317; ETH → USDC received 18.287971 (minimum 18.105088); USDC → ETH received 0.004998130 (minimum 0.004948149); **FORK TEST OK on Ethereum** |
+| `tsx scripts/fork-cctp.mts base arbitrum` | 0 (107 s) | the forks carry the reviewed bytecode (TokenMessengerV2, MessageTransmitterV2, TokenMinterV2 on both sides); 3 of 3 public Circle messages carry exactly 2 signatures by attesters enabled on-chain; signer refusals, burn on the Base fork, mint on the Arbitrum fork with TEST attesters (the script's stated simulation), no double mint; full stack Standard and Fast; **FORK CCTP TEST OK (Base → Arbitrum One)** |
+| `tsx scripts/fork-agent.mts` | **1** at the first run: "no known holder of USDC on Base could fund the vault" (defect 9, the same environment drift); **0** (52 s) after the storage fallback | paper pass 3 orders; mandate refused before the gas reserve (`409 insufficient_gas`), refused with a passkey signature over something else (`422 signer_bad_approval`); LIVE ETH → USDC received 6.515990 (minimum 6.450921); LIVE USDC → LINK received 1.27103 (minimum 1.25921); signer refuses an order above the per-order limit and an order after revocation; withdraw 54.840423 USDC to the owner; audit chain intact; **AGENT FORK TEST OK on Base** |
+
+Conclusion: the V10 execution paths these scripts prove (signer checks on genuine calldata, minimum received, exact-amount
+approvals, CCTP burn / mint, the spot agent's mandate) behave on the V11 tree as their own assertions require. No comparison
+run against `a118e3e` was needed: nothing failed for a reason other than the funding holder.
+Not run (not in the list): `fork-gmx`, `fork-hl-deposit`, `fork-mandate`, `fork-plan`.
