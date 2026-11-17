@@ -91,6 +91,11 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
       // v8 GMX v2: the venue policy needs the owner's passkey; revoking is always allowed; orders go through POST /sign (intent with a `gmx` section)
       if (route === 'POST /venue/gmx/authorize') return await signer.gmxAuthorize(json.authorization, json.assertion);
       if (route === 'POST /venue/gmx/revoke') return signer.gmxRevoke(String(json.authorizationId));
+      // NFT delivery 2 (nft.ts) — passkey each: one NFT transfer built by the signer from the intent (no calldata, no helper data);
+      // a change of the outpoint lock list; a change of the NFT destination allow-list
+      if (route === 'POST /nft/sign') return await signer.nftSign(json.intent, json.assertion);
+      if (route === 'POST /utxo/locks') return await signer.utxoLocks(json.request, json.assertion);
+      if (route === 'POST /nft/allow') return await signer.nftAllow(json.request, json.assertion);
       throw new SignerError('not_found', 'no such route');
     };
     void enqueue(run).then((r) => send(200, r), (e: unknown) => {

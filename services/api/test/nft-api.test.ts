@@ -120,8 +120,8 @@ describe('access', () => {
   it('a state-changing request without the CSRF header and origin is refused', async () => {
     for (const [m, p, body] of routes.filter((r) => r[0] !== 'GET')) expect((await call(m, p, { body, csrf: false })).status, `${m} ${p}`).toBe(403);
   });
-  it('there is no transfer, approval or market-write route', async () => {
-    for (const p of ['/nfts/transfer', '/nfts/transfer/prepare', '/nfts/send', '/nfts/approve', '/nfts/list', '/nfts/buy', '/nfts/offer']) expect((await call('POST', p, { body: {} })).status, p).toBe(404);
+  it('there is no approval or market-write route (delivery 2 added transfer/prepare and transfer/:id/approve — tested in nft-transfer.test.ts)', async () => {
+    for (const p of ['/nfts/transfer', '/nfts/send', '/nfts/approve', '/nfts/set-approval', '/nfts/sign', '/nfts/list', '/nfts/buy', '/nfts/offer']) expect((await call('POST', p, { body: {} })).status, p).toBe(404);
   });
   it('parameters are validated: no owner address is accepted anywhere, keys and limits are bounded', async () => {
     expect((await call('GET', '/nfts?limit=101')).status).toBe(400); expect((await call('GET', '/nfts?chain=not-a-chain')).status).toBe(400); expect((await call('GET', '/nfts?sort=price')).status).toBe(400); // no price sort: there is no reliable price
@@ -133,7 +133,7 @@ describe('access', () => {
 });
 
 describe('capabilities — the real matrix', () => {
-  it('all 23 networks, each with its real state; nothing is transferable, no market write anywhere', async () => {
+  it('all 23 networks, each with its real state; transfers on Solana and the EVM networks only, no market write anywhere', async () => {
     const c = (await call('GET', '/nfts/capabilities')).json, chains = (c.chains as any[]).filter((x) => x.network !== 'testnet'); // eslint-disable-line @typescript-eslint/no-explicit-any
     expect(chains).toHaveLength(23);
     const by = Object.fromEntries(chains.map((x) => [x.network, x]));
@@ -141,15 +141,18 @@ describe('capabilities — the real matrix', () => {
     for (const n of ['ethereum', 'base', 'arbitrum', 'polygon', 'optimism', 'bsc', 'avalanche', 'hyperevm']) expect(by[n], n).toMatchObject({ inventory: 'blocked_by_provider', reason: 'no_keyless_discovery', unlockedBy: 'NFT_EVM_INDEXER_URLS', lookup: true, manualAdd: true, standards: ['erc721', 'erc1155'] });
     expect(by.bitcoin).toMatchObject({ inventory: 'blocked_by_provider', reason: 'ordinals_need_ord_indexer', lookup: false, manualAdd: false });
     for (const n of ['litecoin', 'dogecoin', 'bitcoincash', 'stellar', 'xrpl', 'tron', 'aptos', 'cosmos', 'sui', 'near', 'ton', 'cardano', 'polkadot']) expect(by[n], n).toMatchObject({ inventory: 'unsupported', reason: 'no_adapter', lookup: false, manualAdd: false, receive: false, standards: [] });
-    expect(chains.every((x) => x.transfer === 'not_built' && x.marketWrite === false)).toBe(true);
+    expect(chains.every((x) => x.marketWrite === false)).toBe(true);
+    expect(chains.filter((x) => x.transfer === 'supported').map((x) => x.network).sort()).toEqual(['arbitrum', 'avalanche', 'base', 'bsc', 'ethereum', 'hyperevm', 'optimism', 'polygon', 'solana']);
+    expect(by.solana.transferStandards).toEqual(['spl-token-2022', 'metaplex-token-metadata', 'metaplex-pnft', 'metaplex-core']); expect(by.ethereum.transferStandards).toEqual(['erc721', 'erc1155']);
+    expect(by.bitcoin).toMatchObject({ transfer: 'not_supported', transferReason: 'ordinals_transfer_not_supported', transferStandards: [] }); expect(by.cardano).toMatchObject({ transfer: 'not_supported', transferReason: 'no_adapter' });
     expect(c.providers.find((p: { id: string }) => p.id === 'opensea')).toEqual({ id: 'opensea', on: false, unlockedBy: 'OPENSEA_API_KEY', sends: 'not_built' });
     expect(JSON.stringify(c)).not.toMatch(/api[-_]?key=|secret/i);
   });
   it('the server capability list names the variables, never a value', async () => {
     const { nftCapabilities, nftConfig } = await import('../src/nft/config.ts');
     const off = nftCapabilities({}), on = nftCapabilities({ NFT_SOLANA_DAS_URL: 'https://mainnet.helius-rpc.com/?api-key=SUPERSECRET', NFT_EVM_INDEXER_URLS: '{"ethereum":"https://eth.blockscout.com"}', NFT_MARKET_MAGICEDEN: 'on', OPENSEA_API_KEY: 'SUPERSECRET2' });
-    expect(off.map((c) => [c.id, c.on, c.missing])).toEqual([['nft_inventory', true, []], ['nft_solana_das', true, []], ['nft_evm_discovery', false, ['NFT_EVM_INDEXER_URLS']], ['nft_ordinals', false, []], ['nft_market_read', false, ['NFT_MARKET_MAGICEDEN']]]);
-    expect(on.filter((c) => c.on).map((c) => c.id)).toEqual(['nft_inventory', 'nft_solana_das', 'nft_evm_discovery', 'nft_market_read']); expect(JSON.stringify(on)).not.toContain('SUPERSECRET');
+    expect(off.map((c) => [c.id, c.on, c.missing])).toEqual([['nft_inventory', true, []], ['nft_solana_das', true, []], ['nft_evm_discovery', false, ['NFT_EVM_INDEXER_URLS']], ['nft_transfer', true, []], ['nft_ordinals', false, ['NFT_ORDINALS_API_URL']], ['nft_market_read', false, ['NFT_MARKET_MAGICEDEN']]]);
+    expect(on.filter((c) => c.on).map((c) => c.id)).toEqual(['nft_inventory', 'nft_solana_das', 'nft_evm_discovery', 'nft_transfer', 'nft_market_read']); expect(JSON.stringify(on)).not.toContain('SUPERSECRET');
     expect(nftCapabilities({ NFT_EVM_INDEXER_URLS: '{"solana":"https://x"}' })[0]).toMatchObject({ id: 'nft', on: false });
     expect(() => nftConfig({ NFT_SOLANA_DAS_URL: 'http://plain.example/' })).toThrow(); expect(() => nftConfig({ NFT_IPFS_GATEWAYS: 'http://gw.example/ipfs/' })).toThrow(); expect(() => nftConfig({ NFT_EVM_INDEXER_URLS: 'not json' })).toThrow();
   });
@@ -168,7 +171,7 @@ describe('the reference item, looked up — real fields or nothing', () => {
     expect(a.metadata.attributes.map((x: { traitType: string; valueText: string }) => [x.traitType, x.valueText])).toEqual(doc.attributes.map((x: { trait_type: string; value: string }) => [x.trait_type, x.value])); expect(a.metadata.attributes).toHaveLength(9);
     expect(a.metadata.raw).toEqual(doc); expect(a.metadata.contentHash).toBe(createHash('sha256').update(refMeta.text).digest('hex'));
     expect(a.metadata.traitStatistics).toEqual({ computed: false, reason: 'no_collection_index' }); // no rarity is ever computed without a denominator
-    expect(a.market).toBeNull(); expect(a.capabilities).toMatchObject({ transferable: false, transferBlockedBy: ['not_in_wallet', 'transfer_not_built'], marketActions: false });
+    expect(a.market).toBeNull(); expect(a.capabilities).toMatchObject({ transferable: false, transferBlockedBy: ['not_in_wallet'], transferWarnings: ['core_collection_permanent_delegate', 'mutable_metadata'], marketActions: false });
     expect(a.sources.map((s: { category: string }) => s.category)).toEqual(['onchain', 'creator_metadata']);
     expect(a.externalMarkets).toEqual([{ name: 'Magic Eden', url: `https://magiceden.io/item-details/${REF}` }, { name: 'OpenSea', url: `https://opensea.io/item/solana/${REF}` }]);
     // nothing invented: no price, no rank, no owner name, no rarity anywhere in the answer
@@ -364,8 +367,8 @@ describe('manual tracking (EVM: no automatic discovery)', () => {
   }, 60_000);
   it('receive: the wallet\'s own addresses per readable chain, with the warnings that apply — Bitcoin carries the Ordinals warning', async () => {
     const r = (await call('GET', '/nfts/receive')).json.items, by = Object.fromEntries(r.map((x: { network: string }) => [x.network, x]));
-    expect(by.solana).toMatchObject({ address: SOL_OWNER, warnings: ['sol_compressed_needs_indexer'] }); expect(by.ethereum).toMatchObject({ address: EVM_OWNER, warnings: ['evm_same_address_check_network', 'evm_arrival_not_detected'], detection: 'blocked_by_provider' });
-    expect(by.bitcoin).toMatchObject({ address: addresses.bitcoin, warnings: ['ordinals_not_protected'] }); expect(by.cardano).toBeUndefined();
+    expect(by.solana).toMatchObject({ address: SOL_OWNER, warnings: ['sol_compressed_needs_indexer', 'arrival_after_confirmation'] }); expect(by.ethereum).toMatchObject({ address: EVM_OWNER, warnings: ['evm_same_address_check_network', 'evm_arrival_known_contracts_only', 'arrival_after_confirmation'], detection: 'blocked_by_provider' });
+    expect(by.bitcoin).toMatchObject({ address: addresses.bitcoin, warnings: ['ordinals_heuristic_only', 'ordinals_no_transfer', 'arrival_after_confirmation'] }); expect(by.cardano).toBeUndefined();
   });
 });
 
@@ -390,5 +393,6 @@ describe('retention — everything that grows is pruned', () => {
     for (const [id, bytes, at] of [['a', 600, 3], ['b', 600, 2], ['c', 600, 1]] as const) await sql`insert into nft_media (id, source_uri, status, mime, kind, bytes, fetched_at, last_access, expires_at) values (${`m${id.repeat(40)}`}, ${`https://x.example/${id}`}, 'available', 'image/png', 'image', ${bytes}, ${t}, ${new Date(t.getTime() - at * 1000)}, ${new Date(t.getTime() + 1e9)})`;
     expect(await store.mediaOverCap(1300)).toEqual([`m${'a'.repeat(40)}`]); expect((await sql`select status from nft_media where id = ${`m${'a'.repeat(40)}`}`)[0].status).toBe('not_fetched');
   });
-  it('the schema is additive and idempotent', async () => { const db = await import('../src/db.ts'); await db.migrate(); await db.migrate(); expect((await sql`select count(*)::int as n from information_schema.tables where table_name like 'nft\_%'`)[0].n).toBe(9); });
+  it('the schema is additive and idempotent', async () => { const db = await import('../src/db.ts'); await db.migrate(); await db.migrate(); expect((await sql`select count(*)::int as n from information_schema.tables where table_name like 'nft\_%'`)[0].n).toBe(10); // delivery 2: + nft_arrival_scan
+    expect((await sql`select count(*)::int as n from information_schema.columns where table_name = 'proposals' and column_name = 'nft'`)[0].n).toBe(1); expect((await sql`select count(*)::int as n from information_schema.tables where table_name = 'utxo_reviews'`)[0].n).toBe(1); });
 });

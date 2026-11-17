@@ -534,6 +534,14 @@ create table if not exists nft_event_scan (asset_key text primary key, cursor te
 create table if not exists nft_manual (key text primary key, chain text not null, added_at timestamptz not null default now());
 create table if not exists nft_budget (source text not null, day date not null, requests int not null default 0, bytes bigint not null default 0, primary key (source, day));
 -- <<< NFT delivery 1
+-- >>> NFT delivery 2 (docs/nft/NFT-TRANSFERS.md): additive. An NFT transfer is a row of proposals (kind 'nft') — the same
+-- lifecycle, idempotency, states and worker as a fund transfer; nft holds the review the owner approved. nft_arrival_scan
+-- is the cursor of the per-contract log scan that detects received EVM NFTs; utxo_reviews the outputs the owner declared
+-- ordinary coins (it only lifts the HEURISTIC flag of services/api/src/nft/utxo.ts, never a signer lock or an ord report).
+alter table proposals add column if not exists nft jsonb;
+create table if not exists nft_arrival_scan (chain text not null, contract text not null, cursor bigint not null, scanned_at timestamptz not null default now(), gap boolean not null default false, primary key (chain, contract));
+create table if not exists utxo_reviews (network text not null, outpoint text not null, verdict text not null, at timestamptz not null default now(), primary key (network, outpoint));
+-- <<< NFT delivery 2
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }

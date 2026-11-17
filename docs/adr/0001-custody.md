@@ -29,7 +29,8 @@ Option (b), with these compensating controls:
   hash of the canonical object being approved** — with one bounded exception, the first mint of a bridge the passkey already
   approved (row 6 of the table below);
 - signer-side limits in `policy.json` on the signer machine: per-transfer and per-UTC-day amounts per asset, a fee ceiling per
-  network, a maximum approval window, an optional destination allowlist; single-use proposals. The defaults compiled into
+  network, a maximum approval window, an optional destination allowlist; single-use proposals; since NFT delivery 2, an
+  optional `nft` section (NFT transfers per day, ERC-1155 quantity cap, per-network standard switches, allow-list mode). The defaults compiled into
   the signer are about 50 USD per transfer and twice that per day (`packages/core/src/policy.ts`); the values in force are
   those of the file on the signer machine;
 - an emergency halt that the API can set and that only an operator on the signer machine can lift;
@@ -49,6 +50,17 @@ reclaim of a Solana event account; opening the wallet's Solana USDC account), na
 a venue, GMX orders (increase, decrease, cancellation), a Hyperliquid order or leverage change in manual mode, a withdrawal
 from a venue to the wallet's own address, and every grant of standing authority: an agent mandate, a venue authorization, a
 derivative mandate, a GMX venue policy, the enrolment of another passkey.
+
+Since NFT delivery 2 (2026-11-17), three more operations, each with a passkey assertion over its own canonical object
+(`packages/core/src/nft-intent.ts` — new types under their own domain separators; the transfer intent of `intent.ts` is
+unchanged and every existing kind hashes as before): **one NFT transfer** (`POST /nft/sign`, intent `SPW-NFT-INTENT-v1`:
+ERC-721 / ERC-1155 `safeTransferFrom`, Solana Token-2022 `TransferChecked`, Token Metadata `Transfer` — programmable NFTs
+included — and Core `TransferV1`, built by the signer from the intent's fields and re-read by an independent decoder before
+signing); **a change of the outpoint lock list** of a Bitcoin-style network (`POST /utxo/locks`, `SPW-UTXO-LOCKS-v1`; an
+ordinary send that names a locked outpoint is refused); **a change of the NFT destination allow-list** (`POST /nft/allow`,
+`SPW-NFT-ALLOW-v1`). **No passkey-less path was added: the list below still has exactly seven rows.** What the signer does
+not verify for an NFT transfer — it makes no chain read — is that the wallet owns the token and that the contract is of the
+named standard: `docs/nft/NFT-TRANSFERS.md` §4 says why that cannot move another asset or grant an approval.
 
 ### Without a per-operation passkey — exactly seven paths
 
@@ -110,6 +122,9 @@ Verified against public test vectors in `services/isolated-signer/test`.
   ≤ 7 days). Path 7 is the highest-frequency one: it is bounded per signature and by persisted rates, not by a per-order
   count of the authorization (`maxOrdersPerDay` does not count quotes).
 - One Bitcoin address is reused for receive and change (privacy trade-off, simpler recovery).
+- NFT transfers (delivery 2): the loss bound of a swapped intent is not a small amount but **one NFT per approval** (at most
+  `nft.maxTransfersPerDay` a day), to any address unless `nft.allowlistOnly` is on; an NFT sent is irreversible. Ownership
+  and standard are established by the API, not by the signer. Never executed on a real network.
 - No independent audit or penetration test has been performed. No derivative order was ever accepted by a venue on a funded
   account from this code (`docs/V11-AUDIT.md`, section 10).
 

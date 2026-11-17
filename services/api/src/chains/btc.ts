@@ -130,6 +130,15 @@ export interface UtxoShape {
   section(chosen: Utxo[], change: bigint, fee: bigint, rawTx: (txid: string) => Promise<string>): Promise<{ section: Record<string, unknown>; aux?: Record<string, unknown> }>;
 }
 
+/**
+ * NFT delivery 2 — inscription safety. Outpoints that must NEVER be chosen by the coin selection of an ordinary send or of a
+ * cross-chain swap: the signer's lock list, what an ord server reports as carrying an inscription or a rune, and — without an
+ * ord server — small outputs flagged by a heuristic (services/api/src/nft/utxo.ts sets this guard). The guard receives the
+ * coin set the indexers agreed on. It is asked on every preparation; when it is absent, or returns an empty set, the
+ * selection below is exactly what it was before. A guard that throws refuses the preparation (fail closed).
+ */
+export const utxoGuards: { excluded: ((network: string, address: string, utxos: Utxo[], rawTx: (txid: string) => Promise<string>) => Promise<ReadonlySet<string>>) | null } = { excluded: null };
+
 export function utxoAdapter(n: NetworkDef, shape: UtxoShape, sources: Source[] = n.rpc.map(sourceOf)): Adapter {
   const any = async <T>(f: (s: Source) => Promise<T>): Promise<T> => { let last: unknown; for (const s of sources) { try { return await f(s); } catch (e) { last = e; } } throw last; };
   const all = async <T>(f: (s: Source) => Promise<T>): Promise<T[]> => Promise.all(sources.map(f)).catch((e) => { throw e instanceof UserError ? e : new UserError('rpc_degraded', `${n.name} data source unavailable; transfer refused`, 503); });
@@ -162,7 +171,10 @@ export function utxoAdapter(n: NetworkDef, shape: UtxoShape, sources: Source[] =
       const norm = (s: Utxo[]) => s.filter((u) => u.confirmed).map((u) => `${u.txid}:${u.vout}:${u.value}`).sort();
       const a = norm(sets[0]!);
       for (const s of sets) if (JSON.stringify(norm(s)) !== JSON.stringify(a)) throw new UserError('rpc_disagreement', `${n.name} data sources disagree on spendable coins; transfer refused`, 503);
-      const utxos = sets[0]!.filter((u) => u.confirmed).sort((x, y) => y.value - x.value);
+      const agreed = sets[0]!.filter((u) => u.confirmed);
+      const excluded = utxoGuards.excluded ? await utxoGuards.excluded(n.id, d.from, agreed, (txid) => any((x) => x.rawTx(txid))) : null;
+      const utxos = (excluded && excluded.size ? agreed.filter((u) => !excluded.has(`${u.txid}:${u.vout}`)) : agreed).sort((x, y) => y.value - x.value);
+      const held = agreed.length - utxos.length;
       const DUST = dustOf(n);
       // chains with registry bounds (fixed-fee chains) do not depend on the node's estimate being available
       const fr = n.utxo?.feeRate;
@@ -189,8 +201,17 @@ export function utxoAdapter(n: NetworkDef, shape: UtxoShape, sources: Source[] =
         }
         if (chosen.length >= 20) break;
       }
+      if (held > 0) throw Object.assign(new UserError('insufficient_unlocked_funds', `insufficient confirmed ${n.native.symbol} outside the ${held} protected output(s) (locked, or possibly carrying an inscription): they are never spent by an ordinary send`), { data: { protectedOutputs: held } });
       throw new UserError('insufficient_funds', `insufficient confirmed ${n.native.symbol} for amount plus network fee`);
     },
+    /** the confirmed coins both indexers agree on (NFT delivery 2: the lock-list screen) */
+    async utxos(addr) {
+      const sets = await all((s) => s.utxos(addr));
+      const norm = (s: Utxo[]) => s.filter((u) => u.confirmed).map((u) => `${u.txid}:${u.vout}:${u.value}`).sort();
+      for (const s of sets) if (JSON.stringify(norm(s)) !== JSON.stringify(norm(sets[0]!))) throw new UserError('rpc_disagreement', `${n.name} data sources disagree on the wallet's coins`, 503);
+      return sets[0]!.filter((u) => u.confirmed).sort((x, y) => y.value - x.value);
+    },
+    rawTx: (txid) => any((x) => x.rawTx(txid)),
     async broadcast(raw) {
       const rs = await Promise.allSettled(sources.map((s) => s.broadcast(raw)));
       if (rs.some((r) => r.status === 'fulfilled')) return;

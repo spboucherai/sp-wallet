@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { baseUnits, parseUnits } from './amounts.ts';
 import { NETWORKS } from './networks.ts';
 import type { Intent } from './intent.ts';
+import { NftPolicyFileSchema } from './nft-policy.ts'; // NFT delivery 2
 
 const U = z.string().regex(/^(0|[1-9]\d{0,77})$/);
 /** Signer-side policy. Limits are in base units, keyed by "<network>:<symbol>". Missing key = 0 = deny. */
@@ -13,6 +14,13 @@ export const PolicySchema = z.strictObject({
   maxApprovalTtlSec: z.number().int().min(30).max(900),
   /** when non-empty, only these destinations may receive funds ("<network>:<address>") */
   allowlist: z.array(z.string()),
+  /**
+   * NFT delivery 2 (additive, optional): limits of NFT transfers. ABSENT in every policy.json written before that delivery and
+   * in the file a new installation writes: the signer then applies the code defaults (nft-policy.ts, `effectiveNftPolicy`)
+   * without writing anything. A signer binary from before NFT delivery 2 refuses a file that carries this key (strict schema):
+   * remove the key before rolling back (docs/runbooks/deploy.md).
+   */
+  nft: NftPolicyFileSchema.optional(),
 });
 export type Policy = z.infer<typeof PolicySchema>;
 

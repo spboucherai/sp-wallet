@@ -12,6 +12,9 @@ export interface SignerStatus {
   venueQuotingMandates?: SignerQuotingMandate[];
   /** v8: GMX venue policies stored by the signer */
   gmx?: import('./derivatives/gmx-exec.ts').GmxSignerAuth[];
+  /** NFT delivery 2: the effective NFT policy (file + defaults), today's count, the allow-list; the locked outpoints per Bitcoin-style network. Absent from an older signer. */
+  nft?: { policy: import('@spw/core').NftPolicy; signedToday: number; allow: { network: string; address: string; approvedAt: number }[] };
+  utxoLocks?: Record<string, { outpoint: string; reason: 'owner' | 'ord' | 'heuristic'; at: number }[]>;
   venues?: { authorization: { authorizationId: string; venue: string; network: string }; hash: string; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; today: { orders: number; cancels: number; leverage: number } }[];
 }
 
@@ -59,6 +62,10 @@ export const signer = {
   bridgeReclaim: (p: { proposalId: string; message: string; attestation: string; sol: SolTxParams; assertion: unknown }) => { cached = null; return call<{ raw: string; txid: string; eventAccount: string }>('POST', '/bridge/reclaim', p); },
   solTokenAccount: (request: unknown, assertion: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string; tokenAccount: string }>('POST', '/sol/token-account', { request, assertion }); },
   halt: () => { cached = null; return call<{ ok: true }>('POST', '/halt', {}); },
+  // NFT delivery 2 — passkey each: one NFT transfer (built by the signer from the intent), the outpoint lock list, the NFT allow-list
+  nftSign: (intent: unknown, assertion: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string }>('POST', '/nft/sign', { intent, assertion }); },
+  utxoLocks: (request: unknown, assertion: unknown) => { cached = null; return call<{ network: string; action: string; changed: number; locked: number; hash: string }>('POST', '/utxo/locks', { request, assertion }); },
+  nftAllow: (request: unknown, assertion: unknown) => { cached = null; return call<{ network: string; address: string; action: string; entries: number; hash: string }>('POST', '/nft/allow', { request, assertion }); },
   // agent vaults and mandates
   vaultAddress: (index: number) => call<{ address: string }>('POST', '/vault/address', { index }),
   mandateApprove: (mandate: unknown, assertion: unknown) => { cached = null; return call<{ mandateId: string; hash: string }>('POST', '/mandate/approve', { mandate, assertion }); },

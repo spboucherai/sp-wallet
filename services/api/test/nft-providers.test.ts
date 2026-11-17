@@ -34,13 +34,13 @@ describe('Solana — the reference item CMhG…659j (Metaplex Core)', () => {
     // the collection carries permanent delegates: the collection's authority can move or burn any item — shown, not hidden
     expect(a.extensions).toEqual(['core-collection:PermanentFreezeDelegate', 'core-collection:PermanentTransferDelegate', 'core-collection:PermanentBurnDelegate']);
     expect(a.creators.state).toBe('unsupported'); expect(a.ownership.tokenAccount.state).toBe('unsupported'); expect(a.market).toBeNull();
-    expect(a.capabilities).toMatchObject({ transferable: false, transferBlockedBy: ['not_in_wallet', 'transfer_not_built'], marketActions: false });
+    expect(a.capabilities).toMatchObject({ transferable: false, transferBlockedBy: ['not_in_wallet'], marketActions: false });
     expect(a.quantity).toBe('1'); expect(typeof a.quantity).toBe('string');
   });
   it('held by the wallet when the wallet IS the on-chain owner — and only then', async () => {
     const { p } = sol('sol-core-reference');
     const mine = await p.lookup('solana', { address: REF }, '62Q9eeDY3eM8A5CnprBGYMPShdBjAzdpBdr71QHsS8dS');
-    expect(mine.ownership).toMatchObject({ heldByWallet: true, state: 'in_wallet' }); expect(mine.capabilities.transferBlockedBy).toEqual(['transfer_not_built']); expect(mine.ownerAddress).toBe('62Q9eeDY3eM8A5CnprBGYMPShdBjAzdpBdr71QHsS8dS');
+    expect(mine.ownership).toMatchObject({ heldByWallet: true, state: 'in_wallet' }); expect(mine.capabilities.transferBlockedBy).toEqual([]); expect(mine.ownerAddress).toBe('62Q9eeDY3eM8A5CnprBGYMPShdBjAzdpBdr71QHsS8dS');
   });
   it('its collection account and its history, decoded from Core instructions', async () => {
     const { p } = sol('sol-core-reference'), a = await p.lookup('solana', { address: REF }, null);
@@ -87,22 +87,22 @@ describe('Solana — Token Metadata standards', () => {
     expect(a.standard).toBe('metaplex-pnft'); expect(val(a.ruleSet)).toBe('ARdHQ5FBBMyMaA5dzyJji6U8i7uwAK2TBsMHM8GTBUGn'); expect(val(a.metadata.mutable)).toBe(false);
     expect(a.ownership).toMatchObject({ owner: { state: 'known', value: owner }, tokenAccount: { state: 'known', value: '2vK6qEqvadYp151cBaMnxviSnargTwqcr6F3NgaJD9bg' }, frozen: { state: 'known', value: true }, delegate: { state: 'known', value: '94PEhc7PwL5fjpz7dQoienNWzyBTnupBWksEAjHxd5d9' }, tokenRecordState: { state: 'known', value: 'locked' } });
     expect(a.ownership.source).toMatchObject({ category: 'onchain', confidence: 'chain_verified' }); // the indexer's owner was only a hint: the token account was then read on-chain
-    expect(a.capabilities.transferBlockedBy).toEqual(['not_in_wallet', 'pnft_locked', 'pnft_rule_set', 'transfer_not_built']); // never "frozen" for a pNFT: its account is always frozen
+    expect(a.capabilities.transferBlockedBy).toEqual(['not_in_wallet', 'pnft_locked', 'delegated']); // never "frozen" for a pNFT: its account is always frozen
     const held = await p.lookup('solana', { address: id }, owner);
-    expect(held.ownership).toMatchObject({ heldByWallet: true, state: 'escrow_or_delegated' }); expect(held.capabilities.transferBlockedBy).toEqual(['pnft_locked', 'pnft_rule_set', 'transfer_not_built']);
+    expect(held.ownership).toMatchObject({ heldByWallet: true, state: 'escrow_or_delegated' }); expect(held.capabilities.transferBlockedBy).toEqual(['pnft_locked', 'delegated']);
   });
   it('Token-2022 NFT: program, extensions and the metadata extension', async () => {
     const { p } = sol('sol-token2022'), a = await p.lookup('solana', { address: '1RwLsj9guunjNRQV8fDq1a8S3keE2XgMFmHRUaS2mHM' }, null);
     expect(a.standard).toBe('spl-token-2022'); expect(a.tokenProgram).toBe('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'); expect(a.extensions).toEqual(['metadataPointer', 'groupMemberPointer', 'tokenMetadata']);
     expect(a.metadata.onchainName).toBe('ONLYFINS'); expect(a.metadata.sourceUri).toBe('https://bafybeigetp7ywldrr3xxjlc4h7vrairauzm5oeibkychllu3k66nq7lsbq.ipfs.dweb.link');
     expect(a.creators.state).toBe('unsupported'); expect(a.royaltyBps.state).toBe('unsupported'); expect(a.collection).toBeNull(); // a group member pointer is not decoded: no collection is claimed
-    expect(a.ownership).toMatchObject({ frozen: { state: 'known', value: false }, delegate: { state: 'none' } }); expect(a.capabilities.transferBlockedBy).toEqual(['not_in_wallet', 'transfer_not_built']);
+    expect(a.ownership).toMatchObject({ frozen: { state: 'known', value: false }, delegate: { state: 'none' } }); expect(a.capabilities.transferBlockedBy).toEqual(['not_in_wallet']);
   });
   it('compressed NFT: no account on-chain — indexed data only, labelled as such; nothing is "chain verified"', async () => {
     const { p } = sol('sol-compressed'), a = await p.lookup('solana', { address: '12XAbDPsEUwVbsN3BZwgdc1uqkTanp7Tds9mEtNEuTH' }, null);
     expect(a.standard).toBe('metaplex-bubblegum'); expect(a.mintAddress).toBeNull(); expect(a.sources.every((s) => s.category === 'indexed' && s.confidence === 'indexer_reported')).toBe(true);
     expect(a.collection?.verifiedOnChain.state).toBe('unknown'); expect(a.metadata.traitStatistics).toEqual({ computed: false, reason: 'compressed' });
-    expect(a.extensions).toEqual(['tree:hAsrSYBkzdaz4r3EJ6pwxNL1YbGbM5c1jNuhLV6Uzqi', 'leaf:913729']); expect(a.capabilities.transferBlockedBy).toContain('compressed_requires_indexer');
+    expect(a.extensions).toEqual(['tree:hAsrSYBkzdaz4r3EJ6pwxNL1YbGbM5c1jNuhLV6Uzqi', 'leaf:913729']); expect(a.capabilities.transferBlockedBy).toContain('compressed_transfer_not_supported');
     expect((await p.events(a, null))).toMatchObject({ events: [], completeness: 'unavailable', note: 'compressed_history_requires_indexer' });
   });
   it('without a DAS endpoint a compressed id is simply not found — never an invented asset', async () => {
@@ -141,7 +141,7 @@ describe('Solana — inventory of a public address, section by section', () => {
     expect(by('metaplex-bubblegum').every((a) => a.ownership.source.category === 'indexed')).toBe(true); expect(by('metaplex-core').every((a) => a.ownership.source.category === 'onchain')).toBe(true);
     // frozen and delegated legacy NFTs (staked) and locked pNFTs, as the chain says
     const fox = inv.assets.find((a) => a.assetId === 'GifSyQwxoAJfWF3yfxC6s5654oZUG3gbMAur4yTMs2WG')!;
-    expect(fox.metadata.onchainName).toBe('Fox #3635'); expect(val(fox.ownership.frozen)).toBe(true); expect(fox.ownership.delegate.state).toBe('known'); expect(fox.capabilities.transferBlockedBy).toEqual(['frozen', 'delegated', 'transfer_not_built']);
+    expect(fox.metadata.onchainName).toBe('Fox #3635'); expect(val(fox.ownership.frozen)).toBe(true); expect(fox.ownership.delegate.state).toBe('known'); expect(fox.capabilities.transferBlockedBy).toEqual(['frozen', 'delegated']);
     expect(by('metaplex-pnft').every((a) => val(a.ownership.tokenRecordState) === 'locked' && a.capabilities.transferBlockedBy[0] === 'pnft_locked')).toBe(true);
     // cost: a handful of batched reads, whatever the number of NFTs
     expect(r.asked.length).toBeLessThanOrEqual(20);
@@ -178,9 +178,9 @@ describe('EVM — ERC-721 / ERC-1155 reads on Ethereum mainnet', () => {
     expect(val(a.ownership.owner)).toBe('0x46EFbAedc92067E6d60E84ED6395099723252496'); expect(a.ownership.source).toMatchObject({ confidence: 'chain_verified', detail: 'ethereum-rpc.publicnode.com, eth.drpc.org' });
     expect(a.metadata.sourceUri).toBe('ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/1'); expect(a.metadata.onchainSymbol).toBe('BAYC');
     expect(a.collection).toMatchObject({ name: 'BoredApeYachtClub', verifiedOnChain: { state: 'unsupported' } }); // a contract's name() is not a verification, and none is shown
-    expect(a.capabilities.transferBlockedBy).toEqual(['not_in_wallet', 'transfer_not_built']);
+    expect(a.capabilities.transferBlockedBy).toEqual(['not_in_wallet']);
     const mine = await p.lookup('ethereum', { address: '0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d', tokenId: '0x1' }, '0x46efbaedc92067e6d60e84ed6395099723252496'); // other spellings of the same token and owner
-    expect(mine.key).toBe(a.key); expect(mine.ownership).toMatchObject({ heldByWallet: true, state: 'in_wallet' }); expect(mine.capabilities.transferBlockedBy).toEqual(['transfer_not_built']);
+    expect(mine.key).toBe(a.key); expect(mine.ownership).toMatchObject({ heldByWallet: true, state: 'in_wallet' }); expect(mine.capabilities.transferBlockedBy).toEqual([]);
   });
   it('ERC-721 without the metadata extension: no URI → no name, no image, nothing made up', async () => {
     const { p } = evm(), id = '79233663829379634837589865448569342784712482819484549289560981379859480642508';
@@ -189,7 +189,7 @@ describe('EVM — ERC-721 / ERC-1155 reads on Ethereum mainnet', () => {
   });
   it('pre-standard contract (answers ownerOf, does not declare ERC-721) → evm-nonstandard; a contract with no ownerOf, or an ERC-20 → refused', async () => {
     const { p } = evm(), k = await p.lookup('ethereum', { address: '0x06012c8cf97BEaD5deAe237070F9587f8E7A266d', tokenId: '1' }, null);
-    expect(k.standard).toBe('evm-nonstandard'); expect(k.capabilities.transferBlockedBy).toEqual(['not_in_wallet', 'unsupported_standard', 'transfer_not_built']);
+    expect(k.standard).toBe('evm-nonstandard'); expect(k.capabilities.transferBlockedBy).toEqual(['not_in_wallet', 'unsupported_standard']);
     expect(await code(p.lookup('ethereum', { address: '0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB', tokenId: '1' }, null))).toBe('unsupported_standard:not_erc721_or_erc1155');
     expect(await code(p.lookup('ethereum', { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', tokenId: '1' }, null))).toBe('unsupported_standard:not_erc721_or_erc1155');
   });

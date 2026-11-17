@@ -69,10 +69,54 @@ to keep (manual list) or reindex.
 - The NFT module holds no key and no signing path: an NFT-side compromise cannot move an asset. Review
   `docs/threat-model/threat-model.md` rows 26–31.
 
+## NFT transfers (delivery 2)
+
+**Policy keys** — on the SIGNER machine, `policy.json`, optional key `nft` (absent = the defaults; `policy.json` is never
+rewritten by a release; an unknown key refuses to start):
+
+```json
+"nft": { "enabled": { "ethereum": ["erc721", "erc1155"], "solana": ["metaplex-core"] }, "maxTransfersPerDay": 5,
+         "maxErc1155Quantity": "10", "allowlistOnly": false, "maxComputeUnits": 400000, "maxComputeUnitPrice": "2000000" }
+```
+
+Defaults: the two EVM standards on the 8 EVM networks, the four Solana standards on Solana, 5 transfers per UTC day, 10
+units per ERC-1155 transfer, allow-list off. The fee ceiling is the existing `maxFee[network]`. Restart the signer after an
+edit; the app shows the values in force (`GET /api/v1/nfts/transfer/verdict`, signer status → `nft.policy`). To switch NFT
+transfers off entirely: `"nft": { "maxTransfersPerDay": 0 }`, or `"enabled": {}`.
+
+**Allow-list mode** (`"allowlistOnly": true`): an NFT can only go to a destination the owner approved with the passkey
+(`POST /api/v1/nfts/allow/prepare` → passkey → `/approve`); the list lives in the signer's state and is shown by
+`GET /api/v1/nfts/allow`. Recommended as soon as the wallet holds an NFT of value: it turns "any address" into "an address
+approved earlier".
+
+**A refusal**: the item page and the Send form show the code-specific sentence; every code is listed in
+`NFT-TRANSFERS.md` §8. `signer_bad_approval` on approve = the stored intent is not what the passkey signed (tampering, or a
+stale page): start again. `signer_nft_daily_count`: wait for the next UTC day or raise the key. `nft_transfer_rpc_disagreement`
+/ `ownership_single_source`: an endpoint is down or behind — nothing is prepared on one answer; add a third endpoint
+(`SPW_RPC_EXTRA`) or wait.
+
+**Incident — an NFT was sent to the wrong address.** It is irreversible: no key of this wallet can bring it back, and no
+one can cancel a confirmed transfer. What to do: (1) `POST /api/v1/security/halt` (or the signer CLI `halt`) if a compromise
+is suspected — it stops every further transfer; (2) read the signer journal (`nft.sign.ok`: proposal id, intent hash,
+asset, destination, txid) and the audit log (`nft.transfer.prepared`) to establish what was approved and when; (3) compare
+the intent hash of the journal with the proposal's `intent_hash` in the database — a difference means the API or its database
+was tampered with; (4) if the destination is a known party, ask them; nothing else exists. Afterwards consider
+`allowlistOnly`.
+
+**Bitcoin protected outputs.** Screen: Assets → NFT → Receive → Bitcoin → « Sorties Bitcoin protégées ». Lock / unlock an
+output: passkey each time; the SIGNER then refuses any send that spends it (`utxo_locked`). With `NFT_ORDINALS_API_URL` (a
+self-hosted `ord` with its address index): outputs it reports with an inscription or a rune — or does not know — are never
+selected; if it is unreachable, Bitcoin sends answer `ord_unavailable` (unset the variable to fall back to the heuristic).
+Without it: outputs ≤ 10 000 sat are kept aside by a heuristic until declared ordinary coins on that screen. A send that
+answers `insufficient_unlocked_funds` needs one of the protected outputs: review or unlock it deliberately. Locks on outputs
+that no longer exist are listed as stale and can be removed. **No inscription can be transferred by this wallet.**
+
 ## Known limits of this delivery
 
-No NFT transfer, approval or market action. No Ordinals, and **BTC sends are not inscription-aware — do not receive
-inscriptions on this wallet** (`NFT-AUDIT.md` §4). EVM: no automatic discovery without an indexer; activity limited to the
+No approval or market action. NFT transfers: `NFT-TRANSFERS.md` §6 and §10 (no compressed NFT, no Ordinals transfer, no
+batch); never executed on a real network. BTC sends are inscription-safe only for outputs that are locked, reported by an
+ord server, or small (heuristic) (`NFT-AUDIT.md` §4). EVM: no automatic discovery without an indexer (arrivals are detected
+on contracts the wallet already knows); activity limited to the
 most recent ~1 000 blocks. Solana SPL history is partial (mint + current token account). Compressed NFTs are indexed data,
 not verified against their tree. Token-2022 group / member pointers are listed, not decoded into a collection. No rarity, no
 valuation. 3D models are not displayed. The 13 other chain families have no adapter.

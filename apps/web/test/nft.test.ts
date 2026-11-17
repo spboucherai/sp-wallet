@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { I18n } from '../src/i18n.ts';
 import { displayName, safeLink, shortId, STANDARD_KEY, unitsToText, type NftChainCap, type NftItem, type NftList, type NftSummary, type Stamp } from '../src/nft.ts';
 import { ChainStates, NftDetail, NftLookup, NftMediaView, Nfts } from '../src/screens/Nft.tsx';
+import { NftSend, UtxoLocks } from '../src/screens/NftSend.tsx';
 import { i18nTables } from '../scripts/i18n-split.mts';
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8');
@@ -27,7 +28,7 @@ const item = (o: Partial<NftItem> = {}): NftItem => ({
     contentHash: 'ab'.repeat(32), mutable: { state: 'known', value: true }, traitStatistics: { computed: false, reason: 'no_collection_index' }, source: stamp('creator_metadata', 'metadata-uri', { detail: 'metadata.phygitals.com' }) },
   media: [{ role: 'image', id: `m${'1'.repeat(40)}`, sourceUri: 'https://gateway.irys.xyz/29YSZT2VooL3a8413PAq25rF48j1pa1Rbk9LfYvDA6YF', resolvedUri: null, declaredMime: 'image/png', mime: null, kind: 'image', status: 'not_fetched', errorCode: null, bytes: null }],
   ownership: { state: 'not_in_wallet', owner: { state: 'known', value: '62Q9eeDY3eM8A5CnprBGYMPShdBjAzdpBdr71QHsS8dS' }, tokenAccount: U, frozen: { state: 'known', value: false }, delegate: N, tokenRecordState: U, heldByWallet: false, source: stamp('onchain', 'solana-rpc', { blockRef: { slot: '470470907' } }) },
-  market: null, capabilities: { viewable: true, transferable: false, transferBlockedBy: ['not_in_wallet', 'transfer_not_built'], marketActions: false, marketBlockedBy: 'market_not_integrated' },
+  market: null, capabilities: { viewable: true, transferable: false, transferBlockedBy: ['not_in_wallet'], transferWarnings: [], marketActions: false, marketBlockedBy: 'market_not_integrated' },
   sources: [stamp('onchain', 'solana-rpc', { blockRef: { slot: '470470907' } }), stamp('creator_metadata', 'metadata-uri', { detail: 'metadata.phygitals.com' })], fetchedAt: '2026-11-17T08:43:25.488Z', origin: 'lookup', explorerUrl: `https://solscan.io/token/${REF}`, firstSeen: '2026-11-17T08:43:25.488Z', lastSeen: '2026-11-17T08:43:25.488Z', verifiedAt: '2026-11-17T08:43:25.488Z', goneAt: null,
   externalMarkets: [{ name: 'Magic Eden', url: `https://magiceden.io/item-details/${REF}` }, { name: 'OpenSea', url: `https://opensea.io/item/solana/${REF}` }], ...o });
 
@@ -53,10 +54,10 @@ describe('the reference item page — real fields, each with its provenance', ()
     expect(html).toContain('Aucune donnée de marché'); expect(html).toContain('Valeur de cet objet : non disponible'); expect(html).toContain('Fréquence et rareté : non calculées'); expect(html).toContain('dénominateur inconnu');
     expect(html).not.toMatch(/rang|rank #|floor: [0-9]/i);
   });
-  it('Send and the market actions are there, DISABLED, with the real reasons — in plain words', () => {
+  it('an asset that cannot be sent: Send is DISABLED with its exact reason (never "not built"); the market actions stay disabled', () => {
     for (const id of ['nft-send', 'nft-market-actions']) { const tag = new RegExp(`<button[^>]*data-testid="${id}"[^>]*>`).exec(html)?.[0] ?? ''; expect(tag, id).toContain('disabled=""'); }
-    expect(html).toContain('data-reason="not_in_wallet"'); expect(html).toContain('data-reason="transfer_not_built"');
-    expect(html).toContain('L’envoi de NFT n’est pas pris en charge dans cette version.'); expect(html).toContain('Actions de marché non prises en charge dans cette version');
+    expect(html).toContain('data-reason="not_in_wallet"'); expect(html).not.toContain('transfer_not_built'); expect(html).not.toContain('pas pris en charge dans cette version.<');
+    expect(html).toContain('Ce NFT n’est pas détenu par ce portefeuille.'); expect(html).toContain('Actions de marché non prises en charge dans cette version');
     expect(html + i18nSrc.slice(i18nSrc.indexOf('>>> NFT delivery 1'))).not.toMatch(/livraison suivante|prochaine livraison|next delivery|coming soon|bientôt/i);
   });
   it('external marketplaces are links opened outside, with the warning', () => {
@@ -64,14 +65,14 @@ describe('the reference item page — real fields, each with its provenance', ()
   });
   it('in English too', () => {
     const en = text(detail(item(), 'en'));
-    for (const s of ['Confirmed on-chain', 'Creator metadata', 'This NFT is not in this wallet', 'Sending NFTs is not supported in this version.', 'Frequency and rarity: not computed.', 'outside SP Wallet']) expect(en, s).toContain(s);
+    for (const s of ['Confirmed on-chain', 'Creator metadata', 'This NFT is not in this wallet', 'This NFT is not held by this wallet.', 'Frequency and rarity: not computed.', 'outside SP Wallet']) expect(en, s).toContain(s);
     expect(en).not.toContain('Confirmé');
   });
   it('a pNFT in the wallet: locked, rule set — each reason is its own line', () => {
     const p = text(detail(item({ standard: 'metaplex-pnft', ruleSet: { state: 'known', value: 'ARdHQ5FBBMyMaA5dzyJji6U8i7uwAK2TBsMHM8GTBUGn' }, quantity: '1', origin: 'discovered',
       ownership: { ...item().ownership, state: 'escrow_or_delegated', heldByWallet: true, frozen: { state: 'known', value: true }, delegate: { state: 'known', value: '94PEhc7PwL5fjpz7dQoienNWzyBTnupBWksEAjHxd5d9' }, tokenRecordState: { state: 'known', value: 'locked' }, tokenAccount: { state: 'known', value: '2vK6qEqvadYp151cBaMnxviSnargTwqcr6F3NgaJD9bg' } },
-      capabilities: { ...item().capabilities, transferBlockedBy: ['pnft_locked', 'pnft_rule_set', 'transfer_not_built'] } })));
-    expect(p).toContain('NFT programmable verrouillé par un délégué'); expect(p).toContain('soumis à un jeu de règles'); expect(p).toContain('Délégué ou verrouillé'); expect(p).not.toContain('data-testid="nft-not-in-wallet"'); expect(p).toContain('ARdHQ5FBBMyMaA5dzyJji6U8i7uwAK2TBsMHM8GTBUGn');
+      capabilities: { ...item().capabilities, transferBlockedBy: ['pnft_locked', 'delegated'] }, transfer: { transferable: false, blockedBy: ['pnft_locked', 'delegated'], warnings: ['pnft_rule_set'], standard: 'metaplex-pnft', route: null } })));
+    expect(p).toContain('NFT programmable VERROUILLÉ'); expect(p).toContain('data-reason="pnft_locked"'); expect(p).toContain('data-reason="delegated"'); expect(p).toContain('révoquez-le avant l’envoi'); expect(new RegExp('<button[^>]*data-testid="nft-send"[^>]*>').exec(p)![0]).toContain('disabled=""'); expect(p).toContain('Délégué ou verrouillé'); expect(p).not.toContain('data-testid="nft-not-in-wallet"'); expect(p).toContain('ARdHQ5FBBMyMaA5dzyJji6U8i7uwAK2TBsMHM8GTBUGn');
   });
   it('market data, when a source is on: "Marché — mis à jour à …", the seller is the marketplace\'s, the floor is not a value', () => {
     const cur = { network: 'solana', asset: 'native', symbol: 'SOL', decimals: 9 };
@@ -171,17 +172,23 @@ describe('texts and helpers', () => {
     for (const m of src.matchAll(/t\('(nf[A-Za-z0-9_]+)'/g)) expect(keys, m[1]).toContain(m[1]);
     for (const m of src.matchAll(/'(nf[A-Z][A-Za-z0-9]*_[a-z0-9_]+)'/g)) expect(keys, m[1]).toContain(m[1]);
     const need = (prefix: string, codes: string[]) => { for (const c of codes) expect(keys, `${prefix}${c}`).toContain(`${prefix}${c}`); };
-    need('nfWhy_', ['transfer_not_built', 'not_in_wallet', 'burned', 'frozen', 'pnft_locked', 'pnft_listed', 'pnft_rule_set', 'delegated', 'soulbound', 'compressed_requires_indexer', 'escrow', 'unsupported_standard', 'ownership_unknown', 'ordinals_requires_ord_aware_send']);
+    need('nfWhy_', ['token2022_extension_unsupported', 'compressed_transfer_not_supported', 'ordinals_transfer_not_supported', 'source_not_associated_account', 'ownership_single_source', 'network_disabled_by_policy', 'transfer_not_built', 'not_in_wallet', 'burned', 'frozen', 'pnft_locked', 'pnft_listed', 'pnft_rule_set', 'delegated', 'soulbound', 'compressed_requires_indexer', 'escrow', 'unsupported_standard', 'ownership_unknown', 'ordinals_requires_ord_aware_send']);
     need('nfState_', ['in_wallet', 'not_in_wallet', 'escrow_or_delegated', 'burned', 'unknown']); need('nfInv_', ['supported', 'partial', 'blocked_by_provider', 'unsupported']);
     need('nfInvWhy_', ['onchain_and_das', 'sections_blocked', 'indexer_hint_verified_onchain', 'no_keyless_discovery', 'ordinals_need_ord_indexer', 'no_adapter']);
     need('nfMeta_', ['missing', 'no_uri', 'blocked', 'unreachable', 'malformed', 'too_large', 'not_loaded']); need('nfSec_', ['token', 'core', 'compressed', 'indexer', 'manual', 'inventory']); need('nfSecStatus_', ['ok', 'blocked_by_provider', 'error', 'not_configured']);
     need('nfErr_', ['not_found', 'bad_identifier', 'unsupported_standard', 'unsupported_chain', 'provider_rate_limited', 'provider_unavailable', 'provider_bad_answer', 'provider_disagreement', 'provider_method_unsupported', 'provider_not_configured', 'budget_exhausted']);
     need('nfEv_', ['mint', 'transfer', 'transfer_in', 'transfer_out', 'burn', 'unknown']); need('nfFinal_', ['finalized', 'confirmed', 'pending', 'reorged']); need('nfActComp_', ['full', 'partial', 'recent_window', 'unavailable']);
-    need('nfRecvWarn_', ['ordinals_not_protected', 'evm_same_address_check_network', 'evm_arrival_not_detected', 'sol_compressed_needs_indexer']); need('nfRarityWhy_', ['no_collection_index', 'collection_unverified', 'compressed', 'mutable_metadata', 'not_built']);
+    need('nfRecvWarn_', ['ordinals_not_protected', 'evm_same_address_check_network', 'evm_arrival_not_detected', 'sol_compressed_needs_indexer', 'ordinals_heuristic_only', 'ordinals_ord_source', 'ordinals_no_transfer', 'arrival_after_confirmation', 'evm_arrival_known_contracts_only']);
+    // delivery 2: every code the Send flow and the lock-list screen can show
+    need('nfTWarn_', ['pnft_rule_set', 'core_collection_permanent_delegate', 'core_permanent_delegate', 'mutable_metadata', 'contract_recipient', 'creates_token_account', 'semi_fungible']); need('nfTToKind_', ['account', 'contract', 'new_account']); need('nfTAcct_', ['intent', 'derived', 'pinned']);
+    need('nfTErr_', ['simulation_reverted', 'simulation_failed', 'destination_is_wallet', 'destination_is_contract_itself', 'bad_destination', 'insufficient_quantity', 'policy_quantity_cap', 'policy_not_allowlisted', 'policy_daily_count', 'policy_halted', 'fee_above_policy', 'not_owned', 'rpc_disagreement', 'rpc_identity', 'non_standard_contract', 'contract_is_fungible_token', 'standard_changed', 'state_changed', 'gas_too_high', 'signer_too_old', 'simulation_unexpected']);
+    need('nfUMode_', ['ord', 'heuristic', 'locks_only', 'ord_unavailable']); need('nfUWhy_', ['signer_locked', 'ord_inscription', 'ord_rune', 'ord_unindexed', 'ord_unlisted', 'ord_unavailable', 'heuristic_small', 'heuristic_envelope']);
+    const send = read('../src/screens/NftSend.tsx');
+    for (const m of send.matchAll(/t\('(nf[A-Za-z0-9_]+)'/g)) expect(keys, m[1]).toContain(m[1]); need('nfRarityWhy_', ['no_collection_index', 'collection_unverified', 'compressed', 'mutable_metadata', 'not_built']);
     need('nfConf_', ['chain_verified', 'chain_single_source', 'indexer_reported', 'creator_declared', 'market_reported']); need('nfBlock_', ['scheme_not_allowed', 'private_address', 'forbidden_host', 'mime_mismatch', 'unsupported_type', 'too_large', 'bad_redirect']);
     for (const k of Object.values(STANDARD_KEY)) expect(keys, k).toContain(k);
   });
-  it('the Ordinals warning on the Bitcoin receive address is explicit', () => { expect(tables.fr.nfRecvWarn_ordinals_not_protected).toMatch(/Ne recevez PAS d’inscription Ordinals/); expect(tables.en.nfRecvWarn_ordinals_not_protected).toMatch(/Do NOT receive an Ordinals inscription/); expect(tables.fr.nfRecvConfirm).toMatch(/jamais avant/);
+  it('the Ordinals warning on the Bitcoin receive address is explicit', () => { expect(tables.fr.nfRecvWarn_ordinals_not_protected).toMatch(/Évitez de recevoir une inscription Ordinals/); expect(tables.en.nfRecvWarn_ordinals_not_protected).toMatch(/Avoid receiving an Ordinals inscription/); expect(tables.fr.nfUMode_heuristic).toMatch(/HEURISTIQUE, pas une détection/); expect(tables.en.nfUMode_heuristic).toMatch(/HEURISTIC, not a detection/); expect(tables.fr.nfRecvConfirm).toMatch(/jamais avant/);
     expect(read('../src/screens/Receive.tsx')).toMatch(/n\.id === 'bitcoin' && <Notice tone="warn"><span data-testid="recv-ordinals-warning">\{t\('nfRecvWarn_ordinals_not_protected'\)\}/); }); // the ordinary Receive screen carries it too
   it('amounts are exact (BigInt strings, no float); names are never guessed; links are filtered', () => {
     expect(unitsToText('915900000', 9)).toBe('0.9159'); expect(unitsToText('1', 9)).toBe('0.000000001'); expect(unitsToText('123456789012345678901234567890', 18)).toBe('123456789012.34567890123456789'); expect(unitsToText('5', 0)).toBe('5'); expect(unitsToText('1000000000', 9)).toBe('1');
@@ -192,5 +199,59 @@ describe('texts and helpers', () => {
     const app = read('../src/App.tsx'), assets = read('../src/screens/Assets.tsx');
     expect(app).toMatch(/nft: \(\) => import\('\.\/screens\/Nft'\)/); expect(app).not.toMatch(/^import .* from '\.\/screens\/Nft'/m); expect(app).toMatch(/tab === 'nfts' \|\| tab === 'nft' \|\| tab === 'nftc' \? 'home'/);
     expect(assets).toContain("nav({ tab: 'nfts' })"); expect(assets).not.toMatch(/from '\.\.\/nft'|from '\.\/Nft'/); // Assets (first chunk) imports nothing of the NFT code
+  });
+});
+
+// ── delivery 2: Send NFT and the Bitcoin protected outputs ──────────────────────────────────────────────────────────────
+describe('Send NFT (delivery 2) — on-chain identifiers first, creator metadata secondary and labelled unverified', () => {
+  const mine = (o: Partial<NftItem> = {}) => item({ quantity: '1', origin: 'discovered', ownerAddress: 'HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk', ownership: { ...item().ownership, state: 'in_wallet', heldByWallet: true },
+    capabilities: { ...item().capabilities, transferable: true, transferBlockedBy: [], transferWarnings: ['core_collection_permanent_delegate', 'mutable_metadata'] },
+    transfer: { transferable: true, blockedBy: [], warnings: ['core_collection_permanent_delegate', 'mutable_metadata'], standard: 'metaplex-core', route: 'Core TransferV1 (no compression proof)' }, ...o });
+  it('a transferable asset: Send is ENABLED on the item page and names the instruction that will be used', () => {
+    const html = text(detail(mine())), tag = /<button[^>]*data-testid="nft-send"[^>]*>/.exec(html)![0];
+    expect(tag).not.toContain('disabled=""'); expect(tag).toContain('data-transferable="true"'); expect(html).toContain('Core TransferV1 (no compression proof)'); expect(html).not.toContain('data-testid="nft-send-why"');
+  });
+  it('the form: network, standard, asset address IN FULL, program called; the creator\'s name and image are small, below, and labelled « métadonnée du créateur, non vérifiée »', () => {
+    const html = text(render(createElement(NftSend, { item: mine({ metadata: { ...item().metadata, name: '<b>FREE MINT</b> official ✅', onchainName: 'x' } }), onClose: () => {} }), (qc) => qc.setQueryData(['book'], [{ id: 'b1', network: 'solana', address: '62Q9eeDY3eM8A5CnprBGYMPShdBjAzdpBdr71QHsS8dS', label: 'Coffre' }, { id: 'b2', network: 'base', address: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', label: 'EVM' }])));
+    const idBlock = html.slice(html.indexOf('data-testid="nft-send-identity"'), html.indexOf('data-testid="nft-send-creator"'));
+    expect(idBlock).toContain(REF); expect(idBlock).toContain('Metaplex Core'); expect(idBlock).toContain('CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d'); expect(idBlock).toContain('Core TransferV1 (no compression proof)');
+    expect(idBlock).not.toContain('FREE MINT'); // the creator-declared name is NOT part of what is identified
+    const creator = html.slice(html.indexOf('data-testid="nft-send-creator"'), html.indexOf('data-testid="nft-send-warn-'));
+    expect(creator).toContain('métadonnée du créateur, non vérifiée'); expect(creator).toContain('&lt;b&gt;FREE MINT&lt;/b&gt; official ✅'); expect(creator).not.toContain('<b>FREE MINT');
+    expect(html).toContain('data-testid="nft-send-warn-core_collection_permanent_delegate"'); expect(html).toContain('pouvoir PERMANENT'); expect(html).toContain('data-testid="nft-send-warn-mutable_metadata"');
+    expect(html).toContain('Coffre'); expect(html).not.toContain('>EVM<'); // the address book of THIS network only
+    expect(html).not.toContain('data-testid="nft-send-qty"'); // one unit: no quantity field
+    expect(/<button[^>]*data-testid="nft-send-review"[^>]*>/.exec(html)![0]).toContain('disabled=""'); // no recipient yet
+    expect(text(render(createElement(NftSend, { item: mine(), onClose: () => {} }), () => {}, 'en'))).toContain('creator metadata, not verified');
+  });
+  it('ERC-1155: contract and token id in full (a 78-digit id is not shortened), and a quantity field bounded by what is held', () => {
+    const id = '115792089237316195423570985008687907853269984665640564039457584007913129639935', c = '0x495f947276749Ce646f68AC8c248420045cb7b5e';
+    const html = text(render(createElement(NftSend, { item: mine({ key: `evm:ethereum:${c.toLowerCase()}/${id}`, family: 'evm', chainId: 'ethereum', standard: 'erc1155', tokenId: id, contractAddress: c, mintAddress: null, assetId: `${c.toLowerCase()}/${id}`, quantity: '3', tokenProgram: null,
+      transfer: { transferable: true, blockedBy: [], warnings: ['semi_fungible'], standard: 'erc1155', route: 'safeTransferFrom(address,address,uint256,uint256,bytes) — data empty' } }), onClose: () => {} })));
+    expect(html).toContain(id); expect(html).toContain(c); expect(html).toContain('ERC-1155'); expect(html).toContain('data-testid="nft-send-qty"'); expect(html).toContain('Unités détenues : 3'); expect(html).toContain('data empty'); expect(html).toContain('Vérifiez la quantité');
+  });
+});
+describe('Bitcoin protected outputs (delivery 2) — the heuristic is called a heuristic; lock and unlock say they need the passkey', () => {
+  const T1 = 'ab'.repeat(32), T2 = 'cd'.repeat(32), T3 = 'ef'.repeat(32);
+  const view = (o: Record<string, unknown> = {}) => ({ network: 'bitcoin', address: 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu', mode: 'heuristic', ordConfigured: false, ordHost: null, ordError: null, signerSupportsLocks: true, symbol: 'BTC', decimals: 8, staleLocks: [],
+    utxos: [{ txid: T1, vout: 0, outpoint: `${T1}:0`, value: 60000, signerLock: null, ord: null, excludedBy: [], reviewed: false, spendable: true },
+      { txid: T2, vout: 1, outpoint: `${T2}:1`, value: 546, signerLock: null, ord: null, excludedBy: ['heuristic_small'], reviewed: false, spendable: false },
+      { txid: T3, vout: 0, outpoint: `${T3}:0`, value: 9000, signerLock: { reason: 'owner', at: 1 }, ord: null, excludedBy: ['signer_locked'], reviewed: false, spendable: false }], ...o });
+  const html = (v: unknown, locale: 'fr' | 'en' = 'fr') => text(render(createElement(UtxoLocks, { network: 'bitcoin' }), (qc) => qc.setQueryData(['utxo-locks', 'bitcoin'], v), locale));
+  it('heuristic mode: said as such; each output with its full outpoint, its exact amount, its state and the actions that apply', () => {
+    const h = html(view());
+    expect(h).toContain('HEURISTIQUE, pas une détection'); expect(h).toContain('n’est PAS vue'); expect(h).toContain('demande la clé d’accès');
+    expect(h).toContain(`${T1}:0`); expect(h).toContain(`${T2}:1`); expect(h).toContain('0.0006 BTC'); expect(h).toContain('0.00000546 BTC'); expect(h).toContain('0.00009 BTC');
+    const row = (o: string) => h.slice(h.indexOf(`data-outpoint="${o}"`), h.indexOf('</li>', h.indexOf(`data-outpoint="${o}"`) + 800) > 0 ? h.indexOf('data-outpoint="', h.indexOf(`data-outpoint="${o}"`) + 20) > 0 ? h.indexOf('data-outpoint="', h.indexOf(`data-outpoint="${o}"`) + 20) : h.length : h.length);
+    expect(row(`${T1}:0`)).toContain('Dépensable'); expect(row(`${T1}:0`)).toContain('data-testid="utxo-lock"'); expect(row(`${T1}:0`)).not.toContain('data-testid="utxo-review"');
+    expect(row(`${T2}:1`)).toContain('Tenue à l’écart'); expect(row(`${T2}:1`)).toContain('possiblement une inscription'); expect(row(`${T2}:1`)).toContain('data-testid="utxo-review"'); expect(row(`${T2}:1`)).toContain('C’est une pièce ordinaire');
+    expect(row(`${T3}:0`)).toContain('Verrouillée (signataire)'); expect(row(`${T3}:0`)).toContain('data-testid="utxo-unlock"'); expect(row(`${T3}:0`)).not.toContain('data-testid="utxo-review"'); // a signer lock is not lifted by a review
+    expect(html(view(), 'en')).toContain('HEURISTIC, not a detection');
+  });
+  it('ord mode: the report decides, the unprotected inscription outputs can be locked together; ord unreachable: nothing is spendable and it says why', () => {
+    const o = html(view({ mode: 'ord', ordConfigured: true, ordHost: 'ord.local:8080', utxos: [{ txid: T2, vout: 1, outpoint: `${T2}:1`, value: 546, signerLock: null, ord: { inscriptions: [`${T1}i0`], runes: [] }, excludedBy: ['ord_inscription'], reviewed: false, spendable: false }] }));
+    expect(o).toContain('ord.local:8080'); expect(o).toContain('ord : porte une inscription.'); expect(o).toContain(`${T1}i0`); expect(o).toContain('data-testid="utxo-lock-all"'); expect(o).toContain('Verrouiller les 1 sorties signalées par ord'); expect(o).not.toContain('data-testid="utxo-review"');
+    const down = html(view({ mode: 'ord_unavailable', ordConfigured: true, ordError: 'ord_unavailable', utxos: [{ txid: T1, vout: 0, outpoint: `${T1}:0`, value: 60000, signerLock: null, ord: null, excludedBy: ['ord_unavailable'], reviewed: false, spendable: false }] }));
+    expect(down).toContain('aucun envoi Bitcoin ordinaire n’est préparé'); expect(down).toContain('Serveur ord injoignable'); expect(down).not.toContain('Dépensable');
   });
 });

@@ -28,6 +28,8 @@ export interface NftConfig {
   mediaMaxBytes: number; cacheMaxBytes: number;
   dailyRequests: number; dailyBytes: number;
   inventoryMax: number;
+  /** delivery 2: base URL of a self-hosted `ord` server (inscription-aware coin selection for Bitcoin); null = heuristic only */
+  ordinalsApiUrl: string | null;
 }
 export function nftConfig(env: Env = process.env): NftConfig {
   let evmIndexers: Record<string, string> = {};
@@ -51,6 +53,7 @@ export function nftConfig(env: Env = process.env): NftConfig {
     cacheMaxBytes: int(env.NFT_CACHE_MAX_BYTES, 1024 * 1024 * 1024, 1024 * 1024, 64 * 1024 * 1024 * 1024),
     dailyRequests: int(env.NFT_FETCH_DAILY_REQUESTS, 5000, 1, 1_000_000), dailyBytes: int(env.NFT_FETCH_DAILY_BYTES, 2 * 1024 * 1024 * 1024, 1024 * 1024, 1024 * 1024 * 1024 * 1024),
     inventoryMax: int(env.NFT_INVENTORY_MAX, 500, 1, 5000),
+    ordinalsApiUrl: httpsBase('NFT_ORDINALS_API_URL', env.NFT_ORDINALS_API_URL),
   };
 }
 export const hostOnly = (u: string): string => { try { return new URL(u).host; } catch { return 'invalid'; } };
@@ -66,8 +69,10 @@ export function nftCapabilities(env: Env = process.env): Capability[] {
       why: c.solanaDasUrl === 'off' ? 'NFT_SOLANA_DAS=off: no DAS indexer is asked — compressed NFTs are not listed' : c.solanaDasUrl ? 'compressed NFTs and indexed discovery come from the DAS endpoint of NFT_SOLANA_DAS_URL' : 'NFT_SOLANA_DAS_URL is not set: the wallet\'s own Solana RPC endpoints are probed for DAS methods at each sync (compressed NFTs are listed only while one of them answers)' },
     { id: 'nft_evm_discovery', on: evm.length > 0, missing: evm.length ? [] : ['NFT_EVM_INDEXER_URLS'],
       why: evm.length ? `EVM NFT discovery through a Blockscout-compatible indexer on: ${evm.join(', ')} (each item is re-verified on-chain); the wallet's EVM address is sent to those hosts` : 'NFT_EVM_INDEXER_URLS is not set: EVM NFTs are not discovered automatically (public RPC endpoints refuse wallet-wide log queries); an NFT is added by contract + token id and verified on-chain' },
-    // no Ordinals adapter in this version (no keyless ord-aware indexer exists; the adapter for a self-hosted `ord` server comes with delivery 2)
-    { id: 'nft_ordinals', on: false, missing: [], why: 'Bitcoin inscriptions are not read in this version (it needs a self-hosted ord server); ordinary BTC sends are NOT inscription-aware: do not receive inscriptions on this wallet' },
+    // delivery 2: NFT transfers (EVM ERC-721 / ERC-1155, Solana Token-2022 / Token Metadata / pNFT / Core) — always built; what is signed is bounded by the signer's NFT policy
+    { id: 'nft_transfer', on: c.enabled, missing: c.enabled ? [] : ['NFT_ENABLED'], why: c.enabled ? 'NFT transfers: ERC-721 and ERC-1155 safeTransferFrom on the EVM networks; Token-2022, Token Metadata (programmable NFTs included) and Core on Solana — each one built by the signer from a passkey-approved intent, inside the signer\'s NFT policy. Compressed NFTs and Bitcoin inscriptions are not transferable' : 'NFT_ENABLED=off' },
+    // delivery 2: inscription SAFETY of ordinary BTC sends (no inscription is listed or transferred). With an ord server its report decides; without one a heuristic flags small outputs
+    { id: 'nft_ordinals', on: !!c.ordinalsApiUrl, missing: c.ordinalsApiUrl ? [] : ['NFT_ORDINALS_API_URL'], why: c.ordinalsApiUrl ? 'ordinary BTC sends never select an output the ord server of NFT_ORDINALS_API_URL reports as carrying an inscription or a rune (or does not know); with that server unreachable Bitcoin sends are refused. Inscriptions are not listed and not transferable' : 'NFT_ORDINALS_API_URL is not set: Bitcoin outputs of at most 10 000 sat, or created by a transaction with an inscription envelope, are kept out of ordinary sends by a HEURISTIC (not a detection) until the owner reviews or locks them; outputs locked with the passkey are refused by the signer. Inscriptions are not listed and not transferable' },
     { id: 'nft_market_read', on: c.marketMagicEden, missing: c.marketMagicEden ? [] : ['NFT_MARKET_MAGICEDEN'], why: c.marketMagicEden ? 'Solana listing state and collection floor are read from Magic Eden\'s public API (the mint is sent to Magic Eden, never the wallet address)' : 'NFT_MARKET_MAGICEDEN is not "on": no market data is requested; item pages link to the marketplace instead' },
   ];
 }

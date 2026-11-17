@@ -36,6 +36,15 @@ export interface SignerState {
   venueQuotingMandates?: Record<string, StoredVenueQuotingMandate>;
   /** v8: GMX venue policies approved by the owner (authorizationId -> record). Never deleted: a revoked one stays revoked. */
   gmx?: Record<string, import('./venue-gmx.ts').StoredGmxAuthorization>;
+  // NFT delivery 2 — three OPTIONAL fields, absent in every state written before. An older binary keeps them on disk untouched
+  // (it rewrites the fields it does not know as it read them) but does not ENFORCE them: see the rollback rule in
+  // docs/runbooks/deploy.md ("Signer state added by NFT delivery 2").
+  /** "<YYYY-MM-DD>" -> NFT transfers signed that UTC day (nft.ts); kept three days */
+  nftDaily?: Record<string, number>;
+  /** "<network>:<address>" -> destination the owner approved with the passkey for NFT transfers (allow-list mode) */
+  nftAllow?: Record<string, { at: number }>;
+  /** network -> "<txid>:<vout>" -> lock. An ordinary send that names a locked outpoint is refused (inscription safety). Never pruned. */
+  utxoLocks?: Record<string, Record<string, import('./nft.ts').StoredUtxoLock>>;
 }
 /** an order signed with a trading key that can still add exposure on the venue: kept until its venue expiry + a grace (venue-mandate.ts) */
 export interface VenuePendingOrder { clientId: string; instrument: string; side: 'buy' | 'sell'; size: string; price: string; /** unix ms */ until: number; /** unix ms */ signedAt?: number;
@@ -282,6 +291,7 @@ export class Store {
     for (const [k, exp] of Object.entries(this.state.used)) if (exp + 86400 < nowSec) delete this.state.used[k];
     const keep = new Date((nowSec - 3 * 86400) * 1000).toISOString().slice(0, 10);
     for (const k of Object.keys(this.state.spent)) if (k.slice(0, 10) < keep) delete this.state.spent[k];
+    for (const k of Object.keys(this.state.nftDaily ?? {})) if (k < keep) delete this.state.nftDaily![k]; // NFT delivery 2
     for (const m of Object.values(this.state.mandates ?? {})) for (const d of Object.keys(m.usage)) if (d < keep) delete m.usage[d];
     // a bridge whose mint was signed is kept 90 more days (retries); one that was never minted is kept for ever
     // v8: a Solana burn whose event-account deposit was never reclaimed is kept (the record is the only authority for the reclaim)

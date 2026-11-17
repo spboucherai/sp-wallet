@@ -25,7 +25,8 @@ export const failure = (code: SvCode | (string & {}), params: SvParams = {}, mes
 export interface ProposalRow {
   id: string; state: ProposalState; version: number; network: string; asset: string; symbol: string; decimals: number; amount: string;
   from_addr: string; to_addr: string; note: string; memo: string | null; aux: Record<string, unknown> | null;
-  kind: 'transfer' | 'swap' | 'bridge' | 'xswap' | 'gmx' /* v8: a GMX order action, followed by derivatives/gmx-exec.ts */; xswap?: XswapState | null; bridge: BridgeState | null; swap: { provider: string; toAsset: string; toSymbol: string; toDecimals: number; expectedOut: string; minOut: string; slippageBps: number; needsApproval: boolean; simulated: boolean } | null;
+  kind: 'transfer' | 'swap' | 'bridge' | 'xswap' | 'gmx' /* v8: a GMX order action, followed by derivatives/gmx-exec.ts */ | 'nft' /* NFT delivery 2: one NFT transfer; its intent is an NftIntent (nft/transfer-routes.ts) */;
+  /** NFT delivery 2: the review the owner approved (on-chain identifiers, simulation verdict) — nft/transfer.ts `NftReview` */ nft?: Record<string, unknown> | null; xswap?: XswapState | null; bridge: BridgeState | null; swap: { provider: string; toAsset: string; toSymbol: string; toDecimals: number; expectedOut: string; minOut: string; slippageBps: number; needsApproval: boolean; simulated: boolean } | null;
   pre_raw: string | null; pre_txid: string | null; pre_state: string | null; out_amount: string | null; fee_estimate: string | null; max_fee: string | null; warnings: string[];
   intent: Intent | null; intent_hash: string | null; raw: string | null; txid: string | null; block_ref: string | null; confirmations: number; error: string | null;
   /** v11: machine-readable reason behind `error` (the UI translates it; `error` stays the English fallback for API clients) */
@@ -57,6 +58,7 @@ export function view(p: ProposalRow) {
     xswap: p.xswap ? xswapView(p, p.xswap) : null,
     // v11, additive: one status shape for every kind (exec-status.ts), and the quote the owner was shown next to the firm figures
     execution: executionOf(p),
+    nft: p.nft ?? null, // NFT delivery 2
     quote: p.quote_ref ? { ...p.quote_ref, quotedOutDisplay: formatUnits(BigInt(p.quote_ref.quotedOut), outDecimals(p)), firmOutDisplay: formatUnits(BigInt(p.quote_ref.firmOut), outDecimals(p)) } : null,
   };
 }
@@ -110,14 +112,17 @@ export async function move(p: ProposalRow, to: ProposalState, patch: Record<stri
   return r;
 }
 
-const load = async (id: string): Promise<ProposalRow> => {
+/** NFT delivery 2: what follows a tracked state change of a proposal (nft/transfer-routes.ts records the event and refreshes the inventory). Never signs. */
+export const proposalHooks: { tracked: ((p: ProposalRow) => Promise<void>)[] } = { tracked: [] };
+
+export const load = async (id: string): Promise<ProposalRow> => {
   if (!z.uuid().safeParse(id).success) throw new UserError('not_found', 'proposal not found', 404);
   const [p] = await sql<ProposalRow[]>`select * from proposals where id = ${id}`;
   if (!p) throw new UserError('not_found', 'proposal not found', 404);
   return p;
 };
 
-async function destinationWarnings(network: string, to: string): Promise<string[]> {
+export async function destinationWarnings(network: string, to: string): Promise<string[]> {
   const w: string[] = [];
   const known = await sql<{ address: string }[]>`select address from address_book where network = ${network}
     union select to_addr from proposals where network = ${network} and state in ('finalized','confirming','broadcast')`;
@@ -179,6 +184,7 @@ export function transferRoutes(app: FastifyInstance): void {
     if (p.kind === 'swap') throw new UserError('bad_state', 'a swap is prepared once; start a new one', 409);
     if (p.kind === 'bridge') throw new UserError('bad_state', 'a cross-chain transfer is prepared once; start a new one', 409);
     if (p.kind === 'xswap') throw new UserError('bad_state', 'a cross-chain swap is prepared once; start a new one', 409);
+    if (p.kind === 'nft') throw new UserError('bad_state', 'an NFT transfer is prepared once; start a new one', 409); // NFT delivery 2
     const n = getNetwork(p.network), st = await signer.status(true);
     if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
     // One transfer in flight per network: a second one prepared before the first is confirmed would reuse the same
@@ -221,6 +227,8 @@ export function transferRoutes(app: FastifyInstance): void {
     const body = z.object({ assertion: z.record(z.string(), z.unknown()) }).parse(req.body);
     let p = await load((req.params as { id: string }).id);
     if (p.state !== 'pending_approval' || !p.intent) throw new UserError('bad_state', `proposal is ${p.state}`, 409);
+    // NFT delivery 2: an NFT transfer is approved on its own route (it goes to the signer's NFT route, with an NFT intent)
+    if (p.kind === 'nft') throw new UserError('bad_state', 'an NFT transfer is approved through /api/v1/nfts/transfer', 409);
     if (p.expires_at && p.expires_at.getTime() < Date.now()) { await move(p, 'expired', failure('approval_expired')); throw new UserError('expired', 'approval window expired; start again', 410); }
     // one transfer or swap in flight per network, checked again at the moment of approval
     const [busy] = await sql<{ id: string }[]>`select id from proposals where network = ${p.network} and id <> ${p.id} and state in ('approved', 'signed', 'broadcast') limit 1`;

@@ -137,17 +137,30 @@ export interface NftOwnershipRecord {
   source: DataSourceStamp;
 }
 
-/** Why an asset cannot be sent FROM THIS VERSION. Delivery 2 turns `not_built` into a real per-standard evaluation; the other codes are facts about the asset. */
+/**
+ * Why an asset cannot be sent. Since delivery 2 every code is a FACT about the asset (or about what this wallet can build): an
+ * asset with no reason is transferable. The four codes of the last line belong to delivery 1 (stored rows, older clients) and
+ * are no longer produced.
+ */
 export type TransferBlockReason =
-  | 'transfer_not_built'        // nothing else stands in the way: NFT transfers are not implemented in this version
-  | 'not_in_wallet' | 'burned' | 'frozen' | 'pnft_locked' | 'pnft_listed' | 'pnft_rule_set' | 'delegated'
-  | 'soulbound' | 'compressed_requires_indexer' | 'escrow' | 'unsupported_standard' | 'ownership_unknown' | 'ordinals_requires_ord_aware_send';
+  | 'not_in_wallet' | 'burned' | 'frozen' | 'pnft_locked' | 'pnft_listed' | 'delegated' | 'soulbound' | 'escrow' | 'unsupported_standard' | 'ownership_unknown'
+  | 'token2022_extension_unsupported'   // a Token-2022 extension this wallet does not account for (transfer hook, permanent delegate, transfer fee, …)
+  | 'compressed_transfer_not_supported' // compressed NFT: the merkle proof is not verified against the on-chain tree by this wallet
+  | 'ordinals_transfer_not_supported'   // Bitcoin inscription: no ord-aware transfer in this wallet
+  | 'source_not_associated_account'     // Solana: the unit sits in a token account that is not the wallet's associated token account
+  | 'ownership_single_source'           // the endpoints did not agree on (or only one answered about) the ownership: nothing is prepared
+  | 'network_disabled_by_policy'        // the signer's policy does not enable this standard on this network
+  | 'transfer_not_built' | 'pnft_rule_set' | 'compressed_requires_indexer' | 'ordinals_requires_ord_aware_send';
+/** Something the owner must read before sending; never a block. */
+export type TransferWarning = 'pnft_rule_set' | 'core_collection_permanent_delegate' | 'core_permanent_delegate' | 'mutable_metadata' | 'contract_recipient' | 'creates_token_account' | 'semi_fungible';
 export interface NftCapabilities {
   viewable: boolean;
-  /** always false in model v1 / delivery 1 */
-  transferable: false;
-  /** every reason that applies, the most specific first; never empty */
+  /** true when nothing in `transferBlockedBy` applies (delivery 2). The signer's policy and the re-verification at preparation time still decide. */
+  transferable: boolean;
+  /** every reason that applies, the most specific first; empty when the asset can be sent */
   transferBlockedBy: TransferBlockReason[];
+  /** facts the review must show (delivery 2) */
+  transferWarnings: TransferWarning[];
   /** market WRITE actions: never in delivery 1 */
   marketActions: false;
   marketBlockedBy: 'market_not_integrated';
@@ -261,27 +274,54 @@ export function parseNftKey(key: string): { family: string; chainId: string; ass
 }
 
 // ── capabilities ────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** The reasons an asset cannot be sent in this version, from facts only. `transfer_not_built` is always last: it is the only reason when nothing else applies. */
+/** Token-2022 mint / account extensions a plain TransferChecked fully accounts for. Any other one blocks the transfer. */
+export const TOKEN2022_TRANSFER_SAFE_EXTENSIONS = ['metadataPointer', 'tokenMetadata', 'groupPointer', 'groupMemberPointer', 'tokenGroup', 'tokenGroupMember', 'mintCloseAuthority', 'immutableOwner'] as const;
+/** The extension names of a Token-2022 asset (the provider also lists editions and authorities in `extensions`, with a colon or as `freezeAuthority`). */
+export const token2022Extensions = (extensions: string[]): string[] => extensions.filter((e) => !e.includes(':') && e !== 'freezeAuthority');
+
+/** The reasons an asset cannot be sent, from facts only, the most specific first. Empty = a transfer can be prepared. */
 export function transferBlockReasons(a: Pick<NftAsset, 'standard' | 'ownership' | 'ruleSet' | 'extensions' | 'quantity'>): TransferBlockReason[] {
   const r: TransferBlockReason[] = [], o = a.ownership;
   if (o.state === 'burned') r.push('burned');
   else if (o.state === 'unknown') r.push('ownership_unknown');
   else if (!o.heldByWallet) r.push(o.state === 'escrow_or_delegated' ? 'escrow' : 'not_in_wallet');
   if (a.standard === 'metaplex-pnft') {
+    // a pNFT's token account is always frozen at the SPL level: its real state is the token record
     const s = valueOf(o.tokenRecordState);
     if (s === 'locked') r.push('pnft_locked'); else if (s === 'listed') r.push('pnft_listed');
-    if (a.ruleSet.state === 'known') r.push('pnft_rule_set');
+    else if (o.heldByWallet && o.tokenRecordState.state !== 'known') r.push('ownership_unknown');
   } else if (valueOf(o.frozen) === true) r.push('frozen');
-  if (a.standard !== 'metaplex-pnft' && o.delegate.state === 'known') r.push('delegated');
-  if (a.extensions.includes('nonTransferable')) r.push('soulbound');
-  if (a.standard === 'metaplex-bubblegum') r.push('compressed_requires_indexer');
-  if (a.standard === 'ordinals-inscription') r.push('ordinals_requires_ord_aware_send');
+  else if (o.heldByWallet && o.frozen.state === 'unknown') r.push('ownership_unknown'); // a frozen state that could not be read is not "not frozen"
+  // EVM: an approval never prevents the owner's own transfer (ERC-721 clears it on transfer), and approvals are not read: it is no block there
+  const evm = a.standard === 'erc721' || a.standard === 'erc1155';
+  if (o.delegate.state === 'known') r.push('delegated');
+  else if (!evm && o.heldByWallet && o.delegate.state === 'unknown') r.push('ownership_unknown');
+  if (a.standard === 'spl-token-2022') {
+    const ext = token2022Extensions(a.extensions);
+    if (ext.includes('nonTransferable')) r.push('soulbound');
+    if (ext.some((e) => e !== 'nonTransferable' && !(TOKEN2022_TRANSFER_SAFE_EXTENSIONS as readonly string[]).includes(e))) r.push('token2022_extension_unsupported');
+  } else if (a.extensions.includes('nonTransferable')) r.push('soulbound');
+  if (a.standard === 'metaplex-bubblegum') r.push('compressed_transfer_not_supported');
+  if (a.standard === 'ordinals-inscription') r.push('ordinals_transfer_not_supported');
   if (a.standard === 'unknown' || a.standard === 'evm-nonstandard' || a.standard === 'spl-token') r.push('unsupported_standard');
-  r.push('transfer_not_built');
-  return r;
+  return [...new Set(r)];
 }
-export const capabilitiesOf = (a: Pick<NftAsset, 'standard' | 'ownership' | 'ruleSet' | 'extensions' | 'quantity'>): NftCapabilities =>
-  ({ viewable: true, transferable: false, transferBlockedBy: transferBlockReasons(a), marketActions: false, marketBlockedBy: 'market_not_integrated' });
+/** What the review must say about an asset that can be sent. */
+export function transferWarnings(a: Pick<NftAsset, 'standard' | 'ruleSet' | 'extensions' | 'quantity'> & { metadata?: Pick<NftMetadataRecord, 'mutable'> }): TransferWarning[] {
+  const w: TransferWarning[] = [];
+  if (a.standard === 'metaplex-pnft' && a.ruleSet.state === 'known') w.push('pnft_rule_set');
+  if (a.standard === 'metaplex-core') {
+    if (a.extensions.some((e) => /^core-collection:Permanent(Transfer|Burn|Freeze)Delegate/.test(e))) w.push('core_collection_permanent_delegate');
+    if (a.extensions.some((e) => /^core:Permanent(Transfer|Burn|Freeze)Delegate/.test(e))) w.push('core_permanent_delegate');
+  }
+  if (a.standard === 'erc1155') w.push('semi_fungible');
+  if (a.metadata && valueOf(a.metadata.mutable) === true) w.push('mutable_metadata');
+  return w;
+}
+export const capabilitiesOf = (a: Pick<NftAsset, 'standard' | 'ownership' | 'ruleSet' | 'extensions' | 'quantity'> & { metadata?: Pick<NftMetadataRecord, 'mutable'> }): NftCapabilities => {
+  const blocked = transferBlockReasons(a);
+  return { viewable: true, transferable: blocked.length === 0, transferBlockedBy: blocked, transferWarnings: transferWarnings(a), marketActions: false, marketBlockedBy: 'market_not_integrated' };
+};
 
 /** Provider failure with a stable code; `detail` never contains a URL query, a key or a response body. */
 export class NftProviderError extends Error {

@@ -36,25 +36,41 @@ describe('canonical key', () => {
   });
 });
 
-describe('capabilities: never transferable in model v1, with the real reasons', () => {
+describe('capabilities (delivery 2): transferable when no FACT stands in the way, with the real reasons otherwise', () => {
   const base = { standard: 'metaplex-token-metadata' as const, ruleSet: UNSUPPORTED, extensions: [] as string[], quantity: '1' };
-  it('held, nothing in the way → the only reason is that transfers are not built', () => {
-    expect(transferBlockReasons({ ...base, ownership: own() })).toEqual(['transfer_not_built']);
+  it('held, nothing in the way → no reason: the asset can be sent (market actions stay off)', () => {
+    expect(transferBlockReasons({ ...base, ownership: own() })).toEqual([]);
     const c = capabilitiesOf({ ...base, ownership: own() });
-    expect(c.transferable).toBe(false); expect(c.marketActions).toBe(false); expect(c.viewable).toBe(true);
+    expect(c.transferable).toBe(true); expect(c.transferBlockedBy).toEqual([]); expect(c.marketActions).toBe(false); expect(c.viewable).toBe(true);
+    expect(capabilitiesOf({ ...base, ownership: own({ frozen: known(true) }) }).transferable).toBe(false);
   });
-  it('each fact gives its own reason, most specific first, transfer_not_built last', () => {
-    expect(transferBlockReasons({ ...base, ownership: own({ state: 'not_in_wallet', heldByWallet: false }) })).toEqual(['not_in_wallet', 'transfer_not_built']);
+  it('each fact gives its own reason, most specific first; "not built" is no longer a reason', () => {
+    expect(transferBlockReasons({ ...base, ownership: own({ state: 'not_in_wallet', heldByWallet: false }) })).toEqual(['not_in_wallet']);
     expect(transferBlockReasons({ ...base, ownership: own({ state: 'burned', heldByWallet: false }) })[0]).toBe('burned');
     expect(transferBlockReasons({ ...base, ownership: own({ state: 'unknown', heldByWallet: false }) })[0]).toBe('ownership_unknown');
-    expect(transferBlockReasons({ ...base, ownership: own({ frozen: known(true) }) })).toEqual(['frozen', 'transfer_not_built']);
-    expect(transferBlockReasons({ ...base, ownership: own({ delegate: known('d') }) })).toEqual(['delegated', 'transfer_not_built']);
-    expect(transferBlockReasons({ ...base, standard: 'metaplex-pnft', ruleSet: known('r'), ownership: own({ frozen: known(true), tokenRecordState: known('locked') }) })).toEqual(['pnft_locked', 'pnft_rule_set', 'transfer_not_built']);
-    expect(transferBlockReasons({ ...base, standard: 'metaplex-pnft', ruleSet: NONE, ownership: own({ tokenRecordState: known('listed') }) })).toEqual(['pnft_listed', 'transfer_not_built']);
-    expect(transferBlockReasons({ ...base, standard: 'spl-token-2022', extensions: ['nonTransferable'], ownership: own() })).toEqual(['soulbound', 'transfer_not_built']);
-    expect(transferBlockReasons({ ...base, standard: 'metaplex-bubblegum', ownership: own() })).toEqual(['compressed_requires_indexer', 'transfer_not_built']);
-    expect(transferBlockReasons({ ...base, standard: 'ordinals-inscription', ownership: own() })).toEqual(['ordinals_requires_ord_aware_send', 'transfer_not_built']);
-    expect(transferBlockReasons({ ...base, standard: 'evm-nonstandard', ownership: own() })).toEqual(['unsupported_standard', 'transfer_not_built']);
+    expect(transferBlockReasons({ ...base, ownership: own({ frozen: known(true) }) })).toEqual(['frozen']);
+    expect(transferBlockReasons({ ...base, ownership: own({ delegate: known('d') }) })).toEqual(['delegated']);
+    expect(transferBlockReasons({ ...base, standard: 'metaplex-pnft', ruleSet: known('r'), ownership: own({ frozen: known(true), tokenRecordState: known('locked') }) })).toEqual(['pnft_locked']); // the rule set is a warning now, not a block
+    expect(transferBlockReasons({ ...base, standard: 'metaplex-pnft', ruleSet: NONE, ownership: own({ tokenRecordState: known('listed') }) })).toEqual(['pnft_listed']);
+    expect(transferBlockReasons({ ...base, standard: 'spl-token-2022', extensions: ['nonTransferable'], ownership: own() })).toEqual(['soulbound']);
+    expect(transferBlockReasons({ ...base, standard: 'metaplex-bubblegum', ownership: own() })).toEqual(['compressed_transfer_not_supported']);
+    expect(transferBlockReasons({ ...base, standard: 'ordinals-inscription', ownership: own() })).toEqual(['ordinals_transfer_not_supported']);
+    expect(transferBlockReasons({ ...base, standard: 'evm-nonstandard', ownership: own() })).toEqual(['unsupported_standard']);
+    // delivery 2: Token-2022 extensions a plain TransferChecked does not account for; states that could not be read; warnings
+    expect(transferBlockReasons({ ...base, standard: 'spl-token-2022', extensions: ['metadataPointer', 'tokenMetadata', 'freezeAuthority'], ownership: own() })).toEqual([]);
+    for (const ext of ['transferHook', 'permanentDelegate', 'transferFeeConfig', 'confidentialTransferMint', 'defaultAccountState', 'pausableConfig', 'somethingNew'])
+      expect(transferBlockReasons({ ...base, standard: 'spl-token-2022', extensions: ['metadataPointer', ext], ownership: own() }), ext).toEqual(['token2022_extension_unsupported']);
+    expect(transferBlockReasons({ ...base, standard: 'spl-token-2022', extensions: ['nonTransferable', 'transferHook'], ownership: own() })).toEqual(['soulbound', 'token2022_extension_unsupported']);
+    expect(transferBlockReasons({ ...base, ownership: own({ frozen: unknown('not read') }) })).toEqual(['ownership_unknown']);
+    expect(transferBlockReasons({ ...base, ownership: own({ delegate: unknown('not read') }) })).toEqual(['ownership_unknown']);
+    expect(transferBlockReasons({ ...base, standard: 'metaplex-pnft', ruleSet: NONE, ownership: own({ tokenRecordState: unknown('no record') }) })).toEqual(['ownership_unknown']);
+    expect(transferBlockReasons({ ...base, standard: 'metaplex-pnft', ruleSet: NONE, ownership: own({ frozen: known(true), tokenRecordState: known('unlocked') }) })).toEqual([]); // a pNFT's SPL account is always frozen
+    expect(transferBlockReasons({ ...base, standard: 'metaplex-pnft', ruleSet: NONE, ownership: own({ tokenRecordState: known('unlocked'), delegate: known('d') }) })).toEqual(['delegated']);
+    expect(transferBlockReasons({ ...base, standard: 'spl-token', ownership: own() })).toEqual(['unsupported_standard']);
+    expect(transferBlockReasons({ ...base, standard: 'erc721', ownership: own({ frozen: UNSUPPORTED, delegate: UNSUPPORTED, tokenRecordState: UNSUPPORTED }) })).toEqual([]);
+    expect(capabilitiesOf({ ...base, standard: 'metaplex-pnft', ruleSet: known('r'), ownership: own({ tokenRecordState: known('unlocked') }) }).transferWarnings).toEqual(['pnft_rule_set']);
+    expect(capabilitiesOf({ ...base, standard: 'metaplex-core', extensions: ['core:Attributes', 'core-collection:PermanentTransferDelegate', 'core-collection:PermanentFreezeDelegate'], ownership: own() }).transferWarnings).toEqual(['core_collection_permanent_delegate']);
+    expect(capabilitiesOf({ ...base, standard: 'erc1155', ownership: own() }).transferWarnings).toEqual(['semi_fungible']);
   });
   it('null, unknown, unsupported and a value are four states', () => {
     expect([known(0).state, NONE.state, unknown('why').state, UNSUPPORTED.state]).toEqual(['known', 'none', 'unknown', 'unsupported']);
