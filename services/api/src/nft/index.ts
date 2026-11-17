@@ -18,7 +18,8 @@ import type { SafeFetchDeps } from './safe-fetch.ts';
 import { createNftService, type NftService } from './service.ts';
 import { solanaProvider } from './solana.ts';
 
-export interface NftOptions { cfg?: NftConfig; rpc?: RpcFn; http?: HttpFn; fetch?: SafeFetchDeps; now?: () => Date; addresses?: () => Promise<Record<string, string>>; providers?: NftDataProvider[]; market?: MarketSource | null }
+export interface NftOptions { cfg?: NftConfig; rpc?: RpcFn; http?: HttpFn; fetch?: SafeFetchDeps; now?: () => Date; addresses?: () => Promise<Record<string, string>>; providers?: NftDataProvider[]; market?: MarketSource | null;
+  /** false: nothing is synchronised unless asked (tests drive it); default: a stale inventory refreshes itself when it is read, and on a timer */ autoSync?: boolean }
 
 /** The wallet's addresses as the signer derives them; when it cannot be reached, the last ones it gave (settings) — never a client value. */
 async function signerAddresses(): Promise<Record<string, string>> {
@@ -42,10 +43,11 @@ export function registerNft(app: FastifyInstance, o: NftOptions = {}): NftServic
   const resolver = createResolver({ cfg, fetch: o.fetch, now });
   const market = o.market !== undefined ? o.market : cfg.marketMagicEden ? magicEdenMarket({ http, now }) : null;
   const nft = createNftService({ cfg, providers, resolver, market, addresses: o.addresses ?? signerAddresses, now });
-  nftRoutes(app, nft, resolver);
+  const autoSync = o.autoSync ?? true;
+  nftRoutes(app, nft, resolver, { autoSync });
   // background loops (API workers only): the inventory is refreshed while the wallet runs; everything that grows is pruned
   if (config.workers) {
-    loop('nft-sync', async () => { await nft.sync({ wait: true, onlyStale: true }); }, 10 * 60_000);
+    if (autoSync) loop('nft-sync', async () => { await nft.sync({ wait: true, onlyStale: true }); }, 10 * 60_000);
     loop('nft-prune', async () => { await nft.prune(); }, 6 * 3600_000);
   }
   return nft;

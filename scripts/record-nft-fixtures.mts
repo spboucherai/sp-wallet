@@ -109,5 +109,19 @@ const market: Record<string, () => Promise<void>> = {
     console.log(`market-magiceden                   ${calls.length} calls`);
   },
 };
-const all = { ...sol, ...evm, ...market }, want = process.argv.slice(2);
+// ── creator metadata of the reference item, fetched through the wallet's own SSRF-safe fetcher (pinned connection) ───────────
+const meta: Record<string, () => Promise<void>> = {
+  'sol-core-reference-metadata': async () => {
+    const { safeFetch } = await import('../services/api/src/nft/safe-fetch.ts');
+    const url = `https://metadata.phygitals.com/${REF}`, r = await safeFetch(url, { maxBytes: 256 * 1024, timeoutMs: 15_000, accept: 'application/json' });
+    if (!r.ok) throw new Error(`metadata fetch refused: ${r.code}`);
+    const doc = JSON.parse(new TextDecoder().decode(r.bytes)) as { image?: string };
+    const img = doc.image ? await safeFetch(doc.image, { maxBytes: 25 * 1024 * 1024, timeoutMs: 30_000, accept: 'image/*' }) : null;
+    writeFileSync(new URL('sol-core-reference-metadata.json', dir), `${JSON.stringify({ recordedAt: new Date().toISOString(), note: 'the metadata document the reference Core asset points to, as served that day (verbatim text), and what its image URL answered (type, size, first bytes — the image itself is not stored)',
+      url, finalUrl: r.finalUrl, contentType: r.contentType, text: new TextDecoder().decode(r.bytes),
+      image: img && img.ok ? { url: doc.image, finalUrl: img.finalUrl, hops: img.hops, contentType: img.contentType, bytes: img.bytes.length, head: Buffer.from(img.bytes.slice(0, 16)).toString('hex') } : { url: doc.image ?? null, error: img && !img.ok ? img.code : 'no image' } })}\n`);
+    console.log(`sol-core-reference-metadata        ${r.bytes.length} bytes; image: ${img && img.ok ? `${img.contentType} ${img.bytes.length} bytes, ${img.hops} redirect(s)` : img && !img.ok ? img.code : 'none'}`);
+  },
+};
+const all = { ...sol, ...evm, ...market, ...meta }, want = process.argv.slice(2);
 for (const [name, run] of Object.entries(all)) { if (want.length && !want.includes(name)) continue; try { await run(); } catch (e) { console.log(`${name}: FAILED ${(e as Error).message}`); } }

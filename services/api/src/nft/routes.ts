@@ -23,7 +23,7 @@ const wrap = async <T>(f: () => Promise<T>): Promise<T> => {
 };
 const limit = (max: number) => ({ config: { rateLimit: { max, timeWindow: '1 minute' } } });
 
-export function nftRoutes(app: FastifyInstance, nft: NftService, resolver: Resolver): void {
+export function nftRoutes(app: FastifyInstance, nft: NftService, resolver: Resolver, o: { autoSync: boolean } = { autoSync: true }): void {
   const P = '/api/v1/nfts';
   const summary = (a: ReturnType<NftService['present']>) => { const img = a.media.find((m) => m.role === 'image') ?? a.media[0] ?? null;
     return { key: a.key, chain: a.chainId, family: a.family, standard: a.standard, assetId: a.assetId, tokenId: a.tokenId, name: a.metadata.name, onchainName: a.metadata.onchainName, collection: a.collection ? { key: a.collection.key, name: a.collection.name, verifiedOnChain: a.collection.verifiedOnChain } : null,
@@ -35,7 +35,7 @@ export function nftRoutes(app: FastifyInstance, nft: NftService, resolver: Resol
   app.get(P, async (req) => {
     const q = z.object({ chain: Chain.optional(), collection: Key.optional(), status: z.enum(['in_wallet', 'left', 'tracked']).optional(), q: z.string().trim().max(80).optional(), sort: z.enum(['recent', 'name']).default('recent'),
       cursor: z.coerce.number().int().min(0).max(100_000).default(0), limit: z.coerce.number().int().min(1).max(100).default(48) }).parse(req.query);
-    void nft.sync({ onlyStale: true }).catch(() => {}); // refresh in the background; this answer is what is stored now
+    if (o.autoSync) void nft.sync({ onlyStale: true }).catch(() => {}); // refresh in the background; this answer is what is stored now
     const r = await nft.list({ chain: q.chain, collection: q.collection, status: q.status, q: q.q || undefined, sort: q.sort, limit: q.limit, offset: q.cursor });
     // value: an NFT has no value this wallet can establish — it says so instead of counting zero or a floor price
     return { items: r.items.map(summary), total: r.total, cursor: q.cursor + r.items.length < r.total ? q.cursor + r.items.length : null, sync: nft.syncState(), valuation: { state: 'unavailable', reason: 'no_reliable_valuation' }, asOf: new Date().toISOString() };

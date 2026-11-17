@@ -115,7 +115,7 @@ export function createResolver(deps: ResolverDeps) {
       const typeOf = (u: string) => n.files.find((f) => f.uri === u)?.type ?? null, media: NftMediaRecord[] = [];
       if (n.image) media.push(await registerMediaFor('image', n.image, typeOf(n.image)));
       if (n.animationUrl && n.animationUrl !== n.image) media.push(await registerMediaFor('animation', n.animationUrl, typeOf(n.animationUrl)));
-      for (const f of n.files.filter((x) => x.uri !== n.image && x.uri !== n.animationUrl).slice(0, 4)) media.push(await registerMediaFor('file', f.uri, f.type));
+      for (const f of n.files.filter((x) => x.uri !== n.image && x.uri !== n.animationUrl).slice(0, 8)) media.push(await registerMediaFor('file', f.uri, f.type));
       asset.media = media;
       return asset;
     },
