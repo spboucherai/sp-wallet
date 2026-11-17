@@ -107,7 +107,7 @@ describe('markets hub — explorer', () => {
     expect(by('edgex:BTCUSDC').funding).toEqual({ rate: '0.00005', intervalSec: 14400, perHour: '0.0000125', annualised: '0.1095' });
     expect(by('edgex:BTCUSDC')).toMatchObject({ tradable: false, tradableReason: 'edgex_jurisdiction', paper: false, staleAfterMs: 30_000 }); expect(by('edgex:BTCUSDC').restriction).toMatch(/exclude Canada/);
     expect(by('dydx:BTC-USD')).toMatchObject({ tradable: false, tradableReason: 'dydx_jurisdiction' });
-    expect(by('hyperliquid:kPEPE')).toMatchObject({ underlying: 'PEPE', multiplier: '1000', price: '0.003802', unitPrice: '0.000003802', tradable: false, tradableReason: 'hl_asset_not_pinned', paper: true });
+    expect(by('hyperliquid:kPEPE')).toMatchObject({ underlying: 'PEPE', multiplier: '1000', price: '0.003802', unitPrice: '0.000003802', tradable: true, tradableReason: null, paper: true });   // 2026-11-17: the venue's whole own dex is pinned
     expect(by('hyperliquid:kLUNC')).toMatchObject({ underlying: null, category: null, multiplier: null, unitPrice: null }); expect(by('hyperliquid:kLUNC').mapping.unmapped).toBe('multiplier_unreviewed');
     expect(by('gmx:BTC/USD [BTC-USDC]')).toMatchObject({ tradable: true, underlying: 'BTC' }); expect(by('gmx:BTC/USD [BTC-BTC]')).toMatchObject({ tradable: false, tradableReason: 'gmx_market_not_pinned', underlying: 'BTC' });
     expect(r.locks.map((l) => l.id)).toEqual(['deriv_live_mainnet', 'deriv_gmx_live', 'broadcast']);
@@ -139,10 +139,12 @@ describe('markets hub — explorer', () => {
     expect((await w.hub.list({ ...Q, q: 'pepe' })).rows.some((x) => x.id === 'spot:PEPE')).toBe(true);
     expect(pepe.rows.map((x) => x.id).sort()).toEqual(['dydx:PEPE-USD', 'edgex:1000PEPEUSDC', 'gmx:kPEPE/USD [PEPE-USDC]', 'gmx:kPEPE/USD [WETH-USDC]', 'hyperliquid:kPEPE']);
     const yes = await w.hub.list({ ...Q, kind: 'perp', tradable: 'yes' });
-    expect(yes.rows.map((x) => x.id).sort()).toEqual(['gmx:BTC/USD [BTC-USDC]', 'gmx:ETH/USD [WETH-USDC]', 'hyperliquid:BTC', 'hyperliquid:ETH', 'hyperliquid:SOL']);
+    const yesAll = await w.hub.list({ ...Q, kind: 'perp', tradable: 'yes', limit: 500 }), yesIds = yesAll.rows.map((x) => x.id);
+    expect(yesIds.filter((i) => !i.startsWith('hyperliquid:')).sort()).toEqual(['gmx:BTC/USD [BTC-USDC]', 'gmx:ETH/USD [WETH-USDC]']);
+    expect(yesIds.filter((i) => i.startsWith('hyperliquid:')).length).toBe(179); expect(yesIds).toEqual(expect.arrayContaining(['hyperliquid:BTC', 'hyperliquid:kPEPE', 'hyperliquid:HYPE']));
     const no = await w.hub.list({ ...Q, kind: 'perp', tradable: 'no', limit: 500 }), rest = await w.hub.list({ ...Q, kind: 'perp', tradable: 'no', limit: 500, offset: 500 });
     const reasons = new Set([...no.rows, ...rest.rows].map((x) => x.tradableReason));
-    expect([...reasons].sort()).toEqual(['dydx_jurisdiction', 'edgex_jurisdiction', 'gmx_market_not_pinned', 'hl_asset_not_pinned', 'instrument_halted']);
+    expect([...reasons].sort()).toEqual(['dydx_jurisdiction', 'edgex_jurisdiction', 'gmx_market_not_pinned', 'instrument_halted']);
     expect(no.total + yes.total).toBe(235 + 124 + 296 + 157);
     await expect(w.hub.list({ ...Q, venue: 'binance' })).rejects.toMatchObject({ code: 'unknown_venue', status: 404 });
     // a builder-dex symbol is flagged, never offered (the main-dex adapter lists none today)

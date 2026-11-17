@@ -31,7 +31,8 @@ export interface LiveVenue {
   /** ticker and book read NOW (never a cached value): the context of a live order */
   market(inst: Instrument): Promise<{ ticker: Ticker; book: Book }>;
   /** refuses to trade when the venue's live `meta` no longer matches the pinned asset table */
-  assertPinned(): Promise<void>;
+  /** identity of every pinned asset, and the attributes of `instruments` (all of them when omitted is NOT implied: omitted = identity only) */
+  assertPinned(instruments?: readonly string[]): Promise<void>;
   /** the venue's own record of an order, by client order id (cloid) or order id; null = the venue knows no such order */
   orderStatus(account: string, id: string): Promise<Order | null>;
   /** `agent` + the account it signs for, once an API wallet is approved; `missing` for an address the venue has never seen */
@@ -77,8 +78,8 @@ export class LiveVenues {
         if (!ticker) throw new UserError('venue_unavailable', `Hyperliquid publishes no ticker for ${inst.symbol}`, 503);
         return { ticker, book };
       },
-      async assertPinned() {
-        const why = hlPinnedMismatch(network, await wrap(() => adapter.assets()));
+      async assertPinned(instruments = []) {
+        const why = hlPinnedMismatch(network, await wrap(() => adapter.assets()), instruments);
         if (why) throw new UserError('asset_table_mismatch', `live trading is suspended: the venue's asset table no longer matches the table pinned in the wallet and in the signer (${why}). Nothing was signed.`, 503);
       },
       async orderStatus(account, id) {

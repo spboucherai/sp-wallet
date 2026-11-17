@@ -16,7 +16,7 @@ export const VENUE_AUTH_MAX_DAYS = 90;
 /** an order or leverage approval is valid at most this long (nonce → expiry) */
 export const VENUE_ACTION_MAX_TTL_MS = 120_000;
 /** hard ceilings of the signer-side venue policy (the owner chooses below them) */
-export const VENUE_POLICY_BOUNDS = { maxLeverage: 20, maxOrdersPerDay: 500, minPriceBandBps: 10, maxPriceBandBps: 2000, maxInstruments: 8 } as const;
+export const VENUE_POLICY_BOUNDS = { maxLeverage: 20, maxOrdersPerDay: 500, minPriceBandBps: 10, maxPriceBandBps: 2000, maxInstruments: 256 } as const;   // 2026-11-17: an authorization may allow the venue's whole dex (was 8)
 
 const enc = new TextEncoder();
 const ADDRESS = /^0x[0-9a-f]{40}$/;

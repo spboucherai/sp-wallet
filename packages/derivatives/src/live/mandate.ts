@@ -17,7 +17,7 @@ export const VENUE_MANDATE_MAX_DAYS = 30;
 /** after a mandate is revoked or expires, cancels and reduce-only orders are still signed this long (never new exposure) */
 export const VENUE_MANDATE_WIND_DOWN_S = 86_400;
 /** hard ceilings of a mandate, on top of the authorization's own limits */
-export const VENUE_MANDATE_BOUNDS = { maxDays: VENUE_MANDATE_MAX_DAYS, maxOrdersPerHour: 60, maxLeverageChangesPerDay: 20, maxInstruments: VENUE_POLICY_BOUNDS.maxInstruments } as const;
+export const VENUE_MANDATE_BOUNDS = { maxDays: VENUE_MANDATE_MAX_DAYS, maxOrdersPerHour: 60, maxLeverageChangesPerDay: 20, maxInstruments: 8 /* an agent's mandate stays narrow; the owner's own authorization may allow the whole dex */ } as const;
 /** a signed order stays in the signer's exposure ledger until its venue expiry plus this (the venue's info endpoint may lag) */
 export const VENUE_PENDING_GRACE_MS = 10_000;
 /** the venue's own timestamp on the account state the signer read may differ from the signer's clock by at most this */

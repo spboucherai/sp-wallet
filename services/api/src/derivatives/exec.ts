@@ -378,7 +378,7 @@ export class LiveService {
     const key = await this.deps.signer.venueKey(a.venue, a.network);
     if (key.address.toLowerCase() !== a.agent_address || key.account.toLowerCase() !== a.account) throw new UserError('wrong_key', 'this venue account belongs to another signer key', 409);
     const venue = this.deps.venues.get(a.network);
-    await venue.assertPinned();
+    await venue.assertPinned(body.policy.allowedInstruments);
     for (const inst of body.policy.allowedInstruments) if (!hlPinnedAsset(a.network, inst)) throw new UserError('bad_policy', `${inst} is not in the pinned ${a.network} asset table: it cannot be allowed`, 400);
     const nowMs = this.now(), nowS = Math.floor(nowMs / 1000), ack = jurisdictionAck('hyperliquid', body.locale);
     const authorization: VenueAuthorization = { v: 1, authorizationId: randomUUID(), keyId: st.keyId, venue: 'hyperliquid', network: a.network, account: a.account, agentAddress: a.agent_address, agentName: body.agentName,
@@ -701,7 +701,7 @@ export class LiveService {
     const a = await this.account(id), stop = this.blocked(a, body.reduceOnly ? 'reduce' : 'trade');
     if (stop) throw stop;
     const venue = this.deps.venues.get(a.network);
-    await venue.assertPinned();
+    await venue.assertPinned([body.instrument]);
     const c = await this.check(a, venue, body, 'preview', null, undefined, { origin: 'owner', preview: true });
     return { risk: c.risk, estimate: this.estimate(c), request: c.req, venueState: { state: c.state, positions: c.positions, source: 'venue' as const }, ts: c.now };
   }
@@ -741,7 +741,7 @@ export class LiveService {
     const stop = this.blocked(a, body.reduceOnly ? 'reduce' : 'trade');
     if (stop) throw stop;
     const venue = this.deps.venues.get(a.network);
-    await venue.assertPinned();
+    await venue.assertPinned([body.instrument]);
     const c = await this.check(a, venue, body, key, null, undefined, { origin }), { req, inst, now } = c, at = new Date(now);
     const ins = await sql`insert into deriv_orders (account_id, client_id, cloid, instrument, side, type, size, price, trigger_price, reduce_only, tif, status, state, origin, created_at, updated_at)
       values (${id}, ${key}, ${hlCloid(key)}, ${req.instrument}, ${req.side}, ${req.type}, ${req.size}, ${req.price}, ${req.triggerPrice}, ${req.reduceOnly}, ${req.tif}, 'pending', 'proposed', ${origin}, ${at}, ${at})
@@ -816,7 +816,7 @@ export class LiveService {
       throw new UserError('proposal_expired', 'this proposal has expired; propose the order again', 410);
     }
     const venue = this.deps.venues.get(a.network);
-    try { await venue.assertPinned(); }
+    try { await venue.assertPinned([row.instrument]); }
     catch (e) {
       if (e instanceof UserError && e.code === 'asset_table_mismatch') await this.setOrder(id, key, { state: 'cancelled', final: true, reason: `withdrawn: ${msg(e)}`.slice(0, 500) });
       throw e;
@@ -977,7 +977,7 @@ export class LiveService {
     const halt = this.effectiveHalt(a);
     if (halt) throw new UserError('halted', `trading is halted: ${halt}`, 423);
     const venue = this.deps.venues.get(a.network);
-    await venue.assertPinned();
+    await venue.assertPinned([body.instrument]);
     const inst = await venue.instrument(body.instrument), vp = a.venue_authorization!.policy;
     if (!vp.allowedInstruments.includes(inst.id)) throw new UserError('instrument_not_allowed', `${inst.id} is not allowed by the authorization`, 422);
     if (body.leverage > vp.maxLeverage || D.gt(D.from(BigInt(body.leverage)), D.from(a.policy.maxLeverage))) throw new UserError('leverage_exceeded', `leverage ${body.leverage} is above the authorized maximum (${Math.min(vp.maxLeverage, Number(a.policy.maxLeverage))})`, 422);
@@ -1432,7 +1432,7 @@ export class LiveService {
     const r0 = parsed.data;
     if (cur.phase === 'wind_down' && !r0.reduceOnly) throw new UserError('mandate_wind_down', `the mandate ${cur.row.state === 'revoked' ? 'was revoked' : 'has expired'}: only cancels and reduce-only orders are placed until the wind-down ends`, 422);
     const venue = this.deps.venues.get(a.network);
-    await venue.assertPinned();
+    await venue.assertPinned([r0.instrument]);
     const body = OrderBodySchema.parse({ instrument: r0.instrument, side: r0.side, type: r0.type, size: r0.size, price: r0.price, triggerPrice: r0.triggerPrice, reduceOnly: r0.reduceOnly, tif: r0.tif });
     const chk = await this.check(a, venue, body, key, this.mandatePolicy(a, m, r0.instrument), m.maxPriceDeviationBps, { origin: 'mandate', agentId: c.agentId, mandateId: m.mandateId }), { req: order, inst, now } = chk, at = new Date(now);
     let refusal: { code: string; reason: string } | null = chk.risk.ok ? null : { code: chk.risk.code, reason: chk.risk.reason };
@@ -1502,7 +1502,7 @@ export class LiveService {
     if (!mi) throw new UserError('instrument_not_allowed', `${body.instrument} is not allowed by the mandate`, 422);
     if (body.leverage > mi.maxLeverage) throw new UserError('leverage_exceeded', `leverage ${body.leverage} is above the mandate's ${mi.maxLeverage} for ${body.instrument}`, 422);
     const venue = this.deps.venues.get(a.network);
-    await venue.assertPinned();
+    await venue.assertPinned([body.instrument]);
     const inst = await venue.instrument(body.instrument);
     if (!inst.marginModes.includes(body.marginMode)) throw new UserError('venue_rejected', `${inst.id} does not offer ${body.marginMode} margin`, 422);
     const nonce = await this.nextNonce(id);
