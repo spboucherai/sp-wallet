@@ -12,6 +12,7 @@ import { buildEvmSwapTxs, intentHash, KYBER_ENABLED, KYBER_NATIVE, KYBER_ROUTER,
 import { generateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { TestPasskey } from '../tests/helpers/passkey.ts';
+import { dealTokenRpc } from './lib/fork-helpers.mts';
 import { deriveKeys } from '../services/isolated-signer/src/keys.ts';
 import { Signer } from '../services/isolated-signer/src/signer.ts';
 import { Store } from '../services/isolated-signer/src/store.ts';
@@ -44,9 +45,14 @@ try {
   if ((await rpc<string>('eth_getCode', [ME, 'latest'])) !== '0x') throw new Error('test address has code');
   // fund the test wallet on the fork only
   await rpc('anvil_setBalance', [ME, numberToHex(parseUnits('1', 18))]);
-  await rpc('anvil_impersonateAccount', [WHALE]); await rpc('anvil_setBalance', [WHALE, numberToHex(parseUnits('1', 18))]);
-  await rpc('eth_sendTransaction', [{ from: WHALE, to: USDC, data: encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [ME as `0x${string}`, 100_000000n] }) }]);
-  await rpc('anvil_stopImpersonatingAccount', [WHALE]);
+  // 100 USDC for the test wallet, on the fork only. V11 final validation: written in the token's storage and read back (dealTokenRpc) —
+  // the transfer from a fixed holder was unchecked and failed silently once that holder had no USDC left on Base (2026-11-17).
+  // USDC_WHALE=<holder> keeps the old way, now checked.
+  if (process.env.USDC_WHALE) { await rpc('anvil_impersonateAccount', [WHALE]); await rpc('anvil_setBalance', [WHALE, numberToHex(parseUnits('1', 18))]);
+    await rpc('eth_sendTransaction', [{ from: WHALE, to: USDC, data: encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [ME as `0x${string}`, 100_000000n] }) }]);
+    await rpc('anvil_stopImpersonatingAccount', [WHALE]); }
+  else await dealTokenRpc(rpc as never, USDC, ME, 100_000000n, 'base');
+  if ((await bal(USDC)) !== 100_000000n) throw new Error(`the test wallet holds ${await bal(USDC)} base units of USDC on the fork, 100000000 expected: the funding did not land`);
   console.log(`funded on the fork: ${formatUnits(await bal('native'), 18)} ETH, ${formatUnits(await bal(USDC), 6)} USDC`);
 
   const dir = mkdtempSync(join(tmpdir(), 'spw-fork-'));

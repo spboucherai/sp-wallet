@@ -27,7 +27,9 @@ const rpc = async <T>(net: string, method: string, params: unknown[] = []): Prom
 const psql = (q: string) => execSync(`psql -At -d ${DB}`, { input: q, encoding: 'utf8' }).trim();
 /** Test-only stand-in for the network: the newest signed-but-not-broadcast leg is given its outcome (fork + scratch database). */
 async function settle(): Promise<void> {
-  const row = psql(`select id, kind, amount, from_addr, coalesce(swap->>'expectedOut', '') from proposals where state = 'broadcast' order by updated_at desc limit 1`);
+  // V11: a transfer signed while broadcasting is off ends in the state `not_broadcast` (it was `broadcast` with an error text before the
+  // stabilisation, docs/v11/work/stab-swaps.md §2); `broadcast` is kept for a database written by an older build
+  const row = psql(`select id, kind, amount, from_addr, coalesce(swap->>'expectedOut', '') from proposals where state in ('not_broadcast', 'broadcast') order by updated_at desc limit 1`);
   if (!row) throw new Error('no signed leg to settle');
   const [id, kind, amount, me, expected] = row.split('|') as [string, string, string, string, string];
   if (kind === 'bridge') { // the USDC "arrives" on the Arbitrum fork (FiatToken balance mapping at slot 9)
@@ -36,6 +38,12 @@ async function settle(): Promise<void> {
     await rpc('arbitrum', 'anvil_setStorageAt', [USDC_ARB, slot, '0x' + (cur + BigInt(amount)).toString(16).padStart(64, '0')]);
     psql(`update proposals set state = 'finalized', error = null, finalized_at = now(), version = version + 1, out_amount = ${amount}, bridge = jsonb_set(bridge, '{phase}', '"done"') where id = '${id}'`);
   } else psql(`update proposals set state = 'finalized', error = null, finalized_at = now(), version = version + 1, out_amount = ${expected} where id = '${id}'`);
+  // V11: the plan has already (rightly) paused on this leg — nothing was sent. To walk the following leg, the stand-in also puts the
+  // plan back where a broadcasting server would have left it: the leg `proposed` on this proposal, no pause, that attempt forgotten.
+  // SCRATCH DATABASE ONLY; on a real server a paused plan is resumed by « Réessayer », which prepares the leg again.
+  psql(`update plans set state = 'active', meta = meta - 'pause',
+    legs = jsonb_set(jsonb_set(legs #- array[current::text, 'attempts', '-1'], array[current::text, 'state'], '"proposed"'), array[current::text, 'proposalId'], '"${id}"')
+    where state = 'paused' and legs -> current -> 'attempts' -> -1 ->> 'proposalId' = '${id}'`);
 }
 const api = (page: Page, method: string, path: string, body?: unknown) => page.evaluate(async ([m, p, b]) => { const r = await fetch('/api/v1' + p, { method: m as string, credentials: 'same-origin', headers: m === 'GET' ? {} : { 'x-spw-csrf': '1', 'content-type': 'application/json' }, body: m === 'GET' ? undefined : JSON.stringify(b ?? {}) }); return { status: r.status, json: await r.json().catch(() => null) as any }; }, [method, path, body] as const);
 async function start(page: Page, context: BrowserContext) {
@@ -56,6 +64,21 @@ async function pickTo(page: Page, search: string, row: RegExp) {
 const amount = (page: Page) => page.getByRole('textbox', { name: 'Montant' });
 const cards = (page: Page) => page.getByTestId('plan-card');
 const progress = (page: Page) => page.getByTestId('plan-progress');
+/**
+ * V11 (stabilisation B2): on a server that does not broadcast, a signed leg ends `not_broadcast` and the plan PAUSES on it, saying
+ * so — before V11 the leg stayed "in flight" for ever and the plan waited. This stack never broadcasts, so after each approval
+ * the plan is paused (code `leg_failed`, reason `broadcast_disabled`, « Signée, mais NON envoyée ») and offers retry / re-plan /
+ * stop: that is asserted. The test then plays the network's part on the fork and in the scratch database (`settle()`).
+ */
+async function approvedThenSettled(page: Page, pk: { save: () => Promise<void> }, between?: () => Promise<void>): Promise<void> {
+  await expect(progress(page)).toHaveAttribute('data-next', 'paused', { timeout: 60_000 });
+  await expect(page.getByTestId('plan-paused')).toHaveAttribute('data-code', 'leg_failed');   // the plan's code; the REASON under it is the server's broadcast_disabled
+  await expect(page.getByTestId('plan-pause-text')).toContainText('NON envoyée');
+  for (const id of ['plan-retry', 'plan-replan', 'plan-stop']) await expect(page.getByTestId(id)).toBeVisible();
+  await pk.save();
+  if (between) await between();
+  await settle();                                                                   // FORK + SCRATCH DB ONLY: the leg "arrives"
+}
 
 test('USDC on Base → LINK on Arbitrum: "bridge then swap", two approvals, planned vs actual, resumable; refusals and non-executable pairs are said', async ({ page, context, browser }) => {
   test.setTimeout(420_000);
@@ -97,15 +120,13 @@ test('USDC on Base → LINK on Arbitrum: "bridge then swap", two approvals, plan
   await expect(page.getByTestId('plan-review')).toContainText('20 USDC · Base');
   await shot(page, '04-leg1-review-phone');
   await page.getByTestId('plan-approve').click();                                   // the virtual authenticator answers
-  await expect(progress(page)).toHaveAttribute('data-next', 'wait', { timeout: 60_000 });
-  await expect(page.getByTestId('plan-wait')).toContainText('Étape 1 sur 2 en cours');
-  await pk.save();
-  await shot(page, '05-leg1-waiting-phone');
-  // closing and coming back: the plan is found again from Activity
-  await page.goto('/activity');
-  await expect(page.getByTestId('plan-list')).toContainText('USDC (Base) → LINK (Arbitrum One)');
-  await shot(page, '06-activity-phone');
-  await settle();                                                                   // FORK + SCRATCH DB ONLY: the transfer "arrives"
+  await approvedThenSettled(page, pk, async () => {
+    await shot(page, '05-leg1-not-sent-phone');
+    // closing and coming back: the plan is found again from Activity
+    await page.goto('/activity');
+    await expect(page.getByTestId('plan-list')).toContainText('USDC (Base) → LINK (Arbitrum One)');
+    await shot(page, '06-activity-phone');
+  });
   await page.getByTestId('plan-list').getByRole('button').first().click();
   await expect(progress(page)).toHaveAttribute('data-current', '1', { timeout: 30_000 });
   await expect(progress(page)).toHaveAttribute('data-next', 'prepare');
@@ -119,9 +140,7 @@ test('USDC on Base → LINK on Arbitrum: "bridge then swap", two approvals, plan
   await expect(page.getByTestId('plan-minout')).toContainText('LINK');
   await shot(page, '08-leg2-review-phone');
   await page.getByTestId('plan-approve').click();
-  await expect(progress(page)).toHaveAttribute('data-next', 'wait', { timeout: 60_000 });
-  await pk.save();
-  await settle();
+  await approvedThenSettled(page, pk);
   await expect(progress(page).getByTestId('plan-state')).toHaveAttribute('data-state', 'done', { timeout: 30_000 });
   await expect(page.getByTestId('plan-received')).toContainText('LINK');
   await shot(page, '09-done-phone');

@@ -197,3 +197,56 @@ authorization — a state V11 never creates. Revocation by V11 needs no passkey 
 
 Not rehearsed: a V11-only agent (stream engine, supervisor) or a live agent under a V11 trading mandate running when V10 starts —
 see section 8 (after the soak, on a copy of its database); a production-size database; PM2.
+
+More read-only smokes (2026-11-17):
+
+| Script | Start (UTC) | Observed |
+|---|---|---|
+| `tsx scripts/smoke-quotes.mts --seconds 60` | 06:18:09 | exit 0. Five venues connected within 0.6 s (Coinbase 0.2 s, Hyperliquid 0.3, GMX 0.4, dYdX 0.6, edgeX 0.6). BTC quotes in 60 s: Hyperliquid 590, Coinbase 234, edgeX 117, GMX 10, dYdX 2; Hyperliquid book 1 snapshot + 5 deltas, 0 sequence break, 0 checksum mismatch; 1 159 messages sent, 0 conflated, 0 trades dropped, 0 book resync; lag venue timestamp → socket write p50 295 ms, p95 408 ms; upstream reconnects 0, gaps 0; "trading / account endpoints: none" |
+| `tsx scripts/check-hl-bridge.mts` (read first: JSON-RPC reads on Arbitrum and `POST /info` only, no key, no signature) | 06:19:15 | exit 0, "0 check(s) failed": bytecode on both RPC endpoints = the pinned hash, not a proxy, `paused() = false`, USDC = the registry's; 6 / 6 sampled deposits ≥ 5 USDC credited by the venue to the sending address within 4–7 s; 2 / 6 sampled withdrawals matched on the destination's own ledger (the four others were asked by another account) |
+
+`scripts/preflight.sh` by hand (laptop, 06:33): with `SPW_TRADING_API_EXECUTION` and `SPW_DERIV_MM_MAINNET` set → two WARN "is SET…
+confirm it was decided" and a third "set without the three other settings it needs"; `SPW_WORKERS=agnets` → FAIL "a value the API
+does not know"; the secrets file → "present, mode 600" / "does not exist yet"; `dist/agents.mjs present`.
+
+## 6. Playwright (Chromium), 2026-11-17 06:18–07:18 UTC — every spec, one at a time
+
+Build first: `pnpm build` exit 0 (06:13), first chunk `index-*.js` **262.32 kB** (81.07 kB gzip).
+
+| Spec | Stack | Result |
+|---|---|---|
+| `v11-shell` | `tests/e2e/ui-stack.sh fin 8840` (real API, real signer, virtual passkey, paper; one stack for the six `v11-*` specs) | 6 passed (5.3 min) |
+| `v11-dashboard` | same | 7 passed (3.0 min) |
+| `v11-sections` | same | **first run: 24 passed, 1 failed** — "Markets with live quotes: a tick changes its own cell — the list around it is not redrawn". After the test fix below: **25 passed** (12.0 min) |
+| `v11-trade` | same | 8 passed (4.2 min) |
+| `v11-activity` | same | 4 passed (2.0 min) |
+| `v11-leftovers` | same | 2 passed |
+| `wallet` | fresh `scripts/dev-stack.sh` (8650) | 2 passed (1.5 min) |
+| `developer` | fresh dev stack | 1 passed |
+| `risk` | fresh dev stack | 1 passed |
+| `agents-bind` | fresh dev stack | 1 passed (4.1 min; public Hyperliquid history, paper) |
+| `mm` | fresh dev stack with `SPW_MM_MIN_PAPER_MINUTES=1` | 1 passed (1.3 min) |
+| `futures` | its own Vite dev server, in-browser mock | 18 passed |
+| `futures-live` | same | 10 passed |
+| `futures-gmx` | same | 16 passed |
+| `futures-collateral` | same | 6 passed |
+| `futures-router` | same | 8 passed |
+| `perp-agent-live` | same | 8 passed |
+| `alerts` | `tests/e2e/alerts-server.mts` | 2 passed |
+| `research` | `tests/e2e/research-server.mts` (real runner, fake agent under the OS sandbox) | 2 passed |
+| `v9-visual` | built bundle, recorded answers | 6 passed — **no baseline regenerated** (`git status` clean after the run) |
+| `v10-visual` | same | 5 passed — idem |
+| `rollback-rehearsal` (new) | `scripts/rollback-rehearsal-stack.sh`, both versions | 6 stage runs, each passed (section 5) |
+| `futures-live-real` | needs `LIVE_REAL=1` and a **funded Hyperliquid testnet account** | **NOT RUN** — no funded account, testnet included, may be used |
+
+The `v11-*` total is 52 tests, as in the interface pass.
+
+### Defect 8 — `v11-sections` "Markets with live quotes" counted a cell GOING live as a redraw (test fixed, `f9563d3`)
+
+On a freshly started stack the test failed 4 runs of 6. The recorded mutations were, in order of frequency: the funding cell and
+the freshness cell of a row (BTC, HYPE on Hyperliquid) replacing their static content by the live element — `LiveCell` and
+`QuoteDot` render their static children until the first quote (or the first funding value) of that market arrives, then swap,
+once; and a logo plate finishing to load. Neither is the list being redrawn by a tick. The product is as designed and was not
+changed. The test now counts a cell going live on its own and **fails if the same cell swaps twice** (that would be a redraw),
+ignores a logo plate, and still fails on any other mutation outside a live cell (a row, another column, the table). Four runs of
+the test alone, then the whole spec: 25 / 25.

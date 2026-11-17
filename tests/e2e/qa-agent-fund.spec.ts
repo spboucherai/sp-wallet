@@ -28,7 +28,9 @@ const hex = (v: bigint) => '0x' + v.toString(16);
 const pad = (a: string) => a.toLowerCase().replace(/^0x/, '').padStart(64, '0');
 /** Test-only stand-in for the network: apply the newest signed-but-not-broadcast transfer on the local fork and finalize it. */
 async function settle(): Promise<void> {
-  const row = psql(`select id, network, asset, amount, from_addr, to_addr from proposals where state = 'broadcast' order by updated_at desc limit 1`);
+  // V11: a transfer signed while broadcasting is off ends in the state `not_broadcast` (it was `broadcast` with an error text before the
+  // stabilisation, docs/v11/work/stab-swaps.md §2); `broadcast` is kept for a database written by an older build
+  const row = psql(`select id, network, asset, amount, from_addr, to_addr from proposals where state in ('not_broadcast', 'broadcast') order by updated_at desc limit 1`);
   if (!row) throw new Error('no signed transfer to settle');
   const [id, net, asset, amount, from, to] = row.split('|') as [string, string, string, string, string, string];
   if (asset === 'native') { const cur = BigInt(await rpc<string>(net, 'eth_getBalance', [to, 'latest'])); await rpc(net, 'anvil_setBalance', [to, hex(cur + BigInt(amount))]); }
