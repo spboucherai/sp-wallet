@@ -181,7 +181,8 @@ describe('texts and helpers', () => {
     need('nfConf_', ['chain_verified', 'chain_single_source', 'indexer_reported', 'creator_declared', 'market_reported']); need('nfBlock_', ['scheme_not_allowed', 'private_address', 'forbidden_host', 'mime_mismatch', 'unsupported_type', 'too_large', 'bad_redirect']);
     for (const k of Object.values(STANDARD_KEY)) expect(keys, k).toContain(k);
   });
-  it('the Ordinals warning on the Bitcoin receive address is explicit', () => { expect(tables.fr.nfRecvWarn_ordinals_not_protected).toMatch(/Ne recevez PAS d’inscription Ordinals/); expect(tables.en.nfRecvWarn_ordinals_not_protected).toMatch(/Do NOT receive an Ordinals inscription/); expect(tables.fr.nfRecvConfirm).toMatch(/jamais avant/); });
+  it('the Ordinals warning on the Bitcoin receive address is explicit', () => { expect(tables.fr.nfRecvWarn_ordinals_not_protected).toMatch(/Ne recevez PAS d’inscription Ordinals/); expect(tables.en.nfRecvWarn_ordinals_not_protected).toMatch(/Do NOT receive an Ordinals inscription/); expect(tables.fr.nfRecvConfirm).toMatch(/jamais avant/);
+    expect(read('../src/screens/Receive.tsx')).toMatch(/n\.id === 'bitcoin' && <Notice tone="warn"><span data-testid="recv-ordinals-warning">\{t\('nfRecvWarn_ordinals_not_protected'\)\}/); }); // the ordinary Receive screen carries it too
   it('amounts are exact (BigInt strings, no float); names are never guessed; links are filtered', () => {
     expect(unitsToText('915900000', 9)).toBe('0.9159'); expect(unitsToText('1', 9)).toBe('0.000000001'); expect(unitsToText('123456789012345678901234567890', 18)).toBe('123456789012.34567890123456789'); expect(unitsToText('5', 0)).toBe('5'); expect(unitsToText('1000000000', 9)).toBe('1');
     expect(displayName({ name: null, onchainName: null })).toBeNull(); expect(displayName({ name: null, onchainName: 'On-chain' })).toBe('On-chain'); expect(displayName({ metadata: { name: 'Creator', onchainName: 'On-chain' } })).toBe('Creator');

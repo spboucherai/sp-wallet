@@ -25,7 +25,7 @@ describe('canonical key', () => {
     expect(nftKey('sol', 'solana', 'AbcDEFGHJKLMNPQRSTUVWXYZabcdefghijkm')).not.toBe(nftKey('sol', 'solana', 'abcDEFGHJKLMNPQRSTUVWXYZabcdefghijkm'));
   });
   it('refuses malformed parts', () => {
-    for (const bad of [['EVM', 'ethereum', 'x'], ['evm', 'eth ereum', 'x'], ['evm', 'ethereum', ''], ['evm', 'ethereum', 'a:b'], ['evm', 'ethereum', 'a b'], ['evm', 'ethereum', 'a%2F']] as const) expect(() => nftKey(...bad)).toThrow();
+    for (const bad of [['EVM', 'ethereum', 'x'], ['evm', 'eth ereum', 'x'], ['evm', 'ethereum', ''], ['evm', 'ethereum', 'a:b'], ['evm', 'ethereum', 'a b'], ['evm', 'ethereum', 'a%2F']] as [string, string, string][]) expect(() => nftKey(...bad)).toThrow();
     for (const bad of ['', 'evm', 'evm:ethereum', 'evm::x', ':a:b']) expect(() => parseNftKey(bad)).toThrow();
   });
   it('token ids are exact at uint256 size (never a JS number)', () => {

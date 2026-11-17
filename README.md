@@ -28,11 +28,30 @@ phone (passkey) ──HTTPS──▶ API (node A) ──HMAC, LAN──▶ isola
 A stolen session, a compromised API node or a tampered database cannot produce a signature: none of them holds the passkey, and
 any changed field changes the hash. What they *can* do is listed in the threat model (mainly: show a misleading review screen).
 
+## NFTs (read-only — delivery 1 of `docs/nft/NFT-BRIEF.md`)
+
+Assets → **NFT**: gallery, collection and item pages, each value with its source (on-chain / creator metadata / indexed /
+market) and its freshness. **No NFT can be sent, approved, listed or bought from the wallet in this version**; those
+controls are shown disabled with the reason. Media never load from a third party: they pass through a server-side proxy
+(SSRF-safe fetch, content sniffing, sandboxed responses). NFTs add nothing to the portfolio total: their value is
+"unavailable", not zero and not a floor price.
+
+| Network | Discovery (what the wallet holds) | Item page (lookup / tracked) | Activity | Send | Market |
+|---|---|---|---|---|---|
+| Solana | Token Metadata, pNFT, Token-2022: on-chain · Metaplex Core: on-chain (needs an endpoint serving `getProgramAccounts`) · compressed: DAS index | yes (any mint / Core asset; compressed through DAS) | Core: on-chain; SPL: partial; compressed: no | no | read-only, optional (`NFT_MARKET_MAGICEDEN`) |
+| Ethereum, Base, Arbitrum, Polygon, Optimism, BNB Chain, Avalanche, HyperEVM | **blocked without an indexer** (`NFT_EVM_INDEXER_URLS`); add by contract + token id, verified on-chain | yes (ERC-721, ERC-1155 with exact quantity) | recent blocks only | no | link to the marketplace only |
+| Bitcoin | no (Ordinals need an ord-aware indexer) — **do not receive inscriptions on this wallet: BTC sends are not inscription-aware** | no | no | no | no |
+| Litecoin, Dogecoin, Bitcoin Cash, Stellar, XRP Ledger, TRON, Aptos, Cosmos Hub, Sui, NEAR, TON, Cardano, Polkadot | not supported (no adapter) | no | no | no | no |
+
+Details: `docs/nft/NFT-AUDIT.md` (matrix and audit), `NFT-SOURCES.md` (sources, quotas, terms, variables),
+`NFT-ARCHITECTURE.md`, `NFT-ADDING-A-PROVIDER.md`, `NFT-RUNBOOK.md`, `nft.env.example`. Smoke: `npx tsx scripts/smoke-nft.mts`.
+
 ## Layout
 
 | Path | Role |
 |---|---|
 | `packages/core` | network/asset registry, exact amounts, address validation, canonical intent + hash, transaction builders (EVM, BTC, Solana), policy, audit hash chain, state machine |
+| `packages/nft` | NFT canonical model, URI resolver, address guard (SSRF), content sniffing, Solana NFT decoders — pure, read-only |
 | `services/isolated-signer` | keystore (scrypt + AES-256-GCM), key derivation, passkey verification, policy enforcement, signing; CLI |
 | `services/api` | Fastify API: passkey auth, sessions, chain adapters with dual-RPC checks, transfer lifecycle, reconciliation worker, audit log; serves the web app |
 | `apps/web` | Vite + React + Tailwind PWA |

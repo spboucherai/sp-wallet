@@ -23,7 +23,6 @@ export interface NftConfig {
   /** network id → base URL of a Blockscout-compatible instance (`/api/v2/addresses/<a>/nft`); empty = EVM discovery blocked */
   evmIndexers: Record<string, string>;
   marketMagicEden: boolean;
-  openseaKey: boolean;
   gateways: Gateways;
   cacheDir: string;
   mediaMaxBytes: number; cacheMaxBytes: number;
@@ -45,7 +44,7 @@ export function nftConfig(env: Env = process.env): NftConfig {
     enabled: env.NFT_ENABLED !== 'off',
     solanaDasUrl: env.NFT_SOLANA_DAS === 'off' ? 'off' : httpsBase('NFT_SOLANA_DAS_URL', env.NFT_SOLANA_DAS_URL),
     evmIndexers,
-    marketMagicEden: env.NFT_MARKET_MAGICEDEN === 'on', openseaKey: !!env.OPENSEA_API_KEY,
+    marketMagicEden: env.NFT_MARKET_MAGICEDEN === 'on',
     gateways: { ipfs: parseGatewayList(env.NFT_IPFS_GATEWAYS, DEFAULT_GATEWAYS.ipfs), arweave: parseGatewayList(env.NFT_ARWEAVE_GATEWAYS, DEFAULT_GATEWAYS.arweave) },
     cacheDir: env.NFT_CACHE_DIR || join(env.SPW_DATA_DIR || tmpdir(), 'spw-nft-media'),
     mediaMaxBytes: int(env.NFT_MEDIA_MAX_BYTES, 25 * 1024 * 1024, 64 * 1024, 200 * 1024 * 1024),

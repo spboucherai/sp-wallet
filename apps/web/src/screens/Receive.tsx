@@ -37,6 +37,8 @@ export function Receive({ initial }: { initial?: string }) {
       {acc.data?.signerReachable === false && <Notice tone="warn"><span data-testid="addr-cached">{t('svAddrFromCache', { date: acc.data.addressesAsOf ? new Date(acc.data.addressesAsOf).toLocaleString() : '—' })}</span></Notice>}
       <Notice tone="warn">{t('onlySend', { assets: assets.length > 4 ? `${assets.slice(0, 3).join(' / ')}… (${assets.length})` : assets.join(' / '), network: n.name })}</Notice>
       {n.family === 'evm' && <Notice tone="info">{t('evmSame')}</Notice>}
+      {/* NFT audit (docs/nft/NFT-AUDIT.md §4): BTC sends are not inscription-aware */}
+      {n.id === 'bitcoin' && <Notice tone="warn"><span data-testid="recv-ordinals-warning">{t('nfRecvWarn_ordinals_not_protected')}</span></Notice>}
       {n.activation && n.family !== 'cardano' && n.family !== 'polkadot' && <Notice tone="info">{t('activationNote', { network: n.name, amount: trimAmt(n.activation, 12), sym: n.native.symbol })}</Notice>}
       {/* v8-cardano-polkadot ↓ chain-specific receive warnings */}
       {n.family === 'cardano' && <><Notice tone="info">{t('cdRecvMin')}</Notice><Notice tone="warn">{t('cdRecvTokens')}</Notice><Notice tone="info">{t('cdRecvRecover')}</Notice></>}

@@ -27,7 +27,7 @@ describe('optional capabilities', () => {
 
     const env = { SPW_DERIV_LIVE_MAINNET: 'on', SPW_DERIV_MANDATE_MAINNET: 'on', SPW_DERIV_GMX_LIVE: 'on', SPW_RESEARCH_RUNNER_SECRET: SECRET, RESEARCH_DATABASE_URL: `postgres://reader:${SECRET}@db/sp_wallet`, SPW_BROADCAST: 'off', SPW_LAB_SANDBOX: 'off', SPW_WEB_DIR: '/srv/web' };
     const all = capabilities(env), text = JSON.stringify(all) + capabilitiesLine(all);
-    expect(all.filter((c) => c.on).map((c) => c.id)).toEqual(['deriv_live_mainnet', 'deriv_mandate_mainnet', 'deriv_gmx_live', 'research_runner', 'research_readonly_db', 'workers', 'web_app']);
+    expect(all.filter((c) => c.on).map((c) => c.id)).toEqual(['deriv_live_mainnet', 'deriv_mandate_mainnet', 'deriv_gmx_live', 'research_runner', 'research_readonly_db', 'workers', 'web_app', 'nft_inventory', 'nft_solana_das']); // + the NFT rows (nft/config.ts): read-only inventory and DAS probing are on by default
     expect(text).not.toContain(SECRET); expect(text).not.toContain('reader'); expect(text).not.toContain('/srv/web');
     expect(capabilitiesLine(all)).toMatch(/broadcast=OFF\(set off by SPW_BROADCAST\).*strategy_sandbox_enforced=OFF\(set off by SPW_LAB_SANDBOX\)/);
   });
