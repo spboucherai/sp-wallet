@@ -61,17 +61,30 @@ export async function describePerp(rel: string): Promise<PerpStrategyInfo> {
     meta: { ...p.meta, kind: 'perp', max_leverage: p.meta.max_leverage, max_gross_exposure: p.meta.max_gross_exposure } };
 }
 
+/** `fn` over `items`, at most `limit` at a time; the answers are in the order of `items` whatever the order of completion. Pure. */
+export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length); let next = 0;
+  const worker = async (): Promise<void> => { for (;;) { const i = next++; if (i >= items.length) return; out[i] = await fn(items[i]!, i); } };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(Math.floor(limit), items.length)) }, worker));
+  return out;
+}
+/** laboratory processes started at once by a library listing (one `spq.describe` per version: ≈ 1 s each on a quiet machine) */
+const DESCRIBE_CONCURRENCY = 4;
+
 export async function perpLibrary(): Promise<(PerpStrategyInfo & { readme: string })[]> {
-  const out: (PerpStrategyInfo & { readme: string })[] = [];
-  if (!existsSync(ROOT)) return out;
+  if (!existsSync(ROOT)) return [];
+  const rels: { name: string; ver: string }[] = [];
   for (const name of readdirSync(ROOT).sort()) { if (!/^[a-z0-9_]{1,40}$/.test(name)) continue;
     if (/^rj_[0-9a-f]{12}$/.test(name)) continue; // v7: a research job's strategy is listed by the research routes
     if (!inLibraryManifest(name)) continue;       // V11 (D10): the production library is an explicit manifest
-    for (const ver of readdirSync(path.join(ROOT, name)).sort()) { if (!/^[a-z0-9_]{1,12}$/.test(ver)) continue;
-      try { const i = await describePerp(`${name}/${ver}`); let readme = '';
-        try { readme = readFileSync(path.join(ROOT, name, ver, 'README.md'), 'utf8').slice(0, 1500); } catch { /* none */ }
-        out.push({ ...i, readme }); } catch { /* spot, or not loadable: not offered to perp agents */ } } }
-  return out;
+    for (const ver of readdirSync(path.join(ROOT, name)).sort()) { if (/^[a-z0-9_]{1,12}$/.test(ver)) rels.push({ name, ver }); } }
+  // V11 final validation: the versions were described one after the other (19 s for the 14 versions of the library, measured;
+  // the first GET /agents/templates of every minute waited for it). Same answers, same order, four processes at a time.
+  const described = await mapLimit(rels, DESCRIBE_CONCURRENCY, async ({ name, ver }) => {
+    try { const i = await describePerp(`${name}/${ver}`); let readme = '';
+      try { readme = readFileSync(path.join(ROOT, name, ver, 'README.md'), 'utf8').slice(0, 1500); } catch { /* none */ }
+      return { ...i, readme }; } catch { return null; /* spot, or not loadable: not offered to perp agents */ } });
+  return described.filter((x): x is PerpStrategyInfo & { readme: string } => x !== null);
 }
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();

@@ -102,7 +102,9 @@ describe.skipIf(!READY)('template → backtest (real laboratory, job queue, repo
     expect(verdict.deflatedSharpe).toBeLessThanOrEqual(0.10); expect(verdict.significant).toBe(false);
     say(`GET ${A}/templates → momentum: installed ${t.installed.map((x: any) => x.path).join(', ')}`);
     say(`  lab verdict momentum_xs_perp/2 (read from research/results/2026-11-15-v11): deflated Sharpe ${verdict.deflatedSharpe}, significant=${verdict.significant}, live-capable=${verdict.liveCapable}`);
-  });
+    // the first listing of the library starts one laboratory process per version (14 of them; 6 s alone on a quiet machine since
+    // they run four at a time, 19 s before): nothing here asserts a duration, so the default 30 s is not the right bound for it
+  }, 180_000);
 
   it('create from the template; the backtest runs through the job queue in the laboratory and stores a version-3 report with engine parity applied', async () => {
     const c = await call('POST', `${A}/from-template`, { template: 'momentum', name: 'Momentum bind', strategyPath: 'momentum_xs_perp/2', capitalUsdc: '10000' });
