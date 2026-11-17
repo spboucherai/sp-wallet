@@ -13,6 +13,7 @@ import { runCommand } from './commands.ts';
 import { IDEMPOTENCY_RE, replayHeaders, withIdempotency, withOrderKey } from './idempotency.ts';
 import { buildOpenApi } from './openapi.ts';
 import { requirePrincipal, type Principal } from './principal.ts';
+import { REFERENCE_JS, referenceHtml, referenceMarkdown } from './reference.ts';
 import { AmbiguousSymbol, type Reads } from './read.ts';
 import type { NftReads } from './nft-read.ts';
 import { shapePreview, shapeRefusal } from './shaping.ts';
@@ -148,6 +149,22 @@ export function tradingRoutes(app: FastifyInstance, reads: Reads, ex: Execution,
       },
     });
   }
+  // The reference a person reads, rendered from the same table (reference.ts): GET …/docs (HTML), …/docs.md (Markdown) and
+  // …/docs.js (the page's script — a same-origin FILE because the CSP of server.ts is `script-src 'self'`: nothing inline runs).
+  // Not operations of the contract (they are not in the OpenAPI document, the SDKs or the operation count); like every path
+  // under the prefix they need a principal — any valid key, or the owner session of the browser — and count against a key's
+  // rate limit. Rendered once per process: the content depends on the code only.
+  const pages: Record<string, { type: string; render: () => string; body?: string }> = {
+    '/docs': { type: 'text/html; charset=utf-8', render: referenceHtml },
+    '/docs.md': { type: 'text/markdown; charset=utf-8', render: referenceMarkdown },
+    '/docs.js': { type: 'text/javascript; charset=utf-8', render: () => REFERENCE_JS },
+  };
+  for (const [path, page] of Object.entries(pages)) app.route({
+    method: 'GET', url: TRADING_PREFIX + path,
+    config: { scope: ANY_SCOPE, rateLimit: { allowList: (req: FastifyRequest) => req.principal?.kind === 'api_key' } },
+    handler: async (req, reply) => { requirePrincipal(req); return reply.type(page.type).send((page.body ??= page.render())); },
+  });
+
   // Anything else under the prefix — an unknown path, or a known path with another method — answers the API's own error model,
   // whether or not the server also serves the web app (whose not-found handler exists only when a web directory is configured).
   // Authentication still comes first (401), and the answer is counted against the key's rate limit like any other.

@@ -4,7 +4,8 @@ Status: machine authentication and the **read side** are implemented and connect
 Phase F (branch `v11-exec`) the **order operations of the write side** are wired to the order service (section 7), and
 the strategy and agent operations to the agents runtime (`agents/trading-handlers.ts`). All 41 operations of the contract
 are implemented; `501 execution_not_wired` remains only as the answer of an owner's spot order on a server whose swap flow
-is not configured. Every operation declares the error answers it can give (`x-spw-errors`). Security model: `docs/TRADING-API-SECURITY.md`. Reference: `docs/TRADING-API-OPENAPI.md`.
+is not configured. Every operation declares the error answers it can give (`x-spw-errors`). Security model: `docs/TRADING-API-SECURITY.md`. Reference for people (getting started, concepts, a worked example per
+operation, error catalogue): `docs/TRADING-API-REFERENCE.md`, served at `GET /api/v1/trading/docs` (last section). Compact index: `docs/TRADING-API-OPENAPI.md`.
 
 ## 1. Where it sits
 
@@ -228,3 +229,29 @@ status. Texts: the `dv` block of `i18n.ts`.
 | `SPW_TRADING_API_EXECUTION` | off | `on`: live orders can be placed through the trading API. Off: 403 `execution_disabled` for new live risk; paper works; cancels and strictly reducing orders pass |
 
 Deployment note: the pepper file must be in the secrets backup. Losing it invalidates every key.
+
+## The served reference (documentation)
+
+`GET /api/v1/trading/docs` (HTML), `/docs.md` (Markdown) and `/docs.js` (the page's script) are rendered by
+`trading-api/reference.ts` from the same sources as the contract, so they cannot describe another API than the one running:
+
+| Source | Holds |
+|---|---|
+| `spec.ts` → `openapi.ts` | operations, schemas, the error codes each operation declares |
+| `examples.ts` + `examples-data.ts` | one worked example per operation: the request, the answer (recorded from the real server on the SDK test stack, trimmed), the same call with both SDKs |
+| `error-catalog.ts` | what every error code, mandate reason, scope and order state means, and what to do |
+| `guide.ts` | getting started (English and French) and the concepts, as Markdown; the figures it quotes are read from the code |
+
+The three paths are not operations (not in the OpenAPI document, not in the SDKs): they need a principal like every path
+under the prefix — any valid key, or the owner session of the browser, which is how the Developer screen opens the page.
+The page is one self-contained document: inline CSS (the policy allows it), no CDN, font or image, and its script is a
+same-origin file because the server's Content-Security-Policy is `script-src 'self'`. The policy was not changed.
+
+Tests (`services/api/test/trading-api-docs.test.ts`): every example passes the zod schemas of its operation; the catalogue
+covers exactly the codes the operations declare; every SDK call of a sample exists in both SDKs; the committed Markdown is
+what the code generates; the page names every operation with an example. To change the documentation, edit those four
+files and run `npx tsx scripts/gen-openapi.mts`, then the two SDK generators (`packages/trading-sdk/scripts/gen-types.mts`,
+`sdk/python/scripts/gen_models.py`) since descriptions flow into the generated types.
+
+To record the examples again: start `packages/trading-sdk/scripts/test-stack.mts`, call the operations with the `trader`
+key, and replace the bodies in `examples-data.ts`; the tests say at once when a recorded answer no longer matches the contract.

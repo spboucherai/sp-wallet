@@ -309,7 +309,10 @@ describe('default deny', () => {
     // … plus the two routes of the quote engine (services/api/src/quotes): a websocket cannot be described by the OpenAPI document,
     // so they are not operations of the spec — both declare the scope markets:read (docs/V11-QUOTE-ENGINE.md, services/api/test/quotes-stream.test.ts)
     const STREAMING = ['GET /stream', 'POST /stream/ticket'];
-    expect(inside).toEqual([...spec.OPERATIONS.map((o) => `${o.method} ${o.path}`), ...STREAMING, ...['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => `${m} /*`)].sort());
+    // … plus the reference a person reads, rendered from the same table (trading-api/reference.ts): the page, its Markdown and its script.
+    // Three GETs that read nothing but the contract, open to any valid key (scope `*`); not operations either.
+    const REFERENCE = ['GET /docs', 'GET /docs.js', 'GET /docs.md'];
+    expect(inside).toEqual([...spec.OPERATIONS.map((o) => `${o.method} ${o.path}`), ...STREAMING, ...REFERENCE, ...['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => `${m} /*`)].sort());
   });
 
   it('a route without a declared scope is closed, to a key and to the owner', async () => {
@@ -612,6 +615,40 @@ describe('read side', () => {
     expect(r.json).toEqual(JSON.parse(JSON.stringify(buildOpenApi())));
     expect((await call('GET', `${T}/openapi.json`)).status).toBe(200);
     expect((await call('GET', `${T}/openapi.json`, { cookie: null })).status).toBe(401);
+  });
+
+  it('GET /docs serves the reference as one self-contained page, for any key and for the owner; never without a credential', async () => {
+    const { OPERATIONS } = spec, k = await newKey({ scopes: ['agents:read'] });   // any valid key, whatever its scopes
+    const raw = (path: string, headers: Record<string, string>) => app.inject({ method: 'GET', url: `${T}${path}`, headers });
+    for (const headers of [{ authorization: `Bearer ${k.secret}` }, { cookie }] as Record<string, string>[]) {
+      const page = await raw('/docs', headers);
+      expect(page.statusCode).toBe(200);
+      expect(page.headers['content-type']).toBe('text/html; charset=utf-8');
+      // the policy of server.ts is unchanged, and the page lives inside it: scripts from this origin only — the page has ONE, a file
+      expect(page.headers['content-security-policy']).toContain("script-src 'self';");
+      expect(page.headers['cache-control']).toBe('no-store');
+      expect([...page.body.matchAll(/<script\b[^>]*>/g)].map((m: RegExpMatchArray) => m[0])).toEqual([`<script src="${T}/docs.js" defer>`]);
+      for (const op of OPERATIONS) expect(page.body, op.id).toContain(`id="op-${op.id}"`);
+      expect((page.body.match(/Example response · 200/g) ?? []).length).toBe(OPERATIONS.length);
+      const js = await raw('/docs.js', headers);
+      expect(js.statusCode).toBe(200);
+      expect(js.headers['content-type']).toBe('text/javascript; charset=utf-8');
+      expect(js.headers['x-content-type-options']).toBe('nosniff');
+      const md = await raw('/docs.md', headers);
+      expect(md.statusCode).toBe(200);
+      expect(md.headers['content-type']).toBe('text/markdown; charset=utf-8');
+      expect(md.body).toBe((await import('../src/trading-api/reference.ts')).referenceMarkdown());
+    }
+    for (const path of ['/docs', '/docs.js', '/docs.md']) {
+      const anon = await call('GET', `${T}${path}`, { cookie: null });
+      expect(anon.status, path).toBe(401);
+      expect(anon.json).toEqual({ error: 'unauthenticated', message: 'authentication required' });
+      expect((await call('POST', `${T}${path}`, { key: k.secret, body: {} })).status, `POST ${path}`).toBe(404);   // a page is read, nothing else
+    }
+    // not operations of the contract: the document and the operation count do not know them
+    const doc = (await get('/openapi.json')).json;
+    expect(Object.keys(doc.paths).filter((p: string) => p.includes('/docs'))).toEqual([]);
+    expect(doc.externalDocs.url).toBe(`${T}/docs`);
   });
 
   it('the owner session reaches the trading API too (every scope), with the session rules', async () => {
