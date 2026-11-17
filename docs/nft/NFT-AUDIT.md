@@ -1,4 +1,4 @@
-# SP Wallet — NFT audit (delivery 1, 2026-11-17)
+# SP Wallet — NFT audit (delivery 1, 2026-11-17; transfer column and §4 updated by delivery 2, same day)
 
 Audit of the repository as it is on branch `v11` (commit `e325d1b`) before any NFT code, required by `NFT-BRIEF.md` §3. The
 code is the source of truth; where an older document says otherwise, the code wins and the difference is noted.
@@ -36,16 +36,16 @@ The first three columns describe the wallet before this delivery; the last four,
 
 | Network (family) | Address | Balance | Tokens (allow-list) | NFTs detectable — source | NFT display | NFT transfer | Market actions |
 |---|---|---|---|---|---|---|---|
-| Solana (sol) | yes | yes | yes (26) | **yes** — token accounts (Token + Token-2022) → Token Metadata / pNFT: on-chain; Metaplex Core: `getProgramAccounts` on `api.mainnet-beta.solana.com` (refused by `solana-rpc.publicnode.com` → **blocked** if only that endpoint answers); compressed: DAS on `api.mainnet-beta.solana.com` (indexed; **blocked** without a DAS endpoint) | **yes** | no (not built) | no |
-| Ethereum (evm) | yes | yes | yes (43) | **blocked** — no keyless discovery (wallet-wide `eth_getLogs` refused); direct lookup and manual add **yes** (ERC-721, ERC-1155, on-chain) ; with `NFT_EVM_INDEXER_URLS`: indexer hint + on-chain verification | **yes** (looked-up / tracked) | no | no |
-| Base (evm) | yes | yes | yes (35) | **blocked** — same | **yes** | no | no |
-| Arbitrum One (evm) | yes | yes | yes (32) | **blocked** — same (one endpoint accepts ≤ 30 000-block wallet-wide log queries on recent blocks only: not an inventory) | **yes** | no | no |
-| Polygon PoS (evm) | yes | yes | yes (18) | **blocked** — same | **yes** | no | no |
-| Optimism (evm) | yes | yes | yes (23) | **blocked** — same (≤ 10 000 recent blocks on one endpoint) | **yes** | no | no |
-| BNB Smart Chain (evm) | yes | yes | yes (27) | **blocked** — same | **yes** | no | no |
-| Avalanche C-Chain (evm) | yes | yes | yes (16) | **blocked** — same | **yes** | no | no |
-| HyperEVM (evm) | yes | yes | yes (6) | **blocked** — same | **yes** | no | no |
-| Bitcoin (btc) | yes | yes | — | **blocked** — Ordinals need an ord-aware indexer; no keyless one exists (Hiro shut down 2026-03-09; `ordinals.com` answers a bot challenge); no adapter in this version | no | no — and ordinary BTC sends are **not inscription-safe** (§4) | no |
+| Solana (sol) | yes | yes | yes (26) | **yes** — token accounts (Token + Token-2022) → Token Metadata / pNFT: on-chain; Metaplex Core: `getProgramAccounts` on `api.mainnet-beta.solana.com` (refused by `solana-rpc.publicnode.com` → **blocked** if only that endpoint answers); compressed: DAS on `api.mainnet-beta.solana.com` (indexed; **blocked** without a DAS endpoint) | **yes** | **yes** (delivery 2) — Token-2022 with accounted-for extensions, Token Metadata, programmable NFT, Core; **no** for compressed NFTs (`compressed_transfer_not_supported`) and plain SPL tokens | no |
+| Ethereum (evm) | yes | yes | yes (43) | **blocked** — no keyless discovery (wallet-wide `eth_getLogs` refused); direct lookup and manual add **yes** (ERC-721, ERC-1155, on-chain) ; with `NFT_EVM_INDEXER_URLS`: indexer hint + on-chain verification | **yes** (looked-up / tracked) | **yes** (delivery 2) — ERC-721 and ERC-1155 `safeTransferFrom`; no approval, no batch, no non-standard contract | no |
+| Base (evm) | yes | yes | yes (35) | **blocked** — same | **yes** | **yes** (delivery 2) — same | no |
+| Arbitrum One (evm) | yes | yes | yes (32) | **blocked** — same (one endpoint accepts ≤ 30 000-block wallet-wide log queries on recent blocks only: not an inventory) | **yes** | **yes** (delivery 2) — same | no |
+| Polygon PoS (evm) | yes | yes | yes (18) | **blocked** — same | **yes** | **yes** (delivery 2) — same | no |
+| Optimism (evm) | yes | yes | yes (23) | **blocked** — same (≤ 10 000 recent blocks on one endpoint) | **yes** | **yes** (delivery 2) — same | no |
+| BNB Smart Chain (evm) | yes | yes | yes (27) | **blocked** — same | **yes** | **yes** (delivery 2) — same | no |
+| Avalanche C-Chain (evm) | yes | yes | yes (16) | **blocked** — same | **yes** | **yes** (delivery 2) — same | no |
+| HyperEVM (evm) | yes | yes | yes (6) | **blocked** — same | **yes** | **yes** (delivery 2) — same | no |
+| Bitcoin (btc) | yes | yes | — | **blocked** — Ordinals need an ord-aware indexer; no keyless one exists (Hiro shut down 2026-03-09; `ordinals.com` answers a bot challenge); no adapter in this version | no | **no** (no Ordinals transfer: `ordinals_transfer_not_supported`) — since delivery 2 ordinary sends keep away from locked / ord-reported / heuristically flagged outputs (§4) | no |
 | Litecoin (btc) | yes | yes | — | no adapter (LTC ordinals exist: *tbc*, not planned) | no | no | no |
 | Dogecoin (btc) | yes | yes | — | no adapter (doginals: *tbc*, not planned) | no | no | no |
 | Bitcoin Cash (bch) | yes | yes | — | no adapter (CashTokens NFTs: *tbc*) | no | no | no |
@@ -87,6 +87,20 @@ satoshi goes to the recipient or to the miners as fee. Nothing warns the owner t
   send cannot spend an inscription (brief §15); a dedicated inscription-transfer intent. Until an ord source is configured
   the fail-safe choice for delivery 2 is a signer-side minimum input value for ordinary sends (inscription UTXOs are small),
   stated as a heuristic, not a guarantee.
+
+### Status after delivery 2 (2026-11-17)
+
+Done (`NFT-TRANSFERS.md` §7): (a) an adapter for a self-hosted `ord` server (`NFT_ORDINALS_API_URL`, the documented
+`GET /outputs/<address>?type=any`), whose report excludes inscription- and rune-bearing outputs — and outputs it does not know —
+from coin selection; (b) a lock list of outpoints owned by the owner, held by the **signer**, changed only with the passkey,
+and enforced by the signer on every Bitcoin-style send and THORChain swap (`utxo_locked`); (c) without an ord server, a
+heuristic — labelled as such — that keeps outputs of at most 10 000 sat (and outputs of a transaction with an inscription
+envelope) out of automatic selection until the owner reviews or locks them; (d) the test the brief demands, at both levels
+(`services/api/test/nft-transfer.test.ts`, `services/isolated-signer/test/nft.test.ts`). **Not done**: no inscription is
+listed, and no Ordinals transfer exists — Bitcoin NFTs stay "not supported". The "signer-side minimum input value" suggested
+above was not built: the signer enforces the explicit lock list instead (a value floor would have blocked ordinary small
+coins with no way for the owner to say otherwise). The recommendation stands in a weaker form: avoid receiving inscriptions
+here; if one is received, lock its output.
 
 ## 5. Scope adjusted to the real architecture
 

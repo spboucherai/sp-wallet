@@ -260,7 +260,7 @@ export function NftDetail({ id, nav }: { id: string; nav: Nav }) {
   const link = safeLink(md.externalUrl), reasons = a.capabilities.transferBlockedBy;
   const mdStamp = md.source, idLabel = a.family === 'evm' ? t('nfContract') : t('nfMint');
   const verdict = a.transfer ?? { transferable: a.capabilities.transferable, blockedBy: a.capabilities.transferBlockedBy, warnings: a.capabilities.transferWarnings ?? [], standard: a.standard, route: null };
-  if (sending && verdict.transferable) return <Suspense fallback={<Skeleton h="h-[420px]" />}><NftSend item={a} onClose={() => { setSending(false); void q.refetch(); }} /></Suspense>;
+  if (sending) return <Suspense fallback={<Skeleton h="h-[420px]" />}><NftSend item={a} onClose={() => { setSending(false); void q.refetch(); }} /></Suspense>;
   return <div className="space-y-5" data-testid="nft-detail" data-key={a.key}>
     {back(name ?? <span className="font-mono text-[18px]">{shortId(a.assetId)}</span>)}
     {!o.heldByWallet && <Notice tone={o.state === 'burned' ? 'danger' : 'info'}><span data-testid="nft-not-in-wallet">{t(o.state === 'burned' ? 'nfBurnedNote' : a.origin === 'lookup' ? 'nfNotInWallet' : 'nfNotInWalletTracked')}</span></Notice>}

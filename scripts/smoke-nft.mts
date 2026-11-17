@@ -37,7 +37,7 @@ async function showAsset(chain: string, address: string, tokenId?: string): Prom
   line('collection', a.collection ? `${a.collection.id} — verified on-chain: ${k(a.collection.verifiedOnChain)} — on-chain name: ${a.collection.name ?? 'not read'}` : 'none declared');
   line('extensions / plugins', a.extensions.join(', ') || 'none');
   for (const s of a.sources) line(`source [${s.category}]`, `${s.source} · ${s.detail} · ${s.confidence}${s.blockRef?.slot ? ` · slot ${s.blockRef.slot}` : ''}`);
-  line('transfer in this version', `no — ${a.capabilities.transferBlockedBy.join(', ')}`);
+  line('transfer', a.capabilities.transferable ? 'possible (facts of the asset; the signer policy and the preparation decide)' : `blocked — ${a.capabilities.transferBlockedBy.join(', ')}`);
   // creator metadata, through the SSRF-safe fetcher
   if (a.metadata.sourceUri) {
     const uri = a.standard === 'erc1155' && a.tokenId ? substituteErc1155Id(a.metadata.sourceUri, a.tokenId) : a.metadata.sourceUri, r = resolveUri(uri, cfg.gateways, 'metadata');

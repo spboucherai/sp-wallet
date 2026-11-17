@@ -1,4 +1,4 @@
-# SP Wallet — NFT architecture (delivery 1: read-only)
+# SP Wallet — NFT architecture (delivery 1: read-only; transfers of delivery 2 are in `NFT-TRANSFERS.md`)
 
 Delivery 1 of `NFT-BRIEF.md` §17: inventory, collection and item pages, secure metadata and media, activity where the sources
 allow. **Nothing in it signs, prepares or broadcasts anything; the signer, intents and policy are untouched.** What is real
@@ -147,7 +147,12 @@ placeholder with the reason. 3D models: not displayed.
 - The portfolio total is untouched: NFTs contribute no amount; the list answers `valuation: {state: 'unavailable'}` and the
   screens say « valeur non disponible ».
 
-## 6. What delivery 2 (transfers) plugs into
+## 6. What delivery 2 (transfers) plugs into — DONE, see `NFT-TRANSFERS.md`
+
+*(Kept as written before delivery 2. What changed in the model: `capabilities.transferable` is a boolean — true when no
+fact blocks —, `transfer_not_built` is no longer produced, `capabilities.transferWarnings` exists, and the item route
+answers a `transfer` verdict that also reflects the signer's NFT policy. Capabilities are recomputed from the stored facts
+each time an asset is read.)*
 
 - `capabilities.transferBlockedBy` is the list delivery 2 refines: each reason other than `transfer_not_built` is a fact
   that must **still** block (or route to a specialised builder: pNFT through Token Metadata + rule set, Core through

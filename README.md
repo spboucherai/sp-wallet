@@ -41,22 +41,27 @@ authorization, an approved burn) and inside bounds the signer enforces itself: t
 API can do through each, in `docs/adr/0001-custody.md`. The risk engine, the kill switch and the server locks are
 API-side: they bound an honest API, not a compromised one.
 
-## NFTs (read-only — delivery 1 of `docs/nft/NFT-BRIEF.md`)
+## NFTs (inventory and secure transfer — deliveries 1 and 2 of `docs/nft/NFT-BRIEF.md`)
 
 Assets → **NFT**: gallery, collection and item pages, each value with its source (on-chain / creator metadata / indexed /
-market) and its freshness. **No NFT can be sent, approved, listed or bought from the wallet in this version**; those
-controls are shown disabled with the reason. Media never load from a third party: they pass through a server-side proxy
+market) and its freshness. **Send** (delivery 2): one NFT transfer = one passkey approval over a canonical NFT intent; the
+isolated signer builds the transaction itself (ERC-721 / ERC-1155 `safeTransferFrom`; Solana Token-2022, Token Metadata,
+programmable NFT, Core) inside its NFT policy — no approval, no operator approval, no batch, no calldata from the API. An
+asset that cannot be sent shows its exact reason. **No NFT can be approved, listed or bought from the wallet**; the market
+controls are shown disabled with the reason. NFT transfers were proven on local forks and a local validator only —
+**never executed on a real network** (`docs/nft/work/nft-2.md`). Media never load from a third party: they pass through a server-side proxy
 (SSRF-safe fetch, content sniffing, sandboxed responses). NFTs add nothing to the portfolio total: their value is
 "unavailable", not zero and not a floor price.
 
 | Network | Discovery (what the wallet holds) | Item page (lookup / tracked) | Activity | Send | Market |
 |---|---|---|---|---|---|
-| Solana | Token Metadata, pNFT, Token-2022: on-chain · Metaplex Core: on-chain (needs an endpoint serving `getProgramAccounts`) · compressed: DAS index | yes (any mint / Core asset; compressed through DAS) | Core: on-chain; SPL: partial; compressed: no | no | read-only, optional (`NFT_MARKET_MAGICEDEN`) |
-| Ethereum, Base, Arbitrum, Polygon, Optimism, BNB Chain, Avalanche, HyperEVM | **blocked without an indexer** (`NFT_EVM_INDEXER_URLS`); add by contract + token id, verified on-chain | yes (ERC-721, ERC-1155 with exact quantity) | recent blocks only | no | link to the marketplace only |
-| Bitcoin | no (Ordinals need an ord-aware indexer) — **do not receive inscriptions on this wallet: BTC sends are not inscription-aware** | no | no | no | no |
+| Solana | Token Metadata, pNFT, Token-2022: on-chain · Metaplex Core: on-chain (needs an endpoint serving `getProgramAccounts`) · compressed: DAS index | yes (any mint / Core asset; compressed through DAS) | Core: on-chain; SPL: partial; compressed: no | **yes**: Token-2022 (accounted-for extensions only), Token Metadata, pNFT (unlocked, undelegated), Core (not frozen). **No**: compressed, plain SPL | read-only, optional (`NFT_MARKET_MAGICEDEN`) |
+| Ethereum, Base, Arbitrum, Polygon, Optimism, BNB Chain, Avalanche, HyperEVM | **blocked without an indexer** (`NFT_EVM_INDEXER_URLS`); add by contract + token id, verified on-chain | yes (ERC-721, ERC-1155 with exact quantity); arrivals detected on known contracts after finality | recent blocks only | **yes**: ERC-721, ERC-1155 (quantity). **No**: non-standard contracts | link to the marketplace only |
+| Bitcoin | no (inscriptions are not listed). Ordinary BTC sends keep away from outputs locked with the passkey (refused by the signer), reported by an ord server (`NFT_ORDINALS_API_URL`), or — without one — flagged by a heuristic (≤ 10 000 sat; not a detection) | no | no | **no** (no Ordinals transfer) | no |
 | Litecoin, Dogecoin, Bitcoin Cash, Stellar, XRP Ledger, TRON, Aptos, Cosmos Hub, Sui, NEAR, TON, Cardano, Polkadot | not supported (no adapter) | no | no | no | no |
 
-Details: `docs/nft/NFT-AUDIT.md` (matrix and audit), `NFT-SOURCES.md` (sources, quotas, terms, variables),
+Details: `docs/nft/NFT-AUDIT.md` (matrix and audit), `NFT-TRANSFERS.md` (transfers: intents, what the signer verifies,
+policy keys, per-standard matrix, threats, rollback), `NFT-SOURCES.md` (sources, quotas, terms, variables),
 `NFT-ARCHITECTURE.md`, `NFT-ADDING-A-PROVIDER.md`, `NFT-RUNBOOK.md`, `nft.env.example`. Smoke: `npx tsx scripts/smoke-nft.mts`.
 
 ## Layout

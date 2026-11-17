@@ -187,6 +187,32 @@ route). Therefore:
 `POST /api/v1/mandates/<id>/revoke`; revoking needs no passkey). Check `GET /status` of the signer:
 `venueQuotingMandates[].phase` must be `wind_down` or `ended` for all of them. Rolling forward again needs nothing.
 
+### Signer state and policy added by NFT delivery 2, and the rollback rule
+
+**Policy.** `policy.json` is still left alone (step 3). This release adds an OPTIONAL key `nft` (NFT transfer limits). The
+file in production has no such key: the signer applies the code defaults in memory (`docs/nft/NFT-TRANSFERS.md` §5 — 5
+transfers per day, 10 units per ERC-1155 transfer, the verified standards on, allow-list off), **without writing the file**
+and without touching `version`, `perTx`, `daily`, `maxFee`, `maxApprovalTtlSec` or `allowlist`. After the restart check in
+the signer status that `policy` is what it was and that `nft.policy` shows the defaults. To change an NFT limit, add the key
+by hand (`docs/nft/NFT-RUNBOOK.md`) and restart.
+
+**State.** `state.json` gains three OPTIONAL fields: `nftDaily` (NFT transfers signed per UTC day), `nftAllow` (destinations
+approved for NFT transfers) and `utxoLocks` (locked Bitcoin-style outpoints). A state written before loads unchanged.
+
+**Before rolling the signer back** to a binary from before this release (rehearsed by
+`scripts/rollback-nft-signer-rehearsal.mts <checkout of the previous release>`):
+
+1. **Remove the `nft` key from `policy.json`** if one was added: the older binary's schema is strict and it refuses to start
+   on a file that carries it (fail closed).
+2. Know that the older binary **does not enforce the outpoint lock list**: it keeps `utxoLocks` on disk but signs a send that
+   spends a locked output. If inscription-bearing outputs sit on the Bitcoin address, do not send BTC until the newer signer
+   is back (the API's coin-selection guard still excludes ord-reported and heuristically flagged outputs as long as the API
+   itself is not rolled back).
+3. NFT transfers stop working (the older binary has no `/nft/sign` route: the app answers `signer_too_old`). Nothing else
+   changes: every existing intent kind is signed byte for byte as before (pinned, and shown by the rehearsal).
+
+Rolling forward again needs nothing: the locks, the allow-list and the day's count are in force again.
+
 ## 3. Research node — only when `services/research-runner` or `research/` changed
 
 `services/research-runner/README.md`. Its secret is the API's `SPW_RESEARCH_RUNNER_SECRET`.

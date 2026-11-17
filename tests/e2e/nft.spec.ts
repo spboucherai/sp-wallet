@@ -45,7 +45,7 @@ test.describe('NFT · phone · fr', () => {
     await expect(page.getByTestId('nft-receive-address')).toHaveText(accounts.accounts.find((a) => a.network === 'solana')!.address);
     await expect(page.getByTestId('nft-receive-noclaim')).toContainText('jamais avant');
     await page.getByTestId('nft-receive').getByRole('radio', { name: 'Bitcoin', exact: true }).click();
-    await expect(page.getByTestId('nft-receive-warn-ordinals_not_protected')).toContainText('Ne recevez PAS d’inscription Ordinals');
+    await expect(page.getByTestId('nft-receive-warn-ordinals_heuristic_only')).toContainText('HEURISTIQUE'); // delivery 2: the heuristic and the lock list replace the bare warning
     await expect(page.getByTestId('nft-receive-address')).toHaveText(accounts.accounts.find((a) => a.network === 'bitcoin')!.address);
     await expectNoOverflow(page, 'receive');
     expect(s.errors()).toEqual([]);
@@ -82,7 +82,7 @@ test.describe('NFT · phone · fr', () => {
     await expect(page.getByTestId('nft-rarity')).toContainText('non calculées');
     await expect(page.getByTestId('nft-send')).toBeDisabled(); await expect(page.getByTestId('nft-market-actions')).toBeDisabled();
     await expect(page.getByTestId('nft-send-why').locator('[data-reason=not_in_wallet]')).toBeVisible();
-    await expect(page.getByTestId('nft-send-why').locator('[data-reason=transfer_not_built]')).toContainText('n’est pas pris en charge dans cette version');
+    await expect(page.getByTestId('nft-send-why').locator('li')).toHaveCount(1); await expect(page.getByTestId('nft-send-why')).not.toContainText('pas pris en charge dans cette version'); // delivery 2: the factual reason only
     await expect(page.getByTestId('nft-outside-warning')).toContainText('hors de SP Wallet');
     await expect(page.getByTestId('nft-activity').or(page.getByTestId('nft-activity-error'))).toBeVisible({ timeout: 60_000 });
     await expectNoOverflow(page, 'detail');

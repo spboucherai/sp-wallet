@@ -217,3 +217,29 @@ The server reports which of these are in force — names only — in its capabil
 A creator's server learns that *this server* fetched a document — and, by which document, that some user of it holds or
 looked at that NFT. Looking up an asset the wallet does not hold produces the same requests. The browser itself never
 contacts a third party for NFT data.
+
+## 9. Added by delivery 2 (2026-11-17)
+
+### 9.1 `ord` server — Bitcoin inscription safety (optional, self-hosted)
+
+| | |
+|---|---|
+| What | the reference Ordinals indexer and explorer, run by the operator next to a `bitcoind` (`ord server`, with its address index: `--index-addresses`; `--index-runes` for runes) |
+| Variable | `NFT_ORDINALS_API_URL` (https, or a loopback address). Unset = no ord source: the heuristic of `NFT-TRANSFERS.md` §7 |
+| Endpoint used | `GET <base>/outputs/<ADDRESS>?type=any` with `Accept: application/json` — documented at docs.ordinals.com/guides/api.html (read 2026-11-17: "Get UTXOs held by `<ADDRESS>`"; `type` = `any` \| `cardinal` \| `inscribed` \| `runic`) |
+| Answer used | a JSON array of outputs; of each: `outpoint` (`<txid>:<vout>`), `value` (sat, integer), `inscriptions` (ids), `runes` (map), `indexed` (boolean), `spent` (boolean). Any other shape is `ord_bad_answer` |
+| Auth / quota / terms | none: the operator's own server. No keyless public ord API exists (delivery 1 audit: Hiro shut down 2026-03-09; `ordinals.com` answers a bot challenge) |
+| What it receives | the wallet's Bitcoin address |
+| Tested on | the documented response shape (the examples of the documentation page, with an inscribed and a runic output in the same shape) — `services/api/test/nft-transfer.test.ts`. **Not tested against a running `ord` server**: none is available on this machine, and running one needs a synchronised `bitcoind` |
+| Used for | excluding outputs from the coin selection of ordinary BTC sends. Not used to list or transfer inscriptions |
+
+### 9.2 Program interfaces read for the transfer builders
+
+| Source | Read | Used for |
+|---|---|---|
+| `metaplex-foundation/mpl-token-metadata` — `idls/token_metadata.json` (version 1.14.0, raw.githubusercontent.com, 2026-11-17) | instruction `Transfer`: discriminant 49, 17 accounts in order (token, tokenOwner, destination, destinationOwner, mint, metadata, edition?, ownerTokenRecord?, destinationTokenRecord?, authority (signer), payer (signer), systemProgram, sysvarInstructions, splTokenProgram, splAtaProgram, authorizationRulesProgram?, authorizationRules?); `TransferArgs::V1 { amount: u64, authorization_data: Option<…> }` | `packages/core/src/nft-sol.ts` |
+| `metaplex-foundation/mpl-core` — `idls/mpl_core.json` (0.2.0, program binary 0.4.2) | instruction `TransferV1`: discriminant 14, 7 accounts (asset, collection?, payer (signer), authority? (signer), newOwner, systemProgram?, logWrapper?); `TransferV1Args { compressionProof: Option<…> }` | same |
+| EIP-721, EIP-1155 (eips.ethereum.org) | `safeTransferFrom(address,address,uint256)` = `0x42842e0e`; `safeTransferFrom(address,address,uint256,uint256,bytes)` = `0xf242432a`; ERC-165 ids `0x80ac58cd`, `0xd9b67a26` | `packages/core/src/nft-evm.ts`, `services/api/src/nft/transfer.ts` |
+
+Both Solana instructions were then executed by the real programs (cloned from mainnet) on a local validator, and simulated
+on mainnet for the Core and pNFT cases while the builders were written (`work/nft-2.md`).
