@@ -28,6 +28,9 @@ export function Assets({ nav }: { nav: Nav }) {
       <div className="relative"><Icon n="search" className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-mute" />
         <input className={`${inputCls} !pl-11`} type="search" placeholder={t('search')} aria-label={t('search')} value={q} onChange={(e) => setQ(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="search" /></div>
       <Chips label={t('network')} value={net} onChange={setNet} options={[{ id: '', label: t('all') }, ...(nets.data ?? []).map((n) => ({ id: n.id, label: n.name, net: n.id }))]} />
+      {/* NFT (read-only): their own screen; they add no amount to the totals — their value is not available, which is not zero */}
+      <button onClick={() => nav({ tab: 'nfts' })} className="card row-press flex min-h-[60px] w-full items-center justify-between gap-3 px-5 py-3.5 text-left" data-testid="assets-nft-link">
+        <span className="min-w-0"><span className="block text-[15.5px] font-semibold">{t('nfTitle')}</span><span className="block text-[12.5px] text-mute">{t('nfAssetsLine')}</span></span><Icon n="chev" className="h-5 w-5 shrink-0 text-mute" /></button>
       {rows.length === 0 ? <EmptyState icon="search" title={t('noMatch')} /> : <>
         {held.length > 0 && <section aria-label={t('yourAssets')}><h2 className="t-eyebrow mb-2 px-1">{t('yourAssets')} · {held.length}</h2><Card className="!px-0 !py-1"><ul>{held.map(row)}</ul></Card></section>}
         {rest.length > 0 && <section aria-label={t('dsSupported')}>{held.length > 0 && <h2 className="t-eyebrow mb-2 px-1">{t('dsSupported')} · {rest.length}</h2>}<Card className="!px-0 !py-1"><ul className="cv-list">{rest.map(row)}</ul></Card></section>}

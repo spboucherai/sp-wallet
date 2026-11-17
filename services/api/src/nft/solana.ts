@@ -36,7 +36,8 @@ export function solanaProvider(deps: SolanaDeps): NftDataProvider {
   /** First endpoint that answers; a JSON-RPC error is an answer and is thrown (it says the method is refused there) only when every endpoint gave one. */
   async function any<T>(method: string, params: unknown, only?: string[]): Promise<{ result: T; host: string }> {
     let last: unknown = new Error('no endpoint');
-    for (const u of only ?? urls()) { try { return { result: (await deps.rpc(u, method, params)) as T, host: hostOnly(u) }; } catch (e) { last = e; } }
+    // an endpoint that ANSWERS with an error ("this method is refused here") says more than one that is unreachable: its error is the one reported
+    for (const u of only ?? urls()) { try { return { result: (await deps.rpc(u, method, params)) as T, host: hostOnly(u) }; } catch (e) { if (rpcCodeOf(e) !== undefined || rpcCodeOf(last) === undefined) last = e; } }
     throw last;
   }
   const fail = (e: unknown, what: string): NftProviderError => {
@@ -73,7 +74,7 @@ export function solanaProvider(deps: SolanaDeps): NftDataProvider {
     let last: unknown = null;
     for (const u of cands) {
       try { const result = (await deps.rpc(u, method, params)) as T; dasHost = hostOnly(u); return { result, host: dasHost }; }
-      catch (e) { last = e; }
+      catch (e) { if (rpcCodeOf(e) !== undefined || rpcCodeOf(last) === undefined) last = e; }
     }
     const m = String((last as Error | null)?.message ?? ''), c = rpcCodeOf(last);
     if (/not found|RecordNotFound/i.test(m) && c !== -32601) throw new NftProviderError('not_found', 'solana-das');
@@ -209,7 +210,7 @@ export function solanaProvider(deps: SolanaDeps): NftDataProvider {
           page++;
         }
         sections.push(section('compressed', { source: `solana-das (${host})`, count: n, truncated }));
-      } catch (e) { sections.push(e instanceof NftProviderError && e.code === 'not_found' ? section('compressed', { source: 'solana-das' }) : { ...sectionError('compressed', e, 'NFT_SOLANA_DAS_URL'), unlockedBy: 'NFT_SOLANA_DAS_URL' }); }
+      } catch (e) { sections.push(e instanceof NftProviderError && e.code === 'not_found' ? section('compressed', { source: 'solana-das' }) : sectionError('compressed', e, 'NFT_SOLANA_DAS_URL')); }
       // manual additions that discovery did not return (e.g. Core assets when getProgramAccounts is refused)
       for (const id of o.manual) { if (assets.some((a) => a.assetId === id)) continue; try { const a = await this.lookup(CHAIN, { address: id }, owner); assets.push({ ...a, origin: 'manual' }); } catch { /* kept in the manual list; shown as unverifiable by the service */ } }
       return { assets, sections };

@@ -12,6 +12,7 @@ export interface Capability {
   /** one sentence, no secret, no value of a secret */
   why: string;
 }
+import { nftCapabilities } from './nft/config.ts'; // NFT delivery 1: which optional NFT sources are configured
 type Env = Record<string, string | undefined>;
 const isOn = (v: string | undefined): boolean => v === 'on';
 
@@ -44,6 +45,7 @@ export function capabilities(env: Env = process.env): Capability[] {
     { id: 'strategy_sandbox_enforced', on: env.SPW_LAB_SANDBOX !== 'off', missing: env.SPW_LAB_SANDBOX === 'off' ? ['SPW_LAB_SANDBOX'] : [],
       why: env.SPW_LAB_SANDBOX === 'off' ? 'SPW_LAB_SANDBOX=off: strategy code runs WITHOUT OS confinement (development only)' : 'strategy code only runs inside the OS sandbox (see lab on the monitoring screen for its health)' },
     { id: 'web_app', on: !!env.SPW_WEB_DIR, missing: env.SPW_WEB_DIR ? [] : ['SPW_WEB_DIR'], why: env.SPW_WEB_DIR ? 'the web app is served by this process' : 'SPW_WEB_DIR is not set: this process serves the API only' },
+    ...nftCapabilities(env),
   ];
 }
 

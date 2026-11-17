@@ -42,6 +42,7 @@ import { marketsHub } from './markets-hub/index.ts'; // v11 markets hub: univers
 import { privateMarketsRoutes } from './private-markets/routes.ts'; // v11 private markets (read-only)
 import { apiKeyGate, OWNER, tradingApi } from './trading-api/index.ts'; // v11 trading API (machine authentication)
 import { installQuotes, type QuotesDeps } from './quotes/index.ts'; // v11 quote engine: websocket fan-out of public market data (read-only)
+import { registerNft, type NftOptions } from './nft/index.ts'; // NFT delivery 1: read-only inventory, item pages, media proxy (owner session only)
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
 // v11 quote engine: the browser opens ONE websocket to its own origin. CSP3 lets 'self' match the ws/wss scheme of the page's origin,
@@ -142,7 +143,7 @@ async function walletAddresses(): Promise<{ st: Awaited<ReturnType<typeof signer
   }
 }
 
-export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService; collateral?: import('./derivatives/collateral.ts').CollateralService; gmx?: import('./derivatives/gmx-exec.ts').GmxService; plan?: Partial<PlanDeps>; /** v11 quote engine: scripted upstreams and limits (tests) */ quotes?: QuotesDeps } = {}): Promise<FastifyInstance> {
+export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService; collateral?: import('./derivatives/collateral.ts').CollateralService; gmx?: import('./derivatives/gmx-exec.ts').GmxService; plan?: Partial<PlanDeps>; /** v11 quote engine: scripted upstreams and limits (tests) */ quotes?: QuotesDeps; /** NFT: scripted sources (tests) */ nft?: NftOptions } = {}): Promise<FastifyInstance> {
   const swapProviders = opts.swapProviders;
   const app = Fastify({ logger: { level: 'warn', redact: ['req.headers.cookie', 'req.headers.authorization'] }, bodyLimit: 64 * 1024, trustProxy: config.trustProxy });
   await app.register(cookie);
@@ -213,6 +214,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   registerMm(app, execution); // v11 live market making (owner only): sessions, fills, performance, pull / flatten, the go-live checklist
   await tradingApi(app, { derivatives: opts.derivatives, live: opts.live, gmx: opts.gmx, prices: markets, execution }); // v11: /api/v1/trading (scoped API keys or the owner) and /api/v1/developer (owner only)
   dashboardRoutes(app, { execution }); // v11 interface: /api/v1/dashboard — read-only aggregates composed from the services above (owner session only)
+  registerNft(app, opts.nft); // NFT delivery 1: /api/v1/nfts — read-only (no transfer, no approval, no market write)
   quotes.routes(app); // v11 quote engine: /api/v1/stream (owner session + Origin), /api/v1/trading/stream (API key or ticket, markets:read), /api/v1/stream/stats
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));

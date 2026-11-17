@@ -22,8 +22,6 @@ export interface NftConfig {
   solanaDasUrl: string | null | 'off';
   /** network id → base URL of a Blockscout-compatible instance (`/api/v2/addresses/<a>/nft`); empty = EVM discovery blocked */
   evmIndexers: Record<string, string>;
-  /** base URL of an `ord` server (JSON API); null = Ordinals inventory blocked */
-  ordinalsUrl: string | null;
   marketMagicEden: boolean;
   openseaKey: boolean;
   gateways: Gateways;
@@ -46,7 +44,7 @@ export function nftConfig(env: Env = process.env): NftConfig {
   return {
     enabled: env.NFT_ENABLED !== 'off',
     solanaDasUrl: env.NFT_SOLANA_DAS === 'off' ? 'off' : httpsBase('NFT_SOLANA_DAS_URL', env.NFT_SOLANA_DAS_URL),
-    evmIndexers, ordinalsUrl: httpsBase('NFT_ORDINALS_API_URL', env.NFT_ORDINALS_API_URL),
+    evmIndexers,
     marketMagicEden: env.NFT_MARKET_MAGICEDEN === 'on', openseaKey: !!env.OPENSEA_API_KEY,
     gateways: { ipfs: parseGatewayList(env.NFT_IPFS_GATEWAYS, DEFAULT_GATEWAYS.ipfs), arweave: parseGatewayList(env.NFT_ARWEAVE_GATEWAYS, DEFAULT_GATEWAYS.arweave) },
     cacheDir: env.NFT_CACHE_DIR || join(env.SPW_DATA_DIR || tmpdir(), 'spw-nft-media'),
@@ -69,7 +67,8 @@ export function nftCapabilities(env: Env = process.env): Capability[] {
       why: c.solanaDasUrl === 'off' ? 'NFT_SOLANA_DAS=off: no DAS indexer is asked — compressed NFTs are not listed' : c.solanaDasUrl ? 'compressed NFTs and indexed discovery come from the DAS endpoint of NFT_SOLANA_DAS_URL' : 'NFT_SOLANA_DAS_URL is not set: the wallet\'s own Solana RPC endpoints are probed for DAS methods at each sync (compressed NFTs are listed only while one of them answers)' },
     { id: 'nft_evm_discovery', on: evm.length > 0, missing: evm.length ? [] : ['NFT_EVM_INDEXER_URLS'],
       why: evm.length ? `EVM NFT discovery through a Blockscout-compatible indexer on: ${evm.join(', ')} (each item is re-verified on-chain); the wallet's EVM address is sent to those hosts` : 'NFT_EVM_INDEXER_URLS is not set: EVM NFTs are not discovered automatically (public RPC endpoints refuse wallet-wide log queries); an NFT is added by contract + token id and verified on-chain' },
-    { id: 'nft_ordinals', on: !!c.ordinalsUrl, missing: c.ordinalsUrl ? [] : ['NFT_ORDINALS_API_URL'], why: c.ordinalsUrl ? 'Bitcoin inscriptions are read from the ord server of NFT_ORDINALS_API_URL' : 'NFT_ORDINALS_API_URL is not set: Bitcoin inscriptions are not listed; ordinary BTC sends are NOT inscription-aware' },
+    // no Ordinals adapter in this version (no keyless ord-aware indexer exists; the adapter for a self-hosted `ord` server comes with delivery 2)
+    { id: 'nft_ordinals', on: false, missing: [], why: 'Bitcoin inscriptions are not read in this version (it needs a self-hosted ord server); ordinary BTC sends are NOT inscription-aware: do not receive inscriptions on this wallet' },
     { id: 'nft_market_read', on: c.marketMagicEden, missing: c.marketMagicEden ? [] : ['NFT_MARKET_MAGICEDEN'], why: c.marketMagicEden ? 'Solana listing state and collection floor are read from Magic Eden\'s public API (the mint is sent to Magic Eden, never the wallet address)' : 'NFT_MARKET_MAGICEDEN is not "on": no market data is requested; item pages link to the marketplace instead' },
   ];
 }

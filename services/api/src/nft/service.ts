@@ -1,0 +1,236 @@
+// NFT service: composes the providers (chain truth, indexed discovery), the resolver (creator metadata and media), the optional
+// market source and the store. It is the only place where the five data categories meet, and it keeps them apart: each part of
+// an asset carries its own stamp, and a failure of one source leaves the others as they were.
+//
+// The wallet's addresses come from the SIGNER (through `deps.addresses`), never from a request: no route accepts an owner address.
+import { NETWORKS, type NetworkDef } from '@spw/core';
+import { NftProviderError, nftKey, parseNftKey, type NftAsset, type NftEvent } from '@spw/nft';
+import type { NftConfig } from './config.ts';
+import { externalMarketLinks, type MarketSource } from './market.ts';
+import type { CollectionInfo, InventorySection, NftDataProvider } from './provider.ts';
+import type { Resolver } from './resolver.ts';
+import * as store from './store.ts';
+
+export const TTL_SYNC_MS = 5 * 60_000, TTL_OWNERSHIP_MS = 60_000, TTL_MARKET_MS = 5 * 60_000, TTL_ONCHAIN_STALE_MS = 15 * 60_000, REFRESH_COOLDOWN_MS = 60_000, METADATA_PER_SYNC = 60;
+const NETS = () => Object.values(NETWORKS) as NetworkDef[];
+const SECTION_STANDARDS: Record<string, string[]> = { token: ['metaplex-token-metadata', 'metaplex-pnft', 'spl-token-2022', 'spl-token'], core: ['metaplex-core'], compressed: ['metaplex-bubblegum'], indexer: ['erc721', 'erc1155', 'evm-nonstandard'] };
+
+export interface NftDeps { cfg: NftConfig; providers: NftDataProvider[]; resolver: Resolver; market: MarketSource | null; addresses: () => Promise<Record<string, string>>; now: () => Date }
+export type ChainSupport = 'supported' | 'partial' | 'blocked_by_provider' | 'unsupported';
+export interface ChainCapability { network: string; name: string; family: string; inventory: ChainSupport; /** why, as a code the interface translates */ reason: string; unlockedBy: string | null; standards: string[]; lookup: boolean; manualAdd: boolean; receive: boolean; transfer: 'not_built'; marketRead: boolean; marketWrite: false;
+  sections: { section: string; status: string; code: string | null; unlockedBy: string | null; source: string | null; count: number; truncated: boolean; syncedAt: string }[] }
+
+export function createNftService(deps: NftDeps) {
+  const { cfg } = deps;
+  const providerOf = (chain: string): NftDataProvider | null => deps.providers.find((p) => p.chains().includes(chain)) ?? null;
+  const need = (chain: string): NftDataProvider => { const p = providerOf(chain); if (!p) throw new NftProviderError('unsupported_chain', 'spw', chain); return p; };
+  const running = new Map<string, Promise<void>>(), lastSync = new Map<string, number>(), lastRefresh = new Map<string, number>();
+
+  /** freshness is decided when the asset is read, not when it was stored */
+  function present(row: store.AssetRow): NftAsset & { firstSeen: string; lastSeen: string; verifiedAt: string | null; goneAt: string | null; externalMarkets: { name: string; url: string }[] } {
+    const now = deps.now().getTime(), a = row.asset;
+    const age = (s: { fetchedAt: string }) => now - new Date(s.fetchedAt).getTime();
+    const fresh = <T extends { category: string; fetchedAt: string; freshness: string }>(s: T): T => ({ ...s, freshness: s.category === 'onchain' || s.category === 'indexed' ? (age(s) > TTL_ONCHAIN_STALE_MS ? 'stale' : 'fresh') : s.category === 'market' ? (age(s) > TTL_MARKET_MS * 3 ? 'stale' : 'fresh') : s.freshness });
+    return { ...a, sources: a.sources.map(fresh), ownership: { ...a.ownership, source: fresh(a.ownership.source) }, market: a.market ? { ...a.market, source: fresh(a.market.source) } : null,
+      firstSeen: row.first_seen.toISOString(), lastSeen: row.last_seen.toISOString(), verifiedAt: row.verified_at?.toISOString() ?? null, goneAt: row.gone_at?.toISOString() ?? null, externalMarkets: externalMarketLinks(a) };
+  }
+  /** keep the creator metadata already resolved for the same URI (it has its own TTL); resolve it otherwise */
+  async function withMetadata(a: NftAsset, prev: store.AssetRow | null, o: { force?: boolean; budget?: { left: number } } = {}): Promise<NftAsset> {
+    if (!o.force && prev && prev.asset.metadata.sourceUri === a.metadata.sourceUri && prev.asset.metadata.status !== 'not_loaded' && prev.asset.metadata.source && deps.now().getTime() - new Date(prev.asset.metadata.source.fetchedAt).getTime() < 24 * 3600_000) {
+      a.metadata = { ...prev.asset.metadata, onchainName: a.metadata.onchainName, onchainSymbol: a.metadata.onchainSymbol, mutable: a.metadata.mutable, sourceUri: a.metadata.sourceUri };
+      a.media = prev.asset.media; a.sources = [...a.sources, prev.asset.metadata.source];
+      return deps.resolver.refreshMediaStates(a);
+    }
+    if (o.budget) { if (o.budget.left <= 0) return a; o.budget.left--; }
+    return deps.resolver.resolveMetadata(a, { force: o.force });
+  }
+  async function withMarket(a: NftAsset, prev: store.AssetRow | null, force = false): Promise<NftAsset> {
+    if (!deps.market || !deps.market.supports(a)) { a.market = null; return a; }
+    const old = prev?.asset.market ?? null;
+    if (!force && old && deps.now().getTime() - new Date(old.source.fetchedAt).getTime() < TTL_MARKET_MS) { a.market = old; return a; }
+    try { a.market = await deps.market.snapshot(a); a.sources = [...a.sources.filter((s) => s.category !== 'market'), a.market.source]; }
+    catch { a.market = old ? { ...old, source: { ...old.source, freshness: 'stale' } } : null; } // the market source failing never fails the item
+    return a;
+  }
+
+  async function syncChain(chain: string): Promise<void> {
+    const p = providerOf(chain), addr = (await deps.addresses())[chain];
+    if (!p || !addr) return;
+    const now = deps.now(), manual = (await store.manualKeys(chain)).map((k) => parseNftKey(k).assetId);
+    let inv: { assets: NftAsset[]; sections: InventorySection[] };
+    try { inv = await p.inventory(chain, addr, { manual, max: cfg.inventoryMax }); }
+    catch (e) { await store.saveSections(chain, [{ section: 'inventory', status: 'error', code: e instanceof NftProviderError ? e.code : 'provider_unavailable', unlockedBy: null, source: p.id, count: 0, truncated: false }], now); return; }
+    const budget = { left: METADATA_PER_SYNC };
+    for (const a of inv.assets) {
+      const prev = await store.getAsset(a.key);
+      await withMetadata(a, prev, { budget }).catch(() => a);
+      if (prev?.asset.market) a.market = prev.asset.market;
+      await store.upsertAsset(a, now);
+    }
+    for (const s of inv.sections) if (s.status === 'ok' && !s.truncated && SECTION_STANDARDS[s.section])
+      await store.markGone(chain, SECTION_STANDARDS[s.section]!, inv.assets.filter((a) => a.ownership.heldByWallet).map((a) => a.key), now);
+    await store.saveSections(chain, inv.sections, now);
+    lastSync.set(chain, now.getTime());
+  }
+  function startSync(chain: string): Promise<void> {
+    let job = running.get(chain);
+    if (!job) { job = syncChain(chain).catch(() => {}).finally(() => running.delete(chain)); running.set(chain, job); }
+    return job;
+  }
+  const syncable = async (): Promise<string[]> => { const addrs = await deps.addresses(); return deps.providers.flatMap((p) => p.chains()).filter((c) => addrs[c]); };
+
+  return {
+    present,
+    /** The real matrix: every network of the registry, what can be read for it and why not. */
+    async capabilities(): Promise<{ chains: ChainCapability[]; providers: { id: string; on: boolean; unlockedBy: string | null; sends: string }[]; budget: { source: string; requests: number; bytes: string }[]; limits: Record<string, number> }> {
+      const rows = await store.syncRows(), addrs = await deps.addresses().catch(() => ({} as Record<string, string>));
+      const chains = NETS().map((n): ChainCapability => {
+        const p = providerOf(n.id), sections = rows.filter((r) => r.chain === n.id).map((r) => ({ section: r.section, status: r.status, code: r.code, unlockedBy: r.unlocked_by, source: r.source, count: r.count, truncated: r.truncated, syncedAt: r.synced_at.toISOString() }));
+        const base = { network: n.id, name: n.name, family: n.family, transfer: 'not_built' as const, marketWrite: false as const, sections, receive: !!addrs[n.id] && (!!p || n.id === 'bitcoin') };
+        if (n.family === 'sol' && p) { const blocked = sections.filter((s) => s.status === 'blocked_by_provider');
+          return { ...base, inventory: blocked.length ? 'partial' : 'supported', reason: blocked.length ? `sections_blocked:${blocked.map((s) => s.section).join(',')}` : 'onchain_and_das', unlockedBy: blocked[0]?.unlockedBy ?? null,
+            standards: ['metaplex-token-metadata', 'metaplex-pnft', 'spl-token-2022', 'metaplex-core', 'metaplex-bubblegum'], lookup: true, manualAdd: true, marketRead: !!deps.market }; }
+        if (n.family === 'evm' && p) { const idx = !!cfg.evmIndexers[n.id];
+          return { ...base, inventory: idx ? 'supported' : 'blocked_by_provider', reason: idx ? 'indexer_hint_verified_onchain' : 'no_keyless_discovery', unlockedBy: idx ? null : 'NFT_EVM_INDEXER_URLS', standards: ['erc721', 'erc1155'], lookup: true, manualAdd: true, marketRead: false }; }
+        if (n.id === 'bitcoin') return { ...base, inventory: 'blocked_by_provider', reason: 'ordinals_need_ord_indexer', unlockedBy: null, standards: ['ordinals-inscription'], lookup: false, manualAdd: false, marketRead: false };
+        return { ...base, inventory: 'unsupported', reason: 'no_adapter', unlockedBy: null, standards: [], lookup: false, manualAdd: false, marketRead: false, receive: false };
+      });
+      return { chains, budget: await store.budgetToday(deps.now()),
+        providers: [
+          { id: 'solana-rpc', on: true, unlockedBy: null, sends: 'wallet_address_to_rpc' },
+          { id: 'solana-das', on: cfg.solanaDasUrl !== 'off', unlockedBy: cfg.solanaDasUrl === 'off' ? 'NFT_SOLANA_DAS' : null, sends: cfg.solanaDasUrl && cfg.solanaDasUrl !== 'off' ? 'wallet_address_to_das_host' : 'wallet_address_to_rpc' },
+          { id: 'evm-rpc', on: true, unlockedBy: null, sends: 'wallet_address_to_rpc' },
+          { id: 'evm-indexer', on: Object.keys(cfg.evmIndexers).length > 0, unlockedBy: Object.keys(cfg.evmIndexers).length ? null : 'NFT_EVM_INDEXER_URLS', sends: 'wallet_address_to_indexer_host' },
+          { id: 'magiceden', on: !!deps.market, unlockedBy: deps.market ? null : 'NFT_MARKET_MAGICEDEN', sends: 'mint_only' },
+          { id: 'opensea', on: false, unlockedBy: 'OPENSEA_API_KEY', sends: 'not_built' },
+          { id: 'ordinals', on: false, unlockedBy: null, sends: 'not_built' },
+        ],
+        limits: { inventoryMax: cfg.inventoryMax, mediaMaxBytes: cfg.mediaMaxBytes, dailyRequests: cfg.dailyRequests, dailyBytes: cfg.dailyBytes } };
+    },
+
+    /** Start (or join) a synchronisation of every chain that has a provider and an address; `wait` awaits it. */
+    async sync(o: { chain?: string; wait?: boolean; onlyStale?: boolean } = {}): Promise<{ running: string[] }> {
+      const chains = (await syncable()).filter((c) => !o.chain || c === o.chain), now = deps.now().getTime();
+      const jobs = chains.filter((c) => !o.onlyStale || now - (lastSync.get(c) ?? 0) > TTL_SYNC_MS).map(startSync);
+      if (o.wait) await Promise.all(jobs);
+      return { running: [...running.keys()] };
+    },
+    syncState: () => ({ running: [...running.keys()], lastSyncedAt: Object.fromEntries([...lastSync].map(([c, t]) => [c, new Date(t).toISOString()])) }),
+
+    async list(f: store.ListFilter) { const r = await store.listAssets(f); return { total: r.total, items: r.rows.map(present) }; },
+
+    /** One asset of the inventory (or one already looked up). Ownership is re-read on-chain when it is older than a minute. */
+    async get(key: string, o: { verify?: boolean } = {}): Promise<ReturnType<typeof present> | null> {
+      let row = await store.getAsset(key);
+      if (!row) return null;
+      const now = deps.now();
+      if ((o.verify ?? true) && (!row.verified_at || now.getTime() - row.verified_at.getTime() > TTL_OWNERSHIP_MS)) {
+        const k = parseNftKey(key), p = providerOf(k.chainId);
+        if (p) {
+          try {
+            const wallet = (await deps.addresses())[k.chainId] ?? null, [c, t] = k.family === 'evm' ? k.assetId.split('/') : [k.assetId, undefined];
+            const a = await p.lookup(k.chainId, { address: c!, tokenId: t }, wallet);
+            a.origin = row.origin as NftAsset['origin'];
+            await withMetadata(a, row); await withMarket(a, row);
+            await store.upsertAsset(a, now);
+            row = (await store.getAsset(key))!;
+          } catch { /* the stored asset is answered, its stamps turning stale with time */ }
+        }
+      }
+      row.asset = await deps.resolver.refreshMediaStates(row.asset);
+      return present(row);
+    },
+
+    /** Explicit lookup of ANY asset by its chain identifier (the owner typed it). Stored as `lookup`: never part of the inventory. */
+    async lookup(chain: string, address: string, tokenId?: string): Promise<ReturnType<typeof present>> {
+      const p = need(chain), wallet = (await deps.addresses())[chain] ?? null, now = deps.now();
+      const a = await p.lookup(chain, { address, tokenId }, wallet), prev = await store.getAsset(a.key);
+      if (prev && prev.origin !== 'lookup') a.origin = prev.origin as NftAsset['origin'];
+      await withMetadata(a, prev); await withMarket(a, prev);
+      await store.upsertAsset(a, now);
+      return present((await store.getAsset(a.key))!);
+    },
+
+    async refreshMetadata(key: string): Promise<ReturnType<typeof present>> {
+      const row = await store.getAsset(key);
+      if (!row) throw new NftProviderError('not_found', 'spw');
+      const now = deps.now(), last = Math.max(lastRefresh.get(key) ?? 0, row.metadata_refreshed_at?.getTime() ?? 0);
+      if (now.getTime() - last < REFRESH_COOLDOWN_MS) throw new NftProviderError('provider_rate_limited', 'spw', 'refresh_cooldown');
+      lastRefresh.set(key, now.getTime());
+      if (lastRefresh.size > 5000) lastRefresh.clear();
+      // a refresh re-reads what the CREATOR declares (and the market snapshot); ownership and identity stay what the chain says
+      const a = row.asset;
+      await withMetadata(a, row, { force: true }); await withMarket(a, row, true);
+      await store.saveAssetJson(a, { metadataRefreshed: now });
+      return present((await store.getAsset(key))!);
+    },
+
+    async manualAdd(chain: string, address: string, tokenId?: string): Promise<ReturnType<typeof present>> {
+      const p = need(chain), wallet = (await deps.addresses())[chain] ?? null, now = deps.now();
+      const a = await p.lookup(chain, { address, tokenId }, wallet), prev = await store.getAsset(a.key); // verified on-chain before it is tracked
+      if (!prev || prev.origin !== 'discovered') a.origin = 'manual'; else a.origin = 'discovered';
+      await withMetadata(a, prev); await withMarket(a, prev);
+      await store.addManual(a.key, chain); await store.upsertAsset(a, now);
+      return present((await store.getAsset(a.key))!);
+    },
+    manualRemove: (key: string) => store.removeManual(key),
+
+    /** Events of one asset: what is stored, completed from the chain on the first request and when `more` is asked. */
+    async activity(key: string, o: { cursor?: string | null; limit: number; type?: string; more?: boolean }): Promise<{ events: NftEvent[]; cursor: string | null; completeness: string; note: string | null; scannedAt: string | null; canLoadOlder: boolean; error: string | null }> {
+      const row = await store.getAsset(key);
+      if (!row) throw new NftProviderError('not_found', 'spw');
+      const p = providerOf(row.chain), now = deps.now();
+      let scan = await store.getScan(key), error: string | null = null;
+      const due = !scan || (o.more && !scan.complete) || (!o.cursor && !o.more && now.getTime() - scan.scanned_at.getTime() > TTL_SYNC_MS);
+      if (p && due) {
+        try {
+          const page = await p.events(row.asset, o.more && scan ? scan.cursor : null);
+          await store.upsertEvents(page.events);
+          const cursor = o.more || !scan ? page.cursor : scan.cursor ?? page.cursor;
+          await store.putScan(key, { cursor, complete: cursor === null, completeness: page.completeness, note: page.note }, now);
+          scan = await store.getScan(key);
+        } catch (e) { error = e instanceof NftProviderError ? e.code : 'provider_unavailable'; }
+      }
+      let before: { block: string; id: string } | null = null;
+      if (o.cursor) { const k = o.cursor.indexOf('|'); if (k > 0 && /^[0-9]{1,20}$/.test(o.cursor.slice(0, k))) before = { block: o.cursor.slice(0, k), id: o.cursor.slice(k + 1) }; }
+      const events = await store.listEvents(key, { limit: o.limit + 1, before, type: o.type });
+      const page = events.slice(0, o.limit), last = page[page.length - 1];
+      return { events: page, cursor: events.length > o.limit && last ? `${last.blockRef.slot ?? last.blockRef.number ?? '0'}|${last.id}` : null, completeness: scan?.completeness ?? (p ? 'unavailable' : 'unavailable'), note: scan?.note ?? null,
+        scannedAt: scan?.scanned_at.toISOString() ?? null, canLoadOlder: !!scan && !scan.complete && !!scan.cursor, error };
+    },
+
+    async collection(key: string): Promise<{ info: CollectionInfo | null; error: string | null; metadata: { name: string | null; description: string | null; imageId: string | null; status: string } | null; held: number; fetchedAt: string | null }> {
+      const k = parseNftKey(key), p = need(k.chainId), now = deps.now();
+      let cached = await store.getCollection(key), error: string | null = null;
+      if (!cached || now.getTime() - cached.fetched_at.getTime() > 6 * 3600_000) {
+        try {
+          const info = await p.collection(k.chainId, k.assetId);
+          // the collection's own metadata document, through the same resolver as an item's
+          let metadata: { name: string | null; description: string | null; imageId: string | null; status: string } | null = null;
+          if (info.uri) { const probe = { key: `${key}#collection`, standard: info.standard, tokenId: null, metadata: { sourceUri: info.uri, status: 'not_loaded' }, sources: [], media: [], collection: null } as unknown as NftAsset;
+            const r = await deps.resolver.resolveMetadata(probe); metadata = { name: r.metadata.name, description: r.metadata.description, imageId: r.media.find((m) => m.role === 'image')?.id ?? null, status: r.metadata.status }; }
+          await store.putCollection(key, k.chainId, { info, metadata }, now); cached = await store.getCollection(key);
+        } catch (e) { error = e instanceof NftProviderError ? e.code : 'provider_unavailable'; }
+      }
+      const data = cached?.data as { info: CollectionInfo; metadata: { name: string | null; description: string | null; imageId: string | null; status: string } | null } | undefined;
+      const held = (await store.listAssets({ collection: key, status: 'in_wallet', sort: 'recent', limit: 1, offset: 0 })).total;
+      return { info: data?.info ?? null, metadata: data?.metadata ?? null, error, held, fetchedAt: cached?.fetched_at.toISOString() ?? null };
+    },
+    collections: () => store.collectionCounts(),
+
+    /** Where an NFT can be received: the wallet's address on each chain an adapter reads, with the warnings that apply. */
+    async receive(): Promise<{ network: string; name: string; family: string; address: string; standards: string[]; warnings: string[]; detection: ChainSupport }[]> {
+      const addrs = await deps.addresses(), caps = (await this.capabilities()).chains;
+      return caps.filter((c) => addrs[c.network] && (c.lookup || c.network === 'bitcoin')).map((c) => ({ network: c.network, name: c.name, family: c.family, address: addrs[c.network]!, standards: c.standards, detection: c.inventory,
+        warnings: c.network === 'bitcoin' ? ['ordinals_not_protected'] : c.family === 'evm' ? ['evm_same_address_check_network', ...(c.inventory === 'blocked_by_provider' ? ['evm_arrival_not_detected'] : [])] : ['sol_compressed_needs_indexer'] }));
+    },
+
+    async prune(): Promise<Awaited<ReturnType<typeof store.pruneNft>> & { evicted: number }> {
+      const r = await store.pruneNft(deps.now()), over = await store.mediaOverCap(cfg.cacheMaxBytes);
+      deps.resolver.removeFiles([...r.media, ...over]);
+      return { ...r, evicted: over.length };
+    },
+    key: nftKey,
+  };
+}
+export type NftService = ReturnType<typeof createNftService>;

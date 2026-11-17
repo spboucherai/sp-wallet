@@ -158,6 +158,10 @@ export interface NftMarketSnapshot {
   /** where the owner can see the item on the marketplace itself (opened outside SP Wallet) */
   url: string | null;
   listed: Known<boolean>;
+  /** the address the MARKETPLACE names as seller — with an escrow marketplace this is not the on-chain holder (see `ownership.owner`) */
+  seller: Known<string>;
+  /** the marketplace's own collection identifier (a slug), when it gives one */
+  marketCollection: string | null;
   /** asking price in base units of `currency` */
   listingPrice: Known<{ amount: string; currency: NftCurrency }>;
   bestOffer: Known<{ amount: string; currency: NftCurrency }>;

@@ -57,6 +57,10 @@ const sol: Record<string, () => Promise<void>> = {
   'sol-compressed': async () => { const r = recorder(), p = solanaProvider({ rpc: r.rpc, now, dasUrl: null });
     await p.lookup('solana', { address: process.env.NFT_REC_CNFT ?? '12XAbDPsEUwVbsN3BZwgdc1uqkTanp7Tds9mEtNEuTH' }, W_NONE);
     save('sol-compressed', 'compressed NFT id (no account on-chain): answered by DAS getAsset on the endpoint that serves it', r.calls); },
+  // a burned compressed NFT: the indexer reports `burnt`
+  'sol-burned': async () => { const r = recorder(), p = solanaProvider({ rpc: r.rpc, now, dasUrl: null });
+    const a = await p.lookup('solana', { address: process.env.NFT_REC_BURNT ?? '1AvLxeY76HV3P2Fm8XeZGAkgdBkq4C2TGgQUFnjomBj' }, W_NONE); console.log(`  ${a.standard} ${a.ownership.state} qty=${a.quantity}`);
+    save('sol-burned', 'a burned compressed NFT (DAS reports burnt: true; no account on-chain)', r.calls); },
   // a wallet's whole inventory (public address given on the command line: NFT_REC_OWNER)
   'sol-inventory': async () => { const r = recorder(), p = solanaProvider({ rpc: r.rpc, now, dasUrl: null }), owner = process.env.NFT_REC_OWNER;
     if (!owner) { console.log('sol-inventory: set NFT_REC_OWNER to a public Solana address'); return; }
@@ -86,5 +90,24 @@ const evm: Record<string, () => Promise<void>> = {
     save('evm-lookups', 'Ethereum mainnet reads: ERC-721 (BAYC #1), ERC-721 without metadata (ENS), pre-standard (CryptoKitties), non-standard (CryptoPunks), ERC-20 (USDT), ERC-1155', r.calls, { endpoints: NETWORKS.ethereum!.rpc }); },
 };
 
-const all = { ...sol, ...evm }, want = process.argv.slice(2);
+// EVM transfer logs of one token in the window the public endpoints accept (may legitimately be empty)
+evm['evm-events'] = async () => { const r = recorder(), p = evmProvider({ rpc: r.rpc, now, indexers: {}, http: fetch });
+  const wallet = process.env.NFT_REC_EV_WALLET ?? '0x62e3a8216Abdbd2e4a84Be700905F4BA02FD8A4E';
+  const a = await p.lookup('ethereum', { address: process.env.NFT_REC_EV_CONTRACT ?? '0x495f947276749Ce646f68AC8c248420045cb7b5e', tokenId: process.env.NFT_REC_EV_ID ?? '81678603736433480652309471562595884520144065466341654349472628651124869562369' }, wallet);
+  const e = await p.events(a, null); console.log(`  ${e.completeness} ${e.note} events=${e.events.length}`, e.events.map((x) => `${x.type} ×${x.quantity}`));
+  save('evm-events', 'ERC-1155 token and its TransferSingle / TransferBatch logs in the most recent blocks the public Ethereum endpoints accept', r.calls, { wallet }); };
+
+// ── market (Magic Eden public API, keyless GETs) ────────────────────────────────────────────────────────────────────────
+const market: Record<string, () => Promise<void>> = {
+  'market-magiceden': async () => {
+    const calls: { url: string; status: number; body: unknown }[] = [];
+    const get = async (path: string) => { await sleep(700); const url = `https://api-mainnet.magiceden.dev/v2${path}`, r = await fetch(url, { headers: { accept: 'application/json' } }); const t = await r.text(); let body: unknown = t.slice(0, 500); try { body = JSON.parse(t); } catch { /* text */ } calls.push({ url, status: r.status, body }); return body as any; }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const listed = process.env.NFT_REC_LEGACY ?? 'J2U6QmgcuFAEdgF8XaK9t1PKidJ7QVYeSCdmYGybUzYo';
+    for (const mint of [REF, listed]) { const t = await get(`/tokens/${mint}`); if (t?.listStatus === 'listed') await get(`/tokens/${mint}/listings`); if (t?.collection) await get(`/collections/${t.collection}/stats`); }
+    await get('/tokens/4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T'); // not a token
+    writeFileSync(new URL('market-magiceden.json', dir), `${JSON.stringify({ recordedAt: new Date().toISOString(), note: 'Magic Eden public API answers for the reference Core asset (unlisted) and a listed legacy NFT: token, listings, collection stats', calls })}\n`);
+    console.log(`market-magiceden                   ${calls.length} calls`);
+  },
+};
+const all = { ...sol, ...evm, ...market }, want = process.argv.slice(2);
 for (const [name, run] of Object.entries(all)) { if (want.length && !want.includes(name)) continue; try { await run(); } catch (e) { console.log(`${name}: FAILED ${(e as Error).message}`); } }
