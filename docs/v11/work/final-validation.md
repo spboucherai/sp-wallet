@@ -435,3 +435,132 @@ created first). The database holds two agents created by V11 with an API key: "S
 | `… -v unpark_agents=1` | the network is back to `hyperliquid` (and V10's list is 500 again, as expected) |
 
 Stack stopped, `spw_soak_v10` dropped.
+
+### Soak run 2 — 2026-11-17 08:33–09:08 UTC, tree `42f44d1` (after defect 13): the same workload, the session now quotes
+
+| Measure | First sample | Last sample (t + 1 800 s) | Range over 31 samples |
+|---|---|---|---|
+| RSS of the API process | 259.7 MB | 287.2 MB | 257.3 – 304.9 MB — the second sample was already 304.9 MB and the last five were 278.6, 280.0, 298.9, 293.5, 287.2: **no monotonic growth in 30 minutes**; a slow leak cannot be excluded by a run this short |
+| CPU time of the API process | 5.9 s | 76.2 s | ≈ 3.9 % of one core |
+| Open file descriptors | 125 | 134 | 125 – 144 |
+| Database connections of the stack | 5 | 5 | 4 – 5 |
+| `GET /health/live` latency (proxy for event-loop lag) | p50 1.4, p95 2.5, max 15.2 ms | p50 1.8, p95 2.3, max 2.7 ms | worst p95 3.5 ms, worst single call 15.2 ms |
+
+Client: 19 897 quotes, 123 status messages, 0 stream error, 0 close; 59 limit orders placed and 59 cancelled, 14 market orders,
+**0 order error**. Server stream statistics: 20 147 messages sent (7.46 MB), 11.2 a second, 0 conflated, 0 dropped, 0 resync;
+lag p50 328 ms, p95 450 ms; **0 upstream reconnect, 0 gap**. Runtime loops as in run 1, 0 failure. Unified orders at the end:
+59 `CANCELLED` and 14 `FILLED` of the API key, 3 `FILLED` of the Momentum agent (its first paper rebalance, under its own
+paper mandate); 211 risk evaluations (135 decisions, 76 previews), all `allow`. Database size at the end: 282 MB, of which the
+market engine's backfill (1.36 M candles).
+
+**The market-making paper session, on the real feed, for 30 minutes:**
+
+```
+state running · phase quoting · activeBreakers [] · breakers [] (none tripped) · refusals {}
+counters: ticks 1802, quoteBatches 130, quotesPlaced 221, cancels 164, fills 60
+pnl: volume 2 937.54 USD · total −0.6046 USD = −2.06 bps of volume
+     spread capture −0.2259 · inventory +0.0616 · fees −0.4406 (maker fee paid) · funding +0.0003
+markouts (mean, bps): 1 s −0.82 · 10 s −0.87 · 60 s −0.88 (58 fills) — worst −3.50 / −11.43 / −12.23
+two quotes resting at the end: buy 64 326 (1.48 bps from the mid), sell 64 352 (2.56 bps)
+```
+
+These are SIMULATED fills of the paper venue against the public top of book. They are the first figures of a session quoting
+on the real feed in this project, and **they point the same way as the lab study and the simulator: a loss, with adverse
+markouts at every horizon.** Thirty minutes and sixty fills are not a measurement of anything else.
+
+Table growth in run 2 is the same as in run 1 (orders 76, order events 422, risk decisions 211, snapshots 179, usage 191,
+jobs 30) except: `mm_tape` 1 689, `mm_fills` 60, `agent_signals` 28 (296 in run 1, where the session wrote a line at each
+change of its reason for being pulled). API log: 49 lines, the same 3 start-up lines, nothing else.
+
+Left on the machine by the soaks: the two kept databases (`spw_t_tomz4d_52adc4ef_sdk_soak_fded`,
+`spw_t_ton148_52adad2e_sdk_soak_9130`) — dropped at the end of the validation (section 12).
+
+Found by the soak and NOT fixed: a backtest job has the 150 s deadline of an engine tick — on a cold database attempt 1 of
+the job times out while the backtest goes on, attempt 2 waits for it and ends `done` (both runs); a backtest longer than
+about six minutes in all would leave its job `failed` although its report is stored (limitation 5.16).
+
+## 11. The last pass, on the final code (`42f44d1` — the commits after it change documents only)
+
+`/tmp/spw-final/final-checks.sh` — 2026-11-17 09:08:02Z, load average 2.7 before it started, nothing else running:
+
+| Command | Result |
+|---|---|
+| `pnpm typecheck` | exit 0 |
+| `pnpm test`, run 1 (09:08:06Z) | **194 files, 4 502 tests, all passed** — 81.9 s |
+| `pnpm test`, run 2 (09:09:30Z) | **194 files, 4 502 tests, all passed** — 84.8 s |
+| `pnpm test`, run 3 (09:10:56Z) | **194 files, 4 502 tests, all passed** — 81.8 s |
+| `research/`: `.venv/bin/python -m pytest tests` | 404 passed, 2 skipped (67 s) |
+| `npx vitest run packages/trading-sdk` | 6 files, 165 tests passed |
+| `sdk/python`: `uv run pytest`; `uv run ruff check` | 415 passed; "All checks passed!" |
+| `gen-openapi.mts --check`, `gen-types.mts --check`, `gen_models.py --check`, `gen_sync.py --check` | exit 0, each |
+| `pnpm build` | exit 0; first chunk `index-w6ENuPv4.js` **262.32 kB** (81.07 kB gzip) |
+
+4 502 tests against 4 494 at the start: the eight tests added by this validation (`mapLimit` ×2, the preview-pruning test, the
+job-pruning test, the best-bid / offer market data ×4).
+
+The start-up line of this release with no variable set, as printed by the rehearsal stack (`/tmp/spw-rollback/api-1.log`):
+
+```
+[startup] capabilities: deriv_live_mainnet=OFF(missing SPW_DERIV_LIVE_MAINNET) deriv_mandate_mainnet=OFF(missing SPW_DERIV_LIVE_MAINNET+SPW_DERIV_MANDATE_MAINNET)
+  deriv_gmx_live=OFF(missing SPW_DERIV_LIVE_MAINNET+SPW_DERIV_GMX_LIVE) trading_api_execution=OFF(missing SPW_TRADING_API_EXECUTION)
+  deriv_mm_mainnet=OFF(missing SPW_DERIV_LIVE_MAINNET+SPW_DERIV_MANDATE_MAINNET+SPW_DERIV_MM_MAINNET+SPW_TRADING_API_EXECUTION)
+  deriv_mm_testnet=OFF(missing SPW_DERIV_MM_TESTNET+SPW_TRADING_API_EXECUTION) research_runner=OFF(missing SPW_RESEARCH_RUNNER_SECRET)
+  research_readonly_db=OFF(missing RESEARCH_DATABASE_URL) broadcast=OFF(set off by SPW_BROADCAST) workers=on strategy_sandbox_enforced=on web_app=on
+```
+(one line in the log; wrapped here).
+
+After the last code change the five fresh-stack specs were run again (09:14–09:22Z): `wallet` 2 passed, `developer` 1,
+`risk` 1, `agents-bind` 1 (4.1 min), `mm` 1 (1.4 min) — the last two exercise the two fixes made after the first matrix
+(the backtest job, the sessions' market data). The other specs were not repeated after `42f44d1`: none of them reaches
+that code (mocks, recorded answers, or screens without an agent).
+
+## 12. What could not be run, what was not fixed, what is left on the machine
+
+**Not run, and why**
+
+| What | Why |
+|---|---|
+| `tests/e2e/futures-live-real.spec.ts` | needs a **funded Hyperliquid testnet account**: no funded account, testnet included, may be used |
+| Anything on mainnet or testnet with a real key; the market-making testnet step; every `scripts/hl-*-testnet.mts` | the same |
+| `scripts/gen-market-listings.mts` | no `--check`: it rewrites a reviewed table from three exchanges' live listings |
+| `fork-gmx.mts`, `fork-hl-deposit.mts`, `fork-mandate.mts`, `fork-plan.mts` | not in the list of the brief; the browser spec `qa-plan` covers a plan on forks |
+| A comparison run of the fork scripts on `a118e3e` | not needed: nothing failed for a reason other than the funding holder, which is independent of the code |
+| The rollback under PM2 / mld, on a production-size database, with a live agent or an operation in flight | local rehearsal only; no production node may be touched |
+| Safari / iOS | Chromium only |
+| A soak longer than 30 minutes, across a restart, on the API node | laptop; time |
+| The other 47 Playwright tests after the last two code commits | they do not reach the changed code (see above) |
+
+**Defects found and fixed** — 14, each in its section above with its commit: product 1 (`e58b55b`), 3 and 4 (`d88f1da`), 7
+(`7df3ed1`), 11 and 12 (`b08b417`), 13 (`42f44d1`); test tooling 9 (`467a6c3`, `2a0bd15`) and the edgeX smoke (`96208d9`);
+tests 2 (`96208d9`), 5 (`ae604c2`), 6 (`7df3ed1`), 8 (`f9563d3`), 10 (`467a6c3`). Rollback: the trigger and parking script
+(`c9fa7c4`, `42f44d1`).
+
+**Found and NOT fixed**
+
+| What | Why not |
+|---|---|
+| The cause of the hung reference interpreter in `lab-identity` (three occurrences) | not reproduced on demand (197 concurrent runs, six runs of the file, a watchdog): the test is bounded, the product's own call was never seen to hang |
+| The two failures of `research-runner/test/sandbox.test.ts` (runs 12 and 14) | not reproduced (17 other full runs, three runs alone); the test now reports why |
+| A backtest job has the 150 s deadline of a tick: a backtest of more than about six minutes leaves its job `failed` although the report is stored | a per-kind deadline would make wind-down jobs wait behind a backtest; it needs a design, not a patch (limitation 5.16) |
+| Under V10 code the Agents list answers 500 while a V11-only agent row exists | V10 is the released code and is not to be changed; the rollback script parks the rows (tested) |
+| `capabilities.ts` reports `workers=on` for any value of `SPW_WORKERS` but `off` | `preflight.sh` now checks the value; changing the capability changes the line every deployment compares (11.3) |
+| Orders older than the first V11 start are not in the unified `orders` table | a backfill of history is a migration with its own risks; stated in the deployment plan |
+| The quote hub is still not the market-data source of the sessions | the fix of defect 13 uses the venue client's best-bid / offer stream; wiring the hub is integration work (5b.3) |
+| `docs/v7/screens/plan-05-leg1-waiting-phone.png` shows the V10 behaviour (a plan "waiting" on a leg that was not sent) | the QA spec rewrites its pictures at each run; they were restored, not regenerated, to keep binary churn out of this branch |
+
+**Left on the machine**
+
+- Removed by this work: the databases `spw_rollback`, `spw_soak_v10`, the two soak databases, `spw_dev_ui_fin`,
+  `spw_qa_polish`; `/tmp/spw-rollback`, `/tmp/spw-ui-fin`; the soak stacks' temporary directories; the second worktree
+  `/tmp/spw-v10` (`git worktree remove`); the virtual passkey files of ports 8690, 8760, 8770, 8840. No process of this work
+  is running (checked: no `dist/api.mjs`, `signer.mjs`, `anvil`, `spw-qa-fork`, test stack or Playwright process).
+- Kept on purpose: `/tmp/spw-final/` (1.1 MB: every log quoted in this note — `rm -rf /tmp/spw-final`).
+- Used and left as they were found, because they existed before: the databases `spw_dev` (its schema is dropped and
+  re-created by `scripts/dev-stack.sh`; it now holds the last e2e stack's rows), `spw_qa_plan` (re-created by the QA server),
+  `spw_market_dev` (read by `fork-agent.mts`), `spw_fork*` (scratch databases of the fork scripts).
+- In the worktree, ignored by git: `research/.venv`, `sdk/python/.venv`, `dist/`, `packages/trading-sdk/dist/`,
+  `node_modules/`, `test-results/` (Playwright output). Untracked: `docs/v7/screens/plan-05-leg1-not-sent-phone.png` and
+  `plan-11-…png` if a QA run is repeated.
+- Not this work's: a Vite dev server on port 5249 started on 2026-11-11 from `/tmp/v9-main`, and about forty `spw_t_tokv…`
+  test databases of earlier sessions (`scripts/clean-test-dbs.sh`). `~/.config/sp-wallet/trading-api-secrets.json` exists on
+  this laptop (a development leftover seen by `preflight.sh`; not read, not touched).

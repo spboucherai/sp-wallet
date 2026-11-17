@@ -7,11 +7,12 @@ The rollback of section 9 was rehearsed on a throwaway local database and keysto
 
 **Release to deploy.** Branch `v11-final` (from the local `v11` at `9561d78`, which holds every V11 workstream including
 `v11-mm-live` and `v11-ui`), as validated in `docs/v11/work/final-validation.md` and `V11-TEST-RESULTS.md` §6. The last
-commit of `v11-final` that changes code is **`@@CODE_COMMIT@@`**; the commits after it change documents only. The main
+commit of `v11-final` that changes code is **`42f44d1`**; the commits after it change documents only (the tip of
+`v11-final` is one of them — a page cannot carry the hash of the commit that contains it: `git rev-parse v11-final`). The main
 session merges `v11-final` into `v11`: the hash of `v11` after that merge is the one to deploy and will differ from the one
-above (a merge commit) — the difference between `@@CODE_COMMIT@@` and the deployed commit, restricted to `services`,
+above (a merge commit) — the difference between `42f44d1` and the deployed commit, restricted to `services`,
 `packages`, `apps`, `scripts`, `research` and `sdk`, must be empty. The result that authorises it: `pnpm typecheck` exit 0
-and three consecutive full-suite runs with every test passing (194 files, @@TESTS@@ tests), recorded with every earlier run
+and three consecutive full-suite runs with every test passing (194 files, 4 502 tests), recorded with every earlier run
 that did not pass, in `V11-TEST-RESULTS.md` §6.
 
 ---

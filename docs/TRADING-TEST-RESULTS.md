@@ -87,4 +87,31 @@ The integration's own tests: `mm-live.test.ts` 20, `mm-units.test.ts` 14, `apps/
 
 ### 4.2 Final run on the merged tree (2026-11-16/17, branch `v11-final`)
 
-@@TTR_FINAL@@
+Run on the development laptop with the laboratory virtualenv present; commands and outputs in
+`docs/v11/work/final-validation.md`, the tables in `V11-TEST-RESULTS.md` §6. **Nothing below was exercised with a real
+order; no funded account, mainnet or testnet.**
+
+**Every test file named in section 1 and in 4.1 is part of `pnpm test` (or of the suites listed after it), and all of them
+passed in the final runs:** on the final code (`42f44d1`), started 2026-11-17 09:08:06Z, 09:09:30Z and 09:10:56Z, **three consecutive runs: 194 files, 4 502 tests, all passed** (82 s, 85 s, 82 s).
+Earlier runs of the same day met timing-dependent failures in four files, none of them an assertion about trading:
+`agent-bind.test.ts` (its first test's 30 s timeout on a 19 s library listing — the listing was made four times faster and
+the timeout explicit), `lab-identity.test.ts` (a hung reference interpreter, cause not found), `research-runner`
+`runner.test.ts` (a timer race) and `trading-api.test.ts` (an un-awaited write read at once). `agent-worker-process.test.ts`
+did not time out in any of the valid runs.
+
+| Line of section 1 | What the final validation added |
+|---|---|
+| 1 Agent creation, 8 Backtest — *"a backtest of a bar agent started by a key end to end"* (was not covered) | **Now exercised, and it failed**: the soak driver created a Momentum agent from the template with a key and asked its backtest at once — the job was dead-lettered in 5 s (« the backtest produced no report ») and answered `status: "dead"`, outside the contract. Both defects fixed (`b08b417`): the job waits for the backtest the registration started; a dead-lettered job is `failed` for a client. `agent-bind.test.ts` now asserts one attempt and one backtest. Then run for real in the soak: backtest job `done`, paper start accepted |
+| 2 Agent start (paper), 9 Paper trading | `tests/e2e/agents-bind.spec.ts` (1 passed, 4.1 min), `mm.spec.ts` (1 passed), `v11-trade.spec.ts` (8 passed: a paper order through the UI with the engine's 31 checks, the unified blotter, the command line); the soak (below) |
+| 4 Pause / stop, 18 Kill switch | `risk.spec.ts`, `v11-sections.spec.ts` "Risk" ×4, `v11-dashboard.spec.ts` (engaged, shown on every screen, released with the passkey); in the rollback rehearsal the switch was engaged and released on a database created by V10, and left engaged across a V10 start (V10 ignores it; the database gate still refuses a spot agent's buy) |
+| 5 Restart recovery | the rehearsal restarted the stack five times on one database across two versions: no order duplicated, the projection queue drained after each V11 start. **Not a soak across restarts with agents running** |
+| 6 Connection to real market data — *"a long-running connection (no soak)"* (was not covered) | **Now run, twice, 30 minutes each** (paper; a bar agent, a market-making session, the quote stream, an SDK order loop): 0 stream error and 0 close in both; one upstream reconnect in the first run, none in the second; no growth of the API process's memory. **The first run found that a market-making session on the real feed stopped quoting after seven seconds** (its books came from a channel that speaks every 12 s on BTC) — fixed (`42f44d1`); in the second run the session quoted throughout: 130 quote batches, 60 simulated fills, −2.06 bps of volume, adverse markouts. Still not covered: a soak longer than 30 minutes, across a restart, on the API node, with a recorded second venue |
+| 10 Mandate creation, 3 Agent start live, 14 Authorised signing | unchanged: suite only (real signer code, scripted venue). **The live approval flows were not opened in a browser** (no venue account on a local stack); `futures-live-real.spec.ts` (Hyperliquid testnet) was **not run** |
+| 11 Permission validation, 19 API-key revocation | `developer.spec.ts`, `v11-sections.spec.ts` "Developer" ×4 (a key created with the passkey, its secret shown once, revoked); both SDK suites (TypeScript 165 passed, Python 415 passed) |
+| 15 Order statuses, 17 Reconciliation | in the rehearsal, legacy rows written by V10 code were projected to unified orders by the next V11 start (`FILLED`, origin `legacy`), once each |
+| 20 Network failures, 21 Ambiguous venue answers | unchanged: suite only |
+| Swaps and bridges under the agents (spot agents' execution path) | `scripts/fork-agent.mts` on an anvil fork of Base: paper pass, mandate refusals, two LIVE orders of a spot agent executed **on the fork** at or above their minimum, signer refusals above the limit and after revocation, withdrawal, audit chain intact. A fork is not mainnet |
+
+Still not covered by anything, after the final validation: everything of section 2 except its soak line and the
+"backtest by a key" case; and, new: the cross-process wait of the backtest job when the agents worker is separate
+(read from the code, not tested); a soak with LIVE agents, across restarts, or longer than 30 minutes.

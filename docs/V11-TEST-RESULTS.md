@@ -233,7 +233,7 @@ adapted). The whole matrix was run again on the merged tree: section 6.3. **Safa
 Every line below was run for this page, on the development laptop (18 cores, macOS 27, Node 26.13, local PostgreSQL), with
 the laboratory virtualenv present (nothing skipped for its absence). Commands, timestamps and outputs:
 `docs/v11/work/final-validation.md`. The tree is `9561d78` (the `v11` that holds every workstream) plus the fixes of the
-validation itself; the last commit that changes code is `@@CODE_COMMIT@@`.
+validation itself; the last commit that changes code is `42f44d1`.
 
 **What this section does not contain:** an order, a cancel or a transfer sent to a venue or a chain; a funded account,
 mainnet or testnet; a production node. Fork runs are private anvil chains on 127.0.0.1.
@@ -258,22 +258,22 @@ mainnet or testnet; a production node. Fork runs are private anvil chains on 127
 | 12, 14 | | **1 file failed** each: `research-runner/test/sandbox.test.ts` (its probe wrote no result) — while files of the checkout were being edited; not explained, not reproduced |
 | 13, 15 | | **all passed** |
 | 16, 17, 18 | | **all passed, three in a row** (82–83 s) |
-| **final three** | `@@CODE_COMMIT@@` | @@FINAL_RUNS_ROW@@ |
+| **final three** | `42f44d1` | 194 files, **4 502 tests — all passed, three runs in a row** (2026-11-17 09:08:06Z, 09:09:30Z, 09:10:56Z; 82 s, 85 s, 82 s; load average under 3 before the first) |
 
-Every failure above is a test that depended on timing or on load, except none: **no assertion about the product failed in
-the suite**. Each was traced, and the test bounded without weakening what it asserts (`final-validation.md`, defects 1, 2,
+Every failure above was a test that depended on timing, on load or on the machine: **no assertion about the product failed
+in the suite**. Each was traced, and the test bounded without weakening what it asserts (`final-validation.md`, defects 1, 2,
 5, 6); two things were not explained (the reference-interpreter hang of `lab-identity`, the two `sandbox.test.ts`
 failures) and are in the limitations register (12.2, 12.3). The product defects of the validation were found by measuring,
 by reading, by the browser and by the soak — not by the suite (6.7).
 
 | Other suite / generator | Result |
 |---|---|
-| `research/`: `python -m pytest tests` | **404 passed, 2 skipped** (the two live-network tests) |
+| `research/`: `python -m pytest tests` | **404 passed, 2 skipped** (the two live-network tests) — on `96208d9` and again on the final code |
 | `python -m spq.lint` on every library strategy version (32) | 32 ok |
-| `packages/trading-sdk`: `vitest run` | **6 files, 165 tests passed** |
-| `sdk/python`: `uv run pytest` | **415 passed**; `uv run ruff check`: all checks passed |
-| `gen-openapi.mts --check`, `gen-types.mts --check`, `gen_models.py --check`, `gen_sync.py --check` | all "up to date", exit 0 @@GEN_AGAIN@@ |
-| `pnpm build` | exit 0; first chunk `index-*.js` **262.32 kB** (81.07 kB gzip) |
+| `packages/trading-sdk`: `vitest run` | **6 files, 165 tests passed** — twice, the second time on the final code |
+| `sdk/python`: `uv run pytest` | **415 passed**; `uv run ruff check`: all checks passed — twice, the second time on the final code |
+| `gen-openapi.mts --check`, `gen-types.mts --check`, `gen_models.py --check`, `gen_sync.py --check` | all "up to date", exit 0 — on `9561d78` and again on the final code |
+| `pnpm build` | exit 0; first chunk `index-*.js` **262.32 kB** (81.07 kB gzip) — the same on the final code |
 
 ### 6.2 Read-only live smokes (2026-11-17)
 
@@ -291,7 +291,7 @@ by reading, by the browser and by the soak — not by the suite (6.7).
 |---|---|---|
 | `v11-shell`, `v11-dashboard`, `v11-trade`, `v11-activity`, `v11-leftovers` | one real local stack (`ui-stack.sh`: real API, real signer, virtual passkey, paper) | 6 + 7 + 8 + 4 + 2 passed |
 | `v11-sections` | same | first run **24 passed, 1 failed** ("Markets with live quotes": the test counted a cell going live, and a logo loading, as a redraw of the list — test fixed); then **25 passed** |
-| `wallet`, `developer`, `risk`, `agents-bind`, `mm` | a fresh `dev-stack.sh` each | 2, 1, 1, 1 (4.1 min), 1 passed |
+| `wallet`, `developer`, `risk`, `agents-bind`, `mm` | a fresh `dev-stack.sh` each | 2, 1, 1, 1 (4.1 min), 1 passed — **and again on the final code** (09:14–09:22Z), after the fixes of the backtest job and of the market-making market data: the same |
 | `futures`, `futures-live`, `futures-gmx`, `futures-collateral`, `futures-router`, `perp-agent-live` | in-browser mock | 18, 10, 16, 6, 8, 8 passed (66) |
 | `alerts`, `research` | their own servers | 2, 2 passed |
 | `v9-visual`, `v10-visual` | built bundle, recorded answers | 6, 5 passed — **no baseline regenerated** by this run |
@@ -323,7 +323,38 @@ mainnet**; `fork-gmx`, `fork-hl-deposit`, `fork-mandate`, `fork-plan` were not r
 
 ### 6.5 Soak (30 minutes, paper, local)
 
-@@SOAK_SECTION@@
+Driver `scripts/soak-v11.py` on the SDK tests' stack (real API and signer bundles, an own database, workers in the API
+process, paper only): a bar perp agent from the Momentum template on `momentum_xs_perp/2` (backtest through the job queue,
+then paper), a market-making agent on BTC in paper, one websocket client of the quote stream (Python SDK), and every 30 s
+through the Python SDK a limit order placed and cancelled, every fourth round a market order. Sampled once a minute. Two
+runs, because the first one found a defect.
+
+| | Run 1 (07:50Z, before the market-data fix) | Run 2 (08:33Z, tree `42f44d1`) |
+|---|---|---|
+| RSS of the API process, first → last (range) | 274.3 → 276.5 MB (261.3 – 303.6) | 259.7 → 287.2 MB (257.3 – 304.9) — **no monotonic growth**; 30 minutes cannot exclude a slow leak |
+| CPU of the API process | ≈ 4.5 % of one core | ≈ 3.9 % |
+| Open file descriptors | 132 – 142 | 125 – 144 |
+| Database connections | 4 – 6 | 4 – 5 |
+| `GET /health/live` latency, worst p95 / worst call (a proxy: the API exposes no event-loop lag) | 9.1 ms / 15.6 ms | 3.5 ms / 15.2 ms |
+| Quote stream, client | 18 983 quotes, 0 error, 0 close | 19 897 quotes, 0 error, 0 close |
+| Quote stream, server | 19 232 messages, 0 conflated, 0 dropped; lag p50 291 / p95 390 ms; **1 upstream reconnect** | 20 147 messages, 0 conflated, 0 dropped; lag p50 328 / p95 450 ms; 0 reconnect |
+| SDK order loop | 60 placed, 59 cancelled, 14 market, **0 error** | 59 placed, 59 cancelled, 14 market, **0 error** |
+| Runtime loops | 0 failure | 0 failure |
+| API log | 45 lines; 3 error lines, all at start-up (`signer-client … ECONNREFUSED`: the stack starts the API before its signer listens) | 49 lines; the same 3 |
+| **Market-making paper session** | **1 quote batch in 30 minutes**: pulled after 7 s by `data_stale` + `venue_disconnected`, for good | **130 quote batches, 221 quotes, 60 simulated fills**, no breaker; PnL −0.60 USD on 2 937.54 USD = **−2.06 bps of volume**; markouts −0.82 / −0.87 / −0.88 bps at 1 / 10 / 60 s |
+
+Rows written in 30 minutes (both runs, the same unless noted): `orders` 76, `order_events` 422, `risk_decisions` 211
+(76 of them previews), `market_snapshots` 179, `mm_tape` 1 632 / 1 689, `mm_fills` 0 / 60, `api_key_usage` +191,
+`api_idempotency` +132, `agent_signals` 296 / 28, `agent_jobs` +30, `research_log` +70, `audit_events` +138;
+`order_projection_queue` 0 at the end (never above 2). Which of them are pruned: `V11-REMAINING-LIMITATIONS.md` 11.11.
+`candles` grew from 0.14 M to 1.36 M rows: the market engine's one-time backfill of a fresh database, not a soak effect.
+
+**The defect it found** (run 1): a market-making session on the real feed stopped quoting after seven seconds — its books
+came from the venue's order-book channel, measured that day at one book every 12.3 s on BTC, against a 5 s freshness
+bound and a 15 s cool-down. Fixed (`42f44d1`: the sessions read the best-bid / offer channel). Run 2 is the first session
+of this project that quoted on the real feed for more than a few seconds; its simulated result is a loss with adverse
+markouts, like the study and the simulator. Before that, preparing the driver had found two more (6.7, defects 11, 12).
+**Limits of this soak:** 30 minutes, a laptop, one client, paper, no restart, no live venue account.
 
 ### 6.6 Rollback rehearsal (V10 `a118e3e` ↔ V11, one database and one signer directory)
 
@@ -342,7 +373,10 @@ Observed, on a throwaway local database and keystore (`V11-DEPLOYMENT.md` §9 ha
   its own); V11 takes it back and keeps V10's records in a side file. **With a quoting mandate active, the V10 signer code
   approves a directional mandate that V11 refuses with `conflict`, and can neither see nor revoke the quoting mandate**
   (`scripts/rollback-signer-rehearsal.mts`, exit 0).
-@@ROLLBACK_AGENTS@@
+- **V11-only agents under V10** (on a copy of the soak's database): one stream-agent row makes V10's `GET /api/v1/agents`
+  answer **500** (`unknown network: hyperliquid`) — the whole Agents list, whatever the agent's state; V10's engines do
+  not tick such rows. `scripts/v11-rollback-triggers.sql -v park_agents=1` makes the list work again (200), and
+  `-v unpark_agents=1` undoes it before V11 is started again. Both tested.
 
 ### 6.7 Defects found by the final validation
 
@@ -357,6 +391,7 @@ Observed, on a throwaway local database and keystore (`V11-DEPLOYMENT.md` §9 ha
 | 9 | Fork funding from a holder that holds nothing (test tooling; environment) | the QA specs | **fixed** `467a6c3`, `2a0bd15` |
 | 2, 5, 6, 8, 10 | Tests: a blocking reference call; a timer race; an un-awaited write read at once; a browser test counting a cell going live as a redraw; two QA specs describing V10 | the runs | tests **fixed** (`96208d9`, `ae604c2`, `7df3ed1`, `f9563d3`, `467a6c3`) |
 | — | The smoke of edgeX hard-coded a contract the venue delisted | the smoke | **fixed** `96208d9` |
-@@EXTRA_DEFECTS@@
+| 13 | **A market-making session on the real feed stopped quoting after seven seconds, for good** (paper observed; live by the same code): its market data came from a channel that speaks every 12 s | the soak | **fixed** `42f44d1`; second soak: 130 quote batches in 30 minutes |
+| 14 | Under V10 code, one V11-only agent row breaks the Agents list (500); a V11 kill switch left engaged makes the database refuse the spot agents' buys | the rollback rehearsal | procedure and `scripts/v11-rollback-triggers.sql` (`c9fa7c4`, `42f44d1`) |
 Not fixed: the cause of the `lab-identity` reference hang and of the two `sandbox.test.ts` failures (not reproduced);
-@@NOT_FIXED@@ everything in `V11-REMAINING-LIMITATIONS.md`.
+the backtest job's 150 s deadline (5.16); everything in `V11-REMAINING-LIMITATIONS.md`.
