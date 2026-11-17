@@ -13,6 +13,7 @@
     "@simplewebauthn/server": "14.1.0",
     "@spw/core": "workspace:*",
     "@spw/derivatives": "workspace:*",
+    "@spw/nft": "workspace:*",
     "@spw/swap": "workspace:*",
     "@spw/trading": "workspace:*",
     "fastify": "5.12.8",

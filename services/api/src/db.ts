@@ -508,6 +508,32 @@ create table if not exists mm_tape (instrument text not null, network text not n
 -- position provenance: fills of one timestamp are replayed in the order the wallet stored them (orders/provenance.ts)
 alter table deriv_fills add column if not exists seq bigserial;
 -- <<< v11 live market making
+-- >>> NFT delivery 1 (services/api/src/nft, docs/nft/NFT-ARCHITECTURE.md): read-only inventory. Additive; every table is a CACHE of
+-- what chains, indexers and creators' servers said — dropping them loses nothing that cannot be read again. Rows that grow are pruned
+-- by the nft-prune loop (nft/store.ts pruneNft).
+create table if not exists nft_assets (
+  key text primary key, family text not null, chain text not null, owner_address text, standard text not null, collection_key text,
+  name text not null default '', quantity numeric(78,0) not null default 0, in_wallet boolean not null default false, origin text not null check (origin in ('discovered', 'manual', 'lookup')),
+  asset jsonb not null, first_seen timestamptz not null default now(), last_seen timestamptz not null default now(), verified_at timestamptz, gone_at timestamptz, metadata_refreshed_at timestamptz);
+create index if not exists nft_assets_wallet on nft_assets (chain, in_wallet, last_seen desc);
+create index if not exists nft_assets_collection on nft_assets (collection_key) where collection_key is not null;
+create table if not exists nft_sync (
+  chain text not null, section text not null, status text not null, code text, unlocked_by text, source text, count int not null default 0, truncated boolean not null default false,
+  synced_at timestamptz not null default now(), primary key (chain, section));
+create table if not exists nft_collections (key text primary key, chain text not null, data jsonb not null, fetched_at timestamptz not null default now());
+create table if not exists nft_metadata (
+  uri_hash text primary key, source_uri text not null, resolved_uri text, status text not null, error_code text, doc jsonb, content_hash text,
+  fetched_at timestamptz not null default now(), expires_at timestamptz not null);
+create table if not exists nft_media (
+  id text primary key, source_uri text not null, resolved_uri text, status text not null default 'not_fetched', error_code text, mime text, kind text, bytes bigint, sha256 text,
+  registered_at timestamptz not null default now(), fetched_at timestamptz, expires_at timestamptz, last_access timestamptz);
+create table if not exists nft_events (
+  id text primary key, asset_key text not null, type text not null, tx text not null, idx text not null, block bigint, at timestamptz, finality text not null, event jsonb not null, seen_at timestamptz not null default now());
+create index if not exists nft_events_asset on nft_events (asset_key, block desc, id);
+create table if not exists nft_event_scan (asset_key text primary key, cursor text, complete boolean not null default false, completeness text not null default 'partial', note text, scanned_at timestamptz not null default now());
+create table if not exists nft_manual (key text primary key, chain text not null, added_at timestamptz not null default now());
+create table if not exists nft_budget (source text not null, day date not null, requests int not null default 0, bytes bigint not null default 0, primary key (source, day));
+-- <<< NFT delivery 1
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }
