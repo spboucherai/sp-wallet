@@ -10,7 +10,7 @@
 //  - Send and the market actions exist as DISABLED controls with the real reason of this asset; there is no way to act from here.
 import QRCode from 'qrcode';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useContext, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Nav } from '../App';
 import { get, post, api, type ApiError } from '../api';
 import { hasText, I18n, useT, type Key } from '../i18n';
@@ -19,6 +19,9 @@ import { displayName, mediaUrl, provenanceKey, safeLink, shortId, SOURCE_NAME, S
 import { Addr, Btn, Card, Chips, CopyBtn, EmptyState, ErrorState, Fact, Field, Fold, Icon, inputCls, NetworkIcon, Notice, PageTitle, Section, Seg, Skeleton, Tag, when } from '../ui';
 
 type T = ReturnType<typeof useT>;
+// delivery 2: the Send flow and the Bitcoin lock list are a chunk of their own, loaded when the owner opens one of them
+const NftSend = lazy(() => import('./NftSend').then((m) => ({ default: m.NftSend })));
+const UtxoLocks = lazy(() => import('./NftSend').then((m) => ({ default: m.UtxoLocks })));
 /** the text of a server code when one exists; otherwise the generic sentence WITH the code (never a guess at its meaning) */
 export const tk = (t: T, prefix: string, code: string | null | undefined, fallback: Key): string => (code && hasText(`${prefix}${code}`) ? t(`${prefix}${code}` as Key) : t(fallback, { code: code ?? '—' }));
 const errCode = (e: unknown): string => ((e as ApiError)?.code ?? 'error').replace(/^nft_/, '');
@@ -123,7 +126,7 @@ export function NftLookup({ chains, nav }: { chains: NftChainCap[]; nav: Nav }) 
 export function NftReceive({ initial }: { initial?: string }) {
   const t = useT();
   const q = useQuery({ queryKey: ['nft', 'receive'], queryFn: () => get<{ items: NftReceiveRow[] }>('/nfts/receive'), staleTime: 60_000 });
-  const [net, setNet] = useState(initial ?? 'solana'), [qr, setQr] = useState<{ for: string; url: string } | null>(null);
+  const [net, setNet] = useState(initial ?? 'solana'), [qr, setQr] = useState<{ for: string; url: string } | null>(null), [locks, setLocks] = useState(false);
   const a = q.data?.items.find((x) => x.network === net) ?? q.data?.items[0];
   useEffect(() => { if (a) void QRCode.toDataURL(a.address, { margin: 1, width: 720, errorCorrectionLevel: 'Q', color: { dark: '#080B12', light: '#FFFFFF' } }).then((url) => setQr({ for: a.address, url })); }, [a?.address]);
   if (q.isError) return <ErrorState title={t('nfErrLoad')} onRetry={() => void q.refetch()} />;
@@ -135,9 +138,12 @@ export function NftReceive({ initial }: { initial?: string }) {
       <p className="mt-1 text-center text-[12.5px] text-mute">{a.standards.map((s) => t(STANDARD_KEY[s] ?? 'nfStd_unknown')).join(' · ')}</p>
       <div className="mt-4 rounded-2xl bg-elev/70 p-4 text-center"><div className="mb-1 text-xs text-mute">{t('yourAddress')} · {a.name}</div><span data-testid="nft-receive-address"><Addr value={a.address} /></span></div>
       <div className="mt-3"><CopyBtn text={a.address} full /></div></Card>
-    {a.warnings.map((w) => <Notice key={w} tone={w === 'ordinals_not_protected' ? 'danger' : 'warn'}><span data-testid={`nft-receive-warn-${w}`}>{t(`nfRecvWarn_${w}` as Key)}</span></Notice>)}
+    {a.warnings.map((w) => <Notice key={w} tone={w === 'ordinals_heuristic_only' ? 'danger' : w === 'arrival_after_confirmation' ? 'info' : 'warn'}><span data-testid={`nft-receive-warn-${w}`}>{t(`nfRecvWarn_${w}` as Key)}</span></Notice>)}
+    {/* delivery 2 — Bitcoin: the protected outputs (signer lock list, ord report or heuristic flags) */}
+    {a.network === 'bitcoin' && <Card><Btn full kind="soft" onClick={() => setLocks(!locks)} aria-expanded={locks} data-testid="nft-receive-locks"><Icon n="key" className="h-4 w-4" />{t('nfUTitle')}</Btn>
+      {locks && <div className="mt-4"><Suspense fallback={<Skeleton h="h-40" />}><UtxoLocks network="bitcoin" /></Suspense></div>}</Card>}
     <Notice tone="warn">{t('nfRecvCompat', { network: a.name })}</Notice>
-    <Notice tone="info"><span data-testid="nft-receive-noclaim">{t(a.detection === 'blocked_by_provider' ? 'nfRecvNoDetect' : 'nfRecvConfirm')}</span></Notice>
+    <Notice tone="info"><span data-testid="nft-receive-noclaim">{t(a.network === 'bitcoin' ? 'nfRecvBitcoin' : a.detection === 'blocked_by_provider' ? 'nfRecvNoDetect' : 'nfRecvConfirm')}</span></Notice>
   </div>;
 }
 
@@ -243,6 +249,7 @@ function Activity({ id }: { id: string }) {
 export function NftDetail({ id, nav }: { id: string; nav: Nav }) {
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient();
   const q = useNftItem(id);
+  const [sending, setSending] = useState(false);
   const refresh = useMutation({ mutationFn: () => post<NftItem>('/nfts/refresh-metadata', { key: id }), onSuccess: (a) => qc.setQueryData(['nft', 'item', id], a) });
   const track = useMutation({ mutationFn: async (on: boolean) => { const a = q.data!; if (on) await post('/nfts/manual', { chain: a.chainId, address: a.contractAddress ?? a.assetId, ...(a.tokenId ? { tokenId: a.tokenId } : {}) }); else await api('DELETE', `/nfts/manual?key=${encodeURIComponent(id)}`); }, onSettled: () => { void qc.invalidateQueries({ queryKey: ['nft'] }); } });
   const back = (title: ReactNode) => <PageTitle onBack={() => nav({ tab: 'nfts' })} backLabel={t('back')}>{title}</PageTitle>;
@@ -252,6 +259,8 @@ export function NftDetail({ id, nav }: { id: string; nav: Nav }) {
   const main = a.media.find((m) => m.role === 'animation' && (m.kind === 'video' || m.kind === 'html' || m.kind === 'audio')) ?? a.media.find((m) => m.role === 'image') ?? a.media[0] ?? null;
   const link = safeLink(md.externalUrl), reasons = a.capabilities.transferBlockedBy;
   const mdStamp = md.source, idLabel = a.family === 'evm' ? t('nfContract') : t('nfMint');
+  const verdict = a.transfer ?? { transferable: a.capabilities.transferable, blockedBy: a.capabilities.transferBlockedBy, warnings: a.capabilities.transferWarnings ?? [], standard: a.standard, route: null };
+  if (sending && verdict.transferable) return <Suspense fallback={<Skeleton h="h-[420px]" />}><NftSend item={a} onClose={() => { setSending(false); void q.refetch(); }} /></Suspense>;
   return <div className="space-y-5" data-testid="nft-detail" data-key={a.key}>
     {back(name ?? <span className="font-mono text-[18px]">{shortId(a.assetId)}</span>)}
     {!o.heldByWallet && <Notice tone={o.state === 'burned' ? 'danger' : 'info'}><span data-testid="nft-not-in-wallet">{t(o.state === 'burned' ? 'nfBurnedNote' : a.origin === 'lookup' ? 'nfNotInWallet' : 'nfNotInWalletTracked')}</span></Notice>}
@@ -283,8 +292,12 @@ export function NftDetail({ id, nav }: { id: string; nav: Nav }) {
         <p className="mt-2 text-[12px] text-mute">{t('nfRefreshNote')}</p>
         {(a.origin !== 'discovered') && <Btn kind="ghost" full className="mt-2" busy={track.isPending} onClick={() => track.mutate(a.origin !== 'manual')} data-testid="nft-track">{t(a.origin === 'manual' ? 'nfUntrack' : 'nfTrack')}</Btn>}
         <div className="mt-4 space-y-2 border-t border-line pt-4">
-          <Btn full disabled aria-describedby="nft-send-why" data-testid="nft-send"><Icon n="up" className="h-4 w-4" />{t('nfSend')}</Btn>
-          <ul id="nft-send-why" className="space-y-1 text-[12.5px] text-mute" data-testid="nft-send-why">{reasons.map((r) => <li key={r} data-reason={r}>· {tk(t, 'nfWhy_', r, 'nfWhyOther')}</li>)}</ul>
+          {/* delivery 2: a transferable asset opens the Send flow; a blocked one shows its exact reasons instead of a dead button */}
+          {verdict.transferable
+            ? <><Btn full onClick={() => setSending(true)} data-testid="nft-send" data-transferable="true"><Icon n="up" className="h-4 w-4" />{t('nfSend')}</Btn>
+              <p className="text-[12.5px] text-mute" data-testid="nft-send-route">{t('nfTRoute')} <span className="font-mono text-[11.5px]">{verdict.route}</span></p></>
+            : <><Btn full disabled aria-describedby="nft-send-why" data-testid="nft-send" data-transferable="false"><Icon n="up" className="h-4 w-4" />{t('nfSend')}</Btn>
+              <ul id="nft-send-why" className="space-y-1 text-[12.5px] text-warn" data-testid="nft-send-why">{verdict.blockedBy.map((r) => <li key={r} data-reason={r}>· {tk(t, 'nfWhy_', r, 'nfWhyOther')}</li>)}</ul></>}
           <Btn full disabled kind="soft" aria-describedby="nft-market-why" data-testid="nft-market-actions">{t('nfMarketActions')}</Btn>
           <p id="nft-market-why" className="text-[12.5px] text-mute" data-testid="nft-market-why">{t('nfMarketWhy')}</p>
         </div>

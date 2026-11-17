@@ -17,18 +17,28 @@ export interface NftItem {
   media: NftMedia[];
   ownership: { state: string; owner: Known<string>; tokenAccount: Known<string>; frozen: Known<boolean>; delegate: Known<string>; tokenRecordState: Known<string>; heldByWallet: boolean; source: Stamp };
   market: { source: Stamp; url: string | null; listed: Known<boolean>; seller: Known<string>; marketCollection: string | null; listingPrice: Known<{ amount: string; currency: NftCurrency }>; bestOffer: Known<{ amount: string; currency: NftCurrency }>; lastSale: Known<{ amount: string; currency: NftCurrency; at: string }>; collectionFloor: Known<{ amount: string; currency: NftCurrency }> } | null;
-  capabilities: { viewable: boolean; transferable: false; transferBlockedBy: string[]; marketActions: false; marketBlockedBy: string };
+  capabilities: { viewable: boolean; transferable: boolean; transferBlockedBy: string[]; transferWarnings?: string[]; marketActions: false; marketBlockedBy: string };
+  /** delivery 2: the per-asset verdict (facts of the asset + the signer's NFT policy) */
+  transfer?: { transferable: boolean; blockedBy: string[]; warnings: string[]; standard: string; route: string | null };
   sources: Stamp[]; fetchedAt: string; origin: 'discovered' | 'manual' | 'lookup'; explorerUrl: string | null; firstSeen: string; lastSeen: string; verifiedAt: string | null; goneAt: string | null; externalMarkets: { name: string; url: string }[];
 }
 export interface NftSummary { key: string; chain: string; family: string; standard: string; assetId: string; tokenId: string | null; name: string | null; onchainName: string | null; collection: { key: string; name: string | null; verifiedOnChain: Known<boolean> } | null; quantity: string; state: string; inWallet: boolean; origin: string;
-  metadataStatus: string; image: { id: string; kind: string; status: string } | null; transferBlockedBy: string; firstSeen: string; verifiedAt: string | null; goneAt: string | null; stale: boolean }
+  metadataStatus: string; image: { id: string; kind: string; status: string } | null; transferable?: boolean; transferBlockedBy: string | null; firstSeen: string; verifiedAt: string | null; goneAt: string | null; stale: boolean }
 export interface NftList { items: NftSummary[]; total: number; cursor: number | null; sync: { running: string[]; lastSyncedAt: Record<string, string> }; valuation: { state: 'unavailable'; reason: string }; asOf: string }
-export interface NftChainCap { network: string; name: string; family: string; inventory: 'supported' | 'partial' | 'blocked_by_provider' | 'unsupported'; reason: string; unlockedBy: string | null; standards: string[]; lookup: boolean; manualAdd: boolean; receive: boolean; transfer: 'not_built'; marketRead: boolean; marketWrite: false;
+export interface NftChainCap { network: string; name: string; family: string; inventory: 'supported' | 'partial' | 'blocked_by_provider' | 'unsupported'; reason: string; unlockedBy: string | null; standards: string[]; lookup: boolean; manualAdd: boolean; receive: boolean; transfer: 'supported' | 'not_supported'; transferStandards?: string[]; transferReason?: string | null; marketRead: boolean; marketWrite: false;
   sections: { section: string; status: string; code: string | null; unlockedBy: string | null; source: string | null; count: number; truncated: boolean; syncedAt: string }[] }
 export interface NftCaps { chains: NftChainCap[]; providers: { id: string; on: boolean; unlockedBy: string | null; sends: string }[] }
 export interface NftEventT { id: string; type: string; interpretation: { by: string; note: string | null }; tx: string; index: string; blockRef: { slot?: string; number?: string }; at: string | null; from: string | null; to: string | null; quantity: string; price: { amount: string; currency: NftCurrency } | null; finality: string; source: Stamp }
 export interface NftActivity { events: NftEventT[]; cursor: string | null; completeness: string; note: string | null; scannedAt: string | null; canLoadOlder: boolean; error: string | null }
 export interface NftReceiveRow { network: string; name: string; family: string; address: string; standards: string[]; warnings: string[]; detection: string }
+
+// delivery 2 — transfers and the Bitcoin lock list (services/api/src/nft/transfer.ts, transfer-routes.ts)
+export interface NftReview { key: string; network: string; networkName: string; standard: string; method: string; asset: string; tokenId: string | null; quantity: string; program: string; from: string; to: string; toKind: 'account' | 'contract' | 'new_account';
+  fee: { estimate: string; max: string; symbol: string; decimals: number; rent: string | null }; warnings: string[]; simulation: { ok: true; detail: string; used: string | null; changes: { what: string; before: string; after: string }[] };
+  verified: { standard: string; ownership: string; endpoints: number; at: string }; accounts: { role: string; address: string; derived: string }[]; creatorMetadata: { name: string | null; collectionName: string | null; imageId: string | null } }
+export interface NftTransferView { id: string; state: string; network: string; networkName: string; txid: string | null; explorer: string | null; confirmations: number; error: string | null; errorCode: string | null; errorParams: Record<string, string | number> | null; intentHash: string | null; nft: NftReview | null }
+export interface UtxoRow { txid: string; vout: number; outpoint: string; value: number; signerLock: { reason: string; at: number } | null; ord: { inscriptions: string[]; runes: string[] } | null; excludedBy: string[]; reviewed: boolean; spendable: boolean }
+export interface UtxoLocksView { network: string; address: string; mode: 'ord' | 'heuristic' | 'locks_only' | 'ord_unavailable'; ordConfigured: boolean; ordHost: string | null; ordError: string | null; signerSupportsLocks: boolean; utxos: UtxoRow[]; staleLocks: { outpoint: string; reason: string; at: number }[]; symbol: string; decimals: number }
 
 export const mediaUrl = (id: string, run = false): string => `/api/v1/nfts/media/${id}${run ? '?run=1' : ''}`;
 export const useNftCaps = () => useQuery({ queryKey: ['nft', 'caps'], queryFn: () => get<NftCaps>('/nfts/capabilities'), staleTime: 30_000 });

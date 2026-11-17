@@ -427,7 +427,7 @@ describe('Bitcoin inscription safety — the ord adapter, the classification, th
     // without ord: outputs ≤ 10 000 sat and outputs of a transaction with an inscription envelope are flagged; a review lifts ONLY a heuristic flag
     // (other transaction ids than the coins of the next test: what a transaction contains is remembered per id)
     const H = COINS.map((c, k) => ({ ...c, txid: T(0x21 + k) })), raw = { [T(0x22)]: 'aa' + '0063036f7264' + 'bb', [T(0x21)]: 'aabb' };
-    const h = await classifyUtxos({ ord: null, signerLocks: async () => ({ [`${T(0x21)}:0`]: { reason: 'owner', at: 1 } }), reviewed: async () => new Set([`${T(0x24)}:0`, `${T(0x21)}:0`]) }, 'bitcoin', BADDR, H, async (id) => { if (!(id in raw)) throw new Error('x'); return raw[id as keyof typeof raw]; });
+    const h = await classifyUtxos({ ord: null, signerLocks: async () => ({ [`${T(0x21)}:0`]: { reason: 'owner', at: 1 } }), reviewed: async () => new Set([`${T(0x24)}:0`, `${T(0x21)}:0`]) }, 'bitcoin', BADDR, H, async (id) => { if (!(id in raw)) throw new Error('x'); return raw[id as keyof typeof raw]!; });
     expect(h.mode).toBe('heuristic'); expect(HEURISTIC_MAX_SATS).toBe(10_000);
     expect(h.rows.map((r) => [r.value, r.excludedBy, r.reviewed, r.spendable])).toEqual([[60_000, ['signer_locked'], false, false], [40_000, ['heuristic_envelope'], false, false], [546, ['heuristic_small'], false, false], [9_000, ['heuristic_small'], true, true]]);
     // other Bitcoin-style networks: the signer's lock list only
