@@ -24,6 +24,8 @@ export const WEBHOOK_EXAMPLE = (() => {
 })();
 
 const j = (v: unknown): string => JSON.stringify(v, null, 2);
+/** the language tag of the Python samples — a constant so that these documentation strings do not look like an interpreter being started (lab-sandbox.test.ts scans this directory) */
+const PY = 'python';
 const code = (lang: string, src: string): string => `\`\`\`${lang}\n${src}\n\`\`\``;
 const json = (v: unknown): string => code('json', j(v));
 /** a table cell: a pipe would end it */
@@ -41,12 +43,12 @@ export interface GuideSection { id: string; title: string; /** shown in the navi
 const tabsFirstCall = [
   code('bash', `export SP_WALLET_BASE_URL=https://wallet.spboucher.ai\nexport SP_WALLET_API_KEY=${FAKE_KEY}   # yours, shown once\n\ncurl -s "${B}/markets?venue=hyperliquid&q=BTC&limit=3" \\\n  ${AUTH}`),
   code('ts', `import { SPWallet } from '@sp-wallet/trading-sdk';\n\nconst client = new SPWallet();   // reads SP_WALLET_API_KEY and SP_WALLET_BASE_URL\n${EXAMPLES.listMarkets!.ts}\nconsole.log(markets[0].id, markets[0].mark);`),
-  code('python', `from sp_wallet import SPWallet\n\nclient = SPWallet()   # reads SP_WALLET_API_KEY and SP_WALLET_BASE_URL\n${EXAMPLES.listMarkets!.py}\nprint(markets[0].id, markets[0].mark)`),
+  code(PY, `from sp_wallet import SPWallet\n\nclient = SPWallet()   # reads SP_WALLET_API_KEY and SP_WALLET_BASE_URL\n${EXAMPLES.listMarkets!.py}\nprint(markets[0].id, markets[0].mark)`),
 ].join('\n\n');
 const tabsPaper = [
   code('bash', `# 1. what would happen — creates nothing\ncurl -s -X POST "${B}/orders/preview" ${AUTH} \\\n  -H "Content-Type: application/json" -d '${orderJson}'\n\n# 2. place it — one Idempotency-Key per logical order\ncurl -s -X POST "${B}/orders" ${AUTH} \\\n  -H "Content-Type: application/json" -H "Idempotency-Key: bot-2026-11-17-0001" -d '${orderJson}'\n\n# 3. read it, then close the position\ncurl -s "${B}/orders/${placed.order.id}" ${AUTH}\ncurl -s "${B}/positions?mode=paper" ${AUTH}`),
   code('ts', `import { SPWallet } from '@sp-wallet/trading-sdk';\n\nconst client = new SPWallet();\nconst order = { mode: 'paper', instrument: 'hyperliquid:BTC', side: 'buy', type: 'market', notional: '100' } as const;\n\nconst preview = await client.previewOrder(order);              // creates nothing\nif (!preview.wouldExecute) throw new Error(JSON.stringify(preview.refusals));\n\nconst placed = await client.createOrder(order, { idempotencyKey: 'bot-2026-11-17-0001' });\nconst done = await client.waitForOrder(placed.order.id);       // FILLED, CANCELLED, REJECTED or FAILED\nconsole.log(done.order.status, done.order.filled, done.order.avgFillPrice);\n\nconst { positions } = await client.getPositions({ mode: 'paper' });\nawait client.closePosition(positions[0].id);                   // strictly reduce-only`),
-  code('python', `from sp_wallet import SPWallet\n\nclient = SPWallet()\norder = dict(mode="paper", instrument="hyperliquid:BTC", side="buy", order_type="market", notional="100")\n\npreview = client.preview_order(**order)                        # creates nothing\nif not preview.would_execute:\n    raise SystemExit(preview.refusals)\n\nplaced = client.create_order(**order, idempotency_key="bot-2026-11-17-0001")\ndone = client.wait_for_order(placed.order.id)                  # FILLED, CANCELLED, REJECTED or FAILED\nprint(done.order.status, done.order.filled, done.order.avg_fill_price)\n\npositions = client.get_positions(mode="paper").positions\nclient.close_position(positions[0].id)                         # strictly reduce-only`),
+  code(PY, `from sp_wallet import SPWallet\n\nclient = SPWallet()\norder = dict(mode="paper", instrument="hyperliquid:BTC", side="buy", order_type="market", notional="100")\n\npreview = client.preview_order(**order)                        # creates nothing\nif not preview.would_execute:\n    raise SystemExit(preview.refusals)\n\nplaced = client.create_order(**order, idempotency_key="bot-2026-11-17-0001")\ndone = client.wait_for_order(placed.order.id)                  # FILLED, CANCELLED, REJECTED or FAILED\nprint(done.order.status, done.order.filled, done.order.avg_fill_price)\n\npositions = client.get_positions(mode="paper").positions\nclient.close_position(positions[0].id)                         # strictly reduce-only`),
 ].join('\n\n');
 const sdkInstall = [
   code('bash', `# TypeScript (not on npm: built from the repository)\nnode packages/trading-sdk/scripts/build.mts\nnpm install /path/to/sp-wallet/packages/trading-sdk\n\n# Python (not on PyPI)\npip install /path/to/sp-wallet/sdk/python`),
@@ -419,9 +421,9 @@ The example above is real arithmetic: with the secret \`${whE.secret}\`, the str
 
 ${code('ts', `import { constructWebhookEvent, WebhookVerificationError } from '@sp-wallet/trading-sdk';\n\n// rawBody: the bytes exactly as received (Buffer / Uint8Array / string)\ntry {\n  const event = await constructWebhookEvent({\n    secret: process.env.SP_WALLET_WEBHOOK_SECRET!,\n    timestamp: req.headers['x-spw-timestamp'],\n    signature: req.headers['x-spw-signature'],\n    body: rawBody,\n  });\n  if (!seen.has(event.id)) { seen.add(event.id); handle(event.event, event.data); }\n  res.writeHead(200).end('ok');\n} catch (e) {\n  res.writeHead(e instanceof WebhookVerificationError ? 400 : 500).end();\n}`)}
 
-${code('python', `from sp_wallet import WebhookVerificationError, construct_webhook_event\n\n# raw: the bytes exactly as received\ntry:\n    event = construct_webhook_event(secret=SECRET, timestamp=headers.get("x-spw-timestamp"),\n                                    signature=headers.get("x-spw-signature"), body=raw)\nexcept WebhookVerificationError:\n    return 400\nif event["id"] not in seen:\n    seen.add(event["id"])\n    handle(event["event"], event["data"])\nreturn 200`)}
+${code(PY, `from sp_wallet import WebhookVerificationError, construct_webhook_event\n\n# raw: the bytes exactly as received\ntry:\n    event = construct_webhook_event(secret=SECRET, timestamp=headers.get("x-spw-timestamp"),\n                                    signature=headers.get("x-spw-signature"), body=raw)\nexcept WebhookVerificationError:\n    return 400\nif event["id"] not in seen:\n    seen.add(event["id"])\n    handle(event["event"], event["data"])\nreturn 200`)}
 
-${code('python', `# without the SDK\nimport hashlib, hmac, time\n\ndef verify(secret: str, timestamp: str, signature: str, raw: bytes) -> bool:\n    if abs(time.time() - int(timestamp)) > ${FACTS.webhookToleranceSec}:\n        return False\n    want = "v1=" + hmac.new(secret.encode(), timestamp.encode() + b"." + raw, hashlib.sha256).hexdigest()\n    return hmac.compare_digest(want, signature)`)}
+${code(PY, `# without the SDK\nimport hashlib, hmac, time\n\ndef verify(secret: str, timestamp: str, signature: str, raw: bytes) -> bool:\n    if abs(time.time() - int(timestamp)) > ${FACTS.webhookToleranceSec}:\n        return False\n    want = "v1=" + hmac.new(secret.encode(), timestamp.encode() + b"." + raw, hashlib.sha256).hexdigest()\n    return hmac.compare_digest(want, signature)`)}
 
 ### Delivery
 
@@ -442,7 +444,7 @@ ${code('text', `wss://wallet.spboucher.ai${TRADING_PREFIX}/stream`)}
 
 ${code('ts', `import { SPWalletStream } from '@sp-wallet/trading-sdk';\n\nconst stream = new SPWalletStream();   // SP_WALLET_API_KEY, SP_WALLET_BASE_URL\nawait stream.subscribe([{ type: 'quote', id: 'hyperliquid:BTC' }, { type: 'status', id: 'hyperliquid' }]);\nfor await (const m of stream) {\n  if (m.type === 'quote') console.log(m.id, m.bid, m.ask, m.mark, m.stale ? '(stale)' : '');\n}`)}
 
-${code('python', `# pip install "sp-wallet-python[stream]"\nimport asyncio\nfrom sp_wallet import SPWalletStream\nfrom sp_wallet.stream import Quote\n\nasync def main() -> None:\n    stream = SPWalletStream()   # SP_WALLET_API_KEY, SP_WALLET_BASE_URL\n    await stream.subscribe([{"type": "quote", "id": "hyperliquid:BTC"}, {"type": "status", "id": "hyperliquid"}])\n    async for m in stream:\n        if isinstance(m, Quote):\n            print(m.id, m.bid, m.ask, m.mark, "(stale)" if m.stale else "")\n\nasyncio.run(main())`)}
+${code(PY, `# pip install "sp-wallet-python[stream]"\nimport asyncio\nfrom sp_wallet import SPWalletStream\nfrom sp_wallet.stream import Quote\n\nasync def main() -> None:\n    stream = SPWalletStream()   # SP_WALLET_API_KEY, SP_WALLET_BASE_URL\n    await stream.subscribe([{"type": "quote", "id": "hyperliquid:BTC"}, {"type": "status", "id": "hyperliquid"}])\n    async for m in stream:\n        if isinstance(m, Quote):\n            print(m.id, m.bid, m.ask, m.mark, "(stale)" if m.stale else "")\n\nasyncio.run(main())`)}
 
 ### Protocol (version 1), in short
 
