@@ -24,7 +24,8 @@ if [ "$CMD" = init ]; then
 else stop; fi
 export SPW_SIGNER_DIR="$D/signer" SPW_SIGNER_WRAP_KEY="$D/wrap/wrap.key" SPW_SIGNER_SECRET=$(cat "$D/secret")
 export SPW_ORIGIN=http://localhost:$P SPW_RP_ID=localhost SPW_SIGNER_PORT=$SP SPW_DATA_DIR="$D/data"
-N=$(ls "$D"/api-*.log 2>/dev/null | wc -l | tr -d ' ')
+N=$(find "$D" -maxdepth 1 -name 'api-*.log' | wc -l | tr -d ' ')
+cd "$DIST/.."   # each version runs from ITS OWN checkout (its laboratory, its files), as on a node where the checkout was rolled back
 if [ "$CMD" = init ]; then node "$DIST/signer.mjs" init > "$D/init.json"; node "$DIST/signer.mjs" setup-token > "$D/setup-token"; fi
 node "$DIST/signer.mjs" serve > "$D/signer-$N.log" 2>&1 & echo $! > "$D/signer.pid"
 sleep 1

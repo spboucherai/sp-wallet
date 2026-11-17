@@ -107,7 +107,7 @@ test(`rollback rehearsal — ${STAGE}`, async ({ page, context }) => {
     const accounts = (await call(page, 'GET', '/derivatives/accounts')).json.accounts as { id: string; label: string }[];
     const acct = accounts.find((a) => a.label === 'Rollback rehearsal')!.id;
     await paperTrade(page, acct, 'V10 after V11');
-    const close = await call(page, 'POST', `/derivatives/accounts/${acct}/close`, { instrument: BTC });
+    const close = await call(page, 'POST', `/derivatives/accounts/${acct}/close`, { instrument: BTC, fraction: '0.5', slippageBps: 100 });
     note('V10 after V11: close of the BTC paper position', { status: close.status, body: brief(close.json?.order ?? close.json) });
     const agents = await call(page, 'GET', '/agents');
     note('V10 after V11: agents', { status: agents.status, agents: (agents.json?.agents ?? []).map((a: any) => `${a.name}:${a.state}`) });

@@ -148,3 +148,52 @@ was found by the suite itself (defects 1, 3, 4 and 7 were found by reading and m
 
 `agent-runtime/queue.ts` exports `pruneJobs` (finished jobs older than 14 days); nothing called it. The jobs pass now calls it
 once an hour per worker. Test: `agent-workers.test.ts` "retention: the jobs pass removes FINISHED jobs older than 14 days…".
+
+## 4. Read-only live smokes (2026-11-17)
+
+| Script | Start (UTC) | Observed |
+|---|---|---|
+| `tsx scripts/smoke-private-markets.mts` | 05:36:32 | exit 0. Hyperliquid 5 instruments, **edgeX 2** (it was 3 on 2026-11-16): **7 live instruments, 5 companies**. The three Anthropic contracts of Hyperliquid's builder dexes (`io:ANTH` 1 678.2 = implied 1 678.2 G USD; `para:ANTH` 96.42; `xyz:ANT` 96.507) are still `reviewed … valid until 2026-11-18T00:00:00Z` — 18 h 23 min before the entries expire. **`edgex:ANTHROPICUSDC` is no longer in the live inventory**: edgeX took the contract off its list (below). OpenAI `io:OAI` 1 311.5; Oura; Polymarket and Moonshot on edgeX; five public-company markets excluded; two delisted Ventuals markets |
+| `tsx scripts/smoke-edgex.mts` (sample `ANTHROPICUSDC`, as committed) | 05:36:43 | **exit 1, 2 steps FAILED: "ANTHROPICUSDC is not listed", "no ticker for ANTHROPICUSDC"**. 155 markets (74 crypto, 70 equity, 8 commodity, **2 pre-IPO: MOONSHOTUSDC, POLYMARKETUSDC**, 1 fx). The contract's book, candles and websocket ticker still answer (last trade 01:29:45Z, volume 0 since 02:00Z): the venue delisted it. A venue change, not a regression: the smoke hard-coded its sample contract |
+| the same with the sample as an argument (default `MOONSHOTUSDC`, `96208d9`) | 05:37:43 | exit 0, "all steps passed"; 10 REST calls, no rate-limit backoff, account and trading refused before any request (0 request sent) |
+| `tsx scripts/smoke-markets-hub.mts` | 05:37:19 | exit 0, "OK"; four venues; ETH comparison totals 12.54 bps (Hyperliquid), 12.92 (edgeX), 14.27 (GMX), 28.02 (dYdX); 12 discrepancy pairs, 0 flagged; "trading / account endpoints: none" |
+
+A script started with `node` instead of `tsx` fails at once on a TypeScript parameter property (`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`,
+`services/api/src/derivatives/data.ts`): the smokes that import the API need `tsx`, as their headers say.
+
+## 5. Rollback rehearsal (2026-11-17 06:13–06:17 UTC) — observed, on a throwaway local database and keystore
+
+Tools: `scripts/rollback-rehearsal-stack.sh` (one version's bundles on a signer directory and a database that survive),
+`tests/e2e/rollback-rehearsal.spec.ts` (one driver for the four stages; the owner's session in Chromium with a virtual passkey),
+`scripts/rollback-signer-rehearsal.mts` (both versions' signer code on one directory), `scripts/v11-rollback-triggers.sql`.
+V10 = a second worktree at `a118e3e` (`/tmp/spw-v10`), built with its own `pnpm build`. Database `spw_rollback`.
+
+| Stage | What was done | Observed |
+|---|---|---|
+| (i) V10, fresh | owner setup; paper account, market buy 0.001 BTC; address-book entry; a spot agent (vault from the signer) and a perp agent; the row the paper engine writes for a spot agent's order (by SQL); a transfer draft | 42 tables, one trigger (`audit_no_update`). Draft refused `insufficient_funds` (the throwaway wallet is empty — the route works). A resting limit far from the mark was refused by V10's own price band (not part of the fixture) |
+| (ii) V11 on that database | start; unlock with the same passkey; paper order through `POST /trading/orders` and through the terminal's route; kill switch engaged → a buy refused `kill_switch_active` → released with the passkey in the Risk screen | migrated to 65 tables, 8 triggers, no error line in the log. Both V10 agents listed. `orders` 3, `order_events` 14, `risk_decisions` 4, queue 0. **Orders made before the first V11 start are not in the unified `orders` table** (count 0 at entry): only writes made after the triggers exist are projected |
+| (iii) V10 on the SAME database, kill switch released | health, portfolio, activity, agents (list and both detail routes), paper buy, transfer draft, signer status | **boots; every route 200; a paper order fills; the signer answers with the same key id.** The capability line has its nine V10 entries. `order_projection_queue` grows by two rows per derivative order and one per agent order (3 rows) and is not drained. V10's insert into `research_log` passes the V11 defaults trigger |
+| (iv) V11 again | start; unlock; orders | queue 3 → 0 within seconds; `orders` 3 → 5: **the orders made under V10 became unified orders, none duplicated** (count = distinct engine reference); no error line |
+| (iii-b) V10 with the V11 kill switch LEFT ENGAGED | the same checks + the spot agent's order row | **V10 does not apply the switch: a derivative paper buy FILLS.** A spot agent's BUY row is **refused by the database**: `ERROR: kill_switch_active … (spw_agent_order_gate)`; its SELL row passes. `order_events` refuses an update (`append-only`) |
+| `scripts/v11-rollback-triggers.sql` under V10 | default mode | `agent_orders_gate` dropped, seven triggers left, "kill switch still recorded on: t"; the same BUY row is then accepted |
+| (iv-b) V11 again | start | `migrate()` re-created the gate (8 triggers); the kill switch is still engaged and refuses (`423`, `kill_switch`); queue 10 → 0; `orders` 13 = 13 distinct; no error line |
+
+Signer, in the same stack: the V11 daemon on the V10 directory writes nothing until something changes its state (the files were
+byte-identical after stage (ii); a release of the API-side kill switch does not touch the signer). After `signer.mjs halt` /
+`unhalt` through the V11 control socket: `journal.jsonl` (4 records), `state.json` with a reference, `state.json.lock`,
+`control.sock`. A stopped V11 daemon leaves `control.sock` behind (the lock is removed). V10's binary then starts on it, same
+key id, `journalLength: 2` after its own `halt` / `unhalt` (it sees an empty journal and starts one inside `state.json`, keeping
+the reference it does not know). V11 again: `journalIntact: true`, `journal-rollback-20261117061635.jsonl` written at its
+first save.
+
+`scripts/rollback-signer-rehearsal.mts /tmp/spw-v10` — exit 0, "every observation is as documented":
+Part A (the committed V10-format fixture, V11 → V10 → V11): journal moved to the file (7 → 8 records), `policy.json` untouched,
+same key id, V10 sees the halt and an empty journal, replay markers and spending counters kept, one side file at the return.
+Part B (**why every quoting mandate must be revoked first**): with a quoting mandate active, V11 answers a directional mandate
+on the same authorization `conflict: a quoting mandate is active on this venue authorization: revoke it first`; the V10 signer
+code on the same state **approves the same request** (it does not report the quoting mandate, has no route to sign under it or
+to revoke it, and keeps it on disk); back on V11, a quoting mandate and a directional mandate are both active on one
+authorization — a state V11 never creates. Revocation by V11 needs no passkey and puts the mandate in `wind_down`.
+
+Not rehearsed: a V11-only agent (stream engine, supervisor) or a live agent under a V11 trading mandate running when V10 starts —
+see section 8 (after the soak, on a copy of its database); a production-size database; PM2.

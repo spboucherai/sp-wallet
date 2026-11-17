@@ -59,14 +59,14 @@ say('== Part A — the V10-format fixture: V11 → previous release → V11');
   check('state.json no longer carries the journal array (it holds a reference)', [Array.isArray(afterV11.journal) ? afterV11.journal.length : null, typeof afterV11.journalRef], [0, 'object']);
   check('policy.json untouched by V11', readFileSync(pp, 'utf8') === policyBefore, true);
   const v11Status = g1.status() as any;
-  say(`  V11 status: keyId ${v11Status.keyId}, halted=${v11Status.halted}, journalLength=${v11Status.journalLength}, journalIntact=${v11Status.journalIntact}`);
+  say(`  V11 status: keyId ${v11Status.keyId}, halted=${v11Status.halted}, journalLength=${v11Status.journalLength}`);
 
   // the PREVIOUS release on what V11 left
   let o1: any = null; const openOld = await attempt(() => { o1 = new OldStore(sp, pp); });
   check('the previous release opens the V11 state', openOld, 'ok');
   if (o1) {
     const og = new OldSigner(oldKeys, o1, { rpId: RP, origin: ORIGIN }), st = og.status();
-    say(`  previous release status: keyId ${st.keyId}, halted=${st.halted}, journalLength=${st.journalLength}, journalIntact=${st.journalIntact}, credentials=${o1.state.credentials.length}`);
+    say(`  previous release status: keyId ${st.keyId}, halted=${st.halted}, journalLength=${st.journalLength}, credentials=${o1.state.credentials.length}`);
     check('same key id under both versions', st.keyId, v11Status.keyId);
     check('the previous release sees the halt V11 recorded', st.halted, true);
     check('the previous release sees an EMPTY journal (it does not read journal.jsonl)', st.journalLength, 0);
@@ -83,7 +83,7 @@ say('== Part A — the V10-format fixture: V11 → previous release → V11');
   g2.halt();
   const side = readdirSync(dir).filter((f) => f.startsWith('journal-rollback-'));
   check('what the previous release journaled is kept in ONE side file', side.length, 1);
-  say(`  after V11 wrote again: journalLength=${(g2.status() as any).journalLength}, journalIntact=${(g2.status() as any).journalIntact}; files: ${files(dir)}`);
+  say(`  after V11 wrote again: journalLength=${(g2.status() as any).journalLength}; files: ${files(dir)}`);
   check('a third V11 start finds the journal intact', new Store(sp, pp).journalBrokenAt, null);
 }
 
@@ -123,7 +123,7 @@ say('\n== Part B — a quoting mandate left active, then the previous release on
   const d1 = directional(3), v11Says = await attempt(() => signer.venueMandateApprove(d1, pk.assert(venueMandateHash(d1))));
   say(`  V11, directional mandate next to the active quoting mandate → ${v11Says}`);
   check('V11 refuses it with `conflict`', v11Says.startsWith('conflict'), true);
-  const phase = (s: any): string => JSON.stringify(((s.status() as any).venueQuotingMandates ?? []).map((m: any) => `${m.mandateId.slice(-4)}:${m.phase}`));
+  const phase = (s: any): string => JSON.stringify(((s.status() as any).venueQuotingMandates ?? []).map((m: any) => `${m.mandate.mandateId.slice(-4)}:${m.phase}`));
   say(`  V11 status: venueQuotingMandates ${phase(signer)}`);
 
   // the previous release on this state, as after `signer.mjs.bak-*` is put back
