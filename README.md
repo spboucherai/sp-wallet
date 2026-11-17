@@ -1,65 +1,111 @@
 # SP Wallet
 
-Private, single-owner, self-hosted multi-chain wallet — `wallet.spboucher.ai`, hosted on MacLustr.
+Private, single-owner, self-hosted multi-chain wallet and trading workstation — `wallet.spboucher.ai`, hosted on MacLustr.
 
-- **Networks (mainnet):** Ethereum, Base, Arbitrum One, Polygon PoS, Bitcoin, Solana
-- **Assets:** native coin of each network + native USDC (Circle) on the five networks that have it
-- **Access:** one owner, passkey only (WebAuthn, user verification required). No password, no signup, no recovery by e-mail.
-- **UI:** phone-first PWA, French/English, dark/light.
+**Status (2026-11-17).** Production runs **V10** (`a118e3e`). **V11 is built, validated locally and not deployed**
+(`docs/V11-DEPLOYMENT.md`). Nothing of V11 was ever executed on a funded derivative account, mainnet or testnet; every
+live path is proven on the real signer code against scripted venues, on anvil forks, or on paper.
 
-> Sized for a small balance (tens of USDC). It is a software hot wallet on a home cluster, not an HSM. Read
-> `docs/adr/0001-custody.md` and `docs/threat-model/threat-model.md` before raising the limits.
+## What it is
 
-## How a transfer is authorized
+- **Wallet.** 23 networks in the registry (eight EVM chains, Bitcoin and the UTXO family, Solana, Tron, XRPL, Stellar, TON, Sui, Aptos, NEAR,
+  Cosmos, Cardano, Polkadot), native coins and registry tokens (`docs/TOKENS.md`). Transfers, swaps (KyberSwap, Jupiter,
+  THORChain, native routes), bridges (CCTP), any-to-any plans. One owner, passkey only (WebAuthn, user verification
+  required): no password, no signup, no recovery by e-mail.
+- **Derivatives.** Hyperliquid and GMX v2 (read, paper, and live behind server locks that are off by default); edgeX and
+  dYdX as **market data only** (their terms exclude Canada).
+- **V11 adds:** a unified order service with one risk engine and one kill switch; trading mandates; a trading API
+  (41 operations, API keys with scopes, TypeScript and Python SDKs); a websocket quote stream; a markets explorer and
+  cost comparator; private-markets display; an agents runtime (bar, stream and supervisor agents; research, paper, live)
+  bound to a strategy laboratory (`research/`); market making on paper, and live behind four locks and a quoting mandate;
+  a new five-area interface (Home · Markets · Trade · Agents · Activity).
+- **UI.** Phone-first PWA, French / English, dark / light.
+
+> A software hot wallet on a home cluster, not an HSM. Read `docs/adr/0001-custody.md` and
+> `docs/threat-model/threat-model.md` before raising any limit. No strategy of the laboratory shows an out-of-sample
+> edge, and the market-making evidence is negative (`docs/V11-REMAINING-LIMITATIONS.md` §0).
+
+## How anything is authorized
 
 ```
 phone (passkey) ──HTTPS──▶ API (node A) ──HMAC, LAN──▶ isolated signer (node B, holds the keys)
 ```
 
-1. The API drafts a transfer, checks balances on-chain, simulates it and pre-checks the signer limits.
-2. `request-approval` freezes every chain parameter (nonce / UTXOs / blockhash, fees) into an **intent**, serialized
-   deterministically and hashed (`SPW-INTENT-v1`, SHA-256).
-3. The passkey signs a WebAuthn assertion whose **challenge is that hash**.
-4. The signer — a separate process on a separate machine — verifies the assertion against the passkey public key it pinned at
-   setup, re-checks its own limits / expiry / replay cache / halt flag, **rebuilds the transaction from the intent** (only native
-   transfers and allowlisted USDC transfers can be expressed) and signs once.
-5. The API relays the signed bytes and tracks them to finality. A returned hash is never shown as success.
+The API drafts an operation and freezes it into a canonical **intent** whose SHA-256 is the challenge the passkey signs.
+The signer — a separate process on a separate machine — verifies the assertion against the passkey public key it pinned
+at setup, re-checks its own limits, expiry, replay cache and halt flag, **rebuilds the transaction from the intent** and
+signs once. A stolen session, a compromised API node or a tampered database cannot produce a signature for a transfer.
 
-A stolen session, a compromised API node or a tampered database cannot produce a signature: none of them holds the passkey, and
-any changed field changes the hash. What they *can* do is listed in the threat model (mainly: show a misleading review screen).
+Seven paths sign **without** a per-operation passkey, each under something the passkey approved earlier (a mandate, an
+authorization, an approved burn) and inside bounds the signer enforces itself: they are listed, with what a compromised
+API can do through each, in `docs/adr/0001-custody.md`. The risk engine, the kill switch and the server locks are
+API-side: they bound an honest API, not a compromised one.
 
 ## Layout
 
 | Path | Role |
 |---|---|
-| `packages/core` | network/asset registry, exact amounts, address validation, canonical intent + hash, transaction builders (EVM, BTC, Solana), policy, audit hash chain, state machine |
-| `services/isolated-signer` | keystore (scrypt + AES-256-GCM), key derivation, passkey verification, policy enforcement, signing; CLI |
-| `services/api` | Fastify API: passkey auth, sessions, chain adapters with dual-RPC checks, transfer lifecycle, reconciliation worker, audit log; serves the web app |
+| `packages/core` | network / asset registry, exact amounts, canonical intents and hashes, transaction builders, policy, audit hash chain |
+| `packages/swap`, `packages/derivatives` | swap and bridge providers; venue adapters (Hyperliquid, GMX, edgeX, dYdX), live canonical forms, paper engine |
+| `packages/trading` | canonical order, order state machine, risk checks, mandates, command grammar, market-making rules (pure) |
+| `packages/trading-sdk`, `sdk/python` | client SDKs of the trading API (not deployed) |
+| `services/isolated-signer` | keystore, key derivation, passkey verification, policy and mandate enforcement, signing; CLI |
+| `services/api` | Fastify API: auth, chains, transfers, swaps, derivatives, order service, risk, mandates, trading API, quote hub, agents runtime, market making, monitoring; serves the web app |
+| `services/research-runner` | sandboxed runner of research jobs |
+| `research/` | the strategy laboratory (Python, `uv`): backtester, strategies, studies, committed results |
 | `apps/web` | Vite + React + Tailwind PWA |
 | `tests/` | software passkey helper, Playwright e2e |
-| `docs/` | custody ADR, threat model, runbooks |
+| `scripts/` | build, dev stack, preflight, backup, fork proofs, read-only smokes, rollback rehearsal |
 
-Deviations from the original specification are listed in `docs/security/acceptance.md`.
-
-## Commands
+## Commands and checks
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
+(cd research && uv sync --frozen)      # the laboratory's virtualenv: without it the lab suites are skipped
 pnpm typecheck
-pnpm test            # 38 unit/integration/security tests (needs local Postgres db "spw_test")
-pnpm build           # dist/api.mjs, dist/signer.mjs, dist/web/
-scripts/dev-stack.sh # local stack on http://localhost:8650, throwaway keys, broadcast OFF
-pnpm e2e             # Playwright, phone viewport, virtual passkey (run dev-stack.sh first)
+pnpm test                              # 194 files, ~4 500 tests; needs local PostgreSQL (databases are created per file)
+pnpm build                             # dist/api.mjs, signer.mjs, research-runner.mjs, agents.mjs, dist/web/
+(cd research && uv run pytest)         # the laboratory
+(cd sdk/python && uv run ruff check && uv run pytest)
+npx vitest run packages/trading-sdk
+node scripts/gen-openapi.mts --check   # + gen-types.mts --check, gen_models.py --check, gen_sync.py --check
+
+scripts/dev-stack.sh                   # local stack on http://localhost:8650: throwaway keys, broadcast OFF, paper
+pnpm e2e <spec>                        # Playwright (Chromium, virtual passkey); each spec's header says which stack it needs
 scripts/dev-stop.sh
+
+npx tsx scripts/smoke-*.mts            # read-only checks against public endpoints
+node scripts/fork-*.mts                # execution proofs on local anvil forks (one at a time)
+scripts/preflight.sh                   # on the API node, before a deployment (read-only)
 ```
+
+What was run for V11, with every result including the failures: `docs/v11/work/final-validation.md`.
 
 ## Signer CLI (on the signer machine)
 
 ```bash
-node signer.mjs status           # key id, addresses, limits, journal integrity (no secrets)
+node signer.mjs status           # key id, addresses, limits, journal integrity, mandates (no secrets)
 node signer.mjs export-recovery  # interactive terminal only: prints the 24 words once, for paper backup
-node signer.mjs halt | unhalt    # emergency stop / resume (then: pm2 restart sp-wallet-signer)
+node signer.mjs halt | unhalt    # emergency stop / resume — since V11 applied by the running daemon at once
 node signer.mjs reset-passkeys && node signer.mjs setup-token   # lost passkey: re-run owner setup
 ```
 
-Limits live in `~/sp-wallet-signer-data/policy.json` on the signer machine (bump `version` when editing, then restart).
+Limits live in `~/sp-wallet-signer-data/policy.json` on the signer machine. A deployment never deletes that file.
+
+## Map of the documents
+
+| To know | Read |
+|---|---|
+| What V11 is, as built | `docs/V11-ARCHITECTURE.md` |
+| What is not done, not verified, or refused | `docs/V11-REMAINING-LIMITATIONS.md` |
+| How to deploy, what the owner must authorize, how to roll back | `docs/V11-DEPLOYMENT.md`, `docs/runbooks/deploy.md`, `docs/runbooks/operations.md` |
+| What was tested and how far | `docs/V11-TEST-RESULTS.md`, `docs/TRADING-TEST-RESULTS.md`, `docs/v11/work/final-validation.md` |
+| What can be enabled, and in which order | `docs/TRADING-PRODUCTION-READINESS.md` |
+| Custody, threats, security review | `docs/adr/0001-custody.md`, `docs/threat-model/threat-model.md`, `docs/V11-SECURITY-REVIEW.md`, `docs/security/acceptance.md` |
+| Orders, risk, mandates | `docs/V11-EXECUTION-ENGINE.md`, `docs/V11-RISK-MODEL.md`, `docs/TRADING-RISK-ENGINE.md`, `docs/TRADING-MANDATES.md` |
+| Trading API and SDKs | `docs/TRADING-API-ARCHITECTURE.md`, `docs/TRADING-API-SECURITY.md`, `docs/TRADING-API-OPENAPI.md`, `docs/sdk/` |
+| Venues, markets, quotes, private markets | `docs/V11-EXCHANGE-INTEGRATIONS.md`, `docs/V11-QUOTE-ENGINE.md`, `docs/V11-SYNTHETIC-MARKETS.md`, `docs/v4/venues/` |
+| Agents, laboratory, market making | `docs/TRADING-AGENT-ENGINE.md`, `docs/TRADING-BACKTESTING.md`, `docs/V11-MARKET-MAKING.md`, `research/README.md` |
+| Interface | `docs/v11/UI-ARCHITECTURE.md`, `docs/v9/DESIGN.md` |
+| The audit V11 started from | `docs/V11-AUDIT.md`, `docs/TRADING-AGENTS-AUDIT.md` |
+| Each workstream's own note | `docs/v11/work/*.md`; earlier versions: `docs/v2` … `docs/v10`, `docs/V2-IMPLEMENTATION-STATUS.md` |

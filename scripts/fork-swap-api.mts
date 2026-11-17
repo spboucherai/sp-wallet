@@ -11,6 +11,7 @@ import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { encodeFunctionData, erc20Abi, formatUnits, hexToBigInt, numberToHex, parseUnits } from 'viem';
 import { KYBER_ROUTER, NETWORKS } from '@spw/core';
 import { TestPasskey } from '../tests/helpers/passkey.ts';
+import { dealTokenRpc } from './lib/fork-helpers.mts';
 import { deriveKeys } from '../services/isolated-signer/src/keys.ts';
 import { createSignerServer } from '../services/isolated-signer/src/server.ts';
 import { Signer } from '../services/isolated-signer/src/signer.ts';
@@ -28,9 +29,14 @@ const cleanup = async () => { anvil.kill(); signerSrv?.close(); await app?.close
 try {
   for (let k = 0; k < 80; k++) { try { await rpc('eth_chainId'); break; } catch { await new Promise((r) => setTimeout(r, 250)); } }
   await rpc('anvil_setBalance', [ME, numberToHex(parseUnits('1', 18))]);
-  await rpc('anvil_impersonateAccount', [WHALE]); await rpc('anvil_setBalance', [WHALE, numberToHex(parseUnits('1', 18))]);
-  await rpc('eth_sendTransaction', [{ from: WHALE, to: USDC, data: encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [ME as `0x${string}`, 100_000000n] }) }]);
-  await rpc('anvil_stopImpersonatingAccount', [WHALE]);
+  // 100 USDC for the test wallet, on the fork only. V11 final validation: written in the token's storage and read back (dealTokenRpc) —
+  // the transfer from a fixed holder was unchecked and failed silently once that holder had no USDC left on Base (2026-11-17).
+  // USDC_WHALE=<holder> keeps the old way, now checked.
+  if (process.env.USDC_WHALE) { await rpc('anvil_impersonateAccount', [WHALE]); await rpc('anvil_setBalance', [WHALE, numberToHex(parseUnits('1', 18))]);
+    await rpc('eth_sendTransaction', [{ from: WHALE, to: USDC, data: encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [ME as `0x${string}`, 100_000000n] }) }]);
+    await rpc('anvil_stopImpersonatingAccount', [WHALE]); }
+  else await dealTokenRpc(rpc as never, USDC, ME, 100_000000n, 'base');
+  if ((await bal(USDC)) !== 100_000000n) throw new Error(`the test wallet holds ${await bal(USDC)} base units of USDC on the fork, 100000000 expected: the funding did not land`);
 
   const dir = mkdtempSync(join(tmpdir(), 'spw-forkapi-'));
   const store = new Store(join(dir, 'state.json'), join(dir, 'policy.json'));

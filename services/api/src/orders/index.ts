@@ -166,6 +166,8 @@ export function registerExecution(app: FastifyInstance, o: ExecutionOpts = {}): 
       if ((r.unknown || r.orphans || m.stopped.length || k) && line !== last) console.log(`[orders] ${line}`);
       last = line;
     }, SUPERVISOR_STEP_MS);
+    // retention of the PREVIEW evaluations (risk/service.ts prunePreviews); real decisions are history and stay
+    loop('risk-previews-prune', async () => { const n = await ex.risk.prunePreviews(); if (n) console.log(`[risk] ${n} preview evaluation(s) older than the retention removed`); }, 6 * 3600_000);
   }
   return ex;
 }

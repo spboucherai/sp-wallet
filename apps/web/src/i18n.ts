@@ -2040,6 +2040,7 @@ const D = {
   hdCapOn: ['activé', 'on'], hdCapOff: ['désactivé', 'off'],
   hdCap_deriv_live_mainnet: ['Dérivés réels sur le réseau principal', 'Live derivatives on mainnet'], hdCap_deriv_mandate_mainnet: ['Négociation autonome (mandat) sur le réseau principal', 'Autonomous (mandate) trading on mainnet'],
   hdCap_deriv_gmx_live: ['Ordres GMX v2 (Arbitrum)', 'GMX v2 orders (Arbitrum)'],
+  hdCap_trading_api_execution: ['Exécution réelle par l’API de trading (clés, agents)', 'Live execution through the trading API (keys, agents)'],
   hdCap_research_runner: ['Recherche autonome (accès de l’exécuteur)', 'Autonomous research (runner access)'], hdCap_research_readonly_db: ['Rôle en lecture seule pour les backtests', 'Read-only role for backtests'],
   hdCap_broadcast: ['Diffusion des transactions', 'Transaction broadcast'], hdCap_workers: ['Tâches de fond et moteurs des agents', 'Background tasks and agent engines'],
   hdCap_strategy_sandbox_enforced: ['Confinement obligatoire du code de stratégie', 'Mandatory confinement of strategy code'], hdCap_web_app: ['Application web servie par ce processus', 'Web app served by this process'],

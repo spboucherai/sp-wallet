@@ -42,16 +42,29 @@ for (const { device, lang } of MATRIX) {
       await expect(page.getByTestId('mk-open').first()).toBeVisible({ timeout: 40_000 });
       await expect(page.getByTestId('qt-conn')).toHaveAttribute('data-state', 'live', { timeout: 30_000 });
       await expect(page.getByTestId('qt-live').first()).toBeVisible({ timeout: 30_000 });
-      // 8 s of real ticks: every DOM mutation under the list is recorded with the nearest marked ancestor
-      const seen = await page.evaluate(() => new Promise<{ inCells: number; outside: string[]; rows: number }>((done) => {
+      // 8 s of real ticks: every DOM mutation under the list is recorded with the nearest marked ancestor.
+      // V11 final validation: two things that are NOT a redraw of the list were counted as one, and the test failed whenever they
+      // fell inside the 8 s (4 runs of 6 on a freshly started stack): (a) a cell GOING live — LiveCell / QuoteDot render their
+      // static children until the first quote of that market (or its first funding value) arrives, then swap them for the live
+      // element, once; (b) a logo that finishes loading (its skeleton plate is replaced). (a) is now counted on its own and
+      // bounded — a cell may go live ONCE; a second swap of the same cell IS a redraw and fails — and (b) is ignored. Everything
+      // else outside a live cell still fails the test: a row, a cell of another column, the table.
+      const seen = await page.evaluate(() => new Promise<{ inCells: number; outside: string[]; rows: number; wentLive: number; twice: string[] }>((done) => {
         const root = document.querySelector('[data-testid=markets]')!, rows = root.querySelectorAll('[data-testid=mk-open]').length; let inCells = 0; const outside: string[] = [];
+        const LIVE = '[data-testid=qt-live], [data-testid=qt-dot]', swaps = new Map<Element, number>();
+        const isLive = (n: Node): boolean => n.nodeType === 1 && (n as Element).matches(LIVE);
         const ob = new MutationObserver((list) => { for (const m of list) { const el = (m.target.nodeType === 1 ? m.target : m.target.parentElement) as Element | null;
-          if (el?.closest('[data-testid=qt-live], [data-testid=qt-dot], [data-testid=qt-conn], [data-testid=mk-fresh]')) inCells += 1; else outside.push(`${m.type} ${el?.tagName} ${el?.getAttribute('data-testid') ?? el?.className.toString().slice(0, 40)}`); } });
+          if (el?.closest('[data-testid=qt-live], [data-testid=qt-dot], [data-testid=qt-conn], [data-testid=mk-fresh]')) inCells += 1;
+          else if (el?.closest('.logo-plate')) continue;                                                                                   // (b)
+          else if (m.type === 'childList' && el?.tagName === 'TD' && el.querySelector(`:scope > :is(${LIVE})`) && [...m.addedNodes].every(isLive) && ![...m.removedNodes].some(isLive)) { if (m.addedNodes.length) swaps.set(el, (swaps.get(el) ?? 0) + 1); }   // (a)
+          else outside.push(`${m.type} ${el?.tagName} ${el?.getAttribute('data-testid') ?? el?.className.toString().slice(0, 40)}`); } });
         ob.observe(root, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class', 'data-state'] });
-        setTimeout(() => { ob.disconnect(); done({ inCells, outside: [...new Set(outside)].slice(0, 10), rows }); }, 8000);
+        setTimeout(() => { ob.disconnect(); done({ inCells, outside: [...new Set(outside)].slice(0, 10), rows, wentLive: swaps.size,
+          twice: [...swaps].filter(([, n]) => n > 1).map(([el, n]) => `${el.closest('tr')?.textContent?.slice(0, 24)} col ${(el as HTMLTableCellElement).cellIndex}: ${n} swaps`) }); }, 8000);
       }));
-      test.info().annotations.push({ type: 'live ticks', description: `${seen.inCells} mutations inside live cells over 8 s on ${seen.rows} rows; ${seen.outside.length} kinds outside` });
+      test.info().annotations.push({ type: 'live ticks', description: `${seen.inCells} mutations inside live cells over 8 s on ${seen.rows} rows; ${seen.wentLive} cell(s) went live; ${seen.outside.length} kinds outside` });
       expect(seen.inCells, 'ticks were observed').toBeGreaterThan(0);
+      expect(seen.twice, 'a cell goes live once: a second swap of the same cell is a redraw').toEqual([]);
       expect(seen.outside, 'nothing outside the live cells changed').toEqual([]);
       expect(s.errors(), s.errors().join('\n')).toEqual([]);
     });

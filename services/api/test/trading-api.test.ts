@@ -787,7 +787,9 @@ describe('usage, status, retention', () => {
     expect(dump).not.toContain('SECRETQUERY');
     expect(dump).not.toContain(k.secret.split('_').slice(4).join('_'));
     expect(dump).not.toContain('Bearer');
-    expect((await sql`select last_used_at from api_keys where id = ${k.id}`)[0].last_used_at).not.toBeNull();
+    // `last_used_at` is written without being awaited (keys.ts touch: `void sql\`update …\``), like the usage rows: read at once it was
+    // still null in one full run of three on 2026-11-17. Same bounded poll as usageOf — it returns as soon as the column is set.
+    await expect.poll(async () => (await sql`select last_used_at from api_keys where id = ${k.id}`)[0].last_used_at, { timeout: 30_000, interval: 5 }).not.toBeNull();
     await sql`insert into api_key_usage (key_id, ts, method, route, status, latency_ms, request_id) values (${k.id}, now() - interval '91 days', 'GET', '/old', 200, 1, 'old')`;
     await sql`insert into api_idempotency (principal, key, request_hash, created_at) values ('owner', 'old-key-0001', 'h', now() - interval '2 days')`;
     expect(await principal.pruneTradingApi()).toMatchObject({ usage: 1, idempotency: 1 });

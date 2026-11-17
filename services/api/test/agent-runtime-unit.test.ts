@@ -525,3 +525,23 @@ describe('mode separation — the SQL of the read model', () => {
     expect(src).toMatch(/label: mode === 'paper' \? 'PAPER — simulated/);
   });
 });
+
+// V11 final validation — the library listing describes its versions a few at a time (it was one laboratory process after the
+// other: 19 s for 14 versions, and the first test of agent-bind.test.ts timed out at 30 s whenever the machine was busy).
+describe('mapLimit (the library listing)', () => {
+  it('answers in the order of the items whatever the order of completion, never more than `limit` at once, and a failure is the caller\'s', async () => {
+    const { mapLimit } = await import('../src/agents/perp-strategies.ts');
+    let running = 0, peak = 0;
+    const out = await mapLimit([50, 5, 30, 1, 20, 10, 2], 3, async (ms, i) => { running += 1; peak = Math.max(peak, running); await new Promise((r) => setTimeout(r, ms)); running -= 1; return `${i}:${ms}`; });
+    expect(out).toEqual(['0:50', '1:5', '2:30', '3:1', '4:20', '5:10', '6:2']);
+    expect(peak).toBe(3);
+    expect(await mapLimit([], 4, async () => 1)).toEqual([]);
+    expect(await mapLimit([1, 2], 0, async (x) => x * 2)).toEqual([2, 4]);                       // a limit under one still runs, one at a time
+    await expect(mapLimit([1, 2, 3], 2, async (x) => { if (x === 2) throw new Error('boom'); return x; })).rejects.toThrow('boom');
+  });
+  it('the listing itself: every describe is caught per version (a spot or unloadable version is left out, the others stay)', () => {
+    const src = readFileSync(path.join(REPO_ROOT, 'services/api/src/agents/perp-strategies.ts'), 'utf8');
+    const fn = src.slice(src.indexOf('export async function perpLibrary'), src.indexOf('const sameSet'));
+    expect(fn).toMatch(/mapLimit\(rels, DESCRIBE_CONCURRENCY/); expect(fn).toMatch(/catch \{ return null;/); expect(fn).toMatch(/readdirSync\(ROOT\)\.sort\(\)/);
+  });
+});

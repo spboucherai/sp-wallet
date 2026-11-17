@@ -1,9 +1,11 @@
 // Live READ-ONLY check of the edgeX adapter: public GETs and a short public websocket subscription. No key, no account, no
 // private endpoint; nothing is signed or sent. edgeX is a market-data-only venue in SP Wallet (its Terms of Use exclude Canada).
-// Run: npx tsx scripts/smoke-edgex.mts
+// Run: npx tsx scripts/smoke-edgex.mts [--symbol MOONSHOTUSDC]
 import { createEdgeXAdapter, D, VenueUnavailable, type Book, type Ticker } from '../packages/derivatives/src/index.ts';
 
-const SYMBOL = 'ANTHROPICUSDC';
+// The sample pre-IPO contract. It was ANTHROPICUSDC until edgeX took that contract off its list (observed 2026-11-17: absent from
+// getMetaData and from ticker.all, last trade 01:29:45Z, two days before the company's listing) — a fixed name is a venue fact that expires.
+const SYMBOL = process.argv.includes('--symbol') ? process.argv[process.argv.indexOf('--symbol') + 1]! : 'MOONSHOTUSDC';
 const iso = (ts: number) => new Date(ts).toISOString();
 const line = (k: string, v: unknown) => console.log(`  ${k.padEnd(26)} ${String(v)}`);
 let failed = 0;

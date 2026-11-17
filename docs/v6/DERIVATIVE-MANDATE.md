@@ -34,6 +34,13 @@ order ≤ some position limit ≤ gross; order ≤ daily turnover; the acknowled
 active on that authorization; the id is new; the emergency halt is off; the passkey assertion verifies. Nothing is signed by
 any key at approval and nothing is sent to the venue.
 
+*(Added 2026-11-17, V11.)* A directional mandate and a **quoting mandate** (`SPW-VENUE-QUOTING-MANDATE-v1`, market making —
+`docs/V11-MARKET-MAKING.md`, `docs/TRADING-MANDATES.md` "Quoting mandates") exclude each other on a venue authorization: the
+approval above is also refused, with `conflict`, while a quoting mandate is active on it (`venue-mandate.ts`), and a quoting
+mandate is refused while a directional one is. **A signer binary older than V11 does not know the quoting mandate and does
+not apply this refusal** — which is why every quoting mandate is revoked before a signer rollback (`docs/V11-DEPLOYMENT.md`
+§9.3, demonstrated on 2026-11-17).
+
 ## 2. What the signer enforces by itself on `POST /venue/mandate/sign` (no passkey)
 
 Everything is decided from the signer's stored mandate and authorization, its own `describe()` of the payload (pinned asset

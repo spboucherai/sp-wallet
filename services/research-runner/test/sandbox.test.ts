@@ -39,6 +39,7 @@ describe.skipIf(!sandboxAvailable() || !labReady())('sandbox: every forbidden ac
     const result = await runJob(job, cfg, h.hooks);
     log = h.captured.lines.map((l) => `${l.s}: ${l.t}`).join('\n');
     expect(result.usage.sandbox, log).toBe('sandbox-exec');
+    expect(existsSync(path.join(p.work, 'probe.json')), `the probe wrote no result — outcome ${result.outcome}${'reason' in result ? ` (${result.reason})` : ''}\n${log}`).toBe(true);   // say WHY, not only ENOENT
     probe = JSON.parse(readFileSync(path.join(p.work, 'probe.json'), 'utf8')) as Probe;
     profile = readFileSync(p.profile, 'utf8');
   }, 120_000);

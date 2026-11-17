@@ -36,6 +36,7 @@ import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { deriveKeys } from '../../services/isolated-signer/src/keys.ts';
 import { exchangePrices } from '../../services/isolated-signer/src/prices.ts';
 import { createSignerServer } from '../../services/isolated-signer/src/server.ts';
+import { dealTokenRpc } from '../../scripts/lib/fork-helpers.mts';
 import { Signer } from '../../services/isolated-signer/src/signer.ts';
 import { Store } from '../../services/isolated-signer/src/store.ts';
 
@@ -99,9 +100,17 @@ if (FORK) {
     const rpc = async (method: string, params: unknown[] = []) => { const r = await realFetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rid, method, params }) }); const j = await r.json() as { result?: unknown; error?: { message: string } }; if (j.error) throw new Error(`${method}: ${j.error.message}`); return j.result; };
     for (let n = 0; n < 160; n++) { try { await rpc('eth_chainId'); break; } catch { await new Promise((r) => setTimeout(r, 250)); } }
     await rpc('anvil_setBalance', [me, '0x' + (5n * 10n ** 16n).toString(16)]);
-    if (d.usdc) { await rpc('anvil_impersonateAccount', [WHALE]); await rpc('anvil_setBalance', [WHALE, '0x' + (10n ** 18n).toString(16)]);
-      await rpc('eth_sendTransaction', [{ from: WHALE, to: d.usdc, data: `0xa9059cbb${pad(me)}${(250_000000n).toString(16).padStart(64, '0')}` }]);   // transfer(me, 250 USDC) on the local fork
-      await rpc('anvil_stopImpersonatingAccount', [WHALE]); }
+    // 250 USDC on the local fork. Since the V11 final validation the balance is WRITTEN in the token's storage and read back through
+    // balanceOf (scripts/lib/fork-helpers.mts dealTokenRpc); USDC_WHALE=<holder> still takes it from a holder by an (impersonated)
+    // transfer, now checked. The unchecked transfer from a fixed holder failed silently once that address held nothing.
+    if (d.usdc) {
+      if (process.env.USDC_WHALE) { await rpc('anvil_impersonateAccount', [WHALE]); await rpc('anvil_setBalance', [WHALE, '0x' + (10n ** 18n).toString(16)]);
+        await rpc('eth_sendTransaction', [{ from: WHALE, to: d.usdc, data: `0xa9059cbb${pad(me)}${(250_000000n).toString(16).padStart(64, '0')}` }]);
+        await rpc('anvil_stopImpersonatingAccount', [WHALE]); }
+      else await dealTokenRpc(rpc as never, d.usdc, me, 250_000000n, id);
+      const got = BigInt(await rpc('eth_call', [{ to: d.usdc, data: `0x70a08231${pad(me)}` }, 'latest']) as string);
+      if (got !== 250_000000n) throw new Error(`the throwaway wallet holds ${got} base units of USDC on the ${id} fork, 250000000 expected: the funding did not land`);
+    }
     override[id] = [url, url]; maxFee[id] = '5000000000000000';
   }
   process.on('exit', () => { stopping = true; for (const f of forks) f.kill(); });

@@ -18,11 +18,18 @@ describe('optional capabilities', () => {
     expect(by.deriv_mm_testnet).toMatchObject({ on: false, missing: ['SPW_DERIV_MM_TESTNET', 'SPW_TRADING_API_EXECUTION'] });
     expect(capabilities({ SPW_DERIV_LIVE_MAINNET: 'on', SPW_DERIV_MANDATE_MAINNET: 'on', SPW_DERIV_MM_MAINNET: 'on', SPW_TRADING_API_EXECUTION: 'on' }).find((c) => c.id === 'deriv_mm_mainnet')!.on).toBe(true);
     expect(capabilities({ SPW_DERIV_LIVE_MAINNET: 'on', SPW_DERIV_MANDATE_MAINNET: 'on', SPW_DERIV_MM_MAINNET: 'on' }).find((c) => c.id === 'deriv_mm_mainnet')).toMatchObject({ on: false, missing: ['SPW_TRADING_API_EXECUTION'] });
+    // V11 final validation: EVERY execution lock is in the line — the plain trading-API one too (it was on the Risk screen only)
+    expect(by.trading_api_execution).toMatchObject({ on: false, missing: ['SPW_TRADING_API_EXECUTION'] });
+    expect(by.trading_api_execution!.why).toMatch(/execution_disabled.*cancels and strictly reducing orders still pass/);
+    expect(capabilities({ SPW_TRADING_API_EXECUTION: 'on' }).find((c) => c.id === 'trading_api_execution')).toMatchObject({ on: true, missing: [] });
+    expect(capabilities({ SPW_TRADING_API_EXECUTION: 'true' }).find((c) => c.id === 'trading_api_execution')!.on).toBe(false);   // only "on", as orders/index.ts reads it
+    expect(capabilitiesLine(capabilities({ SPW_TRADING_API_EXECUTION: 'on' }))).toContain(' trading_api_execution=on ');
+    for (const lock of ['SPW_DERIV_LIVE_MAINNET', 'SPW_DERIV_MANDATE_MAINNET', 'SPW_DERIV_GMX_LIVE', 'SPW_TRADING_API_EXECUTION', 'SPW_DERIV_MM_MAINNET', 'SPW_DERIV_MM_TESTNET', 'SPW_BROADCAST']) expect(none.some((c) => c.missing.includes(lock)) || lock === 'SPW_BROADCAST', lock).toBe(true);
     expect(by.research_runner).toMatchObject({ on: false, missing: ['SPW_RESEARCH_RUNNER_SECRET'] });
     expect(by.research_readonly_db).toMatchObject({ on: false, missing: ['RESEARCH_DATABASE_URL'] });
     expect(by.broadcast!.on).toBe(true); expect(by.workers!.on).toBe(true); expect(by.strategy_sandbox_enforced!.on).toBe(true);
     const line = capabilitiesLine(none);
-    expect(line).toMatch(/^capabilities: deriv_live_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\) deriv_mandate_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\+SPW_DERIV_MANDATE_MAINNET\) deriv_gmx_live=OFF\(missing SPW_DERIV_LIVE_MAINNET\+SPW_DERIV_GMX_LIVE\) deriv_mm_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\+SPW_DERIV_MANDATE_MAINNET\+SPW_DERIV_MM_MAINNET\+SPW_TRADING_API_EXECUTION\) deriv_mm_testnet=OFF\(missing SPW_DERIV_MM_TESTNET\+SPW_TRADING_API_EXECUTION\) research_runner=OFF\(missing SPW_RESEARCH_RUNNER_SECRET\) research_readonly_db=OFF\(missing RESEARCH_DATABASE_URL\) broadcast=on workers=on strategy_sandbox_enforced=on/);
+    expect(line).toMatch(/^capabilities: deriv_live_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\) deriv_mandate_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\+SPW_DERIV_MANDATE_MAINNET\) deriv_gmx_live=OFF\(missing SPW_DERIV_LIVE_MAINNET\+SPW_DERIV_GMX_LIVE\) trading_api_execution=OFF\(missing SPW_TRADING_API_EXECUTION\) deriv_mm_mainnet=OFF\(missing SPW_DERIV_LIVE_MAINNET\+SPW_DERIV_MANDATE_MAINNET\+SPW_DERIV_MM_MAINNET\+SPW_TRADING_API_EXECUTION\) deriv_mm_testnet=OFF\(missing SPW_DERIV_MM_TESTNET\+SPW_TRADING_API_EXECUTION\) research_runner=OFF\(missing SPW_RESEARCH_RUNNER_SECRET\) research_readonly_db=OFF\(missing RESEARCH_DATABASE_URL\) broadcast=on workers=on strategy_sandbox_enforced=on/);
     expect(line.split('\n')).toHaveLength(1);
 
     const env = { SPW_DERIV_LIVE_MAINNET: 'on', SPW_DERIV_MANDATE_MAINNET: 'on', SPW_DERIV_GMX_LIVE: 'on', SPW_RESEARCH_RUNNER_SECRET: SECRET, RESEARCH_DATABASE_URL: `postgres://reader:${SECRET}@db/sp_wallet`, SPW_BROADCAST: 'off', SPW_LAB_SANDBOX: 'off', SPW_WEB_DIR: '/srv/web' };

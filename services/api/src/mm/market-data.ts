@@ -1,10 +1,16 @@
 // `MarketDataPort` of the market-making engine over a small SOURCE interface, with freshness guards.
 //
 // `BookSource` is everything the engine's market data needs from the rest of the service: the last top of book of an instrument
-// as the venue's stream delivered it, when it was received, and the status of that stream. Today the source is the venue's own
-// WebSocket through the Hyperliquid adapter (`hlBookSource`: the `l2Book` subscription of the stream client, per network) or
-// the stream engine's market state (`StreamEngine.bookSource`). THE COMING QUOTE HUB REPLACES THE SOURCE, NOT THE PORT: it only
-// has to implement `BookSource` (docs/V11-MARKET-MAKING.md, "Market data").
+// as the venue's stream delivered it, when it was received, and the status of that stream. The source is the venue's own
+// WebSocket through the Hyperliquid adapter: its BEST BID / OFFER channel (`bboBookSource`, per network). THE COMING QUOTE HUB
+// REPLACES THE SOURCE, NOT THE PORT: it only has to implement `BookSource` (docs/V11-MARKET-MAKING.md, "Market data").
+//
+// V11 final validation — why `bbo` and not the order book. Until then the source on mainnet was the stream engine's market state,
+// fed by the venue's `l2Book` channel, and on testnet the same channel of the testnet client. Measured on 2026-11-17 on BTC: that
+// channel delivers a book every 12.3 s (median; 9 in 90 s). With the default freshness bound of 5 s and the breakers' 15 s
+// cool-down, a session on real data was `pulled` for good a few seconds after its start: in a 30-minute paper soak it placed ONE
+// quote batch. (The tests replay recorded books and stamp one every second; nothing had watched a session on the real feed for
+// more than a minute.) The `bbo` channel speaks about ten times a second and is what a quoting engine needs: the top of the book.
 //
 // Guards, all fail-closed (a status other than `connected` trips the engine's `venue_disconnected` breaker, which pulls quotes):
 //   - a stream that is not `connected` is reported as it is, and its last book is NOT served;
@@ -39,6 +45,24 @@ export function marketDataPort(source: BookSource, o: { now: () => number; maxAg
   };
 }
 
+/** the adapter's `stream` function, as much of it as a book source needs */
+export type VenueStreamFn = (sub: { type: 'bbo'; symbol: string }, on: (ev: unknown) => void, onStatus: (s: 'connected' | 'reconnecting' | 'stale') => void) => () => void;
+/**
+ * The top of the book from the venue's best-bid / offer channel. A one-sided top is passed as `null` (the port then serves no
+ * book and the engine's `data_stale` breaker pulls): a quote is never priced from half a book. `ts` is the venue's own time.
+ */
+export function bboBookSource(stream: VenueStreamFn, now: () => number): BookSource & { close(): void } {
+  return subscribingBookSource((symbol, onBook, onStatus) => stream({ type: 'bbo', symbol }, (ev) => {
+    const e = ev as { type?: string; symbol?: string; bid?: [string, string] | null; ask?: [string, string] | null; ts?: number };
+    if (e.type !== 'bbo' || e.symbol !== symbol) return;
+    onBook({ instrument: `hyperliquid:${symbol}`, bids: e.bid ? [e.bid] : [], asks: e.ask ? [e.ask] : [], ts: e.ts ?? now() } as Book);
+  }, onStatus), now);
+}
+/** `top` (and its times, and the status) from one source, `funding` from another that has a ticker — the stream engine's market state */
+export function withFundingFrom(top: BookSource, funding: BookSource): BookSource {
+  return { read: (instrument) => { const r = top.read(instrument); return r ? { ...r, funding: r.funding ?? funding.read(instrument)?.funding ?? null } : null; },
+    ...(top.release ? { release: (instrument: string) => top.release!(instrument) } : {}) };
+}
 /** A `BookSource` over any subscription that delivers books and a status: the Hyperliquid stream client (`adapter.stream`), per network. */
 export function subscribingBookSource(subscribe: (symbol: string, onBook: (b: Book) => void, onStatus: (s: 'connected' | 'reconnecting' | 'stale') => void) => () => void, now: () => number): BookSource & { close(): void } {
   const markets = new Map<string, { read: BookRead; stop: () => void }>();

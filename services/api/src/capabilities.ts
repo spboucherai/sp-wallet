@@ -28,6 +28,11 @@ export function capabilities(env: Env = process.env): Capability[] {
     { id: 'deriv_gmx_live', on: live && gmx, missing: [...(live ? [] : ['SPW_DERIV_LIVE_MAINNET']), ...(gmx ? [] : ['SPW_DERIV_GMX_LIVE'])],
       why: live && gmx ? 'GMX v2 orders can be prepared on Arbitrum (each one still needs the venue policy and a passkey)'
         : 'needs SPW_DERIV_LIVE_MAINNET=on AND SPW_DERIV_GMX_LIVE=on: a NEW GMX position answers gmx_disabled / mainnet_disabled; closing a position and cancelling a pending order still work (reading works)' },
+    // V11 trading API: the execution lock of the order service (orders/index.ts `tradingApiExecutionEnabled`). It was shown on the Risk
+    // screen and in /developer/status only: a value lost or set at a restart did not appear in the start-up line.
+    { id: 'trading_api_execution', on: isOn(env.SPW_TRADING_API_EXECUTION), missing: isOn(env.SPW_TRADING_API_EXECUTION) ? [] : ['SPW_TRADING_API_EXECUTION'],
+      why: isOn(env.SPW_TRADING_API_EXECUTION) ? 'live orders can be placed through the order service by API keys and live agents (inside a mandate) and by the owner through the trading API (with the passkey); the mainnet locks still apply'
+        : 'SPW_TRADING_API_EXECUTION is not "on": no NEW live risk is placed through the order service (API keys, live agents, the owner through the trading API answer execution_disabled); cancels and strictly reducing orders still pass; paper works' },
     // V11 market making: quoting on mainnet needs FOUR settings (and a quoting mandate approved with the passkey); testnet has its own
     { id: 'deriv_mm_mainnet', on: live && mandate && isOn(env.SPW_DERIV_MM_MAINNET) && isOn(env.SPW_TRADING_API_EXECUTION),
       missing: [...(live ? [] : ['SPW_DERIV_LIVE_MAINNET']), ...(mandate ? [] : ['SPW_DERIV_MANDATE_MAINNET']), ...(isOn(env.SPW_DERIV_MM_MAINNET) ? [] : ['SPW_DERIV_MM_MAINNET']), ...(isOn(env.SPW_TRADING_API_EXECUTION) ? [] : ['SPW_TRADING_API_EXECUTION'])],

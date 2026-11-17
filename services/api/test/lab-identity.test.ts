@@ -24,15 +24,20 @@ const library: string[] = [];
 
 /** the invocation of the laboratory as it was before v8: the virtualenv's interpreter (through `uv run`), cwd = research/,
  *  three environment variables, no sandbox */
-function legacy(args: string[], o: { input?: string; env?: Record<string, string>; viaUv?: boolean } = {}): { status: number | null; stdout: string; stderr: string; ms: number } {
+function legacy(args: string[], o: { input?: string; env?: Record<string, string>; viaUv?: boolean; timeoutMs?: number } = {}): { status: number | null; stdout: string; stderr: string; ms: number } {
   const home = process.env.HOME ?? '/tmp', t0 = Date.now();
   const env = { PATH: `${home}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`, HOME: home, UV_OFFLINE: '1', PYTHONDONTWRITEBYTECODE: '1', ...o.env };
   // `uv run` only execs the virtualenv's interpreter; it is used here for the latency figure only. For the comparisons the
   // interpreter is started directly (same binary, same environment): several `uv run` at once — suites running in parallel —
   // were seen to hang for ever, and spawnSync would then block this whole test process. Every call has a timeout.
   const useUv = !!UV && o.viaUv === true;
-  const r = useUv ? spawnSync(UV, ['run', '--frozen', '--no-sync', 'python', '-m', ...args], { cwd: REAL_LAB, env, input: o.input, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 120_000, killSignal: 'SIGKILL' })
-    : spawnSync(REAL_PYTHON, ['-m', ...args], { cwd: REAL_LAB, env, input: o.input, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 300_000, killSignal: 'SIGKILL' });
+  const once = () => useUv ? spawnSync(UV, ['run', '--frozen', '--no-sync', 'python', '-m', ...args], { cwd: REAL_LAB, env, input: o.input, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 120_000, killSignal: 'SIGKILL' })
+    : spawnSync(REAL_PYTHON, ['-m', ...args], { cwd: REAL_LAB, env, input: o.input, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: o.timeoutMs ?? 300_000, killSignal: 'SIGKILL' });
+  let r = once();
+  // V11 final validation: an unconfined reference interpreter was seen twice (2026-11-16, 2026-11-17) not to return until its kill —
+  // not reproduced on demand, cause unknown. A reference call KILLED at its timeout is started once more (its output is what is
+  // compared; a call that answered, whatever it answered, is never repeated). The latency loop passes its own short timeout and no retry.
+  if (r.signal === 'SIGKILL' && o.timeoutMs === undefined) { console.warn(`[lab-identity] reference call killed at its timeout, started again: ${args.slice(0, 3).join(' ')}`); r = once(); }
   return { status: r.status, stdout: r.stdout, stderr: r.stderr, ms: Date.now() - t0 };
 }
 const SYMS: Record<string, [number, number]> = { BTC: [11, 60_000], ETH: [23, 3000], LINK: [31, 15], SOL: [41, 150], AAVE: [53, 90], HYPE: [61, 25] };
@@ -101,11 +106,16 @@ describe.skipIf(!READY)('confinement does not change a signal', () => {
   it('latency of one signal call: sandboxed runner vs the pre-v8 unconfined invocation (measured)', async () => {
     const rel = 'ma_trend/3', dir = path.join(fx.dir, 'strategies', rel), info = await strategies.describe(rel), data = { BTC: bars(info.meta.lookback + 5, 11, 60_000), ETH: bars(info.meta.lookback + 5, 23, 3000) };
     const last = data.BTC.at(-1)!.ts, input = JSON.stringify({ candles: Object.fromEntries(Object.entries(data).map(([s, b]) => [s, b.map((x) => [Math.floor(x.ts / 1000), x.open, x.high, x.low, x.close, x.volume])])), interval: '1h', as_of: new Date(last).toISOString().replace('.000Z', 'Z') });
-    const boxed: number[] = [], old: number[] = [];
+    const boxed: number[] = [], old: number[] = []; let refKilled = 0;
     for (let i = 0; i < 7; i++) { const t0 = Date.now(); await live.runSignal({ path: info.path, sha256: info.sha256 }, data, '1h'); boxed.push(Date.now() - t0);
-      old.push(legacy(['spq.signal', '--strategy', path.join(REAL_LAB, 'strategies', rel), '--sha256', info.sha256, '--input', '-'], { input }).ms); }   // v10: the interpreter directly — a hung `uv run` (another suite or session holding uv's lock) timed this test out; `uv run` only execs this binary
+      // V11 final validation: the REFERENCE figure is printed, never asserted. One unconfined interpreter was seen to hang until its
+      // 300 s kill in a full-suite run (2026-11-16, cause not found: 197 concurrent runs of the same command could not reproduce it),
+      // and spawnSync blocked this test past its own timeout. A reference call is now given 20 s and left out of the median if it is killed.
+      const ref = legacy(['spq.signal', '--strategy', path.join(REAL_LAB, 'strategies', rel), '--sha256', info.sha256, '--input', '-'], { input, timeoutMs: 20_000 });
+      if (ref.status === 0) old.push(ref.ms); else refKilled += 1; }   // v10: the interpreter directly — a hung `uv run` (another suite or session holding uv's lock) timed this test out; `uv run` only execs this binary
     void dir;
-    console.log(`[lab-identity] one signal call (ma_trend/3, ${info.meta.lookback} bars x 2 symbols), 7 runs: sandboxed median ${median(boxed)} ms (min ${Math.min(...boxed)}, max ${Math.max(...boxed)}); pre-v8 invocation (unconfined interpreter) median ${median(old)} ms (min ${Math.min(...old)}, max ${Math.max(...old)})`);
+    console.log(`[lab-identity] one signal call (ma_trend/3, ${info.meta.lookback} bars x 2 symbols), 7 runs: sandboxed median ${median(boxed)} ms (min ${Math.min(...boxed)}, max ${Math.max(...boxed)}); pre-v8 invocation (unconfined interpreter) ${old.length ? `median ${median(old)} ms (min ${Math.min(...old)}, max ${Math.max(...old)})` : 'not measured'}${refKilled ? `; ${refKilled} reference call(s) killed at 20 s and left out` : ''}`);
+    expect(boxed).toHaveLength(7);
     expect(median(boxed)).toBeLessThan(5000);                             // 0.14 % of a 1 h bar at the very worst
   }, 120_000);
 });

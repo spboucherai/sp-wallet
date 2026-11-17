@@ -79,12 +79,20 @@ describe.skipIf(!labReady())('runner state machine (fake agent)', () => {
   // v10: through the runner loop, as in production — the cancel is only known from the API's answer to a log push
   it('cancel of a SILENT agent: nothing is printed after the first line, the heartbeat still learns the cancel', async () => {
     const job = makeJob(), cfg = { ...testConfig('hang'), logFlushMs: 150 }, pushes: number[] = []; let cancelAt = 0, wanted = false;
-    const api = { claim: async () => null, result: async () => {}, log: async (_j: unknown, lines: unknown[]) => { pushes.push(lines.length); return { cancel: wanted }; } };
-    setTimeout(() => { wanted = true; cancelAt = Date.now(); }, 2500);   // long after the agent's only line (« working for ever ») was pushed
+    // V11 final validation: the cancel was armed by a 2.5 s wall-clock timer and the test then counted the empty pushes made before it —
+    // on a busy machine the agent's start took most of those 2.5 s and only two had been made (one failure in three full runs).
+    // The owner's cancel is now wanted once the agent's line has been pushed AND three heartbeats have followed it: the same
+    // situation, whatever the machine's speed. Without a heartbeat the cancel is never wanted and the test times out, as it should.
+    const api = { claim: async () => null, result: async () => {}, log: async (_j: unknown, lines: unknown[]) => {
+      pushes.push(lines.length);
+      const first = pushes.findIndex((n) => n > 0);
+      if (!wanted && first >= 0 && pushes.slice(first + 1).filter((n) => n === 0).length >= 3) { wanted = true; cancelAt = Date.now(); }
+      return { cancel: wanted }; } };
     const result = await processJob(job, cfg, api as never);
     expect(result).toMatchObject({ outcome: 'cancelled', reason: 'cancelled by the owner' });
     expect(Date.now() - cancelAt).toBeLessThan(5000);                    // not the wall-clock budget (minutes)
     expect(pushes.filter((n) => n === 0).length).toBeGreaterThan(2);     // empty batches were pushed to ask
+    expect(pushes.some((n) => n > 0)).toBe(true); expect(cancelAt).toBeGreaterThan(0);   // the agent's line was pushed first; the cancel came from a heartbeat's answer
   }, T);
 
   it('trial budget: more ledger lines than allowed → over_budget, and the consumed trials are reported', async () => {

@@ -16,7 +16,7 @@ only) and `~/sp-wallet-signer-data` (keystore, `state.json`, `policy.json`). Com
    ```bash
    pnpm install --frozen-lockfile
    pnpm typecheck
-   pnpm build                      # dist/api.mjs, dist/signer.mjs, dist/research-runner.mjs, dist/web/
+   pnpm build                      # dist/api.mjs, dist/signer.mjs, dist/research-runner.mjs, dist/agents.mjs (V11: the separate agents worker), dist/web/
    (cd research && uv sync --frozen)   # the laboratory's virtualenv: without it the strategy sandbox is "unavailable" and agents hold
    ```
 3. **Backup before a migration.** The schema is applied by the API at start-up (`migrate()`, `create … if not exists` /
@@ -36,14 +36,18 @@ only) and `~/sp-wallet-signer-data` (keystore, `state.json`, `policy.json`). Com
    | `SPW_DERIV_LIVE_MAINNET=on` | NEW mainnet derivatives risk answers `mainnet_disabled` (orders that open or add, leverage changes, authorizations, collateral moves). Since V11 cancels and reduce-only closes of what already exists still work without it |
    | `RESEARCH_DATABASE_URL` | backtest candles are read with the API's own role instead of the read-only one |
    | `SPW_RESEARCH_RUNNER_SECRET` (≥ 32 chars) | the research runner routes answer 404; research jobs stay queued |
-
+   | `SPW_TRADING_API_EXECUTION=on` (V11, default off) | no NEW live risk is placed through the order service: an API key, a live agent and the owner through the trading API answer `execution_disabled`; cancels and strictly reducing orders pass; paper works. A live perp agent needs it as well as the mainnet locks (in BOTH processes when the agents worker is separate) |
    | `SPW_DERIV_MM_MAINNET=on` (V11, default off) | no quote is placed on mainnet: a market-making session answers `mm_mainnet_disabled`. Needs `SPW_DERIV_LIVE_MAINNET`, `SPW_DERIV_MANDATE_MAINNET` and `SPW_TRADING_API_EXECUTION` as well; cancels, reduce-only orders and the dead man's switch pass without any of them |
    | `SPW_DERIV_MM_TESTNET=on` (V11, default off) | no quote is placed on Hyperliquid TESTNET (`mm_testnet_disabled`): the owner's own first go-live step. Needs `SPW_TRADING_API_EXECUTION` as well |
 
    (`SPW_DERIV_MANDATE_MAINNET=on` as well if perp agents trade on mainnet; without it an agent already live can only
    reduce. `SPW_DERIV_GMX_LIVE` is OFF by default; without it no new GMX position is prepared, closing and cancelling
-   still work.) Which of these three belong in the environment is the owner's decision about what is open on mainnet —
-   this runbook does not state it. **Before restarting, write down what the running process has**
+   still work.) Which of these settings belong in the environment is the owner's decision about what is open on mainnet —
+   this runbook does not state it. The three V11 settings (`SPW_TRADING_API_EXECUTION`, `SPW_DERIV_MM_MAINNET`,
+   `SPW_DERIV_MM_TESTNET`) are OFF by default and a first V11 deployment leaves them unset (`docs/V11-DEPLOYMENT.md` §4).
+   `SPW_WORKERS` takes `on` (default), `off`, `api` (every worker but the agents runtime — only with a separate
+   `sp-wallet-agents` process running `dist/agents.mjs` with `SPW_WORKERS=agents`) or `agents`; any other value starts no
+   worker at all, without an error. **Before restarting, write down what the running process has**
    (`scripts/preflight.sh --env-from-pm2 sp-wallet` prints the variable names, never a value), and compare after. Then:
    ```bash
    pm2 restart sp-wallet            # (confirm) keeps the stored environment
@@ -53,11 +57,13 @@ only) and `~/sp-wallet-signer-data` (keystore, `state.json`, `policy.json`). Com
    capability:
    ```
    sp-wallet api listening on … broadcast=<on|off>
-   [startup] capabilities: deriv_live_mainnet=<…> deriv_mandate_mainnet=<…> deriv_gmx_live=<…> research_runner=<…> research_readonly_db=<…> broadcast=<…> workers=<…> strategy_sandbox_enforced=<…> web_app=<…>
+   [startup] capabilities: deriv_live_mainnet=<…> deriv_mandate_mainnet=<…> deriv_gmx_live=<…> trading_api_execution=<…> deriv_mm_mainnet=<…> deriv_mm_testnet=<…> research_runner=<…> research_readonly_db=<…> broadcast=<…> workers=<…> strategy_sandbox_enforced=<…> web_app=<…>
    [startup] strategy sandbox: sandbox-exec (confined, self-test passed)
    ```
    There is no universally "expected" line: the right one is **the same as before the restart** (step 4), unless this
-   deployment was meant to change a setting. A capability that turned from `on` to `OFF(missing NAME)` is a variable that
+   deployment was meant to change a setting. The first V11 start ADDS three entries to the line a V10 process printed
+   (`trading_api_execution`, `deriv_mm_mainnet`, `deriv_mm_testnet`): all three must read `OFF(missing …)` unless the owner
+   decided otherwise; every execution lock of the server is in this line. A capability that turned from `on` to `OFF(missing NAME)` is a variable that
    was lost by the restart; one that turned from `OFF` to `on` opened something nobody decided to open — treat both as a
    failed deployment. For the three derivative settings, `on` means that code path can place orders with real funds on
    mainnet: the project's own documents state that no order was ever accepted by a venue on a funded account from this
@@ -72,6 +78,26 @@ only) and `~/sp-wallet-signer-data` (keystore, `state.json`, `policy.json`). Com
 **Rollback (API):** `git checkout <previous commit>`, `pnpm install --frozen-lockfile && pnpm build`, `pm2 restart
 sp-wallet`. The schema changes are additive: the previous code runs on the newer schema. Restore the dump only if data
 were damaged (`gunzip -c <file> | psql <new empty database>`, then point `DATABASE_URL` at it).
+**Rolling back from V11 to V10 has steps of its own** — rehearsed on a local database on 2026-11-17, see
+`docs/V11-DEPLOYMENT.md` §9: release the kill switch and read-only mode first (or run `scripts/v11-rollback-triggers.sql`),
+stop the V11-only agents, and revoke every quoting mandate before the signer goes back.
+
+### V11 — what else a deployment must carry
+
+- **The API-key pepper and the webhook signing secrets** are in `trading-api-secrets.json` (mode 600) under `SPW_DATA_DIR`,
+  or `~/.config/sp-wallet` when that variable is not set — created at the first API key. It is **not** in the database dump
+  (`scripts/backup.sh`), on purpose: a stolen dump cannot verify a key. **Add the file to the secrets backup**; losing or
+  regenerating it invalidates every API key. `SPW_API_KEY_PEPPER` (≥ 32 characters), if set, replaces the file's pepper and
+  must then survive every restart like the other variables.
+- **The quote stream is a websocket** (`wss://…/api/v1/stream`, and `/api/v1/trading/stream` for keys). Caddy's
+  `reverse_proxy` tunnels it without any directive and has no default stream timeout: nothing to change on the gateway. A
+  Caddy reload (every `mlt` change) closes the open sockets; the clients reconnect by themselves, and the web app falls back
+  to polling after three failed attempts. `stream_close_delay` would avoid the cut; it is not set and is a gateway change.
+  The API node needs outbound `wss` to the venues' public feeds (Hyperliquid, edgeX, dYdX, Coinbase).
+- **`dist/agents.mjs`** is built but not started by a default deployment (`SPW_WORKERS=on`: the agents runtime runs inside
+  the API). The separate worker is optional: `docs/TRADING-AGENT-ENGINE.md` §4.
+- **New retention loops** run with the workers and need nothing: API usage log (90 days), swap quotes (30 days), preview
+  risk evaluations (30 days), market snapshots, the market-making tape (2 days), finished agent jobs (14 days).
 
 ### Market making (V11) — what a deployment adds
 
@@ -147,7 +173,8 @@ route). Therefore:
 Read-only; prints `ok` / `WARN` / `FAIL` lines, never a secret, exits 1 on a `FAIL`.
 
 ```bash
-scripts/preflight.sh                       # build artefacts, required and optional environment, signer, disk, last backup
+scripts/preflight.sh                       # build artefacts (the four bundles and the web app), required and optional environment, the V11 execution locks
+                                           # (a lock variable that is SET is a WARN to confirm), SPW_WORKERS, the API-key secrets file (mode 600), signer, disk, last backup
 scripts/preflight.sh --db sp_wallet        # + migrate() twice on a scratch database made from `pg_dump --schema-only sp_wallet`
 scripts/preflight.sh --env-from-pm2 sp-wallet   # read the variable NAMES the running PM2 process has (values are not printed)
 ```

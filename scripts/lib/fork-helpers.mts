@@ -38,14 +38,22 @@ export const setNative = (f: Forks, net: string, who: string, eth: string) => f.
  * (USDC: 9, OpenZeppelin upgradeable: 51, …): it is found by trying, and `balanceOf` must agree before the write is kept.
  */
 export async function dealToken(f: Forks, net: string, token: string, who: string, amount: bigint): Promise<number> {
+  return dealTokenRpc(<T>(method: string, params: unknown[] = []) => f.rpc<T>(net, method, params), token, who, amount, net);
+}
+/** The same over a bare JSON-RPC function of ONE fork (the scripts and the QA stack that start their own anvil).
+ *  V11 final validation: fork-swap-kyber, fork-swap-api and tests/e2e/qa-real-server.mts took their USDC from a hard-coded holder
+ *  with an unchecked transfer; on 2026-11-17 that address held 0 USDC on Base, the transfer reverted silently and every funded
+ *  flow failed on a balance of zero. A balance written in storage and read back through `balanceOf` depends on no third party. */
+export async function dealTokenRpc(rpc: <T>(method: string, params?: unknown[]) => Promise<T>, token: string, who: string, amount: bigint, where = 'fork'): Promise<number> {
+  const read = async (): Promise<bigint> => hexToBigInt(await rpc<Hex>('eth_call', [{ to: token, data: encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [who as Hex] }) }, 'latest']));
   for (const k of [9, 51, 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 52, 101, 151]) {
     const slot = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [who as Hex, BigInt(k)]));
-    const before = await f.rpc<Hex>(net, 'eth_getStorageAt', [token, slot, 'latest']);
-    await f.rpc(net, 'anvil_setStorageAt', [token, slot, numberToHex(amount, { size: 32 })]);
-    if ((await balanceOf(f, net, token, who)) === amount) return k;
-    await f.rpc(net, 'anvil_setStorageAt', [token, slot, before]);
+    const before = await rpc<Hex>('eth_getStorageAt', [token, slot, 'latest']);
+    await rpc('anvil_setStorageAt', [token, slot, numberToHex(amount, { size: 32 })]);
+    if ((await read()) === amount) return k;
+    await rpc('anvil_setStorageAt', [token, slot, before]);
   }
-  throw new Error(`could not find the balance slot of ${token} on the ${net} fork`);
+  throw new Error(`could not find the balance slot of ${token} on the ${where} fork`);
 }
 
 /** Mine blocks without moving the fork's clock ahead of the real one more than needed (provider deadlines are wall-clock). */

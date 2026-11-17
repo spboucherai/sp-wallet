@@ -110,7 +110,9 @@ describe('job queue — durable tasks with retries and a dead-letter state', () 
     const [dead] = await sql`select state, attempts, last_error, finished_at from agent_jobs where id = ${id}`;
     expect([dead.state, dead.attempts, dead.last_error]).toEqual(['dead', 5, 'boom 5']); expect(dead.finished_at).not.toBeNull();
     expect(await queue.claim('w1', { now: t + 10 * 86_400_000 })).toEqual([]);                      // a dead letter is never run again
-    expect(queue.jobView((await queue.getJob(id))!)).toMatchObject({ status: 'dead', attempts: 5, error: 'boom 5' });
+    expect((await queue.getJob(id))!.state).toBe('dead');
+    // for a client a dead-lettered job is `failed` (the contract's enum has no `dead`), flagged
+    expect(queue.jobView((await queue.getJob(id))!)).toMatchObject({ status: 'failed', deadLettered: true, attempts: 5, error: 'boom 5' });
   });
   it('a worker that dies with a job: the job is reaped when its lock expires — back to the queue, or dead at the limit; another worker\'s answer for it is ignored', async () => {
     const a = await agent();
@@ -207,6 +209,24 @@ describe('scheduler — isolation and the two-process case', () => {
     expect(seen).toEqual(['backtest:v1']);
     expect(queue.jobView((await queue.getJob(b.id))!)).toMatchObject({ status: 'done', result: { label: 'backtest' } });
     expect((await queue.getJob(w.id))!.last_error).toBe('no handler for wind_down');
+  });
+  it('retention: the jobs pass removes FINISHED jobs older than 14 days (once an hour per worker) — never a queued or a running one, never a recent one', async () => {
+    const a = await agent(), ids: Record<string, string> = {};
+    for (const [name, state, days] of [['old-done', 'done', 15], ['old-dead', 'dead', 40], ['old-cancelled', 'cancelled', 15], ['recent-done', 'done', 13], ['old-queued', 'queued', 30], ['old-running', 'running', 30]] as const) {
+      const j = await queue.enqueue('wind_down', { agentId: a, payload: { name } }); ids[name] = j.id;
+      await sql`update agent_jobs set state = ${state}, finished_at = ${state === 'queued' || state === 'running' ? null : sql`now() - ${`${days} days`}::interval`}, created_at = now() - ${`${days} days`}::interval,
+        run_at = now() + interval '1 hour', locked_until = now() + interval '1 hour' where id = ${j.id}`;
+    }
+    const rt = sched.createAgentRuntime(handlers([], async () => '').h, { workerId: 'proc-prune' });
+    await rt.jobsPass();
+    const left = (await sql<{ id: string }[]>`select id from agent_jobs where id in ${sql(Object.values(ids))}`).map((r: { id: string }) => r.id);
+    expect(Object.entries(ids).filter(([, id]) => left.includes(id)).map(([n]) => n).sort()).toEqual(['old-queued', 'old-running', 'recent-done']);
+    // within the hour the same worker does not prune again: a job that becomes old now stays until the next hour
+    await sql`update agent_jobs set finished_at = now() - interval '20 days' where id = ${ids['recent-done']!}`;
+    await rt.jobsPass();
+    expect(await queue.getJob(ids['recent-done']!)).not.toBeNull();
+    expect(await queue.pruneJobs()).toBe(1);
+    await sql`delete from agent_jobs where id in ${sql(Object.values(ids))}`;
   });
 });
 

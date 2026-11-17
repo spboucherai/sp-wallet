@@ -419,13 +419,16 @@ wired (audit D14). Not exercised in a browser on this branch; `/risk` is not a r
 
 ## 11. Known limits
 
-- The laboratory strategies of the quant-lab workstream are not merged: until they are, momentum and mean reversion
-  bind to versions that include HYPE (paper only), and the stream families have no laboratory backtest (their backtest
-  is the replay of recorded snapshots, which starts empty).
+- *(updated 2026-11-17 — the earlier text said the laboratory strategies were not merged)* The laboratory strategies are
+  merged and the bar templates bind to them by name: Momentum → `momentum_xs_perp/2`, Mean reversion →
+  `mean_reversion_bands_perp/2`, both on BTC, ETH, SOL and live-capable (`docs/v11/work/agents-bind.md` §4). Their
+  out-of-sample verdict is shown as data and is negative (deflated Sharpe ≤ 0.10). The stream families still have no
+  laboratory backtest (their backtest is the replay of recorded snapshots, which starts empty).
 - The recorded-data backtest sees top of book only and needs days of recording before it says anything.
 - The adapter's risk checks are the existing engines' (section 5).
 - The kill switch is API-side; a compromised API can ignore it. The signer's mandates and halt are unchanged.
 - Performance: spot gas, perp slippage and stream win rate are not computed (section 3).
-- `agent-worker-main.ts` has no automated test; the two-process case is tested at the scheduler level (two runtimes on
-  one database).
+- *(updated 2026-11-17)* The separate worker has an automated test with real processes from `dist/`
+  (`services/api/test/agent-worker-process.test.ts`: wrong `SPW_WORKERS` → exit 2, unmigrated database → exit 3, two
+  workers tick each agent once, SIGKILL mid-tick → reaped and re-run). It was never run under PM2.
 - Nothing here was run on a funded account.

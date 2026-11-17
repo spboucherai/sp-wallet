@@ -13,7 +13,7 @@ import { hlPinnedAssets, type VenueQuotingMandate } from '@spw/derivatives/live'
 import type { StreamMmOptions } from '../agent-runtime/stream-engine.ts';
 import type { Execution } from '../orders/index.ts';
 import { envMmLocks } from './live-adapter.ts';
-import { subscribingBookSource, type BookSource } from './market-data.ts';
+import { bboBookSource, type BookSource, type VenueStreamFn } from './market-data.ts';
 import { MmRuntime, type MmLiveDeps, type QuotingMandateInfo } from './runtime.ts';
 import type { UserFeedEvent } from './user-stream.ts';
 
@@ -35,14 +35,19 @@ export function mmLiveDeps(ex: Execution): MmLiveDeps {
     setStepPacing: (accountId, everyMs) => ex.live().setStepPacing(accountId, everyMs),
   };
 }
-/** top of book of a network from the process's own Hyperliquid client of that network (its `l2Book` stream) */
+/** top of book of a network from the process's own Hyperliquid client of that network: its best-bid / offer stream (≈ 10 messages a
+ *  second; the `l2Book` stream it used before delivers a book every 12 s on BTC — market-data.ts says what that did to a session) */
 export function venueBookSource(ex: Execution, network: HlNetwork): BookSource & { close(): void } {
-  return subscribingBookSource((symbol, onBook, onStatus) => ex.live().deps.venues.get(network).adapter.stream({ type: 'book', symbol }, (ev) => { const e = ev as { type?: string; book?: Book }; if (e.type === 'book' && e.book) onBook(e.book); }, onStatus), () => ex.live().now());
+  // the venue-neutral `StreamSub` type has no `bbo`; the Hyperliquid adapter hands the subscription to its stream client, which has
+  // (packages/derivatives/src/venues/hyperliquid/stream.ts `HlStreamSub`) — and checks the symbol against the venue's table first
+  const stream: VenueStreamFn = (sub, on, onStatus) => ex.live().deps.venues.get(network).adapter.stream(sub as never, on, onStatus);
+  return bboBookSource(stream, () => ex.live().now());
 }
 /** what the stream engine of a worker process is given: live sessions on the execution layer, testnet books from the testnet client */
 export function mmStreamOptions(ex: Execution, worker: string): StreamMmOptions {
-  let testnet: (BookSource & { close(): void }) | null = null;
-  return { live: mmLiveDeps(ex), worker, locks: () => envMmLocks(process.env), books: (network) => (network === 'testnet' ? (testnet ??= venueBookSource(ex, 'testnet')) : null) };
+  // one source per network, opened when a session first asks: mainnet too (it was the stream engine's l2Book state — see market-data.ts)
+  const sources = new Map<HlNetwork, BookSource & { close(): void }>();
+  return { live: mmLiveDeps(ex), worker, locks: () => envMmLocks(process.env), books: (network) => { let s = sources.get(network); if (!s) { s = venueBookSource(ex, network); sources.set(network, s); } return s; } };
 }
 /** a runtime of its own for the owner's "pull" / "flatten" when no worker runs the agent's session: books from the venue clients, nothing else */
 export function standaloneMm(ex: Execution): MmRuntime {

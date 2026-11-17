@@ -101,6 +101,9 @@ export function runtimeHandlers(o: BindOptions): RuntimeHandlers {
 
 /** A backtest job. Bar agents: the laboratory's backtest of a registered strategy version (the existing path, asynchronous).
  *  Stream agents: the rule replayed on the snapshots the stream engine recorded. The result is a REPORT, never a performance. */
+/** a version left `backtesting` by another process is taken for a run still going while it is younger than this: the venue backfill
+ *  (15 min at most) and the laboratory (20 min at most), plus a margin; and how often its row is read meanwhile */
+export const BACKTEST_ELSEWHERE_MAX_MS = 40 * 60_000, BACKTEST_ELSEWHERE_POLL_MS = 2_000;
 async function runBacktestJob(job: JobRow, rt: () => PerpRuntime): Promise<unknown> {
   const a = await loadAgent(String(job.agent_id));
   if (a.engine === 'stream') {
@@ -117,13 +120,31 @@ async function runBacktestJob(job: JobRow, rt: () => PerpRuntime): Promise<unkno
   if (!v) throw new Error('strategy version not found for this agent');
   if (v.status === 'approved' || v.status === 'retired') return { status: v.status, note: 'an approved version keeps the report it was approved with; register the version again on another agent to backtest it anew' };
   const rel = v.path.replace(/^strategies\//, '');
-  await sql`update strategy_versions set status = 'draft' where id = ${v.id} and status = 'backtesting'`;   // a run that died with its process
+  // V11 final validation. A registration starts the backtest of its version by itself; a backtest JOB asked right after it (the SDK's
+  // create → backtest) met that run. It used to (1) put the row back to `draft` — after which the run in flight could not store its
+  // report (its last update is conditional on `backtesting`) — and (2) get an empty answer from the busy function, fail with « the
+  // backtest produced no report » and be dead-lettered. Now: a run in flight in this process is WAITED for; a row left `backtesting`
+  // by ANOTHER process (the API, when the agents worker is separate) is waited for while its version is young enough to be still
+  // running; only then is a `backtesting` row taken for a run that died with its process.
+  const { perpBacktestInFlight, describePerp, perpBacktest } = await import('./perp-strategies.ts');
+  const { backtestInFlight, backtest, describe } = await import('./strategies.ts');
+  const here = a.kind === 'perp' ? perpBacktestInFlight(v.id) : backtestInFlight(v.id);
+  if (!here && v.status === 'backtesting') {
+    for (;;) {
+      const [w] = await sql<{ status: string; has_report: boolean; young: boolean }[]>`select status, report is not null as has_report, created_at > now() - ${`${BACKTEST_ELSEWHERE_MAX_MS} milliseconds`}::interval as young from strategy_versions where id = ${v.id}`;
+      if (!w || w.status !== 'backtesting' || w.has_report || !w.young) break;
+      await new Promise((r) => setTimeout(r, BACKTEST_ELSEWHERE_POLL_MS));
+    }
+    await sql`update strategy_versions set status = 'draft' where id = ${v.id} and status = 'backtesting' and report is null`;   // a run that died with its process
+  }
+  const [mid] = await sql<{ status: string; notes: string; has_report: boolean }[]>`select status, notes, report is not null as has_report from strategy_versions where id = ${v.id}`;
+  if (mid?.has_report) return { status: mid.status, hasReport: true, versionId: v.id, label: 'backtest' };   // the other run finished while this job waited
   if (a.kind === 'perp') {
-    const { describePerp, perpBacktest } = await import('./perp-strategies.ts'); const info = await describePerp(rel);
+    const info = await describePerp(rel);
     if (info.sha256 !== v.code_sha256) throw new Error('the strategy file changed since it was registered (another hash): register it again');
     await perpBacktest(v.id, info, a.universe, a.interval as PerpInterval, rt().lab);
   } else {
-    const { backtest, describe } = await import('./strategies.ts'); const info = await describe(rel);
+    const info = await describe(rel);
     if (info.sha256 !== v.code_sha256) throw new Error('the strategy file changed since it was registered (another hash): register it again');
     await backtest(v.id, info, a.universe.filter((s) => s !== 'USDC' && s !== 'USDT'));
   }

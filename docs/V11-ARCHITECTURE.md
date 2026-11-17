@@ -1,11 +1,11 @@
 # SP Wallet V11 — architecture as built
 
-State described: branch `v11` at `fa48015` (114 commits after `a118e3e`, the V10 commit in production). Written
-2026-11-15 from the work notes in `docs/v11/work/`, the module documents and the code. **V11 is not deployed.** Nothing in
-this document was observed on a production node.
-
-Two workstreams were still open when this was written and are not on `v11`: the market-making integration (branch
-`v11-mm-live`) and the final interface pass (branch `v11-ui`). Their sections are placeholders below.
+State described: sections 1–8 were written on 2026-11-15 for branch `v11` at `fa48015` (114 commits after `a118e3e`, the
+V10 commit in production) from the work notes in `docs/v11/work/`, the module documents and the code. Sections 9 and 10
+were written on 2026-11-17 for branch `v11-final` (from `v11` at `9561d78`), once the two workstreams that were open —
+the market-making integration (`v11-mm-live`) and the final interface pass (`v11-ui`) — had been merged; the passages
+of sections 1–8 that those merges changed are corrected in place and dated. **V11 is not deployed.** Nothing in this
+document was observed on a production node.
 
 Companion documents: `V11-REMAINING-LIMITATIONS.md` (what is not done), `V11-DEPLOYMENT.md` (the plan),
 `V11-TEST-RESULTS.md` and `TRADING-TEST-RESULTS.md` (the evidence), `TRADING-PRODUCTION-READINESS.md` (what can be enabled,
@@ -38,7 +38,7 @@ and in which order).
  │                                                                                                                      │
  │  agents runtime: leases, job queue, scheduler · bar engines (spot, perp) · stream engine · risk supervisor           │
  │  strategy lab bridge (sandboxed Python, research/) · research jobs                                                   │
- │  market-making engine (services/api/src/mm) — built, NOT registered in main.ts                                       │
+ │  market-making runtime (services/api/src/mm) — ONE engine for paper and live, ticked by the stream engine (§9)       │
  └──────────────┬───────────────────────────────────────────────────────────────────────────────┬────────────────────────┘
                 │ HMAC over every request, one shared secret                                    │ public endpoints
                 ▼                                                                               ▼
@@ -77,11 +77,11 @@ what the signer signs **without** a per-operation passkey, and what bounds each.
 | 4 | `POST /venue/sign` — a **cancel** on Hyperliquid | venue authorization (passkey) | V10 |
 | 5 | `POST /venue/mandate/sign` — order, cancel, leverage change for an automated strategy | derivative mandate (passkey) | V10 |
 | 6 | `POST /bridge/mint` — first `receiveMessage` of an approved bridge | the approved burn | V10 |
-| 7 | `POST /venue/quoting/sign` — batch of post-only quotes, reduce-only batch, cancel batch, `scheduleCancel` | quoting mandate `SPW-VENUE-QUOTING-MANDATE-v1` (passkey) | **V11**, merged with `v11-mm-core`; nothing in the API calls it yet |
+| 7 | `POST /venue/quoting/sign` — batch of post-only quotes, reduce-only batch, cancel batch, `scheduleCancel` | quoting mandate `SPW-VENUE-QUOTING-MANDATE-v1` (passkey) | **V11**, merged with `v11-mm-core`; *(2026-11-17)* called by the API's live market-making adapter since `v11-mm-live`, behind four locks and the mandate (§9) |
 
-`docs/adr/0001-custody.md` on `v11` still says "exactly six paths": row 7 is in the code
-(`services/isolated-signer/src/server.ts`, routes `/venue/quoting/{approve,sign,revoke}`) and in
-`docs/v11/work/mm-core.md` §2, not in the ADR. See the limitations register.
+*(Corrected 2026-11-17.)* `docs/adr/0001-custody.md` now says "exactly seven paths" and carries row 7 (edited by
+`v11-mm-live`, after re-reading `venue-quoting.ts`: the 30 s validity applies to quote batches and `scheduleCancel`, not
+to cancels and reductions). The threat model has rows 23–25 for the quoting shape.
 
 ### 2.2 Where V11 added paths, exactly
 
@@ -226,21 +226,76 @@ brief of this delivery; no document of the repository names it. Authoritative pl
 | Security review | — | `docs/V11-SECURITY-REVIEW.md` |
 | Audit of V10 | — | `docs/V11-AUDIT.md`, `docs/v11/audit-parts/*.md` |
 
-Three documents on `v11` contain passages that later merges made stale; where they disagree with this page, the code and
-the later work note win: `docs/TRADING-AGENT-ENGINE.md` §11 (says the lab strategies are not merged and that the worker
-has no automated test — both changed by `v11-agents-bind`), `docs/TRADING-API-SECURITY.md` §5 (says `mandate_id` is
-unchecked and key limits are not enforced — both changed by `v11-exec`), `docs/V11-QUOTE-ENGINE.md` §13 last bullet
-(says the SDK stream classes are not exported — changed by `v11-contract2`).
+*(2026-11-17.)* Three documents contained passages that later merges had made stale — `docs/TRADING-AGENT-ENGINE.md`
+§11, `docs/TRADING-API-SECURITY.md` §5, `docs/V11-QUOTE-ENGINE.md` §13 last bullet — and so did the D1 row of
+`docs/TRADING-AGENTS-AUDIT.md` and one row of `docs/security/acceptance.md`. Each was corrected in place with its date
+during the final validation; `docs/v11/work/quotes.md` got a dated note instead (a work note is history). Where an older
+work note still disagrees with a later one, `V11-REMAINING-LIMITATIONS.md` §14 says which is current.
 
 ---
 
-## 9. Market making — integration state
+## 9. Market making — as integrated (`v11-mm-live`, 2026-11-16)
 
-On `v11`: the core is built and tested in isolation (`work/mm-core.md`); the engine is not registered in `main.ts`, no
-route, agent family or screen uses it, and the signer's three quoting routes have no caller.
+Design and runbook: `docs/V11-MARKET-MAKING.md` §12–§13. Work note: `docs/v11/work/mm-live.md`. **No quote was ever sent to
+a venue, mainnet or testnet; the testnet step is implemented and was never run.** Every proof is on the test suite's venue
+double with the real signer code in process, on a recorded public tape, and on paper.
 
-<!-- PENDING: market-making integration (branch v11-mm-live) — what was wired (signer client, mandate storage and routes, runtime family live mode, quote hub as MarketDataPort, RiskPort, projection of sessions/fills, capability line, runbook), and the resulting component diagram changes -->
+```
+ Agents panel (mmPanel, lazy chunk) ── /api/v1/mm/* (owner) ── go-live checklist, session view, pull / flatten / resume
+        │                                         │
+        │                                         ▼
+        │                 MandateService (the SAME service as every trading mandate)
+        │                   quoting section SPW-QUOTING-SECTION-v1 — a sibling record of the trading mandate:
+        │                   terms (signer-enforced, compiled one to one) + engine (API-only); own canonical bytes and hash;
+        │                   approval intent = trading-mandate hash + section hash + signer-mandate hash, two passkey prompts
+        ▼                                         │ approve / revoke / recover
+ agents runtime ── stream engine (lease per agent) ──▶ MmRuntime.tick() ──▶ MmEngine (ONE engine, two modes)
+                                                          │                    │
+                                 PAPER: PaperVenue (real books, simulated      │ LIVE: live adapter ── signer-client
+                                 account, the runtime's own fill model)        │   venueQuotingSign ──▶ signer POST /venue/quoting/sign
+                                                                                │   (path 7) ──▶ Hyperliquid, one pinned instrument
+   ports: MarketDataPort over a BookSource (the stream engine's market state on mainnet, the testnet client's l2Book)
+          reconcile by the venue's user streams (orderUpdates, userFills); REST at start, after a gap, every 60 s
+          RiskPort = the unified risk service and the ONE kill switch (read at every cycle → quotes pulled)
+          MandatePort = the signer's own status of the mandate · JournalPort = the agent journal, mm_fills, audit events
+```
 
-## 10. Interface — final pass
+| Piece | Where | What it is |
+|---|---|---|
+| Signer client | `services/api/src/signer-client.ts` | `venueQuotingApprove`, `venueQuotingSign`, `venueQuotingRevoke`; `venueQuotingMandates` in the status type. **No signer source file was changed by the integration** |
+| Mandate | `services/api/src/mandates/service.ts`, `packages/trading/src/mandate/quoting-mandate.ts`, column `trading_mandates.quoting` | creation (one Hyperliquid account, one pinned instrument, the section consistent with the agent's configuration), `prepareApproval`, `approve` (the full-hash approval verified and stored BEFORE the signer is asked), `revoke` at the signer first, `recoverQuoting` (route `POST /api/v1/mandates/recover-quoting`); exclusivity with a directional mandate both ways |
+| Runtime | `services/api/src/mm/{runtime,engine,ports,live-adapter,paper-venue,market-data,user-stream,budget,sessions,lifecycle,bind,register,routes}.ts`; `agent-runtime/{model,families,stream-engine,scheduler,store}.ts` | family `market_making` gains the `live` mode; the stream engine hands PAPER and LIVE agents to `MmRuntime` under the agent's lease; one quoting rule (`spread_inventory` = `mmQuotes` behind `QuotePolicy`, Avellaneda–Stoikov selectable), wrapped by `withinBand` in live |
+| Market data | `mm/market-data.ts` | `MarketDataPort` over a small `BookSource`. **The quote hub of §7 is NOT its source yet**: the engine reads the stream engine's own market state (the note calls the hub "the coming" source) |
+| Risk | `mm/bind.ts`, the unified risk service | each plan is evaluated as a preview on the worst case of each side, reused for 30 s; the kill switch pulls quotes at once; reductions pass |
+| Accounting | tables `mm_sessions`, `mm_fills`, `mm_tape`; column `deriv_fills.seq`; `orders/provenance.ts` | **quotes are not rows of `orders`**; one session row with the engine's live status; one row per fill with 1 s / 10 s / 60 s markouts from the tape; each reduce-only unwind is one unified order (`engine: 'none'`); a session's fills are attributed to its agent |
+| Locks | `mm/live-adapter.ts` `mmOpeningLock`; `capabilities.ts` | mainnet: `SPW_DERIV_LIVE_MAINNET`, `SPW_DERIV_MANDATE_MAINNET`, `SPW_DERIV_MM_MAINNET`, `SPW_TRADING_API_EXECUTION`; testnet: `SPW_DERIV_MM_TESTNET`, `SPW_TRADING_API_EXECUTION`. All off by default; applied to the mandate, to the start and to every quote; exits pass. Capability ids `deriv_mm_mainnet`, `deriv_mm_testnet` in the start-up line |
+| Operations | `mm/routes.ts`, six alert kinds `agent.mm_*` | the eleven circuit breakers in both modes; the owner's pull / flatten / resume, executed by the API under the agent's lease when no worker runs the session; session hours, maximum duration, stop before the mandate's expiry |
+| Runbook | `docs/runbooks/deploy.md` "Market making (V11)", "Signer state added by V11 market making, and the rollback rule" | the same lock values in every process that runs agent workers; restart with a session running; the rollback rule (demonstrated on 2026-11-17, `V11-DEPLOYMENT.md` §9.3) |
 
-<!-- PENDING: final interface pass (branch v11-ui) — screens changed, navigation, what was exercised in a browser -->
+Measured in the suite (a simulated hour on the recorded tape, the real signer code): 485 of the venue's 1 200 weight units
+a minute on average, 878 in the peak minute — of which 352 are the signer's own reads. It contains no latency, no real
+venue accounting and no other process on the same address.
+
+What is not there: several instruments per session; `modify` / `batchModify`; a recorded `orderUpdates` frame (the
+documented shape is used); a screen that edits the quoting configuration; the approval, recovery, revocation and live
+session view driven in a browser (they need a venue account and open locks). The evidence for the strategy itself is
+negative (`V11-REMAINING-LIMITATIONS.md` §0).
+
+## 10. Interface — final pass (`v11-ui`, 2026-11-15/16)
+
+Design note: `docs/v11/UI-ARCHITECTURE.md`. Work note: `docs/v11/work/ui.md`. The V10 design system is kept (the
+components of `ui.tsx`, no new library, no new colour token).
+
+| Area | What changed | Server side |
+|---|---|---|
+| Shell | five areas on the tab bar and in the sidebar — Home · Markets · Trade · Agents · Activity; sub-views under the header (Markets = Explorer · Compare · Private markets; Trade = Spot · Futures); a header menu for Receive, Send, Risk, Alerts, Settings, Security, Developer / API, System status, Research, Lock; **a risk indicator on every screen** (kill switch, read-only, live limits not set, ok, unknown); new paths `/trade`, `/dashboard`, `/compare`, `/spot`, `/perps`, `/api`, `/system`, `/risk?mandate=<id>` — every previous path still opens its screen | `GET /api/v1/dashboard/status` |
+| Dashboard (under the wallet on Home) | accounts, positions, P&L, risk, agents, system, price freshness: one block per book (paper, live, live testnet), no figure spans two modes; each section fails alone | `GET /api/v1/dashboard/summary` (`services/api/src/dashboard/summary.ts`): composes the risk service, the agents table, the monitor |
+| Trade | the picker is fed by the markets hub and says why a market cannot be traded live; the confirmation and approval sheets show the answer of `POST /trading/orders/preview` for that exact order; a unified blotter (two lists, Réel and Simulation, never added; the twelve states in words); a command line on `POST /trading/commands` (dry run first) | existing routes |
+| Activity | one timeline from five sources (wallet activity and plans, unified orders, risk denials, the audit chain), server-side filters, cursor pagination, a CSV with a `mode` column | `GET /api/v1/dashboard/activity`, `/activity.csv` (`dashboard/activity.ts`) |
+| Audit leftovers | server sentences translated by code or by known wording, otherwise shown as a marked quotation; the mandate deep link on Risk; GMX rows labelled as GMX; development mocks for the V11 reads | — |
+
+Exercised in a browser (Chromium; phone 390 × 844 and desktop 1280 × 900, French and English, light — the Dashboard also in
+dark): the six `v11-*` specs, 52 tests, on one real local stack (real API, real signer, virtual passkey, paper only), and
+the existing specs adapted to the navigation. The runs of the final validation, spec by spec, are in
+`V11-TEST-RESULTS.md` §6. **Not exercised in any browser:** the live paths of Trade (no venue account on a local stack);
+Safari and iOS, for anything.

@@ -22,6 +22,7 @@ import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { encodeFunctionData, erc20Abi, formatUnits, hexToBigInt, numberToHex, parseUnits } from 'viem';
 import { cashLegs, getNetwork, hasSignerPrice, KYBER_ENABLED, tradableSymbols } from '@spw/core';
 import { TestPasskey } from '../tests/helpers/passkey.ts';
+import { dealTokenRpc } from './lib/fork-helpers.mts';
 import { deriveKeys } from '../services/isolated-signer/src/keys.ts';
 import { exchangePrices } from '../services/isolated-signer/src/prices.ts';
 import { createSignerServer } from '../services/isolated-signer/src/server.ts';
@@ -153,7 +154,10 @@ try {
     await rpc('anvil_stopImpersonatingAccount', [w]);
     if ((await bal(VAULT, USDC)) === need) { funded = true; break; }
   }
-  if (!funded) throw new Error(`no known holder of ${CASH.symbol} on ${NET.name} could fund the vault: set USDC_WHALE`);
+  // V11 final validation: on 2026-11-17 none of the known holders could fund the vault on Base (their balances moved). The balance is
+  // then written in the token's storage and read back (scripts/lib/fork-helpers.mts) — a fork-only write that needs no third party.
+  if (!funded) { await dealTokenRpc(rpc as never, USDC, VAULT, need, NET.name); funded = (await bal(VAULT, USDC)) === need; }
+  if (!funded) throw new Error(`the vault could not be given ${CASH.symbol} on the ${NET.name} fork (no known holder, and the balance slot was not found): set USDC_WHALE`);
   const prep = await ok('POST', `/api/v1/agents/${id}/mandate/prepare`);
   console.log(`mandate on ${prep.networkName} (network ${prep.mandate.network}, vault index ${prep.mandate.vaultIndex}), gas reserve ${prep.gasReserve.required} ${prep.gasReserve.symbol} (held ${prep.gasReserve.held}):`);
   console.log('  limits:', prep.limits.map((l: any) => `${l.symbol} ≤ ${l.maxOrder}/order, ${l.maxDaily}/day`).join('; '), `— max slippage ${prep.mandate.maxSlippageBps} bps, ${prep.mandate.maxOrdersPerDay} orders/day`);
