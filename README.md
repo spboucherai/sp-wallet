@@ -54,7 +54,7 @@ Send and receive on 23 mainnet networks, swap and bridge with signer-verified tr
 ![unit tests](https://img.shields.io/badge/vitest%20tests-1753%20in%20123%20files-15803d?style=flat-square)
 ![e2e tests](https://img.shields.io/badge/playwright%20tests-55%20in%2015%20specs-15803d?style=flat-square)
 ![python tests](https://img.shields.io/badge/pytest%20tests-187%20in%2021%20files-15803d?style=flat-square)
-![smoke scripts](https://img.shields.io/badge/smoke%20%2F%20sim%20%2F%20fork%20scripts-50%2B-15803d?style=flat-square)
+![smoke scripts](https://img.shields.io/badge/smoke%20%2F%20sim%20%2F%20fork%20scripts-45-15803d?style=flat-square)
 
 ![node](https://img.shields.io/badge/API%20node-M2M32c-555?style=flat-square&logo=apple&logoColor=white)
 ![port](https://img.shields.io/badge/port-8650-555?style=flat-square)
@@ -522,7 +522,7 @@ What the tests are for:
 - **Concurrency** — database tests each get a database of their own, dropped when the run ends.
 - **End to end** — phone viewport, virtual passkey, real local stack with throwaway keys and broadcast off.
 
-Beyond the test suites, `scripts/` holds more than fifty smoke, simulation and fork scripts (`smoke-*.mts` read live networks; `sim-*.mts` and `fork-*.mts` exercise flows against simulations and local forks), and `scripts/preflight.sh`, a read-only pre-deployment check that prints `ok` / `WARN` / `FAIL` lines and never a secret.
+Beyond the test suites, `scripts/` holds 45 smoke, simulation and fork scripts (`smoke-*.mts` read live networks; `sim-*.mts` and `fork-*.mts` exercise flows against simulations and local forks), and `scripts/preflight.sh`, a read-only pre-deployment check that prints `ok` / `WARN` / `FAIL` lines and never a secret.
 
 ## Deployment
 
