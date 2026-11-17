@@ -20,6 +20,11 @@ const SHOTS = resolve(ROOT, 'docs/v8/screens');
 const ETH = 'gmx:ETH/USD [WETH-USDC]', BTC = 'gmx:BTC/USD [BTC-USDC]';
 let vite: ChildProcess | null = null;
 
+// 2026-11-17: the app now offers Hyperliquid alone (apps/web/src/venues.ts) and opens a venue account on the SIMPLE order form
+// (tests/e2e/futures-hl-simple.spec.ts covers both). This spec covers the code kept behind those two choices, so it runs with the
+// four venues shown — the development-only override of venues.ts — and with the full order form.
+test.beforeEach(async ({ page }) => { await page.addInitScript(() => { sessionStorage.setItem('spw-venues', 'all'); localStorage.setItem('spw-fut-simple', 'false'); }); });
+
 test.beforeAll(async () => {
   if (process.env.FUTURES_URL) return;
   vite = spawn(resolve(ROOT, 'apps/web/node_modules/.bin/vite'), ['--port', String(PORT), '--strictPort'], { cwd: resolve(ROOT, 'apps/web'), stdio: 'ignore' });

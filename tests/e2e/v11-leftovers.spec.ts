@@ -17,6 +17,11 @@ import { deviceUse, expectNoOverflow, openWallet, paperAccount } from './v11-hel
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..'), PORT = 5183, MOCK = process.env.V11_MOCK_URL ?? `http://localhost:${PORT}`;
 const STACK = existsSync(`${process.env.SPW_DEV_DIR ?? '/tmp/spw-dev'}/setup-token`);
 
+// 2026-11-17: the app now offers Hyperliquid alone (apps/web/src/venues.ts) and opens a venue account on the SIMPLE order form
+// (tests/e2e/futures-hl-simple.spec.ts covers both). This spec covers the code kept behind those two choices, so it runs with the
+// four venues shown — the development-only override of venues.ts — and with the full order form.
+test.beforeEach(async ({ page }) => { await page.addInitScript(() => { sessionStorage.setItem('spw-venues', 'all'); localStorage.setItem('spw-fut-simple', 'false'); }); });
+
 test.describe('/risk?mandate=<id> (real stack, paper)', () => {
   test.use(deviceUse('phone', 'fr'));
   test.skip(!STACK, 'needs a local stack (tests/e2e/ui-stack.sh) and its SPW_DEV_DIR');
