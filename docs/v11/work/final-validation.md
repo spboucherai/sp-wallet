@@ -58,3 +58,55 @@ Nothing else ran on the machine during runs 1–4 (load average 2–4 before eac
 - **Change.** The reference figure is printed, never asserted: a reference call now has 20 s and is left out of the median if
   it is killed (the message says how many were). The assertion (median of the seven sandboxed calls under 5 s) is unchanged,
   and the test now also asserts that all seven sandboxed calls were made.
+
+A second occurrence, 2026-11-17 05:30Z: the file run alone, minutes after the laptop woke from sleep — "every library strategy…"
+failed after 341.8 s (one reference call killed at 300 s, so its output could not be compared). Six further runs of the file alone
+(with the watchdog): all passed, 34–107 s, nothing hung. Change (`96208d9`): a reference call killed at its timeout is started
+once more; a call that answered is never repeated; the comparison (byte-identical output) is unchanged.
+
+### Defect 3 — `SPW_TRADING_API_EXECUTION` was not in the start-up capability line (fixed, `d88f1da`)
+
+`capabilities.ts` had the two market-making entries (which name the variable as "missing") and no entry of its own for the
+trading-API execution lock. Added `trading_api_execution` (after `deriv_gmx_live`), its Monitor label in both languages, and the
+neutral tone on Monitor for the locks that are off by default (`trading_api_execution`, `deriv_mm_*` — the item (5) of
+`mm-live.md` §6). Test: `hardening-e.test.ts` (the line, the exact-value rule, every lock variable named).
+
+### Defect 4 — preview risk evaluations were never pruned (fixed, `d88f1da`)
+
+`risk_decisions` stores every evaluation, previews included, and nothing deleted any. `RiskService.prunePreviews` removes
+PREVIEW rows older than `SPW_RISK_PREVIEW_RETENTION_DAYS` (default 30); the decision of a real order request is never deleted.
+Loop `risk-previews-prune`, every 6 h, with the workers. Test: `execution-paper.test.ts` "retention: PREVIEW evaluations…".
+
+## 2. Other suites and generators (2026-11-17, tree `96208d9`)
+
+| Command | Start (UTC) | Result |
+|---|---|---|
+| `node scripts/gen-openapi.mts --check` | 05:38:31 | exit 0 — both files "up to date" |
+| `node packages/trading-sdk/scripts/gen-types.mts --check` | 05:38 | exit 0 — "src/generated/openapi.ts is up to date" |
+| `uv run python scripts/gen_models.py --check` (`sdk/python`) | 05:38 | exit 0 — "src/sp_wallet/models.py is up to date" |
+| `uv run python scripts/gen_sync.py --check` (`sdk/python`) | 05:38 | exit 0 — "src/sp_wallet/_client.py is up to date" |
+| `packages/trading-sdk/scripts/gen-fixtures.mts` | — | has no `--check`; `packages/trading-sdk/test/generated.test.ts` recomputes the vectors (in the suite below) |
+| `scripts/gen-market-listings.mts` | — | **not run**: it has no `--check`, it rewrites `packages/core/src/market-listings.ts` from three exchanges' live listings (a reviewed snapshot, not a derived file) |
+| `uv run ruff check` (`sdk/python`) | 05:38 | "All checks passed!" |
+| `uv run pytest` (`sdk/python`) | 05:38:37 | **415 passed** in 42 s (unit + integration: the suite starts its own local stack; live Hyperliquid quotes read by the stream tests) |
+| `npx vitest run packages/trading-sdk` | 05:40:30 | **6 files, 165 tests passed**, 42 s |
+| `research/.venv/bin/python -m pytest tests` (`research/`) | 05:41:13 | **404 passed, 2 skipped** (the two live-network tests), 69 s |
+| `python -m spq.lint --strategy <dir>` over every library version (not `rj_*`) | 05:45:26 | **32 ok, 0 failed** (the static purity lint; the lab documents no `python -m spq` lint of the whole library, so each version was linted) |
+
+## 3. Full suite after the fixes — three consecutive runs
+
+Tree `d88f1da` (fixes 1–4), 2026-11-17, nothing else running:
+
+| Run | Start (UTC) | Files | Tests | Result | Duration |
+|---|---|---:|---:|---|---|
+| 6 | 05:47:26 | 194 | 4 497 | **all passed** | 83 s |
+| 7 | 05:48:51 | 194 | 4 497 | **all passed** | 83 s |
+| 8 | 05:50:15 | 194 | 4 497 | **1 failed**: `services/research-runner/test/runner.test.ts` "cancel of a SILENT agent…" — `expected 2 to be greater than 2` | 83 s |
+
+### Defect 5 — "cancel of a SILENT agent" counted heartbeats against a wall-clock timer (test made deterministic)
+
+The test armed the owner's cancel with a 2.5 s timer and then asserted that more than two empty log pushes (heartbeats) had been
+made before it. When the fake agent's start took most of the 2.5 s (the third of three back-to-back full runs, load average 15),
+two had been made. The product behaviour was right (the job was cancelled, 0.46 s after the cancel was wanted). The cancel is now
+wanted once the agent's line has been pushed and three heartbeats have followed it; the three assertions are kept and two were
+added (the line was pushed first; the cancel came from a heartbeat's answer). File alone, three times: 17 / 17.
