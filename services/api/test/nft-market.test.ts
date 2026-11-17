@@ -275,6 +275,30 @@ describe('sale interpretation from a transaction (Seaport, keyless) — and what
     expect(interpretSeaportSale('ethereum', l.map((x) => (x.topics[0] === TOPIC_ORDER_FULFILLED ? { ...x, data: `${x.data.slice(0, 200)}ff${x.data.slice(202)}` } : x)), a)).toBeNull(); // does not decode
     expect(interpretSeaportSale('ethereum', [...l, ...l.filter((x) => x.address.toLowerCase() === APES.toLowerCase())], a)).toBeNull();                                     // two transfers of the token: not one sale
   });
+  it('in the EVM activity: the transfer stays a transfer WITHOUT a price; the sale is a second event, labelled as interpreted by SP Wallet — and absent when the receipt has no Seaport event', async () => {
+    const r1 = rc.receipts.find((r) => r.name === '1')! as { name: string; tx: string; blockNumber: string; blockHash: string; logs: (ReceiptLog & { transactionHash: string; blockNumber: string; blockHash: string })[] };
+    const transfer = r1.logs.find((l) => l.address.toLowerCase() === APES.toLowerCase() && l.topics[0] === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef')!; // the Transfer log (an Approval log precedes it)
+    const events = async (withSeaport: boolean, withHints = false) => {
+      const rpc = async (_u: string, method: string, params: unknown) => {
+        if (method === 'eth_blockNumber') return `0x${(BigInt(r1.blockNumber) + 100n).toString(16)}`;
+        if (method === 'eth_getLogs') return withHints ? [] : [transfer];
+        if (method === 'eth_getTransactionReceipt') { expect((params as string[])[0]).toBe(r1.tx); return { blockNumber: r1.blockNumber, blockHash: r1.blockHash, logs: withSeaport ? r1.logs : r1.logs.filter((l) => l.topics[0] !== TOPIC_ORDER_FULFILLED) }; }
+        throw new Error(`unexpected ${method}`);
+      };
+      const hints = withHints ? [{ id: 'alchemy', name: 'Alchemy', unlockedBy: 'ALCHEMY_API_KEY', notCovered: () => null, host: () => 'eth-mainnet.g.alchemy.com', list: async () => ({ hints: [], truncated: false }), history: async () => [{ tx: r1.tx, block: BigInt(r1.blockNumber).toString() }] }] : [];
+      const p = evmProvider({ rpc, now, indexers: {}, http: (async () => { throw new Error('none'); }) as never, hints });
+      return p.events({ key: `evm:ethereum:${APES.toLowerCase()}/3806`, family: 'evm', chainId: 'ethereum', standard: 'erc721', contractAddress: APES, tokenId: '3806', ownerAddress: withHints ? '0x44DDA7C0915c2523d0eD7957785132e76b3483E4' : null } as NftAsset, null);
+    };
+    const page = await events(true), t = page.events.find((e) => e.type === 'transfer')!, s = page.events.find((e) => e.type === 'sale')!;
+    expect(page.events).toHaveLength(2); expect(t.price).toBeNull(); expect(t.interpretation.by).toBe('spw:evm-transfer-log');
+    expect(s).toMatchObject({ tx: r1.tx, quantity: '1', price: { amount: '1090000000000000000', currency: { network: 'ethereum', asset: 'native', symbol: 'ETH', decimals: 18 } }, interpretation: { by: 'spw:seaport-order-fulfilled' }, market: { provider: 'spw-seaport', venue: 'Seaport 1.6', washTrade: { state: 'unknown' } } });
+    expect(s.interpretation.note).toContain('interpreted from the transaction by SP Wallet'); expect(s.id).not.toBe(t.id); expect(s.market!.fees).toHaveLength(1); expect(s.source.category).toBe('onchain');
+    const bare = await events(false); expect(bare.events.map((e) => e.type)).toEqual(['transfer']); expect(bare.events[0]!.price).toBeNull();   // the same transfer with no marketplace event: never a sale
+    expect(bare.completeness).toBe('recent_window');
+    // with a keyed provider naming the transaction (outside the recent window): the events are still READ FROM THE CHAIN
+    const old = await events(true, true); expect(old.completeness).toBe('partial'); expect(old.note).toMatch(/_and_provider_history$/);
+    expect(old.events.map((e) => e.type).sort()).toEqual(['sale', 'transfer-in']); expect(old.events.find((e) => e.type === 'transfer-in')!.source).toMatchObject({ category: 'onchain' }); expect(old.events.find((e) => e.type === 'transfer-in')!.source.detail).toContain('named by Alchemy, read from the chain');
+  });
   it('Solana: a marketplace program is NAMED from a sourced list — nothing else', () => {
     expect(solanaMarketProgram('TCMPhJdwDryooaGtiocG1u3xcYbRpiJzb283XfCZsDp')).toMatchObject({ name: 'Tensor Marketplace' }); expect(solanaMarketProgram('M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K')!.source).toContain('me-foundation/m2');
     expect(solanaMarketProgram('CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d')).toBeNull();
