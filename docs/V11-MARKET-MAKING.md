@@ -398,7 +398,7 @@ otherwise on real fills.
 6. Choose: capital on the venue, instruments, quote size (≥ 10 USD), inventory limits, floor, `deadManSeconds`, session
    hours, rates. Start with one instrument, one level, the minimum size.
 7. Approve the quoting mandate (passkey), ≤ 7 days. Revoke any directional mandate first.
-8. Three settings on: `SPW_DERIV_LIVE_MAINNET`, `SPW_DERIV_MANDATE_MAINNET`, `SPW_DERIV_MM_MAINNET`.
+8. Four settings on: `SPW_DERIV_LIVE_MAINNET`, `SPW_DERIV_MANDATE_MAINNET`, `SPW_DERIV_MM_MAINNET`, `SPW_TRADING_API_EXECUTION` (corrected 2026-11-17: this line said three; §12 (b) is the code).
 9. Watch the first session live: markouts, PnL attribution, rate-limit budget, signer refusals. Know the stop:
    kill switch (pull quotes), revoke (no passkey), emergency halt.
 10. Stop if the realised markouts confirm the study.
