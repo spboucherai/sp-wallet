@@ -111,6 +111,10 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
         <button onClick={() => nav({ tab: 'assets' })} className="row-press flex min-h-[56px] w-full items-center justify-between rounded-b-[22px] border-t border-line px-5 py-4 text-left text-[15px] font-semibold text-blue">
           <span>{t('allAssets')} <span className="font-normal text-mute">· {t('tokensCount', { n: d.balances.length })}</span></span><Icon n="chev" className="h-5 w-5" /></button></Card>
 
+      {/* NFT: reachable from the first screen (they were only linked from « all assets », where the owner did not find them) */}
+      <button onClick={() => nav({ tab: 'nfts' })} className="card row-press flex min-h-[60px] w-full items-center justify-between gap-3 px-5 py-3.5 text-left" data-testid="home-nft-link">
+        <span className="min-w-0"><span className="block text-[15.5px] font-semibold">{t('nfTitle')}</span><span className="block text-[12.5px] text-mute">{t('nfAssetsLine')}</span></span><Icon n="chev" className="h-5 w-5 shrink-0 text-mute" /></button>
+
       </div></div>
 
       {/* v11: the consolidated view — each panel loads, fails and refreshes on its own */}
