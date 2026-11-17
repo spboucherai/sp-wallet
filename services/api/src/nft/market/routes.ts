@@ -4,7 +4,7 @@
 // unavailable with its reason (`marketActions`), next to links that open the marketplace's own page — outside SP Wallet.
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { NftProviderError, parseNftKey, sameCurrency, type MarketMoney } from '@spw/nft';
+import { NftProviderError, parseNftKey, sameCurrency, traitFrequency, type CollectionTraits, type MarketMoney } from '@spw/nft';
 import { UserError } from '../../config.ts';
 import { audit, getSetting, setSetting } from '../../db.ts';
 import { externalMarketLinks } from '../market.ts';
@@ -49,9 +49,26 @@ export function marketRoutes(app: FastifyInstance, nft: NftService, market: Mark
     if (q.cursor && !q.provider) throw new UserError('bad_request', 'a cursor belongs to one source: name it with `provider`', 400);
     return market.events(await assetOf(q.key), { cursor: q.cursor ?? null, types, after: q.after ?? null, before: q.before ?? null, limit: q.limit, provider: q.provider ?? null });
   });
+  /** a collection's trait document can be megabytes (2.3 MB observed): the page gets the most frequent values, and says it was cut */
+  const cut = (t: CollectionTraits): CollectionTraits & { truncated: boolean } => { const cats = t.categories.slice(0, 40).map((c) => ({ type: c.type, values: [...c.values].sort((a, b) => Number(BigInt(b.count) - BigInt(a.count))).slice(0, 12) }));
+    return { total: t.total, categories: cats, truncated: t.categories.length > 40 || t.categories.some((c) => c.values.length > 12) }; };
   app.get(`${P}/market/collection`, limit(40), async (req) => {
-    const q = z.object({ key: Key }).parse(req.query), k = parseNftKey(q.key);
-    return market.collection(q.key, k.chainId);
+    const q = z.object({ key: Key }).parse(req.query), k = parseNftKey(q.key), r = await market.collection(q.key, k.chainId);
+    return { ...r, sources: r.sources.map((s) => (s.traits.state === 'known' ? { ...s, traits: { state: 'known' as const, value: cut(s.traits.value) } } : s)) };
+  });
+  // Trait frequency of ONE item (brief §6): only from a source that gives collection-level counts WITH a stated item total; the
+  // denominator, the source and its date are part of the answer. Otherwise: not computed, and why. Never from a partial sample.
+  app.get(`${P}/market/traits`, limit(40), async (req) => {
+    const q = z.object({ key: Key }).parse(req.query), a = await assetOf(q.key);
+    if (!a.collection) return { key: a.key, computed: false as const, reason: 'no_collection', sources: [] };
+    const c = await market.collection(a.collection.key, a.chainId);
+    const sources = c.sources.filter((s) => s.status.state === 'ok').map((s) => (s.traits.state !== 'known'
+      ? { provider: s.status.provider, name: s.status.name, computed: false as const, reason: 'reason' in s.traits && s.traits.reason ? s.traits.reason : 'trait_counts_unavailable', rows: [] }
+      : { provider: s.status.provider, name: s.status.name, computed: true as const, reason: null, total: s.traits.value.total, fetchedAt: s.status.stamp!.fetchedAt, stale: s.status.stale, method: 'count of items with the value ÷ item total, both stated by the source',
+          rows: a.metadata.attributes.filter((x) => x.traitType !== null && !x.malformed).map((x) => ({ traitType: x.traitType!, value: x.valueText, frequency: traitFrequency((s.traits as { value: CollectionTraits }).value, x.traitType!, x.valueText) })) }));
+    const any = sources.some((s) => s.computed);
+    // the collection's sources that could NOT be asked say why (no key, off, the marketplace has not identified the collection)
+    return { key: a.key, computed: any, reason: any ? null : sources[0]?.reason ?? c.sources[0]?.status.code ?? 'no_market_source', sources, mutableMetadata: a.metadata.mutable.state === 'known' ? a.metadata.mutable.value : null };
   });
 
   // ── the opt-in "indicative floor-based estimate" (brief §8). DEFAULT OFF. It is never added to the wallet's total, and it is
