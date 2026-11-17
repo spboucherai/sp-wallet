@@ -18,7 +18,7 @@
 import { OrderChecksSlot } from './orderChecks';   // v11 Trade
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useQueryClient } from '@tanstack/react-query';
-import { useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { I18n, useT, type Key } from '../i18n';
 import { Btn, Fact, Fold, Icon, Notice } from '../ui';
 import { fmt, usd } from './dec';
@@ -33,8 +33,8 @@ const local = (key: string, detail = ''): LiveErr => ({ key, code: key, status: 
 /** THE approval button: large, alone, the key on it */
 const APPROVE = '!min-h-[56px] !text-[16px]';
 
-export function ApprovalSheet({ account, instrument, request, orders, ttlMs, onClose }: { account: LiveSummary; instrument: Instrument | undefined; request: ApprovalRequest; /** the account's orders, kept current by the stream */ orders: LiveOrder[];
-  ttlMs: number; onClose: (clientId: string | null) => void }) {
+export function ApprovalSheet({ account, instrument, request, orders, ttlMs, liq, onClose }: { account: LiveSummary; instrument: Instrument | undefined; request: ApprovalRequest; /** the account's orders, kept current by the stream */ orders: LiveOrder[];
+  ttlMs: number; /** the simple form's liquidation estimate for this order (simple.ts), repeated before the passkey; absent = the usual note */ liq?: ReactNode; onClose: (clientId: string | null) => void }) {
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient();
   const tone = toneOf(account);
   const [key, setKey] = useState(() => newKey(request.kind));
@@ -103,12 +103,17 @@ export function ApprovalSheet({ account, instrument, request, orders, ttlMs, onC
   const title = t(request.kind === 'close' ? 'flCloseTitle' : 'flApproveTitle');
   const passkeyLabel = t(tone === 'mainnet' ? 'flApproveReal' : 'flApproveTestnet');
   const dim = phase === 'void' ? 'opacity-50' : '';
+  // what the passkey is about to approve, in one plain sentence — written from the CANONICAL order (what is signed) and the server's estimate, never from the form
+  const base = instrument?.base ?? (c ? c.instrument.slice(c.instrument.indexOf(':') + 1) : ''), marketLike = !!c && c.type === 'limit' && c.tif === 'ioc';
+  const plain = !c ? null : t(request.kind === 'close' ? 'hl1SheetClose' : c.reduceOnly ? (c.side === 'buy' ? 'hl1SheetReduceBuy' : 'hl1SheetReduceSell') : marketLike ? (c.side === 'buy' ? 'hl1SheetLong' : 'hl1SheetShort') : (c.side === 'buy' ? 'hl1SheetBuyOrder' : 'hl1SheetSellOrder'),
+    { size: fmt(c.size, { locale, trim: true }), base, about: est ? ` (${t('hl1About', { usd: usd(est.notional, locale) })})` : '', price: fmt(c.triggerPrice ?? c.price, { locale, trim: true }) });
   return <LiveSheet title={title} tone={tone} label={account.label} busy={phase === 'sending' || phase === 'passkey'} onClose={close}>
     <div className="min-w-0 space-y-4" data-testid="approval-sheet" data-phase={phase}>
       <ModeBand tone={tone} label={account.label} />
       {phase === 'proposing' && <Waiting className="py-6">{t('flProposing')}</Waiting>}
 
       {c && phase !== 'proposing' && phase !== 'done' && <>
+        {plain && <p className={`text-[16px] font-semibold leading-snug tracking-[-0.01em] ${dim}`} data-testid="approval-plain">{plain}</p>}
         <Group title={t('flSignedExactly')}><div className={`${TICKET} ${dim}`}><CanonicalRows c={c} instrument={instrument} /></div></Group>
         {/* v11 Trade: every check of the unified risk engine and of the mandate for this order, before the passkey prompts (rendered by the terminal) */}
         {request.kind === 'order' && phase !== 'void' && <OrderChecksSlot mode="live" accountId={account.id} body={request.body} />}
@@ -117,8 +122,9 @@ export function ApprovalSheet({ account, instrument, request, orders, ttlMs, onC
           <div className="rounded-[18px] border border-line px-4 py-1.5"><dl className="receipt">
             <Fact k={t('fxNotional')}>{usd(est.notional, locale)}</Fact><Fact k={t('fxInitialMargin')}>{usd(est.initialMargin, locale)}</Fact>
             <Fact k={t('flFeeMax')}>{usd(est.fee, locale)}</Fact><Fact k={t('fxFreeAfter')}>{usd(est.freeCollateralAfter, locale)}</Fact>
-            <Fact k={t('flVenueLeverage')}>{fmt(est.leverage, { locale, trim: true })}× · {t(est.marginMode === 'cross' ? 'fxCross' : 'fxIsolated')}</Fact></dl></div>
-          <p className="mt-1.5 text-[12px] leading-snug text-mute">{t('flLiqNote')}</p></Group>}
+            <Fact k={t('flVenueLeverage')}>{fmt(est.leverage, { locale, trim: true })}× · {t(est.marginMode === 'cross' ? 'fxCross' : 'fxIsolated')}</Fact>
+            {liq ? <Fact k={t('hl1Liq')} testid="approval-liq">{liq}</Fact> : null}</dl></div>
+          <p className="mt-1.5 text-[12px] leading-snug text-mute">{t(liq ? 'hl1LiqSheetNote' : 'flLiqNote')}</p></Group>}
         {p?.hash && <Fingerprint>{t('fingerprint')} SHA-256 {p.hash}</Fingerprint>}
       </>}
 

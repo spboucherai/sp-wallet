@@ -103,9 +103,10 @@ export function MarketStats({ store, instrument }: { store: MarketStore; instrum
 
 /** v11 Trade: what the markets hub says of an instrument — can the wallet trade it live, can a paper account, and why not */
 export interface HubFlag { tradable: boolean; paper: boolean; reason: string | null }
-export function MarketPicker({ instruments, current, onPick, onClose, hub, hubDown, onInfo }: { instruments: Instrument[]; current: string; onPick: (id: string) => void; onClose: () => void;
+export function MarketPicker({ instruments, current, onPick, onClose, hub, hubDown, onInfo, authorized }: { instruments: Instrument[]; current: string; onPick: (id: string) => void; onClose: () => void;
   /** v11 Trade: the hub's verdict per instrument id. A market the wallet cannot trade live is LABELLED with the reason; one that not even a paper account can trade opens its read-only sheet (`onInfo`) instead of the terminal */
-  hub?: Map<string, HubFlag> | undefined; hubDown?: boolean | undefined; onInfo?: ((id: string) => void) | undefined }) {
+  hub?: Map<string, HubFlag> | undefined; hubDown?: boolean | undefined; onInfo?: ((id: string) => void) | undefined;
+  /** the instruments the selected venue account's authorization allows — one outside it says so on its row (it can still be opened: the order panel explains and offers to add it) */ authorized?: ReadonlySet<string> | undefined }) {
   const t = useT(); const { locale } = useContext(I18n);
   const [q, setQ] = useState(''), [venue, setVenue] = useState<VenueId | 'all' | 'fav'>('all');
   const [favs, setFavs] = useLocalState<string[]>('spw-fut-favs', []);
@@ -115,14 +116,16 @@ export function MarketPicker({ instruments, current, onPick, onClose, hub, hubDo
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
     return instruments.filter((i) => (i.status !== 'halted' || i.id === current) && (venue === 'all' || (venue === 'fav' ? favs.includes(i.id) : i.venue === venue)) && (!s || i.symbol.toLowerCase().includes(s) || i.base.toLowerCase().includes(s) || VENUE_NAME[i.venue].toLowerCase().includes(s)))
-      .sort((a, b) => Number(favs.includes(b.id)) - Number(favs.includes(a.id)) || Number(byId.get(b.id)?.volume24h ?? 0) - Number(byId.get(a.id)?.volume24h ?? 0) || a.symbol.localeCompare(b.symbol)).slice(0, 80);
+      .sort((a, b) => Number(favs.includes(b.id)) - Number(favs.includes(a.id)) || Number(byId.get(b.id)?.volume24h ?? 0) - Number(byId.get(a.id)?.volume24h ?? 0) || a.symbol.localeCompare(b.symbol));
   }, [instruments, q, venue, favs, byId, current]);
+  const one = venues.length <= 1;   // one venue: no venue filter, and the row's second line says how much the market trades instead of where
   return <Sheet wide title={t('fxPickMarket')} onClose={onClose}>
     <div className="min-h-[56dvh] space-y-3 lg:min-h-[420px]">
       <div className="relative"><Icon n="search" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-mute" />
         <input type="search" role="searchbox" aria-label={t('fxSearchMarket')} placeholder={t('fxSearchMarket')} className={`${inputCls} pl-10`} value={q} onChange={(e) => setQ(e.target.value)} autoCapitalize="off" autoCorrect="off" /></div>
       {hubDown && <p className="text-[12.5px] leading-snug text-mute" data-testid="market-hub-down">{t('v11TrPickHubDown')}</p>}
-      <Seg size="sm" label={t('fxVenueFilter')} value={venue} onChange={setVenue} options={[{ id: 'all', label: t('fxAll') }, { id: 'fav', label: `★ ${t('fxFavs')}` }, ...venues.map((v) => ({ id: v, label: <span className="inline-flex items-center gap-1.5"><VenueIcon venue={v} size={16} />{VENUE_NAME[v] ?? v}</span>, aria: VENUE_NAME[v] ?? v }))]} />
+      <Seg size="sm" label={t('fxVenueFilter')} value={venue} onChange={setVenue} options={[{ id: 'all', label: t('fxAll') }, { id: 'fav', label: `★ ${t('fxFavs')}` }, ...(one ? [] : venues).map((v) => ({ id: v, label: <span className="inline-flex items-center gap-1.5"><VenueIcon venue={v} size={16} />{VENUE_NAME[v] ?? v}</span>, aria: VENUE_NAME[v] ?? v }))]} />
+      {instruments.length > 0 && <p className="px-0.5 text-[12px] leading-snug text-mute" data-testid="market-count">{t('hl1PickCount', { n: rows.length })}</p>}
       {instruments.length === 0 ? <div className="space-y-1" aria-hidden="true">{[0, 1, 2, 3, 4, 5].map((k) => <div key={k} className="flex items-center gap-3 px-1 py-2.5"><div className="skel h-9 w-9 !rounded-full" /><div className="flex-1 space-y-2"><div className="skel h-3.5 w-24 !rounded-md" /><div className="skel h-3 w-16 !rounded-md" /></div><div className="skel h-3.5 w-16 !rounded-md" /></div>)}</div>
         : rows.length === 0 ? <Empty icon={venue === 'fav' && !q ? 'star' : 'search'} title={venue === 'fav' && !q ? t('fxNoFavs') : t('fxNoMarket')} /> :
         <ul className="-mx-2 divide-y divide-line/70" data-testid="market-list">{rows.map((i) => { const x = byId.get(i.id), fav = favs.includes(i.id), ch = dec(x?.change24h); return <li key={i.id} className={`flex items-center gap-0.5 rounded-2xl px-1 ${i.id === current ? 'bg-elev' : ''}`}>
@@ -131,7 +134,7 @@ export function MarketPicker({ instruments, current, onPick, onClose, hub, hubDo
           <button type="button" onClick={() => { const h = hub?.get(i.id); if (h && !h.tradable && !h.paper && onInfo) onInfo(i.id); else onPick(i.id); }} aria-current={i.id === current ? 'true' : undefined} data-testid="market-row" data-id={i.id} data-tradable={hub?.has(i.id) ? String(hub.get(i.id)!.tradable) : ''} className="row-press flex min-h-[60px] min-w-0 flex-1 items-center gap-3 rounded-2xl px-1.5 py-2 text-left">
             <MarketLogo instrument={i} size={38} />
             <span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-semibold leading-tight">{i.base}-{i.quote}{i.symbol !== i.base && i.venue === 'gmx' ? <span className="font-normal text-mute"> {i.symbol.replace(/^[^[]*/, '')}</span> : null}</span>
-              <span className="mt-1 flex items-center gap-2 text-[12.5px] leading-tight text-mute"><span className="truncate">{VENUE_NAME[i.venue]}</span>{i.status !== 'active' && <span className="shrink-0 font-medium text-warn">{t(i.status === 'halted' ? 'fxHaltedShort' : 'fxReduceOnly')}</span>}</span>
+              <span className="mt-1 flex items-center gap-2 text-[12.5px] leading-tight text-mute"><span className="truncate">{one ? (x?.volume24h ? t('hl1PickVolume', { v: compactUsd(x.volume24h, locale) }) : t('fxPerp')) : VENUE_NAME[i.venue]}</span>{authorized && !authorized.has(i.id) && <span className="shrink-0" data-testid="market-unauthorized">· {t('hl1PickNotAllowed')}</span>}{i.status !== 'active' && <span className="shrink-0 font-medium text-warn">{t(i.status === 'halted' ? 'fxHaltedShort' : 'fxReduceOnly')}</span>}</span>
               {(() => { const h = hub?.get(i.id); return h && !h.tradable ? <span className="mt-1 block text-[11.5px] leading-snug text-warn" data-testid="market-not-tradable" data-reason={h.reason ?? ''}><b className="font-semibold">{t('v11TrPickLiveOff')} · {t(h.paper ? 'v11TrPickPaperOnly' : 'v11TrPickReadOnly')}.</b> {t(reasonKey(h.reason) as Key)}</span> : null; })()}</span>
             <span className="shrink-0 text-right"><span className="block text-[14.5px] font-semibold">{x ? fmt(x.mark, { dp: priceDp(i.tickSize, x.mark), locale }) : '—'}</span>
               {ch ? <Change pct={D.toNumber(D.mul(ch, D.from(100n)))} /> : <span className="text-[12.5px] text-mute">—</span>}</span>

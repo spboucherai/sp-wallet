@@ -12,7 +12,16 @@
  *
  * No import from the app: App.tsx reads this from the first chunk.
  */
-export const SHOWN_VENUES: readonly string[] = ['hyperliquid'];
+const OFFERED: readonly string[] = ['hyperliquid'];
+/**
+ * Development builds only (`import.meta.env.DEV` is the constant `false` in a production build, so this is removed from the bundle):
+ * `sessionStorage['spw-venues'] = 'all'` shows the four venues again. It exists so that the end-to-end specs of the code that is
+ * kept but no longer offered (Compare, Router, GMX, the dYdX and edgeX market data) keep running against the mock.
+ */
+function devVenues(): readonly string[] | null {
+  try { return import.meta.env?.DEV && typeof sessionStorage !== 'undefined' && sessionStorage.getItem('spw-venues') === 'all' ? ['hyperliquid', 'gmx', 'dydx', 'edgex'] : null; } catch { return null; }
+}
+export const SHOWN_VENUES: readonly string[] = devVenues() ?? OFFERED;
 
 /** is this venue offered to the owner? */
 export const venueShown = (venue: string): boolean => SHOWN_VENUES.includes(venue);

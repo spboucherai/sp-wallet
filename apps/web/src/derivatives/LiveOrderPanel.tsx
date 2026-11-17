@@ -12,12 +12,15 @@ import { startAuthentication } from '@simplewebauthn/browser';   // V11: lifting
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { I18n, useT, type Key } from '../i18n';
-import { AssetIcon, Btn, Field, Icon, inputCls, Notice, VenueIcon } from '../ui';
+import { AssetIcon, Btn, Field, Fold, Icon, inputCls, Notice, VenueIcon } from '../ui';
 import { RISK_CODES } from './api';
 import { Row, Seg } from './bits';
 import { dpOf, fmt, priceDp, usd } from './dec';
 import { AmountProblem } from '../amountUi';   // v8 hardening: says when a typed number is ambiguous (never guessed)
 import { ApprovalSheet, LeverageSheet } from './LiveApproval';
+import { AuthorizeSheet } from './LiveAuthorize';   // an asset outside the authorization: the guided change opens here
+import { SimpleOrderForm } from './LiveSimple';
+import type { MarketStore } from './store';
 import { LiveErrNotice, LiveSheet, ModeTag, OrderOutcome, SourceTag, Waiting, WORDS } from './LiveBits';
 import { buildLive, lapi, LIVE_SLIPPAGE_BPS as SLIPPAGE_BPS, liveError, toneOf, type CancelAll, type LiveConfig, type LiveDetail, type LiveErr, type LiveForm, type LiveOrderBody, type LiveSummary } from './live';
 import { refreshLive, type LiveConn } from './liveStore';
@@ -86,16 +89,21 @@ export function LiveControls({ account, openOrders }: { account: LiveSummary; op
   </fieldset>;
 }
 
-export function LiveOrderPanel({ instrument, account, detail, conn, workerError, config, switcher, goAccounts }: { instrument: Instrument; account: LiveSummary; detail: LiveDetail | undefined; conn: LiveConn; workerError: string | null;
-  config: LiveConfig | undefined; switcher: ReactNode; goAccounts: () => void }) {
+export function LiveOrderPanel({ instrument, account, detail, conn, workerError, config, switcher, goAccounts, store, simple, onSimple }: { instrument: Instrument; account: LiveSummary; detail: LiveDetail | undefined; conn: LiveConn; workerError: string | null;
+  config: LiveConfig | undefined; switcher: ReactNode; goAccounts: () => void; /** the terminal's market data (the simple form reads the mark from it) */ store: MarketStore;
+  /** the simple form (a market order of an amount) or the full one; the owner's choice, kept by the terminal */ simple: boolean; onSimple: (v: boolean) => void }) {
   const t = useT(); const { locale } = useContext(I18n);
   const tone = toneOf(account), a = detail ?? account;
-  const [f, setF] = useState<LiveForm>({ side: 'buy', kind: 'limit', size: '', price: '', trigger: '', reduceOnly: false, postOnly: false });
+  const [f, setF] = useState<LiveForm>({ side: 'buy', kind: simple ? 'market' : 'limit', size: '', price: '', trigger: '', reduceOnly: false, postOnly: false });
+  const [liq, setLiq] = useState<ReactNode>(null), [adding, setAdding] = useState(false);
   const [review, setReview] = useState<LiveOrderBody | null>(null), [last, setLast] = useState<string | null>(null), [lev, setLev] = useState(false);
   const [levRead, setLevRead] = useState<{ instrument: string; account: string; at: number; v: { leverage: string; marginMode: string } } | null>(null);
   const opening = useRef(false);
   const set = (p: Partial<LiveForm>) => { setF((x) => ({ ...x, ...p })); setLast(null); };
   useEffect(() => { setF((x) => ({ ...x, size: '', price: '', trigger: '' })); setLast(null); }, [instrument.id, account.id]);
+  // the simple form is a market order that opens or adds: switching to it leaves nothing of the full form behind; switching back starts from a limit order, as before
+  const wasSimple = useRef(simple);
+  useEffect(() => { if (wasSimple.current === simple) return; wasSimple.current = simple; setF((x) => ({ side: x.side, kind: simple ? 'market' : 'limit', size: '', price: '', trigger: '', reduceOnly: false, postOnly: false })); setLast(null); }, [simple]);
 
   const pinned = config?.pinnedAssets[account.network] ?? [];
   const mainnetOff = account.network === 'mainnet' && !account.mainnetEnabled;
@@ -128,14 +136,16 @@ export function LiveOrderPanel({ instrument, account, detail, conn, workerError,
   const sizeNote = built.body ? `${fmt(built.body.size, { dp: sdp, locale, trim: true })} ${instrument.base}${est ? ` ≈ ${usd(est.notional, locale)}` : ''}` : null;
   const unit = (s: string) => <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[13px] font-medium text-mute">{s}</span>;
 
+  const level = <div data-testid="order-level" data-level={simple ? 'simple' : 'advanced'} className={simple ? 'shrink-0' : ''}><Seg size="sm" label={t('hl1Level')} value={simple ? 'simple' : 'advanced'} onChange={(v) => onSimple(v === 'simple')} options={[{ id: 'simple', label: t('hl1LevelSimple') }, { id: 'advanced', label: t('hl1LevelAdvanced') }]} /></div>;
   return (
     <div className="min-w-0 space-y-3.5" data-testid="order-panel" data-account-kind="venue" data-network={account.network}>
-      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5"><h3 className="flex items-center gap-2 whitespace-nowrap text-[16px] font-semibold tracking-[-0.01em]"><VenueIcon venue="hyperliquid" size={22} /><span>{t(tone === 'mainnet' ? 'flOrderReal' : 'flOrderTestnet')}</span></h3><ModeTag tone={tone} /></div>
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5"><h3 className="flex items-center gap-2 whitespace-nowrap text-[16px] font-semibold tracking-[-0.01em]"><VenueIcon venue="hyperliquid" size={22} /><span>{t(tone === 'mainnet' ? 'flOrderReal' : 'flOrderTestnet')}</span></h3>{/* simple: the form's choice sits beside the title — which money this is stays on the band above and under the button */ simple ? level : <ModeTag tone={tone} />}</div>
+      {!simple && level}
       <div className="rounded-[18px] bg-elev/60 p-3.5">
         {switcher}
         {st?.error ? <p className="mt-2 text-[13px] leading-snug text-danger" data-testid="venue-unreadable">{t('flUnreadable')} <span className="break-words font-mono text-[11px] text-mute">{st.error}</span></p> : <>
           <div className="mt-2 flex items-baseline justify-between gap-3 text-[13.5px]"><span className="text-mute">{t('fxFreeCollateral')}</span><span className="t-num text-[19px]" data-testid="free-collateral">{st?.state ? usd(st.state.freeCollateral, locale) : '—'}</span></div>
-          <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[13.5px]"><span className="text-mute">{t('fxEquity')}</span><span className="font-medium">{st?.state ? usd(st.state.equity, locale) : '—'}</span></div>
+          {!simple && <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[13.5px]"><span className="text-mute">{t('fxEquity')}</span><span className="font-medium">{st?.state ? usd(st.state.equity, locale) : '—'}</span></div>}
           <div className="mt-2 flex items-center justify-between gap-2 text-[11.5px] text-mute"><span className="inline-flex flex-wrap items-center gap-1.5"><SourceTag />{t(conn === 'stream' ? 'flConnStream' : conn === 'polling' ? 'flConnPolling' : 'fxConnecting')}</span></div></>}
         {workerError && <p className="mt-1.5 break-words text-[12px] leading-snug text-warn">{t('flWorkerError')} <span className="font-mono text-[11px]">{workerError}</span></p>}
       </div>
@@ -143,13 +153,17 @@ export function LiveOrderPanel({ instrument, account, detail, conn, workerError,
       {mainnetOff && <Notice tone="warn"><div data-testid="mainnet-off"><b className="font-semibold">{t('flMainnetOffTitle')}</b> {t('flMainnetOff')}</div></Notice>}
       {!mainnetOff && readOnly && <><Notice tone="info"><div data-testid="live-readonly">{t(a.authorization?.revokedAt ? 'flRevokedNote' : 'flReadOnlyNote')}</div></Notice><Btn full kind="soft" onClick={goAccounts}><Icon n="key" className="h-4 w-4" />{t('flGoAuthorize')}</Btn></>}
       {expired && <><Notice tone="warn">{t('flE_authorization_expired')}</Notice><Btn full kind="soft" onClick={goAccounts}><Icon n="key" className="h-4 w-4" />{t('flGoAuthorize')}</Btn></>}
-      {!mainnetOff && !readOnly && !allowed && <Notice tone="warn"><div data-testid="live-not-allowed">{t(isPinned ? 'flNotInAuthorization' : 'flNotPinned', { symbol: instrument.symbol })}</div></Notice>}
+      {!mainnetOff && !readOnly && !allowed && (isPinned && config ? <div className="space-y-2.5"><Notice tone="warn"><div data-testid="live-not-allowed"><b className="block font-semibold">{t('hl1NotAllowedTitle', { symbol: instrument.symbol })}</b>{t('hl1NotAllowed', { symbol: instrument.symbol, n: a.policy.allowedInstruments.length })}</div></Notice>
+        <Btn full onClick={() => setAdding(true)} data-testid="live-add-asset"><Icon n="key" className="h-4 w-4" />{t('hl1NotAllowedGo', { symbol: instrument.symbol })}</Btn></div>
+        : <Notice tone="warn"><div data-testid="live-not-allowed">{t(isPinned ? 'flNotInAuthorization' : 'flNotPinned', { symbol: instrument.symbol })}</div></Notice>)}
       <HaltBanner account={a} />
       {/* v7 perp live: an agent trades this account — what a manual order does to it */}
       {a.mandate && a.mandate.phase !== 'ended' && <AgentOnAccount account={a} />}
       {tone === 'testnet' && canTrade && <p className="rounded-2xl border border-line px-3.5 py-2.5 text-[12px] leading-snug text-mute" data-testid="testnet-note">{t('flTestnetPrices')}{est ? <span className="mt-0.5 block font-medium text-ink">{t('flTestnetMark', { price: fmt(est.mark, { dp: pdp, locale }) })} <SourceTag /></span> : null}</p>}
 
-      {canTrade && <>
+      {canTrade && simple && <SimpleOrderForm instrument={instrument} account={a} detail={detail} store={store} f={f} set={set} built={built} preview={preview} refused={refused} pvErr={pvErr} venueLev={venueLev} maxLev={maxLev}
+        venueMax={pinned.find((p) => p.instrument === instrument.id)?.maxLeverage ?? null} onLeverage={() => setLev(true)} onReview={(l) => { setLiq(l); openReview(); }} reviewing={!!review} lastOrder={lastOrder} sentId={last} />}
+      {canTrade && !simple && <>
         <div role="radiogroup" aria-label={t('fxDirection')} className="grid grid-cols-2 gap-2">
           {(['buy', 'sell'] as const).map((s) => <button key={s} type="button" role="radio" aria-checked={f.side === s} onClick={() => set({ side: s })}
             className={`press min-h-12 rounded-2xl border text-[15px] font-semibold ${f.side === s ? (s === 'buy' ? 'border-emerald bg-emerald text-onprimary' : 'border-danger bg-danger text-[var(--ondanger)]') : 'border-line text-mute hover:text-ink'}`}>{sideLabel(s)}</button>)}
@@ -191,10 +205,13 @@ export function LiveOrderPanel({ instrument, account, detail, conn, workerError,
         <p className="text-center text-[12px] font-medium leading-snug" data-testid="live-foot"><span className={tone === 'mainnet' ? 'text-danger' : 'text-mute'}>{t(tone === 'mainnet' ? 'flFootReal' : 'flFootTestnet')}</span></p>
       </>}
 
-      {!readOnly && <LiveControls account={a} openOrders={st?.openOrders.length ?? 0} />}
+      {/* the stop controls: in full view in the full form; one tap away in the simple one (the header's risk indicator holds the global stop) */}
+      {!readOnly && (simple ? <Fold testid="live-controls-fold" summary={<span className="inline-flex items-center gap-2 text-ink"><Icon n="stop" className="h-4 w-4" />{t('flControls')}{st?.openOrders.length ? ` · ${t('hl1OpenOrders', { n: st.openOrders.length })}` : ''}</span>}><LiveControls account={a} openOrders={st?.openOrders.length ?? 0} /></Fold>
+        : <LiveControls account={a} openOrders={st?.openOrders.length ?? 0} />)}
 
-      {review && <ApprovalSheet account={a} instrument={instrument} request={{ kind: 'order', body: review }} orders={detail?.orders ?? []} ttlMs={config?.bounds.orderApprovalTtlMs ?? 90_000}
+      {review && <ApprovalSheet account={a} instrument={instrument} request={{ kind: 'order', body: review }} orders={detail?.orders ?? []} ttlMs={config?.bounds.orderApprovalTtlMs ?? 90_000} liq={simple ? liq : undefined}
         onClose={(id) => { setReview(null); if (id) { setLast(id); setF((x) => ({ ...x, size: '' })); } }} />}
+      {adding && config && <AuthorizeSheet replace account={a} config={config} ensure={instrument.id} onClose={() => setAdding(false)} />}
       {lev && <LeverageSheet account={a} instrument={instrument} max={maxLev} current={venueLev} onRead={(v) => setLevRead({ instrument: instrument.id, account: account.id, at: Date.now(), v })} onClose={() => setLev(false)} />}
     </div>
   );
