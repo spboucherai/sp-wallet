@@ -700,4 +700,19 @@ describe('trading mandates', () => {
     const { verifyKeyBinding } = app.execution.mandates;
     await expect(verifyKeyBinding.call(app.execution.mandates, k.id, k.mandateId)).rejects.toMatchObject({ code: 'mandate_not_active' });
   });
+  it('retention: PREVIEW evaluations older than the retention are removed; the decision of a real order request never is', async () => {
+    const { previewRetentionDays } = await import('../src/risk/service.ts');
+    expect(previewRetentionDays({})).toBe(30); expect(previewRetentionDays({ SPW_RISK_PREVIEW_RETENTION_DAYS: '7' })).toBe(7);
+    for (const bad of ['0', '-3', 'x', '']) expect(previewRetentionDays({ SPW_RISK_PREVIEW_RETENTION_DAYS: bad }), bad).toBe(30);
+    const now = Date.UTC(2020, 0, 1), day = 86_400_000;                                         // long before anything this file wrote
+    const row = (at: number, preview: boolean, cid: string) => sql`insert into risk_decisions (at, client_order_id, kind, preview, principal_kind, principal_id, mode, venue, decision, reducing, checks) values (${new Date(at)}, ${cid}, 'order', ${preview}, 'owner', 'owner', 'paper', 'hyperliquid', 'allow', false, '[]')`;
+    await row(now - 31 * day, true, 'prune-old-preview'); await row(now - 29 * day, true, 'prune-recent-preview'); await row(now - 400 * day, false, 'prune-old-decision');
+    const before = Number((await sql`select count(*) as n from risk_decisions where client_order_id not like 'prune-%'`)[0].n);
+    expect(await app.execution.risk.prunePreviews(now)).toBe(1);
+    expect((await sql`select client_order_id from risk_decisions where client_order_id like 'prune-%' order by client_order_id`).map((r: any) => r.client_order_id)).toEqual(['prune-old-decision', 'prune-recent-preview']);
+    expect(Number((await sql`select count(*) as n from risk_decisions where client_order_id not like 'prune-%'`)[0].n)).toBe(before);   // this file's own evaluations are untouched
+    expect(await app.execution.risk.prunePreviews(now)).toBe(0);                                  // idempotent
+    expect(await app.execution.risk.prunePreviews(now - 28.5 * day, 0.2)).toBe(0);                // a retention under a day is a day: a preview half a day old is kept
+    await sql`delete from risk_decisions where client_order_id like 'prune-%'`;
+  });
 });

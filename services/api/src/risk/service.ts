@@ -90,6 +90,9 @@ export const GATE_REUSE_MS = 60_000;
 export const CONTEXT_TTL_MS = 2_000;
 const contextTtl = (): number => { const n = Number(process.env.SPW_RISK_CONTEXT_TTL_MS ?? CONTEXT_TTL_MS); return Number.isFinite(n) && n >= 0 ? Math.min(n, 30_000) : CONTEXT_TTL_MS; };
 
+/** days a PREVIEW evaluation is kept (SPW_RISK_PREVIEW_RETENTION_DAYS; default 30, between 1 and 3650) */
+export const previewRetentionDays = (env: Record<string, string | undefined> = process.env): number => { const n = Number(env.SPW_RISK_PREVIEW_RETENTION_DAYS ?? 30); return Number.isFinite(n) && n >= 1 ? Math.min(Math.floor(n), 3650) : 30; };
+
 export class RiskService {
   readonly deps: RiskDeps;
   readonly now: () => number;
@@ -501,6 +504,17 @@ export class RiskService {
       exceptOrderId: r.venue === 'gmx' && cid.startsWith('gmx-') ? cid.slice(4) : cid });
     return ev.decision === 'allow' ? { ok: true } : { ok: false, code: ev.code ?? 'risk_denied', reason: (ev.reason ?? 'denied by the risk engine').slice(0, 400) };
   };
+
+  // ------------------------------------------------------------------ retention
+  /** V11 final validation. `risk_decisions` keeps EVERY evaluation, previews included: a confirmation sheet, a command dry run and
+   *  each plan of a market-making session write one (a paper session: about two a minute, measured), and nothing ever removed
+   *  them. A PREVIEW decides nothing — no order exists for it — so previews older than the retention are deleted
+   *  (`SPW_RISK_PREVIEW_RETENTION_DAYS`, default 30, never under 1). The decision of a real order request (allowed or denied) is
+   *  history and is never deleted here. */
+  async prunePreviews(now: number = Date.now(), days: number = previewRetentionDays()): Promise<number> {
+    const r = await sql`delete from risk_decisions where preview and at < ${new Date(now - Math.max(1, Math.floor(days)) * 86_400_000)}`;
+    return r.count;
+  }
 
   // ------------------------------------------------------------------ views (Risk screen, GET /risk)
   async decisions(limit = 50) {
