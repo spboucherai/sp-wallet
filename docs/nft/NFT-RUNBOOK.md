@@ -120,3 +120,47 @@ on contracts the wallet already knows); activity limited to the
 most recent ~1 000 blocks. Solana SPL history is partial (mint + current token account). Compressed NFTs are indexed data,
 not verified against their tree. Token-2022 group / member pointers are listed, not decoded into a collection. No rarity, no
 valuation. 3D models are not displayed. The 13 other chain families have no adapter.
+
+## Market sources and keyed providers (delivery 3)
+
+**Where the keys live.** `OPENSEA_API_KEY` and `ALCHEMY_API_KEY` belong in the PM2 environment of `sp-wallet` on the **API
+node** and in the `env` block of its `mld` manifest — never on the signer node, never in the web bundle, never in a commit
+or a log. The API reports variable NAMES only (`GET /api/v1/nfts/market/providers`, the capability list, the monitor).
+Alchemy's key travels in the URL path: no Alchemy URL is ever logged, stored or reported by the NFT module
+(`evm-hints.ts`); do not add such a URL to `SPW_RPC_EXTRA` without the same care in `chains/rpc.ts`.
+
+| I want | Set | It sends |
+|---|---|---|
+| market data (Solana + 7 EVM networks) | `OPENSEA_API_KEY` | the contract + token id / mint of each item opened |
+| Magic Eden's own orders (Solana) | `NFT_MARKET_MAGICEDEN=on` — read its API terms page in a browser first | the mint of each Solana item opened |
+| EVM auto-discovery | `NFT_EVM_PROVIDER=alchemy` + `ALCHEMY_API_KEY` (enable each network in the Alchemy dashboard), or `NFT_EVM_PROVIDER=opensea` | **the wallet's EVM address** |
+| OpenSea key set but no market read | `NFT_MARKET_OPENSEA=off` | nothing |
+
+**Is it working?** `npx tsx scripts/smoke-nft-market.mts` (with the variables in the environment) prints what each source
+answers for the reference item, the request counters, and — with `--evm-address <a public address>` — what the EVM
+provider answers per network. Assets → NFT → "Sources de marché" shows the same states.
+
+**Quotas.** The wallet allows itself 30 requests / minute and 5 000 / day towards OpenSea (observed header: 120), 40 /
+minute towards Magic Eden (documented: 120). A refused request is not sent: the panel shows the last answer marked
+"possiblement périmée" (for at most 24 h), then "erreur de la source (budget_exhausted)". The day's count survives a
+restart (`nft_budget`, source `market:<provider>`). An item costs 5 OpenSea requests, a collection 3; answers are kept
+2 – 10 minutes.
+
+**A source is down or rate-limits.** Nothing to do: the other sources, the item page and the ownership are unaffected; the
+source's row says `provider_unavailable` / `provider_rate_limited`. A 429 pauses that provider for a minute.
+
+**A network says "network not enabled for this key".** Enable it in the provider's dashboard; the next synchronisation
+uses it. No restart, no change of SP Wallet.
+
+**Empty the market cache** (a provider asks for deletion; a wrong figure is shown): `delete from nft_market_cache;` and,
+to forget the marketplaces' collection names, `delete from nft_market_slug;`. Both are caches.
+
+**Key renewal / compromise.** Replace the variable and restart the API; revoke the old key at the provider. An OpenSea
+"instant" key expires after 7 days. A leaked Alchemy key exposes the app's quota and the list of addresses it was asked
+about — rotate it in the dashboard.
+
+**Do not hand a trading-API key with `markets:read` to a third party while OpenSea is on**: its developer terms forbid
+providing API data to third parties (`NFT-SOURCES.md` §10.1).
+
+**The opt-in estimate** (`POST /api/v1/nfts/valuation {enabled}`; audit event `nft.floor_estimate`) is a display setting:
+it changes no total.

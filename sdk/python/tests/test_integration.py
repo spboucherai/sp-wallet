@@ -55,6 +55,7 @@ from sp_wallet import (
     ScopeDenied,
     ServiceUnavailable,
     SPWallet,
+    SPWalletError,
     ValidationError,
     WaitTimeout,
     construct_webhook_event,
@@ -393,11 +394,50 @@ def test_compare_markets_and_private_markets(run: Runner) -> None:
     assert (type(unknown), unknown.code) == (NotFound, "unknown_company")
 
 
+def test_nft_reads_inventory_and_market(run: Runner) -> None:
+    """The five NFT reads against the real server. The throwaway wallet holds no NFT; no market provider is configured:
+    every source says why it is absent, and no figure is invented."""
+    c = run.client("reader", timeout=90)
+    ref = "CMhGwGHMbVaBmxebfU3t5eViSf6FKHnvFCBNiA1D659j"
+    lst = run.call(c, "list_nfts", limit=5)
+    conforms("listNfts", lst)
+    assert lst.items == [] and lst.total == 0 and lst.next_cursor is None and lst.valuation.state == "unavailable"
+    say(f"[{run.kind}] list_nfts(limit=5) → {meta(lst)} total={lst.total} valuation={lst.valuation.state}")
+    none = declared("getNft", run.error(c, "get_nft", f"sol:solana:{ref}"))
+    assert (type(none), none.code) == (NotFound, "unknown_nft")
+    assert declared("getNftActivity", run.error(c, "get_nft_activity", f"sol:solana:{ref}")).code == "unknown_nft"
+    bad = declared("getNftMarket", run.error(c, "get_nft_market", network="cardano", address="a" * 40))
+    assert bad.code == "nft_unsupported_chain"
+    say(f"[{run.kind}] get_nft_market(network='cardano') → {type(bad).__name__} {bad.status} {bad.code}")
+    try:
+        m = run.call(c, "get_nft_market", network="solana", address=ref)
+    except SPWalletError as e:  # the public chain endpoints did not answer: a declared failure, not an invented answer
+        if e.status is not None:  # a client-side timeout is not a server answer: reported, not judged
+            declared("getNftMarket", e)
+        say(f"[{run.kind}] get_nft_market(reference item) → {type(e).__name__} {e.status} {e.code}")
+    else:
+        conforms("getNftMarket", m)
+        assert m.key == f"sol:solana:{ref}"
+        assert sorted(s.status.state for s in m.sources) == ["needs_key", "off"]
+        for s in m.sources:
+            assert s.status.unlocked_by in ("OPENSEA_API_KEY", "NFT_MARKET_MAGICEDEN")
+            assert {s.listed.state, s.ask.state, s.best_offer.state, s.last_sale.state, s.collection_floor.state} == {"unknown"}
+        assert m.rates == {} and m.value.state == "unavailable"
+        assert all(a.available is False for a in m.market_actions)
+        say(f"[{run.kind}] get_nft_market(reference item) → {meta(m)} sources={[(s.status.provider, s.status.state) for s in m.sources]} value={m.value.state}")
+        ev = run.call(c, "get_nft_market_events", network="solana", address=ref, type="sale", limit=5)
+        conforms("getNftMarketEvents", ev)
+        assert all(s.events == [] for s in ev.sources)
+    cur = declared("getNftMarketEvents", run.error(c, "get_nft_market_events", network="solana", address=ref, cursor="abc"))
+    assert cur.code == "bad_request"
+
+
 def test_every_read_operation_of_the_document_is_exercised_in_this_file() -> None:
     reads = sorted(k for k, v in OPERATIONS.items() if v[0] == "GET")
-    assert reads == ["compareMarkets", "getActivity", "getAgent", "getAgentPerformance", "getBalances", "getCandles", "getJob", "getMarket", "getOpenApi", "getOrder", "getOrderbook",
+    assert reads == ["compareMarkets", "getActivity", "getAgent", "getAgentPerformance", "getBalances", "getCandles", "getJob", "getMarket", "getNft", "getNftActivity", "getNftMarket",
+                     "getNftMarketEvents", "getOpenApi", "getOrder", "getOrderbook",
                      "getPortfolio", "getPrivateMarket", "getPrivateMarketCompany", "getRisk", "listAgentJournal", "listAgentOrders", "listAgentSignals", "listAgentTemplates", "listAgents",
-                     "listMarkets", "listOrders", "listPositions", "listPrivateMarkets", "listStrategies"]  # fmt: skip
+                     "listMarkets", "listNfts", "listOrders", "listPositions", "listPrivateMarkets", "listStrategies"]  # fmt: skip
 
 
 def test_rate_limit_headers_and_request_ids(run: Runner) -> None:

@@ -1,4 +1,4 @@
-# SP Wallet — NFT architecture (delivery 1: read-only; transfers of delivery 2 are in `NFT-TRANSFERS.md`)
+# SP Wallet — NFT architecture (delivery 1: read-only; transfers of delivery 2 are in `NFT-TRANSFERS.md`; the market READ layer of delivery 3 is §8)
 
 Delivery 1 of `NFT-BRIEF.md` §17: inventory, collection and item pages, secure metadata and media, activity where the sources
 allow. **Nothing in it signs, prepares or broadcasts anything; the signer, intents and policy are untouched.** What is real
@@ -172,3 +172,81 @@ of an exact currency) and the event types `sale`, `list`, `delist`, `offer`, `ca
 exist. A market adapter implements `{supports(asset), snapshot(asset)}` (`market.ts`); writes are a different interface that
 does not exist yet, by design. The `escrow` transfer-block reason and ownership state are reserved for a source that can say
 an on-chain holder *is* a marketplace escrow.
+
+## 8. The market READ layer (delivery 3) — `services/api/src/nft/market/`, `packages/nft/src/market.ts`
+
+**Read only.** No file of this layer builds, signs or submits an order, an approval or a cancellation; the signer, the
+intents and the policy are untouched by delivery 3. The decision document for a first market write is
+`NFT-MARKET-WRITES.md`.
+
+```
+item page / Market screen ── /api/v1/nfts/market/* (owner) ─────┐
+trading API ── GET /nfts/market, /nfts/market/events (markets:read) ─┤
+                                                                  ▼
+                 market/service.ts  ── one ROW PER SOURCE, never merged ──┬─ market/opensea.ts     (key)      ─▶ api.opensea.io
+                   │  cache (nft_market_cache: provider + kind + ref)     ├─ market/magiceden.ts   (opt-in)   ─▶ api-mainnet.magiceden.dev
+                   │  budget per provider (market/budget.ts)              └─ absent slots: reported, never called
+                   └─ rates: the wallet's own price list (source, date)
+ evm.ts events ── market/seaport.ts  (a sale read from the transaction's own Seaport event — no provider)
+ evm.ts inventory ── evm-hints.ts    (Alchemy | OpenSea | Blockscout: HINTS, each re-verified on-chain)
+```
+
+- **`NftMarketProvider`** (`market/types.ts`), beside `NftDataProvider`: `describe()` (chains, what it sends, attribution,
+  terms, its request budget, whether the adapter was verified live or from the documentation only), `notCovered(ref)`,
+  `item(ref)`, and optionally `listings`, `offers`, `events`, `collection`. A provider is asked about **on-chain
+  identifiers only** (contract + token id, or a mint) — never a wallet address. It never says who holds an asset.
+- **The five price notions are five fields** (`ItemMarket`): `ask` (a live listing), `bestOffer`, `lastSale` (reported by a
+  source), `collectionFloor` (a statistic of a collection — never the value of an item), and the **realised sale** of an
+  on-chain event (`NftEvent.price`, set only when a payment of the same transaction was linked). Each is a `Known<…>`:
+  `none` = the source says there is none; `unknown(reason)` = it could not be established.
+- **Amounts**: `MarketMoney {amount (base units, string), currency {network, asset: 'native' | exact mint / contract,
+  symbol, decimals}, precision}`. A source that gives a decimal is converted digit by digit (`decimalToUnits`,
+  `precision: 'source_decimal'`); a currency named by a symbol alone is not a currency — the amount is `unknown
+  (currency_symbol_only)`, or, for a volume, shown `reported` as the source words it. `sameCurrency` compares network AND
+  asset: nothing is ever compared or summed across networks or across currencies.
+- **Per-source isolation.** `service.item(asset)` answers `sources[]`: each configured provider with its state — `ok`
+  (possibly `stale`), `not_covered` (code: `chain_not_covered`, `standard_not_covered`, `not_found`,
+  `collection_not_identified`), `error` (the provider's failure as a stable code) — then every **absent** slot: `needs_key`
+  or `off`, with the NAME of the variable that would turn it on. A failing source changes nothing in the others, the item
+  page or the ownership. `contradictions[]` names where two `ok` sources disagree (listed state, asking price, floor in
+  the same currency, verification); none is chosen.
+- **Budget** (`market/budget.ts`): one per provider, per minute (memory) and per UTC day (persisted in `nft_budget` as
+  `market:<provider>`), set below the provider's documented limit; a refused request is not sent (`budget_exhausted`); a
+  429 pauses the provider for a minute. Counters: `GET /api/v1/nfts/market/providers`.
+- **Cache** (`nft_market_cache`, key = provider + data kind + reference — never a URL): item, listings, offers 2 min;
+  events 5 min; collection 10 min. When a provider fails, the last answer is served marked `stale` with the failure's
+  code, for at most 24 h; then the source is `error`.
+- **Errors**: `NftProviderError` codes only (`provider_unavailable`, `provider_rate_limited`, `provider_bad_answer`,
+  `provider_not_configured`, `not_found`, `budget_exhausted`); the body of a failed answer is never read into an error; a
+  provider that answers ANOTHER asset or collection than the one asked is a `provider_bad_answer`, never displayed.
+- **Verification** (`MarketVerification {state, providerValue, by}`): a marketplace's badge with its name. The web shows
+  "Collection vérifiée par <source>" only for an `ok` source saying `verified`; else "Contrat connu" (the chain knows the
+  collection's account / contract) or "Non vérifié". It is never merged into `collection.verifiedOnChain`.
+- **Traits** (`GET /nfts/market/traits`): a frequency only from a source that gives collection counts AND a stated item
+  total — answered with the count, the total, the source and its date; otherwise `computed: false` with the reason. A
+  rank only with the provider's named method.
+- **Fiat** (`rates`): for each quoted currency that is the native coin or a token of the registry (matched by
+  identifier), the wallet's own rate with its source and date. A rate from the price source licensed for internal use
+  (`docs/V11-MARKET-DATA-SOURCES.md`) is withheld from an API key.
+- **Value.** An item has none: `value: {state: 'unavailable'}`. The gallery total stays « valeur non disponible ». The
+  opt-in `GET /nfts/valuation` (setting `nftFloorEstimate`, default off) lists, per collection, items held × the lowest
+  floor a source reports, with that source and its age — labelled `indicative_floor_based_estimate`, excluded from every
+  total.
+- **Sale interpretation without a provider** (`market/seaport.ts`): see `NFT-SOURCES.md` §10.4. Such an event has
+  `interpretation.by = spw:seaport-order-fulfilled` and the web says "interprétée à partir de la transaction par SP Wallet".
+  On Solana a recognised marketplace PROGRAM is named on the event (`marketProgram`), nothing more.
+- **EVM discovery hints** (`evm-hints.ts`): the first configured source that answers is used; a source that refuses THIS
+  network (a key not enabled for it) makes the section `blocked_by_provider` with `network_not_enabled_for_key` — never an
+  empty inventory. The indexer's spam flag is kept on the asset (`indexerFlags`), hidden by default in the list
+  (`spam=hide|show|only`), never used to drop an item.
+- **Routes** (owner session, GET only except the opt-in toggle): `/nfts/market?key=` · `/nfts/market/listings` ·
+  `/nfts/market/offers` · `/nfts/market/activity?type=&after=&before=&provider=&cursor=` (a cursor belongs to one source)
+  · `/nfts/market/collection?key=` · `/nfts/market/traits?key=` · `/nfts/market/providers` · `GET|POST /nfts/valuation`.
+  Every answer that concerns actions carries `actions[]`: the seven market actions, each `available: false`,
+  `reason: market_writes_not_built`.
+- **Trading API** (`trading-api/nft-read.ts`, `spec.ts`): `listNfts`, `getNft`, `getNftActivity` (`wallet:read`: the
+  owner's inventory only) and `getNftMarket`, `getNftMarketEvents` (`markets:read`: any item named by its chain
+  identifiers; the answer says nothing about the wallet). In the OpenAPI document and both SDKs.
+- **Web** (`screens/NftMarket.tsx`, a lazy chunk): the item's market panel, the Market screen (listings, offers, events,
+  the disabled actions and — apart — the external links with the facts "no WalletConnect, no key export"), the
+  collection's market figures, the sources and what each key unlocks, the opt-in estimate.

@@ -115,3 +115,26 @@ here; if one is received, lock its output.
 - Not built in delivery 1 (stated on the screens and in the API): NFT transfer, approvals, any market write; an Ordinals
   adapter; adapters for the 13 other families; rarity / frequency; fiat valuation of NFTs; read equivalents under the trading
   API (`/api/v1/trading`, scope `wallet:read`) — not trivial (spec, OpenAPI and SDK regeneration), left for a later pass.
+
+## 6. Market column after delivery 3 (2026-11-17)
+
+The "Market actions" column of §3 says **no** on every row and that is still true of **writes**: nothing can be bought,
+sold, listed, offered, accepted or cancelled from the wallet, on any network (`NFT-MARKET-WRITES.md`). Market **reads**:
+
+| Network | Market READ — source (state without any variable) | With a key / setting | Market WRITE |
+|---|---|---|---|
+| Solana | none: every market field "unavailable" with its reason | **OpenSea** (`OPENSEA_API_KEY`): listing, best offer, last sale, events, collection floor / volume / owners / badge, trait counts, rank — verified live · **Magic Eden** (`NFT_MARKET_MAGICEDEN=on`, keyless): its own listings, offers, activity, floor | not built |
+| Ethereum, Base, Arbitrum, Polygon, Optimism, Avalanche, HyperEVM | a sale price **only** when the transfer's transaction holds a Seaport event (keyless, interpreted by SP Wallet) | **OpenSea** (`OPENSEA_API_KEY`): as above | not built |
+| BNB Smart Chain | the Seaport interpretation only | not covered by OpenSea; no other source | not built |
+| Bitcoin and the 13 other networks | not available (no NFT adapter) | — | not built |
+
+EVM **discovery** after delivery 3: still `blocked_by_provider` with no variable; with `NFT_EVM_PROVIDER=alchemy` +
+`ALCHEMY_API_KEY`, or `NFT_EVM_PROVIDER=opensea` + `OPENSEA_API_KEY`, the provider's list is a hint and every item is
+re-verified on-chain. A network the key does not cover stays `blocked_by_provider` with the reason
+(`network_not_enabled_for_key`); HyperEVM is not in Alchemy's NFT API (OpenSea covers it); BNB is not in OpenSea's
+(Alchemy covers it).
+
+Also closed from deliveries 1 – 2: read equivalents under the trading API (five operations, both SDKs); the collection
+page (banner, description, verification with its source, floor and volume, traits — when a source is on); the Solana
+transfer-preparation path has suite-level tests on recorded mainnet accounts; the simulation's "changes" are codes with
+FR / EN texts; `tests/e2e/nft.spec.ts` and `nft-send.spec.ts` re-run. Still open: `work/nft-3.md` §9.

@@ -16,8 +16,9 @@ machine. Tags: **[live]** observed in a live call that day (the answers behind t
 | EVM on-chain truth | the two RPC endpoints of each EVM network (`eth_call`, `eth_getCode`) | none | integrated, tested |
 | EVM discovery | none keyless (measured, §4). Optional: a Blockscout-compatible instance per network, `NFT_EVM_INDEXER_URLS` | none (per-instance REST) | integrated as a **hint** re-verified on-chain; off by default |
 | Bitcoin Ordinals | none usable without self-hosting | — | **not integrated**; warning shown |
-| Market read | Magic Eden public Solana API, `NFT_MARKET_MAGICEDEN=on` | none | integrated, **off by default** (terms only partly readable, §6) |
-| OpenSea | API v2 | `OPENSEA_API_KEY` (mandatory) | **not integrated**; variable name reserved |
+| Market read | Magic Eden public Solana API, `NFT_MARKET_MAGICEDEN=on` | none | integrated, **off by default** (terms not readable from the official site, §10.2) |
+| OpenSea | API v2 | `OPENSEA_API_KEY` (mandatory) | **integrated in delivery 3, verified live with a key** (§10.1); absent without the key |
+| EVM discovery, keyed | Alchemy NFT API v3 or OpenSea account listing, `NFT_EVM_PROVIDER` | yes | **integrated in delivery 3** as hints re-verified on-chain (§10.3) |
 
 Degraded mode with **no variable set**: Solana inventory (token + Core + compressed while the public endpoint serves DAS),
 lookup of any Solana / EVM asset, manual tracking of EVM NFTs verified on-chain, creator metadata and media through the proxy,
@@ -198,7 +199,7 @@ before turning it on.
 | `NFT_CACHE_DIR`, `NFT_CACHE_MAX_BYTES`, `NFT_MEDIA_MAX_BYTES` | media cache location (default: `SPW_DATA_DIR` or the OS temp dir), its cap (1 GiB) and the per-file cap (25 MiB) | defaults |
 | `NFT_FETCH_DAILY_REQUESTS`, `NFT_FETCH_DAILY_BYTES` | daily budget of requests to creator-controlled hosts (5 000 / 2 GiB) | defaults |
 | `NFT_INVENTORY_MAX` | cap of items read per section and chain (500) | default |
-| reserved, not read by any code yet | `OPENSEA_API_KEY`, `NFT_EVM_PROVIDER_API_KEY`, `NFT_ORDINALS_API_URL` | — |
+| added by delivery 3 | `OPENSEA_API_KEY`, `NFT_MARKET_OPENSEA`, `NFT_EVM_PROVIDER`, `ALCHEMY_API_KEY` / `NFT_EVM_PROVIDER_API_KEY` | see §10.6 |
 
 The server reports which of these are in force — names only — in its capability line at start-up and in
 `GET /api/v1/nfts/capabilities` (`providers[]`, `chains[].unlockedBy`).
@@ -243,3 +244,208 @@ contacts a third party for NFT data.
 
 Both Solana instructions were then executed by the real programs (cloned from mainnet) on a local validator, and simulated
 on mainnet for the Core and pNFT cases while the builders were written (`work/nft-2.md`).
+
+## 10. Added by delivery 3 (2026-11-17) — market data, the keyed EVM discovery provider, sale interpretation
+
+Tags as in the head of this file, plus **[live-key]**: observed with a key the owner supplied (the key is in no file of
+the repository; recorded answers are scrubbed). Fixtures say their own provenance in a `provenance` field.
+
+### 10.0 Decision summary
+
+| Need | Source | Key | Verified | State |
+|---|---|---|---|---|
+| Market read — Solana and 7 EVM networks | **OpenSea API v2** | `OPENSEA_API_KEY` (mandatory) | **live with a key**: every endpoint the adapter uses, on the reference Core item, an ERC-721 and an ERC-1155 | integrated; absent and reported `needs_key` without the key; `NFT_MARKET_OPENSEA=off` turns it off |
+| Market read — Solana, Magic Eden's own orders | **Magic Eden** public API | none | live, keyless | integrated, **off by default** (`NFT_MARKET_MAGICEDEN=on`): its API terms could not be read from the official site (§10.2) |
+| EVM discovery (which NFTs the wallet's address holds) | **Alchemy NFT API v3** (`NFT_EVM_PROVIDER=alchemy`, `ALCHEMY_API_KEY`) or **OpenSea** account listing (`NFT_EVM_PROVIDER=opensea`) | yes | live with keys | integrated as **hints**, each item re-verified on-chain on the wallet's two endpoints; never on by default (the provider receives the wallet's EVM address) |
+| A sale price without any provider (EVM) | the transaction's own **Seaport `OrderFulfilled`** event | none | 5 mainnet receipts | integrated, labelled "interpreted from the transaction by SP Wallet" |
+| Solana marketplace involvement | a sourced list of 6 **program ids** | none | each read in its official repository and seen on-chain | integrated as a NAME only — never a price |
+| Etherscan API v2, Tensor API, Helius, Solscan, Reservoir, Alchemy `getNFTSales`, Alchemy floor price | — | — | availability only | **not integrated** (§10.5) |
+| Market WRITES (buy, sell, list, offer, accept, cancel) | — | — | — | **not built** — `NFT-MARKET-WRITES.md` |
+
+### 10.1 OpenSea API v2
+
+- **Reference.** The provider's own OpenAPI document, `https://api.opensea.io/api/v2/openapi.json` (OpenAPI 3.1.0, "OpenSea
+  API" 2.0.0, 392 schemas) [live, keyless]; the documentation pages (`docs.opensea.io/llms.txt`; any page + `.md`). The
+  document has **no response example** for the endpoints used (one exists for traits): the adapter was written against the
+  schemas, then **verified live with a key**.
+- **Key.** "All requests require an API key" [doc]; header `x-api-key` [doc]. Obtained at opensea.io → Settings → Developer
+  (verified e-mail, a form, at most 3 keys), or `POST /api/v2/auth/keys` — an "instant" key that expires after 7 days,
+  `rate_limits {read: "600/h", write: "30/h", fulfillment: "5/m"}` [doc; **not called**]. Observed without a key
+  [live]: 200 for Get NFT / collection / stats of an *Ethereum* item, **401** `Missing an API Key, which is required for
+  this request.` for the reference *Solana* item and for listings, offers, events, traits, account NFTs. The adapter never
+  runs without a key.
+- **Limits observed with the owner's key** [live-key]: `x-ratelimit-limit: 120`, `x-ratelimit-remaining`,
+  `x-ratelimit-reset` on every answer; `Retry-After` on 429 [doc]. Numeric limits of a full key are not published ("read
+  the headers"). The wallet allows itself **30 requests / minute and 5 000 / day** towards OpenSea (visible counters); an
+  item read costs 5 requests (item, collection, best listing, best offer, last sale), a collection 3 (collection, stats,
+  traits). Cache: item, listings, offers 2 min; events 5 min; collection 10 min.
+- **Endpoints used, all verified live with the key** on the reference Core item, on BAYC #1 and #4339 (ERC-721) and on
+  `0x33fd…7af1` #501 (ERC-1155):
+
+  | Endpoint | Used for | Observed |
+  |---|---|---|
+  | `GET /chain/{chain}/contract/{address}/nfts/{identifier}` | the marketplace's collection slug, flags (`is_suspicious`, `is_disabled`, `is_nsfw`), `rarity {strategy_id, strategy_version, rank}` | **Solana: `address` and `identifier` are both the mint / asset address** — not stated by the documentation (one documented example suggests it); confirmed live on the reference item (`token_standard: metaplex_core`). `identifier = 0` answers 404 |
+  | `GET /collections/{slug}` | name, description, image, banner, `safelist_status`, `fees[{fee %, recipient, required}]`, `total_supply`, `rarity.max_rank`, `pricing_currencies` (symbol → address + decimals) | reference collection `phygitals`: `safelist_status: verified`, 344 673 items, one required fee of 1 %, listing currency USDC `EPjFWdd5…Dt1v` |
+  | `GET /collections/{slug}/stats` | floor and volume (decimals in whole units, named by SYMBOL), sales, owners | floor `0.36` `USDC`; **volume in `ETH` for this Solana collection** — a symbol with no network: shown as reported, attached to no currency |
+  | `GET /traits/{slug}` | per-value counts | 2.3 MB for this collection; no item total in it — the denominator is the collection's `total_supply` of the same source |
+  | `GET /listings/collection/{slug}/nfts/{id}/best` | asking price | 404 `No listings found …` = none. EVM: Seaport parameters (the payment token is read from the consideration). **Solana: `svm_order` + `protocol` (`tensor`, `os_tensor`), price named by symbol only** — tied to an exact mint only when it matches the collection's own `pricing_currencies`, else `unknown (currency_symbol_only)` |
+  | `GET /offers/collection/{slug}/nfts/{id}/best`, `…/nfts/{id}` | best offer, offers list (`next` cursor) | BAYC #1: 8.03 WETH by contract address |
+  | `GET /events/chain/{chain}/contract/{address}/nfts/{id}` (`event_type`, `after`, `before`, `limit`, `next`) | sales (`payment {quantity, token_address, decimals, symbol}`), listings and offers (`event_type: order` + `order_type`), transfers | reference item: **one sale, 14 500 USDC, 2026-11-10 16:38:56 UTC**, and 17 transfers with both parties on the first page; history back to 2026-04 on the next page |
+  | `GET /chain/{chain}/account/{address}/nfts` | EVM discovery hints (§10.3) | 200 with the key |
+
+  There is **no "all listings of one item" endpoint** (only `/best`), **no cancellation in the REST events** (Stream API
+  only [doc]) and **no wash-trade flag anywhere** (zero occurrence in the document): `delist` / `cancel-offer` are never
+  produced by this adapter and `washTrade` is `unknown`, never `false`.
+- **Coverage.** `chain` values used: `ethereum`, `base`, `arbitrum`, `polygon`, `optimism`, `avalanche`, `hyperevm`,
+  `solana` (the document's enum has 26 values; `/api/v2/chains` answered 28). **Not BNB Smart Chain** (404 [live-key]).
+  Solana: "a selected group of established Solana collections" [doc, support.opensea.io]; Metaplex Core is served [live-key].
+  Which read endpoints OpenSea guarantees for Solana: **NE** (not stated).
+- **Verification badge.** `safelist_status`: `not_requested`, `requested`, `approved`, `verified`, `disabled_top_trending`
+  (the SDK's own comments; no enum in the document). Only `verified` is shown, as "Collection vérifiée par OpenSea" —
+  the marketplace's statement, never an on-chain verification.
+- **Rarity.** `strategy_id: openrarity` [live]; rank shown as "2664 sur 9996 · méthode openrarity 1.0, selon OpenSea".
+  The reference item has `rarity: null`: no rank is shown.
+- **Terms** — `https://opensea.io/developer-terms`, "Developer Terms of Use", **Last Updated: April 26, 2023** [doc]:
+  - attribution: "You agree to provide appropriate attribution to OpenSea on your site or in your product or services, for
+    example by linking to the OpenSea website from the NFTs that you display, where appropriate" → the panel shows "Market
+    data: OpenSea" and the link to the item's page;
+  - commercial use: "You may not commercialize the API, or any data … without our express written permission. Your use …
+    will be considered 'commercial' if you earn money as part of a product or service that you are selling, re-selling, or
+    otherwise monetizing";
+  - redistribution: "You may not rent, sell, lease, lend, convey, redistribute, or otherwise provide any third party with
+    use of or access to any aspect of the API or API Data" → the owner's own screens are not a third party; **an API key
+    of the trading API given to someone else would be**: `markets:read` answers OpenSea data — do not hand such a key to a
+    third party while this source is on;
+  - storage: "If API Data is deleted, suspended, withheld, modified, disabled, delisted … you will make all reasonable
+    efforts to delete or modify such API Data in your possession as soon as possible, and in any case within 24 hours after
+    a written request" → the market cache is dropped after 24 h and can be emptied (`NFT-RUNBOOK.md`);
+  - limits: "not to … exceed, circumvent … any limits (e.g., rate limits) … including by sharing access to the API,
+    aggregating accounts, or creating multiple API keys";
+  - no caching-duration clause; whether the keyless answers are intended: NE.
+- **What OpenSea learns**: the contract + token id (or mint) of each item the owner OPENS, the collection slug, the
+  server's IP and the key. Never the wallet's address — unless `NFT_EVM_PROVIDER=opensea` (§10.3).
+
+### 10.2 Magic Eden (Solana) — opt-in
+
+- **Terms.** `magiceden.io/legal-policies/api-terms`, `docs.magiceden.io` and `help.magiceden.io` still answer a bot
+  challenge (403, `cf-mitigated: challenge`) to this machine [live]: **the API terms were not read from the official
+  site.** A third-party archive (tostracker.app, capture of 2026-07-10) shows an "API Terms of Service — Last Updated:
+  March 2025" whose clauses would allow this use with constraints (2.2: not to "create copies of any data … except as
+  necessary to enable an intended usage scenario", nor "Redistribute or resell"; 5.3: not to "keep cached copies longer
+  than permitted by the cache header"; 6.1: "display any attribution(s) required by Magic Eden as described in the
+  documentation"; 2.5: the APIs may change or stop "AT ANY TIME"). It is an unofficial copy: **nothing is enabled on it**.
+  What the documentation says [snippet]: "we make this API available free of charge and kindly request that you attribute
+  Magic Eden … please consider linking to the Magic Eden marketplace from the NFTs that you showcase"; "This public API is
+  free to use, and the default limit is 120 QPM or 2 QPS". Status: "For now, the Solana API remains operational"
+  [snippet, help article 13885533]; its Bitcoin / Runes APIs were discontinued on 2026-03-27.
+  → **Decision unchanged: OFF by default.** The owner, who can read the terms page in a browser, turns it on with
+  `NFT_MARKET_MAGICEDEN=on`; the panel then shows "Market data: Magic Eden" and the link back. The wallet allows itself 40
+  requests / minute (observed header `x-ratelimit-limit: 180`).
+- **Endpoints, each called live keyless** (fixture `market-magiceden-live.json`): `/tokens/{mint}` ·
+  `/tokens/{mint}/listings` · `/tokens/{mint}/offers_received` · `/tokens/{mint}/activities` ·
+  `/collections/{symbol}/stats` (`floorPrice`, `listedCount`, `avgPrice24hr`, `volume7d` — no `volumeAll`). Their
+  documented parameter tables: NE (documentation blocked).
+- **Observed and handled:** in `activities`, `priceInfo.solPrice.rawAmount` is **not lamports** (price × 10¹⁸ while
+  `decimals` says 9): an activity's amount is taken from `price` (decimal SOL), marked `source_decimal`; in `listings`
+  the base-unit field is right and must agree with `price`, else the price is `unknown`. `offers_received` returns
+  **expired offers**: filtered on `expiry`. `volume7d` and `avgPrice24hr` can be non-integer numbers of lamports: kept
+  only when whole. `/collections/{symbol}` answers 429 with `x-ratelimit-limit: -1` and `holder_stats` 400: not usable
+  keyless — no collection description, no badge (`isBadged` exists only in the bulk list; its meaning is NE).
+  `collections/{symbol}/attributes` counts LISTED items with no collection total: **no trait frequency from this source**.
+- The reference item on Magic Eden [live]: unlisted, no offer, **no activity**; collection floor 0.004 SOL. OpenSea
+  reports a USDC sale of the same item (§10.1): two marketplaces, two statements, shown side by side.
+
+### 10.3 Keyed EVM discovery — hints only
+
+Every hint (contract + token id) is re-read on-chain on the wallet's two endpoints before it is shown as held; what the
+chain does not confirm is dropped and counted (`not_confirmed_on_chain:N`). A provider can hide an NFT; it cannot invent
+one. **Each receives the wallet's EVM address**: never on by default.
+
+**Alchemy NFT API v3** (`NFT_EVM_PROVIDER=alchemy`, key `ALCHEMY_API_KEY` — or `NFT_EVM_PROVIDER_API_KEY`):
+- reference: `github.com/alchemyplatform/docs` `src/openapi/nft/nft.yaml` and `src/openrpc/alchemy/transfers/transfers.yaml` [doc];
+- `GET https://{network}.g.alchemy.com/nft/v3/{apiKey}/getNFTsForOwner?owner=&withMetadata=false&pageSize=100&pageKey=`
+  — **the key is a URL path segment**. With `withMetadata=false` the items are flat: `{contractAddress, tokenId, balance,
+  isSpam, spamClassifications}` [live-key]. Networks of the spec's enum used: `eth-mainnet`, `base-mainnet`,
+  `arb-mainnet`, `polygon-mainnet`, `opt-mainnet`, `bnb-mainnet`, `avax-mainnet`; **HyperEVM is not in the NFT API**;
+- **the owner's key today [live-key, 2026-11-17]: Ethereum answers; Base, Arbitrum, Polygon, Optimism, BNB and Avalanche
+  answer 403 `<NETWORK> is not enabled for this app`** → shown per network as *blocked by provider: network not enabled
+  for this key* (never "no NFT"); enabling the network in the Alchemy dashboard is enough — no change of SP Wallet;
+- spam: `isSpam` is passed through as "signalé comme indésirable par Alchemy"; such items are hidden by default behind a
+  filter of the gallery and are never deleted. (The `SPAM` *filter parameter* is "available exclusively on paid tiers"
+  [doc]; the flag itself is answered on this key.) On a public address with 27 612 NFTs, 195 of the first 200 were flagged;
+- history: `alchemy_getAssetTransfers` (JSON-RPC, `category: [erc721, erc1155]`, `contractAddresses`, `toAddress` /
+  `fromAddress`) names the transactions in which a contract's tokens moved to or from the wallet; each is then read from
+  the chain (its receipt, on the wallet's own endpoints) — this extends an item's EVM activity beyond the ~1 000-block
+  window, for items of the wallet only;
+- `getNFTSales`: **404 `This API endpoint has been deprecated.`** [live-key]. `getFloorPrice` answers a float and a
+  symbol relayed from OpenSea and LooksRare (the LooksRare figure seen was dated 2025-01): not used — OpenSea is asked
+  first-hand. `getNFTMetadata`, `getContractMetadata`, `getOwnersForNFT` answer [live-key] and are **not used**: the wallet
+  reads ownership on-chain and the creator's metadata itself;
+- free plan [doc]: 30 M compute units / month, 300 CU/s; `getNFTsForOwner` 480 CU (≈ 62 500 calls / month);
+- terms — `legal.alchemy.com`, "Last updated June 27, 2025" [doc, read in part]: "the right to Use the Services solely for
+  your internal business purposes"; no resale / mirroring; no circumvention of limits. Clauses on caching or attribution
+  of API data: none found in the part read (NE for the rest);
+- **the same key is NOT wired as an RPC endpoint.** It could serve as a third endpoint of `rpcQuorum` (`SPW_RPC_EXTRA`);
+  that is a separate owner decision, because an RPC URL is logged and reported in more places than this adapter's (a
+  key-in-URL would need the same scrubbing in `chains/rpc.ts`, the monitor and every RPC error path).
+
+**OpenSea account listing** (`NFT_EVM_PROVIDER=opensea`, the same `OPENSEA_API_KEY`): `GET
+/chain/{chain}/account/{address}/nfts` [live-key] on ethereum, base, arbitrum, polygon, optimism, avalanche, hyperevm
+(not BNB). The developer terms do not restrict reading an account's NFTs (the clauses quoted in §10.1 are the relevant
+ones). No spam flag in that answer. It is a separate opt-in from the market read: setting the key alone sends no address.
+
+### 10.4 Sale interpretation from a transaction (keyless)
+
+- **Seaport.** Addresses from `github.com/ProjectOpenSea/seaport` `docs/Deployments.md` ("Canonical addresses"): 1.6
+  `0x0000000000000068F116a894984e2DB1123eB395` — listed for the 8 EVM networks of the registry ("checked onchain on
+  November 9 and 10, 2026") —, 1.5 `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`, 1.4
+  `0x00000000000001ad428e4906aE43D8F9852d0dD6`, 1.1 `0x00000000006c3852cbEf3e08E8dF289169EdE581` (no per-chain list in
+  the document: recognised where code was observed at the address on 2026-11-17 — 7 networks, none on HyperEVM). Event
+  and structs from `ProjectOpenSea/seaport-types` (`ConsiderationEventsAndErrors.sol`, `ConsiderationStructs.sol`,
+  `ConsiderationEnums.sol`); topic `0x9d9af8e3…cdcb6f31`, confirmed on 245 live logs.
+- Rule (`market/seaport.ts`): a price is linked to a transfer only when the receipt of the same transaction holds an
+  `OrderFulfilled` of a recognised contract naming the token on one side and a payment in ONE currency on the other, and
+  the token's own transfer log has the same parties. Checked on 5 recorded mainnet receipts (a listing filled in ETH, an
+  accepted WETH offer, matched orders — two events for one sale, counted once —, a bulk purchase, an ERC-1155); the
+  ERC-1155 figure equals what OpenSea reports for the same transaction. Not interpreted: any other marketplace
+  (Blur, LooksRare, X2Y2…), criteria items, payments in several currencies, a payment token the registry does not know.
+- **Solana program ids** (name only — no layout is decoded, no price): M2 `M2mx93ek…aF7K`, MMM `mmm3XBJg…owMc`, M3
+  `M3mxk5W2…BfS1` (github.com/me-foundation), Tensor Swap `TSWAPaqy…mHbN` (tensor-hq/tensorswap-sdk), Tensor Marketplace
+  `TCMPhJdw…ZsDp` (tensor-foundation/marketplace), Metaplex Auction House `hausS13j…BBmk`
+  (metaplex-foundation/metaplex-program-library); each executable on mainnet [live]. OpenSea's `os_tensor`
+  (`7Aru291A…tQF9V`) is **not** in the list: no official source names it.
+
+### 10.5 Looked at, not integrated
+
+| Source | Finding (2026-11-17) |
+|---|---|
+| Etherscan API v2 `tokennfttx` / `token1155tx` | key mandatory (keyless: `Missing/Invalid API Key`); free tier 3 calls/s, 100 000/day on Ethereum, Arbitrum, Polygon only (HyperEVM free until 2026-11-30); Base, Optimism, BNB, Avalanche paid; `addresstokennftinventory` is PRO; terms (1 Oct 2026): "Powered by Etherscan.io APIs" attribution, exempt "for purely private use". Not built: one keyed EVM adapter was asked for, and Alchemy's covers more networks on its free plan |
+| Tensor API | key by application ("This API is in Alpha!"); keyless → 403. Its on-chain program is the subject of `NFT-MARKET-WRITES.md` |
+| Helius enhanced transactions | key; "deprecated and no longer receiving new parser types" |
+| Solscan | 401 without a token |
+| Reservoir, SimpleHash | shut down (as recorded in §4.2) |
+| A public `ord` instance | the documentation names ordinals.com (mainnet) but every JSON request answered a Cloudflare challenge (403); signet / testnet hosts do not resolve; no terms or robots policy found. **The ord adapter is still unverified against a real `ord`** |
+
+### 10.6 Variables added (names only)
+
+| Variable | Effect | Without it |
+|---|---|---|
+| `OPENSEA_API_KEY` | OpenSea market read (and the key of `NFT_EVM_PROVIDER=opensea`) | the source is absent: `needs_key` |
+| `NFT_MARKET_OPENSEA=off` | turns the OpenSea market read off although the key is set | on when the key is set |
+| `NFT_EVM_PROVIDER` | `alchemy` or `opensea`: keyed EVM discovery hints — **sends the wallet's EVM address to it** | no keyed discovery |
+| `ALCHEMY_API_KEY` (or `NFT_EVM_PROVIDER_API_KEY`) | the key of `NFT_EVM_PROVIDER=alchemy` | the provider is absent |
+
+Where the keys live in production: the PM2 environment of `sp-wallet` on the **API node** and the `env` block of the
+`mld` manifest. **Never on the signer node, never in the web bundle, never in a commit.** The API reads them in
+`nft/config.ts` only and reports variable NAMES.
+
+### 10.7 Who receives what — additions to §8
+
+| Request | Carries | Goes to | When |
+|---|---|---|---|
+| OpenSea item / collection / events | contract + token id or mint; the collection slug | api.opensea.io | the owner opens an item or a collection, with the key set |
+| OpenSea account NFTs | **the wallet's EVM address** | api.opensea.io | each synchronisation, only with `NFT_EVM_PROVIDER=opensea` |
+| Alchemy `getNFTsForOwner`, `alchemy_getAssetTransfers` | **the wallet's EVM address** (and a contract) | `<network>.g.alchemy.com` | each synchronisation / an item's activity, only with `NFT_EVM_PROVIDER=alchemy` |
+| Magic Eden | the mint, the collection symbol | api-mainnet.magiceden.dev | the owner opens a Solana item, only when turned on |
+| collection logo / banner | nothing about the wallet | the marketplace's image host, through the media proxy | first display |
+| `GET /api/v1/trading/nfts/market` (a key with `markets:read`) | the same item identifiers as above | the market sources | on the key's request — the key learns nothing about the wallet |

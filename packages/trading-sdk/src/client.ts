@@ -226,7 +226,7 @@ export class SPWallet {
   /** GET /nfts — one page of the wallet's NFTs (what the chain confirmed as held). NFTs carry no value: `valuation.state` is `unavailable`. */
   listNfts(query: T.ListNftsQuery = {}, o?: RequestOptions): Promise<T.ListNftsResponse> { return this.#get('/nfts', query, o); }
   /** Every NFT of the wallet, page after page (`limit` is the page size; `maxItems` stops early). */
-  async *iterNfts(query: Omit<T.ListNftsQuery, 'cursor'> = {}, o: PageOptions = {}): AsyncGenerator<T.ListNftsResponse['items'][number], void, undefined> {
+  async *iterateNfts(query: Omit<T.ListNftsQuery, 'cursor'> = {}, o: PageOptions = {}): AsyncGenerator<T.ListNftsResponse['items'][number], void, undefined> {
     yield* this.#pages((cursor) => this.listNfts({ ...query, cursor }, o).then((r) => ({ items: r.items, nextCursor: r.nextCursor })), o.maxItems);
   }
   /** GET /nfts/item — one NFT of the wallet by its `key` (`family:network:asset-id`): on-chain facts, creator metadata and sources, kept apart */

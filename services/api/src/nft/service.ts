@@ -13,7 +13,6 @@ import * as store from './store.ts';
 import type { EvmHintSource } from './evm-hints.ts';
 import { UNLOCK_DISCOVERY } from './evm.ts';
 import type { MarketService } from './market/service.ts';
-import { refOf } from './market/types.ts';
 
 export const TTL_SYNC_MS = 5 * 60_000, TTL_OWNERSHIP_MS = 60_000, TTL_MARKET_MS = 5 * 60_000, TTL_ONCHAIN_STALE_MS = 15 * 60_000, REFRESH_COOLDOWN_MS = 60_000, METADATA_PER_SYNC = 60;
 const NETS = () => Object.values(NETWORKS) as NetworkDef[];
@@ -40,8 +39,7 @@ export function createNftService(deps: NftDeps) {
     const fresh = <T extends { category: string; fetchedAt: string; freshness: string }>(s: T): T => ({ ...s, freshness: s.category === 'onchain' || s.category === 'indexed' ? (age(s) > TTL_ONCHAIN_STALE_MS ? 'stale' : 'fresh') : s.category === 'market' ? (age(s) > TTL_MARKET_MS * 3 ? 'stale' : 'fresh') : s.freshness });
     // capabilities are derived from the stored FACTS each time the asset is read (a row stored by delivery 1 says "not built")
     // delivery 3: which market sources concern this asset and in what state — static (no request is made to say it)
-    const ref = refOf(a), marketSources = deps.marketService ? deps.marketService.providers().filter((m) => m.chains.includes(a.chainId)).map((m) => ({ provider: m.id, name: m.name, state: m.state === 'on' ? 'on' as const : m.state, unlockedBy: m.unlockedBy })) : [];
-    void ref;
+    const marketSources = deps.marketService ? deps.marketService.providers().filter((m) => m.chains.includes(a.chainId)).map((m) => ({ provider: m.id, name: m.name, state: m.state === 'on' ? 'on' as const : m.state, unlockedBy: m.unlockedBy })) : [];
     return { ...a, marketSources, capabilities: capabilitiesOf(a), sources: a.sources.map(fresh), ownership: { ...a.ownership, source: fresh(a.ownership.source) }, market: a.market ? { ...a.market, source: fresh(a.market.source) } : null,
       firstSeen: row.first_seen.toISOString(), lastSeen: row.last_seen.toISOString(), verifiedAt: row.verified_at?.toISOString() ?? null, goneAt: row.gone_at?.toISOString() ?? null, externalMarkets: externalMarketLinks(a) };
   }
