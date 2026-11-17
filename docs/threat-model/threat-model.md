@@ -3,9 +3,10 @@
 Scope: one owner, balances of tens of USD. Owner of every control: Simon-Pierre Boucher. Severity is for the stated scope.
 
 Revised on 2026-11-15 (V11 Phase B): rows 1, 4, 6 and 19 said that nothing is signed without a passkey assertion. That is true
-of the owner's wallet key for transfers, swaps, deposits, withdrawals and orders, but six signer paths sign on the strength of
+of the owner's wallet key for transfers, swaps, deposits, withdrawals and orders, but seven signer paths (six when this was written) sign on the strength of
 a standing authority the passkey approved earlier. They are listed, with what bounds each, in `docs/adr/0001-custody.md`
-("Without a per-operation passkey — exactly six paths"); the rows below now say what an attacker gets through them.
+("Without a per-operation passkey — exactly seven paths" since the quoting mandate of V11 market making; this sentence said six
+until 2026-11-17, rows 23–25 cover the seventh); the rows below now say what an attacker gets through them.
 
 | # | Threat | Sev. | Abuse scenario | Prevention | Detection | Containment | Test | Residual |
 |---|---|---|---|---|---|---|---|---|

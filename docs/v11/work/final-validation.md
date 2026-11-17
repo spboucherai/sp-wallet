@@ -306,3 +306,35 @@ Conclusion: the V10 execution paths these scripts prove (signer checks on genuin
 approvals, CCTP burn / mint, the spot agent's mandate) behave on the V11 tree as their own assertions require. No comparison
 run against `a118e3e` was needed: nothing failed for a reason other than the funding holder.
 Not run (not in the list): `fork-gmx`, `fork-hl-deposit`, `fork-mandate`, `fork-plan`.
+
+## 8. Two product defects found while preparing the soak (the SDK flow "create → backtest" by a key, never run end to end before)
+
+`TRADING-TEST-RESULTS.md` listed it under "not covered": *a backtest of a bar agent started by a key end to end*. The first
+trial of the soak driver did exactly that (`create_agent(template="momentum", strategy_path="momentum_xs_perp/2")`, then
+`backtest_agent`, then `wait_for_job`), and failed in 5 seconds:
+
+```
+sp_wallet.errors.ServerError: GET /api/v1/trading/jobs/7dfd3940-…: the answer does not match the contract
+(job.status: Input should be 'queued', 'running', 'done', 'failed' or 'cancelled')
+agent_jobs: backtest | dead | attempts 2 | the backtest produced no report        strategy_versions: draft, no report
+```
+
+### Defect 11 — a backtest job asked right after a creation was dead-lettered, and destroyed the result of the run in flight (fixed, `b08b417`)
+
+A registration starts the backtest of its version by itself (`void perpBacktest(…)`). The job handler
+(`agents/runtime-bindings.ts`) (1) put the row back from `backtesting` to `draft`, taking the run for one "that died with its
+process" — after which the run in flight could not store its report (its last update is conditional on `backtesting`); and
+(2) called the backtest function, which answered at once because a run was in flight (`if (running.has(id)) return`), found no
+report, failed, was retried and dead-lettered. The existing test (`agent-bind.test.ts`) passed only because its retry, a minute
+later, ran a second full backtest.
+**Fix.** A second caller of `perpBacktest` / `backtest` now WAITS for the run in flight (one promise per version); the handler
+leaves a run in flight alone; a row left `backtesting` by ANOTHER process (the API, when the agents worker is separate) is
+waited for while its version is younger than 40 minutes, and only then taken for a dead run.
+**Test.** `agent-bind.test.ts`: the job is `done` at its FIRST attempt, not dead-lettered, and ONE `strategy.backtested` audit
+event exists for the version (one backtest ran, not two). Not tested: the cross-process wait (read from the code).
+
+### Defect 12 — a dead-lettered job was sent to API keys as `status: "dead"`, outside the contract (fixed, `b08b417`)
+
+`jobView` passed the queue's own state through. The OpenAPI document's enum is `queued | running | done | failed | cancelled`;
+the Python SDK, strict by design, refused the whole answer. The owner's overview route already mapped it. `jobView` now answers
+`failed` with `deadLettered: true`. Test: `agent-workers.test.ts` (the dead-letter case).

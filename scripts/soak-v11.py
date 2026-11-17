@@ -82,6 +82,7 @@ async def main() -> None:
         raise SystemExit(f"the stack did not start: {info}")
     base, control, key, db = info["baseUrl"], info["control"], info["keys"]["trader"]["secret"], info["kept"]["database"].rsplit("/", 1)[-1]
     pid = int(info["kept"]["apiPid"])
+    account = info["paper"]["accountId"]  # the key's own paper account (the agents get accounts of their own: the venue then has several)
     notes: list[str] = [f"stack {base}, database {db}, API pid {pid}, started {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}"]
     print(notes[0], flush=True)
     counters = {"quotes": 0, "status": 0, "streamErrors": 0, "streamCloses": 0, "ordersPlaced": 0, "ordersCancelled": 0, "marketOrders": 0, "orderErrors": 0}
@@ -131,14 +132,14 @@ async def main() -> None:
                     mk = await w.get_market("hyperliquid:BTC")
                     mark = Decimal(str(mk.ticker.mark))
                     px = (mark * Decimal("0.985")).quantize(Decimal("1"), rounding=ROUND_DOWN)
-                    o = await w.create_order(side="buy", order_type="limit", instrument="hyperliquid:BTC", size="0.001", price=str(px), mode="paper", client_order_id=f"soak-{uuid.uuid4().hex[:20]}")
+                    o = await w.create_order(side="buy", order_type="limit", instrument="hyperliquid:BTC", size="0.001", price=str(px), mode="paper", account_id=account, client_order_id=f"soak-{uuid.uuid4().hex[:20]}")
                     counters["ordersPlaced"] += 1
                     await asyncio.sleep(10)
                     await w.cancel_order(o.order.id)
                     counters["ordersCancelled"] += 1
                     if k % 4 == 0:
                         side = "buy" if (k // 4) % 2 else "sell"
-                        await w.create_order(side=side, order_type="market", instrument="hyperliquid:BTC", size="0.001", mode="paper", slippage_bps=100, client_order_id=f"soak-{uuid.uuid4().hex[:20]}")
+                        await w.create_order(side=side, order_type="market", instrument="hyperliquid:BTC", size="0.001", mode="paper", account_id=account, slippage_bps=100, client_order_id=f"soak-{uuid.uuid4().hex[:20]}")
                         counters["marketOrders"] += 1
                 except Exception as e:  # noqa: BLE001 — a soak records every failure and goes on
                     counters["orderErrors"] += 1

@@ -25,7 +25,7 @@ import { computePerformance, type EquityPoint, type Performance } from './perfor
 import type { HlNetwork } from '@spw/derivatives';
 import type { MmLocks } from '../mm/live-adapter.ts';
 import { envMmLocks } from '../mm/live-adapter.ts';
-import type { BookSource } from '../mm/market-data.ts';
+import { withFundingFrom, type BookSource } from '../mm/market-data.ts';
 import { MmRuntime, type MmAgentRow, type MmLiveDeps } from '../mm/runtime.ts';
 
 export type FeedEvent = { event: 'status'; data: { status: 'connected' | 'reconnecting' | 'stale'; ts: number } } | { event: 'ticker'; data: Ticker } | { event: 'book'; data: Book } | { event: string; data: unknown };
@@ -101,7 +101,9 @@ export class StreamEngine {
     this.feed = feed; this.o = o;
     const ks = o.killSwitch ?? killSwitchRead, m = o.mm ?? {};
     this.mm = new MmRuntime({ now: () => this.feed.now(), worker: m.worker ?? 'stream', locks: m.locks ?? (() => envMmLocks(process.env)),
-      books: (network) => (network === 'mainnet' ? this.bookSource() : m.books?.(network) ?? { read: () => null }), resolve: (venue, base) => this.instrument(venue, base), fees: (venue) => this.feed.fees(venue),
+      // the sessions' top of book: the source the process was given (the venue's best-bid / offer stream, mm/bind.ts), with the funding
+      // of this engine's own ticker; without one (tests, a process with no venue client) the engine's own market state on mainnet
+      books: (network) => { const given = m.books?.(network) ?? null; return given ? withFundingFrom(given, this.bookSource()) : network === 'mainnet' ? this.bookSource() : { read: () => null }; }, resolve: (venue, base) => this.instrument(venue, base), fees: (venue) => this.feed.fees(venue),
       killSwitch: async () => { const k = await ks.engaged(); return k.engaged || k.readOnly === true; }, ...(m.live ? { live: m.live } : {}),
       ...(m.saveEveryMs !== undefined ? { saveEveryMs: m.saveEveryMs } : {}), ...(m.slowEveryMs !== undefined ? { slowEveryMs: m.slowEveryMs } : {}), ...(m.reconcileEveryMs !== undefined ? { reconcileEveryMs: m.reconcileEveryMs } : {}), ...(m.auditEveryMs !== undefined ? { auditEveryMs: m.auditEveryMs } : {}) });
   }

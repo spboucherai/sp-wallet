@@ -12,7 +12,7 @@ import { spreadInventoryPolicy, mmQuotes, quotePolicyOf } from '../src/agent-run
 import { MmBudget, signerQuoteReadWeight } from '../src/mm/budget.ts';
 import { MmEngine } from '../src/mm/engine.ts';
 import { createLiveMmAdapter } from '../src/mm/live-adapter.ts';
-import { marketDataPort, type BookSource } from '../src/mm/market-data.ts';
+import { bboBookSource, marketDataPort, withFundingFrom, type BookSource, type VenueStreamFn } from '../src/mm/market-data.ts';
 import { PaperVenue } from '../src/mm/paper-venue.ts';
 import type { OrderPort, VenueFill, VenueOpenOrder } from '../src/mm/ports.ts';
 import { inSessionHours, roundersFor, withinBand } from '../src/mm/runtime.ts';
@@ -21,6 +21,69 @@ import { streamReconciled, type UserFeedEvent } from '../src/mm/user-stream.ts';
 import { attributable, fillOrder, replay, type LedgerFill } from '../src/orders/provenance.ts';
 import { BREAKERS, engineConfig, INSTRUMENT, studyPolicy, tapeEvents, TAPE, ACCOUNT, AGENT } from './mm-harness.ts';
 import { SimVenue } from './mm-sim-venue.ts';
+
+// V11 final validation — the sessions' market data on the REAL cadence of the venue. In a 30-minute paper soak a session quoted for
+// seven seconds and stayed pulled: its books came from the venue's order-book channel, measured that day at one book every 12.3 s
+// (median) on BTC, against a 5 s freshness bound and a 15 s cool-down. The source is now the best-bid / offer channel.
+describe('market data of a session — best bid / offer, at the venue\'s real cadence', () => {
+  /** a scripted venue stream: records the subscription, lets the test push events and statuses */
+  function fakeStream() {
+    const subs: { sub: { type: string; symbol: string }; on: (ev: unknown) => void; onStatus: (s: 'connected' | 'reconnecting' | 'stale') => void; open: boolean }[] = [];
+    const stream: VenueStreamFn = (sub, on, onStatus) => { const x = { sub, on, onStatus, open: true }; subs.push(x); return () => { x.open = false; }; };
+    return { stream, subs };
+  }
+  const bbo = (bid: string | null, ask: string | null, ts: number, symbol = 'BTC') => ({ type: 'bbo', symbol, bid: bid ? [bid, '1.5'] : null, ask: ask ? [ask, '2'] : null, ts });
+
+  it('subscribes to the bbo channel of the instrument (never the order book), maps a message to the top with the venue\'s time, and serves no half book', () => {
+    const f = fakeStream(), clock = { t: 1_000_000 }, src = bboBookSource(f.stream, () => clock.t);
+    expect(src.read('hyperliquid:BTC')).toMatchObject({ status: 'idle', top: null });
+    expect(f.subs.map((x) => x.sub)).toEqual([{ type: 'bbo', symbol: 'BTC' }]);
+    src.read('hyperliquid:BTC'); expect(f.subs).toHaveLength(1);                                   // one subscription per instrument
+    f.subs[0]!.onStatus('connected'); f.subs[0]!.on(bbo('64000', '64001', 999_900));
+    expect(src.read('hyperliquid:BTC')).toEqual({ status: 'connected', top: { bid: '64000', bidSize: '1.5', ask: '64001', askSize: '2' }, venueTs: 999_900, receivedAt: 1_000_000 });
+    f.subs[0]!.on(bbo('64000', '64001', 1, 'ETH')); f.subs[0]!.on({ type: 'book', book: { bids: [['1', '1']], asks: [['2', '1']], ts: 5 } });   // another coin, another kind: ignored
+    expect(src.read('hyperliquid:BTC')!.top!.bid).toBe('64000');
+    f.subs[0]!.on(bbo('64000', null, 1_000_000));                                                  // the offer side is empty
+    expect(src.read('hyperliquid:BTC')!.top).toBeNull();
+    f.subs[0]!.on(bbo('64002', '64003', 1_000_000)); f.subs[0]!.onStatus('reconnecting');          // a gap: what was held may be wrong
+    expect(src.read('hyperliquid:BTC')).toMatchObject({ status: 'reconnecting', top: null });
+    src.release!('hyperliquid:BTC'); expect(f.subs[0]!.open).toBe(false);
+  });
+
+  it('at ten messages a second the port stays `connected` for a whole minute; at one book every 12 s — the order-book channel — it is stale 7 seconds out of 12', () => {
+    const run = (everyMs: number): { connected: number; stale: number } => {
+      const f = fakeStream(), clock = { t: 5_000_000 }, src = bboBookSource(f.stream, () => clock.t);
+      const port = marketDataPort(src, { now: () => clock.t, maxAgeMs: 5000 });
+      port.snapshot('hyperliquid:BTC'); f.subs[0]!.onStatus('connected');
+      const seen = { connected: 0, stale: 0 };
+      for (let ms = 0; ms < 60_000; ms += 100) {                                                    // one engine cycle a second is enough; the port is read every 100 ms here
+        if (ms % everyMs === 0) f.subs[0]!.on(bbo('64000', '64001', clock.t));
+        const s = port.snapshot('hyperliquid:BTC').status; if (s === 'connected') seen.connected += 1; else if (s === 'stale') seen.stale += 1;
+        clock.t += 100;
+      }
+      return seen;
+    };
+    expect(run(100)).toEqual({ connected: 600, stale: 0 });
+    const slow = run(12_000);                                                                       // what the l2Book channel gave on 2026-11-17
+    expect(slow.stale).toBeGreaterThan(slow.connected);                                             // stale 7 s out of every 12: with a 15 s cool-down, pulled for good
+    expect(slow).toEqual({ connected: 255, stale: 345 });
+  });
+
+  it('withFundingFrom: the top, its times and its status come from the first source; the funding from the second when the first has none', () => {
+    const top: BookSource = { read: (i) => (i === 'hyperliquid:BTC' ? { status: 'connected', top: { bid: '1', bidSize: '1', ask: '2', askSize: '1' }, venueTs: 10, receivedAt: 11 } : null) };
+    const eng: BookSource = { read: () => ({ status: 'stale', top: null, venueTs: 0, receivedAt: 0, funding: { rate: '0.0000125', mark: '64000', receivedAt: 9 } }) };
+    expect(withFundingFrom(top, eng).read('hyperliquid:BTC')).toEqual({ status: 'connected', top: { bid: '1', bidSize: '1', ask: '2', askSize: '1' }, venueTs: 10, receivedAt: 11, funding: { rate: '0.0000125', mark: '64000', receivedAt: 9 } });
+    expect(withFundingFrom(top, eng).read('hyperliquid:ETH')).toBeNull();                          // no top: nothing — the engine's stale state never stands in for it
+    expect(withFundingFrom(top, { read: () => null }).read('hyperliquid:BTC')!.funding).toBeNull();
+  });
+
+  it('the bindings: the process gives the sessions the bbo source on BOTH networks; the stream engine prefers it and keeps its own state only as a fallback', () => {
+    const bind = readFileSync(new URL('../src/mm/bind.ts', import.meta.url), 'utf8'), eng = readFileSync(new URL('../src/agent-runtime/stream-engine.ts', import.meta.url), 'utf8');
+    expect(bind).toMatch(/return bboBookSource\(stream, /); expect(bind).not.toMatch(/type: 'book', symbol/);
+    expect(bind).toMatch(/books: \(network\) => \{ let s = sources\.get\(network\); if \(!s\) \{ s = venueBookSource\(ex, network\)/);
+    expect(eng).toMatch(/const given = m\.books\?\.\(network\) \?\? null; return given \? withFundingFrom\(given, this\.bookSource\(\)\)/);
+  });
+});
 
 describe('markouts and attribution — hand-checked', () => {
   it('markoutFromTape: the FIRST mid at or after each horizon, against the fill price, in bps; negative = adverse selection', () => {

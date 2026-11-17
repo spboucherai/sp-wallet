@@ -156,7 +156,7 @@ reference; a Solana-source CCTP replay test; **any live call to 0x or 1inch**.
 | `services/isolated-signer/test/venue-quoting.test.ts` | 49 | S | every refusal of the quoting mandate individually; exits under halt, revocation, expiry; property: after every accepted batch the worst case stays inside the mandate | `mm-core.md` §1.3 |
 | `packages/derivatives/test/hyperliquid/mm-primitives.test.ts` | 36 | U + 22 vectors from the official Python SDK 0.24.0 | builders equal the SDK's action, hash and signature | §1.1 |
 | `packages/trading/test/mm.test.ts`, `quoting-mandate.test.ts` | 40 + 3 | U, property tests | never a crossing pair, budget, inventory bound, attribution identity | §1.4, §1.5 |
-| `services/api/test/mm-engine.test.ts` | 39 | S + R (36-minute recorded BTC tape, **modelled** fills) | start, quoting, each breaker, lost answers, crash and restart, signer down, out-of-mandate policies stopped by the signer, the three locks | §1.6 |
+| `services/api/test/mm-engine.test.ts` | 39 | S + R (36-minute recorded BTC tape, **modelled** fills) | start, quoting, each breaker, lost answers, crash and restart, signer down, out-of-mandate policies stopped by the signer, the locks (three at that date; four since the integration) | §1.6 |
 
 Integration (`v11-mm-live`, note `mm-live.md`) — the rows above still hold; these were added or rewritten:
 
@@ -228,14 +228,135 @@ adapted). The whole matrix was run again on the merged tree: section 6.3. **Safa
 
 ---
 
-## 6. Final run on the merged tree
+## 6. Final validation on the merged tree (branch `v11-final`, 2026-11-16 and 2026-11-17)
 
-<!-- PENDING: final full-suite totals, e2e matrix, soak -->
+Every line below was run for this page, on the development laptop (18 cores, macOS 27, Node 26.13, local PostgreSQL), with
+the laboratory virtualenv present (nothing skipped for its absence). Commands, timestamps and outputs:
+`docs/v11/work/final-validation.md`. The tree is `9561d78` (the `v11` that holds every workstream) plus the fixes of the
+validation itself; the last commit that changes code is `@@CODE_COMMIT@@`.
 
-To record here: the commit; `pnpm typecheck`; `pnpm test` (files, tests, passed, skipped, failed, with the lab
-virtualenv present — and each failure named); `uv run pytest` in `research/` and `sdk/python/`; the Playwright matrix
-(every spec of `tests/e2e/`, including the v9 / v10 visual suites and whether their baselines were regenerated); the
-generators' `--check`; the build and first-chunk size; a soak of the API with the stream and the agents runtime (duration,
-memory, reconnects); and `scripts/preflight.sh --db` if run against a copy of the production schema.
+**What this section does not contain:** an order, a cancel or a transfer sent to a venue or a chain; a funded account,
+mainnet or testnet; a production node. Fork runs are private anvil chains on 127.0.0.1.
 
-<!-- PENDING: final interface pass (branch v11-ui) — browser runs and visual baselines it produced -->
+### 6.1 Type check, full suite, other suites, generators
+
+`pnpm typecheck`: exit 0 at every step.
+
+`pnpm test` — **eighteen runs before the last three, each reported as it came out** (one is void: the laptop slept during it):
+
+| Runs | Tree | Result |
+|---|---|---|
+| 1 | `9561d78` | 194 files, 4 494 tests — **all passed** (172 s) |
+| 2 | `9561d78` | **1 failed**: `agent-bind` "the Momentum template is bound…" (30 s timeout) |
+| 3 | `9561d78` | **2 failed**: the same; `lab-identity` "latency of one signal call" (blocked 300 s by a hung reference interpreter) |
+| 4 | + library listing fix | 4 496 — **all passed** |
+| 5 | | void (machine asleep) |
+| 6, 7 | + capability line, preview pruning | 4 497 — **all passed**, twice |
+| 8 | | **1 failed**: `research-runner` "cancel of a SILENT agent" (heartbeats counted against a 2.5 s timer) |
+| 9 | + that test made deterministic | **1 failed**: `trading-api` "the usage log…" (`last_used_at` read before its un-awaited write) |
+| 10, 11 | | **all passed** (run 11 in 343 s: the `lab-identity` hang again, absorbed by the retry) |
+| 12, 14 | | **1 file failed** each: `research-runner/test/sandbox.test.ts` (its probe wrote no result) — while files of the checkout were being edited; not explained, not reproduced |
+| 13, 15 | | **all passed** |
+| 16, 17, 18 | | **all passed, three in a row** (82–83 s) |
+| **final three** | `@@CODE_COMMIT@@` | @@FINAL_RUNS_ROW@@ |
+
+Every failure above is a test that depended on timing or on load, except none: **no assertion about the product failed in
+the suite**. Each was traced, and the test bounded without weakening what it asserts (`final-validation.md`, defects 1, 2,
+5, 6); two things were not explained (the reference-interpreter hang of `lab-identity`, the two `sandbox.test.ts`
+failures) and are in the limitations register (12.2, 12.3). The product defects of the validation were found by measuring,
+by reading, by the browser and by the soak — not by the suite (6.7).
+
+| Other suite / generator | Result |
+|---|---|
+| `research/`: `python -m pytest tests` | **404 passed, 2 skipped** (the two live-network tests) |
+| `python -m spq.lint` on every library strategy version (32) | 32 ok |
+| `packages/trading-sdk`: `vitest run` | **6 files, 165 tests passed** |
+| `sdk/python`: `uv run pytest` | **415 passed**; `uv run ruff check`: all checks passed |
+| `gen-openapi.mts --check`, `gen-types.mts --check`, `gen_models.py --check`, `gen_sync.py --check` | all "up to date", exit 0 @@GEN_AGAIN@@ |
+| `pnpm build` | exit 0; first chunk `index-*.js` **262.32 kB** (81.07 kB gzip) |
+
+### 6.2 Read-only live smokes (2026-11-17)
+
+| Script | Observed |
+|---|---|
+| `smoke-private-markets.mts` (05:36Z) | exit 0 — 7 live instruments, 5 companies. Anthropic on Hyperliquid's builder dexes still reviewed and priced, 18 h before the entries expire (`io:ANTH` 1 678.2 = 1 678 G USD implied; `para:ANTH` 96.42; `xyz:ANT` 96.507); **`edgex:ANTHROPICUSDC` gone from edgeX's list** |
+| `smoke-edgex.mts` (05:36Z) | **exit 1 as committed** ("ANTHROPICUSDC is not listed": the smoke's hard-coded sample contract was delisted by the venue); exit 0, all steps passed, with the sample as an argument (`MOONSHOTUSDC`): 155 markets, 2 pre-IPO |
+| `smoke-markets-hub.mts` (05:37Z) | exit 0 — four venues; ETH totals 12.54 (Hyperliquid), 12.92 (edgeX), 14.27 (GMX), 28.02 bps (dYdX); no trading or account endpoint |
+| `smoke-quotes.mts --seconds 60` (06:18Z) | exit 0 — five venues connected in 0.6 s; BTC quotes: Hyperliquid 590, Coinbase 234, edgeX 117, GMX 10, dYdX 2; 0 reconnect, 0 gap, 0 checksum mismatch; lag p50 295 ms, p95 408 ms |
+| `check-hl-bridge.mts` (06:19Z; read-only: RPC reads and `POST /info`) | exit 0 — bytecode as pinned, not paused; 6 / 6 sampled deposits credited by the venue in 4–7 s |
+
+### 6.3 Playwright (Chromium) — every spec of `tests/e2e/`, one at a time
+
+| Spec | Stack | Result |
+|---|---|---|
+| `v11-shell`, `v11-dashboard`, `v11-trade`, `v11-activity`, `v11-leftovers` | one real local stack (`ui-stack.sh`: real API, real signer, virtual passkey, paper) | 6 + 7 + 8 + 4 + 2 passed |
+| `v11-sections` | same | first run **24 passed, 1 failed** ("Markets with live quotes": the test counted a cell going live, and a logo loading, as a redraw of the list — test fixed); then **25 passed** |
+| `wallet`, `developer`, `risk`, `agents-bind`, `mm` | a fresh `dev-stack.sh` each | 2, 1, 1, 1 (4.1 min), 1 passed |
+| `futures`, `futures-live`, `futures-gmx`, `futures-collateral`, `futures-router`, `perp-agent-live` | in-browser mock | 18, 10, 16, 6, 8, 8 passed (66) |
+| `alerts`, `research` | their own servers | 2, 2 passed |
+| `v9-visual`, `v10-visual` | built bundle, recorded answers | 6, 5 passed — **no baseline regenerated** by this run |
+| `qa-agent-fund`, `qa-real` (**first run in V11**) | real stack on **anvil forks** of Base and Arbitrum, broadcast off | first run **2 failed, 5 not run**; after two fixes **7 passed** |
+| `qa-plan` (**first run in V11**) | same, fresh stack | first run **1 failed**; after the fixes **1 passed** |
+| `rollback-rehearsal` (new) | both versions' bundles on one database (6.6) | every stage passed |
+| `futures-live-real` | needs a **funded Hyperliquid testnet account** | **NOT RUN** |
+
+What the QA specs found: (a) the forks were funded from a hard-coded USDC holder that held **0 USDC on Base** that day — an
+unchecked transfer, a silent zero balance; not a V11 regression; funding now writes the balance in storage and checks it.
+(b) Two specs still described V10: a transfer signed with broadcasting off is now `not_broadcast`, and a plan now **pauses**
+on a leg that was not sent — both intended V11 changes that no browser run had met. The specs assert the new behaviour; to
+walk the second leg of a plan, the test's stand-in for the network also restores the plan in the scratch database.
+**Safari and iOS: never.**
+
+### 6.4 Fork proof scripts of the swap / bridge stack (anvil, one at a time)
+
+| Script | Result |
+|---|---|
+| `fork-swap-kyber.mts` | **FORK TEST OK** — pinned router bytecode; ETH → USDC 18.272398 received (approved minimum 18.182289); USDC → ETH; USDC → LINK through two pools; a higher minimum than the calldata guarantees is refused |
+| `fork-swap-api.mts` | **FULL-STACK FORK TEST OK** — both directions finalized through the API, the signer over HMAC and the worker; leftover allowance 0 |
+| `fork-swap-net.mts base` | **FORK TEST OK on Base** |
+| `fork-swap-net.mts ethereum` | **FORK TEST OK on Ethereum** (block 26 433 317) |
+| `fork-cctp.mts base arbitrum` | **FORK CCTP TEST OK** — reviewed bytecode on both forks; Circle's public messages verified against on-chain attesters; refusals; burn, mint (test attesters on the destination fork: the script's stated simulation), no double mint; Standard and Fast through the full stack |
+| `fork-agent.mts` | exit 1 at first (the same funding holder), then **AGENT FORK TEST OK on Base** — paper, mandate refusals, two live orders at or above their minimum, signer refusals above the limit and after revocation, withdrawal, audit chain intact |
+
+They prove that the stabilisation did not degrade the V10 execution paths these scripts exercise. **A fork is not
+mainnet**; `fork-gmx`, `fork-hl-deposit`, `fork-mandate`, `fork-plan` were not run.
+
+### 6.5 Soak (30 minutes, paper, local)
+
+@@SOAK_SECTION@@
+
+### 6.6 Rollback rehearsal (V10 `a118e3e` ↔ V11, one database and one signer directory)
+
+Observed, on a throwaway local database and keystore (`V11-DEPLOYMENT.md` §9 has the procedure that follows from it):
+
+- V11 migrates a database created and used by the V10 build (42 → 65 tables, 1 → 8 triggers) and reads its rows back;
+  orders older than the first V11 start are not in the unified `orders` table.
+- **V10 boots on the database V11 wrote**: health, portfolio, activity, agents, a paper order, a reduce-only close, a
+  transfer draft and the signer status all answer as before V11.
+- With the V11 kill switch left engaged: **V10 does not apply it** (a paper buy fills), and **the database refuses a spot
+  agent's buy** (`kill_switch_active`, trigger `agent_orders_gate`) — which V10 cannot release.
+  `scripts/v11-rollback-triggers.sql` (new, tested there) drops that one trigger.
+- Forward again: the projection queue left by V10 drains in seconds, the orders made under V10 become unified orders,
+  **none duplicated**, no error; a dropped trigger is re-created; a switch left engaged is engaged again.
+- Signer: the V10 binary starts on the V11 state (same key id, counters and replay markers intact, an empty journal of
+  its own); V11 takes it back and keeps V10's records in a side file. **With a quoting mandate active, the V10 signer code
+  approves a directional mandate that V11 refuses with `conflict`, and can neither see nor revoke the quoting mandate**
+  (`scripts/rollback-signer-rehearsal.mts`, exit 0).
+@@ROLLBACK_AGENTS@@
+
+### 6.7 Defects found by the final validation
+
+| # | Defect | Found by | State |
+|---|---|---|---|
+| 1 | The agents' library listing started one laboratory process per version, one after the other: 19 s for `GET /agents/templates` once a minute | timing a failing test | **fixed** `e58b55b` (5.9 s) |
+| 3 | `SPW_TRADING_API_EXECUTION` absent from the start-up capability line | reading | **fixed** `d88f1da` |
+| 4 | Preview risk evaluations never pruned | reading, then the soak | **fixed** `d88f1da` |
+| 7 | Finished agent jobs never pruned (`pruneJobs` had no caller) | reading | **fixed** `7df3ed1` |
+| 11 | **A backtest job asked right after a creation was dead-lettered and destroyed the result of the run in flight** (the SDK's own create → backtest flow) | the soak driver | **fixed** `b08b417` |
+| 12 | A dead-lettered job answered `status: "dead"`, outside the contract; the Python SDK refused the answer | the soak driver | **fixed** `b08b417` |
+| 9 | Fork funding from a holder that holds nothing (test tooling; environment) | the QA specs | **fixed** `467a6c3`, `2a0bd15` |
+| 2, 5, 6, 8, 10 | Tests: a blocking reference call; a timer race; an un-awaited write read at once; a browser test counting a cell going live as a redraw; two QA specs describing V10 | the runs | tests **fixed** (`96208d9`, `ae604c2`, `7df3ed1`, `f9563d3`, `467a6c3`) |
+| — | The smoke of edgeX hard-coded a contract the venue delisted | the smoke | **fixed** `96208d9` |
+@@EXTRA_DEFECTS@@
+Not fixed: the cause of the `lab-identity` reference hang and of the two `sandbox.test.ts` failures (not reproduced);
+@@NOT_FIXED@@ everything in `V11-REMAINING-LIMITATIONS.md`.
