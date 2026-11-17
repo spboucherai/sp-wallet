@@ -4,7 +4,9 @@
 // NFT-AUDIT.md (the per-chain matrix), docs/nft/work/nft-1.md.
 import type { FastifyInstance } from 'fastify';
 import { config, UserError } from '../config.ts';
-import { rpcOne } from '../chains/rpc.ts';
+import { utxoGuards } from '../chains/btc.ts';
+import { rpcAny, rpcOne, rpcQuorum } from '../chains/rpc.ts';
+import { sql } from '../db.ts';
 import { getSetting } from '../db.ts';
 import { signer } from '../signer-client.ts';
 import { loop } from '../worker.ts';
@@ -17,9 +19,29 @@ import { nftRoutes } from './routes.ts';
 import type { SafeFetchDeps } from './safe-fetch.ts';
 import { createNftService, type NftService } from './service.ts';
 import { solanaProvider } from './solana.ts';
+import type { AnyFn, QuorumFn } from './transfer.ts';
+import { nftTransferRoutes, scanArrivals, type SignerApi } from './transfer-routes.ts';
+import { ordSource, utxoGuard, type OrdSource, type UtxoDeps } from './utxo.ts';
 
 export interface NftOptions { cfg?: NftConfig; rpc?: RpcFn; http?: HttpFn; fetch?: SafeFetchDeps; now?: () => Date; addresses?: () => Promise<Record<string, string>>; providers?: NftDataProvider[]; market?: MarketSource | null;
-  /** false: nothing is synchronised unless asked (tests drive it); default: a stale inventory refreshes itself when it is read, and on a timer */ autoSync?: boolean }
+  /** false: nothing is synchronised unless asked (tests drive it); default: a stale inventory refreshes itself when it is read, and on a timer */ autoSync?: boolean;
+  /** delivery 2 — what a test replaces: the signer, the two read rules (every endpoint agrees / first that answers), the ord server */
+  signer?: SignerApi; quorum?: QuorumFn; any?: AnyFn; ord?: OrdSource | null }
+
+/** "Every endpoint must answer and agree" over an injected transport (tests): the rule of `rpcQuorum`, without its endpoint-health memory. */
+export function quorumOver(rpc: RpcFn): QuorumFn {
+  return async <T>(urls: string[], method: string, params: unknown[], same: (a: T, b: T) => boolean = (a, b) => JSON.stringify(a) === JSON.stringify(b)): Promise<T> => {
+    const rs = await Promise.allSettled(urls.map((u) => rpc(u, method, params) as Promise<T>));
+    const bad = rs.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
+    if (bad) { if ((bad.reason as { rpcCode?: number }).rpcCode !== undefined && rs.every((r) => r.status === 'rejected')) throw bad.reason; throw new UserError('rpc_degraded', `network data source unavailable (${method}); transfer refused`, 503); }
+    const ok = rs.map((r) => (r as PromiseFulfilledResult<T>).value);
+    for (const v of ok) if (!same(ok[0]!, v)) throw new UserError('rpc_disagreement', `network data sources disagree (${method}); transfer refused`, 503);
+    return ok[0]!;
+  };
+}
+export function anyOver(rpc: RpcFn): AnyFn {
+  return async <T>(urls: string[], method: string, params: unknown[]): Promise<T> => { let last: unknown = new Error('no endpoint'); for (const u of urls) { try { return (await rpc(u, method, params)) as T; } catch (e) { last = e; if ((e as { rpcCode?: number }).rpcCode !== undefined) throw e; } } throw last; };
+}
 
 /** The wallet's addresses as the signer derives them; when it cannot be reached, the last ones it gave (settings) — never a client value. */
 async function signerAddresses(): Promise<Record<string, string>> {
@@ -44,7 +66,17 @@ export function registerNft(app: FastifyInstance, o: NftOptions = {}): NftServic
   const market = o.market !== undefined ? o.market : cfg.marketMagicEden ? magicEdenMarket({ http, now }) : null;
   const nft = createNftService({ cfg, providers, resolver, market, addresses: o.addresses ?? signerAddresses, now });
   const autoSync = o.autoSync ?? true;
-  nftRoutes(app, nft, resolver, { autoSync });
+  // delivery 2 — transfers, the outpoint lock list, the allow-list, arrival detection (transfer-routes.ts)
+  const sg: SignerApi = o.signer ?? signer;
+  const ord = o.ord !== undefined ? o.ord : cfg.ordinalsApiUrl ? ordSource(cfg.ordinalsApiUrl, http) : null;
+  const utxo: UtxoDeps = { ord, signerLocks: async (network) => Object.fromEntries(((await sg.status()).utxoLocks?.[network] ?? []).map((l) => [l.outpoint, { reason: l.reason, at: l.at }])),
+    reviewed: async (network) => new Set((await sql<{ outpoint: string }[]>`select outpoint from utxo_reviews where network = ${network} and verdict = 'ordinary'`).map((r) => r.outpoint)) };
+  utxoGuards.excluded = utxoGuard(utxo); // every Bitcoin-style coin selection (ordinary send, THORChain swap) now asks it
+  const lookup = async (chain: string, ref: { address: string; tokenId?: string }, wallet: string | null) => { const p = providers.find((x) => x.chains().includes(chain)); if (!p) throw new UserError('nft_unsupported_chain', 'no NFT adapter for this network', 422); return p.lookup(chain, ref, wallet); };
+  const tdeps = { quorum: o.quorum ?? (o.rpc ? quorumOver(rpc) : (rpcQuorum as QuorumFn)), any: o.any ?? (o.rpc ? anyOver(rpc) : (rpcAny as AnyFn)), lookup, now };
+  nftRoutes(app, nft, resolver, { autoSync, signer: sg });
+  nftTransferRoutes(app, { nft, transfer: tdeps, signer: sg, utxo, rpc, now });
+  if (config.workers && autoSync) loop('nft-arrivals', async () => { await scanArrivals({ nft, rpc, signer: sg }); }, 5 * 60_000);
   // background loops (API workers only): the inventory is refreshed while the wallet runs; everything that grows is pruned
   if (config.workers) {
     if (autoSync) loop('nft-sync', async () => { await nft.sync({ wait: true, onlyStale: true }); }, 10 * 60_000);

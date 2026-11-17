@@ -36,7 +36,7 @@ export function buildAsset(a: {
   quantity: string; supply?: Known<string>; collection?: NftCollectionRef | null; updateAuthority?: Known<string>; creators?: NftAsset['creators']; tokenProgram?: string | null; royaltyBps?: Known<number>; ruleSet?: Known<string>; extensions?: string[];
   metadata: NftMetadataRecord; ownership: NftOwnershipRecord; sources: DataSourceStamp[]; fetchedAt: string; blockRef?: NftAsset['blockRef']; origin: NftAsset['origin']; explorerUrl: string | null;
 }): NftAsset {
-  const base = { standard: a.standard, ownership: a.ownership, ruleSet: a.ruleSet ?? UNSUPPORTED, extensions: a.extensions ?? [], quantity: a.quantity };
+  const base = { standard: a.standard, ownership: a.ownership, ruleSet: a.ruleSet ?? UNSUPPORTED, extensions: a.extensions ?? [], quantity: a.quantity, metadata: a.metadata };
   return { modelVersion: NFT_MODEL_VERSION, key: a.key, family: a.family, chainId: a.chainId, ownerAddress: a.ownerAddress, assetId: a.assetId, standard: a.standard, tokenId: a.tokenId ?? null, contractAddress: a.contractAddress ?? null, mintAddress: a.mintAddress ?? null,
     quantity: a.quantity, supply: a.supply ?? unknown(), collection: a.collection ?? null, updateAuthority: a.updateAuthority ?? UNSUPPORTED, creators: a.creators ?? UNSUPPORTED, tokenProgram: a.tokenProgram ?? null, royaltyBps: a.royaltyBps ?? unknown(),
     ruleSet: base.ruleSet, extensions: base.extensions, metadata: a.metadata, media: [], ownership: a.ownership, market: null, capabilities: capabilitiesOf(base), sources: a.sources, fetchedAt: a.fetchedAt, blockRef: a.blockRef ?? null, origin: a.origin, explorerUrl: a.explorerUrl };

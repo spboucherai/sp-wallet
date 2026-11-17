@@ -101,5 +101,8 @@ export interface Adapter {
   broadcast(raw: string): Promise<void>;
   track(p: { txid: string; intent: any; blockRef: string | null; broadcastAt: number }): Promise<Tracked>;
   deposits(addr: string, cursor: number | null): Promise<{ items: Deposit[]; cursor: number; finalizedHeight: number }>;
+  /** Bitcoin-style networks (NFT delivery 2): the confirmed coins of an address, agreed by every indexer; a raw transaction */
+  utxos?(addr: string): Promise<{ txid: string; vout: number; value: number; confirmed: boolean }[]>;
+  rawTx?(txid: string): Promise<string>;
 }
 export const hostOf = (u: string) => new URL(u.replace(/^[a-z]+:(?=https?:)/, '')).host;

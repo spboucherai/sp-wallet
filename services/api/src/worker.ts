@@ -7,7 +7,7 @@ import { audit, sql } from './db.ts';
 import { signer } from './signer-client.ts';
 import { advanceSwap, recordSwapOutcome } from './swap-exec.ts';
 import { advanceBridgeBurn, advanceBridges } from './bridge.ts';
-import { broadcastNow, failure, move, type ProposalRow } from './transfers.ts';
+import { broadcastNow, failure, move, proposalHooks, type ProposalRow } from './transfers.ts';
 import { advanceXswapSend, advanceXswaps, xswapMayBroadcast } from './xswap.ts';
 import { advancePlans } from './plan-exec.ts'; // v7 any-to-any plans
 import { pruneSwapQuotes } from './swap.ts'; // v11
@@ -49,6 +49,7 @@ async function reconcile(): Promise<void> {
         if (t.state === 'finalized') patch.finalized_at = new Date();
         const moved = await move(p, t.state, patch);
         if (t.state === 'finalized' || t.state === 'confirming') await recordSwapOutcome(moved).catch(() => {});
+        for (const h of proposalHooks.tracked) await h(moved).catch(() => {}); // NFT delivery 2: activity + inventory of an NFT transfer (never signs)
       } else if (t.confirmations !== p.confirmations) await sql`update proposals set confirmations = ${t.confirmations}, block_ref = ${t.blockRef ?? p.block_ref} where id = ${p.id}`;
     } catch (e) { log(`reconcile ${p.id}: ${(e as Error).message}`); }
   }

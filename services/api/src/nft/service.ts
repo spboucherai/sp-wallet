@@ -4,7 +4,7 @@
 //
 // The wallet's addresses come from the SIGNER (through `deps.addresses`), never from a request: no route accepts an owner address.
 import { NETWORKS, type NetworkDef } from '@spw/core';
-import { NftProviderError, nftKey, parseNftKey, type NftAsset, type NftEvent } from '@spw/nft';
+import { capabilitiesOf, NftProviderError, nftKey, parseNftKey, type NftAsset, type NftEvent } from '@spw/nft';
 import type { NftConfig } from './config.ts';
 import { externalMarketLinks, type MarketSource } from './market.ts';
 import type { CollectionInfo, InventorySection, NftDataProvider } from './provider.ts';
@@ -16,8 +16,10 @@ const NETS = () => Object.values(NETWORKS) as NetworkDef[];
 const SECTION_STANDARDS: Record<string, string[]> = { token: ['metaplex-token-metadata', 'metaplex-pnft', 'spl-token-2022', 'spl-token'], core: ['metaplex-core'], compressed: ['metaplex-bubblegum'], indexer: ['erc721', 'erc1155', 'evm-nonstandard'] };
 
 export interface NftDeps { cfg: NftConfig; providers: NftDataProvider[]; resolver: Resolver; market: MarketSource | null; addresses: () => Promise<Record<string, string>>; now: () => Date }
+/** standards a transfer is built for (delivery 2), per family — the per-asset verdict and the signer's policy decide the rest */
+export const TRANSFER_STANDARDS: Record<string, string[]> = { evm: ['erc721', 'erc1155'], sol: ['spl-token-2022', 'metaplex-token-metadata', 'metaplex-pnft', 'metaplex-core'] };
 export type ChainSupport = 'supported' | 'partial' | 'blocked_by_provider' | 'unsupported';
-export interface ChainCapability { network: string; name: string; family: string; inventory: ChainSupport; /** why, as a code the interface translates */ reason: string; unlockedBy: string | null; standards: string[]; lookup: boolean; manualAdd: boolean; receive: boolean; transfer: 'not_built'; marketRead: boolean; marketWrite: false;
+export interface ChainCapability { network: string; name: string; family: string; inventory: ChainSupport; /** why, as a code the interface translates */ reason: string; unlockedBy: string | null; standards: string[]; lookup: boolean; manualAdd: boolean; receive: boolean; /** delivery 2: 'supported' = a transfer can be prepared for the standards of `transferStandards` (the asset's own state and the signer's policy still decide) */ transfer: 'supported' | 'not_supported'; transferStandards: string[]; /** why not, as a code */ transferReason: string | null; marketRead: boolean; marketWrite: false;
   sections: { section: string; status: string; code: string | null; unlockedBy: string | null; source: string | null; count: number; truncated: boolean; syncedAt: string }[] }
 
 export function createNftService(deps: NftDeps) {
@@ -31,7 +33,8 @@ export function createNftService(deps: NftDeps) {
     const now = deps.now().getTime(), a = row.asset;
     const age = (s: { fetchedAt: string }) => now - new Date(s.fetchedAt).getTime();
     const fresh = <T extends { category: string; fetchedAt: string; freshness: string }>(s: T): T => ({ ...s, freshness: s.category === 'onchain' || s.category === 'indexed' ? (age(s) > TTL_ONCHAIN_STALE_MS ? 'stale' : 'fresh') : s.category === 'market' ? (age(s) > TTL_MARKET_MS * 3 ? 'stale' : 'fresh') : s.freshness });
-    return { ...a, sources: a.sources.map(fresh), ownership: { ...a.ownership, source: fresh(a.ownership.source) }, market: a.market ? { ...a.market, source: fresh(a.market.source) } : null,
+    // capabilities are derived from the stored FACTS each time the asset is read (a row stored by delivery 1 says "not built")
+    return { ...a, capabilities: capabilitiesOf(a), sources: a.sources.map(fresh), ownership: { ...a.ownership, source: fresh(a.ownership.source) }, market: a.market ? { ...a.market, source: fresh(a.market.source) } : null,
       firstSeen: row.first_seen.toISOString(), lastSeen: row.last_seen.toISOString(), verifiedAt: row.verified_at?.toISOString() ?? null, goneAt: row.gone_at?.toISOString() ?? null, externalMarkets: externalMarketLinks(a) };
   }
   /** keep the creator metadata already resolved for the same URI (it has its own TTL); resolve it otherwise */
@@ -86,7 +89,9 @@ export function createNftService(deps: NftDeps) {
       const rows = await store.syncRows(), addrs = await deps.addresses().catch(() => ({} as Record<string, string>));
       const chains = NETS().map((n): ChainCapability => {
         const p = providerOf(n.id), sections = rows.filter((r) => r.chain === n.id).map((r) => ({ section: r.section, status: r.status, code: r.code, unlockedBy: r.unlocked_by, source: r.source, count: r.count, truncated: r.truncated, syncedAt: r.synced_at.toISOString() }));
-        const base = { network: n.id, name: n.name, family: n.family, transfer: 'not_built' as const, marketWrite: false as const, sections, receive: !!addrs[n.id] && (!!p || n.id === 'bitcoin') };
+        const ts = p ? TRANSFER_STANDARDS[n.family] ?? [] : [];
+        const base = { network: n.id, name: n.name, family: n.family, transfer: ts.length ? 'supported' as const : 'not_supported' as const, transferStandards: ts, transferReason: ts.length ? null : n.id === 'bitcoin' ? 'ordinals_transfer_not_supported' : 'no_adapter',
+          marketWrite: false as const, sections, receive: !!addrs[n.id] && (!!p || n.id === 'bitcoin') };
         if (n.family === 'sol' && p) { const blocked = sections.filter((s) => s.status === 'blocked_by_provider');
           return { ...base, inventory: blocked.length ? 'partial' : 'supported', reason: blocked.length ? `sections_blocked:${blocked.map((s) => s.section).join(',')}` : 'onchain_and_das', unlockedBy: blocked[0]?.unlockedBy ?? null,
             standards: ['metaplex-token-metadata', 'metaplex-pnft', 'spl-token-2022', 'metaplex-core', 'metaplex-bubblegum'], lookup: true, manualAdd: true, marketRead: !!deps.market }; }
@@ -175,6 +180,18 @@ export function createNftService(deps: NftDeps) {
     },
     manualRemove: (key: string) => store.removeManual(key),
 
+    /** Delivery 2: an NFT seen arriving (a finalized Transfer log to the wallet). It enters the inventory only if the chain confirms the wallet holds it NOW. */
+    async adopt(chain: string, address: string, tokenId?: string): Promise<ReturnType<typeof present> | null> {
+      const p = need(chain), wallet = (await deps.addresses())[chain] ?? null, now = deps.now();
+      const a = await p.lookup(chain, { address, tokenId }, wallet);
+      if (!a.ownership.heldByWallet || a.ownership.source.confidence !== 'chain_verified') return null;
+      const prev = await store.getAsset(a.key);
+      a.origin = prev && prev.origin === 'manual' ? 'manual' : 'discovered';
+      await withMetadata(a, prev); await withMarket(a, prev);
+      await store.upsertAsset(a, now);
+      return present((await store.getAsset(a.key))!);
+    },
+
     /** Events of one asset: what is stored, completed from the chain on the first request and when `more` is asked. */
     async activity(key: string, o: { cursor?: string | null; limit: number; type?: string; more?: boolean }): Promise<{ events: NftEvent[]; cursor: string | null; completeness: string; note: string | null; scannedAt: string | null; canLoadOlder: boolean; error: string | null }> {
       const row = await store.getAsset(key);
@@ -193,7 +210,10 @@ export function createNftService(deps: NftDeps) {
       }
       let before: { block: string; id: string } | null = null;
       if (o.cursor) { const k = o.cursor.indexOf('|'); if (k > 0 && /^[0-9]{1,20}$/.test(o.cursor.slice(0, k))) before = { block: o.cursor.slice(0, k), id: o.cursor.slice(k + 1) }; }
-      const events = await store.listEvents(key, { limit: o.limit + 1, before, type: o.type });
+      // delivery 2: a transfer SENT by this wallet is recorded from its own proposal (direction and finality known); the same
+      // transaction read back from the contract's logs is the same event, not a second one
+      const own = new Set((await store.listEvents(key, { limit: 200 })).filter((e) => e.index === 'spw-transfer').map((e) => e.tx));
+      const events = (await store.listEvents(key, { limit: o.limit + 1 + own.size, before, type: o.type })).filter((e) => e.index === 'spw-transfer' || !own.has(e.tx)).slice(0, o.limit + 1);
       const page = events.slice(0, o.limit), last = page[page.length - 1];
       return { events: page, cursor: events.length > o.limit && last ? `${last.blockRef.slot ?? last.blockRef.number ?? '0'}|${last.id}` : null, completeness: scan?.completeness ?? (p ? 'unavailable' : 'unavailable'), note: scan?.note ?? null,
         scannedAt: scan?.scanned_at.toISOString() ?? null, canLoadOlder: !!scan && !scan.complete && !!scan.cursor, error };
@@ -222,7 +242,9 @@ export function createNftService(deps: NftDeps) {
     async receive(): Promise<{ network: string; name: string; family: string; address: string; standards: string[]; warnings: string[]; detection: ChainSupport }[]> {
       const addrs = await deps.addresses(), caps = (await this.capabilities()).chains;
       return caps.filter((c) => addrs[c.network] && (c.lookup || c.network === 'bitcoin')).map((c) => ({ network: c.network, name: c.name, family: c.family, address: addrs[c.network]!, standards: c.standards, detection: c.inventory,
-        warnings: c.network === 'bitcoin' ? ['ordinals_not_protected'] : c.family === 'evm' ? ['evm_same_address_check_network', ...(c.inventory === 'blocked_by_provider' ? ['evm_arrival_not_detected'] : [])] : ['sol_compressed_needs_indexer'] }));
+        // delivery 2: Bitcoin — inscriptions are never TRANSFERRED by this wallet; ordinary sends keep away from locked / flagged outputs (nft/utxo.ts).
+        // EVM without an indexer — arrivals are detected on contracts the wallet already knows, after finality; a new collection is added by hand once
+        warnings: c.network === 'bitcoin' ? [cfg.ordinalsApiUrl ? 'ordinals_ord_source' : 'ordinals_heuristic_only', 'ordinals_no_transfer', 'arrival_after_confirmation'] : c.family === 'evm' ? ['evm_same_address_check_network', ...(c.inventory === 'blocked_by_provider' ? ['evm_arrival_known_contracts_only'] : []), 'arrival_after_confirmation'] : ['sol_compressed_needs_indexer', 'arrival_after_confirmation'] }));
     },
 
     async prune(): Promise<Awaited<ReturnType<typeof store.pruneNft>> & { evicted: number }> {

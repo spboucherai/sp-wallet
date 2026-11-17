@@ -9,6 +9,8 @@ import { UserError } from '../config.ts';
 import { audit } from '../db.ts';
 import type { NftService } from './service.ts';
 import type { Resolver } from './resolver.ts';
+import { transferVerdict } from './transfer.ts';
+import type { SignerApi } from './transfer-routes.ts';
 
 const Key = z.string().min(5).max(260).refine((k) => { try { parseNftKey(k); return true; } catch { return false; } });
 const Chain = z.string().max(24).refine((c) => !!(NETWORKS as Record<string, unknown>)[c]);
@@ -23,12 +25,12 @@ const wrap = async <T>(f: () => Promise<T>): Promise<T> => {
 };
 const limit = (max: number) => ({ config: { rateLimit: { max, timeWindow: '1 minute' } } });
 
-export function nftRoutes(app: FastifyInstance, nft: NftService, resolver: Resolver, o: { autoSync: boolean } = { autoSync: true }): void {
+export function nftRoutes(app: FastifyInstance, nft: NftService, resolver: Resolver, o: { autoSync: boolean; signer?: SignerApi } = { autoSync: true }): void {
   const P = '/api/v1/nfts';
   const summary = (a: ReturnType<NftService['present']>) => { const img = a.media.find((m) => m.role === 'image') ?? a.media[0] ?? null;
     return { key: a.key, chain: a.chainId, family: a.family, standard: a.standard, assetId: a.assetId, tokenId: a.tokenId, name: a.metadata.name, onchainName: a.metadata.onchainName, collection: a.collection ? { key: a.collection.key, name: a.collection.name, verifiedOnChain: a.collection.verifiedOnChain } : null,
       quantity: a.quantity, state: a.ownership.state, inWallet: a.ownership.heldByWallet, origin: a.origin, metadataStatus: a.metadata.status, image: img ? { id: img.id, kind: img.kind, status: img.status } : null,
-      transferBlockedBy: a.capabilities.transferBlockedBy[0], firstSeen: a.firstSeen, verifiedAt: a.verifiedAt, goneAt: a.goneAt, stale: a.ownership.source.freshness === 'stale' }; };
+      transferable: a.capabilities.transferable, transferBlockedBy: a.capabilities.transferBlockedBy[0] ?? null, firstSeen: a.firstSeen, verifiedAt: a.verifiedAt, goneAt: a.goneAt, stale: a.ownership.source.freshness === 'stale' }; };
 
   app.get(`${P}/capabilities`, async () => nft.capabilities());
 
@@ -50,7 +52,9 @@ export function nftRoutes(app: FastifyInstance, nft: NftService, resolver: Resol
     const q = z.object({ key: Key }).parse(req.query);
     const a = await nft.get(q.key);
     if (!a) throw new UserError('nft_not_found', 'this NFT is not in the inventory; use the lookup to open it', 404);
-    return a;
+    // delivery 2: the per-asset transfer verdict (facts of the asset + the signer's NFT policy when it can be read)
+    const policy = o.signer ? (await o.signer.status().catch(() => null))?.nft?.policy ?? null : null;
+    return { ...a, transfer: transferVerdict(a, policy) };
   });
 
   app.get(`${P}/activity`, limit(60), async (req) => {
