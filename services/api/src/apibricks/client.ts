@@ -4,8 +4,8 @@
 // Facts, verified live on 2026-11-17 with the owner's key (docs/v11/research/apibricks.md):
 //   host      https://rest.coinapi.io   — the ONLY host the key is ever sent to (a constant, not an option)
 //   auth      header `X-CoinAPI-Key`    — never the query string, never the URL path
-//   metering  `x-ratelimit-request-cost` on every 200 answer (1 for every call made, including a 113-asset rate list and a
-//             100-bar OHLCV page); no `X-Credits-*` header on this plan; `x-tierlimit-rpm-limit: 160`, concurrency 4
+//   metering  `x-ratelimit-request-cost` on every 200 answer (1 for every call made, including a 77-asset rate list and a
+//             24-bar OHLCV page asked with limit=100); no `X-Credits-*` header on this plan; `x-tierlimit-rpm-limit: 160`, concurrency 4
 //   errors    JSON `{ "error": "…" }` — 401 bad or missing key, 400 unknown symbol, 550 "single item that we don't have",
 //             429 too many requests (documented); an error answer carries no cost header: it is counted as one credit
 //

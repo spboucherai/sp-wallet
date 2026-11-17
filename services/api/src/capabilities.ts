@@ -35,10 +35,6 @@ export function capabilities(env: Env = process.env): Capability[] {
         : 'market making: live on Hyperliquid, off unless SPW_DERIV_LIVE_MAINNET, SPW_DERIV_MANDATE_MAINNET, SPW_DERIV_MM_MAINNET and SPW_TRADING_API_EXECUTION are all "on" and a quoting mandate is approved: a quote answers the code of the first setting that is off; cancels, reduce-only orders and the dead man\'s switch always pass (paper works)' },
     { id: 'deriv_mm_testnet', on: isOn(env.SPW_DERIV_MM_TESTNET) && isOn(env.SPW_TRADING_API_EXECUTION), missing: [...(isOn(env.SPW_DERIV_MM_TESTNET) ? [] : ['SPW_DERIV_MM_TESTNET']), ...(isOn(env.SPW_TRADING_API_EXECUTION) ? [] : ['SPW_TRADING_API_EXECUTION'])],
       why: isOn(env.SPW_DERIV_MM_TESTNET) && isOn(env.SPW_TRADING_API_EXECUTION) ? 'market making on Hyperliquid TESTNET is enabled (test funds; the owner\'s first go-live step)' : 'market making on Hyperliquid testnet needs SPW_DERIV_MM_TESTNET=on and SPW_TRADING_API_EXECUTION=on: a quote answers mm_testnet_disabled / execution_disabled; cancels and reductions pass' },
-    // V11: API Bricks (CoinAPI) market data — a keyed provider: absent and reported `needsKey` without its key (the name only, never the value)
-    { id: 'market_data_apibricks', on: !!(env.APIBRICKS_API_KEY ?? '').trim(), missing: (env.APIBRICKS_API_KEY ?? '').trim() ? [] : ['APIBRICKS_API_KEY'],
-      why: (env.APIBRICKS_API_KEY ?? '').trim() ? `API Bricks is the second price source (cross-check, failover), an additional confirming market-data source and a metered quote source, within ${env.APIBRICKS_DAILY_CREDITS ?? '100'} credits a day`
-        : 'needsKey — APIBRICKS_API_KEY is not set: CoinGecko stays the only price source of the portfolio and nothing is asked of API Bricks (the wallet works as before)' },
     { id: 'research_runner', on: secret.length >= 32, missing: secret.length >= 32 ? [] : ['SPW_RESEARCH_RUNNER_SECRET'],
       why: secret.length >= 32 ? 'the research runner routes accept the runner secret' : secret ? 'SPW_RESEARCH_RUNNER_SECRET is set but shorter than 32 characters: the runner routes answer 404, research jobs stay queued' : 'SPW_RESEARCH_RUNNER_SECRET is not set: the runner routes answer 404, research jobs stay queued' },
     { id: 'research_readonly_db', on: !!env.RESEARCH_DATABASE_URL, missing: env.RESEARCH_DATABASE_URL ? [] : ['RESEARCH_DATABASE_URL'],
@@ -48,6 +44,10 @@ export function capabilities(env: Env = process.env): Capability[] {
     { id: 'strategy_sandbox_enforced', on: env.SPW_LAB_SANDBOX !== 'off', missing: env.SPW_LAB_SANDBOX === 'off' ? ['SPW_LAB_SANDBOX'] : [],
       why: env.SPW_LAB_SANDBOX === 'off' ? 'SPW_LAB_SANDBOX=off: strategy code runs WITHOUT OS confinement (development only)' : 'strategy code only runs inside the OS sandbox (see lab on the monitoring screen for its health)' },
     { id: 'web_app', on: !!env.SPW_WEB_DIR, missing: env.SPW_WEB_DIR ? [] : ['SPW_WEB_DIR'], why: env.SPW_WEB_DIR ? 'the web app is served by this process' : 'SPW_WEB_DIR is not set: this process serves the API only' },
+    // V11: API Bricks (CoinAPI) market data — a keyed provider: absent and reported `needsKey` without its key (the name only, never the value)
+    { id: 'market_data_apibricks', on: !!(env.APIBRICKS_API_KEY ?? '').trim(), missing: (env.APIBRICKS_API_KEY ?? '').trim() ? [] : ['APIBRICKS_API_KEY'],
+      why: (env.APIBRICKS_API_KEY ?? '').trim() ? `API Bricks is the second price source (cross-check, failover), an additional confirming market-data source and a metered quote source, within ${env.APIBRICKS_DAILY_CREDITS ?? '100'} credits a day`
+        : 'needsKey — APIBRICKS_API_KEY is not set: CoinGecko stays the only price source of the portfolio and nothing is asked of API Bricks (the wallet works as before)' },
   ];
 }
 

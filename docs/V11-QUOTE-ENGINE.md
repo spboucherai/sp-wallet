@@ -97,6 +97,18 @@ after reconnect, gap events):
 times on every venue, Coinbase `ticker.time`, CoinGecko `last_updated`. Hyperliquid's asset context, edgeX's and dYdX's tickers
 and books and GMX's tickers carry none: `venueTs` is `null` and `recvTs` (receipt by this server) is the only date.
 
+### Spot symbols without a Coinbase stream: the metered second source (2026-11-17)
+
+With `APIBRICKS_API_KEY` set, a spot symbol Coinbase does not list **and** that maps onto API Bricks with certainty is
+polled from that provider instead of the price list: `source: "apibricks-rest"`, `transport: "poll"`, one batched REST
+call every 5 minutes while a channel on such a symbol is open, stale after 15 minutes, `last` only (no bid / ask). It is
+paid from a daily credit budget (30 polls a day by default). The path is chosen when the channel opens — no room in the
+budget means the price list, as before. If the budget runs out while a channel is open, the source is **`down` with the
+reason `quota`**: an error on the channel, `hub.venues[spot].upstream.second` and `metered.apibricks` in
+`GET /api/v1/stream/stats` (budget used / ceiling / remaining / `exhausted`), and the `spot` venue status when that
+source alone feeds it. Its failures touch neither the Coinbase stream nor the polled symbols. Without the key nothing of
+this exists. Details: `docs/V11-MARKET-DATA-SOURCES.md` §2.3 (c).
+
 ## 3. Endpoints and authentication
 
 | Route | Who | Credential |

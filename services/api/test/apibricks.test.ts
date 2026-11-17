@@ -358,6 +358,24 @@ describe('additional confirming market source', () => {
     const bad = apiBricksMarketSource({ client: clientOf(scripted([{ status: 400, body: fx('error-unknown-symbol').body }])), symbols: ['BTC'], intervals: ['1h'], spacingMs: 0 });
     await expect(bad.candles('BTC', '1h', { start, end }, now)).rejects.toMatchObject({ kind: 'unsupported' });
   });
+  it('REAL bars of the same hours (Coinbase read directly, Gemini through the provider): the gate confirms the good ones and refuses the provider\'s off-market prints', async () => {
+    // observed on 2026-11-16: 20 of the 24 hourly closes agree within 5 bps (median 2.3); FOUR bars of the provider's Gemini series
+    // close ~470–510 bps above the market (07:00, 15:00, 16:00, 17:00 UTC). The same gate as for the exchanges decides.
+    const cb: Candle[] = fx<number[][]>('coinbase-btc-1h-same-hours').body.map(([t, low, high, open, close, volume]) => ({ ts: t! * 1000, open: open!, high: high!, low: low!, close: close!, volume: volume! }));
+    const ab = validateBars(parseOhlcv(rec.body), '1h', now).bars;
+    expect(cb).toHaveLength(24); expect(ab).toHaveLength(24);
+    const dev = ab.map((b, k) => (Math.abs(b.close - cb[k]!.close) / ((b.close + cb[k]!.close) / 2)) * 1e4);
+    expect(dev.filter((d) => d <= 5)).toHaveLength(20); expect(dev.filter((d) => d > 400).map((_, k) => k)).toHaveLength(4);
+    const opts = { lookback: 3, agreeBars: 3, priority: ['coinbase', 'bitstamp', 'kraken', 'apibricks'] as const };
+    const upTo = (hour: number) => ({ coinbase: cb.slice(0, hour + 1), apibricks: ab.slice(0, hour + 1) }), atClose = (hour: number) => start + (hour + 1) * H + 11_000;
+    const good = evaluate(upTo(6), '1h', atClose(6), opts);                                                             // 04:00–06:00: confirmed
+    expect(good.status).toBe('ok'); expect(good.maxDeviationBps!).toBeLessThan(5); expect(good.provided).toEqual({ coinbase: 3 });
+    const bad = evaluate(upTo(7), '1h', atClose(7), opts);                                                              // 07:00 is an off-market print
+    expect(bad.status).toBe('disagreement'); expect(bad.maxDeviationBps!).toBeGreaterThan(400);
+    // with a real second exchange that agrees, the provider's bad bar is recorded and does not block (the existing rule)
+    const third = evaluate({ ...upTo(7), kraken: cb.slice(0, 8).map((c) => ({ ...c, close: c.close * 1.0002 })) }, '1h', atClose(7), opts);
+    expect(third.status).toBe('ok'); expect(third.agreement.at(-1)!.closes.apibricks).toBe(ab[7]!.close);
+  });
   it('quality gate: it CONFIRMS a bar of an exchange, is never preferred to one, and can never pass alone', async () => {
     const src = apiBricksMarketSource({ client: clientOf(scripted([rec.body])), symbols: ['BTC'], intervals: ['1h'], spacingMs: 0 });
     const ab = validateBars(await src.candles('BTC', '1h', { start, end }, now), '1h', now).bars, at = end + H + 11_000;

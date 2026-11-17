@@ -9,8 +9,8 @@
 //   settle(consumer, d)    after the answer: the provider's own cost (`x-ratelimit-request-cost`) minus what was reserved
 //   refund(consumer, n)    the request never left (network error before any answer)
 //
-// The day is the UTC calendar day (the provider does not publish its reset time: UTC is this module's own convention, and
-// an assumption that only matters at midnight). A consumer may have its own smaller ceiling (`caps`): the market-data
+// The day is the UTC calendar day: this module's OWN convention for its own ceiling. It is not the provider's accounting
+// (its documentation describes plan quotas as a rolling 24-hour window, and a prepaid balance has no day at all). A consumer may have its own smaller ceiling (`caps`): the market-data
 // backfill must not starve the price cross-check. The count survives a restart through `store` (the settings table):
 // a restart loop cannot spend the ceiling several times.
 

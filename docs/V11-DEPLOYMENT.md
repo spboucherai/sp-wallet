@@ -109,6 +109,12 @@ production), `SPW_VAPID_SUBJECT`, `SPW_PUSH_ALLOW_HOSTS`, `SPW_RPC_OVERRIDE`, `S
 | `SPW_RPC_EXTRA` | unset | unset (owner's choice, A8) | JSON map of additional https RPC endpoints per network |
 | `SPW_SWAP_QUOTES_RETENTION_DAYS` | 30 (never under 8) | default | pruning of `swap_quotes` |
 | `ZEROX_API_KEY`, `ONEINCH_API_KEY` | unset | unset | quote-only comparison sources; without a key they are never asked. No live call was ever made with either |
+| `APIBRICKS_API_KEY` (**a secret**) | unset | **unset until the owner authorises it** (then: the value of the owner's secrets file, see below) | API Bricks (CoinAPI) market data: second price source (cross-check, labelled failover), additional confirming market source, metered spot quotes. Unset = provider absent, capability `market_data_apibricks=OFF(missing APIBRICKS_API_KEY)`, nothing else changes. `docs/V11-MARKET-DATA-SOURCES.md` |
+| `APIBRICKS_DAILY_CREDITS` | 100 | default, after reading the balance in the provider's console | hard ceiling of REST credits per UTC day, kept by the wallet (the provider reports no balance). About 0.53 USD a day at the published pay-as-you-go price. 0 = never call |
+| `APIBRICKS_MARKET_DAILY_CREDITS` / `APIBRICKS_QUOTE_DAILY_CREDITS` | 25 / 30 | default | parts of that ceiling for the confirming bars and for the quote hub |
+| `APIBRICKS_PRICE_TTL_MS` / `APIBRICKS_FAILOVER_TTL_MS` / `APIBRICKS_QUOTE_POLL_MS` | 1 800 000 / 300 000 / 300 000 | default | refresh of the second price list (normal / while CoinGecko is down or stale) and polling of the hub |
+| `APIBRICKS_DIVERGENCE_BPS` | 100 | default | two prices further apart are flagged `divergent` |
+| `APIBRICKS_MARKET_INTERVALS` / `APIBRICKS_MARKET_SYMBOLS` / `APIBRICKS_MARKET_HISTORY_BARS` | `1d` / base set / 300 | default | bars from this source: `1d,1h,5m` or `off`; hourly bars cost 24 credits per symbol and per day |
 | `SPW_LAB_RESULTS_RUN` | `2026-11-15-v11` | default | which committed lab run the Agents panel shows |
 | `SPW_LAB_EXTRA_STRATEGIES` | unset | unset | extra strategy names in the library manifest |
 | `SPW_AGENT_BAR_MS` / `SPW_AGENT_JOBS_MS` / `SPW_AGENT_SUPERVISOR_MS` | 60 000 / 5 000 / 60 000 | default | cadence of the separate agents worker only |
@@ -124,6 +130,15 @@ the variable names before and after (`scripts/preflight.sh --env-from-pm2 sp-wal
 (`M1M32:~/dispatch/apps/sp-wallet.json`); if the app is restarted through `mld`, the same rule applies to the manifest's
 `env` block.
 
+**`APIBRICKS_API_KEY` (when the owner authorises it — it was not set by the work that added it).** It lives in two places
+and nowhere else: the PM2 environment of `sp-wallet` on the API node (M2M32c) and the `env` block of the mld manifest on
+M1M32. Adding it is a `pm2 restart sp-wallet --update-env` from a shell that exports **every** variable of 4.2 **and**
+`APIBRICKS_API_KEY` (read from the owner's secrets file with `set -a; . <file>; set +a` — never typed on a command line,
+never echoed, never pasted in a log or a ticket); a later restart without `--update-env` keeps it. It must not be given
+to the signer node (`sp-wallet-signer`): the signer's price check stays independent of any keyed third party. After the
+restart, check the NAME only (`scripts/preflight.sh --env-from-pm2 sp-wallet`), the start-up line
+(`market_data_apibricks=on`) and the monitor (credits used today).
+
 ---
 
 ## 5. Secrets and files to back up from now on
@@ -134,6 +149,7 @@ the variable names before and after (`scripts/preflight.sh --env-from-pm2 sp-wal
 | Signer `journal.jsonl` and closed segments `journal-<first>-<last>.jsonl`, `journal-rollback-<time>.jsonl` | `~/sp-wallet-signer-data` on the signer node | since V11 `state.json` holds only a reference to the journal; the daemon refuses to start on a broken journal | n/a — back up with `state.json` |
 | `state.json` | same | replay markers, counters, revocations, mandates | n/a |
 | `state.json.lock`, `control.sock` | same | runtime only: **not** to back up or restore; a stale lock is taken over by V11 | — |
+| **`APIBRICKS_API_KEY`** (once set) | the owner's secrets file on the laptop (`~/Desktop/Cluster/secrets/sp-wallet-apibricks.env`, 0600), the PM2 environment of `sp-wallet`, the mld manifest's `env` | losing it only switches the second source off (the wallet works as before); a leaked key spends the owner's prepaid balance — rotate it in the provider's console | **no**: keep it with the other secrets of the app (the manifest and the secrets directory), never in the repository |
 | Never copied anywhere | keystore, `wrap.key` | runbook | — |
 
 New packages in the build: `packages/trading` (`@spw/trading`, a dependency of the API), `packages/trading-sdk`
