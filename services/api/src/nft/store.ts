@@ -133,5 +133,7 @@ export const marketSlugs = async (collectionKey: string): Promise<Record<string,
 /** held items per collection (for the opt-in indicative estimate): only what the chain confirmed as held */
 export const heldByCollection = () => sql<{ collection_key: string; chain: string; n: number; name: string | null; sample: string }[]>`
   select collection_key, chain, count(*)::int as n, max(asset->'collection'->>'name') as name, min(key) as sample from nft_assets where collection_key is not null and in_wallet and origin <> 'lookup' group by collection_key, chain order by n desc, collection_key limit 200`;
+/** one stored item of a collection (inventory or looked-up): the marketplace's identifier of a collection is learnt from its answer about an item */
+export const sampleOfCollection = async (collectionKey: string): Promise<AssetRow | null> => (await sql<AssetRow[]>`select * from nft_assets where collection_key = ${collectionKey} order by in_wallet desc, last_seen desc limit 1`)[0] ?? null;
 export const spamCount = async (): Promise<number> => (await sql<{ n: number }[]>`select count(*)::int as n from nft_assets where in_wallet and origin <> 'lookup' and coalesce((asset->'indexerFlags'->>'spam')::boolean, false)`)[0]!.n;
 export const setBudget = (source: string, day: string, requests: number) => sql`insert into nft_budget (source, day, requests) values (${source}, ${day}, ${requests}) on conflict (source, day) do update set requests = greatest(nft_budget.requests, excluded.requests)`;

@@ -111,6 +111,15 @@ describe('the reference item', () => {
     // a collection no source has identified yet (none of its items was opened): said so, not guessed from a name
     const other = (await call('GET', `/nfts/market/collection?key=${q('evm:ethereum:0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d')}`)).json;
     expect(other.sources[0].status).toMatchObject({ state: 'not_covered', code: 'collection_not_identified' });
+    // the page gets the most frequent values only (the source's document was megabytes), and says it was cut
+    expect(os.traits.value.categories.every((x: any) => x.values.length <= 12)).toBe(true); expect(os.traits.value.truncated).toBe(true); // eslint-disable-line @typescript-eslint/no-explicit-any
+  });
+  it('trait frequency of the item: from the source\'s counts over its STATED total — or not computed, and why', async () => {
+    const t = (await call('GET', `/nfts/market/traits?key=${q(KEY)}`)).json;
+    // the creator's document could not be fetched in this test (the scripted world answers 404): no attribute, hence no row — and still no invented frequency
+    expect(t).toMatchObject({ key: KEY, computed: true, sources: [{ provider: 'opensea', computed: true, total: '344673', fetchedAt: '2026-11-17T12:00:00.000Z' }] });
+    expect(t.sources[0].rows).toEqual([]); expect(t.sources[0].method).toContain('both stated by the source');
+    const none = (await call('GET', `/nfts/market/traits?key=${q('sol:solana:11111111111111111111111111111111')}`)); expect(none.status).toBe(404);
   });
 });
 

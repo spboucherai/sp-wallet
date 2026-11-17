@@ -52,8 +52,12 @@ export function marketRoutes(app: FastifyInstance, nft: NftService, market: Mark
   /** a collection's trait document can be megabytes (2.3 MB observed): the page gets the most frequent values, and says it was cut */
   const cut = (t: CollectionTraits): CollectionTraits & { truncated: boolean } => { const cats = t.categories.slice(0, 40).map((c) => ({ type: c.type, values: [...c.values].sort((a, b) => Number(BigInt(b.count) - BigInt(a.count))).slice(0, 12) }));
     return { total: t.total, categories: cats, truncated: t.categories.length > 40 || t.categories.some((c) => c.values.length > 12) }; };
+  /** A marketplace names a collection by its own slug, which it gives in its answer about an ITEM: when no slug is known yet, one stored item of the collection is asked first (cached like any item read). */
+  const learnSlugs = async (collectionKey: string): Promise<void> => { if (Object.keys(await store.marketSlugs(collectionKey)).length) return; const row = await store.sampleOfCollection(collectionKey); if (row) await market.item(row.asset).catch(() => {}); };
   app.get(`${P}/market/collection`, limit(40), async (req) => {
-    const q = z.object({ key: Key }).parse(req.query), k = parseNftKey(q.key), r = await market.collection(q.key, k.chainId);
+    const q = z.object({ key: Key }).parse(req.query), k = parseNftKey(q.key);
+    await learnSlugs(q.key);
+    const r = await market.collection(q.key, k.chainId);
     return { ...r, sources: r.sources.map((s) => (s.traits.state === 'known' ? { ...s, traits: { state: 'known' as const, value: cut(s.traits.value) } } : s)) };
   });
   // Trait frequency of ONE item (brief §6): only from a source that gives collection-level counts WITH a stated item total; the
@@ -61,6 +65,7 @@ export function marketRoutes(app: FastifyInstance, nft: NftService, market: Mark
   app.get(`${P}/market/traits`, limit(40), async (req) => {
     const q = z.object({ key: Key }).parse(req.query), a = await assetOf(q.key);
     if (!a.collection) return { key: a.key, computed: false as const, reason: 'no_collection', sources: [] };
+    await market.item(a).catch(() => {}); // the item's own market read (cached) is what tells each marketplace's name for the collection
     const c = await market.collection(a.collection.key, a.chainId);
     const sources = c.sources.filter((s) => s.status.state === 'ok').map((s) => (s.traits.state !== 'known'
       ? { provider: s.status.provider, name: s.status.name, computed: false as const, reason: 'reason' in s.traits && s.traits.reason ? s.traits.reason : 'trait_counts_unavailable', rows: [] }

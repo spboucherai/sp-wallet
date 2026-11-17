@@ -29,7 +29,7 @@ export function SourceState({ s }: { s: SourceStatus }) {
     <span className="text-[15px] font-semibold">{s.name}</span>
     <Tag tone={tone} icon={s.state === 'ok' ? (s.stale ? 'warn' : 'chart') : s.state === 'needs_key' ? 'key' : s.state === 'off' ? 'minus' : s.state === 'error' ? 'warn' : 'eyeOff'}>{t(`nfMkState_${s.state}` as Key)}{s.stale ? ` · ${t('nfStale')}` : ''}</Tag>
     {s.stamp && <span className="text-[12px] text-mute">{t('nfMkUpdated', { time: when(s.stamp.fetchedAt, locale) })}</span>}
-    {s.state !== 'ok' && <p className="basis-full text-[12.5px] leading-snug text-mute" data-testid="nft-market-why">{tk(t, 'nfMkWhy_', s.code, 'nfMkWhyOther')}{s.unlockedBy ? <> — {t('nfUnlockedBy')} <code className="font-mono text-[11.5px] text-ink">{s.unlockedBy}</code></> : null}</p>}
+    {s.state !== 'ok' && <p className="basis-full text-[12.5px] leading-snug text-mute" data-testid="nft-market-source-why">{tk(t, 'nfMkWhy_', s.code, 'nfMkWhyOther')}{s.unlockedBy ? <> — {t('nfUnlockedBy')} <code className="font-mono text-[11.5px] text-ink">{s.unlockedBy}</code></> : null}</p>}
     {s.state === 'ok' && s.stale && s.code && <p className="basis-full text-[12.5px] text-warn">{t('nfMkStaleWhy', { code: s.code })}</p>}
   </div>;
 }
