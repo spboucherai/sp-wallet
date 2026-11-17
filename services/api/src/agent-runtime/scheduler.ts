@@ -19,7 +19,7 @@ import { journal } from './journal.ts';
 import { killSwitch } from './kill-switch.ts';
 import { acquireLease, newWorkerId, releaseLease, renewLease, withLease, type Lease } from './leases.ts';
 import { apiMode, lifecycleOf } from './model.ts';
-import { claim, complete, enqueue, fail, reap, type JobKind, type JobRow } from './queue.ts';
+import { claim, complete, enqueue, fail, pruneJobs, reap, type JobKind, type JobRow } from './queue.ts';
 import { supervise, type AgentSnapshot, type Finding, type SupervisorLimits, type SupervisorPorts, type SupervisorState } from './risk-supervisor.ts';
 import { StreamEngine, type FeedEvent, type StreamAgentRow, type StreamFeed, type StreamOptions } from './stream-engine.ts';
 
@@ -121,7 +121,11 @@ export function createAgentRuntime(h: RuntimeHandlers, o: RuntimeOptions = {}) {
   }
 
   /** the other job kinds: backtests and wind-downs asked for through the API */
+  // V11 final validation: `pruneJobs` existed and nothing called it — finished jobs (done, cancelled, dead) were kept for ever. Once an
+  // hour per worker, with this pass; a failure of the pruning never fails the pass.
+  let jobsPrunedAt = 0;
   const jobsPass = async (): Promise<Record<string, string>> => {
+    if (Date.now() - jobsPrunedAt > 3_600_000) { jobsPrunedAt = Date.now(); await pruneJobs().catch(() => 0); }
     const r = await reap(qnow());
     for (const j of r.dead) if (j.agent_id) await journal(j.agent_id, { kind: 'error', code: 'job_dead_letter', severity: 'error', title: `${j.kind} job dead-lettered: its worker stopped answering`, body: j.last_error ?? '', ref: { job: j.id } });
     return drain(['backtest', 'wind_down'], (j) => (j.kind === 'backtest' && h.backtest ? () => h.backtest!(j) : j.kind === 'wind_down' && h.windDown ? () => h.windDown!(j) : null));

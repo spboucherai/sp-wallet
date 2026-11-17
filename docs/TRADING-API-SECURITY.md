@@ -67,11 +67,16 @@ backup) or in `SPW_API_KEY_PEPPER`. The comparison is constant-time; an unknown 
 
 ## 5. Things a reviewer should know
 
-- `mandate_id` on a key is a stored UUID. Nothing verifies that the mandate exists, is approved or is active.
-  The check `mandate_required` only tests that the column is set. The real check must be added with execution.
+- *(updated 2026-11-17 — this paragraph described the state before the execution work)* `mandate_id` on a key is
+  verified: `mandates.verifyKeyBinding` requires the mandate to exist, to be approved and active, and to name this key as
+  its principal — at creation, update and rotation of the key and at every order (`services/api/src/mandates/service.ts`;
+  `docs/v11/work/exec.md`, `contract-resync.md` Part 2 §4). A rotated key is unbound on purpose (the mandate names the
+  old id).
 - `orders:cancel` is treated as an execution scope and needs a mandate. A cancel reduces risk; the integrators may
   decide to relax it, in line with the audit's rule that a reduction is never blocked.
-- Key limits (`maxOrderNotionalUsd`, `maxDailyNotionalUsd`) are recorded and not enforced.
+- *(updated 2026-11-17)* Key limits (`maxOrderNotionalUsd`, `maxDailyNotionalUsd`) are enforced by the order service
+  (`orders/service.ts` `keyLimits`; `execution-paper.test.ts` "the key's own notional limits and restrictions"). A key's
+  daily limit does not bound its agents' paper orders (`V11-REMAINING-LIMITATIONS.md` 3.13).
 - Limiters and the failed-auth throttle are in memory: several API processes would each count separately.
 - The WebAuthn counter of the API's credential copy is updated on a key approval, as it is on login. The signer keeps
   its own counter.

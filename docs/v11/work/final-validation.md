@@ -110,3 +110,41 @@ made before it. When the fake agent's start took most of the 2.5 s (the third of
 two had been made. The product behaviour was right (the job was cancelled, 0.46 s after the cancel was wanted). The cancel is now
 wanted once the agent's line has been pushed and three heartbeats have followed it; the three assertions are kept and two were
 added (the line was pushed first; the cancel came from a heartbeat's answer). File alone, three times: 17 / 17.
+
+Tree `ae604c2` (fix 5), three more consecutive runs:
+
+| Run | Start (UTC) | Files | Tests | Result | Duration |
+|---|---|---:|---:|---|---|
+| 9 | 05:53:16 | 194 | 4 497 | **1 failed**: `trading-api.test.ts` "the usage log holds route patterns…" — `last_used_at` read as null | 82 s |
+| 10 | 05:54:39 | 194 | 4 497 | **all passed** | 81 s |
+| 11 | 05:56:02 | 194 | 4 497 | **all passed** — in 343 s: a reference interpreter of `lab-identity` hung again and was killed at 300 s; the retry of fix 2 let the comparison finish | 343 s |
+
+### Defect 6 — `last_used_at` read at once (test given a bounded poll)
+
+`keys.ts` refreshes `api_keys.last_used_at` without awaiting the write (`void sql…`), like the usage rows; the test read the
+column immediately. Same remedy as the two usage-log reads fixed in `23c0a23`: a bounded poll that returns as soon as the
+column is set. The product is unchanged.
+
+### Runs 12–18 (with a watchdog that samples any laboratory process older than 45 s)
+
+| Run | Start (UTC) | Result |
+|---|---|---|
+| 12 | 06:02:11 | **1 file failed**: `services/research-runner/test/sandbox.test.ts` — its `beforeAll` found no `probe.json` (ENOENT); 12 tests of the file skipped, 4 485 passed |
+| 13 | 06:03:36 | all passed (4 497) |
+| 14 | 06:04:57 | the same failure as run 12 |
+| 15 | 06:06:20 | all passed |
+| 16, 17, 18 | 06:08:28, 06:09:52, 06:11:17 | **all passed, three in a row** (194 files, 4 497 tests; 82 s, 83 s, 82 s) — tree `ae604c2` + the diagnostic below |
+
+**Not explained.** The `sandbox.test.ts` failure appeared in two of four runs made while documents and a test file of this
+checkout were being edited by this session, never in the eleven runs before nor in the three after; the file alone passed three
+times. The test now says why the probe wrote nothing (outcome, reason and the captured log) instead of `ENOENT`. The
+`lab-identity` hang (defect 2) was not caught by the watchdog in runs 12–18 either.
+
+**Honest reading of the eighteen runs:** the suite's assertions about the product all pass; on this laptop about one full run
+in three still met a load- or timing-dependent event before fixes 1, 2, 5 and 6, each of which is now bounded. No product defect
+was found by the suite itself (defects 1, 3, 4 and 7 were found by reading and measuring).
+
+### Defect 7 — finished agent jobs were never pruned (fixed)
+
+`agent-runtime/queue.ts` exports `pruneJobs` (finished jobs older than 14 days); nothing called it. The jobs pass now calls it
+once an hour per worker. Test: `agent-workers.test.ts` "retention: the jobs pass removes FINISHED jobs older than 14 days…".

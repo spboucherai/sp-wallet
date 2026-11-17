@@ -436,5 +436,6 @@ In a process without the HTTP server (`agent-worker-main.ts`) a hub can be built
 - **GMX** has no stream: one quote per fresh read of the venue, about every 6 s (10 in a minute in the smoke).
 - **One process**: no cross-process fan-out; connection limits are per process.
 - **Safari / iOS** were not run (Chromium only); the CSP names the websocket origin explicitly for the old Safari behaviour.
-- The SDK stream classes are not yet exported from the packages' index files, and the OpenAPI document does not (cannot)
-  describe the websocket.
+- *(updated 2026-11-17)* The SDK stream classes are exported from both packages' index files since `v11-contract2`
+  (`docs/v11/work/contract-resync.md` Part 3 §1). The OpenAPI document does not (cannot) describe the websocket: the
+  stream has no machine-readable contract (`V11-REMAINING-LIMITATIONS.md` 6.5).

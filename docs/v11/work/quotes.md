@@ -1,5 +1,11 @@
 # V11 — Real-time quotation engine with WebSocket: work note
 
+> **Note added 2026-11-17 (final validation) — this note is kept as written; two things it names have changed since.**
+> (1) `packages/trading-sdk/scripts/stream-stack.mts` no longer exists: the stream integration tests of both SDKs run on the
+> shared stack `packages/trading-sdk/scripts/test-stack.mts` since `v11-contract2`
+> (`docs/v11/work/contract-resync.md` Part 3). (2) The stream classes ARE exported from `src/index.ts` and `__init__.py`
+> since the same work; where this note says "not re-exported", the later note is current.
+
 Branch `v11-quotes`, from the local branch `v11` at `dbd62f2`; the local `v11` of the end of the work (`8b489d7`) is merged in.
 Written 2026-11-15 (the runs below are stamped 2026-11-16 UTC).
 Scope: READ-ONLY public market data. The engine never places, signs or cancels anything; no production access, no production

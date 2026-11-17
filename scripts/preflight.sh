@@ -25,6 +25,7 @@ FAILS=0; WARNS=0
 ok()   { echo "ok    $1"; }
 warn() { echo "WARN  $1"; WARNS=$((WARNS + 1)); }
 fail() { echo "FAIL  $1"; FAILS=$((FAILS + 1)); }
+note() { echo "note  $1"; }
 mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0; }
 
 echo "== build"
@@ -32,11 +33,11 @@ if git rev-parse --short HEAD >/dev/null 2>&1; then
   HEAD_SHA=$(git rev-parse --short HEAD); ok "checkout at $HEAD_SHA"
   if [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then warn "the checkout has uncommitted changes: what runs will not be exactly $HEAD_SHA"; fi
 else warn "not a git checkout: the commit cannot be checked"; HEAD_SHA=""; fi
-for f in dist/api.mjs dist/signer.mjs dist/web/index.html; do
+for f in dist/api.mjs dist/signer.mjs dist/agents.mjs dist/research-runner.mjs dist/web/index.html; do   # V11: agents.mjs is the fourth bundle (the separate agents worker)
   if [ -s "$f" ]; then ok "$f present"; else fail "$f is missing: run pnpm build"; fi
 done
 if [ -s dist/api.mjs ]; then
-  NEWEST_SRC=$(find services/api/src packages/core/src packages/swap/src packages/derivatives/src -name '*.ts' -newer dist/api.mjs 2>/dev/null | head -1)
+  NEWEST_SRC=$(find services/api/src packages/core/src packages/swap/src packages/derivatives/src packages/trading/src -name '*.ts' -newer dist/api.mjs 2>/dev/null | head -1)
   if [ -n "$NEWEST_SRC" ]; then fail "dist/api.mjs is older than the sources (e.g. $NEWEST_SRC): rebuild"; else ok "dist/api.mjs is newer than the API sources"; fi
   if [ -n "$HEAD_SHA" ]; then if grep -q "\"$HEAD_SHA\"" dist/api.mjs; then ok "dist/api.mjs was built from $HEAD_SHA"; else warn "dist/api.mjs does not carry commit $HEAD_SHA (built from another commit, or SPW_COMMIT was set)"; fi; fi
 fi
@@ -62,14 +63,43 @@ for v in SPW_ORIGIN SPW_RP_ID DATABASE_URL SPW_SIGNER_SECRET; do if has "$v"; th
 for v in SPW_DERIV_LIVE_MAINNET RESEARCH_DATABASE_URL SPW_RESEARCH_RUNNER_SECRET; do
   if has "$v"; then ok "$v is set"; else warn "$v is not set (optional — see the table in docs/runbooks/deploy.md; the API will log it as OFF)"; fi
 done
+# V11 — the execution locks. Only the exact value `on` opens one; this script reads NAMES, so a lock that is SET is reported for a
+# human to confirm against the start-up line (`[startup] capabilities: …` names every lock and what is missing).
+for v in SPW_TRADING_API_EXECUTION SPW_DERIV_MANDATE_MAINNET SPW_DERIV_GMX_LIVE SPW_DERIV_MM_MAINNET SPW_DERIV_MM_TESTNET; do
+  if has "$v"; then warn "$v is SET: if its value is on, an execution lock is open — confirm it was decided (docs/V11-DEPLOYMENT.md, authorizations)"
+  else ok "$v is not set (lock closed: the default)"; fi
+done
+if has SPW_DERIV_MM_MAINNET && ! { has SPW_DERIV_LIVE_MAINNET && has SPW_DERIV_MANDATE_MAINNET && has SPW_TRADING_API_EXECUTION; }; then warn "SPW_DERIV_MM_MAINNET is set without the three other settings it needs (SPW_DERIV_LIVE_MAINNET, SPW_DERIV_MANDATE_MAINNET, SPW_TRADING_API_EXECUTION): market making stays off"; fi
+if has SPW_DERIV_MM_TESTNET && ! has SPW_TRADING_API_EXECUTION; then warn "SPW_DERIV_MM_TESTNET is set without SPW_TRADING_API_EXECUTION: testnet market making stays off"; fi
+# SPW_WORKERS: on (default) | off | api (every worker but the agents runtime) | agents (the separate worker only). Any other value starts NO worker, silently.
+if has SPW_WORKERS; then
+  if [ -z "$PM2" ]; then case "${SPW_WORKERS:-}" in on|off|api|agents) ok "SPW_WORKERS has a known value" ;; *) fail "SPW_WORKERS has a value the API does not know (on, off, api, agents): no background worker would start" ;; esac
+  else note "SPW_WORKERS is set in the PM2 process: its value must be on, off, api or agents (api only when a separate sp-wallet-agents process runs dist/agents.mjs with SPW_WORKERS=agents)"; fi
+else ok "SPW_WORKERS is not set (default: every worker in the API process)"; fi
 if has SPW_LAB_SANDBOX && [ -z "$PM2" ] && [ "${SPW_LAB_SANDBOX:-}" = off ]; then fail "SPW_LAB_SANDBOX=off: strategy code would run without OS confinement"; fi
 if has SPW_BROADCAST && [ -z "$PM2" ] && [ "${SPW_BROADCAST:-}" = off ]; then warn "SPW_BROADCAST=off: nothing would be relayed (test mode)"; fi
+
+echo "== secrets outside the database (V11)"
+# The API-key pepper and the webhook signing secrets are in a FILE, on purpose not in the database: a stolen dump cannot verify a key.
+# scripts/backup.sh does not contain it. Losing or regenerating it invalidates every API key.
+if [ -n "$PM2" ] && has SPW_DATA_DIR; then note "SPW_DATA_DIR is set in the PM2 process (value not read): trading-api-secrets.json is in THAT directory — check it is mode 600 and in the secrets backup"
+else
+  SECRETS="${SPW_DATA_DIR:-$HOME/.config/sp-wallet}/trading-api-secrets.json"
+  if [ -f "$SECRETS" ]; then
+    MODE=$(stat -f %Lp "$SECRETS" 2>/dev/null || stat -c %a "$SECRETS" 2>/dev/null || echo '?')
+    if [ "$MODE" = 600 ]; then ok "trading-api-secrets.json present, mode 600 — it must be in the secrets backup (it is NOT in the database dump)"; else fail "trading-api-secrets.json has mode $MODE (expected 600)"; fi
+  else ok "trading-api-secrets.json does not exist yet (created at the first API key or webhook; back it up from then on)"; fi
+fi
+if has SPW_API_KEY_PEPPER; then note "SPW_API_KEY_PEPPER is set: it replaces the pepper of the file — losing the variable at a restart invalidates every API key"; fi
 
 echo "== signer"
 SIGNER_URL="${SPW_SIGNER_URL:-http://127.0.0.1:8651}"
 HOSTPORT=$(printf '%s' "$SIGNER_URL" | sed -E 's#^[a-z]+://##; s#/.*$##'); SH=${HOSTPORT%%:*}; SP=${HOSTPORT##*:}
 if [[ "$SP" =~ ^[0-9]+$ ]] && (exec 3<>"/dev/tcp/$SH/$SP") 2>/dev/null; then ok "the signer's port answers ($SH:$SP; a TCP connection only — nothing was sent)"
 else fail "nothing listens at the signer address $SH:$SP (SPW_SIGNER_URL; on the API node this is the relay, see operations.md)"; fi
+
+note "signer node (not checked from here): back up journal.jsonl and journal-*.jsonl WITH state.json (since V11 the state holds only a reference to the journal); never back up state.json.lock or control.sock"
+note "gateway (not checked from here): the quote stream is a websocket on /api/v1/stream — Caddy's reverse_proxy needs no change; a Caddy reload closes the sockets (clients reconnect) unless stream_close_delay is set"
 
 echo "== disk and backup"
 FREE=$(df -Pk "$HOME" | awk 'NR==2 { printf "%d", 100 - $5 }')
