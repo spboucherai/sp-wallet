@@ -20,9 +20,14 @@
 //   - `control`: a local endpoint for the two owner actions a key can never do — POST <control>/kill-switch/release (owner
 //     session + passkey) and PUT <control>/command-defaults { defaults } (owner session).
 // Paper orders are filled by the paper engine against the venue's REAL public order book: nothing leaves this machine but reads.
+//
+// For a soak (V11 final validation, scripts/soak-v11.py) — none of this is used by the SDK tests:
+//   SPW_STACK_API_LOG=<file>   the API's stdout and stderr are appended to that file (they are discarded otherwise)
+//   SPW_STACK_KEEP=1           the database and the temporary directory are NOT removed at exit; the JSON line names them
+//   GET <control>/owner?path=/api/v1/…   an owner READ (GET only) with the stack's owner session: stream statistics, risk state, monitor
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
@@ -38,6 +43,7 @@ const label = (process.argv[2] ?? 'sdk').replace(/[^a-z0-9_]/g, '').slice(0, 20)
 const say = (o: unknown): void => { process.stdout.write(JSON.stringify(o) + '\n'); };
 const children: ChildProcess[] = [];
 let db: TestDb | null = null, dir = '';
+const KEEP = process.env.SPW_STACK_KEEP === '1', API_LOG = process.env.SPW_STACK_API_LOG ?? '';
 
 let stopping: Promise<void> | null = null;
 /** idempotent: stdin 'end' and 'close' (and a signal) may all ask for it; the process exits only when the cleanup is done */
@@ -46,6 +52,7 @@ function shutdown(code: number): Promise<never> {
     for (const c of children) { try { c.kill('SIGTERM'); } catch { /* gone */ } }
     await new Promise((r) => setTimeout(r, 150));
     for (const c of children) { try { c.kill('SIGKILL'); } catch { /* gone */ } }
+    if (KEEP) return;                                                    // a soak keeps its database and its directory for the report
     try { await db?.drop(); } catch { /* the global teardown or scripts/clean-test-dbs.sh removes it */ }
     if (dir) rmSync(dir, { recursive: true, force: true });
   })();
@@ -65,10 +72,11 @@ async function main(): Promise<void> {
   execFileSync('node', ['dist/signer.mjs', 'init'], { cwd: ROOT, env: signerEnv, stdio: 'ignore' });
   const setupToken = execFileSync('node', ['dist/signer.mjs', 'setup-token'], { cwd: ROOT, env: signerEnv, encoding: 'utf8' }).trim();
   children.push(spawn('node', ['dist/signer.mjs', 'serve'], { cwd: ROOT, env: signerEnv, stdio: 'ignore' }));
-  const api = spawn('node', ['dist/api.mjs'], { cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'],
+  const logFd = API_LOG ? openSync(API_LOG, 'a') : null;
+  const api = spawn('node', ['dist/api.mjs'], { cwd: ROOT, stdio: logFd === null ? ['ignore', 'ignore', 'pipe'] : ['ignore', logFd, logFd],
     env: { ...signerEnv, DATABASE_URL: db.url, SPW_SIGNER_URL: `http://127.0.0.1:${signerPort}`, PORT: String(port), SPW_BROADCAST: 'off', SPW_DATA_DIR: `${dir}/data` } });
   children.push(api);
-  let apiErr = ''; api.stderr!.on('data', (c: Buffer) => { apiErr = (apiErr + c.toString()).slice(-2000); });
+  let apiErr = ''; api.stderr?.on('data', (c: Buffer) => { apiErr = (apiErr + c.toString()).slice(-2000); });
   let up = false;
   for (let i = 0; i < 120 && !up; i++) { up = await fetch(`${base}/api/v1/health/live`).then((r) => r.ok, () => false); if (!up) await new Promise((r) => setTimeout(r, 250)); }
   if (!up) throw new Error(`the API did not start: ${apiErr.slice(-400)}`);
@@ -152,6 +160,7 @@ async function main(): Promise<void> {
           return ownerCall('POST', '/api/v1/risk/kill-switch/release', p.needed ? { assertion: owner.assert(Buffer.from(p.options.challenge, 'base64url')) } : {});
         }
         if (req.url === `/${token}/command-defaults` && req.method === 'PUT') return ownerCall('PUT', '/api/v1/developer/command-defaults', JSON.parse(raw || '{}'));
+        if (req.method === 'GET' && req.url?.startsWith(`/${token}/owner?path=`)) { const target = decodeURIComponent(req.url.slice(`/${token}/owner?path=`.length)); if (!target.startsWith('/api/v1/')) throw new Error('owner reads are under /api/v1/'); return ownerCall('GET', target); }
         throw new Error('unknown control action');
       })().then((j) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(j ?? {})); }, (e: Error) => { res.writeHead(500, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: e.message })); });
     });
@@ -164,6 +173,7 @@ async function main(): Promise<void> {
   const secret = randomBytes(32).toString('base64url'), timestamp = Math.floor(Date.now() / 1000);
   const body = JSON.stringify({ app: 'sp-wallet', id: randomUUID(), event: 'key.revoked', ts: new Date().toISOString(), data: { keyId: keys.revoked.id, name: 'sdk revoked', reason: 'sdk integration test — é ü 漢' } });
   say({ ok: true, baseUrl: base, keys, paper: { accountId: account, instrument: INSTRUMENT, maxOrderNotionalUsd: MANDATE.maxOrderNotionalUsd }, live: { accountId: liveAccount }, control: controlUrl,
+    ...(KEEP ? { kept: { database: db!.url, dir, apiPid: api.pid } } : { apiPid: api.pid }),
     webhook: { secret, timestamp, body, signature: webhookSignature(secret, timestamp, body) } });
 }
 

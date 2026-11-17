@@ -1,13 +1,16 @@
 # SP Wallet V11 — test results
 
-Evidence compiled from the work notes (`docs/v11/work/*.md`), each written by the workstream that ran the tests. Counts
-are **as reported in the note named in the last column**, on the branch and date of that note; no suite was run to write
-this page. The final run on the merged tree is a placeholder at the end, to be filled by the main session.
+Sections 1–5: evidence compiled from the work notes (`docs/v11/work/*.md`), each written by the workstream that ran the
+tests. Counts are **as reported in the note named in the last column**, on the branch and date of that note; no suite was
+run to write those sections. **Section 6 is different: every line of it was run for this page**, on the merged tree, on
+2026-11-16 and 2026-11-17 (`docs/v11/work/final-validation.md` has each command and its output).
 
 Three statements frame everything below:
 
 1. **No live order was ever sent.** No test, script or person of V11 sent an order, a cancel, a transfer or any signed
-   action to a venue or a chain. No funded account, no testnet account and no real key was used by any workstream.
+   action to a venue or a chain. No funded account, no testnet account and no real key was used by any workstream — the
+   final validation included. Its fork runs sign and execute on private anvil chains on 127.0.0.1: a fork run is not a
+   mainnet execution.
 2. **The signer changes are proven on the real signer code against fake venues**: the real `Signer` class (in process or
    as a local process on a temporary directory, public test mnemonic), a scripted Hyperliquid, a scripted Arbitrum chain.
 3. **What ran against real external systems is read-only public market data**, listed in section 3.
@@ -15,7 +18,8 @@ Three statements frame everything below:
 Evidence levels used in the tables:
 **U** unit / pure · **I** integration on a real local server + PostgreSQL with scripted or recorded venues ·
 **S** real signer code in the loop, fake venue · **R** recorded real venue answers replayed · **L** live read-only call to
-a public endpoint · **B** real browser (Chromium) · **F** anvil fork (V10 evidence, not re-run in V11).
+a public endpoint · **B** real browser (Chromium) · **F** anvil fork (V10 evidence; **re-run on the V11 tree on 2026-11-17**,
+section 6.4).
 
 ---
 
@@ -145,7 +149,7 @@ reference; a Solana-source CCTP replay test; **any live call to 0x or 1inch**.
 | `apps/web/test/quotes.test.ts` | 13 | U | one socket per tab, reconnect, fallback, batching, freshness | idem |
 | SDK stream tests | 8 + 5 (TypeScript), 9 + 5 (Python) in `quotes.md`; reported as 14 (TypeScript) and "6 passed" + 1 lazy-import test (Python) after `v11-contract2` | U + I + L | header and ticket connections, refusals, live Hyperliquid quotes | `quotes.md` §7; `contract-resync.md` Part 3 |
 
-### 2.8 Market making (core only — not integrated on `v11`)
+### 2.8 Market making (core, then the integration)
 
 | Test file | Count | Level | Proves | Note |
 |---|---:|---|---|---|
@@ -154,7 +158,20 @@ reference; a Solana-source CCTP replay test; **any live call to 0x or 1inch**.
 | `packages/trading/test/mm.test.ts`, `quoting-mandate.test.ts` | 40 + 3 | U, property tests | never a crossing pair, budget, inventory bound, attribution identity | §1.4, §1.5 |
 | `services/api/test/mm-engine.test.ts` | 39 | S + R (36-minute recorded BTC tape, **modelled** fills) | start, quoting, each breaker, lost answers, crash and restart, signer down, out-of-mandate policies stopped by the signer, the three locks | §1.6 |
 
-<!-- PENDING: market-making integration (branch v11-mm-live) — its tests (files, counts), what ran on paper and on recorded tapes, and the explicit statement of what was not run on testnet or mainnet -->
+Integration (`v11-mm-live`, note `mm-live.md`) — the rows above still hold; these were added or rewritten:
+
+| Test file | Count | Level | Proves | Note |
+|---|---:|---|---|---|
+| `services/api/test/mm-live.test.ts` | 20 | S + R + I (real signer code in process, the venue double `mm-sim-venue.ts`, PostgreSQL, the agents runtime with two workers) | the quoting mandate in the SAME lifecycle as the trading mandates (25 out-of-bounds values each refused with its code; the sheet; one prompt is not enough; a lost approval answer → `pending_signer` → adopted; a section altered after approval → `mandate_integrity`; exclusivity both ways); a live session through the runtime: first signature is `scheduleCancel`, fills on both sides with the attribution identity, hard-limit unwind as unified orders, kill switch, a lock closed mid-session, unknown outcome of a batch, user-stream gap, signer down, restart with resting orders, a worker that stops, flatten with no worker, wind-down at expiry; every lock, the default, the exact-value rule | `mm-live.md` §1–§3 |
+| `services/api/test/mm-units.test.ts` | 14 | U + R | markouts and attribution hand-checked; the fill tie-break; session hours; **a simulated hour** on the recorded tape played twice: 485 of 1 200 weight a minute, peak 878 | §2, §4 |
+| `services/api/test/mm-engine.test.ts` | 39 | S + R | the engine on the live adapter, each of the eleven breakers, the four out-of-mandate policies stopped by the signer | §2 |
+| `services/api/test/agent-stream.test.ts` (10 of 16 rewritten) | 16 | R | PAPER market making on recorded mainnet frames through the same engine | §2 |
+| `apps/web/test/mm.test.ts` | 36 | U | checklist order and gating, the negative evidence shown as it is, every form field with its bound and no client-side clamping, refusal codes verbatim, PAPER labelled SIMULATED | §6 |
+| `tests/e2e/mm.spec.ts` | 1 | B (dev stack, paper) | PAPER end to end in a browser; LIVE with every lock off up to where the server refuses (`mandate_required`; no approval sheet and no passkey prompt reachable) | §6; re-run in section 6 |
+
+**Not run, by anyone: the testnet path (implemented, with its own lock), and anything on mainnet.** Not covered by a test:
+a worker process killed with SIGKILL during a session (simulated by a worker that stops being called); alert delivery of
+the six `agent.mm_*` kinds end to end; the approval, recovery, revocation and LIVE session view in a browser.
 
 ---
 
@@ -173,9 +190,10 @@ reference; a Solana-source CCTP replay test; **any live call to 0x or 1inch**.
 | Kraken public API (`SystemStatus`, `Depth` ×2) | 2026-11-15 | answer shapes for the freshness check | `stab-signer.md` |
 | SDK integration and stream tests; `agent-worker-process`; `agents-bind.spec.ts` | 2026-11-15/16 | public market data read by the local stack (paper fills against the public book) | `sdks.md`, `agents-bind.md` |
 
-Browser runs (Chromium only, local stacks): `developer.spec.ts`, `risk.spec.ts`, `agents-bind.spec.ts`,
-`v11-quotes-live.mts`, and Private Markets opened by hand at 390 × 844 (French) and 1280 × 900 (English) against
-recorded fixtures (`private-markets.md` §6). **Safari and iOS: never.**
+Browser runs reported by the workstreams (Chromium only, local stacks): `developer.spec.ts`, `risk.spec.ts`,
+`agents-bind.spec.ts`, `mm.spec.ts`, `v11-quotes-live.mts`, Private Markets opened by hand against recorded fixtures
+(`private-markets.md` §6), and the interface pass's matrix (`ui.md` §8: 52 tests of six `v11-*` specs, the existing specs
+adapted). The whole matrix was run again on the merged tree: section 6.3. **Safari and iOS: never.**
 
 ---
 
@@ -184,17 +202,17 @@ recorded fixtures (`private-markets.md` §6). **Safari and iOS: never.**
 | Capability | Highest level reached |
 |---|---|
 | Hyperliquid live orders (manual, mandate, by key, by agent) | S — real signer code, scripted venue |
-| GMX v2 orders | F in V10 (anvil fork, real bytecode: creation, simulated execution, keeper cancellation); V11 unified path on a scripted chain only |
-| Quoting mandate, live adapter, dead man's switch | S + recorded tape; `scheduleCancel` never sent to the venue |
+| GMX v2 orders | F in V10 (anvil fork, real bytecode: creation, simulated execution, keeper cancellation) — **not re-run in the final validation** (`fork-gmx.mts` was not in its list); V11 unified path on a scripted chain only |
+| Quoting mandate, live adapter, runtime, dead man's switch | S + recorded tape, through the integrated runtime since `v11-mm-live`; `scheduleCancel` never sent to the venue; the testnet path never run |
 | Trading-mandate approval (two passkey prompts) | S with a software passkey; not in a browser |
 | Spot orders of the owner through the trading API | I with a stand-in port for the swap route |
 | Attached SL/TP | paper only |
 | Stream agents | paper on a simulated book; second venue scripted |
 | Strategies | backtest and paper; out-of-sample verdict: no edge |
-| CCTP, THORChain | scripted chains and operators (V10: forks and mainnet simulation) |
+| CCTP, THORChain | scripted chains and operators; CCTP and the EVM swap path again on anvil forks on 2026-11-17 (section 6.4) |
 | 0x, 1inch | documentation-derived fixtures |
-| V10 → V11 migration | a fixture database of the old shape; `preflight.sh --db` on the real schema is part of the deployment plan, not yet run |
-| Signer state migration | an old-format `state.json` written by the old store code |
+| V10 → V11 migration | a fixture database of the old shape; **and, on 2026-11-17, a database created and used by the V10 build itself**, migrated by V11, used by V10 again, then by V11 again (section 6.6). `preflight.sh --db` on the real schema is part of the deployment plan, not yet run |
+| Signer state migration | an old-format `state.json` written by the old store code; **and both versions' signer code and bundles on one directory, back and forth** (section 6.6) |
 
 ## 5. Never exercised on mainnet, on testnet, or with a funded account
 
