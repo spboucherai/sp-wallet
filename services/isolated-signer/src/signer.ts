@@ -23,6 +23,7 @@ import { noVenueReader, type VenueReader } from './venue-read.ts';
 import { venueQuotingApprove, venueQuotingRevoke, venueQuotingSign, venueQuotingStatus, type VenueQuotingSignRequest } from './venue-quoting.ts'; // V11 market making
 import { checkPolicyNoSpend } from '@spw/core'; // v8 GMX: decrease / cancel move no asset amount
 import { gmxAuthorize, gmxPlainVerdict, gmxPrepare, gmxRevoke, gmxStatus } from './venue-gmx.ts'; // v8 GMX v2 orders (wallet transactions built here)
+import { lockedInput, nftAllowApply, nftSign, nftStatus, utxoLockStatus, utxoLocksApply, type NftCtx } from './nft.ts'; // NFT delivery 2
 
 export class SignerError extends Error { constructor(public code: string, msg: string) { super(msg); } }
 const sha = (s: string | Uint8Array) => createHash('sha256').update(s).digest();
@@ -50,8 +51,19 @@ export class Signer {
       venueMandates: venueMandateStatus(this.venueCtx()),
       venueQuotingMandates: venueQuotingStatus(this.venueCtx()), // V11
       gmx: gmxStatus(this.venueCtx()), // v8
+      nft: nftStatus(this.nftCtx()), // NFT delivery 2: effective NFT policy (file + defaults), today's count, the allow-list
+      utxoLocks: utxoLockStatus(this.nftCtx()), // NFT delivery 2: locked outpoints per Bitcoin-style network
     };
   }
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  // NFT delivery 2 (nft.ts). An NFT transfer has its own intent type, its own route and its own builder; the lock list of
+  // Bitcoin-style outpoints and the NFT allow-list change only with the owner's passkey. None of this adds a passkey-less path.
+  private nftCtx(): NftCtx { return { keys: this.keys, store: this.store, now: this.now, verify: (a, c) => this.verifyAssertion(a, c), fail: (code, msg) => new SignerError(code, msg),
+    signEvm: (tx) => privateKeyToAccount(`0x${Buffer.from(this.keys.evmPriv).toString('hex')}`).signTransaction(tx), signSol: (msg) => ed25519.sign(msg, this.keys.solSeed) }; }
+  nftSign(intent: unknown, assertion?: AuthenticationResponseJSON) { return nftSign(this.nftCtx(), intent, assertion); }
+  utxoLocks(request: unknown, assertion?: AuthenticationResponseJSON) { return utxoLocksApply(this.nftCtx(), request, assertion); }
+  nftAllow(request: unknown, assertion?: AuthenticationResponseJSON) { return nftAllowApply(this.nftCtx(), request, assertion); }
 
   // ---------------------------------------------------------------------------------------------------------------------
   // Live derivatives (venue.ts). The trading key is a dedicated key; the main key signs only the venue's agent approval,
@@ -446,6 +458,9 @@ export class Signer {
     if (i.from !== own) deny('wrong_source', 'source address is not controlled by this signer');
     if (i.swap || i.bridge ? i.to !== own : i.to === own) deny('self_send', i.swap ? 'a swap must deliver to the wallet itself' : i.bridge ? 'a bridge must deliver to the wallet itself' : 'destination equals source');
     if (st.state.used[i.proposalId] !== undefined) deny('replay', 'proposal already signed');
+    // NFT delivery 2 — inscription safety: an input the owner locked (passkey, `POST /utxo/locks`) is never spent by a send or a
+    // cross-chain swap, whatever the API selected. With an empty lock list this line changes nothing.
+    if (i.btc) { const locked = lockedInput(st, i.network, i.btc.inputs); if (locked) deny('utxo_locked', `input ${locked} is locked (possible inscription): unlock it with the passkey before spending it`); }
     // venue deposits (venue-collateral.ts): pinned bridge, native USDC, floor above the venue minimum; a plain transfer to a venue bridge is refused
     const vd = venueDepositVerdict(i, own!);
     if (vd) deny('venue_deposit', vd);
