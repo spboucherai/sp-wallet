@@ -1,0 +1,8 @@
+{
+ "capturedAt": "2026-11-17T07:55:00Z",
+ "endpoint": "GET /v1/exchangerate/BTC/USD (with a made-up key of the right shape)",
+ "status": 401,
+ "body": {
+  "error": "Invalid API key format."
+ }
+}

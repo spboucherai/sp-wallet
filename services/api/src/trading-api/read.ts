@@ -37,7 +37,7 @@ export interface ReadDeps {
   gmx: () => Pick<GmxService, 'status'>;
   /** the order service of this server: its projection queue and its view of a unified order (GET /orders lists the unified table) */
   orders: () => Pick<OrderService, 'drain' | 'view'>;
-  prices: () => Promise<Record<string, { usd: number }> | null>;
+  prices: () => Promise<Record<string, { usd: number; priceAt?: string | null; source?: string; divergent?: boolean; divergenceBps?: number | null }> | null>;
   /** the spot/perp strategy libraries (they start laboratory processes: injectable) */
   library?: () => Promise<{ kind: 'spot' | 'perp'; path: string; sha256: string; meta: unknown }[]>;
   now?: () => number;
@@ -236,7 +236,9 @@ export function createReads(deps: ReadDeps) {
     const b = await balances(p, {}), px = await deps.prices().catch(() => null), errors: PartialError[] = [...b.errors];
     if (!px) errors.push({ source: 'prices', message: 'the price feed is off or unavailable: the wallet is listed without a value' });
     // money leaves this API as decimal strings: the feed's number is turned into one once, and every product and sum is exact
-    const rows = b.balances.map((r) => { const usd = px?.[r.symbol]?.usd, price = usd === undefined ? null : priceString(usd); return { ...r, valueUsd: r.display !== null && price !== null ? usdValue(r.display, price) : null }; });
+    // v11: each row names the source of its price, that price's own date, and whether a second source disagrees (never averaged)
+    const rows = b.balances.map((r) => { const m = px?.[r.symbol], usd = m?.usd, price = usd === undefined ? null : priceString(usd);
+      return { ...r, valueUsd: r.display !== null && price !== null ? usdValue(r.display, price) : null, priceSource: m?.source ?? (m ? 'coingecko' : null), priceAt: m?.priceAt ?? null, priceDivergent: m?.divergent ?? false, priceDivergenceBps: m?.divergenceBps ?? null }; });
     const priced = rows.filter((r) => r.valueUsd !== null), held = rows.filter((r) => r.amount !== null && r.amount !== '0');
     const accts = await accounts(p, errors);
     const walletUsd = px ? D.str(priced.reduce((t, r) => D.add(t, D.from(r.valueUsd!)), D.zero)) : null;

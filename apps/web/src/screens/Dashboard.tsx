@@ -163,6 +163,15 @@ export function DashboardPanels({ nav }: { nav: Nav }) {
       <Panel id="db-freshness" title={t('v11DbFreshness')} wide>
         <Card className="!p-4"><dl>
           <Fact k={t('v11DbFreshWallet')}>{pf.data?.prices && pf.data.pricesAsOf ? <PriceFreshness at={pf.data.pricesAsOf} stale={pf.data.pricesStale} /> : <span className="text-mute">{t('v11DbFreshNone')}</span>}</Fact>
+          {/* v11, two price sources: which ones answered, whether a price fell back to the second one, whether they disagree (never averaged) */}
+          {pf.data?.prices && pf.data.priceSources && <Fact k={t('abSources')} testid="db-price-sources"><span className="flex flex-wrap items-center gap-1.5" data-second={pf.data.priceSources.second ?? ''} data-divergent={pf.data.priceSources.divergent.length} data-fallback={pf.data.priceSources.fallback.length}>
+            <Tag tone="mute" icon="info">{t(pf.data.priceSources.second ? 'abSourcesTwo' : 'abSourcesOne')}</Tag>
+            {pf.data.priceSources.fallback.length > 0 && <Tag tone="warn" icon="warn">{t('abFallback', { n: pf.data.priceSources.fallback.length })}</Tag>}
+            {pf.data.priceSources.divergent.length > 0 ? <Tag tone="danger" icon="warn">{t('abDivergent', { n: pf.data.priceSources.divergent.length })}</Tag>
+              : pf.data.priceSources.compared > 0 && <Tag tone="ok" icon="check">{t('abAgree', { n: pf.data.priceSources.compared, bps: Math.round(pf.data.priceSources.maxDivergenceBps ?? 0) })}</Tag>}</span>
+            {(pf.data.priceSources.fallback.length > 0 || pf.data.priceSources.divergent.length > 0) && <span className="mt-1 block break-words text-[12.5px] text-mute">
+              {[pf.data.priceSources.fallback.length > 0 ? t('abFallbackList', { symbols: pf.data.priceSources.fallback.join(', ') }) : '', pf.data.priceSources.divergent.length > 0 ? t('abDivergentList', { symbols: pf.data.priceSources.divergent.join(', '), bps: Math.round(pf.data.priceSources.maxDivergenceBps ?? 0) }) : ''].filter(Boolean).join(' ')}</span>}
+            {!pf.data.priceSources.second && <span className="mt-1 block text-[12.5px] text-mute">{t('abSourcesOneNote')}</span>}</Fact>}
           <Fact k={t('v11DbFreshSummary')}><Tag tone="mute" icon="clock">{t('v11DbReadAgo', { age: ago(t, s.ts) })}</Tag></Fact>
           {ids.length === 0 ? <Fact k={t('v11DbFreshMarks')}><span className="text-mute">{t('v11DbFreshNoMarks')}</span></Fact>
             : ids.map((id) => <Fact key={id} k={<span className="break-all">{t('v11DbFreshMark', { symbol: symbolOf(id), venue: venueName(id.slice(0, id.indexOf(':'))) })}</span>}><QuoteDot id={id}><span className="text-[12.5px] text-mute">{t('v11DbFreshPolled')}</span></QuoteDot></Fact>)}

@@ -20,6 +20,8 @@ interface Exposure { asset: string; spotUsd: number; perpLongUsd: number; perpSh
 interface Connector { id: string; group: string; name: string; ok: boolean | null; lastSuccessAt: number | null; ageSec: number | null; detail: string }
 interface Health {
   asOf: number; connectors: Connector[];
+  /** v11: API Bricks, the optional keyed market-data provider — `needsKey` without its key, else its daily credit counter */
+  marketData?: { apibricks: { configured: boolean; needsKey: boolean; status?: 'ok' | 'idle' | 'degraded' | 'down'; reason?: string | null; budget?: { used: number; ceiling: number; remaining: number; exhausted: boolean; resetsAt: string } } };
   loopsNote?: string | null; lab?: { mode: 'sandbox-exec' | 'off' | 'unavailable'; ok: boolean; reason: string | null } | null; capabilities?: { id: string; on: boolean; missing: string[]; why: string }[];
   loops: { name: string; everyMs: number; runs: number; lastOkAt: number | null; lastError: string | null; failures: number; ageSec: number | null; late: boolean }[];
   backup: { visible: boolean; lastAt: number | null; files: number; ageHours: number | null }; disk: { freePct: number; freeGb: number; totalGb: number } | null;
@@ -148,9 +150,14 @@ export function Monitor({ open }: { open: (path: string) => void }) {
 
       {/* the optional capabilities of the server: an OFF one names the variables that are missing (names only) */}
       {h?.capabilities && <Section title={t('dzMoCapabilities')}><Card className="!px-4 !py-1.5">
-        <ul className="divide-y divide-line" data-testid="monitor-capabilities">{h.capabilities.map((c) => <li key={c.id} className="flex min-h-[52px] items-center gap-3 py-2.5" data-on={c.on}>
+        <ul className="divide-y divide-line" data-testid="monitor-capabilities">{h.capabilities.filter((c) => c.id !== 'market_data_apibricks').map((c) => <li key={c.id} className="flex min-h-[52px] items-center gap-3 py-2.5" data-on={c.on}>
           <span className="min-w-0 flex-1"><span className="block text-[14.5px] font-medium leading-snug">{t((c.id.startsWith('deriv_mm_') ? `mmCap_${c.id}` : `hdCap_${c.id}`) as Key)}</span>{!c.on && c.missing.length > 0 && <span className="mt-0.5 block break-all font-mono text-xs text-mute">{c.missing.join(' + ')}</span>}</span>
-          <span className="shrink-0"><Status ok={c.on ? true : c.id === 'research_readonly_db' || c.id === 'web_app' || c.id === 'deriv_live_mainnet' || c.id === 'deriv_mandate_mainnet' || c.id === 'research_runner' ? null : false}>{c.on ? t('hdCapOn') : t('hdCapOff')}</Status></span></li>)}</ul></Card></Section>}
+          <span className="shrink-0"><Status ok={c.on ? true : c.id === 'research_readonly_db' || c.id === 'web_app' || c.id === 'deriv_live_mainnet' || c.id === 'deriv_mandate_mainnet' || c.id === 'research_runner' ? null : false}>{c.on ? t('hdCapOn') : t('hdCapOff')}</Status></span></li>)}
+          {/* v11: API Bricks (second, keyed market-data source): the key is missing, or the day's credit counter; `quota` is said, never silent */}
+          {h.marketData && (() => { const a = h.marketData.apibricks, b = a.budget; return <li className="flex min-h-[52px] items-center gap-3 py-2.5" data-testid="monitor-apibricks" data-status={a.configured ? a.status : 'needs-key'}>
+            <span className="min-w-0 flex-1"><span className="block text-[14.5px] font-medium leading-snug">{t('abCap')}</span>
+              <span className="mt-0.5 block text-xs text-mute">{!a.configured ? <span className="break-all font-mono">APIBRICKS_API_KEY</span> : b ? t(b.exhausted || a.reason === 'quota' ? 'abQuotaOut' : 'abBudget', { used: b.used, ceiling: b.ceiling, at: when(new Date(b.resetsAt), locale) }) : ''}</span></span>
+            <span className="shrink-0"><Status ok={!a.configured ? null : a.status === 'down' ? false : a.status === 'degraded' ? null : true}>{t(!a.configured ? 'abNeedsKey' : a.status === 'down' ? (a.reason === 'quota' ? 'abDownQuota' : 'abDown') : a.status === 'degraded' ? 'abDegraded' : 'hdCapOn')}</Status></span></li>; })()}</ul></Card></Section>}
 
       {h && <Section title={t('dzMoVersions')}><Card className="!py-2"><dl>
         <Fact k={t('moApiVersion')} mono>{h.versions.apiVersion}{h.versions.apiCommit ? ` · ${h.versions.apiCommit}` : ''}</Fact>

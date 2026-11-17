@@ -10,6 +10,9 @@ import { authRoutes, deviceRoutes, isAuthed, listCreds } from './auth.ts';
 import { adapterFor } from './chains/index.ts';
 import { http, rpcEndpointHealth } from './chains/rpc.ts';
 import { createGecko, priceStamp } from './gecko.ts';
+import { COINGECKO } from './prices/coingecko-ids.ts';
+import { crossCheck, crossSummary, type CrossFields } from './prices/cross.ts'; // v11: two price sources, one rule
+import { ASSET_MAP, apiBricks, apiBricksStatus } from './apibricks/index.ts'; // v11: the optional keyed second source (null without APIBRICKS_API_KEY)
 import { config, secureCookies, UserError } from './config.ts';
 import { audit, auditList, getSetting, setSetting, sql } from './db.ts';
 import { marketDataRoutes } from './market/routes.ts';
@@ -69,38 +72,14 @@ async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Prom
   return v;
 }
 
-const COINGECKO: Record<string, string> = {
-  ETH: 'ethereum', BTC: 'bitcoin', SOL: 'solana', POL: 'polygon-ecosystem-token', BNB: 'binancecoin', AVAX: 'avalanche-2', HYPE: 'hyperliquid',
-  LTC: 'litecoin', DOGE: 'dogecoin', BCH: 'bitcoin-cash', TRX: 'tron', XRP: 'ripple', XLM: 'stellar',
-  APT: 'aptos',
-  ATOM: 'cosmos',
-  SUI: 'sui',
-  NEAR: 'near',
-  TON: 'the-open-network',
-  USDC: 'usd-coin', USDT: 'tether', PYUSD: 'paypal-usd', DAI: 'dai', USDS: 'usds', USDe: 'ethena-usde', FDUSD: 'first-digital-usd', EURC: 'euro-coin', RLUSD: 'ripple-usd', USDG: 'global-dollar',
-  LINK: 'chainlink', UNI: 'uniswap', AAVE: 'aave', LDO: 'lido-dao', WBTC: 'wrapped-bitcoin', WETH: 'weth', PAXG: 'pax-gold', ONDO: 'ondo-finance', RENDER: 'render-token',
-  JUP: 'jupiter-exchange-solana', RAY: 'raydium', BONK: 'bonk', PEPE: 'pepe', SHIB: 'shiba-inu',
-  // registry v5. A symbol has one price: a bridged or exchange-pegged representation registered under the asset's own ticker
-  // (Binance-Peg ETH / XRP / DOGE…, bridged DAI / WBTC / WETH) is valued at the asset's price; representations with their own
-  // ticker use their own CoinGecko entry where one exists. A symbol missing here is shown without a fiat value, never with a guess.
-  USDT0: 'usdt0', 'USDC.e': 'usd-coin', GHO: 'gho', crvUSD: 'crvusd', frxUSD: 'frax-usd', USDD: 'usdd',
-  cbBTC: 'coinbase-wrapped-btc', tBTC: 'tbtc', BTCB: 'binance-bitcoin', 'BTC.b': 'bitcoin-avalanche-bridged-btc-b',
-  'WETH.e': 'avalanche-bridged-weth-avalanche', 'LINK.e': 'chainlink', wstETH: 'wrapped-steth', rETH: 'rocket-pool-eth', cbETH: 'coinbase-wrapped-staked-eth', weETH: 'wrapped-eeth',
-  ARB: 'arbitrum', OP: 'optimism', WPOL: 'wmatic', WAVAX: 'wrapped-avax', WBNB: 'wbnb', WHYPE: 'wrapped-hype', MNT: 'mantle',
-  cbXRP: 'coinbase-wrapped-xrp', cbDOGE: 'coinbase-wrapped-doge', cbLTC: 'coinbase-wrapped-ltc', cbADA: 'coinbase-wrapped-ada', ADA: 'cardano', DOT: 'polkadot',
-  MKR: 'maker', SKY: 'sky', CRV: 'curve-dao-token', COMP: 'compound-governance-token', SNX: 'havven', PENDLE: 'pendle', ENA: 'ethena', GMX: 'gmx',
-  AERO: 'aerodrome-finance', VELO: 'velodrome-finance', CAKE: 'pancakeswap-token', JOE: 'joe', MORPHO: 'morpho', EIGEN: 'eigenlayer',
-  BRETT: 'based-brett', TOSHI: 'toshi', DEGEN: 'degen-base', JTO: 'jito-governance-token', PYTH: 'pyth-network', HNT: 'helium', ORCA: 'orca',
-  mSOL: 'msol', jitoSOL: 'jito-staked-sol', bSOL: 'blazestake-staked-sol',
-};
 /** v11: `priceAt` = when the source last updated THIS price (CoinGecko's own `last_updated`, else the time it was fetched); `stale` = served past its refresh window or older than PRICE_STALE_MS */
 interface Market { priceAt: string | null; stale: boolean; usd: number; cad: number; change24h: number | null; change7d: number | null; marketCap: number | null; volume24h: number | null; high24h: number | null; low24h: number | null; ath: number | null; rank: number | null; spark: number[] }
 // CoinGecko GET with stale-on-error and a short retry after a failure: gecko.ts (v10)
 const gecko = createGecko((url, init) => http(url, init));
 type GeckoRow = { id: string; last_updated?: string; current_price: number; price_change_percentage_24h_in_currency?: number; price_change_percentage_7d_in_currency?: number; market_cap?: number; total_volume?: number; high_24h?: number; low_24h?: number; ath?: number; market_cap_rank?: number; sparkline_in_7d?: { price: number[] } };
 const thin = (a: number[], max: number) => (a.length <= max ? a : Array.from({ length: max }, (_, k) => a[Math.round((k * (a.length - 1)) / (max - 1))]!));
-async function markets(): Promise<Record<string, Market> | null> {
-  if (!(await getSetting('prices', true))) return null;
+/** the primary source alone (CoinGecko), as before V11's second source */
+async function geckoMarkets(): Promise<Record<string, Market> | null> {
   const ids = [...new Set(Object.values(COINGECKO))].join(',');
   const q = (cur: string) => gecko<GeckoRow[]>(`markets:${cur}`, PRICE_TTL_MS, `/coins/markets?vs_currency=${cur}&ids=${ids}&per_page=250&sparkline=${cur === 'usd'}&price_change_percentage=24h,7d`);
   const [usd, cad] = await Promise.all([q('usd'), q('cad')]);
@@ -119,7 +98,24 @@ async function markets(): Promise<Record<string, Market> | null> {
   }
   return out;
 }
-async function prices(): Promise<Record<string, Market> | null> { return markets(); }
+/**
+ * v11: every price names its `source`. With APIBRICKS_API_KEY the second source is read too (cached, metered): the displayed
+ * price stays CoinGecko's unless it is missing or stale — then the second one is shown, labelled (`fallback`) — and two fresh
+ * prices of similar dates are compared (`divergent`), never averaged (prices/cross.ts). Without the key: CoinGecko, as before.
+ */
+type PricedMarket = Market & CrossFields;
+const blankMarket = (s: { usd: number; cad: number | null; priceAt: string }): Market | null => (s.cad === null ? null
+  : { priceAt: s.priceAt, stale: false, usd: s.usd, cad: s.cad, change24h: null, change7d: null, marketCap: null, volume24h: null, high24h: null, low24h: null, ath: null, rank: null, spark: [] });
+async function markets(): Promise<Record<string, PricedMarket> | null> {
+  if (!(await getSetting('prices', true))) return null;
+  const primary = await geckoMarkets(), ab = apiBricks();
+  if (!ab) return crossCheck(primary, null, { thresholdBps: 0 }, () => null);
+  // the primary is down, or serves an old price for a symbol the second source has: ask the second one for a fresher read
+  const failover = !primary || Object.entries(primary).some(([sym, m]) => m.stale && Object.hasOwn(ASSET_MAP, sym));
+  const second = await ab.prices.read(failover ? { maxAgeMs: ab.cfg.failoverTtlMs } : {}).catch(() => null);
+  return crossCheck(primary, second?.prices ?? null, { thresholdBps: ab.cfg.divergenceBps }, (_sym, s2) => blankMarket(s2));
+}
+async function prices(): Promise<Record<string, PricedMarket> | null> { return markets(); }
 /** Refresh window of the price list, and the age past which a price is flagged even when the list itself is fresh. */
 const PRICE_TTL_MS = 4 * 60_000, PRICE_STALE_MS = 15 * 60_000;
 
@@ -147,7 +143,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   const app = Fastify({ logger: { level: 'warn', redact: ['req.headers.cookie', 'req.headers.authorization'] }, bodyLimit: 64 * 1024, trustProxy: config.trustProxy });
   await app.register(cookie);
   await app.register(rateLimit, { max: 240, timeWindow: '1 minute' });
-  const quotes = await installQuotes(app, { derivatives: opts.derivatives, prices: markets, ...opts.quotes }); // v11 quote engine: the websocket plugin, before the routes
+  const quotes = await installQuotes(app, { derivatives: opts.derivatives, prices: markets, second: apiBricks()?.second, metered: () => ({ apibricks: apiBricksStatus() }), ...opts.quotes }); // v11 quote engine: the websocket plugin, before the routes
 
   app.addHook('onRequest', async (req, reply) => {
     reply.header('content-security-policy', CSP).header('x-content-type-options', 'nosniff').header('referrer-policy', 'no-referrer')
@@ -255,7 +251,9 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     const pending = await sql<ProposalRow[]>`select * from proposals where state in ('pending_approval','approved','signed','broadcast','confirming','reorged') order by created_at desc`;
     // v11: `asOf` is the time of this answer; the prices have their own dates (`prices[sym].priceAt`, `pricesAsOf` = the oldest one)
     const stamps = px ? Object.values(px).map((m) => m.priceAt).filter((x): x is string => !!x).sort() : [];
-    return { asOf: new Date().toISOString(), prices: px, priceSource: px ? 'coingecko' : null, pricesAsOf: stamps[0] ?? null, pricesStale: px ? Object.values(px).some((m) => m.stale) : false,
+    // v11: `priceSource` = where the displayed prices come from (`mixed` when some fell back to the second source); `priceSources` says which
+    const cs = crossSummary(px, apiBricks() !== null), all = px ? Object.keys(px).length : 0;
+    return { asOf: new Date().toISOString(), prices: px, priceSource: !px ? null : cs.fallback.length === 0 ? 'coingecko' : cs.fallback.length === all ? 'apibricks' : 'mixed', priceSources: px ? cs : null, pricesAsOf: stamps[0] ?? null, pricesStale: px ? Object.values(px).some((m) => m.stale) : false,
       balances: rows.flat(), pending: pending.map(view), halted: st ? st.halted : null,
       // the signer could not be reached: balances are the API's own reads of the last known addresses; nothing can be signed meanwhile
       signer: { reachable: !!st, addressesAsOf: w.addressesAsOf } };

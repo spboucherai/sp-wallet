@@ -39,6 +39,7 @@ export const defaultLimits = (): StreamLimits => ({
 
 export interface QuoteEngineOptions {
   hub: QuoteHub; limits?: Partial<StreamLimits>; now?: () => number;
+  /** V11: the metered market-data providers behind the hub (budget counter, state) — shown as `metered` in the statistics */ metered?: (() => Record<string, unknown>) | undefined;
   /** tests: replace the credential re-checks */ sessionAlive?: (token: string | undefined) => Promise<boolean>; keyActive?: (id: string) => Promise<boolean>;
 }
 interface Ticket { principal: Principal; sessionToken: string | null; expiresAt: number }
@@ -178,11 +179,12 @@ export class QuoteEngine {
   private readonly perSec = new Array<number>(10).fill(0); private secIdx = 0; private sentThisSec = 0;
   readonly counters = { connections: 0, refused: 0, subscribes: 0, messagesSent: 0, bytesSent: 0, conflated: 0, tradesDropped: 0, bookResyncs: 0, slowConsumers: 0, deadPeers: 0, badFrames: 0, rateLimited: 0, restricted: 0, unauthorizedClosed: 0, ticketsIssued: 0, ticketsUsed: 0, ticketsRefused: 0 };
   private app: FastifyInstance | null = null;
+  private readonly metered: (() => Record<string, unknown>) | null;
   private readonly alive: (token: string | undefined) => Promise<boolean>; private readonly keyActive: (id: string) => Promise<boolean>;
 
   constructor(o: QuoteEngineOptions) {
     this.hub = o.hub; this.limits = { ...defaultLimits(), ...o.limits }; this.now = o.now ?? Date.now;
-    this.alive = o.sessionAlive ?? sessionAlive;
+    this.alive = o.sessionAlive ?? sessionAlive; this.metered = o.metered ?? null;
     this.keyActive = o.keyActive ?? (async (id) => keyStatus(await getKey(id)) === 'active');
   }
 
@@ -217,12 +219,14 @@ export class QuoteEngine {
       upstreamReconnects: hub.venues.reduce((s, v) => s + v.reconnects, 0),
       /** the venue's own timestamp of an update → that update written to a client socket, over the last 4096 venue-stamped updates sent without queueing (ms) */ lagMs: this.lagStats(),
       limits: this.limits, hub,
+      /** keyed, metered sources: daily credit budget used / remaining; `down` with the reason `quota` when it is spent (null: none configured in this build of the engine) */
+      metered: (() => { try { return this.metered?.() ?? null; } catch { return null; } })(),
     };
   }
   /** compact summary for the monitor screen's health answer */
   summary() {
     const s = this.stats();
-    return { connections: s.connections.open, subscriptions: s.subscriptions, messagesPerSec: s.messagesPerSec, conflated: s.backpressure.conflated, tradesDropped: s.backpressure.tradesDropped, upstreamReconnects: s.upstreamReconnects,
+    return { connections: s.connections.open, subscriptions: s.subscriptions, messagesPerSec: s.messagesPerSec, conflated: s.backpressure.conflated, tradesDropped: s.backpressure.tradesDropped, upstreamReconnects: s.upstreamReconnects, metered: s.metered,
       lagMs: s.lagMs, venues: s.hub.venues.map((v) => ({ venue: v.venue, status: v.status, ageMs: v.ageMs, transport: v.transport, feeds: v.feeds, reconnects: v.reconnects, gaps: v.gaps })) };
   }
 

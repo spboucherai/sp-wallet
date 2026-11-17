@@ -41,7 +41,7 @@ export interface RiskDeps extends PasskeyDeps {
   derivatives: () => Derivatives; live: () => LiveService;
   /** GMX positions are read from the chain through the GMX service; null = this server has no GMX service */
   gmx: () => Pick<GmxService, 'status'> | null;
-  prices?: () => Promise<Record<string, { usd: number; priceAt?: string | null }> | null>;
+  prices?: () => Promise<Record<string, { usd: number; priceAt?: string | null; source?: string }> | null>;
   /** throws when the signer cannot be reached */
   signerStatus: () => Promise<{ halted: boolean }>;
   emit?: (event: 'risk.kill_switch', data: Record<string, unknown>) => Promise<unknown>;
@@ -392,9 +392,11 @@ export class RiskService {
       marks.push({ instrument: order.instrument, source: 'mark', price: m.ticker.mark, ts: m.ticker.ts });
       if (m.ticker.index !== null) marks.push({ instrument: order.instrument, source: 'index', price: m.ticker.index, ts: m.ticker.ts });
     }
-    // one reference that does not come from the venue: the wallet's spot price list, with the time ITS source gives
+    // one reference that does not come from the venue: the wallet's spot price list, with the time ITS source gives — and under the
+    // name of the source that really gave it (v11: `apibricks` when the list fell back to the second source; that name has no
+    // entry in `maxPriceAgeMs.per`, so it is judged with the default, strict, age: a fallback price loosens nothing by itself)
     const px = inst && this.deps.prices ? await this.deps.prices().then((p) => p?.[inst.base.toUpperCase()] ?? null, () => null) : null;
-    if (px && Number.isFinite(px.usd) && px.usd > 0 && px.priceAt) { const ts = Date.parse(px.priceAt); if (Number.isFinite(ts)) marks.push({ instrument: order.instrument, source: 'coingecko', price: D.str(D.from(String(px.usd))), ts }); }
+    if (px && Number.isFinite(px.usd) && px.usd > 0 && px.priceAt) { const ts = Date.parse(px.priceAt); if (Number.isFinite(ts)) marks.push({ instrument: order.instrument, source: px.source ?? 'coingecko', price: D.str(D.from(String(px.usd))), ts }); }
     let leverageSetting: DecStr | null = o.known?.leverage ?? null;
     if (leverageSetting === null && inst && own && order.marketKind === 'perp') leverageSetting = await this.leverageOf(mode, order, own, inst).catch(() => null);
     const ownAccount = accounts.find((a) => a.accountId === own);

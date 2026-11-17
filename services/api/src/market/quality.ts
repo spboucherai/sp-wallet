@@ -6,9 +6,16 @@
 // a time no source has is a gap. Volume is therefore the volume of one venue, not a market total, and it changes scale
 // where the series falls back to another source (Coinbase omits intervals without a trade; the others print them with volume 0).
 import { findGaps, type GapRange } from './validate.ts';
-import { INTERVAL_MS, SOURCE_IDS, expectedLastTs, type BySource, type Candle, type Interval, type MarketErrorCode, type SeriesBar, type SourceId } from './types.ts';
+import { BASE_SOURCE_IDS, INTERVAL_MS, SOURCE_IDS, expectedLastTs, type BySource, type Candle, type Interval, type MarketErrorCode, type SeriesBar, type SourceId } from './types.ts';
 
-export const DEFAULT_PRIORITY: readonly SourceId[] = SOURCE_IDS;
+const priority: SourceId[] = [...BASE_SOURCE_IDS];
+/** the sources in force, best first. The three exchanges; an optional source (V11: `apibricks`) is appended — always LAST — by
+ *  `addConfirmingSource` when it is configured, so that without it every verdict is exactly what it was. */
+export const DEFAULT_PRIORITY: readonly SourceId[] = priority;
+/** An additional source may CONFIRM a bar (and fill a slot no exchange has); ranked last, it is never preferred to an exchange read directly. */
+export function addConfirmingSource(id: SourceId): void { if (!priority.includes(id)) priority.push(id); }
+/** tests: back to the three exchanges */
+export function resetConfirmingSources(): void { priority.length = BASE_SOURCE_IDS.length; }
 
 export function consolidate(bySource: BySource, priority: readonly SourceId[] = DEFAULT_PRIORITY): SeriesBar[] {
   const out = new Map<number, SeriesBar>();

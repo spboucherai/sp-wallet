@@ -10,7 +10,12 @@ export type MarketSymbol = string;
 export const INTERVAL_MS = { '5m': 300_000, '1h': 3_600_000, '1d': 86_400_000 } as const;
 export type Interval = keyof typeof INTERVAL_MS;
 export const INTERVALS = Object.keys(INTERVAL_MS) as Interval[];
-export const SOURCE_IDS = ['coinbase', 'bitstamp', 'kraken'] as const;
+/** the three exchanges read directly (public, keyless): the sources of every bar until V11 */
+export const BASE_SOURCE_IDS = ['coinbase', 'bitstamp', 'kraken'] as const;
+export type BaseSourceId = (typeof BASE_SOURCE_IDS)[number];
+/** every source a stored bar may name. `apibricks` (V11, optional, keyed): bars of ONE exchange the wallet does not read itself,
+ *  relayed by API Bricks — present only when APIBRICKS_API_KEY is set (apibricks/market-source.ts); always ranked last */
+export const SOURCE_IDS = [...BASE_SOURCE_IDS, 'apibricks'] as const;
 export type SourceId = (typeof SOURCE_IDS)[number];
 
 export const isSymbol = (s: string): s is MarketSymbol => hasMarketData(s);
@@ -49,6 +54,10 @@ export interface MarketSource {
   candles(symbol: MarketSymbol, interval: Interval, range: { start: number; end: number }, now: number): Promise<Candle[]>;
   /** pause this source (after a rate-limit answer) */
   penalize(ms: number): void;
+  /** intervals this source serves; absent = all (a metered source is kept to the intervals its budget allows) */
+  intervals?: readonly Interval[];
+  /** false = leave this source alone for now (its budget is spent): the pass skips it without an error */
+  ready?(): boolean;
 }
 
 export type MarketErrorCode = 'unsupported' | 'no_data' | 'stale' | 'gap' | 'insufficient_history' | 'insufficient_sources' | 'disagreement';

@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { consolidate, deviations, evaluate, spreadBps } from '../src/market/quality.ts';
-import { INTERVAL_MS, SourceError, expectedLastTs, isClosed, type BySource, type Candle, type HttpJson, type Interval, type MarketSource, type SourceId } from '../src/market/types.ts';
+import { INTERVAL_MS, SourceError, expectedLastTs, isClosed, type BySource, type Candle, type HttpJson, type Interval, type MarketSource, type BaseSourceId as SourceId /* the three exchanges; the optional keyed source has its own test file */ } from '../src/market/types.ts';
 import { findGaps, normalise, validateBars } from '../src/market/validate.ts';
 
 type Fixture = { source: SourceId; interval: Interval; recordedAt: number; range: { start: number; end: number }; url: string; status: number; body: any };
