@@ -5,6 +5,9 @@
 
 Version 1.0.0. Machine-readable document: [`docs/openapi/trading-v1.json`](openapi/trading-v1.json), also served at `GET /api/v1/trading/openapi.json`.
 
+This file is the compact index (operations, raw JSON Schemas, error codes). The reference with getting started, concepts, a worked example per operation
+and what each error means is [`TRADING-API-REFERENCE.md`](TRADING-API-REFERENCE.md), served at `GET /api/v1/trading/docs`.
+
 ## Authentication
 
 `Authorization: Bearer spw_live_<key id>_<secret>`. No cookie, no CSRF header. The key is refused on every path outside
@@ -95,18 +98,18 @@ logged like any other.
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
 | `venue` | query | no | `{"type":"string","maxLength":40}` | venue id: hyperliquid, gmx, dydx, spot |
-| `kind` | query | no | `{"type":"string","enum":["perpetual","spot"]}` |  |
+| `kind` | query | no | `{"type":"string","enum":["perpetual","spot"]}` | perpetual = a venue instrument; spot = a market-data symbol |
 | `q` | query | no | `{"type":"string","maxLength":40}` | case-insensitive match on id, symbol or base |
-| `limit` | query | no | `{"default":2000,"type":"integer","minimum":1,"maximum":5000}` |  |
+| `limit` | query | no | `{"default":2000,"type":"integer","minimum":1,"maximum":5000}` | rows returned at most; `total` and `truncated` say when it cut the list |
 
 ### GET `/api/v1/trading/markets/compare`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
 | `underlying` | query | no | `{"default":"BTC","type":"string","pattern":"^[A-Za-z0-9]{1,15}$"}` | common underlying, e.g. BTC (see GET /markets-hub/underlyings) |
-| `side` | query | no | `{"default":"long","type":"string","enum":["long","short"]}` |  |
+| `side` | query | no | `{"default":"long","type":"string","enum":["long","short"]}` | direction of the position compared |
 | `notional` | query | no | `{"default":"1000","type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` | position notional in USD (not the collateral) |
-| `leverage` | query | no | `{"default":"1","type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` |  |
+| `leverage` | query | no | `{"default":"1","type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` | leverage of the position: collateral = notional / leverage |
 | `horizonHours` | query | no | `{"default":"24","type":"string","pattern":"^(0|[1-9]\\d{0,3})(\\.\\d{1,4})?$"}` | expected holding period; funding is the current rate held constant over it |
 | `liquidity` | query | no | `{"default":"taker","type":"string","enum":["taker","maker"]}` | how the entry and the exit are executed, for the fee |
 | `minNetEdgeBps` | query | no | `{"default":"0","type":"string","pattern":"^(0|[1-9]\\d{0,4})(\\.\\d{1,4})?$"}` | a discrepancy estimate above this is flagged |
@@ -122,15 +125,15 @@ logged like any other.
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
 | `symbol` | path | yes | `{"type":"string","minLength":1,"maxLength":120}` | `venue:symbol` (e.g. `hyperliquid:BTC`, `spot:ETH`); a bare symbol is accepted when it is not ambiguous |
-| `depth` | query | no | `{"default":20,"type":"integer","minimum":1,"maximum":50}` |  |
+| `depth` | query | no | `{"default":20,"type":"integer","minimum":1,"maximum":50}` | price levels per side |
 
 ### GET `/api/v1/trading/markets/{symbol}/candles`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
 | `symbol` | path | yes | `{"type":"string","minLength":1,"maxLength":120}` | `venue:symbol` (e.g. `hyperliquid:BTC`, `spot:ETH`); a bare symbol is accepted when it is not ambiguous |
-| `interval` | query | no | `{"default":"1h","type":"string","enum":["1m","5m","15m","1h","4h","1d"]}` |  |
-| `limit` | query | no | `{"default":200,"type":"integer","minimum":1,"maximum":1000}` |  |
+| `interval` | query | no | `{"default":"1h","type":"string","enum":["1m","5m","15m","1h","4h","1d"]}` | bar length |
+| `limit` | query | no | `{"default":200,"type":"integer","minimum":1,"maximum":1000}` | most recent closed bars, oldest first in the answer |
 
 ### GET `/api/v1/trading/private-markets`
 
@@ -138,52 +141,52 @@ logged like any other.
 |---|---|---|---|---|
 | `delisted` | query | no | `{"type":"string","enum":["true","false"]}` | true: only delisted markets (frozen prices) |
 | `size` | query | no | `{"type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` | hypothetical position size, contracts (default 1) |
-| `side` | query | no | `{"type":"string","enum":["long","short"]}` |  |
+| `side` | query | no | `{"type":"string","enum":["long","short"]}` | side of the hypothetical position (default long) |
 
 ### GET `/api/v1/trading/private-markets/companies/{slug}`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `slug` | path | yes | `{"type":"string","pattern":"^[a-z0-9-]{1,40}$"}` |  |
-| `size` | query | no | `{"type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` |  |
-| `side` | query | no | `{"type":"string","enum":["long","short"]}` |  |
-| `interval` | query | no | `{"type":"string","enum":["1h","1d"]}` |  |
-| `limit` | query | no | `{"type":"integer","minimum":1,"maximum":500}` |  |
+| `slug` | path | yes | `{"type":"string","pattern":"^[a-z0-9-]{1,40}$"}` | company slug, from GET /private-markets (`companies[].slug`), e.g. `anthropic` |
+| `size` | query | no | `{"type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` | hypothetical position size, contracts (default 1) |
+| `side` | query | no | `{"type":"string","enum":["long","short"]}` | side of the hypothetical position (default long) |
+| `interval` | query | no | `{"type":"string","enum":["1h","1d"]}` | candle length |
+| `limit` | query | no | `{"type":"integer","minimum":1,"maximum":500}` | candles returned at most |
 
 ### GET `/api/v1/trading/private-markets/{id}`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
 | `id` | path | yes | `{"type":"string","minLength":3,"maxLength":120,"pattern":"^[a-z]+:[A-Za-z0-9:._-]+$"}` | `venue:symbol`, e.g. `hyperliquid:io:ANTH`, `edgex:ANTHROPICUSDC` |
-| `size` | query | no | `{"type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` |  |
-| `side` | query | no | `{"type":"string","enum":["long","short"]}` |  |
-| `interval` | query | no | `{"type":"string","enum":["1h","1d"]}` |  |
-| `limit` | query | no | `{"type":"integer","minimum":1,"maximum":500}` |  |
+| `size` | query | no | `{"type":"string","pattern":"^(0|[1-9]\\d{0,11})(\\.\\d{1,8})?$"}` | hypothetical position size, contracts (default 1) |
+| `side` | query | no | `{"type":"string","enum":["long","short"]}` | side of the hypothetical position (default long) |
+| `interval` | query | no | `{"type":"string","enum":["1h","1d"]}` | candle length |
+| `limit` | query | no | `{"type":"integer","minimum":1,"maximum":500}` | candles returned at most |
 
 ### GET `/api/v1/trading/balances`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `network` | query | no | `{"type":"string","maxLength":24}` |  |
+| `network` | query | no | `{"type":"string","maxLength":24}` | one network id (e.g. `base`, `arbitrum`, `solana`); default: every network of the wallet |
 
 ### GET `/api/v1/trading/activity`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
+| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` | rows returned at most |
 | `cursor` | query | no | `{"type":"string","minLength":1,"maxLength":400,"pattern":"^[A-Za-z0-9_-]+$"}` | opaque position returned as `nextCursor` by the previous page; send it with the same filters |
 
 ### GET `/api/v1/trading/nfts`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `network` | query | no | `{"type":"string","maxLength":24}` |  |
+| `network` | query | no | `{"type":"string","maxLength":24}` | one network id; default: all |
 | `collection` | query | no | `{"type":"string","maxLength":260}` | collection key |
-| `status` | query | no | `{"type":"string","enum":["in_wallet","left","tracked"]}` |  |
-| `q` | query | no | `{"type":"string","maxLength":80}` |  |
-| `sort` | query | no | `{"default":"recent","type":"string","enum":["recent","name"]}` |  |
+| `status` | query | no | `{"type":"string","enum":["in_wallet","left","tracked"]}` | in_wallet: held now; left: was found in the wallet and is no longer held; tracked: added by hand. Default: held, tracked, or left within the last 30 days |
+| `q` | query | no | `{"type":"string","maxLength":80}` | case-insensitive text matched on the name, the key or the collection name |
+| `sort` | query | no | `{"default":"recent","type":"string","enum":["recent","name"]}` | order of the list |
 | `spam` | query | no | `{"default":"hide","type":"string","enum":["hide","show","only"]}` | items an indexer flags as spam are hidden by default, never deleted |
-| `limit` | query | no | `{"default":48,"type":"integer","minimum":1,"maximum":100}` |  |
+| `limit` | query | no | `{"default":48,"type":"integer","minimum":1,"maximum":100}` | rows returned at most |
 | `cursor` | query | no | `{"type":"string","minLength":1,"maxLength":400,"pattern":"^[A-Za-z0-9_-]+$"}` | opaque position returned as `nextCursor` by the previous page; send it with the same filters |
 
 ### GET `/api/v1/trading/nfts/item`
@@ -196,16 +199,16 @@ logged like any other.
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `key` | query | yes | `{"type":"string","minLength":5,"maxLength":260}` |  |
-| `limit` | query | no | `{"default":20,"type":"integer","minimum":1,"maximum":50}` |  |
-| `cursor` | query | no | `{"type":"string","maxLength":400}` |  |
-| `type` | query | no | `{"type":"string","enum":["mint","transfer","transfer-in","transfer-out","burn","sale","unknown"]}` |  |
+| `key` | query | yes | `{"type":"string","minLength":5,"maxLength":260}` | `family:network:asset-id`, as returned by GET /nfts |
+| `limit` | query | no | `{"default":20,"type":"integer","minimum":1,"maximum":50}` | rows returned at most |
+| `cursor` | query | no | `{"type":"string","maxLength":400}` | `nextCursor` of the previous page |
+| `type` | query | no | `{"type":"string","enum":["mint","transfer","transfer-in","transfer-out","burn","sale","unknown"]}` | only events of this type |
 
 ### GET `/api/v1/trading/nfts/market`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `network` | query | yes | `{"type":"string","maxLength":24}` |  |
+| `network` | query | yes | `{"type":"string","maxLength":24}` | network id, e.g. `ethereum`, `base`, `solana` |
 | `address` | query | yes | `{"type":"string","minLength":26,"maxLength":64}` | EVM: the contract; Solana: the mint / asset address |
 | `tokenId` | query | no | `{"type":"string","maxLength":80}` | EVM: required, decimal or 0x-hex |
 
@@ -213,15 +216,15 @@ logged like any other.
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `network` | query | yes | `{"type":"string","maxLength":24}` |  |
-| `address` | query | yes | `{"type":"string","minLength":26,"maxLength":64}` |  |
-| `tokenId` | query | no | `{"type":"string","maxLength":80}` |  |
-| `provider` | query | no | `{"type":"string","pattern":"^[a-z][a-z0-9-]{1,30}$"}` |  |
+| `network` | query | yes | `{"type":"string","maxLength":24}` | network id, e.g. `ethereum`, `base`, `solana` |
+| `address` | query | yes | `{"type":"string","minLength":26,"maxLength":64}` | EVM: the contract; Solana: the mint / asset address |
+| `tokenId` | query | no | `{"type":"string","maxLength":80}` | EVM: required, decimal or 0x-hex |
+| `provider` | query | no | `{"type":"string","pattern":"^[a-z][a-z0-9-]{1,30}$"}` | only this source (its id is `sources[].status.provider`); required with `cursor` |
 | `type` | query | no | `{"type":"string","maxLength":120,"pattern":"^[a-z,-]+$"}` | comma-separated: sale, list, delist, offer, cancel-offer, transfer, mint |
-| `after` | query | no | `{"type":"string","format":"date-time","pattern":"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"}` |  |
-| `before` | query | no | `{"type":"string","format":"date-time","pattern":"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"}` |  |
+| `after` | query | no | `{"type":"string","format":"date-time","pattern":"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"}` | only events after this instant (ISO 8601) |
+| `before` | query | no | `{"type":"string","format":"date-time","pattern":"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"}` | only events before this instant (ISO 8601) |
 | `cursor` | query | no | `{"type":"string","maxLength":600}` | a position in ONE source's list: send it with `provider` |
-| `limit` | query | no | `{"default":20,"type":"integer","minimum":1,"maximum":50}` |  |
+| `limit` | query | no | `{"default":20,"type":"integer","minimum":1,"maximum":50}` | rows returned at most |
 
 ### GET `/api/v1/trading/positions`
 
@@ -237,20 +240,20 @@ logged like any other.
 | `mode` | query | no | `{"type":"string","enum":["paper","live"]}` | paper = simulated, live = a venue or on-chain account. The two are never merged in one figure. |
 | `venue` | query | no | `{"type":"string","maxLength":40}` | venue id: hyperliquid, gmx, dydx, spot |
 | `open` | query | no | `{"type":"string","enum":["true","false"]}` | true: only orders that are not final; false: only final orders |
-| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
+| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` | rows returned at most |
 | `cursor` | query | no | `{"type":"string","minLength":1,"maxLength":400,"pattern":"^[A-Za-z0-9_-]+$"}` | opaque position returned as `nextCursor` by the previous page; send it with the same filters |
 
 ### GET `/api/v1/trading/orders/{id}`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 ### GET `/api/v1/trading/strategies`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `kind` | query | no | `{"type":"string","enum":["spot","perp"]}` |  |
+| `kind` | query | no | `{"type":"string","enum":["spot","perp"]}` | only spot or only perp strategies |
 
 ### POST `/api/v1/trading/orders/preview`
 
@@ -285,7 +288,8 @@ Request body (JSON):
       "enum": [
         "buy",
         "sell"
-      ]
+      ],
+      "description": "buy opens or adds to a long (or reduces a short); sell the reverse"
     },
     "type": {
       "type": "string",
@@ -296,7 +300,8 @@ Request body (JSON):
         "stop_limit",
         "take_profit_market",
         "take_profit_limit"
-      ]
+      ],
+      "description": "market: immediate, bounded by `slippageBps`. limit: rests at `price`. stop_* and take_profit_*: wait for `triggerPrice`, then act as a market order or as a limit order at `price`"
     },
     "size": {
       "description": "quantity of the base asset. Exactly one of `size` and `notional` is required",
@@ -309,21 +314,23 @@ Request body (JSON):
       "pattern": "^\\d+(\\.\\d+)?$"
     },
     "price": {
+      "description": "limit price, a multiple of the instrument's `tickSize`; required by `limit`, `stop_limit` and `take_profit_limit`, refused on a market order",
       "type": "string",
-      "pattern": "^\\d+(\\.\\d+)?$",
-      "description": "decimal number as a string (never a float)"
+      "pattern": "^\\d+(\\.\\d+)?$"
     },
     "triggerPrice": {
+      "description": "price at which a stop or take-profit order is triggered; required by the four trigger types",
       "type": "string",
-      "pattern": "^\\d+(\\.\\d+)?$",
-      "description": "decimal number as a string (never a float)"
+      "pattern": "^\\d+(\\.\\d+)?$"
     },
     "reduceOnly": {
       "default": false,
+      "description": "true: the order may only reduce an existing position — it can neither open, increase nor flip one",
       "type": "boolean"
     },
     "tif": {
       "default": "gtc",
+      "description": "time in force of a limit order: gtc = rests until cancelled, ioc = fills what it can at once and cancels the rest, alo = add liquidity only (post-only)",
       "type": "string",
       "enum": [
         "gtc",
@@ -332,6 +339,7 @@ Request body (JSON):
       ]
     },
     "slippageBps": {
+      "description": "market orders: the worst acceptable price, in basis points from the reference price",
       "type": "integer",
       "minimum": 1,
       "maximum": 500
@@ -395,7 +403,8 @@ Request body (JSON):
       "enum": [
         "buy",
         "sell"
-      ]
+      ],
+      "description": "buy opens or adds to a long (or reduces a short); sell the reverse"
     },
     "type": {
       "type": "string",
@@ -406,7 +415,8 @@ Request body (JSON):
         "stop_limit",
         "take_profit_market",
         "take_profit_limit"
-      ]
+      ],
+      "description": "market: immediate, bounded by `slippageBps`. limit: rests at `price`. stop_* and take_profit_*: wait for `triggerPrice`, then act as a market order or as a limit order at `price`"
     },
     "size": {
       "description": "quantity of the base asset. Exactly one of `size` and `notional` is required",
@@ -419,21 +429,23 @@ Request body (JSON):
       "pattern": "^\\d+(\\.\\d+)?$"
     },
     "price": {
+      "description": "limit price, a multiple of the instrument's `tickSize`; required by `limit`, `stop_limit` and `take_profit_limit`, refused on a market order",
       "type": "string",
-      "pattern": "^\\d+(\\.\\d+)?$",
-      "description": "decimal number as a string (never a float)"
+      "pattern": "^\\d+(\\.\\d+)?$"
     },
     "triggerPrice": {
+      "description": "price at which a stop or take-profit order is triggered; required by the four trigger types",
       "type": "string",
-      "pattern": "^\\d+(\\.\\d+)?$",
-      "description": "decimal number as a string (never a float)"
+      "pattern": "^\\d+(\\.\\d+)?$"
     },
     "reduceOnly": {
       "default": false,
+      "description": "true: the order may only reduce an existing position — it can neither open, increase nor flip one",
       "type": "boolean"
     },
     "tif": {
       "default": "gtc",
+      "description": "time in force of a limit order: gtc = rests until cancelled, ioc = fills what it can at once and cancels the rest, alo = add liquidity only (post-only)",
       "type": "string",
       "enum": [
         "gtc",
@@ -442,6 +454,7 @@ Request body (JSON):
       ]
     },
     "slippageBps": {
+      "description": "market orders: the worst acceptable price, in basis points from the reference price",
       "type": "integer",
       "minimum": 1,
       "maximum": 500
@@ -476,13 +489,13 @@ Request body (JSON):
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 ### POST `/api/v1/trading/positions/{id}/close`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 Request body (JSON):
 
@@ -491,6 +504,7 @@ Request body (JSON):
   "type": "object",
   "properties": {
     "slippageBps": {
+      "description": "worst acceptable price of the closing market order, in basis points from the reference price",
       "type": "integer",
       "minimum": 1,
       "maximum": 500
@@ -504,7 +518,7 @@ Request body (JSON):
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 Request body (JSON):
 
@@ -518,6 +532,7 @@ Request body (JSON):
       "description": "share of the position to close, in (0, 1]"
     },
     "slippageBps": {
+      "description": "worst acceptable price of the reducing market order, in basis points from the reference price",
       "type": "integer",
       "minimum": 1,
       "maximum": 500
@@ -582,6 +597,7 @@ Request body (JSON):
   "properties": {
     "reason": {
       "default": "",
+      "description": "why, for the audit trail and the `risk.kill_switch` webhook",
       "type": "string",
       "maxLength": 200
     }
@@ -603,15 +619,17 @@ Request body (JSON):
       "enum": [
         "spot",
         "perp"
-      ]
+      ],
+      "description": "must be the kind of the agent (409 `wrong_kind` otherwise)"
     },
     "path": {
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
-      "description": "library path of the strategy"
+      "description": "library path of the strategy, from GET /strategies (`library[].path`)"
     },
     "agentId": {
+      "description": "the agent the version is registered on; required in practice (400 without it)",
       "type": "string",
       "format": "uuid",
       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
@@ -629,7 +647,7 @@ Request body (JSON):
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 Request body (JSON):
 
@@ -638,6 +656,7 @@ Request body (JSON):
   "type": "object",
   "properties": {
     "symbols": {
+      "description": "default: the agent's universe",
       "minItems": 1,
       "maxItems": 12,
       "type": "array",
@@ -647,6 +666,7 @@ Request body (JSON):
       }
     },
     "interval": {
+      "description": "bar interval; default: the agent's",
       "type": "string",
       "enum": [
         "1h",
@@ -662,7 +682,7 @@ Request body (JSON):
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 Request body (JSON):
 
@@ -680,6 +700,7 @@ Request body (JSON):
       "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
     },
     "agentId": {
+      "description": "strategy operations only: the agent, when the version id alone does not name it",
       "type": "string",
       "format": "uuid",
       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
@@ -696,7 +717,7 @@ Request body (JSON):
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 Request body (JSON):
 
@@ -706,6 +727,7 @@ Request body (JSON):
   "properties": {
     "reason": {
       "default": "",
+      "description": "why, for the agent's journal",
       "type": "string",
       "maxLength": 200
     }
@@ -718,33 +740,33 @@ Request body (JSON):
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 ### GET `/api/v1/trading/agents/{id}/signals`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 | `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it. |
-| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
+| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` | rows returned at most |
 | `before` | query | no | `{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}` | unix ms: rows strictly before it |
 
 ### GET `/api/v1/trading/agents/{id}/journal`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 | `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it. |
-| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
+| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` | rows returned at most |
 | `before` | query | no | `{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}` | unix ms: rows strictly before it |
 
 ### GET `/api/v1/trading/agents/{id}/orders`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 | `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it. |
-| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` |  |
+| `limit` | query | no | `{"default":100,"type":"integer","minimum":1,"maximum":500}` | rows returned at most |
 | `before` | query | no | `{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}` | unix ms: rows strictly before it |
 | `open` | query | no | `{"type":"string","enum":["true","false"]}` | true: only the orders that are not final |
 
@@ -752,14 +774,14 @@ Request body (JSON):
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 | `mode` | query | no | `{"type":"string","enum":["research","paper","live"]}` | default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it. |
 
 ### GET `/api/v1/trading/jobs/{id}`
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 ### POST `/api/v1/trading/agents`
 
@@ -785,14 +807,17 @@ Request body (JSON):
     "name": {
       "type": "string",
       "minLength": 2,
-      "maxLength": 40
+      "maxLength": 40,
+      "description": "shown in the app and in the lists"
     },
     "mission": {
       "default": "",
+      "description": "free text for people; it changes nothing the agent does",
       "type": "string",
       "maxLength": 400
     },
     "universe": {
+      "description": "asset symbols the agent trades, e.g. [\"BTC\"]; a fixed-universe strategy needs its exact universe (422 `universe_mismatch`); default: the template's",
       "minItems": 1,
       "maxItems": 12,
       "type": "array",
@@ -802,6 +827,7 @@ Request body (JSON):
       }
     },
     "venues": {
+      "description": "venues the agent reads; default: the template's",
       "minItems": 1,
       "maxItems": 2,
       "type": "array",
@@ -816,10 +842,12 @@ Request body (JSON):
       }
     },
     "strategyPath": {
+      "description": "bar templates: which of the template's installed strategies to bind, from GET /agents/templates",
       "type": "string",
       "maxLength": 60
     },
     "interval": {
+      "description": "bar agents: bar length; default 1h",
       "type": "string",
       "enum": [
         "1h",
@@ -828,10 +856,12 @@ Request body (JSON):
       ]
     },
     "capitalUsdc": {
+      "description": "simulated capital of the agent, a decimal string; default 1000",
       "type": "string",
       "pattern": "^\\d{1,7}(\\.\\d{1,6})?$"
     },
     "risk": {
+      "description": "overrides of the agent's own risk limits, by name (the limits in force are in GET /agents/{id}: `riskLimits`)",
       "type": "object",
       "propertyNames": {
         "type": "string"
@@ -845,6 +875,7 @@ Request body (JSON):
       }
     },
     "config": {
+      "description": "overrides of the template's parameters, by name",
       "type": "object",
       "propertyNames": {
         "type": "string"
@@ -872,7 +903,7 @@ Request body (JSON):
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 Request body (JSON):
 
@@ -890,6 +921,7 @@ Request body (JSON):
       "description": "research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes."
     },
     "agentId": {
+      "description": "strategy operations only: the agent, when the version id alone does not name it",
       "type": "string",
       "format": "uuid",
       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
@@ -906,7 +938,7 @@ Request body (JSON):
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 Request body (JSON):
 
@@ -916,6 +948,7 @@ Request body (JSON):
   "properties": {
     "reason": {
       "default": "",
+      "description": "why, for the agent's journal",
       "type": "string",
       "maxLength": 200
     }
@@ -928,7 +961,7 @@ Request body (JSON):
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 Request body (JSON):
 
@@ -938,6 +971,7 @@ Request body (JSON):
   "properties": {
     "reason": {
       "default": "",
+      "description": "why, for the agent's journal",
       "type": "string",
       "maxLength": 200
     }
@@ -950,7 +984,7 @@ Request body (JSON):
 
 | Name | In | Required | Schema | Description |
 |---|---|---|---|---|
-| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` |  |
+| `id` | path | yes | `{"type":"string","minLength":1,"maxLength":200}` | the `id` a list or a creation of this API returned; URL-encode it (a position id contains colons) |
 
 Request body (JSON):
 
@@ -959,6 +993,7 @@ Request body (JSON):
   "type": "object",
   "properties": {
     "versionId": {
+      "description": "bar agents: the strategy version to backtest; default: the agent's current one",
       "type": "string",
       "format": "uuid",
       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"

@@ -8,9 +8,9 @@ const Dec = (max: number, what: string) => z.string().regex(/^(0|[1-9]\d{0,11})(
 export const UnderlyingSchema = z.string().regex(/^[A-Za-z0-9]{1,15}$/, 'underlying: a ticker');
 export const CompareQuerySchema = z.object({
   underlying: UnderlyingSchema.default('BTC').describe('common underlying, e.g. BTC (see GET /markets-hub/underlyings)'),
-  side: z.enum(['long', 'short']).default('long'),
+  side: z.enum(['long', 'short']).default('long').describe('direction of the position compared'),
   notional: Dec(1_000_000_000, 'notional').default('1000').describe('position notional in USD (not the collateral)'),
-  leverage: Dec(200, 'leverage').default('1'),
+  leverage: Dec(200, 'leverage').default('1').describe('leverage of the position: collateral = notional / leverage'),
   horizonHours: z.string().regex(/^(0|[1-9]\d{0,3})(\.\d{1,4})?$/, 'horizonHours: a decimal number').refine((x) => Number(x) <= 8760, 'horizonHours: at most 8760').default('24').describe('expected holding period; funding is the current rate held constant over it'),
   liquidity: z.enum(['taker', 'maker']).default('taker').describe('how the entry and the exit are executed, for the fee'),
   minNetEdgeBps: z.string().regex(/^(0|[1-9]\d{0,4})(\.\d{1,4})?$/).default('0').describe('a discrepancy estimate above this is flagged'),

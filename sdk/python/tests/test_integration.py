@@ -219,7 +219,10 @@ def conforms(op_id: str, result: Any) -> None:
 # ================================================================================================================ reads
 def test_openapi_served_is_the_committed_contract(run: Runner) -> None:
     d = run.call(run.client("reader"), "openapi")
-    assert d.to_dict() == OPENAPI
+    # the SDK reads every JSON number with a fraction as a Decimal (never a float): the committed document is read the same way here,
+    # since the recorded example answers it carries (`example` on every 200) hold such numbers
+    committed = json.loads((ROOT / "docs" / "openapi" / "trading-v1.json").read_text(), parse_float=Decimal)
+    assert d.to_dict() == committed
     say(f"[{run.kind}] openapi() → {meta(d)} openapi={d.openapi} paths={len(d.to_dict()['paths'])}")
 
 

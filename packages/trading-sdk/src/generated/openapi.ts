@@ -164,10 +164,11 @@ export type GetOpenApiResponse = {
 export interface ListMarketsQuery {
   /** venue id: hyperliquid, gmx, dydx, spot */
   venue?: string;
+  /** perpetual = a venue instrument; spot = a market-data symbol */
   kind?: "perpetual" | "spot";
   /** case-insensitive match on id, symbol or base */
   q?: string;
-  /** default: 2000 */
+  /** rows returned at most; `total` and `truncated` say when it cut the list — default: 2000 */
   limit?: number;
 }
 export type ListMarketsResponse = {
@@ -201,11 +202,11 @@ export type ListMarketsResponse = {
 export interface CompareMarketsQuery {
   /** common underlying, e.g. BTC (see GET /markets-hub/underlyings) — pattern: ^[A-Za-z0-9]{1,15}$ — default: "BTC" */
   underlying?: string;
-  /** default: "long" */
+  /** direction of the position compared — default: "long" */
   side?: "long" | "short";
   /** position notional in USD (not the collateral) — pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ — default: "1000" */
   notional?: string;
-  /** pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ — default: "1" */
+  /** leverage of the position: collateral = notional / leverage — pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ — default: "1" */
   leverage?: string;
   /** expected holding period; funding is the current rate held constant over it — pattern: ^(0|[1-9]\d{0,3})(\.\d{1,4})?$ — default: "24" */
   horizonHours?: string;
@@ -334,7 +335,7 @@ export type GetMarketResponse = {
 
 // ---------------------------------------------------------------------------------------------------- getOrderbook: GET /api/v1/trading/markets/{symbol}/orderbook
 export interface GetOrderbookQuery {
-  /** default: 20 */
+  /** price levels per side — default: 20 */
   depth?: number;
 }
 export type GetOrderbookResponse = {
@@ -349,9 +350,9 @@ export type GetOrderbookResponse = {
 
 // ---------------------------------------------------------------------------------------------------- getCandles: GET /api/v1/trading/markets/{symbol}/candles
 export interface GetCandlesQuery {
-  /** default: "1h" */
+  /** bar length — default: "1h" */
   interval?: "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
-  /** default: 200 */
+  /** most recent closed bars, oldest first in the answer — default: 200 */
   limit?: number;
 }
 export type GetCandlesResponse = {
@@ -384,6 +385,7 @@ export interface ListPrivateMarketsQuery {
   delisted?: "true" | "false";
   /** hypothetical position size, contracts (default 1) — pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ */
   size?: string;
+  /** side of the hypothetical position (default long) */
   side?: "long" | "short";
 }
 export type ListPrivateMarketsResponse = {
@@ -524,10 +526,13 @@ export type ListPrivateMarketsResponse = {
 
 // ---------------------------------------------------------------------------------------------------- getPrivateMarketCompany: GET /api/v1/trading/private-markets/companies/{slug}
 export interface GetPrivateMarketCompanyQuery {
-  /** pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ */
+  /** hypothetical position size, contracts (default 1) — pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ */
   size?: string;
+  /** side of the hypothetical position (default long) */
   side?: "long" | "short";
+  /** candle length */
   interval?: "1h" | "1d";
+  /** candles returned at most */
   limit?: number;
 }
 export type GetPrivateMarketCompanyResponse = {
@@ -762,10 +767,13 @@ export type GetPrivateMarketCompanyResponse = {
 
 // ---------------------------------------------------------------------------------------------------- getPrivateMarket: GET /api/v1/trading/private-markets/{id}
 export interface GetPrivateMarketQuery {
-  /** pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ */
+  /** hypothetical position size, contracts (default 1) — pattern: ^(0|[1-9]\d{0,11})(\.\d{1,8})?$ */
   size?: string;
+  /** side of the hypothetical position (default long) */
   side?: "long" | "short";
+  /** candle length */
   interval?: "1h" | "1d";
+  /** candles returned at most */
   limit?: number;
 }
 export type GetPrivateMarketResponse = {
@@ -935,6 +943,7 @@ export type GetPortfolioResponse = {
 
 // ---------------------------------------------------------------------------------------------------- getBalances: GET /api/v1/trading/balances
 export interface GetBalancesQuery {
+  /** one network id (e.g. `base`, `arbitrum`, `solana`); default: every network of the wallet */
   network?: string;
 }
 export type GetBalancesResponse = {
@@ -959,7 +968,7 @@ export type GetBalancesResponse = {
 
 // ---------------------------------------------------------------------------------------------------- getActivity: GET /api/v1/trading/activity
 export interface GetActivityQuery {
-  /** default: 100 */
+  /** rows returned at most — default: 100 */
   limit?: number;
   /** opaque position returned as `nextCursor` by the previous page; send it with the same filters — pattern: ^[A-Za-z0-9_-]+$ */
   cursor?: string;
@@ -978,16 +987,19 @@ export type GetActivityResponse = {
 
 // ---------------------------------------------------------------------------------------------------- listNfts: GET /api/v1/trading/nfts
 export interface ListNftsQuery {
+  /** one network id; default: all */
   network?: string;
   /** collection key */
   collection?: string;
+  /** in_wallet: held now; left: was found in the wallet and is no longer held; tracked: added by hand. Default: held, tracked, or left within the last 30 days */
   status?: "in_wallet" | "left" | "tracked";
+  /** case-insensitive text matched on the name, the key or the collection name */
   q?: string;
-  /** default: "recent" */
+  /** order of the list — default: "recent" */
   sort?: "recent" | "name";
   /** items an indexer flags as spam are hidden by default, never deleted — default: "hide" */
   spam?: "hide" | "show" | "only";
-  /** default: 48 */
+  /** rows returned at most — default: 48 */
   limit?: number;
   /** opaque position returned as `nextCursor` by the previous page; send it with the same filters — pattern: ^[A-Za-z0-9_-]+$ */
   cursor?: string;
@@ -1141,10 +1153,13 @@ export type GetNftResponse = {
 
 // ---------------------------------------------------------------------------------------------------- getNftActivity: GET /api/v1/trading/nfts/activity
 export interface GetNftActivityQuery {
+  /** `family:network:asset-id`, as returned by GET /nfts */
   key: string;
-  /** default: 20 */
+  /** rows returned at most — default: 20 */
   limit?: number;
+  /** `nextCursor` of the previous page */
   cursor?: string;
+  /** only events of this type */
   type?: "mint" | "transfer" | "transfer-in" | "transfer-out" | "burn" | "sale" | "unknown";
 }
 export type GetNftActivityResponse = {
@@ -1183,6 +1198,7 @@ export type GetNftActivityResponse = {
 
 // ---------------------------------------------------------------------------------------------------- getNftMarket: GET /api/v1/trading/nfts/market
 export interface GetNftMarketQuery {
+  /** network id, e.g. `ethereum`, `base`, `solana` */
   network: string;
   /** EVM: the contract; Solana: the mint / asset address */
   address: string;
@@ -1280,20 +1296,23 @@ export type GetNftMarketResponse = {
 
 // ---------------------------------------------------------------------------------------------------- getNftMarketEvents: GET /api/v1/trading/nfts/market/events
 export interface GetNftMarketEventsQuery {
+  /** network id, e.g. `ethereum`, `base`, `solana` */
   network: string;
+  /** EVM: the contract; Solana: the mint / asset address */
   address: string;
+  /** EVM: required, decimal or 0x-hex */
   tokenId?: string;
-  /** pattern: ^[a-z][a-z0-9-]{1,30}$ */
+  /** only this source (its id is `sources[].status.provider`); required with `cursor` — pattern: ^[a-z][a-z0-9-]{1,30}$ */
   provider?: string;
   /** comma-separated: sale, list, delist, offer, cancel-offer, transfer, mint — pattern: ^[a-z,-]+$ */
   type?: string;
-  /** pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  /** only events after this instant (ISO 8601) — pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   after?: string;
-  /** pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
+  /** only events before this instant (ISO 8601) — pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$ */
   before?: string;
   /** a position in ONE source's list: send it with `provider` */
   cursor?: string;
-  /** default: 20 */
+  /** rows returned at most — default: 20 */
   limit?: number;
 }
 export type GetNftMarketEventsResponse = {
@@ -1400,7 +1419,7 @@ export interface ListOrdersQuery {
   venue?: string;
   /** true: only orders that are not final; false: only final orders */
   open?: "true" | "false";
-  /** default: 100 */
+  /** rows returned at most — default: 100 */
   limit?: number;
   /** opaque position returned as `nextCursor` by the previous page; send it with the same filters — pattern: ^[A-Za-z0-9_-]+$ */
   cursor?: string;
@@ -1421,20 +1440,23 @@ export type PlaceOrderBody = {
   accountId?: string;
   /** `venue:symbol` (e.g. `hyperliquid:BTC`, `spot:ETH`); a bare symbol is accepted when it is not ambiguous */
   instrument: string;
+  /** buy opens or adds to a long (or reduces a short); sell the reverse */
   side: "buy" | "sell";
+  /** market: immediate, bounded by `slippageBps`. limit: rests at `price`. stop_* and take_profit_*: wait for `triggerPrice`, then act as a market order or as a limit order at `price` */
   type: "limit" | "market" | "stop_market" | "stop_limit" | "take_profit_market" | "take_profit_limit";
   /** quantity of the base asset. Exactly one of `size` and `notional` is required — pattern: ^\d+(\.\d+)?$ */
   size?: string;
   /** value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required. A SPOT order: a SELL names `size` (the quantity sold); a BUY names `notional` — the amount of the quote asset to spend — because a swap is exact-input — pattern: ^\d+(\.\d+)?$ */
   notional?: string;
-  /** decimal number as a string (never a float) — pattern: ^\d+(\.\d+)?$ */
+  /** limit price, a multiple of the instrument's `tickSize`; required by `limit`, `stop_limit` and `take_profit_limit`, refused on a market order — pattern: ^\d+(\.\d+)?$ */
   price?: string;
-  /** decimal number as a string (never a float) — pattern: ^\d+(\.\d+)?$ */
+  /** price at which a stop or take-profit order is triggered; required by the four trigger types — pattern: ^\d+(\.\d+)?$ */
   triggerPrice?: string;
-  /** default: false */
+  /** true: the order may only reduce an existing position — it can neither open, increase nor flip one — default: false */
   reduceOnly?: boolean;
-  /** default: "gtc" */
+  /** time in force of a limit order: gtc = rests until cancelled, ioc = fills what it can at once and cancels the rest, alo = add liquidity only (post-only) — default: "gtc" */
   tif?: "gtc" | "ioc" | "alo";
+  /** market orders: the worst acceptable price, in basis points from the reference price */
   slippageBps?: number;
   /** paper only: leverage setting of the instrument on the account. On a venue account the leverage is a venue setting — pattern: ^\d+(\.\d+)?$ */
   leverage?: string;
@@ -1503,6 +1525,7 @@ export type CancelOrderResponse = {
 
 // ---------------------------------------------------------------------------------------------------- listStrategies: GET /api/v1/trading/strategies
 export interface ListStrategiesQuery {
+  /** only spot or only perp strategies */
   kind?: "spot" | "perp";
 }
 export type ListStrategiesResponse = {
@@ -1529,10 +1552,11 @@ export type ListStrategiesResponse = {
 
 // ---------------------------------------------------------------------------------------------------- createStrategy: POST /api/v1/trading/strategies
 export type CreateStrategyBody = {
+  /** must be the kind of the agent (409 `wrong_kind` otherwise) */
   kind: "spot" | "perp";
-  /** library path of the strategy */
+  /** library path of the strategy, from GET /strategies (`library[].path`) */
   path: string;
-  /** pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** the agent the version is registered on; required in practice (400 without it) — pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   agentId?: string;
 };
 export type CreateStrategyResponse = {
@@ -1573,16 +1597,23 @@ export type CreateAgentBody = {
   kind?: "spot" | "perp";
   /** one of GET /agents/templates */
   template?: string;
+  /** shown in the app and in the lists */
   name: string;
-  /** default: "" */
+  /** free text for people; it changes nothing the agent does — default: "" */
   mission?: string;
+  /** asset symbols the agent trades, e.g. ["BTC"]; a fixed-universe strategy needs its exact universe (422 `universe_mismatch`); default: the template's */
   universe?: string[];
+  /** venues the agent reads; default: the template's */
   venues?: Array<"hyperliquid" | "edgex" | "dydx" | "gmx">;
+  /** bar templates: which of the template's installed strategies to bind, from GET /agents/templates */
   strategyPath?: string;
+  /** bar agents: bar length; default 1h */
   interval?: "1h" | "4h" | "1d";
-  /** pattern: ^\d{1,7}(\.\d{1,6})?$ */
+  /** simulated capital of the agent, a decimal string; default 1000 — pattern: ^\d{1,7}(\.\d{1,6})?$ */
   capitalUsdc?: string;
+  /** overrides of the agent's own risk limits, by name (the limits in force are in GET /agents/{id}: `riskLimits`) */
   risk?: Record<string, number | string | boolean>;
+  /** overrides of the template's parameters, by name */
   config?: Record<string, unknown>;
   /** research (default): the agent is created and not running. paper: an agent created from a stream or supervisor template is started on paper at once; a bar agent (momentum, mean reversion, …, or `kind: perp`) is created and NOT started — it needs a backtested strategy version first, then POST /agents/{id}/start. `live` is refused (400 `bad_request`): an agent goes live only through POST /agents/{id}/start, under a mandate the owner approved. — default: "research" */
   mode?: "research" | "paper";
@@ -1644,20 +1675,23 @@ export type PreviewOrderBody = {
   accountId?: string;
   /** `venue:symbol` (e.g. `hyperliquid:BTC`, `spot:ETH`); a bare symbol is accepted when it is not ambiguous */
   instrument: string;
+  /** buy opens or adds to a long (or reduces a short); sell the reverse */
   side: "buy" | "sell";
+  /** market: immediate, bounded by `slippageBps`. limit: rests at `price`. stop_* and take_profit_*: wait for `triggerPrice`, then act as a market order or as a limit order at `price` */
   type: "limit" | "market" | "stop_market" | "stop_limit" | "take_profit_market" | "take_profit_limit";
   /** quantity of the base asset. Exactly one of `size` and `notional` is required — pattern: ^\d+(\.\d+)?$ */
   size?: string;
   /** value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required. A SPOT order: a SELL names `size` (the quantity sold); a BUY names `notional` — the amount of the quote asset to spend — because a swap is exact-input — pattern: ^\d+(\.\d+)?$ */
   notional?: string;
-  /** decimal number as a string (never a float) — pattern: ^\d+(\.\d+)?$ */
+  /** limit price, a multiple of the instrument's `tickSize`; required by `limit`, `stop_limit` and `take_profit_limit`, refused on a market order — pattern: ^\d+(\.\d+)?$ */
   price?: string;
-  /** decimal number as a string (never a float) — pattern: ^\d+(\.\d+)?$ */
+  /** price at which a stop or take-profit order is triggered; required by the four trigger types — pattern: ^\d+(\.\d+)?$ */
   triggerPrice?: string;
-  /** default: false */
+  /** true: the order may only reduce an existing position — it can neither open, increase nor flip one — default: false */
   reduceOnly?: boolean;
-  /** default: "gtc" */
+  /** time in force of a limit order: gtc = rests until cancelled, ioc = fills what it can at once and cancels the rest, alo = add liquidity only (post-only) — default: "gtc" */
   tif?: "gtc" | "ioc" | "alo";
+  /** market orders: the worst acceptable price, in basis points from the reference price */
   slippageBps?: number;
   /** paper only: leverage setting of the instrument on the account. On a venue account the leverage is a venue setting — pattern: ^\d+(\.\d+)?$ */
   leverage?: string;
@@ -1743,6 +1777,7 @@ export type PreviewOrderResponse = {
 
 // ---------------------------------------------------------------------------------------------------- closePosition: POST /api/v1/trading/positions/{id}/close
 export type ClosePositionBody = {
+  /** worst acceptable price of the closing market order, in basis points from the reference price */
   slippageBps?: number;
 };
 export type ClosePositionResponse = {
@@ -1771,6 +1806,7 @@ export type ClosePositionResponse = {
 export type ReducePositionBody = {
   /** share of the position to close, in (0, 1] — pattern: ^(0(\.\d+)?|1(\.0+)?)$ */
   fraction: string;
+  /** worst acceptable price of the reducing market order, in basis points from the reference price */
   slippageBps?: number;
 };
 export type ReducePositionResponse = {
@@ -1887,7 +1923,7 @@ export type RunCommandResponse = {
 
 // ---------------------------------------------------------------------------------------------------- engageKillSwitch: POST /api/v1/trading/risk/kill-switch
 export type EngageKillSwitchBody = {
-  /** default: "" */
+  /** why, for the audit trail and the `risk.kill_switch` webhook — default: "" */
   reason?: string;
 };
 export type EngageKillSwitchResponse = {
@@ -1898,7 +1934,9 @@ export type EngageKillSwitchResponse = {
 
 // ---------------------------------------------------------------------------------------------------- backtestStrategy: POST /api/v1/trading/strategies/{id}/backtest
 export type BacktestStrategyBody = {
+  /** default: the agent's universe */
   symbols?: string[];
+  /** bar interval; default: the agent's */
   interval?: "1h" | "1d";
 };
 export type BacktestStrategyResponse = {
@@ -1916,7 +1954,7 @@ export type BacktestStrategyResponse = {
 export type StartStrategyBody = {
   /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
   mode: "research" | "paper" | "live";
-  /** pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** strategy operations only: the agent, when the version id alone does not name it — pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   agentId?: string;
 };
 export type StartStrategyResponse = {
@@ -1932,7 +1970,7 @@ export type StartStrategyResponse = {
 
 // ---------------------------------------------------------------------------------------------------- stopStrategy: POST /api/v1/trading/strategies/{id}/stop
 export type StopStrategyBody = {
-  /** default: "" */
+  /** why, for the agent's journal — default: "" */
   reason?: string;
 };
 export type StopStrategyResponse = {
@@ -1977,7 +2015,7 @@ export type GetAgentResponse = {
 export interface ListAgentSignalsQuery {
   /** default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it. */
   mode?: "research" | "paper" | "live";
-  /** default: 100 */
+  /** rows returned at most — default: 100 */
   limit?: number;
   /** unix ms: rows strictly before it */
   before?: number;
@@ -2003,7 +2041,7 @@ export type ListAgentSignalsResponse = {
 export interface ListAgentJournalQuery {
   /** default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it. */
   mode?: "research" | "paper" | "live";
-  /** default: 100 */
+  /** rows returned at most — default: 100 */
   limit?: number;
   /** unix ms: rows strictly before it */
   before?: number;
@@ -2028,7 +2066,7 @@ export type ListAgentJournalResponse = {
 export interface ListAgentOrdersQuery {
   /** default: the mode the agent is in NOW (for a stopped agent, the one it last ran in) — the answer always says which in `mode`. Name it to read one mode whatever the agent is doing; both SDKs require it. */
   mode?: "research" | "paper" | "live";
-  /** default: 100 */
+  /** rows returned at most — default: 100 */
   limit?: number;
   /** unix ms: rows strictly before it */
   before?: number;
@@ -2083,7 +2121,7 @@ export type GetJobResponse = {
 export type StartAgentBody = {
   /** research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes. */
   mode: "research" | "paper" | "live";
-  /** pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** strategy operations only: the agent, when the version id alone does not name it — pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   agentId?: string;
 };
 export type StartAgentResponse = {
@@ -2099,7 +2137,7 @@ export type StartAgentResponse = {
 
 // ---------------------------------------------------------------------------------------------------- pauseAgent: POST /api/v1/trading/agents/{id}/pause
 export type PauseAgentBody = {
-  /** default: "" */
+  /** why, for the agent's journal — default: "" */
   reason?: string;
 };
 export type PauseAgentResponse = {
@@ -2115,7 +2153,7 @@ export type PauseAgentResponse = {
 
 // ---------------------------------------------------------------------------------------------------- stopAgent: POST /api/v1/trading/agents/{id}/stop
 export type StopAgentBody = {
-  /** default: "" */
+  /** why, for the agent's journal — default: "" */
   reason?: string;
 };
 export type StopAgentResponse = {
@@ -2131,7 +2169,7 @@ export type StopAgentResponse = {
 
 // ---------------------------------------------------------------------------------------------------- backtestAgent: POST /api/v1/trading/agents/{id}/backtest
 export type BacktestAgentBody = {
-  /** pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  /** bar agents: the strategy version to backtest; default: the agent's current one — pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   versionId?: string;
   /** stream agents: how many hours of recorded snapshots to replay */
   hours?: number;

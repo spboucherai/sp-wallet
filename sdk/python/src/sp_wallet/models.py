@@ -1035,15 +1035,15 @@ class OrderRequest(RequestModel):
     mode: Literal["paper", "live"] = Field(description='paper = simulated, live = a venue or on-chain account. The two are never merged in one figure.')
     account_id: Annotated[str, Field(pattern='^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$')] | None = Field(default=None, alias='accountId', description='paper account or venue account; required when the wallet has several on the venue')
     instrument: Annotated[str, Field(min_length=1, max_length=120)] = Field(description='`venue:symbol` (e.g. `hyperliquid:BTC`, `spot:ETH`); a bare symbol is accepted when it is not ambiguous')
-    side: Literal["buy", "sell"]
-    type: Literal["limit", "market", "stop_market", "stop_limit", "take_profit_market", "take_profit_limit"]
+    side: Literal["buy", "sell"] = Field(description='buy opens or adds to a long (or reduces a short); sell the reverse')
+    type: Literal["limit", "market", "stop_market", "stop_limit", "take_profit_market", "take_profit_limit"] = Field(description='market: immediate, bounded by `slippageBps`. limit: rests at `price`. stop_* and take_profit_*: wait for `triggerPrice`, then act as a market order or as a limit order at `price`')
     size: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description='quantity of the base asset. Exactly one of `size` and `notional` is required')
     notional: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description='value of the order in the quote currency of the instrument (USD or a USD stablecoin on every venue of this wallet). The SERVER turns it into a size: notional / reference price, rounded DOWN to the lot size — the reference is the limit price, else the trigger price, else the mark price read now (503 `stale_data` when it is stale; 422 `below_min_size` under one lot). The answer carries the size that was used. Exactly one of `size` and `notional` is required. A SPOT order: a SELL names `size` (the quantity sold); a BUY names `notional` — the amount of the quote asset to spend — because a swap is exact-input')
-    price: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description='decimal number as a string (never a float)')
-    trigger_price: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, alias='triggerPrice', description='decimal number as a string (never a float)')
-    reduce_only: bool | None = Field(default=None, alias='reduceOnly', description='server default: false')
-    tif: Literal["gtc", "ioc", "alo"] | None = Field(default=None, description='server default: "gtc"')
-    slippage_bps: Annotated[int, Field(ge=1, le=500)] | None = Field(default=None, alias='slippageBps')
+    price: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description="limit price, a multiple of the instrument's `tickSize`; required by `limit`, `stop_limit` and `take_profit_limit`, refused on a market order")
+    trigger_price: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, alias='triggerPrice', description='price at which a stop or take-profit order is triggered; required by the four trigger types')
+    reduce_only: bool | None = Field(default=None, alias='reduceOnly', description='true: the order may only reduce an existing position — it can neither open, increase nor flip one — server default: false')
+    tif: Literal["gtc", "ioc", "alo"] | None = Field(default=None, description='time in force of a limit order: gtc = rests until cancelled, ioc = fills what it can at once and cancels the rest, alo = add liquidity only (post-only) — server default: "gtc"')
+    slippage_bps: Annotated[int, Field(ge=1, le=500)] | None = Field(default=None, alias='slippageBps', description='market orders: the worst acceptable price, in basis points from the reference price')
     leverage: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, description='paper only: leverage setting of the instrument on the account. On a venue account the leverage is a venue setting')
     max_fee_usd: Annotated[str, Field(pattern='^\\d+(\\.\\d+)?$')] | None = Field(default=None, alias='maxFeeUsd', description='highest fee accepted, USD; default: 10 bps of the notional')
     client_order_id: Annotated[str, Field(pattern='^[A-Za-z0-9._:-]{8,100}$')] | None = Field(default=None, alias='clientOrderId', description='idempotency key of the ORDER; default: the Idempotency-Key header. The order id is derived from it and from the principal')
@@ -1126,9 +1126,9 @@ class StrategyResult(ApiModel):
 class CreateStrategyRequest(RequestModel):
     """closed object in the contract"""
 
-    kind: Literal["spot", "perp"]
-    path: Annotated[str, Field(min_length=1, max_length=200)] = Field(description='library path of the strategy')
-    agent_id: Annotated[str, Field(pattern='^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$')] | None = Field(default=None, alias='agentId')
+    kind: Literal["spot", "perp"] = Field(description='must be the kind of the agent (409 `wrong_kind` otherwise)')
+    path: Annotated[str, Field(min_length=1, max_length=200)] = Field(description='library path of the strategy, from GET /strategies (`library[].path`)')
+    agent_id: Annotated[str, Field(pattern='^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$')] | None = Field(default=None, alias='agentId', description='the agent the version is registered on; required in practice (400 without it)')
 
 
 class Agent(ApiModel):
@@ -1173,15 +1173,15 @@ class CreateAgentRequest(RequestModel):
 
     kind: Literal["spot", "perp"] | None = Field(default=None, description='without a template: perp (a spot agent needs a vault from the signer: owner only)')
     template: Annotated[str, Field(max_length=40)] | None = Field(default=None, description='one of GET /agents/templates')
-    name: Annotated[str, Field(min_length=2, max_length=40)]
-    mission: Annotated[str, Field(max_length=400)] | None = Field(default=None, description='server default: ""')
-    universe: Annotated[list[Annotated[str, Field(pattern='^[A-Z0-9]{2,15}$')]], Field(min_length=1, max_length=12)] | None = Field(default=None)
-    venues: Annotated[list[Literal["hyperliquid", "edgex", "dydx", "gmx"]], Field(min_length=1, max_length=2)] | None = Field(default=None)
-    strategy_path: Annotated[str, Field(max_length=60)] | None = Field(default=None, alias='strategyPath')
-    interval: Literal["1h", "4h", "1d"] | None = Field(default=None)
-    capital_usdc: Annotated[str, Field(pattern='^\\d{1,7}(\\.\\d{1,6})?$')] | None = Field(default=None, alias='capitalUsdc')
-    risk: dict[str, Decimal | str | bool] | None = Field(default=None)
-    config: dict[str, Any] | None = Field(default=None)
+    name: Annotated[str, Field(min_length=2, max_length=40)] = Field(description='shown in the app and in the lists')
+    mission: Annotated[str, Field(max_length=400)] | None = Field(default=None, description='free text for people; it changes nothing the agent does — server default: ""')
+    universe: Annotated[list[Annotated[str, Field(pattern='^[A-Z0-9]{2,15}$')]], Field(min_length=1, max_length=12)] | None = Field(default=None, description='asset symbols the agent trades, e.g. ["BTC"]; a fixed-universe strategy needs its exact universe (422 `universe_mismatch`); default: the template\'s')
+    venues: Annotated[list[Literal["hyperliquid", "edgex", "dydx", "gmx"]], Field(min_length=1, max_length=2)] | None = Field(default=None, description="venues the agent reads; default: the template's")
+    strategy_path: Annotated[str, Field(max_length=60)] | None = Field(default=None, alias='strategyPath', description="bar templates: which of the template's installed strategies to bind, from GET /agents/templates")
+    interval: Literal["1h", "4h", "1d"] | None = Field(default=None, description='bar agents: bar length; default 1h')
+    capital_usdc: Annotated[str, Field(pattern='^\\d{1,7}(\\.\\d{1,6})?$')] | None = Field(default=None, alias='capitalUsdc', description='simulated capital of the agent, a decimal string; default 1000')
+    risk: dict[str, Decimal | str | bool] | None = Field(default=None, description="overrides of the agent's own risk limits, by name (the limits in force are in GET /agents/{id}: `riskLimits`)")
+    config: dict[str, Any] | None = Field(default=None, description="overrides of the template's parameters, by name")
     mode: Literal["research", "paper"] | None = Field(default=None, description='research (default): the agent is created and not running. paper: an agent created from a stream or supervisor template is started on paper at once; a bar agent (momentum, mean reversion, …, or `kind: perp`) is created and NOT started — it needs a backtested strategy version first, then POST /agents/{id}/start. `live` is refused (400 `bad_request`): an agent goes live only through POST /agents/{id}/start, under a mandate the owner approved. — server default: "research"')
 
 
@@ -1326,14 +1326,14 @@ class OrderPreview(ApiModel):
 class ClosePositionRequest(RequestModel):
     """closed object in the contract"""
 
-    slippage_bps: Annotated[int, Field(ge=1, le=500)] | None = Field(default=None, alias='slippageBps')
+    slippage_bps: Annotated[int, Field(ge=1, le=500)] | None = Field(default=None, alias='slippageBps', description='worst acceptable price of the closing market order, in basis points from the reference price')
 
 
 class ReducePositionRequest(RequestModel):
     """closed object in the contract"""
 
     fraction: Annotated[str, Field(pattern='^(0(\\.\\d+)?|1(\\.0+)?)$')] = Field(description='share of the position to close, in (0, 1]')
-    slippage_bps: Annotated[int, Field(ge=1, le=500)] | None = Field(default=None, alias='slippageBps')
+    slippage_bps: Annotated[int, Field(ge=1, le=500)] | None = Field(default=None, alias='slippageBps', description='worst acceptable price of the reducing market order, in basis points from the reference price')
 
 
 class CommandQuery(ApiModel):
@@ -1432,7 +1432,7 @@ class KillSwitchResult(ApiModel):
 class KillSwitchRequest(RequestModel):
     """closed object in the contract"""
 
-    reason: Annotated[str, Field(max_length=200)] | None = Field(default=None, description='server default: ""')
+    reason: Annotated[str, Field(max_length=200)] | None = Field(default=None, description='why, for the audit trail and the `risk.kill_switch` webhook — server default: ""')
 
 
 class JobResultJob(ApiModel):
@@ -1454,21 +1454,21 @@ class JobResult(ApiModel):
 class BacktestRequest(RequestModel):
     """closed object in the contract"""
 
-    symbols: Annotated[list[Annotated[str, Field(pattern='^[A-Z0-9]{2,15}$')]], Field(min_length=1, max_length=12)] | None = Field(default=None)
-    interval: Literal["1h", "1d"] | None = Field(default=None)
+    symbols: Annotated[list[Annotated[str, Field(pattern='^[A-Z0-9]{2,15}$')]], Field(min_length=1, max_length=12)] | None = Field(default=None, description="default: the agent's universe")
+    interval: Literal["1h", "1d"] | None = Field(default=None, description="bar interval; default: the agent's")
 
 
 class StartRequest(RequestModel):
     """closed object in the contract"""
 
     mode: Literal["research", "paper", "live"] = Field(description='research = analysis and backtests, never an order; paper = explicit simulation; live = a real venue under an owner-approved mandate. One answer never carries two modes.')
-    agent_id: Annotated[str, Field(pattern='^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$')] | None = Field(default=None, alias='agentId')
+    agent_id: Annotated[str, Field(pattern='^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$')] | None = Field(default=None, alias='agentId', description='strategy operations only: the agent, when the version id alone does not name it')
 
 
 class StopRequest(RequestModel):
     """closed object in the contract"""
 
-    reason: Annotated[str, Field(max_length=200)] | None = Field(default=None, description='server default: ""')
+    reason: Annotated[str, Field(max_length=200)] | None = Field(default=None, description='why, for the agent\'s journal — server default: ""')
 
 
 class AgentTemplatesTemplatesItem(ApiModel):
@@ -1577,7 +1577,7 @@ class AgentPerformance(ApiModel):
 class AgentBacktestRequest(RequestModel):
     """closed object in the contract"""
 
-    version_id: Annotated[str, Field(pattern='^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$')] | None = Field(default=None, alias='versionId')
+    version_id: Annotated[str, Field(pattern='^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$')] | None = Field(default=None, alias='versionId', description="bar agents: the strategy version to backtest; default: the agent's current one")
     hours: Annotated[int, Field(ge=1, le=168)] | None = Field(default=None, description='stream agents: how many hours of recorded snapshots to replay')
 
 
