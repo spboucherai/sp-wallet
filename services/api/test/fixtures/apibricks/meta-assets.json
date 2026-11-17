@@ -1,0 +1,819 @@
+{
+ "capturedAt": 1794902480310,
+ "endpoint": "GET /v1/assets?filter_asset_id=<wallet symbols>",
+ "note": "trimmed to asset_id, name, type_is_crypto, chain_addresses",
+ "body": [
+  {
+   "asset_id": "BTC",
+   "name": "Bitcoin",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
+    }
+   ]
+  },
+  {
+   "asset_id": "USD",
+   "name": "US Dollar",
+   "type_is_crypto": 0,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xd233d1f6fd11640081abb8db125f722b5dc729dc"
+    }
+   ]
+  },
+  {
+   "asset_id": "LTC",
+   "name": "Litecoin",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "USDT",
+   "name": "Tether",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xdac17f958d2ee523a2206206994597c13d831ec7"
+    }
+   ]
+  },
+  {
+   "asset_id": "CAD",
+   "name": "Canadian Dollar",
+   "type_is_crypto": 0,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "ETH",
+   "name": "Ethereum",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+    }
+   ]
+  },
+  {
+   "asset_id": "DOGE",
+   "name": "DogeCoin",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "XRP",
+   "name": "Ripple",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "XLM",
+   "name": "Stellar Lumens",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "EURC",
+   "name": "EURC",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x1abaea1f7c830bd89acc67ec4af516284b1bc33c"
+    }
+   ]
+  },
+  {
+   "asset_id": "OP",
+   "name": "Operand",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "ARB",
+   "name": "ARbit",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0x912ce59144191c1204e64559fe8253a0e49e6548"
+    }
+   ]
+  },
+  {
+   "asset_id": "APT",
+   "name": "APT",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "BNB",
+   "name": "Binance Coin",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xb8c77482e45f1f44de1745f52c74426c631bdd52"
+    }
+   ]
+  },
+  {
+   "asset_id": "BCH",
+   "name": "Bitcoin Cash",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "USDE",
+   "name": "USDe",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "LINK",
+   "name": "ChainLink",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0xf97f4df75117a78c1a5a0dbb814af92458539fb4"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x514910771af9ca656af840dff83e8264ecf986ca"
+    }
+   ]
+  },
+  {
+   "asset_id": "TRX",
+   "name": "TRON",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x50327c6c5a14dcade707abad2e27eb517df87ab5"
+    }
+   ]
+  },
+  {
+   "asset_id": "COMP",
+   "name": "COMP",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0x354a6da3fcde098f8389cad84b0182725c6c91de"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xc00e94cb662c3520282e6f5717214004a7f26888"
+    }
+   ]
+  },
+  {
+   "asset_id": "ADA",
+   "name": "Cardano",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "USDC",
+   "name": "USDC",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0xaf88d065e77c8cc2239327c5edb3a432268e5831"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    }
+   ]
+  },
+  {
+   "asset_id": "SNX",
+   "name": "Synthetix Network Token",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xc011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f"
+    }
+   ]
+  },
+  {
+   "asset_id": "MKR",
+   "name": "Maker",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2"
+    }
+   ]
+  },
+  {
+   "asset_id": "USDS",
+   "name": "StableUSD",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0xd74f5255d557944cf7dd0e45ff521520002d5748"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xa4bdb11dc0a2bec88d24a3aa1e6bb17201112ebe"
+    }
+   ]
+  },
+  {
+   "asset_id": "ATOM",
+   "name": "Cosmos",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "WETH",
+   "name": "WETH",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0x7d0c76601529ac4d8a3728b50dc7ca7e66204636"
+    }
+   ]
+  },
+  {
+   "asset_id": "DOT",
+   "name": "Polkadot",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "DAI",
+   "name": "DAI (Multi-collateral)",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x6b175474e89094c44da98b954eedeac495271d0f"
+    }
+   ]
+  },
+  {
+   "asset_id": "PAXG",
+   "name": "Paxos Gold",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0xfeb4dfc8c4cf7ed305bb08065d08ec6ee6728429"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x45804880de22913dafe09f4980848ece6ecbaf78"
+    }
+   ]
+  },
+  {
+   "asset_id": "SKY",
+   "name": "Skycoin",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "SOL",
+   "name": "SOL",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "POL",
+   "name": "Polygon Ecosystem Token",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "AVAX",
+   "name": "AVAX",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "WBTC",
+   "name": "WBTC",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xab8deecdf71c539541edb7d7b490c6dc052b1fbf"
+    }
+   ]
+  },
+  {
+   "asset_id": "CRV",
+   "name": "CRV",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0x11cdb42b0eb46d95f990bedd4695a6e3fa034978"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xd533a949740bb3306d119cc777fa900ba034cd52"
+    }
+   ]
+  },
+  {
+   "asset_id": "UNI",
+   "name": "Uniswap",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0xfa7f8980b0f1e64a2062791cc3b0871572f1f7f0"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"
+    }
+   ]
+  },
+  {
+   "asset_id": "VELO",
+   "name": "VELO",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "USDG",
+   "name": "USDG",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xbd62253c8033f3907c0800780662eab7378a4b96"
+    }
+   ]
+  },
+  {
+   "asset_id": "CAKE",
+   "name": "CAKE",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "AAVE",
+   "name": "AAVE",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0xba5ddd1f9d7f570dc94a51479a000e3bce967196"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9"
+    }
+   ]
+  },
+  {
+   "asset_id": "NEAR",
+   "name": "NEAR",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x85f17cf997934a597031b2e18a9ab6ebd4b9f6a4"
+    }
+   ]
+  },
+  {
+   "asset_id": "HNT",
+   "name": "HNT",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "TBTC",
+   "name": "TBTC",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x8daebade922df735c38c80c7ebd708af50815faa"
+    }
+   ]
+  },
+  {
+   "asset_id": "RAY",
+   "name": "RAY",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x5245c0249e5eeb2a0838266800471fd32adb1089"
+    }
+   ]
+  },
+  {
+   "asset_id": "SHIB",
+   "name": "Shiba Inu",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce"
+    }
+   ]
+  },
+  {
+   "asset_id": "JUP",
+   "name": "JUP",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "LDO",
+   "name": "LDO",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x5a98fcbea516cf06857215779fd812ca3bef1b32"
+    }
+   ]
+  },
+  {
+   "asset_id": "JOE",
+   "name": "JOE",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07"
+    }
+   ]
+  },
+  {
+   "asset_id": "ORCA",
+   "name": "ORCA",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "HYPE",
+   "name": "HYPE",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xe1212f852c0ca3491ca6b96081ac3cf40e989094"
+    }
+   ]
+  },
+  {
+   "asset_id": "PENDLE",
+   "name": "PENDLE",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0x0c880f6761f1af8d9aa9c466984b80dab9a8c9e8"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x808507121b80c02388fad14726482e061b8da827"
+    }
+   ]
+  },
+  {
+   "asset_id": "MSOL",
+   "name": "MSOL",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "BTCB",
+   "name": "BTCB",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "WBNB",
+   "name": "WBNB",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "GMX",
+   "name": "GoldMaxCoin",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a"
+    }
+   ]
+  },
+  {
+   "asset_id": "USDD",
+   "name": "USDD",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x0c10bf8fcb7bf5412187a595ab97a3609160b5c6"
+    }
+   ]
+  },
+  {
+   "asset_id": "MNT",
+   "name": "Mantle",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "CBETH",
+   "name": "ETH2 Coinbase Staked",
+   "type_is_crypto": 0,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xbe9895146f7af43049ca1c1ae358b0541ea49704"
+    }
+   ]
+  },
+  {
+   "asset_id": "BONK",
+   "name": "BONK",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "TON",
+   "name": "TON",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "PEPE",
+   "name": "PepeCoin",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0xa54b8e178a49f8e5405a4d44bb31f496e5564a05"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x6982508145454ce325ddbe47a25d4ec3d2311933"
+    }
+   ]
+  },
+  {
+   "asset_id": "SUI",
+   "name": "SUI",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "FDUSD",
+   "name": "FDUSD",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "PYUSD",
+   "name": "PYUSD",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x6c3ea9036406852006290770bedfcaba0e23a0e8"
+    }
+   ]
+  },
+  {
+   "asset_id": "crvUSD",
+   "name": "crvUSD",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xf939e0a03fb07f59a73314e73794be0e57ac1b4e"
+    }
+   ]
+  },
+  {
+   "asset_id": "TOSHI",
+   "name": "TOSHI",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "PYTH",
+   "name": "PYTH",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "WSTETH",
+   "name": "WSTETH",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0x5979d7b546e38e414f7e9822514be443a4800529"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"
+    }
+   ]
+  },
+  {
+   "asset_id": "RETH",
+   "name": "RETH",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ARBITRUM",
+     "network_id": "MAINNET",
+     "address": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8"
+    },
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0xae78736cd615f374d3085123a210448e74fc6393"
+    }
+   ]
+  },
+  {
+   "asset_id": "DEGEN",
+   "name": "DEGEN",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "GHO",
+   "name": "GHO",
+   "type_is_crypto": 1,
+   "chain_addresses": [
+    {
+     "chain_id": "ETHEREUM",
+     "network_id": "MAINNET",
+     "address": "0x40d16fc0246ad3160ccc09b8d0d3a2cd28ae6c2f"
+    }
+   ]
+  },
+  {
+   "asset_id": "JTO",
+   "name": "JTO",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "WEETH",
+   "name": null,
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "ONDO",
+   "name": "ONDO",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "AERO",
+   "name": "AERO",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "RENDER",
+   "name": "RENDER",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "BRETT",
+   "name": "Brett",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "ENA",
+   "name": "ENA",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "EIGEN",
+   "name": "EIGEN",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "RLUSD",
+   "name": null,
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "MORPHO",
+   "name": "MORPHO",
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "JITOSOL",
+   "name": null,
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  },
+  {
+   "asset_id": "USDT0",
+   "name": null,
+   "type_is_crypto": 1,
+   "chain_addresses": null
+  }
+ ]
+}

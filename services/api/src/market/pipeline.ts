@@ -61,7 +61,8 @@ async function forEachSeries(sources: MarketSource[], cfg: MarketConfig, s: Pass
   await Promise.all(sources.map(async (src) => {
     let failures = 0;
     for (const [interval, symbol] of seriesOrder(cfg)) {
-      if (!src.pairs[symbol]) continue;
+      if (!src.pairs[symbol] || (src.intervals && !src.intervals.includes(interval))) continue;
+      if (src.ready && !src.ready()) return;
       try { if ((await each(src, symbol, interval)) === false) return; failures = 0; }
       catch (e) {
         s.errors.push(`${key(src.id, symbol, interval)}: ${(e as Error).message.slice(0, 160)}`);

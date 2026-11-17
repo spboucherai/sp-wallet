@@ -57,7 +57,7 @@ only) and `~/sp-wallet-signer-data` (keystore, `state.json`, `policy.json`). Com
    capability:
    ```
    sp-wallet api listening on … broadcast=<on|off>
-   [startup] capabilities: deriv_live_mainnet=<…> deriv_mandate_mainnet=<…> deriv_gmx_live=<…> trading_api_execution=<…> deriv_mm_mainnet=<…> deriv_mm_testnet=<…> research_runner=<…> research_readonly_db=<…> broadcast=<…> workers=<…> strategy_sandbox_enforced=<…> web_app=<…>
+   [startup] capabilities: deriv_live_mainnet=<…> deriv_mandate_mainnet=<…> deriv_gmx_live=<…> trading_api_execution=<…> deriv_mm_mainnet=<…> deriv_mm_testnet=<…> research_runner=<…> research_readonly_db=<…> broadcast=<…> workers=<…> strategy_sandbox_enforced=<…> web_app=<…> market_data_apibricks=<…>
    [startup] strategy sandbox: sandbox-exec (confined, self-test passed)
    ```
    There is no universally "expected" line: the right one is **the same as before the restart** (step 4), unless this
@@ -98,6 +98,29 @@ stop the V11-only agents, and revoke every quoting mandate before the signer goe
   the API). The separate worker is optional: `docs/TRADING-AGENT-ENGINE.md` §4.
 - **New retention loops** run with the workers and need nothing: API usage log (90 days), swap quotes (30 days), preview
   risk evaluations (30 days), market snapshots, the market-making tape (2 days), finished agent jobs (14 days).
+
+### API Bricks market data (V11, optional) — what a deployment adds
+
+- **Nothing, unless `APIBRICKS_API_KEY` is set.** Without it the capability line reads
+  `market_data_apibricks=OFF(missing APIBRICKS_API_KEY)` and the wallet behaves as before. Setting it is an owner
+  decision (a metered, prepaid account): `docs/V11-DEPLOYMENT.md` §4.3–4.4, `docs/V11-MARKET-DATA-SOURCES.md` §2.7.
+- **The key is a secret.** It goes in the PM2 environment of `sp-wallet` (and in the `env` block of the mld manifest on
+  M1M32) and nowhere else — not in the repository, not in a log, not on the signer node. Load it from the owner's secrets
+  file (`set -a; . <file>; set +a`); do not type or echo it. When the restart re-reads the shell (`--update-env`), it must
+  be exported together with every other variable of the process, or it is lost; afterwards compare the variable NAMES
+  (`scripts/preflight.sh --env-from-pm2 sp-wallet`). Include it in the secrets backup of the app.
+- **Quota settings** (all optional; defaults from the plan observed on 2026-11-17): `APIBRICKS_DAILY_CREDITS` (100),
+  `APIBRICKS_MARKET_DAILY_CREDITS` (25), `APIBRICKS_QUOTE_DAILY_CREDITS` (30), `APIBRICKS_PRICE_TTL_MS`,
+  `APIBRICKS_FAILOVER_TTL_MS`, `APIBRICKS_QUOTE_POLL_MS`, `APIBRICKS_DIVERGENCE_BPS`, `APIBRICKS_MARKET_INTERVALS`
+  (`1d`; `off` to take no bars), `APIBRICKS_MARKET_SYMBOLS`, `APIBRICKS_MARKET_HISTORY_BARS`. Read the balance in the
+  provider's console first: the API does not report it.
+- **After the restart**: `market_data_apibricks=on` in the start-up line; Monitor → "API Bricks … n / 100 crédits utilisés
+  aujourd'hui"; Dashboard → "Sources de prix: CoinGecko + API Bricks"; `GET /api/v1/stream/stats` → `metered.apibricks`.
+  A spent budget reads "Arrêtée : quota" until 00:00 UTC — the wallet then runs on CoinGecko alone, as before.
+- No new table. One new settings key (`apibricksBudget`: the day's credit count). Bars of the additional source are rows
+  of the existing `candles` table with `source = 'apibricks'`.
+- **Rolling back** to a build without it: nothing to undo; the variable is ignored and the `apibricks` rows are not read.
+- Live check without touching the stack: `npx tsx scripts/smoke-apibricks.mts` with the key in the environment (3 credits).
 
 ### Market making (V11) — what a deployment adds
 

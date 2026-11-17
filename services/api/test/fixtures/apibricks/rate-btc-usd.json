@@ -1,0 +1,11 @@
+{
+ "capturedAt": "2026-11-17T07:55:00Z",
+ "endpoint": "GET /v1/exchangerate/BTC/USD",
+ "status": 200,
+ "body": {
+  "time": "2026-11-17T07:53:00.7000000Z",
+  "asset_id_base": "BTC",
+  "asset_id_quote": "USD",
+  "rate": 64618.455790259
+ }
+}

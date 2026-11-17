@@ -3076,6 +3076,17 @@ const D = {
   v11LoSrvRefused: ['Demande refusée par le serveur. Message d’origine (en anglais) : « {detail} »', '{detail}'],
   v11LoSrvCode: ['Demande refusée par le serveur (code {code}).', 'Request refused by the server (code {code}).'],
   // <<< end of the `v11` block
+  // >>> `ab` block — API Bricks, the optional second (keyed) market-data source: Dashboard price-freshness panel and Monitor
+  abSources: ['Sources de prix', 'Price sources'], abSourcesOne: ['CoinGecko seul', 'CoinGecko only'], abSourcesTwo: ['CoinGecko + API Bricks', 'CoinGecko + API Bricks'],
+  abSourcesOneNote: ['Une seule source : aucun recoupement possible.', 'A single source: nothing to cross-check against.'],
+  abFallback: ['{n} prix en secours', '{n} prices on fallback'], abFallbackList: ['Prix affichés depuis API Bricks, CoinGecko étant indisponible ou périmé : {symbols}.', 'Prices shown from API Bricks because CoinGecko is unavailable or stale: {symbols}.'],
+  abDivergent: ['{n} écarts entre sources', '{n} sources disagree'], abDivergentList: ['Les deux sources divergent (jusqu’à {bps} pb) : {symbols}. Le prix affiché reste celui de CoinGecko ; aucune moyenne n’est faite.', 'The two sources disagree (up to {bps} bps): {symbols}. The price shown remains CoinGecko’s; nothing is averaged.'],
+  abAgree: ['{n} prix recoupés, écart max. {bps} pb', '{n} prices cross-checked, max gap {bps} bps'],
+  abCap: ['API Bricks (deuxième source de prix et de marché)', 'API Bricks (second price and market source)'], abNeedsKey: ['Clé absente', 'Key missing'],
+  abBudget: ['{used} / {ceiling} crédits utilisés aujourd’hui (remise à zéro {at})', '{used} / {ceiling} credits used today (resets {at})'],
+  abQuotaOut: ['Budget du jour épuisé : {used} / {ceiling} crédits. Source arrêtée jusqu’à {at}.', 'Daily budget spent: {used} / {ceiling} credits. Source stopped until {at}.'],
+  abDownQuota: ['Arrêtée : quota', 'Down: quota'], abDown: ['Arrêtée', 'Down'], abDegraded: ['Dégradée', 'Degraded'],
+  // <<< end of the `ab` block
 } as const;
 export type Key = keyof typeof D;
 // v10 performance pass — ONE language at a time in the browser. `D` above (both languages side by side, the form every

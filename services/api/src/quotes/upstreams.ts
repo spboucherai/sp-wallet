@@ -6,7 +6,9 @@
 //   dydx         indexer websocket wss://indexer.dydx.trade/v4/ws through the adapter (v4_markets, v4_orderbook, v4_trades); candles: REST polling.
 //   gmx          NO public stream exists: REST polling of the oracle tickers through the derivatives data service (per-venue budget, last-good cache).
 //   spot         Coinbase Exchange websocket wss://ws-feed.exchange.coinbase.com (channel `ticker`, public, no key) for the symbols
-//                Coinbase lists against USD; any other wallet symbol: polling of the wallet's existing price module (CoinGecko), with its own date.
+//                Coinbase lists against USD; any other wallet symbol: polling of the wallet's existing price module (CoinGecko), with its own date —
+//                or, when APIBRICKS_API_KEY is set and the symbol maps onto that provider with certainty, REST polling of API Bricks
+//                (`apibricks-rest`, metered: a daily credit budget; exhausted → that source is `down` with the reason `quota`).
 //
 // Heartbeats, reconnection with backoff + jitter, resubscription and gap events are those of each client: createHlStream,
 // EdgeXStream and DydxStream (packages/derivatives) and createReconnectingWs (ws-client.ts) for Coinbase.
@@ -23,7 +25,7 @@ import type { Level } from './shared.ts';
  * when nothing moved); edgeX ≈ 2/s; dYdX only when the oracle price or the funding estimate moves (5 in a minute); GMX one per
  * fresh read — a 3 s poll over the data service's 3 s cache: about every 6 s; Coinbase on every trade (5/s on BTC, far less on a quiet pair); CoinGecko a few minutes between two prices.
  */
-export const QUOTE_CADENCE_MS = { 'hyperliquid-ws': 15_000, 'edgex-ws': 15_000, 'dydx-ws': 60_000, 'gmx-rest': 20_000, 'coinbase-ws': 30_000, 'coingecko-rest': 15 * 60_000 } as const;
+export const QUOTE_CADENCE_MS = { 'hyperliquid-ws': 15_000, 'edgex-ws': 15_000, 'dydx-ws': 60_000, 'gmx-rest': 20_000, 'coinbase-ws': 30_000, 'coingecko-rest': 15 * 60_000, 'apibricks-rest': 15 * 60_000 } as const;
 export const POLL_MS = { gmxTickers: 3_000, candles: 10_000, gecko: 60_000 } as const;
 
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 200);
@@ -169,7 +171,20 @@ export function venueUpstream(o: VenueUpstreamOptions): Upstream {
 
 // ---------------------------------------------------------------------------------------------------------------- spot
 export type SpotPrices = () => Promise<Record<string, { usd: number; priceAt?: string | null; stale?: boolean; change24h?: number | null }> | null>;
+/**
+ * A second, METERED source of spot prices for the symbols Coinbase does not stream (V11: API Bricks). Injected, so that this
+ * file imports nothing of the provider. `available(symbol)`: the symbol maps with certainty AND the budget has room now —
+ * decided when a channel is opened (a symbol that is not available is polled from the price module, as before).
+ * `read()` answers the prices, or `{ down, reason }` — `reason: 'quota'` when the daily budget is spent.
+ */
+export interface SecondSpotSource {
+  source: string; staleAfterMs: number; pollMs: number;
+  available(symbol: string): boolean;
+  read(): Promise<{ prices: Record<string, { usd: number; priceAt: string; stale: boolean }> } | { down: true; reason: string; detail: string }>;
+  stats?(): Record<string, unknown>;
+}
 export interface SpotUpstreamOptions {
+  /** V11: polled instead of the price module for the symbols it has (see SecondSpotSource) */ second?: SecondSpotSource;
   /** the wallet's existing price module (server.ts `markets()`, CoinGecko): used for the symbols Coinbase does not list */ prices?: SpotPrices;
   WebSocket?: WsCtor; url?: string; now?: () => number; random?: () => number; backoffMinMs?: number; backoffMaxMs?: number; staleAfterMs?: number; staleGraceMs?: number;
   /** symbol → Coinbase product id; default: the generated listing table of @spw/core */ pairs?: (symbol: string) => string | undefined;
@@ -188,6 +203,38 @@ export function spotUpstream(o: SpotUpstreamOptions = {}): Upstream {
   const gk: FeedInfo = { source: 'coingecko-rest', transport: 'poll', staleAfterMs: QUOTE_CADENCE_MS['coingecko-rest'] };
   const live = new Map<string, { symbol: string; sink: UpstreamSink; onStatus: (s: UpStatus, d?: string) => void }>();   // by product id
   const polled = new Map<string, { sink: UpstreamSink; onStatus: (s: UpStatus, d?: string) => void; last: string }>();
+  // the symbols polled from the second source: their own map, timer and failures — nothing here touches the two other paths
+  const metered = new Map<string, { sink: UpstreamSink; onStatus: (s: UpStatus, d?: string) => void; last: string }>(), viaSecond = new Set<string>();
+  const sec = o.second, sk: FeedInfo | null = sec ? { source: sec.source, transport: 'poll', staleAfterMs: sec.staleAfterMs } : null;
+  let timer2: ReturnType<typeof setInterval> | null = null;
+  const m2 = { polls: 0, quotes: 0, failures: 0, status: 'idle' as UpStatus | 'idle', reason: null as string | null, detail: null as string | null, lastOkAt: null as number | null };
+  const pollSecond = async (): Promise<void> => {
+    if (!sec || metered.size === 0) return;
+    m2.polls += 1;
+    // like the price module: the venue status of `spot` is the websocket's while it carries a symbol
+    const report = live.size === 0;
+    try {
+      const r = await sec.read();
+      if ('down' in r) {
+        // never silent: counted, kept in the statistics, sent as an error on every channel it feeds, and the venue status when it alone feeds `spot`
+        m2.failures += 1; m2.status = 'down'; m2.reason = r.reason; m2.detail = r.detail;
+        for (const p of metered.values()) { p.sink.error(`${sec.source}: ${r.reason} — ${r.detail}`); if (report) p.onStatus('down', r.reason); }
+        return;
+      }
+      m2.status = 'connected'; m2.reason = null; m2.detail = null; m2.lastOkAt = now();
+      for (const [symbol, p] of metered) {
+        const m = r.prices[symbol];
+        if (!m || !Number.isFinite(m.usd) || !(m.usd > 0)) { if (report) p.onStatus('stale', `no price from ${sec.source}`); continue; }
+        if (report) p.onStatus(m.stale ? 'stale' : 'connected', m.stale ? `${sec.source} serves an old price` : undefined);
+        const at = Date.parse(m.priceAt), sig = `${m.usd}|${m.priceAt}`;
+        if (sig === p.last) continue;
+        p.last = sig; m2.quotes += 1;
+        p.sink.quote({ last: D.str(D.from(m.usd.toFixed(m.usd < 1 ? 10 : 6))), change24h: null, venueTs: Number.isFinite(at) ? at : null });
+      }
+    } catch (e) { m2.failures += 1; m2.status = 'stale'; m2.reason = 'error'; m2.detail = msg(e); for (const p of metered.values()) { p.sink.error(`${sec.source}: ${msg(e)}`); if (report) p.onStatus('stale', msg(e)); } }
+  };
+  /** which path a symbol without a Coinbase pair takes: fixed while a channel on it is open */
+  const second = (symbol: string): boolean => viaSecond.has(symbol) || (!!sec && !polled.has(symbol) && sec.available(symbol));
   let ws: ReconnectingWs | null = null, timer: ReturnType<typeof setInterval> | null = null, wsStatus: UpStatus = 'reconnecting';
   const st = { tickers: 0, heartbeats: 0, invalid: 0, errors: 0 };
 
@@ -239,9 +286,10 @@ export function spotUpstream(o: SpotUpstreamOptions = {}): Upstream {
   return {
     venue: 'spot',
     feedsFor: (type, symbol) => (type === 'quote' ? [{ kind: 'ticker', symbol }] : []),
-    info: (feed: FeedSpec) => (pairOf(feed.symbol) ? cb : gk),
+    info: (feed: FeedSpec) => (pairOf(feed.symbol) ? cb : sk && second(feed.symbol) ? sk : gk),
     async known(symbol) {
       if (pairOf(symbol)) return true;
+      if (sec?.available(symbol)) return true;
       if (!o.prices) return false;
       const px = await o.prices();
       return !!px && Object.hasOwn(px, symbol);
@@ -259,12 +307,20 @@ export function spotUpstream(o: SpotUpstreamOptions = {}): Upstream {
           if (live.size === 0) { s.stop(); wsStatus = 'reconnecting'; }
         };
       }
+      if (sec && second(feed.symbol)) {
+        const symbol = feed.symbol;
+        viaSecond.add(symbol); metered.set(symbol, { sink, onStatus, last: '' });
+        if (!timer2) { timer2 = setInterval(() => { void pollSecond(); }, sec.pollMs); timer2.unref?.(); }
+        void pollSecond();
+        return () => { metered.delete(symbol); viaSecond.delete(symbol); if (metered.size === 0 && timer2) { clearInterval(timer2); timer2 = null; m2.status = 'idle'; } };
+      }
       polled.set(feed.symbol, { sink, onStatus, last: '' });
       if (!timer) { timer = setInterval(() => { void pollGecko(); }, o.geckoPollMs ?? POLL_MS.gecko); timer.unref?.(); }
       void pollGecko();
       return () => { polled.delete(feed.symbol); if (polled.size === 0 && timer) { clearInterval(timer); timer = null; } };
     },
-    stats: () => ({ coinbase: { ...(ws ? ws.stats() : { status: 'idle' }), products: live.size, ...st }, polled: polled.size, at: now() }),
-    close: () => { ws?.stop(); if (timer) { clearInterval(timer); timer = null; } live.clear(); polled.clear(); },
+    stats: () => ({ coinbase: { ...(ws ? ws.stats() : { status: 'idle' }), products: live.size, ...st }, polled: polled.size,
+      ...(sec ? { second: { source: sec.source, symbols: metered.size, pollMs: sec.pollMs, ...m2, ...(sec.stats?.() ?? {}) } } : {}), at: now() }),
+    close: () => { ws?.stop(); if (timer) { clearInterval(timer); timer = null; } if (timer2) { clearInterval(timer2); timer2 = null; } live.clear(); polled.clear(); metered.clear(); viaSecond.clear(); },
   };
 }

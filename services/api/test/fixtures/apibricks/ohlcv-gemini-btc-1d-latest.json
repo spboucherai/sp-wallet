@@ -1,0 +1,68 @@
+{
+ "capturedAt": "2026-11-17T07:55:00Z",
+ "endpoint": "GET /v1/ohlcv/GEMINI_SPOT_BTC_USD/latest?period_id=1DAY&limit=5",
+ "status": 200,
+ "body": [
+  {
+   "time_period_start": "2026-11-17T00:00:00.0000000Z",
+   "time_period_end": "2026-11-18T00:00:00.0000000Z",
+   "time_open": "2026-11-17T00:00:03.2110000Z",
+   "time_close": "2026-11-17T07:51:22.0050000Z",
+   "price_open": 64823.24,
+   "price_high": 65138,
+   "price_low": 64248.76,
+   "price_close": 64594.61,
+   "volume_traded": 53.73838718000002,
+   "trades_count": 2919
+  },
+  {
+   "time_period_start": "2026-11-16T00:00:00.0000000Z",
+   "time_period_end": "2026-11-17T00:00:00.0000000Z",
+   "time_open": "2026-11-16T00:00:07.9310000Z",
+   "time_close": "2026-11-16T23:59:59.9620000Z",
+   "price_open": 65336.59,
+   "price_high": 68200.05,
+   "price_low": 63842,
+   "price_close": 67959.68,
+   "volume_traded": 207.70399801999997,
+   "trades_count": 10727
+  },
+  {
+   "time_period_start": "2026-11-15T00:00:00.0000000Z",
+   "time_period_end": "2026-11-16T00:00:00.0000000Z",
+   "time_open": "2026-11-15T00:00:02.3120000Z",
+   "time_close": "2026-11-15T23:59:54.9310000Z",
+   "price_open": 64126.31,
+   "price_high": 68446.845,
+   "price_low": 61998,
+   "price_close": 68211.635,
+   "volume_traded": 233.76502890999998,
+   "trades_count": 13328
+  },
+  {
+   "time_period_start": "2026-11-14T00:00:00.0000000Z",
+   "time_period_end": "2026-11-15T00:00:00.0000000Z",
+   "time_open": "2026-11-14T00:00:11.0380000Z",
+   "time_close": "2026-11-14T23:59:59.9660000Z",
+   "price_open": 68283.48,
+   "price_high": 69297.04,
+   "price_low": 63299,
+   "price_close": 67617.14,
+   "volume_traded": 384.9628402900001,
+   "trades_count": 19471
+  },
+  {
+   "time_period_start": "2026-11-13T00:00:00.0000000Z",
+   "time_period_end": "2026-11-14T00:00:00.0000000Z",
+   "time_open": "2026-11-13T00:00:01.3040000Z",
+   "time_close": "2026-11-13T23:59:58.7120000Z",
+   "price_open": 71366.68,
+   "price_high": 71433.73,
+   "price_low": 67777,
+   "price_close": 69674.855,
+   "volume_traded": 388.7389909200002,
+   "trades_count": 17814
+  }
+ ],
+ "note": "newest first; the first row is the bar still open at capture time"
+}

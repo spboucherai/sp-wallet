@@ -35,7 +35,7 @@ export interface Execution { risk: RiskService; mandates: MandateService; orders
 declare module 'fastify' { interface FastifyInstance { execution: Execution } }
 export interface ExecutionOpts {
   derivatives?: Derivatives | undefined; live?: LiveService | undefined; gmx?: GmxService | undefined;
-  prices?: () => Promise<Record<string, { usd: number; priceAt?: string | null }> | null>;
+  prices?: () => Promise<Record<string, { usd: number; priceAt?: string | null; source?: string }> | null>;
   /** tests: a verifier for the passkey steps of the API itself (limits, switches); default: auth.ts against the credentials table */
   verifyOwner?: (assertion: unknown, challenge: Uint8Array) => Promise<void>;
   /** tests: the re-verification of an approval stored with a live mandate; default: risk/passkey.ts against the credentials table */

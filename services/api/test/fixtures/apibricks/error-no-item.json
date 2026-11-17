@@ -1,0 +1,8 @@
+{
+ "capturedAt": "2026-11-17T07:55:00Z",
+ "endpoint": "GET /v1/exchangerate/NOPEXYZQ/USD",
+ "status": 550,
+ "body": {
+  "error": "You requested specific single item that we don't have at this moment."
+ }
+}

@@ -9,6 +9,7 @@ import { capital, exposure, pnl } from './aggregate.ts';
 import { auditChainStatus, collectConnectors, diskFree, lastBackup, versions } from './health.ts';
 import { labStatus } from '../agents/lab.ts'; // v8
 import { capabilities } from '../capabilities.ts'; // v8
+import { apiBricksStatus } from '../apibricks/index.ts'; // v11: API Bricks (second, keyed market-data source)
 import { quoteSummary } from '../quotes/index.ts'; // v11 quote engine: connections, rates, conflation, upstream state
 
 const cache = new Map<string, { at: number; v: unknown }>();
@@ -62,6 +63,8 @@ export function monitorRoutes(app: FastifyInstance): void {
       loopsNote: null,
       // v11 quote engine (websocket fan-out of public market data): null before the first server is built
       quotes: quoteSummary(),
+      // v11: the optional keyed market-data provider — `needsKey` without APIBRICKS_API_KEY; with it, the daily credit counter and `down: quota`
+      marketData: { apibricks: apiBricksStatus() },
       backup: backup ? { visible: true, lastAt: backup.lastAt, files: backup.files, ageHours: backup.lastAt === null ? null : Math.round((now - backup.lastAt) / 360_000) / 10 } : { visible: false, lastAt: null, files: 0, ageHours: null },
       disk: await diskFree(),
       audit,

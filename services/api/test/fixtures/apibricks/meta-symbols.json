@@ -1,0 +1,1187 @@
+{
+ "capturedAt": 1794902480310,
+ "endpoint": "GET /v1/symbols?filter_exchange_id=<GEMINI|BITFINEX>&filter_asset_id=USD",
+ "note": "spot USD pairs only, trimmed to the fields the selection reads",
+ "body": [
+  {
+   "symbol_id": "GEMINI_SPOT_BTC_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "BTC",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 3450334.33,
+   "price": 64662.69
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_ETH_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ETH",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 517795.07,
+   "price": 1830.755
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_ZEC_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ZEC",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 524966.38,
+   "price": 925.055
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_LTC_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "LTC",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 11873.12,
+   "price": 44.705
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_BCH_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "BCH",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 2280.34,
+   "price": 208.675
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_LINK_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "LINK",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 59434.32,
+   "price": 9.1364
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_DAI_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "DAI",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.99277
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_BAT_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "BAT",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": 100.85,
+   "price": 0.09954
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_PAXG_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "PAXG",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 18751.17,
+   "price": 3901.89
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_AMP_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "AMP",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 243.5,
+   "price": 0.00054
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_UNI_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "UNI",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 31170.97,
+   "price": 5.2949
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_CRV_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "CRV",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T21:00:00.0000000Z",
+   "volume_1day_usd": 81.21,
+   "price": 0.2061
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_YFI_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "YFI",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": 144.16,
+   "price": 1745.875
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_UMA_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "UMA",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 0.17,
+   "price": 0.264
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_MANA_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "MANA",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-14T21:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.04879
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_AAVE_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "AAVE",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 32276.26,
+   "price": 110.79345
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_FIL_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "FIL",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 565.58,
+   "price": 0.61215
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_GRT_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "GRT",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 41.73,
+   "price": 0.0168
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_SAND_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "SAND",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T21:00:00.0000000Z",
+   "volume_1day_usd": 1.38,
+   "price": 0.03593
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_SKL_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "SKL",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T17:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.00344
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_INJ_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "INJ",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 806.23,
+   "price": 7.10365
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_CUBE_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "CUBE",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-10T06:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.06415
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_DOGE_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "DOGE",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 68154.51,
+   "price": 0.059005
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_FTM_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "FTM",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T20:00:00.0000000Z",
+   "volume_1day_usd": 1199.74,
+   "price": 0.0328
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_CTX_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "CTX",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 130.67,
+   "price": 0.3663
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_XTZ_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "XTZ",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 216,
+   "price": 0.2138
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_USDC_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "USDC",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 641220.61,
+   "price": 0.999725
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_QNT_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "QNT",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 3727.07,
+   "price": 154.14
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_SHIB_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "SHIB",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 1487.75,
+   "price": 0.0000038495
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_FET_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "FET",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 395.4,
+   "price": 0.13238
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_RNDR_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "RNDR",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 9.72,
+   "price": 1.3845
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_ELON_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ELON",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 3.1,
+   "price": 1.95e-8
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_GALA_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "GALA",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T21:00:00.0000000Z",
+   "volume_1day_usd": 18.92,
+   "price": 0.001385
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_ENS_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ENS",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T15:00:00.0000000Z",
+   "volume_1day_usd": 0.03,
+   "price": 3.867
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_SOL_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "SOL",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 159254.74,
+   "price": 72.8615
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_APE_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "APE",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 76.61,
+   "price": 0.07945
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_ALI_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ALI",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 86.5,
+   "price": 0.000959
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_DOT_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "DOT",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 664.33,
+   "price": 0.7327
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_EUL_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "EUL",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T16:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.8214
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_IMX_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "IMX",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": 0.23,
+   "price": 0.096965
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_AVAX_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "AVAX",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 77196,
+   "price": 7.175
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_USDT_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "USDT",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 1227393.53,
+   "price": 0.999045
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_ATOM_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ATOM",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 22.33,
+   "price": 1.3245
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_PEPE_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "PEPE",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 52206.1,
+   "price": 0.0000038945
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_XRP_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "XRP",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 378503.45,
+   "price": 0.961545
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_HNT_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "HNT",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 26.9,
+   "price": 0.2335
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_WIF_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "WIF",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 12.37,
+   "price": 0.131
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_BONK_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "BONK",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 630.05,
+   "price": 0.0000023795
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_OP_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "OP",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": 4919.01,
+   "price": 0.0771
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_POPCAT_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "POPCAT",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-15T22:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.04415
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_PYTH_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "PYTH",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T20:00:00.0000000Z",
+   "volume_1day_usd": 175.79,
+   "price": 0.05483
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_CHILLGUY_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "CHILLGUY",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-15T08:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.00735
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_ARB_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ARB",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 34.77,
+   "price": 0.1319
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_RLUSD_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "RLUSD",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 546.1,
+   "price": 0.99995
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_JTO_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "JTO",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T13:00:00.0000000Z",
+   "volume_1day_usd": 158.2,
+   "price": 0.26605
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_JITOSOL_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "JITOSOL",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T20:00:00.0000000Z",
+   "volume_1day_usd": 16.58,
+   "price": 104.3462
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_TRUMP_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "TRUMP",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.9698
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_EUR_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "EUR",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-03-18T00:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": null
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_PUMP_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "PUMP",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 43.42,
+   "price": 0.00277644
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_PENGU_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "PENGU",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": 29.61,
+   "price": 0.0048697
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_WCT_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "WCT",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": 4.92,
+   "price": 0.027096
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_POL_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "POL",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T20:00:00.0000000Z",
+   "volume_1day_usd": 75.45,
+   "price": 0.080667
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_WLFI_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "WLFI",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T21:00:00.0000000Z",
+   "volume_1day_usd": 18.75,
+   "price": 0.046021
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_USD1_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "USD1",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-15T23:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.999225
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_FARTCOIN_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "FARTCOIN",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T12:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.144426
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_SKY_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "SKY",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": 65.94,
+   "price": 0.0521735
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_AUD_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "AUD",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-03-04T00:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.67615526
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_JUP_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "JUP",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T21:00:00.0000000Z",
+   "volume_1day_usd": 844.55,
+   "price": 0.2494885
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_KMNO_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "KMNO",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T15:00:00.0000000Z",
+   "volume_1day_usd": 9.32,
+   "price": 0.027562
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_DRIFT_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "DRIFT",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.0098
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_WLD_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "WLD",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T20:00:00.0000000Z",
+   "volume_1day_usd": 2.99,
+   "price": 0.268173
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_2Z_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "2Z",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T20:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.016551
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_MON_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "MON",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 455.73,
+   "price": 0.0150005
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_USDG_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "USDG",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-10T18:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.985
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_HYPE_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "HYPE",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 38395.9,
+   "price": 69.3778
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_BNB_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "BNB",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": 36.95,
+   "price": 591.1514
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_TRX_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "TRX",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 187.6,
+   "price": 0.3055485
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_SUI_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "SUI",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 494.86,
+   "price": 0.72395
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_XAUT_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "XAUT",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 3860.9989
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_USAT_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "USAT",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-14T17:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.99375
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_GRAM_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "GRAM",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T04:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 1.07
+  },
+  {
+   "symbol_id": "GEMINI_SPOT_NEAR_USD",
+   "exchange_id": "GEMINI",
+   "symbol_type": "SPOT",
+   "asset_id_base": "NEAR",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T21:00:00.0000000Z",
+   "volume_1day_usd": 122.79,
+   "price": 3.25795
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_BTC_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "BTC",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 11664503.91,
+   "price": 64710
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_LTC_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "LTC",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 54699.82,
+   "price": 44.7405
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_ETH_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ETH",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 2430208.4,
+   "price": 1831.95
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_ETC_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ETC",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 834.47,
+   "price": 5.8665
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_ZEC_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ZEC",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 37236.83,
+   "price": 918.5
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_XMR_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "XMR",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 314205.19,
+   "price": 499.165
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_DSH_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "DSH",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 9309.85,
+   "price": 37.7585
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_XRP_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "XRP",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 541889.24,
+   "price": 0.962285
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_TRX_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "TRX",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 6939.4,
+   "price": 0.305595
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_XLM_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "XLM",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 17756.75,
+   "price": 0.13746
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_PNK_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "PNK",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T19:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.006585
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_UDC_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "UDC",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 100388.31,
+   "price": 1.00065
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_LEO_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "LEO",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 92348.02,
+   "price": 9.3155
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_ALG_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ALG",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": 4665.11,
+   "price": 0.080045
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_CHZ_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "CHZ",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T19:00:00.0000000Z",
+   "volume_1day_usd": 1733.23,
+   "price": 0.0098064
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_ADA_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ADA",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 6231.12,
+   "price": 0.15356
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_UNI_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "UNI",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 48354.04,
+   "price": 5.2988
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_FIL_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "FIL",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T21:00:00.0000000Z",
+   "volume_1day_usd": 8394.05,
+   "price": 0.611545
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_XDC_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "XDC",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 58484.26,
+   "price": 0.0295905
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_SUN_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "SUN",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T19:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.014806
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_SOL_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "SOL",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 910802.02,
+   "price": 72.9135
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_CRV_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "CRV",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T18:00:00.0000000Z",
+   "volume_1day_usd": 356.19,
+   "price": 0.208675
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_STG_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "STG",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-10T13:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.14337
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_TON_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "TON",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 3311.69,
+   "price": 1.07305
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_SUI_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "SUI",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 9864.59,
+   "price": 0.724045
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_OPX_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "OPX",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T19:00:00.0000000Z",
+   "volume_1day_usd": 0.52,
+   "price": 0.069399
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_SEI_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "SEI",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 325.68,
+   "price": 0.0397555
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_ENA_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ENA",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 331.01,
+   "price": 0.11785
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_ZRO_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "ZRO",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 856.43,
+   "price": 1.4957
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_POL_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "POL",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 14.05,
+   "price": 0.0799385
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_NYM_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "NYM",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T19:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.0219775
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_GUN_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "GUN",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T18:00:00.0000000Z",
+   "volume_1day_usd": 1.39,
+   "price": 0.0015122
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_STX_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "STX",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T21:00:00.0000000Z",
+   "volume_1day_usd": null,
+   "price": 0.265735
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_SKY_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "SKY",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 155.25,
+   "price": 0.051127
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_XPL_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "XPL",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T23:00:00.0000000Z",
+   "volume_1day_usd": 270.68,
+   "price": 0.045032
+  },
+  {
+   "symbol_id": "BITFINEX_SPOT_RLS_USD",
+   "exchange_id": "BITFINEX",
+   "symbol_type": "SPOT",
+   "asset_id_base": "RLS",
+   "asset_id_quote": "USD",
+   "data_trade_end": "2026-11-16T22:00:00.0000000Z",
+   "volume_1day_usd": 128.81,
+   "price": 0.00151
+  }
+ ]
+}

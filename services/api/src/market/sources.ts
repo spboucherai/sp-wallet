@@ -16,7 +16,7 @@
 import { z } from 'zod';
 import { MARKET_LISTINGS } from '@spw/core';
 import { http } from '../chains/rpc.ts';
-import { INTERVAL_MS, SourceError, isClosed, type Candle, type HttpJson, type Interval, type MarketSource, type MarketSymbol, type SourceId } from './types.ts';
+import { INTERVAL_MS, SourceError, isClosed, type Candle, type HttpJson, type Interval, type MarketSource, type BaseSourceId, type MarketSymbol, type SourceId } from './types.ts';
 
 export const httpJson: HttpJson = async (url) => {
   const r = await http(url, { headers: { accept: 'application/json', 'user-agent': 'sp-wallet-market/1' } });
@@ -67,7 +67,7 @@ const schema = <T>(id: SourceId, s: z.ZodType<T>, body: unknown): T => {
 };
 const msgOf = (body: unknown) => JSON.stringify(body ?? null).slice(0, 160);
 /** Pair names of one exchange, from the reviewed static table of USD listings (never discovered at run time). */
-const pairsOf = (id: SourceId): Record<MarketSymbol, string | undefined> => Object.fromEntries(Object.entries(MARKET_LISTINGS).flatMap(([s, l]) => (l[id] ? [[s, l[id]]] : [])));
+const pairsOf = (id: BaseSourceId): Record<MarketSymbol, string | undefined> => Object.fromEntries(Object.entries(MARKET_LISTINGS).flatMap(([s, l]) => (l[id] ? [[s, l[id]]] : [])));
 
 const CoinbaseRows = z.array(z.tuple([z.number().int(), z.number(), z.number(), z.number(), z.number(), z.number()]));
 export const coinbaseSource = (opts: SourceOpts = {}): MarketSource => make({
@@ -118,5 +118,16 @@ export const krakenSource = (opts: SourceOpts = {}): MarketSource => make({
   },
 }, opts);
 
-/** Consolidation priority: the first source that has a bar provides it (see series.ts). */
-export const defaultSources = (opts: SourceOpts = {}): MarketSource[] => [coinbaseSource(opts), bitstampSource(opts), krakenSource(opts)];
+/**
+ * V11 — an ADDITIONAL confirming source, registered only when it is configured (apibricks/index.ts with APIBRICKS_API_KEY).
+ * It is a MarketSource like the others: its bars go through the same validation, normalisation, storage and quality gates.
+ * INDEPENDENCE RULE (apibricks/venues.ts): a source counts as a confirmation only if its bars do not come from an exchange
+ * already read here — an aggregator relaying Coinbase's bars would let Coinbase confirm itself. The factory returns the
+ * same instance every time (it owns a budget and a pacer), or null when the source is off.
+ */
+const extra: (() => MarketSource | null)[] = [];
+export function registerMarketSource(make: () => MarketSource | null): void { extra.push(make); }
+export function resetMarketSources(): void { extra.length = 0; }
+
+/** Consolidation priority: the first source that has a bar provides it (see series.ts). Additional sources come last. */
+export const defaultSources = (opts: SourceOpts = {}): MarketSource[] => [coinbaseSource(opts), bitstampSource(opts), krakenSource(opts), ...extra.flatMap((m) => { const s = m(); return s ? [s] : []; })];

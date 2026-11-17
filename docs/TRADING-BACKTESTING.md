@@ -348,5 +348,10 @@ reach around 2026-12-13.
   modelled.
 - **Engine parity is at bar resolution**: loss limits are checked at closes; the live engine checks every minute.
 - **History is short**: 180 days, one regime sequence; a test split of five weeks. Deflated Sharpe ratios assume
-  independent trials.
+  independent trials. *(2026-11-17: a loader for a longer history exists — `spq.data.apibricks`, API Bricks / CoinAPI,
+  keyed and metered; the provider has `HYPERLIQUID_PERP_{BTC,ETH,SOL}_USDC` since 2024-09-27. **No pull was made**: two
+  years of 1h bars cost about 194 credits per series, 1 750 for the nine perpetual series of this study, against a
+  budget of 100 a day. `uv run python -m spq.data.apibricks --symbol-id … --dry-run` prints the estimate;
+  `overlap_check` measures the distance to the venue's own bars on the overlap before any splice. The 180-day statement
+  stands for every result in this document.)*
 - **Survivorship**: the universe is fixed ex post (section 6).
