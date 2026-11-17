@@ -334,6 +334,16 @@ export const wait = (p: ProposalRow, b: BridgeState, h: string | SvHold, detail:
 /** 5 s at first, then slower, never above five minutes — and never giving up: burned funds stay mintable for ever. */
 const backoff = (polls: number, speed: string) => Math.min(300_000, (speed === 'fast' ? 4_000 : 15_000) * Math.ceil((polls + 1) / 8));
 
+/** The block number the destination's contracts compare a Fast attestation's `expirationBlock` with, or null when it cannot be read.
+ *  On Arbitrum the EVM's `block.number` is the Ethereum (L1) block number, while `eth_blockNumber` answers the L2 height, which is
+ *  hundreds of millions ahead: comparing with it made every Fast transfer to Arbitrum look expired and never mint. Multicall3's
+ *  getBlockNumber() returns what a contract sees. */
+const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11', GET_BLOCK_NUMBER = '0x42cbb15c';
+export async function expiryHead(dst: NetworkDef): Promise<bigint | null> {
+  if (dst.id !== 'arbitrum') return rpcAny<`0x${string}`>(dst.rpc, 'eth_blockNumber', []).then(hexToBigInt, () => null);
+  return rpcAny<`0x${string}`>(dst.rpc, 'eth_call', [{ to: MULTICALL3, data: GET_BLOCK_NUMBER }, 'latest']).then((h) => (/^0x[0-9a-f]{64}$/i.test(h) ? hexToBigInt(h) : null), () => null);
+}
+
 async function usedNonce(dst: NetworkDef, nonce: string): Promise<boolean> {
   const r = await rpcQuorum<`0x${string}`>(dst.rpc, 'eth_call', [{ to: CCTP_MESSAGE_TRANSMITTER, data: encodeFunctionData({ abi: CCTP_ABI, functionName: 'usedNonces', args: [`0x${nonce}`] }) }, 'latest']);
   return hexToBigInt(r) !== 0n;
@@ -400,9 +410,11 @@ export async function advanceBridge(p: ProposalRow, o: { manual?: boolean } = {}
     if (r.status === 404 || !parsed.success) return pending(r.status === 404 ? 'not_found' : `http_${r.status}`, null);
     // the answer is untrusted: keep only a message that is exactly the approved burn (the signer re-checks the same way)
     let hit: { message: string; attestation: string; v: ReturnType<typeof verifyCctpMint> } | null = null, why = '';
+    // a message set aside as expired is taken back when it is in fact still valid at the destination (wrongly judged expired earlier)
+    const exHead = b.expiredHash && dst.family !== 'sol' ? await expiryHead(dst) : null;
     for (const m of parsed.data.messages) {
       if (m.status !== 'complete' || !m.message || !m.attestation) continue;
-      try { const v = verifyCctpMint(bridge, m.message, m.attestation); if (v.messageHash === b.expiredHash) continue; hit = { message: m.message.toLowerCase(), attestation: m.attestation.toLowerCase(), v }; break; } catch (e) { why = (e as Error).message; }
+      try { const v = verifyCctpMint(bridge, m.message, m.attestation); if (v.messageHash === b.expiredHash && !(exHead !== null && exHead < v.msg.body.expirationBlock)) continue; hit = { message: m.message.toLowerCase(), attestation: m.attestation.toLowerCase(), v }; break; } catch (e) { why = (e as Error).message; }
     }
     if (!hit) {
       const m0 = parsed.data.messages[0];
@@ -423,7 +435,8 @@ export async function advanceBridge(p: ProposalRow, o: { manual?: boolean } = {}
     try { await cctpGuards(dst, destAddr(p)); } catch (e) { return wait(p, b, (e as UserError).code ?? 'rpc_degraded', (e as Error).message, 60_000); }
     // a Fast attestation expires about a day after the burn: ask Circle for a fresh one, then mint with it
     if (b.expirationBlock && b.expirationBlock !== '0') {
-      const head = await rpcAny<`0x${string}`>(dst.rpc, 'eth_blockNumber', []).then(hexToBigInt, () => null);
+      const head = await expiryHead(dst);
+      if (head === null && !b.mint?.evm) return wait(p, b, 'rpc_degraded', 'the destination block number could not be read', 20_000);
       if (head !== null && head >= BigInt(b.expirationBlock) && !b.mint?.evm) {
         await iris(`/v2/reattest/0x${b.nonce}`, { method: 'POST' }).catch(() => null);
         await audit('bridge.reattest', 'system', { id: p.id, nonce: b.nonce });

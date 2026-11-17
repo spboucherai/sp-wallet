@@ -26,6 +26,7 @@ const TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523
 /** One scripted EVM chain behind a JSON-RPC endpoint. */
 class Chain {
   head = 1000; nonce = 0; native = 10n ** 17n; allowance = 0n; pending: { hash: string; raw: string }[] = []; receipts = new Map<string, any>(); used = new Set<string>();
+  /** what a contract reads as block.number when it differs from the height (Arbitrum: the Ethereum block number) */ evmBlock: number | null = null;
   implSlot: Record<string, string>; burnReverts = false; mintReverts: string | null = null; sent: string[] = [];
   constructor(public id: string) { const p = CCTP_ENABLED[id]!; this.implSlot = { [CCTP_TOKEN_MESSENGER.toLowerCase()]: p.messengerImpl.address, [CCTP_MESSAGE_TRANSMITTER.toLowerCase()]: p.transmitterImpl.address }; }
   /** include what is pending; `status` 0 = the transaction reverts */
@@ -58,6 +59,7 @@ class Chain {
         return CODE[a] ?? '0x'; }
       case 'eth_getStorageAt': return p[1] === EIP1967_IMPLEMENTATION_SLOT ? pad((this.implSlot[String(p[0]).toLowerCase()] ?? '0x0') as Hex, { size: 32 }).toLowerCase() : pad('0x0', { size: 32 });
       case 'eth_estimateGas': case 'eth_call': { const d = String(p[0].data), sel = d.slice(0, 10);
+        if (sel === '0x42cbb15c') return numberToHex(this.evmBlock ?? this.head, { size: 32 }); // Multicall3.getBlockNumber()
         if (sel === SEL.allowance) return numberToHex(this.allowance, { size: 32 });
         if (sel === SEL.used) return numberToHex(this.used.has(d.slice(10, 74)) ? 1 : 0, { size: 32 });
         if (sel === SEL.minFee) return err('execution reverted');
@@ -224,6 +226,27 @@ describe('life cycle', () => {
     iris.messages.set((await getP(id)).txid, attested(intent, {}, { feeExecuted: 2599n, expirationBlock: 99_999_999n }));
     await finish(id); chains.arbitrum!.mine();
     expect((await finish(id)).bridge).toMatchObject({ stage: 'done', receivedDisplay: '19.997401', feeExecutedDisplay: '0.002599', speed: 'fast' });
+  });
+  it('Fast to Arbitrum: the expiry is compared with the block number contracts see (Ethereum\'s), not with the L2 height', async () => {
+    const arb = chains.arbitrum!; arb.head = 400_000_000; arb.evmBlock = 26_437_000;
+    try {
+      const { id, intent } = await burn('20', 'fast');
+      iris.messages.set((await getP(id)).txid, attested(intent, {}, { feeExecuted: 2599n, expirationBlock: 26_442_519n }));
+      await finish(id); arb.mine();
+      expect((await finish(id)).bridge).toMatchObject({ stage: 'done', receivedDisplay: '19.997401' });
+      // a transfer the old comparison set aside as expired, while Circle keeps answering the same valid message: it is taken back and minted
+      const two = await burn('20', 'fast'), msg = attested(two.intent, {}, { feeExecuted: 2599n, expirationBlock: 26_442_519n });
+      iris.messages.set((await getP(two.id)).txid, msg);
+      const raw = await row(two.id), hash = keccak256(msg.messages[0]!.message as Hex).slice(2);
+      await sql`update proposals set bridge = ${sql.json({ ...raw.bridge, phase: 'attesting', expiredHash: hash, attestingSince: Date.now(), nextAt: 0 } as never)} where id = ${two.id}`;
+      await finish(two.id); arb.mine();
+      expect((await finish(two.id)).bridge).toMatchObject({ stage: 'done', receivedDisplay: '19.997401' });
+      // really expired at the destination: still set aside, a fresh attestation is asked for
+      const three = await burn('20', 'fast');
+      iris.messages.set((await getP(three.id)).txid, attested(three.intent, {}, { feeExecuted: 2599n, expirationBlock: 26_000_000n }));
+      await finish(three.id);
+      expect((await row(three.id)).bridge).toMatchObject({ phase: 'attesting', hold: 'attestation_expired' });
+    } finally { arb.head = 1000; arb.evmBlock = null; }
   });
   it('restart between the two legs: API state is in the database, the approval is in the signer\'s file; the mint still happens days later', async () => {
     const { id, intent } = await burn('10');
