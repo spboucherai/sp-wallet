@@ -15,6 +15,7 @@ import { errText, I18n, useT, type Key } from '../i18n';
 import { Btn, Card, EmptyState, ErrorState, Fact, Field, fiat, Fold, Icon, inputCls, Notice, numFmt, PageTitle, Section, Seg, Sheet, SkeletonCard, SkeletonRows, Stat, StatGrid, Tag, Timeline, usdCapital, when, type StepState, type Tone } from '../ui';
 import { srvText } from '../srvText'; // v11 interface (audit B3): a server sentence without a code is translated when known, quoted as English otherwise
 import { CardHead, EquityCard, FormGroup, LogoStack, UnitInput } from './agentBits';
+import { venueShown } from '../venues';
 import { LabVerdicts, ReportV3, type LabVerdict, type ReportSummary } from './labReport';
 // V11 market making: the session view, the go-live checklist and the quoting mandate — a chunk of its own, loaded for a market-making agent only
 const MmSection = lazy(() => import('./mmPanel').then((m) => ({ default: m.MmSection })));
@@ -120,7 +121,8 @@ export const PERP_RISK_KEYS = ['maxLeverage', 'maxGrossExposureX', 'maxPositionX
 export const shortSha = (s: string): string => s.slice(0, 10);
 
 // ------------------------------------------------------------------------------------------------------------------ small pieces
-const VENUES = ['hyperliquid', 'edgex', 'dydx', 'gmx'] as const;
+/** the venues an agent can be given: those the owner is offered (venues.ts) */
+const VENUES = (['hyperliquid', 'edgex', 'dydx', 'gmx'] as const).filter(venueShown);
 const VENUE_NAME: Record<string, string> = { hyperliquid: 'Hyperliquid', edgex: 'edgeX', dydx: 'dYdX v4', gmx: 'GMX v2' };
 export function LifeTag({ state }: { state: Life }) { const t = useT(), x = LIFE_TAG[state]; return <Tag tone={x.tone} icon={x.icon} testid="ag2-life">{t(x.key)}</Tag>; }
 export function ModeTag({ mode }: { mode: Mode }) { const t = useT(), x = MODE_TAG[mode]; return <Tag tone={x.tone} icon={x.icon} testid={`ag2-mode-${mode}`}>{t(x.key)}</Tag>; }
@@ -137,7 +139,7 @@ export function TemplateSheet({ onClose, onCreated }: { onClose: () => void; onC
   const t = useT(); const { locale } = useContext(I18n);
   const q = useQuery({ queryKey: ['agent-templates'], queryFn: () => get<{ templates: Template[] }>('/agents/templates'), staleTime: 60_000 });
   const [tp, setTp] = useState<Template | null>(null), [d, setD] = useState<CreateDraft | null>(null), [busy, setBusy] = useState(false), [err, setErr] = useState('');
-  const pick = (x: Template) => { setTp(x); setD(emptyDraft(x)); setErr(''); };
+  const pick = (x: Template) => { const d0 = emptyDraft(x); setTp(x); setD({ ...d0, venues: d0.venues.filter(venueShown) }); setErr(''); };
   const problem = tp && d ? createProblem(tp, d) : 'name';
   const create = async () => { if (!tp || !d || problem) return; setBusy(true); setErr('');
     try { const r = await post<{ agent: { id: string } }>('/agents/from-template', createBody(tp, d)); onCreated(r.agent.id); } catch (e) { setErr(errText(t, e)); } finally { setBusy(false); } };
@@ -146,7 +148,8 @@ export function TemplateSheet({ onClose, onCreated }: { onClose: () => void; onC
     footer={tp && d ? <div className="flex gap-2"><Btn kind="ghost" onClick={() => { setTp(null); setD(null); }}>{t('ag2Back')}</Btn><Btn full busy={busy} disabled={problem !== null} onClick={() => void create()}>{t('ag2Create')}</Btn></div> : undefined}>
     {q.isLoading ? <SkeletonRows n={5} /> : q.isError ? <ErrorState title={t('ag2LoadErr')} onRetry={() => void q.refetch()} /> : !tp || !d ? <div className="grid gap-2.5">
       {/* step 1 — the family */}
-      {q.data!.templates.map((x) => <button key={x.id} type="button" disabled={!x.strategyInstalled} onClick={() => pick(x)} data-testid={`ag2-tpl-${x.id}`} className="card row-press block w-full p-4 text-left disabled:opacity-70">
+      {/* a template that needs more venues than the owner is offered cannot be configured: it is not listed */}
+      {q.data!.templates.filter((x) => venuesNeeded(x) <= VENUES.length).map((x) => <button key={x.id} type="button" disabled={!x.strategyInstalled} onClick={() => pick(x)} data-testid={`ag2-tpl-${x.id}`} className="card row-press block w-full p-4 text-left disabled:opacity-70">
         <span className="flex items-start justify-between gap-3"><span className="min-w-0"><span className="block text-[16px] font-semibold">{x.name[locale]}</span><span className="mt-1 block text-[13.5px] leading-snug text-mute">{x.summary[locale]}</span></span>{x.strategyInstalled && <Icon n="chev" className="mt-1 h-4 w-4 shrink-0 text-mute" />}</span>
         <span className="mt-2.5 flex flex-wrap items-center gap-1.5">{x.modes.map((m) => <ModeTag key={m} mode={m} />)}{!x.strategyInstalled && <Tag tone="warn" icon="x" testid="ag2-not-installed">{t('ag2NotInstalled')}</Tag>}</span>
         {!x.strategyInstalled && <span className="mt-2 block text-[12.5px] leading-snug text-mute">{t('ag2NotInstalledNote', { names: x.strategyNames.join(', ') })}</span>}

@@ -10,6 +10,7 @@ import { codeExamples, daysLeft, docOps, docTags, draftBody, emptyDraft, errKey,
 import { I18n, useT, type Key } from '../i18n';
 import { Btn, Card, CopyBtn, EmptyState, ErrorState, Fact, Field, Fold, H, Icon, inputCls, Notice, PageTitle, Section, Seg, Sheet, SkeletonCard, SkeletonRows, Stat, StatGrid, Tag, Timeline, when, type Tone } from '../ui';
 import { srvText } from '../srvText';
+import { SHOWN_VENUES } from '../venues';
 
 type View = 'keys' | 'usage' | 'webhooks' | 'docs' | 'status';
 const VIEWS: View[] = ['keys', 'usage', 'webhooks', 'docs', 'status'];
@@ -148,7 +149,7 @@ function CreateKey({ data, onClose, onCreated }: { data: KeysAnswer; onClose: ()
             <Field label={`${t('dvLimitDaily')} (USD)`} hint={bad('maxDaily')}><input className={inputCls} inputMode="decimal" value={d.maxDailyUsd} placeholder={t('dvNoLimit')} onChange={(e) => set('maxDailyUsd', e.target.value)} /></Field></div></Fold>
         <Fold summary={t('dvRestrictionsK')}>
           <div className="space-y-3"><p className="text-xs leading-snug text-mute">{t('dvRestrNote')}</p>
-            <Field label={t('dvAxis_venues')}><input className={inputCls} value={d.venues} placeholder="hyperliquid, gmx, spot" onChange={(e) => set('venues', e.target.value)} /></Field>
+            <Field label={t('dvAxis_venues')}><input className={inputCls} value={d.venues} placeholder={`${SHOWN_VENUES.join(', ')}, spot`} onChange={(e) => set('venues', e.target.value)} /></Field>
             <Field label={t('dvAxis_instruments')}><input className={inputCls} value={d.instruments} placeholder="hyperliquid:BTC, hyperliquid:ETH" onChange={(e) => set('instruments', e.target.value)} /></Field>
             <Field label={t('dvAxis_networks')}><input className={inputCls} value={d.networks} placeholder="base, arbitrum" onChange={(e) => set('networks', e.target.value)} /></Field>
             <Field label={t('dvAxis_ipAllow')} hint={bad('ips')}><input className={inputCls} value={d.ips} placeholder="203.0.113.7, 10.0.0.0/8" onChange={(e) => set('ips', e.target.value)} /></Field></div></Fold>

@@ -13,6 +13,7 @@ import { loadLocale } from './i18n-load';
 import { useAlertsRuntime, useUnread } from './alerts'; // v6-alerts
 import { setAmountLocale } from './amount'; // v8 hardening: amounts follow the screen's language
 import { AREAS, type Area } from './nav';
+import { MULTI_VENUE } from './venues';   // one venue shown: no Compare sub-view
 
 // v10 performance pass — what the first screen needs (the shell, Home, the asset list and page, the lock screen) is the
 // first chunk; every other screen is a chunk of its own, fetched when it is opened or — so that a tap never waits — by
@@ -168,7 +169,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
   const sideCls = 'press flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-[15px] font-medium';
   // the sub-views of an area, under the header: one row, never wrapping (it scrolls sideways if a translation is long)
   const SUB: Partial<Record<Area, readonly (readonly [string, Key, Route, boolean])[]>> = {
-    markets: [['explorer', 'mkViewExplorer', { tab: 'markets' }, tab === 'markets' && route.view !== 'compare'], ['compare', 'mkViewCompare', { tab: 'markets', view: 'compare', asset: tab === 'markets' ? route.asset : undefined }, tab === 'markets' && route.view === 'compare'], ['private', 'pmTab', { tab: 'private' }, tab === 'private']],
+    markets: [['explorer', 'mkViewExplorer', { tab: 'markets' }, tab === 'markets' && (!MULTI_VENUE || route.view !== 'compare')], ...(!MULTI_VENUE ? [] : [['compare', 'mkViewCompare', { tab: 'markets', view: 'compare', asset: tab === 'markets' ? route.asset : undefined }, tab === 'markets' && route.view === 'compare']] as const), ['private', 'pmTab', { tab: 'private' }, tab === 'private']],
     trade: [['swap', 'fxSpot', { tab: 'swap' }, tab === 'swap'], ['futures', 'fxFutures', { tab: 'futures' }, tab === 'futures']],
   };
   const sub = area && tab !== 'plan' ? SUB[area] : undefined;

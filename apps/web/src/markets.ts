@@ -7,10 +7,13 @@
  */
 import { get } from './api';
 import { parseAmountInput, type AmountLocale } from './amount';
+import { venueShown } from './venues';
 
 export type Category = 'crypto' | 'equity' | 'pre_ipo' | 'commodity' | 'fx';
 export const CATEGORIES: readonly Category[] = ['crypto', 'equity', 'pre_ipo', 'commodity', 'fx'];
 export const HUB_VENUES = ['hyperliquid', 'gmx', 'dydx', 'edgex'] as const;
+/** the venues the owner is offered (venues.ts): filters, stream status */
+export const SHOWN_HUB_VENUES: readonly (typeof HUB_VENUES)[number][] = HUB_VENUES.filter(venueShown);
 export type HubSort = 'volume' | 'openInterest' | 'funding' | 'change' | 'symbol';
 export interface HubFunding { rate: string; intervalSec: number; perHour: string; annualised: string }
 export interface HubRow {

@@ -22,7 +22,9 @@ interface Item { swap?: { toSymbol: string; receivedDisplay: string | null; minO
   to?: string; from?: string; feeDisplay?: string | null; feeSymbol?: string; error?: string | null; errorCode?: string | null; errorParams?: Record<string, string | number> | null; execution?: ExecutionV; note?: string; confirmations?: number }
 
 const KIND_ICON: Record<ActivityKind, string> = { transfer: 'up', receive: 'down', swap: 'swap', bridge: 'swap', plan: 'list', order: 'chart', agent: 'robot', mandate: 'key', risk: 'shield', key: 'key', security: 'lock' };
-const VENUES = ['hyperliquid', 'gmx', 'dydx', 'edgex', 'spot'] as const;
+import { venueShown } from '../venues';
+/** the filter offers the venues the owner is offered (venues.ts) — a past operation on another venue stays in the unfiltered list */
+const VENUES = (['hyperliquid', 'gmx', 'dydx', 'edgex', 'spot'] as const).filter((v) => v === 'spot' || venueShown(v));
 const VENUE_NAME: Record<string, string> = { hyperliquid: 'Hyperliquid', gmx: 'GMX', dydx: 'dYdX', edgex: 'edgeX', spot: 'Spot' };
 const selectCls = `${inputCls} min-h-11 !py-2 text-[14px]`;
 

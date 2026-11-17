@@ -17,7 +17,7 @@ import { fmt, pct, priceDp, usd } from '../derivatives/dec';
 import { PriceFreshness } from '../freshness';
 import { usePortfolio } from '../hooks';
 import { I18n, useT, type Key } from '../i18n';
-import { HUB_VENUES } from '../markets';
+import { SHOWN_HUB_VENUES } from '../markets';   // the venues the owner is offered (venues.ts)
 import { LiveCell, LiveStatus, QuoteDot } from '../quotes-ui';
 import { ago } from '../sv';
 import { Btn, Card, EmptyState, ErrorState, Fact, Fold, Icon, Notice, Section, SkeletonCard, SkeletonStats, Stat, StatGrid, Tag, VenueIcon, type Tone } from '../ui';
@@ -156,7 +156,7 @@ export function DashboardPanels({ nav }: { nav: Nav }) {
               {h.data.loops.late.length > 0 && <span className="mt-1 block text-[12.5px] text-warn">{t('v11DbLoopsLate', { n: h.data.loops.late.length })}</span>}</Fact></dl>}
           {!au.ok ? <Unavailable code={au.error.code} /> : <dl><Fact k={t('v11DbAudit')} testid="db-audit"><Tag tone={au.data.intact ? 'ok' : 'danger'} icon={au.data.intact ? 'check' : 'x'}>{t(au.data.intact ? 'v11DbAuditOk' : 'v11DbAuditBroken')}</Tag>
             <span className="mt-1 block text-[12.5px] text-mute">{t('v11DbAuditEvents', { n: au.data.total })}</span></Fact></dl>}
-          <div><h3 className="mb-1.5 text-[13px] text-mute">{t('v11DbStreams')}</h3><LiveStatus venues={[...HUB_VENUES]} names={VENUE} /></div>
+          <div><h3 className="mb-1.5 text-[13px] text-mute">{t('v11DbStreams')}</h3><LiveStatus venues={[...SHOWN_HUB_VENUES]} names={VENUE} /></div>
         </div></Card>
       </Panel>
 

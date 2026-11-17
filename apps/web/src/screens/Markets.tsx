@@ -16,9 +16,10 @@ import { DataTable, Seg, timeOf, VENUE_NAME, VenueBadge, type Col } from '../der
 import { compactUsd, fmt, priceDp } from '../derivatives/dec';
 import type { VenueId } from '../derivatives/types';
 import { errText, I18n, useT, type Key } from '../i18n';
-import { ageLabel, CATEGORIES, defaultFilters, freshness, HUB_VENUES, mapi, nextSort, pctText, reasonKey, rowTarget, unmappedKey, type Category, type HubFilters, type HubRow, type HubSort } from '../markets';
+import { ageLabel, CATEGORIES, defaultFilters, freshness, SHOWN_HUB_VENUES, mapi, nextSort, pctText, reasonKey, rowTarget, unmappedKey, type Category, type HubFilters, type HubRow, type HubSort } from '../markets';
 import { useConn, useQuoteSubscriptions, type LiveQuote } from '../quotes';   // v11 live quotes
 import { LiveCell, LiveStatus, QuoteDot } from '../quotes-ui';
+import { hubVenueParam, MULTI_VENUE, venueShown } from '../venues';   // which venues the owner is offered
 import { Btn, Card, Chips, Coin, ErrorState, Fact, Icon, inputCls, Notice, numFmt, PageTitle, Sheet, Stat, StatGrid, Tag } from '../ui';
 
 export type MarketsView = 'explorer' | 'compare';
@@ -47,7 +48,8 @@ function NotTradable({ r, long }: { r: HubRow; long?: boolean }) {
     <b className="font-semibold">{t(r.kind === 'spot' ? 'mkNotSwappable' : 'mkNotTradable')}</b> {t(reasonKey(r.tradableReason) as Key)}{r.paper ? ` ${t('mkPaperOk')}` : ''}</span>;
 }
 
-export function Markets({ view, underlying, nav }: { view: MarketsView; underlying?: string; nav: Nav }) {
+export function Markets({ view: asked, underlying, nav }: { view: MarketsView; underlying?: string; nav: Nav }) {
+  const view: MarketsView = MULTI_VENUE ? asked : 'explorer';   // comparing venues needs two of them (venues.ts)
   const t = useT(); const { locale } = useContext(I18n);
   const [f, setF] = useState<HubFilters>(() => ({ ...defaultFilters('perp'), limit: PAGE }));
   const [sheet, setSheet] = useState<HubRow | null>(null);
@@ -55,7 +57,7 @@ export function Markets({ view, underlying, nav }: { view: MarketsView; underlyi
   // v11 live quotes: the rows tick from the websocket; the listing itself (order, pages, volumes) is re-read less often while the stream is live,
   // and at the cadence it always had when the stream cannot connect
   const conn = useConn();
-  const q = useQuery({ queryKey: ['mh', 'list', f], queryFn: () => mapi.list(f), refetchInterval: conn === 'live' ? 30_000 : 10_000, placeholderData: (prev) => prev, enabled: view === 'explorer' });
+  const q = useQuery({ queryKey: ['mh', 'list', f], queryFn: async () => { const d = await mapi.list({ ...f, venue: hubVenueParam(f.venue) }); return { ...d, rows: d.rows.filter((r) => r.kind !== 'perp' || venueShown(r.venue)) }; }, refetchInterval: conn === 'live' ? 30_000 : 10_000, placeholderData: (prev) => prev, enabled: view === 'explorer' });
   useQuoteSubscriptions(useMemo(() => (view === 'explorer' ? (q.data?.rows ?? []).map(liveIdOf).filter((x): x is string => x !== null) : []), [q.data, view]));
   const instruments = useQuery({ queryKey: ['deriv', 'instruments', locale], queryFn: () => dapi.instruments(undefined, locale), staleTime: 60_000, enabled: view === 'compare' });
   const open = (r: HubRow) => { const to = rowTarget(r); if (to.kind === 'asset') nav({ tab: 'asset', network: to.network, asset: to.asset }); else if (to.kind === 'futures') nav({ tab: 'futures', asset: to.instrument }); else setSheet(r); };
@@ -71,7 +73,7 @@ export function Markets({ view, underlying, nav }: { view: MarketsView; underlyi
       {r.kind === 'perp' && r.multiplier !== null && r.multiplier !== '1' && <span className="text-[11.5px] font-normal text-mute">{t('mkMultiplier', { n: r.multiplier, u: r.underlying ?? '' })}</span>}
       {r.kind === 'perp' && r.underlying === null && <span className="max-w-[240px] whitespace-normal text-[11.5px] font-normal leading-snug text-mute" data-testid="mk-unmapped">{t(unmappedKey(r.mapping.unmapped) as Key)}</span>}
       <NotTradable r={r} /></span> },
-    ...(perp ? [{ id: 'v', label: t('fxVenue'), head: true, cell: (r: HubRow) => <VenueBadge venue={r.venue as VenueId} /> } satisfies Col<HubRow>] : []),
+    ...(perp && MULTI_VENUE ? [{ id: 'v', label: t('fxVenue'), head: true, cell: (r: HubRow) => <VenueBadge venue={r.venue as VenueId} /> } satisfies Col<HubRow>] : []),
     { id: 'px', label: t('mkPrice'), num: true, cell: (r) => <LiveCell id={liveIdOf(r)} flash={(q) => livePriceOf(r, q)} render={(q) => { const p = livePriceOf(r, q); return p ? <span className="font-semibold tabular-nums">{fmt(p, { dp: priceDp('0.01', p), locale })}</span> : null; }}>
       {r.price ? <span className="font-semibold tabular-nums">{fmt(r.price, { dp: priceDp('0.01', r.price), locale })}</span> : <span className="text-mute">—</span>}</LiveCell> },
     { id: 'chg', label: sortHead('change', t('mkChange')), num: true, cell: (r) => <LiveCell id={liveIdOf(r)} render={(q) => (q.change24h === null ? null : <span className={Number(q.change24h) < -0.00005 ? 'text-danger' : 'text-emerald'}>{pctText(q.change24h, 2, locale, true)}</span>)}>
@@ -98,17 +100,17 @@ export function Markets({ view, underlying, nav }: { view: MarketsView; underlyi
                 <input type="search" value={f.q} onChange={(e) => set({ q: e.target.value.slice(0, 40) })} placeholder={t('mkSearch')} data-testid="mk-search" className={`${inputCls} !py-2.5 pl-10 text-[15px]`} /></label>
             </div>
             {perp && <div className="mt-3 space-y-2">
-              <Chips label={t('fxVenue')} value={f.venue} onChange={(venue) => set({ venue })} options={[{ id: '', label: t('mkAllVenues') }, ...HUB_VENUES.map((v) => ({ id: v as string, label: VENUE_NAME[v] }))]} />
+              {MULTI_VENUE && <Chips label={t('fxVenue')} value={f.venue} onChange={(venue) => set({ venue })} options={[{ id: '', label: t('mkAllVenues') }, ...SHOWN_HUB_VENUES.map((v) => ({ id: v as string, label: VENUE_NAME[v] }))]} />}
               <Chips label={t('mkCategory')} value={f.category} onChange={(category) => set({ category: category as Category | '' })} options={[{ id: '', label: t('mkAllCategories') }, ...CATEGORIES.map((c) => ({ id: c as string, label: t(`mkCat_${c}` as Key) }))]} />
             </div>}
             <div className="mt-3"><Chips label={t('mkTradable')} value={f.tradable} onChange={(tradable) => set({ tradable: tradable as HubFilters['tradable'] })}
               options={[{ id: '', label: t('mkTradableAll') }, { id: 'yes', label: t(perp ? 'mkTradableYes' : 'mkSwappableYes') }, { id: 'no', label: t(perp ? 'mkTradableNo' : 'mkSwappableNo') }]} /></div>
           </Card>
-          <div className="px-1"><LiveStatus venues={perp ? [...HUB_VENUES] : ['spot']} names={{ ...VENUE_NAME, spot: t('mkSpotSource') }} /></div>
-          {d && <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1 text-[12.5px] text-mute" data-testid="mk-venues" aria-label={t('mkSources')}>{d.venues.filter((v) => (perp ? v.id !== 'spot' : v.id === 'spot')).map((v) =>
+          <div className="px-1"><LiveStatus venues={perp ? [...SHOWN_HUB_VENUES] : ['spot']} names={{ ...VENUE_NAME, spot: t('mkSpotSource') }} /></div>
+          {d && <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1 text-[12.5px] text-mute" data-testid="mk-venues" aria-label={t('mkSources')}>{d.venues.filter((v) => (perp ? v.id !== 'spot' && venueShown(v.id) : v.id === 'spot')).map((v) =>
             <span key={v.id} className="inline-flex items-center gap-1.5" title={v.error ?? undefined}>{v.id === 'spot' ? t('mkSpotSource') : VENUE_NAME[v.id as VenueId] ?? v.name}
               <Tag tone={v.status === 'ok' ? 'ok' : v.status === 'stale' ? 'warn' : 'danger'} testid={`mk-venue-${v.id}`}>{t(`mkVenue_${v.status}` as Key)}{v.ageMs !== null && v.status !== 'error' ? ` · ${ageLabel(v.ageMs, locale)}` : ''}</Tag></span>)}</div>}
-          {d && d.errors.length > 0 && <Notice tone="warn">{t('mkSourceErrors', { sources: [...new Set(d.errors.map((e) => (e.source === 'spot' ? t('mkSpotSource') : VENUE_NAME[e.source as VenueId] ?? e.source)))].join(', ') })}</Notice>}
+          {d && d.errors.filter((e) => e.source === 'spot' || venueShown(e.source)).length > 0 && <Notice tone="warn">{t('mkSourceErrors', { sources: [...new Set(d.errors.filter((e) => e.source === 'spot' || venueShown(e.source)).map((e) => (e.source === 'spot' ? t('mkSpotSource') : VENUE_NAME[e.source as VenueId] ?? e.source)))].join(', ') })}</Notice>}
           <Card>
             {q.isLoading ? <div className="space-y-3 py-1" aria-hidden="true">{[0, 1, 2, 3, 4, 5].map((k) => <div key={k} className="flex items-center gap-3"><div className="skel h-6 w-28 !rounded-full" /><div className="skel h-4 w-14 !rounded-md" /><div className="skel h-4 flex-1 !rounded-md" /></div>)}</div>
               : q.isError && !d ? <ErrorState title={t('mkLoadError')} onRetry={() => void q.refetch()}>{errText(t, q.error)}</ErrorState>
@@ -120,7 +122,7 @@ export function Markets({ view, underlying, nav }: { view: MarketsView; underlyi
             <p className="mt-3 text-[12px] leading-snug text-mute">{t(perp ? 'mkNotePerp' : 'mkNoteSpot')}</p>
           </Card>
         </>}
-      {sheet && <MarketSheet row={sheet} onClose={() => setSheet(null)} onCompare={sheet.underlying ? () => { const u = sheet.underlying!; setSheet(null); nav({ tab: 'markets', view: 'compare', asset: u }); } : undefined} />}
+      {sheet && <MarketSheet row={sheet} onClose={() => setSheet(null)} onCompare={MULTI_VENUE && sheet.underlying ? () => { const u = sheet.underlying!; setSheet(null); nav({ tab: 'markets', view: 'compare', asset: u }); } : undefined} />}
     </div>
   );
 }
