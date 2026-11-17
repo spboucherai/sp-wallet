@@ -127,6 +127,11 @@ describe.skipIf(!READY)('template → backtest (real laboratory, job queue, repo
     }
     const [ver] = await sql`select status, notes, report from strategy_versions where id = ${versionId}`;
     expect(ver.report, `no report: ${ver.notes} / job ${JSON.stringify(job)}`).toBeTruthy();
+    // V11 final validation — the job met the backtest the registration had started by itself: it WAITED for that run instead of
+    // failing on « the backtest produced no report » and being dead-lettered (and instead of putting the row back to `draft`, which
+    // made the run in flight lose its report). One attempt, done; nothing was retried.
+    expect(job).toMatchObject({ status: 'done', attempts: 1, deadLettered: false });
+    expect((await sql`select count(*)::int as n from audit_events where type = 'strategy.backtested' and data->>'version' = ${versionId}`)[0].n).toBe(1);   // ONE backtest ran, not two
     const rep = ver.report;
     expect(rep.schema_version).toBe(3); expect(rep.kind).toBe('perp'); expect(rep.engine_parity.applied).toBe(true);
     expect(rep.checks).toMatchObject({ lookahead: 'pass', ledger: 'pass', funding_alignment: 'pass' });

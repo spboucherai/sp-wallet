@@ -122,10 +122,19 @@ export function stageLedger(scratch: string): { copy: string; merge(): boolean }
     return true; } };
 }
 
-const running = new Set<string>();
+// one run per version in this process; a second caller waits for the run in flight (see perp-strategies.ts `running`)
+const running = new Map<string, Promise<void>>();
+/** is a backtest of this version running in THIS process? */
+export const backtestInFlight = (versionId: string): boolean => running.has(versionId);
 /** Backtest a registered version on the stored candles and attach the report. Never throws; the outcome is stored on the row. */
-export async function backtest(versionId: string, info: StrategyInfo, symbols: string[]): Promise<void> {
-  if (running.has(versionId)) return; running.add(versionId);
+export function backtest(versionId: string, info: StrategyInfo, symbols: string[]): Promise<void> {
+  const inFlight = running.get(versionId);
+  if (inFlight) return inFlight;
+  const run = runBacktest(versionId, info, symbols).finally(() => { running.delete(versionId); });
+  running.set(versionId, run);
+  return run;
+}
+async function runBacktest(versionId: string, info: StrategyInfo, symbols: string[]): Promise<void> {
   const tmp = scratchDir(), out = path.join(tmp, 'report.json'), data = path.join(tmp, 'data');
   try {
     await sql`update strategy_versions set status = 'backtesting', notes = '' where id = ${versionId} and status in ('draft', 'backtesting')`;
@@ -148,7 +157,7 @@ export async function backtest(versionId: string, info: StrategyInfo, symbols: s
     await sql`update strategy_versions set status = 'draft', report = ${sql.json(report as never)}, notes = '' where id = ${versionId} and status = 'backtesting'`;
     await audit('strategy.backtested', 'engine', { version: versionId, sha256: info.sha256 });
   } catch (e) { await sql`update strategy_versions set status = 'draft', notes = ${`backtest failed: ${(e as Error).message.slice(0, 200)}`} where id = ${versionId} and status = 'backtesting'`.catch(() => {}); }
-  finally { running.delete(versionId); dropScratch(tmp); }
+  finally { dropScratch(tmp); }
 }
 
 /** Pin a library version (or a research job's `rj_*`) to an agent and start its backtest. Used by the owner's route and by the

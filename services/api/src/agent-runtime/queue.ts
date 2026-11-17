@@ -80,7 +80,10 @@ export async function cancelJobs(agentId: string, kinds: readonly JobKind[]): Pr
   return (await sql`update agent_jobs set state = 'cancelled', finished_at = now(), updated_at = now() where agent_id = ${agentId} and kind in ${sql([...kinds])} and state = 'queued' returning id`).length;
 }
 export const getJob = async (id: string): Promise<JobRow | null> => (await sql<JobRow[]>`select * from agent_jobs where id = ${id}`)[0] ?? null;
-export const jobView = (j: JobRow) => ({ id: j.id, agentId: j.agent_id, kind: j.kind, status: j.state, attempts: j.attempts, maxAttempts: j.max_attempts, runAt: j.run_at.getTime(), error: j.last_error, result: j.result ?? null,
+/** What a job is for a client. The contract's `status` has no `dead`: a dead-lettered job (every attempt failed, or its worker stopped
+ *  answering) is `failed`, with `deadLettered: true` — V11 final validation: the raw `dead` was sent to API keys, outside the enum of
+ *  the OpenAPI document, and the Python SDK (strict by design) refused the whole answer. */
+export const jobView = (j: JobRow) => ({ id: j.id, agentId: j.agent_id, kind: j.kind, status: j.state === 'dead' ? 'failed' as const : j.state, deadLettered: j.state === 'dead', attempts: j.attempts, maxAttempts: j.max_attempts, runAt: j.run_at.getTime(), error: j.last_error, result: j.result ?? null,
   createdAt: j.created_at.getTime(), updatedAt: j.updated_at.getTime(), finishedAt: j.finished_at?.getTime() ?? null });
 
 export async function queueStats(): Promise<{ queued: number; running: number; dead24h: number; oldestQueuedMs: number | null }> {

@@ -110,7 +110,9 @@ describe('job queue — durable tasks with retries and a dead-letter state', () 
     const [dead] = await sql`select state, attempts, last_error, finished_at from agent_jobs where id = ${id}`;
     expect([dead.state, dead.attempts, dead.last_error]).toEqual(['dead', 5, 'boom 5']); expect(dead.finished_at).not.toBeNull();
     expect(await queue.claim('w1', { now: t + 10 * 86_400_000 })).toEqual([]);                      // a dead letter is never run again
-    expect(queue.jobView((await queue.getJob(id))!)).toMatchObject({ status: 'dead', attempts: 5, error: 'boom 5' });
+    expect((await queue.getJob(id))!.state).toBe('dead');
+    // for a client a dead-lettered job is `failed` (the contract's enum has no `dead`), flagged
+    expect(queue.jobView((await queue.getJob(id))!)).toMatchObject({ status: 'failed', deadLettered: true, attempts: 5, error: 'boom 5' });
   });
   it('a worker that dies with a job: the job is reaped when its lock expires — back to the queue, or dead at the limit; another worker\'s answer for it is ignored', async () => {
     const a = await agent();
