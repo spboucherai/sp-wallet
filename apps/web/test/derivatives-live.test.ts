@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../src/api.ts';
-import { buildLive, canonicalProblem, clock, closeProblem, defaultPolicyForm, inFlight, isUnfunded, liveError, newKey, policyFromForm, remainingMs, samePolicy, sha256Hex, toneOf, venueWords,
+import { assetsAtLeverage, buildLive, canonicalProblem, clock, closeProblem, defaultPolicyForm, policyFormOf, inFlight, isUnfunded, liveError, newKey, policyFromForm, remainingMs, samePolicy, sha256Hex, toneOf, venueWords,
   type LiveConfig, type LiveDetail, type LiveOrder, type LiveOrderBody, type VenueOrder } from '../src/derivatives/live.ts';
 import { applyLiveEvent, mergeOrder } from '../src/derivatives/liveStore.ts';
 
@@ -99,11 +99,13 @@ describe('authorization limits', () => {
     for (const n of ['testnet', 'mainnet'] as const) {
       const r = policyFromForm(defaultPolicyForm(n, PINNED), BOUNDS, PINNED);
       expect(r.ok).toBe(true);
-      if (r.ok) { expect(r.policy.allowedInstruments).toEqual(['hyperliquid:BTC']); expect(r.policy.maxLeverage).toBe(2); expect(r.days).toBe(7); expect(r.policy.maxPriceDeviationBps).toBe(n === 'testnet' ? 1000 : 200); expect(r.policy.maxOrderNotional).toBe('50'); }
+      // 2026-11-17: the default is « all assets » — every pinned instrument the leverage allows (was BTC alone)
+      if (r.ok) { expect(r.policy.allowedInstruments).toEqual(PINNED.map((p) => p.instrument)); expect(r.policy.maxLeverage).toBe(2); expect(r.days).toBe(7); expect(r.policy.maxPriceDeviationBps).toBe(n === 'testnet' ? 1000 : 200); expect(r.policy.maxOrderNotional).toBe('50'); }
     }
   });
   it('refuses what the server would refuse, with the reason', () => {
-    const f = defaultPolicyForm('testnet', PINNED), bad = (patch: Partial<typeof f>) => { const r = policyFromForm({ ...f, ...patch }, BOUNDS, PINNED); return r.ok ? null : r.problem; };
+    // the instrument checks are those of the « choose » mode (the ticked list); « all assets » is covered below
+    const f = { ...defaultPolicyForm('testnet', PINNED), scope: 'choose' as const }, bad = (patch: Partial<typeof f>) => { const r = policyFromForm({ ...f, ...patch }, BOUNDS, PINNED); return r.ok ? null : r.problem; };
     expect(bad({ instruments: [] })).toBe('instruments');
     expect(bad({ instruments: ['hyperliquid:DOGE'] })).toBe('instruments');                                              // not pinned: cannot be allowed
     expect(bad({ maxLeverage: '0' })).toBe('leverage'); expect(bad({ maxLeverage: '21' })).toBe('leverage'); expect(bad({ maxLeverage: '2.5' })).toBe('leverage');
@@ -116,6 +118,31 @@ describe('authorization limits', () => {
     expect(bad({ days: '91' })).toBe('days'); expect(bad({ days: '0' })).toBe('days');
     const ok = policyFromForm({ ...f, maxOrderNotional: '1 234,50', maxPositionNotional: '2000', maxGrossExposure: '3000' }, BOUNDS, PINNED);
     expect(ok.ok && ok.policy.maxOrderNotional).toBe('1234.5');                                                           // French input → canonical decimal string
+  });
+  it('« all assets » = every pinned instrument whose venue maximum is at least the leverage; the others are left out and named', () => {
+    const all = (lev: string) => { const r = policyFromForm({ ...defaultPolicyForm('mainnet', PINNED), maxLeverage: lev }, BOUNDS, PINNED); return r.ok ? r.policy.allowedInstruments : r.problem; };
+    expect(all('2')).toEqual(PINNED.map((p) => p.instrument));
+    const max = Math.max(...PINNED.map((p) => p.maxLeverage)), min = Math.min(...PINNED.map((p) => p.maxLeverage)), mid = Math.min(max, BOUNDS.maxLeverage);
+    expect(max).toBeGreaterThan(min);                                                                                      // the fixture has assets with different maxima
+    const split = assetsAtLeverage(PINNED, String(min + 1));
+    expect(split.leftOut.map((p) => p.instrument)).toEqual(PINNED.filter((p) => p.maxLeverage <= min).map((p) => p.instrument));
+    expect(split.allowed.length + split.leftOut.length).toBe(PINNED.length);
+    expect(all(String(min + 1))).toEqual(split.allowed.map((p) => p.instrument));                                          // the policy carries exactly the assets the form announced
+    expect(all(String(mid))).toEqual(PINNED.filter((p) => p.maxLeverage >= mid).map((p) => p.instrument));
+    expect(all('0')).toBe('leverage'); expect(all('abc')).toBe('leverage');                                                 // « all » is defined by the leverage: a wrong leverage is said first
+    expect(assetsAtLeverage(PINNED, 'abc').leftOut).toEqual([]);
+    // every asset of an « all » policy passes the signer's rule: the one leverage never exceeds an allowed asset's venue maximum
+    for (const lev of [1, 2, 3, 5, 10, 20]) { const s = assetsAtLeverage(PINNED, lev); expect(s.allowed.every((p) => p.maxLeverage >= lev)).toBe(true); expect(s.leftOut.every((p) => p.maxLeverage < lev)).toBe(true); }
+  });
+  it('the form that changes an authorization starts from its own limits, and knows whether its list was « all »', () => {
+    const base = { maxLeverage: 2, maxOrderNotional: '50', maxPositionNotional: '100', maxGrossExposure: '150', maxOrdersPerDay: 20, maxPriceDeviationBps: 200 };
+    const one = policyFormOf({ ...base, allowedInstruments: ['hyperliquid:BTC'] }, 'mainnet', PINNED);
+    expect(one.scope).toBe('choose'); expect(one.instruments).toEqual(['hyperliquid:BTC']); expect(one.maxLeverage).toBe('2'); expect(one.maxOrderNotional).toBe('50'); expect(one.bandBps).toBe('200');
+    const every = policyFormOf({ ...base, allowedInstruments: PINNED.map((p) => p.instrument) }, 'mainnet', PINNED);
+    expect(every.scope).toBe('all');
+    const again = policyFromForm({ ...one, scope: 'all' }, BOUNDS, PINNED);                                                 // BTC alone → all assets, same limits
+    expect(again.ok && again.policy).toEqual({ ...base, allowedInstruments: PINNED.map((p) => p.instrument) });
+    expect(policyFormOf({ ...base, allowedInstruments: ['hyperliquid:GONE', 'hyperliquid:BTC'] }, 'mainnet', PINNED).instruments).toEqual(['hyperliquid:BTC']);   // an asset no longer pinned is dropped
   });
   it('compares the limits the server prepared with those asked for', () => {
     const p = { allowedInstruments: ['hyperliquid:BTC', 'hyperliquid:ETH'], maxLeverage: 2, maxOrderNotional: '50', maxPositionNotional: '100', maxGrossExposure: '150', maxOrdersPerDay: 20, maxPriceDeviationBps: 1000 };

@@ -166,24 +166,47 @@ export function closeProblem(pos: { instrument: string; side: 'long' | 'short'; 
   return null;
 }
 
-export interface PolicyForm { instruments: string[]; maxLeverage: string; maxOrderNotional: string; maxPositionNotional: string; maxGrossExposure: string; maxOrdersPerDay: string; bandBps: string; days: string }
 /**
- * Conservative starting values, all editable: one market, leverage 2, small notionals, few orders, one week. The price band is
+ * `scope`: 'all' = every pinned instrument whose venue maximum leverage is at least the chosen leverage (the list follows the
+ * leverage field); 'choose' = the instruments ticked in `instruments`. One authorization carries ONE maximum leverage and the signer
+ * refuses it when it exceeds the venue maximum of ANY allowed instrument — which is why a higher leverage leaves assets out.
+ */
+export interface PolicyForm { scope: 'all' | 'choose'; instruments: string[]; maxLeverage: string; maxOrderNotional: string; maxPositionNotional: string; maxGrossExposure: string; maxOrdersPerDay: string; bandBps: string; days: string }
+/**
+ * Conservative starting values, all editable: every asset the leverage allows, leverage 2, small notionals, few orders, one week. The price band is
  * the one field that differs by network: the signer compares every order price with its own USD spot price, and the testnet
  * mark wanders more than 1 % away from it (docs/v4/venues/hyperliquid.md, section 13).
  */
 export function defaultPolicyForm(network: LiveNetwork, pinned: { instrument: string }[]): PolicyForm {
   const btc = pinned.find((p) => p.instrument === 'hyperliquid:BTC') ?? pinned[0];
-  return { instruments: btc ? [btc.instrument] : [], maxLeverage: '2', maxOrderNotional: '50', maxPositionNotional: '100', maxGrossExposure: '150', maxOrdersPerDay: '20', bandBps: network === 'testnet' ? '1000' : '200', days: '7' };
+  return { scope: 'all', instruments: btc ? [btc.instrument] : [], maxLeverage: '2', maxOrderNotional: '50', maxPositionNotional: '100', maxGrossExposure: '150', maxOrdersPerDay: '20', bandBps: network === 'testnet' ? '1000' : '200', days: '7' };
 }
 export type PolicyProblem = 'instruments' | 'tooManyInstruments' | 'leverage' | 'leverageVenue' | 'order' | 'position' | 'gross' | 'orderAbovePosition' | 'positionAboveGross' | 'ordersPerDay' | 'band' | 'days';
 const int = (s: string): number | null => (/^\d{1,6}$/.test(s.trim()) ? Number(s.trim()) : null);
+/**
+ * « All assets » at a leverage: the pinned instruments whose venue maximum is at least `leverage`, and those left out because
+ * theirs is lower. A leverage that is not a whole number ≥ 1 leaves nothing out (the form says the leverage is wrong first).
+ */
+export function assetsAtLeverage<P extends { instrument: string; maxLeverage: number }>(pinned: readonly P[], leverage: string | number): { allowed: P[]; leftOut: P[] } {
+  const lev = typeof leverage === 'number' ? leverage : int(leverage);
+  if (lev === null || !Number.isInteger(lev) || lev < 1) return { allowed: [...pinned], leftOut: [] };
+  return { allowed: pinned.filter((p) => p.maxLeverage >= lev), leftOut: pinned.filter((p) => p.maxLeverage < lev) };
+}
+/** the form that reproduces an authorization's limits (to change its assets): same figures, the scope the list corresponds to */
+export function policyFormOf(p: VenuePolicy, network: LiveNetwork, pinned: readonly { instrument: string; maxLeverage: number }[]): PolicyForm {
+  const all = assetsAtLeverage(pinned, p.maxLeverage).allowed.map((x) => x.instrument), d = defaultPolicyForm(network, [...pinned]);
+  const same = all.length === p.allowedInstruments.length && all.every((i) => p.allowedInstruments.includes(i));
+  return { ...d, scope: same ? 'all' : 'choose', instruments: p.allowedInstruments.filter((i) => pinned.some((x) => x.instrument === i)), maxLeverage: String(p.maxLeverage), maxOrderNotional: p.maxOrderNotional,
+    maxPositionNotional: p.maxPositionNotional, maxGrossExposure: p.maxGrossExposure, maxOrdersPerDay: String(p.maxOrdersPerDay), bandBps: String(p.maxPriceDeviationBps) };
+}
 const pos = (s: string): DecStr | null => { const v = parseInput(s); return v && D.isPos(D.from(v)) ? v : null; };
 /** the form as the `VenuePolicy` the server takes, or the first reason it cannot be one (the server checks again) */
 export function policyFromForm(f: PolicyForm, bounds: LiveConfig['bounds'], pinned: { instrument: string; maxLeverage: number }[]): { ok: true; policy: VenuePolicy; days: number } | { ok: false; problem: PolicyProblem } {
   const no = (problem: PolicyProblem) => ({ ok: false as const, problem });
-  const allowed = f.instruments.filter((i) => pinned.some((p) => p.instrument === i));
-  if (!allowed.length) return no('instruments');
+  const lev0 = int(f.maxLeverage);
+  if (f.scope === 'all' && (lev0 === null || lev0 < 1 || lev0 > bounds.maxLeverage)) return no('leverage');   // « all assets » is defined by the leverage: it is judged first
+  const allowed = f.scope === 'all' ? assetsAtLeverage(pinned, lev0!).allowed.map((p) => p.instrument) : f.instruments.filter((i) => pinned.some((p) => p.instrument === i));
+  if (!allowed.length) return no(f.scope === 'all' ? 'leverageVenue' : 'instruments');
   if (allowed.length > bounds.maxInstruments) return no('tooManyInstruments');
   const lev = int(f.maxLeverage);
   if (lev === null || lev < 1 || lev > bounds.maxLeverage) return no('leverage');
