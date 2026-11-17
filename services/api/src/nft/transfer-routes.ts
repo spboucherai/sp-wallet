@@ -109,7 +109,7 @@ export function nftTransferRoutes(app: FastifyInstance, d: TransferRoutesDeps): 
       broadcast: config.broadcast };
   });
 
-  app.post(`${P}/transfer/prepare`, limit(30), async (req) => {
+  app.post(`${P}/transfer/prepare`, limit(120), async (req) => {
     const b = z.strictObject({ key: Key, to: z.string().trim().min(26).max(64), quantity: z.string().regex(/^[1-9]\d{0,77}$/).default('1') }).parse(req.body);
     const idem = idemOf(req.headers as Record<string, unknown>, 'nft', b), dup = await existingFor(idem);
     if (dup) return { proposal: nftView(dup), intent: dup.intent, review: dup.nft ?? null, options: await challengeFor(dup), replayed: true };
@@ -131,7 +131,7 @@ export function nftTransferRoutes(app: FastifyInstance, d: TransferRoutesDeps): 
   });
 
   // The HTTP call is not the approval: the passkey assertion over the NFT intent hash is, and only the signer judges it.
-  app.post(`${P}/transfer/:id/approve`, limit(30), async (req) => {
+  app.post(`${P}/transfer/:id/approve`, limit(120), async (req) => {
     const body = z.object({ assertion: z.record(z.string(), z.unknown()) }).parse(req.body);
     let p = await load((req.params as { id: string }).id);
     if (p.kind !== 'nft') throw new UserError('not_found', 'proposal not found', 404);

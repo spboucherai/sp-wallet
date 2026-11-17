@@ -7,10 +7,11 @@
 // The API is NOT a security authority here: everything it establishes (standard, ownership, state of the asset, destination,
 // simulation) protects the owner from a transfer that fails or that he did not mean; what bounds a compromised API is the
 // signer (nft.ts there). A refusal carries a stable code (`nft_transfer_<code>`), the on-chain identifiers, and never a URL.
-import { decodeAbiParameters, encodeFunctionData, getAddress, hexToBigInt, hexToNumber, parseAbi } from 'viem';
+import { encodeFunctionData, getAddress, hexToBigInt, hexToNumber, parseAbi } from 'viem';
 import { associatedTokenAddress, buildNftEvmTx, buildNftSolMessage, checkNftPolicy, getNetwork, NFT_CORE_PROGRAM, NFT_SOL_SIGNATURE_FEE, NFT_TOKEN_METADATA_PROGRAM, NFT_TRANSFER_METHOD, nftIntentHash, NftIntentSchema, NftRefusal, nftSolWire,
-  nftTokenRecordPda, nftMetadataPda, normalizeAddress, planNftSol, SYSTEM_PROGRAM, TOKEN_2022_PROGRAM, TOKEN_PROGRAM, toHex, verifyNftEvmTx, verifyNftSolMessage, effectiveNftPolicy, type NetworkDef, type NftIntent, type NftPolicy, type NftTransferStandard } from '@spw/core';
+  nftTokenRecordPda, nftMetadataPda, normalizeAddress, planNftSol, SYSTEM_PROGRAM, TOKEN_2022_PROGRAM, TOKEN_PROGRAM, toHex, verifyNftEvmTx, verifyNftSolMessage, type NetworkDef, type NftIntent, type NftPolicy, type NftTransferStandard } from '@spw/core';
 import { decodeCoreAsset, decodeCoreCollection, decodeTmMetadata, decodeTmTokenRecord, parseNftKey, parseTokenId, transferBlockReasons, transferWarnings, type NftAsset, type TransferBlockReason, type TransferWarning } from '@spw/nft';
+import { base58 } from '@scure/base';
 import { UserError } from '../config.ts';
 import type { SignerStatus } from '../signer-client.ts';
 
@@ -22,9 +23,8 @@ const erc165 = parseAbi(['function supportsInterface(bytes4 interfaceId) view re
 const erc721 = parseAbi(['function ownerOf(uint256 tokenId) view returns (address)']);
 const erc1155 = parseAbi(['function balanceOf(address account, uint256 id) view returns (uint256)']);
 const IF_721 = '0x80ac58cd', IF_1155 = '0xd9b67a26';
-const RENT_TOKEN_ACCOUNT = 2_039_280n;
 const b64 = (s: string): Uint8Array => new Uint8Array(Buffer.from(s, 'base64'));
-const b58 = (b: Uint8Array): string => { let n = 0n; for (const x of b) n = (n << 8n) | BigInt(x); let out = ''; const A = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'; while (n > 0n) { out = A[Number(n % 58n)] + out; n /= 58n; } for (const x of b) { if (x !== 0) break; out = '1' + out; } return out; };
+const b58 = (b: Uint8Array): string => base58.encode(b);
 
 /** A refusal of a preparation: stable code, factual sentence, and the facts it rests on (`data`). */
 export function blocked(code: string, message: string, data: Record<string, unknown> = {}, status = 422): UserError {
@@ -287,11 +287,10 @@ async function prepareSol(d: TransferDeps, n: NetworkDef, a: NftAsset, st: Signe
     changes.push({ what: 'units in the wallet\'s token account', before: '1', after: s1 ? '0' : '0 (account closed)' }, { what: `units in the destination's token account (owner ${to})`, before: dstExists ? '0' : 'no account', after: '1' });
   }
   const wi = watch.length - 1, lamBefore = lam(wi, before), lamAfter = lam(wi, post);
-  // the fee payer's balance in a simulation includes or excludes the fee depending on the node: the rent is what leaves beyond the fee
-  const out = lamBefore > lamAfter ? lamBefore - lamAfter : 0n, rent = out > fee ? out - fee : out > 0n && out < fee ? 0n : out === fee ? 0n : out;
+  // the fee payer's balance after a simulation has the fee deducted (measured on Agave 4.4.1, scripts/validator-nft-solana.mts: what the
+  // wallet really spent equals this figure): what leaves beyond the fee is the rent locked in the accounts the transfer creates
+  const out = lamBefore > lamAfter ? lamBefore - lamAfter : 0n, rent = out > fee ? out - fee : 0n;
   changes.push({ what: 'SOL of the wallet (lamports), fee and rent of created accounts', before: lamBefore.toString(), after: lamAfter.toString() });
-  if (lamBefore < fee + rent + (dstExists ? 0n : 0n)) throw new UserError('insufficient_gas', 'not enough SOL to pay the network fee and the rent of the accounts this transfer creates');
-  void RENT_TOKEN_ACCOUNT;
   precheck(st, intent, nowSec);
   const plan = planNftSol(intent);
   return { intent, hash: toHex(nftIntentHash(intent)), feeEstimate: fee, maxFee: fee, ttlSec,
@@ -302,6 +301,26 @@ async function prepareSol(d: TransferDeps, n: NetworkDef, a: NftAsset, st: Signe
       accounts: plan.accounts, creatorMetadata: creator(a) } };
 }
 
+/** The exact sentence of each block reason (English; the interface has its own FR / EN texts keyed by the same codes). */
+export const BLOCK_TEXT: Partial<Record<TransferBlockReason, string>> = {
+  not_in_wallet: 'this NFT is not held by this wallet (the chain names another holder)',
+  burned: 'this NFT was burned: it no longer exists',
+  ownership_unknown: 'the holder or the state of this NFT could not be established on-chain: nothing is prepared',
+  ownership_single_source: 'the endpoints did not agree on the ownership of this NFT (or only one answered): nothing is prepared',
+  escrow: 'this NFT is held by another account (an escrow or a delegate), not by this wallet',
+  frozen: 'this NFT is FROZEN: it cannot be transferred until its freeze authority thaws it',
+  pnft_locked: 'this programmable NFT is LOCKED (token record state "locked" — typically staked, or locked by a delegate): it cannot be transferred until it is unlocked',
+  pnft_listed: 'this programmable NFT is LISTED (token record state "listed" — a marketplace sale delegate holds it): cancel the listing before sending',
+  delegated: 'a delegate is set on this NFT (it may be listed on a marketplace): revoke it before sending',
+  soulbound: 'this token is NON-TRANSFERABLE (Token-2022 NonTransferable extension): it can never be sent',
+  token2022_extension_unsupported: 'this Token-2022 mint carries an extension this wallet does not account for (transfer hook, permanent delegate, transfer fee, confidential transfer, default account state, …): its transfer is not built',
+  compressed_transfer_not_supported: 'compressed NFT: its transfer needs a merkle proof verified against the on-chain tree, which this wallet does not do — not transferable here',
+  ordinals_transfer_not_supported: 'Bitcoin inscription: this wallet builds no inscription transfer — not transferable here',
+  unsupported_standard: 'this standard has no transfer builder in this wallet (non-standard contract, or a plain token without NFT metadata)',
+  source_not_associated_account: 'this NFT sits in a token account that is not this wallet\'s associated token account: its transfer is not built',
+  network_disabled_by_policy: 'the signer\'s policy does not enable transfers of this standard on this network',
+};
+
 /**
  * Re-verify, build, simulate. `a` is the asset as just looked up on every endpoint (the caller does it); `st` the signer's
  * status read now. Throws a `blocked` refusal (422) with the factual reason, or returns what the owner will approve.
@@ -310,9 +329,8 @@ export async function prepareNftTransfer(d: TransferDeps, a: NftAsset, st: Signe
   const n = getNetwork(a.chainId), pol = policyOf(st);
   if (st.halted) throw new UserError('halted', 'emergency halt is active', 423);
   const v = transferVerdict(a, pol.nft);
-  if (!v.transferable) throw blocked(v.blockedBy[0]!, `this NFT cannot be sent: ${v.blockedBy.join(', ')}`, { blockedBy: v.blockedBy, standard: a.standard });
+  if (!v.transferable) throw blocked(v.blockedBy[0]!, BLOCK_TEXT[v.blockedBy[0]!] ?? `this NFT cannot be sent (${v.blockedBy[0]})`, { blockedBy: v.blockedBy, standard: a.standard });
   if (n.family === 'evm') return prepareEvm(d, n, a, st, wallet, to, quantity, proposalId);
   if (n.family === 'sol') return prepareSol(d, n, a, st, wallet, to, quantity, proposalId);
   throw blocked('unsupported_standard', 'NFT transfers are built for EVM networks and Solana only');
 }
-export { decodeAbiParameters, effectiveNftPolicy };
