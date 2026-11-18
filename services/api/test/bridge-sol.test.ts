@@ -1,3 +1,4 @@
+import { intentHash as nativeIntentHash, toB64u as nativeB64u } from '@spw/core';
 // Solana ↔ EVM USDC (Circle CCTP V2) life cycle through the REAL API routes, worker steps and signer process boundary, against
 // a scripted Solana cluster, a scripted EVM chain and a scripted attestation service (no network). The scripted cluster
 // DECODES the transactions it receives (v1 messages, signatures checked) and plays the three Circle instructions the way the
@@ -201,6 +202,9 @@ const attest = (txid: string, message: Hex) => iris.messages.set(txid, { message
 async function prepare(body: unknown) {
   const prep = await api('POST', '/api/v1/bridge/proposals', body, crypto.randomUUID());
   expect(prep.status, JSON.stringify(prep.json)).toBe(200);
+  // native clients: the canonical object comes with its challenge, and the challenge is its hash
+  expect(prep.json.options.challenge).toBe(nativeB64u(nativeIntentHash(prep.json.intent)));
+  expect(prep.json.intent.proposalId).toBe(prep.json.proposal.id);
   return prep.json as { proposal: any; options: any };
 }
 const approve = async (prep: { proposal: any; options: any }) => { const ap = await api('POST', `/api/v1/transfers/proposals/${prep.proposal.id}/approve`, { assertion: assert(prep.options) }); expect(ap.status, JSON.stringify(ap.json)).toBe(200); return ap.json; };
