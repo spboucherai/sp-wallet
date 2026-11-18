@@ -57,8 +57,10 @@ export async function challengeFor(p: ProposalRow): Promise<unknown | null> {
 }
 
 /** The answer of a repeated preparation: the same proposal, `replayed: true`, and its challenge while it can still be approved. */
-export async function replayAnswer(p: ProposalRow): Promise<{ proposal: ReturnType<typeof view>; options: unknown | null; replayed: true }> {
-  return { proposal: view(p), options: await challengeFor(p), replayed: true };
+export async function replayAnswer(p: ProposalRow): Promise<{ proposal: ReturnType<typeof view>; intent: ProposalRow['intent']; options: unknown | null; replayed: true }> {
+  const options = await challengeFor(p);
+  // `intent` (native clients): the canonical object of the challenge, only while there is a challenge to answer
+  return { proposal: view(p), intent: options ? p.intent : null, options, replayed: true };
 }
 /** Before the expensive preparation: answer the existing proposal when this key already produced one. */
 export async function replayOf(i: Idem): Promise<Awaited<ReturnType<typeof replayAnswer>> | null> {

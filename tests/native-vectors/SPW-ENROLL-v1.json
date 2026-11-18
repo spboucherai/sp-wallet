@@ -1,0 +1,24 @@
+[
+  {
+    "name": "enroll-es256-16-byte-credential-id",
+    "domain": "SPW-ENROLL-v1",
+    "source": "services/isolated-signer/src/signer.ts enrollChallenge (same string as the unexported services/api/src/auth.ts enrollChallenge)",
+    "object": {
+      "credentialId": "AAECAwQFBgcICQoLDA0ODw",
+      "publicKey": "pQECAyYgASFYIBERERERERERERERERERERERERERERERERERERERERERIlggIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI"
+    },
+    "canonicalHex": "5350572d454e524f4c4c2d76310a41414543417751464267634943516f4c4441304f44770a7051454341795967415346594942455245524552455245524552455245524552455245524552455245524552455245524552455245524552496c676749694969496949694969496949694969496949694969496949694969496949694969496949694969496949",
+    "hashHex": "872b7666405f6343fb21cface1b5184ae19eeb03110ac19365c1777903a1ccc1"
+  },
+  {
+    "name": "enroll-es256-32-byte-credential-id-url-safe-chars",
+    "domain": "SPW-ENROLL-v1",
+    "source": "services/isolated-signer/src/signer.ts enrollChallenge (same string as the unexported services/api/src/auth.ts enrollChallenge)",
+    "object": {
+      "credentialId": "-__7__v_-__7__v_-__7__v_-__7__v_-__7__v_-_8",
+      "publicKey": "pQECAyYgASFYIBERERERERERERERERERERERERERERERERERERERERERIlggIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI"
+    },
+    "canonicalHex": "5350572d454e524f4c4c2d76310a2d5f5f375f5f765f2d5f5f375f5f765f2d5f5f375f5f765f2d5f5f375f5f765f2d5f5f375f5f765f2d5f380a7051454341795967415346594942455245524552455245524552455245524552455245524552455245524552455245524552455245524552496c676749694969496949694969496949694969496949694969496949694969496949694969496949694969496949",
+    "hashHex": "df2ac6032f81e79701c5a6e2b53cd47a19185b9c92b92349a3769a014308c21a"
+  }
+]

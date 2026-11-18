@@ -274,7 +274,7 @@ export async function createSolSwapProposal(b: { network: string; fromAsset: str
   const creds = await listCreds();
   const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge: new Uint8Array(hash), timeout: 45_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
   if (options.challenge !== toB64u(hash)) throw new Error('challenge binding mismatch');
-  return { proposal: view(p), options };
+  return { proposal: view(p), intent: p.intent, options };
 }
 
 const factsOf = (p: ProposalRow): JupiterSwapFacts | null => {

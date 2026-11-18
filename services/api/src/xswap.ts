@@ -266,7 +266,7 @@ export function xswapRoutes(app: FastifyInstance): void {
     const creds = await listCreds();
     const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge: new Uint8Array(hash), timeout: 110_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
     if (options.challenge !== toB64u(hash)) throw new Error('challenge binding mismatch');
-    return { proposal: view(p), options };
+    return { proposal: view(p), intent: p.intent, options };
   });
 
   // Look now instead of waiting for the worker. Safe at any time, any number of times; it signs nothing.

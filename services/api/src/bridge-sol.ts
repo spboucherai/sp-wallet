@@ -269,7 +269,7 @@ export async function createSolBurnProposal(b: { n: NetworkDef; dst: NetworkDef;
   const creds = await listCreds();
   const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge: new Uint8Array(hash), timeout: 45_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
   if (options.challenge !== toB64u(hash)) throw new Error('challenge binding mismatch');
-  return { proposal: view(p), options };
+  return { proposal: view(p), intent: p.intent, options };
 }
 
 /**
@@ -420,7 +420,7 @@ export async function solMintRetryOptions(p: ProposalRow, b: BridgeState) {
   const challenge = new Uint8Array(createHash('sha256').update(cctpSolMintRetryBytes(p.id, b.messageHash!, g.sol)).digest());
   const creds = await listCreds();
   const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge, timeout: 45_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
-  return { proposal: view(p), options };
+  return { proposal: view(p), options, approval: { proposalId: p.id, messageHash: b.messageHash!, sol: g.sol } };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -487,7 +487,7 @@ export function bridgeSolRoutes(app: FastifyInstance, load: (id: string) => Prom
     const challenge = new Uint8Array(createHash('sha256').update(cctpSolReclaimBytes(p.id, s.eventAccount, b.messageHash, budget)).digest());
     const creds = await listCreds();
     const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge, timeout: 45_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
-    return { proposal: view(p), options, deposit: String(ev.lamports), networkFee: (SOL_SIGNATURE_FEE + priorityOf(limit, price)).toString() };
+    return { proposal: view(p), options, approval: { proposalId: p.id, eventAccount: s.eventAccount, messageHash: b.messageHash, sol: budget }, deposit: String(ev.lamports), networkFee: (SOL_SIGNATURE_FEE + priorityOf(limit, price)).toString() };
   });
   app.post('/api/v1/bridge/proposals/:id/reclaim', async (req) => {
     const body = z.object({ assertion: z.record(z.string(), z.unknown()) }).parse(req.body);
@@ -538,7 +538,7 @@ export function bridgeSolRoutes(app: FastifyInstance, load: (id: string) => Prom
     const creds = await listCreds();
     const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge: new Uint8Array(hash), timeout: 45_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
     if (options.challenge !== toB64u(hash)) throw new Error('challenge binding mismatch');
-    return { requestId: request.requestId, owner: me, tokenAccount: t.address, rent: t.rent.toString(), rentDisplay: formatUnits(t.rent, 9), networkFee: networkFee.toString(), networkFeeDisplay: formatUnits(networkFee, 9), symbol: 'SOL', expiresAt: request.expiresAt, options };
+    return { requestId: request.requestId, owner: me, tokenAccount: t.address, rent: t.rent.toString(), rentDisplay: formatUnits(t.rent, 9), networkFee: networkFee.toString(), networkFeeDisplay: formatUnits(networkFee, 9), symbol: 'SOL', expiresAt: request.expiresAt, options, request };
   });
   app.post('/api/v1/bridge/solana/token-account', async (req) => {
     const body = z.object({ requestId: z.uuid(), assertion: z.record(z.string(), z.unknown()) }).parse(req.body);

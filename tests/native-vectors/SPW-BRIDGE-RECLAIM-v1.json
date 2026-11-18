@@ -1,0 +1,20 @@
+[
+  {
+    "name": "reclaim-event-account",
+    "domain": "SPW-BRIDGE-RECLAIM-v1",
+    "source": "packages/core/src/cctp-sol-tx.ts cctpSolReclaimBytes (hash = SHA-256 of those bytes, taken by the caller)",
+    "object": {
+      "proposalId": "7a1c1f0e-8f5f-4b1e-9c56-000000000620",
+      "eventAccount": "GokivDYuQXPZCWRkwMhdH2h91KpDQXBEmpgBgs55bnpH",
+      "messageHash": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "sol": {
+        "recentBlockhash": "EkSnNWid2cvwEVnVx9aBqawnmiCNiDgp3gUdkDPTKN1N",
+        "lastValidBlockHeight": 312345678,
+        "computeUnitLimit": 250000,
+        "computeUnitPrice": "10000"
+      }
+    },
+    "canonicalHex": "5350572d4252494447452d5245434c41494d2d76310a37613163316630652d386635662d346231652d396335362d3030303030303030303632300a476f6b69764459755158505a4357526b774d686448326839314b7044515842456d70674267733535626e70480a3078356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535650a456b536e4e5769643263767745566e56783961427161776e6d69434e69446770336755646b4450544b4e314e0a3331323334353637380a3235303030300a3130303030",
+    "hashHex": "ba5bc0542f908f42a38fd570dbe12aaceb2705f075adddf95c2e3c45e6b72e07"
+  }
+]

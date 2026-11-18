@@ -328,7 +328,7 @@ export function planRoutes(app: FastifyInstance, deps: PlanDeps): void {
       }
       const proposal = r.json.proposal as { id: string; amount: string };
       p = await savePlan(planAttach(p, proposal.id, BigInt(proposal.amount), Date.now()), describe);
-      return { plan: await docView(p), proposal: r.json.proposal, options: r.json.options };
+      return { plan: await docView(p), proposal: r.json.proposal, intent: r.json.intent ?? null, options: r.json.options };
     });
   });
 

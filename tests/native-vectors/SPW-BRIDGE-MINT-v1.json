@@ -1,0 +1,36 @@
+[
+  {
+    "name": "mint-retry-evm",
+    "domain": "SPW-BRIDGE-MINT-v1",
+    "source": "packages/core/src/cctp.ts cctpMintRetryBytes (hash = SHA-256 of those bytes, taken by the caller)",
+    "object": {
+      "proposalId": "7a1c1f0e-8f5f-4b1e-9c56-000000000600",
+      "messageHash": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "gas": {
+        "nonce": 42,
+        "gasLimit": "250000",
+        "maxFeePerGas": "30000000000",
+        "maxPriorityFeePerGas": "1000000000"
+      }
+    },
+    "canonicalHex": "5350572d4252494447452d4d494e542d76310a37613163316630652d386635662d346231652d396335362d3030303030303030303630300a3078356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535650a34320a3235303030300a33303030303030303030300a31303030303030303030",
+    "hashHex": "5f9b3ad2943d22ca58a37fe43084f3928395c56f3823e46b16d38c6fecb014dd"
+  },
+  {
+    "name": "mint-retry-evm-nonce-0",
+    "domain": "SPW-BRIDGE-MINT-v1",
+    "source": "packages/core/src/cctp.ts cctpMintRetryBytes (hash = SHA-256 of those bytes, taken by the caller)",
+    "object": {
+      "proposalId": "7a1c1f0e-8f5f-4b1e-9c56-000000000601",
+      "messageHash": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "gas": {
+        "nonce": 0,
+        "gasLimit": "160000",
+        "maxFeePerGas": "1",
+        "maxPriorityFeePerGas": "0"
+      }
+    },
+    "canonicalHex": "5350572d4252494447452d4d494e542d76310a37613163316630652d386635662d346231652d396335362d3030303030303030303630310a3078356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535650a300a3136303030300a310a30",
+    "hashHex": "b71ae08abd58ad5fd0613417ea9339bfb3269ef4a8c15a4ccd79e4dd56d293f6"
+  }
+]

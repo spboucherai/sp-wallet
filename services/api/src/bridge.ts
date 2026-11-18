@@ -249,7 +249,7 @@ export function bridgeRoutes(app: FastifyInstance): void {
     const creds = await listCreds();
     const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge: new Uint8Array(hash), timeout: 70_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
     if (options.challenge !== toB64u(hash)) throw new Error('challenge binding mismatch');
-    return { proposal: view(p), options };
+    return { proposal: view(p), intent: p.intent, options };
   });
 
   const load = async (id: string): Promise<ProposalRow> => {
@@ -278,7 +278,7 @@ export function bridgeRoutes(app: FastifyInstance): void {
     const challenge = new Uint8Array(createHash('sha256').update(cctpMintRetryBytes(p.id, b.messageHash, evm.evm)).digest());
     const creds = await listCreds();
     const options = await generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required', challenge, timeout: 100_000, allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as never })) });
-    return { proposal: view(p), options };
+    return { proposal: view(p), options, approval: { proposalId: p.id, messageHash: b.messageHash, gas: evm.evm } };
   });
   app.post('/api/v1/bridge/proposals/:id/retry-mint', async (req) => {
     const body = z.object({ assertion: z.record(z.string(), z.unknown()) }).parse(req.body);

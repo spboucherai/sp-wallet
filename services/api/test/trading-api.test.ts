@@ -289,9 +289,14 @@ describe('default deny', () => {
     expect(routes.some((r) => r.path === '/api/v1/security/emergency-halt') && routes.some((r) => r.path === '/api/v1/developer/keys') && routes.some((r) => r.path.startsWith('/api/v1/research/runner/'))).toBe(true);
     const outside = routes.filter((r) => !r.path.startsWith(`${T}/`));
     expect(outside.length).toBeGreaterThan(170);
-    expect(outside.every((r) => r.path.startsWith('/api/'))).toBe(true);                     // this instance serves no static file: every route is an API route
+    // this instance serves no static file: every route is an API route — except ONE public document, the passkey association file of
+    // the native apps (native-clients.ts): app identifiers only, nothing of the wallet, no credential read (404 here: no app is named)
+    const nonApi = outside.filter((r) => !r.path.startsWith('/api/'));
+    expect([...new Set(nonApi.map((r) => r.path))]).toEqual(['/.well-known/apple-app-site-association']);
+    expect(nonApi.every((r) => r.method === 'GET' || r.method === 'HEAD')).toBe(true);
+    expect((await call('GET', '/.well-known/apple-app-site-association', { key: k.secret })).status).toBe(404);
     const answers = new Map<number, number>();
-    for (const r of outside) {
+    for (const r of outside.filter((x) => x.path.startsWith('/api/'))) {
       const res = await call(r.method, concrete(r.path), { key: k.secret, ...(r.method === 'GET' || r.method === 'DELETE' ? {} : { body: {} }) });
       answers.set(res.status, (answers.get(res.status) ?? 0) + 1);
       expect([401, 403], `${r.method} ${r.path} answered ${res.status}`).toContain(res.status);

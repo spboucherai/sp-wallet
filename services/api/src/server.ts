@@ -45,6 +45,7 @@ import { marketsHub } from './markets-hub/index.ts'; // v11 markets hub: univers
 import { privateMarketsRoutes } from './private-markets/routes.ts'; // v11 private markets (read-only)
 import { apiKeyGate, OWNER, tradingApi } from './trading-api/index.ts'; // v11 trading API (machine authentication)
 import { installQuotes, type QuotesDeps } from './quotes/index.ts'; // v11 quote engine: websocket fan-out of public market data (read-only)
+import { nativeClientRoutes } from './native-clients.ts'; // native apps: the passkey association file (/.well-known), nothing under /api
 import { registerNft, type NftOptions } from './nft/index.ts'; // NFT delivery 1: read-only inventory, item pages, media proxy (owner session only)
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
@@ -212,6 +213,8 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   dashboardRoutes(app, { execution }); // v11 interface: /api/v1/dashboard — read-only aggregates composed from the services above (owner session only)
   registerNft(app, { ...opts.nft, prices: opts.nft?.prices ?? markets }); // NFT: /api/v1/nfts — inventory, transfers (delivery 2), market READ (delivery 3; no market write). `prices`: fiat rates of market amounts, with their source and date
   quotes.routes(app); // v11 quote engine: /api/v1/stream (owner session + Origin), /api/v1/trading/stream (API key or ticket, markets:read), /api/v1/stream/stats
+
+  nativeClientRoutes(app); // /.well-known/apple-app-site-association (404 unless SPW_APPLE_APP_IDS names an app)
 
   app.get('/api/v1/health/live', async () => ({ ok: true }));
   app.get('/api/v1/health/ready', async () => {

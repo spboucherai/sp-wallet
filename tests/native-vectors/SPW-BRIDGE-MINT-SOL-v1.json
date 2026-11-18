@@ -1,0 +1,36 @@
+[
+  {
+    "name": "mint-retry-solana",
+    "domain": "SPW-BRIDGE-MINT-SOL-v1",
+    "source": "packages/core/src/cctp-sol-tx.ts cctpSolMintRetryBytes (hash = SHA-256 of those bytes, taken by the caller)",
+    "object": {
+      "proposalId": "7a1c1f0e-8f5f-4b1e-9c56-000000000610",
+      "messageHash": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "sol": {
+        "recentBlockhash": "EkSnNWid2cvwEVnVx9aBqawnmiCNiDgp3gUdkDPTKN1N",
+        "lastValidBlockHeight": 312345678,
+        "computeUnitLimit": 250000,
+        "computeUnitPrice": "10000"
+      }
+    },
+    "canonicalHex": "5350572d4252494447452d4d494e542d534f4c2d76310a37613163316630652d386635662d346231652d396335362d3030303030303030303631300a3078356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535650a456b536e4e5769643263767745566e56783961427161776e6d69434e69446770336755646b4450544b4e314e0a3331323334353637380a3235303030300a3130303030",
+    "hashHex": "2a97dcdcacb0f3a6a726681ef8803a1d0761f6bde74e85bc126f075e6046fabe"
+  },
+  {
+    "name": "mint-retry-solana-zero-price",
+    "domain": "SPW-BRIDGE-MINT-SOL-v1",
+    "source": "packages/core/src/cctp-sol-tx.ts cctpSolMintRetryBytes (hash = SHA-256 of those bytes, taken by the caller)",
+    "object": {
+      "proposalId": "7a1c1f0e-8f5f-4b1e-9c56-000000000611",
+      "messageHash": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "sol": {
+        "recentBlockhash": "EkSnNWid2cvwEVnVx9aBqawnmiCNiDgp3gUdkDPTKN1N",
+        "lastValidBlockHeight": 312345678,
+        "computeUnitLimit": 400000,
+        "computeUnitPrice": "0"
+      }
+    },
+    "canonicalHex": "5350572d4252494447452d4d494e542d534f4c2d76310a37613163316630652d386635662d346231652d396335362d3030303030303030303631310a3078356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535653565356535650a456b536e4e5769643263767745566e56783961427161776e6d69434e69446770336755646b4450544b4e314e0a3331323334353637380a3430303030300a30",
+    "hashHex": "34904e6e59ca6dba6098dd993f47024d0054b895251b321c01650837d544eb4f"
+  }
+]

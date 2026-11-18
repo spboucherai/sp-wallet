@@ -1,0 +1,48 @@
+[
+  {
+    "name": "auto-kill-switch-off-total-loss",
+    "domain": "SPW-RISK-AUTO-INTENT-v1",
+    "source": "services/api/src/risk/service.ts prepareAutoKill (risk/passkey.ts prepareIntent → services/api/src/derivatives/exec.ts canonicalIntentHash)",
+    "object": {
+      "v": 1,
+      "kind": "auto",
+      "auto": {
+        "totalLoss": false,
+        "drawdown": true,
+        "dailyLoss": false
+      },
+      "loosened": [
+        "totalLoss"
+      ],
+      "nonce": "7a1c1f0e-8f5f-4b1e-9c56-000000000706",
+      "createdAt": 1794000000000,
+      "expiresAt": 1794000300000
+    },
+    "canonicalHex": "5350572d5249534b2d4155544f2d494e54454e542d76310a7b226175746f223a7b226461696c794c6f7373223a66616c73652c2264726177646f776e223a747275652c22746f74616c4c6f7373223a66616c73657d2c22637265617465644174223a313739343030303030303030302c22657870697265734174223a313739343030303330303030302c226b696e64223a226175746f222c226c6f6f73656e6564223a5b22746f74616c4c6f7373225d2c226e6f6e6365223a2237613163316630652d386635662d346231652d396335362d303030303030303030373036222c2276223a317d",
+    "hashHex": "e79a308e8ff5d61776a6aa1b0439120b8c65775530918d05e5c643c0b8f05f9c"
+  },
+  {
+    "name": "auto-kill-switch-all-off",
+    "domain": "SPW-RISK-AUTO-INTENT-v1",
+    "source": "services/api/src/risk/service.ts prepareAutoKill (risk/passkey.ts prepareIntent → services/api/src/derivatives/exec.ts canonicalIntentHash)",
+    "object": {
+      "v": 1,
+      "kind": "auto",
+      "auto": {
+        "totalLoss": false,
+        "drawdown": false,
+        "dailyLoss": false
+      },
+      "loosened": [
+        "totalLoss",
+        "drawdown",
+        "dailyLoss"
+      ],
+      "nonce": "7a1c1f0e-8f5f-4b1e-9c56-000000000707",
+      "createdAt": 1794000000000,
+      "expiresAt": 1794000300000
+    },
+    "canonicalHex": "5350572d5249534b2d4155544f2d494e54454e542d76310a7b226175746f223a7b226461696c794c6f7373223a66616c73652c2264726177646f776e223a66616c73652c22746f74616c4c6f7373223a66616c73657d2c22637265617465644174223a313739343030303030303030302c22657870697265734174223a313739343030303330303030302c226b696e64223a226175746f222c226c6f6f73656e6564223a5b22746f74616c4c6f7373222c2264726177646f776e222c226461696c794c6f7373225d2c226e6f6e6365223a2237613163316630652d386635662d346231652d396335362d303030303030303030373037222c2276223a317d",
+    "hashHex": "d1a051fc491d811cc656d798aad7ccf77a89bd79021f4fa0c5910c46945f6824"
+  }
+]
