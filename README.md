@@ -641,6 +641,17 @@ The `main` branch is at the V10 design pass. The repository's own documents reco
 - **Send and receive only** on the networks that have no executable swap leg (see the plan matrix).
 - **No full Bitcoin node**: public indexers are used, two of which must agree.
 
+## 📱 SP Wallet family
+
+The native clients of this backend each have their own repository on the forge:
+
+| Repository | Platform | Role |
+|---|---|---|
+| **[sp-wallet](https://git.spboucher.ai/sp-wallet)** (this repository) | Web + API | Backend, web app, isolated signer |
+| [sp-wallet-macos](https://git.spboucher.ai/sp-wallet-macos) | macOS | Native client |
+| [sp-wallet-ios](https://git.spboucher.ai/sp-wallet-ios) | iOS · iPadOS | Native client |
+| [sp-wallet-core](https://git.spboucher.ai/sp-wallet-core) | Swift package | Core shared by the two native apps |
+
 ## Author and license
 
 <div align="center">
