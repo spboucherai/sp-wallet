@@ -1,15 +1,24 @@
 <div align="center">
 
+<img src="docs/brand/logo.svg" alt="SP Wallet logo" width="560">
+
+<br><br>
+
+<img src="docs/brand/icon.png" alt="SP Wallet icon" width="112" height="112">
+
 # SP Wallet
 
 **A private, single-owner, self-hosted multi-chain wallet — where no session, server or database can move funds without the owner's passkey.**
 
 Send and receive on 23 mainnet networks, swap and bridge with signer-verified transactions, run mandate-bound trading agents, and follow everything from a phone-first PWA.
 
+**Author: [Simon-Pierre Boucher](https://www.spboucher.ai)**
+
 [![site](https://img.shields.io/website?url=https%3A%2F%2Fwallet.spboucher.ai%2Fapi%2Fv1%2Fhealth%2Flive&label=wallet.spboucher.ai&style=for-the-badge&up_message=online&down_message=offline)](https://wallet.spboucher.ai)
 ![version](https://img.shields.io/badge/version-1.0.0-0f172a?style=for-the-badge)
 ![release](https://img.shields.io/badge/release-V11-4f46e5?style=for-the-badge)
 ![license](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey?style=for-the-badge)
+![author](https://img.shields.io/badge/author-Simon--Pierre%20Boucher-0A66C2?style=for-the-badge)
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-7.0.2-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A5%2024-339933?style=flat-square&logo=nodedotjs&logoColor=white)
@@ -634,7 +643,14 @@ The `main` branch is at the V10 design pass. The repository's own documents reco
 
 ## Author and license
 
-**Simon-Pierre Boucher** — [contact@spboucher.ai](mailto:contact@spboucher.ai)
+<div align="center">
+
+<img src="docs/brand/icon.png" width="64" height="64" alt="">
+
+**Simon-Pierre Boucher** — design, development, operations<br>
+[www.spboucher.ai](https://www.spboucher.ai) · [git.spboucher.ai](https://git.spboucher.ai) · contact@spboucher.ai
+
+</div>
 
 All rights reserved. The source is published for reading; no license to use, copy or redistribute it is granted.
 
