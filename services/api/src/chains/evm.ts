@@ -1,7 +1,7 @@
-import { decodeAbiParameters, decodeFunctionResult, encodeFunctionData, erc20Abi, hexToBigInt, hexToNumber, hexToString, multicall3Abi, numberToHex, pad } from 'viem';
+import { decodeAbiParameters, decodeFunctionResult, encodeFunctionData, erc20Abi, hexToBigInt, hexToNumber, hexToString, multicall3Abi, numberToHex, pad, serializeTransaction } from 'viem';
 import { getAsset, type NetworkDef } from '@spw/core';
 import { UserError } from '../config.ts';
-import { benchOnFailure, FAST, hostOf, notBenched, rpcAny, rpcOne, rpcQuorum, settle, type Adapter, type BalancesDetailed, type Deposit, type Health, type NativeScanNote, type NativeScanState, type Prepared, type Tracked } from './rpc.ts';
+import { benchOnFailure, FAST, hostOf, notBenched, rpcAny, rpcEach, rpcOne, rpcQuorum, settle, type Adapter, type BalancesDetailed, type Deposit, type Health, type NativeScanNote, type NativeScanState, type Prepared, type Tracked } from './rpc.ts';
 
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const hx = (n: bigint | number) => numberToHex(n);
@@ -12,6 +12,10 @@ const NO_HISTORY = /missing trie node|state .*(not available|unavailable|pruned|
 /** `idx` of the rows of the native scan: above any log index, so that (txid, idx) never collides with a token transfer of the same transaction */
 export const NATIVE_IDX = 1_000_000;
 class ScanRetry extends Error {} // the pass stops here and is tried again later; nothing is recorded past the resolved frontier
+
+/** OP-stack predeploy (the same address on every OP-stack chain): what Ethereum data costs for a given transaction */
+const OP_GAS_ORACLE = '0x420000000000000000000000000000000000000F';
+const OP_ORACLE_ABI = [{ type: 'function', name: 'getL1Fee', stateMutability: 'view', inputs: [{ name: '_data', type: 'bytes' }], outputs: [{ type: 'uint256' }] }] as const;
 
 export function evmAdapter(n: NetworkDef): Adapter {
   const call = <T>(m: string, p: unknown[]) => rpcAny<T>(n.rpc, m, p);
@@ -55,6 +59,20 @@ export function evmAdapter(n: NetworkDef): Adapter {
     } catch { return (identity = false); }
   }
   const live = () => n.tokens.filter((t) => !disabled.has(t.id));
+  /**
+   * NEXT (E1) — OP-stack chains: the Ethereum data fee of this transaction, from the chain's own GasPriceOracle, plus 25 %.
+   * 0n on other chains; null when the oracle could not be read (the caller says so instead of showing a fee that omits it).
+   */
+  const l1Fee = async (t: { to: `0x${string}`; value: bigint; data?: `0x${string}`; gas: bigint; maxFeePerGas: bigint; tip: bigint; nonce: number }): Promise<bigint | null> => {
+    if (n.evm?.l1Fee !== 'opstack') return 0n;
+    try {
+      // the signed size: the unsigned EIP-1559 bytes plus a 65-byte signature (r, s, y parity and their RLP prefixes: 67 bytes)
+      const unsigned = serializeTransaction({ type: 'eip1559', chainId: Number(n.chainRef), nonce: t.nonce, gas: t.gas, maxFeePerGas: t.maxFeePerGas, maxPriorityFeePerGas: t.tip, to: t.to, value: t.value, data: t.data ?? '0x' });
+      const bytes = (unsigned + 'ff'.repeat(67)) as `0x${string}`;
+      const ret = await call<`0x${string}`>('eth_call', [{ to: OP_GAS_ORACLE, data: encodeFunctionData({ abi: OP_ORACLE_ABI, functionName: 'getL1Fee', args: [bytes] }) }, 'latest']);
+      return hexToBigInt(ret) * 5n / 4n;
+    } catch { return null; }
+  };
   const finalizedHeight = async (): Promise<number> => {
     try { const b = await call<{ number: `0x${string}` } | null>('eth_getBlockByNumber', ['finalized', false]); if (b) return hexToNumber(b.number); } catch { /* tag unsupported */ }
     return hexToNumber(await call<`0x${string}`>('eth_blockNumber', [])) - n.minConf;
@@ -141,11 +159,21 @@ export function evmAdapter(n: NetworkDef): Adapter {
       const code = await call<string>('eth_getCode', [d.to, 'latest']);
       const balances = await this.balances(d.from);
       if (asset.id !== 'native' && balances[asset.id] === undefined) throw new UserError('rpc_degraded', 'token balance could not be read; transfer refused', 503);
-      let gas: bigint;
+      let gas: bigint, l1: bigint | null;
       if (asset.id === 'native') {
         if (code !== '0x') throw new UserError('contract_destination', 'native transfers to contract addresses are not supported');
         gas = 21000n;
-        if ((balances.native ?? 0n) < d.amount + gas * maxFeePerGas) throw new UserError('insufficient_funds', `insufficient ${n.native.symbol} for amount plus network fee`);
+        if (n.evm?.nativeGasMax) { // NEXT (E1): the rollup charges its Ethereum posting cost through the gas limit — 21 000 is refused there
+          let est: bigint;
+          // both endpoints must answer, within 20 % of each other (the estimate moves with the Ethereum base fee between two calls)
+          const near = (x: `0x${string}`, y: `0x${string}`) => { const [p, q] = [hexToBigInt(x), hexToBigInt(y)]; return (p > q ? p - q : q - p) * 5n <= (p > q ? p : q); };
+          try { est = hexToBigInt(await rpcQuorum<`0x${string}`>(n.rpc, 'eth_estimateGas', [{ from: d.from, to: d.to, value: numberToHex(d.amount) }], near)); }
+          catch (e) { if (e instanceof UserError) throw e; throw new UserError('simulation_failed', `gas estimate refused: ${(e as Error).message.slice(0, 160)}`); }
+          gas = est * 12n / 10n; if (gas < 21000n) gas = 21000n;
+          if (gas > BigInt(n.evm.nativeGasMax)) throw new UserError('simulation_failed', `unexpectedly high gas estimate for a ${n.native.symbol} transfer on ${n.name}`);
+        }
+        l1 = await l1Fee({ to: d.to as `0x${string}`, value: d.amount, gas, maxFeePerGas, tip, nonce });
+        if ((balances.native ?? 0n) < d.amount + gas * maxFeePerGas + (l1 ?? 0n)) throw new UserError('insufficient_funds', `insufficient ${n.native.symbol} for amount plus network fee`);
       } else {
         if (code !== '0x') warnings.push('contract_destination');
         if ((balances[asset.id] ?? 0n) < d.amount) throw new UserError('insufficient_funds', `insufficient ${asset.symbol} balance`);
@@ -158,30 +186,52 @@ export function evmAdapter(n: NetworkDef): Adapter {
         if (ret !== '0x' && hexToBigInt(ret) !== 1n) throw new UserError('simulation_failed', 'token transfer simulation returned false');
         gas = (est * 13n) / 10n + 5000n;
         if (gas > 200_000n) throw new UserError('simulation_failed', 'unexpectedly high gas estimate for a token transfer');
-        if ((balances.native ?? 0n) < gas * maxFeePerGas) throw new UserError('insufficient_gas', `not enough ${n.native.symbol} on ${n.name} to pay the network fee`);
+        l1 = await l1Fee({ to: asset.id as `0x${string}`, value: 0n, data, gas, maxFeePerGas, tip, nonce });
+        if ((balances.native ?? 0n) < gas * maxFeePerGas + (l1 ?? 0n)) throw new UserError('insufficient_gas', `not enough ${n.native.symbol} on ${n.name} to pay the network fee`);
       }
       return { section: { evm: { nonce, gasLimit: gas.toString(), maxFeePerGas: maxFeePerGas.toString(), maxPriorityFeePerGas: tip.toString() } },
-        maxFee: gas * maxFeePerGas, feeEstimate: gas * (baseFee + tip), warnings, ttlSec: 180 };
+        // the approved maximum bounds what the transaction's own fields can cost; the OP-stack data fee is charged on top by the
+        // chain and is part of the ESTIMATE only (it is not a field the signer could bound)
+        maxFee: gas * maxFeePerGas, feeEstimate: gas * (baseFee + tip) + (l1 ?? 0n), warnings: l1 === null ? [...warnings, 'l1_fee_unknown'] : warnings, ttlSec: 180 };
     },
     async broadcast(raw) {
       const rs = await Promise.allSettled(n.rpc.map((u) => rpcOne<string>(u, 'eth_sendRawTransaction', [raw])));
       if (rs.some((r) => r.status === 'fulfilled')) return;
-      const msg = String((rs[0] as PromiseRejectedResult).reason?.message ?? 'broadcast failed');
-      if (/already known|already imported|ALREADY_EXISTS/i.test(msg)) return;
-      throw new Error(msg);
+      // NEXT: every endpoint's answer is read, not only the first one's. "Already known" from any of them is a relay.
+      // "nonce too low" is NOT treated as success here: it only says the nonce is used — by this transaction or by
+      // another one. The caller settles that by looking the transaction up (transfers.ts `broadcastNow`).
+      const msgs = rs.map((r) => String((r as PromiseRejectedResult).reason?.message ?? 'broadcast failed'));
+      if (msgs.some((m) => /already known|already imported|ALREADY_EXISTS|known transaction/i.test(m))) return;
+      throw new Error([...new Set(msgs)].join(' | ').slice(0, 300));
     },
+    /**
+     * NEXT — a verdict never rests on one endpoint's silence:
+     *  - a receipt from ANY endpoint places the transaction in a block (a lagging endpoint cannot hide it);
+     *  - "not in a block and unknown" needs every endpoint to have answered both lookups;
+     *  - `replaced` needs, in addition, the nonce to be consumed according to every endpoint (quorum);
+     *  - the worker applies a negative verdict only after it was repeated on consecutive passes (worker.ts).
+     */
     async track(p): Promise<Tracked> {
-      const rc = await call<{ status: `0x${string}`; blockNumber: `0x${string}`; blockHash: string } | null>('eth_getTransactionReceipt', [p.txid]).catch((e) => { if ((e as { rpcCode?: number }).rpcCode !== undefined) return null; throw e; });
+      type Receipt = { status: `0x${string}`; blockNumber: `0x${string}`; blockHash: string; gasUsed?: `0x${string}`; effectiveGasPrice?: `0x${string}`; l1Fee?: `0x${string}` };
+      const rcs = await rpcEach<Receipt | null>(n.rpc, 'eth_getTransactionReceipt', [p.txid]);
+      const rc = rcs.values.find((v) => v && v.blockHash) ?? null;
       if (!rc) {
-        if (p.blockRef) return { state: 'reorged', confirmations: 0, rebroadcast: true };
-        const latest = hexToNumber(await call<`0x${string}`>('eth_getTransactionCount', [p.intent.from, 'latest']));
-        if (latest > p.intent.evm.nonce && Date.now() / 1000 - p.broadcastAt > 90) return { state: 'replaced', confirmations: 0, error: 'nonce was consumed by another transaction' };
-        return { state: 'broadcast', confirmations: 0, rebroadcast: true };
+        if (rcs.values.length === 0) throw new Error(`no ${n.name} endpoint answered (receipt)`);
+        const txs = await rpcEach<{ hash: string } | null>(n.rpc, 'eth_getTransactionByHash', [p.txid]);
+        const known = txs.values.some((v) => v), everyone = rcs.all && txs.all;
+        const pending: Tracked['state'] = p.blockRef ? 'reorged' : 'broadcast';
+        if (known) return { state: pending, confirmations: 0, seen: true, rebroadcast: !!p.blockRef };
+        if (everyone && Date.now() / 1000 - p.broadcastAt > 90) {
+          const latest = await rpcQuorum<`0x${string}`>(n.rpc, 'eth_getTransactionCount', [p.intent.from, 'latest']).then(hexToNumber, () => null);
+          if (latest !== null && latest > p.intent.evm.nonce) return { state: 'replaced', confirmations: 0, seen: false, error: 'nonce was consumed by another transaction' };
+        }
+        return { state: pending, confirmations: 0, rebroadcast: true, seen: everyone ? false : undefined };
       }
-      if (hexToNumber(rc.status) !== 1) return { state: 'failed', confirmations: 0, blockRef: rc.blockHash, error: 'transaction reverted on-chain' };
+      const paid = rc.gasUsed && rc.effectiveGasPrice ? hexToBigInt(rc.gasUsed) * hexToBigInt(rc.effectiveGasPrice) + (rc.l1Fee ? hexToBigInt(rc.l1Fee) : 0n) : undefined; // l1Fee: OP-stack data fee
+      if (hexToNumber(rc.status) !== 1) return { state: 'failed', confirmations: 0, blockRef: rc.blockHash, error: 'transaction reverted on-chain', seen: true, feePaid: paid };
       const bn = hexToNumber(rc.blockNumber), head = hexToNumber(await call<`0x${string}`>('eth_blockNumber', []));
       const fin = await finalizedHeight();
-      return { state: bn <= fin ? 'finalized' : 'confirming', confirmations: Math.max(1, head - bn + 1), blockRef: rc.blockHash };
+      return { state: bn <= fin ? 'finalized' : 'confirming', confirmations: Math.max(1, head - bn + 1), blockRef: rc.blockHash, seen: true, feePaid: paid };
     },
     async deposits(addr, cursor) {
       const head = hexToNumber(await call<`0x${string}`>('eth_blockNumber', []));

@@ -103,7 +103,24 @@ export interface Prepared {
   /** unauthenticated helper data for the signer (it re-verifies everything in it against the intent) */
   aux?: Record<string, unknown>;
 }
-export interface Tracked { state: 'broadcast' | 'confirming' | 'finalized' | 'failed' | 'replaced' | 'reorged'; confirmations: number; blockRef?: string; error?: string; rebroadcast?: boolean }
+export interface Tracked { state: 'broadcast' | 'confirming' | 'finalized' | 'failed' | 'replaced' | 'reorged'; confirmations: number; blockRef?: string; error?: string; rebroadcast?: boolean;
+  /**
+   * NEXT — is the transaction known to the network right now? `true`: at least one source has it (mempool or block).
+   * `false`: EVERY source was asked, answered, and none knows it. `undefined`: this adapter cannot tell, or a source did
+   * not answer. Only `false`, repeated over time, lets the worker call a transfer dropped (worker.ts).
+   */
+  seen?: boolean;
+  /** NEXT — the fee the network actually charged, in base units of the native coin, once the transaction is in a block */
+  feePaid?: bigint;
+  /** NEXT — `failed` because the transaction's own validity window closed before inclusion (nothing moved, nothing can) */
+  expired?: boolean }
+/** Ask every endpoint; the answers that came, and whether all of them came (a JSON-RPC error is an answer). */
+export async function rpcEach<T>(urls: string[], method: string, params: unknown[]): Promise<{ values: T[]; all: boolean; errors: string[] }> {
+  const rs = await Promise.allSettled(urls.map((u) => rpcOne<T>(u, method, params)));
+  const values: T[] = [], errors: string[] = [];
+  for (const r of rs) { if (r.status === 'fulfilled') values.push(r.value); else errors.push(String((r.reason as Error)?.message ?? r.reason)); }
+  return { values, all: values.length === urls.length, errors };
+}
 export interface Deposit { txid: string; idx: number; asset: string; amount: bigint; from: string; block: number; time: number | null;
   /** NEXT — how the row was found when it is not the chain's ordinary listing: `tx` a value transfer to the wallet located by the
    *  balance scan, `internal_call` value that arrived inside a contract call (txid = the wallet's own transaction of that block when
@@ -146,7 +163,9 @@ export interface Adapter {
   disabledAssets?(): string[];
   prepare(d: { asset: string; from: string; to: string; amount: bigint; memo?: string;
     /** UTXO chains, THORChain vault payment: extra output bytes (the memo), a minimum fee rate, and change always returned to the wallet */
-    thor?: { extraBytes: number; minRate: number } }): Promise<Prepared>;
+    thor?: { extraBytes: number; minRate: number };
+    /** NEXT, UTXO chains: for each dropped transfer still watched, its coins ("txid:vout") — the new transaction spends at least one coin of each that is still unspent */
+    mustSpend?: string[][] }): Promise<Prepared>;
   broadcast(raw: string): Promise<void>;
   track(p: { txid: string; intent: any; blockRef: string | null; broadcastAt: number }): Promise<Tracked>;
   deposits(addr: string, cursor: number | null): Promise<{ items: Deposit[]; cursor: number; finalizedHeight: number; /** NEXT: transactions listed by the chain that no source serves any more (reported, never silently skipped) */ gaps?: { txid: string; block: number }[] }>;

@@ -287,6 +287,10 @@ const wantOf = (p: ProposalRow): { want: ThorVaultWant; dest: string } => { cons
 /** A UTXO inbound is never (re)broadcast in the last minutes of its window: it must confirm while the vault it pays is the one that was confirmed. */
 export const xswapMayBroadcast = (p: { xswap?: XswapState | null }, nowMs = Date.now()): boolean => !!p.xswap && nowMs / 1000 < p.xswap.expiry - 180;
 
+/** NEXT: the bookkeeping of a vault payment that reached the network, wherever the relay was acknowledged from (worker.ts adopts a relay whose answer was lost). */
+export const xswapSent = async (q: ProposalRow): Promise<ProposalRow> =>
+  q.kind === 'xswap' && q.xswap && q.state === 'broadcast' && q.xswap.phase !== 'sent' ? save(q, { ...q.xswap, phase: 'sent', sentAt: now(), nextAt: 0 }) : q;
+
 export async function advanceXswapSend(p: ProposalRow, check: (w: ThorVaultWant) => Promise<ThorVaultVerdict> = vaultCheck): Promise<ProposalRow> {
   if (p.kind !== 'xswap' || p.state !== 'signed' || !p.raw || !p.intent?.xswap || !p.xswap) return p;
   const n = getNetwork(p.network), b = p.xswap;

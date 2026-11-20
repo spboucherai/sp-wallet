@@ -31,6 +31,8 @@ import { agentRoutes } from './agents/routes.ts';
 import { strategyRoutes } from './agents/strategies.ts';
 import { perpAgentRoutes } from './agents/perp-routes.ts'; // v6 perp agents
 import { runtimeRoutes } from './agents/runtime-routes.ts'; // v11 agent panel: templates, mode-scoped reads, start/pause/stop, jobs, kill switch
+import { eventRoutes } from './events.ts';
+import { prefsRoutes } from './prefs.ts';
 import { transferRoutes, view, type ProposalRow } from './transfers.ts';
 import { healthCache } from './worker.ts';
 import { alertRoutes } from './alerts/routes.ts';     // v6-alerts
@@ -183,6 +185,8 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   authRoutes(app);
   deviceRoutes(app);
   transferRoutes(app);
+  eventRoutes(app); // NEXT: the wallet's event stream (events.ts)
+  prefsRoutes(app); // NEXT: hidden / favourite assets, editable address book (prefs.ts)
   const swapRuntimes = swapRoutes(app, { providers: swapProviders, prices: markets });
   swapExecRoutes(app);
   bridgeRoutes(app);
@@ -329,8 +333,8 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     return { ok: true };
   });
 
-  const Settings = z.strictObject({ locale: z.enum(['fr', 'en']), currency: z.enum(['USD', 'CAD']), hideBalances: z.boolean(), prices: z.boolean() });
-  const readSettings = async () => ({ locale: await getSetting('locale', 'fr'), currency: await getSetting('currency', 'CAD'), hideBalances: await getSetting('hideBalances', false), prices: await getSetting('prices', true) });
+  const Settings = z.strictObject({ locale: z.enum(['fr', 'en']), currency: z.enum(['USD', 'CAD']), hideBalances: z.boolean(), prices: z.boolean(), /* NEXT: appearance follows the account on every device */ theme: z.enum(['system', 'light', 'dark']) });
+  const readSettings = async () => ({ locale: await getSetting('locale', 'fr'), currency: await getSetting('currency', 'CAD'), hideBalances: await getSetting('hideBalances', false), prices: await getSetting('prices', true), theme: await getSetting('theme', 'system') });
   app.get('/api/v1/settings', readSettings);
   app.put('/api/v1/settings', async (req) => {
     const b = Settings.partial().parse(req.body);

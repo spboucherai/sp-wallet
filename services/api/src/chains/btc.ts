@@ -231,12 +231,17 @@ export function utxoAdapter(n: NetworkDef, shape: UtxoShape, sources: Source[] =
         if (!(d.thor.minRate >= 0) || d.thor.minRate > cap) throw new UserError('fee_ceiling', `THORChain recommends a fee rate above this wallet's ceiling for ${n.name}; swap refused`, 422);
         rate = Math.max(rate, d.thor.minRate);
       }
+      // NEXT: one still-unspent coin of every dropped transfer goes first and is always spent (transfers.ts `droppedCoins`):
+      // the dropped transaction and this one then conflict, and at most one of them can ever confirm.
+      const forced: Utxo[] = [];
+      for (const coins of d.mustSpend ?? []) { const u = utxos.find((x) => coins.includes(`${x.txid}:${x.vout}`)); if (u && !forced.includes(u)) forced.push(u); }
+      if (forced.length) utxos.sort((x, y) => Number(forced.includes(y)) - Number(forced.includes(x)) || y.value - x.value);
       const chosen: Utxo[] = []; let total = 0n;
       for (const u of utxos) {
         chosen.push(u); total += BigInt(u.value);
         const feeWithChange = BigInt(Math.ceil((shape.size(chosen.length, d.to, true) + extra) * rate));
         const feeNoChange = BigInt(Math.ceil((shape.size(chosen.length, d.to, false) + extra) * rate));
-        if (total >= d.amount + feeNoChange) {
+        if (chosen.length >= forced.length && total >= d.amount + feeNoChange) {
           let change = total - d.amount - feeWithChange, fee = feeWithChange;
           if (change < DUST && d.thor) { if (chosen.length >= 20) break; continue; } // a vault payment always returns change to the wallet: add a coin
           if (change < DUST) { change = 0n; fee = total - d.amount; } // dust change is added to the fee
@@ -262,14 +267,24 @@ export function utxoAdapter(n: NetworkDef, shape: UtxoShape, sources: Source[] =
       if (rs.some((r) => r.status === 'fulfilled')) return;
       const msgs = rs.map((r) => String((r as PromiseRejectedResult).reason?.message));
       if (msgs.some((m) => /already|known|in block chain/i.test(m))) return;
-      throw new Error(msgs[0]);
+      // "inputs missing or spent" is not a relay: the coins are gone — spent by this transaction (already mined) or by another one.
+      // The caller settles that by looking the transaction up (transfers.ts `broadcastNow`).
+      throw new Error([...new Set(msgs)].join(' | ').slice(0, 300));
     },
+    /**
+     * NEXT — every indexer is asked. The transaction is placed by any indexer that has it confirmed; "unknown to the
+     * network" (`seen: false`) needs every indexer to have answered that it does not know it.
+     */
     async track(p): Promise<Tracked> {
-      const st = await any((s) => s.status(p.txid));
-      if (!st.found) return { state: p.blockRef ? 'reorged' : 'broadcast', confirmations: 0, rebroadcast: true };
-      if (!st.confirmed) return { state: p.blockRef ? 'reorged' : 'broadcast', confirmations: 0 };
+      const rs = await Promise.allSettled(sources.map((s) => s.status(p.txid)));
+      const sts = rs.filter((r): r is PromiseFulfilledResult<Status> => r.status === 'fulfilled').map((r) => r.value);
+      if (!sts.length) throw (rs[0] as PromiseRejectedResult).reason;
+      const st = sts.find((x) => x.found && x.confirmed) ?? sts.find((x) => x.found);
+      const pending: Tracked['state'] = p.blockRef ? 'reorged' : 'broadcast';
+      if (!st) return { state: pending, confirmations: 0, rebroadcast: true, seen: sts.length === sources.length ? false : undefined };
+      if (!st.confirmed) return { state: pending, confirmations: 0, seen: true };
       const conf = (await any((s) => s.tip())) - st.height! + 1;
-      return { state: conf >= n.minConf ? 'finalized' : 'confirming', confirmations: conf, blockRef: st.hash };
+      return { state: conf >= n.minConf ? 'finalized' : 'confirming', confirmations: conf, blockRef: st.hash, seen: true };
     },
     async deposits(addr) {
       const h = await any((s) => s.tip());

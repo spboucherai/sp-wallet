@@ -4,12 +4,12 @@ import { generateAuthenticationOptions } from '@simplewebauthn/server';
 import { z } from 'zod';
 import {
   assertTransition, buildBtcTx, buildEvmTx, buildSolMessage, checkPolicy, formatUnits, getAsset, getNetwork, IntentSchema, intentHash,
-  normalizeAddress, parseUnits, pluginFor, toB64u, toHex, type Intent, type ProposalState,
+  legacyState, lifecycleOf, normalizeAddress, parseUnits, pluginFor, toB64u, toHex, type Intent, type ProposalState,
 } from '@spw/core';
 import { adapterFor } from './chains/index.ts';
 import { simulateSol } from './chains/sol.ts';
 import { config, UserError } from './config.ts';
-import { audit, sql } from './db.ts';
+import { audit, sql, walletEvent } from './db.ts';
 import { listCreds } from './auth.ts';
 import { addressFor, signer } from './signer-client.ts';
 import type { BridgeState } from './bridge.ts';
@@ -34,19 +34,25 @@ export interface ProposalRow {
   /** v11: the quote the owner was shown, next to the firm figures of the preparation (prepare-common.ts) */
   quote_ref?: QuoteRecord | null;
   created_at: Date; updated_at: Date; expires_at: Date | null; broadcast_at: Date | null; last_broadcast_at: Date | null; finalized_at: Date | null;
+  /** NEXT (life cycle v2, db.ts): a relay started; since when no source knows the transaction; the negative verdict being repeated; the fee charged */
+  relay_attempted_at?: Date | null; unseen_since?: Date | null; neg_verdict?: string | null; neg_since?: Date | null; neg_streak?: number; fee_paid?: string | null;
 }
 
 export function view(p: ProposalRow) {
   const n = getNetwork(p.network);
   return {
-    id: p.id, state: p.state, network: p.network, networkName: n.name, asset: p.asset, symbol: p.symbol, decimals: p.decimals,
+    // `state` keeps the vocabulary shipped clients know (their enums are closed): `dropped` reads `failed` there, with its code.
+    // `lifecycle` is the NEXT vocabulary, the same on web, macOS and iOS; `finalized` tells "in a block" from "final".
+    id: p.id, state: legacyState(p.state), lifecycle: lifecycleOf(p.state, { relayAttempted: !!p.relay_attempted_at, errorCode: p.error_code }), finalized: p.state === 'finalized',
+    watched: p.state === 'dropped' || p.state === 'replaced', network: p.network, networkName: n.name, asset: p.asset, symbol: p.symbol, decimals: p.decimals,
     amount: p.amount, amountDisplay: formatUnits(BigInt(p.amount), p.decimals), from: p.from_addr, to: p.to_addr, note: p.note, memo: p.memo,
     feeEstimate: p.fee_estimate, maxFee: p.max_fee, feeSymbol: n.native.symbol, feeDecimals: n.native.decimals,
     feeDisplay: p.fee_estimate ? formatUnits(BigInt(p.fee_estimate), n.native.decimals) : null,
     maxFeeDisplay: p.max_fee ? formatUnits(BigInt(p.max_fee), n.native.decimals) : null,
     warnings: p.warnings, intentHash: p.intent_hash, txid: p.txid, explorer: p.txid && p.state !== 'not_broadcast' ? n.explorerTx + p.txid : null,
     confirmations: p.confirmations, error: p.error, errorCode: p.error_code ?? null, errorParams: p.error_params ?? null, createdAt: p.created_at, updatedAt: p.updated_at, expiresAt: p.expires_at,
-    broadcastAt: p.broadcast_at, finalizedAt: p.finalized_at,
+    broadcastAt: p.broadcast_at, finalizedAt: p.finalized_at, relayAttemptedAt: p.relay_attempted_at ?? null,
+    feePaid: p.fee_paid ?? null, feePaidDisplay: p.fee_paid ? formatUnits(BigInt(p.fee_paid), n.native.decimals) : null,
     kind: p.kind ?? 'transfer',
     swap: p.swap ? { provider: p.swap.provider, toAsset: p.swap.toAsset, toSymbol: p.swap.toSymbol, slippageBps: p.swap.slippageBps, needsApproval: p.swap.needsApproval, simulated: p.swap.simulated,
       expectedOut: p.swap.expectedOut, expectedOutDisplay: formatUnits(BigInt(p.swap.expectedOut), p.swap.toDecimals), minOut: p.swap.minOut, minOutDisplay: formatUnits(BigInt(p.swap.minOut), p.swap.toDecimals),
@@ -105,10 +111,18 @@ export async function move(p: ProposalRow, to: ProposalState, patch: Record<stri
   assertTransition(p.state, to);
   // an `error` written without a code (or cleared) never keeps the code of an earlier one
   if ('error' in patch && !('error_code' in patch)) patch = { ...patch, error_code: null, error_params: null };
-  const [r] = await sql<ProposalRow[]>`update proposals set ${sql({ ...patch, state: to, version: p.version + 1, updated_at: new Date() } as never)}
-    where id = ${p.id} and state = ${p.state} and version = ${p.version} returning *`;
+  let r: ProposalRow | undefined;
+  try {
+    [r] = await sql<ProposalRow[]>`update proposals set ${sql({ ...patch, state: to, version: p.version + 1, updated_at: new Date() } as never)}
+      where id = ${p.id} and state = ${p.state} and version = ${p.version} returning *`;
+  } catch (e) { // NEXT: the database's own one-in-flight rule (db.ts `proposals_one_in_flight`) — two approvals in the same instant
+    if ((e as { code?: string; constraint_name?: string }).code === '23505' && /proposals_one_in_flight/.test(String((e as { constraint_name?: string }).constraint_name ?? (e as Error).message)))
+      throw new UserError('pending_tx', 'a previous transfer or swap on this network is not confirmed yet', 409);
+    throw e;
+  }
   if (!r) throw new UserError('conflict', 'proposal changed concurrently; reload', 409);
   await audit(`transfer.${to}`, 'system', { id: p.id, network: p.network, symbol: p.symbol, amount: p.amount, to: p.to_addr, txid: r.txid, hash: r.intent_hash, error: r.error });
+  await walletEvent('transfer.state', p.id, { from: p.state, to, lifecycle: lifecycleOf(to, { relayAttempted: !!r.relay_attempted_at, errorCode: r.error_code }), network: p.network, kind: p.kind ?? 'transfer', txid: r.txid, confirmations: r.confirmations, errorCode: r.error_code ?? null });
   return r;
 }
 
@@ -132,6 +146,24 @@ export async function destinationWarnings(network: string, to: string): Promise<
     if (known.some((k) => k.address !== to && sig(k.address) === sig(to))) w.push('address_poisoning_suspected');
   }
   return w;
+}
+
+/**
+ * NEXT — the same payment as a recent one whose fate is not "certainly did not happen": sent, confirming, confirmed, dropped
+ * or replaced (both still watched), or failed after a relay had started. The owner is told before approving again; the
+ * client makes him tick a box (same treatment as a new destination).
+ */
+export async function duplicateWarning(network: string, asset: string, to: string, amount: string): Promise<string[]> {
+  const [d] = await sql<{ id: string }[]>`select id from proposals where network = ${network} and asset = ${asset} and to_addr = ${to} and amount = ${amount}
+    and created_at > now() - interval '24 hours' and kind = 'transfer'
+    and (state in ('signed', 'broadcast', 'confirming', 'reorged', 'finalized', 'dropped', 'replaced') or (state = 'failed' and relay_attempted_at is not null)) limit 1`;
+  return d ? ['duplicate_recent'] : [];
+}
+
+/** NEXT — Bitcoin-style networks: the coins of the dropped transfers still watched on this network (see `mustSpend`, chains/btc.ts). */
+export async function droppedCoins(network: string): Promise<string[][]> {
+  const rows = await sql<{ intent: Intent | null }[]>`select intent from proposals where network = ${network} and state = 'dropped' and intent is not null`;
+  return rows.map((r) => (r.intent?.btc?.inputs ?? []).map((i) => `${i.txid}:${i.vout}`)).filter((c) => c.length > 0);
 }
 
 const Create = z.strictObject({ network: z.string().max(20), asset: z.string().max(80), to: z.string().min(1).max(130), amount: z.string().min(1).max(80), note: z.string().max(80).default(''), memo: z.string().max(120).optional() });
@@ -166,7 +198,7 @@ export function transferRoutes(app: FastifyInstance): void {
     const probe = { network: n.id, symbol: asset.symbol, amount: amount.toString(), maxFee: prep.maxFee.toString(), to, policyVersion: st.policy.version, createdAt: now, expiresAt: now + 30 } as Intent;
     const verdict = checkPolicy(st.policy, probe, BigInt(st.spentToday[`${n.id}:${asset.symbol}`] ?? '0'), now, st.halted);
     if (!verdict.ok) throw new UserError('policy', verdict.reason, 422);
-    const warnings = [...prep.warnings, ...(await destinationWarnings(n.id, to))];
+    const warnings = [...prep.warnings, ...(await destinationWarnings(n.id, to)), ...(await duplicateWarning(n.id, asset.id, to, amount.toString()))];
     const id = randomUUID();
     const [p] = await sql<ProposalRow[]>`insert into proposals (id, idempotency_key, request_hash, state, network, asset, symbol, decimals, amount, from_addr, to_addr, note, memo, fee_estimate, max_fee, warnings, expires_at)
       values (${id}, ${idem}, ${key.hash}, 'draft', ${n.id}, ${asset.id}, ${asset.symbol}, ${asset.decimals}, ${amount.toString()}, ${from}, ${to}, ${b.note}, ${memo ?? null}, ${prep.feeEstimate.toString()}, ${prep.maxFee.toString()}, ${sql.json(warnings)}, now() + interval '15 minutes') returning *`;
@@ -191,7 +223,10 @@ export function transferRoutes(app: FastifyInstance): void {
     // nonce / sequence / coins, and on some chains (Sui) could even lock those coins until the epoch ends.
     const [busy] = await sql<{ id: string }[]>`select id from proposals where network = ${p.network} and id <> ${p.id} and state in ('approved', 'signed', 'broadcast') limit 1`;
     if (busy) throw new UserError('pending_tx', 'a previous transfer on this network is not confirmed yet; wait for it before sending another', 409);
-    const prep = await adapterFor(n.id).prepare({ asset: p.asset, from: p.from_addr, to: p.to_addr, amount: BigInt(p.amount), memo: p.memo ?? undefined });
+    // NEXT: a dropped transfer on a Bitcoin-style network is still valid bytes. The new transaction must spend at least one
+    // of its coins, so that the two can never both confirm (EVM gets the same property from the nonce, which is reused).
+    const mustSpend = n.family === 'btc' ? await droppedCoins(n.id) : [];
+    const prep = await adapterFor(n.id).prepare({ asset: p.asset, from: p.from_addr, to: p.to_addr, amount: BigInt(p.amount), memo: p.memo ?? undefined, ...(mustSpend.length ? { mustSpend } : {}) });
     const now = Math.floor(Date.now() / 1000);
     const intent = IntentSchema.parse({
       v: 1, proposalId: p.id, keyId: st.keyId, network: n.id, chainRef: n.chainRef, asset: p.asset, symbol: p.symbol, decimals: p.decimals,
@@ -255,18 +290,46 @@ export function transferRoutes(app: FastifyInstance): void {
   });
 }
 
-/** Relay signed bytes. A returned hash is not success: state stays "broadcast" until the chain confirms. */
+/**
+ * Relay signed bytes. A returned hash is not success: state stays "broadcast" until the chain confirms.
+ *
+ * NEXT (life cycle v2):
+ *  - `relay_attempted_at` is written BEFORE the network call. From that instant "nothing was sent" can only be said by the
+ *    chain: a crash, a time-out or an error answer no longer proves anything (a node may have accepted the bytes).
+ *  - a relay error is followed by a look-up of the transaction. If the network already has it — it was accepted by an
+ *    earlier attempt whose answer was lost, and may even be mined ("nonce too low", "inputs spent") — the row moves to
+ *    `broadcast` and the tracker takes over. Otherwise it stays `signed` and the worker tries again.
+ */
 export async function broadcastNow(p: ProposalRow): Promise<ProposalRow> {
-  if (!p.raw) return p;
+  const raw = p.raw;
+  if (!raw) return p;
   // v11 (B2): broadcasting disabled = the transaction was signed and deliberately NOT relayed. That is its own terminal state:
   // it is not "broadcast" (nothing left this server), it never confirms, and it does not hold the network's in-flight slot.
   if (!config.broadcast) return move(p, 'not_broadcast', failure('broadcast_disabled'));
+  const a = adapterFor(p.network);
+  if (!p.relay_attempted_at) {
+    const [r] = await sql<ProposalRow[]>`update proposals set relay_attempted_at = now() where id = ${p.id} and relay_attempted_at is null returning *`;
+    if (r) { p = { ...p, relay_attempted_at: r.relay_attempted_at }; await walletEvent('transfer.relay', p.id, { network: p.network, lifecycle: 'broadcasting', txid: p.txid }); }
+  }
   try {
-    await adapterFor(p.network).broadcast(p.raw);
+    await a.broadcast(raw);
     return await move(p, 'broadcast', { broadcast_at: new Date(), last_broadcast_at: new Date(), error: null });
   } catch (e) {
+    if (p.txid && p.intent && await knownToNetwork(p).catch(() => false))
+      return move(p, 'broadcast', { broadcast_at: p.relay_attempted_at ?? new Date(), last_broadcast_at: new Date(), error: null });
     const f = failure('broadcast_attempt_failed', { detail: (e as Error).message.slice(0, 200) });
     await sql`update proposals set error = ${f.error}, error_code = ${f.error_code}, error_params = ${f.error_params}, updated_at = now() where id = ${p.id}`;
     return (await sql<ProposalRow[]>`select * from proposals where id = ${p.id}`)[0]!;
   }
+}
+
+/** The intent whose transaction `p.txid` is: a swap / bridge / native swap / GMX order preceded by an approval uses the next nonce. */
+export const trackedIntent = (p: ProposalRow): Intent | null =>
+  p.intent && (p.kind === 'swap' || p.kind === 'bridge' || p.kind === 'xswap' || p.kind === 'gmx') && p.pre_raw && p.intent.evm
+    ? { ...p.intent, evm: { ...p.intent.evm, nonce: p.intent.evm.nonce + 1 } } : p.intent;
+
+/** Does the network have this transaction (in a block, or in a mempool a source can see)? Throws when no source answers. */
+export async function knownToNetwork(p: ProposalRow): Promise<boolean> {
+  const t = await adapterFor(p.network).track({ txid: p.txid!, intent: trackedIntent(p), blockRef: null, broadcastAt: Date.now() / 1000 });
+  return t.seen === true || t.state === 'confirming' || t.state === 'finalized' || (t.state === 'failed' && !!t.blockRef);
 }

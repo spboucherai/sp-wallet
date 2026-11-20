@@ -31,6 +31,7 @@ export function mainState(state: string): ExecState {
     case 'confirming': case 'reorged': return 'confirming';
     case 'finalized': return 'confirmed';
     case 'failed': case 'replaced': case 'rejected': case 'expired': case 'not_broadcast': return 'failed';
+    case 'dropped': return 'unknown'; // NEXT: not confirmed, not provably dead — still watched
     default: return 'unknown';
   }
 }

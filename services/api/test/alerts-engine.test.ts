@@ -216,7 +216,7 @@ describe('condition rules', () => {
     w.clock.advance(1000);
     const now = w.clock.t;
     await addProposal(sql, { state: 'broadcast', createdAt: new Date(now - 2 * H) });
-    await addProposal(sql, { state: 'broadcast', createdAt: new Date(now - 5 * 60_000) });                       // recent: not stuck
+    await addProposal(sql, { state: 'broadcast', network: 'arbitrum', createdAt: new Date(now - 5 * 60_000) }); // recent: not stuck (another network: one in flight per network)
     await addProposal(sql, { kind: 'bridge', state: 'finalized', bridge: { phase: 'attesting' }, createdAt: new Date(now - 3 * H) });
     await addProposal(sql, { kind: 'bridge', state: 'finalized', bridge: { phase: 'done' }, createdAt: new Date(now - 3 * H) });
     const mid = randomUUID();

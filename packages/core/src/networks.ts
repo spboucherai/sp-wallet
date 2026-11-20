@@ -51,6 +51,15 @@ export interface NetworkDef {
     /** height of the block whose hash is `chainRef` (default 0 = genesis) */
     refHeight?: number;
   };
+  /**
+   * EVM rollups whose fee is not only `gas × price` on the rollup itself (NEXT, audit E1):
+   *  - `nativeGasMax`: the gas LIMIT of a plain native transfer is not 21 000 there — Arbitrum charges the cost of posting
+   *    the transaction to Ethereum through the gas limit (measured 2026-11-19: 21 489). The limit is estimated per send and
+   *    must stay between 21 000 and this ceiling; the fee stays bounded by the approved `maxFee` like everywhere else.
+   *  - `l1Fee: 'opstack'`: OP-stack chains charge the Ethereum data fee separately, on top of `gas × price`; it is read from
+   *    the chain's GasPriceOracle and added to the fee ESTIMATE and to the balance check (it is not a field of the transaction).
+   */
+  evm?: { nativeGasMax?: number; l1Fee?: 'opstack' };
   /** Cosmos SDK chains: bech32 account prefix and the denom of the native coin (used for the transfer and the fee) */
   cosmos?: { bech32: string; denom: string };
   /** destination memo / tag support: free text or an unsigned 32-bit number */
@@ -78,13 +87,13 @@ const DEFS = {
     explorerTx: 'https://etherscan.io/tx/', explorerAddr: 'https://etherscan.io/address/', minConf: 12,
   },
   base: {
-    id: 'base', family: 'evm', name: 'Base', chainRef: '8453', native: eth,
+    id: 'base', family: 'evm', name: 'Base', chainRef: '8453', native: eth, evm: { l1Fee: 'opstack' },
     tokens: [],
     rpc: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'],
     explorerTx: 'https://basescan.org/tx/', explorerAddr: 'https://basescan.org/address/', minConf: 12,
   },
   arbitrum: {
-    id: 'arbitrum', family: 'evm', name: 'Arbitrum One', chainRef: '42161', native: eth,
+    id: 'arbitrum', family: 'evm', name: 'Arbitrum One', chainRef: '42161', native: eth, evm: { nativeGasMax: 120_000 },
     tokens: [],
     rpc: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum-one-rpc.publicnode.com'],
     explorerTx: 'https://arbiscan.io/tx/', explorerAddr: 'https://arbiscan.io/address/', minConf: 12,
@@ -97,7 +106,7 @@ const DEFS = {
     explorerTx: 'https://polygonscan.com/tx/', explorerAddr: 'https://polygonscan.com/address/', minConf: 64,
   },
   optimism: {
-    id: 'optimism', family: 'evm', name: 'Optimism', chainRef: '10', native: eth, tokens: [],
+    id: 'optimism', family: 'evm', name: 'Optimism', chainRef: '10', native: eth, evm: { l1Fee: 'opstack' }, tokens: [],
     rpc: ['https://mainnet.optimism.io', 'https://optimism-rpc.publicnode.com'],
     explorerTx: 'https://optimistic.etherscan.io/tx/', explorerAddr: 'https://optimistic.etherscan.io/address/', minConf: 12,
   },
