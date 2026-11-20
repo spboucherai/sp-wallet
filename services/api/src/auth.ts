@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { CRED_MAX_TTL_SEC, credentialHash, CredentialRequestSchema, type CredentialRequest } from '@spw/core';
 import { describeUa } from './alerts/rules.ts';
 import { config, secureCookies, UserError } from './config.ts';
-import { audit, getSetting, setSetting, sql, walletEvent } from './db.ts';
+import { audit, getSetting, setSetting, sql } from './db.ts';
 import { signer, type SignerStatus } from './signer-client.ts';
 
 export const COOKIE = secureCookies ? '__Host-spw' : 'spw';
@@ -261,7 +261,6 @@ export function deviceRoutes(app: FastifyInstance): void {
       on conflict (id) do nothing`;
     await sql`delete from pending_credentials where id = ${p.id}`;
     await audit('device.added', 'owner', { credential: String(p.id).slice(0, 12), label: p.label });
-    await walletEvent('credential.added', String(p.id).slice(0, 12), { label: p.label });
     return { ok: true };
   });
 
@@ -292,7 +291,6 @@ export function deviceRoutes(app: FastifyInstance): void {
     await sql`delete from pending_credentials where id = ${id}`;
     const ended = await sql`update sessions set revoked = true where credential_id = ${id} and not revoked returning sid`;
     await audit('device.revoked', 'owner', { credential: id.slice(0, 12), label: gone?.label ?? '', signer: onSigner, sessions: ended.length, ip: req.ip });
-    await walletEvent('credential.revoked', id.slice(0, 12), { label: gone?.label ?? '', sessions: ended.length });
     return { ok: true, signer: onSigner, sessionsRevoked: ended.length };
   });
 
@@ -310,7 +308,6 @@ export function deviceRoutes(app: FastifyInstance): void {
     if (!s) throw new UserError('not_found', 'no such active session', 404);
     if (current) reply.clearCookie(COOKIE, { path: '/' });
     await audit('session.revoked', 'owner', { session: sid, current, ip: req.ip });
-    await walletEvent('session.revoked', sid, { current });
     return { ok: true, current };
   });
 }

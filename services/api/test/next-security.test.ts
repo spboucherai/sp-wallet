@@ -136,7 +136,8 @@ describe('adding a passkey (SPW-CRED-v2, verified by the signer)', () => {
     expect(ov.signerCredentials[0].lastUsedAt).not.toBeNull();                                           // the owner's passkey just approved on the signer
     expect(ov.mismatch).toEqual([]);
     expect((await auditTypes()).filter((t) => !t.startsWith('risk.'))).toEqual(['owner.setup', 'device.added']);
-    expect((await sql`select type, ref from wallet_events where type like 'credential.%'`).map((r: any) => [r.type, r.ref])).toEqual([['credential.added', phone.id.slice(0, 12)]]);
+    // every client following the event stream hears about it (db.ts mirrors `device.*`, `session.*` and `login.ok` audit records)
+    expect((await sql`select type from wallet_events where type like 'device.%'`).map((r: any) => r.type)).toEqual(['device.added']);
   });
 
   it('P3 — a lost answer: the signer applied the request, the API did not record it; asking again completes the API\'s part and adds nothing twice', async () => {
