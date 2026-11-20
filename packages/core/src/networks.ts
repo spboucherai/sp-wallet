@@ -141,8 +141,11 @@ const DEFS = {
     chainRef: '12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2',
     native: { id: 'native', symbol: 'LTC', name: 'Litecoin', decimals: 8 }, tokens: [], coinType: 2,
     utxo: { bech32: 'ltc', pubKeyHash: 0x30, scriptHash: 0x32, kind: 'wpkh', dust: 5460 },
-    rpc: ['https://litecoinspace.org/api', 'blockbook:https://litecoin.atomicwallet.io/api/v2'],
-    explorerTx: 'https://litecoinspace.org/tx/', explorerAddr: 'https://litecoinspace.org/address/', minConf: 6,
+    // 2026-11-20: litecoinspace.org (Esplora) has been answering HTTP 525 since 2026-11-19, which left Litecoin with one source
+    // (sends refused, « 22/23 networks »). Two independent indexers of two operators and two code bases, as for Dogecoin:
+    // Blockbook (Atomic Wallet) and Bitcore (BitPay). The explorer links moved with it.
+    rpc: ['blockbook:https://litecoin.atomicwallet.io/api/v2', 'bitcore:https://api.bitcore.io/api/LTC/mainnet'],
+    explorerTx: 'https://blockchair.com/litecoin/transaction/', explorerAddr: 'https://blockchair.com/litecoin/address/', minConf: 6,
   },
   // Dust: Dogecoin Core's soft dust limit, 0.01 DOGE (doc/fee-recommendation.md, read 2026-11-10; an output below it costs an
   // extra 0.01 DOGE of fee, below 0.001 DOGE it is rejected). Fee: 0.01 DOGE/kB recommended = 1000 koinu per byte.
