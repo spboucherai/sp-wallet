@@ -112,11 +112,9 @@ describe('the vocabularies are the code\'s own', () => {
     expect([...emitted].sort()).toEqual(Object.entries(TRANSFER_WARNINGS).filter(([, w]) => w.emitted).map(([k]) => k).sort());
     for (const [code, w] of Object.entries(TRANSFER_WARNINGS)) if (!w.emitted) expect(src, `${code} is marked reserved but the code emits it: set emitted`).not.toContain(`'${code}'`);
     expect(Object.entries(TRANSFER_WARNINGS).filter(([, w]) => w.ack).map(([k]) => k)).toEqual(['new_destination', 'address_poisoning_suspected', 'duplicate_recent']);
-    // the web app translates a warning as `w_<code>`. Missing on this branch: the two codes NEXT added on the server
-    // (`duplicate_recent`, `l1_fee_unknown`) — the web safety work owns those strings. They are listed here so that the gap
-    // is visible and the list shrinks to nothing once that branch is merged.
+    // the web app translates a warning as `w_<code>`: every emitted code has its string (the two NEXT added on the server included)
     const i18n = read('apps/web/src/i18n.ts');
-    expect(Object.entries(TRANSFER_WARNINGS).filter(([code, w]) => w.emitted && !new RegExp(`^  w_${code}: \\[`, 'm').test(i18n)).map(([code]) => code)).toEqual(['duplicate_recent', 'l1_fee_unknown']);
+    expect(Object.entries(TRANSFER_WARNINGS).filter(([code, w]) => w.emitted && !new RegExp(`^  w_${code}: \\[`, 'm').test(i18n)).map(([code]) => code)).toEqual([]);
   });
   it('event types are the ones the log receives', () => {
     for (const t of Object.keys(EVENT_TYPES)) expect(t.startsWith('transfer.') || MIRRORED.test(t), t).toBe(true);
