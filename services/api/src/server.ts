@@ -31,6 +31,7 @@ import { agentRoutes } from './agents/routes.ts';
 import { strategyRoutes } from './agents/strategies.ts';
 import { perpAgentRoutes } from './agents/perp-routes.ts'; // v6 perp agents
 import { runtimeRoutes } from './agents/runtime-routes.ts'; // v11 agent panel: templates, mode-scoped reads, start/pause/stop, jobs, kill switch
+import { eventRoutes } from './events.ts';
 import { transferRoutes, view, type ProposalRow } from './transfers.ts';
 import { healthCache } from './worker.ts';
 import { alertRoutes } from './alerts/routes.ts';     // v6-alerts
@@ -188,6 +189,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   authRoutes(app);
   deviceRoutes(app);
   transferRoutes(app);
+  eventRoutes(app); // NEXT: the wallet's event stream (events.ts)
   const swapRuntimes = swapRoutes(app, { providers: swapProviders, prices: markets });
   swapExecRoutes(app);
   bridgeRoutes(app);

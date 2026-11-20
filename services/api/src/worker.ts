@@ -11,6 +11,7 @@ import { broadcastNow, failure, knownToNetwork, move, proposalHooks, trackedInte
 import { advanceXswapSend, advanceXswaps, xswapMayBroadcast, xswapSent } from './xswap.ts';
 import { advancePlans } from './plan-exec.ts'; // v7 any-to-any plans
 import { pruneSwapQuotes } from './swap.ts'; // v11
+import { pruneEvents } from './events.ts';
 import { advanceWithdrawals } from './agents/withdrawals.ts'; // v8
 
 export const healthCache = new Map<string, Health>();
@@ -200,6 +201,7 @@ export function startWorkers(): void {
   loop('plans', advancePlans, 6_000); // v7: reads the proposals of open plans and moves the plans; never signs
   loop('deposits', scanDeposits, 75_000);
   loop('swap-quotes-prune', async () => { await pruneSwapQuotes(); }, 6 * 3600_000); // v11: retention of the quote log (swap.ts)
+  loop('events-prune', async () => { await pruneEvents(); }, 6 * 3600_000); // NEXT: retention of the wallet event log (events.ts)
   loop('withdrawals', () => advanceWithdrawals(), 8_000); // v8: agent-vault withdrawals — receipt and arrival at the owner's address; never signs
 }
 export { refreshHealth, reconcile, expireStale, isTerminal, advanceBridges };

@@ -585,6 +585,8 @@ export async function walletEvent(type: string, ref: string | null, data: Record
   catch (e) { console.error(`[events] ${type}: ${(e as Error).message}`); }
 }
 
+/** kept in step with events.ts `MIRRORED` (a test compares them) */
+export const WALLET_EVENT_TYPES = /^(deposit\.|device\.|sessions?\.|login\.ok$|addressbook\.|settings\.|halt\.|owner\.setup$|security\.)/;
 let auditLock: Promise<unknown> = Promise.resolve();
 /** Append to the tamper-evident hash chain. Never pass secrets or assertion payloads here. */
 export function audit(type: string, actor: string, data: Record<string, unknown> = {}): Promise<void> {
@@ -596,7 +598,9 @@ export function audit(type: string, actor: string, data: Record<string, unknown>
       await tx`insert into audit_events (seq, ts, type, actor, data, prev, hash) values (${rec.seq}, ${rec.ts}, ${rec.type}, ${rec.actor}, ${tx.json(rec.data as never)}, ${rec.prev}, ${rec.hash})`;
     });
   };
-  const p = auditLock.then(run, run);
+  // NEXT: the audit entries a client must hear about are also wallet events (events.ts `MIRRORED`; transfers write their own)
+  const mirror = async () => { if (WALLET_EVENT_TYPES.test(type)) await walletEvent(type, typeof data.id === 'string' ? data.id : null, data); };
+  const p = auditLock.then(run, run).then(mirror);
   auditLock = p.catch(() => {});
   return p;
 }
