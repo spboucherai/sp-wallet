@@ -1011,6 +1011,8 @@ Request body (JSON):
 
 ## Errors
 
+A 400 `bad_request` produced by input validation carries `data.fields`: one `{ path, code, message }` per refused member (what is expected, never the value that was sent).
+
 Every error is `{ "error": "<code>", "message": "<sentence>" }`; a refusal about an order also carries `data` (`data.order`, `data.reasons`, `data.failed`, `data.checks`, `data.questions`).
 A path that is not an operation (or a known path with another method) answers 404 `not_found`.
 

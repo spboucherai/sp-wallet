@@ -36,7 +36,7 @@ describe('generated files', () => {
     for (const o of OPERATIONS) expect(guide, o.id).toContain(`| ${o.method} | \`${oaPath(o.path)}\` |`);
     for (const code of Object.keys(doc['x-spw-error-catalog'])) expect(guide, code).toContain(`| \`${code}\` |`);
     for (const l of LIFECYCLES) expect(guide, l).toContain(`| \`${l}\` |`);
-    for (const o of OPERATIONS.filter((x) => x.changing)) expect(guide, o.id).toContain(`(\`${o.id}\`)`);
+    expect(JSON.stringify(doc)).not.toContain('x-spw-changing');   // the credential / session routes are described as merged
   });
 });
 

@@ -48,7 +48,7 @@ export function generateWalletTypes(document: Json): string {
   L.push('/** every operation of the document: method, path template, whether it needs the owner session and the CSRF headers, and its answer type */', 'export const WALLET_OPERATIONS = {');
   for (const { id, method, path, o } of ops) {
     const content = Object.keys(((o.responses as Json)['200'] as Json).content as Json)[0];
-    L.push(`  ${id}: { method: ${JSON.stringify(method)}, path: ${JSON.stringify(path)}, auth: ${JSON.stringify(o['x-spw-auth'])}, csrf: ${String(o['x-spw-csrf'] === true)}, produces: ${JSON.stringify(content)}, since: ${JSON.stringify(o['x-spw-since'] ?? 'v1')}, changing: ${String(typeof o['x-spw-changing'] === 'string')} },`);
+    L.push(`  ${id}: { method: ${JSON.stringify(method)}, path: ${JSON.stringify(path)}, auth: ${JSON.stringify(o['x-spw-auth'])}, csrf: ${String(o['x-spw-csrf'] === true)}, produces: ${JSON.stringify(content)}, since: ${JSON.stringify(o['x-spw-since'] ?? 'v1')} },`);
   }
   L.push('} as const;', 'export type WalletOperationId = keyof typeof WALLET_OPERATIONS;', '');
   L.push('/** every error answer an operation can give: `[HTTP status, code]`. `open`: a chain adapter or the signer can add a code of its own. */',

@@ -3,7 +3,7 @@
   "info": {
     "title": "SP Wallet core API",
     "version": "1.0.0",
-    "description": "Everything a wallet client (web, macOS, iOS) uses outside `/api/v1/trading`: authentication, accounts, portfolio, transfers, activity, address book, settings, security, alerts, events, analytics, search.\n\nAuthentication: the owner session — a `__Host-spw` cookie set by the passkey sign-in. Every mutating request also carries `Origin` (the wallet's own origin) and `X-SPW-CSRF: 1`. An API key (`Authorization: Bearer spw_live_…`) opens nothing here.\n\nADDITIVE: no member is ever removed, renamed or retyped; every object is open — ignore members you do not know. New routes and members only.\n\nAMOUNTS are strings of integer base units, next to a display string computed with exact arithmetic. Fiat figures are decimal strings. Market prices are display numbers and are never used as amounts.\n\nESTIMATES are flagged: a figure that is an estimate, partial or stale carries the member that says so (`complete`, `estimate`, `stale`, `unvalued`, `unknown`…). An estimate is never called a realised return.\n\nENUMERATIONS are components. `x-spw-open: true` means new values may appear in a later release: decode with an \"unknown\" fallback (the known values are in `x-spw-values`). `x-spw-open: false` is frozen for good.\n\nERRORS are `{ \"error\": \"<code>\", \"message\": \"<English sentence>\", \"data\"?: … }`. Every operation lists its codes with their status in `x-spw-errors`; `x-spw-errors-open` means a chain adapter or the signer can add one of its own (`signer_<code>`). What each code means and what to do: `x-spw-error-catalog`. A 400 `bad_request` from input validation carries `data.fields` (path, code, message — never the submitted value).\n\nA transfer's state is read in `lifecycle` (`x-spw-lifecycle`). `state` keeps the vocabulary shipped clients know and never grows. Once an approval left the device its outcome is unknown until the server answers: re-read the proposal, never assume failure.\n\nOther route families of the same server are documented elsewhere: `x-spw-other-families`. Operations marked `x-spw-changing` are being redesigned and are described as the code is today."
+    "description": "Everything a wallet client (web, macOS, iOS) uses outside `/api/v1/trading`: authentication, accounts, portfolio, transfers, activity, address book, settings, security, alerts, events, analytics, search.\n\nAuthentication: the owner session — a `__Host-spw` cookie set by the passkey sign-in. Every mutating request also carries `Origin` (the wallet's own origin) and `X-SPW-CSRF: 1`. An API key (`Authorization: Bearer spw_live_…`) opens nothing here.\n\nADDITIVE: no member is ever removed, renamed or retyped; every object is open — ignore members you do not know. New routes and members only.\n\nAMOUNTS are strings of integer base units, next to a display string computed with exact arithmetic. Fiat figures are decimal strings. Market prices are display numbers and are never used as amounts.\n\nESTIMATES are flagged: a figure that is an estimate, partial or stale carries the member that says so (`complete`, `estimate`, `stale`, `unvalued`, `unknown`…). An estimate is never called a realised return.\n\nENUMERATIONS are components. `x-spw-open: true` means new values may appear in a later release: decode with an \"unknown\" fallback (the known values are in `x-spw-values`). `x-spw-open: false` is frozen for good.\n\nERRORS are `{ \"error\": \"<code>\", \"message\": \"<English sentence>\", \"data\"?: … }`. Every operation lists its codes with their status in `x-spw-errors`; `x-spw-errors-open` means a chain adapter or the signer can add one of its own (`signer_<code>`). What each code means and what to do: `x-spw-error-catalog`. A 400 `bad_request` from input validation carries `data.fields` (path, code, message — never the submitted value).\n\nA transfer's state is read in `lifecycle` (`x-spw-lifecycle`). `state` keeps the vocabulary shipped clients know and never grows. Once an approval left the device its outcome is unknown until the server answers: re-read the proposal, never assume failure.\n\nIDLE RULE. A session ends after 30 minutes without activity (12 hours at most). A client marks the requests made on a real interaction of the user with the header `X-SPW-Interaction: 1` (`x-spw-interaction-header`); from the first such request on, only those keep the session alive — background polling no longer does. A session that never sent the header keeps the earlier behaviour (any authenticated request refreshes it).\n\nCONTROL CHARACTERS. A NUL anywhere in a request (query, path, JSON body), or any control character in the query string or a path parameter, is refused with 400 `bad_request` before the route runs.\n\nOther route families of the same server are documented elsewhere: `x-spw-other-families`."
   },
   "servers": [
     {
@@ -278,6 +278,84 @@
                     "rpcEndpoints"
                   ],
                   "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: `unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests: `rate_limited`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error: `internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {
+        "operationId": "getOpenApi",
+        "tags": [
+          "Meta"
+        ],
+        "summary": "This document",
+        "description": "The OpenAPI 3.1 document as built into this server (the content of docs/openapi/wallet-v1.json). Owner session, like every route.",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-spw-auth": "session",
+        "x-spw-csrf": false,
+        "x-spw-since": "next",
+        "x-spw-errors": [
+          {
+            "status": 401,
+            "code": "unauthenticated"
+          },
+          {
+            "status": 429,
+            "code": "rate_limited"
+          },
+          {
+            "status": 500,
+            "code": "internal"
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": {},
+                  "description": "an OpenAPI 3.1 document: openapi, info, servers, tags, paths, components, and the `x-spw-*` catalogues"
                 }
               }
             }
@@ -667,7 +745,6 @@
         "security": [],
         "x-spw-auth": "public",
         "x-spw-csrf": true,
-        "x-spw-changing": "sessions get public ids and per-session revoke; login history",
         "x-spw-errors": [
           {
             "status": 400,
@@ -766,11 +843,10 @@
           "Auth"
         ],
         "summary": "Sign-in: verify the assertion, open a session",
-        "description": "Sets the `__Host-spw` cookie (HttpOnly, Secure, SameSite=Strict). A challenge is single-use.",
+        "description": "Sets the `__Host-spw` cookie (HttpOnly, Secure, SameSite=Strict). A challenge is single-use. A passkey the signer no longer lists opens no session (`login_failed`); when the signer does not answer, or holds no passkey at all, the API's own table decides — the wallet can then be viewed, and nothing can be approved.",
         "security": [],
         "x-spw-auth": "public",
         "x-spw-csrf": true,
-        "x-spw-changing": "sessions get public ids and per-session revoke; login history",
         "x-spw-errors": [
           {
             "status": 400,
@@ -906,7 +982,6 @@
         "security": [],
         "x-spw-auth": "public",
         "x-spw-csrf": true,
-        "x-spw-changing": "sessions get public ids and per-session revoke; login history",
         "x-spw-errors": [
           {
             "status": 400,
@@ -3781,7 +3856,7 @@
           "Transfers"
         ],
         "summary": "The short status of one proposal",
-        "description": "Legacy short form (no `lifecycle`): new clients read GET /transfers/proposals/:id.",
+        "description": "The short form for polling. NEXT added `lifecycle`, `finalized`, `watched`, `feePaid`, `feePaidDisplay`.",
         "security": [
           {
             "session": []
@@ -3837,6 +3912,38 @@
                     },
                     "state": {
                       "$ref": "#/components/schemas/ProposalState"
+                    },
+                    "lifecycle": {
+                      "$ref": "#/components/schemas/Lifecycle"
+                    },
+                    "finalized": {
+                      "type": "boolean"
+                    },
+                    "watched": {
+                      "type": "boolean"
+                    },
+                    "feePaid": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "integer amount in base units, as a string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "the fee the network actually charged; null until known (rows older than NEXT have none)"
+                    },
+                    "feePaidDisplay": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "the same amount as a decimal string (exact arithmetic)"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "txid": {
                       "type": [
@@ -4007,6 +4114,11 @@
                   "required": [
                     "id",
                     "state",
+                    "lifecycle",
+                    "finalized",
+                    "watched",
+                    "feePaid",
+                    "feePaidDisplay",
                     "txid",
                     "confirmations",
                     "error",
@@ -5702,6 +5814,7 @@
           "Settings"
         ],
         "summary": "Change settings (any subset)",
+        "description": "Writes the audit event `settings.saved` (the keys changed and their new values), mirrored into the wallet event log so that other devices follow.",
         "security": [
           {
             "session": []
@@ -5877,7 +5990,8 @@
         "tags": [
           "Security"
         ],
-        "summary": "Signer state, passkeys, sessions",
+        "summary": "Signer state, passkeys (both lists), sessions",
+        "description": "Every member that existed before NEXT keeps its name and type. A divergence between the two passkey lists that lasts 30 s is written once to the audit chain (`credentials.mismatch`) and raises the alert `security.credential_mismatch`.",
         "security": [
           {
             "session": []
@@ -5885,7 +5999,6 @@
         ],
         "x-spw-auth": "session",
         "x-spw-csrf": false,
-        "x-spw-changing": "credential life cycle v2 (signed, expiring, single-use add / revoke objects verified by the signer); sessions get public ids and per-session revoke; login history",
         "x-spw-errors": [
           {
             "status": 401,
@@ -5943,6 +6056,34 @@
                           "additionalProperties": {
                             "type": "string"
                           }
+                        },
+                        "recoveryExportedAt": {
+                          "description": "when the recovery phrase was last displayed on the signer; null: never recorded",
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "description": "date-time, ISO 8601, UTC"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "recoveryVerifiedAt": {
+                          "description": "when the recovery phrase was last proved; null: never",
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "description": "date-time, ISO 8601, UTC"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "credentialCooldownSec": {
+                          "description": "how long a newly added passkey cannot approve anything (0 = off)",
+                          "type": "number"
                         }
                       },
                       "required": [
@@ -5986,6 +6127,17 @@
                           },
                           "enrolledOnSigner": {
                             "type": "boolean"
+                          },
+                          "credentialId": {
+                            "type": "string",
+                            "description": "the full credential id: what the revoke routes take"
+                          },
+                          "inCooldown": {
+                            "type": "boolean"
+                          },
+                          "revocable": {
+                            "type": "boolean",
+                            "description": "false for the last passkey on the signer, and while the signer is unreachable"
                           }
                         },
                         "required": [
@@ -5995,10 +6147,14 @@
                           "backedUp",
                           "createdAt",
                           "lastUsedAt",
-                          "enrolledOnSigner"
+                          "enrolledOnSigner",
+                          "credentialId",
+                          "inCooldown",
+                          "revocable"
                         ],
                         "additionalProperties": {}
-                      }
+                      },
+                      "description": "the API's own table: a copy"
                     },
                     "sessions": {
                       "type": "array",
@@ -6018,13 +6174,37 @@
                           },
                           "ip": {
                             "type": "string"
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "description": "PUBLIC id of the session (never derived from its token): what POST /security/sessions/{id}/revoke takes"
+                          },
+                          "current": {
+                            "type": "boolean"
+                          },
+                          "device": {
+                            "type": "string",
+                            "description": "coarse label: browser · system"
+                          },
+                          "credential": {
+                            "description": "12-character prefix of the passkey that opened it; null for a session older than NEXT",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
                           "created_at",
                           "last_seen",
                           "ua",
-                          "ip"
+                          "ip",
+                          "id",
+                          "current",
+                          "device",
+                          "credential"
                         ],
                         "additionalProperties": {}
                       }
@@ -6034,6 +6214,117 @@
                     },
                     "broadcast": {
                       "type": "boolean"
+                    },
+                    "signerCredentials": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "description": "date-time, ISO 8601, UTC"
+                              },
+                              "lastUsedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "description": "date-time, ISO 8601, UTC"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "inCooldown": {
+                                "type": "boolean"
+                              },
+                              "cooldownUntil": {
+                                "description": "Unix seconds",
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "known": {
+                                "type": "boolean",
+                                "description": "false: pinned on the signer with no row in the API — it can approve and is listed nowhere else"
+                              },
+                              "label": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "revocable": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "createdAt",
+                              "lastUsedAt",
+                              "inCooldown",
+                              "cooldownUntil",
+                              "known",
+                              "label",
+                              "revocable"
+                            ],
+                            "additionalProperties": {}
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "the SIGNER's list — the source of truth for who can approve; null when it cannot be reached"
+                    },
+                    "mismatch": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "side": {
+                                "type": "string",
+                                "enum": [
+                                  "signer",
+                                  "api"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "side"
+                            ],
+                            "additionalProperties": {}
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "credential ids known to one side only; null when the signer cannot be reached"
+                    },
+                    "currentSessionId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -6041,9 +6332,185 @@
                     "devices",
                     "sessions",
                     "origin",
-                    "broadcast"
+                    "broadcast",
+                    "signerCredentials",
+                    "mismatch",
+                    "currentSessionId"
                   ],
                   "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: `unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests: `rate_limited`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error: `internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security/logins": {
+      "get": {
+        "operationId": "listLogins",
+        "tags": [
+          "Security"
+        ],
+        "summary": "The last sign-ins",
+        "description": "From the audit chain (`login.ok`), newest first. Members a record written before NEXT does not carry are null.",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-spw-auth": "session",
+        "x-spw-csrf": false,
+        "x-spw-since": "next",
+        "x-spw-errors": [
+          {
+            "status": 400,
+            "code": "bad_request"
+          },
+          {
+            "status": 401,
+            "code": "unauthenticated"
+          },
+          {
+            "status": 429,
+            "code": "rate_limited"
+          },
+          {
+            "status": 500,
+            "code": "internal"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "rows returned at most",
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "logins": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "seq": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "at": {
+                            "type": "string",
+                            "description": "date-time, ISO 8601, UTC"
+                          },
+                          "credential": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "label": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "ip": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "device": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "newDevice": {
+                            "description": "no session had ever been opened with this user agent",
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "session": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "seq",
+                          "at",
+                          "credential",
+                          "label",
+                          "ip",
+                          "device",
+                          "newDevice",
+                          "session"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "logins"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid: `bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -6262,7 +6729,6 @@
         ],
         "x-spw-auth": "session",
         "x-spw-csrf": false,
-        "x-spw-changing": "credential life cycle v2 (signed, expiring, single-use add / revoke objects verified by the signer)",
         "x-spw-errors": [
           {
             "status": 401,
@@ -6369,7 +6835,6 @@
         ],
         "x-spw-auth": "session",
         "x-spw-csrf": true,
-        "x-spw-changing": "credential life cycle v2 (signed, expiring, single-use add / revoke objects verified by the signer)",
         "x-spw-errors": [
           {
             "status": 400,
@@ -6481,7 +6946,8 @@
         "tags": [
           "Security"
         ],
-        "summary": "Add a passkey, step 2: verify the new passkey, get the challenge an EXISTING passkey must sign",
+        "summary": "Add a passkey, step 2: verify the new passkey, get the request an ENROLLED passkey must approve",
+        "description": "The server builds an `add` credential request (valid 5 minutes, single use). A client that signs `options` as returned works unchanged; one that recomputed the pre-NEXT `SPW-ENROLL-v1` challenge must be updated.",
         "security": [
           {
             "session": []
@@ -6489,7 +6955,6 @@
         ],
         "x-spw-auth": "session",
         "x-spw-csrf": true,
-        "x-spw-changing": "credential life cycle v2 (signed, expiring, single-use add / revoke objects verified by the signer)",
         "x-spw-errors": [
           {
             "status": 400,
@@ -6518,8 +6983,13 @@
           {
             "status": 500,
             "code": "internal"
+          },
+          {
+            "status": 503,
+            "code": "signer_unreachable"
           }
         ],
+        "x-spw-errors-open": true,
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -6569,12 +7039,16 @@
                       "type": "object",
                       "properties": {},
                       "additionalProperties": {},
-                      "description": "WebAuthn options (PublicKeyCredentialRequestOptions / CreationOptions as JSON), to hand to the platform API"
+                      "description": "assertion options: challenge = SHA-256 of `request`; allowCredentials = the passkeys that may approve (on the signer, out of cool-down, not the new one)"
+                    },
+                    "request": {
+                      "$ref": "#/components/schemas/CredentialRequest"
                     }
                   },
                   "required": [
                     "pendingId",
-                    "options"
+                    "options",
+                    "request"
                   ],
                   "additionalProperties": {}
                 }
@@ -6630,6 +7104,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "A backing service is unavailable; nothing was done: `signer_unreachable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -6640,7 +7124,8 @@
         "tags": [
           "Security"
         ],
-        "summary": "Add a passkey, step 3: the existing passkey's assertion; the signer enrols",
+        "summary": "Add a passkey, step 3: the enrolled passkey's assertion; the signer verifies it and pins the new passkey",
+        "description": "Refusals are the signer's own: `signer_bad_approval`, `signer_expired`, `signer_cooldown` (the approving passkey was added too recently), `signer_self_approval`… A lost answer is safe to repeat: when the signer says the request was already applied and lists the passkey, the call succeeds.",
         "security": [
           {
             "session": []
@@ -6648,7 +7133,6 @@
         ],
         "x-spw-auth": "session",
         "x-spw-csrf": true,
-        "x-spw-changing": "credential life cycle v2 (signed, expiring, single-use add / revoke objects verified by the signer)",
         "x-spw-errors": [
           {
             "status": 400,
@@ -6786,6 +7270,382 @@
         }
       }
     },
+    "/api/v1/security/devices/revoke/options": {
+      "post": {
+        "operationId": "revokeDeviceOptions",
+        "tags": [
+          "Security"
+        ],
+        "summary": "Revoke a passkey, step 1: the request ANOTHER enrolled passkey must approve",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-spw-auth": "session",
+        "x-spw-csrf": true,
+        "x-spw-since": "next",
+        "x-spw-errors": [
+          {
+            "status": 400,
+            "code": "bad_request"
+          },
+          {
+            "status": 401,
+            "code": "unauthenticated"
+          },
+          {
+            "status": 403,
+            "code": "csrf"
+          },
+          {
+            "status": 404,
+            "code": "not_found"
+          },
+          {
+            "status": 409,
+            "code": "last_credential"
+          },
+          {
+            "status": 409,
+            "code": "no_approver"
+          },
+          {
+            "status": 429,
+            "code": "rate_limited"
+          },
+          {
+            "status": 500,
+            "code": "internal"
+          },
+          {
+            "status": 503,
+            "code": "signer_unreachable"
+          }
+        ],
+        "x-spw-errors-open": true,
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "credentialId": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 1024,
+                    "description": "`devices[].credentialId` or `signerCredentials[].id` of the overview"
+                  }
+                },
+                "required": [
+                  "credentialId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "challengeId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "request": {
+                      "$ref": "#/components/schemas/CredentialRequest"
+                    },
+                    "options": {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": {},
+                      "description": "assertion options: challenge = SHA-256 of `request`; allowCredentials never contains the passkey being revoked"
+                    }
+                  },
+                  "required": [
+                    "challengeId",
+                    "request",
+                    "options"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid: `bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: `unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused: `csrf`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The object does not exist: `not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the state of the object: `last_credential`, `no_approver`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests: `rate_limited`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error: `internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A backing service is unavailable; nothing was done: `signer_unreachable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security/devices/revoke/confirm": {
+      "post": {
+        "operationId": "revokeDeviceConfirm",
+        "tags": [
+          "Security"
+        ],
+        "summary": "Revoke a passkey, step 2: the approval; the signer removes it, its sessions end",
+        "description": "The challenge is single use. The signer judges the approval (`signer_bad_approval`, `signer_cooldown`, `signer_last_credential`…). A row the signer does not list is removed on the API's own verification of the same request by a passkey the signer does list (`bad_approval` otherwise).",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-spw-auth": "session",
+        "x-spw-csrf": true,
+        "x-spw-since": "next",
+        "x-spw-errors": [
+          {
+            "status": 400,
+            "code": "bad_request"
+          },
+          {
+            "status": 400,
+            "code": "self_approval"
+          },
+          {
+            "status": 401,
+            "code": "challenge_expired"
+          },
+          {
+            "status": 401,
+            "code": "unauthenticated"
+          },
+          {
+            "status": 403,
+            "code": "csrf"
+          },
+          {
+            "status": 422,
+            "code": "bad_approval"
+          },
+          {
+            "status": 429,
+            "code": "rate_limited"
+          },
+          {
+            "status": 500,
+            "code": "internal"
+          },
+          {
+            "status": 503,
+            "code": "signer_unreachable"
+          }
+        ],
+        "x-spw-errors-open": true,
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challengeId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "assertion": {}
+                },
+                "required": [
+                  "challengeId",
+                  "assertion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "signer": {
+                      "type": "boolean",
+                      "description": "true: the passkey was on the signer's list and the signer removed it; false: only the API's row existed"
+                    },
+                    "sessionsRevoked": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "signer",
+                    "sessionsRevoked"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid: `bad_request`, `self_approval`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: `challenge_expired`, `unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused: `csrf`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A valid request that cannot be carried out: `bad_approval`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests: `rate_limited`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error: `internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A backing service is unavailable; nothing was done: `signer_unreachable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/security/sessions/revoke-all": {
       "post": {
         "operationId": "revokeAllSessions",
@@ -6800,7 +7660,6 @@
         ],
         "x-spw-auth": "session",
         "x-spw-csrf": true,
-        "x-spw-changing": "sessions get public ids and per-session revoke; login history",
         "x-spw-errors": [
           {
             "status": 400,
@@ -6867,6 +7726,147 @@
           },
           "403": {
             "description": "Refused: `csrf`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests: `rate_limited`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error: `internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security/sessions/{id}/revoke": {
+      "post": {
+        "operationId": "revokeSession",
+        "tags": [
+          "Security"
+        ],
+        "summary": "Revoke one session by its public id",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-spw-auth": "session",
+        "x-spw-csrf": true,
+        "x-spw-since": "next",
+        "x-spw-errors": [
+          {
+            "status": 400,
+            "code": "bad_request"
+          },
+          {
+            "status": 401,
+            "code": "unauthenticated"
+          },
+          {
+            "status": 403,
+            "code": "csrf"
+          },
+          {
+            "status": 404,
+            "code": "not_found"
+          },
+          {
+            "status": 429,
+            "code": "rate_limited"
+          },
+          {
+            "status": 500,
+            "code": "internal"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the id returned by the creation or by a list",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "current": {
+                      "type": "boolean",
+                      "description": "true: it was this session; its cookie is cleared"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "current"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid: `bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: `unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused: `csrf`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The object does not exist: `not_found`",
             "content": {
               "application/json": {
                 "schema": {
@@ -7679,7 +8679,7 @@
                         "type": "object",
                         "properties": {
                           "kind": {
-                            "type": "string"
+                            "$ref": "#/components/schemas/AlertKind"
                           },
                           "group": {
                             "$ref": "#/components/schemas/AlertGroup"
@@ -7945,7 +8945,7 @@
                         "type": "object",
                         "properties": {
                           "kind": {
-                            "type": "string"
+                            "$ref": "#/components/schemas/AlertKind"
                           },
                           "group": {
                             "$ref": "#/components/schemas/AlertGroup"
@@ -9333,14 +10333,15 @@
                       "maximum": 9007199254740991
                     },
                     "more": {
-                      "description": "absent when `reset`",
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "true: the page is full, ask again from the last id. Always present (false on `reset`)"
                     }
                   },
                   "required": [
                     "reset",
                     "events",
-                    "latest"
+                    "latest",
+                    "more"
                   ],
                   "additionalProperties": {}
                 }
@@ -11968,8 +12969,7 @@
             "description": "milliseconds since the Unix epoch"
           },
           "kind": {
-            "type": "string",
-            "description": "alert kind (packages/core/src/alert-catalog.ts); new kinds appear with releases"
+            "$ref": "#/components/schemas/AlertKind"
           },
           "severity": {
             "$ref": "#/components/schemas/AlertSeverity"
@@ -12069,6 +13069,85 @@
           "derivatives",
           "security",
           "system"
+        ]
+      },
+      "AlertKind": {
+        "type": "string",
+        "description": "Kind of an alert (packages/core/src/alert-catalog.ts, which also holds its FR / EN wording). A release adds kinds: show an unknown one with its `kind` and severity.",
+        "x-spw-open": true,
+        "x-spw-values": [
+          "transfer.confirmed",
+          "transfer.failed",
+          "transfer.dropped",
+          "transfer.replaced",
+          "transfer.expired",
+          "transfer.recovered",
+          "swap.confirmed",
+          "swap.failed",
+          "bridge.confirmed",
+          "bridge.failed",
+          "transfer.stuck",
+          "deposit.received",
+          "plan.step_ready",
+          "plan.paused",
+          "plan.done",
+          "agent.order_filled",
+          "agent.stopped_loss",
+          "agent.stopped_mandate",
+          "agent.stopped",
+          "agent.mm_breaker",
+          "agent.mm_halted",
+          "agent.mm_dead_man_switch",
+          "agent.mm_signer_refusals",
+          "agent.mm_rate_budget",
+          "agent.mm_session_ended",
+          "agent.mandate_revoked",
+          "agent.data_stale",
+          "agent.signal_failures",
+          "agent.research_submitted",
+          "agent.research_failed",
+          "mandate.expiring",
+          "deriv.paper.filled",
+          "deriv.live.filled",
+          "deriv.order_rejected",
+          "deriv.order_unknown",
+          "deriv.position_opened",
+          "deriv.position_closed",
+          "deriv.margin_warning",
+          "deriv.paper.liquidation",
+          "deriv.live.liquidation",
+          "deriv.funding",
+          "deriv.loss_limit",
+          "deriv.halt",
+          "deriv.divergence",
+          "deriv.divergence_cleared",
+          "deriv.asset_table_mismatch",
+          "security.passkey_added",
+          "security.passkey_revoked",
+          "security.credential_mismatch",
+          "security.new_device",
+          "security.login_failed",
+          "security.signer_unreachable",
+          "security.signer_back",
+          "security.signer_halted",
+          "security.signer_unhalted",
+          "security.kill_switch_on",
+          "security.kill_switch_off",
+          "security.signer_refused",
+          "security.pin_mismatch",
+          "security.audit_broken",
+          "security.policy_changed",
+          "system.api_restarted",
+          "system.worker_failing",
+          "system.backup_missing",
+          "system.disk_low",
+          "system.lab_sandbox_unavailable",
+          "system.lab_sandbox_back",
+          "system.lab_sandbox_off",
+          "conn.down",
+          "conn.up",
+          "system.alerts_capped",
+          "system.test"
         ]
       },
       "AlertSeverity": {
@@ -13124,6 +14203,63 @@
         ],
         "additionalProperties": {}
       },
+      "CredentialRequest": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "type": "number",
+            "const": 2
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "add",
+              "revoke"
+            ]
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "single use: the signer records it and refuses it a second time"
+          },
+          "keyId": {
+            "type": "string",
+            "description": "the signer this request is for"
+          },
+          "credentialId": {
+            "type": "string",
+            "description": "WebAuthn credential id, base64url: the passkey to add, or the one to revoke"
+          },
+          "publicKey": {
+            "description": "`add` only: COSE public key of the new passkey, base64url",
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Unix seconds"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Unix seconds; at most 300 s after createdAt"
+          }
+        },
+        "required": [
+          "v",
+          "action",
+          "requestId",
+          "keyId",
+          "credentialId",
+          "createdAt",
+          "expiresAt"
+        ],
+        "additionalProperties": {},
+        "description": "The canonical credential request. The WebAuthn challenge of `options` is the SHA-256 of its domain-separated, length-prefixed serialisation (domain `SPW-CRED-v2`; fields v, action, requestId, keyId, credentialId, publicKey — empty for a revocation —, createdAt, expiresAt, in that order). A client that shows or re-derives what is being approved reads it here; the signer verifies the approval itself."
+      },
       "Currency": {
         "type": "string",
         "enum": [
@@ -13235,6 +14371,11 @@
           "deposit.native_window",
           "deposit.scan_gap",
           "device.added",
+          "device.revoked",
+          "session.revoked",
+          "credentials.mismatch",
+          "credentials.reconciled",
+          "settings.saved",
           "sessions.revoked",
           "login.ok",
           "owner.setup",
@@ -13252,8 +14393,13 @@
           "deposit.native_window": "EVM native-coin scan: a balance difference was located to a block window, not to a transaction",
           "deposit.scan_gap": "a transaction of the deposit scan is no longer served by any source",
           "device.added": "a passkey was added — `data`: `{ credential, label }`",
+          "device.revoked": "a passkey was revoked — `data`: `{ credential, label, signer, sessions, ip }` (`signer`: it was on the signer's list; `sessions`: sessions it had opened, ended with it)",
+          "session.revoked": "one session was revoked by its public id — `data`: `{ session, current, ip }`",
+          "credentials.mismatch": "the signer's passkey list and the API's differ, and still did 30 s later — `data`: `{ count, signerOnly, apiOnly }` (12-character id prefixes)",
+          "credentials.reconciled": "the two passkey lists agree again",
+          "settings.saved": "account settings changed — `data`: `{ changed: { locale?, currency?, hideBalances?, prices?, theme? } }`: re-read GET /settings",
           "sessions.revoked": "every session was revoked",
-          "login.ok": "a sign-in succeeded — `data`: `{ credential, ip }`",
+          "login.ok": "a sign-in succeeded — `data`: `{ credential, ip, label, device, newDevice, session }`",
           "owner.setup": "the first passkey was enrolled (one-time setup)",
           "addressbook.saved": "a contact was created or changed — `data`: `{ network, address, label }`",
           "addressbook.removed": "a contact was deleted",
@@ -14296,6 +15442,13 @@
       "meaning": "the amount is not a positive decimal within the asset's precision",
       "action": "correct the amount"
     },
+    "bad_approval": {
+      "statuses": [
+        422
+      ],
+      "meaning": "the approval could not be verified against the signer's list",
+      "action": "approve again with a passkey the signer lists"
+    },
     "bad_destination": {
       "statuses": [
         400
@@ -14466,6 +15619,13 @@
       "meaning": "the cursor is not one a previous page returned",
       "action": "restart from the first page"
     },
+    "last_credential": {
+      "statuses": [
+        409
+      ],
+      "meaning": "the last passkey on the signer cannot be revoked",
+      "action": "add another passkey first"
+    },
     "login_failed": {
       "statuses": [
         401
@@ -14479,6 +15639,13 @@
       ],
       "meaning": "the destination requires a memo / tag",
       "action": "add it"
+    },
+    "no_approver": {
+      "statuses": [
+        409
+      ],
+      "meaning": "no other passkey can approve this revocation (none enrolled on the signer and out of its cool-down)",
+      "action": "wait for the cool-down of the other passkey, or add one"
     },
     "not_found": {
       "statuses": [
@@ -14550,6 +15717,13 @@
       ],
       "meaning": "the network's runtime changed since this wallet was reviewed; sending is suspended",
       "action": "update the wallet"
+    },
+    "self_approval": {
+      "statuses": [
+        400
+      ],
+      "meaning": "a passkey cannot approve its own revocation",
+      "action": "approve with another passkey"
     },
     "setup_closed": {
       "statuses": [
@@ -14824,12 +15998,32 @@
       "description": "a passkey was added — `data`: `{ credential, label }`"
     },
     {
+      "type": "device.revoked",
+      "description": "a passkey was revoked — `data`: `{ credential, label, signer, sessions, ip }` (`signer`: it was on the signer's list; `sessions`: sessions it had opened, ended with it)"
+    },
+    {
+      "type": "session.revoked",
+      "description": "one session was revoked by its public id — `data`: `{ session, current, ip }`"
+    },
+    {
+      "type": "credentials.mismatch",
+      "description": "the signer's passkey list and the API's differ, and still did 30 s later — `data`: `{ count, signerOnly, apiOnly }` (12-character id prefixes)"
+    },
+    {
+      "type": "credentials.reconciled",
+      "description": "the two passkey lists agree again"
+    },
+    {
+      "type": "settings.saved",
+      "description": "account settings changed — `data`: `{ changed: { locale?, currency?, hideBalances?, prices?, theme? } }`: re-read GET /settings"
+    },
+    {
       "type": "sessions.revoked",
       "description": "every session was revoked"
     },
     {
       "type": "login.ok",
-      "description": "a sign-in succeeded — `data`: `{ credential, ip }`"
+      "description": "a sign-in succeeded — `data`: `{ credential, ip, label, device, newDevice, session }`"
     },
     {
       "type": "owner.setup",
@@ -14877,5 +16071,14 @@
     "/api/v1/mandates": "trading mandates",
     "/api/v1/mm": "live market making",
     "/api/v1/stream": "quote engine websocket (docs/V11-QUOTE-ENGINE.md)"
+  },
+  "x-spw-interaction-header": {
+    "name": "X-SPW-Interaction",
+    "value": "1",
+    "in": "header",
+    "required": false,
+    "idleMinutes": 30,
+    "absoluteHours": 12,
+    "description": "Send it on requests caused by the user (a tap, a navigation), never on timers. Once a session has sent it, requests without it no longer refresh the idle timer."
   }
 }

@@ -38,3 +38,29 @@ function messageOf(i: Issue): string {
 export function validationFields(e: ZodError): FieldIssue[] {
   return e.issues.slice(0, MAX_FIELD_ISSUES).map((raw) => { const i = raw as Issue; return { path: pathOf(i.path), code: String(i.code).slice(0, 40), message: messageOf(i) }; });
 }
+
+// ---------------------------------------------------------------------------------------------------------------- control characters
+// One rule for every route (server.ts `preValidation`), instead of a 500 from the database:
+//   - a NUL (U+0000) is refused everywhere — query, path parameters, every string and every key of a JSON body. PostgreSQL
+//     cannot store it in text or jsonb, and no field of this API means anything with one;
+//   - any other control character (C0, DEL) is refused in the query string and in path parameters: ids, filters, searches.
+// Body strings keep the other control characters: a strategy source or a captured log legitimately has tabs, new lines and
+// escape sequences, and PostgreSQL stores them. The routes that want stricter text say so in their own schema.
+const CONTROL = /[\u0000-\u001f\u007f]/, NUL = /\u0000/;
+const issue = (path: string): FieldIssue => ({ path, code: 'invalid_format', message: 'control characters are not accepted' });
+function nulIn(v: unknown, path: (string | number)[], depth: number): FieldIssue | null {
+  if (typeof v === 'string') return NUL.test(v) ? issue(pathOf(path)) : null;
+  if (v === null || typeof v !== 'object' || depth > 12) return null;
+  for (const [k, x] of Array.isArray(v) ? v.entries() : Object.entries(v)) {
+    if (typeof k === 'string' && NUL.test(k)) return issue(pathOf(path));
+    const hit = nulIn(x, [...path, k], depth + 1);
+    if (hit) return hit;
+  }
+  return null;
+}
+/** The first place where the request carries text this API refuses outright, as a `data.fields` entry; null when there is none. */
+export function controlIssue(query: unknown, params: unknown, body: unknown): FieldIssue | null {
+  for (const flat of [query, params]) if (flat && typeof flat === 'object') for (const [k, v] of Object.entries(flat))
+    for (const x of Array.isArray(v) ? v : [v]) if ((typeof x === 'string' && CONTROL.test(x)) || CONTROL.test(k)) return issue(pathOf([k]));
+  return nulIn(body, [], 0);
+}

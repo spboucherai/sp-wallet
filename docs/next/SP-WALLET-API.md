@@ -76,7 +76,8 @@ imported). A request member added to a route without its copy here is not caught
 | `DepositOrigin` | **yes** — decode with a fallback | `transfer`, `swap`, `bridge`, `xswap`, `gmx`, `nft`, `agent_withdrawal`, `venue_withdrawal` |
 | `DepositDetection` | **yes** — decode with a fallback | `tx`, `internal_call`, `aggregate` |
 | `FlowScope` | no (frozen) | `external`, `internal`, `ownAccounts` |
-| `EventType` | **yes** — decode with a fallback | `transfer.state`, `transfer.relay`, `transfer.confirmations`, `deposit.seen`, `deposit.native_window`, `deposit.scan_gap`, `device.added`, `sessions.revoked`, `login.ok`, `owner.setup`, `addressbook.saved`, `addressbook.removed`, `settings.asset_pref`, `halt.on`, `security.contact_address_changed` |
+| `EventType` | **yes** — decode with a fallback | `transfer.state`, `transfer.relay`, `transfer.confirmations`, `deposit.seen`, `deposit.native_window`, `deposit.scan_gap`, `device.added`, `device.revoked`, `session.revoked`, `credentials.mismatch`, `credentials.reconciled`, `settings.saved`, `sessions.revoked`, `login.ok`, `owner.setup`, `addressbook.saved`, `addressbook.removed`, `settings.asset_pref`, `halt.on`, `security.contact_address_changed` |
+| `AlertKind` | **yes** — decode with a fallback | `transfer.confirmed`, `transfer.failed`, `transfer.dropped`, `transfer.replaced`, `transfer.expired`, `transfer.recovered`, `swap.confirmed`, `swap.failed`, `bridge.confirmed`, `bridge.failed`, `transfer.stuck`, `deposit.received`, `plan.step_ready`, `plan.paused`, `plan.done`, `agent.order_filled`, `agent.stopped_loss`, `agent.stopped_mandate`, `agent.stopped`, `agent.mm_breaker`, `agent.mm_halted`, `agent.mm_dead_man_switch`, `agent.mm_signer_refusals`, `agent.mm_rate_budget`, `agent.mm_session_ended`, `agent.mandate_revoked`, `agent.data_stale`, `agent.signal_failures`, `agent.research_submitted`, `agent.research_failed`, `mandate.expiring`, `deriv.paper.filled`, `deriv.live.filled`, `deriv.order_rejected`, `deriv.order_unknown`, `deriv.position_opened`, `deriv.position_closed`, `deriv.margin_warning`, `deriv.paper.liquidation`, `deriv.live.liquidation`, `deriv.funding`, `deriv.loss_limit`, `deriv.halt`, `deriv.divergence`, `deriv.divergence_cleared`, `deriv.asset_table_mismatch`, `security.passkey_added`, `security.passkey_revoked`, `security.credential_mismatch`, `security.new_device`, `security.login_failed`, `security.signer_unreachable`, `security.signer_back`, `security.signer_halted`, `security.signer_unhalted`, `security.kill_switch_on`, `security.kill_switch_off`, `security.signer_refused`, `security.pin_mismatch`, `security.audit_broken`, `security.policy_changed`, `system.api_restarted`, `system.worker_failing`, `system.backup_missing`, `system.disk_low`, `system.lab_sandbox_unavailable`, `system.lab_sandbox_back`, `system.lab_sandbox_off`, `conn.down`, `conn.up`, `system.alerts_capped`, `system.test` |
 | `AlertSeverity` | no (frozen) | `info`, `warning`, `critical` |
 | `AlertGroup` | **yes** — decode with a fallback | `transfers`, `agents`, `derivatives`, `security`, `system` |
 | `Currency` | no (frozen) | `USD`, `CAD` |
@@ -90,12 +91,13 @@ imported). A request member added to a route without its copy here is not caught
 |---|---|---|---|---|---|
 | GET | `/api/v1/health/live` | Meta | public | v1 | Liveness |
 | GET | `/api/v1/health/ready` | Meta | owner | v1 | Readiness: database, signer, networks, data sources |
+| GET | `/api/v1/openapi.json` | Meta | owner | NEXT | This document |
 | GET | `/api/v1/auth/state` | Auth | public | v1 | Is the wallet set up, and is this client signed in |
 | POST | `/api/v1/auth/setup/options` | Auth | public | v1 | One-time setup: passkey creation options |
 | POST | `/api/v1/auth/setup/verify` | Auth | public | v1 | One-time setup: enrol the first passkey with the signer's setup token |
-| POST | `/api/v1/auth/login/options` | Auth | public | v1 | Sign-in: assertion options † |
-| POST | `/api/v1/auth/login/verify` | Auth | public | v1 | Sign-in: verify the assertion, open a session † |
-| POST | `/api/v1/auth/logout` | Auth | public | v1 | End this session † |
+| POST | `/api/v1/auth/login/options` | Auth | public | v1 | Sign-in: assertion options |
+| POST | `/api/v1/auth/login/verify` | Auth | public | v1 | Sign-in: verify the assertion, open a session |
+| POST | `/api/v1/auth/logout` | Auth | public | v1 | End this session |
 | GET | `/api/v1/networks` | Wallet | owner | v1 | The networks of the wallet, with their verified assets and their health |
 | GET | `/api/v1/assets` | Wallet | owner | v1 | The verified asset registry, flat |
 | GET | `/api/v1/accounts` | Wallet | owner | v1 | The wallet's own address on every network |
@@ -119,13 +121,17 @@ imported). A request member added to a route without its copy here is not caught
 | GET | `/api/v1/contacts` | AddressBook | owner | NEXT | Contacts with note and favourite, favourites first |
 | GET | `/api/v1/settings` | Settings | owner | v1 | Account settings shared by every device |
 | PUT | `/api/v1/settings` | Settings | owner | v1 | Change settings (any subset) |
-| GET | `/api/v1/security/overview` | Security | owner | v1 | Signer state, passkeys, sessions † |
+| GET | `/api/v1/security/overview` | Security | owner | v1 | Signer state, passkeys (both lists), sessions |
+| GET | `/api/v1/security/logins` | Security | owner | NEXT | The last sign-ins |
 | GET | `/api/v1/security/audit` | Security | owner | v1 | The audit hash chain, newest first |
-| GET | `/api/v1/security/devices` | Security | owner | v1 | Passkeys known to the API † |
-| POST | `/api/v1/security/devices/options` | Security | owner | v1 | Add a passkey, step 1: creation options † |
-| POST | `/api/v1/security/devices/verify` | Security | owner | v1 | Add a passkey, step 2: verify the new passkey, get the challenge an EXISTING passkey must sign † |
-| POST | `/api/v1/security/devices/confirm` | Security | owner | v1 | Add a passkey, step 3: the existing passkey's assertion; the signer enrols † |
-| POST | `/api/v1/security/sessions/revoke-all` | Security | owner | v1 | Revoke every session, this one included † |
+| GET | `/api/v1/security/devices` | Security | owner | v1 | Passkeys known to the API |
+| POST | `/api/v1/security/devices/options` | Security | owner | v1 | Add a passkey, step 1: creation options |
+| POST | `/api/v1/security/devices/verify` | Security | owner | v1 | Add a passkey, step 2: verify the new passkey, get the request an ENROLLED passkey must approve |
+| POST | `/api/v1/security/devices/confirm` | Security | owner | v1 | Add a passkey, step 3: the enrolled passkey's assertion; the signer verifies it and pins the new passkey |
+| POST | `/api/v1/security/devices/revoke/options` | Security | owner | NEXT | Revoke a passkey, step 1: the request ANOTHER enrolled passkey must approve |
+| POST | `/api/v1/security/devices/revoke/confirm` | Security | owner | NEXT | Revoke a passkey, step 2: the approval; the signer removes it, its sessions end |
+| POST | `/api/v1/security/sessions/revoke-all` | Security | owner | v1 | Revoke every session, this one included |
+| POST | `/api/v1/security/sessions/{id}/revoke` | Security | owner | NEXT | Revoke one session by its public id |
 | POST | `/api/v1/security/emergency-halt` | Security | owner | v1 | Trigger the emergency halt of the signer |
 | GET | `/api/v1/alerts` | Alerts | owner | v1 | In-app alerts, newest first |
 | GET | `/api/v1/alerts/unread` | Alerts | owner | v1 | Unread counters |
@@ -150,7 +156,7 @@ imported). A request member added to a route without its copy here is not caught
 | GET | `/api/v1/analytics` | Analytics | owner | NEXT | What entered and left, fees paid, outcomes, counterparties — from the database only |
 | GET | `/api/v1/search` | Search | owner | NEXT | Universal search: assets, contacts, transactions |
 
-61 operations. † = being redesigned, described as the code is today (see the TODO list).
+66 operations.
 <!-- END GENERATED: routes -->
 
 ### Families documented elsewhere
@@ -219,6 +225,7 @@ Every error is `{ error, message, data? }`. Codes common to every operation: `un
 |---|---|---|---|
 | `bad_address` | 400 | the destination is not a valid address of this network, or is the wallet itself | correct the address |
 | `bad_amount` | 400 | the amount is not a positive decimal within the asset's precision | correct the amount |
+| `bad_approval` | 422 | the approval could not be verified against the signer's list | approve again with a passkey the signer lists |
 | `bad_destination` | 400 | the destination cannot receive this asset (account type, missing trust line…) | check the destination |
 | `bad_memo` | 400 | the memo / destination tag is not accepted on this network | correct or remove it |
 | `bad_request` | 400 | the request is not valid; `data.fields` lists the refused members when it comes from input validation | fix the request; do not retry unchanged |
@@ -243,8 +250,10 @@ Every error is `{ error, message, data? }`. Codes common to every operation: `un
 | `insufficient_unlocked_funds` | 400 | part of the balance is locked | lower the amount |
 | `internal` | 500 | server error | retry later; a transfer approval is NOT retried blindly — re-read the proposal first |
 | `invalid_cursor` | 400 | the cursor is not one a previous page returned | restart from the first page |
+| `last_credential` | 409 | the last passkey on the signer cannot be revoked | add another passkey first |
 | `login_failed` | 401 | authentication failed (unknown passkey or bad assertion) | try again; repeated failures raise an alert |
 | `memo_required` | 400 | the destination requires a memo / tag | add it |
+| `no_approver` | 409 | no other passkey can approve this revocation (none enrolled on the signer and out of its cool-down) | wait for the cool-down of the other passkey, or add one |
 | `not_found` | 404 | the object does not exist | reload the list |
 | `owner_only` | 403 | the route is for the owner's session, not an API key | use the session |
 | `pending_tx` | 400, 409 | another transfer or swap on this network is not confirmed yet | wait for it; a dropped one no longer blocks |
@@ -255,6 +264,7 @@ Every error is `{ error, message, data? }`. Codes common to every operation: `un
 | `rpc_degraded` | 503 | not enough data sources answered for this network; nothing was prepared | retry later |
 | `rpc_disagreement` | 503 | the data sources disagree; nothing was prepared | retry later |
 | `runtime_changed` | 503 | the network's runtime changed since this wallet was reviewed; sending is suspended | update the wallet |
+| `self_approval` | 400 | a passkey cannot approve its own revocation | approve with another passkey |
 | `setup_closed` | 403 | the one-time setup was already completed | sign in instead |
 | `setup_token` | 403 | the setup token is missing | ask for the token printed by the signer |
 | `signer_unreachable` | 503 | the signer cannot be reached; nothing was signed | reads still work; retry sending later |
@@ -291,8 +301,11 @@ Every error is `{ error, message, data? }`. Codes common to every operation: `un
 | POST `/api/v1/transfers/proposals/{id}/reject` | `not_found` (404), `bad_state` (409), `conflict` (409) |
 | POST `/api/v1/addressbook` | `bad_address` (400) |
 | PATCH `/api/v1/addressbook/{id}` | `bad_address` (400), `not_found` (404), `stale_contact` (409), `duplicate_contact` (409) |
-| POST `/api/v1/security/devices/verify` | `challenge_expired` (401), `registration_failed` (401) |
+| POST `/api/v1/security/devices/verify` | `challenge_expired` (401), `registration_failed` (401), `signer_unreachable` (503), *open* |
 | POST `/api/v1/security/devices/confirm` | `expired` (400), `signer_unreachable` (503), *open* |
+| POST `/api/v1/security/devices/revoke/options` | `not_found` (404), `last_credential` (409), `no_approver` (409), `signer_unreachable` (503), *open* |
+| POST `/api/v1/security/devices/revoke/confirm` | `self_approval` (400), `challenge_expired` (401), `bad_approval` (422), `signer_unreachable` (503), *open* |
+| POST `/api/v1/security/sessions/{id}/revoke` | `not_found` (404) |
 | POST `/api/v1/security/emergency-halt` | `signer_unreachable` (503), *open* |
 | GET `/api/v1/alerts/stream` | `too_many_streams` (429) |
 | POST `/api/v1/push/subscriptions` | `too_many_subscriptions` (422) |
@@ -416,8 +429,13 @@ re-reads the object named by `ref`. `reset` means the position cannot be resumed
 | `deposit.native_window` | EVM native-coin scan: a balance difference was located to a block window, not to a transaction |
 | `deposit.scan_gap` | a transaction of the deposit scan is no longer served by any source |
 | `device.added` | a passkey was added — `data`: `{ credential, label }` |
+| `device.revoked` | a passkey was revoked — `data`: `{ credential, label, signer, sessions, ip }` (`signer`: it was on the signer's list; `sessions`: sessions it had opened, ended with it) |
+| `session.revoked` | one session was revoked by its public id — `data`: `{ session, current, ip }` |
+| `credentials.mismatch` | the signer's passkey list and the API's differ, and still did 30 s later — `data`: `{ count, signerOnly, apiOnly }` (12-character id prefixes) |
+| `credentials.reconciled` | the two passkey lists agree again |
+| `settings.saved` | account settings changed — `data`: `{ changed: { locale?, currency?, hideBalances?, prices?, theme? } }`: re-read GET /settings |
 | `sessions.revoked` | every session was revoked |
-| `login.ok` | a sign-in succeeded — `data`: `{ credential, ip }` |
+| `login.ok` | a sign-in succeeded — `data`: `{ credential, ip, label, device, newDevice, session }` |
 | `owner.setup` | the first passkey was enrolled (one-time setup) |
 | `addressbook.saved` | a contact was created or changed — `data`: `{ network, address, label }` |
 | `addressbook.removed` | a contact was deleted |
@@ -444,27 +462,32 @@ A recovery is critical so that quiet hours and the hourly cap never hold it back
 second payment made by other means. The alert kind `transfer.expired` is about the on-chain validity window; the *audit*
 type `transfer.expired` (approval window passed before the passkey, nothing was signed) raises no alert.
 
-## 8. TODO — routes owned by the credential / session work (branch `next-signer`)
+## 8. Credentials and sessions (merged from `next-signer`)
 
-These operations are in the document as the code is today, marked `x-spw-changing`. When that branch merges: update their
-schemas in `spec.ts`, add the new routes (the route-enumeration test will fail until they are documented), regenerate.
+The operations that were marked "changing" are now described as merged; nothing is marked any more.
 
-<!-- BEGIN GENERATED: todo -->
-| Operation | What is changing |
-|---|---|
-| POST `/api/v1/auth/login/options` (`loginOptions`) | sessions get public ids and per-session revoke; login history |
-| POST `/api/v1/auth/login/verify` (`loginVerify`) | sessions get public ids and per-session revoke; login history |
-| POST `/api/v1/auth/logout` (`logout`) | sessions get public ids and per-session revoke; login history |
-| GET `/api/v1/security/overview` (`securityOverview`) | credential life cycle v2 (signed, expiring, single-use add / revoke objects verified by the signer); sessions get public ids and per-session revoke; login history |
-| GET `/api/v1/security/devices` (`listDevices`) | credential life cycle v2 (signed, expiring, single-use add / revoke objects verified by the signer) |
-| POST `/api/v1/security/devices/options` (`deviceOptions`) | credential life cycle v2 (signed, expiring, single-use add / revoke objects verified by the signer) |
-| POST `/api/v1/security/devices/verify` (`deviceVerify`) | credential life cycle v2 (signed, expiring, single-use add / revoke objects verified by the signer) |
-| POST `/api/v1/security/devices/confirm` (`deviceConfirm`) | credential life cycle v2 (signed, expiring, single-use add / revoke objects verified by the signer) |
-| POST `/api/v1/security/sessions/revoke-all` (`revokeAllSessions`) | sessions get public ids and per-session revoke; login history |
-<!-- END GENERATED: todo -->
-
-Expected additions, not yet in the code and therefore not in the document: revoke one passkey; the signer's credential list
-as the source of truth of `security/overview`; per-session ids and revoke-one; a login history route.
+- **Adding a passkey** keeps its three routes. `devices/verify` also returns `request`, the `SPW-CRED-v2` object (component
+  `CredentialRequest`): `v`, `action` (`add` / `revoke`), `requestId` (single use), `keyId`, `credentialId`, `publicKey`
+  (add only), `createdAt`, `expiresAt` (5 minutes at most). The challenge of `options` is the SHA-256 of its canonical
+  bytes; an enrolled passkey signs it and the signer verifies the approval itself. A client that signs `options` as
+  returned works unchanged.
+- **Revoking a passkey**: `POST /security/devices/revoke/options` `{ credentialId }` → `{ challengeId, request, options }`,
+  then `POST /security/devices/revoke/confirm` `{ challengeId, assertion }` → `{ ok, signer, sessionsRevoked }`. Refusals:
+  `last_credential`, `no_approver` (409), `self_approval` (400), `bad_approval` (422), and the signer's own
+  (`signer_bad_approval`, `signer_cooldown`, `signer_last_credential`, `signer_self_approval`, `signer_replay`…).
+- **Sessions** have a public `id`: `POST /security/sessions/{id}/revoke` → `{ ok, current }`. `GET /security/logins` lists
+  the last sign-ins (passkey, address, coarse device label, `newDevice`).
+- **`security/overview`** adds `signer.recoveryExportedAt` / `recoveryVerifiedAt` / `credentialCooldownSec`,
+  `devices[].credentialId` / `revocable` / `inCooldown`, `sessions[].id` / `current` / `device` / `credential`,
+  `signerCredentials` (the signer's list, the source of truth), `mismatch`, `currentSessionId`.
+- **Sign-in**: a passkey the signer no longer lists opens no session. When the signer does not answer, or holds no passkey
+  at all, the API's own table decides.
+- **Idle rule and `X-SPW-Interaction: 1`.** A session ends after 30 minutes without activity (12 hours at most). A client
+  sends the header on requests caused by the user, never on timers. From the first such request on, only those refresh the
+  idle timer; a session that never sent it keeps the earlier behaviour (any authenticated request refreshes it).
+- **Alerts**: `security.passkey_revoked` (warning) on `device.revoked`; `security.credential_mismatch` (critical) on
+  `credentials.mismatch`. **Events**: `device.revoked`, `session.revoked`, `credentials.mismatch`,
+  `credentials.reconciled` (the mirror now includes `credentials.*`).
 
 ## 9. Not covered yet
 
@@ -479,17 +502,24 @@ as the source of truth of `security/overview`; per-session ids and revoke-one; a
 - **Swift models.** The Swift package is not generated from, nor checked against, this document yet.
 - **The web app does not import the generated types yet** (`get<GetPortfolioResponse>('/portfolio')` is the intended use);
   wiring them is part of the web work.
-- **The document is not served by the server.** It is a repository artefact (`docs/openapi/wallet-v1.json`).
 
-Found while writing the contract, and left as they are (answers are additive only):
+Found while writing the contract. Fixed since (additively):
 
-- `PUT /api/v1/settings` writes no audit event, so no `settings.*` event reaches the other devices when the language, the
-  currency or the theme changes (only `settings.asset_pref` exists). Architecture decision 2 expects one.
-- A text parameter containing a NUL character reaches PostgreSQL on the older routes and answers 500. The parameters added
-  by NEXT (`q`, `network`, `asset`) refuse control characters at validation.
+- `PUT /api/v1/settings` now writes the audit event `settings.saved` (`changed`: the keys sent and their new values), so
+  the change reaches the event log and the other devices.
+- A NUL character anywhere in a request, or any control character in the query string or a path parameter, is refused
+  with 400 `bad_request` by one hook in front of every route (it used to reach PostgreSQL and answer 500). Body strings
+  keep tabs, new lines and escape sequences: strategy sources and captured logs carry them. Behind the hook, the error
+  handler maps PostgreSQL's "invalid byte sequence" class (22021, 22P05) to 400 as well, for text that does not come from
+  the query, the path or the body.
+- `GET /transfers/{id}/status` carries `lifecycle`, `finalized`, `watched`, `feePaid`, `feePaidDisplay`; `GET /events`
+  always carries `more`.
+- The document is served: `GET /api/v1/openapi.json` (owner session).
+
+Left as they are (answers are additive only):
+
 - Two operations answer two shapes: `GET /market/{symbol}` (no `currency` / `days` for an unknown symbol) and
-  `security/overview.signer` (only `reachable: false` when the signer is down). `GET /transfers/{id}/status` has no
-  `lifecycle`. `GET /events` omits `more` when `reset`.
+  `security/overview.signer` (only `reachable: false` when the signer is down).
 - Naming is mixed in three places and cannot change: `created_at` next to `updatedAt` on a contact, `created_at` /
   `last_seen` on a session row, `depositKind` on a receipt next to `kind`.
 - In `GET /activity` a receipt's `state` is `confirming` / `finalized`, while the CSV says `confirmed` in the `state` column

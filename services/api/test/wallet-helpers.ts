@@ -34,6 +34,8 @@ export interface Wallet {
   /** sign in again (after a logout or a revoke-all) */
   login(): Promise<void>;
   cookie(): string;
+  /** answers `429 rate_limited` this file received (it should be none: see `api`) */
+  rateLimited(): number;
   /** insert a proposal row; returns its id */
   proposal(o?: Record<string, unknown>): Promise<string>;
   deposit(o: { txid: string; asset?: string; amount: string; from?: string; kind?: string | null; origin?: string | null; network?: string; idx?: number; at?: Date; block?: number; detection?: string | null; blockHash?: string | null }): Promise<void>;
@@ -77,13 +79,16 @@ export async function bootWallet(label: string): Promise<Wallet> {
   (await (await import('../src/alerts/dispatcher.ts')).alerts()).deps.fetch = globalThis.fetch;
 
   const owner = new TestPasskey(RP, ORIGIN);
-  let cookie = '';
+  let cookie = '', calls = 0, limited = 0;
   const api: Wallet['api'] = async (method, path, body, o = {}) => {
     const headers: Record<string, string> = { ...o.headers }, c = o.cookie === undefined ? cookie : o.cookie;
     if (c) headers.cookie = c;
     if (method !== 'GET') { headers.origin = ORIGIN; headers['x-spw-csrf'] = '1'; headers['content-type'] = 'application/json'; }
     if (o.idem) headers['idempotency-key'] = o.idem;
-    const r = await app.inject({ method, url: path, headers, payload: method === 'GET' ? undefined : JSON.stringify(body ?? {}) });
+    // the rate limit is per address (240 a minute): the calls of a file are spread over addresses, 100 each, so that a long file is never refused for its length
+    calls += 1;
+    const r = await app.inject({ method, url: path, headers, payload: method === 'GET' ? undefined : JSON.stringify(body ?? {}), remoteAddress: `10.210.0.${1 + Math.floor(calls / 100)}` });
+    if (r.statusCode === 429 && r.json()?.error === 'rate_limited') limited += 1;
     return { status: r.statusCode, json: (() => { try { return r.json(); } catch { return null; } })(), body: r.body, headers: r.headers, setCookie: r.headers['set-cookie'] as string | undefined };
   };
   const login = async (): Promise<void> => {
@@ -109,6 +114,6 @@ export async function bootWallet(label: string): Promise<Wallet> {
     await sql`insert into deposits (network, txid, idx, asset, amount, from_addr, block, block_time, kind, origin, detection, block_hash)
       values (${d.network ?? 'base'}, ${d.txid}, ${d.idx ?? 0}, ${d.asset ?? 'native'}, ${d.amount}, ${d.from ?? ''}, ${d.block ?? 100}, ${d.at ?? new Date()}, ${d.kind === undefined ? 'external' : d.kind}, ${d.origin ?? null}, ${d.detection ?? null}, ${d.blockHash ?? null})`;
   };
-  return { app, sql, db, pf, adapters, keys, owner, me, outbound, api, setup, login, cookie: () => cookie, proposal, deposit,
+  return { app, sql, db, pf, adapters, keys, owner, me, outbound, api, setup, login, cookie: () => cookie, rateLimited: () => limited, proposal, deposit,
     close: async () => { await app.close(); signerSrv.close(); await sql.end(); globalThis.fetch = realFetch; } };
 }
