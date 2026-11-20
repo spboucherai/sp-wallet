@@ -23,7 +23,11 @@ export function buildEvmTx(i: Intent): TransactionSerializableEIP1559 {
   if (gas * maxFeePerGas > baseUnits(i.maxFee)) throw new Error('fee exceeds approved maximum');
   const common = { type: 'eip1559' as const, chainId: Number(n.chainRef), nonce: i.evm.nonce, gas, maxFeePerGas, maxPriorityFeePerGas: tip };
   if (asset.id === 'native') {
-    if (gas !== 21000n) throw new Error('native transfer must use 21000 gas (EOA destinations only)');
+    // 21 000 exactly, except on a rollup that charges its Ethereum posting cost through the gas limit (networks.ts `evm.nativeGasMax`):
+    // there the limit is bounded on both sides, and the fee is bounded by the approved maximum above, as everywhere.
+    const ceiling = BigInt(n.evm?.nativeGasMax ?? 21000);
+    if (ceiling === 21000n ? gas !== 21000n : gas < 21000n || gas > ceiling)
+      throw new Error(ceiling === 21000n ? 'native transfer must use 21000 gas (EOA destinations only)' : `native transfer gas must be between 21000 and ${ceiling} on ${n.name}`);
     return { ...common, to, value: amount };
   }
   if (gas > 200_000n) throw new Error('gas limit too high for ERC-20 transfer');
