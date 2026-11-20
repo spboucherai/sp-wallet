@@ -30,7 +30,6 @@ const REVIEW = { id: '99999999-9999-4999-8999-999999999999', state: 'draft', lif
   from: ADDR.me, to: ADDR.rent, note: '', memo: null, feeDisplay: '0.0000021', maxFeeDisplay: '0.0000034', feeSymbol: 'ETH', warnings: ['duplicate_recent', 'l1_fee_unknown'], intentHash: '3f'.repeat(32), txid: null, explorer: null, confirmations: 0, error: null,
   createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 180_000).toISOString() };
 test.skip(!process.env.NEXT_SHOTS, 'screenshots are taken on demand (NEXT_SHOTS=1)');
-test.describe.configure({ mode: 'serial' });
 
 async function settle(page: Page): Promise<void> {
   await expect(page.locator('main .skel')).toHaveCount(0, { timeout: 15_000 }).catch(() => {});
@@ -46,10 +45,10 @@ for (const cell of CELLS) {
       const shot = async (name: string, kind: 'fixture' | 'real', o: { full?: boolean } = {}) => {
         await settle(page);
         const h = await page.evaluate(() => document.documentElement.scrollHeight), full = o.full !== false && h > SIZES[cell.size].height + 4;
-        // a page longer than the screen is captured whole (bounded to three screens: the files stay small). The phone's tab bar is
+        // a page longer than the screen is captured whole (bounded to two or three screens: the files stay small — tests/e2e/next-shots-shrink.py then reduces them to a palette). The phone's tab bar is
         // fixed to the viewport: on such a capture it would be drawn across the middle of the page, so it is left out of it.
         const hide = full ? await page.addStyleTag({ content: '[data-testid=nav-tabbar]{display:none!important}' }) : null;
-        await page.screenshot({ path: `${OUT}/${name}-${cell.size}-${cell.theme}-${cell.lang}-${kind}.png`, scale: 'css', animations: 'disabled', ...(full ? { fullPage: true, clip: { x: 0, y: 0, width: SIZES[cell.size].width, height: Math.min(h, SIZES[cell.size].height * 3) } } : {}) });
+        await page.screenshot({ path: `${OUT}/${name}-${cell.size}-${cell.theme}-${cell.lang}-${kind}.png`, scale: 'css', animations: 'disabled', ...(full ? { fullPage: true, clip: { x: 0, y: 0, width: SIZES[cell.size].width, height: Math.min(h, Math.round(SIZES[cell.size].height * (cell.size === 'phone' ? 2.6 : 2.1))) } } : {}) });
         await hide?.evaluate((el) => el.remove());
       };
       await openWallet(page, context, baseURL, { lang: cell.lang, theme: cell.theme });
@@ -80,6 +79,7 @@ for (const cell of CELLS) {
         if (s === 'ext') { for (const [path, name] of [['/swap', 'ext-swap'], ['/alerts', 'ext-alerts'], ['/agents', 'ext-agents']] as const) { await roomInRateLimit(page, 60); await page.evaluate((p) => { history.pushState({ spw: 1 }, '', p); dispatchEvent(new PopStateEvent('popstate')); scrollTo(0, 0); }, path); await page.waitForTimeout(2500); await shot(name, 'real'); } }
         if (s === 'search') { await go('/', 'history'); await page.keyboard.press('Control+k'); await page.getByTestId('search-input').fill('usd'); await page.getByTestId('search-results').waitFor(); await shot('search', 'fixture', { full: false }); await page.keyboard.press('Escape'); }
       }
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
     });
   });
 }

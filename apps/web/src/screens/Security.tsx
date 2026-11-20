@@ -104,7 +104,7 @@ export function Security() {
           {!fromSigner && <div className="mb-3"><Notice tone="warn" testid="keys-not-from-signer">{t('nwSecKeysApiOnly')}</Notice></div>}</div>
           <ul data-testid="passkeys">{keys.map((k) => <li key={k.id} className="row flex-wrap sm:flex-nowrap" data-testid="passkey" data-id={k.id} data-on-signer={k.onSigner}>
             <span className="disc" data-tone={k.onSigner && k.known ? undefined : 'caution'} aria-hidden="true"><Icon n="key" className="h-[1.125rem] w-[1.125rem]" /></span>
-            <div className="min-w-0 flex-1"><div className="t-body-strong flex flex-wrap items-center gap-x-2 gap-y-1"><span className="truncate">{k.label ?? t('nwSecKeyUnnamed')}</span>
+            <div className="min-w-[min(13rem,100%)] flex-1"><div className="t-body-strong flex flex-wrap items-center gap-x-2 gap-y-1"><span className="truncate">{k.label ?? t('nwSecKeyUnnamed')}</span>
                 {!k.known && <Tag tone="danger" icon="warn" testid="key-unknown">{t('nwSecKeyUnknown')}</Tag>}{!k.onSigner && <Tag tone="warn" icon="warn" testid="key-not-on-signer">{t('nwSecKeyNotOnSigner')}</Tag>}
                 {k.inCooldown && <Tag tone="info" icon="clock" testid="key-cooldown">{t('nwSecKeyCooldown')}</Tag>}</div>
               <div className="t-footnote text-mute"><span className="font-mono">{k.id.slice(0, 12)}…</span>{k.backedUp !== null && <> · {k.backedUp ? t('synced') : t('deviceBound')}</>}</div>
@@ -134,7 +134,7 @@ export function Security() {
         <Card className="!px-0 !pb-0"><div className="px-[var(--card-padding)]"><H>{t('sessions')}</H></div>
           <ul data-testid="sessions">{d.sessions.map((x, k) => <li key={x.id ?? k} className="row flex-wrap sm:flex-nowrap" data-testid="session" data-current={!!x.current}>
             <span className="disc" data-tone={x.current ? 'positive' : undefined} aria-hidden="true"><Icon n="device" className="h-[1.125rem] w-[1.125rem]" /></span>
-            <div className="min-w-0 flex-1"><div className="t-body-strong flex flex-wrap items-center gap-x-2 gap-y-1"><span className="truncate">{x.device || x.ua.replace(/Mozilla\/5.0 \(([^)]+)\).*/, '$1').slice(0, 40)}</span>{x.current && <Tag tone="ok" icon="check" testid="session-current">{t('nwSecThisSession')}</Tag>}</div>
+            <div className="min-w-[min(13rem,100%)] flex-1"><div className="t-body-strong flex flex-wrap items-center gap-x-2 gap-y-1"><span className="truncate">{x.device || x.ua.replace(/Mozilla\/5.0 \(([^)]+)\).*/, '$1').slice(0, 40)}</span>{x.current && <Tag tone="ok" icon="check" testid="session-current">{t('nwSecThisSession')}</Tag>}</div>
               <div className="t-footnote text-mute">{t('nwSecLastSeen', { date: when(x.last_seen, locale) })}{x.ip ? ` · ${x.ip}` : ''}</div></div>
             {x.id && <Btn kind="ghost" className="!min-h-11 shrink-0 !px-4 !text-[0.84375rem] max-sm:ml-[3.25rem]" disabled={!!busy} onClick={() => { setErr(''); setEnding(x); }} data-testid="session-revoke">{t(x.current ? 'logout' : 'nwSecEnd')}</Btn>}</li>)}</ul>
           <div className="border-t border-line p-[var(--card-padding)]"><Btn kind="ghost" full disabled={!!busy} onClick={() => { setErr(''); setEnding('all'); }} data-testid="sessions-revoke-all">{t('revokeAll')}</Btn></div></Card>
@@ -142,7 +142,7 @@ export function Security() {
         {logins.data && logins.data.length > 0 && <Card className="!px-0 !pb-1"><div className="px-[var(--card-padding)]"><H>{t('nwSecLogins')}</H></div>
           <ul data-testid="logins">{logins.data.map((l) => <li key={l.seq} className="row" data-new-device={l.newDevice === true}>
             <span className="disc" data-tone={l.newDevice ? 'caution' : undefined} aria-hidden="true"><Icon n={l.newDevice ? 'warn' : 'lock'} className="h-[1.125rem] w-[1.125rem]" /></span>
-            <div className="min-w-0 flex-1"><div className="t-body-strong flex flex-wrap items-center gap-x-2 gap-y-1"><span>{when(l.at, locale)}</span>{l.newDevice && <Tag tone="warn" icon="warn" testid="login-new-device">{t('nwSecNewDevice')}</Tag>}</div>
+            <div className="min-w-[min(13rem,100%)] flex-1"><div className="t-body-strong flex flex-wrap items-center gap-x-2 gap-y-1"><span>{when(l.at, locale)}</span>{l.newDevice && <Tag tone="warn" icon="warn" testid="login-new-device">{t('nwSecNewDevice')}</Tag>}</div>
               <div className="t-footnote text-mute">{[l.device, l.label, l.ip].filter(Boolean).join(' · ') || '—'}</div></div></li>)}</ul></Card>}
 
         {s.reachable && s.policy && <Card><H right={<span className="t-footnote text-mute">{allLimits ? t('qaLimitsShown', { n: shown.length, total: limitKeys.length }) : t('nwSecReadOnly')}</span>}>{t('limits')}</H>
