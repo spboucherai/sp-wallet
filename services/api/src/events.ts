@@ -24,7 +24,7 @@ import { sql } from './db.ts';
 
 export const RETENTION_DAYS = 30, MAX_STREAMS = 12, STREAM_MAX_MS = 10 * 60_000, PAGE = 500, POLL_MS = 5_000;
 /** Audit types that are also wallet events (db.ts `audit` mirrors them). `transfer.*` is written by `move` itself, with more detail. */
-export const MIRRORED = /^(deposit\.|device\.|sessions?\.|login\.ok$|addressbook\.|settings\.|halt\.|owner\.setup$|security\.)/;
+export const MIRRORED = /^(deposit\.|device\.|credentials\.|sessions?\.|login\.ok$|addressbook\.|settings\.|halt\.|owner\.setup$|security\.)/;
 
 export interface WalletEvent { id: number; at: string; type: string; ref: string | null; data: Record<string, unknown> }
 type Row = { id: string; at: Date; type: string; ref: string | null; data: Record<string, unknown> };
