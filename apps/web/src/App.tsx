@@ -216,11 +216,11 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
           <div className="app-header-row flex items-center justify-between gap-1 px-5 py-2.5">
             <div className="app-brand flex min-w-0 items-center gap-2.5"><img src="/icon.svg" alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-[10px]" /><span className="app-brand-name truncate text-[1.0625rem] font-semibold tracking-[-0.02em] max-[359px]:hidden">SP Wallet</span></div>
             <span ref={mini} className="app-mini-title" aria-hidden="true" data-testid="mini-title" />
-            <div className="flex shrink-0 items-center gap-0.5">
+            <div className="flex min-w-0 shrink-0 items-center gap-0.5 [&_svg]:max-h-[22px] [&_svg]:max-w-[22px]">
               <Suspense fallback={<span className="mx-0.5 h-8 w-[68px] rounded-full bg-elev" aria-hidden="true" />}><RiskIndicator go={go} current={tab === 'risk'} /></Suspense>
-              {searchBtn('grid h-11 w-11 place-items-center rounded-full text-mute')}
-              {bell(`grid h-11 w-11 place-items-center rounded-full ${tab === 'alerts' ? 'bg-elev text-ink' : 'text-mute'}`)}
-              <button onClick={() => setMenu(true)} data-testid="nav-menu" aria-label={t('v11NavMenu')} aria-haspopup="dialog" aria-expanded={menu} className={`grid h-11 w-11 place-items-center rounded-full ${area === null && tab !== 'alerts' && tab !== 'risk' ? 'bg-elev text-ink' : 'text-mute'}`}><Icon n="list" /></button>
+              {searchBtn('grid h-[44px] w-[44px] place-items-center rounded-full text-mute')}
+              {bell(`grid h-[44px] w-[44px] place-items-center rounded-full ${tab === 'alerts' ? 'bg-elev text-ink' : 'text-mute'}`)}
+              <button onClick={() => setMenu(true)} data-testid="nav-menu" aria-label={t('v11NavMenu')} aria-haspopup="dialog" aria-expanded={menu} className={`grid h-[44px] w-[44px] place-items-center rounded-full ${area === null && tab !== 'alerts' && tab !== 'risk' ? 'bg-elev text-ink' : 'text-mute'}`}><Icon n="list" className="h-[20px] w-[20px]" /></button>
             </div>
           </div>
         </header>
@@ -257,7 +257,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
         <nav aria-label={t('v11NavMain')} data-testid="nav-tabbar" className="tabbar safe-b nav-glass fixed inset-x-0 bottom-0 z-10 lg:hidden">
           <div className="mx-auto flex max-w-xl items-end px-1 pt-1.5">{AREAS.map(([id, icon, label]) => { const on = area === id; return (
             <button key={id} onClick={() => { haptic(); toArea(id); }} data-area={id} aria-current={on ? 'page' : undefined} className={`press relative flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[0.6875rem] ${on ? 'font-semibold text-ink' : 'font-medium text-mute'}`}>
-              <span className={`grid h-7 w-12 place-items-center rounded-full transition-colors ${on ? 'bg-elev' : ''}`}><Icon n={icon} className="h-[22px] w-[22px]" /></span><span className="max-w-full truncate px-0.5">{t(label)}</span></button>); })}</div>
+              <span className={`grid h-[28px] w-[48px] max-w-full place-items-center rounded-full transition-colors ${on ? 'bg-elev' : ''}`}><Icon n={icon} className="h-[22px] w-[22px]" /></span><span className="max-w-full truncate px-0.5">{t(label)}</span></button>); })}</div>
         </nav>
         {menu && <Suspense fallback={null}><ShellMenu tab={tab} go={go} lock={lock} onClose={() => setMenu(false)} /></Suspense>}
         {search && <Suspense fallback={null}><SearchPalette onClose={() => setSearch(false)} /></Suspense>}

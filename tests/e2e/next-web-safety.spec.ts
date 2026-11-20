@@ -4,6 +4,7 @@
 //   tests/e2e/ui-stack.sh websafety 8790
 //   SPW_E2E_BASE=http://localhost:8790 SPW_DEV_DIR=/tmp/spw-ui-websafety pnpm e2e next-web-safety.spec.ts
 import { expect, test } from '@playwright/test';
+import { roomInRateLimit } from './qa-helpers.ts';
 import { openWallet } from './v11-helpers.ts';
 
 test.describe.configure({ mode: 'serial' });
@@ -40,6 +41,7 @@ test('portfolio: a first load that fails is an error with a retry; a refresh tha
   fail = false;
   await page.getByRole('button', { name: 'Réessayer' }).click();
   await expect(page.getByRole('searchbox')).toBeVisible({ timeout: 60_000 });
+  await roomInRateLimit(page, 100);   // NEXT: the dashboard reads more routes per load (history, preferences, movements, contacts, events) — the limiter (240 a minute) needs room for this fourth reload
   await page.goto('/');
   await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId('balances-at')).toContainText(/Soldes lus à/);

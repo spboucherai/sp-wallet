@@ -113,7 +113,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
   };
 
   // v9: where the owner is in the flow (details → review → tracking); the current step is named, not only coloured
-  const steps = <ol className="flex items-center gap-2" aria-label={t('dsSteps')} data-testid="send-steps">{(['form', 'review', 'track'] as const).map((id, k) => { const cur = id === step, done = ['form', 'review', 'track'].indexOf(step) > k;
+  const steps = <ol className="flex flex-wrap items-center gap-2" aria-label={t('dsSteps')} data-testid="send-steps">{(['form', 'review', 'track'] as const).map((id, k) => { const cur = id === step, done = ['form', 'review', 'track'].indexOf(step) > k;
     return <li key={id} aria-current={cur ? 'step' : undefined} className={`t-footnote flex items-center gap-2 ${cur ? 'font-semibold text-ink' : 'text-mute'} ${k < 2 ? 'flex-1' : ''}`}>
       <span className={`t-micro grid h-6 w-6 shrink-0 place-items-center rounded-full font-bold ${cur ? 'bg-primary text-onprimary' : done ? 'bg-positive/15 text-positive' : 'bg-elev text-mute'}`}>{done ? <Icon n="check" className="h-3.5 w-3.5" /> : k + 1}</span>
       <span className="whitespace-nowrap">{t(id === 'form' ? 'dsStepDetails' : id === 'review' ? 'dsStepReview' : 'dsStepTrack')}</span>{k < 2 && <span className="h-px min-w-3 flex-1 bg-line" aria-hidden="true" />}</li>; })}</ol>;

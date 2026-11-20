@@ -32,8 +32,8 @@ export function TransactionRow({ i, contacts, hidden, time, onOpen, expanded, ri
   const t = useT(); const dir = directionOf(i), internal = isInternalDeposit(i);
   const body = <>
     <span className="disc" data-tone={dir === 'in' && !internal ? 'positive' : dir === 'swap' || internal ? 'accent' : undefined} aria-hidden="true"><Icon n={internal ? 'refresh' : KIND_ICON[dir]!} className="h-[1.125rem] w-[1.125rem]" /></span>
-    <span className="min-w-0 flex-1"><span className="t-body block truncate font-medium">{itemTitle(t, i, contacts)}</span><span className="t-footnote block truncate text-mute">{i.networkName} · {time}</span></span>
-    <span className="flex shrink-0 flex-col items-end gap-1 text-right">
+    <span className="row-main"><span className="t-body block truncate font-medium">{itemTitle(t, i, contacts)}</span><span className="t-footnote block truncate text-mute">{i.networkName} · {time}</span></span>
+    <span className="row-end flex flex-col items-end gap-1">
       <span className={`t-body-strong amt ${dir === 'in' ? 'text-positive' : ''}`}><Money hidden={hidden}>{dir === 'in' ? '+' : '−'}{trimAmt(i.amountDisplay)} {i.symbol}</Money></span>
       {right ?? <StatusPill of={i} />}</span></>;
   return onOpen ? <button className="row row-press" onClick={onOpen} aria-expanded={expanded} data-testid={testid ?? 'tx-row'} data-id={i.id}>{body}</button> : <div className="row" data-testid={testid ?? 'tx-row'} data-id={i.id}>{body}</div>;

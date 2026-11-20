@@ -175,7 +175,7 @@ button.card:active, a.card:active { transform: scale(0.985); background: color-m
 /* ── v10: shared pieces of the second design pass (ui.tsx: Tag, Stat, Fact, Timeline, ProgressRing, Fold, Sheet footer) ─── */
 /* generous numerals: a figure that is the subject of its card (equity, vault value, price) */
 .t-num { font-family: var(--font-display); font-weight: 650; letter-spacing: -0.03em; line-height: 1.05; font-variant-numeric: tabular-nums; }
-.tag { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 0.7188rem; font-weight: 600; line-height: 1.35; white-space: nowrap; }
+.tag { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 0.7188rem; font-weight: 600; line-height: 1.35; max-width: 100%; } /* NEXT: a tag wraps between its words when the line is too short for it (text at 200 %) instead of pushing the page wider */
 .tag[data-tone='mute'] { color: var(--mute); background: var(--elev); }
 .tag[data-tone='ok'] { color: var(--emerald); background: color-mix(in srgb, var(--emerald) 10%, transparent); }
 .tag[data-tone='info'] { color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
@@ -232,8 +232,9 @@ button.card:active, a.card:active { transform: scale(0.985); background: color-m
 .status-pill { display: inline-flex; align-items: center; gap: 0.25rem; border-radius: var(--radius-full); padding: 0.125rem 0.5rem; font-size: 0.71875rem; font-weight: 600; line-height: 1.35; white-space: nowrap; color: var(--tone, var(--mute)); background: color-mix(in srgb, var(--tone, var(--mute)) var(--wash), var(--surface)); }
 .status-pill[data-lifecycle='draft'], .status-pill[data-lifecycle='expired'], .status-pill[data-lifecycle='rejected'], .status-pill[data-lifecycle='not_sent'] { background: var(--elev); }
 /* segmented control: one track, one thumb */
-.seg { display: flex; border-radius: var(--radius-md); padding: 0.25rem; }
-.seg-item { min-height: var(--target); flex: 1; min-width: 0; border-radius: var(--radius-sm); padding: 0 0.5rem; font-size: 0.84375rem; transition: background-color var(--dur-fast), color var(--dur-fast); }
+/* (text at 200 %: a segment never squeezes its word — the track wraps onto a second line instead) */
+.seg { display: flex; flex-wrap: wrap; border-radius: var(--radius-md); padding: 0.25rem; }
+.seg-item { min-height: var(--target); flex: 1 1 0%; min-width: max-content; white-space: nowrap; border-radius: var(--radius-sm); padding: 0 0.5rem; font-size: 0.84375rem; transition: background-color var(--dur-fast), color var(--dur-fast); }
 .seg-item.bg-surface { box-shadow: 0 1px 2px color-mix(in srgb, var(--hero-base) 16%, transparent); }
 .seg-item.seg-compact { min-height: 2.25rem; }
 @media (pointer: coarse) { .seg-item.seg-compact { min-height: var(--target); } }
@@ -251,7 +252,11 @@ button.card:active, a.card:active { transform: scale(0.985); background: color-m
 .fact.fact-stack > dt { max-width: none; font-size: 0.78125rem; }
 .fact.fact-stack > dd { margin-top: 0.125rem; text-align: left; }
 /* rows of the core lists */
-.row { display: flex; min-height: var(--row-min); width: 100%; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--card-padding); text-align: left; }
+.row { display: flex; flex-wrap: wrap; min-height: var(--row-min); width: 100%; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-3) var(--card-padding); text-align: left; }
+/* the two ends of a row: its name (keeps a readable width) and its figures. When both no longer fit on one line — a narrow
+   screen with the text size doubled — the figures go under the name, whole, instead of being squeezed or cut. */
+.row-main { flex: 1 1 6.5rem; min-width: min(6.5rem, 100%); }
+.row-end { margin-left: auto; min-width: 0; max-width: 100%; text-align: right; }
 .row-asset { min-height: var(--asset-row); }
 .row + .row, li + li > .row, .row-sep { border-top: 1px solid var(--line); }
 .disc { display: grid; flex: none; height: 2.5rem; width: 2.5rem; place-items: center; border-radius: 50%; background: var(--elev); color: var(--mute); }
@@ -265,7 +270,9 @@ button.card:active, a.card:active { transform: scale(0.985); background: color-m
 .chip { display: inline-flex; min-height: var(--target); flex: none; align-items: center; gap: 0.375rem; border-radius: var(--radius-full); border: 1px solid var(--line); background: var(--surface); padding: 0 0.875rem; font-size: 0.84375rem; font-weight: 500; white-space: nowrap; }
 .chip[aria-pressed='true'], .chip[aria-checked='true'] { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
 /* value chart */
-.vchart { position: relative; touch-action: pan-y; user-select: none; outline: none; }
+.vchart { position: relative; touch-action: pan-y; user-select: none; outline: none; max-width: 100%; }
+/* a chart is drawn at the width its box had when it was measured: until it is measured again it must never make the page wider */
+.vchart > svg, .chart-box > svg { max-width: 100%; }
 .vchart:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-sm); }
 .vchart-tip { pointer-events: none; position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; border-radius: var(--radius-xs); background: var(--primary); color: var(--on-primary); padding: 0.1875rem 0.5rem; font-size: 0.71875rem; font-weight: 500; }
 /* page layouts on a desktop: two panes inside the content width; text lines never wider than the reading width */

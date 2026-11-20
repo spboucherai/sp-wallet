@@ -30,6 +30,7 @@ export interface PopulateOpts { currency?: 'CAD' | 'USD'; /** a network whose ba
 
 /** the portfolio of the real stack, with the fixture's holdings, prices and summary laid over it */
 export function patchPortfolio(j: J, o: PopulateOpts = {}): J {
+  if (!Array.isArray(j?.balances)) return j;   // not a portfolio (a refusal of the rate limiter): left as it is
   const cur = o.currency ?? 'CAD', ck = cur === 'USD' ? 'usd' : 'cad';
   const prices: J = { ...(j.prices ?? {}) };
   HOLDINGS.forEach((h, k) => { prices[h.symbol] = { source: 'coingecko', usd: h.usd, cad: h.cad, change24h: h.change24h, change7d: h.change24h * 1.8, marketCap: 1e9 * (20 - k), volume24h: 5e7 * (9 - k), high24h: h.usd * 1.02, low24h: h.usd * 0.98, ath: h.usd * 1.4, rank: k + 1, spark: spark(k + 2, h.change24h), priceAt: new Date(Date.now() - 90_000).toISOString(), stale: false }; });

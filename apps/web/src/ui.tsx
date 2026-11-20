@@ -39,7 +39,7 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
   return <section className={`card p-[var(--card-padding)] ${className}`}>{children}</section>;
 }
 export function H({ children, right }: { children: ReactNode; right?: ReactNode }) {
-  return <div className="mb-3 flex items-center justify-between gap-3"><h2 className="t-headline">{children}</h2>{right}</div>;
+  return <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1"><h2 className="t-headline">{children}</h2>{right}</div>;
 }
 /**
  * Buttons (design system §4): `primary` (one per screen), `soft` (secondary, elev fill), `ghost` (outlined), `quiet` (text),
@@ -134,8 +134,10 @@ export function Change({ pct, suffix }: { pct: number; suffix?: string }) {
     <svg viewBox="0 0 12 12" className="h-3 w-3" aria-hidden="true"><path d={up ? 'M6 2l4.5 7h-9z' : 'M6 10L1.5 3h9z'} fill="currentColor" /></svg>
     {up ? '+' : '−'}{numFmt(Math.abs(pct), locale, 2, 2)} %{suffix && <span className="font-normal text-mute">{suffix}</span>}</span>;
 }
+/** An amount of the owner. Hide-balances mode (design system §4): the figure is REPLACED by « •••• » — it is not in the page at all, not merely blurred. */
 export function Money({ children, hidden }: { children: ReactNode; hidden?: boolean }) {
-  return <span className={hidden ? 'mask' : ''} aria-hidden={hidden || undefined}>{children}</span>;
+  const t = useT();
+  return hidden ? <span data-hidden-amount="" aria-label={t('nwHiddenAmount')}>••••</span> : <span>{children}</span>;
 }
 /** A crypto amount for DISPLAY: truncated to `max` decimals (never rounded up), trailing zeros dropped, written in the screen's language (rule: amount.ts). */
 export const trimAmt = (s: string, max = 6, locale: AmountLocale = amountLocale()) => {

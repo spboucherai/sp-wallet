@@ -111,7 +111,7 @@ export function Activity({ open: openId }: { /** NEXT: the id of one movement to
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1">
         <p className="min-w-0 flex-1 text-[0.78125rem] leading-snug text-mute">{t('v11AcNoTotals')}</p>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {active && <button type="button" onClick={() => { setOpen(''); setF(defaultActivityFilters()); }} data-testid="ac-reset" className="press inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[0.875rem] font-medium text-accent"><Icon n="x" className="h-4 w-4" />{t('v11AcReset')}</button>}
           <a href={activityApi.csvHref(f)} data-testid="ac-csv" className="link press px-3"><Icon n="down" className="h-4 w-4" />{t('v11AcCsv')}</a>
           {walletRows.length > 0 && <a data-testid="ac-csv-wallet" className="link press px-3" download="sp-wallet-mouvements.csv" title={t('nwAcCsvWalletHint')}

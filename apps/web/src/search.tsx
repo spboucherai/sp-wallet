@@ -36,7 +36,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const act = useQuery({ queryKey: ['activity', 'search'], queryFn: () => get<{ items: WalletItem[] }>('/activity?limit=200'), staleTime: 60_000 });
   const [q, setQ] = useState(''), [at, setAt] = useState(0), [server, setServer] = useState<{ q: string; hits: SearchHit[] | null } | null>(null);
   const input = useRef<HTMLInputElement>(null), list = useRef<HTMLUListElement>(null);
-  useEffect(() => { const h = setTimeout(() => input.current?.focus(), 30); return () => clearTimeout(h); }, []);
+  useEffect(() => { input.current?.focus(); }, []);   // after the Sheet's own effect (it focuses its panel): the field has the keyboard at once
   const netName = (n: string) => nets.data?.find((x) => x.id === n)?.name ?? n;
   const local = useMemo(() => localSearch(q, { assets: pf.data?.balances ?? [], contacts: contacts.data ?? [], items: act.data?.items ?? [], netName, amount: (x) => trimAmt(x), txTitle: (i) => itemTitle(t, i as unknown as WalletItem, contacts.data),
     destinations: DESTINATIONS.map(([did, path, key, keywords]): Destination => ({ id: did, path, title: t(key), keywords })) }), [q, pf.data, contacts.data, act.data, nets.data]);   // eslint-disable-line react-hooks/exhaustive-deps

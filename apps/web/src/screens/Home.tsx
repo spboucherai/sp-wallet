@@ -128,7 +128,7 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
         <div className="hidden lg:block"><Suspense fallback={null}><HomeAttention pending={d.pending} nav={nav} go={go} /></Suspense></div>
 
         {d.pending.length > 0 && <Card><H>{t('pending')}</H>
-          <ul className="space-y-3.5">{d.pending.map((p) => <li key={p.id} className="flex items-center gap-3">
+          <ul className="space-y-3.5">{d.pending.map((p) => <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <Coin sym={p.symbol} net={p.network} size={40} />
             <div className="min-w-0 flex-1"><div className="t-body-strong amt"><Money hidden={hidden}>{trimAmt(p.amountDisplay)} {p.symbol}</Money></div><div className="t-footnote truncate text-mute">{/* v11: a GMX order transaction is not a transfer to the router's address */ (p as { kind?: string }).kind === 'gmx' ? `${t('svKind_gmx')} · ${p.networkName}` : `${p.networkName} → ${short(p.to)}`}</div></div>
             <StatusPill of={p} /></li>)}</ul></Card>}
@@ -146,7 +146,7 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
       <Suspense fallback={<div className="grid gap-4 lg:grid-cols-2" aria-busy="true"><SkeletonRows n={3} /><SkeletonRows n={3} /></div>}><DashboardPanels nav={nav} /></Suspense>
 
       {netState === 'partial' && <Card><H>{t('networks')}</H>
-        <ul className="space-y-2.5">{list.filter((n) => n.health && !n.health.ok).map((n) => <li key={n.id} className="t-callout flex items-center justify-between">
+        <ul className="space-y-2.5">{list.filter((n) => n.health && !n.health.ok).map((n) => <li key={n.id} className="t-callout flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <span className="flex items-center gap-2.5"><NetDot net={n.id} size={22} />{n.name}</span>
           <span className="t-footnote inline-flex items-center gap-1.5 text-caution"><Icon n="warn" className="h-3.5 w-3.5" />{n.health!.readable ? t('sendPaused') : t('unavailable')}</span></li>)}</ul>
         <p className="t-footnote mt-3 text-mute">{t('partialNote')}</p></Card>}

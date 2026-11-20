@@ -40,14 +40,14 @@ export function AssetRow({ b, prices, cur, ck, hidden, onOpen, trailing, favorit
     <li className="flex items-stretch" data-testid={testid ?? 'asset-row'} data-asset={`${b.network}:${b.asset}`}>
       <button onClick={onOpen} className="row row-asset row-press min-w-0 flex-1">
         <AssetIcon sym={b.symbol} net={b.network} size={44} />
-        <span className="min-w-0 flex-1"><span className="t-body-strong flex items-center gap-1.5 leading-tight"><span className="truncate">{b.name}</span>{favorite && <Icon n="starFill" className="h-3.5 w-3.5 shrink-0 text-caution" />}</span>
+        <span className="row-main"><span className="t-body-strong flex items-center gap-1.5 leading-tight"><span className="truncate">{b.name}</span>{favorite && <Icon n="starFill" className="h-3.5 w-3.5 shrink-0 text-caution" />}</span>
           <span className="t-footnote mt-0.5 block truncate text-mute">{b.symbol} · {b.networkName}</span></span>
-        <span className="shrink-0 text-right">
+        <span className="row-end">
           {b.display === null ? <span className="t-footnote inline-flex items-center gap-1 text-caution"><Icon n="warn" className="h-3.5 w-3.5" />{t('unavailable')}</span> : zero ? <>
             <span className="t-body-strong block leading-tight">{m ? fiatText(mulDecimal('1', m[ck], m[ck] < 1 ? 6 : 2), cur, locale, { dp: m[ck] < 1 ? 6 : 2 }) : '—'}</span>
             <span className="t-footnote mt-0.5 block">{m && m.change24h !== null ? <ChangeText pct={m.change24h} /> : <span className="text-mute">{t('nwNotHeld')}</span>}</span></> : <>
             <span className="t-body-strong amt block leading-tight"><Money hidden={hidden}>{trimAmt(b.display)} <span className="font-normal text-mute">{b.symbol}</span></Money></span>
-            <span className="t-footnote mt-0.5 flex items-center justify-end gap-2 text-mute">{v !== null ? <Money hidden={hidden}>{fiatText(v, cur, locale)}</Money> : <span>{t('nwNoPrice')}</span>}{m && m.change24h !== null && <ChangeText pct={m.change24h} />}</span></>}
+            <span className="t-footnote mt-0.5 flex flex-wrap items-center justify-end gap-x-2 text-mute">{v !== null ? <Money hidden={hidden}>{fiatText(v, cur, locale)}</Money> : <span>{t('nwNoPrice')}</span>}{m && m.change24h !== null && <ChangeText pct={m.change24h} />}</span></>}
         </span>
       </button>
       {trailing}

@@ -102,7 +102,7 @@ export function DashboardPanels({ nav }: { nav: Nav }) {
   const level = r.ok ? riskLevel(r.data) : null, sys = systemLevel(h, au);
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-2" data-testid="dashboard" data-state="ready">
+    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2" data-testid="dashboard" data-state="ready">
       <Panel id="db-accounts" title={t('v11DbAccounts')} right={link(t('v11DbOpenTrade'), () => nav({ tab: 'futures', view: 'accounts' }), 'db-open-accounts')}>
         <PerBook s={s} equity empty="v11DbNoAccounts" render={(b) => (b.collateral.length === 0 ? <p className="text-[0.84375rem] text-mute">{t('v11DbNoAccounts')}</p> : <Accounts b={b} />)} />
       </Panel>

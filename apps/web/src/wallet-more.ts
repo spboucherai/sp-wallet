@@ -24,8 +24,12 @@ export function readAnalytics(j: unknown): Analytics {
   };
 }
 /** `data === null`: the route is not on this server (the tiles that need it are not shown). */
+/** a route this server answered 404 for is not asked again during this browser session (one request less on every load); a new session asks again */
+const MISSING_KEY = 'spw-routes-missing';
+const knownMissing = (route: string): boolean => { try { return (sessionStorage.getItem(MISSING_KEY) ?? '').split(',').includes(route); } catch { return false; } };
+const noteMissing = (route: string): void => { try { const cur = (sessionStorage.getItem(MISSING_KEY) ?? '').split(',').filter(Boolean); if (!cur.includes(route)) sessionStorage.setItem(MISSING_KEY, [...cur, route].join(',')); } catch { /* asked again next time */ } };
 export const useAnalytics = (range: Range) => useQuery({ queryKey: ['analytics', range], staleTime: 60_000, retry: 0, refetchInterval: 5 * 60_000,
-  queryFn: async (): Promise<Analytics | null> => { try { return readAnalytics(await get(`/analytics?range=${range}`)); } catch (e) { if (routeMissing(e)) return null; throw e; } } });
+  queryFn: async (): Promise<Analytics | null> => { if (knownMissing('analytics')) return null; try { return readAnalytics(await get(`/analytics?range=${range}`)); } catch (e) { if (routeMissing(e)) { noteMissing('analytics'); return null; } throw e; } } });
 
 // ------------------------------------------------------------------------------------------------------------------ security
 export interface SecDevice { id: string; label: string; deviceType?: string; backedUp?: boolean; createdAt?: string; lastUsedAt?: string | null; enrolledOnSigner?: boolean; credentialId?: string; inCooldown?: boolean; revocable?: boolean }
@@ -66,5 +70,6 @@ export function readSearch(j: unknown): SearchHit[] {
 }
 /** null: the route is not on this server (the palette then searches its local index only) */
 export async function serverSearch(q: string, signal?: AbortSignal): Promise<SearchHit[] | null> {
-  try { return readSearch(await get(`/search?q=${encodeURIComponent(q)}`, { signal, timeoutMs: 8000 })); } catch (e) { if (routeMissing(e)) return null; throw e; }
+  if (knownMissing('search')) return null;
+  try { return readSearch(await get(`/search?q=${encodeURIComponent(q)}`, { signal, timeoutMs: 8000 })); } catch (e) { if (routeMissing(e)) { noteMissing('search'); return null; } throw e; }
 }

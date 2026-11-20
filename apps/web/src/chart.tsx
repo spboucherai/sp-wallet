@@ -25,9 +25,9 @@ export function Allocation({ parts, otherLabel, label, pct, hidden }: { parts: P
       </div>
       <ul className="mt-3 grid gap-x-6 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">{segs.map((s) =>
         <li key={s.id} tabIndex={0} data-part={s.id} onFocus={() => setOn(s.id)} onBlur={() => setOn(null)} onPointerEnter={() => setOn(s.id)} onPointerLeave={() => setOn(null)}
-          className={`t-callout flex min-h-9 items-center gap-2.5 rounded-md transition-opacity ${on && on !== s.id ? 'opacity-55' : ''}`}>
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} aria-hidden="true" /><span className="min-w-0 flex-1 truncate">{s.label}</span>
-          {s.value && <span className={`shrink-0 text-mute ${hidden ? 'mask' : ''}`} aria-hidden={hidden || undefined}>{s.value}</span>}<span className="w-[3.75rem] shrink-0 text-right font-semibold">{pct(s.share)}</span></li>)}</ul>
+          className={`t-callout flex min-h-9 flex-wrap items-center gap-x-2.5 rounded-md transition-opacity ${on && on !== s.id ? 'opacity-55' : ''}`}>
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} aria-hidden="true" /><span className="min-w-[3rem] flex-1 truncate">{s.label}</span>
+          {s.value && <span className={`shrink-0 text-mute ${hidden ? 'mask' : ''}`} aria-hidden={hidden || undefined}>{s.value}</span>}<span className="min-w-[3.25rem] shrink-0 text-right font-semibold">{pct(s.share)}</span></li>)}</ul>
     </div>
   );
 }
@@ -63,7 +63,7 @@ export function PriceChart({ points, format, formatTime, onHover }: { points: Pt
   const first = points[0]!, last = points[points.length - 1]!;
   const cur = at === null ? null : points[at]!;
   return (
-    <div ref={box} className="relative touch-pan-y select-none" role="img"
+    <div ref={box} className="chart-box relative touch-pan-y select-none" role="img"
       aria-label={`${formatTime(first.t)} → ${formatTime(last.t)} : ${format(first.p)} → ${format(last.p)} (min ${format(g.min)}, max ${format(g.max)})`}
       onPointerDown={(e) => move(e.clientX)} onPointerMove={(e) => { if (e.pointerType === 'mouse' || e.buttons || e.pressure > 0) move(e.clientX); }}
       onPointerUp={(e) => { if (e.pointerType !== 'mouse') leave(); }} onPointerLeave={leave} onPointerCancel={leave}>

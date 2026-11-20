@@ -86,7 +86,7 @@ export function HomeValue({ range, setRange, cur, hidden, summary: s, netName }:
   return <>
     <ValueHistory range={range} setRange={setRange} cur={cur} hidden={hidden} />
     {parts.length > 0 && <Card><div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2"><h2 className="t-headline">{t('nwAlloc')}</h2>
-      <div className="min-w-[13.5rem]"><Seg compact testid="alloc-split" label={t('nwAlloc')} value={split} onChange={setSplit} options={[['asset', t('nwByAsset')], ['network', t('nwByNetwork')]]} /></div></div>
+      <div className="w-full sm:w-auto sm:min-w-[13.5rem]"><Seg compact testid="alloc-split" label={t('nwAlloc')} value={split} onChange={setSplit} options={[['asset', t('nwByAsset')], ['network', t('nwByNetwork')]]} /></div></div>
       <Allocation parts={parts} hidden={hidden} label={t('dsAllocation')} otherLabel={t('dsOther')} pct={(x) => pctText(x * 100, locale, x < 0.1 ? 1 : 0)} />
       {s && !s.complete && <p className="t-footnote mt-3 text-mute">{t('nwAllocPartial')}</p>}</Card>}
   </>;
