@@ -50,7 +50,7 @@ A transaction that never confirmed blocked its network for ever.
 6. The database enforces one transaction in flight per network (partial unique index), in addition to the route checks.
 
 *States.* Stored: `draft, pending_approval, approved, signed, broadcast, confirming, finalized, rejected, expired, failed,
-replaced, reorged, not_broadcast, dropped`. Clients read `lifecycle` (thirteen values, `packages/core/src/state.ts`):
+replaced, reorged, not_broadcast, dropped`. Clients read `lifecycle` (fourteen values, `packages/core/src/state.ts`):
 
 | Brief | lifecycle | from |
 |---|---|---|
@@ -60,7 +60,7 @@ replaced, reorged, not_broadcast, dropped`. Clients read `lifecycle` (thirteen v
 | Signed | `signed` | signed, no relay started |
 | Broadcasting | `broadcasting` | signed, relay started |
 | Pending | `pending` | broadcast |
-| Confirmed | `confirmed` (+ `finalized` flag, `confirmations`) | confirming, reorged, finalized |
+| Confirmed | `confirming` (in a block, not final — `confirmations`) then `confirmed` (final only) | confirming, reorged · finalized |
 | Failed | `failed` | failed |
 | Replaced | `replaced` | replaced |
 | Dropped | `dropped` | dropped |

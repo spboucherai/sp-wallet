@@ -148,6 +148,7 @@
 [data-lifecycle='signed'] { --tone: var(--accent); }
 [data-lifecycle='broadcasting'] { --tone: var(--accent); }
 [data-lifecycle='pending'] { --tone: var(--caution); }
+[data-lifecycle='confirming'] { --tone: var(--accent); }
 [data-lifecycle='confirmed'] { --tone: var(--positive); }
 [data-lifecycle='failed'] { --tone: var(--negative); }
 [data-lifecycle='replaced'] { --tone: var(--caution); }

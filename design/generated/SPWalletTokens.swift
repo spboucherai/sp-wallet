@@ -97,6 +97,7 @@ public enum SPTokens {
         "signed": Status(tone: .accent, symbol: "checkmark.seal", fr: "Signée", en: "Signed"),
         "broadcasting": Status(tone: .accent, symbol: "dot.radiowaves.left.and.right", fr: "Envoi au réseau", en: "Broadcasting"),
         "pending": Status(tone: .caution, symbol: "clock", fr: "En attente", en: "Pending"),
+        "confirming": Status(tone: .accent, symbol: "clock.badge.checkmark", fr: "En confirmation", en: "Confirming"),
         "confirmed": Status(tone: .positive, symbol: "checkmark.circle.fill", fr: "Confirmée", en: "Confirmed"),
         "failed": Status(tone: .negative, symbol: "xmark.octagon.fill", fr: "Échouée", en: "Failed"),
         "replaced": Status(tone: .caution, symbol: "arrow.triangle.2.circlepath", fr: "Remplacée", en: "Replaced"),

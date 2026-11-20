@@ -38,6 +38,12 @@ export const LIFECYCLE_STATUS = {
     "fr": "En attente",
     "en": "Pending"
   },
+  "confirming": {
+    "tone": "accent",
+    "symbol": "clock.badge.checkmark",
+    "fr": "En confirmation",
+    "en": "Confirming"
+  },
   "confirmed": {
     "tone": "positive",
     "symbol": "checkmark.circle.fill",

@@ -63,7 +63,9 @@ describe('the state machine', () => {
     expect(lifecycleOf('signed')).toBe('signed');
     expect(lifecycleOf('signed', { relayAttempted: true })).toBe('broadcasting');
     expect(lifecycleOf('broadcast')).toBe('pending');
-    expect(lifecycleOf('reorged')).toBe('confirmed');
+    expect(lifecycleOf('reorged')).toBe('confirming');
+    expect(lifecycleOf('confirming')).toBe('confirming');
+    expect(lifecycleOf('finalized')).toBe('confirmed'); // said only of a final transaction
     expect(lifecycleOf('failed', { errorCode: 'expired_onchain' })).toBe('expired');
     expect(lifecycleOf('failed', { errorCode: 'tx_failed' })).toBe('failed');
     expect(lifecycleOf('not_broadcast')).toBe('not_sent');
@@ -257,7 +259,7 @@ describe('T6 / T7 / T8 — one in flight, duplicates, what is recorded', () => {
     net.next = { state: 'confirming', confirmations: 1, blockRef: '0xb', seen: true };
     await worker.reconcile();
     const ev = await sql`select id, type, ref, data from wallet_events order by id`;
-    expect(ev.map((e: any) => [e.type, e.data.lifecycle ?? null])).toEqual([['transfer.relay', 'broadcasting'], ['transfer.state', 'pending'], ['transfer.state', 'confirmed']]);
+    expect(ev.map((e: any) => [e.type, e.data.lifecycle ?? null])).toEqual([['transfer.relay', 'broadcasting'], ['transfer.state', 'pending'], ['transfer.state', 'confirming']]);
     expect(ev.every((e: any) => e.ref === p.id)).toBe(true);
     expect(Number(ev[2].id)).toBeGreaterThan(Number(ev[0].id));
   });

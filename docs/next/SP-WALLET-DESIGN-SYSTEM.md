@@ -48,7 +48,7 @@ target ≥ 44, content max 1120, reading max 672, sidebar 256. **Radius**: `xs` 
 
 ## 3. Transfer status — one vocabulary
 
-The API field `lifecycle` has thirteen values. Each has one tone, one symbol and one word on the three platforms
+The API field `lifecycle` has fourteen values. Each has one tone, one symbol and one word on the three platforms
 (`status` in the token file):
 
 | lifecycle | tone | FR | EN |
@@ -59,7 +59,8 @@ The API field `lifecycle` has thirteen values. Each has one tone, one symbol and
 | signed | accent | Signée | Signed |
 | broadcasting | accent | Envoi au réseau | Broadcasting |
 | pending | caution | En attente | Pending |
-| confirmed | positive | Confirmée | Confirmed (with "final" / "n confirmations" from `finalized`, `confirmations`) |
+| confirming | accent | En confirmation | Confirming (in a block, not final; shows `confirmations`) |
+| confirmed | positive | Confirmée | Confirmed — said only of a final transaction |
 | failed | negative | Échouée | Failed |
 | replaced | caution | Remplacée | Replaced |
 | dropped | caution | Non incluse | Dropped |

@@ -40,13 +40,14 @@ export const IN_FLIGHT: readonly ProposalState[] = ['approved', 'signed', 'broad
 /**
  * The life cycle as a client shows it (NEXT) — one vocabulary for web, macOS and iOS, derived from the stored state:
  *
- *   draft → awaiting_confirmation → awaiting_signature → signed → broadcasting → pending → confirmed
+ *   draft → awaiting_confirmation → awaiting_signature → signed → broadcasting → pending → confirming → confirmed
  *                                                              ↘ failed · replaced · dropped · expired · rejected · not_sent
  *
  * `relayAttempted`: a relay to the network has started for a `signed` row (its outcome may be unknown).
- * `finalized`: `confirmed` covers both "in a block" and "final"; the flag tells them apart.
+ * `confirming`: in a block, not final yet (a reorganisation can still undo it). `confirmed` is said only of a FINAL transaction:
+ * a client may treat `confirmed` as done, and nothing else.
  */
-export const LIFECYCLES = ['draft', 'awaiting_confirmation', 'awaiting_signature', 'signed', 'broadcasting', 'pending', 'confirmed',
+export const LIFECYCLES = ['draft', 'awaiting_confirmation', 'awaiting_signature', 'signed', 'broadcasting', 'pending', 'confirming', 'confirmed',
   'failed', 'replaced', 'dropped', 'expired', 'rejected', 'not_sent'] as const;
 export type Lifecycle = (typeof LIFECYCLES)[number];
 export function lifecycleOf(state: ProposalState, o: { relayAttempted?: boolean; errorCode?: string | null } = {}): Lifecycle {
@@ -56,7 +57,8 @@ export function lifecycleOf(state: ProposalState, o: { relayAttempted?: boolean;
     case 'approved': return 'awaiting_signature';
     case 'signed': return o.relayAttempted ? 'broadcasting' : 'signed';
     case 'broadcast': return 'pending';
-    case 'confirming': case 'reorged': case 'finalized': return 'confirmed';
+    case 'confirming': case 'reorged': return 'confirming';
+    case 'finalized': return 'confirmed';
     case 'replaced': return 'replaced';
     case 'dropped': return 'dropped';
     case 'expired': return 'expired';
