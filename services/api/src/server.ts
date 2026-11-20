@@ -47,6 +47,7 @@ import { marketsHub } from './markets-hub/index.ts'; // v11 markets hub: univers
 import { privateMarketsRoutes } from './private-markets/routes.ts'; // v11 private markets (read-only)
 import { apiKeyGate, OWNER, tradingApi } from './trading-api/index.ts'; // v11 trading API (machine authentication)
 import { installQuotes, type QuotesDeps } from './quotes/index.ts'; // v11 quote engine: websocket fan-out of public market data (read-only)
+import { history as portfolioHistory, portfolioDeps, RANGES, readRows, summarize, type Currency, type Range } from './portfolio.ts'; // NEXT: provenance, summary, value history
 import { nativeClientRoutes } from './native-clients.ts'; // native apps: the passkey association file (/.well-known), nothing under /api
 import { registerNft, type NftOptions } from './nft/index.ts'; // NFT delivery 1: read-only inventory, item pages, media proxy (owner session only)
 
@@ -67,14 +68,8 @@ export function csvOutcome(p: ProposalRow): { toNetwork: string; toSymbol: strin
   if (p.kind === 'swap' && p.swap) return { toNetwork: p.network, toSymbol: p.swap.toSymbol, received: p.out_amount ? formatUnits(BigInt(p.out_amount), p.swap.toDecimals) : '' };
   return { toNetwork: '', toSymbol: '', received: '' };
 }
-const cache = new Map<string, { at: number; v: unknown }>();
-async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
-  const c = cache.get(key);
-  if (c && Date.now() - c.at < ttlMs) return c.v as T;
-  const v = await fn();
-  cache.set(key, { at: Date.now(), v });
-  return v;
-}
+/** NEXT H1: the row's `txid` is a block hash (value that arrived inside a contract call, or an aggregate), not a transaction id */
+export const depositTxidIsBlock = (d: { detection: string | null; txid: string; block_hash: string | null }): boolean => d.detection === 'aggregate' || (d.detection === 'internal_call' && (d.block_hash === null || d.txid.toLowerCase() === d.block_hash.toLowerCase()));
 
 /** v11: `priceAt` = when the source last updated THIS price (CoinGecko's own `last_updated`, else the time it was fetched); `stale` = served past its refresh window or older than PRICE_STALE_MS */
 interface Market { priceAt: string | null; stale: boolean; usd: number; cad: number; change24h: number | null; change7d: number | null; marketCap: number | null; volume24h: number | null; high24h: number | null; low24h: number | null; ath: number | null; rank: number | null; spark: number[] }
@@ -242,30 +237,31 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     return { keyId: w.keyId, signerReachable: !!w.st, addressesAsOf: w.addressesAsOf, accounts: NETS.filter((n) => w.addresses[n.id]).map((n) => ({ network: n.id, name: n.name, family: n.family, address: w.addresses[n.id]!, explorer: n.explorerAddr + w.addresses[n.id] })) };
   });
 
+  // NEXT B2 / B3: the rows carry the provenance of their read (height, sources, agreed, stale — portfolio.ts) and the answer
+  // carries `summary`, computed here once for the three clients. Every earlier field keeps its name and type.
+  const walletRows = async () => { const w = await walletAddresses(); return { w, rows: await readRows(w.addresses, (n) => [n.native, ...liveTokens(n)]) }; };
+  const currencyOf = async (): Promise<Currency> => ((await getSetting('currency', 'CAD')) === 'USD' ? 'USD' : 'CAD');
+  portfolioDeps.prices = prices;
+  portfolioDeps.read = async () => ({ rows: (await walletRows()).rows, px: await prices() });
   app.get('/api/v1/portfolio', async () => {
-    const w = await walletAddresses(), st = w.st;
+    const { w, rows } = await walletRows(), st = w.st;
     const px = await prices();
-    const rows = await Promise.all(NETS.filter((n) => w.addresses[n.id]).map(async (n) => {
-      const address = w.addresses[n.id]!;
-      try {
-        const b = await cached(`bal:${n.id}`, 12_000, () => adapterFor(n.id).balances(address));
-        return [n.native, ...liveTokens(n)].map((a) => (b[a.id] === undefined
-          ? { network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals, amount: null, display: null, error: 'unavailable' as string | null }
-          : { network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals,
-              amount: b[a.id]!.toString(), display: formatUnits(b[a.id]!, a.decimals), error: null as string | null }));
-      } catch {
-        return [n.native, ...liveTokens(n)].map((a) => ({ network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals, amount: null, display: null, error: 'unavailable' }));
-      }
-    }));
     const pending = await sql<ProposalRow[]>`select * from proposals where state in ('pending_approval','approved','signed','broadcast','confirming','reorged') order by created_at desc`;
     // v11: `asOf` is the time of this answer; the prices have their own dates (`prices[sym].priceAt`, `pricesAsOf` = the oldest one)
     const stamps = px ? Object.values(px).map((m) => m.priceAt).filter((x): x is string => !!x).sort() : [];
     // v11: `priceSource` = where the displayed prices come from (`mixed` when some fell back to the second source); `priceSources` says which
     const cs = crossSummary(px, apiBricks() !== null), all = px ? Object.keys(px).length : 0;
     return { asOf: new Date().toISOString(), prices: px, priceSource: !px ? null : cs.fallback.length === 0 ? 'coingecko' : cs.fallback.length === all ? 'apibricks' : 'mixed', priceSources: px ? cs : null, pricesAsOf: stamps[0] ?? null, pricesStale: px ? Object.values(px).some((m) => m.stale) : false,
-      balances: rows.flat(), pending: pending.map(view), halted: st ? st.halted : null,
+      balances: rows, summary: summarize(rows, px, await currencyOf()).summary, pending: pending.map(view), halted: st ? st.halted : null,
       // the signer could not be reached: balances are the API's own reads of the last known addresses; nothing can be signed meanwhile
       signer: { reachable: !!st, addressesAsOf: w.addressesAsOf } };
+  });
+
+  // NEXT: value of the wallet over time, from the snapshots of the worker (complete points only), with what entered and left
+  // over the same period so that a deposit is never read as performance (portfolio.ts). `currency` defaults to the setting.
+  app.get('/api/v1/portfolio/history', async (req) => {
+    const q = z.object({ range: z.enum(Object.keys(RANGES) as [Range, ...Range[]]).default('1W'), currency: z.enum(['USD', 'CAD']).optional() }).parse(req.query);
+    return portfolioHistory(q.range, q.currency ?? await currencyOf());
   });
 
   // price history for one asset (chart). `symbol` must be in the pinned map; nothing about the wallet is sent upstream.
@@ -285,7 +281,8 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   app.get('/api/v1/activity', async (req) => {
     const q = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) }).parse(req.query);
     const out = await sql<ProposalRow[]>`select * from proposals where state <> 'draft' order by created_at desc limit ${q.limit}`;
-    const dep = await sql<{ network: string; txid: string; idx: number; asset: string; amount: string; from_addr: string; block: string; block_time: Date | null; seen_at: Date; finalized: string | null }[]>`
+    const dep = await sql<{ network: string; txid: string; idx: number; asset: string; amount: string; from_addr: string; block: string; block_time: Date | null; seen_at: Date; finalized: string | null;
+      kind: string | null; proposal_id: string | null; origin: string | null; detection: string | null; block_hash: string | null }[]>`
       select d.*, c.finalized from deposits d left join scan_cursor c on c.network = d.network order by coalesce(d.block_time, d.seen_at) desc limit ${q.limit}`;
     const items = [
       // `kind` is what the row IS (v11): a GMX order transaction is `gmx`, not a send to the GMX router; `rawKind` keeps the stored kind (xswap vs swap)
@@ -293,8 +290,13 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
       ...dep.map((d) => {
         const n = getNetwork(d.network), a = d.asset === 'native' ? n.native : n.tokens.find((t) => t.id === d.asset)!;
         return { kind: 'receive' as const, at: d.block_time ?? d.seen_at, id: `${d.network}:${d.txid}:${d.idx}`, network: d.network, networkName: n.name, asset: d.asset, symbol: a.symbol,
-          decimals: a.decimals, amount: d.amount, amountDisplay: formatUnits(BigInt(d.amount), a.decimals), from: d.from_addr, txid: d.txid, explorer: n.explorerTx + d.txid,
-          state: Number(d.block) <= Number(d.finalized ?? 0) ? 'finalized' : 'confirming' };
+          decimals: a.decimals, amount: d.amount, amountDisplay: formatUnits(BigInt(d.amount), a.decimals), from: d.from_addr, txid: d.txid,
+          // NEXT H1: a native deposit located only to its block has the BLOCK hash in `txid` (`txidIsBlock`): the link then opens the block page
+          explorer: depositTxidIsBlock(d) ? n.explorerTx.replace(/tx\/$/, "block/") + Number(d.block) : n.explorerTx + d.txid,
+          state: Number(d.block) <= Number(d.finalized ?? 0) ? 'finalized' : 'confirming',
+          // NEXT H5 (additive): `depositKind` external = someone paid the wallet | internal = the result of one of the wallet's own operations (`origin` says which, `proposalId` links it)
+          depositKind: d.kind === 'internal' ? 'internal' as const : 'external' as const, origin: d.origin, proposalId: d.proposal_id,
+          detection: d.detection, txidIsBlock: depositTxidIsBlock(d), blockHash: d.block_hash, block: Number(d.block) };
       }),
     ].sort((x, y) => new Date(y.at).getTime() - new Date(x.at).getTime()).slice(0, q.limit);
     return { items };

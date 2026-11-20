@@ -103,7 +103,7 @@ export function walletItem(w: W): ActivityItem {
   const kind = WALLET_KIND[w.kind as string] ?? 'transfer', receive = w.kind === 'receive';
   const got = w.swap ? { value: String(w.swap.receivedDisplay ?? w.swap.minOutDisplay ?? ''), symbol: str(w.swap.toSymbol) } : null;
   return { id: `w:${w.id}`, kind, source: 'wallet', at: iso(w.at), mode: 'live', venue: w.kind === 'gmx' ? 'gmx' : null, network: str(w.network), principal: { kind: 'owner', id: 'owner' },
-    code: `wallet.${w.kind}`, params: { symbol: w.symbol ?? null, toSymbol: w.swap?.toSymbol ?? null, toNetwork: w.bridge?.toNetwork ?? null, received: w.swap ? w.swap.receivedDisplay !== null && w.swap.receivedDisplay !== undefined : null },
+    code: `wallet.${w.kind}`, params: { ...(receive && typeof w.depositKind === 'string' ? { depositKind: w.depositKind } : {}), symbol: w.symbol ?? null, toSymbol: w.swap?.toSymbol ?? null, toNetwork: w.bridge?.toNetwork ?? null, received: w.swap ? w.swap.receivedDisplay !== null && w.swap.receivedDisplay !== undefined : null },
     status: str(w.state), instrument: str(w.symbol), side: null, amount: w.amountDisplay !== undefined ? { value: String(w.amountDisplay), symbol: str(w.symbol) } : null, received: got && got.value !== '' ? got : null,
     ref: { type: receive ? 'deposit' : 'proposal', id: String(w.id) }, txid: str(w.txid), explorer: str(w.explorer), wallet: w };
 }
