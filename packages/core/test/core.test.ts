@@ -5,6 +5,7 @@ import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from '@solana-program/t
 import { parseTransaction, decodeFunctionData, erc20Abi } from 'viem';
 import { base58 } from '@scure/base';
 import {
+  getNetwork,
   appendAudit, associatedTokenAddress, assertTransition, buildBtcTx, buildEvmTx, buildSolMessage, canonicalBytes, canTransition,
   checkPolicy, DEFAULT_POLICY, formatUnits, getAsset, intentHash, normalizeAddress, parseUnits, serializeEvmUnsigned, toHex,
   verifyAuditChain, NETWORKS, type AuditRecord, type Intent,
@@ -105,6 +106,20 @@ describe('EVM builder', () => {
     expect(() => buildEvmTx({ ...evmIntent, decimals: 18 })).toThrow();
     expect(() => buildEvmTx({ ...evmIntent, to: USDC_BASE })).toThrow();
     expect(() => buildEvmTx({ ...evmIntent, asset: 'native', symbol: 'ETH', decimals: 18 })).toThrow(/21000/);
+  });
+  it('native gas limit: exactly 21 000 everywhere, except bounded on a rollup that charges posting through the limit (NEXT, E1)', () => {
+    const native = (network: string, gasLimit: string) => { const n = getNetwork(network); return { ...evmIntent, network, chainRef: n.chainRef, asset: 'native', symbol: n.native.symbol, decimals: 18, amount: '1000', maxFee: (10n ** 18n).toString(), evm: { ...evmIntent.evm!, gasLimit } }; };
+    expect(getNetwork('arbitrum').evm?.nativeGasMax).toBe(120_000);
+    expect(buildEvmTx(native('arbitrum', '25787')).gas).toBe(25787n);
+    expect(buildEvmTx(native('arbitrum', '21000')).gas).toBe(21000n);
+    expect(() => buildEvmTx(native('arbitrum', '20999'))).toThrow(/between 21000 and 120000/);
+    expect(() => buildEvmTx(native('arbitrum', '120001'))).toThrow(/between 21000 and 120000/);
+    for (const net of ['ethereum', 'base', 'optimism', 'polygon']) { // unchanged elsewhere
+      expect(buildEvmTx(native(net, '21000')).gas).toBe(21000n);
+      expect(() => buildEvmTx(native(net, '21001')), net).toThrow(/must use 21000/);
+    }
+    // the approved maximum still bounds the fee on the rollup
+    expect(() => buildEvmTx({ ...native('arbitrum', '100000'), maxFee: '1' })).toThrow(/fee exceeds approved maximum/);
   });
 });
 

@@ -118,6 +118,8 @@ async function fromAudit(e: AlertEvent, c: RuleCtx): Promise<Draft[]> {
       return [{ kind: 'bridge.failed', params: { network: netName(p.network), to: netName(p.bridge?.toNetwork), symbol: p.symbol, amount: units(p.amount, p.decimals), reason: 'the mint transaction reverted on the destination; the funds are not lost, finish the transfer with your passkey' }, subject: { type: 'proposal', id: p.id, network: p.network } }];
     }
     case 'deposit.seen': {
+      // NEXT H5: the result of one of the wallet's own operations (swap output, bridge mint, own withdrawal) is not a deposit to announce
+      if (d.kind === 'internal') return [];
       let symbol = '', amount = '';
       try { const n = getNetwork(String(d.network)), a = d.asset === 'native' ? n.native : n.tokens.find((x) => x.id === d.asset); if (a) { symbol = a.symbol; amount = units(d.amount, a.decimals); } } catch { /* unknown network: no detail */ }
       return [{ kind: 'deposit.received', params: { network: netName(d.network), symbol, amount }, subject: { type: 'deposit', id: str(d.txid, 120), network: str(d.network, 40) } }];

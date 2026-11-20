@@ -11,7 +11,10 @@ import { broadcastNow, failure, knownToNetwork, move, proposalHooks, trackedInte
 import { advanceXswapSend, advanceXswaps, xswapMayBroadcast, xswapSent } from './xswap.ts';
 import { advancePlans } from './plan-exec.ts'; // v7 any-to-any plans
 import { pruneSwapQuotes } from './swap.ts'; // v11
+import { pruneEvents } from './events.ts';
 import { advanceWithdrawals } from './agents/withdrawals.ts'; // v8
+import { scanDepositsPass } from './deposit-scan.ts'; // NEXT: deposits (native coins on EVM, backlog, classification)
+import { SNAPSHOT_EVERY_MS, snapshotTick } from './portfolio.ts'; // NEXT: value of the wallet over time
 
 export const healthCache = new Map<string, Health>();
 const log = (m: string) => console.log(`[worker] ${m}`);
@@ -150,22 +153,7 @@ async function reconcile(): Promise<void> {
 async function scanDeposits(): Promise<void> {
   const st = await signer.status().catch(() => null);
   if (!st) return;
-  for (const n of NETS) {
-    const address = st.addresses[n.id];
-    if (!address) continue;
-    try {
-      const [c] = await sql<{ cursor: string }[]>`select cursor from scan_cursor where network = ${n.id}`;
-      const r = await adapterFor(n.id).deposits(address, c ? Number(c.cursor) : null);
-      for (const d of r.items) {
-        const ins = await sql`insert into deposits (network, txid, idx, asset, amount, from_addr, block, block_time)
-          values (${n.id}, ${d.txid}, ${d.idx}, ${d.asset}, ${d.amount.toString()}, ${d.from}, ${d.block}, ${d.time ? new Date(d.time * 1000) : null})
-          on conflict do nothing returning txid`;
-        if (ins.length) await audit('deposit.seen', 'chain', { network: n.id, txid: d.txid, asset: d.asset, amount: d.amount.toString() });
-      }
-      await sql`insert into scan_cursor (network, cursor, finalized) values (${n.id}, ${r.cursor}, ${Math.min(r.finalizedHeight, Number.MAX_SAFE_INTEGER)})
-        on conflict (network) do update set cursor = excluded.cursor, finalized = excluded.finalized`;
-    } catch (e) { log(`deposits ${n.id}: ${(e as Error).message.slice(0, 120)}`); }
-  }
+  await scanDepositsPass(st.addresses); // NEXT: deposit-scan.ts
 }
 
 async function refreshHealth(): Promise<void> {
@@ -199,7 +187,9 @@ export function startWorkers(): void {
   loop('xswaps', advanceXswaps, 10_000);
   loop('plans', advancePlans, 6_000); // v7: reads the proposals of open plans and moves the plans; never signs
   loop('deposits', scanDeposits, 75_000);
+  loop('portfolio-snapshots', snapshotTick, SNAPSHOT_EVERY_MS); // NEXT: one value point per currency every 10 min; reads only
   loop('swap-quotes-prune', async () => { await pruneSwapQuotes(); }, 6 * 3600_000); // v11: retention of the quote log (swap.ts)
+  loop('events-prune', async () => { await pruneEvents(); }, 6 * 3600_000); // NEXT: retention of the wallet event log (events.ts)
   loop('withdrawals', () => advanceWithdrawals(), 8_000); // v8: agent-vault withdrawals — receipt and arrival at the owner's address; never signs
 }
-export { refreshHealth, reconcile, expireStale, isTerminal, advanceBridges };
+export { refreshHealth, reconcile, expireStale, isTerminal, advanceBridges, scanDeposits };

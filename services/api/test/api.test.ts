@@ -54,7 +54,8 @@ beforeAll(async () => {
         amountOut: out, minAmountOut: (out * 995n) / 1000n, fees: [], estimatedSeconds: 12, priceImpactBps: 4, quotedAt: Date.now(), expiresAt: Date.now() + 30_000, firmness: 'indicative' as const,
         executability: { class: 'opaque' as const, reason: 'test' }, refundable: true, atomic: true }]; } });
   await db.setSetting('prices', false); // the suite never contacts the price source
-  for (const k of Object.keys(adapters)) adapters[k].balances = async (a: string) => { balanceReads.push(`${k}:${a}`); return { native: 5n }; }; // nor a chain
+  // nor a chain. NEXT: the portfolio prefers the adapter's cross-checked read (balancesDetailed) when it has one; it is removed here so that the scripted read below is the one used
+  for (const k of Object.keys(adapters)) { delete adapters[k].balancesDetailed; adapters[k].balances = async (a: string) => { balanceReads.push(`${k}:${a}`); return { native: 5n }; }; }
   app = await (await import('../src/server.ts')).buildServer({ swapProviders: [fake('alpha', 10n), fake('beta', 30n), fake('evil', 0n, '0x000000000000000000000000000000000000dEaD')] });
 });
 afterAll(async () => { await app?.close(); signerSrv?.close(); await sql?.end(); });
