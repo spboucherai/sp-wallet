@@ -4,8 +4,6 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { useSettings } from './hooks';
 import { get, post, setUnauthHandler } from './api';
 import { I18n, useT, type Key, type Locale } from './i18n';
-import { Asset } from './screens/Asset';
-import { Assets } from './screens/Assets';
 import type { FuturesView } from './screens/Futures';
 import { Gate } from './screens/Gate';
 import { Home } from './screens/Home';
@@ -24,6 +22,8 @@ import { applyTheme, cacheTheme, currentTheme, isThemePref } from './theme';
 const screens = {
   futures: () => import('./screens/Futures'),      // the Futures terminal: by far the largest; never preloaded
   alerts: () => import('./screens/Alerts'), monitor: () => import('./screens/Monitor'),
+  // NEXT: the asset list and the asset page are chunks of their own (the first screen is the dashboard) — fetched first when idle
+  assets: () => import('./screens/Assets'), asset: () => import('./screens/Asset'), contacts: () => import('./screens/Contacts'),
   swap: () => import('./screens/Swap'), send: () => import('./screens/Send'), receive: () => import('./screens/Receive'), activity: () => import('./screens/Activity'),
   agents: () => import('./screens/Agents'), research: () => import('./screens/Research'), plan: () => import('./plan'),
   security: () => import('./screens/Security'), settings: () => import('./screens/Settings'),
@@ -36,6 +36,9 @@ const screens = {
 const Futures = lazy(() => screens.futures().then((m) => ({ default: m.Futures })));
 const Alerts = lazy(() => screens.alerts().then((m) => ({ default: m.Alerts })));
 const Monitor = lazy(() => screens.monitor().then((m) => ({ default: m.Monitor })));
+const Assets = lazy(() => screens.assets().then((m) => ({ default: m.Assets })));
+const Asset = lazy(() => screens.asset().then((m) => ({ default: m.Asset })));
+const Contacts = lazy(() => screens.contacts().then((m) => ({ default: m.Contacts })));
 const Swap = lazy(() => screens.swap().then((m) => ({ default: m.Swap })));
 const Send = lazy(() => screens.send().then((m) => ({ default: m.Send })));
 const Receive = lazy(() => screens.receive().then((m) => ({ default: m.Receive })));
@@ -58,7 +61,7 @@ let preloaded = false;
 function preloadScreens(): void {
   if (preloaded) return; preloaded = true;
   const idle = (f: () => void) => { if (typeof requestIdleCallback === 'function') requestIdleCallback(f, { timeout: 4000 }); else setTimeout(f, 1500); };
-  const queue = [async () => { prefetchIcons(); }, screens.swap, screens.send, screens.activity, screens.settings, screens.receive, screens.security, screens.agents, screens.alerts];
+  const queue = [async () => { prefetchIcons(); }, screens.assets, screens.asset, screens.swap, screens.send, screens.activity, screens.settings, screens.receive, screens.security, screens.agents, screens.alerts];
   const next = () => { const f = queue.shift(); if (f) idle(() => { void f().catch(() => {}).then(next); }); };
   setTimeout(next, 1200);
 }
@@ -73,12 +76,12 @@ const ScreenSkeleton = () => <div className="space-y-4" aria-busy="true"><Skelet
 
 // Every screen that has a plain path. The order no longer says anything about the navigation (v11: see AREAS below).
 const TABS = [['home', '/', 'home'], ['swap', '/swap', 'swap'], ['agents', '/agents', 'key'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
-export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent' | 'futures' | 'alerts' | 'monitor' | 'research' | 'plan' | 'developer' | 'private' | 'markets' | 'risk' | 'nfts' | 'nft' | 'nftc';
+export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'contacts' | 'agent' | 'futures' | 'alerts' | 'monitor' | 'research' | 'plan' | 'developer' | 'private' | 'markets' | 'risk' | 'nfts' | 'nft' | 'nftc';
 // v11 interface (docs/v11/UI-ARCHITECTURE.md) — FIVE areas, the same on the phone's tab bar and in the desktop sidebar. An area
 // is not a screen: it is where a screen lives (the tab that stays lit), and its sub-views are listed under the page header.
 export { AREAS, type Area };
 /** the area a screen belongs to; null for what the header menu opens (settings, security, developer, system status, risk, alerts) */
-export const areaOf = (tab: Tab): Area | null => (tab === 'home' || tab === 'assets' || tab === 'asset' || tab === 'receive' || tab === 'send' || tab === 'nfts' || tab === 'nft' || tab === 'nftc' ? 'home' : tab === 'markets' || tab === 'private' ? 'markets'
+export const areaOf = (tab: Tab): Area | null => (tab === 'home' || tab === 'assets' || tab === 'asset' || tab === 'contacts' || tab === 'receive' || tab === 'send' || tab === 'nfts' || tab === 'nft' || tab === 'nftc' ? 'home' : tab === 'markets' || tab === 'private' ? 'markets'
   : tab === 'swap' || tab === 'futures' || tab === 'plan' ? 'trade' : tab === 'agents' || tab === 'agent' || tab === 'research' ? 'agents' : tab === 'activity' ? 'activity' : null);
 /** Trade opens on the sub-view used last (spot by default: the terminal is the largest chunk and is fetched only when asked for) */
 const TRADE_KEY = 'spw-trade-view';
@@ -87,7 +90,7 @@ const areaHome = (a: Area): Tab => (a === 'trade' ? lastTrade() : a);
 /** Where to go, with optional pre-selection (asset page, or send/receive pre-filled). */
 export interface Route { tab: Tab; network?: string; asset?: string; /** sub-view of a screen (Futures: compare, accounts) */ view?: string }
 export type Nav = (r: Route) => void;
-export const pathOf = (r: Route): string => r.tab === 'nfts' ? `/nfts${r.view ? `?v=${r.view}` : ''}` : r.tab === 'nft' ? `/nft/${encodeURIComponent(r.asset ?? '')}` : r.tab === 'nftc' ? `/nfts/c/${encodeURIComponent(r.asset ?? '')}` : r.tab === 'risk' ? `/risk${r.asset ? `?mandate=${encodeURIComponent(r.asset)}` : ''}` : r.tab === 'markets' ? `/markets${r.view === 'compare' ? `?v=compare${r.asset ? `&u=${encodeURIComponent(r.asset)}` : ''}` : ''}` : r.tab === 'private' ? `/private-markets${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'developer' ? `/developer${r.view ? `?v=${r.view}` : ''}` : r.tab === 'plan' ? `/plan/${r.asset}` : r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
+export const pathOf = (r: Route): string => r.tab === 'nfts' ? `/nfts${r.view ? `?v=${r.view}` : ''}` : r.tab === 'nft' ? `/nft/${encodeURIComponent(r.asset ?? '')}` : r.tab === 'nftc' ? `/nfts/c/${encodeURIComponent(r.asset ?? '')}` : r.tab === 'risk' ? `/risk${r.asset ? `?mandate=${encodeURIComponent(r.asset)}` : ''}` : r.tab === 'markets' ? `/markets${r.view === 'compare' ? `?v=compare${r.asset ? `&u=${encodeURIComponent(r.asset)}` : ''}` : ''}` : r.tab === 'private' ? `/private-markets${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'developer' ? `/developer${r.view ? `?v=${r.view}` : ''}` : r.tab === 'plan' ? `/plan/${r.asset}` : r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : r.tab === 'contacts' ? '/contacts' : r.tab === 'activity' && r.asset && !r.network ? `/activity?tx=${encodeURIComponent(r.asset)}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
 /** v11: paths that name an AREA or an older place — each is answered by the screen that holds it today (the address bar is corrected in place) */
 const ALIASES: Record<string, () => Route> = { '/trade': () => ({ tab: lastTrade() }), '/dashboard': () => ({ tab: 'home' }), '/compare': () => ({ tab: 'markets', view: 'compare' }), '/spot': () => ({ tab: 'swap' }), '/perps': () => ({ tab: 'futures' }), '/api': () => ({ tab: 'developer' }), '/system': () => ({ tab: 'monitor' }) };
 export function routeOf(): Route {
@@ -96,6 +99,8 @@ export function routeOf(): Route {
   const m = /^\/asset\/([a-z0-9-]+)\/(.+)$/.exec(location.pathname);
   if (m) return { tab: 'asset', network: m[1], asset: decodeURIComponent(m[2]!) };
   if (location.pathname === '/assets') return { tab: 'assets' };
+  if (location.pathname === '/contacts') return { tab: 'contacts' };   // NEXT: the address book
+  if (location.pathname === '/activity' && new URLSearchParams(location.search).get('tx')) return { tab: 'activity', asset: new URLSearchParams(location.search).get('tx')! };   // NEXT: one movement, opened
   const ag = /^\/agents\/([0-9a-f-]{36})$/.exec(location.pathname);
   if (ag) return { tab: 'agent', asset: ag[1] };
   const pl = /^\/plan\/([0-9a-f-]{36})$/.exec(location.pathname);   // v7: a plan's progress view
@@ -172,6 +177,10 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
     if (gone && mini.current && mini.current.textContent !== h1!.textContent) mini.current.textContent = h1!.textContent;
     h.toggleAttribute('data-titled', gone); }); }; f(); addEventListener('scroll', f, { passive: true }); return () => { removeEventListener('scroll', f); cancelAnimationFrame(raf); }; }, [tab]);
   useEffect(() => { preloadScreens(); }, []);   // v10: the other screens' chunks, once this one is drawn and the browser is idle
+  // NEXT live sync: one event feed for the open session (walletEvents.ts) — it stops with the shell (lock, logout, session end)
+  useEffect(() => { let stop: (() => void) | null = null, gone = false;
+    void import('./walletEvents').then((m) => { if (!gone) stop = m.startWalletEvents(qc); }, () => { /* without the feed the screens keep their own polling */ });
+    return () => { gone = true; stop?.(); }; }, [qc]);
   const ptr = usePullToRefresh(tab === 'home' || tab === 'activity', () => qc.invalidateQueries());
   const area = areaOf(tab);
   useEffect(() => { if (tab === 'swap' || tab === 'futures') { try { localStorage.setItem(TRADE_KEY, tab); } catch { /* private mode */ } } }, [tab]);   // Trade reopens where it was left
@@ -188,7 +197,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
   const sub = area && tab !== 'plan' ? SUB[area] : undefined;
   const wide = tab === 'futures' || tab === 'markets';
   // the width of the page: forms stay a narrow column; lists, dashboards and operations pages use the desktop's width
-  const width = wide ? `max-w-none ${tab === 'futures' ? 'lg:pt-6' : 'lg:pt-8'}` : `lg:pt-10 max-w-xl ${tab === 'home' ? 'lg:max-w-5xl' : tab === 'activity' || tab === 'agents' || tab === 'agent' || tab === 'research' || tab === 'monitor' || tab === 'private' || tab === 'risk' || tab === 'developer' || tab === 'alerts' || tab === 'nfts' || tab === 'nft' || tab === 'nftc' ? 'lg:max-w-4xl' : 'lg:max-w-2xl'}`;
+  const width = wide ? `max-w-none ${tab === 'futures' ? 'lg:pt-6' : 'lg:pt-8'}` : `lg:pt-10 max-w-xl ${tab === 'home' || tab === 'assets' || tab === 'asset' || tab === 'send' || tab === 'security' || tab === 'settings' || tab === 'contacts' ? 'lg:max-w-[var(--content-max)]' : tab === 'activity' || tab === 'agents' || tab === 'agent' || tab === 'research' || tab === 'monitor' || tab === 'private' || tab === 'risk' || tab === 'developer' || tab === 'alerts' || tab === 'nfts' || tab === 'nft' || tab === 'nftc' ? 'lg:max-w-4xl' : 'lg:max-w-2xl'}`;
   return (
     <div className={`safe-x mx-auto flex min-h-full ${tab === 'futures' ? 'max-w-[1680px]' : 'max-w-7xl'}`}>{ptr}
       <a href="#main" className="absolute left-0 top-0 h-0 w-0 overflow-hidden focus:fixed focus:left-3 focus:top-3 focus:z-40 focus:h-auto focus:min-h-11 focus:w-auto focus:rounded-xl focus:bg-surface focus:px-4 focus:py-3 focus:shadow-e2">{t('v11NavSkip')}</a>
@@ -213,16 +222,17 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
             <button key={id} role="tab" aria-selected={on} data-sub={id} onClick={() => { if (!on) nav(to); }} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 text-[0.8125rem] font-semibold transition min-[380px]:px-3 min-[380px]:text-[0.875rem] ${on ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-mute hover:text-ink'}`}>{t(k)}</button>)}</div>}
           <ErrorBoundary scope="screen" resetKey={pathOf(route)}>
           {tab === 'home' && <Home go={go} nav={nav} />}
+          <Suspense fallback={<ScreenSkeleton />}>
           {tab === 'assets' && <Assets nav={nav} />}
           {tab === 'asset' && <Asset network={route.network ?? ''} asset={route.asset ?? 'native'} nav={nav} />}
-          <Suspense fallback={<ScreenSkeleton />}>
+          {tab === 'contacts' && <Contacts nav={nav} />}
           {tab === 'receive' && <Receive initial={route.network} nav={nav} />}
           {tab === 'send' && <Send go={go} initial={route} />}
           {tab === 'swap' && <Swap />}
           {tab === 'futures' && <Suspense fallback={<Skeleton h="h-72" />}><Futures instrument={route.asset} view={(['compare', 'accounts', 'router'].includes(route.view ?? '') ? route.view : 'terminal') as FuturesView} nav={nav} /></Suspense>}
           {tab === 'agents' && <Agents nav={nav} />}
           {tab === 'agent' && <Agent id={route.asset ?? ''} nav={nav} />}
-          {tab === 'activity' && <Activity />}
+          {tab === 'activity' && <Activity open={route.network ? undefined : route.asset} />}
           {tab === 'plan' && <PlanScreen id={route.asset ?? ''} />}
           {tab === 'security' && <Security />}
           {tab === 'settings' && <Settings lock={lock} go={go} />}

@@ -85,7 +85,7 @@ describe('Activity — only the first page is re-read on the interval', () => {
     const pages = [page(['c', 'fresh'])];
     expect(withHead(pages, { page: page(['c', 'stale']), at: 50 }, 100)).toEqual(pages); expect(withHead([], { page: page(['x', 'y']), at: 500 }, 0)).toEqual([]); expect(withHead(pages, null, 0)).toEqual(pages);
   });
-  it('the infinite query itself has no interval', () => { const s = src('../src/screens/Activity.tsx'); expect(s).not.toMatch(/refetchInterval: 20_000 \}\);\n  const pages/); expect(s).toMatch(/setInterval\(tick, HEAD_REFRESH_MS\)/); });
+  it('the infinite query itself has no interval', () => { const s = src('../src/screens/Activity.tsx'); expect(s).not.toMatch(/refetchInterval: 20_000 \}\);\n  const pages/); expect(s).toMatch(/setInterval\(tick, headMs\)/); expect(s).toMatch(/useFallbackInterval\(HEAD_REFRESH_MS, /); });
 });
 
 describe('query cache — kept a few minutes, never beyond the session', () => {

@@ -118,9 +118,11 @@ describe('i18n: the `rk` block and the `v11Lo` keys', () => {
 
 describe('the Asset page names the kind of an operation', () => {
   it('a swap, a cross-chain transfer and a GMX order are not « sent »', () => {
-    const s = read('../src/screens/Asset.tsx');
+    // NEXT: the asset page, the dashboard and Activity share ONE row (tx-row.tsx `itemTitle`)
+    expect(read('../src/screens/Asset.tsx')).toMatch(/<TransactionRow /);
+    const s = read('../src/tx-row.tsx');
     expect(s).not.toMatch(/i\.kind === 'receive' \? t\('received'\) : t\('sent'\)/);
-    expect(s).toMatch(/i\.kind === 'gmx' \? t\('svKind_gmx'\)/);
+    expect(s).toMatch(/if \(i\.kind === 'gmx'\) return `\$\{t\('svKind_gmx'\)\}/); expect(s).toMatch(/if \(i\.kind === 'bridge'\) return `\$\{t\('brActivity'\)\}/); expect(s).toMatch(/if \(i\.kind === 'swap'\) return `\$\{t\('swap'\)\}/);
   });
 });
 

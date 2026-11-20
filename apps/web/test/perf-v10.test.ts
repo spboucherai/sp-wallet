@@ -72,7 +72,9 @@ describe('critical logos and separate screens', () => {
       expect(app, m).toMatch(new RegExp(`\\(\\) => import\\('${m.replace(/[./]/g, '\\$&')}'\\)`));
       expect(app, m).not.toMatch(new RegExp(`^import \\{[^}]*\\} from '${m.replace(/[./]/g, '\\$&')}';`, 'm'));
     }
-    for (const m of ['./screens/Home', './screens/Assets', './screens/Asset', './screens/Gate']) expect(app, m).toMatch(new RegExp(`^import \\{[^}]*\\} from '${m.replace(/[./]/g, '\\$&')}';`, 'm'));
+    // NEXT: the first screen is the dashboard (Home) and the lock screen; the asset list and the asset page became chunks of their own
+    for (const m of ['./screens/Assets', './screens/Asset', './screens/Contacts']) { expect(app, m).toMatch(new RegExp(`\\(\\) => import\\('${m.replace(/[./]/g, '\\$&')}'\\)`)); expect(app, m).not.toMatch(new RegExp(`^import \\{[^}]*\\} from '${m.replace(/[./]/g, '\\$&')}';`, 'm')); }
+    for (const m of ['./screens/Home', './screens/Gate']) expect(app, m).toMatch(new RegExp(`^import \\{[^}]*\\} from '${m.replace(/[./]/g, '\\$&')}';`, 'm'));
     expect(app).toMatch(/useEffect\(\(\) => \{ preloadScreens\(\); \}, \[\]\);/);
   });
 });

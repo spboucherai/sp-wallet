@@ -1,31 +1,45 @@
 import { useQuery } from '@tanstack/react-query';
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { get } from '../api';
 import type { Nav } from '../App';
 import { PriceChart, type Pt } from '../chart';
 import { sendBlock, sendBlockKey, useNetworks, usePortfolio, useSettings } from '../hooks';
 import { backOr } from '../nav';
 import { I18n, useT } from '../i18n';
-import { Addr, Btn, Card, Change, Coin, CopyBtn, EmptyState, ErrorState, fiat, H, Icon, Money, NetDot, Notice, numFmt, Seg, Skeleton, SkeletonRows, StatePill, trimAmt, when } from '../ui';
+import { Addr, Btn, Card, Change, Coin, CopyBtn, EmptyState, ErrorState, Fact, fiat, H, Icon, Money, NetDot, Notice, numFmt, Seg, Skeleton, SkeletonRows, StatTile, trimAmt } from '../ui';
 import { issuerOf } from '../issuer';
 import { PriceFreshness, StaleBanner } from '../freshness'; // v11; NEXT W4
+import { fiatText, mulDecimal } from '../money';
 import { LiveSpotTag, useLiveSpot } from '../quotes-spot'; // v11 live quotes (the quote client itself is fetched on demand)
+import { prefKey, useAssetPrefs, useContacts } from '../wallet';
+import { TransactionRow } from '../tx-row';
+import { rowValue, useFallbackInterval } from '../wallet-ui';
+import { foldInternal, itemsOfAsset, type WalletItem } from '../walletItems';
 
-/** NEXT W5: GET /activity has no asset filter — the widest window it allows is read, and an empty result inside a FULL window is not « no activity » */
+/** GET /activity returns at most this many rows; without a server-side asset filter, an empty result inside a FULL window is not « no activity » */
 export const ACTIVITY_WINDOW = 500;
 const RANGES = [['1', '1J', '1D'], ['7', '1S', '1W'], ['30', '1M', '1M'], ['365', '1A', '1Y']] as const;
 const compact = (n: number | null, cur: string, locale: string) => (n === null ? '—' : new Intl.NumberFormat(locale === 'fr' ? 'fr-CA' : 'en-CA', { style: 'currency', currency: cur, notation: 'compact', maximumFractionDigits: 2 }).format(n));
+/**
+ * Was the answer filtered by the server? The `network` / `asset` filters of GET /activity belong to a branch not merged when this
+ * was written, and a server without them ignores the parameters: the answer is then every movement. It is taken as filtered
+ * only when it holds nothing else than this asset (pure: tested).
+ */
+export const serverFiltered = (items: readonly Pick<WalletItem, 'network' | 'asset'>[], network: string, asset: string): boolean => items.length > 0 && items.every((i) => i.network === network && i.asset === asset);
 
 export function Asset({ network, asset, nav }: { network: string; asset: string; nav: Nav }) {
   const t = useT(); const { locale } = useContext(I18n); const { settings } = useSettings();
-  const pf = usePortfolio(), nets = useNetworks();
-  const [days, setDays] = useState<'1' | '7' | '30' | '365'>('7'), [hover, setHover] = useState<Pt | null>(null);
+  const pf = usePortfolio(), nets = useNetworks(), prefs = useAssetPrefs(), contacts = useContacts();
+  const [days, setDays] = useState<'1' | '7' | '30' | '365'>('7'), [hover, setHover] = useState<Pt | null>(null), [prefFailed, setPrefFailed] = useState(false);
+  useEffect(() => { if (!prefFailed) return; const h = setTimeout(() => setPrefFailed(false), 6000); return () => clearTimeout(h); }, [prefFailed]);
   const cur = settings.currency, ck = cur === 'USD' ? 'usd' : 'cad';
   const b = pf.data?.balances.find((x) => x.network === network && x.asset === asset);
   const live = useLiveSpot(b ? [b.symbol] : [])[b?.symbol ?? ''];   // v11 live quotes: the streamed USD price of this symbol, when there is one
   const mk = useQuery({ queryKey: ['market', b?.symbol, days, ck], enabled: !!b, staleTime: 120_000,
     queryFn: () => get<{ points: Pt[]; market: any }>(`/market/${encodeURIComponent(b!.symbol)}?days=${days}&currency=${ck}`) });
-  const act = useQuery({ queryKey: ['activity', 'window', ACTIVITY_WINDOW], queryFn: () => get<{ items: any[] }>(`/activity?limit=${ACTIVITY_WINDOW}`), staleTime: 15_000 });
+  const actMs = useFallbackInterval(30_000, 180_000);
+  const act = useQuery({ queryKey: ['activity', 'asset', network, asset], refetchInterval: actMs, staleTime: 15_000,
+    queryFn: () => get<{ items: WalletItem[] }>(`/activity?limit=${ACTIVITY_WINDOW}&network=${encodeURIComponent(network)}&asset=${encodeURIComponent(asset)}`) });
   // NEXT W5: « back » returns where the owner came from (the asset list, Home, another asset); on a page opened directly, Home
   const back = () => backOr(() => nav({ tab: 'home' }));
   const backBtn = <button onClick={back} aria-label={t('back')} data-testid="asset-back" className="press -ml-2.5 grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink"><Icon n="chev" className="h-6 w-6 rotate-180" /></button>;
@@ -43,81 +57,93 @@ export function Asset({ network, asset, nav }: { network: string; asset: string;
   const shown = hover?.p ?? livePrice ?? (pts.length ? pts[pts.length - 1]!.p : price);
   const base = pts.length ? pts[0]!.p : null;
   const delta = shown !== null && base ? ((shown - base) / base) * 100 : null;
-  const money = (v: number) => fiat(v, cur, locale);
   const priceFmt = (v: number) => new Intl.NumberFormat(locale === 'fr' ? 'fr-CA' : 'en-CA', { style: 'currency', currency: cur, maximumFractionDigits: v < 1 ? 6 : 2 }).format(v);
   const timeFmt = (ts: number) => new Date(ts).toLocaleString(locale === 'fr' ? 'fr-CA' : 'en-CA', days === '1' ? { hour: '2-digit', minute: '2-digit' } : days === '365' ? { month: 'short', year: 'numeric' } : { day: 'numeric', month: 'short' });
   const hidden = settings.hideBalances;
-  const value = b.display !== null && price !== null ? Number(b.display) * price : null;
-  const others = pf.data.balances.filter((x) => x.symbol === b.symbol && !(x.network === network && x.asset === asset));
-  const mine = (act.data?.items ?? []).filter((i) => i.network === network && i.asset === asset).slice(0, 6), windowFull = (act.data?.items.length ?? 0) >= ACTIVITY_WINDOW, block = sendBlock(pf.data);
+  // the holding's value: an exact product of the balance and the price (money.ts), never a float
+  const value = price !== null ? mulDecimal(b.display, price) : null;
+  // per-network breakdown: every row of this symbol the wallet can hold, this one included
+  const same = pf.data.balances.filter((x) => x.symbol === b.symbol), heldElsewhere = same.filter((x) => x.amount !== null && x.amount !== '0');
+  const all = act.data?.items ?? [], filtered = serverFiltered(all, network, asset);
+  const mine = foldInternal(itemsOfAsset(all, network, asset)).slice(0, 8), windowFull = !filtered && all.length >= ACTIVITY_WINDOW, block = sendBlock(pf.data);
   const iss = asset === 'native' ? null : issuerOf(t, b.symbol, b.name);
   const sgn = (v: number) => `${v > -0.005 ? '+' : '−'}${numFmt(Math.abs(v), locale, 2, 2)} %`;
-  const stat = (k: string, v: string) => <div className="rounded-2xl bg-elev/60 p-3.5"><div className="text-[0.75rem] text-mute">{k}</div><div className="mt-0.5 text-[0.9375rem] font-semibold">{v}</div></div>;
+  const p = prefs.prefs[prefKey(network, asset)];
+  const change = (c: { hidden?: boolean; favorite?: boolean }) => { void prefs.set(network, asset, c).then((ok) => { if (!ok) setPrefFailed(true); }); };
+  const loc = locale === 'fr' ? 'fr-CA' : 'en-CA';
+  const rowTime = (at: string) => new Date(at).toLocaleString(loc, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-testid="asset">
       <div className="flex items-center gap-2.5 pt-2">
         {backBtn}
         <Coin sym={b.symbol} net={b.network} size={48} />
-        <div className="min-w-0"><h1 className="truncate text-[1.3125rem] font-semibold leading-tight tracking-[-0.02em]">{b.name}</h1><div className="mt-0.5 flex items-center gap-1.5 text-[0.8125rem] text-mute"><span>{b.symbol}</span><span aria-hidden="true">·</span><NetDot net={b.network} size={15} /><span className="truncate">{b.networkName}</span></div></div>
-        {livePrice !== null ? <span className="ml-auto shrink-0"><LiveSpotTag converted={ck !== 'usd'} /></span> : m?.priceAt && <span className="ml-auto shrink-0"><PriceFreshness at={m.priceAt} stale={!!m.stale} /></span>}
+        <div className="min-w-0 flex-1"><h1 className="t-title2 truncate">{b.name}</h1><div className="t-footnote mt-0.5 flex items-center gap-1.5 text-mute"><span>{b.symbol}</span><span aria-hidden="true">·</span><NetDot net={b.network} size={15} /><span className="truncate">{b.networkName}</span></div></div>
+        {prefs.available && <span className="flex shrink-0 items-center">
+          <button type="button" aria-pressed={!!p?.favorite} aria-label={t(p?.favorite ? 'nwUnfav' : 'nwFav', { name: b.name })} data-testid="asset-fav" onClick={() => change({ favorite: !p?.favorite })} className={`press grid h-11 w-11 place-items-center rounded-full ${p?.favorite ? 'text-caution' : 'text-mute'}`}><Icon n={p?.favorite ? 'starFill' : 'star'} className="h-[22px] w-[22px]" /></button>
+          <button type="button" aria-pressed={!!p?.hidden} aria-label={t(p?.hidden ? 'nwUnhide' : 'nwHide', { name: b.name })} data-testid="asset-hide" onClick={() => change({ hidden: !p?.hidden })} className="press grid h-11 w-11 place-items-center rounded-full text-mute"><Icon n={p?.hidden ? 'eye' : 'eyeOff'} className="h-[22px] w-[22px]" /></button></span>}
       </div>
 
       <StaleBanner q={pf} />
+      {prefFailed && <Notice tone="danger" testid="pref-failed">{t('nwPrefFailed')}</Notice>}
+      {p?.hidden && <Notice tone="info" testid="asset-hidden-note" action={<button className="link" onClick={() => change({ hidden: false })}>{t('nwShowAgain')}</button>}>{t('nwHiddenAsset')}</Notice>}
       {iss && <div data-testid="asset-issuer"><Notice tone="warn">{t('qaPegNote', { name: b.name, sym: b.symbol, issuer: iss.text })}</Notice></div>}
-      <Card className="!pb-4">
-        <div className="text-[0.8125rem] text-mute">{hover ? timeFmt(hover.t) : t('price')}</div>
-        <div className="t-display mt-1.5 text-[clamp(2.125rem,10.5vw,2.75rem)]">{shown !== null && shown !== undefined ? priceFmt(shown) : '—'}</div>
-        <div className="mt-2 h-5">{delta !== null && <Change pct={delta} suffix={t(`r_${days}` as never)} />}</div>
-        <div className="mt-3">{mk.isLoading ? <div className="skel h-[210px] !rounded-2xl" /> : <PriceChart points={pts} format={priceFmt} formatTime={timeFmt} onHover={setHover} />}</div>
-        <div className="mt-4"><Seg label={t('range')} value={days} onChange={(d) => { setDays(d); setHover(null); }} options={RANGES.map(([d, fr, en]) => [d, locale === 'fr' ? fr : en] as const)} /></div>
-        {!pf.data.prices && <p className="mt-3 text-[0.78125rem] text-mute">{t(settings.prices ? 'dzPricesAway' : 'noPrices')}</p>}
-      </Card>
+      <div className="panes space-y-5 lg:space-y-0"><div className="min-w-0 space-y-5">
+        <Card className="!pb-4">
+          <div className="flex items-center justify-between gap-3"><div className="t-footnote text-mute">{hover ? timeFmt(hover.t) : t('price')}</div>
+            {livePrice !== null ? <LiveSpotTag converted={ck !== 'usd'} /> : m?.priceAt && <PriceFreshness at={m.priceAt} stale={!!m.stale} />}</div>
+          <div className="t-display amt mt-1.5 text-[clamp(2.125rem,10.5vw,2.75rem)]">{shown !== null && shown !== undefined ? priceFmt(shown) : '—'}</div>
+          <div className="mt-2 h-5">{delta !== null && <Change pct={delta} suffix={t(`r_${days}` as never)} />}</div>
+          <div className="mt-3">{mk.isLoading ? <div className="skel h-[210px] !rounded-2xl" /> : <PriceChart points={pts} format={priceFmt} formatTime={timeFmt} onHover={setHover} />}</div>
+          <div className="mt-4"><Seg compact label={t('range')} value={days} onChange={(d) => { setDays(d); setHover(null); }} options={RANGES.map(([d, fr, en]) => [d, locale === 'fr' ? fr : en] as const)} /></div>
+          {!pf.data.prices && <p className="t-footnote mt-3 text-mute">{t(settings.prices ? 'dzPricesAway' : 'noPrices')}</p>}
+        </Card>
 
-      <Card>
-        <div className="flex items-end justify-between gap-3">
-          <div><div className="text-[0.8125rem] text-mute">{t('yourBalance')}</div>
-            <div className="mt-1 text-[1.75rem] font-semibold leading-tight tracking-[-0.025em]"><Money hidden={hidden}>{b.display === null ? '—' : trimAmt(b.display, 8)} <span className="text-mute">{b.symbol}</span></Money></div>
-            {value !== null && <div className="text-[0.875rem] text-mute"><Money hidden={hidden}>{money(value)}</Money></div>}</div>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <button onClick={() => nav({ tab: 'receive', network })} className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-[0.96875rem] font-semibold text-onprimary"><Icon n="down" className="h-[18px] w-[18px]" />{t('receive')}</button>
-          <button onClick={() => nav({ tab: 'send', network, asset })} disabled={block !== null} data-testid="asset-send" className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl bg-elev px-4 text-[0.96875rem] font-semibold disabled:opacity-40"><Icon n="up" className="h-[18px] w-[18px]" />{t('send')}</button>
-        </div>
-        {block && <p className="mt-3 text-[0.78125rem] leading-snug text-warn" data-testid="send-blocked">{t(sendBlockKey(block))}</p>}
-      </Card>
+        {m && <Card><H>{t('marketData')}</H>
+          <div className="grid grid-cols-2 gap-3">
+            <StatTile label={t('change24h')} value={m.change24h === null ? '—' : sgn(m.change24h)} />
+            <StatTile label={t('change7d')} value={m.change7d === null ? '—' : sgn(m.change7d)} />
+            <StatTile label={t('marketCap')} value={compact(m.marketCap, 'USD', locale)} />
+            <StatTile label={t('volume24h')} value={compact(m.volume24h, 'USD', locale)} />
+            <StatTile label={t('range24h')} value={m.low24h === null || m.high24h === null ? '—' : `${fiat(m.low24h, 'USD', locale)} – ${fiat(m.high24h, 'USD', locale)}`} />
+            <StatTile label={t('rank')} value={m.rank ? `#${m.rank}` : '—'} />
+          </div>
+          <p className="t-footnote mt-3 text-mute">{t('marketSource')}</p></Card>}
+      </div><div className="min-w-0 space-y-5">
+        <Card>
+          <div className="t-footnote text-mute">{t('yourBalance')}</div>
+          <div className="t-title1 amt mt-1" data-testid="asset-balance"><Money hidden={hidden}>{b.display === null ? '—' : trimAmt(b.display, 8)} <span className="text-mute">{b.symbol}</span></Money></div>
+          {value !== null && <div className="t-callout text-mute"><Money hidden={hidden}>{fiatText(value, cur, locale)}</Money></div>}
+          {b.display === null && <p className="t-footnote mt-1 text-caution">{t('qaBalUnknown')}</p>}
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <Btn onClick={() => nav({ tab: 'receive', network })}><Icon n="arrowDown" className="h-[18px] w-[18px]" />{t('receive')}</Btn>
+            <Btn kind="soft" onClick={() => nav({ tab: 'send', network, asset })} disabled={block !== null} data-testid="asset-send"><Icon n="arrowUp" className="h-[18px] w-[18px]" />{t('send')}</Btn>
+          </div>
+          {block && <p className="t-footnote mt-3 text-caution" data-testid="send-blocked">{t(sendBlockKey(block))}</p>}
+        </Card>
 
-      {others.length > 0 && <Card className="!px-0 !pb-1"><div className="px-5"><H>{t('otherNetworks', { sym: b.symbol })}</H></div>
-        <ul>{others.map((o, k) => <li key={o.network + o.asset}><button onClick={() => nav({ tab: 'asset', network: o.network, asset: o.asset })} className={`row-press flex min-h-[60px] w-full items-center gap-3 px-5 py-2.5 text-left ${k ? 'border-t border-line' : ''}`}>
-          <Coin sym={o.symbol} net={o.network} size={36} /><span className="min-w-0 flex-1"><span className="block truncate text-[0.9375rem] font-medium leading-tight">{o.networkName}</span>{o.name !== b.name && <span className="mt-0.5 block truncate text-[0.75rem] text-mute">{o.name}</span>}</span>
-          <span className={`text-[0.9375rem] font-semibold ${o.amount === '0' ? 'text-mute' : ''}`}><Money hidden={hidden}>{o.display === null ? '—' : trimAmt(o.display)}</Money></span><Icon n="chev" className="h-4 w-4 text-mute" /></button></li>)}</ul></Card>}
+        {same.length > 1 && <Card className="!px-0 !pb-1"><div className="px-[var(--card-padding)]"><H right={heldElsewhere.length > 0 ? <span className="t-footnote text-mute">{t('nwOnNetworks', { n: heldElsewhere.length })}</span> : undefined}>{t('nwByNetworkOf', { sym: b.symbol })}</H></div>
+          <ul data-testid="asset-networks">{same.map((o) => { const here = o.network === network && o.asset === asset, v = rowValue(o, pf.data!.prices, ck);
+            return <li key={o.network + o.asset}><button onClick={() => { if (!here) nav({ tab: 'asset', network: o.network, asset: o.asset }); }} aria-current={here ? 'page' : undefined} className={`row row-press ${here ? 'bg-elev/50' : ''}`}>
+              <Coin sym={o.symbol} net={o.network} size={36} /><span className="min-w-0 flex-1"><span className="t-body block truncate font-medium leading-tight">{o.networkName}</span>{o.name !== b.name && <span className="t-footnote mt-0.5 block truncate text-mute">{o.name}</span>}</span>
+              <span className="shrink-0 text-right"><span className={`t-body-strong amt block ${o.amount === '0' ? 'text-mute' : ''}`}><Money hidden={hidden}>{o.display === null ? '—' : trimAmt(o.display)}</Money></span>
+                {v !== null && o.amount !== '0' && <span className="t-footnote block text-mute"><Money hidden={hidden}>{fiatText(v, cur, locale)}</Money></span>}</span>
+              {!here && <Icon n="chev" className="h-4 w-4 shrink-0 text-mute" />}</button></li>; })}</ul></Card>}
 
-      {m && <Card><H>{t('marketData')}</H>
-        <div className="grid grid-cols-2 gap-3">
-          {stat(t('change24h'), m.change24h === null ? '—' : sgn(m.change24h))}
-          {stat(t('change7d'), m.change7d === null ? '—' : sgn(m.change7d))}
-          {stat(t('marketCap'), compact(m.marketCap, 'USD', locale))}
-          {stat(t('volume24h'), compact(m.volume24h, 'USD', locale))}
-          {stat(t('range24h'), m.low24h === null || m.high24h === null ? '—' : `${fiat(m.low24h, 'USD', locale)} – ${fiat(m.high24h, 'USD', locale)}`)}
-          {stat(t('rank'), m.rank ? `#${m.rank}` : '—')}
-        </div>
-        <p className="mt-3 text-[0.75rem] text-mute">{t('marketSource')}</p></Card>}
+        <Card><H>{t('assetDetails')}</H>
+          <dl>
+            <Fact k={t('network')}><span className="inline-flex items-center gap-2"><NetDot net={b.network} size={20} />{b.networkName}</span></Fact>
+            <Fact k={t('decimals')}>{b.decimals}</Fact>
+            {asset === 'native' ? <Fact k={t('nwKind')}>{t('nativeCoin')}</Fact> : <Fact stack k={t('contract')} testid="asset-contract"><Addr value={asset} />
+              <div className="mt-2 flex flex-wrap gap-2"><CopyBtn small text={asset} />{n && <a href={n.explorerAddr + asset} target="_blank" rel="noreferrer noopener" className="btn press inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] border border-line px-5 text-[0.84375rem] font-medium"><Icon n="ext" className="h-4 w-4" />{t('explorer')}</a>}</div></Fact>}
+          </dl>
+          {asset !== 'native' && <p className="t-footnote mt-3 text-mute">{t('verifiedToken')}</p>}</Card>
 
-      <Card><H>{t('assetDetails')}</H>
-        <dl className="space-y-3 text-[0.875rem]">
-          <div className="flex justify-between gap-4"><dt className="text-mute">{t('network')}</dt><dd className="flex items-center gap-2 font-medium"><NetDot net={b.network} size={20} />{b.networkName}</dd></div>
-          <div className="flex justify-between gap-4"><dt className="text-mute">{t('decimals')}</dt><dd className="font-medium">{b.decimals}</dd></div>
-          <div><dt className="text-mute">{asset === 'native' ? t('nativeCoin') : t('contract')}</dt>
-            {asset !== 'native' && <dd className="mt-1"><Addr value={asset} /><div className="mt-2 flex gap-2"><CopyBtn text={asset} />{n && <a href={n.explorerAddr + asset} target="_blank" rel="noreferrer noopener" className="press inline-flex min-h-[50px] items-center gap-2 rounded-2xl border border-line px-4 text-[0.9375rem] font-medium"><Icon n="ext" className="h-4 w-4" />{t('explorer')}</a>}</div></dd>}</div>
-        </dl>
-        {asset !== 'native' && <p className="mt-3 text-[0.75rem] text-mute">{t('verifiedToken')}</p>}</Card>
-
-      <Card className="!px-0 !pb-1"><div className="px-5"><H right={<button className="-my-2 min-h-11 min-w-11 text-[0.84375rem] font-medium text-blue" onClick={() => nav({ tab: 'activity' })}>{t('all')}</button>}>{t('activity')}</H></div>
-        {!act.data ? (act.isError ? <div className="flex items-center justify-between gap-3 px-5 pb-4 text-[0.875rem] text-mute" data-testid="asset-activity-error"><span>{t('nxActivityErr')}</span><Btn kind="soft" className="!min-h-11 shrink-0 !px-3.5 !text-[0.84375rem]" onClick={() => void act.refetch()}>{t('retry')}</Btn></div> : <div className="px-5 pb-4" aria-busy="true"><Skeleton h="h-12" /></div>)
-          : mine.length === 0 ? <p className="px-5 pb-4 text-[0.875rem] text-mute" data-testid="asset-activity-empty" data-window-full={windowFull}>{windowFull ? t('nxActivityWindow', { n: ACTIVITY_WINDOW }) : t('noActivity')}</p> :
-          <ul>{mine.map((i, k) => <li key={i.id} className={`flex items-center gap-3 px-5 py-3 ${k ? 'border-t border-line' : ''}`}>
-            <span className={`grid h-9 w-9 place-items-center rounded-full ${i.kind === 'receive' ? 'bg-emerald/10 text-emerald' : 'bg-blue/10 text-blue'}`}><Icon n={i.kind === 'receive' ? 'down' : 'up'} className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-[0.90625rem] font-medium">{/* v11 interface: a swap, a cross-chain transfer and a GMX order are not « sent » */ i.kind === 'receive' ? t('received') : i.kind === 'gmx' ? t('svKind_gmx') : i.kind === 'bridge' ? t('brActivity') : i.kind === 'swap' ? t('swap') : t('sent')}</span><span className="block text-[0.75rem] text-mute">{when(i.at, locale)}</span></span>
-            <span className="text-right"><span className="block text-[0.90625rem] font-semibold"><Money hidden={hidden}>{i.kind === 'receive' ? '+' : '−'}{trimAmt(i.amountDisplay)}</Money></span><StatePill state={i.state} /></span></li>)}</ul>}</Card>
+        <Card className="!px-0 !pb-1"><div className="px-[var(--card-padding)]"><H right={<button className="link -my-2" onClick={() => nav({ tab: 'activity' })}>{t('all')}<Icon n="chev" className="h-4 w-4" /></button>}>{t('nwMovementsOf', { sym: b.symbol })}</H></div>
+          {!act.data ? (act.isError ? <div className="t-callout flex items-center justify-between gap-3 px-[var(--card-padding)] pb-4 text-mute" data-testid="asset-activity-error"><span>{t('nxActivityErr')}</span><Btn kind="soft" className="!min-h-11 shrink-0 !text-[0.84375rem]" onClick={() => void act.refetch()}>{t('retry')}</Btn></div> : <div className="px-[var(--card-padding)] pb-4" aria-busy="true"><Skeleton h="h-12" /></div>)
+            : mine.length === 0 ? <p className="t-callout px-[var(--card-padding)] pb-4 text-mute" data-testid="asset-activity-empty" data-window-full={windowFull}>{windowFull ? t('nxActivityWindow', { n: ACTIVITY_WINDOW }) : t('noActivity')}</p> :
+            <><ul data-testid="asset-activity" data-server-filtered={filtered}>{mine.map((i) => <li key={i.id}><TransactionRow i={i} contacts={contacts.data} hidden={hidden} time={rowTime(i.at)} onOpen={() => nav({ tab: 'activity', asset: i.id })} /></li>)}</ul>
+              {windowFull && <p className="t-footnote border-t border-line px-[var(--card-padding)] py-3 text-mute" data-testid="asset-activity-window">{t('nwWindowNote', { n: ACTIVITY_WINDOW })}</p>}</>}</Card>
+      </div></div>
     </div>
   );
 }
