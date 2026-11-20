@@ -1,7 +1,17 @@
 # SP Wallet NEXT — deployment
 
-Nothing in this document has been executed on production. Every stage needs the owner's explicit go-ahead; stages 3 and 5
-change the signer and need it separately.
+**Executed so far (2026-11-20, on the owner's explicit go-ahead for each):**
+- 00:05 ET — stage 2, API + web: `main` = `30467db` on M2M32c. Backups `~/backups/sp-wallet/pre-next-20261120-0005.dump`,
+  `dist-pre-next-20261120-0005.tgz`, `.commit` (851e2fa). After restart: migration applied, 19 proposals and the 282-entry
+  audit chain unchanged, 251 balances read, snapshots recorded, locks unchanged.
+- 00:08 ET — stage 3, signer on m6ma (review list S1–S12 approved): bundle of `30467db` (sha256 `af7b818f87dbfc9e…`,
+  identical on the laptop and on the API node). Before the swap the new binary loaded a copy of the real state (same key id,
+  same journal head, journal intact). Key id unchanged `spw-ab7cac49ffebb919`; start line shows the allowlist;
+  `policy.json` untouched. Backups on m6ma `*.bak-next-20261120`; key-free state copy taken off the node.
+- Not yet: stage 0 (off-node backup schedule), stage 5 (cool-down / cap values), stage 6 (native builds), and the first
+  real operations of §7 — no real signature has gone through the new signer yet.
+
+Stages 0, 5 and 6 are not executed. Each stage needs the owner's explicit go-ahead.
 
 ## 1. Environments
 
