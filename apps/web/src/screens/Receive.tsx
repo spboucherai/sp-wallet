@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { Nav } from '../App';
 import { useAccounts, useNetworks } from '../hooks';
 import { useT } from '../i18n';
+import { paymentUri } from '../payment-uri';
 import { Addr, Btn, Card, Chips, CopyBtn, EmptyState, ErrorState, H, haptic, Icon, NetworkIcon, Notice, PageTitle, Skeleton, trimAmt } from '../ui';
 
 export function Receive({ initial, nav }: { initial?: string; nav?: Nav }) {
@@ -22,24 +23,31 @@ export function Receive({ initial, nav }: { initial?: string; nav?: Nav }) {
   if (!a || !n) return <div className="space-y-4" aria-busy="true"><Skeleton h="h-11" className="!w-40 !rounded-xl" /><Skeleton h="h-[520px]" /></div>;
   const assets = [n.native.symbol, ...n.tokens.map((x) => x.symbol)];
   const canShare = typeof navigator.share === 'function';
+  const pay = paymentUri(n, a.address);
   const ready = qr?.for === a.address && qr.url !== null, qrFailed = qr?.for === a.address && qr.url === null;
   return (
-    <div className="space-y-4">
+    <div className="page space-y-4" data-testid="receive">
       <PageTitle>{t('receiveTitle')}</PageTitle>
       <Card>
         <Chips label={t('network')} value={net} onChange={setNet} options={nets.data!.map((x) => ({ id: x.id, label: x.name, net: x.id }))} />
         <div className="mt-5 grid place-items-center">
-          <div className="relative w-full max-w-[264px] rounded-[28px] bg-white p-3.5 shadow-e2 ring-1 ring-line" data-testid="qr-card">
-            {ready ? <img src={qr!.url!} alt={`QR ${a.address}`} width={720} height={720} className="block h-auto w-full rounded-xl" /> : qrFailed ? <div className="grid aspect-square w-full place-items-center rounded-xl bg-[#f1f3f7] p-4 text-center text-[0.8125rem] leading-snug text-[#3b4252]" role="alert" data-testid="qr-failed">{t('nxQrFailed')}</div> : <div className="skel aspect-square w-full !rounded-xl" />}
+          {/* the QR code sits on a WHITE plate in both themes (design system: the QR plate is always white) — a scanner needs the contrast */}
+          <div className="relative w-full max-w-[16.5rem] rounded-[var(--radius-xl)] bg-white p-3.5 shadow-e2 ring-1 ring-line" data-testid="qr-card">
+            {ready ? <img src={qr!.url!} alt={`QR ${a.address}`} width={720} height={720} className="block h-auto w-full rounded-xl" /> : qrFailed ? <div className="t-footnote grid aspect-square w-full place-items-center rounded-xl p-4 text-center" style={{ background: '#f1f3f7', color: '#3b4252' }} role="alert" data-testid="qr-failed">{t('nxQrFailed')}</div> : <div className="skel aspect-square w-full !rounded-xl" />}
             {ready && <span className="pointer-events-none absolute left-1/2 top-1/2 grid h-[21%] w-[21%] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white p-[3px]" aria-hidden="true" data-testid="qr-logo"><NetworkIcon net={n.id} size={44} className="!h-full !w-full" /></span>}
           </div>
         </div>
-        <div className="mt-4 flex items-center justify-center gap-2 text-[0.9375rem] font-semibold"><NetworkIcon net={n.id} size={22} />{n.name}</div>
-        <p className="mt-1 text-center text-[0.8125rem] text-mute">{assets.slice(0, 6).join(' · ')}{assets.length > 6 ? ` · +${assets.length - 6}` : ''}</p>
-        <div className="mt-4 rounded-2xl bg-elev/70 p-4 text-center"><div className="mb-1 text-xs text-mute">{t('yourAddress')} · {n.name}</div><Addr value={a.address} /></div>
+        <div className="t-body-strong mt-4 flex items-center justify-center gap-2"><NetworkIcon net={n.id} size={22} />{n.name}</div>
+        <p className="t-footnote mt-1 text-center text-mute">{assets.slice(0, 6).join(' · ')}{assets.length > 6 ? ` · +${assets.length - 6}` : ''}</p>
+        <div className="mt-4 rounded-[var(--radius-md)] bg-elev/70 p-4 text-center"><div className="t-footnote mb-1 text-mute">{t('yourAddress')} · {n.name}</div><Addr value={a.address} /></div>
         <div className={`mt-3 grid gap-3 ${canShare ? 'grid-cols-[1fr_auto_auto]' : 'grid-cols-2'}`}><CopyBtn text={a.address} full />
-          {canShare && <Btn kind="soft" aria-label={t('dsShare')} onClick={() => { haptic(); void navigator.share({ text: a.address }).catch(() => {}); }}><Icon n="share" className="h-[18px] w-[18px]" /></Btn>}
-          <a href={a.explorer} target="_blank" rel="noreferrer noopener" className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl border border-line px-4 text-[0.96875rem] font-medium"><Icon n="ext" className="h-4 w-4" />{t('explorer')}</a></div>
+          {canShare && <Btn kind="soft" aria-label={t('nwRcShare')} data-testid="recv-share" onClick={() => { haptic(); void navigator.share({ text: a.address }).catch(() => {}); }}><Icon n="share" className="h-[18px] w-[18px]" /></Btn>}
+          <a href={a.explorer} target="_blank" rel="noreferrer noopener" className="btn press inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-line px-5 text-[0.96875rem] font-medium"><Icon n="ext" className="h-4 w-4" />{t('explorer')}</a></div>
+        {/* NEXT: a payment link where the network has a standard one (payment-uri.ts) — the address and the network, never an amount */}
+        {pay && <div className="mt-3 border-t border-line pt-3" data-testid="recv-uri" data-uri={pay.uri}>
+          <div className="flex flex-wrap gap-2"><CopyBtn small text={pay.uri} label={t('nwRcUri')} />
+            {canShare && <Btn kind="soft" className="!min-h-11 !text-[0.84375rem]" data-testid="recv-share-uri" onClick={() => { haptic(); void navigator.share({ text: pay.uri }).catch(() => {}); }}><Icon n="share" className="h-4 w-4" />{t('dsShare')}</Btn>}</div>
+          <p className="t-footnote mt-2 text-mute">{t('nwRcUriNote', { std: pay.standard })}</p><p className="t-mono mt-1 break-all text-mute">{pay.uri}</p></div>}
       </Card>
       {acc.data?.signerReachable === false && <Notice tone="warn"><span data-testid="addr-cached">{t('svAddrFromCache', { date: acc.data.addressesAsOf ? new Date(acc.data.addressesAsOf).toLocaleString() : '—' })}</span></Notice>}
       <Notice tone="warn">{t('onlySend', { assets: assets.length > 4 ? `${assets.slice(0, 3).join(' / ')}… (${assets.length})` : assets.join(' / '), network: n.name })}</Notice>

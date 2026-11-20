@@ -242,10 +242,10 @@ describe('D1 — the rule on the screens added by the redesign, GMX and the Sola
   const noRawSanitiser = (s: string, f: string) => { expect(s, f).not.toMatch(/replace\(',', '\.'\)/); expect(s, f).not.toMatch(/replace\(\/\[\^0-9\.,?\]\/g, ''\)(?!\) \|\| 0)/); };
   it('the redesigned Send: the field keeps what is typed, Max is written for the screen, the API receives the canonical string', () => {
     const s = src('../src/screens/Send.tsx');
-    expect(s).toMatch(/onChange=\{\(e\) => setAmount\(sanitizeAmountText\(e\.target\.value\)\)\}/);
-    expect(s).toMatch(/setAmount\(amountInputText\(bal\.display!, locale\)\)/);
+    expect(s).toMatch(/onChange=\{\(e\) => \{ setAmount\(sanitizeAmountText\(e\.target\.value\)\); setApproxMax\(false\); \}\}/);
+    expect(s).toMatch(/setAmount\(amountInputText\(bal\.display, locale\)\)/); expect(s).toMatch(/setAmount\(amountInputText\(m\.value, locale\)\)/);   // NEXT: Max of the native coin is net of the known fee ceiling (maxNative)
     expect(s).toMatch(/amount: amountOf\(amount, locale\) \?\? amount\.trim\(\)/);                       // what is posted: no float, no Number()
-    expect(s).toMatch(/disabled=\{!to \|\| !amountOf\(amount, locale\) \|\| block !== null \|\| !n\}/);   // NEXT W5: `block` = halted or signer unreachable (hooks.ts sendBlock)     // unreadable or ambiguous: no review
+    expect(s).toMatch(/disabled=\{!to \|\| !amountOf\(amount, locale\) \|\| block !== null \|\| !n \|\| verdict\?\.ok === false\}/);   // NEXT W5: `block` = halted or signer unreachable (hooks.ts sendBlock)     // unreadable or ambiguous: no review
     expect(s).toMatch(/<AmountProblem text=\{amount\} \/>/);
     expect(s.match(/exactAmt\(cur\.amountDisplay\)/g)!.length).toBe(2);                                  // the receipt and the tracking card: every digit
     expect(s).not.toMatch(/\{cur\.amountDisplay\}/); expect(s).not.toMatch(/Number\(amount|parseFloat/);

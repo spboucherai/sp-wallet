@@ -72,6 +72,8 @@ const shellMore = () => import('./shell-more');
 const RiskIndicator = lazy(() => shellMore().then((m) => ({ default: m.RiskIndicator })));
 const Sidebar = lazy(() => shellMore().then((m) => ({ default: m.Sidebar })));
 const ShellMenu = lazy(() => shellMore().then((m) => ({ default: m.ShellMenu })));
+// NEXT: universal search (⌘K / Ctrl-K, the header's search control) — fetched the first time it is opened
+const SearchPalette = lazy(() => import('./search').then((m) => ({ default: m.SearchPalette })));
 const ScreenSkeleton = () => <div className="space-y-4" aria-busy="true"><Skeleton h="h-9" className="!mt-2 !w-44 !rounded-xl" /><SkeletonRows n={5} /></div>;
 
 // Every screen that has a plain path. The order no longer says anything about the navigation (v11: see AREAS below).
@@ -90,7 +92,7 @@ const areaHome = (a: Area): Tab => (a === 'trade' ? lastTrade() : a);
 /** Where to go, with optional pre-selection (asset page, or send/receive pre-filled). */
 export interface Route { tab: Tab; network?: string; asset?: string; /** sub-view of a screen (Futures: compare, accounts) */ view?: string }
 export type Nav = (r: Route) => void;
-export const pathOf = (r: Route): string => r.tab === 'nfts' ? `/nfts${r.view ? `?v=${r.view}` : ''}` : r.tab === 'nft' ? `/nft/${encodeURIComponent(r.asset ?? '')}` : r.tab === 'nftc' ? `/nfts/c/${encodeURIComponent(r.asset ?? '')}` : r.tab === 'risk' ? `/risk${r.asset ? `?mandate=${encodeURIComponent(r.asset)}` : ''}` : r.tab === 'markets' ? `/markets${r.view === 'compare' ? `?v=compare${r.asset ? `&u=${encodeURIComponent(r.asset)}` : ''}` : ''}` : r.tab === 'private' ? `/private-markets${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'developer' ? `/developer${r.view ? `?v=${r.view}` : ''}` : r.tab === 'plan' ? `/plan/${r.asset}` : r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : r.tab === 'contacts' ? '/contacts' : r.tab === 'activity' && r.asset && !r.network ? `/activity?tx=${encodeURIComponent(r.asset)}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
+export const pathOf = (r: Route): string => r.tab === 'nfts' ? `/nfts${r.view ? `?v=${r.view}` : ''}` : r.tab === 'nft' ? `/nft/${encodeURIComponent(r.asset ?? '')}` : r.tab === 'nftc' ? `/nfts/c/${encodeURIComponent(r.asset ?? '')}` : r.tab === 'risk' ? `/risk${r.asset ? `?mandate=${encodeURIComponent(r.asset)}` : ''}` : r.tab === 'markets' ? `/markets${r.view === 'compare' ? `?v=compare${r.asset ? `&u=${encodeURIComponent(r.asset)}` : ''}` : ''}` : r.tab === 'private' ? `/private-markets${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'developer' ? `/developer${r.view ? `?v=${r.view}` : ''}` : r.tab === 'plan' ? `/plan/${r.asset}` : r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : r.tab === 'contacts' ? '/contacts' : r.tab === 'activity' && r.asset && !r.network ? `/activity?tx=${encodeURIComponent(r.asset)}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}${r.tab === 'send' && r.view ? `&to=${encodeURIComponent(r.view)}` : ''}` : '');
 /** v11: paths that name an AREA or an older place — each is answered by the screen that holds it today (the address bar is corrected in place) */
 const ALIASES: Record<string, () => Route> = { '/trade': () => ({ tab: lastTrade() }), '/dashboard': () => ({ tab: 'home' }), '/compare': () => ({ tab: 'markets', view: 'compare' }), '/spot': () => ({ tab: 'swap' }), '/perps': () => ({ tab: 'futures' }), '/api': () => ({ tab: 'developer' }), '/system': () => ({ tab: 'monitor' }) };
 export function routeOf(): Route {
@@ -119,7 +121,7 @@ export function routeOf(): Route {
   if (pm) return { tab: 'private', asset: pm[1] ? decodeURIComponent(pm[1]) : undefined, view: q.get('v') ?? undefined };
   const fu = /^\/futures(?:\/(.+))?$/.exec(location.pathname);   // /futures, /futures/<venue:symbol>
   if (fu) return { tab: 'futures', asset: fu[1] ? decodeURIComponent(fu[1]) : undefined, view: q.get('v') ?? undefined };
-  return { tab: TABS.find((t) => t[1] === location.pathname)?.[0] ?? 'home', network: q.get('n') ?? undefined, asset: q.get('a') ?? undefined };
+  return { tab: TABS.find((t) => t[1] === location.pathname)?.[0] ?? 'home', network: q.get('n') ?? undefined, asset: q.get('a') ?? undefined, view: q.get('to') ?? undefined };
 }
 
 export function App() {
@@ -184,7 +186,10 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
   const ptr = usePullToRefresh(tab === 'home' || tab === 'activity', () => qc.invalidateQueries());
   const area = areaOf(tab);
   useEffect(() => { if (tab === 'swap' || tab === 'futures') { try { localStorage.setItem(TRADE_KEY, tab); } catch { /* private mode */ } } }, [tab]);   // Trade reopens where it was left
-  const [menu, setMenu] = useState(false);
+  const [menu, setMenu] = useState(false), [search, setSearch] = useState(false);
+  useEffect(() => { const f = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearch((x) => !x); } };
+    addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, []);
+  const searchBtn = (cls: string, wide = false) => <button type="button" onClick={() => setSearch(true)} data-testid="search-open" aria-label={t('nwSrOpen')} aria-haspopup="dialog" aria-keyshortcuts="Meta+K Control+K" className={cls}><Icon n="search" className="h-5 w-5 shrink-0" />{wide && <><span className="flex-1 text-left">{t('nwSrTitle')}</span><kbd className="kbd" aria-hidden="true">⌘K</kbd></>}</button>;
   const toArea = (a: Area) => { const to = areaHome(a); if (tab !== to || route.asset || route.view || route.network) go(to); else window.scrollTo({ top: 0 }); };
   const bell = (cls: string) => <button onClick={() => go('alerts')} data-testid="alerts-bell" aria-label={`${t('alBell')}${unread.unread ? ` (${unread.unread})` : ''}`} aria-current={tab === 'alerts' ? 'page' : undefined} className={cls}>
     <span className="relative"><Icon n="bell" />{unread.unread > 0 && <span data-testid="alerts-badge" className={`absolute -right-2 -top-2 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[0.65625rem] font-bold leading-none text-white ${unread.critical ? 'bg-danger' : 'bg-blue'}`}>{unread.unread > 99 ? '99+' : unread.unread}</span>}</span>{cls.includes('w-full') && t('alTitle')}</button>;
@@ -203,6 +208,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
       <a href="#main" className="absolute left-0 top-0 h-0 w-0 overflow-hidden focus:fixed focus:left-3 focus:top-3 focus:z-40 focus:h-auto focus:min-h-11 focus:w-auto focus:rounded-xl focus:bg-surface focus:px-4 focus:py-3 focus:shadow-e2">{t('v11NavSkip')}</a>
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto p-5 lg:flex">
         <div className="mb-7 flex items-center gap-3 px-2 pt-2"><img src="/icon.svg" alt="" width={36} height={36} className="h-9 w-9 rounded-xl shadow-e1" /><span className="text-[1.1875rem] font-semibold tracking-[-0.02em]">SP Wallet</span></div>
+        {searchBtn('press mb-4 flex min-h-11 w-full items-center gap-3 rounded-[var(--radius-md)] border border-line bg-surface px-3.5 text-[0.875rem] text-mute', true)}
         <Suspense fallback={null}><Sidebar tab={tab} area={area} go={go} toArea={toArea} lock={lock} bell={bell(`${sideCls} ${tab === 'alerts' ? 'bg-primary text-onprimary shadow-e1' : 'text-mute hover:bg-elev hover:text-ink'}`)} /></Suspense>
       </aside>
       <div className="min-w-0 flex-1">
@@ -212,6 +218,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
             <span ref={mini} className="app-mini-title" aria-hidden="true" data-testid="mini-title" />
             <div className="flex shrink-0 items-center gap-0.5">
               <Suspense fallback={<span className="mx-0.5 h-8 w-[68px] rounded-full bg-elev" aria-hidden="true" />}><RiskIndicator go={go} current={tab === 'risk'} /></Suspense>
+              {searchBtn('grid h-11 w-11 place-items-center rounded-full text-mute')}
               {bell(`grid h-11 w-11 place-items-center rounded-full ${tab === 'alerts' ? 'bg-elev text-ink' : 'text-mute'}`)}
               <button onClick={() => setMenu(true)} data-testid="nav-menu" aria-label={t('v11NavMenu')} aria-haspopup="dialog" aria-expanded={menu} className={`grid h-11 w-11 place-items-center rounded-full ${area === null && tab !== 'alerts' && tab !== 'risk' ? 'bg-elev text-ink' : 'text-mute'}`}><Icon n="list" /></button>
             </div>
@@ -253,6 +260,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
               <span className={`grid h-7 w-12 place-items-center rounded-full transition-colors ${on ? 'bg-elev' : ''}`}><Icon n={icon} className="h-[22px] w-[22px]" /></span><span className="max-w-full truncate px-0.5">{t(label)}</span></button>); })}</div>
         </nav>
         {menu && <Suspense fallback={null}><ShellMenu tab={tab} go={go} lock={lock} onClose={() => setMenu(false)} /></Suspense>}
+        {search && <Suspense fallback={null}><SearchPalette onClose={() => setSearch(false)} /></Suspense>}
       </div>
     </div>
   );

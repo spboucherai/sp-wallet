@@ -36,7 +36,7 @@ export function RiskIndicator({ go, current, row }: { go: (t: Tab) => void; curr
 
 export const sideCls = (on: boolean, small = false): string => `press flex w-full items-center gap-3 rounded-2xl px-3.5 ${small ? 'py-2.5' : 'py-3'} text-[0.9375rem] font-medium ${on ? 'bg-primary text-onprimary shadow-e1' : 'text-mute hover:bg-elev hover:text-ink'}`;
 // what the five areas do not hold: the header menu on a phone, the bottom of the sidebar on a desktop
-const MORE: readonly (readonly [Tab, string, Key])[] = [['settings', 'gear', 'settings'], ['security', 'shield', 'security'], ['developer', 'key', 'dvTitle'], ['monitor', 'bars', 'moTitle']];
+const MORE: readonly (readonly [Tab, string, Key])[] = [['settings', 'gear', 'settings'], ['security', 'shield', 'security'], ['contacts', 'users', 'nwContacts'], ['developer', 'key', 'dvTitle'], ['monitor', 'bars', 'moTitle']];
 
 export function Sidebar({ tab, area, go, toArea, lock, bell }: { tab: Tab; area: Area | null; go: (t: Tab) => void; toArea: (a: Area) => void; lock: () => void; /** the alerts entry, drawn by the shell (it owns the unread count) */ bell: ReactNode }) {
   const t = useT();

@@ -117,6 +117,7 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
         {uncertain.length > 0 && <Notice tone="warn"><span data-testid="uncertain-note">{t('nwUncertainBody', { list: [...new Set(uncertain.map((u) => netName(u.network)))].join(', ') })}</span></Notice>}
         {unpriced.length > 0 && <Notice tone="info"><span data-testid="unpriced-note">{t('nwUnpricedBody', { syms: [...new Set(unpriced.map((u) => u.symbol))].join(', ') })}</span></Notice>}
 
+        <div className="lg:hidden"><Suspense fallback={null}><HomeAttention pending={d.pending} nav={nav} go={go} /></Suspense></div>
         <Suspense fallback={<div className="space-y-5" aria-busy="true"><Skeleton h="h-[23rem]" /><Skeleton h="h-40" /></div>}><HomeValue range={range} setRange={setRange} cur={cur} hidden={hidden} summary={s} netName={netName} /></Suspense>
 
         {shown.length > 0 ? <Card className="!px-0 !pb-0"><div className="px-[var(--card-padding)]"><H right={<button className="link -my-2" data-testid="see-all-assets" onClick={() => nav({ tab: 'assets' })}>{t('nwSeeAll')}<Icon n="chev" className="h-4 w-4" /></button>}>{t('nwHeld')}</H></div>
@@ -124,7 +125,7 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
           {(shown.length > 6 || nHidden > 0) && <p className="t-footnote border-t border-line px-[var(--card-padding)] py-3 text-mute" data-testid="held-more">{[shown.length > 6 ? t('nwHeldMore', { n: shown.length - 6 }) : '', nHidden > 0 ? t(nHidden === 1 ? 'nwHiddenCounted1' : 'nwHiddenCounted', { n: nHidden }) : ''].filter(Boolean).join(' ')}</p>}</Card>
           : all.length === 0 && <EmptyState icon="down" title={t('nwEmptyTitle')} action={<button className="btn press inline-flex min-h-12 items-center rounded-[var(--radius-md)] bg-primary px-5 font-semibold text-onprimary" onClick={() => go('receive')}>{t('receive')}</button>}>{t('nwEmptyBody')}</EmptyState>}
       </div><div className="min-w-0 space-y-5">
-        <Suspense fallback={null}><HomeAttention pending={d.pending} nav={nav} go={go} /></Suspense>
+        <div className="hidden lg:block"><Suspense fallback={null}><HomeAttention pending={d.pending} nav={nav} go={go} /></Suspense></div>
 
         {d.pending.length > 0 && <Card><H>{t('pending')}</H>
           <ul className="space-y-3.5">{d.pending.map((p) => <li key={p.id} className="flex items-center gap-3">

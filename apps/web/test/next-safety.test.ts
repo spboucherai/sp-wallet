@@ -158,7 +158,7 @@ describe('W1 — every flow that submits a passkey approval uses the shared help
   });
   it('Send: no Approve and no Cancel while the outcome is unread; the key is not regenerated on a lost answer', () => {
     const s = src('../src/screens/Send.tsx');
-    expect(s).toMatch(/\{!ap\.locked && <Btn full busy=\{!!busy\} disabled=\{needCheck && !checked\} onClick=\{approve\}/); expect(s).toMatch(/\{!ap\.locked && busy !== 'submit' && <Btn full kind="ghost"/);
+    expect(s).toMatch(/\{!ap\.locked && <Btn full busy=\{!!busy\} disabled=\{!acked\} onClick=\{approve\}/); expect(s).toMatch(/\{!ap\.locked && busy !== 'submit' && <Btn full kind="ghost"/);
     expect(s).toMatch(/catch \(e\) \{ fail\(e\); draft\.current\.failed\(e\); \}/); expect(s).not.toMatch(/setIdem\(crypto\.randomUUID\(\)\)/);
   });
 });
