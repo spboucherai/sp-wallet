@@ -5,6 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { get, post } from './api';
+import { proposalApplied } from './approval';
+import { ApprovalOutcomePanel, useApprovalOutcome } from './approvalUi';
 import { errText, useT, type Key } from './i18n';
 import { AssetIcon, Btn, Card, ErrorState, Fact, Field, Icon, inputCls, Notice, PageTitle, ProgressRing, ProviderIcon, Section, Sheet, Stat, StatePill, StatGrid, Tag, Timeline, trimAmt, type StepState, type Tone } from './ui';
 import { amountInputText, amountLocale, amountOf, formatAmount, sanitizeAmountText } from './amount'; // v8 hardening: one rule for typed amounts
@@ -178,7 +180,7 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
   const t = useT(); const qc = useQueryClient();
   const q = useQuery({ queryKey: ['plan', id], queryFn: () => get<PlanV>(`/plans/${id}`), refetchInterval: (x) => (x.state.data && ['done', 'stopped'].includes(x.state.data.state) ? false : 3000), retry: false });
   const [prep, setPrep] = useState<{ proposal: any; options: any } | null>(null), [busy, setBusy] = useState(''), [err, setErr] = useState(''), [left, setLeft] = useState(0), [floor, setFloor] = useState('');
-  const p = q.data;
+  const p = q.data; const ap = useApprovalOutcome<{ state: string }>();
   const mine = prep && p?.proposal?.id === prep.proposal.id && p?.proposal?.state === 'pending_approval' ? prep : null;   // the challenge held here matches the step awaiting approval
   useEffect(() => { if (!mine) return; const tick = () => setLeft(Math.max(0, Math.round((new Date(mine.proposal.expiresAt).getTime() - Date.now()) / 1000))); tick(); const h = setInterval(tick, 500); return () => clearInterval(h); }, [mine?.proposal.id]);
   useEffect(() => { if (p?.state === 'done' || p?.state === 'stopped') { void qc.invalidateQueries({ queryKey: ['portfolio'] }); void qc.invalidateQueries({ queryKey: ['activity'] }); } }, [p?.state, qc]);
@@ -189,7 +191,14 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
   const prepare = () => act('prepare', async () => { const r = await post<{ plan: PlanV; proposal: any | null; options: any | null }>(`/plans/${id}/prepare`, {}); set(r.plan); setPrep(r.proposal ? { proposal: r.proposal, options: r.options } : null); });
   const approve = () => act('passkey', async () => { if (!mine) return;
     const assertion = await startAuthentication({ optionsJSON: mine.options });   // the challenge is the fingerprint of this exact step
-    setBusy('submit'); await post(`/transfers/proposals/${mine.proposal.id}/approve`, { assertion }); setPrep(null); await q.refetch(); });
+    // NEXT W1: the approval leaves the browser — a lost answer is settled by the step's proposal read from the server, never by the error
+    setBusy('submit'); const pid = mine.proposal.id;
+    await ap.run({ submit: () => post<{ state: string }>(`/transfers/proposals/${pid}/approve`, { assertion }), read: () => get<{ state: string }>(`/transfers/proposals/${pid}`), applied: proposalApplied }, (o) => {
+      if (o.kind === 'refused') { const m = errText(t, o.error); if (m) setErr(m); }
+      else if (o.kind === 'read' && !o.applied) return;   // the server still awaits the approval: the challenge held here stays
+      else setPrep(null);
+      void q.refetch();
+    }); });
   const simple = (path: string, body: unknown = {}) => act(path, async () => { set(await post<PlanV>(`/plans/${id}/${path}`, body)); setPrep(null); });
   const cur = p.legs[p.current], pr = p.proposal, step = Math.min(p.current + 1, p.steps);
   const wait = pr?.bridge ? t(`brStage_${pr.bridge.stage}` as Key) : pr?.xswap ? t(`xsStage_${pr.xswap.stage}` as Key) : null;
@@ -232,7 +241,7 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
 
       {p.next === 'prepare' && cur && <div className="space-y-3">
         <Notice tone="info">{t('pnReadyNote', { k: step, n: p.steps, amt: trimAmt(p.holding.amountDisplay, 8), sym: p.holding.symbol })}</Notice>
-        <Btn full busy={busy === 'prepare'} onClick={() => void prepare()} data-testid="plan-prepare"><Icon n="swap" className="h-4 w-4" />{t('pnPrepare', { k: step, n: p.steps })}</Btn></div>}
+        <Btn full busy={busy === 'prepare'} disabled={ap.locked} onClick={() => void prepare()} data-testid="plan-prepare"><Icon n="swap" className="h-4 w-4" />{t('pnPrepare', { k: step, n: p.steps })}</Btn></div>}
 
       {/* the receipt of the step the passkey signs: every field in full, nothing animated */}
       {p.next === 'approve' && pr && <div className="space-y-3" data-testid="plan-review">
@@ -248,8 +257,8 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
           </dl>
         </div>
         {mine ? <><Notice tone="ok">{t('pnStepGuarantee')}</Notice>
-          <Btn full busy={busy === 'passkey' || busy === 'submit'} disabled={left === 0} onClick={() => void approve()} data-testid="plan-approve"><Icon n="key" />{busy === 'passkey' ? t('approving') : `${t('approve')} · ${left} s`}</Btn></>
-          : <><Notice tone="info">{t('pnReprepare')}</Notice><Btn full busy={busy === 'prepare'} onClick={() => void prepare()} data-testid="plan-prepare"><Icon n="swap" className="h-4 w-4" />{t('pnPrepare', { k: step, n: p.steps })}</Btn></>}
+          <Btn full busy={busy === 'passkey' || busy === 'submit'} disabled={left === 0 || ap.locked} onClick={() => void approve()} data-testid="plan-approve"><Icon n="key" />{busy === 'passkey' ? t('approving') : `${t('approve')} · ${left} s`}</Btn></>
+          : <><Notice tone="info">{t('pnReprepare')}</Notice><Btn full busy={busy === 'prepare'} disabled={ap.locked} onClick={() => void prepare()} data-testid="plan-prepare"><Icon n="swap" className="h-4 w-4" />{t('pnPrepare', { k: step, n: p.steps })}</Btn></>}
       </div>}
 
       {p.next === 'wait' && <div className="flex items-start gap-3 rounded-[20px] bg-elev/60 p-4 text-[13.5px] leading-snug text-mute" data-testid="plan-wait"><Icon n="spin" className="mt-0.5 h-4 w-4 shrink-0 text-blue" /><span className="min-w-0">{t('pnWaiting', { k: step, n: p.steps })}{wait ? ` — ${wait}` : pr ? ` — ${t(`s_${pr.state}` as Key)}` : ''}. {t('pnWaitingNote')}</span></div>}
@@ -260,13 +269,14 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
           <input className={inputCls} inputMode="decimal" placeholder={amountInputText(p.floorDisplay ?? '', amountLocale())} aria-label={t('pnFloorChange', { sym: p.to.symbol })} value={floor} onChange={(e) => setFloor(sanitizeAmountText(e.target.value))} autoComplete="off" /><AmountProblem text={floor} /></Field>}
         <Btn full busy={busy === 'retry'} disabled={!!busy || (p.pause.code === 'floor' && floor.trim() !== '' && amountOf(floor, amountLocale()) === null)} onClick={() => { const f = amountOf(floor, amountLocale()); void simple('retry', p.pause?.code === 'floor' && f !== null ? { floor: /[1-9]/.test(f) ? f : null } : {}); }} data-testid="plan-retry"><Icon n="refresh" className="h-4 w-4" />{t('pnRetry')}</Btn>
         <Btn full kind="soft" busy={busy === 'replan'} disabled={!!busy} onClick={() => void simple('replan')} data-testid="plan-replan">{t('pnReplan', { sym: p.holding.symbol, net: p.holding.networkName })}</Btn>
-        <Btn full kind="ghost" busy={busy === 'stop'} disabled={!!busy} onClick={() => void simple('stop')} data-testid="plan-stop">{t('pnStop')}</Btn>
+        <Btn full kind="ghost" busy={busy === 'stop'} disabled={!!busy || ap.locked} onClick={() => void simple('stop')} data-testid="plan-stop">{t('pnStop')}</Btn>
       </div>}
 
       {p.state === 'done' && <Notice tone="ok">{t('pnDone', { n: p.steps })}</Notice>}
       {p.state === 'stopped' && <Notice tone="info">{t('pnStopped', { amt: trimAmt(p.holding.amountDisplay, 8), sym: p.holding.symbol, net: p.holding.networkName })}</Notice>}
-      {err && <Notice tone="danger">{err}</Notice>}
-      {p.state === 'active' && p.next !== 'wait' && <button className="press min-h-11 w-full text-center text-[13.5px] font-medium text-mute underline disabled:opacity-45" disabled={!!busy} onClick={() => void simple('stop')} data-testid="plan-stop-link">{t('pnStopHere')}</button>}
+      {err && !ap.locked && <Notice tone="danger">{err}</Notice>}
+      <ApprovalOutcomePanel ap={ap} />
+      {p.state === 'active' && p.next !== 'wait' && <button className="press min-h-11 w-full text-center text-[13.5px] font-medium text-mute underline disabled:opacity-45" disabled={!!busy || ap.locked} onClick={() => void simple('stop')} data-testid="plan-stop-link">{t('pnStopHere')}</button>}
       {(p.state === 'active' || p.state === 'paused') && <p className="text-[12.5px] text-mute">{t('pnResumable')}</p>}
     </div>);
 }

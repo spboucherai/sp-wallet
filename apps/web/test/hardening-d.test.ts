@@ -245,7 +245,7 @@ describe('D1 — the rule on the screens added by the redesign, GMX and the Sola
     expect(s).toMatch(/onChange=\{\(e\) => setAmount\(sanitizeAmountText\(e\.target\.value\)\)\}/);
     expect(s).toMatch(/setAmount\(amountInputText\(bal\.display!, locale\)\)/);
     expect(s).toMatch(/amount: amountOf\(amount, locale\) \?\? amount\.trim\(\)/);                       // what is posted: no float, no Number()
-    expect(s).toMatch(/disabled=\{!to \|\| !amountOf\(amount, locale\) \|\| !!pf\.data\?\.halted\}/);     // unreadable or ambiguous: no review
+    expect(s).toMatch(/disabled=\{!to \|\| !amountOf\(amount, locale\) \|\| block !== null \|\| !n\}/);   // NEXT W5: `block` = halted or signer unreachable (hooks.ts sendBlock)     // unreadable or ambiguous: no review
     expect(s).toMatch(/<AmountProblem text=\{amount\} \/>/);
     expect(s.match(/exactAmt\(cur\.amountDisplay\)/g)!.length).toBe(2);                                  // the receipt and the tracking card: every digit
     expect(s).not.toMatch(/\{cur\.amountDisplay\}/); expect(s).not.toMatch(/Number\(amount|parseFloat/);

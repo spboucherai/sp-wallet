@@ -152,7 +152,7 @@ describe('B1 / B6 — what is shown is what is executed', () => {
     expect(swap).not.toMatch(/chosen\.amountOutDisplay/); expect(swap).not.toMatch(/chosen\.minAmountOutDisplay/);
     expect(swap).not.toMatch(/exec\?\.via === 'thorchain' && !routes\.some/);
     expect(swap.match(/crypto\.randomUUID\(\)/g)!.length).toBe(1);                                    // one key, kept while the same request is unanswered
-    expect(swap).toMatch(/x\.code !== 'offline'\) attempt\.current = null/);
+    expect(swap).toMatch(/if \(!answerLost\(e\)\) attempt\.current = null/);                            // NEXT W1: kept after ANY lost answer (time-out, network, 5xx), not only `offline`
     expect(swap).toMatch(/data-testid="route-facts"/); expect(swap).toMatch(/svCardNotReported/);    // the normalized card, with "not reported" instead of a zero
   });
 });
@@ -188,7 +188,7 @@ describe('resilience — what the owner is told', () => {
     for (const f of ['../src/screens/Home.tsx', '../src/screens/Assets.tsx', '../src/screens/Asset.tsx']) expect(src(f), f).toMatch(/<PriceFreshness /);
     const home = src('../src/screens/Home.tsx');
     expect(home).toMatch(/d\.signer && !d\.signer\.reachable/); expect(home).toMatch(/svSignerDown/);
-    expect(home).toMatch(/d\.signer\?\.reachable === false\)/);                                       // sending is disabled while nothing can be signed
+    expect(home).toMatch(/action\('send', 'up', t\('send'\), false, block !== null\)/); expect(src('../src/hooks.ts')).toMatch(/p\.signer\?\.reachable === false \? 'signer'/);   // NEXT W5: one rule (sendBlock) for every screen                                       // sending is disabled while nothing can be signed
     expect(src('../src/screens/Receive.tsx')).toMatch(/signerReachable === false/);
   });
 });

@@ -287,7 +287,7 @@ describe('refusals are shown verbatim; no passkey prompt past a refusal', () => 
   it('the approval sheet: once refused, the approve button is gone — recover for a lost signer answer, close otherwise', () => {
     const sheet = panel.slice(panel.indexOf('export function QuotingApprovalSheet'), panel.indexOf('// ------------------------------------------------------------------------------------------------------------------ the section of the agent page'));
     expect(sheet).toContain("footer={refusal ? (refusal.code === 'quoting_approval_unknown' ? <Btn full busy={busy} onClick={() => void recover()} data-testid=\"mm-approval-recover\">");
-    expect(sheet).toContain(': <Btn full busy={busy} disabled={!ack} onClick={() => void approve()} data-testid="mm-approval-approve">');
+    expect(sheet).toContain(': <Btn full busy={busy} disabled={!ack || ap.locked} onClick={() => void approve()} data-testid="mm-approval-approve">');   // NEXT W1: nor while an approval's outcome is unread
     expect(sheet).toContain("post<{ adopted: string[]; revoked: string[]; pending: string[] }>('/mm/recover', {})");
     // the two prompts, in order: the signer's request, then the binding; both only inside approve(), which the refused sheet cannot call
     const a = sheet.indexOf('startAuthentication({ optionsJSON: sheet.signer.options'), b = sheet.indexOf('startAuthentication({ optionsJSON: sheet.binding.options'), c = sheet.indexOf('post(`/mandates/${sheet.mandateId}/approve`, { assertion, bindingAssertion, acknowledged: true })');

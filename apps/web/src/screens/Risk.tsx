@@ -7,6 +7,8 @@
 import { lazy, Suspense, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { startAuthentication } from '@simplewebauthn/browser';
+import { ApprovalOutcomePanel, inDoubt, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 import { renderAlert } from '../../../../packages/core/src/alert-catalog';
 import type { AlertItem } from '../alerts';
 import { get, post, type ApiError } from '../api';
@@ -48,18 +50,20 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
   const [busy, setBusy] = useState(''); const [fail, setFail] = useState(''); const [reason, setReason] = useState('');
   const [book, setBook] = useState<(typeof BOOKS)[number]>('live'); const [mode, setMode] = useState<'paper' | 'live'>('live');
   const [editing, setEditing] = useState(false); const [sheet, setSheet] = useState<ApprovalSheet | null>(null); const [creating, setCreating] = useState(false);
-  const refresh = () => { void qc.invalidateQueries({ queryKey: ['risk'] }); };
+  const refresh = () => { void qc.invalidateQueries({ queryKey: ['risk'] }); }; const ap = useApprovalOutcome<State>();
   // v11 interface — `/risk?mandate=<id>`: once the mandates and the page are there, that mandate's card is scrolled into view and focused, and its
   // details are open (below). Nothing is approved from a link: the approval sheet opens on a tap only.
   const wantedFound = !!wanted && (mq.data?.mandates ?? []).some((m) => m.id === wanted), pageReady = !!q.data;
   useEffect(() => { if (!wantedFound || !pageReady) return; const el = document.querySelector<HTMLElement>(`[data-mandate-card="${CSS.escape(wanted!)}"]`); if (!el) return;
     el.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); el.focus({ preventScroll: true }); }, [wanted, wantedFound, pageReady]);
-  const run = async (id: string, fn: () => Promise<unknown>): Promise<boolean> => { setBusy(id); setFail(''); try { await fn(); refresh(); return true; } catch (e) { setFail(err(e)); return false; } finally { setBusy(''); } };
+  const run = async (id: string, fn: () => Promise<unknown>): Promise<boolean> => { setBusy(id); setFail(''); try { await fn(); refresh(); return true; } catch (e) { if (!inDoubt(e)) setFail(err(e)); return false; } finally { setBusy(''); } };
 
   /** releasing a switch: the server prepares the intent, the passkey signs its hash */
   const release = (kind: 'kill-switch' | 'read-only') => run(kind, async () => {
     const p = await post(`/risk/${kind}/release/prepare`, {});
-    await post(`/risk/${kind}/release`, p.needed ? { assertion: await startAuthentication({ optionsJSON: p.options }) } : {});
+    const body = p.needed ? { assertion: await startAuthentication({ optionsJSON: p.options }) } : {};
+    // NEXT W1: a lost answer is settled by the risk state read from the server (is the switch still on?)
+    await ap.send<unknown>({ submit: () => post(`/risk/${kind}/release`, body), read: () => get<State>('/risk/state'), applied: (s) => !s.switches[kind === 'kill-switch' ? 'killSwitch' : 'readOnly'].on, late: refresh });
   });
   const openApproval = (id: string) => run(`prep-${id}`, async () => { setSheet(await post(`/mandates/${id}/approve/prepare`, { locale })); });
 
@@ -77,6 +81,7 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
       <PageTitle onBack={onBack} backLabel={t('settings')}>{t('rkTitle')}</PageTitle>
       <p className="px-1 text-[14px] leading-snug text-mute">{t('rkLead')}</p>
       {fail && <Notice tone="danger">{fail}</Notice>}
+      <ApprovalOutcomePanel ap={ap} />
 
       {(live.ownerOrdersRefused || live.automationOrdersRefused) && <div data-testid="rk-live-banner" data-owner-refused={String(!!live.ownerOrdersRefused)}>
         <Notice tone={live.ownerOrdersRefused ? 'danger' : 'warn'}>
@@ -90,14 +95,14 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
       <Card className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-[16.5px] font-semibold">{t('rkKill')}</h2><Tag tone={ks.on ? 'danger' : 'ok'} icon={ks.on ? 'stop' : 'check'} testid="rk-kill-state">{t(ks.on ? 'rkOn' : 'rkOff')}</Tag></div>
         <p className="text-[13.5px] leading-snug text-mute">{t('rkKillBody')}</p>{who(ks)}
-        {ks.on ? <Btn full kind="soft" busy={busy === 'kill-switch'} onClick={() => void release('kill-switch')} data-testid="rk-kill-release"><Icon n="key" className="h-4 w-4" />{t('rkRelease')}</Btn>
+        {ks.on ? <Btn full kind="soft" busy={busy === 'kill-switch'} disabled={ap.locked} onClick={() => void release('kill-switch')} data-testid="rk-kill-release"><Icon n="key" className="h-4 w-4" />{t('rkRelease')}</Btn>
           : <><Field label={t('rkReason')}><input className={inputCls} value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} data-testid="rk-kill-reason" /></Field>
             <Btn full kind="danger" busy={busy === 'kill'} onClick={() => void run('kill', () => post('/risk/kill-switch', { reason }))} data-testid="rk-kill-engage"><Icon n="stop" className="h-4 w-4" />{t('rkEngage')}</Btn></>}
       </Card>
       <Card className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-[16.5px] font-semibold">{t('rkReadOnly')}</h2><Tag tone={ro.on ? 'warn' : 'ok'} icon={ro.on ? 'lock' : 'check'}>{t(ro.on ? 'rkOn' : 'rkOff')}</Tag></div>
         <p className="text-[13.5px] leading-snug text-mute">{t('rkReadOnlyBody')}</p>{who(ro)}
-        {ro.on ? <Btn full kind="soft" busy={busy === 'read-only'} onClick={() => void release('read-only')}><Icon n="key" className="h-4 w-4" />{t('rkRelease')}</Btn>
+        {ro.on ? <Btn full kind="soft" busy={busy === 'read-only'} disabled={ap.locked} onClick={() => void release('read-only')}><Icon n="key" className="h-4 w-4" />{t('rkRelease')}</Btn>
           : <Btn full kind="soft" busy={busy === 'ro'} onClick={() => void run('ro', () => post('/risk/read-only', { reason }))}><Icon n="lock" className="h-4 w-4" />{t('rkReadOnlyEngage')}</Btn>}
       </Card>
 

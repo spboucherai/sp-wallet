@@ -51,6 +51,15 @@ export const activityApi = {
   order: (id: string) => get<{ order: Record<string, unknown>; fills: unknown[]; history?: OrderTransition[] }>(`/trading/orders/${encodeURIComponent(id)}`),
   csvHref: (f: ActivityFilters) => `/api/v1/dashboard/activity.csv${activityQuery(f)}`,
 };
+/** how often the first page is re-read while the screen is visible */
+export const HEAD_REFRESH_MS = 20_000;
+/**
+ * NEXT: the first page re-read on the interval, laid over the pages read so far — first, so that `mergePages` keeps ITS version of
+ * an item (its newer state). A head older than the pages themselves (they were re-read since) is left out.
+ */
+export function withHead<P>(pages: readonly P[], head: { page: P; at: number } | null, pagesReadAt: number): P[] {
+  return head && pages.length > 0 && head.at > pagesReadAt ? [head.page, ...pages] : [...pages];
+}
 /** the pages read so far as one list: an item is shown once (a page re-read while the list moves may repeat one) */
 export function mergePages(pages: readonly Pick<ActivityPage, 'items'>[]): ActivityItem[] {
   const seen = new Set<string>(), out: ActivityItem[] = [];

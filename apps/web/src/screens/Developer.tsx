@@ -5,6 +5,8 @@
 import { useContext, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { startAuthentication } from '@simplewebauthn/browser';
+import { ApprovalOutcomePanel, inDoubt, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 import { api, get, post, type ApiError } from '../api';
 import { codeExamples, daysLeft, docOps, docTags, draftBody, emptyDraft, errKey, REFERENCE_URL, SCOPE_GROUPS, scopeKey, type ApiKey, type DocOp, type DraftError, type KeyDraft, type KeysAnswer, type StatusAnswer, type UsageAnswer, type WebhooksAnswer } from '../developer';
 import { I18n, useT, type Key } from '../i18n';
@@ -56,19 +58,21 @@ function Keys() {
   const [busy, setBusy] = useState(false); const [fail, setFail] = useState('');
   const refresh = () => { void qc.invalidateQueries({ queryKey: ['dev'] }); };
 
+  const ap = useApprovalOutcome<never>();
   const act = async () => {
-    if (!confirm) return;
+    if (!confirm || ap.locked) return;
     setBusy(true); setFail('');
     try {
       if (confirm.kind === 'revoke') await post(`${P}/keys/${confirm.key.id}/revoke`, {});
       else {
         const p = await post(`${P}/keys/${confirm.key.id}/rotate/prepare`, {});
         const assertion = await startAuthentication({ optionsJSON: p.options });   // the challenge is the fingerprint of this exact rotation
-        const r = await post(`${P}/keys/${confirm.key.id}/rotate`, { intentId: p.intentId, assertion });
+        // NEXT W1: the new secret is shown once, in the answer — a lost answer cannot be read back: the panel says the status is unknown
+        const r = await ap.send<any>({ submit: () => post(`${P}/keys/${confirm.key.id}/rotate`, { intentId: p.intentId, assertion }) });
         setSecret({ title: t('dvRotatedTitle'), secret: r.secret, id: r.key.id });
       }
       setConfirm(null); refresh();
-    } catch (e) { setFail(err(e)); } finally { setBusy(false); }
+    } catch (e) { if (inDoubt(e)) refresh(); else setFail(err(e)); } finally { setBusy(false); }
   };
 
   if (q.isLoading) return <SkeletonRows n={3} />;
@@ -102,9 +106,9 @@ function Keys() {
             <Btn kind="ghost" className="!text-danger" onClick={() => { setFail(''); setConfirm({ kind: 'revoke', key: k }); }}><Icon n="stop" className="h-4 w-4" />{t('dvRevoke')}</Btn></div>}
         </Card>))}
       {creating && <CreateKey data={d} onClose={() => setCreating(false)} onCreated={(s) => { setCreating(false); setSecret(s); refresh(); }} />}
-      {confirm && <Sheet title={t(confirm.kind === 'revoke' ? 'dvRevokeTitle' : 'dvRotateTitle')} sub={confirm.key.name} onClose={() => setConfirm(null)} busy={busy} testid="dev-confirm"
-        footer={<Btn full kind={confirm.kind === 'revoke' ? 'danger' : 'primary'} busy={busy} onClick={() => void act()}>{confirm.kind === 'revoke' ? t('dvRevokeConfirm') : t('approve')}</Btn>}>
-        <div className="space-y-3"><p className="text-[14.5px] leading-snug">{t(confirm.kind === 'revoke' ? 'dvRevokeBody' : 'dvRotateBody')}</p>{fail && <Notice tone="danger">{fail}</Notice>}</div></Sheet>}
+      {confirm && <Sheet title={t(confirm.kind === 'revoke' ? 'dvRevokeTitle' : 'dvRotateTitle')} sub={confirm.key.name} onClose={() => setConfirm(null)} busy={busy || ap.locked} testid="dev-confirm"
+        footer={<Btn full kind={confirm.kind === 'revoke' ? 'danger' : 'primary'} busy={busy} disabled={ap.locked} onClick={() => void act()}>{confirm.kind === 'revoke' ? t('dvRevokeConfirm') : t('approve')}</Btn>}>
+        <div className="space-y-3"><p className="text-[14.5px] leading-snug">{t(confirm.kind === 'revoke' ? 'dvRevokeBody' : 'dvRotateBody')}</p>{fail && <Notice tone="danger">{fail}</Notice>}<ApprovalOutcomePanel ap={ap} /></div></Sheet>}
       {secret && <Sheet title={secret.title} sub={secret.id} onClose={() => setSecret(null)} dismissable={false} testid="dev-secret"
         footer={<Btn full onClick={() => setSecret(null)}>{t('dvSecretSaved')}</Btn>}>
         <div className="space-y-3"><Notice tone="warn">{t('dvSecretOnce')}</Notice>
@@ -121,19 +125,22 @@ function CreateKey({ data, onClose, onCreated }: { data: KeysAnswer; onClose: ()
   const set = <K extends keyof KeyDraft>(k: K, v: KeyDraft[K]) => setD((x) => ({ ...x, [k]: v }));
   const known = new Set(data.scopes.map((s) => s.scope));
   const bad = (e: DraftError) => (errors.includes(e) ? <span className="text-danger">{t(`dvFieldErr_${e}` as Key)}</span> : undefined);
+  const ap = useApprovalOutcome<never>();
   const submit = async () => {
+    if (ap.locked) return;
     const b = draftBody(d, data.bounds);
     if (!b.ok) { setErrors(b.errors); return; }
     setErrors([]); setFail(''); setBusy(true);
     try {
       const p = await post(`${P}/keys/prepare`, b.body);
       const assertion = await startAuthentication({ optionsJSON: p.options });   // the passkey signs the SHA-256 of the canonical request the server just showed
-      const r = await post(`${P}/keys`, { intentId: p.intentId, assertion });
+      // NEXT W1: the secret is shown once, in the answer — a lost answer cannot be read back: the panel says the status is unknown
+      const r = await ap.send<any>({ submit: () => post(`${P}/keys`, { intentId: p.intentId, assertion }) });
       onCreated({ title: t('dvSecretTitle'), secret: r.secret, id: r.key.id });
-    } catch (e) { setFail(err(e)); } finally { setBusy(false); }
+    } catch (e) { if (!inDoubt(e)) setFail(err(e)); } finally { setBusy(false); }
   };
   return (
-    <Sheet title={t('dvCreateTitle')} onClose={onClose} wide busy={busy} testid="dev-create" footer={<Btn full busy={busy} onClick={() => void submit()} data-testid="dev-create-submit"><Icon n="key" className="h-4 w-4" />{t('approve')}</Btn>}>
+    <Sheet title={t('dvCreateTitle')} onClose={onClose} wide busy={busy || ap.locked} testid="dev-create" footer={<Btn full busy={busy} disabled={ap.locked} onClick={() => void submit()} data-testid="dev-create-submit"><Icon n="key" className="h-4 w-4" />{t('approve')}</Btn>}>
       <div className="space-y-5">
         <Field label={t('dvName')} hint={bad('name')}><input className={inputCls} value={d.name} maxLength={60} placeholder={t('dvNamePh')} onChange={(e) => set('name', e.target.value)} data-testid="dev-name" /></Field>
         <div><span className="mb-1.5 block text-[13px] font-medium text-mute">{t('dvExpiry')}</span>

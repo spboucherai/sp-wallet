@@ -21,6 +21,8 @@ import { gapi, GMX_STATUS_KEY, gmxError, type GmxErr, type GmxOperation, type Gm
 import { EstimateRows, GMX_LABEL, GmxErrNotice, GmxOpCard, TwoStep } from './GmxBits';
 import { Countdown, Fingerprint, Group, LiveSheet, ModeBand, TICKET, Waiting, WORDS } from './LiveBits';
 import { newKey } from './live';
+import { ApprovalOutcomePanel, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 
 export type GmxRequest = { kind: 'order'; body: GmxOrderBody } | { kind: 'close'; position: GmxPosition; fraction: DecStr; slippageBps?: number } | { kind: 'cancel'; op: GmxOperation };
 type Phase = 'proposing' | 'ready' | 'passkey' | 'sending' | 'progress' | 'void';
@@ -80,6 +82,7 @@ export function GmxConfirm({ status, request, onClose }: { status: GmxStatus; re
   };
   useEffect(() => { if (started.current === key) return; started.current = key; void propose(key); }, [key]);   // eslint-disable-line react-hooks/exhaustive-deps
 
+  const ap = useApprovalOutcome<GmxOperation>();
   const approve = async () => {
     if (lock.current || phaseRef.current !== 'ready' || !p) return;              // one prompt, one approval, however fast the button is pressed
     lock.current = true;
@@ -90,8 +93,14 @@ export function GmxConfirm({ status, request, onClose }: { status: GmxStatus; re
       catch (e) { fail(e); setPhase('void'); withdraw(p.operation.id); return; }  // nothing was signed
       if (p.operation.expiresAt !== null && p.operation.expiresAt <= Date.now()) { setBad('expired'); setPhase('void'); withdraw(p.operation.id); return; }
       setPhase('sending');
-      try { await gapi.approve(p.operation.id, a); } catch (e) { fail(e); }       // refused or lost: the operation itself says what happened
-      setOpId(p.operation.id); setPhase('progress');
+      // NEXT W1: an answered refusal is shown and the operation says the rest; a LOST answer is settled by the operation read from the
+      // server ("checking"), and while it cannot be read the sheet stays on "status unknown" — nothing is prepared again
+      const id = p.operation.id;
+      await ap.run({ submit: () => gapi.approve(id, a), read: () => gapi.operation(id), applied: (o) => o.state !== 'pending_approval' }, (o) => {
+        if (o.kind === 'read' && !o.applied) { setPhase('void'); withdraw(id); return; }   // the server never received the approval: this proposal is withdrawn
+        if (o.kind === 'refused') fail(o.error);
+        setOpId(id); setPhase('progress');
+      });
     } finally { lock.current = false; refresh(); }
   };
   const close = () => {
@@ -107,6 +116,7 @@ export function GmxConfirm({ status, request, onClose }: { status: GmxStatus; re
   return <LiveSheet title={title} tone="mainnet" label={GMX_LABEL} busy={phase === 'sending' || phase === 'passkey'} onClose={close}>
     <div className="min-w-0 space-y-4" data-testid="gmx-confirm" data-phase={phase} data-kind={request.kind}>
       <ModeBand tone="mainnet" label={GMX_LABEL} compact />
+      <ApprovalOutcomePanel ap={ap} />
       {phase === 'proposing' && <Waiting className="py-6">{t('gxProposing')}</Waiting>}
 
       {p && o && phase !== 'proposing' && phase !== 'progress' && <div className={`space-y-4 ${phase === 'void' ? 'opacity-50' : ''}`}>
@@ -122,7 +132,7 @@ export function GmxConfirm({ status, request, onClose }: { status: GmxStatus; re
 
       {phase === 'ready' && o?.expiresAt && <Countdown expiresAt={o.expiresAt} skewMs={0} ttlMs={Math.max(1, o.expiresAt - o.createdAt)} onExpire={() => { if (phaseRef.current === 'ready') { setBad('expired'); setPhase('void'); withdraw(o.id); } }} />}
       {phase === 'passkey' && <Notice tone="info">{t('flPasskeyWaiting')}</Notice>}
-      {phase === 'sending' && <Waiting>{t('gxSending')}</Waiting>}
+      {phase === 'sending' && !ap.locked && <Waiting>{t('gxSending')}</Waiting>}
       {bad && <Notice tone="danger"><div data-testid="gmx-integrity" data-why={bad}>{t(bad === 'expired' ? 'gxExpired' : 'gxIntegrity')}{bad !== 'expired' && <span className={`mt-1.5 ${WORDS}`}>{bad}</span>}</div></Notice>}
       {err && !(bad === 'expired') && !(phase === 'progress' && op.data?.final && op.data.state !== 'failed') && <GmxErrNotice err={err.e} raw={err.raw}>{phase === 'void' && <span className="mt-1 block">{t('gxVoidNote')}</span>}</GmxErrNotice>}
 

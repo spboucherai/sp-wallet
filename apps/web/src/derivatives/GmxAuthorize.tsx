@@ -8,6 +8,8 @@
  * row, one unmistakable real-money approval button; the sheet is `LiveSheet` with the real-money tag in its title area.
  */
 import { startAuthentication } from '@simplewebauthn/browser';
+import { ApprovalOutcomePanel, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 import { useQueryClient } from '@tanstack/react-query';
 import { useContext, useRef, useState } from 'react';
 import { amountInputText, sanitizeAmountText } from '../amount';   // v8 hardening: the wallet's single rule for typed amounts
@@ -30,6 +32,7 @@ export function GmxAuthorize({ status, onClose }: { status: GmxStatus; onClose: 
     maxLeverage: String(prev?.maxLeverage ?? 3), maxOrderSizeUsd: amountInputText(prev?.maxOrderSizeUsd ?? '100', locale), maxOrdersPerDay: String(prev?.maxOrdersPerDay ?? 10), bandBps: String(prev?.maxPriceDeviationBps ?? 100), days: '30' }));
   const [step, setStep] = useState<Step>('form'), [p, setP] = useState<GmxAuthPrepared | null>(null), [read, setRead] = useState(false), [err, setErr] = useState<{ e: GmxErr; raw: unknown } | null>(null);
   const lock = useRef(false);
+  const ap = useApprovalOutcome<GmxStatus>();
   const once = async (fn: () => Promise<void>) => { if (lock.current) return; lock.current = true; try { await fn(); } finally { lock.current = false; } };
   const v = gmxAuthFromForm(f, locale), busy = step === 'preparing' || step === 'passkey' || step === 'sending';
   const set = (k: keyof GmxAuthForm, val: string) => { setF({ ...f, [k]: val }); setErr(null); };
@@ -48,8 +51,14 @@ export function GmxAuthorize({ status, onClose }: { status: GmxStatus; onClose: 
     try { a = await startAuthentication({ optionsJSON: p.options }); }
     catch (e) { setErr({ e: gmxError(e), raw: e }); setStep('review'); return; }   // nothing was approved
     setStep('sending');
-    try { const s = await gapi.approveAuthorization(p.authorization, a); qc.setQueryData([...GMX_STATUS_KEY, locale], s); void qc.invalidateQueries({ queryKey: GMX_STATUS_KEY }); setStep('done'); }
-    catch (e) { setErr({ e: gmxError(e), raw: e }); setStep('review'); }
+    // NEXT W1: a lost answer is settled by the status read from the server (is a NEW authorization active?), never by the error
+    const before = status.authorization, took = (s: GmxStatus) => { qc.setQueryData([...GMX_STATUS_KEY, locale], s); void qc.invalidateQueries({ queryKey: GMX_STATUS_KEY }); setStep('done'); };
+    await ap.run({ submit: () => gapi.approveAuthorization(p.authorization, a), read: () => gapi.status(locale),
+      applied: (s) => s.authorization?.state === 'active' && (s.authorization.id !== before?.id || s.authorization.createdAt !== before?.createdAt) }, (o) => {
+      if (o.kind === 'refused') { setErr({ e: gmxError(o.error), raw: o.error }); setStep('review'); }
+      else if (o.kind === 'read' && !o.applied) setStep('review');
+      else took(o.kind === 'answered' ? o.value : o.state);
+    });
   });
 
   const pol = p ? { ...(v.ok ? v.body : {}), ...(p.authorization.policy ?? {}) } as Partial<GmxAuthPrepared['authorization']['policy'] & { days: number }> : null;
@@ -60,6 +69,7 @@ export function GmxAuthorize({ status, onClose }: { status: GmxStatus; onClose: 
   return <LiveSheet title={t('gxAuthTitle')} wide tone="mainnet" label={GMX_LABEL} busy={busy} onClose={onClose}>
     <div className="min-w-0 space-y-4" data-testid="gmx-authorize" data-step={step}>
       <ModeBand tone="mainnet" label={GMX_LABEL} compact />
+      <ApprovalOutcomePanel ap={ap} />
       {(step === 'form' || step === 'preparing') && <>
         <p className="text-[13.5px] leading-snug">{t('gxAuthIntro')}</p>
         <fieldset className="min-w-0"><legend className="mb-2 text-[13px] font-medium text-mute">{t('gxAuthMarkets')}</legend>

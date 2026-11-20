@@ -15,6 +15,8 @@ import { PlanCards } from '../plan'; // v7 any-to-any plans
 import { ExecutionTimeline } from '../execution';                 // v11: unified execution status
 import { execReason, flagDetail, propError } from '../sv';       // v11: server texts by code
 import type { ApiError } from '../api';
+import { answerLost, cancelDraft, proposalApplied, proposalGone } from '../approval';   // NEXT W1: the outcome of an approval is what the server says
+import { ApprovalOutcomePanel, useApprovalOutcome, type KnownOutcome } from '../approvalUi';
 import { heroOf, prepareOf, type Executor, type QuoteRefV } from '../swapLogic'; // v11: what is shown is what is executed (B1, B6)
 
 interface SAsset { key: string; network: string; networkName: string; asset: string; symbol: string; name: string; decimals: number; native?: boolean }
@@ -85,6 +87,7 @@ export function Swap() {
   useEffect(() => { const h = setInterval(() => setNow(Date.now()), 5000); return () => clearInterval(h); }, []);
   const qc = useQueryClient();
   const [exec, setExec] = useState<{ proposal: any; options: any } | null>(null), [busy, setBusy] = useState(''), [execErr, setExecErr] = useState(''), [left, setLeft] = useState(0);
+  const execAp = useApprovalOutcome<any>();
   const live = useQuery({ queryKey: ['proposal', exec?.proposal.id], enabled: !!exec && !['pending_approval'].includes(exec.proposal.state), refetchInterval: 3000, queryFn: () => get<any>(`/transfers/proposals/${exec!.proposal.id}`) });
   const prop = live.data ?? exec?.proposal;
   useEffect(() => { if (!exec || exec.proposal.state !== 'pending_approval') return; const tick = () => setLeft(Math.max(0, Math.round((new Date(exec.proposal.expiresAt).getTime() - Date.now()) / 1000))); tick(); const h = setInterval(tick, 500); return () => clearInterval(h); }, [exec]);
@@ -116,15 +119,23 @@ export function Swap() {
   // v8, toward Solana: the wallet's USDC token account must exist before anything is burned; creating it is a small passkey-approved transaction
   const brSol = brQ.data?.solana, ataMissing = brSol?.role === 'destination' && !brSol.tokenAccountExists;
   const [ataBusy, setAtaBusy] = useState(false), [ataMsg, setAtaMsg] = useState(''), [ataErr, setAtaErr] = useState('');
+  const ataAp = useApprovalOutcome<BridgeQuote>();
   const createAta = async () => {
     setAtaBusy(true); setAtaErr(''); setAtaMsg('');
+    let o: { requestId: string; options: any }, assertion;
     try {
-      const o = await post<{ requestId: string; options: any }>('/bridge/solana/token-account/options');
-      const assertion = await startAuthentication({ optionsJSON: o.options });
-      const r = await post<{ sent: boolean }>('/bridge/solana/token-account', { requestId: o.requestId, assertion });
-      setAtaMsg(r.sent ? t('scAtaCreating') : t('scAtaNotSent'));
-      for (const ms of [4000, 9000, 16000, 30000]) setTimeout(() => void qc.invalidateQueries({ queryKey: ['bridge-quote'] }), ms);
-    } catch (e) { const m = scErrText(t, e); if (m) setAtaErr(m); } finally { setAtaBusy(false); }
+      o = await post<{ requestId: string; options: any }>('/bridge/solana/token-account/options');
+      assertion = await startAuthentication({ optionsJSON: o.options });
+    } catch (e) { const m = scErrText(t, e); if (m) setAtaErr(m); setAtaBusy(false); return; }
+    const later = () => { for (const ms of [4000, 9000, 16000, 30000]) setTimeout(() => void qc.invalidateQueries({ queryKey: ['bridge-quote'] }), ms); };
+    // a lost answer: the quote is read again — it says whether the token account exists now (the creation may still be confirming)
+    await ataAp.run({ submit: () => post<{ sent: boolean }>('/bridge/solana/token-account', { requestId: o.requestId, assertion }),
+      read: () => get<BridgeQuote>(`/bridge/quote?from=${from!.network}&to=${to!.network}&amount=${encodeURIComponent(amount)}`), applied: (q) => q.solana?.role === 'destination' && q.solana.tokenAccountExists }, (r) => {
+      if (r.kind === 'refused') { const m = scErrText(t, r.error); if (m) setAtaErr(m); return; }
+      if (r.kind === 'answered') setAtaMsg(r.value.sent ? t('scAtaCreating') : t('scAtaNotSent')); else if (!r.applied) setAtaMsg(t('nxAtaNotSeen'));
+      void qc.invalidateQueries({ queryKey: ['bridge-quote'] }); later();
+    });
+    setAtaBusy(false);
   };
   const cur = settings.currency, rate = pf.data?.prices ? (cur === 'USD' ? 1 : (pf.data.prices.USDC?.cad ?? 0) / (pf.data.prices.USDC?.usd || 1)) : null;
   const money = (usd: number | null) => (usd === null || rate === null ? null : fiat(usd * rate, cur, locale));
@@ -161,7 +172,7 @@ export function Swap() {
     try { setExec(await post(path, body, { 'idempotency-key': attempt.current.key })); attempt.current = null; }
     catch (e) {
       const x = e as ApiError, d = (x.body as { data?: { fresh?: { amountOutDisplay: string; symbol: string }; quoted?: { minAmountOutDisplay: string } } } | undefined)?.data;
-      if (x.code !== 'offline') attempt.current = null; // answered (even by a refusal): the next click is a new request
+      if (!answerLost(e)) attempt.current = null; // answered (even by a refusal): the next click is a new request; a lost answer (time-out, network, 5xx) keeps the key
       const requote = () => { setAgain((n) => n + 1); void qc.invalidateQueries({ queryKey: ['bridge-quote'] }); };
       if (x.code === 'quote_moved' && d?.fresh && d.quoted) { setExecErr(t('svQuoteMoved', { fresh: trimAmt(d.fresh.amountOutDisplay, 8), min: trimAmt(d.quoted.minAmountOutDisplay, 8), sym: d.fresh.symbol })); requote(); }
       else if (x.code === 'quote_mismatch') { setExecErr(t('svQuoteStale')); requote(); }
@@ -173,15 +184,29 @@ export function Swap() {
   const approve = async () => {
     if (!exec) return;
     setBusy('passkey'); setExecErr('');
-    try {
-      const assertion = await startAuthentication({ optionsJSON: exec.options }); // the challenge is the fingerprint of this exact swap
-      setBusy('submit');
-      const p = await post(`/transfers/proposals/${exec.proposal.id}/approve`, { assertion });
-      setExec({ ...exec, proposal: p });
-    } catch (e) { const m = errText(t, e); if (m) setExecErr(m); const fresh = await get<any>(`/transfers/proposals/${exec.proposal.id}`).catch(() => null); if (fresh) setExec({ ...exec, proposal: fresh }); }
-    finally { setBusy(''); }
+    const id = exec.proposal.id, read = () => get<any>(`/transfers/proposals/${id}`);
+    let assertion;
+    try { assertion = await startAuthentication({ optionsJSON: exec.options }); } // the challenge is the fingerprint of this exact swap
+    catch (e) { const m = errText(t, e); if (m) setExecErr(m); setBusy(''); return; }
+    // the approval leaves the browser: only a state read from the server says what happened (approval.ts)
+    setBusy('submit');
+    await execAp.run({ submit: () => post<any>(`/transfers/proposals/${id}/approve`, { assertion }), read, applied: proposalApplied }, (o: KnownOutcome<any, any>) => {
+      if (o.kind === 'refused') { const m = errText(t, o.error); if (m) setExecErr(m); void read().then((fresh) => setExec({ ...exec, proposal: fresh }), () => {}); return; }
+      setExec({ ...exec, proposal: o.kind === 'answered' ? o.value : o.state }); setExecErr('');   // a state that still awaits the approval is said by the panel
+    });
+    setBusy('');
   };
-  const closeExec = async () => { if (exec?.proposal.state === 'pending_approval') await post(`/transfers/proposals/${exec.proposal.id}/reject`).catch(() => {}); setExec(null); setExecErr(''); setAmount(''); };
+  // closing a review cancels its draft: a cancellation that fails says so and the sheet stays; never offered while the outcome of an approval is unread
+  const closeExec = async () => {
+    if (execAp.locked) return;
+    if (exec?.proposal.state === 'pending_approval') {
+      const id = exec.proposal.id; setBusy('cancel'); setExecErr('');
+      const c = await cancelDraft(() => post(`/transfers/proposals/${id}/reject`), () => get<any>(`/transfers/proposals/${id}`));
+      setBusy('');
+      if (c.kind === 'failed' && !(c.state && proposalGone(c.state))) { setExecErr(t('nxCancelFailed', { why: errText(t, c.error) })); if (c.state) setExec({ ...exec, proposal: c.state }); return; }
+    }
+    setExec(null); setExecErr(''); setAmount('');
+  };
   const net = (r: RouteV) => r.valuation.netUsd ?? Number(r.minAmountOutDisplay);
   const sorted = [...routes].sort((a, b) => Number(b.id === best[mode]) - Number(a.id === best[mode]) || net(b) - net(a));
   const chosen = sorted[0];
@@ -291,8 +316,9 @@ export function Swap() {
   const review = exec && prop;
   const reviewPill = (pill: React.ReactNode) => <span className="mt-1.5 inline-flex">{pill}</span>;
   const reviewActions = prop && <div className="mt-4 space-y-2.5">
-    {prop.state === 'pending_approval' && <Btn full busy={!!busy} disabled={left === 0} onClick={() => void approve()}><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>}
-    <Btn full kind="ghost" disabled={!!busy} onClick={() => void closeExec()}>{prop.state === 'pending_approval' ? t('cancel') : t('swClose')}</Btn>
+    <ApprovalOutcomePanel ap={execAp} />
+    {prop.state === 'pending_approval' && !execAp.locked && <Btn full busy={!!busy} disabled={left === 0} onClick={() => void approve()}><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>}
+    {!execAp.locked && busy !== 'submit' && <Btn full kind="ghost" disabled={!!busy} onClick={() => void closeExec()}>{prop.state === 'pending_approval' ? t('cancel') : t('swClose')}</Btn>}
   </div>;
 
   return (
@@ -343,7 +369,8 @@ export function Swap() {
           {brSol?.role === 'destination' && ataMissing && <Notice tone="warn"><span data-testid="sc-ata-missing"><b>{t('scAtaMissingTitle')}</b> {t('scAtaMissing', { rent: trimAmt(brSol.tokenAccountRentDisplay, 9) })}</span>
             <span className="mt-1 block break-all font-mono text-[11px] text-mute">{brSol.tokenAccount}</span>
             {ataMsg && <span className="mt-1 block">{ataMsg}</span>}{ataErr && <span className="mt-1 block text-danger">{ataErr}</span>}
-            <div className="mt-2"><Btn full kind="soft" busy={ataBusy} onClick={() => void createAta()}><Icon n="key" className="h-4 w-4" />{t('scAtaCreate')}</Btn></div></Notice>}
+            <ApprovalOutcomePanel ap={ataAp} quiet className="mt-2" />
+            <div className="mt-2"><Btn full kind="soft" busy={ataBusy} disabled={ataAp.locked} onClick={() => void createAta()}><Icon n="key" className="h-4 w-4" />{t('scAtaCreate')}</Btn></div></Notice>}
           {execErr && !exec && <Notice tone="danger">{execErr}</Notice>}
           <Btn full busy={busy === 'prepare'} disabled={!brQ.data.destinationGas.enough || ataMissing} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('brExecute', { net: brQ.data.toName })}</Btn>
         </div>}

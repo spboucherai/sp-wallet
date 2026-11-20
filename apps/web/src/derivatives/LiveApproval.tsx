@@ -17,6 +17,8 @@
  */
 import { OrderChecksSlot } from './orderChecks';   // v11 Trade
 import { startAuthentication } from '@simplewebauthn/browser';
+import { ApprovalOutcomePanel, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 import { useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { I18n, useT, type Key } from '../i18n';
@@ -74,10 +76,18 @@ export function ApprovalSheet({ account, instrument, request, orders, ttlMs, liq
 
   const send = async () => {
     setPhase('sending'); setErr(null);
-    try { const r = await lapi.approveOrder(account.id, key, assertion.current); setSent(r.order); setPhase('done'); }
-    catch (e) { const le = liveError(e, 'approve'); if (le.retry) { setErr(le); setPhase('resend'); } else fail(le); }
-    finally { void refreshLive(qc, account.id); }
+    // NEXT W1: a lost answer is settled by the ORDER read from the server. Read and past `proposed`: that is what happened. Read and
+    // still awaiting: the same approval may be sent again (the server sends an order once, however many times it is approved).
+    // Not readable: "status unknown" — the sheet stays, nothing is proposed again.
+    const readOrder = async (): Promise<LiveOrder> => { const o = (await lapi.account(account.id)).orders.find((x) => x.clientId === key); if (!o) throw new Error('order not listed'); return o; };
+    await ap.run<LiveOrder>({ submit: async () => (await lapi.approveOrder(account.id, key, assertion.current)).order, read: readOrder, applied: (o) => o.state !== 'proposed' && o.state !== 'risk_checked' }, (o) => {
+      if (o.kind === 'refused') { fail(liveError(o.error, 'approve')); return; }
+      if (o.kind === 'read' && !o.applied) { setErr(liveError(o.error, 'approve')); setPhase('resend'); return; }
+      setSent(o.kind === 'answered' ? o.value : o.state); setPhase('done');
+    });
+    void refreshLive(qc, account.id);
   };
+  const ap = useApprovalOutcome<LiveOrder>();
   const approve = async () => {
     if (lock.current || phaseRef.current !== 'ready' || !p?.options) return;     // one prompt, one approval, however fast the button is pressed
     lock.current = true;
@@ -110,6 +120,7 @@ export function ApprovalSheet({ account, instrument, request, orders, ttlMs, liq
   return <LiveSheet title={title} tone={tone} label={account.label} busy={phase === 'sending' || phase === 'passkey'} onClose={close}>
     <div className="min-w-0 space-y-4" data-testid="approval-sheet" data-phase={phase}>
       <ModeBand tone={tone} label={account.label} />
+      <ApprovalOutcomePanel ap={ap} quiet />
       {phase === 'proposing' && <Waiting className="py-6">{t('flProposing')}</Waiting>}
 
       {c && phase !== 'proposing' && phase !== 'done' && <>
@@ -130,7 +141,7 @@ export function ApprovalSheet({ account, instrument, request, orders, ttlMs, liq
 
       {phase === 'ready' && p?.expiresAt && <Countdown expiresAt={p.expiresAt} skewMs={skew} ttlMs={ttlMs} onExpire={() => { if (phaseRef.current === 'ready') fail(local('proposal_expired')); }} />}
       {phase === 'passkey' && <Notice tone="info">{t('flPasskeyWaiting')}</Notice>}
-      {phase === 'sending' && <Waiting>{t('flSending')}</Waiting>}
+      {phase === 'sending' && !ap.locked && <Waiting>{t('flSending')}</Waiting>}
       {err && <LiveErrNotice err={err} tone={err.key === 'passkey_cancelled' ? 'warn' : 'danger'}>{phase === 'void' && <span className="mt-1 block">{t('flVoidNote')}</span>}</LiveErrNotice>}
       {phase === 'done' && order && <><OrderOutcome order={order} instrument={instrument} />
         {inFlight(order.state) && <Notice tone="warn">{t('flUnknownNote')}</Notice>}
@@ -160,6 +171,7 @@ export function LeverageSheet({ account, instrument, max, current, onRead, onClo
   const phaseRef = useRef(phase); phaseRef.current = phase;
   const lock = useRef(false);
   const busy = phase === 'proposing' || phase === 'passkey' || phase === 'sending';
+  const ap = useApprovalOutcome<LeverageResult['action']>();
   const once = async (f: () => Promise<void>) => { if (lock.current) return; lock.current = true; try { await f(); } finally { lock.current = false; } };
   const propose = () => once(async () => {
     if (phaseRef.current !== 'form' && phaseRef.current !== 'void') return;
@@ -177,14 +189,20 @@ export function LeverageSheet({ account, instrument, max, current, onRead, onClo
     try { a = await startAuthentication({ optionsJSON: p.options }); } catch (e) { setErr(liveError(e, 'approve')); setPhase('void'); return; }
     if (remainingMs(p.expiresAt, Date.now(), skew) <= 0) { setErr(local('proposal_expired')); setPhase('void'); return; }
     setPhase('sending');
-    try { const r = await lapi.approveLeverage(account.id, p.action.id, a); if (r.venue?.leverage) onRead(r.venue.leverage); setRes(r); setPhase('done'); }
-    catch (e) { setErr(liveError(e, 'approve')); setPhase('void'); }
-    finally { void refreshLive(qc, account.id); void qc.invalidateQueries({ queryKey: ['deriv', 'live', 'preview'] }); }
+    // NEXT W1: a lost answer is settled by the ACTION read from the account (its state says whether the venue was asked)
+    const actionId = p.action.id, readAction = async () => { const x = (await lapi.account(account.id)).actions.find((k) => k.id === actionId); if (!x) throw new Error('action not listed'); return x; };
+    await ap.run<LeverageResult>({ submit: () => lapi.approveLeverage(account.id, actionId, a), read: readAction, applied: (x) => x.state !== p.action.state }, (o) => {
+      if (o.kind === 'refused') { setErr(liveError(o.error, 'approve')); setPhase('void'); return; }
+      if (o.kind === 'read') { if (o.applied) { setRes({ action: o.state, idempotent: true, venue: null }); setPhase('done'); } else setPhase('void'); return; }
+      if (o.value.venue?.leverage) onRead(o.value.venue.leverage); setRes(o.value); setPhase('done');
+    });
+    void refreshLive(qc, account.id); void qc.invalidateQueries({ queryKey: ['deriv', 'live', 'preview'] });
   });
   const state = res?.action.state;
   return <LiveSheet title={t('flLevTitle', { symbol: instrument.symbol })} tone={tone} label={account.label} busy={busy} onClose={onClose}>
     <div className="min-w-0 space-y-4" data-testid="leverage-sheet" data-phase={phase}>
       <ModeBand tone={tone} label={account.label} />
+      <ApprovalOutcomePanel ap={ap} quiet />
       <p className="text-[13.5px] leading-snug text-mute">{t('flLevIntro')}</p>
       {(phase === 'form' || phase === 'proposing' || phase === 'void') && <>
         <div><div className="flex items-end justify-between gap-3"><label htmlFor="fl-lev" className="text-[13px] font-medium text-mute">{t('flLevNew')}</label><span className="t-num text-[34px]">{lev}×</span></div>

@@ -1,10 +1,12 @@
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
+import { ApprovalOutcomePanel, inDoubt, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useState } from 'react';
 import { get, post } from '../api';
 import { useNetworks } from '../hooks';
 import { errText, I18n, useT } from '../i18n';
-import { Btn, Card, Coin, H, Icon, inputCls, Notice, PageTitle, Skeleton, SkeletonRows, when } from '../ui';
+import { Btn, Card, Coin, ErrorState, H, Icon, inputCls, Notice, PageTitle, Skeleton, SkeletonRows, when } from '../ui';
 
 const fmt = (v: string, d: number) => { const s = v.padStart(d + 1, '0'); const i = s.slice(0, s.length - d), f = s.slice(s.length - d).replace(/0+$/, ''); return f ? `${i}.${f}` : i; };
 
@@ -14,16 +16,20 @@ export function Security() {
   const ov = useQuery({ queryKey: ['security'], queryFn: () => get<any>('/security/overview'), refetchInterval: 30_000 });
   const au = useQuery({ queryKey: ['audit'], queryFn: () => get<any>('/security/audit?limit=60'), refetchInterval: 30_000 });
   const [showAudit, setShowAudit] = useState(false), [allLimits, setAllLimits] = useState(false), [lq, setLq] = useState('');
-  const [halt, setHalt] = useState(''), [haltOpen, setHaltOpen] = useState(false), [busy, setBusy] = useState(''), [err, setErr] = useState('');
+  const [halt, setHalt] = useState(''), [haltOpen, setHaltOpen] = useState(false), [busy, setBusy] = useState(''), [err, setErr] = useState(''); const ap = useApprovalOutcome<any>();
+  // NEXT W3: a failed load is an error state with a retry, not a skeleton that never ends
+  if (!ov.data && ov.isError) return <div className="space-y-4" data-testid="security-error"><PageTitle>{t('security')}</PageTitle><ErrorState title={t('nxErrLoad')} offline={(ov.error as { code?: string } | null)?.code === 'offline'} onRetry={() => void ov.refetch()}>{t('nxErrLoadBody')}</ErrorState></div>;
   if (ov.isLoading || !ov.data) return <div className="space-y-4" aria-busy="true"><Skeleton h="h-11" className="!w-40 !rounded-xl" /><Skeleton h="h-44" /><SkeletonRows n={4} /></div>;
   const s = ov.data.signer;
-  const act = async (name: string, fn: () => Promise<unknown>) => { setBusy(name); setErr(''); try { await fn(); await qc.invalidateQueries(); } catch (e) { setErr(errText(t, e)); } finally { setBusy(''); } };
+  const act = async (name: string, fn: () => Promise<unknown>) => { setBusy(name); setErr(''); try { await fn(); await qc.invalidateQueries(); } catch (e) { if (!inDoubt(e)) setErr(errText(t, e)); } finally { setBusy(''); } };
   const addDevice = () => act('device', async () => {
     const o = await post('/security/devices/options');
     const response = await startRegistration({ optionsJSON: o.options });
     const v = await post('/security/devices/verify', { challengeId: o.challengeId, response, label: `Passkey ${ov.data.devices.length + 1}` });
     const assertion = await startAuthentication({ optionsJSON: v.options }); // an existing passkey authorizes the new one
-    await post('/security/devices/confirm', { pendingId: v.pendingId, assertion });
+    // NEXT W1: a lost answer is settled by the device list read from the server (is there one more passkey?)
+    const had = ov.data.devices.length;
+    await ap.send<unknown>({ submit: () => post('/security/devices/confirm', { pendingId: v.pendingId, assertion }), read: () => get<any>('/security/overview'), applied: (o) => o.devices.length > had, late: () => void qc.invalidateQueries() });
   });
   const keys: string[] = s.reachable ? Object.keys(s.policy.perTx).sort() : [];
   const nameOf = (net: string) => nets.data?.find((x) => x.id === net)?.name ?? net;
@@ -33,6 +39,7 @@ export function Security() {
     <div className="space-y-4">
       <PageTitle>{t('security')}</PageTitle>
       {err && <Notice tone="danger">{err}</Notice>}
+      <ApprovalOutcomePanel ap={ap} />
       <Card>
         <H>{t('signer')}</H>
         {!s.reachable ? <Notice tone="danger">{t('signer')} : {t('unreachable')}</Notice> : <>
@@ -68,7 +75,7 @@ export function Security() {
           <div className="min-w-0 flex-1"><div className="font-medium">{d.label} <span className="font-mono text-xs text-mute">{d.id}…</span></div>
             <div className="text-xs text-mute">{d.backedUp ? t('synced') : t('deviceBound')} · {t('lastUsed')} {d.lastUsedAt ? when(d.lastUsedAt, locale) : t('never')}</div></div>
           <span className={`text-xs ${d.enrolledOnSigner ? 'text-emerald' : 'text-warn'}`}><Icon n={d.enrolledOnSigner ? 'check' : 'warn'} className="inline h-4 w-4" /></span></li>)}</ul>
-        <Btn kind="soft" full className="mt-4" busy={busy === 'device'} onClick={addDevice}><Icon n="key" />{t('addDevice')}</Btn>
+        <Btn kind="soft" full className="mt-4" busy={busy === 'device'} disabled={ap.locked} onClick={addDevice}><Icon n="key" />{t('addDevice')}</Btn>
         <p className="mt-2 text-xs text-mute">{t('addDeviceNote')}</p></Card>
 
       <Card><H>{t('recovery')}</H><p className="text-[13.5px] text-mute">{t('recoveryBody')}</p>

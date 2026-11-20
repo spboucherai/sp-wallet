@@ -264,13 +264,13 @@ export function liveError(e: unknown, stage: 'propose' | 'approve' | 'other' = '
   if (!(e instanceof ApiError)) return { key: 'passkey_failed', code: String(x?.name ?? 'error'), status: 0, detail: String(x?.message ?? ''), consumed: stage === 'approve', retry: false };
   const code = e.code, detail = e.message && e.message !== 'error' && e.message !== code ? e.message : '';
   const key = code === 'halted' && e.status === 423 ? 'halted_423' : KNOWN.has(code) ? code : code.startsWith('signer_') ? 'signer_other' : 'other';
-  const transport = e.status === 0 || code === 'venue_unavailable' || code === 'venue_rate_limited' || code === 'stale_data';
+  const transport = e.outcomeUnknown || code === 'venue_unavailable' || code === 'venue_rate_limited' || code === 'stale_data';
   // At approval the screen treats EVERY answered failure as the end of that proposal (the server marks the order `rejected`
   // whenever no signature came back, and an expired one `cancelled`): the only thing sent again as is, is an approval whose
   // answer was lost on the way (no answer, or an unexplained 5xx) — the server sends an order once however many times it is
   // approved, and answers the second call with the order's present state.
   // At proposal a 422 is stored under the Idempotency-Key as a refused order: the next review needs a new key.
-  const lost = e.status === 0 || (e.status >= 500 && !['signer_unreachable', 'asset_table_mismatch', 'venue_unavailable', 'venue_rate_limited'].includes(code));
+  const lost = e.outcomeUnknown || (e.status >= 500 && !['signer_unreachable', 'asset_table_mismatch', 'venue_unavailable', 'venue_rate_limited'].includes(code));
   const consumed = stage === 'approve' ? !lost : stage === 'propose' ? e.status === 422 : false;
   return { key, code, status: e.status, detail, consumed, retry: stage === 'approve' ? lost : transport };
 }

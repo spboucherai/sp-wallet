@@ -1,6 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { build as esbuild } from 'esbuild';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
@@ -47,7 +48,16 @@ const i18nSplit = (): Plugin => {
   };
 };
 
+// NEXT W5: the version shown in Settings is the build's own — the package version and the short commit (`SPW_COMMIT` when the
+// build runs outside a git checkout, e.g. from an archive on a node; « nogit » when neither is known). Read by src/version.ts.
+const pkgVersion = (JSON.parse(readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8')) as { version: string }).version;
+const commit = (): string => {
+  const env = (process.env.SPW_COMMIT ?? '').trim(); if (/^[0-9a-f]{7,40}$/i.test(env)) return env.slice(0, 7);
+  try { return execFileSync('git', ['rev-parse', '--short=7', 'HEAD'], { cwd: fileURLToPath(new URL('.', import.meta.url)), stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || 'nogit'; } catch { return 'nogit'; }
+};
+
 export default defineConfig({
+  define: { __SPW_VERSION__: JSON.stringify(`${pkgVersion} (${commit()})`) },
   plugins: [i18nSplit(), iconsCheck(), react(), tailwindcss(), serviceWorker()],
   build: { outDir: '../../dist/web', emptyOutDir: true, sourcemap: false, assetsInlineLimit: 0, modulePreload: { polyfill: false } },
   // v11 live quotes: `ws: true` so that the dev server also proxies the websocket of the quote engine (/api/v1/stream)
