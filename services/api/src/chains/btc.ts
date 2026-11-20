@@ -78,8 +78,11 @@ export function blockbook(u: string): Source {
     tip: async () => (await j<{ blockbook: { bestHeight: number } }>(u)).blockbook.bestHeight,
     blockHash: async (h) => (await j<{ blockHash: string }>(`${u}/block-index/${h}`)).blockHash,
     utxos: async (a) => (await j<{ txid: string; vout: number; value: string; confirmations: number }[]>(`${u}/utxo/${a}`)).map((x) => ({ txid: x.txid, vout: x.vout, value: exact(x.value), confirmed: x.confirmations > 0 })),
-    balance: async (a) => { const s = await j<{ balance: string; unconfirmedBalance: string }>(`${u}/address/${a}?details=basic`); const un = BigInt(s.unconfirmedBalance); return BigInt(s.balance) + (un < 0n ? un : 0n); },
-    detail: async (a) => { const s = await j<{ balance: string; unconfirmedBalance: string }>(`${u}/address/${a}?details=basic`); return { confirmed: BigInt(s.balance), net: BigInt(s.unconfirmedBalance) }; },
+    // `unconfirmedBalance` is absent from some Blockbook builds when the address has nothing in the mempool (seen 2026-11-19 on the
+    // Litecoin instance: with the other source down, the missing member made this one fail too and the balance read "unavailable").
+    // Absent = nothing unconfirmed. `balance` itself must be there: without it the answer is not a balance.
+    balance: async (a) => { const s = await j<{ balance?: string; unconfirmedBalance?: string }>(`${u}/address/${a}?details=basic`); if (typeof s.balance !== 'string') throw new Error('indexer: no balance in the answer'); const un = BigInt(s.unconfirmedBalance ?? '0'); return BigInt(s.balance) + (un < 0n ? un : 0n); },
+    detail: async (a) => { const s = await j<{ balance?: string; unconfirmedBalance?: string }>(`${u}/address/${a}?details=basic`); if (typeof s.balance !== 'string') throw new Error('indexer: no balance in the answer'); return { confirmed: BigInt(s.balance), net: BigInt(s.unconfirmedBalance ?? '0') }; },
     feeRate: async () => feePerKb((await j<{ result: string }>(u + '/estimatefee/3')).result),
     broadcast: async (hex) => { await txt(u + '/sendtx/', { method: 'POST', body: hex }); },
     status: async (id) => { try { const s = await j<{ blockHeight: number; blockHash?: string; confirmations: number }>(`${u}/tx/${id}`); return { found: true, confirmed: s.confirmations > 0, height: s.blockHeight, hash: s.blockHash }; } catch (e) { if ([400, 404].includes((e as { status?: number }).status ?? 0)) return { found: false, confirmed: false }; throw e; } },

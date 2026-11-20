@@ -59,20 +59,25 @@ async function scanNative(n: NetworkDef, address: string): Promise<void> {
   await sql`update scan_cursor set native_cursor = ${r.state.block}, native_balance = ${r.state.balance.toString()}, native_nonce = ${r.state.nonce}, native_addr = ${address.toLowerCase()} where network = ${n.id}`;
 }
 
+/** networks scanned at once: each one talks to its own endpoints; the pass is as long as its slowest fifth, not their sum */
+export const SCAN_CONCURRENCY = 5;
+async function scanOne(n: NetworkDef, address: string): Promise<void> {
+  try {
+    const [c] = await sql<{ cursor: string }[]>`select cursor from scan_cursor where network = ${n.id}`;
+    const r = await adapterFor(n.id).deposits(address, c ? Number(c.cursor) : null);
+    await recordDeposits(n.id, r.items);
+    for (const g of r.gaps ?? []) await audit('deposit.scan_gap', 'chain', { network: n.id, txid: g.txid, block: g.block, reason: 'transaction no longer served by any source' });
+    await sql`insert into scan_cursor (network, cursor, finalized) values (${n.id}, ${r.cursor}, ${Math.min(r.finalizedHeight, Number.MAX_SAFE_INTEGER)})
+      on conflict (network) do update set cursor = excluded.cursor, finalized = excluded.finalized`;
+  } catch (e) { log(`deposits ${n.id}: ${(e as Error).message.slice(0, 120)}`); }
+  try { await scanNative(n, address); } catch (e) { log(`native deposits ${n.id}: ${(e as Error).message.slice(0, 120)}`); }
+}
 export async function scanDepositsPass(addresses: Record<string, string>): Promise<void> {
-  for (const n of NETS) {
-    const address = addresses[n.id];
-    if (!address) continue;
-    try {
-      const [c] = await sql<{ cursor: string }[]>`select cursor from scan_cursor where network = ${n.id}`;
-      const r = await adapterFor(n.id).deposits(address, c ? Number(c.cursor) : null);
-      await recordDeposits(n.id, r.items);
-      for (const g of r.gaps ?? []) await audit('deposit.scan_gap', 'chain', { network: n.id, txid: g.txid, block: g.block, reason: 'transaction no longer served by any source' });
-      await sql`insert into scan_cursor (network, cursor, finalized) values (${n.id}, ${r.cursor}, ${Math.min(r.finalizedHeight, Number.MAX_SAFE_INTEGER)})
-        on conflict (network) do update set cursor = excluded.cursor, finalized = excluded.finalized`;
-    } catch (e) { log(`deposits ${n.id}: ${(e as Error).message.slice(0, 120)}`); }
-    try { await scanNative(n, address); } catch (e) { log(`native deposits ${n.id}: ${(e as Error).message.slice(0, 120)}`); }
-  }
+  const todo = NETS.filter((n) => addresses[n.id]);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(SCAN_CONCURRENCY, todo.length) }, async () => {
+    for (;;) { const n = todo[next++]; if (!n) return; await scanOne(n, addresses[n.id]!); }
+  }));
   // an operation can record its own transaction id after the deposit was seen: look again at the recent external rows
   await classifyDeposits(true).catch((e) => log(`classify: ${(e as Error).message.slice(0, 120)}`));
   try { await recordFlows(portfolioDeps.prices ? await portfolioDeps.prices().catch(() => null) : null); } catch (e) { log(`flows: ${(e as Error).message.slice(0, 120)}`); }

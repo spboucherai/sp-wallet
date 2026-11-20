@@ -40,9 +40,9 @@ export interface PortfolioRow {
 }
 
 // ------------------------------------------------------------------------------------------------------------------ reading
-const BAL_TTL_MS = 12_000;
 const balCache = new Map<string, { at: number; address: string; rows: PortfolioRow[] }>();
-export const resetBalanceCache = (): void => balCache.clear();
+let epoch = 0; // a read started before a reset never writes after it
+export const resetBalanceCache = (): void => { epoch += 1; balCache.clear(); inflight.clear(); lastMemo.clear(); };
 
 async function readNetwork(n: NetworkDef, address: string, assets: AssetDef[]): Promise<PortfolioRow[]> {
   const base = (a: AssetDef) => ({ network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals });
@@ -62,16 +62,69 @@ async function readNetwork(n: NetworkDef, address: string, assets: AssetDef[]): 
       : { ...base(a), amount: b[a.id]!.toString(), display: formatUnits(b[a.id]!, a.decimals), error: null, height: null, sources: 1, sourcesAsked: null, agreed: true, stale: false, readAt, reason: null }));
   } catch { return assets.map((a) => none(a, 'network_unavailable')); }
 }
-/** Every (network, asset) of the wallet. Reads are cached 12 s per network (as before NEXT). */
+// Serving rule (pre-production rehearsal, 2026-11-19: a cold read of the 23 networks took 19 s — one slow source held everybody):
+//   - a read younger than `ttlMs` is served as it is;
+//   - otherwise the network is read again, ONCE whoever asks (`inflight`), and the caller waits at most `waitMs` for it:
+//     past that, the previous read (up to `serveMs` old) is served, each row marked `stale` with its own `readAt` — an
+//     old figure that says it is old, instead of a screen that waits; the fresh read lands in the cache for the next call;
+//   - with no previous read, the caller waits `firstWaitMs`, then the rows are `unavailable` (`slow_source`), never 0.
+// The worker keeps the cache warm (worker.ts `balances`), so a client normally never waits at all.
+/** the delays of the serving rule (an object so that tests can shorten them) */
+export const balTiming = { ttlMs: 12_000, serveMs: 10 * 60_000, waitMs: 4_000, firstWaitMs: 15_000 };
+const inflight = new Map<string, Promise<PortfolioRow[]>>();
+const pause = (ms: number) => new Promise<null>((r) => { setTimeout(() => r(null), ms).unref(); });
+function refresh(n: NetworkDef, address: string, assets: AssetDef[]): Promise<PortfolioRow[]> {
+  const key = `${n.id}:${address}`, running = inflight.get(key);
+  if (running) return running;
+  const started = epoch;
+  const p: Promise<PortfolioRow[]> = readNetwork(n, address, assets).then((rows) => {
+    if (started !== epoch) return rows;
+    // a read that failed entirely does not replace a recent good one (the good one keeps being served as stale)
+    const prev = balCache.get(n.id), failed = rows.every((r) => r.amount === null);
+    if (!failed || !prev || prev.address !== address || Date.now() - prev.at > balTiming.serveMs) balCache.set(n.id, { at: Date.now(), address, rows });
+    void rememberLast(rows);
+    return rows;
+  }).finally(() => { if (inflight.get(key) === p) inflight.delete(key); });
+  inflight.set(key, p);
+  return p;
+}
+/** Every (network, asset) of the wallet — see the serving rule above. */
 export async function readRows(addresses: Record<string, string>, assetsOf: (n: NetworkDef) => AssetDef[]): Promise<PortfolioRow[]> {
   const out = await Promise.all(NETS.filter((n) => addresses[n.id]).map(async (n) => {
-    const address = addresses[n.id]!, c = balCache.get(n.id);
-    if (c && c.address === address && Date.now() - c.at < BAL_TTL_MS) return c.rows;
-    const rows = await readNetwork(n, address, assetsOf(n));
-    balCache.set(n.id, { at: Date.now(), address, rows });
-    return rows;
+    const address = addresses[n.id]!, assets = assetsOf(n), c = balCache.get(n.id), mine = c && c.address === address ? c : null;
+    if (mine && Date.now() - mine.at < balTiming.ttlMs) return mine.rows;
+    const fresh = refresh(n, address, assets);
+    const usable = mine && Date.now() - mine.at < balTiming.serveMs ? mine : null;
+    const got = await Promise.race([fresh, pause(usable ? balTiming.waitMs : balTiming.firstWaitMs)]);
+    if (got) return got.every((r) => r.amount === null) && usable ? usable.rows.map((r) => ({ ...r, stale: true })) : got;
+    if (usable) return usable.rows.map((r) => ({ ...r, stale: true }));
+    return assets.map((a): PortfolioRow => ({ network: n.id, networkName: n.name, asset: a.id, symbol: a.symbol, name: a.name, decimals: a.decimals, amount: null, display: null, error: 'unavailable',
+      height: null, sources: 0, sourcesAsked: null, agreed: false, stale: false, readAt: null, reason: 'slow_source' }));
   }));
   return out.flat();
+}
+
+// the last amount READ for each (network, asset): what lets a snapshot say "that network could not be read, and it held nothing"
+const lastMemo = new Map<string, { amount: string; savedAt: number }>();
+async function rememberLast(rows: PortfolioRow[]): Promise<void> {
+  try {
+    for (const r of rows) {
+      if (r.amount === null) continue;
+      const k = `${r.network}:${r.asset}`, m = lastMemo.get(k);
+      if (m && m.amount === r.amount && Date.now() - m.savedAt < 10 * 60_000) continue;
+      lastMemo.set(k, { amount: r.amount, savedAt: Date.now() });
+      await sql`insert into balance_last (network, asset, amount, read_at) values (${r.network}, ${r.asset}, ${r.amount}, now())
+        on conflict (network, asset) do update set amount = excluded.amount, read_at = excluded.read_at`;
+    }
+  } catch { /* a missed note only makes a later snapshot stricter */ }
+}
+/** Every unreadable row held nothing the last time it was read, and that was at most `days` ago. */
+export async function missingHeldNothing(rows: PortfolioRow[], days = 7): Promise<boolean> {
+  const miss = rows.filter((r) => r.amount === null);
+  if (!miss.length) return false;
+  const known = await sql<{ network: string; asset: string; amount: string }[]>`select network, asset, amount::text as amount from balance_last where read_at > now() - ${days} * interval '1 day' and network in ${sql([...new Set(miss.map((r) => r.network))])}`;
+  const zero = new Set(known.filter((k) => k.amount === '0').map((k) => `${k.network}:${k.asset}`));
+  return miss.every((r) => zero.has(`${r.network}:${r.asset}`));
 }
 
 // ------------------------------------------------------------------------------------------------------------------ exact decimals
@@ -170,8 +223,12 @@ export async function writeSnapshot(now: Date = new Date()): Promise<{ complete:
   for (const currency of ['USD', 'CAD'] as const) {
     const { summary: s, breakdown } = summarize(rows, px, currency);
     if (s.total === null) return null;
-    const ok = s.complete && !s.pricesStale;
-    const reasons = [...s.missing.map((m) => ({ kind: 'missing', ...m })), ...s.uncertain.map((u) => ({ kind: 'uncertain', ...u })), ...s.unpriced.map((u) => ({ kind: 'unpriced', network: u.network, asset: u.asset })), ...s.stalePrices.map((symbol) => ({ kind: 'stale_price', symbol }))].slice(0, 60);
+    // A network that could not be read and held NOTHING the last time it was read (within a week) does not make the point
+    // unusable: the total is the same figure. The point is kept as usable, and says so (`carried_zero`). Anything else that
+    // is missing, uncertain, unpriced or stale keeps the point out of the chart, as before.
+    const carried = !s.complete && !s.pricesStale && s.uncertain.length === 0 && s.unpriced.length === 0 && await missingHeldNothing(rows);
+    const ok = (s.complete && !s.pricesStale) || carried;
+    const reasons = [...s.missing.map((m) => ({ kind: carried ? 'carried_zero' : 'missing', ...m })), ...s.uncertain.map((u) => ({ kind: 'uncertain', ...u })), ...s.unpriced.map((u) => ({ kind: 'unpriced', network: u.network, asset: u.asset })), ...s.stalePrices.map((symbol) => ({ kind: 'stale_price', symbol }))].slice(0, 60);
     await sql`insert into portfolio_snapshots (at, currency, total, complete, reasons, breakdown) values (${now}, ${currency}, ${s.total}, ${ok}, ${sql.json(reasons as never)}, ${sql.json(breakdown as never)})`;
     totals[currency] = s.total; complete &&= ok;
   }

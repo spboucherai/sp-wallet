@@ -598,6 +598,9 @@ create index if not exists portfolio_snapshots_at on portfolio_snapshots (curren
 -- what entered and left the wallet (not performance): deposits and finalized plain transfers, with the price at the time the
 -- API saw them when that was close to the event (else price_* stay NULL and the flow is reported as not valued).
 -- scope: 'external' | 'own_account' (to / from the owner's agent vaults and venue accounts, which the wallet total does not include)
+-- the last amount read for each (network, asset): lets a snapshot tell "unreadable, and it held nothing" from "unreadable"
+create table if not exists balance_last (
+  network text not null, asset text not null, amount numeric(78,0) not null, read_at timestamptz not null, primary key (network, asset));
 create table if not exists portfolio_flows (
   ref_type text not null, ref_id text not null, at timestamptz not null, direction text not null, scope text not null,
   network text not null, asset text not null, symbol text not null, decimals int not null, amount numeric(78,0) not null,

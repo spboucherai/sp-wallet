@@ -276,6 +276,18 @@ describe('indexer clients (stubbed fetch)', () => {
     serve({ '/api/v2': { body: { blockbook: { bestHeight: 600010 } } }, [`/address/${me}?details=txs&pageSize=50`]: { body: { transactions: [] } } });
     expect(await ad.deposits(me, null)).toEqual({ items: [], cursor: 600010, finalizedHeight: 600005 });
   });
+  it('Blockbook: an answer without `unconfirmedBalance` is a balance with nothing unconfirmed; one without `balance` is not a balance (NEXT)', async () => {
+    const s = btc.sourceOf('blockbook:https://bb.test/api/v2'), me = BCH_FROM;
+    serve({ [`/address/${me}?details=basic`]: { body: { address: me, balance: '66601176', totalReceived: '66601176', totalSent: '0', unconfirmedTxs: 0, txs: 1 } } }); // the real shape seen on the Litecoin instance
+    expect(await s.balance(me)).toBe(66601176n);
+    expect(await s.detail!(me)).toEqual({ confirmed: 66601176n, net: 0n });
+    serve({ [`/address/${me}?details=basic`]: { body: { address: me, balance: '100', unconfirmedBalance: '-40' } } });
+    expect(await s.balance(me)).toBe(60n);
+    expect(await s.detail!(me)).toEqual({ confirmed: 100n, net: -40n });
+    serve({ [`/address/${me}?details=basic`]: { body: { address: me } } });
+    await expect(s.balance(me)).rejects.toThrow(/no balance/);
+    await expect(s.detail!(me)).rejects.toThrow(/no balance/);
+  });
 
   it('source specifications in the registry resolve to the intended clients', () => {
     expect(DOGE.rpc.map((r) => r.split(':')[0])).toEqual(['blockbook', 'bitcore']);

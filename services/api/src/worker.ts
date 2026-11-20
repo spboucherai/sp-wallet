@@ -12,6 +12,7 @@ import { advanceXswapSend, advanceXswaps, xswapMayBroadcast, xswapSent } from '.
 import { advancePlans } from './plan-exec.ts'; // v7 any-to-any plans
 import { pruneSwapQuotes } from './swap.ts'; // v11
 import { pruneEvents } from './events.ts';
+import { portfolioDeps } from './portfolio.ts';
 import { advanceWithdrawals } from './agents/withdrawals.ts'; // v8
 import { scanDepositsPass } from './deposit-scan.ts'; // NEXT: deposits (native coins on EVM, backlog, classification)
 import { SNAPSHOT_EVERY_MS, snapshotTick } from './portfolio.ts'; // NEXT: value of the wallet over time
@@ -189,6 +190,7 @@ export function startWorkers(): void {
   loop('deposits', scanDeposits, 75_000);
   loop('portfolio-snapshots', snapshotTick, SNAPSHOT_EVERY_MS); // NEXT: one value point per currency every 10 min; reads only
   loop('swap-quotes-prune', async () => { await pruneSwapQuotes(); }, 6 * 3600_000); // v11: retention of the quote log (swap.ts)
+  loop('balances', async () => { await portfolioDeps.read?.(); }, 60_000); // NEXT: keeps the balance cache warm so that a client never waits on a slow source (portfolio.ts)
   loop('events-prune', async () => { await pruneEvents(); }, 6 * 3600_000); // NEXT: retention of the wallet event log (events.ts)
   loop('withdrawals', () => advanceWithdrawals(), 8_000); // v8: agent-vault withdrawals — receipt and arrival at the owner's address; never signs
 }
