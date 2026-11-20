@@ -69,7 +69,7 @@ with an error (nothing is added); everything else works.
 
 | Item | State | Decision |
 |---|---|---|
-| **Recovery phrase on paper** [I2] | Unknown: still listed as pending. After the signer is updated: `signer.mjs verify-recovery` on the node tells whether the paper matches, without showing anything. | **Owner — the most important item.** |
+| **Recovery phrase on paper** [I2] | **Done: the owner states he wrote the 24 words down on 2026-11-19** (on the signer node, outside any assistant session). Not yet checked against the key: after the signer update, `signer.mjs verify-recovery` on the node tells whether the paper matches, without showing anything. | Owner: run `verify-recovery` after the signer is updated. |
 | Signer disk encryption [I1] | FileVault off on m6ma; wrap key on the same disk. | Owner: encryption needs a password at boot (no unattended restart after a power cut). |
 | Signer node exposure [I3] | Listens on all interfaces, firewall off, Remote Management on; protected by the allowlist + HMAC. | Owner: firewall on, Remote Management off on m6ma (recommended). |
 | Passkey cool-down [S7] | Off. | Owner: recommended 24 h once a second passkey exists. |
