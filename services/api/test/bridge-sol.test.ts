@@ -347,6 +347,9 @@ describe('Solana → EVM', () => {
     const prep = await prepare({ fromNetwork: 'solana', toNetwork: 'base', amount: '5', speed: 'fast' });
     expect(prep.proposal.bridge).toMatchObject({ speed: 'fast', expectedSeconds: 1, cctpMaxFee: '500' });
     sol.drop = true; await approve(prep); sol.mine(400); await tick();
+    // NEXT: "expired, nothing moved" is applied only once every endpoint repeated it (worker.ts NEG_PASSES / NEG_HOLD_MS)
+    expect((await getP(prep.proposal.id)).state).toBe('broadcast');
+    await tick(); await sql`update proposals set neg_since = now() - interval '2 minutes' where id = ${prep.proposal.id}`; await tick();
     const p = await getP(prep.proposal.id);
     expect(p.state).toBe('failed'); expect(p.error).toMatch(/expired before inclusion/); expect(sol.tokens.get(MY_ATA)!.amount).toBe(100_000000n);
   });

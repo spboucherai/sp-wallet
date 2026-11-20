@@ -1,7 +1,7 @@
 import { decodeAbiParameters, decodeFunctionResult, encodeFunctionData, erc20Abi, hexToBigInt, hexToNumber, hexToString, multicall3Abi, numberToHex, pad } from 'viem';
 import { getAsset, type NetworkDef } from '@spw/core';
 import { UserError } from '../config.ts';
-import { hostOf, rpcAny, rpcOne, rpcQuorum, type Adapter, type Deposit, type Health, type Prepared, type Tracked } from './rpc.ts';
+import { hostOf, rpcAny, rpcEach, rpcOne, rpcQuorum, type Adapter, type Deposit, type Health, type Prepared, type Tracked } from './rpc.ts';
 
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const hx = (n: bigint | number) => numberToHex(n);
@@ -115,22 +115,41 @@ export function evmAdapter(n: NetworkDef): Adapter {
     async broadcast(raw) {
       const rs = await Promise.allSettled(n.rpc.map((u) => rpcOne<string>(u, 'eth_sendRawTransaction', [raw])));
       if (rs.some((r) => r.status === 'fulfilled')) return;
-      const msg = String((rs[0] as PromiseRejectedResult).reason?.message ?? 'broadcast failed');
-      if (/already known|already imported|ALREADY_EXISTS/i.test(msg)) return;
-      throw new Error(msg);
+      // NEXT: every endpoint's answer is read, not only the first one's. "Already known" from any of them is a relay.
+      // "nonce too low" is NOT treated as success here: it only says the nonce is used — by this transaction or by
+      // another one. The caller settles that by looking the transaction up (transfers.ts `broadcastNow`).
+      const msgs = rs.map((r) => String((r as PromiseRejectedResult).reason?.message ?? 'broadcast failed'));
+      if (msgs.some((m) => /already known|already imported|ALREADY_EXISTS|known transaction/i.test(m))) return;
+      throw new Error([...new Set(msgs)].join(' | ').slice(0, 300));
     },
+    /**
+     * NEXT — a verdict never rests on one endpoint's silence:
+     *  - a receipt from ANY endpoint places the transaction in a block (a lagging endpoint cannot hide it);
+     *  - "not in a block and unknown" needs every endpoint to have answered both lookups;
+     *  - `replaced` needs, in addition, the nonce to be consumed according to every endpoint (quorum);
+     *  - the worker applies a negative verdict only after it was repeated on consecutive passes (worker.ts).
+     */
     async track(p): Promise<Tracked> {
-      const rc = await call<{ status: `0x${string}`; blockNumber: `0x${string}`; blockHash: string } | null>('eth_getTransactionReceipt', [p.txid]).catch((e) => { if ((e as { rpcCode?: number }).rpcCode !== undefined) return null; throw e; });
+      type Receipt = { status: `0x${string}`; blockNumber: `0x${string}`; blockHash: string; gasUsed?: `0x${string}`; effectiveGasPrice?: `0x${string}`; l1Fee?: `0x${string}` };
+      const rcs = await rpcEach<Receipt | null>(n.rpc, 'eth_getTransactionReceipt', [p.txid]);
+      const rc = rcs.values.find((v) => v && v.blockHash) ?? null;
       if (!rc) {
-        if (p.blockRef) return { state: 'reorged', confirmations: 0, rebroadcast: true };
-        const latest = hexToNumber(await call<`0x${string}`>('eth_getTransactionCount', [p.intent.from, 'latest']));
-        if (latest > p.intent.evm.nonce && Date.now() / 1000 - p.broadcastAt > 90) return { state: 'replaced', confirmations: 0, error: 'nonce was consumed by another transaction' };
-        return { state: 'broadcast', confirmations: 0, rebroadcast: true };
+        if (rcs.values.length === 0) throw new Error(`no ${n.name} endpoint answered (receipt)`);
+        const txs = await rpcEach<{ hash: string } | null>(n.rpc, 'eth_getTransactionByHash', [p.txid]);
+        const known = txs.values.some((v) => v), everyone = rcs.all && txs.all;
+        const pending: Tracked['state'] = p.blockRef ? 'reorged' : 'broadcast';
+        if (known) return { state: pending, confirmations: 0, seen: true, rebroadcast: !!p.blockRef };
+        if (everyone && Date.now() / 1000 - p.broadcastAt > 90) {
+          const latest = await rpcQuorum<`0x${string}`>(n.rpc, 'eth_getTransactionCount', [p.intent.from, 'latest']).then(hexToNumber, () => null);
+          if (latest !== null && latest > p.intent.evm.nonce) return { state: 'replaced', confirmations: 0, seen: false, error: 'nonce was consumed by another transaction' };
+        }
+        return { state: pending, confirmations: 0, rebroadcast: true, seen: everyone ? false : undefined };
       }
-      if (hexToNumber(rc.status) !== 1) return { state: 'failed', confirmations: 0, blockRef: rc.blockHash, error: 'transaction reverted on-chain' };
+      const paid = rc.gasUsed && rc.effectiveGasPrice ? hexToBigInt(rc.gasUsed) * hexToBigInt(rc.effectiveGasPrice) + (rc.l1Fee ? hexToBigInt(rc.l1Fee) : 0n) : undefined; // l1Fee: OP-stack data fee
+      if (hexToNumber(rc.status) !== 1) return { state: 'failed', confirmations: 0, blockRef: rc.blockHash, error: 'transaction reverted on-chain', seen: true, feePaid: paid };
       const bn = hexToNumber(rc.blockNumber), head = hexToNumber(await call<`0x${string}`>('eth_blockNumber', []));
       const fin = await finalizedHeight();
-      return { state: bn <= fin ? 'finalized' : 'confirming', confirmations: Math.max(1, head - bn + 1), blockRef: rc.blockHash };
+      return { state: bn <= fin ? 'finalized' : 'confirming', confirmations: Math.max(1, head - bn + 1), blockRef: rc.blockHash, seen: true, feePaid: paid };
     },
     async deposits(addr, cursor) {
       const head = hexToNumber(await call<`0x${string}`>('eth_blockNumber', []));

@@ -365,6 +365,9 @@ describe('approval, sending and outcome', () => {
   it('sent but never included: expires with the blockhash, nothing moved; an on-chain failure records no outcome', async () => {
     const prep = await prepare(chain.f), r = await approve(prep); expect(r.json.state).toBe('broadcast');
     chain.height += 200; await worker.reconcile();
+    // NEXT: "expired, nothing moved" is applied only once every endpoint repeated it (worker.ts NEG_PASSES / NEG_HOLD_MS)
+    expect((await getP(prep.json.proposal.id)).state).toBe('broadcast');
+    await worker.reconcile(); await sql`update proposals set neg_since = now() - interval '2 minutes' where id = ${prep.json.proposal.id}`; await worker.reconcile();
     let p = await getP(prep.json.proposal.id); expect(p.state).toBe('failed'); expect(p.error).toMatch(/expired before inclusion.*no funds moved/); expect(p.swap.received).toBeNull();
     const prep2 = await prepare(chain.f), r2 = await approve(prep2); expect(r2.json.state).toBe('broadcast');
     confirm(r2.json.txid, 'confirmed', { InstructionError: [1, { Custom: 6001 }] }); await worker.reconcile();

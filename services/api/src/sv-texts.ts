@@ -18,6 +18,11 @@ export const SV = {
   signer_hash_mismatch: 'signer hash mismatch',
   broadcast_attempt_failed: 'broadcast attempt failed: {detail}',
   tx_failed: 'the transaction failed on-chain: {detail}',
+  // NEXT (life cycle v2): what is known is said, nothing more
+  relay_unconfirmed: 'handed to the network without an acknowledgement and not found on-chain; it stays watched and is recorded if it appears. A new transfer on this network replaces it',
+  dropped: 'no longer known to the network and not confirmed; it stays watched and is recorded if it appears. A new transfer on this network replaces it',
+  expired_onchain: 'its validity window closed before the network included it; nothing moved',
+  replaced_onchain: 'another transaction used the same nonce or the same coins; this one can no longer be included',
   swap_late: 'the swap could not be sent in time; nothing was swapped',
   swap_approval_reverted: 'the token approval reverted; nothing was swapped',
   swap_would_revert: 'the swap would revert now ({detail}); it was not sent',

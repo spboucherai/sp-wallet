@@ -47,6 +47,29 @@ update proposals set state = 'not_broadcast', error_code = 'broadcast_disabled',
   where state = 'broadcast' and error like 'broadcast disabled%';
 -- <<< v11 stabilisation
 create unique index if not exists proposals_txid on proposals (network, txid) where txid is not null;
+-- >>> NEXT: transfer life cycle v2 (docs/next/SP-WALLET-ARCHITECTURE.md)
+--   relay_attempted_at  a relay to the network STARTED for this signed transaction (written before the network call): from
+--                       then on only the chain can say that nothing was sent
+--   unseen_since        since when every source says it does not know the transaction (basis of the dropped state)
+--   neg_verdict/since/streak  a negative verdict (replaced, expired) is applied only once repeated (worker.ts)
+--   fee_paid            the fee the network actually charged, native base units
+alter table proposals add column if not exists relay_attempted_at timestamptz;
+alter table proposals add column if not exists unseen_since timestamptz;
+alter table proposals add column if not exists neg_verdict text;
+alter table proposals add column if not exists neg_since timestamptz;
+alter table proposals add column if not exists neg_streak int not null default 0;
+alter table proposals add column if not exists fee_paid numeric(78,0);
+update proposals set relay_attempted_at = broadcast_at where relay_attempted_at is null and broadcast_at is not null;
+-- one outgoing transaction in flight per network, enforced by the database as well as by the routes (two approvals in
+-- the same instant). Created only if the existing rows allow it: a refusal here must never stop the server from starting.
+do $$ begin
+  create unique index if not exists proposals_one_in_flight on proposals (network) where state in ('approved', 'signed', 'broadcast');
+exception when others then raise warning 'proposals_one_in_flight not created: %', sqlerrm; end $$;
+-- the wallet's event log: every change a client may need to hear about, in order, with an id it can resume from
+create table if not exists wallet_events (
+  id bigserial primary key, at timestamptz not null default now(), type text not null, ref text, data jsonb not null default '{}');
+create index if not exists wallet_events_at on wallet_events (at);
+-- <<< NEXT
 create table if not exists deposits (
   network text not null, txid text not null, idx int not null, asset text not null, amount numeric(78,0) not null,
   from_addr text not null default '', block bigint not null, block_time timestamptz, seen_at timestamptz not null default now(),
@@ -552,6 +575,15 @@ create table if not exists nft_market_slug (collection_key text not null, provid
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }
+
+/**
+ * NEXT — append one event to the wallet's event log (the stream every client follows, events.ts). Never throws: an event that
+ * could not be written must not undo the change it describes; clients re-read state on reconnect anyway.
+ */
+export async function walletEvent(type: string, ref: string | null, data: Record<string, unknown> = {}): Promise<void> {
+  try { await sql`insert into wallet_events (type, ref, data) values (${type}, ${ref}, ${sql.json(data as never)})`; await sql.notify('wallet_events', type); }
+  catch (e) { console.error(`[events] ${type}: ${(e as Error).message}`); }
+}
 
 let auditLock: Promise<unknown> = Promise.resolve();
 /** Append to the tamper-evident hash chain. Never pass secrets or assertion payloads here. */

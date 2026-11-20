@@ -32,10 +32,11 @@ describe('B2 — "signed, not broadcast" is its own terminal state', () => {
     expect(canTransition('signed', 'broadcast')).toBe(true); // the real path is untouched
   });
   it('the migration turns rows parked in `broadcast` by a non-broadcasting server into `not_broadcast`, and only those', async () => {
-    const ins = (id: string, error: string | null) => sql`insert into proposals (id, idempotency_key, state, network, asset, symbol, decimals, amount, from_addr, to_addr, error, broadcast_at)
-      values (${id}, ${'k-' + id}, 'broadcast', 'base', 'native', 'ETH', 18, 1, 'a', 'b', ${error}, now())`;
+    // NEXT: one transaction in flight per network (db.ts `proposals_one_in_flight`) — the two rows are on two networks
+    const ins = (id: string, error: string | null, network = 'base') => sql`insert into proposals (id, idempotency_key, state, network, asset, symbol, decimals, amount, from_addr, to_addr, error, broadcast_at)
+      values (${id}, ${'k-' + id}, 'broadcast', ${network}, 'native', 'ETH', 18, 1, 'a', 'b', ${error}, now())`;
     const A = '00000000-0000-4000-8000-0000000000a1', B = '00000000-0000-4000-8000-0000000000b2';
-    await ins(A, 'broadcast disabled (test mode)'); await ins(B, null);
+    await ins(A, 'broadcast disabled (test mode)'); await ins(B, null, 'arbitrum');
     await (await import('../src/db.ts')).migrate();
     const rows = await sql`select id, state, error_code, broadcast_at from proposals where id in ${sql([A, B])} order by id`;
     expect(rows[0]).toMatchObject({ id: A, state: 'not_broadcast', error_code: 'broadcast_disabled', broadcast_at: null });

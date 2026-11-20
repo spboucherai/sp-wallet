@@ -1,6 +1,6 @@
 import { associatedTokenAddress, buildSolMessage, getAsset, solFeeLamports, solWireTransaction, SYSTEM_PROGRAM, TOKEN_2022_PROGRAM, TOKEN_PROGRAM, tokenProgramOf, type Intent, type NetworkDef } from '@spw/core';
 import { UserError } from '../config.ts';
-import { hostOf, rpcAny, rpcOne, rpcQuorum, type Adapter, type Deposit, type Health, type Prepared, type Tracked } from './rpc.ts';
+import { hostOf, rpcAny, rpcEach, rpcOne, rpcQuorum, type Adapter, type Deposit, type Health, type Prepared, type Tracked } from './rpc.ts';
 
 const RENT_ATA = 2_039_280n; // rent-exempt minimum for a 165-byte token account
 const RENT_SYSTEM = 890_880n; // rent-exempt minimum for a 0-byte system account
@@ -93,21 +93,35 @@ export function solAdapter(n: NetworkDef): Adapter {
     async broadcast(raw) {
       const rs = await Promise.allSettled(n.rpc.map((u) => rpcOne<string>(u, 'sendTransaction', [raw, { encoding: 'base64', skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 5 }])));
       if (rs.some((r) => r.status === 'fulfilled')) return;
-      const msg = String((rs[0] as PromiseRejectedResult).reason?.message);
-      if (/already been processed/i.test(msg)) return;
-      throw new Error(msg);
+      const msgs = rs.map((r) => String((r as PromiseRejectedResult).reason?.message)); // NEXT: every endpoint's answer, not only the first
+      if (msgs.some((m) => /already been processed/i.test(m))) return;
+      throw new Error([...new Set(msgs)].join(' | ').slice(0, 300));
     },
+    /**
+     * NEXT — "expired, nothing moved" is a statement about the whole network: it needs EVERY endpoint to say it does not
+     * know the signature AND every endpoint's finalized height to be past the transaction's last valid block height.
+     * One endpoint that knows the signature is enough to place it. The worker repeats a negative verdict before applying it.
+     */
     async track(p): Promise<Tracked> {
-      const r = await call<{ value: ({ confirmations: number | null; err: unknown; confirmationStatus: string; slot: number } | null)[] }>('getSignatureStatuses', [[p.txid], { searchTransactionHistory: true }]);
-      const s = r.value[0];
+      type St = { confirmations: number | null; err: unknown; confirmationStatus: string; slot: number };
+      const rs = await rpcEach<{ value: (St | null)[] }>(n.rpc, 'getSignatureStatuses', [[p.txid], { searchTransactionHistory: true }]);
+      if (rs.values.length === 0) throw new Error('no Solana endpoint answered (signature status)');
+      const found = rs.values.map((v) => v.value[0]).filter((v): v is St => !!v);
+      const s = found.find((v) => v.confirmationStatus === 'finalized') ?? found[0];
       if (!s) {
-        const h = await call<number>('getBlockHeight', [{ commitment: 'finalized' }]);
-        if (h > p.intent.sol.lastValidBlockHeight) return { state: 'failed', confirmations: 0, error: 'expired before inclusion (blockhash too old); no funds moved' };
-        return { state: 'broadcast', confirmations: 0, rebroadcast: true };
+        const last = p.intent?.sol?.lastValidBlockHeight as number | undefined;
+        if (rs.all && typeof last === 'number') {
+          const hs = await rpcEach<number>(n.rpc, 'getBlockHeight', [{ commitment: 'finalized' }]);
+          if (hs.all && hs.values.every((h) => h > last)) return { state: 'failed', confirmations: 0, seen: false, expired: true, error: 'expired before inclusion (blockhash too old); no funds moved' };
+        }
+        return { state: p.blockRef ? 'reorged' : 'broadcast', confirmations: 0, rebroadcast: true, seen: rs.all ? false : undefined };
       }
-      if (s.err) return { state: 'failed', confirmations: 0, blockRef: String(s.slot), error: `on-chain error: ${JSON.stringify(s.err).slice(0, 120)}` };
-      if (s.confirmationStatus === 'finalized') return { state: 'finalized', confirmations: 32, blockRef: String(s.slot) };
-      return { state: 'confirming', confirmations: s.confirmations ?? 1, blockRef: String(s.slot) };
+      const paid = async (): Promise<bigint | undefined> => { // the fee the network charged (display only: first endpoint that answers)
+        try { const t = await call<{ meta: { fee: number } | null } | null>('getTransaction', [p.txid, { commitment: 'finalized', maxSupportedTransactionVersion: 0, encoding: 'json' }]); return t?.meta ? BigInt(t.meta.fee) : undefined; } catch { return undefined; }
+      };
+      if (s.err) return { state: 'failed', confirmations: 0, blockRef: String(s.slot), seen: true, error: `on-chain error: ${JSON.stringify(s.err).slice(0, 120)}` };
+      if (s.confirmationStatus === 'finalized') return { state: 'finalized', confirmations: 32, blockRef: String(s.slot), seen: true, feePaid: await paid() };
+      return { state: 'confirming', confirmations: s.confirmations ?? 1, blockRef: String(s.slot), seen: true };
     },
     async deposits(addr, cursor) {
       const items: Deposit[] = [];
