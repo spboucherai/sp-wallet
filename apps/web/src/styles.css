@@ -246,7 +246,7 @@ button.card:active, a.card:active { transform: scale(0.985); background: color-m
 .toggle-knob { position: absolute; left: 2px; top: 2px; height: 1.6875rem; width: 1.6875rem; border-radius: 50%; background: var(--hero-ink); box-shadow: 0 2px 5px color-mix(in srgb, var(--hero-base) 30%, transparent); transition: transform var(--dur-base) var(--ease-spring); }
 .toggle[aria-checked='true'] .toggle-knob { transform: translateX(1.3125rem); }
 /* stat tile: eyebrow · headline value · footnote */
-.stat-tile { min-width: 0; border-radius: var(--radius-md); border: 1px solid var(--line); background: var(--surface); padding: var(--space-3) var(--space-4); }
+.stat-tile { min-width: 0; overflow-wrap: anywhere; border-radius: var(--radius-md); border: 1px solid var(--line); background: var(--surface); padding: var(--space-3) var(--space-4); }
 /* the stacked fact: label above, the whole value below */
 .fact.fact-stack { display: block; }
 .fact.fact-stack > dt { max-width: none; font-size: 0.78125rem; }

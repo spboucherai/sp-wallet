@@ -46,8 +46,11 @@ test('portfolio: a first load that fails is an error with a retry; a refresh tha
   await expect(page.getByText('Valeur totale estimée')).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId('balances-at')).toContainText(/Soldes lus à/);
   await expect(page.getByTestId('stale-banner')).toHaveCount(0);
-  // the refresh fails (interval 20 s, one retry): the total stays, the banner says since when
+  // the refresh fails (one retry): the total stays, the banner says since when. NEXT: with the wallet event stream connected the
+  // timed re-read is a slow fallback (90 s); coming back to the tab re-reads at once, as it always did — that is what is provoked here
   fail = true;
+  await page.waitForTimeout(6000);   // past the 5 s during which a reading counts as fresh
+  await page.evaluate(() => { document.dispatchEvent(new Event('visibilitychange', { bubbles: true })); });
   await expect(page.getByTestId('stale-banner')).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId('stale-banner')).toContainText(/Pas à jour depuis/);
   await expect(page.getByText('Valeur totale estimée')).toBeVisible();
@@ -57,6 +60,7 @@ test('portfolio: a first load that fails is an error with a retry; a refresh tha
 });
 
 test('a network whose balance is unavailable → the total is labelled partial; signer unreachable → send disabled with its reason, everywhere', async ({ page, context, baseURL }) => {
+  test.setTimeout(300_000);   // NEXT: with request interception the browser cache is off, every reload re-reads every file — the limiter (240 a minute) makes this test wait
   await openWallet(page, context, baseURL);
   await page.route('**/api/v1/portfolio', async (route) => {
     const r = await route.fetch(), j = await r.json();
@@ -68,8 +72,10 @@ test('a network whose balance is unavailable → the total is labelled partial; 
   await expect(page.getByTestId('partial-note')).toContainText('Solana', { timeout: 60_000 });
   await expect(page.getByTestId('send-blocked')).toContainText(/signataire est injoignable/);
   await expect(page.getByRole('main').getByRole('button', { name: 'Envoyer' })).toBeDisabled();
+  await roomInRateLimit(page, 100);   // NEXT: more routes are read per load — room for the two reloads that follow
   await page.goto('/asset/base/native');
   await expect(page.getByTestId('asset-send')).toBeDisabled({ timeout: 60_000 }); await expect(page.getByTestId('send-blocked')).toBeVisible();
+  await roomInRateLimit(page, 100);
   await page.goto('/send');
   await expect(page.getByTestId('send-blocked')).toBeVisible({ timeout: 60_000 });
   await page.locator('textarea').fill('0x1111111111111111111111111111111111111111'); await page.getByPlaceholder('0.00').fill('0.01');

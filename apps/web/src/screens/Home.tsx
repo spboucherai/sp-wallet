@@ -42,7 +42,7 @@ function BalanceCard({ p, s, total, own, hidden, cur, onHide, pfError, gaps, act
   return (
     <section className="balance-card px-6 pb-6 pt-5" data-testid="balance-card" data-complete={s ? String(s.complete) : ''} aria-label={t('totalEstimate')}>
       <div className="flex items-center justify-between gap-2">
-        <span className="t-eyebrow bc-mute !text-[var(--hero-mute)]">{t('totalEstimate')}</span>
+        <span className="t-eyebrow bc-mute min-w-0 !text-[var(--hero-mute)]">{t('totalEstimate')}</span>
         <button onClick={onHide} aria-label={hidden ? t('show') : t('hide')} aria-pressed={hidden} data-testid="hide-balances" className="press bc-icon-btn -mr-2.5"><Icon n={hidden ? 'eyeOff' : 'eye'} /></button>
       </div>
       <div className="t-display amt mt-1 text-[clamp(2.25rem,11.5vw,3.25rem)]" data-testid="total" data-total={total ?? ''}>
@@ -61,7 +61,7 @@ function BalanceCard({ p, s, total, own, hidden, cur, onHide, pfError, gaps, act
         {p.prices && <PriceFreshness hero at={p.pricesAsOf} stale={p.pricesStale} />}
         {children}
       </div>
-      <div className="mt-6 flex gap-2" role="group" aria-label={t('nwQuick')}>{actions}</div>
+      <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label={t('nwQuick')}>{actions}</div>
     </section>);
 }
 
@@ -95,7 +95,7 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
   const list = nets.data ?? [], checked = list.filter((n) => n.health), up = checked.filter((n) => n.health!.ok).length;
   const netState = checked.length < list.length || list.length === 0 ? 'checking' : up === list.length ? 'ok' : 'partial';
   const action = (id: Tab, icon: string, label: string, main = false, disabled = false) =>
-    <button onClick={() => { haptic(); go(id); }} disabled={disabled} className="press group flex min-w-0 flex-1 flex-col items-center gap-2 text-[0.78125rem] font-semibold disabled:opacity-40">
+    <button onClick={() => { haptic(); go(id); }} disabled={disabled} className="press group flex min-w-[52px] flex-1 flex-col items-center gap-2 text-[0.78125rem] font-semibold disabled:opacity-40">
       <span className={`grid h-[52px] w-[52px] place-items-center rounded-full ${main ? 'hero-btn-main' : 'hero-btn'}`}><Icon n={icon} className="h-[21px] w-[21px]" /></span><span className="max-w-full truncate">{label}</span></button>;
   const rowProps = { cur, ck: ck as 'usd' | 'cad', hidden, prices: rowPrices };
   const uncertain = s?.uncertain ?? [], unpriced = s?.unpriced ?? [];
@@ -130,7 +130,7 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
         {d.pending.length > 0 && <Card><H>{t('pending')}</H>
           <ul className="space-y-3.5">{d.pending.map((p) => <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <Coin sym={p.symbol} net={p.network} size={40} />
-            <div className="min-w-0 flex-1"><div className="t-body-strong amt"><Money hidden={hidden}>{trimAmt(p.amountDisplay)} {p.symbol}</Money></div><div className="t-footnote truncate text-mute">{/* v11: a GMX order transaction is not a transfer to the router's address */ (p as { kind?: string }).kind === 'gmx' ? `${t('svKind_gmx')} · ${p.networkName}` : `${p.networkName} → ${short(p.to)}`}</div></div>
+            <div className="min-w-[min(7rem,100%)] flex-1"><div className="t-body-strong amt"><Money hidden={hidden}>{trimAmt(p.amountDisplay)} {p.symbol}</Money></div><div className="t-footnote truncate text-mute">{/* v11: a GMX order transaction is not a transfer to the router's address */ (p as { kind?: string }).kind === 'gmx' ? `${t('svKind_gmx')} · ${p.networkName}` : `${p.networkName} → ${short(p.to)}`}</div></div>
             <StatusPill of={p} /></li>)}</ul></Card>}
 
         <Suspense fallback={<SkeletonRows n={4} />}><HomeRecent range={range} cur={cur} hidden={hidden} nav={nav} go={go} netName={netName} /></Suspense>

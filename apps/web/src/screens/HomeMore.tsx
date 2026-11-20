@@ -38,8 +38,8 @@ function HistoryFigures({ h, cur, hidden, scrub }: { h: History; cur: string; hi
     <div className="t-footnote text-mute">{scrub ? time(scrub.t) : t('nwValueChange')}</div>
     <div className="t-title2 amt mt-0.5 min-h-[1.65rem]" data-testid="history-headline">{hidden ? '••••' : scrub ? fiatText(scrub.total, cur, locale) : vc ? <ChangeText abs={vc.abs} pct={vc.pct} cur={cur} /> : '—'}</div>
     {!hidden && <dl className="t-footnote mt-2 flex flex-wrap gap-x-5 gap-y-1 text-mute">
-      <div className="flex gap-1.5"><dt>{t('nwNetFlows')}</dt><dd className="font-semibold text-ink" data-testid="net-flows">{fiatText(h.flows.net, cur, locale, { sign: true })}</dd></div>
-      {em && <div className="flex gap-1.5" title={t('nwEstMarketNote')}><dt>{t('nwEstMarket')}</dt><dd className="font-semibold text-ink" data-testid="est-market">≈ {fiatText(em.abs, cur, locale, { sign: true })}</dd></div>}
+      <div className="flex min-w-0 flex-wrap gap-x-1.5"><dt>{t('nwNetFlows')}</dt><dd className="font-semibold text-ink" data-testid="net-flows">{fiatText(h.flows.net, cur, locale, { sign: true })}</dd></div>
+      {em && <div className="flex min-w-0 flex-wrap gap-x-1.5" title={t('nwEstMarketNote')}><dt>{t('nwEstMarket')}</dt><dd className="font-semibold text-ink" data-testid="est-market">≈ {fiatText(em.abs, cur, locale, { sign: true })}</dd></div>}
     </dl>}
   </div>;
 }
@@ -122,7 +122,7 @@ export function HomeRecent({ range, cur, hidden, nav, go, netName }: { range: Ra
         : <ul data-testid="recent-activity" className="pb-1">{latest.map((i) => <li key={i.id}><TransactionRow i={i} contacts={contacts.data} hidden={hidden} time={rowTime(i.at)} onOpen={() => nav({ tab: 'activity', asset: i.id })} /></li>)}</ul>}</Card>
 
     {(flows || a) && <section aria-label={t('nwTiles', { range: rangeName })} data-testid="tiles"><h2 className="t-eyebrow mb-2 px-1">{t('nwTiles', { range: rangeName })}</h2>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-3">
         {flows && <StatTile testid="tile-in" label={t('nwTileIn')} value={<Money hidden={hidden}>{fiatText(flows.external.in, cur, locale)}</Money>} note={t('nwTileFlowsNote')} />}
         {flows && <StatTile testid="tile-out" label={t('nwTileOut')} value={<Money hidden={hidden}>{fiatText(flows.external.out, cur, locale)}</Money>} note={flows.complete ? t('nwTileFlowsNote') : t('nwEstPartial', { n: flows.unvalued.length })} />}
         {a?.feesPaid != null && <StatTile testid="tile-fees" label={t('nwTileFees')} value={<Money hidden={hidden}>{fiatText(a.feesPaid, cur, locale)}</Money>} note={a.feesCount !== null ? t('nwTileFeesNote', { n: a.feesCount }) : undefined} />}
