@@ -605,6 +605,16 @@ create table if not exists portfolio_flows (
   primary key (ref_type, ref_id));
 create index if not exists portfolio_flows_at on portfolio_flows (at);
 -- <<< NEXT balances / deposits / portfolio
+-- >>> NEXT (credential and session life cycle): additive. sid = the PUBLIC id of a session (random, unrelated to the token:
+-- id_hash stays the only thing derived from it); credential_id = the passkey that opened it (null on rows written before);
+-- interactive = the client has sent the user-interaction header at least once (auth.ts, idle timer). pending_credentials.request
+-- = the SPW-CRED-v2 request built for that pending passkey (null on a row written before: it is asked again).
+alter table sessions add column if not exists sid uuid not null default gen_random_uuid();
+create unique index if not exists sessions_sid on sessions (sid);
+alter table sessions add column if not exists credential_id text;
+alter table sessions add column if not exists interactive boolean not null default false;
+alter table pending_credentials add column if not exists request jsonb;
+-- <<< NEXT (credential and session life cycle)
 `;
 
 /**

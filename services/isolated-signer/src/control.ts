@@ -3,21 +3,26 @@
 //
 // Now the daemon owns the state (state.lock) and listens on a Unix socket inside its own data directory (mode 0600, directory
 // 0700). The CLI sends the command there; the daemon applies it in the same queue as every signing request, so it is neither
-// lost nor interleaved with a signature. When no daemon runs, the CLI takes the lock itself and writes the file.
+// lost nor interleaved with a signature — except `halt`, which since NEXT is applied at once (`controlRunner`). When no daemon
+// runs, the CLI takes the lock itself and writes the file.
 //
 // This is NOT reachable from the API: the API talks to the signer over TCP (HMAC), and the route table of server.ts has no
 // un-halt, no passkey reset and no setup token. A Unix socket is a file: only a process of the signer's own user, on the
 // signer machine, can open it — exactly who could already edit state.json.
 import { chmodSync, existsSync, unlinkSync } from 'node:fs';
 import net from 'node:net';
+import type { Enqueue } from './server.ts';
 import type { Store } from './store.ts';
 
-export type ControlRequest = { cmd: 'halt' } | { cmd: 'unhalt' } | { cmd: 'reset-passkeys' } | { cmd: 'setup-token'; /** sha256 (hex) of the token the CLI generated and prints; the token itself never leaves the CLI */ tokenHash: string };
+export type ControlRequest = { cmd: 'halt' } | { cmd: 'unhalt' } | { cmd: 'reset-passkeys' } | { cmd: 'setup-token'; /** sha256 (hex) of the token the CLI generated and prints; the token itself never leaves the CLI */ tokenHash: string }
+  /** NEXT (audit K1): the CLI completed `export-recovery`, or `verify-recovery` found the typed phrase to match. A date and a journal record: no word, no key. */
+  | { cmd: 'recovery-mark'; what: 'exported' | 'verified' };
 export type ControlAnswer = { ok: true; halted: boolean; credentials: number; via: 'daemon' | 'file' } | { ok: false; error: string };
 
 export function isControlRequest(x: unknown): x is ControlRequest {
   const c = (x as { cmd?: unknown } | null)?.cmd;
   if (c === 'halt' || c === 'unhalt' || c === 'reset-passkeys') return true;
+  if (c === 'recovery-mark') { const w = (x as { what?: unknown }).what; return w === 'exported' || w === 'verified'; }
   return c === 'setup-token' && /^[0-9a-f]{64}$/.test(String((x as { tokenHash?: unknown }).tokenHash ?? ''));
 }
 
@@ -26,7 +31,10 @@ export function applyControl(store: Store, req: ControlRequest, via: 'daemon' | 
   const s = store.state;
   if (req.cmd === 'halt' || req.cmd === 'unhalt') { s.halted = req.cmd === 'halt'; store.log(req.cmd === 'halt' ? 'halt.on' : 'halt.off', { via: 'cli' }); }
   else if (req.cmd === 'reset-passkeys') { s.credentials = []; store.log('credentials.reset', { via: 'cli' }); }
-  else {
+  else if (req.cmd === 'recovery-mark') {
+    if (req.what === 'exported') s.recoveryExportedAt = new Date().toISOString(); else s.recoveryVerifiedAt = new Date().toISOString();
+    store.log(`recovery.${req.what}`, { via: 'cli' });
+  } else {
     if (s.credentials.length > 0) return { ok: false, error: 'a passkey is already enrolled; setup token refused' };
     s.setupTokenHash = req.tokenHash; store.log('setup_token.issued', {});
   }
@@ -34,7 +42,16 @@ export function applyControl(store: Store, req: ControlRequest, via: 'daemon' | 
   return { ok: true, halted: s.halted, credentials: s.credentials.length, via };
 }
 
-/** The daemon's side. `run` must apply the request inside the daemon's serial queue. One JSON line in, one JSON line out. */
+/**
+ * NEXT (audit C1) — how the running daemon applies a control command. `halt` is applied AT ONCE, in the tick its line is read:
+ * it never waits behind a signing request, a price read or a venue read (a signature being computed at that moment is not
+ * released: server.ts, release check). Every other command — `unhalt` included — waits its turn in the daemon's serial queue,
+ * as before, so that it is never interleaved with a signature.
+ */
+export const controlRunner = (store: Store, enqueue: Enqueue) => async (req: ControlRequest): Promise<ControlAnswer> =>
+  (req.cmd === 'halt' ? applyControl(store, req, 'daemon') : enqueue(() => applyControl(store, req, 'daemon')));
+
+/** The daemon's side. `run` applies the request (`controlRunner`). One JSON line in, one JSON line out. */
 export function startControlServer(sockPath: string, run: (req: ControlRequest) => Promise<ControlAnswer>): net.Server {
   if (existsSync(sockPath)) unlinkSync(sockPath); // left by a daemon that no longer runs: this process holds the state lock
   const server = net.createServer({ allowHalfOpen: true }, (c) => {

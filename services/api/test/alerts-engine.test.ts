@@ -267,6 +267,24 @@ describe('condition rules', () => {
     expect((await one('security.policy_changed')).params).toEqual({ what: '@signer', detail: 'version 4' });
   });
 
+  it('NEXT — passkeys: a revocation is said; a divergence between the signer\'s list and the application\'s table is said once it lasts, and once', async () => {
+    await w.db.audit('device.revoked', 'owner', { credential: 'abc', label: 'Old phone', signer: true, sessions: 2 });
+    await d.tail();
+    expect(await one('security.passkey_revoked')).toMatchObject({ severity: 'warning', params: { label: 'Old phone', count: 2 } });
+    // the signer lists a passkey the application's table does not hold
+    w.env.signer = { ...SIGNER_OK, credentials: [{ id: 'c'.repeat(27), addedAt: '2026-11-19T00:00:00.000Z' }] } as never;
+    await d.conditions(); await d.tail();
+    expect(await kinds()).toEqual(['security.passkey_revoked']);     // the first look: it may be an addition in progress
+    w.clock.advance(31_000); await d.conditions(); await d.tail();
+    expect(await one('security.credential_mismatch')).toMatchObject({ severity: 'critical', params: { count: 1 }, source: 'audit' });
+    w.clock.advance(120_000); await d.conditions(); await w.dispatcher().conditions(); await d.tail();   // still true, also after a restart: said once
+    expect(await w.alerts(`kind = 'security.credential_mismatch'`)).toHaveLength(1);
+    w.env.signer = SIGNER_OK;                                        // the two sides agree again: written to the audit chain, no alert
+    await d.conditions(); await d.tail();
+    expect((await sql`select type from audit_events where type like 'credentials.%' order by seq`).map((r: { type: string }) => r.type)).toEqual(['credentials.mismatch', 'credentials.reconciled']);
+    expect(await kinds()).toEqual(['security.credential_mismatch', 'security.passkey_revoked']);
+  });
+
   it('a flapping feed says nothing; a real outage says down once and back once', async () => {
     const h = (readable: boolean) => [{ network: 'base', ok: readable, readable, identityVerified: true, height: 1, endpoints: [{ url: 'u', ok: readable, ms: 10 }], checkedAt: new Date(w.clock.t).toISOString() }];
     for (let i = 0; i < 12; i++) { w.env.rpc = h(i % 2 === 0); await d.conditions(); w.clock.advance(20_000); }   // down, up, down, up… every 20 s

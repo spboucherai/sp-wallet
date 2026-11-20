@@ -4,7 +4,11 @@ import { config, UserError } from './config.ts';
 
 export interface SignerStatus {
   keyId: string; addresses: Record<string, string>; halted: boolean; enrollmentOpen: boolean;
-  credentials: { id: string; addedAt: string }[]; policy: Policy; spentToday: Record<string, string>; journalHead: string | null; journalLength: number;
+  /** NEXT: the signer's own list — the source of truth for who can approve. The fields after `addedAt` are absent from a signer older than NEXT. */
+  credentials: { id: string; addedAt: string; createdAt?: string; lastUsedAt?: string | null; inCooldown?: boolean; cooldownUntil?: number | null }[];
+  /** NEXT: effective cool-down of a newly added passkey (0 = off), and when the recovery phrase was last displayed / proved; absent from an older signer */
+  credentialCooldownSec?: number; recoveryExportedAt?: string | null; recoveryVerifiedAt?: string | null;
+  policy: Policy; spentToday: Record<string, string>; journalHead: string | null; journalLength: number;
   mandates?: { mandate: Mandate; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; today: { sold: Record<string, string>; orders: number } }[];
   venueMandates?: { mandate: { mandateId: string; authorizationId: string }; hash: string; approvedAt: string; revoked: boolean; revokedAt: string | null; expired: boolean; phase: 'active' | 'wind_down' | 'ended'; windDownUntil: number | null;
     today: { orders: number; reduceOnly: number; cancels: number; leverage: number; turnover: string }; ordersLastHour: number; pendingOrders: number }[];
@@ -55,6 +59,8 @@ export const signer = {
     return v;
   },
   enroll: (p: unknown) => { cached = null; return call<{ ok: true }>('POST', '/enroll', p); },
+  // NEXT: add or revoke one passkey — a canonical SPW-CRED-v2 request approved by ANOTHER enrolled passkey, verified by the signer
+  credential: (p: { request: unknown; assertion: unknown; credential?: { counter: number; transports: string[] } }) => { cached = null; return call<{ ok: true; action: 'add' | 'revoke'; credentialId: string; hash: string; credentials: number }>('POST', '/credential', p); },
   sign: (intent: unknown, assertion: unknown, aux?: unknown) => { cached = null; return call<{ raw: string; txid: string; hash: string; pre?: { raw: string; txid: string }; eventAccount?: string }>('POST', '/sign', { intent, assertion, ...(aux ? { aux } : {}) }); },
   bridgeMint: (p: { proposalId: string; message: string; attestation: string; evm?: { nonce: number; gasLimit: string; maxFeePerGas: string; maxPriorityFeePerGas: string }; /** v8: a mint on Solana */ sol?: SolTxParams; assertion?: unknown }) => {
     cached = null; return call<{ raw: string; txid: string; messageHash: string; minted: string; replayed: boolean }>('POST', '/bridge/mint', p); },

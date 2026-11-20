@@ -134,7 +134,12 @@ vi.setConfig({ testTimeout: 240_000 });
 
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spw-contract-'));
-  signerSrv = createSignerServer(new Signer(deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'), new Store(join(dir, 'state.json'), join(dir, 'policy.json')), { rpId: RP, origin: ORIGIN }), SECRET).listen(0, '127.0.0.1');
+  // NEXT (audit P4): the API's own passkey checks accept only a passkey the SIGNER lists — the test passkey is pinned there too, as on a real wallet
+  const signerStore = new Store(join(dir, 'state.json'), join(dir, 'policy.json'));
+  signerStore.state.setupTokenHash = createHash('sha256').update('tok').digest('hex');
+  const signerOfTest = new Signer(deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'), signerStore, { rpId: RP, origin: ORIGIN });
+  await signerOfTest.enroll({ credential: owner.credential(), setupToken: 'tok' });
+  signerSrv = createSignerServer(signerOfTest, SECRET).listen(0, '127.0.0.1');
   await new Promise((r) => signerSrv.once('listening', r));
   await useDatabase('trading_contract');
   Object.assign(process.env, { SPW_SIGNER_SECRET: SECRET, SPW_SIGNER_URL: `http://127.0.0.1:${(signerSrv.address() as { port: number }).port}`, SPW_DATA_DIR: join(dir, 'data') });

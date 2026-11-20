@@ -27,3 +27,4 @@ export * from './nft-intent.ts'; // NFT delivery 2
 export * from './nft-evm.ts'; // NFT delivery 2
 export * from './nft-sol.ts'; // NFT delivery 2
 export * from './nft-policy.ts'; // NFT delivery 2
+export * from './credential.ts'; // NEXT: credential life cycle v2 (SPW-CRED-v2)

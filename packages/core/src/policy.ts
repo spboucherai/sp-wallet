@@ -21,8 +21,19 @@ export const PolicySchema = z.strictObject({
    * remove the key before rolling back (docs/runbooks/deploy.md).
    */
   nft: NftPolicyFileSchema.optional(),
+  /**
+   * NEXT (additive, optional — same compatibility rule as `nft` above: absent in every file written before, never written by
+   * the signer, refused by an older binary's strict schema, so remove both keys before rolling back).
+   * `newCredentialCooldownSec`: a passkey added by another passkey approves nothing on the signer for this many seconds after
+   * it was added. Absent or 0 = no cool-down (the behaviour before NEXT).
+   */
+  newCredentialCooldownSec: z.number().int().min(0).max(30 * 86400).optional(),
+  /** passkey-less returns from ONE agent vault to the owner per UTC day (audit C3). Absent = DEFAULT_MAX_VAULT_RETURNS_PER_DAY. */
+  maxVaultReturnsPerDay: z.number().int().min(0).max(10_000).optional(),
 });
 export type Policy = z.infer<typeof PolicySchema>;
+/** a return costs the vault gas and nothing else; twelve a day is far above what an owner or a wind-down needs */
+export const DEFAULT_MAX_VAULT_RETURNS_PER_DAY = 12;
 
 /**
  * Per-transfer caps in whole units, sized to roughly 50 USD at the prices of 2026-11-10 (the daily cap is twice that).

@@ -16,6 +16,12 @@ cannot undo it. When no daemon runs, the command writes the state file under a l
 state file`). If it answers that the state is in use but the control socket did not answer, nothing was changed: check the
 daemon (`pm2 logs sp-wallet-signer`) before trying again. The same holds for `reset-passkeys` and `setup-token`.
 
+Since NEXT the halt never waits: from the app or from the command line it is applied the moment the signer has
+authenticated the request, also while a signature is being computed or the signer is waiting for a price. A signature that
+was being computed at that moment is not released (the app shows the operation as refused; the signer's journal records
+`halt.withheld`); the proposal it belonged to is spent and must be made again once the halt is lifted. `unhalt` still waits
+for the request in progress to finish.
+
 What the halt stops: transfers, swaps, bridges, deposits, withdrawals from a venue, new positions, orders that can add
 exposure, leverage changes, new authorizations and mandates. What it never stops (V11): cancelling an order, closing or
 reducing a position (Hyperliquid reduce-only orders, GMX decreases and cancellations — the passkey is still asked where it
@@ -26,10 +32,23 @@ In your own Terminal (not through an assistant, no screen sharing): `ssh -t <sig
 type `SHOW`, write the 24 words on paper, clear the terminal. The phrase restores all three chains in any BIP-39 wallet
 (paths in `docs/adr/0001-custody.md`).
 
+Since NEXT the signer records WHEN the phrase was displayed (journal `recovery.exported`; `recoveryExportedAt` in its
+status and in Security — `null` means never). To check that what is on paper is right, without displaying anything:
+`ssh -t <signer-node> /opt/homebrew/bin/node apps/sp-wallet-signer/signer.mjs verify-recovery`, type the 24 words (nothing
+is echoed), Enter. The only answers are `matches this signer's key` / `does not match this signer's key`; a match is
+recorded (`recoveryVerifiedAt`). Like `export-recovery` it runs in an interactive terminal only — never piped, never over
+the API, never by an assistant.
+
 ## Restore on a new signer node
 There is deliberately no import command yet. Quickest safe path: import the 24 words into a standard wallet app
 (EVM `m/44'/60'/0'/0/0`, BTC BIP-84 account 0, Solana `m/44'/501'/0'/0'`) and move the funds; then deploy a fresh signer
 (`init`), run owner setup again and deposit to the new addresses.
+
+## Revoking one passkey (NEXT)
+In the app: Security → the passkey → revoke, approved with ANOTHER enrolled passkey (the signer verifies it; the last
+passkey cannot be revoked; allowed under the emergency halt). Its sessions end. A passkey listed as "signer only" (pinned on
+the signer, unknown to the app — an alert is raised when that lasts) is revoked the same way. If no other passkey is left to
+approve, use "Lost passkey" below.
 
 ## Lost passkey
 On the signer node: `signer.mjs reset-passkeys`, `signer.mjs setup-token` (applied by the running daemon: no restart); on the API node

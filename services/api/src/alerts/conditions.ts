@@ -3,6 +3,7 @@
 // a condition that stays true — or a process that restarts while it is true — says it once. Reads only.
 import { createHash } from 'node:crypto';
 import { getNetwork } from '@spw/core';
+import { credentialSets } from '../auth.ts'; // NEXT: signer passkeys vs the application's table
 import { sql } from '../db.ts';
 import { auditChainStatus, collectConnectors, diskFree, lastBackup, type HealthDeps } from '../monitor/health.ts';
 import { derivAccount, INTERVAL_MS, type Draft } from './rules.ts';
@@ -93,6 +94,9 @@ export async function conditionDrafts(d: ConditionDeps, s: AlertSettings): Promi
     if (prev && prev.halted !== signer.halted) out.push({ kind: signer.halted ? 'security.signer_halted' : 'security.signer_unhalted', params: {}, dedupe: `signer.halt:${signer.halted}:${now}` });
     if (prev && prev.policyHash !== policyHash) out.push({ kind: 'security.policy_changed', params: { what: '@signer', detail: version === null ? '' : `version ${version}` }, dedupe: `signer.policy:${policyHash}` });
     if (!prev || prev.halted !== signer.halted || prev.policyHash !== policyHash) await putState('signer', { halted: signer.halted, policyHash });
+    // NEXT: the signer's passkeys against the application's table, looked at on every pass. A divergence that lasts is written to the
+    // audit chain there (auth.ts `credentialSets`); the alert `security.credential_mismatch` is derived from that event (rules.ts).
+    await credentialSets(signer, now).catch(() => {});
   }
   for (const c of connectors) {
     if (c.id === 'signer') continue;

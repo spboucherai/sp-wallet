@@ -76,6 +76,8 @@ export async function mmLiveWorld(o: { fromMs?: number; toMs?: number; startEqui
   await signer.enroll({ credential: pk.credential(), setupToken: 'tok' });
   const c = pk.credential();
   await sql`insert into credentials (id, public_key, counter, transports, label) values (${c.id}, ${c.publicKey}, 0, ${sql.json(c.transports as never)}, 'test passkey') on conflict do nothing`;
+  // NEXT (audit P4): the API's own passkey checks ask the SIGNER which passkeys it lists; this world's signer is in process (no HTTP)
+  (await import('../src/signer-client.ts')).signer.status = (async () => signer.status()) as never;
   await openLiveLimits(sql);
   const b64 = (hexHash: string) => Buffer.from(hexHash, 'hex');
   t.setMid(Math.round(Number(sim.mid())));

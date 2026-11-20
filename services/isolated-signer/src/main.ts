@@ -10,8 +10,9 @@ import { deriveKeys } from './keys.ts';
 import { exchangePrices } from './prices.ts';
 import { hyperliquidReader } from './venue-read.ts';
 import { initKeystore, loadMnemonic } from './keystore.ts';
-import { applyControl, controlCall, startControlServer, type ControlRequest } from './control.ts';
-import { createQueue, createSignerServer } from './server.ts';
+import { applyControl, controlCall, controlRunner, startControlServer, type ControlRequest } from './control.ts';
+import { backupState, phraseMatches, readHidden } from './recovery.ts';
+import { createQueue, createSignerServer, listenRefusal } from './server.ts';
 import { Signer } from './signer.ts';
 import { acquireStateLock, Store, StoreLockedError } from './store.ts';
 import { thorVaults } from './vaults.ts';
@@ -71,6 +72,24 @@ if (cmd === 'init') {
   if (a.trim() !== 'SHOW') process.exit(1);
   const words = loadMnemonic(paths.keystore, wrapKey).split(' ');
   console.log('\n' + words.map((w, k) => `${String(k + 1).padStart(2)}. ${w}`).join('\n') + '\n\nWrite it on paper, store it offline, then clear this terminal (Cmd-K).');
+  // NEXT (K1): the journal and `status` say that, and when, the phrase was displayed — a date, never a word
+  await change({ cmd: 'recovery-mark', what: 'exported' });
+} else if (cmd === 'verify-recovery') {
+  // NEXT (K1): does the phrase on paper restore THIS signer? Terminal only, like export-recovery: there is no HTTP route and no
+  // control command for it. The words are read without echo, compared in memory, and never printed, stored or journaled.
+  if (!process.stdin.isTTY || !process.stdout.isTTY) { console.error('verify-recovery only runs in an interactive terminal (never piped, logged or run by an agent)'); process.exit(1); }
+  const typed = await readHidden('Type the 24 words of the recovery phrase, separated by spaces (nothing is displayed), then Enter: ');
+  if (typed === null) process.exit(1);
+  const matches = phraseMatches(typed, loadMnemonic(paths.keystore, wrapKey));
+  if (matches) await change({ cmd: 'recovery-mark', what: 'verified' });
+  console.log(matches ? 'matches this signer\'s key' : 'does not match this signer\'s key');
+  process.exit(matches ? 0 : 1);
+} else if (cmd === 'backup-state') {
+  // NEXT (K1): state.json, policy.json and the journal files, as one tar (mode 0600) — never the keystore, the wrap key or the gateway secret
+  const out = process.argv[3];
+  if (!out) { console.error('usage: signer backup-state <file.tar>'); process.exit(2); }
+  try { console.log(`${out}: ${backupState(dir, out).join(', ')} — no keystore, no wrap key, no gateway secret`); }
+  catch (e) { console.error((e as NodeJS.ErrnoException).code === 'EEXIST' ? `${out} already exists: not overwritten` : (e as Error).message); process.exit(1); }
 } else if (cmd === 'serve') {
   if (!existsSync(paths.keystore)) { console.error('no keystore: run `init` first'); process.exit(1); }
   // the daemon owns the state for its whole life: a second daemon, or a CLI command writing under it, is refused
@@ -78,6 +97,11 @@ if (cmd === 'init') {
   try { release = acquireStateLock(paths.state); } catch (e) { console.error((e as Error).message); process.exit(1); }
   process.on('exit', () => release());
   for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => process.exit(0));
+  // NEXT (audit C2): never on a network address without a source allowlist — decided before a key is read
+  const host = process.env.SPW_SIGNER_HOST ?? '127.0.0.1', port = Number(process.env.SPW_SIGNER_PORT ?? 8651);
+  const allowed = (process.env.SPW_SIGNER_ALLOW_IPS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const refusal = listenRefusal(host, allowed);
+  if (refusal) { console.error(refusal); process.exit(1); }
   const { keys, store } = open();
   const broken = store.journalBrokenAt;
   if (broken !== null) { console.error(`signer journal hash chain broken at seq ${broken} — refusing to start`); process.exit(1); }
@@ -88,14 +112,14 @@ if (cmd === 'init') {
   dns.setDefaultResultOrder('ipv4first'); net.setDefaultAutoSelectFamilyAttemptTimeout(2500);
   const signer = new Signer(keys, store, { rpId: need('SPW_RP_ID'), origin: need('SPW_ORIGIN') }, undefined, exchangePrices(), hyperliquidReader(),
     thorVaults()); // further outbound use: asking independent THORNode operators whether a vault is genuine before signing a cross-chain swap (vaults.ts)
-  const host = process.env.SPW_SIGNER_HOST ?? '127.0.0.1', port = Number(process.env.SPW_SIGNER_PORT ?? 8651);
-  const allowed = (process.env.SPW_SIGNER_ALLOW_IPS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   const enqueue = createQueue();
-  // the operator's commands (halt, unhalt, reset-passkeys, setup-token) reach the running daemon through a socket in its own directory
-  startControlServer(paths.control, (req) => enqueue(() => applyControl(store, req, 'daemon')));
-  createSignerServer(signer, secret, allowed, enqueue).listen(port, host, () => console.log(`signer ${keys.keyId} listening on ${host}:${port} halted=${store.state.halted}`));
+  // the operator's commands reach the running daemon through a socket in its own directory; `halt` is applied at once, the others in the queue
+  startControlServer(paths.control, controlRunner(store, enqueue));
+  createSignerServer(signer, secret, allowed, enqueue).listen(port, host, () => console.log(`signer ${keys.keyId} listening on ${host}:${port} halted=${store.state.halted} allowed-sources=${allowed.length ? allowed.join(',') : '(any: loopback only)'}`));
   process.on('uncaughtException', (e) => { console.error('fatal:', e.message); process.exit(1); });
+  // a rejection nobody handled is as fatal as an exception (Node's default); only its message is printed — never the object, which may carry a request
+  process.on('unhandledRejection', (e) => { console.error('fatal: unhandled rejection:', e instanceof Error ? e.message : typeof e); process.exit(1); });
 } else {
-  console.error('usage: signer init | setup-token | status | serve | halt | unhalt | reset-passkeys | export-recovery');
+  console.error('usage: signer init | setup-token | status | serve | halt | unhalt | reset-passkeys | export-recovery | verify-recovery | backup-state <file.tar>');
   process.exit(2);
 }

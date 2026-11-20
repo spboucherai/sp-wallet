@@ -407,6 +407,22 @@ const stamp = (n: number) => ({ nonce: uuid(0x700 + n), createdAt: T0_MS, expire
   put('enroll-es256-32-byte-credential-id-url-safe-chars', Buffer.from('fbff'.repeat(16), 'hex').toString('base64url'), cose);
 }
 
+// ------------------------------------------------------------------------------------------------------------------ 8. SPW-CRED-v2 (NEXT)
+{
+  // packages/core/src/credential.ts — the request an ENROLLED passkey approves to add another passkey or to revoke one. It replaces
+  // SPW-ENROLL-v1 for every passkey after the first (the signer no longer accepts the v1 challenge). Eight framed fields, always
+  // all of them, in this order: v, action, requestId, keyId, credentialId, publicKey ("" for a revocation), createdAt, expiresAt.
+  const put = (name: string, object: Record<string, unknown>) => add('SPW-CRED-v2.json', { name, domain: core.CRED_DOMAIN, source: 'packages/core/src/credential.ts credentialBytes / credentialHash', object, bytes: core.credentialBytes(object), hash: core.credentialHash(object) });
+  const cose = Buffer.concat([Buffer.from('a5010203262001215820', 'hex'), Buffer.from('11'.repeat(32), 'hex'), Buffer.from('225820', 'hex'), Buffer.from('22'.repeat(32), 'hex')]).toString('base64url');
+  const id16 = Buffer.from('000102030405060708090a0b0c0d0e0f', 'hex').toString('base64url'), id32 = Buffer.from('fbff'.repeat(16), 'hex').toString('base64url');
+  const cred = (n: number, o: Record<string, unknown>) => ({ v: 2, requestId: uuid(0x900 + n), keyId: KEY_ID, ...o, createdAt: T0, expiresAt: T0 + 300 });
+  put('add-es256-16-byte-credential-id', cred(1, { action: 'add', credentialId: id16, publicKey: cose }));
+  put('add-es256-32-byte-credential-id-url-safe-chars', cred(2, { action: 'add', credentialId: id32, publicKey: cose }));
+  put('add-shorter-validity', { ...cred(3, { action: 'add', credentialId: id16, publicKey: cose }), expiresAt: T0 + 120 });
+  put('revoke-no-public-key', cred(4, { action: 'revoke', credentialId: id16 }));
+  put('revoke-32-byte-credential-id', cred(5, { action: 'revoke', credentialId: id32 }));
+}
+
 // ------------------------------------------------------------------------------------------------------------------ write
 const here = join(ROOT, 'tests/native-vectors');
 const swift = process.env.SPW_NATIVE_VECTORS_DIR ?? resolve(ROOT, '../../apple/SPWalletCore/Tests/SPWalletCoreTests/Vectors');

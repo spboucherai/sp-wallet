@@ -2,7 +2,11 @@ import { closeSync, existsSync, fsyncSync, ftruncateSync, mkdirSync, openSync, r
 import { basename, dirname, join } from 'node:path';
 import { appendAudit, auditHash, DEFAULT_POLICY, PolicySchema, verifyAuditChain, type AuditRecord, type CctpBridge, type Mandate, type Policy } from '@spw/core';
 
-export interface StoredCredential { id: string; publicKey: string; counter: number; transports?: string[]; addedAt: string }
+/**
+ * `lastUsedAt` and `addedBy` (NEXT, optional — absent on a credential written before): the last approval this signer verified
+ * with the passkey, and the passkey that approved its addition (absent on the first one, pinned with the setup token).
+ */
+export interface StoredCredential { id: string; publicKey: string; counter: number; transports?: string[]; addedAt: string; lastUsedAt?: string; addedBy?: string }
 export interface SignerState {
   v: 1;
   halted: boolean;
@@ -45,6 +49,13 @@ export interface SignerState {
   nftAllow?: Record<string, { at: number }>;
   /** network -> "<txid>:<vout>" -> lock. An ordinary send that names a locked outpoint is refused (inscription safety). Never pruned. */
   utxoLocks?: Record<string, Record<string, import('./nft.ts').StoredUtxoLock>>;
+  // NEXT — three OPTIONAL fields, absent in every state written before. An older binary keeps them on disk untouched and does
+  // not enforce them: see the rollback rule in docs/runbooks/deploy.md ("Signer state added by NEXT").
+  /** "<YYYY-MM-DD>" -> vault index -> passkey-less returns signed for that vault that UTC day (audit C3); kept three days */
+  vaultReturns?: Record<string, Record<string, number>>;
+  /** when the operator last completed `export-recovery` / last typed a phrase that `verify-recovery` found to match (ISO dates) */
+  recoveryExportedAt?: string;
+  recoveryVerifiedAt?: string;
 }
 /** an order signed with a trading key that can still add exposure on the venue: kept until its venue expiry + a grace (venue-mandate.ts) */
 export interface VenuePendingOrder { clientId: string; instrument: string; side: 'buy' | 'sell'; size: string; price: string; /** unix ms */ until: number; /** unix ms */ signedAt?: number;
@@ -292,6 +303,7 @@ export class Store {
     const keep = new Date((nowSec - 3 * 86400) * 1000).toISOString().slice(0, 10);
     for (const k of Object.keys(this.state.spent)) if (k.slice(0, 10) < keep) delete this.state.spent[k];
     for (const k of Object.keys(this.state.nftDaily ?? {})) if (k < keep) delete this.state.nftDaily![k]; // NFT delivery 2
+    for (const k of Object.keys(this.state.vaultReturns ?? {})) if (k < keep) delete this.state.vaultReturns![k]; // NEXT (C3)
     for (const m of Object.values(this.state.mandates ?? {})) for (const d of Object.keys(m.usage)) if (d < keep) delete m.usage[d];
     // a bridge whose mint was signed is kept 90 more days (retries); one that was never minted is kept for ever
     // v8: a Solana burn whose event-account deposit was never reclaimed is kept (the record is the only authority for the reclaim)
