@@ -5,7 +5,7 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import { z, ZodError } from 'zod';
-import { formatUnits, getNetwork, NETWORKS, normalizeAddress, type NetworkDef, type NetworkId } from '@spw/core';
+import { formatUnits, getNetwork, lifecycleOf, NETWORKS, normalizeAddress, type NetworkDef, type NetworkId } from '@spw/core';
 import { authRoutes, credentialSets, currentSessionId, deviceRoutes, isAuthed, listCreds } from './auth.ts';
 import { describeUa } from './alerts/rules.ts'; // NEXT: the coarse device label of a session (browser · system)
 import { adapterFor } from './chains/index.ts';
@@ -51,6 +51,7 @@ import { installQuotes, type QuotesDeps } from './quotes/index.ts'; // v11 quote
 import { history as portfolioHistory, portfolioDeps, RANGES, readRows, summarize, type Currency, type Range } from './portfolio.ts'; // NEXT: provenance, summary, value history
 import { nativeClientRoutes } from './native-clients.ts'; // native apps: the passkey association file (/.well-known), nothing under /api
 import { registerNft, type NftOptions } from './nft/index.ts'; // NFT delivery 1: read-only inventory, item pages, media proxy (owner session only)
+import { contactLabeler, csvCell, NO_CONTROL, validationFields, walletApiRoutes } from './wallet-api/index.ts'; // NEXT: analytics, search, contact labels, validation detail (contract: wallet-api/spec.ts)
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
 // v11 quote engine: the browser opens ONE websocket to its own origin. CSP3 lets 'self' match the ws/wss scheme of the page's origin,
@@ -69,6 +70,9 @@ export function csvOutcome(p: ProposalRow): { toNetwork: string; toSymbol: strin
   if (p.kind === 'swap' && p.swap) return { toNetwork: p.network, toSymbol: p.swap.toSymbol, received: p.out_amount ? formatUnits(BigInt(p.out_amount), p.swap.toDecimals) : '' };
   return { toNetwork: '', toSymbol: '', received: '' };
 }
+/** Columns of GET /api/v1/export/activity.csv. Only ever appended to: a reader that takes columns by position keeps working. */
+export const EXPORT_CSV_HEADER = 'time_utc,direction,network,symbol,amount_base_units,amount,counterparty,state,txid,fee_estimate_base_units,to_network,to_symbol,received'
+  + ',lifecycle,fee_paid_base_units,fee_paid,fee_symbol,deposit_kind,deposit_origin,contact_label';
 /** NEXT H1: the row's `txid` is a block hash (value that arrived inside a contract call, or an aggregate), not a transaction id */
 export const depositTxidIsBlock = (d: { detection: string | null; txid: string; block_hash: string | null }): boolean => d.detection === 'aggregate' || (d.detection === 'internal_call' && (d.block_hash === null || d.txid.toLowerCase() === d.block_hash.toLowerCase()));
 
@@ -141,6 +145,11 @@ async function walletAddresses(): Promise<{ st: Awaited<ReturnType<typeof signer
 export async function buildServer(opts: { swapProviders?: import('@spw/swap').SwapProvider[]; derivatives?: Derivatives; live?: LiveService; collateral?: import('./derivatives/collateral.ts').CollateralService; gmx?: import('./derivatives/gmx-exec.ts').GmxService; plan?: Partial<PlanDeps>; /** v11 quote engine: scripted upstreams and limits (tests) */ quotes?: QuotesDeps; /** NFT: scripted sources (tests) */ nft?: NftOptions } = {}): Promise<FastifyInstance> {
   const swapProviders = opts.swapProviders;
   const app = Fastify({ logger: { level: 'warn', redact: ['req.headers.cookie', 'req.headers.authorization'] }, bodyLimit: 64 * 1024, trustProxy: config.trustProxy });
+  // NEXT: every route as it is registered (`app.routeTable`) — read by the contract test, which fails when a route under
+  // /api/v1 is in neither the wallet contract (wallet-api/spec.ts) nor a family documented elsewhere. Nothing reads it at run time.
+  const routeTable: { method: string; url: string }[] = [];
+  app.addHook('onRoute', (r) => { for (const method of [r.method].flat()) routeTable.push({ method, url: r.url }); });
+  app.decorate('routeTable', routeTable);
   await app.register(cookie);
   await app.register(rateLimit, { max: 240, timeWindow: '1 minute' });
   const quotes = await installQuotes(app, { derivatives: opts.derivatives, prices: markets, second: apiBricks()?.second, metered: () => ({ apibricks: apiBricksStatus() }), ...opts.quotes }); // v11 quote engine: the websocket plugin, before the routes
@@ -176,7 +185,8 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     const e = err as Error & { statusCode?: number };
     // `data` (v11): machine-readable detail of a refusal — e.g. the fresh quote of `quote_moved` (prepare-common.ts)
     if (e instanceof UserError) return reply.status(e.status).send({ error: e.code, message: e.message, ...((e as { data?: unknown }).data !== undefined ? { data: (e as { data?: unknown }).data } : {}) });
-    if (e instanceof ZodError) return reply.status(400).send({ error: 'bad_request', message: 'invalid request' });
+    // NEXT (additive): which members were refused and what is expected of each — never the value that was sent (wallet-api/validation.ts)
+    if (e instanceof ZodError) return reply.status(400).send({ error: 'bad_request', message: 'invalid request', data: { fields: validationFields(e) } });
     if (e.statusCode === 429) return reply.status(429).send({ error: 'rate_limited', message: 'too many requests' });
     if (e.statusCode && e.statusCode < 500) return reply.status(e.statusCode).send({ error: 'bad_request', message: 'invalid request' });
     req.log.error({ msg: e.message, path: req.url.split('?')[0] });
@@ -212,6 +222,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   await tradingApi(app, { derivatives: opts.derivatives, live: opts.live, gmx: opts.gmx, prices: markets, execution }); // v11: /api/v1/trading (scoped API keys or the owner) and /api/v1/developer (owner only)
   dashboardRoutes(app, { execution }); // v11 interface: /api/v1/dashboard — read-only aggregates composed from the services above (owner session only)
   registerNft(app, { ...opts.nft, prices: opts.nft?.prices ?? markets }); // NFT: /api/v1/nfts — inventory, transfers (delivery 2), market READ (delivery 3; no market write). `prices`: fiat rates of market amounts, with their source and date
+  walletApiRoutes(app, { currency: async () => ((await getSetting('currency', 'CAD')) === 'USD' ? 'USD' : 'CAD') }); // NEXT: /api/v1/analytics, /api/v1/search (owner session, database only)
   quotes.routes(app); // v11 quote engine: /api/v1/stream (owner session + Origin), /api/v1/trading/stream (API key or ticket, markets:read), /api/v1/stream/stats
 
   nativeClientRoutes(app); // /.well-known/apple-app-site-association (404 unless SPW_APPLE_APP_IDS names an app)
@@ -280,14 +291,19 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   });
 
   app.get('/api/v1/activity', async (req) => {
-    const q = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) }).parse(req.query);
-    const out = await sql<ProposalRow[]>`select * from proposals where state <> 'draft' order by created_at desc limit ${q.limit}`;
+    // NEXT (additive): `network` / `asset` are applied in SQL, before the limit — an asset page reaches that asset's movements
+    // however many other operations came after them. A token id is compared without case (EVM ids are checksummed in the registry).
+    const q = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100), network: z.string().min(1).max(20).regex(NO_CONTROL).optional(), asset: z.string().min(1).max(130).regex(NO_CONTROL).optional() }).parse(req.query);
+    const only = (t: 'p' | 'd') => sql`${q.network ? sql`and ${sql(t)}.network = ${q.network}` : sql``} ${q.asset ? sql`and lower(${sql(t)}.asset) = ${q.asset.toLowerCase()}` : sql``}`;
+    const label = await contactLabeler();
+    const out = await sql<ProposalRow[]>`select p.* from proposals p where p.state <> 'draft' ${only('p')} order by p.created_at desc limit ${q.limit}`;
     const dep = await sql<{ network: string; txid: string; idx: number; asset: string; amount: string; from_addr: string; block: string; block_time: Date | null; seen_at: Date; finalized: string | null;
       kind: string | null; proposal_id: string | null; origin: string | null; detection: string | null; block_hash: string | null }[]>`
-      select d.*, c.finalized from deposits d left join scan_cursor c on c.network = d.network order by coalesce(d.block_time, d.seen_at) desc limit ${q.limit}`;
+      select d.*, c.finalized from deposits d left join scan_cursor c on c.network = d.network where true ${only('d')} order by coalesce(d.block_time, d.seen_at) desc limit ${q.limit}`;
     const items = [
       // `kind` is what the row IS (v11): a GMX order transaction is `gmx`, not a send to the GMX router; `rawKind` keeps the stored kind (xswap vs swap)
-      ...out.map((p) => ({ ...view(p), kind: activityKind(p.kind), rawKind: p.kind ?? 'transfer', at: p.created_at })),
+      // NEXT (additive): `contactLabel` = the address-book label of the counterparty, when it is a contact
+      ...out.map((p) => ({ ...view(p), kind: activityKind(p.kind), rawKind: p.kind ?? 'transfer', at: p.created_at, contactLabel: label(p.network, p.to_addr) })),
       ...dep.map((d) => {
         const n = getNetwork(d.network), a = d.asset === 'native' ? n.native : n.tokens.find((t) => t.id === d.asset)!;
         return { kind: 'receive' as const, at: d.block_time ?? d.seen_at, id: `${d.network}:${d.txid}:${d.idx}`, network: d.network, networkName: n.name, asset: d.asset, symbol: a.symbol,
@@ -297,7 +313,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
           state: Number(d.block) <= Number(d.finalized ?? 0) ? 'finalized' : 'confirming',
           // NEXT H5 (additive): `depositKind` external = someone paid the wallet | internal = the result of one of the wallet's own operations (`origin` says which, `proposalId` links it)
           depositKind: d.kind === 'internal' ? 'internal' as const : 'external' as const, origin: d.origin, proposalId: d.proposal_id,
-          detection: d.detection, txidIsBlock: depositTxidIsBlock(d), blockHash: d.block_hash, block: Number(d.block) };
+          detection: d.detection, txidIsBlock: depositTxidIsBlock(d), blockHash: d.block_hash, block: Number(d.block), contactLabel: label(d.network, d.from_addr) };
       }),
     ].sort((x, y) => new Date(y.at).getTime() - new Date(x.at).getTime()).slice(0, q.limit);
     return { items };
@@ -305,15 +321,19 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
 
   app.get('/api/v1/export/activity.csv', async (_req, reply) => {
     const out = await sql<ProposalRow[]>`select * from proposals where state <> 'draft' order by created_at`;
-    const dep = await sql`select * from deposits order by seen_at`;
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""').replace(/^([=+\-@])/, "'$1")}"`;
+    const dep = await sql`select d.*, c.finalized from deposits d left join scan_cursor c on c.network = d.network order by d.seen_at`;
+    const esc = csvCell, label = await contactLabeler();
     // v11: `direction` is the real kind of the row (send | swap | bridge | xswap | gmx | receive) and three columns say what a swap or a
-    // cross-chain transfer delivered; they are appended, so the positions of the earlier columns do not change
-    const lines = ['time_utc,direction,network,symbol,amount_base_units,amount,counterparty,state,txid,fee_estimate_base_units,to_network,to_symbol,received'];
-    for (const p of out) { const o = csvOutcome(p);
-      lines.push([p.created_at.toISOString(), csvKind(p.kind), p.network, p.symbol, p.amount, formatUnits(BigInt(p.amount), p.decimals), p.to_addr, p.state, p.txid, p.fee_estimate, o.toNetwork, o.toSymbol, o.received].map(esc).join(',')); }
+    // cross-chain transfer delivered; they are appended, so the positions of the earlier columns do not change.
+    // NEXT: seven more columns, appended the same way — the life cycle, the fee the network really charged (empty when it was
+    // never recorded: the estimate stays in its own column and is not a substitute), what a receipt is, and the contact's label.
+    const lines = [EXPORT_CSV_HEADER];
+    for (const p of out) { const o = csvOutcome(p), n = getNetwork(p.network);
+      lines.push([p.created_at.toISOString(), csvKind(p.kind), p.network, p.symbol, p.amount, formatUnits(BigInt(p.amount), p.decimals), p.to_addr, p.state, p.txid, p.fee_estimate, o.toNetwork, o.toSymbol, o.received,
+        lifecycleOf(p.state, { relayAttempted: !!p.relay_attempted_at, errorCode: p.error_code }), p.fee_paid ?? '', p.fee_paid ? formatUnits(BigInt(p.fee_paid), n.native.decimals) : '', n.native.symbol, '', '', label(p.network, p.to_addr) ?? ''].map(esc).join(',')); }
     for (const d of dep) { const n = getNetwork(d.network), a = d.asset === 'native' ? n.native : n.tokens.find((t) => t.id === d.asset)!;
-      lines.push([(d.block_time ?? d.seen_at).toISOString(), 'receive', d.network, a.symbol, d.amount, formatUnits(BigInt(d.amount), a.decimals), d.from_addr, 'confirmed', d.txid, '', '', '', ''].map(esc).join(',')); }
+      lines.push([(d.block_time ?? d.seen_at).toISOString(), 'receive', d.network, a.symbol, d.amount, formatUnits(BigInt(d.amount), a.decimals), d.from_addr, 'confirmed', d.txid, '', '', '', '',
+        Number(d.block) <= Number(d.finalized ?? 0) ? 'confirmed' : 'confirming', '', '', '', d.kind === 'internal' ? 'internal' : 'external', d.origin ?? '', label(d.network, d.from_addr) ?? ''].map(esc).join(',')); }
     return reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', 'attachment; filename="sp-wallet-activity.csv"').send(lines.join('\n') + '\n');
   });
 

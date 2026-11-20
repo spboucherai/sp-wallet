@@ -132,4 +132,7 @@ repositories.)*
   in a field a shipped client decodes with a closed enum.
 - Amounts are strings of base units plus a display string computed with exact arithmetic; never a float.
 - Every figure that is an estimate, partial or stale carries the flag that says so.
-- Errors are `{ error: code, message, data? }`; codes are catalogued (`sv-texts.ts`, and the OpenAPI document to come).
+- Errors are `{ error: code, message, data? }`; codes are catalogued (`sv-texts.ts` for the outcome of a stored proposal,
+  `services/api/src/wallet-api/spec.ts` for the HTTP errors of every route).
+- The core wallet API has a machine-readable contract: `docs/openapi/wallet-v1.json`, generated from `wallet-api/spec.ts`
+  and checked against the real server by `test/wallet-contract.test.ts` — see `SP-WALLET-API.md`.
