@@ -104,6 +104,6 @@ public enum SPTokens {
         "dropped": Status(tone: .caution, symbol: "questionmark.circle", fr: "Non incluse", en: "Dropped"),
         "expired": Status(tone: .mute, symbol: "hourglass.bottomhalf.filled", fr: "Expirée", en: "Expired"),
         "rejected": Status(tone: .mute, symbol: "hand.raised", fr: "Refusée par vous", en: "Rejected"),
-        "not_sent": Status(tone: .mute, symbol: "paperplane.slash", fr: "Signée, non envoyée", en: "Signed, not sent"),
+        "not_sent": Status(tone: .mute, symbol: "pause.circle", fr: "Signée, non envoyée", en: "Signed, not sent"),
     ]
 }

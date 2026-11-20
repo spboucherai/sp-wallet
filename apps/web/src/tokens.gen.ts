@@ -82,7 +82,7 @@ export const LIFECYCLE_STATUS = {
   },
   "not_sent": {
     "tone": "mute",
-    "symbol": "paperplane.slash",
+    "symbol": "pause.circle",
     "fr": "Signée, non envoyée",
     "en": "Signed, not sent"
   }
