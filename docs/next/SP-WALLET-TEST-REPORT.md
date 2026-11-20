@@ -16,7 +16,9 @@ network; each line says which kind it is.
 | Swift shared package | `swift test` | 468 / 468 (9 live tests skipped: no stack configured) | 2026-11-19 |
 | macOS app | unit tests; scripted self-test on a throwaway stack running the NEXT backend with a local fork | 61 / 61; 25 / 25 | 2026-11-20 |
 | macOS release build 2.0.0 (2) | `verify-release.sh` (signature, hardened runtime, sandbox, no web engine, production endpoint, no secret) | all checks pass | 2026-11-20 |
-| iOS app | see §3 | — | — |
+| iOS app | unit tests; fixture UI tests on iPhone and iPad simulators; live UI tests on a throwaway stack with a local fork | 368 / 368; iPhone 40 run, 0 failures; iPad 37 of 40 green, 2 harness failures left; live 5 / 5 | 2026-11-20 |
+| iOS release build 2.0.0 (4) | `check-release.sh` on the exported IPA (no test passkey, no fixture, no web view, production origin, distribution signature) | all checks pass; uploaded to TestFlight | 2026-11-20 |
+| macOS notarisation | Apple notary service, app and disk image | Accepted, stapled, Gatekeeper: Notarized Developer ID | 2026-11-20 |
 
 ## 2. Critical scenarios (brief §15)
 
@@ -55,7 +57,16 @@ before its own final review; the merge was re-verified here (typecheck, unit tes
 The XCUITest suite compiles but did not run (macOS asks for UI automation to be allowed at the keyboard). Compiled only:
 passkey add / revoke, contact writes, second window, lock over sheets and on real sleep, notification delivery, VoiceOver.
 
-**iOS.** *(completed when the iOS work reports)*
+**iOS.** 368 unit tests (183 before). Fixture UI tests: iPhone 40 run with 0 failures; iPad 33 of 40 green in the full run,
+4 more green after fixes, 2 still failing in the test harness itself (a long-press context menu, opening the sidebar at the
+largest text size); the last source change was followed by unit tests and partial iPad runs only. Live on a throwaway stack
+(NEXT backend, local fork): sign-in, receive, invalid address, the ten extended sections, and a full send up to the tracker.
+50 screenshots in the app repository (iPhone and iPad, light and dark, FR and EN, largest text size), all fixture-fed
+except the two live send captures. Seen in the Simulator: the lock over an open sheet (the sheet survives), the privacy
+cover in the app switcher above a sheet. Compiled or logic-tested only: camera scanner, confirmed / dropped / failed
+tracker states, passkey add and revoke beyond the refusal, widgets inside WidgetKit, haptics. A release leak that predates
+NEXT was found and fixed: the software test passkey and the fixtures were linked into Release builds (the old check missed
+it); both are now linked in Debug only and the release check proves it.
 
 ## 4. Faults simulated, and what the rehearsal found
 
