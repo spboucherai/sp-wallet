@@ -24,6 +24,10 @@ describe('api — time-out', () => {
     const a = caught(post('/transfers/proposals/x/approve', { assertion: {} }));
     await vi.advanceTimersByTimeAsync(TIMEOUT_MS + 5000); expect(f.mock.calls[0]![1].signal.aborted).toBe(false);
     await vi.advanceTimersByTimeAsync(APPROVE_TIMEOUT_MS - TIMEOUT_MS - 5000); expect((await a).kind).toBe('timeout');
+    for (const p of ['/bridge/proposals/x/retry-mint', '/bridge/proposals/x/reclaim', '/risk/kill-switch/release', '/transfers/proposals/x/request-approval', '/nfts/transfer/prepare']) {   // the other long calls
+      const f2 = hang(); vi.stubGlobal('fetch', f2); const q = caught(post(p)); await vi.advanceTimersByTimeAsync(TIMEOUT_MS + 1); expect(f2.mock.calls[0]![1].signal.aborted, p).toBe(false); await vi.advanceTimersByTimeAsync(APPROVE_TIMEOUT_MS); expect((await q).kind).toBe('timeout'); }
+    { const f3 = hang(); vi.stubGlobal('fetch', f3); const q = caught(post('/mandates/m/approve/preview')); await vi.advanceTimersByTimeAsync(TIMEOUT_MS); expect((await q).kind).toBe('timeout'); }   // not an approval: 20 s
+    vi.stubGlobal('fetch', hang());
     const b = caught(get('/networks', { timeoutMs: 50 })); await vi.advanceTimersByTimeAsync(50); expect((await b).kind).toBe('timeout');
     const c = caught(post('/mandates/m/approve', {}, undefined, { timeoutMs: 1000 })); await vi.advanceTimersByTimeAsync(1000); expect((await c).kind).toBe('timeout');   // overridable per call
   });

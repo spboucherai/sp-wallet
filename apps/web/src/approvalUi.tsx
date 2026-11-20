@@ -9,9 +9,10 @@
  * `settle` is called for the first outcome and again for the outcome of each "check again": the same code decides what the
  * screen shows whenever the state finally arrives. An `unknown` outcome never reaches it — the panel stays instead.
  */
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { readOutcome, submitApproval, type ApprovalOutcome, type ApprovalPlan, type ReadPlan } from './approval';
 import { useT } from './i18n';
+import { IN_APP } from './nav';
 import { Btn, Icon } from './ui';
 
 export type OutcomePhase = 'idle' | 'checking' | 'unknown';
@@ -62,11 +63,14 @@ export function useApprovalOutcome<S>(): ApprovalHandle<S> {
     if (o.kind === 'read' && o.applied) return o.state;
     throw new ApprovalInDoubt(o.kind === 'unknown' ? 'unknown' : 'not_received');
   }, [run]);
-  return { phase, locked: phase !== 'idle', run, recheck, canRecheck, notReceived, send };
+  // while the outcome is unread, closing or reloading the tab would lose the only screen that says so: the browser asks first
+  const locked = phase !== 'idle';
+  useEffect(() => { if (!locked) return; const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); }; addEventListener('beforeunload', warn); return () => removeEventListener('beforeunload', warn); }, [locked]);
+  return { phase, locked, run, recheck, canRecheck, notReceived, send };
 }
 
 /** In-app navigation to Activity from anywhere in the tree (App listens to `popstate`). */
-export const openActivity = (): void => { history.pushState(null, '', '/activity'); dispatchEvent(new PopStateEvent('popstate')); window.scrollTo(0, 0); };
+export const openActivity = (): void => { history.pushState(IN_APP, '', '/activity'); dispatchEvent(new PopStateEvent('popstate')); window.scrollTo(0, 0); };
 
 /**
  * What the owner sees between the moment the approval left and the moment the server said what happened. Never "failed",

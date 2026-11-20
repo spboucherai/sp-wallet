@@ -223,8 +223,10 @@ export function Sheet({ title, onClose, children, dismissable = true, wide, sub,
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     panel.current?.focus();
     const key = (e: KeyboardEvent) => {
+      // only the sheet on top has the keyboard: one opened from this one (in its subtree or in a portal after it) answers instead
+      const open = document.querySelectorAll('[role=dialog][aria-modal=true]'); if (open[open.length - 1] !== root.current) return;
       if (e.key === 'Escape' && canRef.current) { close.current(); return; }
-      if (e.key !== 'Tab' || !panel.current || !root.current || root.current.querySelector('[role=dialog]')) return;   // a sheet opened from this one has the keyboard
+      if (e.key !== 'Tab' || !panel.current) return;
       const next = trapTarget(focusables(panel.current), document.activeElement, e.shiftKey, panel.current);
       if (next) { e.preventDefault(); next.focus(); }
     };

@@ -18,11 +18,11 @@ export const outcomeUnknown = (e: unknown): boolean => !(e instanceof ApiError) 
 let onUnauth: () => void = () => {};
 export const setUnauthHandler = (f: () => void) => { onUnauth = f; };
 
-/** every request is bounded: 20 s by default; an approval (the server waits for the signer and the first relay) gets 45 s */
+/** every request is bounded: 20 s by default; an approval (the server waits for the signer and the first relay) and a preparation (the server simulates against the chain) get 45 s */
 export const TIMEOUT_MS = 20_000, APPROVE_TIMEOUT_MS = 45_000;
 export interface ApiOptions { /** time allowed for the whole exchange, body included */ timeoutMs?: number; signal?: AbortSignal }
-/** a path that submits an approval (`…/approve`, `…/retry-mint`): the long time-out unless the caller says otherwise */
-const isApproval = (method: string, path: string): boolean => method === 'POST' && /\/(approve|retry-mint)(\?|$)/.test(path);
+/** a path that submits an approval (`…/approve`, `…/retry-mint`, `…/reclaim`, a switch release, a halt lift) or prepares one: the long time-out unless the caller says otherwise */
+const isApproval = (method: string, path: string): boolean => method === 'POST' && /\/(approve|retry-mint|reclaim|release|resume|rebase|prepare|request-approval)(\?|$)/.test(path);
 
 export async function api<T = any>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}, opts: ApiOptions = {}): Promise<T> {
   const ctl = new AbortController(); let timedOut = false;
