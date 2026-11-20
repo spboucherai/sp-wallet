@@ -9,7 +9,7 @@ import { formatUnits, getNetwork, NETWORKS, normalizeAddress, type NetworkDef, t
 import { authRoutes, credentialSets, currentSessionId, deviceRoutes, isAuthed, listCreds } from './auth.ts';
 import { describeUa } from './alerts/rules.ts'; // NEXT: the coarse device label of a session (browser · system)
 import { adapterFor } from './chains/index.ts';
-import { http, rpcEndpointHealth } from './chains/rpc.ts';
+import { hostOf, http, rpcEndpointHealth } from './chains/rpc.ts';
 import { createGecko, priceStamp } from './gecko.ts';
 import { COINGECKO } from './prices/coingecko-ids.ts';
 import { crossCheck, crossSummary, type CrossFields } from './prices/cross.ts'; // v11: two price sources, one rule
@@ -220,7 +220,7 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   app.get('/api/v1/health/ready', async () => {
     const db = await sql`select 1`.then(() => true, () => false);
     const s = await signer.status().then((x) => ({ ok: true, halted: x.halted }), () => ({ ok: false, halted: null }));
-    return { db, signer: s, networks: [...healthCache.values()], rpcEndpoints: rpcEndpointHealth() };
+    return { db, signer: s, networks: [...healthCache.values()], rpcEndpoints: rpcEndpointHealth().map((h) => ({ ...h, url: hostOf(h.url) })) }; // NEXT (audit H1): the host only — an endpoint URL can carry a key in its path
   });
 
   const liveTokens = (n: NetworkDef) => { const off = new Set(adapterFor(n.id).disabledAssets?.() ?? []); return n.tokens.filter((t) => !off.has(t.id)); };
