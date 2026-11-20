@@ -2,15 +2,17 @@ import { UserError } from '../config.ts';
 
 const TIMEOUT = 9000;
 /** One retry on connection-level failures (never on an HTTP answer). Safe for reads; re-sending signed bytes is idempotent on-chain. */
-export async function http(url: string, init: RequestInit = {}): Promise<Response> {
-  try { return await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT), redirect: 'error' }); }
-  catch { await new Promise((r) => setTimeout(r, 300)); return fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT), redirect: 'error' }); }
+export async function http(url: string, init: RequestInit = {}, o: { timeoutMs?: number; retry?: boolean } = {}): Promise<Response> {
+  const ms = o.timeoutMs ?? TIMEOUT;
+  try { return await fetch(url, { ...init, signal: AbortSignal.timeout(ms), redirect: 'error' }); }
+  catch (e) { if (o.retry === false) throw e; await new Promise((r) => setTimeout(r, 300)); return fetch(url, { ...init, signal: AbortSignal.timeout(ms), redirect: 'error' }); }
 }
 
 let idc = 0;
-export async function rpcOne<T>(url: string, method: string, params: unknown[]): Promise<T> {
-  const r = await http(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++idc, method, params }) });
-  if (!r.ok) throw new Error(`rpc http ${r.status}`);
+/** `o` (NEXT): a shorter time-out and no second attempt, for reads that are asked to several endpoints anyway */
+export async function rpcOne<T>(url: string, method: string, params: unknown[], o: { timeoutMs?: number; retry?: boolean } = {}): Promise<T> {
+  const r = await http(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++idc, method, params }) }, o);
+  if (!r.ok) throw Object.assign(new Error(`rpc http ${r.status}`), { httpStatus: r.status });
   const j = (await r.json()) as { result?: T; error?: { code: number; message: string } };
   if (j.error) throw Object.assign(new Error(j.error.message), { rpcCode: j.error.code });
   if (j.result === undefined) throw new Error('rpc: empty result');
@@ -58,7 +60,20 @@ export function rpcAdmitted(urls: string[], now = Date.now()): { core: string[];
   return { core, probation: ejected.filter((u) => healthOf(u).ejectedUntil <= now), ejected: ejected.filter((u) => healthOf(u).ejectedUntil > now) };
 }
 export const rpcEndpointHealth = (): EndpointHealth[] => [...endpoints.values()].map((h) => ({ ...h }));
-export const resetRpcHealth = (): void => endpoints.clear();
+export const resetRpcHealth = (): void => { endpoints.clear(); benched.clear(); };
+
+// ── NEXT: compared DISPLAY reads (balancesDetailed) ─────────────────────────────────────────────────────────────────────
+// A balance read asks every endpoint, so the slowest one sets the time of the answer. Two bounds: one attempt of 7 s per
+// call (FAST), and an endpoint that failed at the connection level (time-out, HTTP error) sits out for a minute — the read
+// is then made by the others and says so (`sources` < `sourcesAsked`). This is for display reads only: `rpcQuorum`, which
+// feeds signatures, keeps its own stricter rule above and is not touched.
+export const FAST = { timeoutMs: 7000, retry: false } as const;
+const benched = new Map<string, number>();
+export const BENCH_MS = 60_000;
+/** the endpoints to ask now (all of them when every one is benched: something must be asked) */
+export const notBenched = (urls: string[], now = Date.now()): string[] => { const ok = urls.filter((u) => (benched.get(u) ?? 0) <= now); return ok.length ? ok : urls; };
+/** call after a failure: only a connection-level failure benches (a JSON-RPC error is an answer) */
+export const benchOnFailure = (url: string, e: unknown, now = Date.now()): void => { if ((e as { rpcCode?: number }).rpcCode === undefined) benched.set(url, now + BENCH_MS); };
 
 /**
  * Every admitted endpoint must answer and agree. Use for anything that feeds a signature (nonce, chain identity).

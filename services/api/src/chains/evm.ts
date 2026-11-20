@@ -1,7 +1,7 @@
 import { decodeAbiParameters, decodeFunctionResult, encodeFunctionData, erc20Abi, hexToBigInt, hexToNumber, hexToString, multicall3Abi, numberToHex, pad } from 'viem';
 import { getAsset, type NetworkDef } from '@spw/core';
 import { UserError } from '../config.ts';
-import { hostOf, rpcAny, rpcOne, rpcQuorum, settle, type Adapter, type BalancesDetailed, type Deposit, type Health, type NativeScanNote, type NativeScanState, type Prepared, type Tracked } from './rpc.ts';
+import { benchOnFailure, FAST, hostOf, notBenched, rpcAny, rpcOne, rpcQuorum, settle, type Adapter, type BalancesDetailed, type Deposit, type Health, type NativeScanNote, type NativeScanState, type Prepared, type Tracked } from './rpc.ts';
 
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const hx = (n: bigint | number) => numberToHex(n);
@@ -86,15 +86,17 @@ export function evmAdapter(n: NetworkDef): Adapter {
      * pinned block is read at `latest` and its answer carries its own head. Per asset: all answers equal = agreed; otherwise
      * the row is not a fact (`agreed: false`, amount of the higher block). A token no endpoint could read is `unavailable`.
      * Cost: 3 calls per endpoint (2 on a network without tokens) + 1 block header for the age of the state.
+     * Time: one attempt of 7 s per call; an endpoint that failed at the connection level sits out for a minute (rpc.ts).
      */
     async balancesDetailed(addr): Promise<BalancesDetailed> {
       const toks = live();
-      const heads = await Promise.all(n.rpc.map(async (url) => { try { return hexToNumber(await rpcOne<`0x${string}`>(url, 'eth_blockNumber', [])); } catch { return null; } }));
+      const urls = notBenched(n.rpc);
+      const heads = await Promise.all(urls.map(async (url) => { try { return hexToNumber(await rpcOne<`0x${string}`>(url, 'eth_blockNumber', [], FAST)); } catch (e) { benchOnFailure(url, e); return null; } }));
       const up = heads.filter((h): h is number => h !== null);
       if (!up.length) throw new Error('no endpoint answered');
       const pin = Math.max(0, Math.min(...up) - 1);
       const readOn = async (url: string, tag: string): Promise<Record<string, bigint>> => {
-        const one = <T>(m: string, p: unknown[]) => rpcOne<T>(url, m, p);
+        const one = <T>(m: string, p: unknown[]) => rpcOne<T>(url, m, p, FAST);
         const out: Record<string, bigint> = { native: hexToBigInt(await one<`0x${string}`>('eth_getBalance', [addr, tag])) };
         if (toks.length) {
           const rs = await multi(toks.map((t) => ({ target: t.id, data: encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [addr as `0x${string}`] }) })), one, tag);
@@ -102,14 +104,18 @@ export function evmAdapter(n: NetworkDef): Adapter {
         }
         return out;
       };
-      const reads = (await Promise.all(n.rpc.map(async (url, k) => {
+      const reads = (await Promise.all(urls.map(async (url, k) => {
         if (heads[k] === null) return null;
-        try { return { height: pin, v: await readOn(url, hx(pin)) }; }
-        catch { try { return { height: heads[k]!, v: await readOn(url, 'latest') }; } catch { return null; } }
-      }))).filter((r): r is { height: number; v: Record<string, bigint> } => r !== null);
+        try { return { url, height: pin, v: await readOn(url, hx(pin)) }; }
+        catch (e) {
+          benchOnFailure(url, e);
+          if ((e as { rpcCode?: number }).rpcCode === undefined) return null; // it does not answer: asking it again at `latest` would only wait once more
+          try { return { url, height: heads[k]!, v: await readOn(url, 'latest') }; } catch (e2) { benchOnFailure(url, e2); return null; }
+        }
+      }))).filter((r): r is { url: string; height: number; v: Record<string, bigint> } => r !== null);
       if (!reads.length) throw new Error('no endpoint answered');
       let stale = false; // unknown age (header not served) is not called stale
-      try { const b = await call<{ timestamp: `0x${string}` } | null>('eth_getBlockByNumber', [hx(pin), false]); if (b) stale = Date.now() / 1000 - hexToNumber(b.timestamp) > EVM_STALE_SEC; } catch { /* age unknown */ }
+      try { const b = await rpcOne<{ timestamp: `0x${string}` } | null>(reads[0]!.url, 'eth_getBlockByNumber', [hx(pin), false], FAST); if (b) stale = Date.now() / 1000 - hexToNumber(b.timestamp) > EVM_STALE_SEC; } catch { /* age unknown */ }
       const assets: BalancesDetailed['assets'] = {}, unavailable: Record<string, string> = {};
       for (const id of ['native', ...toks.map((t) => t.id)]) {
         const got = reads.filter((r) => r.v[id] !== undefined).map((r) => ({ amount: r.v[id]!, height: r.height }));
@@ -218,6 +224,10 @@ export function evmAdapter(n: NetworkDef): Adapter {
      *     `internal_call` under the wallet's own transaction of that block when there is exactly one (a swap paying out the
      *     native coin), otherwise under the BLOCK hash — never under a transaction id that is not known.
      * Every state read is asked to every endpoint; those that answer must agree, else the pass stops and is retried.
+     * Public endpoints differ on old state (observed 2026-11-19: some refuse it with `missing trie node` / `historical
+     * state`, some with HTTP 403, one by never answering): a state read uses one attempt of 4 s, and an endpoint that
+     * refused or failed a state read is not asked again for the BISECTION points of the pass, so a pass is not slowed by
+     * it. The end of each window — the state the next pass starts from — is always asked to every endpoint.
      * When no endpoint keeps the state of a block (pruned nodes): the part that cannot be bisected is recorded as ONE
      * `aggregate` deposit at the end block of that part, with a note — never dropped. A decrease that nothing explains is
      * reported in `notes` (the caller writes it to the audit chain) and records nothing.
@@ -233,16 +243,24 @@ export function evmAdapter(n: NetworkDef): Adapter {
       let calls = 0, points = 0, leaves = 0;
       const count = <T>(p: Promise<T>): Promise<T> => { calls += 1; return p; };
       /** balance and nonce at a block, from every endpoint; `null` = no endpoint keeps that state */
-      const stateAt = async (block: number): Promise<NativeScanState | null> => {
+      const skipped = new Set<string>(), fast = { timeoutMs: 4000, retry: false };
+      /** the endpoint says it does not keep that state: a JSON-RPC error naming it, or a plain HTTP refusal (403 on publicnode) */
+      const isRefusal = (e: unknown): boolean => { const x = e as { rpcCode?: number; httpStatus?: number; message?: string };
+        return (x.rpcCode !== undefined && NO_HISTORY.test(String(x.message))) || [400, 403, 404, 410].includes(x.httpStatus ?? 0); };
+      const stateAt = async (block: number, everyEndpoint = false): Promise<NativeScanState | null> => {
         points += 1;
-        const rs = await Promise.allSettled(n.rpc.map(async (url) => {
-          const [b, c] = await Promise.all([count(rpcOne<`0x${string}`>(url, 'eth_getBalance', [addr, hx(block)])), count(rpcOne<`0x${string}`>(url, 'eth_getTransactionCount', [addr, hx(block)]))]);
+        const urls = !everyEndpoint && n.rpc.some((u) => !skipped.has(u)) ? n.rpc.filter((u) => !skipped.has(u)) : n.rpc;
+        const rs = await Promise.allSettled(urls.map(async (url) => {
+          const [b, c] = await Promise.all([count(rpcOne<`0x${string}`>(url, 'eth_getBalance', [addr, hx(block)], fast)), count(rpcOne<`0x${string}`>(url, 'eth_getTransactionCount', [addr, hx(block)], fast))]);
           return { balance: hexToBigInt(b), nonce: hexToNumber(c) };
         }));
+        if (!everyEndpoint) rs.forEach((r, k) => { if (r.status === 'rejected') skipped.add(urls[k]!); });
         const ok = rs.filter((r): r is PromiseFulfilledResult<{ balance: bigint; nonce: number }> => r.status === 'fulfilled').map((r) => r.value);
         if (!ok.length) {
-          const refused = rs.some((r) => r.status === 'rejected' && (r.reason as { rpcCode?: number }).rpcCode !== undefined && NO_HISTORY.test(String((r.reason as Error).message)));
-          if (refused) return null;
+          // "no endpoint keeps it" only when EVERY endpoint was asked and every one refused; anything else is a failure to retry
+          const all = urls.length === n.rpc.length ? rs : await Promise.allSettled(n.rpc.map((url) => count(rpcOne<`0x${string}`>(url, 'eth_getBalance', [addr, hx(block)], fast))));
+          if (all.some((r) => r.status === 'fulfilled')) throw new ScanRetry(`state at block ${block}: endpoints answer unevenly`);
+          if (all.every((r) => r.status === 'rejected' && isRefusal(r.reason))) return null;
           throw new ScanRetry(`state at block ${block} unavailable`);
         }
         if (ok.some((v) => v.balance !== ok[0]!.balance || v.nonce !== ok[0]!.nonce)) throw new ScanRetry(`endpoints disagree on the state at block ${block}`);
@@ -327,17 +345,17 @@ export function evmAdapter(n: NetworkDef): Adapter {
       const safe = head - n.minConf;
       if (safe < 0) return { items, state: frontier, notes, calls };
       if (!prev) { // first pass: a baseline, nothing to compare with
-        const s = await stateAt(safe);
+        const s = await stateAt(safe, true);
         if (!s) throw new Error('recent state not served by any endpoint');
         return { items, state: s, notes, calls };
       }
       try {
         for (let w = 0; w < maxWindows && frontier.block < safe; w++) {
           const lo: NativeScanState = frontier, end = Math.min(safe, lo.block + maxWindow);
-          const hi = await stateAt(end);
+          const hi = await stateAt(end, true);
           if (!hi) {
             // no endpoint keeps the state of that (old) block: everything up to the recent safe block becomes one aggregate
-            const now = end === safe ? null : await stateAt(safe);
+            const now = end === safe ? null : await stateAt(safe, true);
             if (!now) throw new ScanRetry('recent state not served by any endpoint');
             await aggregate(lo, now, 'window_too_old'); frontier = now; break;
           }

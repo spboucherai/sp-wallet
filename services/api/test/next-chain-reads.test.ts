@@ -53,29 +53,68 @@ describe('Solana balances: a registry token is never 0 without a read (B1)', () 
   const ad = () => solMod.solAdapter(N);
 
   it('both endpoints agree: the amount with its slot and two sources; an absent token is 0 only because both say so', async () => {
-    serve({ [A]: end({ lamports: 7_000_000, slot: 300, held: { [USDC.id]: '1234' } }), [B]: end({ lamports: 7_000_000, slot: 302, held: { [USDC.id]: '1234' } }) });
+    const { calls } = serve({ [A]: end({ lamports: 7_000_000, slot: 300, held: { [USDC.id]: '1234' } }), [B]: end({ lamports: 7_000_000, slot: 302, held: { [USDC.id]: '1234' } }) });
     const d = await ad().balancesDetailed!(ME);
+    // the direct reads stay within what the public endpoints accept (10 accounts per call) and cover every registry token on both endpoints
+    const direct = calls.filter((c) => c.method === 'getMultipleAccounts');
+    expect(direct.every((c) => c.params[0].length <= 10)).toBe(true);
+    for (const u of [A, B]) expect(direct.filter((c) => c.url === u).reduce((s, c) => s + c.params[0].length, 0)).toBe(N.tokens.length);
     expect(d.assets.native).toEqual({ amount: 7_000_000n, height: 302, sources: 2, asked: 2, agreed: true, stale: false });
     expect(d.assets[USDC.id]).toEqual({ amount: 1234n, height: 302, sources: 2, asked: 2, agreed: true, stale: false });
     expect(d.assets[OTHER.id]).toMatchObject({ amount: 0n, sources: 2, agreed: true });
     expect(d.unavailable).toEqual({});
   });
 
-  it('one endpoint answers a truncated (empty) token list: its answer is discarded, the token keeps the amount the other one read — not 0', async () => {
+  it('one endpoint answers a truncated (empty) token list: the direct read of the account still gives its amount — not 0', async () => {
     serve({ [A]: end({ lamports: 1, slot: 300, held: { [USDC.id]: '1234' } }), [B]: end({ lamports: 1, slot: 300, held: { [USDC.id]: '1234' }, list: {} }) });
     const a = ad(), d = await a.balancesDetailed!(ME);
-    expect(d.assets[USDC.id]).toMatchObject({ amount: 1234n, sources: 1, asked: 2, agreed: true });
+    expect(d.assets[USDC.id]).toEqual({ amount: 1234n, height: 300, sources: 2, asked: 2, agreed: true, stale: false });
     expect((await a.balances(ME))[USDC.id]).toBe(1234n);
   });
 
-  it('every endpoint answers an empty list while the account exists: unavailable, and absent from balances()', async () => {
+  it('EVERY endpoint answers an empty list while the account exists: the amount is the one the direct reads give, never the 0 of the lists', async () => {
     const broken = { lamports: 1, slot: 300, held: { [USDC.id]: '1234' }, list: {} };
     serve({ [A]: end(broken), [B]: end(broken) });
+    const a = ad(), d = await a.balancesDetailed!(ME);
+    expect(d.assets[USDC.id]).toMatchObject({ amount: 1234n, sources: 2, agreed: true });
+    expect((await a.balances(ME))[USDC.id]).toBe(1234n);
+  });
+
+  it('an empty list and no direct read at all (the only evidence is the truncated list): unavailable, and absent from balances()', async () => {
+    const noDirect = (e: End): Handler => (m, p, u) => { if (m === 'getMultipleAccounts') throw new RpcError('method disabled', -32601); return end(e)(m, p, u); };
+    const broken = { lamports: 1, slot: 300, held: { [USDC.id]: '1234' }, list: {} };
+    serve({ [A]: noDirect(broken), [B]: noDirect(broken) });
     const a = ad(), d = await a.balancesDetailed!(ME), legacy = await a.balances(ME);
     expect(d.assets[USDC.id]).toBeUndefined();
-    expect(d.unavailable[USDC.id]).toBe('inconsistent_source');
+    expect(d.unavailable[USDC.id]).toBe('zero_not_confirmed');
     expect(Object.hasOwn(legacy, USDC.id)).toBe(false);
     expect(legacy.native).toBe(1n);
+  });
+
+  it('as in production on 2026-11-19: one endpoint refuses the list (HTTP 403) but answers the direct reads — amounts and zeros rest on two sources', async () => {
+    const full = end({ lamports: 5, slot: 300, held: { [USDC.id]: '1234' } }), noList = end({ lamports: 5, slot: 301, held: { [USDC.id]: '1234' } });
+    vi.stubGlobal('fetch', async (input: unknown, init?: RequestInit) => {
+      const url = String(input), req = JSON.parse(String(init!.body)) as { id: number; method: string; params: any[] };
+      if (url === B && req.method === 'getTokenAccountsByOwner') return new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32602, message: 'Indexed requests require a personal token' }, id: req.id }), { status: 403 });
+      return Response.json({ jsonrpc: '2.0', id: req.id, result: (url === A ? full : noList)(req.method, req.params, url) });
+    });
+    const a = ad();
+    for (let k = 0; k < 2; k++) { // twice: the refusal of the list must not put the endpoint aside for its other reads
+      const d = await a.balancesDetailed!(ME);
+      expect(d.assets.native).toMatchObject({ amount: 5n, sources: 2, asked: 2, agreed: true });
+      expect(d.assets[USDC.id]).toEqual({ amount: 1234n, height: 301, sources: 2, asked: 2, agreed: true, stale: false });
+      expect(d.assets[OTHER.id]).toMatchObject({ amount: 0n, sources: 2, agreed: true });
+      expect(d.unavailable).toEqual({});
+    }
+  });
+
+  it('a second token account of the same mint (not the associated one) is added from the list, and the row says it rests on that list', async () => {
+    const AUX = '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin';
+    const withAux = (e: End): Handler => (m, p, u) => { const r = end(e)(m, p, u) as any;
+      if (m === 'getTokenAccountsByOwner' && p[1].programId === tokenProgramOf(USDC)) r.value.push({ pubkey: AUX, account: { data: { parsed: { info: { mint: USDC.id, tokenAmount: { amount: '66', decimals: 6 } } } } } });
+      return r; };
+    serve({ [A]: withAux({ lamports: 1, slot: 300, held: { [USDC.id]: '1000' } }), [B]: end({ lamports: 1, slot: 300, held: { [USDC.id]: '1000' }, list: {} }) }); // B's list is useless
+    expect((await ad().balancesDetailed!(ME)).assets[USDC.id]).toEqual({ amount: 1066n, height: 300, sources: 1, asked: 2, agreed: true, stale: false });
   });
 
   it('a single endpoint saying "no token account" is not a read of zero: every token is unavailable, the lamports are known from one source', async () => {
@@ -101,12 +140,13 @@ describe('Solana balances: a registry token is never 0 without a read (B1)', () 
   });
 
   it('the prepare path refuses a token whose balance is unknown instead of calling it insufficient', async () => {
-    const h = end({ lamports: 50_000_000, slot: 300, held: { [USDC.id]: '1234' }, list: {} });
-    const more: Handler = (m, p, u) => { if (m === 'getGenesisHash') return N.chainRef; if (m === 'getAccountInfo') return { value: null };
+    const chain = (e: End): Handler => (m, p, u) => { if (m === 'getGenesisHash') return N.chainRef; if (m === 'getAccountInfo') return { value: null };
       if (m === 'getMultipleAccounts' && p[1].commitment === 'finalized') return { value: (p[0] as string[]).map((id) => ({ owner: tokenProgramOf(N.tokens.find((t) => t.id === id)!), data: { parsed: { type: 'mint', info: { decimals: N.tokens.find((t) => t.id === id)!.decimals } } } })) };
-      return h(m, p, u); };
-    serve({ [A]: more, [B]: more });
-    await expect(ad().prepare({ asset: USDC.id, from: ME, to: '8vCyX7oB6Pc3pbWMGYYZF5pbSnAdQ7Gyr32JqxqCy8ZR', amount: 10n })).rejects.toMatchObject({ code: 'rpc_degraded' });
+      return end(e)(m, p, u); };
+    // the two endpoints do not agree that the token account exists: the balance is unknown
+    serve({ [A]: chain({ lamports: 50_000_000, slot: 300, held: { [USDC.id]: '1234' } }), [B]: chain({ lamports: 50_000_000, slot: 300, held: {} }) });
+    const err = await ad().prepare({ asset: USDC.id, from: ME, to: '8vCyX7oB6Pc3pbWMGYYZF5pbSnAdQ7Gyr32JqxqCy8ZR', amount: 10n }).then(() => null, (e) => e);
+    expect(err).toMatchObject({ code: 'rpc_degraded', message: 'token balance could not be read; transfer refused' });
   });
   it('TOKEN_PROGRAM is the program of the test token (the fixture lists it under the right program)', () => { expect(tokenProgramOf(USDC)).toBe(TOKEN_PROGRAM); });
 });
@@ -167,6 +207,18 @@ describe('EVM balances: every endpoint, the same block (B2)', () => {
     expect(d.assets[T1.id]).toMatchObject({ amount: 3n, sources: 1 });
   });
 
+  it('an endpoint that failed at the connection level sits out the next reads (they are not slowed by it) and the row still says 1 of 2', async () => {
+    let onA = 0;
+    vi.stubGlobal('fetch', async (input: unknown, init?: RequestInit) => {
+      if (String(input) === A) { onA += 1; return new Response('bad gateway', { status: 502 }); }
+      const req = JSON.parse(String(init!.body)) as { id: number; method: string; params: any[] };
+      return Response.json({ jsonrpc: '2.0', id: req.id, result: end({ head: 100, native: () => 8n })(req.method, req.params, B) });
+    });
+    const a = ad();
+    for (let k = 0; k < 3; k++) expect((await a.balancesDetailed!(ME)).assets.native).toMatchObject({ amount: 8n, sources: 1, asked: 2, agreed: true });
+    expect(onA).toBe(1);
+  });
+
   it('no endpoint: the read fails (the portfolio marks the network unavailable)', async () => {
     serve({ [A]: DOWN, [B]: DOWN });
     await expect(ad().balancesDetailed!(ME)).rejects.toThrow(/no endpoint answered/);
@@ -220,6 +272,7 @@ describe('EVM native deposits without a trace API (H1)', () => {
     head = 1000; start = 3n * ETH; blocks = new Map<number, { txs: Tx[]; internal: bigint }>();
     /** per endpoint: the oldest block whose state it keeps (a pruned node), and a lie about one block's balance */
     keep: Record<string, number> = {}; lie: Record<string, { block: number; add: bigint }> = {};
+    /** endpoints that refuse old state with a plain HTTP 403 instead of a JSON-RPC error (seen on public endpoints) */ forbid = new Set<string>();
     at(b: number) { let x = this.blocks.get(b); if (!x) this.blocks.set(b, (x = { txs: [], internal: 0n })); return x; }
     tx(b: number, t: Tx) { this.at(b).txs.push(t); return t.hash; }
     cost(t: Tx) { return (t.gasUsed ?? 21_000n) * (t.gasPrice ?? GWEI) + (t.l1Fee ?? 0n) + ((t.status ?? 1) === 1 && t.to !== ME ? t.value : 0n); }
@@ -244,6 +297,13 @@ describe('EVM native deposits without a trace API (H1)', () => {
   const h = (n: number) => pad(numberToHex(n));
   const ad = () => evm.evmAdapter(N);
   const world = () => { const c = new Chain(); const s = serve({ [A]: c.handler, [B]: c.handler }); return { c, calls: s.calls }; };
+  /** the same, with the endpoints of `c.forbid` answering HTTP 403 for a state they do not keep */
+  const world403 = () => { const c = new Chain(), calls: { url: string; method: string; params: any[] }[] = [];
+    vi.stubGlobal('fetch', async (input: unknown, init?: RequestInit) => { const url = String(input), req = JSON.parse(String(init!.body)) as { id: number; method: string; params: any[] };
+      calls.push({ url, method: req.method, params: req.params });
+      try { return Response.json({ jsonrpc: '2.0', id: req.id, result: c.handler(req.method, req.params, url) }); }
+      catch (e) { if (!(e instanceof RpcError)) throw e; return c.forbid.has(url) && /trie node/.test(e.message) ? new Response('Forbidden', { status: 403 }) : Response.json({ jsonrpc: '2.0', id: req.id, error: { code: e.code, message: e.message } }); } });
+    return { c, calls }; };
   const SAFE = 1000 - N.minConf; // 988
   const baseline = (c: Chain, block = 100) => ({ block, balance: c.balance(block), nonce: c.nonce(block) });
 
@@ -322,6 +382,35 @@ describe('EVM native deposits without a trace API (H1)', () => {
     expect(r.items).toEqual([{ txid: c.hashOf(SAFE), idx: evm.NATIVE_IDX + 1, asset: 'native', amount: ETH, from: '', block: SAFE, time: null, via: 'aggregate' }]);
     expect(r.notes).toEqual([{ code: 'state_unavailable', fromBlock: 901, toBlock: SAFE, amount: ETH.toString(), unknownOwnTxs: 0 }]);
     expect(r.state).toEqual({ block: SAFE, balance: prev.balance + ETH, nonce: 5 });
+  });
+
+  it('one endpoint refuses old state (HTTP 403), the other keeps it: the deposit is located from the one that answers, and the refusing one is not asked again for the bisection', async () => {
+    const { c, calls } = world403();
+    c.forbid = new Set([B]); c.keep = { [B]: 980 };
+    c.tx(930, { hash: h(1), from: OTHER, to: ME, value: ETH });
+    const prev = baseline(c, 900), r = await ad().nativeDeposits!(ME, prev);
+    expect(r.items.map((d) => [d.txid, d.block, d.via])).toEqual([[h(1), 930, 'tx']]);
+    expect(r.notes).toEqual([]); expect(r.state).toEqual({ block: SAFE, balance: prev.balance + ETH, nonce: 5 });
+    const onB = calls.filter((x) => x.url === B && x.method === 'eth_getBalance').map((x) => hexToNumber(x.params[1]));
+    expect(onB).toEqual([SAFE, 944]); // the end of the window (always every endpoint), then ONE refused bisection point — never again
+  });
+
+  it('every endpoint refuses old state with HTTP 403: an aggregate, as with a JSON-RPC refusal', async () => {
+    const { c } = world403();
+    c.forbid = new Set([A, B]); c.keep = { [A]: 980, [B]: 980 };
+    c.tx(930, { hash: h(1), from: OTHER, to: ME, value: ETH });
+    const r = await ad().nativeDeposits!(ME, baseline(c, 900));
+    expect(r.items.map((d) => [d.block, d.amount, d.via])).toEqual([[SAFE, ETH, 'aggregate']]);
+    expect(r.notes.map((x) => x.code)).toEqual(['state_unavailable']);
+  });
+
+  it('one endpoint refuses old state and the other fails for another reason: not called "no history" — the pass is retried', async () => {
+    const c = new Chain();
+    c.tx(930, { hash: h(1), from: OTHER, to: ME, value: ETH }); c.keep = { [A]: 980 };
+    const limited: Handler = (m, p, u) => { if ((m === 'eth_getBalance' || m === 'eth_getTransactionCount') && hexToNumber(p[1]) < 980) throw new RpcError('rate limited', -32005); return c.handler(m, p, u); };
+    serve({ [A]: c.handler, [B]: limited });
+    const prev = baseline(c, 900), r = await ad().nativeDeposits!(ME, prev);
+    expect(r.items).toEqual([]); expect(r.notes).toEqual([]); expect(r.state).toEqual(prev);
   });
 
   it('a window too old (long downtime, pruned endpoints): recorded as an aggregate at the recent block — never dropped', async () => {

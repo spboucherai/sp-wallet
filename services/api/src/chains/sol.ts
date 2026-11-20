@@ -1,9 +1,11 @@
 import { associatedTokenAddress, buildSolMessage, getAsset, solFeeLamports, solWireTransaction, SYSTEM_PROGRAM, TOKEN_2022_PROGRAM, TOKEN_PROGRAM, tokenProgramOf, type Intent, type NetworkDef } from '@spw/core';
 import { UserError } from '../config.ts';
-import { hostOf, rpcAny, rpcOne, rpcQuorum, settle, type Adapter, type BalancesDetailed, type Deposit, type Health, type Prepared, type Tracked } from './rpc.ts';
+import { benchOnFailure, FAST, hostOf, notBenched, rpcAny, rpcOne, rpcQuorum, settle, type Adapter, type BalancesDetailed, type Deposit, type Health, type Prepared, type Tracked } from './rpc.ts';
 
 const RENT_ATA = 2_039_280n; // rent-exempt minimum for a 165-byte token account
 const RENT_SYSTEM = 890_880n; // rent-exempt minimum for a 0-byte system account
+/** NEXT: accounts per getMultipleAccounts of the balance read. 10: one of the two public endpoints refuses more (HTTP 403 "A maximum of 10 accounts is allowed", observed 2026-11-19) */
+export const SOL_ATA_CHUNK = 10;
 /** NEXT: a balance read at a slot older than this is flagged `stale` */
 export const SOL_STALE_SEC = 180;
 /** NEXT H3: signatures per page, pages per account and transactions per pass of the deposit scan */
@@ -59,53 +61,72 @@ export function solAdapter(n: NetworkDef): Adapter {
       return Object.fromEntries(Object.entries(d.assets).map(([id, r]) => [id, r.amount]));
     },
     /**
-     * NEXT B1 / B2 — every endpoint is asked. On each one: the lamports, the token accounts of both token programs (the list),
-     * and the associated token account of every registry token read directly (one getMultipleAccounts per 100 tokens).
-     * On one endpoint a token is
-     *   present      it is in the list (and the direct read of its associated account, if that account exists, says the same);
-     *   absent       it is not in the list AND the direct read says its associated account does not exist;
-     *   inconsistent the list and the direct read contradict each other (a truncated or empty list): that answer is discarded.
-     * Across endpoints: present everywhere = the amounts are compared (equal: agreed; else `agreed: false`, higher slot shown);
-     * absent everywhere = 0, but only when at least two endpoints say so (or the network has a single endpoint) — the
-     * absence of an account in ONE answer is not a positive read; present on one and absent on another = unavailable.
+     * NEXT B1 / B2 — every endpoint is asked. On each one: the lamports; the associated token account of every registry
+     * token, read DIRECTLY (getMultipleAccounts, SOL_ATA_CHUNK accounts per call — the read that says "this account holds X" or "this
+     * account does not exist"); and the list of the owner's token accounts of both token programs.
+     * The list is what finds token accounts other than the associated one, but it is the weak read: an endpoint may refuse it
+     * (observed 2026-11-19: one of the two public endpoints answers HTTP 403 to getTokenAccountsByOwner) or answer it
+     * truncated. So, per endpoint and per token:
+     *   associated account   the direct read (amount, or "does not exist"); without a direct read, the list's entry if it has one;
+     *   other accounts       the list's, counted only when that list agrees with the direct read about the associated account
+     *                        (a list that misses an account the direct read sees is truncated: nothing is taken from it).
+     * Across endpoints, on the associated account: amounts are compared (equal: agreed; else `agreed: false`, higher slot
+     * shown); "exists" on one and "does not exist" on another = unavailable; "does not exist" is 0 only when at least two
+     * endpoints say so (or the network has one endpoint) — a single answer of absence is not a positive read. The other
+     * accounts of the mint, when a list reports some, are added; they rest on the listing endpoints only (`sources`).
+     * Limit, stated: a token held ONLY in a non-associated account that no list reports cannot be seen.
      */
     async balancesDetailed(addr): Promise<BalancesDetailed> {
       const toks = n.tokens.filter((t) => !disabled.has(t.id));
       const atas = toks.map((t) => associatedTokenAddress(addr, t.id, tokenProgramOf(t)));
       type Ctx<T> = { context?: { slot?: number }; value: T };
       const slotOf = (c: Ctx<unknown>): number | null => (typeof c.context?.slot === 'number' ? c.context.slot : null);
-      type TokenRead = { slot: number | null; state: Map<string, { amount: bigint } | 'absent' | 'inconsistent' | 'unverified'> };
-      const readOn = async (url: string): Promise<{ native: { amount: bigint; height: number | null }; tokens: TokenRead | null } | null> => {
+      /** one endpoint's view of one token: `ata` = amount | null (the account does not exist) | undefined (not read); `aux` = other accounts of the mint (undefined: no usable list) */
+      type TokenView = { ata: bigint | null | undefined; aux: bigint | undefined; slot: number | null };
+      const readOn = async (url: string): Promise<{ native: { amount: bigint; height: number | null }; tokens: Map<string, TokenView> } | null> => {
         let native: { amount: bigint; height: number | null };
-        try { const b = await rpcOne<Ctx<number>>(url, 'getBalance', [addr, { commitment: 'confirmed' }]); if (!Number.isSafeInteger(b.value) || b.value < 0) return null; native = { amount: BigInt(b.value), height: slotOf(b) }; }
-        catch { return null; }
-        if (!toks.length) return { native, tokens: null };
-        let list: Ctx<Parsed[]>[];
-        try { list = await Promise.all([TOKEN_PROGRAM, TOKEN_2022_PROGRAM].map((programId) => rpcOne<Ctx<Parsed[]>>(url, 'getTokenAccountsByOwner', [addr, { programId }, { encoding: 'jsonParsed', commitment: 'confirmed' }]))); }
-        catch { return { native, tokens: null }; }
-        if (list.some((l) => !Array.isArray(l.value))) return { native, tokens: null };
-        const accts = list.flatMap((l) => l.value), slots = list.map(slotOf);
-        // the associated account of every registry token, read directly: what makes an absence (or a presence) a read
-        let direct: ({ amount: string | null } | null)[] | null = [];
-        try {
-          for (let k = 0; k < atas.length; k += 100) {
-            const r = await rpcOne<Ctx<({ data?: { parsed?: { info?: { tokenAmount?: { amount?: string } } } } } | null)[]>>(url, 'getMultipleAccounts', [atas.slice(k, k + 100), { encoding: 'jsonParsed', commitment: 'confirmed' }]);
-            if (!Array.isArray(r.value) || r.value.length !== Math.min(100, atas.length - k)) throw new Error('short answer');
-            for (const a of r.value) direct.push(a === null ? null : { amount: typeof a.data?.parsed?.info?.tokenAmount?.amount === 'string' ? a.data.parsed.info.tokenAmount.amount : null });
-          }
-        } catch { direct = null; }
-        const state: TokenRead['state'] = new Map();
+        try { const b = await rpcOne<Ctx<number>>(url, 'getBalance', [addr, { commitment: 'confirmed' }], FAST); if (!Number.isSafeInteger(b.value) || b.value < 0) return null; native = { amount: BigInt(b.value), height: slotOf(b) }; }
+        catch (e) { benchOnFailure(url, e); return null; }
+        const tokens = new Map<string, TokenView>();
+        if (!toks.length) return { native, tokens };
+        const [direct, list] = await Promise.all([
+          (async () => { // the associated account of every registry token
+            try {
+              const out: ({ amount: bigint } | null | undefined)[] = []; let slot: number | null = null, first = true;
+              const chunks = Array.from({ length: Math.ceil(atas.length / SOL_ATA_CHUNK) }, (_, k) => atas.slice(k * SOL_ATA_CHUNK, (k + 1) * SOL_ATA_CHUNK));
+              const answers = await Promise.all(chunks.map((keys) => rpcOne<Ctx<({ data?: { parsed?: { info?: { tokenAmount?: { amount?: string } } } } } | null)[]>>(url, 'getMultipleAccounts', [keys, { encoding: 'jsonParsed', commitment: 'confirmed' }], FAST)));
+              for (const [k, r] of answers.entries()) {
+                if (!Array.isArray(r.value) || r.value.length !== chunks[k]!.length) throw new Error('short answer');
+                const s = slotOf(r); slot = first ? s : slot === null || s === null ? null : Math.min(slot, s); first = false;
+                // an account that exists but is not a parsed token account is not a read of this token
+                for (const a of r.value) { const amt = a?.data?.parsed?.info?.tokenAmount?.amount; out.push(a === null ? null : typeof amt === 'string' && /^\d+$/.test(amt) ? { amount: BigInt(amt) } : undefined); }
+              }
+              return { out, slot };
+            } catch { return null; }
+          })(),
+          (async () => { // every token account of the owner (may be refused)
+            try {
+              const rs = await Promise.all([TOKEN_PROGRAM, TOKEN_2022_PROGRAM].map((programId) => rpcOne<Ctx<Parsed[]>>(url, 'getTokenAccountsByOwner', [addr, { programId }, { encoding: 'jsonParsed', commitment: 'confirmed' }], FAST)));
+              if (rs.some((l) => !Array.isArray(l.value))) return null;
+              const slots = rs.map(slotOf);
+              return { accts: rs.flatMap((l) => l.value), slot: slots.every((x) => x !== null) ? Math.min(...(slots as number[])) : null };
+            } catch { return null; }
+          })(),
+        ]);
         toks.forEach((t, k) => {
-          const mine = accts.filter((a) => a.account.data.parsed.info.mint === t.id), inList = mine.find((a) => a.pubkey === atas[k]);
-          const sum = mine.reduce((x, a) => x + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
-          if (!direct) { state.set(t.id, mine.length ? { amount: sum } : 'unverified'); return; }
-          const d = direct[k]!;
-          if (d === null) state.set(t.id, inList ? 'inconsistent' : mine.length ? { amount: sum } : 'absent');
-          else state.set(t.id, !inList || d.amount === null || d.amount !== inList.account.data.parsed.info.tokenAmount.amount ? 'inconsistent' : { amount: sum });
+          const mine = list ? list.accts.filter((a) => a.account.data.parsed.info.mint === t.id) : [], inList = mine.find((a) => a.pubkey === atas[k]);
+          const amt = (a: Parsed) => BigInt(a.account.data.parsed.info.tokenAmount.amount);
+          const others = mine.filter((a) => a.pubkey !== atas[k]).reduce((x, a) => x + amt(a), 0n);
+          const d = direct ? direct.out[k] : undefined;
+          if (d !== undefined) {
+            // the list is used for the other accounts only when it says the same thing as the direct read about this one
+            const sameAsList = !!list && (d === null ? !inList : !!inList && amt(inList) === d.amount);
+            tokens.set(t.id, { ata: d === null ? null : d.amount, aux: sameAsList ? others : undefined, slot: direct!.slot });
+          } else if (list) tokens.set(t.id, { ata: inList ? amt(inList) : undefined, aux: inList || others > 0n ? others : undefined, slot: list.slot });
         });
-        return { native, tokens: { slot: slots.every((x) => x !== null) ? Math.min(...(slots as number[])) : null, state } };
+        return { native, tokens };
       };
-      const reads = (await Promise.all(n.rpc.map(readOn))).filter((r) => r !== null);
+      const reads = (await Promise.all(notBenched(n.rpc).map(readOn))).filter((r) => r !== null);
       if (!reads.length) throw new Error('no endpoint answered');
       // age of the state: the time of the highest slot read, when the cluster gives it
       let stale = false;
@@ -114,12 +135,19 @@ export function solAdapter(n: NetworkDef): Adapter {
       const assets: BalancesDetailed['assets'] = { native: settle(reads.map((r) => r.native), n.rpc.length, stale) }, unavailable: Record<string, string> = {};
       const needZero = Math.min(2, n.rpc.length);
       for (const t of toks) {
-        const got = reads.filter((r) => r.tokens).map((r) => ({ slot: r.tokens!.slot, st: r.tokens!.state.get(t.id)! }));
-        const present = got.filter((g): g is { slot: number | null; st: { amount: bigint } } => typeof g.st === 'object'), absent = got.filter((g) => g.st === 'absent');
-        if (present.length && absent.length) unavailable[t.id] = 'sources_disagree_on_existence';
-        else if (present.length) assets[t.id] = settle(present.map((g) => ({ amount: g.st.amount, height: g.slot })), n.rpc.length, stale);
-        else if (absent.length >= needZero) assets[t.id] = settle(absent.map((g) => ({ amount: 0n, height: g.slot })), n.rpc.length, stale);
-        else unavailable[t.id] = absent.length ? 'zero_not_confirmed' : got.some((g) => g.st === 'inconsistent') ? 'inconsistent_source' : got.some((g) => g.st === 'unverified') ? 'zero_not_confirmed' : 'no_source_answered';
+        const views = reads.map((r) => r.tokens.get(t.id)).filter((v): v is TokenView => v !== undefined);
+        const known = views.filter((v) => v.ata !== undefined), exists = known.filter((v) => v.ata !== null), none = known.filter((v) => v.ata === null);
+        const auxViews = views.filter((v) => v.aux !== undefined && v.aux > 0n);
+        if (!known.length && !auxViews.length) { unavailable[t.id] = views.length ? 'zero_not_confirmed' : 'no_source_answered'; continue; }
+        if (exists.length && none.length) { unavailable[t.id] = 'sources_disagree_on_existence'; continue; }
+        // other accounts of the mint: what the lists that could be trusted report (they must agree with each other)
+        const aux = auxViews.length ? settle(auxViews.map((v) => ({ amount: v.aux!, height: v.slot })), n.rpc.length, stale) : null;
+        if (exists.length) {
+          const main = settle(exists.map((v) => ({ amount: v.ata as bigint, height: v.slot })), n.rpc.length, stale);
+          assets[t.id] = aux ? { ...main, amount: main.amount + aux.amount, sources: Math.min(main.sources, aux.sources), agreed: main.agreed && aux.agreed } : main;
+        } else if (aux) assets[t.id] = aux; // held only outside the associated account
+        else if (none.length >= needZero) assets[t.id] = settle(none.map((v) => ({ amount: 0n, height: v.slot })), n.rpc.length, stale);
+        else unavailable[t.id] = 'zero_not_confirmed';
       }
       return { assets, unavailable };
     },
@@ -201,12 +229,17 @@ export function solAdapter(n: NetworkDef): Adapter {
       const targets = [addr, ...(await tokenAccounts(addr)).filter((a) => mine.has(a.account.data.parsed.info.mint)).map((a) => a.pubkey)].slice(0, 40);
       type Sig = { signature: string; slot: number; err: unknown; blockTime?: number | null };
       const sigs = new Map<string, Sig>();
+      // -32016 = the backend that answered has not reached `minContextSlot` yet (seen on a load-balanced public endpoint for its own
+      // finalized slot): asked again a moment later, twice at most; it is never asked without the bound
+      const sigPage = async (t: string, o: Record<string, unknown>): Promise<Sig[]> => {
+        for (let k = 0; ; k++) { try { return await call<Sig[]>('getSignaturesForAddress', [t, o]); } catch (e) { if ((e as { rpcCode?: number }).rpcCode !== -32016 || k >= 2) throw e; await new Promise((r) => setTimeout(r, 400)); } }
+      };
       for (const t of targets) {
         let before: string | undefined;
         for (let page = 0; ; page++) {
           if (page >= SOL_SIG_MAX_PAGES) throw new Error(`signature history of ${t.slice(0, 8)} deeper than the scan bound; cursor not moved`);
           const limit = page === 0 ? SOL_SIG_FIRST : SOL_SIG_PAGE;
-          const r = await call<Sig[]>('getSignaturesForAddress', [t, { limit, commitment: 'finalized', minContextSlot: upTo, ...(before ? { before } : {}) }]);
+          const r = await sigPage(t, { limit, commitment: 'finalized', minContextSlot: upTo, ...(before ? { before } : {}) });
           let reached = false;
           for (const x of r) { if (x.slot <= cur) { reached = true; break; } if (x.slot <= upTo) sigs.set(x.signature, x); }
           // the first pass of a wallet (no cursor) reads the newest page only: there is no "previous cursor" to reach

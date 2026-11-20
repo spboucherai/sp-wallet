@@ -68,14 +68,6 @@ export function csvOutcome(p: ProposalRow): { toNetwork: string; toSymbol: strin
 }
 /** NEXT H1: the row's `txid` is a block hash (value that arrived inside a contract call, or an aggregate), not a transaction id */
 export const depositTxidIsBlock = (d: { detection: string | null; txid: string; block_hash: string | null }): boolean => d.detection === 'aggregate' || (d.detection === 'internal_call' && (d.block_hash === null || d.txid.toLowerCase() === d.block_hash.toLowerCase()));
-const cache = new Map<string, { at: number; v: unknown }>();
-async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
-  const c = cache.get(key);
-  if (c && Date.now() - c.at < ttlMs) return c.v as T;
-  const v = await fn();
-  cache.set(key, { at: Date.now(), v });
-  return v;
-}
 
 /** v11: `priceAt` = when the source last updated THIS price (CoinGecko's own `last_updated`, else the time it was fetched); `stale` = served past its refresh window or older than PRICE_STALE_MS */
 interface Market { priceAt: string | null; stale: boolean; usd: number; cad: number; change24h: number | null; change7d: number | null; marketCap: number | null; volume24h: number | null; high24h: number | null; low24h: number | null; ath: number | null; rank: number | null; spark: number[] }
