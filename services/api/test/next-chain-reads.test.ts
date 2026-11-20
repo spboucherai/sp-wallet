@@ -123,7 +123,7 @@ describe('EVM balances: every endpoint, the same block (B2)', () => {
       case 'eth_call': {
         if (p[1] !== 'latest' && e.pinned === false) throw new RpcError('header not found');
         const { args } = decodeFunctionData({ abi: multicall3Abi, data: p[0].data });
-        const result = (args![0] as { target: string }[]).map((c) => { const v = e.token ? e.token(c.target.toLowerCase(), p[1]) : 0n; return v === null ? { success: false, returnData: '0x' as const } : { success: true, returnData: pad(numberToHex(v)) }; });
+        const result = (args![0] as unknown as { target: string }[]).map((c) => { const v = e.token ? e.token(c.target.toLowerCase(), p[1]) : 0n; return v === null ? { success: false, returnData: '0x' as const } : { success: true, returnData: pad(numberToHex(v)) }; });
         return encodeFunctionResult({ abi: multicall3Abi, functionName: 'aggregate3', result });
       }
       case 'eth_getBlockByNumber': return { number: p[0], timestamp: numberToHex(e.ts ?? Math.floor(Date.now() / 1000)) };

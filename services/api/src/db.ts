@@ -549,7 +549,7 @@ create table if not exists utxo_reviews (network text not null, outpoint text no
 create table if not exists nft_market_cache (provider text not null, kind text not null, ref text not null, data jsonb not null, fetched_at timestamptz not null default now(), primary key (provider, kind, ref));
 create table if not exists nft_market_slug (collection_key text not null, provider text not null, slug text not null, learnt_at timestamptz not null default now(), primary key (collection_key, provider));
 -- <<< NFT delivery 3
--- >>> NEXT balances / deposits / portfolio (docs/next/NEXT-BALANCES.md): additive.
+-- >>> NEXT balances / deposits / portfolio (src/portfolio.ts, src/deposit-scan.ts, src/chains/evm.ts nativeDeposits): additive.
 -- deposits.kind: 'external' (someone paid the wallet) | 'internal' (the result of one of the wallet's own operations);
 --   NULL only until the first classification (classifyDeposits below, run at boot and by the deposit worker).
 -- deposits.origin: which own operation (swap | bridge | xswap | transfer | gmx | nft | agent_withdrawal | venue_withdrawal); NULL when external.

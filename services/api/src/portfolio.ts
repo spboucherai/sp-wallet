@@ -91,7 +91,8 @@ export function fixed(v: bigint, dp = 2): string {
   const neg = v < 0n, a = neg ? -v : v, unit = 10n ** BigInt(S - dp), q = (a + unit / 2n) / unit, int = q / 10n ** BigInt(dp), frac = (q % 10n ** BigInt(dp)).toString().padStart(dp, '0');
   return `${neg && q !== 0n ? '-' : ''}${int}${dp ? `.${frac}` : ''}`;
 }
-const ratio = (num: bigint, den: bigint, dp = 6): number => (den === 0n ? 0 : Number((num * 10n ** BigInt(dp)) / den) / 10 ** dp);
+/** num / den as a number with `dp` decimals, rounded half away from zero (den > 0) */
+const ratio = (num: bigint, den: bigint, dp = 6): number => { if (den <= 0n) return 0; const neg = num < 0n, a = (neg ? -num : num) * 10n ** BigInt(dp), q = Number((a + den / 2n) / den) / 10 ** dp; return neg && q !== 0 ? -q : q; };
 /** value of `amount` base units at `price` (18-decimal integer), as an 18-decimal integer; truncated below 1e-18 */
 export const valueOf = (amount: bigint, decimals: number, price: bigint): bigint => (amount * price) / 10n ** BigInt(decimals);
 
@@ -196,7 +197,7 @@ export async function snapshotTick(): Promise<void> {
 
 // ------------------------------------------------------------------------------------------------------------------ flows
 export const FLOW_PRICE_WINDOW_MS = 30 * 60_000;
-interface FlowSrc { ref_type: 'deposit' | 'proposal'; ref_id: string; at: Date; direction: 'in' | 'out'; scope: 'external' | 'own_account'; network: string; asset: string; symbol: string; decimals: number; amount: string }
+interface FlowSrc { ref_type: 'deposit' | 'proposal'; ref_id: string; at: Date; direction: 'in' | 'out'; scope: 'external' | 'own_account'; network: string; asset: string; symbol: string; decimals: number; amount: string; /** the time of the event is not known (an aggregate deposit): never valued */ undated?: boolean }
 /**
  * Record the flows not recorded yet: deposits that are external or come from one of the owner's own accounts outside the wallet
  * (agent vault, venue), and finalized plain transfers (to one of those accounts: `own_account`; else `external`).
@@ -209,15 +210,15 @@ export async function recordFlows(px: Prices | null, now: Date = new Date()): Pr
     and d.kind = 'internal' and (d.origin is null or d.origin not in ('agent_withdrawal', 'venue_withdrawal'))`;
   await sql`update portfolio_flows f set scope = 'own_account' from deposits d where f.ref_type = 'deposit' and f.scope = 'external' and f.ref_id = d.network || ':' || d.txid || ':' || d.idx || ':' || d.asset
     and d.kind = 'internal' and d.origin in ('agent_withdrawal', 'venue_withdrawal')`;
-  const dep = await sql<{ network: string; txid: string; idx: number; asset: string; amount: string; at: Date; kind: string; origin: string | null }[]>`
-    select d.network, d.txid, d.idx, d.asset, d.amount, coalesce(d.block_time, d.seen_at) as at, d.kind, d.origin from deposits d
+  const dep = await sql<{ network: string; txid: string; idx: number; asset: string; amount: string; at: Date; kind: string; origin: string | null; detection: string | null }[]>`
+    select d.network, d.txid, d.idx, d.asset, d.amount, coalesce(d.block_time, d.seen_at) as at, d.kind, d.origin, d.detection from deposits d
     where d.kind is not null and (d.kind = 'external' or d.origin in ('agent_withdrawal', 'venue_withdrawal'))
       and not exists (select 1 from portfolio_flows f where f.ref_type = 'deposit' and f.ref_id = d.network || ':' || d.txid || ':' || d.idx || ':' || d.asset)
     order by d.seen_at limit 500`;
   for (const d of dep) {
     const n = NETWORKS[d.network as keyof typeof NETWORKS] as NetworkDef | undefined, a = !n ? undefined : d.asset === 'native' ? n.native : n.tokens.find((t) => t.id === d.asset);
     if (!n || !a) continue;
-    found.push({ ref_type: 'deposit', ref_id: `${d.network}:${d.txid}:${d.idx}:${d.asset}`, at: d.at, direction: 'in', scope: d.kind === 'external' ? 'external' : 'own_account', network: d.network, asset: d.asset, symbol: a.symbol, decimals: a.decimals, amount: d.amount });
+    found.push({ ref_type: 'deposit', ref_id: `${d.network}:${d.txid}:${d.idx}:${d.asset}`, at: d.at, direction: 'in', scope: d.kind === 'external' ? 'external' : 'own_account', network: d.network, asset: d.asset, symbol: a.symbol, decimals: a.decimals, amount: d.amount, undated: d.detection === 'aggregate' });
   }
   const out = await sql<{ id: string; network: string; asset: string; symbol: string; decimals: number; amount: string; at: Date; own: boolean }[]>`
     select p.id, p.network, p.asset, p.symbol, p.decimals, p.amount, coalesce(p.finalized_at, p.updated_at) as at,
@@ -229,7 +230,7 @@ export async function recordFlows(px: Prices | null, now: Date = new Date()): Pr
   let n = 0;
   for (const f of found) {
     const m = px && Object.hasOwn(px, f.symbol) ? px[f.symbol]! : null;
-    const near = Math.abs(now.getTime() - new Date(f.at).getTime()) <= FLOW_PRICE_WINDOW_MS;
+    const near = !f.undated && Math.abs(now.getTime() - new Date(f.at).getTime()) <= FLOW_PRICE_WINDOW_MS;
     const ok = !!m && !m.stale && near && toScaled(m.usd) !== null && toScaled(m.cad) !== null;
     n += (await sql`insert into portfolio_flows (ref_type, ref_id, at, direction, scope, network, asset, symbol, decimals, amount, price_usd, price_cad, priced_at)
       values (${f.ref_type}, ${f.ref_id}, ${f.at}, ${f.direction}, ${f.scope}, ${f.network}, ${f.asset}, ${f.symbol}, ${f.decimals}, ${f.amount},
