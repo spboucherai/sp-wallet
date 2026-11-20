@@ -1,7 +1,8 @@
 // Cross-chain USDC transfer (Circle CCTP): progress of the two legs and the "finish" action, shared by Swap and Activity.
 import { useState, type ReactNode } from 'react';
 import { startAuthentication } from '@simplewebauthn/browser';
-import { post } from './api';
+import { get, post } from './api';
+import { ApprovalOutcomePanel, useApprovalOutcome } from './approvalUi';
 import { useContext } from 'react';
 import { errText, I18n, useT, type Key } from './i18n';
 import { holdDetail } from './sv';
@@ -59,17 +60,24 @@ export function BridgePill({ b }: { b: BridgeV }) {
 
 /** The four steps, what the transfer is waiting for, and the finish / approve-again action. `onUpdate` receives the fresh proposal. `fromNetwork` (when known) puts the source network's logo on the first step. */
 export function BridgeProgress({ id, b, onUpdate, fromNetwork }: { id: string; b: BridgeV; onUpdate: (p: any) => void; fromNetwork?: string }) {
-  const t = useT(); const [busy, setBusy] = useState(false), [err, setErr] = useState('');
+  const t = useT(); const [busy, setBusy] = useState(false), [err, setErr] = useState(''); const ap = useApprovalOutcome<any>();
   const at = b.stage === 'ready' ? 1 : b.stage === 'mint_failed' ? 2 : ORDER.indexOf(b.stage as (typeof ORDER)[number]);
   const finish = async () => {
     setBusy(true); setErr('');
+    let assertion;
     try {
-      if (b.needsPasskey) { // the single automatic mint signature is spent: a new one needs the passkey, over the exact new transaction
-        const o = await post<{ proposal: any; options: any }>(`/bridge/proposals/${id}/retry-mint/options`);
-        if (o.proposal.bridge?.needsPasskey) { const assertion = await startAuthentication({ optionsJSON: o.options }); onUpdate(await post(`/bridge/proposals/${id}/retry-mint`, { assertion })); }
-        else onUpdate(o.proposal);
-      } else onUpdate(await post(`/bridge/proposals/${id}/finish`));
-    } catch (e) { const m = errText(t, e); if (m) setErr(m); } finally { setBusy(false); }
+      if (!b.needsPasskey) { onUpdate(await post(`/bridge/proposals/${id}/finish`)); return; }
+      // the single automatic mint signature is spent: a new one needs the passkey, over the exact new transaction
+      const o = await post<{ proposal: any; options: any }>(`/bridge/proposals/${id}/retry-mint/options`);
+      if (!o.proposal.bridge?.needsPasskey) { onUpdate(o.proposal); return; }
+      assertion = await startAuthentication({ optionsJSON: o.options });
+    } catch (e) { const m = errText(t, e); if (m) setErr(m); return; } finally { if (!assertion) setBusy(false); }
+    // NEXT W1: the approval leaves the browser — a lost answer is settled by the transfer read from the server, never by the error
+    await ap.run({ submit: () => post<any>(`/bridge/proposals/${id}/retry-mint`, { assertion }), read: () => get<any>(`/transfers/proposals/${id}`), applied: (p) => !p.bridge?.needsPasskey || p.bridge.stage !== b.stage }, (o) => {
+      if (o.kind === 'refused') { const m = errText(t, o.error); if (m) setErr(m); return; }
+      onUpdate(o.kind === 'answered' ? o.value : o.state); if (o.kind === 'read' && !o.applied) setErr(t('nxNotReceived'));
+    });
+    setBusy(false);
   };
   if (b.stage === 'review' || b.stage === 'failed') return null;
   const node = (s: (typeof ORDER)[number]) => (s === 'burning' ? (fromNetwork ? <NetworkIcon net={fromNetwork} size={24} /> : undefined) : s === 'attesting' ? <ProviderIcon provider="cctp" size={24} /> : <NetworkIcon net={b.toNetwork} size={24} />);
@@ -82,24 +90,31 @@ export function BridgeProgress({ id, b, onUpdate, fromNetwork }: { id: string; b
       {b.hold && b.stage !== 'done' && <Notice tone={b.stage === 'mint_failed' || b.hold === 'message_mismatch' || b.hold === 'contract_changed' ? 'danger' : 'warn'}>{t(holdKey(b.hold))}{b.holdDetail ? <span className="block text-mute" data-testid="hold-detail">{holdDetail(t, b)}</span> : null}</Notice>}
       {b.stage !== 'done' && <p className="text-[12.5px] text-mute">{t('brSafe')}</p>}
       {b.stage === 'done' && b.mintedBy === 'other' && <p className="text-[13px] text-mute">{t('brMintedByOther')}</p>}
-      {err && <Notice tone="danger">{err}</Notice>}
+      {err && !ap.locked && <Notice tone="danger">{err}</Notice>}
+      <ApprovalOutcomePanel ap={ap} />
       {b.mintExplorer && <ExplorerLink href={b.mintExplorer}>{t('brViewMint', { net: b.toNetworkName })}</ExplorerLink>}
-      {b.canFinish && <Btn full kind={b.needsPasskey ? 'primary' : 'soft'} busy={busy} onClick={() => void finish()}><Icon n={b.needsPasskey ? 'key' : 'check'} className="h-4 w-4" />{b.needsPasskey ? t('brFinishPasskey') : t('brFinish')}</Btn>}
+      {b.canFinish && !ap.locked && <Btn full kind={b.needsPasskey ? 'primary' : 'soft'} busy={busy} onClick={() => void finish()}><Icon n={b.needsPasskey ? 'key' : 'check'} className="h-4 w-4" />{b.needsPasskey ? t('brFinishPasskey') : t('brFinish')}</Btn>}
       {b.sol?.role === 'source' && b.sol.reclaimState && <SolDeposit id={id} b={b} onUpdate={onUpdate} />}
     </div>);
 }
 
 /** v8 — the refundable deposit of the message account of a burn made on Solana: where it stands, and "récupérer le dépôt" (passkey) once the program allows it. */
 export function SolDeposit({ id, b, onUpdate }: { id: string; b: BridgeV; onUpdate: (p: any) => void }) {
-  const t = useT(); const { locale } = useContext(I18n); const [busy, setBusy] = useState(false), [err, setErr] = useState('');
+  const t = useT(); const { locale } = useContext(I18n); const [busy, setBusy] = useState(false), [err, setErr] = useState(''); const ap = useApprovalOutcome<any>();
   const s = b.sol!; const st = s.reclaimState!;
   const reclaim = async () => {
     setBusy(true); setErr('');
+    let assertion;
     try {
       const o = await post<{ proposal: any; options: any }>(`/bridge/proposals/${id}/reclaim/options`);
-      const assertion = await startAuthentication({ optionsJSON: o.options });
-      onUpdate(await post(`/bridge/proposals/${id}/reclaim`, { assertion }));
-    } catch (e) { const m = scErrText(t, e); if (m) setErr(m); } finally { setBusy(false); }
+      assertion = await startAuthentication({ optionsJSON: o.options });
+    } catch (e) { const m = scErrText(t, e); if (m) setErr(m); setBusy(false); return; }
+    // NEXT W1: a lost answer is settled by the transfer read from the server (its reclaim state), never by the error
+    await ap.run({ submit: () => post<any>(`/bridge/proposals/${id}/reclaim`, { assertion }), read: () => get<any>(`/transfers/proposals/${id}`), applied: (p) => (p.bridge?.sol?.reclaimState ?? st) !== st }, (o) => {
+      if (o.kind === 'refused') { const m = scErrText(t, o.error); if (m) setErr(m); return; }
+      onUpdate(o.kind === 'answered' ? o.value : o.state); if (o.kind === 'read' && !o.applied) setErr(t('nxNotReceived'));
+    });
+    setBusy(false);
   };
   const vars = { dep: trimAmt(s.depositDisplay ?? '0', 9), date: s.reclaimableAt ? day(s.reclaimableAt, locale) : '—', got: trimAmt(s.reclaimedDisplay ?? '0', 9) };
   return (
@@ -107,8 +122,9 @@ export function SolDeposit({ id, b, onUpdate }: { id: string; b: BridgeV; onUpda
       <div className="mb-1.5 flex items-center gap-2"><NetworkIcon net="solana" size={18} /><span className="t-eyebrow">{t('scReclaimTitle')}</span></div>
       <p className={st === 'done' ? 'flex gap-1.5 text-emerald' : ''}>{st === 'done' && <Icon n="check" className="mt-0.5 h-4 w-4 shrink-0" />}<span>{t(`scReclaim_${st}` as Key, vars)}</span></p>
       {st === 'failed' && s.reclaimError && <p className="mt-1 text-mute">{s.reclaimError}</p>}
-      {err && <div className="mt-2"><Notice tone="danger">{err}</Notice></div>}
-      {(st === 'available' || st === 'failed') && <div className="mt-3"><Btn full kind="primary" busy={busy} onClick={() => void reclaim()}><Icon n="key" className="h-4 w-4" />{t('scReclaimBtn')}</Btn></div>}
+      {err && !ap.locked && <div className="mt-2"><Notice tone="danger">{err}</Notice></div>}
+      <ApprovalOutcomePanel ap={ap} className="mt-2" />
+      {(st === 'available' || st === 'failed') && !ap.locked && <div className="mt-3"><Btn full kind="primary" busy={busy} onClick={() => void reclaim()}><Icon n="key" className="h-4 w-4" />{t('scReclaimBtn')}</Btn></div>}
       {s.reclaimExplorer && <div className="mt-1"><ExplorerLink href={s.reclaimExplorer}>{t('scReclaimView')}</ExplorerLink></div>}
     </div>);
 }

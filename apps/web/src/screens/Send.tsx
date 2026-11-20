@@ -1,7 +1,9 @@
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { get, post } from '../api';
+import { cancelDraft, DraftKey, proposalApplied, proposalGone } from '../approval';
+import { ApprovalOutcomePanel, useApprovalOutcome, type KnownOutcome } from '../approvalUi';
 import type { Tab } from '../App';
 import { useNetworks, usePortfolio, type Proposal } from '../hooks';
 import { amountInputText, amountOf, sanitizeAmountText } from '../amount';
@@ -21,7 +23,8 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
   const [step, setStep] = useState<Step>('form');
   const [net, setNet] = useState(initial?.network ?? 'base'), [asset, setAsset] = useState(initial?.asset ?? ''), [to, setTo] = useState(''), [amount, setAmount] = useState(''), [note, setNote] = useState(''), [memo, setMemo] = useState('');
   const [p, setP] = useState<Proposal | null>(null), [busy, setBusy] = useState(''), [err, setErr] = useState(''), [checked, setChecked] = useState(false);
-  const [idem, setIdem] = useState(() => crypto.randomUUID());
+  // NEXT W1: the same idempotency key for the same form content, whatever the number of retries; a new one when the content changes or once the server has answered
+  const draft = useRef(new DraftKey()); const ap = useApprovalOutcome<Proposal>();
   const n = nets.data?.find((x) => x.id === net);
   const assets = useMemo(() => {
     if (!n) return [];
@@ -40,27 +43,48 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
 
   const review = async () => {
     setBusy('review'); setErr('');
-    try { setP(await post<Proposal>('/transfers/proposals', { network: net, asset, to: to.trim(), amount: amountOf(amount, locale) ?? amount.trim(), note, ...(n?.memo && memo.trim() ? { memo: memo.trim() } : {}) }, { 'idempotency-key': idem })); setChecked(false); setStep('review'); }
-    catch (e) { fail(e); setIdem(crypto.randomUUID()); } finally { setBusy(''); }
+    const body = { network: net, asset, to: to.trim(), amount: amountOf(amount, locale) ?? amount.trim(), note, ...(n?.memo && memo.trim() ? { memo: memo.trim() } : {}) };
+    try { setP(await post<Proposal>('/transfers/proposals', body, { 'idempotency-key': draft.current.for(JSON.stringify(body)) })); setChecked(false); setStep('review'); }
+    catch (e) { fail(e); draft.current.failed(e); } finally { setBusy(''); }   // a lost answer keeps the key: the retry is the same request
+  };
+  const read = (id: string) => get<Proposal>(`/transfers/proposals/${id}`);
+  // what the SERVER said of the approval (its answer, or the state read after a lost answer) decides what is shown
+  const settle = (o: KnownOutcome<Proposal, Proposal>) => {
+    if (o.kind === 'refused') { fail(o.error); const id = p?.id; if (id) void read(id).then((fresh) => { setP(fresh); if (proposalApplied(fresh)) setStep('track'); }, () => {}); return; }
+    const s = o.kind === 'answered' ? o.value : o.state; setP(s);
+    if (o.kind === 'read' && !o.applied) { setErr(t('nxNotReceived')); return; }
+    setErr(''); setStep('track'); void qc.invalidateQueries({ queryKey: ['portfolio'] });
   };
   const approve = async () => {
     if (!p) return;
     setBusy('prepare'); setErr('');
-    try {
+    let assertion;
+    try {   // nothing has been approved yet: a failure here is an ordinary error, the review stays
       const ra = await post<{ proposal: Proposal; options: any }>(`/transfers/proposals/${p.id}/request-approval`);
       setP(ra.proposal); setBusy('passkey');
-      const assertion = await startAuthentication({ optionsJSON: ra.options }); // challenge = fingerprint of this exact transfer
-      setBusy('submit');
-      setP(await post<Proposal>(`/transfers/proposals/${p.id}/approve`, { assertion }));
-      setStep('track'); void qc.invalidateQueries({ queryKey: ['portfolio'] });
+      assertion = await startAuthentication({ optionsJSON: ra.options }); // challenge = fingerprint of this exact transfer
     } catch (e) {
       fail(e);
-      const fresh = await get<Proposal>(`/transfers/proposals/${p.id}`).catch(() => null);
-      if (fresh) { setP(fresh); if (!['draft', 'pending_approval'].includes(fresh.state)) setStep('track'); }
-    } finally { setBusy(''); }
+      const fresh = await read(p.id).catch(() => null);
+      if (fresh) { setP(fresh); if (proposalApplied(fresh)) setStep('track'); }
+      setBusy(''); return;
+    }
+    // from here the approval LEAVES the browser: only a state read from the server says what happened (approval.ts)
+    setBusy('submit');
+    await ap.run({ submit: () => post<Proposal>(`/transfers/proposals/${p.id}/approve`, { assertion }), read: () => read(p.id), applied: proposalApplied }, settle);
+    setBusy('');
   };
-  const reset = () => { setStep('form'); setP(null); setTo(''); setAmount(''); setNote(''); setMemo(''); setErr(''); setIdem(crypto.randomUUID()); };
-  const cancel = async () => { if (p) await post(`/transfers/proposals/${p.id}/reject`).catch(() => {}); reset(); };
+  const reset = () => { setStep('form'); setP(null); setTo(''); setAmount(''); setNote(''); setMemo(''); setErr(''); draft.current.renew(); };
+  // a cancellation that fails says so and changes nothing on screen; it is not offered once the approval was submitted
+  const cancel = async () => {
+    if (!p) { reset(); return; }
+    setBusy('cancel'); setErr('');
+    const c = await cancelDraft(() => post(`/transfers/proposals/${p.id}/reject`), () => read(p.id));
+    setBusy('');
+    if (c.kind === 'cancelled' || (c.state && proposalGone(c.state))) { reset(); return; }
+    setErr(t('nxCancelFailed', { why: errText(t, c.error) }));
+    if (c.state) { setP(c.state); if (proposalApplied(c.state)) setStep('track'); }
+  };
 
   // v9: where the owner is in the flow (details → review → tracking); the current step is named, not only coloured
   const steps = <ol className="flex items-center gap-2" aria-label={t('dsSteps')} data-testid="send-steps">{(['form', 'review', 'track'] as const).map((id, k) => { const cur = id === step, done = ['form', 'review', 'track'].indexOf(step) > k;
@@ -130,9 +154,11 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
       {cur.warnings.map((w) => <Notice key={w} tone={w === 'address_poisoning_suspected' ? 'danger' : 'warn'}>{t(`w_${w}` as Key)}</Notice>)}
       <Notice tone="info">{t('boundNote')} {t('irreversible')}</Notice>
       {needCheck && <label className="flex min-h-11 items-start gap-3 rounded-2xl border border-line bg-surface p-3.5 text-[14px]"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[var(--primary)]" checked={checked} onChange={(e) => setChecked(e.target.checked)} />{t('iChecked')}</label>}
-      {err && <Notice tone="danger">{err}</Notice>}
-      <Btn full busy={!!busy} disabled={needCheck && !checked} onClick={approve}><Icon n="key" />{busy === 'passkey' ? t('approving') : busy === 'prepare' ? t('preparing') : t('approve')}</Btn>
-      <Btn full kind="ghost" disabled={!!busy} onClick={cancel}>{t('cancel')}</Btn>
+      {err && !ap.locked && <Notice tone="danger">{err}</Notice>}
+      <ApprovalOutcomePanel ap={ap} />
+      {/* once the approval was submitted and until the server has said what happened: no Approve, no Cancel */}
+      {!ap.locked && <Btn full busy={!!busy} disabled={needCheck && !checked} onClick={approve} data-testid="send-approve"><Icon n="key" />{busy === 'passkey' ? t('approving') : busy === 'prepare' ? t('preparing') : t('approve')}</Btn>}
+      {!ap.locked && busy !== 'submit' && <Btn full kind="ghost" disabled={!!busy} onClick={() => void cancel()} data-testid="send-cancel">{t('cancel')}</Btn>}
     </div>
   );
 

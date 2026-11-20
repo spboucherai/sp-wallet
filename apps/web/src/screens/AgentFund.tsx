@@ -3,8 +3,10 @@
 // with the network and the recipient fixed to the agent's own; withdrawing is the existing vault-return route.
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { get, post } from '../api';
+import { answerLost, cancelDraft, DraftKey, proposalApplied } from '../approval';
+import { ApprovalOutcomePanel, useApprovalOutcome } from '../approvalUi';
 import type { Nav } from '../App';
 import { useAccounts, useNetworks, usePortfolio, type Net, type Proposal } from '../hooks';
 import { errText, I18n, useT, type Key } from '../i18n';
@@ -52,14 +54,17 @@ export function fundErr(t: T, e: unknown, ctx: { sym: string; net: string; nativ
   }
 }
 
-/** One ordinary transfer of the main wallet, up to the signer: draft, frozen intent, passkey over its hash, approval. */
-async function sendTransfer(o: { network: string; asset: string; to: string; amount: string; note: string; idem: string; onDraft?: (id: string) => void }): Promise<Proposal> {
+/**
+ * One ordinary transfer of the main wallet, up to the passkey: draft, frozen intent, passkey over its hash. The approval itself
+ * is NOT sent here (NEXT W1): the caller submits it through approval.ts, where a lost answer is settled by the server's state.
+ * `assertion` is absent when the transfer is already past the passkey (resumed).
+ */
+async function draftTransfer(o: { network: string; asset: string; to: string; amount: string; note: string; idem: string; onDraft?: (id: string) => void }): Promise<{ proposal: Proposal; assertion?: unknown }> {
   const p = await post<Proposal>('/transfers/proposals', { network: o.network, asset: o.asset, to: o.to, amount: o.amount, note: o.note.slice(0, 80) }, { 'idempotency-key': o.idem });
   o.onDraft?.(p.id);
-  if (!['draft', 'pending_approval'].includes(p.state)) return p;                     // resumed: already past the passkey
+  if (proposalApplied(p)) return { proposal: p };                                     // resumed: already past the passkey
   const ra = await post<{ proposal: Proposal; options: never }>(`/transfers/proposals/${p.id}/request-approval`);
-  const assertion = await startAuthentication({ optionsJSON: ra.options });           // challenge = fingerprint of this exact transfer
-  return post<Proposal>(`/transfers/proposals/${p.id}/approve`, { assertion });
+  return { proposal: ra.proposal, assertion: await startAuthentication({ optionsJSON: ra.options }) };   // challenge = fingerprint of this exact transfer
 }
 
 /** The one network of this operation, fixed: the network's logo, the sentence, a lock. */
@@ -103,7 +108,7 @@ export function FundSheet({ a, gas, nav, onClose }: { a: FundAgent; gas: GasInfo
   const maxCash = minBig(mainCash, ...(capCash ? [capCash.per, capCash.left] : []));
   const planned = toUnits(a.capitalUsdc, cashDec);
 
-  const [legs, setLegsRaw] = useState<Leg[] | null>(() => loadLegs(a.id));
+  const [legs, setLegsRaw] = useState<Leg[] | null>(() => loadLegs(a.id)); const ap = useApprovalOutcome<Proposal>();
   const setLegs = (l: Leg[] | null) => { setLegsRaw(l); if (l) localStorage.setItem(store(a.id), JSON.stringify({ at: Date.now(), legs: l })); else localStorage.removeItem(store(a.id)); };
   const [cashAmt, setCashAmt] = useState(''), [gasAmt, setGasAmt] = useState(''), [busy, setBusy] = useState(false), [touched, setTouched] = useState(false);
   const loc = amountLocale();
@@ -132,15 +137,31 @@ export function FundSheet({ a, gas, nav, onClose }: { a: FundAgent; gas: GasInfo
   const run = async (all: Leg[], k: number) => {
     const l = all[k]!; let next = all.map((x, i) => (i === k ? { ...x, error: undefined } : x)); setLegs(next); setBusy(true);
     const patch = (p: Partial<Leg>) => { next = next.map((x, i) => (i === k ? { ...x, ...p } : x)); setLegs(next); };
-    try {
-      const p = await sendTransfer({ network: a.network, asset: l.asset, to: a.vaultAddress, amount: l.amount, note: `Agent ${a.name}`, idem: l.idem, onDraft: (id) => patch({ proposalId: id, state: 'draft' }) });
-      patch({ proposalId: p.id, state: p.state, txError: p.error, txCode: p.errorCode, txParams: p.errorParams, explorer: p.explorer });
-      void qc.invalidateQueries({ queryKey: ['security'] });
-    } catch (e) {
-      // a draft left behind is cancelled so that a retry starts clean (a new idempotency key)
-      const id = next[k]!.proposalId; if (id) await post(`/transfers/proposals/${id}/reject`).catch(() => {});
-      patch({ error: fundErr(t, e, ctxOf(l)), proposalId: undefined, state: undefined, idem: crypto.randomUUID() });
-    } finally { setBusy(false); }
+    const took = (p: Proposal) => { patch({ proposalId: p.id, state: p.state, txError: p.error, txCode: p.errorCode, txParams: p.errorParams, explorer: p.explorer }); void qc.invalidateQueries({ queryKey: ['security'] }); };
+    // An ANSWERED refusal: nothing was approved by this request. The draft left behind is cancelled so that a retry starts clean
+    // (a new idempotency key); a cancellation that fails is said with the error, never swallowed.
+    const refused = async (e: unknown) => {
+      const id = next[k]!.proposalId; let more = '';
+      if (id) { const c = await cancelDraft(() => post(`/transfers/proposals/${id}/reject`)); if (c.kind === 'failed') more = ` ${t('nxCancelFailed', { why: errText(t, c.error) })}`; }
+      patch({ error: fundErr(t, e, ctxOf(l)) + more, proposalId: undefined, state: undefined, idem: crypto.randomUUID() });
+    };
+    let d: { proposal: Proposal; assertion?: unknown };
+    try { d = await draftTransfer({ network: a.network, asset: l.asset, to: a.vaultAddress, amount: l.amount, note: `Agent ${a.name}`, idem: l.idem, onDraft: (id) => patch({ proposalId: id, state: 'draft' }) }); }
+    catch (e) {
+      // before the approval: a lost answer (or a passkey prompt that was closed) keeps the SAME key — the retry finds the same draft
+      if (answerLost(e)) patch({ error: fundErr(t, e, ctxOf(l)), proposalId: undefined, state: undefined }); else await refused(e);
+      setBusy(false); return;
+    }
+    if (d.assertion === undefined) { took(d.proposal); setBusy(false); return; }
+    // the approval leaves the browser: only a state read from the server says what happened. While it is unknown the leg keeps its
+    // proposal (no button, no new key) and the proposal is polled; nothing is cancelled and nothing is sent again.
+    const pid = d.proposal.id; patch({ proposalId: pid, state: d.proposal.state });
+    await ap.run({ submit: () => post<Proposal>(`/transfers/proposals/${pid}/approve`, { assertion: d.assertion }), read: () => get<Proposal>(`/transfers/proposals/${pid}`), applied: proposalApplied }, (o) => {
+      if (o.kind === 'refused') { void refused(o.error); return; }
+      if (o.kind === 'read' && !o.applied) { patch({ error: t('nxNotReceived'), proposalId: undefined, state: undefined }); return; }   // same key: the retry resumes this very proposal
+      took(o.kind === 'answered' ? o.value : o.state);
+    });
+    setBusy(false);
   };
   const start = () => { const l: Leg[] = [];
     if (cashU > 0n) l.push({ key: 'cash', asset: cashId, symbol: a.cash, amount: fromUnits(cashU, cashDec), idem: crypto.randomUUID() });
@@ -175,8 +196,9 @@ export function FundSheet({ a, gas, nav, onClose }: { a: FundAgent; gas: GasInfo
       {allDone && <div className="mt-3"><Notice tone="ok">{t('qaFundAllDone', { net: a.networkName })}</Notice></div>}
       <div className="mt-4 space-y-2.5">
         {!allDone && !stuck && !stepBtn && <p className="flex items-center gap-2 text-[13px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('qaFundWait', { net: a.networkName })}</p>}
+        <ApprovalOutcomePanel ap={ap} />
         {!(allDone || stuck) && <><Btn full kind="ghost" disabled={busy} onClick={onClose}>{t('qaFundLater')}</Btn>
-          {!legs.some((l) => l.proposalId && !BAD.includes(l.state ?? '')) && <Btn full kind="ghost" disabled={busy} onClick={() => setLegs(null)}>{t('qaFundAbandon')}</Btn>}</>}
+          {!ap.locked && !legs.some((l) => l.proposalId && !BAD.includes(l.state ?? '')) && <Btn full kind="ghost" disabled={busy} onClick={() => setLegs(null)}>{t('qaFundAbandon')}</Btn>}</>}
         {!allDone && !stuck && <p className="text-[12.5px] leading-snug text-mute">{t('qaFundResumeNote')}</p>}
       </div>
     </Sheet>;
@@ -280,6 +302,7 @@ export function ElsewhereFunds({ a }: { a: FundAgent }) {
   const list = q.data?.holdings ?? [];
   // v8: tracked withdrawals — the row says signed / broadcast / confirmed / failed / not sent as the server reports it
   const wd = useTrackedWithdrawals(a.id, () => { void qc.invalidateQueries({ queryKey: ['agent-elsewhere', a.id] }); });
+  const topKeys = useRef<Record<string, DraftKey>>({}), topAp = useApprovalOutcome<Proposal>();
   const byNet = useMemo(() => { const m = new Map<string, Elsewhere[]>(); for (const h of list) m.set(h.network, [...(m.get(h.network) ?? []), h]);
     // tokens first: the native coin pays their withdrawal fee and leaves last
     return [...m.entries()].map(([k, v]) => [k, [...v].sort((x, y) => Number(x.asset === 'native') - Number(y.asset === 'native'))] as [string, Elsewhere[]]); }, [list]);
@@ -291,6 +314,7 @@ export function ElsewhereFunds({ a }: { a: FundAgent }) {
   return <div className="mt-5 border-t border-line pt-5" data-testid="agent-elsewhere">
     <div className="mb-2.5 flex items-center gap-2 text-[15.5px] font-semibold"><Icon n="warn" className="h-[18px] w-[18px] shrink-0 text-warn" />{t('qaElseTitle')}</div>
     <Notice tone="warn">{t('qaElseIntro', { network: a.networkName })}</Notice>
+    <ApprovalOutcomePanel ap={topAp} className="mt-3" />
     <div className="mt-3 space-y-3">{byNet.map(([net, hs]) => { const h0 = hs[0]!, n = nets.data?.find((x) => x.id === net), dec = n?.native.decimals ?? 18;
       const tokens = hs.filter((h) => h.asset !== 'native'), lacking = tokens.length > 0 && (h0.gasEnough === false || (h0.gasEnough == null && !h0.hasGas));
       const need = h0.gasNeed ? toUnits(h0.gasNeed, dec) : 0n, held = toUnits(h0.gasHeld ?? '0', dec);
@@ -299,8 +323,20 @@ export function ElsewhereFunds({ a }: { a: FundAgent }) {
       const mainNat = BigInt(pf.data?.balances.find((b) => b.network === net && b.asset === 'native')?.amount ?? '0');
       const tp = top[net], tpTest = !!tp && tp.state === NOT_SENT;
       const topUp = async () => { setBusy(`gas${net}`); setMsg((m) => ({ ...m, [`gas${net}`]: { ok: true, text: '' } }));
-        try { const p = await sendTransfer({ network: net, asset: 'native', to: a.vaultAddress, amount: sendD, note: `Agent ${a.name}`, idem: crypto.randomUUID() }); setTop((m) => ({ ...m, [net]: { id: p.id, state: p.state, error: p.error } })); }
-        catch (e) { setMsg((m) => ({ ...m, [`gas${net}`]: { ok: false, text: fundErr(t, e, { sym: h0.gas, net: h0.networkName, native: h0.gas }) } })); } finally { setBusy(''); } };
+        const say = (text: string) => setMsg((m) => ({ ...m, [`gas${net}`]: { ok: false, text } })), ctx = { sym: h0.gas, net: h0.networkName, native: h0.gas };
+        const took = (p: Proposal) => setTop((m) => ({ ...m, [net]: { id: p.id, state: p.state, error: p.error } }));
+        // NEXT W1: the same idempotency key for the same top-up until the server has answered; the approval's outcome is read from the server
+        const dk = topKeys.current[net] ??= new DraftKey(); let d: { proposal: Proposal; assertion?: unknown };
+        try { d = await draftTransfer({ network: net, asset: 'native', to: a.vaultAddress, amount: sendD, note: `Agent ${a.name}`, idem: dk.for(`${net}|${sendD}`) }); }
+        catch (e) { dk.failed(e); say(fundErr(t, e, ctx)); setBusy(''); return; }
+        if (d.assertion === undefined) { took(d.proposal); setBusy(''); return; }
+        const pid = d.proposal.id;
+        await topAp.run({ submit: () => post<Proposal>(`/transfers/proposals/${pid}/approve`, { assertion: d.assertion }), read: () => get<Proposal>(`/transfers/proposals/${pid}`), applied: proposalApplied }, (o) => {
+          if (o.kind === 'refused') { dk.renew(); say(fundErr(t, o.error, ctx)); return; }
+          if (o.kind === 'read' && !o.applied) { say(t('nxNotReceived')); return; }
+          dk.renew(); took(o.kind === 'answered' ? o.value : o.state);
+        });
+        setBusy(''); };
       return <section key={net} className="rounded-2xl border border-line p-3.5" aria-label={h0.networkName}>
         <div className="mb-2.5 flex items-center gap-2 text-[14.5px] font-semibold"><NetDot net={net} size={22} />{h0.networkName}</div>
         <ul className="divide-y divide-line">{hs.map((h) => <li key={key(h)} className="py-2.5 first:pt-0 last:pb-0">
@@ -311,9 +347,10 @@ export function ElsewhereFunds({ a }: { a: FundAgent }) {
         {lacking && <div className="mt-3 space-y-2"><Notice tone="info">{h0.gasNeed ? t('qaElseNeedGas', { native: h0.gas, net: h0.networkName, need: trimAmt(h0.gasNeed, 8), held: trimAmt(h0.gasHeld ?? '0', 8) }) : t('agElsewhereGas', { gas: h0.gas })}</Notice>
           {tp && !BAD.includes(tp.state) && !tpTest ? <p className="flex items-center gap-2 text-[13px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('qaElseGasSent', { native: h0.gas })}</p>
             : tpTest ? <Notice tone="warn">{t('qaFundTestMode')}</Notice>
+            : topAp.locked ? null
             : h0.gasNeed && mainNat > send ? <Btn full kind="soft" busy={busy === `gas${net}`} disabled={!!busy && busy !== `gas${net}`} onClick={() => void topUp()}><Icon n="key" className="h-4 w-4 shrink-0" />{t('qaElseSendGas', { amount: trimAmt(sendD, 6), native: h0.gas, net: h0.networkName })}</Btn>
             : <p className="text-[12.5px] text-mute">{t('qaElseNoMainGas', { native: h0.gas, net: h0.networkName })}</p>}
-          {msg[`gas${net}`]?.text && <Notice tone="danger">{msg[`gas${net}`]!.text}</Notice>}</div>}
+          {msg[`gas${net}`]?.text && !topAp.locked && <Notice tone="danger">{msg[`gas${net}`]!.text}</Notice>}</div>}
       </section>; })}</div>
   </div>;
 }

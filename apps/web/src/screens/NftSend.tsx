@@ -12,8 +12,10 @@
 //  - after approval: pending → confirmed only at the chain's finality; `not_broadcast` is said as such, never as "sent".
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { get, post, type ApiError } from '../api';
+import { cancelDraft, DraftKey, proposalApplied, proposalGone } from '../approval';
+import { ApprovalOutcomePanel, useApprovalOutcome } from '../approvalUi';
 import { hasText, useT, type Key } from '../i18n';
 import { displayName, mediaUrl, STANDARD_KEY, unitsToText, type NftItem, type NftReview, type NftTransferView, type UtxoLocksView } from '../nft';
 import { propError } from '../sv';
@@ -50,7 +52,7 @@ export function NftSend({ item, onClose }: { item: NftItem; onClose: () => void 
   const t = useT(); const qc = useQueryClient();
   const book = useQuery({ queryKey: ['book'], queryFn: () => get<{ id: string; network: string; address: string; label: string }[]>('/addressbook') });
   const [step, setStep] = useState<'form' | 'review' | 'track'>('form');
-  const [to, setTo] = useState(''), [qty, setQty] = useState('1'), [idem, setIdem] = useState(() => crypto.randomUUID());
+  const [to, setTo] = useState(''), [qty, setQty] = useState('1'), draft = useRef(new DraftKey()), ap = useApprovalOutcome<NftTransferView>();   // NEXT W1: stable idempotency key, outcome read from the server
   const [prep, setPrep] = useState<{ proposal: NftTransferView; review: NftReview; options: unknown } | null>(null), [cur, setCur] = useState<NftTransferView | null>(null);
   const [busy, setBusy] = useState(''), [err, setErr] = useState(''), [checked, setChecked] = useState(false);
   const multi = item.standard === 'erc1155', held = item.quantity, qtyOk = /^[1-9]\d{0,77}$/.test(qty) && (!multi || BigInt(qty) <= BigInt(held));
@@ -62,26 +64,39 @@ export function NftSend({ item, onClose }: { item: NftItem; onClose: () => void 
 
   const review = async () => {
     setBusy('review'); setErr('');
-    try { const r = await post<{ proposal: NftTransferView; review: NftReview; options: unknown }>('/nfts/transfer/prepare', { key: item.key, to: to.trim(), ...(multi ? { quantity: qty } : {}) }, { 'idempotency-key': idem });
+    const body = { key: item.key, to: to.trim(), ...(multi ? { quantity: qty } : {}) };
+    try { const r = await post<{ proposal: NftTransferView; review: NftReview; options: unknown }>('/nfts/transfer/prepare', body, { 'idempotency-key': draft.current.for(JSON.stringify(body)) });
       setPrep(r); setCur(r.proposal); setChecked(false); setStep('review'); }
-    catch (e) { setErr(refusalText(t, e)); setIdem(crypto.randomUUID()); } finally { setBusy(''); }
+    catch (e) { setErr(refusalText(t, e)); draft.current.failed(e); } finally { setBusy(''); }   // a lost answer keeps the key: the retry is the same request
   };
   const approve = async () => {
     if (!prep) return;
     setBusy('passkey'); setErr('');
-    try {
-      const assertion = await startAuthentication({ optionsJSON: prep.options as never }); // challenge = fingerprint of this exact NFT transfer
-      setBusy('submit');
-      setCur(await post<NftTransferView>(`/nfts/transfer/${prep.proposal.id}/approve`, { assertion }));
-      setStep('track');
-    } catch (e) {
-      setErr(refusalText(t, e));
-      const fresh = await get<NftTransferView>(`/nfts/transfer/${prep.proposal.id}`).catch(() => null);
-      if (fresh) { setCur(fresh); if (fresh.state !== 'pending_approval') setStep('track'); }
-    } finally { setBusy(''); }
+    const id = prep.proposal.id, read = () => get<NftTransferView>(`/nfts/transfer/${id}`);
+    let assertion;
+    try { assertion = await startAuthentication({ optionsJSON: prep.options as never }); } // challenge = fingerprint of this exact NFT transfer
+    catch (e) { setErr(refusalText(t, e)); setBusy(''); return; }
+    // the approval leaves the browser: only a state read from the server says what happened (approval.ts)
+    setBusy('submit');
+    await ap.run({ submit: () => post<NftTransferView>(`/nfts/transfer/${id}/approve`, { assertion }), read, applied: proposalApplied }, (o) => {
+      if (o.kind === 'refused') { setErr(refusalText(t, o.error)); void read().then((fresh) => { setCur(fresh); if (proposalApplied(fresh)) setStep('track'); }, () => {}); return; }
+      setCur(o.kind === 'answered' ? o.value : o.state);
+      if (o.kind === 'read' && !o.applied) setErr(t('nxNotReceived')); else { setErr(''); setStep('track'); }
+    });
+    setBusy('');
   };
-  const cancel = async () => { if (prep && cur?.state === 'pending_approval') await post(`/transfers/proposals/${prep.proposal.id}/reject`).catch(() => {}); setPrep(null); setCur(null); setIdem(crypto.randomUUID()); setStep('form'); };
-  const back = <button onClick={() => (step === 'review' ? void cancel() : onClose())} className="press -ml-1 inline-flex min-h-11 items-center gap-1 text-[14px] text-blue" data-testid="nft-send-back"><Icon n="back" className="h-4 w-4" />{t('back')}</button>;
+  // a cancellation that fails says so and the review stays; it is not offered while the outcome of an approval is unread
+  const cancel = async () => {
+    if (ap.locked || busy) return;
+    if (prep && cur?.state === 'pending_approval') {
+      const id = prep.proposal.id; setBusy('cancel'); setErr('');
+      const c = await cancelDraft(() => post(`/transfers/proposals/${id}/reject`), () => get<NftTransferView>(`/nfts/transfer/${id}`));
+      setBusy('');
+      if (c.kind === 'failed' && !(c.state && proposalGone(c.state))) { setErr(t('nxCancelFailed', { why: refusalText(t, c.error) })); if (c.state) { setCur(c.state); if (proposalApplied(c.state)) setStep('track'); } return; }
+    }
+    setPrep(null); setCur(null); draft.current.renew(); setStep('form');
+  };
+  const back = ap.locked ? null : <button onClick={() => (step === 'review' ? void cancel() : onClose())} className="press -ml-1 inline-flex min-h-11 items-center gap-1 text-[14px] text-blue" data-testid="nft-send-back"><Icon n="back" className="h-4 w-4" />{t('back')}</button>;
 
   if (step === 'form') return <div className="space-y-4" data-testid="nft-send-form">
     {back}<PageTitle>{t('nfTTitle')}</PageTitle>
@@ -95,7 +110,8 @@ export function NftSend({ item, onClose }: { item: NftItem; onClose: () => void 
       {multi && <Field label={t('nfTQuantity')} hint={t('nfTQuantityHint', { held })}>
         <input className={`${inputCls} text-[19px] font-semibold`} inputMode="numeric" pattern="[0-9]*" value={qty} onChange={(e) => setQty(e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 78))} aria-label={t('nfTQuantity')} aria-invalid={!qtyOk} data-testid="nft-send-qty" />
         {!qtyOk && qty !== '' && <p className="mt-1 text-[12.5px] text-warn" role="alert" data-testid="nft-send-qty-problem">{t('nfTQuantityProblem', { held })}</p>}</Field>}
-      {err && <Notice tone="danger"><span role="alert" data-testid="nft-send-error">{err}</span></Notice>}
+      {err && !ap.locked && <Notice tone="danger"><span role="alert" data-testid="nft-send-error">{err}</span></Notice>}
+      <ApprovalOutcomePanel ap={ap} />
       <Btn full busy={busy === 'review'} disabled={!to.trim() || !qtyOk} onClick={review} data-testid="nft-send-review">{busy === 'review' ? t('nfTVerifying') : t('review')}</Btn>
       <p className="text-[12.5px] text-mute">{t('nfTReviewNote')}</p>
     </Card>
@@ -133,9 +149,10 @@ export function NftSend({ item, onClose }: { item: NftItem; onClose: () => void 
       {/* while the passkey prompt is open: what is being approved, in on-chain terms */}
       {busy === 'passkey' && <Card className="border-blue"><p className="mb-1 text-[13px] font-semibold" data-testid="nft-passkey-title">{t('nfTPasskeyTitle')}</p><Identity r={r} t={t} testid="nft-passkey-summary" />
         <dl><Fact k={t('to')}><span className="break-all font-mono text-[12.5px]">{r.to}</span></Fact><Fact k={t('feeMax')}>{fee(r.fee.max)}{r.fee.rent !== null && r.fee.rent !== '0' ? ` + ${fee(r.fee.rent)}` : ''}</Fact></dl></Card>}
-      {err && <Notice tone="danger"><span role="alert" data-testid="nft-send-error">{err}</span></Notice>}
-      <Btn full busy={!!busy} disabled={needCheck && !checked} onClick={approve} data-testid="nft-send-approve"><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>
-      <Btn full kind="ghost" disabled={!!busy} onClick={() => void cancel()} data-testid="nft-send-cancel">{t('cancel')}</Btn>
+      {err && !ap.locked && <Notice tone="danger"><span role="alert" data-testid="nft-send-error">{err}</span></Notice>}
+      <ApprovalOutcomePanel ap={ap} />
+      {!ap.locked && <Btn full busy={!!busy} disabled={needCheck && !checked} onClick={approve} data-testid="nft-send-approve"><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>}
+      {!ap.locked && busy !== 'submit' && <Btn full kind="ghost" disabled={!!busy} onClick={() => void cancel()} data-testid="nft-send-cancel">{t('cancel')}</Btn>}
     </div>; }
 
   const idx = FLOW.indexOf(shown.state), bad = idx < 0, r = (shown.nft ?? prep?.review) as NftReview | undefined;

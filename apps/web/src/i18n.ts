@@ -3393,6 +3393,18 @@ const D = {
   hl1PickCount: ['{n} marchés — vos favoris d’abord, puis les plus négociés.', '{n} markets — your favourites first, then the most traded.'],
   hl1PickVolume: ['Volume 24 h : {v}', '24 h volume: {v}'], hl1PickNotAllowed: ['hors autorisation', 'not in your authorization'],
   // <<< Hyperliquid only — end of the `hl1` block
+  // NEXT web safety (W1–W5): the outcome of an approval is what the server says; honest freshness; error states
+  e_timeout: ['Délai dépassé : la réponse du serveur n’est pas arrivée.', 'Timed out: the server’s answer did not arrive.'],
+  e_bad_answer: ['Réponse illisible du serveur.', 'Unreadable answer from the server.'],
+  nxChecking: ['Vérification de ce qui s’est passé…', 'Checking what happened…'],
+  nxCheckingBody: ['La réponse du serveur n’est pas arrivée. L’état de l’opération est relu sur le serveur : ne recommencez pas, ne fermez pas cette page.', 'The server’s answer did not arrive. The state of the operation is being read from the server: do not start again, do not close this page.'],
+  nxUnknownTitle: ['État inconnu — n’envoyez pas de nouveau', 'Status unknown — do not send again'],
+  nxUnknownBody: ['L’approbation est partie, mais la réponse n’est pas revenue et l’état n’a pas pu être relu. L’opération a peut-être été signée et envoyée. Vérifiez à nouveau, ou consultez l’activité, avant toute nouvelle tentative.', 'The approval left this device, but the answer did not come back and the state could not be read. The operation may have been signed and sent. Check again, or open Activity, before any new attempt.'],
+  nxUnknownBodyNoRead: ['L’approbation est partie, mais la réponse n’est pas revenue. L’opération a peut-être été prise en compte. Consultez l’activité, et l’état affiché après rechargement, avant toute nouvelle tentative.', 'The approval left this device, but the answer did not come back. The operation may have been taken into account. Open Activity, and look at the state shown after a reload, before any new attempt.'],
+  nxRecheck: ['Vérifier à nouveau', 'Check again'], nxSeeActivity: ['Voir l’activité', 'Open Activity'],
+  nxNotReceived: ['La réponse s’est perdue, et le serveur indique que l’approbation ne lui est pas parvenue : rien n’a été signé. Vous pouvez approuver de nouveau.', 'The answer was lost, and the server reports that the approval did not reach it: nothing was signed. You can approve again.'],
+  nxCancelFailed: ['L’annulation n’a pas pu être confirmée, rien n’a été modifié à l’écran. {why}', 'The cancellation could not be confirmed; nothing was changed on screen. {why}'],
+  nxAtaNotSeen: ['La réponse s’est perdue et le compte de jetons n’est pas encore visible. S’il a été créé, il apparaîtra d’ici une minute ; sinon, recommencez.', 'The answer was lost and the token account is not visible yet. If it was created it will appear within a minute; otherwise, start again.'],
 } as const;
 export type Key = keyof typeof D;
 // v10 performance pass — ONE language at a time in the browser. `D` above (both languages side by side, the form every
