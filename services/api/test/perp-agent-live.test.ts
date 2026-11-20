@@ -696,6 +696,8 @@ describe('through the API routes: the owner\'s session, CSRF, no route that plac
     const w = await liveWorld(), ORIGIN = 'https://wallet.test';
     // V11.2: the API's own passkey step of the mandate approval is verified against the API's credentials table
     { const c = w.pk.credential(); await sql`insert into credentials (id, public_key, counter, transports, label) values (${c.id}, ${c.publicKey}, 0, ${sql.json(c.transports)}, 'test passkey') on conflict (id) do nothing`; }
+    // NEXT (audit P4): …and the passkey must be on the SIGNER's list. This world's signer is in process (no HTTP): the API's signer client reads its status
+    { const sc = await import('../src/signer-client.ts'); sc.signer.status = (async () => w.signer.status()) as never; if (w.signer.status().credentials.length === 0) await w.signer.enroll({ credential: w.pk.credential(), setupToken: 'tok' }); }
     const dv = mod.createDerivatives({ registry: mod.createRegistry(fixtureVenues(w.clock as never).adapters, w.clock.now), now: w.clock.now });
     const app = await (await import('../src/server.ts')).buildServer({ derivatives: dv, live: w.svc });
     await (await import('./derivatives-helpers.ts')).openLiveLimits(sql);   // V11: the owner's limits of the unified risk engine (absent = every new live order is denied)

@@ -4,6 +4,8 @@ Status: accepted by the owner on 2026-11-10 for small balances (owner instructio
 Amended on 2026-11-15 (V11 Phase B): the section "What the signer signs, and when it asks for the passkey" replaces two
 statements of the original decision that had stopped being true ("every signature requires a fresh WebAuthn assertion",
 "the signer can only express two transaction shapes per chain"). The decision itself — option (b) — is unchanged.
+Amended on 2026-11-19 (NEXT, audit P1 / C1 / C3): the section "Passkeys: who can approve" is new; rows 2 and 3 of the table
+gain a daily count; the halt is applied outside the signer's queue. The decision and the seven passkey-less paths are unchanged.
 
 ## Options considered
 
@@ -49,7 +51,23 @@ Transfers on every supported network, swaps (KyberSwap, Jupiter), bridges (Circl
 reclaim of a Solana event account; opening the wallet's Solana USDC account), native cross-chain swaps (THORChain), deposits to
 a venue, GMX orders (increase, decrease, cancellation), a Hyperliquid order or leverage change in manual mode, a withdrawal
 from a venue to the wallet's own address, and every grant of standing authority: an agent mandate, a venue authorization, a
-derivative mandate, a GMX venue policy, the enrolment of another passkey.
+derivative mandate, a GMX venue policy, the addition or the revocation of a passkey (next section).
+
+### Passkeys: who can approve (NEXT, 2026-11-19)
+
+The signer's own list of passkeys is the source of truth; the API's table is a copy, compared with it (a divergence that
+lasts raises an alert). The list changes in three ways only:
+
+- **the first passkey**: `POST /enroll` with the operator's one-time setup token (issued on the signer machine);
+- **adding or revoking one passkey**: `POST /credential` — a canonical request `SPW-CRED-v2`
+  (`packages/core/src/credential.ts`: action, credential id, public key, request id, validity ≤ 300 s, this signer's key id)
+  approved by **another** enrolled passkey. Single use (the request id is a replay marker saved before the answer). Adding is
+  refused under the halt; revoking is not; the last passkey is never revoked; the passkey named by a request never approves
+  it. The earlier `SPW-ENROLL-v1` approval (no expiry, no request id) is no longer accepted;
+- **the operator** on the signer machine: `reset-passkeys`.
+
+Optional cool-down (`newCredentialCooldownSec` in `policy.json`, off unless the owner sets it): a passkey added by another
+passkey approves nothing on the signer — no transfer, no grant, no addition, no revocation — for that long.
 
 Since NFT delivery 2 (2026-11-17), three more operations, each with a passkey assertion over its own canonical object
 (`packages/core/src/nft-intent.ts` — new types under their own domain separators; the transfer intent of `intent.ts` is
@@ -67,8 +85,8 @@ named standard: `docs/nft/NFT-TRANSFERS.md` §4 says why that cannot move anothe
 | # | Signer route | Key that signs | Standing authority it rests on | What bounds it, enforced by the signer alone |
 |---|---|---|---|---|
 | 1 | `POST /mandate/sign` — a swap inside an agent vault | the vault's key (HD account ≥ 1, never the owner's) | a spot mandate approved with the passkey | not halted, not revoked, not expired; one active mandate per vault; the mandated provider, network and assets only; spends from and delivers to the vault itself; per-order and daily volume per asset; orders per day; validity ≤ 300 s; fee ceiling of the policy; calldata rebuilt and checked; guaranteed output worth at least `1 − maxSlippageBps` of the input at the signer's own Coinbase + Kraken prices; replay marker. **Not bounded: the market loss of what the vault holds** (see `docs/V11-SECURITY-REVIEW.md`, "Spot mandate loss limit") |
-| 2 | `POST /mandate/return` — a transfer out of a vault | the vault's key | none needed beyond the mandate record | destination must be the owner's own address; plain transfer only; validity ≤ 300 s; fee ceiling; replay marker. No amount limit and no halt check: it can only bring the owner's funds back to the owner |
-| 3 | `POST /vault/return` — same, for a vault with no mandate or on another EVM network | the vault's key | none | as row 2; EVM networks only. Worst case for both rows: gas spent from the vault, at most the fee ceiling per call |
+| 2 | `POST /mandate/return` — a transfer out of a vault | the vault's key | none needed beyond the mandate record | destination must be the owner's own address; plain transfer only; validity ≤ 300 s; fee ceiling; replay marker; NEXT: at most `maxVaultReturnsPerDay` (default 12) returns per vault and UTC day, rows 2 and 3 together. No amount limit and no halt check: it can only bring the owner's funds back to the owner |
+| 3 | `POST /vault/return` — same, for a vault with no mandate or on another EVM network | the vault's key | none | as row 2; EVM networks only. Worst case for both rows: gas spent from the vault, at most the fee ceiling per call and, since NEXT, twelve calls per vault and day |
 | 4 | `POST /venue/sign` — a **cancel** on Hyperliquid | the venue trading key (a dedicated key that can only sign orders, cancels and leverage changes) | a venue authorization approved with the passkey, not revoked, not expired | the action is read by the signer (`describe`, pinned asset table); allowed instruments only; a venue expiry ≤ 120 s; nonce never reused. A cancel can only remove an order. Signed under the emergency halt |
 | 5 | `POST /venue/mandate/sign` — an order, a cancel or a leverage change on Hyperliquid for an automated strategy | the venue trading key | a derivative mandate approved with the passkey, extending an authorization | cancel: as row 4. Reduce-only order: instrument, order notional, price rule, client id never signed twice — also under halt and during the 24 h wind-down. Order that can add exposure: mandate active and not halted; orders per day and per hour; daily turnover; **the signer's own read of the venue account** (fresh, consistent, valued at its own prices): account value ≥ the mandate's floor, leverage setting ≤ the mandate's, worst-case position and gross exposure within the mandate. Leverage change: ≤ the mandate's, ≤ 20 a day, never a margin-mode change on an open position. The trading key cannot withdraw, transfer or approve another key |
 | 6 | `POST /bridge/mint` — the **first** `receiveMessage` of a bridge | the owner's wallet key | the burn of that bridge, approved with the passkey | only the message that matches the stored approved bridge; mints the wallet's own burned USDC to the wallet's own address; one signature per bridge (an identical request gets the same bytes again; any other needs the passkey); fee ceiling of the destination network; not halted |
@@ -93,6 +111,12 @@ transaction the signer built itself: no collateral leaves, no approval, `MarketD
 still required). Vault returns to the owner (rows 2 and 3) are not halted either. Lifting the halt is an operator action on
 the signer machine (`signer unhalt`), applied by the running daemon through a socket in its own data directory; no HTTP
 route lifts it.
+
+NEXT: the halt (`POST /halt`, or `signer halt` on the machine) is applied as soon as the request is authenticated — it does
+not wait in the signer's queue behind a signature, a price read or a venue read, and an unauthenticated or unfinished
+request never enters that queue. A signature being computed when the halt is recorded is not released: the answer of a
+request whose handler started before the halt and ends after it is withheld (journal `halt.withheld`) — except the returns
+of rows 2 and 3, which are never halted. Under the halt no passkey is added; one can be revoked.
 
 ### What is enforced by the API only
 

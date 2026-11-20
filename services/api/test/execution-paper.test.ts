@@ -82,7 +82,12 @@ const releaseSwitch = async (kind: 'kill-switch' | 'read-only') => { const p = a
 
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spw-exec-paper-'));
-  signerSrv = createSignerServer(new Signer(deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'), new Store(join(dir, 'state.json'), join(dir, 'policy.json')), { rpId: RP, origin: ORIGIN }), SECRET).listen(0, '127.0.0.1');
+  // NEXT (audit P4): the API's own passkey checks accept only a passkey the SIGNER lists — the test passkey is pinned there too, as on a real wallet
+  const signerStore = new Store(join(dir, 'state.json'), join(dir, 'policy.json'));
+  signerStore.state.setupTokenHash = createHash('sha256').update('tok').digest('hex');
+  const signerOfTest = new Signer(deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'), signerStore, { rpId: RP, origin: ORIGIN });
+  await signerOfTest.enroll({ credential: owner.credential(), setupToken: 'tok' });
+  signerSrv = createSignerServer(signerOfTest, SECRET).listen(0, '127.0.0.1');
   await new Promise((r) => signerSrv.once('listening', r));
   hookSrv = createServer((req, res) => { let body = ''; req.on('data', (c) => { body += c; }); req.on('end', () => { received.push(JSON.parse(body)); res.statusCode = 200; res.end('ok'); }); }).listen(0, '127.0.0.1');
   await new Promise((r) => hookSrv.once('listening', r));

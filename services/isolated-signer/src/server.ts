@@ -5,8 +5,12 @@ import { Signer, SignerError } from './signer.ts';
 const MAX_BODY = 1024 * 1024; // legacy UTXO chains attach previous transactions
 /** NEXT (audit C1): the whole body of a request must have arrived this long after its headers */
 const BODY_TIMEOUT_MS = 5000;
-/** connections open at once; above it new ones are dropped (stalled clients must not use up the file descriptors the state is written with) */
-const MAX_CONNECTIONS = 64;
+/**
+ * Connections open at once; above it new ones are dropped. The API opens one connection per request and waits for its answer,
+ * so this is also the depth of the queue. It keeps a flood of idle connections from using up the file descriptors the state
+ * and the operator's control socket need (a connection that sends nothing is closed after `headersTimeout`).
+ */
+const MAX_CONNECTIONS = 128;
 
 export function authHeader(secret: string, method: string, path: string, body: string, ts = Math.floor(Date.now() / 1000), nonce: string = crypto.randomUUID()): string {
   const mac = createHmac('sha256', secret).update([method, path, ts, nonce, createHash('sha256').update(body).digest('hex')].join('\n')).digest('hex');
@@ -88,12 +92,12 @@ export function createSignerServer(signer: Signer, secret: string, allowedIps: s
     nonces.set(a.nonce, a.ts);
   };
   const server = createServer({ connectionsCheckingInterval: 1000, headersTimeout: 5000, requestTimeout: 10_000, keepAliveTimeout: 1000 }, (req, res) => {
-    /** `drop`: the request was not read to its end — the connection is closed once the answer is written */
-    const send = (code: number, obj: unknown, drop = false) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store', connection: 'close' }); res.end(JSON.stringify(obj), drop ? () => req.socket.destroy() : undefined); };
+    /** a request refused before its body was read to the end (bad source, bad header, too large, too slow): the connection is closed once the answer is written */
+    const send = (code: number, obj: unknown) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store', connection: 'close' }); res.end(JSON.stringify(obj), req.complete ? undefined : () => req.socket.destroy()); };
     const refuse = (e: unknown) => {
       const code = e instanceof SignerError ? e.code : 'internal';
       const http = code === 'unauthorized' ? 401 : code === 'not_found' ? 404 : code === 'too_large' ? 413 : code === 'timeout' ? 408 : code === 'internal' ? 500 : 422;
-      send(http, { error: code, message: e instanceof SignerError ? e.message : 'internal error' }, code === 'too_large' || code === 'timeout');
+      send(http, { error: code, message: e instanceof SignerError ? e.message : 'internal error' });
     };
     if (req.method === 'GET' && req.url === '/healthz') return send(200, { ok: true }); // liveness only, no information
     /** step 1: nothing here touches the signer or the queue */

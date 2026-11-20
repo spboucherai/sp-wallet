@@ -78,7 +78,11 @@ beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spw-exec-spot-'));
   const keys = deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
   ME = keys.addresses.evm;
-  signer = new Signer(keys, new Store(join(dir, 'state.json'), join(dir, 'policy.json')), { rpId: RP, origin: ORIGIN });
+  // NEXT (audit P4): the API's own passkey checks accept only a passkey the SIGNER lists — the test passkey is pinned there too, as on a real wallet
+  const signerStore = new Store(join(dir, 'state.json'), join(dir, 'policy.json'));
+  signerStore.state.setupTokenHash = createHash('sha256').update('tok').digest('hex');
+  signer = new Signer(keys, signerStore, { rpId: RP, origin: ORIGIN });
+  await signer.enroll({ credential: owner.credential(), setupToken: 'tok' });
   signerSrv = createSignerServer(signer, SECRET).listen(0, '127.0.0.1');
   await new Promise((r) => signerSrv.once('listening', r));
   await useDatabase('execution_spot');

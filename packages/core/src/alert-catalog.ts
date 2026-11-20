@@ -141,6 +141,13 @@ export const ALERT_DEFS: readonly AlertDef[] = [
   d('security.passkey_added', 'security', 'critical', true, ['Nouvelle clé d’accès', 'New passkey enrolled'],
     ['Une clé d’accès « {label} » a été ajoutée. Si ce n’est pas vous : arrêt d’urgence.', 'A passkey “{label}” was added. If this was not you: emergency halt.'],
     ['Une clé d’accès a été ajoutée. Si ce n’est pas vous : arrêt d’urgence.', 'A passkey was added. If this was not you: emergency halt.']),
+  // NEXT (credential life cycle): a passkey was revoked; the signer and the application do not list the same passkeys
+  d('security.passkey_revoked', 'security', 'warning', true, ['Clé d’accès révoquée', 'Passkey revoked'],
+    ['La clé d’accès « {label} » a été révoquée ; {count} session(s) fermée(s).', 'The passkey “{label}” was revoked; {count} session(s) closed.'],
+    ['Une clé d’accès a été révoquée ; {count} session(s) fermée(s).', 'A passkey was revoked; {count} session(s) closed.']),
+  d('security.credential_mismatch', 'security', 'critical', true, ['Clés d’accès : le signataire et l’application divergent', 'Passkeys: the signer and the app disagree'],
+    ['{count} clé(s) d’accès ne sont connues que d’un côté (signataire ou application). Ouvrez Sécurité : une clé que vous ne reconnaissez pas doit être révoquée.', '{count} passkey(s) are known to one side only (signer or app). Open Security: a passkey you do not recognise must be revoked.'],
+    ['{count} clé(s) d’accès ne sont connues que d’un côté. Ouvrez Sécurité.', '{count} passkey(s) are known to one side only. Open Security.']),
   d('security.new_device', 'security', 'warning', true, ['Connexion depuis un nouvel appareil', 'Sign-in from a new device'],
     ['{device} ({ip}).', '{device} ({ip}).'], ['Un appareil jamais vu a ouvert une session.', 'A device never seen before signed in.']),
   d('security.login_failed', 'security', 'warning', true, ['Connexions refusées', 'Sign-in attempts refused'],

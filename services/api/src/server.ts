@@ -6,7 +6,8 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import { z, ZodError } from 'zod';
 import { formatUnits, getNetwork, NETWORKS, normalizeAddress, type NetworkDef, type NetworkId } from '@spw/core';
-import { authRoutes, deviceRoutes, isAuthed, listCreds } from './auth.ts';
+import { authRoutes, credentialSets, currentSessionId, deviceRoutes, isAuthed, listCreds } from './auth.ts';
+import { describeUa } from './alerts/rules.ts'; // NEXT: the coarse device label of a session (browser · system)
 import { adapterFor } from './chains/index.ts';
 import { http, rpcEndpointHealth } from './chains/rpc.ts';
 import { createGecko, priceStamp } from './gecko.ts';
@@ -336,14 +337,32 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     return readSettings();
   });
 
-  app.get('/api/v1/security/overview', async () => {
+  // NEXT — additive: every field that existed keeps its name, type and meaning (the native apps 1.0 decode this answer).
+  //   signer.recoveryExportedAt / recoveryVerifiedAt / credentialCooldownSec   what the signer says about its recovery phrase and its cool-down
+  //   devices[].credentialId, .revocable, .inCooldown                          the full id (what the revoke routes take); can it be revoked now
+  //   sessions[].id, .current, .device, .credential                            the session's PUBLIC id (never derived from its token); is it this one
+  //   signerCredentials                                                        the SIGNER's list — the source of truth for who can approve (null: unreachable)
+  //   mismatch                                                                 ids known to one side only (null: unreachable); currentSessionId
+  app.get('/api/v1/security/overview', async (req) => {
     const st = await signer.status(true).catch(() => null);
-    const devices = (await listCreds()).map((c) => ({ id: c.id.slice(0, 12), label: c.label, deviceType: c.device_type, backedUp: c.backed_up, createdAt: c.created_at, lastUsedAt: c.last_used_at,
-      enrolledOnSigner: !!st?.credentials.some((x) => x.id === c.id) }));
-    const sessions = await sql`select created_at, last_seen, ua, ip from sessions where not revoked and expires_at > now() order by last_seen desc limit 20`;
+    const { creds, mismatch } = await credentialSets(st);
+    const pinned = (id: string) => st?.credentials.find((x) => x.id === id);
+    const devices = creds.map((c) => ({ id: c.id.slice(0, 12), label: c.label, deviceType: c.device_type, backedUp: c.backed_up, createdAt: c.created_at, lastUsedAt: c.last_used_at,
+      enrolledOnSigner: !!pinned(c.id), credentialId: c.id, inCooldown: !!pinned(c.id)?.inCooldown,
+      // on the signer: as long as it is not the last one there; a row the signer does not list approves nothing and can always go
+      revocable: !!st && (!pinned(c.id) || st.credentials.length > 1) }));
+    const current = await currentSessionId(req);
+    const sessions = (await sql<{ sid: string; created_at: Date; last_seen: Date; ua: string; ip: string; credential_id: string | null }[]>`
+      select sid, created_at, last_seen, ua, ip, credential_id from sessions where not revoked and expires_at > now() order by last_seen desc limit 20`)
+      .map((x) => ({ created_at: x.created_at, last_seen: x.last_seen, ua: x.ua, ip: x.ip, id: x.sid, current: x.sid === current, device: describeUa(x.ua), credential: x.credential_id?.slice(0, 12) ?? null }));
     return {
-      signer: st ? { reachable: true, keyId: st.keyId, halted: st.halted, journalLength: st.journalLength, journalHead: st.journalHead, policy: st.policy, spentToday: st.spentToday } : { reachable: false },
+      signer: st ? { reachable: true, keyId: st.keyId, halted: st.halted, journalLength: st.journalLength, journalHead: st.journalHead, policy: st.policy, spentToday: st.spentToday,
+        recoveryExportedAt: st.recoveryExportedAt ?? null, recoveryVerifiedAt: st.recoveryVerifiedAt ?? null, credentialCooldownSec: st.credentialCooldownSec ?? 0 } : { reachable: false },
       devices, sessions, origin: config.origin, broadcast: config.broadcast,
+      signerCredentials: st ? st.credentials.map((c) => { const row = creds.find((x) => x.id === c.id);
+        return { id: c.id, createdAt: c.createdAt ?? c.addedAt, lastUsedAt: c.lastUsedAt ?? null, inCooldown: !!c.inCooldown, cooldownUntil: c.cooldownUntil ?? null,
+          known: !!row, label: row?.label ?? null, revocable: st.credentials.length > 1 }; }) : null,
+      mismatch, currentSessionId: current,
     };
   });
   app.get('/api/v1/security/devices', async () => (await listCreds()).map((c) => ({ id: c.id.slice(0, 12), label: c.label, createdAt: c.created_at, lastUsedAt: c.last_used_at })));
@@ -353,6 +372,16 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     return { ok: true, halted: true };
   });
   app.get('/api/v1/security/audit', async (req) => auditList(z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) }).parse(req.query).limit));
+  // NEXT — the last sign-ins, from the audit chain (`login.ok`): time, passkey, address, a coarse device label, and whether that
+  // device had ever opened a session before. Fields a record written before NEXT does not carry are null.
+  app.get('/api/v1/security/logins', async (req) => {
+    const q = z.object({ limit: z.coerce.number().int().min(1).max(200).default(20) }).parse(req.query);
+    const rows = await sql<{ seq: number; ts: Date; data: Record<string, unknown> }[]>`select seq::int as seq, ts, data from audit_events where type = 'login.ok' order by seq desc limit ${q.limit}`;
+    const labels = new Map((await listCreds()).map((c) => [c.id.slice(0, 12), c.label]));
+    const text = (v: unknown) => (typeof v === 'string' ? v : null);
+    return { logins: rows.map((r) => ({ seq: r.seq, at: r.ts, credential: text(r.data.credential), label: text(r.data.label) ?? labels.get(String(r.data.credential)) ?? null,
+      ip: text(r.data.ip), device: text(r.data.device), newDevice: typeof r.data.newDevice === 'boolean' ? r.data.newDevice : null, session: text(r.data.session) })) };
+  });
 
   if (config.webDir && existsSync(join(config.webDir, 'index.html'))) {
     // wildcard serving: files are resolved per request, so a rebuilt bundle is served without restarting the API

@@ -359,7 +359,7 @@ describe('transport (C1): authentication and body outside the queue, the halt ne
   it('nothing unauthenticated enters the queue: bad source, bad header, bad MAC and replayed nonce are answered while the queue is busy', async () => {
     const enqueue = createQueue(); let release!: () => void;
     void enqueue(() => new Promise<void>((r) => { release = r; }));                                      // a handler that takes its time
-    const { signer } = await setup(), { port, call } = await serve(signer, { enqueue });
+    const { signer } = await setup(), { port, call, raw } = await serve(signer, { enqueue });
     const get = (auth?: string) => fetch(`http://127.0.0.1:${port}/status`, { headers: auth ? { 'x-spw-auth': auth } : {} }).then((r) => r.status);
     expect(await get()).toBe(401);
     expect(await get(authHeader('x'.repeat(48), 'GET', '/status', ''))).toBe(401);
@@ -368,6 +368,10 @@ describe('transport (C1): authentication and body outside the queue, the halt ne
     await sleep(30);
     expect(await get(h)).toBe(401);                                                                      // its nonce is already taken, although its handler has not run
     expect(await call('POST', '/halt', {})).toMatchObject({ status: 200 });                              // and the halt does not wait either
+    // refused on its header: answered and CLOSED at once, although the body it announced never came (its bytes are not waited for)
+    const t0 = Date.now(), unread = await raw('POST /sign HTTP/1.1\r\nhost: signer\r\nx-spw-auth: nonsense\r\ncontent-length: 500\r\n\r\n{"intent":').closed;
+    expect(unread).toMatch(/^HTTP\/1\.1 401 /);
+    expect(Date.now() - t0).toBeLessThan(2000);
     release();
     expect(await first).toBe(200);
     // source allowlist: checked first, before the header and the body

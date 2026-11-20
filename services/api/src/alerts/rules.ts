@@ -177,6 +177,9 @@ async function fromAudit(e: AlertEvent, c: RuleCtx): Promise<Draft[]> {
       return [{ kind: 'security.policy_changed', params: { what: '@derivatives', name: acct.label, detail: `${acct.label}${d.maxLeverage !== undefined ? `, max leverage ${str(d.maxLeverage, 10)}` : ''}` }, subject: { type: 'account', id } }];
     }
     case 'device.added': return [{ kind: 'security.passkey_added', params: { label: str(d.label, 40) }, subject: { type: 'none' } }];
+    // NEXT (credential life cycle): a revocation; a divergence between the signer's passkeys and the application's table that lasted (auth.ts `credentialSets`)
+    case 'device.revoked': return [{ kind: 'security.passkey_revoked', params: { label: str(d.label, 40), count: Number(d.sessions) || 0 }, subject: { type: 'none' } }];
+    case 'credentials.mismatch': return [{ kind: 'security.credential_mismatch', params: { count: Number(d.count) || 0 }, subject: { type: 'none' }, dedupe: `cred_mismatch:${e.id}` }];
     case 'login.failed': return [{ kind: 'security.login_failed', params: { ip: str(d.ip, 60), count: 1 }, dedupe: `login_failed:${bucket(e.ts, 15)}`, bump: true }];
     case 'login.ok': return newDevice(e, c);
     // v7 any-to-any plans: the plan saga records these itself (services/api/src/plan-exec.ts); every parameter comes from the event

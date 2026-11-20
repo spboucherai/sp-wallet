@@ -572,6 +572,16 @@ create table if not exists utxo_reviews (network text not null, outpoint text no
 create table if not exists nft_market_cache (provider text not null, kind text not null, ref text not null, data jsonb not null, fetched_at timestamptz not null default now(), primary key (provider, kind, ref));
 create table if not exists nft_market_slug (collection_key text not null, provider text not null, slug text not null, learnt_at timestamptz not null default now(), primary key (collection_key, provider));
 -- <<< NFT delivery 3
+-- >>> NEXT (credential and session life cycle): additive. sid = the PUBLIC id of a session (random, unrelated to the token:
+-- id_hash stays the only thing derived from it); credential_id = the passkey that opened it (null on rows written before);
+-- interactive = the client has sent the user-interaction header at least once (auth.ts, idle timer). pending_credentials.request
+-- = the SPW-CRED-v2 request built for that pending passkey (null on a row written before: it is asked again).
+alter table sessions add column if not exists sid uuid not null default gen_random_uuid();
+create unique index if not exists sessions_sid on sessions (sid);
+alter table sessions add column if not exists credential_id text;
+alter table sessions add column if not exists interactive boolean not null default false;
+alter table pending_credentials add column if not exists request jsonb;
+-- <<< NEXT (credential and session life cycle)
 `;
 
 export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }

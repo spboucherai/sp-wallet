@@ -213,6 +213,51 @@ approved for NFT transfers) and `utxoLocks` (locked Bitcoin-style outpoints). A 
 
 Rolling forward again needs nothing: the locks, the allow-list and the day's count are in force again.
 
+### Signer changes of NEXT (credential life cycle, queue, start-up refusal), and the rollback rule
+
+**Before the restart (step 4).** The signer now **refuses to start** when it listens on a network address
+(`SPW_SIGNER_HOST` other than `127.x`, `::1`, `localhost`) with an empty `SPW_SIGNER_ALLOW_IPS`. Check the PM2 environment
+of `sp-wallet-signer` first: the allowlist must hold the API node's address. The start line of the log now shows it:
+`signer <key id> listening on <host>:<port> halted=<…> allowed-sources=<list>`.
+
+**Deploy the API and the signer in the same window.** Adding and revoking a passkey need both sides at NEXT (the API
+sends a `SPW-CRED-v2` request to the signer's new route `POST /credential`; the signer no longer accepts the old
+`SPW-ENROLL-v1` approval on `POST /enroll`). With one side old and the other new, *Security → add a passkey* answers an error
+(`signer_not_found` or `signer_forbidden`) and nothing is added; everything else — sign-in, transfers, swaps, the halt —
+works in both mixed states. The native apps 1.0 cannot add a passkey until they are updated (they compute the old challenge
+and stop before any passkey prompt); they add one from the web app meanwhile.
+
+**Policy.** `policy.json` is still left alone. Two OPTIONAL keys exist, absent from the production file and never written
+by the signer: `newCredentialCooldownSec` (absent = 0 = no cool-down: unchanged behaviour) and `maxVaultReturnsPerDay`
+(absent = 12 passkey-less returns per agent vault per UTC day; **this default is new behaviour**: a 13th return of the same
+vault on the same day is refused and journaled `return.denied`). To set one, add the key by hand and restart.
+
+**State.** `state.json` gains OPTIONAL fields: `vaultReturns` (returns per day and vault, kept three days),
+`recoveryExportedAt`, `recoveryVerifiedAt`, and on a credential `lastUsedAt` and `addedBy`. A state written before loads
+unchanged, and an old credential is not rewritten with new fields until it approves something. New journal record types:
+`credential.added`, `credential.revoked`, `credential.denied`, `halt.withheld`, `recovery.exported`, `recovery.verified`.
+
+**Before rolling the signer back** to a binary from before NEXT:
+
+1. **Remove `newCredentialCooldownSec` and `maxVaultReturnsPerDay` from `policy.json`** if they were added: the older
+   binary's schema is strict and refuses to start on a file that carries them (fail closed).
+2. Know what the older binary does NOT do: it does not enforce a cool-down, it does not cap vault returns, it reads the
+   request body inside its queue (a stalled client can delay the halt again), and **it accepts again the old way of adding
+   a passkey** (an enrolled passkey's assertion over `SPW-ENROLL-v1`, no expiry, no single use). It has no route to revoke
+   one passkey: with the NEXT API in front of it, add and revoke answer an error. Roll the API back too if passkeys must be
+   added meanwhile.
+3. Nothing is lost: the older binary keeps the new state fields on disk untouched (it rewrites what it read), the replay
+   markers of credential requests are ordinary entries of `used`, and every passkey added or revoked under NEXT stays
+   added or revoked. **Do not put `state.json.bak-*` back** (same rule as above): it would bring revoked passkeys back.
+
+Rolling forward again needs nothing.
+
+**Backup of the signer's state (new).** `node signer.mjs backup-state <file.tar>` writes `state.json`, `policy.json` and
+every `journal*.jsonl` as one tar, mode 0600, never over an existing file — and **nothing else**: no keystore, no wrap key,
+no gateway secret. It can run next to the daemon. The copy holds no key; it does hold the passkeys' public keys, the limits
+and the journal: keep it private, copy it off the node. It restores counters, revocations and the journal onto a signer
+that already has its keystore; it restores no key.
+
 ## 3. Research node — only when `services/research-runner` or `research/` changed
 
 `services/research-runner/README.md`. Its secret is the API's `SPW_RESEARCH_RUNNER_SECRET`.
