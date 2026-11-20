@@ -24,6 +24,7 @@ import { venueQuotingApprove, venueQuotingRevoke, venueQuotingSign, venueQuoting
 import { checkPolicyNoSpend } from '@spw/core'; // v8 GMX: decrease / cancel move no asset amount
 import { gmxAuthorize, gmxPlainVerdict, gmxPrepare, gmxRevoke, gmxStatus } from './venue-gmx.ts'; // v8 GMX v2 orders (wallet transactions built here)
 import { lockedInput, nftAllowApply, nftSign, nftStatus, utxoLockStatus, utxoLocksApply, type NftCtx } from './nft.ts'; // NFT delivery 2
+import { CRED_MAX_TTL_SEC, CredentialRequestSchema, credentialHash, DEFAULT_MAX_VAULT_RETURNS_PER_DAY } from '@spw/core'; // NEXT: credential life cycle v2, vault return cap
 
 export class SignerError extends Error { constructor(public code: string, msg: string) { super(msg); } }
 const sha = (s: string | Uint8Array) => createHash('sha256').update(s).digest();
@@ -39,7 +40,13 @@ export class Signer {
     return {
       keyId: this.keys.keyId, addresses: this.keys.addresses, halted: s.halted,
       enrollmentOpen: s.credentials.length === 0 && s.setupTokenHash !== null,
-      credentials: s.credentials.map((c) => ({ id: c.id, addedAt: c.addedAt })),
+      // NEXT: the signer's own list is the source of truth for who can approve. Identifiers and dates only, never a public key.
+      // `lastUsedAt`: the last approval THIS signer verified with the passkey (a login is the API's business and is not seen here).
+      credentials: s.credentials.map((c) => { const until = this.cooldownUntil(c); return { id: c.id, addedAt: c.addedAt, createdAt: c.addedAt, lastUsedAt: c.lastUsedAt ?? null, inCooldown: until !== null, cooldownUntil: until }; }),
+      credentialCooldownSec: this.store.policy.newCredentialCooldownSec ?? 0,
+      maxVaultReturnsPerDay: this.store.policy.maxVaultReturnsPerDay ?? DEFAULT_MAX_VAULT_RETURNS_PER_DAY,
+      // NEXT (K1): when the operator last completed `export-recovery` / last proved the written phrase with `verify-recovery`; null = never
+      recoveryExportedAt: s.recoveryExportedAt ?? null, recoveryVerifiedAt: s.recoveryVerifiedAt ?? null,
       policy: this.store.policy,
       spentToday: Object.fromEntries(Object.entries(s.spent).filter(([k]) => k.startsWith(today)).map(([k, v]) => [k.slice(11), v])),
       journalHead: this.store.journalHead()?.hash ?? null, journalLength: this.store.journalHead()?.seq ?? 0,
@@ -92,9 +99,24 @@ export class Signer {
   gmxAuthorize(authorization: unknown, assertion?: AuthenticationResponseJSON) { return gmxAuthorize(this.venueCtx(), authorization, assertion); }
   gmxRevoke(authorizationId: string) { return gmxRevoke(this.venueCtx(), authorizationId); }
 
+  /**
+   * NEXT — optional cool-down (`newCredentialCooldownSec` of policy.json, 0 or absent = off): unix time until which a passkey
+   * ADDED BY ANOTHER PASSKEY approves nothing on this signer, null when it is not in cool-down. The first passkey (setup token,
+   * an operator's act on this machine) has no cool-down. An unreadable date counts as "added now": never as "no cool-down".
+   */
+  private cooldownUntil(c: StoredCredential): number | null {
+    const sec = this.store.policy.newCredentialCooldownSec ?? 0;
+    if (sec <= 0 || c.addedBy === undefined) return null;
+    const added = Math.floor(Date.parse(c.addedAt) / 1000), now = this.now();
+    const until = (Number.isFinite(added) ? added : now) + sec;
+    return now < until ? until : null;
+  }
+
+  /** Every approval of this signer — transfers, grants, list changes, credential changes — is verified here and nowhere else. */
   private async verifyAssertion(assertion: AuthenticationResponseJSON, challenge: Uint8Array): Promise<StoredCredential> {
     const cred = this.store.state.credentials.find((c) => c.id === assertion.id);
     if (!cred) throw new SignerError('unknown_credential', 'approval was not made with an enrolled passkey');
+    if (this.cooldownUntil(cred) !== null) throw new SignerError('cooldown', 'this passkey was added recently: it cannot approve anything yet');
     let v;
     try {
       v = await verifyAuthenticationResponse({
@@ -105,25 +127,76 @@ export class Signer {
     } catch (e) { throw new SignerError('bad_approval', `approval verification failed: ${(e as Error).message}`); }
     if (!v.verified || !v.authenticationInfo.userVerified) throw new SignerError('bad_approval', 'approval not verified');
     cred.counter = v.authenticationInfo.newCounter;
+    cred.lastUsedAt = new Date(this.now() * 1000).toISOString(); // saved with the decision it approved (every caller saves)
     return cred;
   }
 
-  /** First passkey needs the one-time setup token; later ones need an assertion from an already enrolled passkey. */
-  async enroll(req: { credential: { id: string; publicKey: string; counter: number; transports?: string[] }; setupToken?: string; assertion?: AuthenticationResponseJSON }): Promise<void> {
+  /**
+   * The FIRST passkey of this signer, pinned with the operator's one-time setup token (`POST /enroll`). NEXT: this is all that
+   * is left of the old path — once a passkey exists, another one is added with a credential request approved by an enrolled
+   * passkey (`credentialApply`, SPW-CRED-v2); an assertion over the `SPW-ENROLL-v1` challenge is no longer accepted. Not
+   * refused under the halt: the token is an operator's act on this machine, and a halted signer whose passkeys were reset must
+   * be able to get its owner back before the halt is lifted.
+   */
+  async enroll(req: { credential: { id: string; publicKey: string; counter: number; transports?: string[] }; setupToken?: string }): Promise<void> {
     const s = this.store.state, c = req.credential;
     if (!/^[A-Za-z0-9_-]{16,1024}$/.test(c.id) || !/^[A-Za-z0-9_-]{40,2048}$/.test(c.publicKey)) throw new SignerError('bad_request', 'malformed credential');
     if (s.credentials.some((x) => x.id === c.id)) throw new SignerError('conflict', 'credential already enrolled');
-    if (s.credentials.length === 0) {
-      const given = sha(req.setupToken ?? ''), want = Buffer.from(s.setupTokenHash ?? '', 'hex');
-      if (want.length !== 32 || !timingSafeEqual(given, want)) throw new SignerError('forbidden', 'invalid setup token');
-      s.setupTokenHash = null; // single use
-    } else {
-      if (!req.assertion) throw new SignerError('forbidden', 'existing passkey approval required');
-      await this.verifyAssertion(req.assertion, enrollChallenge(c.id, c.publicKey));
-    }
-    s.credentials.push({ id: c.id, publicKey: c.publicKey, counter: c.counter, transports: c.transports, addedAt: new Date().toISOString() });
+    if (s.credentials.length > 0) throw new SignerError('forbidden', 'existing passkey approval required: a passkey is added with a credential request (SPW-CRED-v2)');
+    const given = sha(req.setupToken ?? ''), want = Buffer.from(s.setupTokenHash ?? '', 'hex');
+    if (want.length !== 32 || !timingSafeEqual(given, want)) throw new SignerError('forbidden', 'invalid setup token');
+    s.setupTokenHash = null; // single use
+    s.credentials.push({ id: c.id, publicKey: c.publicKey, counter: c.counter, transports: c.transports, addedAt: new Date(this.now() * 1000).toISOString() });
     this.store.log('credential.enrolled', { id: c.id });
     this.store.save();
+  }
+
+  /**
+   * NEXT (audit P1) — add or revoke ONE passkey, approved by ANOTHER enrolled passkey over the canonical request
+   * (packages/core/src/credential.ts, `SPW-CRED-v2`: action, credential, public key, request id, validity, this signer's key id).
+   *   - single use: the request id is recorded with the replay markers and saved before the answer; it expires (≤ 300 s);
+   *   - add: refused under the emergency halt (checked again once the approval is verified), refused when no passkey exists
+   *     (the first one needs the setup token), refused for a credential already enrolled;
+   *   - revoke: allowed under the halt (it only removes authority); the last passkey is never revoked;
+   *   - the passkey named by the request never approves it (neither its own addition nor its own revocation);
+   *   - a passkey in cool-down approves neither (verifyAssertion): a passkey added a minute ago cannot remove the others.
+   * `extra` (signature counter, transports) is not part of the approval: it describes the authenticator and grants nothing.
+   */
+  async credentialApply(raw: unknown, assertion?: AuthenticationResponseJSON, extra?: { counter?: unknown; transports?: unknown }): Promise<{ ok: true; action: 'add' | 'revoke'; credentialId: string; hash: string; credentials: number }> {
+    const st = this.store, now = this.now();
+    const parsed = CredentialRequestSchema.safeParse(raw);
+    if (!parsed.success) throw new SignerError('bad_request', 'malformed credential request');
+    const r = parsed.data;
+    let hash: Uint8Array;
+    try { hash = credentialHash(r); } catch { throw new SignerError('bad_request', 'malformed credential request'); }
+    const counter = extra?.counter ?? 0, transports = extra?.transports ?? [];
+    if (!Number.isSafeInteger(counter) || (counter as number) < 0 || !Array.isArray(transports) || transports.length > 8 || transports.some((t) => typeof t !== 'string' || t.length > 32)) throw new SignerError('bad_request', 'malformed credential');
+    const hashHex = Buffer.from(hash).toString('hex');
+    const deny = (code: string, msg: string): never => { st.log('credential.denied', { requestId: r.requestId, action: r.action, id: r.credentialId, hash: hashHex, code, msg }); st.save(); throw new SignerError(code, msg); };
+    if (r.keyId !== this.keys.keyId) deny('wrong_key', 'request targets another key');
+    if (st.state.used[r.requestId] !== undefined) deny('replay', 'credential request already applied');
+    if (r.expiresAt <= now) deny('expired', 'credential request expired');
+    if (r.createdAt > now + 60 || r.expiresAt <= r.createdAt || r.expiresAt - r.createdAt > CRED_MAX_TTL_SEC) deny('policy', 'validity window is not acceptable');
+    const known = st.state.credentials.some((c) => c.id === r.credentialId);
+    if (r.action === 'add') {
+      if (st.state.halted) deny('policy', 'emergency halt is active: no passkey is added');
+      if (st.state.credentials.length === 0) deny('forbidden', 'the first passkey is enrolled with the setup token');
+      if (known) deny('conflict', 'credential already enrolled');
+    } else {
+      if (!known) deny('not_found', 'no such passkey on this signer');
+      if (st.state.credentials.length <= 1) deny('last_credential', 'the last passkey cannot be revoked');
+    }
+    if (!assertion) deny('bad_approval', 'this change needs the approval of an enrolled passkey');
+    if (assertion!.id === r.credentialId) deny('self_approval', 'a passkey cannot approve its own addition or revocation');
+    let by: StoredCredential;
+    try { by = await this.verifyAssertion(assertion!, hash); } catch (e) { return deny((e as SignerError).code ?? 'bad_approval', (e as Error).message); }
+    if (r.action === 'add' && st.state.halted) deny('policy', 'emergency halt is active: no passkey is added'); // recorded while the approval was being verified
+    st.state.used[r.requestId] = r.expiresAt; st.prune(now);
+    if (r.action === 'add') st.state.credentials.push({ id: r.credentialId, publicKey: r.publicKey!, counter: counter as number, transports: transports as string[], addedAt: new Date(now * 1000).toISOString(), addedBy: by.id });
+    else st.state.credentials = st.state.credentials.filter((c) => c.id !== r.credentialId);
+    st.log(r.action === 'add' ? 'credential.added' : 'credential.revoked', { requestId: r.requestId, hash: hashHex, id: r.credentialId, by: by.id, credentials: st.state.credentials.length });
+    st.save(); // durable before the answer
+    return { ok: true, action: r.action, credentialId: r.credentialId, hash: hashHex, credentials: st.state.credentials.length };
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
@@ -211,6 +284,17 @@ export class Signer {
     return out;
   }
 
+  /**
+   * NEXT (audit C3): the passkey-less returns of ONE vault are counted per UTC day and capped (`maxVaultReturnsPerDay` of
+   * policy.json, default 12): a compromised API can no longer burn a vault's gas without limit. Counted before the signature
+   * and saved with it; a refusal is journaled by the caller's `deny`.
+   */
+  private countVaultReturn(index: number, now: number, deny: (code: string, msg: string) => never): void {
+    const day = ((this.store.state.vaultReturns ??= {})[new Date(now * 1000).toISOString().slice(0, 10)] ??= {});
+    if ((day[index] ?? 0) >= (this.store.policy.maxVaultReturnsPerDay ?? DEFAULT_MAX_VAULT_RETURNS_PER_DAY)) deny('policy', 'daily number of returns reached for this vault');
+    day[index] = (day[index] ?? 0) + 1;
+  }
+
   /** Move funds out of a vault — only ever to the owner's own address. Works for revoked and expired mandates too. */
   async signReturn(mandateId: string, rawIntent: unknown): Promise<SignResult> {
     const st = this.store, now = this.now();
@@ -230,6 +314,7 @@ export class Signer {
     const fee = st.policy.maxFee[i.network];
     if (fee === undefined || baseUnits(i.maxFee) > baseUnits(fee)) deny('policy', 'fee ceiling above policy');
     let tx; try { tx = buildEvmTx(i); } catch (e) { return deny('unsupported', (e as Error).message); }
+    this.countVaultReturn(m.vaultIndex, now, deny);
     st.state.used[i.proposalId] = i.expiresAt; st.prune(now);
     const raw = await privateKeyToAccount(`0x${Buffer.from(vault.priv).toString('hex')}`).signTransaction(tx);
     const out = { raw, txid: keccak256(raw), hash: Buffer.from(hash).toString('hex') };
@@ -262,6 +347,7 @@ export class Signer {
     const fee = st.policy.maxFee[i.network];
     if (fee === undefined || baseUnits(i.maxFee) > baseUnits(fee)) deny('policy', 'fee ceiling above policy');
     let tx; try { tx = buildEvmTx(i); } catch (e) { return deny('unsupported', (e as Error).message); }
+    this.countVaultReturn(index, now, deny);
     st.state.used[i.proposalId] = i.expiresAt; st.prune(now);
     const raw = await privateKeyToAccount(`0x${Buffer.from(vault.priv).toString('hex')}`).signTransaction(tx);
     const out = { raw, txid: keccak256(raw), hash: Buffer.from(hash).toString('hex') };
@@ -432,11 +518,18 @@ export class Signer {
     };
   }
 
+  /**
+   * The emergency halt. Synchronous and, since NEXT, never queued: the server calls it as soon as the request is authenticated,
+   * also while a signature is being computed for another request (server.ts then withholds that signature; `withheld` records it).
+   */
   halt(): void {
     this.store.state.halted = true;
     this.store.log('halt.on', {});
     this.store.save();
   }
+  get halted(): boolean { return this.store.state.halted; }
+  /** an answer computed across the moment the halt was recorded, and therefore not released (server.ts) */
+  withheld(route: string): void { this.store.log('halt.withheld', { route }); this.store.save(); }
 
   async sign(rawIntent: unknown, assertion: AuthenticationResponseJSON, aux?: Record<string, unknown>): Promise<SignResult> {
     const st = this.store, now = this.now();
@@ -595,6 +688,11 @@ export interface BridgeReclaimRequest { proposalId: string; message: string; att
 const EVENT_ACCOUNT_PROBE = 'SysvarC1ock11111111111111111111111111111111';
 export interface BridgeMintResult { raw: string; txid: string; messageHash: string; minted: string; replayed: boolean }
 
+/**
+ * RETIRED by NEXT: the challenge an enrolled passkey signed to add another one before SPW-CRED-v2. The signer no longer
+ * accepts it anywhere; the function stays for the native test vectors (tests/native-vectors/SPW-ENROLL-v1.json), which
+ * describe what the 1.0 native clients compute.
+ */
 export function enrollChallenge(credId: string, publicKey: string): Uint8Array {
   return new Uint8Array(sha(`SPW-ENROLL-v1\n${credId}\n${publicKey}`));
 }

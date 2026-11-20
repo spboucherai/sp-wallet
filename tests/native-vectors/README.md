@@ -24,7 +24,7 @@ hash function, and that the bytes start with the domain string.
 
 | Case | Domains | How |
 |---|---|---|
-| The real function returns the bytes | INTENT, NFT-INTENT, NFT-ALLOW, UTXO-LOCKS, MANDATE, VENUE-AUTH, VENUE-ORDER, VENUE-LEVERAGE, VENUE-WITHDRAW, VENUE-MANDATE, VENUE-QUOTING-MANDATE, GMX-AUTH, TRADING-MANDATE, QUOTING-SECTION, ORDER-INTENT, BRIDGE-MINT, BRIDGE-MINT-SOL, BRIDGE-RECLAIM | bytes of the real function, hash of the real function (for the three BRIDGE-* domains the real code has only a bytes function; callers take `sha256` of it — `services/api/src/bridge.ts:278`, signer `signer.ts:307`) |
+| The real function returns the bytes | CRED (v2), INTENT, NFT-INTENT, NFT-ALLOW, UTXO-LOCKS, MANDATE, VENUE-AUTH, VENUE-ORDER, VENUE-LEVERAGE, VENUE-WITHDRAW, VENUE-MANDATE, VENUE-QUOTING-MANDATE, GMX-AUTH, TRADING-MANDATE, QUOTING-SECTION, ORDER-INTENT, BRIDGE-MINT, BRIDGE-MINT-SOL, BRIDGE-RECLAIM | bytes of the real function, hash of the real function (for the three BRIDGE-* domains the real code has only a bytes function; callers take `sha256` of it — `services/api/src/bridge.ts:278`, signer `signer.ts:307`) |
 | The real function returns only the hash | SOL-TOKEN-ACCOUNT (`solTokenAccountHash`), ORDER-BODY (`orderBodyHashHex`) | bytes rebuilt with the real exported framing `canonicalEncode` (`packages/derivatives/src/live/canonical.ts:26/240`) — for ORDER-BODY from the real `canonicalOrderFields` minus its last three pairs; for SOL-TOKEN-ACCOUNT from the field list of §2.14 — then **asserted** to hash to the value of the real function |
 | JSON-canonical, hash only | RISK-INTENT, GMX-RISK-INTENT, RISK-LIMITS-INTENT, RISK-SWITCH-INTENT, RISK-AUTO-INTENT, TRADING-MANDATE-APPROVAL (`canonicalIntentHash`, whose `stableJson` is not exported) | bytes = `domain + "\n" +` the exported `canonicalJson` of `services/api/src/trading-api/key-model.ts:30`, **asserted** to hash to the value of the real `canonicalIntentHash` / `riskIntentHash` / `gmxRiskIntentHash` |
 | JSON-canonical, real pieces | APIKEY-INTENT | real `canonicalJson` + real `intentChallenge` |
@@ -42,7 +42,7 @@ Domain strings found in the source and deliberately **not** covered, because no 
 
 ### 1.1 Framed (name, value) pairs — "F"
 
-Used by 21 domains. One implementation, copied in several files (`intent.ts:160-171`, `nft-intent.ts:78`, `mandate.ts:47-49`,
+Used by 22 domains (21 + `SPW-CRED-v2`). One implementation, copied in several files (`intent.ts:160-171`, `credential.ts`, `nft-intent.ts:78`, `mandate.ts:47-49`,
 `canonical.ts:26`, `collateral.ts:156`, `gmx.ts:468`, `cctp-sol-tx.ts:165`); all byte-identical in behaviour.
 
 ```
@@ -261,7 +261,7 @@ networkFee, networkFeeDisplay, symbol, expiresAt, options }`: **NOT returned** (
 = networkFee + the fixed rent bound, `createdAt` = `expiresAt − 50`, `policyVersion`, the whole `sol` section). A
 `/api/v1/bridge/solana/token-account {requestId, assertion}`. Signer: `signer.ts:393`.
 
-### 2.15 `SPW-ENROLL-v1` — L — `services/api/src/auth.ts:16` `enrollChallenge` (not exported); signer copy `services/isolated-signer/src/signer.ts:598`
+### 2.15 `SPW-ENROLL-v1` — L — **retired by NEXT, see §2.16** — `services/api/src/auth.ts:16` `enrollChallenge` (not exported); signer copy `services/isolated-signer/src/signer.ts:598`
 
 `SHA-256("SPW-ENROLL-v1\n" + credentialId + "\n" + publicKey)` — `credentialId` = the WebAuthn credential id (base64url, no
 padding), `publicKey` = base64url (no padding) of the credential public key bytes as `@simplewebauthn/server` returns them at
@@ -270,6 +270,25 @@ P `/api/v1/security/devices/verify` → `{ pendingId, options }`: **partly retur
 `publicKey` string is not served; the new device holds its own public key from its registration response (that those bytes are
 the same COSE encoding was not verified here). A `/api/v1/security/devices/confirm {pendingId, assertion}`. Signer:
 `signer.ts:122` → `:598`.
+
+### 2.16 `SPW-CRED-v2` — F — `packages/core/src/credential.ts` `credentialBytes` / `credentialHash` (NEXT)
+
+The request an **enrolled** passkey approves to add another passkey or to revoke one. Since NEXT the signer accepts nothing
+else for a passkey after the first: **`SPW-ENROLL-v1` (§2.15) is retired** — its vectors stay because the 1.0 native builds
+compute it, but no server verifies it any more.
+
+Order — eight fields, always all of them: `v, action, requestId, keyId, credentialId, publicKey, createdAt, expiresAt`.
+`v` is `"2"`. `action` is `add` or `revoke`. `publicKey` is the base64url COSE key of the new passkey for `add` and the
+**empty string** for `revoke` (the JSON object has no `publicKey` key then; the frame still has the field, with a zero
+length). `createdAt` / `expiresAt` are unix **seconds**; the signer refuses `expiresAt − createdAt > 300`.
+
+P `/api/v1/security/devices/verify` → `{ pendingId, options, request }`: **fully returned** (`request` is the object; a
+client must check that `request.action == "add"`, that `request.credentialId` is the credential it just created and
+`request.publicKey` the key of its own attestation, then that `options.challenge` is the hash). A
+`/api/v1/security/devices/confirm {pendingId, assertion}`.
+P `/api/v1/security/devices/revoke/options {credentialId}` → `{ challengeId, request, options }`: **fully returned**. A
+`/api/v1/security/devices/revoke/confirm {challengeId, assertion}`. The assertion must come from another passkey than the one
+named by `request.credentialId`. Signer: `signer.ts` `credentialApply` (`POST /credential`).
 
 ## 3. API-only objects (the signer never sees them) — J
 
@@ -339,7 +358,7 @@ lists are sorted **after** formatting.
 5. `POST /api/v1/bridge/proposals/:id/retry-mint/options` — `SPW-BRIDGE-MINT-v1` and `SPW-BRIDGE-MINT-SOL-v1`
 6. `POST /api/v1/bridge/proposals/:id/reclaim/options` — `SPW-BRIDGE-RECLAIM-v1`
 7. `POST /api/v1/bridge/solana/token-account/options` — `SPW-SOL-TOKEN-ACCOUNT-v1`
-8. `POST /api/v1/security/devices/verify` — `SPW-ENROLL-v1` (credential id returned as `pendingId`, `publicKey` not)
+8. ~~`POST /api/v1/security/devices/verify` — `SPW-ENROLL-v1`~~ — since NEXT this route returns the complete `SPW-CRED-v2` request (§2.16)
 
 On these routes a native client cannot recompute the challenge; it signs what the server (and then the signer) says. Every
 other prepare route of §2–§3 returns the complete object.

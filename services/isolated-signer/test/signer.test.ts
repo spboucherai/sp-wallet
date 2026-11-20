@@ -137,16 +137,16 @@ describe('keystore', () => {
 });
 
 describe('enrollment', () => {
-  it('first passkey needs the one-time token; later ones need an existing passkey', async () => {
-    const { signer, pk } = setup();
+  it('first passkey needs the one-time token; the legacy path (SPW-ENROLL-v1) adds nothing after it', async () => {
+    const { signer, pk, store } = setup();
     await expect(signer.enroll({ credential: pk.credential(), setupToken: 'wrong' })).rejects.toThrow(/setup token/);
     await signer.enroll({ credential: pk.credential(), setupToken: 'setup-token' });
+    expect(store.state.setupTokenHash).toBeNull();                                      // single use
     const pk2 = new TestPasskey(RP, ORIGIN);
     await expect(signer.enroll({ credential: pk2.credential(), setupToken: 'setup-token' })).rejects.toThrow(/passkey approval/);
-    const rogue = new TestPasskey(RP, ORIGIN);
-    await expect(signer.enroll({ credential: pk2.credential(), assertion: rogue.assert(enrollChallenge(pk2.id, pk2.publicKey)) })).rejects.toThrow();
-    await signer.enroll({ credential: pk2.credential(), assertion: pk.assert(enrollChallenge(pk2.id, pk2.publicKey)) });
-    expect(signer.status().credentials.length).toBe(2);
+    // NEXT: what the signer accepted before — an enrolled passkey's assertion over the v1 challenge — is refused; a passkey is added with SPW-CRED-v2 (next-signer.test.ts)
+    await expect(signer.enroll({ credential: pk2.credential(), assertion: pk.assert(enrollChallenge(pk2.id, pk2.publicKey)) } as never)).rejects.toThrow(/SPW-CRED-v2/);
+    expect(signer.status().credentials.map((c) => c.id)).toEqual([pk.id]);
   });
 });
 
