@@ -39,14 +39,14 @@ export function ChainTag() {
 /** always on screen where an order can be made or followed: what « ordre en deux temps » means */
 export function TwoStep({ expirationSec, className = '' }: { expirationSec: number; className?: string }) {
   const t = useT();
-  const n = (k: number) => <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-elev text-[12px] font-bold" aria-hidden="true">{k}</span>;
+  const n = (k: number) => <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-elev text-[0.75rem] font-bold" aria-hidden="true">{k}</span>;
   return <div className={`rounded-[18px] border border-line p-3.5 ${className}`} data-testid="gmx-two-step">
-    <div className="flex items-center gap-2 text-[13.5px] font-semibold"><Icon n="clock" className="h-4 w-4 shrink-0 text-mute" />{t('gxTwoStepTitle')}</div>
-    <ol className="mt-2.5 space-y-2 text-[13px] leading-snug">
+    <div className="flex items-center gap-2 text-[0.84375rem] font-semibold"><Icon n="clock" className="h-4 w-4 shrink-0 text-mute" />{t('gxTwoStepTitle')}</div>
+    <ol className="mt-2.5 space-y-2 text-[0.8125rem] leading-snug">
       <li className="flex gap-2.5">{n(1)}<span className="min-w-0 pt-0.5">{t('gxTwoStep1')}</span></li>
       <li className="flex gap-2.5">{n(2)}<span className="min-w-0 pt-0.5">{t('gxTwoStep2')}</span></li>
     </ol>
-    <p className="mt-2.5 text-[12px] leading-snug text-mute">{t('gxTwoStepCancel', { seconds: expirationSec })}</p></div>;
+    <p className="mt-2.5 text-[0.75rem] leading-snug text-mute">{t('gxTwoStepCancel', { seconds: expirationSec })}</p></div>;
 }
 
 /** our sentence for the code, then the server's own words; anything that is not a GMX code goes to the live notice */
@@ -61,8 +61,8 @@ export function GmxErrNotice({ err, raw, children }: { err: GmxErr; /** the thro
 export function EstimateRows({ e, action = 'increase' }: { e: GmxEstimate; action?: 'increase' | 'decrease' }) {
   const t = useT(); const { locale } = useContext(I18n);
   const R = ({ label, note, strong, children }: { label: ReactNode; note?: ReactNode; strong?: boolean; children: ReactNode }) => <div className="border-t border-dashed border-line py-2 first:border-t-0">
-    <div className="flex items-baseline justify-between gap-3 text-[14px]"><span className="min-w-0 text-mute">{label}</span><span className={`shrink-0 whitespace-nowrap text-right ${strong ? 'font-semibold' : 'font-medium'}`}>{children}</span></div>
-    {note ? <div className="mt-0.5 text-right text-[12px] leading-snug text-mute">{note}</div> : null}</div>;
+    <div className="flex items-baseline justify-between gap-3 text-[0.875rem]"><span className="min-w-0 text-mute">{label}</span><span className={`shrink-0 whitespace-nowrap text-right ${strong ? 'font-semibold' : 'font-medium'}`}>{children}</span></div>
+    {note ? <div className="mt-0.5 text-right text-[0.75rem] leading-snug text-mute">{note}</div> : null}</div>;
   const rate = (r: { perHour: string; usdPerDay: string }) => `≈ ${usd(r.usdPerDay, locale, true)} ${t('gxPerDay')}`;
   return <div data-testid="gmx-estimate">
     <div className="mb-1 flex items-center justify-between gap-2"><span className="t-eyebrow">{t('gxEstTitle')}</span><SourceTag source="estimate" /></div>
@@ -80,7 +80,7 @@ export function EstimateRows({ e, action = 'increase' }: { e: GmxEstimate; actio
         <R label={t('gxEstLiq')} note={t('gxEstLiqNote')}>{e.liquidationPrice ? px(e.liquidationPrice, locale) : '—'}</R></>}
       {e.totalAtEntryUsd && <R label={t(action === 'increase' ? 'gxEstTotal' : 'gxEstTotalClose')} strong>{usd(e.totalAtEntryUsd, locale)}</R>}
     </div>
-    <p className="mt-1.5 text-[12px] leading-snug text-mute">{t('gxEstFoot')}</p>
+    <p className="mt-1.5 text-[0.75rem] leading-snug text-mute">{t('gxEstFoot')}</p>
   </div>;
 }
 
@@ -96,15 +96,15 @@ export function GmxOpCard({ op, onCancel, timeline }: { op: GmxOperation; onCanc
   const returned = o?.collateralReturned;
   return <div className="min-w-0 rounded-[18px] border border-line p-4" data-testid="gmx-op" data-kind={op.kind} data-state={op.state} data-done={done ? '1' : '0'}>
     <div className="flex items-start gap-3"><VenueIcon venue="gmx" size={36} />
-      <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><span className="text-[15.5px] font-semibold leading-tight">{t(`gxKind_${op.kind}` as Key)}</span>{op.side && <SideTag side={op.side} />}</div>
-        {op.marketName && <div className="mt-0.5 text-[12.5px] leading-snug text-mute [overflow-wrap:anywhere]">{op.marketName}</div>}
+      <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><span className="text-[0.96875rem] font-semibold leading-tight">{t(`gxKind_${op.kind}` as Key)}</span>{op.side && <SideTag side={op.side} />}</div>
+        {op.marketName && <div className="mt-0.5 text-[0.78125rem] leading-snug text-mute [overflow-wrap:anywhere]">{op.marketName}</div>}
         <div className="mt-1.5"><Tag tone={w.tone} icon={w.tone === 'ok' ? 'check' : w.tone === 'danger' ? 'x' : 'clock'}>{t(`gxState_${op.state}` as Key)}</Tag></div></div></div>
-    <p className="mt-3 text-[13.5px] leading-snug" data-testid="gmx-op-words" role="status">{t(w.key as Key)}</p>
+    <p className="mt-3 text-[0.84375rem] leading-snug" data-testid="gmx-op-words" role="status">{t(w.key as Key)}</p>
     {!dead && op.state !== 'pending_approval' && <div className="mt-3.5">{timeline ? <Timeline label={t('gxSteps')} items={items} /> : <StepBar label={t('gxSteps')} items={items} />}</div>}
-    {o?.reason && <p className="mt-2.5 break-words rounded-xl bg-elev/70 px-2.5 py-2 text-[12.5px] leading-snug" data-testid="gmx-op-reason"><span className="text-mute">{t('gxReason')} </span>{o.reason}{o.reasonCode ? <span className="block font-mono text-[11px] text-mute">{o.reasonCode}</span> : null}</p>}
-    {op.state === 'cancelled' && op.kind === 'increase' && <p className={`mt-2.5 flex items-start gap-2 rounded-xl px-2.5 py-2 text-[13px] font-medium leading-snug ${returned === true ? 'bg-emerald/[0.08] text-emerald' : 'bg-warn/[0.1] text-warn'}`} data-testid="gmx-collateral-returned" data-returned={String(returned ?? null)}>
+    {o?.reason && <p className="mt-2.5 break-words rounded-xl bg-elev/70 px-2.5 py-2 text-[0.78125rem] leading-snug" data-testid="gmx-op-reason"><span className="text-mute">{t('gxReason')} </span>{o.reason}{o.reasonCode ? <span className="block font-mono text-[0.6875rem] text-mute">{o.reasonCode}</span> : null}</p>}
+    {op.state === 'cancelled' && op.kind === 'increase' && <p className={`mt-2.5 flex items-start gap-2 rounded-xl px-2.5 py-2 text-[0.8125rem] font-medium leading-snug ${returned === true ? 'bg-emerald/[0.08] text-emerald' : 'bg-warn/[0.1] text-warn'}`} data-testid="gmx-collateral-returned" data-returned={String(returned ?? null)}>
       <Icon n={returned === true ? 'check' : 'warn'} className="mt-0.5 h-4 w-4 shrink-0" /><span className="min-w-0">{t(returned === true ? 'gxReturnedYes' : returned === false ? 'gxReturnedNo' : 'gxReturnedUnknown', { amount: usdc(o?.collateralOut ?? op.collateral, locale) })}</span></p>}
-    {op.error && <p className="mt-2.5 break-words rounded-xl bg-elev/70 px-2.5 py-2 font-mono text-[11.5px] text-mute" data-testid="gmx-op-error">{op.error}</p>}
+    {op.error && <p className="mt-2.5 break-words rounded-xl bg-elev/70 px-2.5 py-2 font-mono text-[0.71875rem] text-mute" data-testid="gmx-op-error">{op.error}</p>}
     {order && <div className="mt-2">
       <dl>
         {op.sizeUsd && <Fact k={t('gxSize')}><span className="font-semibold">{usd(op.sizeUsd, locale)}{op.leverage ? ` · ${lev(op.leverage, locale)}` : ''}</span></Fact>}
@@ -120,11 +120,11 @@ export function GmxOpCard({ op, onCancel, timeline }: { op: GmxOperation; onCanc
           {o.collateralOut && <Fact k={t('gxCollateralOut')}><span className="font-semibold">{usdc(o.collateralOut, locale)}</span></Fact>}
           {o.executionFeeRefundEth && <Fact k={t('gxRefund')}>{eth(o.executionFeeRefundEth, locale)}</Fact>}
         </dl>
-        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11.5px] text-mute"><ChainTag />{t('gxOutcomeSource')}</p></div>}
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.71875rem] text-mute"><ChainTag />{t('gxOutcomeSource')}</p></div>}
     </div>}
     {op.state === 'created' && order && onCancel && <div className="mt-3 space-y-1.5">
-      <Btn kind="soft" className="!min-h-11 !text-[14px]" disabled={op.cancellableAt === null || left > 0} onClick={() => onCancel(op)} data-testid="gmx-op-cancel"><Icon n="x" className="h-4 w-4" />{t('gxCancelOrder')}</Btn>
-      <p className="text-[12px] leading-snug text-mute" data-testid="gmx-cancel-wait">{op.cancellableAt === null ? t('gxCancelUnknown') : left > 0 ? t('gxCancelIn', { time: clock(left) }) : t('gxCancelNow')}</p></div>}
-    {(o?.explorer ?? op.explorer) && <a href={(o?.explorer ?? op.explorer)!} target="_blank" rel="noreferrer noopener" className="mt-1.5 inline-flex min-h-11 items-center gap-1.5 text-[13px] font-medium text-blue underline-offset-2 hover:underline">{t('gxSeeTx')}<Icon n="ext" className="h-3.5 w-3.5" /></a>}
+      <Btn kind="soft" className="!min-h-11 !text-[0.875rem]" disabled={op.cancellableAt === null || left > 0} onClick={() => onCancel(op)} data-testid="gmx-op-cancel"><Icon n="x" className="h-4 w-4" />{t('gxCancelOrder')}</Btn>
+      <p className="text-[0.75rem] leading-snug text-mute" data-testid="gmx-cancel-wait">{op.cancellableAt === null ? t('gxCancelUnknown') : left > 0 ? t('gxCancelIn', { time: clock(left) }) : t('gxCancelNow')}</p></div>}
+    {(o?.explorer ?? op.explorer) && <a href={(o?.explorer ?? op.explorer)!} target="_blank" rel="noreferrer noopener" className="mt-1.5 inline-flex min-h-11 items-center gap-1.5 text-[0.8125rem] font-medium text-blue underline-offset-2 hover:underline">{t('gxSeeTx')}<Icon n="ext" className="h-3.5 w-3.5" /></a>}
   </div>;
 }

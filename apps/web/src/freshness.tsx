@@ -19,9 +19,9 @@ export function StaleBanner({ q }: { q: { isError: boolean; data: unknown; dataU
   const t = useT(); const { locale } = useContext(I18n);
   if (!q.isError || q.data === undefined) return null;
   const time = clockText(q.dataUpdatedAt, locale);
-  return <div role="alert" data-testid="stale-banner" className="flex items-center gap-3 rounded-2xl border border-warn/40 bg-warn/[0.09] p-3.5 text-[13.5px] leading-snug">
-    <Icon n="warn" className="h-4 w-4 shrink-0 text-warn" /><div className="min-w-0 flex-1"><b className="block font-semibold">{t('nxStaleSince', { time })}</b>{t('nxStaleBody', { time })}</div>
-    <Btn kind="soft" className="!min-h-11 shrink-0 !px-3.5 !text-[13.5px]" busy={q.isFetching} onClick={() => void q.refetch()}>{t('retry')}</Btn></div>;
+  return <div role="alert" data-testid="stale-banner" className="notice items-center" data-tone="warn">
+    <Icon n="warn" className="notice-icon h-4 w-4 shrink-0" /><div className="min-w-0 flex-1"><b className="block font-semibold">{t('nxStaleSince', { time })}</b>{t('nxStaleBody', { time })}</div>
+    <Btn kind="soft" className="!min-h-11 shrink-0 !text-[0.84375rem]" busy={q.isFetching} onClick={() => void q.refetch()}>{t('retry')}</Btn></div>;
 }
 
 export const freshnessText = (t: ReturnType<typeof useT>, at: string | null | undefined, stale: boolean, now = Date.now()): string => t(stale ? 'svPriceStale' : 'svPriceAt', { age: ago(t, at, now) });
@@ -31,6 +31,6 @@ export function PriceFreshness({ at, stale, hero }: { at: string | null | undefi
   const t = useT();
   if (!at) return null;
   const text = freshnessText(t, at, !!stale), title = stale ? `${text} — ${t('svPriceOneSource')}` : text;
-  if (hero) return <span className={`inline-flex items-center gap-1.5 ${stale ? 'font-semibold text-[#f4b65b]' : ''}`} data-testid="price-freshness" data-stale={!!stale} title={title}><Icon n={stale ? 'warn' : 'clock'} className="h-3.5 w-3.5" />{text}</span>;
+  if (hero) return <span className={`inline-flex items-center gap-1.5 ${stale ? 'font-semibold text-[var(--hero-ink)]' : ''}`} data-testid="price-freshness" data-stale={!!stale} title={title}><Icon n={stale ? 'warn' : 'clock'} className="h-3.5 w-3.5" />{text}</span>;
   return <span data-testid="price-freshness" data-stale={!!stale} title={title}><Tag tone={stale ? 'warn' : 'mute'} icon={stale ? 'warn' : 'clock'}>{text}</Tag></span>;
 }

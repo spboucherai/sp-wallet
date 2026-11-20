@@ -127,7 +127,7 @@ const VENUE_NAME: Record<string, string> = { hyperliquid: 'Hyperliquid', edgex: 
 export function LifeTag({ state }: { state: Life }) { const t = useT(), x = LIFE_TAG[state]; return <Tag tone={x.tone} icon={x.icon} testid="ag2-life">{t(x.key)}</Tag>; }
 export function ModeTag({ mode }: { mode: Mode }) { const t = useT(), x = MODE_TAG[mode]; return <Tag tone={x.tone} icon={x.icon} testid={`ag2-mode-${mode}`}>{t(x.key)}</Tag>; }
 function Chip({ on, onClick, children, disabled }: { on: boolean; onClick: () => void; children: ReactNode; disabled?: boolean }) {
-  return <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onClick} className={`press min-h-11 rounded-full border px-4 text-[14px] font-medium disabled:opacity-40 ${on ? 'border-blue bg-blue/10 text-blue' : 'border-line text-mute'}`}>{children}</button>;
+  return <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onClick} className={`press min-h-11 rounded-full border px-4 text-[0.875rem] font-medium disabled:opacity-40 ${on ? 'border-blue bg-blue/10 text-blue' : 'border-line text-mute'}`}>{children}</button>;
 }
 function RiskFields({ risk, onChange }: { risk: Record<string, string>; onChange: (r: Record<string, string>) => void }) {
   const t = useT();
@@ -150,10 +150,10 @@ export function TemplateSheet({ onClose, onCreated }: { onClose: () => void; onC
       {/* step 1 — the family */}
       {/* a template that needs more venues than the owner is offered cannot be configured: it is not listed */}
       {q.data!.templates.filter((x) => venuesNeeded(x) <= VENUES.length).map((x) => <button key={x.id} type="button" disabled={!x.strategyInstalled} onClick={() => pick(x)} data-testid={`ag2-tpl-${x.id}`} className="card row-press block w-full p-4 text-left disabled:opacity-70">
-        <span className="flex items-start justify-between gap-3"><span className="min-w-0"><span className="block text-[16px] font-semibold">{x.name[locale]}</span><span className="mt-1 block text-[13.5px] leading-snug text-mute">{x.summary[locale]}</span></span>{x.strategyInstalled && <Icon n="chev" className="mt-1 h-4 w-4 shrink-0 text-mute" />}</span>
+        <span className="flex items-start justify-between gap-3"><span className="min-w-0"><span className="block text-[1rem] font-semibold">{x.name[locale]}</span><span className="mt-1 block text-[0.84375rem] leading-snug text-mute">{x.summary[locale]}</span></span>{x.strategyInstalled && <Icon n="chev" className="mt-1 h-4 w-4 shrink-0 text-mute" />}</span>
         <span className="mt-2.5 flex flex-wrap items-center gap-1.5">{x.modes.map((m) => <ModeTag key={m} mode={m} />)}{!x.strategyInstalled && <Tag tone="warn" icon="x" testid="ag2-not-installed">{t('ag2NotInstalled')}</Tag>}</span>
-        {!x.strategyInstalled && <span className="mt-2 block text-[12.5px] leading-snug text-mute">{t('ag2NotInstalledNote', { names: x.strategyNames.join(', ') })}</span>}
-        {!x.modes.includes('live') && x.liveReason && <span className="mt-2 block text-[12.5px] leading-snug text-mute" data-testid="ag2-live-reason">{x.liveReason}</span>}
+        {!x.strategyInstalled && <span className="mt-2 block text-[0.78125rem] leading-snug text-mute">{t('ag2NotInstalledNote', { names: x.strategyNames.join(', ') })}</span>}
+        {!x.modes.includes('live') && x.liveReason && <span className="mt-2 block text-[0.78125rem] leading-snug text-mute" data-testid="ag2-live-reason">{x.liveReason}</span>}
         {/* the laboratory's out-of-sample result for this template: a BACKTEST, labelled, with its stops */}
         <LabVerdicts verdicts={x.labVerdicts} /></button>)}
     </div> : <div className="space-y-6">
@@ -165,24 +165,24 @@ export function TemplateSheet({ onClose, onCreated }: { onClose: () => void; onC
       <FormGroup title={t('ag2StepStrategy')}>
         {tp.engine === 'bar' ? <div className="grid gap-2" role="radiogroup" aria-label={t('ag2StepStrategy')}>{tp.installed.map((s) => { const on = s.path === d.strategyPath; return <button key={s.path} type="button" role="radio" aria-checked={on} onClick={() => setD({ ...d, strategyPath: s.path })}
           className={`press rounded-2xl border p-3.5 text-left ${on ? 'border-blue bg-blue/5' : 'border-line'}`}>
-          <span className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-[13.5px] font-semibold">{s.path}</span><Tag tone={s.liveCapable ? 'ok' : 'info'} icon={s.liveCapable ? 'bolt' : 'eye'}>{t(s.liveCapable ? 'ag2CanLive' : 'ag2PaperOnly')}</Tag></span>
-          <span className="mt-1 block text-[13px] text-mute">{s.generic ? t('ag2GenericUniverse', { min: s.minSymbols ?? 1, max: s.maxSymbols ?? 8 }) : s.universe.join(' · ')} — {s.interval} — {shortSha(s.sha256)}…</span>
-          {s.generic && s.liveCondition && <span className="mt-1.5 block text-[12.5px] leading-snug text-mute">{s.liveCondition}</span>}
+          <span className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-[0.84375rem] font-semibold">{s.path}</span><Tag tone={s.liveCapable ? 'ok' : 'info'} icon={s.liveCapable ? 'bolt' : 'eye'}>{t(s.liveCapable ? 'ag2CanLive' : 'ag2PaperOnly')}</Tag></span>
+          <span className="mt-1 block text-[0.8125rem] text-mute">{s.generic ? t('ag2GenericUniverse', { min: s.minSymbols ?? 1, max: s.maxSymbols ?? 8 }) : s.universe.join(' · ')} — {s.interval} — {shortSha(s.sha256)}…</span>
+          {s.generic && s.liveCondition && <span className="mt-1.5 block text-[0.78125rem] leading-snug text-mute">{s.liveCondition}</span>}
           {/* audit D1: the refusal is said BEFORE anything is approved */}
-          {!s.liveCapable && s.liveReason && <span className="mt-1.5 block text-[12.5px] leading-snug text-warn">{s.liveReason}</span>}</button>; })}</div>
+          {!s.liveCapable && s.liveReason && <span className="mt-1.5 block text-[0.78125rem] leading-snug text-warn">{s.liveReason}</span>}</button>; })}</div>
           : <dl><Fact k={t('ag2Rule')} mono>{tp.rule?.name}@{tp.rule?.version}</Fact><Fact k={t('ag2RuleHash')} mono>{shortSha(tp.rule?.sha256 ?? '')}…</Fact>
             {tp.labBacktest.wanted.length > 0 && <Fact k={t('ag2LabBacktest')}>{tp.labBacktest.installed.length ? tp.labBacktest.installed.join(', ') : t('ag2LabBacktestNone', { names: tp.labBacktest.wanted.join(', ') })}</Fact>}
             {(tp.labStudies ?? []).length > 0 && <Fact k={t('ag2LabStudies')}>{tp.labStudies!.map((x) => x.name).join(', ')}</Fact>}</dl>}
-        {tp.labBacktest.wanted.length > 0 && <p className="text-[12.5px] leading-snug text-mute">{t('ag2LabBacktestOnly')}</p>}
+        {tp.labBacktest.wanted.length > 0 && <p className="text-[0.78125rem] leading-snug text-mute">{t('ag2LabBacktestOnly')}</p>}
         <LabVerdicts verdicts={tp.labVerdicts} detail />
       </FormGroup>
       {/* step 3 — the markets */}
       {tp.engine !== 'supervisor' && <FormGroup title={t('ag2StepMarkets')}>
         {tp.engine === 'bar' ? (strat?.generic ? <><Field label={t('ag2GenericField')} hint={t('ag2GenericUniverse', { min: strat.minSymbols ?? 1, max: strat.maxSymbols ?? 8 })}><input className={`${inputCls} uppercase`} maxLength={90} value={d.universe ?? ''} onChange={(e) => setD({ ...d, universe: e.target.value.toUpperCase().replace(/[^A-Z0-9 ,]/g, '') })} data-testid="ag2-generic-universe" /></Field>
-            <div className="flex items-center gap-3"><LogoStack syms={parseUniverse(d.universe)} /><span className="text-[15px] font-semibold">{parseUniverse(d.universe).join(' · ')}</span></div>{strat.liveCondition && <p className="text-[12.5px] leading-snug text-mute">{strat.liveCondition}</p>}</>
-          : <><div className="flex items-center gap-3"><LogoStack syms={strat?.universe ?? []} /><span className="text-[15px] font-semibold">{(strat?.universe ?? []).join(' · ')}</span></div><p className="text-[12.5px] leading-snug text-mute">{t('ag2UniverseFixed')}</p></>)
+            <div className="flex items-center gap-3"><LogoStack syms={parseUniverse(d.universe)} /><span className="text-[0.9375rem] font-semibold">{parseUniverse(d.universe).join(' · ')}</span></div>{strat.liveCondition && <p className="text-[0.78125rem] leading-snug text-mute">{strat.liveCondition}</p>}</>
+          : <><div className="flex items-center gap-3"><LogoStack syms={strat?.universe ?? []} /><span className="text-[0.9375rem] font-semibold">{(strat?.universe ?? []).join(' · ')}</span></div><p className="text-[0.78125rem] leading-snug text-mute">{t('ag2UniverseFixed')}</p></>)
           : <><Field label={t('ag2Base')}><input className={`${inputCls} uppercase`} maxLength={10} value={d.base} onChange={(e) => setD({ ...d, base: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} /></Field>
-            <div><div className="mb-2 text-[13px] font-medium text-mute">{t('ag2Venues', { n: venuesNeeded(tp) })}</div><div className="flex flex-wrap gap-2">{VENUES.map((v) => { const on = d.venues.includes(v); return <Chip key={v} on={on} onClick={() => setD({ ...d, venues: on ? d.venues.filter((x) => x !== v) : [...d.venues, v].slice(-venuesNeeded(tp)) })}>{VENUE_NAME[v]}</Chip>; })}</div></div></>}
+            <div><div className="mb-2 text-[0.8125rem] font-medium text-mute">{t('ag2Venues', { n: venuesNeeded(tp) })}</div><div className="flex flex-wrap gap-2">{VENUES.map((v) => { const on = d.venues.includes(v); return <Chip key={v} on={on} onClick={() => setD({ ...d, venues: on ? d.venues.filter((x) => x !== v) : [...d.venues, v].slice(-venuesNeeded(tp)) })}>{VENUE_NAME[v]}</Chip>; })}</div></div></>}
         <div className="flex flex-wrap items-center gap-1.5">{tp.modes.map((m) => <ModeTag key={m} mode={m} />)}</div>
         {!tp.modes.includes('live') && tp.liveReason && <Notice tone="info"><span data-testid="ag2-live-reason">{tp.liveReason}</span></Notice>}
       </FormGroup>}
@@ -205,7 +205,7 @@ function PerfView({ id, mode }: { id: string; mode: 'paper' | 'live' }) {
   const p = q.data, rows = perfRows(p);
   return <div className="space-y-3" data-testid={`ag2-perf-${p.mode}`} data-mode={p.mode}>
     <EquityCard title={t(mode === 'paper' ? 'ag2EqPaper' : 'ag2EqLive')} right={<ModeTag mode={p.mode} />} points={p.equityCurve.map((e) => ({ t: e.ts, p: e.equity }))} format={(v) => fiat(v, 'USD', locale)} formatTime={(x) => when(new Date(x), locale)} />
-    <p className="px-1 text-[12.5px] leading-snug text-mute">{p.label}</p>
+    <p className="px-1 text-[0.78125rem] leading-snug text-mute">{p.label}</p>
     {p.warnings.map((w) => <Notice key={w.code} tone="warn">{srvText(t, locale, w.message)}</Notice>)}
     <StatGrid>{rows.map((r) => <Stat key={r.key} label={t(r.key)} value={fmtPerf(r, locale)} sub={r.reason ?? undefined} />)}
       <Stat label={t('ag2PfTrades')} value={String(p.closedTrades)} /><Stat label={t('ag2PfOrders')} value={String(p.orders)} /></StatGrid>
@@ -218,14 +218,14 @@ function ModeLists({ id, mode }: { id: string; mode: Mode }) {
   const od = useQuery({ queryKey: ['ag2-orders', id, mode], queryFn: () => get<{ mode: Mode; orders: any[] }>(scopedUrl(id, 'orders', mode, 50)), refetchInterval: 20_000, enabled: mode !== 'research' });
   return <div className="space-y-4" data-mode={mode}>
     <Section title={t('ag2Timeline')} right={<ModeTag mode={mode} />}><Card>
-      {tl.isLoading ? <SkeletonRows n={4} /> : !tl.data?.items.length ? <p className="text-[14px] text-mute">{t('ag2TimelineEmpty')}</p> :
+      {tl.isLoading ? <SkeletonRows n={4} /> : !tl.data?.items.length ? <p className="text-[0.875rem] text-mute">{t('ag2TimelineEmpty')}</p> :
         <Timeline label={t('ag2Timeline')} items={tl.data.items.map((it, k) => ({ key: `${it.ts}-${k}`, state: timelineState(it), title: it.title, stateLabel: t(`ag2Ty_${['signal', 'decision', 'order', 'fill', 'error', 'risk', 'mandate', 'state', 'proposal', 'hold', 'stop'].includes(it.type) ? it.type : 'other'}` as Key),
           children: <><span className="block">{when(new Date(it.ts), locale)}{it.configVersion ? ` · ${t('ag2ConfigV', { n: it.configVersion })}` : ''}{it.code ? ` · ${it.code}` : ''}</span>{it.body && <span className="block [overflow-wrap:anywhere]">{it.body}</span>}</> }))} />}</Card></Section>
     {mode !== 'research' && <Section title={t('ag2Orders')} right={<ModeTag mode={mode} />}><Card>
-      {od.isLoading ? <SkeletonRows n={3} /> : !od.data?.orders.length ? <p className="text-[14px] text-mute">{t('ag2OrdersEmpty')}</p> : <ul className="divide-y divide-line">{od.data.orders.map((o) => <li key={o.id} className="py-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[14.5px] font-semibold">{t(o.side === 'buy' ? 'ag2Buy' : 'ag2Sell')} {o.instrument}{o.reduceOnly ? ` · ${t('ag2ReduceOnly')}` : ''}</span><Tag tone={ORDER_TONE[o.state] ?? 'mute'}>{o.state}</Tag></div>
-        <div className="mt-0.5 text-[12.5px] text-mute">{when(new Date(o.ts), locale)} · {o.size ?? o.notional ?? '—'}{Number(o.filledSize) > 0 ? ` · ${t('ag2Filled', { size: o.filledSize, price: o.avgFillPrice ?? '—' })}` : ''}</div>
-        {o.detail && <div className="mt-0.5 text-[12.5px] text-mute [overflow-wrap:anywhere]">{o.detail}</div>}</li>)}</ul>}</Card></Section>}
+      {od.isLoading ? <SkeletonRows n={3} /> : !od.data?.orders.length ? <p className="text-[0.875rem] text-mute">{t('ag2OrdersEmpty')}</p> : <ul className="divide-y divide-line">{od.data.orders.map((o) => <li key={o.id} className="py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[0.90625rem] font-semibold">{t(o.side === 'buy' ? 'ag2Buy' : 'ag2Sell')} {o.instrument}{o.reduceOnly ? ` · ${t('ag2ReduceOnly')}` : ''}</span><Tag tone={ORDER_TONE[o.state] ?? 'mute'}>{o.state}</Tag></div>
+        <div className="mt-0.5 text-[0.78125rem] text-mute">{when(new Date(o.ts), locale)} · {o.size ?? o.notional ?? '—'}{Number(o.filledSize) > 0 ? ` · ${t('ag2Filled', { size: o.filledSize, price: o.avgFillPrice ?? '—' })}` : ''}</div>
+        {o.detail && <div className="mt-0.5 text-[0.78125rem] text-mute [overflow-wrap:anywhere]">{o.detail}</div>}</li>)}</ul>}</Card></Section>}
   </div>;
 }
 
@@ -247,20 +247,20 @@ function BacktestCard({ o, id, refresh }: { o: Overview; id: string; refresh: ()
   if (o.engine === 'supervisor') return null;
   return <Card><div data-testid="ag2-backtest" data-label={o.backtests.label}>
     <CardHead right={<Tag tone="warn" icon="chart" testid="ag2-backtest-tag">{t(BACKTEST_KEYS.tag)}</Tag>}>{t(BACKTEST_KEYS.title)}</CardHead>
-    <p className="text-[13px] leading-snug text-mute">{t(BACKTEST_KEYS.note)}</p>
+    <p className="text-[0.8125rem] leading-snug text-mute">{t(BACKTEST_KEYS.note)}</p>
     <div className="mt-3 space-y-3">
       {o.backtests.versions.filter((v) => v.hasReport).slice(0, 2).map((v) => <div key={v.id} className="rounded-2xl bg-elev/60 p-3.5">
-        <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-[13px] font-semibold">{v.name}@{v.version} · {shortSha(v.sha256)}…</span><Tag tone={v.status === 'approved' ? 'ok' : 'mute'}>{v.status}{v.approvedBy && v.approvedBy !== 'owner' ? ` (${t('ag2ApprovedPaperOnly')})` : ''}</Tag></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-[0.8125rem] font-semibold">{v.name}@{v.version} · {shortSha(v.sha256)}…</span><Tag tone={v.status === 'approved' ? 'ok' : 'mute'}>{v.status}{v.approvedBy && v.approvedBy !== 'owner' ? ` (${t('ag2ApprovedPaperOnly')})` : ''}</Tag></div>
         <StatGrid cols={3} className="mt-2.5">{(['train', 'validation', 'test'] as const).map((s) => <Stat key={s} label={`${t('ag2BtSplit')} ${s}`} value={pct(v.metrics?.[s]?.total_return)} sub={`Sharpe ${n2(v.metrics?.[s]?.sharpe)} · DD ${pct(v.metrics?.[s]?.max_drawdown)}`} />)}</StatGrid>
-        {v.checks && <p className="mt-2 text-[12.5px] text-mute">{Object.entries(v.checks).filter(([, x]) => typeof x === 'string').map(([k, x]) => `${k}: ${String(x)}`).join(' · ')}</p>}
+        {v.checks && <p className="mt-2 text-[0.78125rem] text-mute">{Object.entries(v.checks).filter(([, x]) => typeof x === 'string').map(([k, x]) => `${k}: ${String(x)}`).join(' · ')}</p>}
         {o.kind === 'perp' && <ReportV3 summary={summaryOf(v)} />}</div>)}
       {o.backtests.versions.filter((v) => !v.hasReport && v.notes).slice(0, 1).map((v) => <Notice key={v.id} tone="warn">{v.notes}</Notice>)}
       {rec && isBacktestLabel(rec.label) && <div className="rounded-2xl bg-elev/60 p-3.5">
-        <div className="text-[13.5px] font-semibold">{t('ag2BtRecorded', { n: rec.snapshots, missing: rec.missing })}</div>
+        <div className="text-[0.84375rem] font-semibold">{t('ag2BtRecorded', { n: rec.snapshots, missing: rec.missing })}</div>
         <StatGrid cols={3} className="mt-2.5">{perfRows(rec.performance).slice(0, 6).map((r) => <Stat key={r.key} label={t(r.key)} value={fmtPerf(r, locale)} sub={r.reason ?? undefined} />)}</StatGrid>
         {rec.warnings.map((w) => <Notice key={w} tone="warn">{w}</Notice>)}
-        <Fold summary={t('ag2BtModel')}><ul className="list-disc space-y-1 pl-5 text-[12.5px] text-mute">{rec.model.map((m) => <li key={m}>{m}</li>)}</ul></Fold></div>}
-      {!rec && !o.backtests.versions.some((v) => v.hasReport) && <p className="text-[13.5px] text-mute">{t('ag2BtNone')}</p>}
+        <Fold summary={t('ag2BtModel')}><ul className="list-disc space-y-1 pl-5 text-[0.78125rem] text-mute">{rec.model.map((m) => <li key={m}>{m}</li>)}</ul></Fold></div>}
+      {!rec && !o.backtests.versions.some((v) => v.hasReport) && <p className="text-[0.84375rem] text-mute">{t('ag2BtNone')}</p>}
       {job && <Notice tone={job.status === 'failed' ? 'danger' : job.status === 'done' ? 'ok' : 'info'}>{t(`ag2Job_${job.status === 'cancelled' ? 'failed' : job.status}` as Key)}{job.error ? ` — ${srvText(t, locale, job.error)}` : ''}</Notice>}
       {err && <Notice tone="danger">{err}</Notice>}
       <Btn kind="ghost" full busy={running} disabled={running} onClick={() => void run()}><Icon n="chart" className="h-4 w-4" />{t('ag2BtRun')}</Btn>
@@ -282,13 +282,13 @@ function MandateSheet({ o, onClose, onLegacy }: { o: Overview; onClose: () => vo
       {o.pausedFrom === 'LIVE' && <Notice tone="info">{t('ag2ResumeNewMandate')}</Notice>}
       <Notice tone="info">{t('ag2MandateNote')}</Notice>
       {d.fields && <dl className="receipt">{Object.entries(d.fields).filter(([, v]) => typeof v !== 'object' || v === null || Array.isArray(v)).map(([k, v]) => <Fact key={k} k={k} mono>{Array.isArray(v) ? v.map(flat).join(', ') : flat(v)}</Fact>)}</dl>}
-      {d.fields && Object.entries(d.fields).some(([, v]) => v && typeof v === 'object' && !Array.isArray(v)) && <Fold summary={t('ag2MandateDetail')}><pre className="overflow-x-auto whitespace-pre-wrap text-[12px] text-mute">{JSON.stringify(d.fields, null, 2)}</pre></Fold>}
+      {d.fields && Object.entries(d.fields).some(([, v]) => v && typeof v === 'object' && !Array.isArray(v)) && <Fold summary={t('ag2MandateDetail')}><pre className="overflow-x-auto whitespace-pre-wrap text-[0.75rem] text-mute">{JSON.stringify(d.fields, null, 2)}</pre></Fold>}
       <dl><Fact k={t('ag2MandateDraft')} mono>{d.draft}</Fact></dl>
       {d.pending && <Notice tone="info"><span data-testid="ag2-mandate-pending">{t(d.pending.state === 'active' ? 'ag2MandateApproved' : 'ag2MandatePending', { id: d.pending.mandateId.slice(0, 8) })}</span></Notice>}
       {err && <Notice tone="danger">{err}</Notice>}
       {d.create && <Btn full busy={busy} onClick={() => void create()} data-testid="ag2-mandate-create">{t('ag2MandateCreate')}</Btn>}
-      <a className={`press inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl px-5 text-[15.5px] font-semibold ${d.create ? 'border border-line' : 'bg-primary text-onprimary'}`} href={d.approval.route} data-testid="ag2-mandate-link">{t('ag2MandateOpen')}</a>
-      <p className="text-[12.5px] leading-snug text-mute">{t('ag2MandateUntilMerge')}{d.existingFlow ? ` ${d.existingFlow}.` : ''}</p>
+      <a className={`press inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl px-5 text-[0.96875rem] font-semibold ${d.create ? 'border border-line' : 'bg-primary text-onprimary'}`} href={d.approval.route} data-testid="ag2-mandate-link">{t('ag2MandateOpen')}</a>
+      <p className="text-[0.78125rem] leading-snug text-mute">{t('ag2MandateUntilMerge')}{d.existingFlow ? ` ${d.existingFlow}.` : ''}</p>
       {onLegacy && (o.kind === 'spot' || o.kind === 'perp') && <Btn kind="ghost" full onClick={onLegacy}>{t('ag2MandateLegacy')}</Btn>}
     </div>}
   </Sheet>;
@@ -300,14 +300,14 @@ function PerpRiskSheet({ o, onClose, onSaved }: { o: Overview; onClose: () => vo
   const save = async () => { setBusy(true); setErr(''); try { await post(`/agents/${o.id}/perp/risk`, { risk: Object.fromEntries(Object.entries(risk).map(([k, v]) => [k, Number(v)])), liftHalt: lift }); onSaved(); } catch (e) { setErr(errText(t, e)); } finally { setBusy(false); } };
   return <Sheet title={t('ag2EditLimits')} sub={t('ag2EditLimitsSub')} onClose={onClose} busy={busy} footer={<Btn full busy={busy} onClick={() => void save()}>{t('ag2Save')}</Btn>} testid="ag2-risk-sheet">
     <div className="space-y-4"><RiskFields risk={risk} onChange={setRisk} />
-      <label className="flex min-h-11 items-center gap-3 text-[14px]"><input type="checkbox" checked={lift} onChange={(e) => setLift(e.target.checked)} />{t('ag2LiftHalt')}</label>
+      <label className="flex min-h-11 items-center gap-3 text-[0.875rem]"><input type="checkbox" checked={lift} onChange={(e) => setLift(e.target.checked)} />{t('ag2LiftHalt')}</label>
       {err && <Notice tone="danger">{err}</Notice>}</div></Sheet>;
 }
 function Withdrawals({ id }: { id: string }) {
   const t = useT(); const { locale } = useContext(I18n);
   const q = useQuery({ queryKey: ['ag2-withdrawals', id], queryFn: () => get<{ withdrawals: { id: string; symbol?: string; state: string; createdAt?: string; created_at?: string; display?: string; txid?: string | null }[] }>(`/agents/${id}/withdrawals`) });
-  return <Fold summary={t('ag2Withdrawals')} testid="ag2-withdrawals">{q.isLoading ? <SkeletonRows n={2} /> : !q.data?.withdrawals.length ? <p className="text-[13.5px] text-mute">{t('ag2WithdrawalsNone')}</p> :
-    <ul className="divide-y divide-line">{q.data.withdrawals.map((w) => <li key={w.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-[13.5px]"><span>{w.display ?? ''} {w.symbol ?? ''} · {when(w.createdAt ?? w.created_at ?? new Date(), locale)}</span><Tag tone={w.state === 'confirmed' ? 'ok' : w.state === 'failed' ? 'danger' : 'info'}>{w.state}</Tag></li>)}</ul>}</Fold>;
+  return <Fold summary={t('ag2Withdrawals')} testid="ag2-withdrawals">{q.isLoading ? <SkeletonRows n={2} /> : !q.data?.withdrawals.length ? <p className="text-[0.84375rem] text-mute">{t('ag2WithdrawalsNone')}</p> :
+    <ul className="divide-y divide-line">{q.data.withdrawals.map((w) => <li key={w.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-[0.84375rem]"><span>{w.display ?? ''} {w.symbol ?? ''} · {when(w.createdAt ?? w.created_at ?? new Date(), locale)}</span><Tag tone={w.state === 'confirmed' ? 'ok' : w.state === 'failed' ? 'danger' : 'info'}>{w.state}</Tag></li>)}</ul>}</Fold>;
 }
 
 // ------------------------------------------------------------------------------------------------------------------ the panel
@@ -332,7 +332,7 @@ export function AgentPanel({ id, nav, onLegacy }: { id: string; nav: Nav; onLega
   return <div className="space-y-4" data-testid="ag2-panel">
     <PageTitle onBack={() => (onLegacy ? onLegacy() : nav({ tab: 'agents' }))} backLabel={t('agents')}>{o.name}</PageTitle>
     <Card><div className="flex items-center gap-3.5">{o.universe.length > 0 && <LogoStack syms={o.universe} size={40} />}
-      <div className="min-w-0 flex-1"><div className="text-[15px] font-semibold">{t(FAMILY_KEY(o.family))}</div><div className="text-[13px] text-mute [overflow-wrap:anywhere]">{o.universe.join(' · ') || t('ag2AllAgents')} · {o.venue}</div></div></div>
+      <div className="min-w-0 flex-1"><div className="text-[0.9375rem] font-semibold">{t(FAMILY_KEY(o.family))}</div><div className="text-[0.8125rem] text-mute [overflow-wrap:anywhere]">{o.universe.join(' · ') || t('ag2AllAgents')} · {o.venue}</div></div></div>
       <div className="mt-3 flex flex-wrap items-center gap-1.5"><LifeTag state={o.state} /><ModeTag mode={o.mode} /><Tag tone="mute" icon="list">{t('ag2ConfigV', { n: o.configVersion })}</Tag>{o.mandate && <Tag tone="danger" icon="key">{t('ag2MandateActive')}</Tag>}</div>
       <dl className="mt-3">
         <Fact k={t('ag2Strategy')} mono>{o.strategy ? `${o.strategy.name}@${o.strategy.version} · ${shortSha(o.strategy.sha256)}…` : t('ag2NoStrategy')}</Fact>
@@ -340,7 +340,7 @@ export function AgentPanel({ id, nav, onLegacy }: { id: string; nav: Nav; onLega
         {o.stopReason && o.state === 'stopped' && <Fact k={t('ag2StopReason')}>{srvText(t, locale, o.stopReason)}</Fact>}
         {o.worker.tick?.last_error && <Fact k={t('ag2LastError')}>{o.worker.tick.last_error}</Fact>}
       </dl>
-      {block !== null && <p className="mt-2 text-[12.5px] leading-snug text-mute" data-testid="ag2-live-reason">{block}</p>}
+      {block !== null && <p className="mt-2 text-[0.78125rem] leading-snug text-mute" data-testid="ag2-live-reason">{block}</p>}
       {onLegacy && <Btn kind="ghost" full className="mt-3" onClick={onLegacy}>{t('ag2OpenLegacy')}</Btn>}</Card>
 
     {o.killSwitch.engaged && <Notice tone="danger">{t('ag2KillOn', { reason: o.killSwitch.reason ?? '—' })}</Notice>}
@@ -356,7 +356,7 @@ export function AgentPanel({ id, nav, onLegacy }: { id: string; nav: Nav; onLega
       {acts.stop && <Btn kind="danger" full busy={busy === 'stop'} onClick={() => void act('stop', () => post(`/agents/${id}/stop`, {}))}>{t('ag2Stop')}</Btn>}
       {o.mandate && <Btn kind="danger" full busy={busy === 'revoke'} onClick={() => void revoke()}>{t('ag2Revoke')}</Btn>}
       {o.kind === 'perp' && !o.mandate && <Btn kind="ghost" full onClick={() => setSheet('risk')}>{t('ag2EditLimits')}</Btn>}
-      <p className="text-[12.5px] leading-snug text-mute">{t('ag2ActionsNote')}</p></Card></Section>
+      <p className="text-[0.78125rem] leading-snug text-mute">{t('ag2ActionsNote')}</p></Card></Section>
 
     {isMm && <Suspense fallback={<SkeletonCard lines={4} />}><MmSection id={id} agent={{ strategySha256: o.strategy?.sha256 ?? '', capitalUsd: o.capitalUsd, mode: o.mode }} focus={mmFocus} onChanged={refresh} /></Suspense>}
 
@@ -370,14 +370,14 @@ export function AgentPanel({ id, nav, onLegacy }: { id: string; nav: Nav; onLega
       {book ? <><StatGrid cols={3}><Stat label={t('ag2BkRealized')} value={fiat(book.realizedPnl, 'USD', locale)} /><Stat label={t('ag2PfFees')} value={fiat(book.fees, 'USD', locale)} /><Stat label={t('ag2PfFunding')} value={fiat(book.funding, 'USD', locale)} /></StatGrid>
         <dl>{Object.entries(book.positions).filter(([, p]) => p.size !== 0).map(([k, p]) => <Fact key={k} k={k} mono>{numFmt(p.size, locale, 6)} @ {numFmt(p.avgPrice, locale, 2)}</Fact>)}
           {book.quotes.map((x) => <Fact key={x.id} k={`${t(x.side === 'buy' ? 'ag2QuoteBid' : 'ag2QuoteAsk')} ${x.instrument}`} mono>{numFmt(x.size, locale, 6)} @ {numFmt(x.price, locale, 2)}</Fact>)}
-          {book.pair && <Fact k={t('ag2Pair')} mono>+{book.pair.longInstrument} / −{book.pair.shortInstrument} · {numFmt(book.pair.sizeBase, locale, 6)}</Fact>}</dl></> : <p className="text-[13.5px] text-mute">{t('ag2BkNone')}</p>}
-      {o.runtime.rule === 'spread_inventory' && <Fold summary={t('ag2FillModel')}><p className="text-[12.5px] leading-snug text-mute">{t('ag2FillModelText')}</p></Fold>}</Card></Section>}
+          {book.pair && <Fact k={t('ag2Pair')} mono>+{book.pair.longInstrument} / −{book.pair.shortInstrument} · {numFmt(book.pair.sizeBase, locale, 6)}</Fact>}</dl></> : <p className="text-[0.84375rem] text-mute">{t('ag2BkNone')}</p>}
+      {o.runtime.rule === 'spread_inventory' && <Fold summary={t('ag2FillModel')}><p className="text-[0.78125rem] leading-snug text-mute">{t('ag2FillModelText')}</p></Fold>}</Card></Section>}
 
     {o.engine === 'supervisor' && <Section title={t('ag2KillSwitch')}><Card className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2"><Tag tone={o.killSwitch.engaged ? 'danger' : 'ok'} icon={o.killSwitch.engaged ? 'stop' : 'check'} testid="ag2-kill-state">{t(o.killSwitch.engaged ? 'ag2KillEngaged' : 'ag2KillOff')}</Tag>{o.runtime?.lastPass && <span className="text-[12.5px] text-mute">{t('ag2SupLast', { n: o.runtime.lastPass.findings, at: when(new Date(o.runtime.lastPass.ts), locale) })}</span>}</div>
-      <p className="text-[12.5px] leading-snug text-mute">{t('ag2SupNote')}</p>
+      <div className="flex flex-wrap items-center gap-2"><Tag tone={o.killSwitch.engaged ? 'danger' : 'ok'} icon={o.killSwitch.engaged ? 'stop' : 'check'} testid="ag2-kill-state">{t(o.killSwitch.engaged ? 'ag2KillEngaged' : 'ag2KillOff')}</Tag>{o.runtime?.lastPass && <span className="text-[0.78125rem] text-mute">{t('ag2SupLast', { n: o.runtime.lastPass.findings, at: when(new Date(o.runtime.lastPass.ts), locale) })}</span>}</div>
+      <p className="text-[0.78125rem] leading-snug text-mute">{t('ag2SupNote')}</p>
       {/* V11.2: ONE kill switch, the risk engine's. It is engaged from here; it is released in Risk, with the passkey — never here */}
-      {o.killSwitch.engaged ? <a className="press inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl border border-line px-5 text-[15.5px] font-semibold" href="/risk" data-testid="ag2-kill-release-link">{t('ag2KillRelease')}</a> : <Btn kind="danger" full onClick={() => setSheet('kill')}>{t('ag2KillEngage')}</Btn>}</Card></Section>}
+      {o.killSwitch.engaged ? <a className="press inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl border border-line px-5 text-[0.96875rem] font-semibold" href="/risk" data-testid="ag2-kill-release-link">{t('ag2KillRelease')}</a> : <Btn kind="danger" full onClick={() => setSheet('kill')}>{t('ag2KillEngage')}</Btn>}</Card></Section>}
 
     <BacktestCard o={o} id={id} refresh={refresh} />
 

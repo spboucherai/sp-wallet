@@ -29,14 +29,14 @@ export function RiskIndicator({ go, current, row }: { go: (t: Tab) => void; curr
   const q = useQuery({ queryKey: ['risk', 'status'], queryFn: () => get<RiskStatus>('/dashboard/status'), refetchInterval: 20_000, staleTime: 10_000, retry: 0 });
   const level = riskLevel(q.data), look = RISK_LOOK[level], word = t(`v11NavRisk_${level}` as Key), label = t('v11NavRiskAria', { state: t(`v11NavRiskLong_${level}` as Key) });
   if (row) return <button onClick={() => go('risk')} data-testid="risk-indicator" data-level={level} aria-label={label} aria-current={current ? 'page' : undefined} className={sideCls(current, true)}>
-    <Icon n="shield" /><span className="flex-1 text-left">{t('rkTitle')}</span><span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${look.cls}`}><Icon n={look.icon} className="h-3 w-3" />{word}</span></button>;
+    <Icon n="shield" /><span className="flex-1 text-left">{t('rkTitle')}</span><span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.71875rem] font-semibold ${look.cls}`}><Icon n={look.icon} className="h-3 w-3" />{word}</span></button>;
   return <button onClick={() => go('risk')} data-testid="risk-indicator" data-level={level} aria-label={label} title={label} aria-current={current ? 'page' : undefined} className="press grid h-11 shrink-0 place-items-center px-0.5">
-    <span className={`inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold ${look.cls}`}><Icon n={look.icon} className="h-3.5 w-3.5" />{word}</span></button>;
+    <span className={`inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.75rem] font-semibold ${look.cls}`}><Icon n={look.icon} className="h-3.5 w-3.5" />{word}</span></button>;
 }
 
-export const sideCls = (on: boolean, small = false): string => `press flex w-full items-center gap-3 rounded-2xl px-3.5 ${small ? 'py-2.5' : 'py-3'} text-[15px] font-medium ${on ? 'bg-primary text-onprimary shadow-e1' : 'text-mute hover:bg-elev hover:text-ink'}`;
+export const sideCls = (on: boolean, small = false): string => `press flex w-full items-center gap-3 rounded-2xl px-3.5 ${small ? 'py-2.5' : 'py-3'} text-[0.9375rem] font-medium ${on ? 'bg-primary text-onprimary shadow-e1' : 'text-mute hover:bg-elev hover:text-ink'}`;
 // what the five areas do not hold: the header menu on a phone, the bottom of the sidebar on a desktop
-const MORE: readonly (readonly [Tab, string, Key])[] = [['settings', 'gear', 'settings'], ['security', 'shield', 'security'], ['developer', 'key', 'dvTitle'], ['monitor', 'bars', 'moTitle']];
+const MORE: readonly (readonly [Tab, string, Key])[] = [['settings', 'gear', 'settings'], ['security', 'shield', 'security'], ['contacts', 'users', 'nwContacts'], ['developer', 'key', 'dvTitle'], ['monitor', 'bars', 'moTitle']];
 
 export function Sidebar({ tab, area, go, toArea, lock, bell }: { tab: Tab; area: Area | null; go: (t: Tab) => void; toArea: (a: Area) => void; lock: () => void; /** the alerts entry, drawn by the shell (it owns the unread count) */ bell: ReactNode }) {
   const t = useT();
@@ -60,7 +60,7 @@ export function ShellMenu({ tab, go, lock, onClose }: { tab: Tab; go: (t: Tab) =
   return <Sheet title={t('v11NavMenu')} onClose={onClose} testid="nav-menu-sheet">
     <nav aria-label={t('v11NavMore')} className="-mx-1 divide-y divide-line">{([['receive', 'down', 'receive'], ['send', 'up', 'send'], ['risk', 'shield', 'rkTitle'], ['alerts', 'bell', 'alTitle'], ...MORE, ['research', 'search', 'rjTitle']] as readonly (readonly [Tab, string, Key])[]).map(([id, icon, label]) =>
       <button key={id} onClick={() => { onClose(); go(id); }} data-menu={id} aria-current={tab === id ? 'page' : undefined} className={row}>
-        <span className={disc}><Icon n={icon} className="h-[19px] w-[19px]" /></span><span className="flex-1 text-[15.5px] font-semibold">{t(label)}</span><Icon n="chev" className="h-5 w-5 text-mute" /></button>)}
-      <button onClick={() => { onClose(); lock(); }} data-menu="lock" className={row}><span className={disc}><Icon n="lock" className="h-[19px] w-[19px]" /></span><span className="flex-1 text-[15.5px] font-semibold">{t('logout')}</span></button>
+        <span className={disc}><Icon n={icon} className="h-[19px] w-[19px]" /></span><span className="flex-1 text-[0.96875rem] font-semibold">{t(label)}</span><Icon n="chev" className="h-5 w-5 text-mute" /></button>)}
+      <button onClick={() => { onClose(); lock(); }} data-menu="lock" className={row}><span className={disc}><Icon n="lock" className="h-[19px] w-[19px]" /></span><span className="flex-1 text-[0.96875rem] font-semibold">{t('logout')}</span></button>
     </nav></Sheet>;
 }

@@ -26,7 +26,7 @@ const symbolOf = (id: string) => id.slice(id.indexOf(':') + 1);
 export function SrcTag({ source }: { source: RouterSource | 'paper' }) {
   const t = useT();
   const cls = source === 'venue' ? 'border-emerald/35 bg-emerald/8 text-emerald' : source === 'constant' ? 'border-line bg-elev text-mute' : 'border-warn/40 bg-warn/10 text-warn';
-  return <span className={`ml-1.5 inline-flex shrink-0 items-center rounded-md border px-1 py-px align-middle text-[10px] font-bold uppercase tracking-[0.05em] ${cls}`} title={t(`rxSrcTitle_${source}` as Key)} data-src={source}>{t(`rxSrc_${source}` as Key)}</span>;
+  return <span className={`ml-1.5 inline-flex shrink-0 items-center rounded-md border px-1 py-px align-middle text-[0.625rem] font-bold uppercase tracking-[0.05em] ${cls}`} title={t(`rxSrcTitle_${source}` as Key)} data-src={source}>{t(`rxSrc_${source}` as Key)}</span>;
 }
 
 export function RouterView({ accounts, onOpenPaper, gmx, onOpenGmx }: { accounts: DerivAccount[]; onOpenPaper: (p: PaperPrefill, accountId: string | null) => void; /* v8 GMX trading */ gmx?: GmxStatus; onOpenGmx?: (p: GmxPrefill) => void }) {
@@ -57,7 +57,7 @@ export function RouterView({ accounts, onOpenPaper, gmx, onOpenGmx }: { accounts
             <Field label={t('rxAsset')} hint={asset ? asset.venues.map((v) => `${VENUE_NAME[v.venue] ?? v.name}${v.restriction ? ` (${t('rxUnavailableShort')})` : ''}`).join(' · ') : undefined}>
               <select className={inputCls} value={f.base} onChange={(e) => set({ base: e.target.value })} aria-label={t('rxAsset')}>
                 {(bases.some((b) => b.base === f.base) ? bases : [{ base: f.base }, ...bases]).map((b) => <option key={b.base} value={b.base}>{b.base}</option>)}</select></Field>
-            <div><span className="mb-1.5 block text-[13px] font-medium text-mute">{t('fxDirection')}</span>
+            <div><span className="mb-1.5 block text-[0.8125rem] font-medium text-mute">{t('fxDirection')}</span>
               <Seg label={t('fxDirection')} value={f.side} onChange={(v) => set({ side: v })} options={[{ id: 'long', label: t('fxLong') }, { id: 'short', label: t('fxShort') }]} /></div>
             <Field label={t('fxSize')} hint={f.unit === 'usd' ? t('rxSizeUsdHint') : t('rxSizeBaseHint', { base: f.base })}>
               <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.size} onChange={(e) => set({ size: num(e.target.value) })} aria-label={t('fxSize')} />
@@ -66,11 +66,11 @@ export function RouterView({ accounts, onOpenPaper, gmx, onOpenGmx }: { accounts
               <div className="flex items-center gap-2"><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.lev} onChange={(e) => set({ lev: num(e.target.value) })} aria-label={t('fxLeverage')} /><span className="text-mute">×</span></div></Field>
           </div>
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            <div><span className="mb-1.5 block text-[13px] font-medium text-mute">{t('rxHorizon')}</span>
+            <div><span className="mb-1.5 block text-[0.8125rem] font-medium text-mute">{t('rxHorizon')}</span>
               <Seg size="sm" label={t('rxHorizon')} value={f.horizon} onChange={(v) => set({ horizon: v })} options={HORIZONS.map((h) => ({ id: h, label: horizonLabel(h) }))} />
               <span className="mt-1.5 block text-xs text-mute">{t('rxHorizonHint')}</span></div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div><span className="mb-1.5 block text-[13px] font-medium text-mute">{t('fxOrderType')}</span>
+              <div><span className="mb-1.5 block text-[0.8125rem] font-medium text-mute">{t('fxOrderType')}</span>
                 <Seg size="sm" label={t('fxOrderType')} value={f.type} onChange={(v) => set({ type: v })} options={[{ id: 'market', label: t('fxKind_market') }, { id: 'limit', label: t('fxKind_limit') }]} /></div>
               {f.type === 'limit' && <Field label={t('fxPrice')}><input className={inputCls} inputMode="decimal" autoComplete="off" value={f.price} onChange={(e) => set({ price: num(e.target.value) })} aria-label={t('fxPrice')} /><AmountProblem ambiguousOnly text={f.price} /></Field>}
             </div>
@@ -120,22 +120,22 @@ function Results({ data, stale, locale, accounts, onOpenPaper, gmx, onOpenGmx }:
     { id: 'bps', label: t('rxAllInBps'), num: true, cell: (r) => fix(bpsT(r.allInBps, locale)) },
     { id: 'unc', label: t('rxUncertainty'), num: true, cell: (r) => `± ${usdT(r.uncertaintyUsd, locale)}` },
     { id: 'tie', label: t('rxTie'), cell: (r) => (r.tiedWith.length ? t('rxTieExact', { n: r.tiedWith.length }) : r.nearTieWith.length ? t('rxTieNear', { n: r.nearTieWith.length }) : t('rxTieNone')) },
-    { id: 'trip', label: t('rxRoundTrip'), num: true, cell: (r) => (r.roundTripUsd ? <>{usdT(r.roundTripUsd, locale)}{r.roundTripRank !== null && r.roundTripRank !== r.rank ? <span className="block text-[11.5px] text-warn">{t('rxRoundTripRank', { n: r.roundTripRank })}</span> : null}</> : '—') },
+    { id: 'trip', label: t('rxRoundTrip'), num: true, cell: (r) => (r.roundTripUsd ? <>{usdT(r.roundTripUsd, locale)}{r.roundTripRank !== null && r.roundTripRank !== r.rank ? <span className="block text-[0.71875rem] text-warn">{t('rxRoundTripRank', { n: r.roundTripRank })}</span> : null}</> : '—') },
     { id: 'now', label: t('rxExecutable'), cell: (r) => (r.executableNow ? <span className="inline-flex items-center gap-1.5">{t('rxExecPaper')}<PaperTag /></span> : <span className="text-mute">{t('rxExecNo')}</span>) },
   ];
   const diffCols: Col<(typeof data.differences.fields)[number]>[] = [
     { id: 'f', label: t('rxTerm'), head: true, cell: (d) => t(`rxTerm_${d.field}` as Key) },
     ...data.candidates.map((c): Col<(typeof data.differences.fields)[number]> => ({ id: c.instrument, label: <span className="inline-flex flex-wrap items-center gap-1"><VenueBadge venue={c.venue} /><span>{symbolOf(c.instrument)}</span></span>,
-      cell: (d) => { const v = d.values.find((x) => x.instrument === c.instrument); return v ? <span className="block max-w-[300px] whitespace-normal text-[12.5px] leading-snug md:w-[230px]">{v.value}<SrcTag source={v.source} /></span> : '—'; } })),
+      cell: (d) => { const v = d.values.find((x) => x.instrument === c.instrument); return v ? <span className="block max-w-[300px] whitespace-normal text-[0.78125rem] leading-snug md:w-[230px]">{v.value}<SrcTag source={v.source} /></span> : '—'; } })),
   ];
 
   return (
     <div className={`space-y-4 ${stale ? 'opacity-60' : ''}`} data-testid="router-results" data-stale={stale ? '1' : '0'}>
       {stale && <Notice tone="warn">{t('rxStale')}</Notice>}
       <Card>
-        <H right={<span className="text-[12px] text-mute">{t('rxAsOf', { age: ageText(Date.now() - data.ts) })}</span>}>{t('rxRankingTitle')}</H>
+        <H right={<span className="text-[0.75rem] text-mute">{t('rxAsOf', { age: ageText(Date.now() - data.ts) })}</span>}>{t('rxRankingTitle')}</H>
         <div className="mb-3 space-y-2">
-          {first ? <p className="rounded-2xl bg-elev/70 px-4 py-3 text-[14.5px] leading-snug" data-testid="router-least"><b className="font-semibold">{t('rxLeast')}</b> {name(first.instrument)} — {usdT(first.allInUsd, locale)} ({fix(bpsT(first.allInBps, locale))}).{' '}
+          {first ? <p className="rounded-2xl bg-elev/70 px-4 py-3 text-[0.90625rem] leading-snug" data-testid="router-least"><b className="font-semibold">{t('rxLeast')}</b> {name(first.instrument)} — {usdT(first.allInUsd, locale)} ({fix(bpsT(first.allInBps, locale))}).{' '}
             {first.tiedWith.length ? t('rxLeastTied', { n: first.tiedWith.length }) : first.nearTieWith.length ? t('rxLeastNear', { n: first.nearTieWith.length }) : ''}</p>
             : <Notice tone="warn">{t('rxNoEligible')}</Notice>}
           <Notice tone="warn"><b className="font-semibold">{t('rxNotBest')}</b> {t('rxNotBestBody')}</Notice>
@@ -145,7 +145,7 @@ function Results({ data, stale, locale, accounts, onOpenPaper, gmx, onOpenGmx }:
           {data.errors.length > 0 && <Notice tone="warn">{t('fxVenueErrors', { venues: data.errors.map((e) => VENUE_NAME[e.venue as VenueId] ?? e.venue).join(', ') })}</Notice>}
         </div>
         <DataTable label={t('rxRankingTitle')} cols={cols} rows={rows} rowKey={(r) => r.instrument} empty={t('rxNoEligible')} />
-        <p className="mt-3 text-[12px] leading-snug text-mute">{t('rxRankingNote', { bps })}</p>
+        <p className="mt-3 text-[0.75rem] leading-snug text-mute">{t('rxRankingNote', { bps })}</p>
       </Card>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2" data-testid="router-cards">
@@ -156,9 +156,9 @@ function Results({ data, stale, locale, accounts, onOpenPaper, gmx, onOpenGmx }:
         <H>{t('rxDiffTitle')}</H>
         <div className="mb-3"><Notice tone="warn"><b className="font-semibold">{t('fxNotInterchangeable')}</b> {t('rxDiffBody', { n: data.candidates.length, base: data.intent.base.toUpperCase(), k: data.differences.fields.length })}</Notice></div>
         <DataTable label={t('rxDiffTitle')} cols={diffCols} rows={data.differences.fields} rowKey={(d) => d.field} empty={t('rxDiffEmpty')} />
-        <ul className="mt-4 list-disc space-y-1.5 pl-5 text-[13px] leading-snug">{(['fxNever1', 'fxNever2', 'fxNever3', 'fxNever4'] as const).map((k) => <li key={k}>{t(k)}</li>)}</ul>
-        <details className="mt-3"><summary className="flex min-h-11 cursor-pointer items-center text-[12.5px] font-medium text-blue">{t('hdEngineNotes', { n: data.warnings.length })}</summary>
-          <ul className="list-disc space-y-1 pb-1 pl-5 text-[12.5px] leading-snug text-mute">{data.warnings.map((w) => <li key={w}>{w}</li>)}</ul></details>
+        <ul className="mt-4 list-disc space-y-1.5 pl-5 text-[0.8125rem] leading-snug">{(['fxNever1', 'fxNever2', 'fxNever3', 'fxNever4'] as const).map((k) => <li key={k}>{t(k)}</li>)}</ul>
+        <details className="mt-3"><summary className="flex min-h-11 cursor-pointer items-center text-[0.78125rem] font-medium text-blue">{t('hdEngineNotes', { n: data.warnings.length })}</summary>
+          <ul className="list-disc space-y-1 pb-1 pl-5 text-[0.78125rem] leading-snug text-mute">{data.warnings.map((w) => <li key={w}>{w}</li>)}</ul></details>
       </Card>
     </div>
   );
@@ -169,14 +169,14 @@ function Status({ c }: { c: RoutedCandidate }) {
   const restricted = c.eligibility.reasons.some((r) => r.code === 'venue_restricted');
   const [key, tone, icon]: [Key, string, string] = restricted ? ['rxStRestricted', 'warn', 'warn'] : !c.eligibility.eligible ? ['rxStNotEligible', 'danger', 'x']
     : c.eligibility.executableNow ? ['rxStPaper', 'ok', 'check'] : ['rxStSetup', 'mute', 'gear'];
-  return <span className="tag !whitespace-normal !px-2.5 !py-1 !text-[12px]" data-tone={tone} data-testid="router-status" data-status={restricted ? 'restricted' : !c.eligibility.eligible ? 'not_eligible' : c.eligibility.executableNow ? 'paper' : 'setup'}><Icon n={icon} className="h-3 w-3 shrink-0" />{t(key)}</span>;
+  return <span className="tag !whitespace-normal !px-2.5 !py-1 !text-[0.75rem]" data-tone={tone} data-testid="router-status" data-status={restricted ? 'restricted' : !c.eligibility.eligible ? 'not_eligible' : c.eligibility.executableNow ? 'paper' : 'setup'}><Icon n={icon} className="h-3 w-3 shrink-0" />{t(key)}</span>;
 }
 function ReasonLine({ r }: { r: Reason }) {
   const t = useT();
   const k = `rxReason_${r.code}`, known = t(k as Key), text = known.startsWith('rxReason') || known === r.code.replace(/_/g, ' ') ? r.message : known;
   const tone = r.kind === 'blocker' ? 'text-danger' : r.kind === 'setup' ? 'text-warn' : 'text-mute';
-  return <li className="text-[13px] leading-snug" data-reason={r.code}><span className={`font-semibold ${tone}`}>{t(`rxKind_${r.kind}` as Key)}</span> — {text}
-    {text !== r.message && r.kind !== 'note' && <span className="mt-0.5 block break-words font-mono text-[11px] text-mute">{r.code} — {r.message}</span>}</li>;
+  return <li className="text-[0.8125rem] leading-snug" data-reason={r.code}><span className={`font-semibold ${tone}`}>{t(`rxKind_${r.kind}` as Key)}</span> — {text}
+    {text !== r.message && r.kind !== 'note' && <span className="mt-0.5 block break-words font-mono text-[0.6875rem] text-mute">{r.code} — {r.message}</span>}</li>;
 }
 function Sub({ title, children }: { title: string; children: ReactNode }) {
   return <section className="border-t border-line pt-3.5"><h3 className="t-eyebrow mb-1.5">{title}</h3>{children}</section>;
@@ -185,11 +185,11 @@ function CostRow({ k, locale }: { k: CostComponent; locale: string }) {
   const t = useT(); const fix = (s: string) => s;
   return <li className="py-1.5" data-cost={k.id}>
     <details>
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-[13.5px]">
-        <span className="min-w-0"><span className="font-medium">{t(`rxCost_${k.id}` as Key)}</span><span className="block text-[11.5px] text-mute">{t(`rxTiming_${k.timing}` as Key)}</span></span>
-        <span className="shrink-0 text-right tabular-nums">{k.usd === null ? <span className="font-semibold text-warn">{t('rxUnknown')}</span> : <><span className="font-semibold">{usdT(k.usd, locale, true)}</span><SrcTag source="estimate" /><span className="block text-[11.5px] text-mute">{fix(bpsT(k.bps, locale, true))} · ± {usdT(k.uncertaintyUsd, locale)}</span></>}</span>
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-[0.84375rem]">
+        <span className="min-w-0"><span className="font-medium">{t(`rxCost_${k.id}` as Key)}</span><span className="block text-[0.71875rem] text-mute">{t(`rxTiming_${k.timing}` as Key)}</span></span>
+        <span className="shrink-0 text-right tabular-nums">{k.usd === null ? <span className="font-semibold text-warn">{t('rxUnknown')}</span> : <><span className="font-semibold">{usdT(k.usd, locale, true)}</span><SrcTag source="estimate" /><span className="block text-[0.71875rem] text-mute">{fix(bpsT(k.bps, locale, true))} · ± {usdT(k.uncertaintyUsd, locale)}</span></>}</span>
       </summary>
-      <div className="space-y-1.5 pb-2 text-[12.5px] leading-snug text-mute">
+      <div className="space-y-1.5 pb-2 text-[0.78125rem] leading-snug text-mute">
         <p><b className="font-semibold text-ink">{t('rxBasis')}</b> {k.basis}</p>
         <p><b className="font-semibold text-ink">{t('rxUncertainty')}</b> {k.uncertainty}</p>
         {k.inputs.length > 0 && <ul className="space-y-0.5">{k.inputs.map((i) => <li key={i.name} className="break-words"><span className="text-ink">{i.name}</span> : {i.value ?? t('rxUnknown')}<SrcTag source={i.source} /></li>)}</ul>}
@@ -211,14 +211,14 @@ function Candidate({ c, locale, account, onOpenPaper, gmx, onOpenGmx }: { c: Rou
     <Card className={restricted ? '!border-warn/40' : ''}>
       <div data-testid="router-card" data-venue={c.venue} data-instrument={c.instrument} className="space-y-3">
         <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5"><div className="flex min-w-[min(100%,15rem)] flex-1 items-center gap-3.5"><VenueIcon venue={c.venue} size={44} />
-          <div className="min-w-0 flex-1"><h3 className="text-[17px] font-semibold leading-tight tracking-[-0.015em]">{c.symbol}</h3><p className="mt-0.5 text-[13px] text-mute">{VENUE_NAME[c.venue]}</p></div></div>
+          <div className="min-w-0 flex-1"><h3 className="text-[1.0625rem] font-semibold leading-tight tracking-[-0.015em]">{c.symbol}</h3><p className="mt-0.5 text-[0.8125rem] text-mute">{VENUE_NAME[c.venue]}</p></div></div>
           <Status c={c} /></div>
         {restricted && <Notice tone="warn"><b className="font-semibold">{t('rxRestrictedTitle', { venue: VENUE_NAME[c.venue] })}</b> {t('rxRestrictedBody')}</Notice>}
         <ul className="space-y-1.5" data-testid="router-reasons">{c.eligibility.reasons.filter((r) => !(restricted && r.code !== 'venue_restricted' && r.kind !== 'blocker')).map((r) => <ReasonLine key={r.code + r.message.slice(0, 20)} r={r} />)}</ul>
 
         {fl && o && <Sub title={t('rxFillTitle')}>
           <Row label={t('fxSize')}>{o.sizeUnit === 'usd' ? usdT(o.sizeUsd, locale) : <>{fmt(o.sizeBase, { locale, trim: true })} {base}<span className="text-mute"> ≈ {usdT(o.sizeUsd, locale)}</span></>}<SrcTag source="estimate" /></Row>
-          {o.rounding && <p className="text-[11.5px] leading-snug text-mute">{o.sizeUnit === 'usd' ? t('rxRoundUsd') : t('rxRoundLot')}</p>}
+          {o.rounding && <p className="text-[0.71875rem] leading-snug text-mute">{o.sizeUnit === 'usd' ? t('rxRoundUsd') : t('rxRoundLot')}</p>}
           <Row label={t(fl.method === 'order_book_walk' ? 'rxRefBook' : 'rxRefOracle')}>{priceT(fl.referencePrice, locale)}<SrcTag source="venue" /></Row>
           <Row label={t('rxAvgPrice')}>{priceT(fl.avgPrice, locale)}<SrcTag source="estimate" /></Row>
           {fl.method === 'order_book_walk' && <>
@@ -234,18 +234,18 @@ function Candidate({ c, locale, account, onOpenPaper, gmx, onOpenGmx }: { c: Rou
             <Row label={t('rxImpactCaps')}>+{usdT(g.capPositiveUsd, locale)} / −{usdT(g.capNegativeUsd, locale)}<SrcTag source="venue" /></Row>
             <Row label={t('rxImbalance')}>{usdT(g.imbalanceBeforeUsd, locale)} → {usdT(g.imbalanceAfterUsd, locale)}<SrcTag source="estimate" /></Row>
             <Row label={t('rxCapacityUsed')}>{fmt(fl.depthConsumedPct, { dp: 3, locale })} %<SrcTag source="venue" /></Row>
-            <p className="mt-1 text-[11.5px] leading-snug text-mute">{t('rxGmxImpactNote')} {t(`rxVirtual_${g.virtualInventory}` as Key)}</p>
+            <p className="mt-1 text-[0.71875rem] leading-snug text-mute">{t('rxGmxImpactNote')} {t(`rxVirtual_${g.virtualInventory}` as Key)}</p>
           </>}
         </Sub>}
 
         {c.costs.length > 0 && <Sub title={t('rxCostsTitle')}>
           <ul className="divide-y divide-line/70" data-testid="router-costs">{c.costs.map((k) => <CostRow key={k.id} k={k} locale={locale} />)}</ul>
           {c.allIn && <div className="mt-2 rounded-2xl bg-elev px-4 py-3.5" data-testid="router-allin">
-            <div className="flex items-baseline justify-between gap-3"><span className="text-[13.5px] font-semibold">{t('rxAllInOver', { h: t(`rxH_${c.allIn.horizonHours}` as Key) })}</span>
-              <span className="text-right"><span className="t-num text-[19px]">{usdT(c.allIn.usd, locale, true)}</span><SrcTag source="estimate" /></span></div>
-            <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[12px] text-mute"><span>{c.allIn.complete ? t('rxComplete') : c.allIn.unknown.length ? t('rxIncomplete', { list: c.allIn.unknown.map((u) => t(`rxCost_${u}` as Key)).join(', ') }) : t('rxPartial')}</span>
+            <div className="flex items-baseline justify-between gap-3"><span className="text-[0.84375rem] font-semibold">{t('rxAllInOver', { h: t(`rxH_${c.allIn.horizonHours}` as Key) })}</span>
+              <span className="text-right"><span className="t-num text-[1.1875rem]">{usdT(c.allIn.usd, locale, true)}</span><SrcTag source="estimate" /></span></div>
+            <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[0.75rem] text-mute"><span>{c.allIn.complete ? t('rxComplete') : c.allIn.unknown.length ? t('rxIncomplete', { list: c.allIn.unknown.map((u) => t(`rxCost_${u}` as Key)).join(', ') }) : t('rxPartial')}</span>
               <span className="shrink-0 tabular-nums">{fix(bpsT(c.allIn.bps, locale, true))} · ± {usdT(c.allIn.uncertaintyUsd, locale)}</span></div>
-            {c.exit && <p className="mt-2 border-t border-line pt-2 text-[12px] leading-snug text-mute">{t('rxExit', { exit: usdT(c.exit.usd, locale, true), trip: usdT(c.exit.roundTripUsd, locale), bps: fix(bpsT(c.exit.roundTripBps, locale)) })}</p>}
+            {c.exit && <p className="mt-2 border-t border-line pt-2 text-[0.75rem] leading-snug text-mute">{t('rxExit', { exit: usdT(c.exit.usd, locale, true), trip: usdT(c.exit.roundTripUsd, locale), bps: fix(bpsT(c.exit.roundTripBps, locale)) })}</p>}
           </div>}
         </Sub>}
 
@@ -253,30 +253,30 @@ function Candidate({ c, locale, account, onOpenPaper, gmx, onOpenGmx }: { c: Rou
           <Row label={t('rxInitialMargin', { lev: fmt(c.margin.leverage, { locale, trim: true }) })}>{usdT(c.margin.initialMarginUsd, locale)}<SrcTag source="estimate" /></Row>
           <Row label={t('rxMaintenance')}>{c.margin.maintenanceFraction ? `${fmt(D.mul(D.from(c.margin.maintenanceFraction), D.from(100n)), { dp: 3, locale, trim: true })} %` : t('rxUnknown')}<SrcTag source={c.margin.maintenanceSource} /></Row>
           <Row label={t('rxLiq')}>{c.margin.liquidationPrice.value ? <>{priceT(c.margin.liquidationPrice.value, locale)}<span className="text-mute"> · {fix(bpsT(c.margin.liquidationDistanceBps, locale))}</span></> : t('rxUnknown')}<SrcTag source="estimate" /></Row>
-          <details><summary className="flex min-h-11 cursor-pointer items-center text-[12.5px] font-medium text-blue">{t('rxMethod')}</summary>
-            <p className="pb-1 text-[12.5px] leading-snug text-mute">{c.margin.maintenanceRule}</p><p className="pb-1 text-[12.5px] leading-snug text-mute">{c.margin.liquidationPrice.method}</p></details>
+          <details><summary className="flex min-h-11 cursor-pointer items-center text-[0.78125rem] font-medium text-blue">{t('rxMethod')}</summary>
+            <p className="pb-1 text-[0.78125rem] leading-snug text-mute">{c.margin.maintenanceRule}</p><p className="pb-1 text-[0.78125rem] leading-snug text-mute">{c.margin.liquidationPrice.method}</p></details>
         </Sub>}
 
         <Sub title={t('rxRiskTitle')}>
-          <Row label={t('rxVenueLimits')}>{c.risk.venue.accepted ? <span className="inline-flex items-center gap-1 text-emerald"><Icon n="check" className="h-3.5 w-3.5" />{t('rxAccepted')}</span> : <span className="text-danger"><Icon n="x" className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />{t('rxRefused')} — <span className="font-mono text-[12px]">{c.risk.venue.codes.join(', ')}</span></span>}</Row>
-          {c.risk.accounts.length === 0 ? <p className="text-[12px] leading-snug text-mute">{t('rxNoAccountAsked')}</p>
+          <Row label={t('rxVenueLimits')}>{c.risk.venue.accepted ? <span className="inline-flex items-center gap-1 text-emerald"><Icon n="check" className="h-3.5 w-3.5" />{t('rxAccepted')}</span> : <span className="text-danger"><Icon n="x" className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />{t('rxRefused')} — <span className="font-mono text-[0.75rem]">{c.risk.venue.codes.join(', ')}</span></span>}</Row>
+          {c.risk.accounts.length === 0 ? <p className="text-[0.75rem] leading-snug text-mute">{t('rxNoAccountAsked')}</p>
             : c.risk.accounts.map((a) => <div key={a.accountId} data-testid="router-policy" data-accepted={String(a.accepted)}>
-              <Row label={<span className="inline-flex items-center gap-1.5">{a.label}{a.kind === 'paper' && <PaperTag />}</span>}>{a.accepted === true ? <span className="inline-flex items-center gap-1 text-emerald"><Icon n="check" className="h-3.5 w-3.5" />{t('rxAccepted')}</span> : a.accepted === false ? <span className="text-danger"><Icon n="x" className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />{t('rxRefused')} — <span className="font-mono text-[12px]">{a.code}</span></span> : <span className="text-mute">{t('rxNotAsked')}</span>}</Row>
-              {a.accepted === false && a.code && <p className="text-[12px] leading-snug text-mute">{(() => { const s = t(`rk_${a.code}` as Key); return s.startsWith('rk ') || s === a.code!.replace(/_/g, ' ') ? a.reason : s; })()}</p>}
-              {a.accepted === null && a.reason && <p className="text-[12px] leading-snug text-mute">{a.reason}</p>}</div>)}
+              <Row label={<span className="inline-flex items-center gap-1.5">{a.label}{a.kind === 'paper' && <PaperTag />}</span>}>{a.accepted === true ? <span className="inline-flex items-center gap-1 text-emerald"><Icon n="check" className="h-3.5 w-3.5" />{t('rxAccepted')}</span> : a.accepted === false ? <span className="text-danger"><Icon n="x" className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />{t('rxRefused')} — <span className="font-mono text-[0.75rem]">{a.code}</span></span> : <span className="text-mute">{t('rxNotAsked')}</span>}</Row>
+              {a.accepted === false && a.code && <p className="text-[0.75rem] leading-snug text-mute">{(() => { const s = t(`rk_${a.code}` as Key); return s.startsWith('rk ') || s === a.code!.replace(/_/g, ' ') ? a.reason : s; })()}</p>}
+              {a.accepted === null && a.reason && <p className="text-[0.75rem] leading-snug text-mute">{a.reason}</p>}</div>)}
         </Sub>
 
         <details className="fold border-t border-line" data-testid="router-terms"><summary>{t('rxTermsTitle')}</summary>
-          <dl className="space-y-2.5 pb-1">{TERMS.map((k) => <div key={k}><dt className="t-eyebrow">{t(`rxTerm_${k}` as Key)}</dt><dd className="mt-0.5 text-[13px] leading-snug">{c.terms[k].value}<SrcTag source={c.terms[k].source} /></dd></div>)}</dl></details>
+          <dl className="space-y-2.5 pb-1">{TERMS.map((k) => <div key={k}><dt className="t-eyebrow">{t(`rxTerm_${k}` as Key)}</dt><dd className="mt-0.5 text-[0.8125rem] leading-snug">{c.terms[k].value}<SrcTag source={c.terms[k].source} /></dd></div>)}</dl></details>
 
         {c.venue === 'hyperliquid' && <div className="space-y-1.5 border-t border-line pt-3">
           <Btn full kind="soft" disabled={!canOpen} onClick={open} data-testid="router-open-paper">{t('rxOpenPaper')}</Btn>
-          <p className="text-[12px] leading-snug text-mute">{t(canOpen ? 'rxOpenPaperHint' : 'rxOpenPaperOff')}</p></div>}
+          <p className="text-[0.75rem] leading-snug text-mute">{t(canOpen ? 'rxOpenPaperHint' : 'rxOpenPaperOff')}</p></div>}
         {/* >>> v8 GMX trading: only when GMX is tradable and this pool is a market of the venue policy — it pre-fills the GMX order panel, nothing is sent */}
         {gxMarket && onOpenGmx && o && c.margin && !o.reduceOnly && <div className="space-y-1.5 border-t border-line pt-3">
           <Btn full kind="soft" onClick={() => { const size = D.div(D.from(c.margin!.notionalUsd), D.one, 2, 'down'), l = D.from(c.margin!.leverage);
             onOpenGmx({ instrument: c.instrument, side: o.positionSide, sizeUsd: D.str(size), leverage: D.str(D.div(l, D.one, 1, 'down')), collateral: D.isPos(l) ? D.str(D.div(size, l, 2, 'up')) : '' }); }} data-testid="router-open-gmx">{t('gxRouterOpen')}</Btn>
-          <p className="text-[12px] leading-snug text-mute">{t('gxRouterOpenHint')}</p></div>}
+          <p className="text-[0.75rem] leading-snug text-mute">{t('gxRouterOpenHint')}</p></div>}
         {/* <<< v8 GMX trading */}
       </div>
     </Card>

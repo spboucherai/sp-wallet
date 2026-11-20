@@ -28,9 +28,9 @@ export function MultiSeriesChart({ series, format, formatTime, label, zero, tole
   };
   const leave = () => setAt(null);
   const shown = series.map((s) => { const p = at === null ? s.points[s.points.length - 1] ?? null : valueAt(s.points, at, tolerance); return { ...s, p }; });
-  const legend = <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px]" data-testid="msc-legend">{shown.map((s) =>
+  const legend = <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[0.78125rem]" data-testid="msc-legend">{shown.map((s) =>
     <li key={s.id} className="inline-flex items-center gap-1.5"><span className="h-[3px] w-3.5 rounded-full" style={{ background: s.color }} aria-hidden="true" /><span className="text-mute">{s.label}</span><span className="font-semibold tabular-nums">{s.p ? format(s.p.v) : '—'}</span></li>)}</ul>;
-  if (!g) return <div ref={box} data-testid="msc"><div className="grid place-items-center text-[13px] text-mute" style={{ height }}>{empty}</div>{legend}</div>;
+  if (!g) return <div ref={box} data-testid="msc"><div className="grid place-items-center text-[0.8125rem] text-mute" style={{ height }}>{empty}</div>{legend}</div>;
   return (
     <div data-testid="msc">
       <div ref={box} className="relative touch-pan-y select-none" role="img"
@@ -44,10 +44,10 @@ export function MultiSeriesChart({ series, format, formatTime, label, zero, tole
           {at !== null && shown.map((s) => (s.p ? <circle key={s.id} cx={g.x(s.p.t)} cy={g.y(s.p.v)} r="4" fill={s.color} stroke="var(--surface)" strokeWidth="2" /> : null))}
           {at === null && g.paths.map((p) => (p.last ? <circle key={p.id} cx={p.last.x} cy={p.last.y} r="3" fill={series.find((x) => x.id === p.id)!.color} stroke="var(--surface)" strokeWidth="1.5" /> : null))}
         </svg>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between text-[11px] text-mute"><span>{formatTime(g.t0)}</span><span>{formatTime(g.t1)}</span></div>
-        <div className="pointer-events-none absolute right-0 top-0 text-right text-[11px] leading-tight text-mute">max {format(g.max)}</div>
-        <div className="pointer-events-none absolute bottom-5 right-0 text-right text-[11px] leading-tight text-mute">min {format(g.min)}</div>
-        {at !== null && <div className="pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap rounded-lg bg-primary px-2 py-1 text-[11.5px] font-medium text-onprimary" style={{ left: Math.max(46, Math.min(w - 46, g.x(at))) }}>{formatTime(at)}</div>}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between text-[0.6875rem] text-mute"><span>{formatTime(g.t0)}</span><span>{formatTime(g.t1)}</span></div>
+        <div className="pointer-events-none absolute right-0 top-0 text-right text-[0.6875rem] leading-tight text-mute">max {format(g.max)}</div>
+        <div className="pointer-events-none absolute bottom-5 right-0 text-right text-[0.6875rem] leading-tight text-mute">min {format(g.min)}</div>
+        {at !== null && <div className="pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap rounded-lg bg-primary px-2 py-1 text-[0.71875rem] font-medium text-onprimary" style={{ left: Math.max(46, Math.min(w - 46, g.x(at))) }}>{formatTime(at)}</div>}
       </div>
       {legend}
     </div>

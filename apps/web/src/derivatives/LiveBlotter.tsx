@@ -19,7 +19,7 @@ import type { BlotterTab } from './Blotter';
 import type { Fill, Instrument, Order, Position } from './types';
 
 const sym = (id: string) => id.slice(id.indexOf(':') + 1);
-const mini = 'press inline-flex min-h-11 min-w-11 shrink-0 whitespace-nowrap items-center justify-center rounded-xl border border-line px-3 text-[13px] font-semibold text-ink hover:bg-elev disabled:opacity-45';
+const mini = 'press inline-flex min-h-11 min-w-11 shrink-0 whitespace-nowrap items-center justify-center rounded-xl border border-line px-3 text-[0.8125rem] font-semibold text-ink hover:bg-elev disabled:opacity-45';
 /** a resting order as the venue lists it, with the wallet's own record of it when the wallet placed it */
 interface Resting { o: Order; ours: LiveOrder | null }
 
@@ -69,7 +69,7 @@ export function LiveBlotter({ account, detail, instruments, ttlMs, onSelect }: {
     { id: 'st', label: t('fxStatus'), cell: ({ ours }) => (ours ? <LiveStatePill state={ours.state} /> : <Tag tone="danger" icon="warn">{t('flForeign')}</Tag>) },
     { id: 'at', label: t('fxTime'), cell: ({ o }) => <span className="text-mute">{timeOf(o.createdAt, locale, true)}</span> },
     { id: 'x', label: '', cell: ({ o, ours }) => (ours ? <button type="button" disabled={!!busy || !canAct} className={mini} onClick={() => void cancel(ours)} aria-label={t('fxCancelAria', { symbol: sym(o.instrument) })}>{t('fxCancelOrder')}</button>
-      : <span className="block max-w-[260px] whitespace-normal text-[11.5px] leading-snug text-mute">{t('flForeignHint')}</span>) },
+      : <span className="block max-w-[260px] whitespace-normal text-[0.71875rem] leading-snug text-mute">{t('flForeignHint')}</span>) },
   ];
   const histCols: Col<LiveOrder>[] = [
     { id: 'm', label: t('fxMarket'), head: true, cell: (o) => market(o.instrument) },
@@ -81,7 +81,7 @@ export function LiveBlotter({ account, detail, instruments, ttlMs, onSelect }: {
     { id: 'price', label: t('fxPrice'), num: true, cell: (o) => px(o.instrument, o.avgFillPrice ?? o.price) },
     { id: 'src', label: t('flSource'), cell: (o) => <SourceTag source={o.source} /> },
     { id: 'at', label: t('fxTime'), cell: (o) => <span className="text-mute">{timeOf(o.createdAt, locale, true)}</span> },
-    { id: 'why', label: t('fxReason'), full: true, cell: (o) => <span className="block max-w-[420px] whitespace-normal break-words text-[12px] text-mute">{inFlight(o.state) && !o.final ? `${t('flUnknownShort')} ` : ''}{o.reason ?? '—'}</span> },
+    { id: 'why', label: t('fxReason'), full: true, cell: (o) => <span className="block max-w-[420px] whitespace-normal break-words text-[0.75rem] text-mute">{inFlight(o.state) && !o.final ? `${t('flUnknownShort')} ` : ''}{o.reason ?? '—'}</span> },
   ];
   const fillCols: Col<Fill>[] = [
     { id: 'm', label: t('fxMarket'), head: true, cell: (f) => market(f.instrument) },
@@ -101,7 +101,7 @@ export function LiveBlotter({ account, detail, instruments, ttlMs, onSelect }: {
   ];
   const evCols: Col<LiveRiskEvent>[] = [
     { id: 'k', label: t('fxEvent'), head: true, cell: (e) => { const k = t(`flEv_${e.kind}` as Key); return k.startsWith('flEv ') || k.startsWith('lEv') ? e.kind : k; } },
-    { id: 'd', label: t('fxDetail'), cell: (e) => <span className="block max-w-[560px] whitespace-normal">{e.code && RISK_CODES.has(e.code) ? <span className="block">{t(`rk_${e.code}` as Key)}</span> : null}<span className="block break-words text-[12px] text-mute">{e.code ? `${e.code} — ` : ''}{e.message}</span></span> },
+    { id: 'd', label: t('fxDetail'), cell: (e) => <span className="block max-w-[560px] whitespace-normal">{e.code && RISK_CODES.has(e.code) ? <span className="block">{t(`rk_${e.code}` as Key)}</span> : null}<span className="block break-words text-[0.75rem] text-mute">{e.code ? `${e.code} — ` : ''}{e.message}</span></span> },
     { id: 'at', label: t('fxTime'), cell: (e) => <span className="text-mute">{timeOf(e.ts, locale, true)}</span> },
   ];
   const eq = detail?.equity ?? [], state = st?.state ?? null;
@@ -115,12 +115,12 @@ export function LiveBlotter({ account, detail, instruments, ttlMs, onSelect }: {
           { id: 'fills', label: t('fxFills') }, { id: 'funding', label: t('fxFunding') }, { id: 'pnl', label: t('fxPnl') }, { id: 'risk', label: `${t('fxRiskEvents')}${n(detail?.riskEvents.length ?? 0)}` }]} />
         <ModeTag tone={tone} className="hidden sm:inline-flex" />
       </div>
-      {st?.error && <div className="mb-3"><Notice tone="danger">{t('flUnreadable')} <span className="mt-1 block break-words font-mono text-[11.5px] text-mute">{st.error}</span></Notice></div>}
+      {st?.error && <div className="mb-3"><Notice tone="danger">{t('flUnreadable')} <span className="mt-1 block break-words font-mono text-[0.71875rem] text-mute">{st.error}</span></Notice></div>}
       {flying.length > 0 && <div className="mb-3"><Notice tone="warn"><div data-testid="in-flight">{t('flInFlight', { n: flying.length })}</div></Notice></div>}
       {err && <div className="mb-3"><LiveErrNotice err={err} /></div>}
       {note && <div className="mb-3"><Notice tone="warn">{note}</Notice></div>}
       <div role="tabpanel" aria-label={t('fxBlotter')}>
-        {(tab === 'positions' || tab === 'orders') && !st?.error && <p className="mb-2.5 flex flex-wrap items-center gap-1.5 text-[12px] text-mute"><SourceTag />{st ? t('flReadAt', { time: timeOf(st.ts, locale) }) : t('fxLoading')}</p>}
+        {(tab === 'positions' || tab === 'orders') && !st?.error && <p className="mb-2.5 flex flex-wrap items-center gap-1.5 text-[0.75rem] text-mute"><SourceTag />{st ? t('flReadAt', { time: timeOf(st.ts, locale) }) : t('fxLoading')}</p>}
         {tab === 'positions' && !st?.error && <DataTable label={t('fxPositions')} cols={posCols} rows={positions} rowKey={(p) => p.instrument} empty={t('fxNoPositions')} />}
         {tab === 'orders' && !st?.error && <DataTable label={t('fxOpenOrders')} cols={restCols} rows={resting} rowKey={({ o }) => o.venueOrderId ?? o.clientId} empty={t('fxNoOpenOrders')} />}
         {tab === 'history' && <DataTable label={t('fxOrderHistory')} cols={histCols} rows={orders} rowKey={(o) => o.clientId} empty={t('fxNoHistory')} />}
@@ -132,8 +132,8 @@ export function LiveBlotter({ account, detail, instruments, ttlMs, onSelect }: {
             <Tile label={t('fxEquity')} value={usd(state?.equity, locale)} /><Tile label={t('fxCollateral')} value={usd(state?.collateral, locale)} />
             <Tile label={t('fxUnrealized')} value={<Pnl value={D.str(unreal)} locale={locale} />} /><Tile label={t('fxWithdrawable')} value={usd(state?.withdrawable, locale)} /></StatGrid>
           {eq.length >= 2 ? <PriceChart points={eq.map((p) => ({ t: p.ts, p: Number(p.equity) }))} format={(v) => usd(v.toFixed(2), locale)} formatTime={(ts) => timeOf(ts, locale, true)} />
-            : <div className="flex items-center gap-3 rounded-[18px] bg-elev/50 px-4 py-4 text-[13.5px] text-mute"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface"><Icon n="chart" className="h-[18px] w-[18px]" /></span><span className="min-w-0">{t('fxNoEquity')}</span></div>}
-          <p className="flex items-start gap-1.5 text-[12px] leading-snug text-mute"><SourceTag /><span className="min-w-0">{t('flPnlNote')}</span></p>
+            : <div className="flex items-center gap-3 rounded-[18px] bg-elev/50 px-4 py-4 text-[0.84375rem] text-mute"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface"><Icon n="chart" className="h-[18px] w-[18px]" /></span><span className="min-w-0">{t('fxNoEquity')}</span></div>}
+          <p className="flex items-start gap-1.5 text-[0.75rem] leading-snug text-mute"><SourceTag /><span className="min-w-0">{t('flPnlNote')}</span></p>
         </div>}
       </div>
       {closing && <ApprovalSheet account={a} instrument={instruments.get(closing.position.instrument)} request={{ kind: 'close', position: closing.position, fraction: closing.fraction }} orders={orders} ttlMs={ttlMs} onClose={() => setClosing(null)} />}

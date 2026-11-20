@@ -36,15 +36,15 @@ function Identity({ r, t, testid }: { r: Pick<NftReview, 'networkName' | 'networ
     <Fact k={t('nfStandard')}><span data-testid="nft-send-standard">{t(STANDARD_KEY[r.standard] ?? 'nfStd_unknown')}</span></Fact>
     <Fact k={t(evm ? 'nfTContract' : 'nfTMintOrAsset')}><CopyId value={r.asset} label={t(evm ? 'nfTContract' : 'nfTMintOrAsset')} /></Fact>
     {evm && <Fact k={t('nfTokenId')}><CopyId value={r.tokenId!} label={t('nfTokenId')} /></Fact>}
-    <Fact k={t('nfTQuantity')}><span className="font-mono text-[15px] font-semibold" data-testid="nft-send-quantity">{r.quantity}</span></Fact>
-    <Fact k={t(evm ? 'nfTCalledContract' : 'nfTCalledProgram')}><span className="break-all font-mono text-[12.5px]" data-testid="nft-send-program">{r.program}</span><div className="mt-0.5 text-[12.5px] text-mute" data-testid="nft-send-method">{r.method}</div></Fact>
+    <Fact k={t('nfTQuantity')}><span className="font-mono text-[0.9375rem] font-semibold" data-testid="nft-send-quantity">{r.quantity}</span></Fact>
+    <Fact k={t(evm ? 'nfTCalledContract' : 'nfTCalledProgram')}><span className="break-all font-mono text-[0.78125rem]" data-testid="nft-send-program">{r.program}</span><div className="mt-0.5 text-[0.78125rem] text-mute" data-testid="nft-send-method">{r.method}</div></Fact>
   </dl>;
 }
 /** What the creator declares: small, secondary, labelled unverified. */
 function CreatorNote({ name, collection, imageId, t }: { name: string | null; collection: string | null; imageId: string | null; t: T }) {
   return <div className="flex items-center gap-3 rounded-2xl border border-dashed border-line p-3" data-testid="nft-send-creator">
     {imageId ? <img src={mediaUrl(imageId)} alt="" width={44} height={44} loading="lazy" referrerPolicy="no-referrer" className="h-11 w-11 shrink-0 rounded-lg bg-elev object-cover opacity-80" /> : <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-elev text-mute"><Icon n="eye" className="h-4 w-4" /></div>}
-    <div className="min-w-0 text-[12.5px] text-mute"><div className="font-semibold uppercase tracking-wide" data-testid="nft-send-creator-label">{t('nfTCreatorUnverified')}</div>
+    <div className="min-w-0 text-[0.78125rem] text-mute"><div className="font-semibold uppercase tracking-wide" data-testid="nft-send-creator-label">{t('nfTCreatorUnverified')}</div>
       <div className="truncate">{name ?? t('nfNameUnavailable')}{collection ? ` · ${collection}` : ''}</div></div></div>;
 }
 
@@ -96,7 +96,7 @@ export function NftSend({ item, onClose }: { item: NftItem; onClose: () => void 
     }
     setPrep(null); setCur(null); draft.current.renew(); setStep('form');
   };
-  const back = ap.locked ? null : <button onClick={() => (step === 'review' ? void cancel() : onClose())} className="press -ml-1 inline-flex min-h-11 items-center gap-1 text-[14px] text-blue" data-testid="nft-send-back"><Icon n="back" className="h-4 w-4" />{t('back')}</button>;
+  const back = ap.locked ? null : <button onClick={() => (step === 'review' ? void cancel() : onClose())} className="press -ml-1 inline-flex min-h-11 items-center gap-1 text-[0.875rem] text-blue" data-testid="nft-send-back"><Icon n="back" className="h-4 w-4" />{t('back')}</button>;
 
   if (step === 'form') return <div className="space-y-4" data-testid="nft-send-form">
     {back}<PageTitle>{t('nfTTitle')}</PageTitle>
@@ -105,15 +105,15 @@ export function NftSend({ item, onClose }: { item: NftItem; onClose: () => void 
     {(item.transfer?.warnings ?? []).map((w) => <Notice key={w} tone="warn"><span data-testid={`nft-send-warn-${w}`}>{t(`nfTWarn_${w}` as Key)}</span></Notice>)}
     <Card className="space-y-4">
       <Field label={t('nfTRecipient')} hint={t('nfTRecipientHint', { network: item.chainId })}>
-        <input className={`${inputCls} font-mono text-[13.5px]`} value={to} onChange={(e) => setTo(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="off" aria-label={t('nfTRecipient')} data-testid="nft-send-to" /></Field>
-      {(book.data ?? []).some((b) => b.network === item.chainId) && <div className="flex flex-wrap gap-2" data-testid="nft-send-book">{book.data!.filter((b) => b.network === item.chainId).map((b) => <button key={b.id} type="button" onClick={() => setTo(b.address)} className={`press min-h-11 rounded-full border px-3.5 py-1.5 text-[13px] ${to === b.address ? 'border-emerald bg-emerald/[0.07] text-emerald' : 'border-line'}`}><Icon n="book" className="mr-1 inline h-3.5 w-3.5" />{b.label}</button>)}</div>}
+        <input className={`${inputCls} font-mono text-[0.84375rem]`} value={to} onChange={(e) => setTo(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="off" aria-label={t('nfTRecipient')} data-testid="nft-send-to" /></Field>
+      {(book.data ?? []).some((b) => b.network === item.chainId) && <div className="flex flex-wrap gap-2" data-testid="nft-send-book">{book.data!.filter((b) => b.network === item.chainId).map((b) => <button key={b.id} type="button" onClick={() => setTo(b.address)} className={`press min-h-11 rounded-full border px-3.5 py-1.5 text-[0.8125rem] ${to === b.address ? 'border-emerald bg-emerald/[0.07] text-emerald' : 'border-line'}`}><Icon n="book" className="mr-1 inline h-3.5 w-3.5" />{b.label}</button>)}</div>}
       {multi && <Field label={t('nfTQuantity')} hint={t('nfTQuantityHint', { held })}>
-        <input className={`${inputCls} text-[19px] font-semibold`} inputMode="numeric" pattern="[0-9]*" value={qty} onChange={(e) => setQty(e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 78))} aria-label={t('nfTQuantity')} aria-invalid={!qtyOk} data-testid="nft-send-qty" />
-        {!qtyOk && qty !== '' && <p className="mt-1 text-[12.5px] text-warn" role="alert" data-testid="nft-send-qty-problem">{t('nfTQuantityProblem', { held })}</p>}</Field>}
+        <input className={`${inputCls} text-[1.1875rem] font-semibold`} inputMode="numeric" pattern="[0-9]*" value={qty} onChange={(e) => setQty(e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 78))} aria-label={t('nfTQuantity')} aria-invalid={!qtyOk} data-testid="nft-send-qty" />
+        {!qtyOk && qty !== '' && <p className="mt-1 text-[0.78125rem] text-warn" role="alert" data-testid="nft-send-qty-problem">{t('nfTQuantityProblem', { held })}</p>}</Field>}
       {err && !ap.locked && <Notice tone="danger"><span role="alert" data-testid="nft-send-error">{err}</span></Notice>}
       <ApprovalOutcomePanel ap={ap} />
       <Btn full busy={busy === 'review'} disabled={!to.trim() || !qtyOk} onClick={review} data-testid="nft-send-review">{busy === 'review' ? t('nfTVerifying') : t('review')}</Btn>
-      <p className="text-[12.5px] text-mute">{t('nfTReviewNote')}</p>
+      <p className="text-[0.78125rem] text-mute">{t('nfTReviewNote')}</p>
     </Card>
   </div>;
 
@@ -124,31 +124,31 @@ export function NftSend({ item, onClose }: { item: NftItem; onClose: () => void 
       {back}<PageTitle>{t('nfTReviewTitle')}</PageTitle>
       {/* the receipt the passkey signs: on-chain identifiers, every one in full */}
       <Card className="receipt space-y-1">
-        <p className="text-[13px] text-mute">{t('nfTYouSend')}</p>
+        <p className="text-[0.8125rem] text-mute">{t('nfTYouSend')}</p>
         <Identity r={r} t={t} testid="nft-review-identity" />
         <dl>
           <Fact k={t('to')}><span data-testid="nft-review-to"><Addr value={r.to} /></span><div className="mt-1"><Tag tone={r.toKind === 'contract' ? 'warn' : 'mute'} testid="nft-review-tokind">{t(`nfTToKind_${r.toKind}` as Key)}</Tag></div></Fact>
-          <Fact k={t('from')}><span className="break-all font-mono text-[12.5px] text-mute" data-testid="nft-review-from">{r.from}</span></Fact>
+          <Fact k={t('from')}><span className="break-all font-mono text-[0.78125rem] text-mute" data-testid="nft-review-from">{r.from}</span></Fact>
           <Fact k={t('fee')}><span data-testid="nft-review-fee">≈ {fee(r.fee.estimate)}</span></Fact>
           <Fact k={t('feeMax')}><span data-testid="nft-review-feemax">{fee(r.fee.max)}</span></Fact>
           {r.fee.rent !== null && r.fee.rent !== '0' && <Fact k={t('nfTRent')}><span data-testid="nft-review-rent">{fee(r.fee.rent)}</span></Fact>}
-          {prep.proposal.intentHash && <Fact k={t('fingerprint')}><span className="break-all font-mono text-[11px] text-mute" data-testid="nft-review-hash">{prep.proposal.intentHash}</span></Fact>}
+          {prep.proposal.intentHash && <Fact k={t('fingerprint')}><span className="break-all font-mono text-[0.6875rem] text-mute" data-testid="nft-review-hash">{prep.proposal.intentHash}</span></Fact>}
         </dl>
       </Card>
       <CreatorNote name={r.creatorMetadata.name} collection={r.creatorMetadata.collectionName} imageId={r.creatorMetadata.imageId} t={t} />
-      <Card><p className="mb-2 flex items-center gap-2 text-[14px] font-semibold text-emerald" data-testid="nft-review-sim"><Icon n="check" className="h-4 w-4" />{t('nfTSimOk')}</p>
-        <ul className="space-y-1 text-[13px]" data-testid="nft-review-changes">{r.simulation.changes.map((c, k) => <li key={k} className="break-words" data-code={c.code ?? ''}>{/* delivery 3: the server's code is translated; a review stored before it carries only the English sentence, shown as it is */}
-          <span className="text-mute">{c.code && hasText(`nfTChg_${c.code}`) ? t(`nfTChg_${c.code}` as Key, c.params ?? {}) : c.what} :</span> <span className="font-mono text-[12px]">{c.beforeCode && hasText(`nfTChgV_${c.beforeCode}`) ? t(`nfTChgV_${c.beforeCode}` as Key) : c.before}</span> → <span className="font-mono text-[12px]">{c.afterCode && hasText(`nfTChgV_${c.afterCode}`) ? t(`nfTChgV_${c.afterCode}` as Key) : c.after}</span></li>)}</ul>
-        <p className="mt-2 text-[12.5px] text-mute" data-testid="nft-review-verified">{t('nfTVerified', { n: r.verified.endpoints })} {r.verified.standard}; {r.verified.ownership}.</p>
-        {r.accounts.length > 0 && <details className="mt-2 text-[12.5px]"><summary className="cursor-pointer text-blue" data-testid="nft-review-accounts-toggle">{t('nfTAccounts', { n: r.accounts.length })}</summary>
-          <ul className="mt-2 space-y-1" data-testid="nft-review-accounts">{r.accounts.map((a, k) => <li key={k} className="break-all"><span className="text-mute">{a.role} ({t(`nfTAcct_${a.derived}` as Key)}) :</span> <span className="font-mono text-[11.5px]">{a.address}</span></li>)}</ul></details>}
+      <Card><p className="mb-2 flex items-center gap-2 text-[0.875rem] font-semibold text-emerald" data-testid="nft-review-sim"><Icon n="check" className="h-4 w-4" />{t('nfTSimOk')}</p>
+        <ul className="space-y-1 text-[0.8125rem]" data-testid="nft-review-changes">{r.simulation.changes.map((c, k) => <li key={k} className="break-words" data-code={c.code ?? ''}>{/* delivery 3: the server's code is translated; a review stored before it carries only the English sentence, shown as it is */}
+          <span className="text-mute">{c.code && hasText(`nfTChg_${c.code}`) ? t(`nfTChg_${c.code}` as Key, c.params ?? {}) : c.what} :</span> <span className="font-mono text-[0.75rem]">{c.beforeCode && hasText(`nfTChgV_${c.beforeCode}`) ? t(`nfTChgV_${c.beforeCode}` as Key) : c.before}</span> → <span className="font-mono text-[0.75rem]">{c.afterCode && hasText(`nfTChgV_${c.afterCode}`) ? t(`nfTChgV_${c.afterCode}` as Key) : c.after}</span></li>)}</ul>
+        <p className="mt-2 text-[0.78125rem] text-mute" data-testid="nft-review-verified">{t('nfTVerified', { n: r.verified.endpoints })} {r.verified.standard}; {r.verified.ownership}.</p>
+        {r.accounts.length > 0 && <details className="mt-2 text-[0.78125rem]"><summary className="cursor-pointer text-blue" data-testid="nft-review-accounts-toggle">{t('nfTAccounts', { n: r.accounts.length })}</summary>
+          <ul className="mt-2 space-y-1" data-testid="nft-review-accounts">{r.accounts.map((a, k) => <li key={k} className="break-all"><span className="text-mute">{a.role} ({t(`nfTAcct_${a.derived}` as Key)}) :</span> <span className="font-mono text-[0.71875rem]">{a.address}</span></li>)}</ul></details>}
       </Card>
       {r.warnings.map((w) => <Notice key={w} tone={w === 'address_poisoning_suspected' ? 'danger' : 'warn'}><span data-testid={`nft-review-warn-${w}`}>{hasText(`nfTWarn_${w}`) ? t(`nfTWarn_${w}` as Key) : t(`w_${w}` as Key)}</span></Notice>)}
       <Notice tone="danger"><span data-testid="nft-review-irreversible">{t('nfTIrreversible')}</span></Notice>
-      {needCheck && <label className="flex min-h-11 items-start gap-3 rounded-2xl border border-line bg-surface p-3.5 text-[14px]"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[var(--primary)]" checked={checked} onChange={(e) => setChecked(e.target.checked)} data-testid="nft-review-check" />{t('nfTIChecked')}</label>}
+      {needCheck && <label className="flex min-h-11 items-start gap-3 rounded-2xl border border-line bg-surface p-3.5 text-[0.875rem]"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[var(--primary)]" checked={checked} onChange={(e) => setChecked(e.target.checked)} data-testid="nft-review-check" />{t('nfTIChecked')}</label>}
       {/* while the passkey prompt is open: what is being approved, in on-chain terms */}
-      {busy === 'passkey' && <Card className="border-blue"><p className="mb-1 text-[13px] font-semibold" data-testid="nft-passkey-title">{t('nfTPasskeyTitle')}</p><Identity r={r} t={t} testid="nft-passkey-summary" />
-        <dl><Fact k={t('to')}><span className="break-all font-mono text-[12.5px]">{r.to}</span></Fact><Fact k={t('feeMax')}>{fee(r.fee.max)}{r.fee.rent !== null && r.fee.rent !== '0' ? ` + ${fee(r.fee.rent)}` : ''}</Fact></dl></Card>}
+      {busy === 'passkey' && <Card className="border-blue"><p className="mb-1 text-[0.8125rem] font-semibold" data-testid="nft-passkey-title">{t('nfTPasskeyTitle')}</p><Identity r={r} t={t} testid="nft-passkey-summary" />
+        <dl><Fact k={t('to')}><span className="break-all font-mono text-[0.78125rem]">{r.to}</span></Fact><Fact k={t('feeMax')}>{fee(r.fee.max)}{r.fee.rent !== null && r.fee.rent !== '0' ? ` + ${fee(r.fee.rent)}` : ''}</Fact></dl></Card>}
       {err && !ap.locked && <Notice tone="danger"><span role="alert" data-testid="nft-send-error">{err}</span></Notice>}
       <ApprovalOutcomePanel ap={ap} />
       {!ap.locked && <Btn full busy={!!busy} disabled={needCheck && !checked} onClick={approve} data-testid="nft-send-approve"><Icon n="key" />{busy === 'passkey' ? t('approving') : t('approve')}</Btn>}
@@ -163,12 +163,12 @@ export function NftSend({ item, onClose }: { item: NftItem; onClose: () => void 
       {r && <dl><Fact k={t('to')}><Addr value={r.to} /></Fact></dl>}
       {testNotSent(shown) && <Notice tone="warn"><span data-testid="nft-track-notsent">{t('nfTNotBroadcast')}</span></Notice>}
       {!bad && !testNotSent(shown) && <ol className="space-y-2.5" aria-label={t('status')} data-testid="nft-track-steps">{FLOW.slice(1).map((s, k) => { const done = idx > k + 1 || shown.state === 'finalized', now = idx === k + 1 && shown.state !== 'finalized';
-        return <li key={s} className={`flex items-center gap-3 text-[14.5px] ${done ? 'text-emerald' : now ? 'text-ink' : 'text-mute'}`}><span className={`grid h-6 w-6 place-items-center rounded-full border ${done ? 'border-emerald' : now ? 'border-blue text-blue' : 'border-line'}`}><Icon n={done ? 'check' : now ? 'spin' : 'clock'} className="h-3.5 w-3.5" /></span>
+        return <li key={s} className={`flex items-center gap-3 text-[0.90625rem] ${done ? 'text-emerald' : now ? 'text-ink' : 'text-mute'}`}><span className={`grid h-6 w-6 place-items-center rounded-full border ${done ? 'border-emerald' : now ? 'border-blue text-blue' : 'border-line'}`}><Icon n={done ? 'check' : now ? 'spin' : 'clock'} className="h-3.5 w-3.5" /></span>
           {t(`s_${s}` as Key)}{s === 'confirming' && shown.confirmations > 0 ? ` · ${shown.confirmations} ${t('confirmations')}` : ''}</li>; })}</ol>}
       {shown.state === 'finalized' && <Notice tone="ok"><span data-testid="nft-track-done">{t('nfTConfirmed')}</span></Notice>}
       {!bad && shown.state !== 'finalized' && !testNotSent(shown) && <p className="text-xs text-mute" data-testid="nft-track-pending">{t('nfTPendingNote')}</p>}
       {bad && !testNotSent(shown) && <Notice tone="danger"><span data-testid="nft-track-failed">{shown.error ? propError(t, shown as never) : t(`s_${shown.state}` as Key)}</span></Notice>}
-      {shown.txid && <dl><Fact k={t('txid')}><span className="break-all font-mono text-[11.5px]" data-testid="nft-track-txid">{shown.txid}</span></Fact></dl>}
+      {shown.txid && <dl><Fact k={t('txid')}><span className="break-all font-mono text-[0.71875rem]" data-testid="nft-track-txid">{shown.txid}</span></Fact></dl>}
       {shown.explorer && !testNotSent(shown) && <a className="inline-flex min-h-11 items-center gap-1.5 text-sm text-blue" href={shown.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
     </Card>
     <Btn full kind="soft" onClick={onClose} data-testid="nft-send-close">{t('nfTBackToItem')}</Btn>
@@ -199,18 +199,18 @@ export function UtxoLocks({ network = 'bitcoin' }: { network?: string }) {
     {unprotected.length > 0 && d.signerSupportsLocks && <Btn full busy={change.isPending} onClick={() => change.mutate({ action: 'lock', reason: 'ord', outpoints: unprotected.map((u) => u.outpoint) })} data-testid="utxo-lock-all"><Icon n="key" />{t('nfULockAll', { n: unprotected.length })}</Btn>}
     {err && <Notice tone="danger"><span role="alert" data-testid="utxo-change-error">{err}</span></Notice>}
     <ApprovalOutcomePanel ap={lockAp} />
-    <Card className="!p-0">{d.utxos.length === 0 ? <p className="p-5 text-[13.5px] text-mute" data-testid="utxo-empty">{t('nfUEmpty')}</p> : <ul className="divide-y divide-line" data-testid="utxo-list">{d.utxos.map((u) => <li key={u.outpoint} className="space-y-2 px-5 py-3.5" data-outpoint={u.outpoint} data-spendable={u.spendable} data-locked={!!u.signerLock}>
-      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-[15px] font-semibold">{sats(u.value)}</div><div className="break-all font-mono text-[11.5px] text-mute">{u.outpoint}</div></div>
+    <Card className="!p-0">{d.utxos.length === 0 ? <p className="p-5 text-[0.84375rem] text-mute" data-testid="utxo-empty">{t('nfUEmpty')}</p> : <ul className="divide-y divide-line" data-testid="utxo-list">{d.utxos.map((u) => <li key={u.outpoint} className="space-y-2 px-5 py-3.5" data-outpoint={u.outpoint} data-spendable={u.spendable} data-locked={!!u.signerLock}>
+      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-[0.9375rem] font-semibold">{sats(u.value)}</div><div className="break-all font-mono text-[0.71875rem] text-mute">{u.outpoint}</div></div>
         <Tag tone={u.signerLock ? 'ok' : u.spendable ? 'mute' : 'warn'} icon={u.signerLock ? 'key' : u.spendable ? 'check' : 'warn'} testid="utxo-state">{t(u.signerLock ? 'nfULocked' : u.spendable ? 'nfUSpendable' : 'nfUHeld')}</Tag></div>
-      {u.excludedBy.length > 0 && <ul className="space-y-0.5 text-[12.5px] text-mute" data-testid="utxo-reasons">{u.excludedBy.map((r) => <li key={r} data-reason={r}>· {t(`nfUWhy_${r}` as Key)}</li>)}</ul>}
-      {u.ord && u.ord.inscriptions.length > 0 && <p className="break-all font-mono text-[11px] text-mute">{u.ord.inscriptions.join(', ')}</p>}
+      {u.excludedBy.length > 0 && <ul className="space-y-0.5 text-[0.78125rem] text-mute" data-testid="utxo-reasons">{u.excludedBy.map((r) => <li key={r} data-reason={r}>· {t(`nfUWhy_${r}` as Key)}</li>)}</ul>}
+      {u.ord && u.ord.inscriptions.length > 0 && <p className="break-all font-mono text-[0.6875rem] text-mute">{u.ord.inscriptions.join(', ')}</p>}
       <div className="flex flex-wrap gap-2">
         {d.signerSupportsLocks && (u.signerLock
           ? <Btn kind="ghost" busy={busy === u.outpoint} onClick={() => change.mutate({ action: 'unlock', reason: 'owner', outpoints: [u.outpoint] })} data-testid="utxo-unlock"><Icon n="key" className="h-4 w-4" />{t('nfUUnlock')}</Btn>
           : <Btn kind="soft" busy={busy === u.outpoint} onClick={() => change.mutate({ action: 'lock', reason: u.excludedBy.some((r) => r.startsWith('ord_')) ? 'ord' : u.excludedBy.some((r) => r.startsWith('heuristic_')) ? 'heuristic' : 'owner', outpoints: [u.outpoint] })} data-testid="utxo-lock"><Icon n="key" className="h-4 w-4" />{t('nfULock')}</Btn>)}
         {!u.signerLock && u.excludedBy.length > 0 && u.excludedBy.every((r) => r.startsWith('heuristic_')) && <Btn kind="ghost" busy={review.isPending} onClick={() => review.mutate({ outpoint: u.outpoint, ordinary: !u.reviewed })} data-testid="utxo-review">{t(u.reviewed ? 'nfUUnreview' : 'nfUReview')}</Btn>}
       </div></li>)}</ul>}</Card>
-    {d.staleLocks.length > 0 && <Card><p className="mb-2 text-[13px] text-mute">{t('nfUStale')}</p><ul className="space-y-2" data-testid="utxo-stale">{d.staleLocks.map((l) => <li key={l.outpoint} className="flex items-center justify-between gap-3"><span className="break-all font-mono text-[11.5px]">{l.outpoint}</span>
+    {d.staleLocks.length > 0 && <Card><p className="mb-2 text-[0.8125rem] text-mute">{t('nfUStale')}</p><ul className="space-y-2" data-testid="utxo-stale">{d.staleLocks.map((l) => <li key={l.outpoint} className="flex items-center justify-between gap-3"><span className="break-all font-mono text-[0.71875rem]">{l.outpoint}</span>
       <Btn kind="ghost" onClick={() => change.mutate({ action: 'unlock', reason: 'owner', outpoints: [l.outpoint] })}>{t('nfUUnlock')}</Btn></li>)}</ul></Card>}
   </div>;
 }

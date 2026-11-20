@@ -41,7 +41,7 @@ export const goPath = (path: string) => { history.pushState(null, '', path); dis
 const kindKey = (k: string): Key => (k === 'bridge' ? 'pnKindBridge' : k === 'xswap' ? 'pnKindXswap' : 'pnKindSwap');
 
 function Pair({ a, b }: { a: AssetV; b: AssetV }) {
-  const chip = (x: AssetV) => <span className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-ink"><AssetIcon sym={x.symbol} net={x.network} size={22} />{x.symbol}<span className="font-normal text-mute">· {x.networkName}</span></span>;
+  const chip = (x: AssetV) => <span className="inline-flex items-center gap-1.5 text-[0.84375rem] font-medium text-ink"><AssetIcon sym={x.symbol} net={x.network} size={22} />{x.symbol}<span className="font-normal text-mute">· {x.networkName}</span></span>;
   return <span className="flex flex-wrap items-center gap-x-2 gap-y-1">{chip(a)}<span className="inline-flex items-center gap-2"><Icon n="chev" className="h-3 w-3 text-mute" />{chip(b)}</span></span>;
 }
 const issueText = (t: T, i: IssueV) => t(`pnIssue_${i.code}` as Key, { step: (i.leg ?? 0) + 1, need: trimAmt(i.needDisplay, 8), have: trimAmt(i.haveDisplay, 8), sym: i.symbol, net: i.networkName });
@@ -75,15 +75,15 @@ export function PlanCards({ from, to, amount, slip, routes, money, pname, onCoun
     <div className="space-y-3" data-testid="plan-cards">
       {running && <div className="card flex flex-wrap items-center gap-3 p-4" role="note">
         <span className="sw-ring"><ProgressRing done={running.legs.filter((l) => l.state === 'settled').length} total={running.steps} size={44} /></span>
-        <span className="min-w-[12ch] flex-1 text-[14px] font-medium leading-snug">{t('pnOpenBanner', { from: running.from.symbol, to: running.to.symbol, k: Math.min(running.current + 1, running.steps), n: running.steps })}</span>
+        <span className="min-w-[12ch] flex-1 text-[0.875rem] font-medium leading-snug">{t('pnOpenBanner', { from: running.from.symbol, to: running.to.symbol, k: Math.min(running.current + 1, running.steps), n: running.steps })}</span>
         <Btn kind="soft" className="!min-h-11" onClick={() => setShow(running.id)}>{t('pnResume')}</Btn></div>}
-      {ok && (q.isLoading || deb !== amount) && <div className="space-y-3" role="status" aria-label={t('pnSearching')}><p className="flex items-center gap-2 px-1 text-[13px] text-mute"><Icon n="spin" className="h-4 w-4 shrink-0" />{t('pnSearching')}</p><PlanSkeleton /><PlanSkeleton /></div>}
+      {ok && (q.isLoading || deb !== amount) && <div className="space-y-3" role="status" aria-label={t('pnSearching')}><p className="flex items-center gap-2 px-1 text-[0.8125rem] text-mute"><Icon n="spin" className="h-4 w-4 shrink-0" />{t('pnSearching')}</p><PlanSkeleton /><PlanSkeleton /></div>}
       {q.error ? <Notice tone="danger">{errText(t, q.error)}</Notice> : null}
       {ok && q.data?.notExecutable && <Notice tone="warn"><span data-testid="plan-not-executable"><b>{t('pnNotExecTitle')}</b> {t(`pnNo_${q.data.notExecutable.code}` as Key, { net: q.data.notExecutable.network ?? '' })}</span></Notice>}
       {ok && q.data && !q.data.notExecutable && plans.length === 0 && q.data.plans.length === 0 && q.data.skipped.length > 0 && <Notice tone="warn">{t('pnNoQuote')} {svText(t, q.data.skipped[0]!.code, null, q.data.skipped[0]!.message)}</Notice>}
       {ok && plans.length > 0 && <Section title={t('pnTitle')}>
         <div className="space-y-3">
-        <p className="px-1 text-[13px] text-mute">{t('pnIntro')}</p>
+        <p className="px-1 text-[0.8125rem] text-mute">{t('pnIntro')}</p>
         {plans.map((p, k) => { const isOpen = open === p.id || (open === '' && k === 0); const blocking = p.issues.filter((i) => i.blocking), warns = p.issues.filter((i) => !i.blocking && i.code === 'limit_margin');
           const simple = p.legs.length === 2 && p.legs[0]!.kind === 'bridge' && p.legs[1]!.kind === 'swap';
           return (
@@ -91,25 +91,25 @@ export function PlanCards({ from, to, amount, slip, routes, money, pname, onCoun
             <button className="row-press w-full p-4 text-left" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '-' : p.id)}>
               <div className="flex items-center gap-3">
                 <Vias vias={p.legs.map((l) => l.via)} />
-                <div className="min-w-0 flex-1"><div className="text-[15px] font-semibold leading-tight">{simple ? t('pnSimple') : p.legs.map((l) => t(kindKey(l.kind))).join(' → ')}</div>
-                  <div className="mt-0.5 text-[13px] text-mute">{t('pnApprovals', { n: p.approvals })} · <Icon n="clock" className="mr-0.5 inline h-3.5 w-3.5 align-[-2px]" />{dur(p.seconds)}</div></div>
+                <div className="min-w-0 flex-1"><div className="text-[0.9375rem] font-semibold leading-tight">{simple ? t('pnSimple') : p.legs.map((l) => t(kindKey(l.kind))).join(' → ')}</div>
+                  <div className="mt-0.5 text-[0.8125rem] text-mute">{t('pnApprovals', { n: p.approvals })} · <Icon n="clock" className="mr-0.5 inline h-3.5 w-3.5 align-[-2px]" />{dur(p.seconds)}</div></div>
                 <Icon n="chev" className={`h-4 w-4 shrink-0 text-mute transition-transform ${isOpen ? '-rotate-90' : 'rotate-90'}`} />
               </div>
               {((k === 0 && p.executable) || !p.executable) && <div className="mt-3 flex flex-wrap gap-1.5">
                 {k === 0 && p.executable && <span className="tag bg-primary text-onprimary"><Icon n="star" className="h-3 w-3" />{t('pnBest')}</span>}
                 {!p.executable && <Tag tone="warn" icon="warn">{t('pnBlocked')}</Tag>}</div>}
-              <div className="t-num mt-3 break-words text-[28px]">{trimAmt(p.expectedOutDisplay, 8)} <span className="text-mute">{p.to.symbol}</span></div>
-              <div className="mt-1 text-[13px] text-mute">{t('pnExpected')}{p.expectedUsd != null ? ` · ≈ ${money(p.expectedUsd)}` : ''}</div>
-              <div className="mt-2.5 flex gap-2 rounded-2xl bg-elev/60 px-3 py-2.5 text-[13.5px] leading-snug"><Icon n="shield" className="mt-0.5 h-4 w-4 shrink-0 text-emerald" /><span className="min-w-0"><span className="font-semibold">{trimAmt(p.worstOutDisplay, 8)} {p.to.symbol}</span> <span className="text-mute">{t('pnWorst')}</span></span></div>
+              <div className="t-num mt-3 break-words text-[1.75rem]">{trimAmt(p.expectedOutDisplay, 8)} <span className="text-mute">{p.to.symbol}</span></div>
+              <div className="mt-1 text-[0.8125rem] text-mute">{t('pnExpected')}{p.expectedUsd != null ? ` · ≈ ${money(p.expectedUsd)}` : ''}</div>
+              <div className="mt-2.5 flex gap-2 rounded-2xl bg-elev/60 px-3 py-2.5 text-[0.84375rem] leading-snug"><Icon n="shield" className="mt-0.5 h-4 w-4 shrink-0 text-emerald" /><span className="min-w-0"><span className="font-semibold">{trimAmt(p.worstOutDisplay, 8)} {p.to.symbol}</span> <span className="text-mute">{t('pnWorst')}</span></span></div>
             </button>
-            {isOpen && <div className="space-y-4 border-t border-line p-4 text-[13.5px]">
+            {isOpen && <div className="space-y-4 border-t border-line p-4 text-[0.84375rem]">
               <ol className="tl" aria-label={t('pnSteps')}>{p.legs.map((l, i) => <li key={i} className="tl-item">
                 <span className="tl-node" aria-hidden="true"><ProviderIcon provider={l.via} size={26} /></span>
-                <div className="tl-body"><div className="text-[15px] font-semibold leading-snug">{i + 1}. {t(kindKey(l.kind))} <span className="font-normal text-mute">· {l.label}{l.speed ? ` · ${t(l.speed === 'fast' ? 'pnFast' : 'pnStandard')}` : ''}</span></div>
+                <div className="tl-body"><div className="text-[0.9375rem] font-semibold leading-snug">{i + 1}. {t(kindKey(l.kind))} <span className="font-normal text-mute">· {l.label}{l.speed ? ` · ${t(l.speed === 'fast' ? 'pnFast' : 'pnStandard')}` : ''}</span></div>
                   <div className="mt-1.5 space-y-1.5 leading-snug">
                     <Pair a={l.from} b={l.to} />
                     <div className="text-mute">{trimAmt(l.expectedInDisplay, 8)} {l.from.symbol} → <span className="font-medium text-ink">{trimAmt(l.expectedOutDisplay, 8)} {l.to.symbol}</span> · {t('pnWorstShort')} {trimAmt(l.worstOutDisplay, 8)}</div>
-                    <div className="text-[13px] text-mute">{dur(l.seconds)} · {l.fees.length === 0 ? t('pnNoFee') : l.fees.map((f) => `${t(`pnFee_${f.kind}` as Key)} ${trimAmt(f.display, 8)} ${f.symbol}${f.network !== l.from.network || f.kind === 'network' ? ` (${f.networkName})` : ''}${f.includedInOutput ? ` ${t('pnInOutput')}` : ''}`).join(' · ')}</div>
+                    <div className="text-[0.8125rem] text-mute">{dur(l.seconds)} · {l.fees.length === 0 ? t('pnNoFee') : l.fees.map((f) => `${t(`pnFee_${f.kind}` as Key)} ${trimAmt(f.display, 8)} ${f.symbol}${f.network !== l.from.network || f.kind === 'network' ? ` (${f.networkName})` : ''}${f.includedInOutput ? ` ${t('pnInOutput')}` : ''}`).join(' · ')}</div>
                   </div></div></li>)}</ol>
               <StatGrid><Stat label={t('pnTotalTime')} value={dur(p.seconds)} /><Stat label={t('pnTotalFees')} value={p.extraFeesUsd === null ? '—' : money(p.extraFeesUsd) ?? `${p.extraFeesUsd.toFixed(2)} USD`} /></StatGrid>
               <div><div className="t-eyebrow mb-2">{t('pnRequired')}</div>
@@ -121,9 +121,9 @@ export function PlanCards({ from, to, amount, slip, routes, money, pname, onCoun
                     <span className="min-w-0">{t('pnLimitLine', { step: l.leg + 1, need: trimAmt(l.needDisplay, 6), sym: l.symbol, net: l.networkName, per: trimAmt(l.perTransferDisplay, 6), left: trimAmt(l.leftTodayDisplay, 6) })}</span></li>)}
                 </ul></div>
               {blocking.length > 0 && <Notice tone="warn"><ul className="space-y-1" data-testid="plan-issues">{blocking.map((i, n) => <li key={n}>{issueText(t, i)}</li>)}</ul></Notice>}
-              {warns.length > 0 && <p className="text-[13px] text-mute">{warns.map((i) => issueText(t, i)).join(' ')}</p>}
+              {warns.length > 0 && <p className="text-[0.8125rem] text-mute">{warns.map((i) => issueText(t, i)).join(' ')}</p>}
               <Btn full disabled={!p.executable || !!running} onClick={() => setStart(p)}><Icon n="swap" className="h-4 w-4" />{t('pnStart', { n: p.approvals })}</Btn>
-              {!!running && <p className="text-[13px] text-mute">{t('pnOneAtATime')}</p>}
+              {!!running && <p className="text-[0.8125rem] text-mute">{t('pnOneAtATime')}</p>}
             </div>}
           </section>); })}
         {better && <Notice tone="info"><span data-testid="plan-comparison">{t('pnComparison', { via: better.providers.map(pname).join(' → '), min: trimAmt(better.minAmountOutDisplay, 8), sym: to.symbol })}</span></Notice>}
@@ -144,19 +144,19 @@ function StartSheet({ plan: p, slip, amount, onClose, onStarted }: { plan: PlanQ
   return (
     <Sheet title={t('pnStartTitle')} onClose={onClose} dismissable={false} busy={busy} testid="plan-start" wide>
       <div className="rounded-[20px] bg-elev/60 p-4">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-mute"><Vias vias={p.legs.map((l) => l.via)} size={24} /><span className="min-w-0">{trimAmt(p.amountInDisplay, 8)} {p.from.symbol} · {p.from.networkName} → {p.to.networkName}</span></div>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.8125rem] text-mute"><Vias vias={p.legs.map((l) => l.via)} size={24} /><span className="min-w-0">{trimAmt(p.amountInDisplay, 8)} {p.from.symbol} · {p.from.networkName} → {p.to.networkName}</span></div>
         <div className="mt-3 flex items-start gap-3.5"><AssetIcon sym={p.to.symbol} net={p.to.network} size={44} ring="var(--elev)" />
-          <div className="min-w-0"><div className="t-display break-words text-[clamp(25px,7.6vw,32px)] !leading-[1.12]">{trimAmt(p.expectedOutDisplay, 8)} <span className="text-mute">{p.to.symbol}</span></div>
-            <div className="mt-1 text-[13px] text-mute">{t('pnExpected')} · {t('pnWorstShort')} {trimAmt(p.worstOutDisplay, 8)} {p.to.symbol}</div></div></div>
+          <div className="min-w-0"><div className="t-display break-words text-[clamp(1.5625rem,7.6vw,2rem)] !leading-[1.12]">{trimAmt(p.expectedOutDisplay, 8)} <span className="text-mute">{p.to.symbol}</span></div>
+            <div className="mt-1 text-[0.8125rem] text-mute">{t('pnExpected')} · {t('pnWorstShort')} {trimAmt(p.worstOutDisplay, 8)} {p.to.symbol}</div></div></div>
       </div>
-      <div className="mt-3 space-y-3 text-[13.5px]">
+      <div className="mt-3 space-y-3 text-[0.84375rem]">
         <Notice tone="info">{t('pnGuarantee', { n: p.approvals })}</Notice>
         <Notice tone="ok">{t('pnBetween')}</Notice>
         <div><Field label={t('pnFloorLabel', { sym: p.to.symbol })}>
           <input className={inputCls} inputMode="decimal" placeholder={t('pnFloorNone')} aria-label={t('pnFloorLabel', { sym: p.to.symbol })} value={floor} onChange={(e) => setFloor(sanitizeAmountText(e.target.value))} autoComplete="off" />
           <AmountProblem text={floor} />
-          <span className="mt-1.5 block text-[12.5px] text-mute">{t('pnFloorHint', { worst: trimAmt(p.worstOutDisplay, 8), sym: p.to.symbol })}</span></Field>
-          <button type="button" className="press inline-flex min-h-11 items-center gap-1.5 text-[13.5px] font-semibold text-blue" onClick={() => setFloor(amountInputText(formatAmount(p.worstOutDisplay, 'en', { maxDecimals: 8, group: false }), amountLocale()))}><Icon n="lock" className="h-4 w-4" />{t('pnFloorUseWorst')}</button></div>
+          <span className="mt-1.5 block text-[0.78125rem] text-mute">{t('pnFloorHint', { worst: trimAmt(p.worstOutDisplay, 8), sym: p.to.symbol })}</span></Field>
+          <button type="button" className="press inline-flex min-h-11 items-center gap-1.5 text-[0.84375rem] font-semibold text-blue" onClick={() => setFloor(amountInputText(formatAmount(p.worstOutDisplay, 'en', { maxDecimals: 8, group: false }), amountLocale()))}><Icon n="lock" className="h-4 w-4" />{t('pnFloorUseWorst')}</button></div>
         {err && <Notice tone="danger">{err}</Notice>}
       </div>
       <div className="mt-4 space-y-2.5">
@@ -213,15 +213,15 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
   return (
     <div className="space-y-4" data-testid="plan-progress" data-next={p.next} data-current={p.current}>
       <div className="rounded-[20px] bg-elev/60 p-4">
-        <div className="flex items-center gap-3 text-[13px] text-mute"><span className="sw-ring"><ProgressRing done={settledCount(p)} total={p.steps} size={42} /></span>
+        <div className="flex items-center gap-3 text-[0.8125rem] text-mute"><span className="sw-ring"><ProgressRing done={settledCount(p)} total={p.steps} size={42} /></span>
           <span className="min-w-0 flex-1 leading-snug">{trimAmt(p.amountInDisplay, 8)} {p.from.symbol} · {p.from.networkName} → {p.to.symbol} · {p.to.networkName}</span><PlanPill p={p} /></div>
         <div className="mt-3.5 flex items-center gap-3.5">
           {p.state === 'done' ? <AssetIcon sym={p.to.symbol} net={p.to.network} size={44} ring="var(--elev)" /> : <AssetIcon sym={p.holding.symbol} net={p.holding.network} size={44} ring="var(--elev)" />}
-          {p.state === 'done' ? <div className="min-w-0 flex-1"><div className="text-[13px] text-mute">{t('pnReceived')}</div><div className="t-num break-words text-[26px]" data-testid="plan-received">{trimAmt(p.receivedDisplay ?? '', 10)} <span className="text-mute">{p.to.symbol}</span></div></div>
-            : <div className="min-w-0 flex-1"><div className="text-[13px] leading-snug text-mute">{t('pnHolding')}</div><div className="t-num mt-0.5 break-words text-[24px]" data-testid="plan-holding">{trimAmt(p.holding.amountDisplay, 8)} <span className="text-mute">{p.holding.symbol} · {p.holding.networkName}</span></div></div>}
+          {p.state === 'done' ? <div className="min-w-0 flex-1"><div className="text-[0.8125rem] text-mute">{t('pnReceived')}</div><div className="t-num break-words text-[1.625rem]" data-testid="plan-received">{trimAmt(p.receivedDisplay ?? '', 10)} <span className="text-mute">{p.to.symbol}</span></div></div>
+            : <div className="min-w-0 flex-1"><div className="text-[0.8125rem] leading-snug text-mute">{t('pnHolding')}</div><div className="t-num mt-0.5 break-words text-[1.5rem]" data-testid="plan-holding">{trimAmt(p.holding.amountDisplay, 8)} <span className="text-mute">{p.holding.symbol} · {p.holding.networkName}</span></div></div>}
         </div>
-        <div className="mt-3 border-t border-line pt-3 text-[13px] leading-snug text-mute">{p.estimate && p.state !== 'done' ? t('pnEstimateNow', { exp: trimAmt(p.estimate.expectedOutDisplay, 8), worst: trimAmt(p.estimate.worstOutDisplay, 8), sym: p.to.symbol }) : t('pnPlannedLine', { exp: trimAmt(p.plannedExpectedDisplay, 8), worst: trimAmt(p.plannedWorstDisplay, 8), sym: p.to.symbol })}</div>
-        {p.floorDisplay ? <div className="mt-2 flex items-center gap-1.5 text-[13px] font-semibold" data-testid="plan-floor"><Icon n="lock" className="h-4 w-4 shrink-0 text-mute" />{t('pnFloorIs', { floor: trimAmt(p.floorDisplay, 8), sym: p.to.symbol })}</div> : null}
+        <div className="mt-3 border-t border-line pt-3 text-[0.8125rem] leading-snug text-mute">{p.estimate && p.state !== 'done' ? t('pnEstimateNow', { exp: trimAmt(p.estimate.expectedOutDisplay, 8), worst: trimAmt(p.estimate.worstOutDisplay, 8), sym: p.to.symbol }) : t('pnPlannedLine', { exp: trimAmt(p.plannedExpectedDisplay, 8), worst: trimAmt(p.plannedWorstDisplay, 8), sym: p.to.symbol })}</div>
+        {p.floorDisplay ? <div className="mt-2 flex items-center gap-1.5 text-[0.8125rem] font-semibold" data-testid="plan-floor"><Icon n="lock" className="h-4 w-4 shrink-0 text-mute" />{t('pnFloorIs', { floor: trimAmt(p.floorDisplay, 8), sym: p.to.symbol })}</div> : null}
       </div>
 
       <div className="sw-tl"><Timeline label={t('pnSteps')} items={p.legs.map((l) => { const here = l.index === p.current && (p.state === 'active' || p.state === 'paused');
@@ -234,7 +234,7 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
               ? <dl className="sw-pva"><div><dt>{t('dzPnActual')}</dt><dd className="text-ink">{trimAmt(l.actual.inDisplay ?? '', 8)} {l.from.symbol} → <span className="font-semibold">{trimAmt(l.actual.outDisplay ?? '', 8)} {l.to.symbol}</span></dd></div><div><dt>{t('pnPlanned')}</dt><dd>{trimAmt(l.planned.expectedOutDisplay, 8)} {l.to.symbol}</dd></div></dl>
               : <div>{t('pnPlanned')} {trimAmt(l.planned.expectedInDisplay, 8)} {l.from.symbol} → {trimAmt(l.planned.expectedOutDisplay, 8)} {l.to.symbol} · {t('pnWorstShort')} {trimAmt(l.planned.worstOutDisplay, 8)} · {dur(l.seconds)}</div>}
             {sign && <div className="sw-sign" data-testid="plan-signs"><Icon n="key" className="mt-0.5 h-4 w-4 shrink-0 text-blue" /><span className="min-w-0">{sign}</span></div>}
-            {l.attempts.filter((a) => a.outcome && a.outcome !== 'settled' && a.error).slice(-1).map((a, n) => <div key={n} className="flex gap-1.5 text-[13px]"><Icon n="warn" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" /><span className="min-w-0">{t('pnLastAttempt')} {svText(t, a.errorCode, a.errorParams, a.error)}</span></div>)}
+            {l.attempts.filter((a) => a.outcome && a.outcome !== 'settled' && a.error).slice(-1).map((a, n) => <div key={n} className="flex gap-1.5 text-[0.8125rem]"><Icon n="warn" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" /><span className="min-w-0">{t('pnLastAttempt')} {svText(t, a.errorCode, a.errorParams, a.error)}</span></div>)}
             {/* the step in flight, transaction by transaction — the same status object as a single swap or transfer */}
             {here && l.proposalId && l.execution && l.execution.steps.some((s) => s.txid) && <ExecutionTimeline exec={l.execution} testid="plan-leg-execution" />}
           </div> }; })} /></div>
@@ -246,7 +246,7 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
       {/* the receipt of the step the passkey signs: every field in full, nothing animated */}
       {p.next === 'approve' && pr && <div className="space-y-3" data-testid="plan-review">
         <div className="rounded-[20px] border border-line p-4">
-          <div className="mb-1 flex flex-wrap items-center justify-between gap-2"><span className="text-[15px] font-semibold">{t('pnReview', { k: step, n: p.steps })}</span><StatePill state={pr.state} /></div>
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2"><span className="text-[0.9375rem] font-semibold">{t('pnReview', { k: step, n: p.steps })}</span><StatePill state={pr.state} /></div>
           <dl className="receipt">
             <Fact k={t('pnYouGive')}>{trimAmt(pr.amountDisplay, 10)} {pr.symbol} · {pr.networkName}</Fact>
             {pr.bridge ? <Fact k={t('pnMinGuaranteed')}>{trimAmt(pr.bridge.minReceiveDisplay, 10)} USDC · {pr.bridge.toNetworkName}</Fact>
@@ -261,7 +261,7 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
           : <><Notice tone="info">{t('pnReprepare')}</Notice><Btn full busy={busy === 'prepare'} disabled={ap.locked} onClick={() => void prepare()} data-testid="plan-prepare"><Icon n="swap" className="h-4 w-4" />{t('pnPrepare', { k: step, n: p.steps })}</Btn></>}
       </div>}
 
-      {p.next === 'wait' && <div className="flex items-start gap-3 rounded-[20px] bg-elev/60 p-4 text-[13.5px] leading-snug text-mute" data-testid="plan-wait"><Icon n="spin" className="mt-0.5 h-4 w-4 shrink-0 text-blue" /><span className="min-w-0">{t('pnWaiting', { k: step, n: p.steps })}{wait ? ` — ${wait}` : pr ? ` — ${t(`s_${pr.state}` as Key)}` : ''}. {t('pnWaitingNote')}</span></div>}
+      {p.next === 'wait' && <div className="flex items-start gap-3 rounded-[20px] bg-elev/60 p-4 text-[0.84375rem] leading-snug text-mute" data-testid="plan-wait"><Icon n="spin" className="mt-0.5 h-4 w-4 shrink-0 text-blue" /><span className="min-w-0">{t('pnWaiting', { k: step, n: p.steps })}{wait ? ` — ${wait}` : pr ? ` — ${t(`s_${pr.state}` as Key)}` : ''}. {t('pnWaitingNote')}</span></div>}
 
       {p.state === 'paused' && p.pause && <div className="space-y-3" data-testid="plan-paused" data-code={p.pause.code}>
         <Notice tone="warn"><b>{t(`pnPause_${['floor', 'refused', 'refunded', 'no_funds'].includes(p.pause.code) ? p.pause.code : 'other'}` as Key, { k: p.pause.leg + 1 })}</b> <span data-testid="plan-pause-text">{pauseText(t, p.pause)}</span> {t('pnPausedFunds', { amt: trimAmt(p.holding.amountDisplay, 8), sym: p.holding.symbol, net: p.holding.networkName })}</Notice>
@@ -276,8 +276,8 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
       {p.state === 'stopped' && <Notice tone="info">{t('pnStopped', { amt: trimAmt(p.holding.amountDisplay, 8), sym: p.holding.symbol, net: p.holding.networkName })}</Notice>}
       {err && !ap.locked && <Notice tone="danger">{err}</Notice>}
       <ApprovalOutcomePanel ap={ap} />
-      {p.state === 'active' && p.next !== 'wait' && <button className="press min-h-11 w-full text-center text-[13.5px] font-medium text-mute underline disabled:opacity-45" disabled={!!busy || ap.locked} onClick={() => void simple('stop')} data-testid="plan-stop-link">{t('pnStopHere')}</button>}
-      {(p.state === 'active' || p.state === 'paused') && <p className="text-[12.5px] text-mute">{t('pnResumable')}</p>}
+      {p.state === 'active' && p.next !== 'wait' && <button className="press min-h-11 w-full text-center text-[0.84375rem] font-medium text-mute underline disabled:opacity-45" disabled={!!busy || ap.locked} onClick={() => void simple('stop')} data-testid="plan-stop-link">{t('pnStopHere')}</button>}
+      {(p.state === 'active' || p.state === 'paused') && <p className="text-[0.78125rem] text-mute">{t('pnResumable')}</p>}
     </div>);
 }
 
@@ -304,8 +304,8 @@ export function PlanList() {
       <ul className="divide-y divide-line" data-testid="plan-list">{plans.map((p) => { const needs = p.next === 'prepare' || p.next === 'approve'; return <li key={p.id}>
         <button className="row-press flex min-h-[68px] w-full items-center gap-3.5 px-4 py-3 text-left" onClick={() => setShow(p.id)}>
           <span className="flex shrink-0 items-center gap-1" aria-hidden="true"><AssetIcon sym={p.from.symbol} net={p.from.network} size={32} /><Icon n="chev" className="h-3 w-3 text-mute" /><AssetIcon sym={p.to.symbol} net={p.to.network} size={32} /></span>
-          <span className="min-w-0 flex-1"><span className="block text-[15px] font-semibold leading-snug">{p.from.symbol} ({p.from.networkName}) → {p.to.symbol} ({p.to.networkName})</span>
-            <span className="mt-0.5 block text-[13px] leading-snug text-mute">{t('pnStepOf', { k: Math.min(p.current + 1, p.steps), n: p.steps })} · {trimAmt(p.amountInDisplay, 6)} {p.from.symbol}</span>
+          <span className="min-w-0 flex-1"><span className="block text-[0.9375rem] font-semibold leading-snug">{p.from.symbol} ({p.from.networkName}) → {p.to.symbol} ({p.to.networkName})</span>
+            <span className="mt-0.5 block text-[0.8125rem] leading-snug text-mute">{t('pnStepOf', { k: Math.min(p.current + 1, p.steps), n: p.steps })} · {trimAmt(p.amountInDisplay, 6)} {p.from.symbol}</span>
             <span className="mt-1.5 flex flex-wrap items-center gap-1.5"><PlanPill p={p} />{needs && <Tag tone="warn" icon="key">{t('pnNeedsYou')}</Tag>}</span></span>
           <Icon n="chev" className="h-4 w-4 shrink-0 text-mute" /></button></li>; })}</ul></Card></Section>
     {show && <PlanSheet id={show} onClose={() => { setShow(null); void qc.invalidateQueries({ queryKey: ['plans'] }); }} />}

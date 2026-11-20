@@ -25,8 +25,8 @@ export interface ApprovalSheet {
 const ENF_TONE: Record<Enforcement['enforcedBy'], Tone> = { signer: 'ok', signer_partial: 'warn', api_only: 'danger', not_applicable: 'mute' };
 export const EnforcementTable = ({ rows }: { rows: Enforcement[] }) => { const t = useT(); return (
   <ul className="divide-y divide-line" data-testid="rk-enforcement">{rows.map((e) => <li key={e.field} className="py-2.5" data-testid={`rk-enf-${e.field}`} data-enforced={e.enforcedBy}>
-    <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-[13px]">{e.field}</span><Tag tone={ENF_TONE[e.enforcedBy]}>{t(`rkEnf_${e.enforcedBy}` as Key)}</Tag></div>
-    <p className="mt-1 text-[12.5px] leading-snug text-mute">{e.signerField ? `${e.signerField} — ` : ''}{e.note}</p></li>)}</ul>); };
+    <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-[0.8125rem]">{e.field}</span><Tag tone={ENF_TONE[e.enforcedBy]}>{t(`rkEnf_${e.enforcedBy}` as Key)}</Tag></div>
+    <p className="mt-1 text-[0.78125rem] leading-snug text-mute">{e.signerField ? `${e.signerField} — ` : ''}{e.note}</p></li>)}</ul>); };
 
 /** one field of a mandate as a sentence a person reads (never raw JSON) */
 function fieldText(k: string, v: unknown, locale: string): string {
@@ -41,7 +41,7 @@ function fieldText(k: string, v: unknown, locale: string): string {
 }
 export function MandateFields({ mandate, testid }: { mandate: Record<string, unknown>; testid?: string }) {
   const { locale } = useContext(I18n);
-  return <dl data-testid={testid}>{Object.entries(mandate).map(([k, v]) => <Fact key={k} k={<span className="font-mono text-[12.5px]">{k}</span>}><span className="break-all" data-field={k}>{fieldText(k, v, locale)}</span></Fact>)}</dl>;
+  return <dl data-testid={testid}>{Object.entries(mandate).map(([k, v]) => <Fact key={k} k={<span className="font-mono text-[0.78125rem]">{k}</span>}><span className="break-all" data-field={k}>{fieldText(k, v, locale)}</span></Fact>)}</dl>;
 }
 
 export function MandateApprovalSheet({ sheet, onClose, onDone, onError }: { sheet: ApprovalSheet; onClose: () => void; onDone: () => void; onError: (e: unknown) => string }) {
@@ -68,22 +68,22 @@ export function MandateApprovalSheet({ sheet, onClose, onDone, onError }: { shee
       <div className="space-y-3">
         <Notice tone={live ? 'warn' : 'info'}>{live ? t('rkSheetTwo') : t('rkSheetPaper')}</Notice>
         <dl>
-          <Fact k={t('rkHashFull')}><span className="break-all font-mono text-[12.5px]" data-testid="rk-sheet-hash">{sheet.hash}</span></Fact>
-          {sheet.signer && <Fact k={t('rkSignerHash')}><span className="break-all font-mono text-[12.5px]" data-testid="rk-sheet-signer-hash">{sheet.signer.hash}</span></Fact>}
-          {sheet.principalDescriptor && <Fact k={t('rkPrincipalDesc')}><span className="break-all font-mono text-[12.5px]">{sheet.principalDescriptor}</span></Fact>}
+          <Fact k={t('rkHashFull')}><span className="break-all font-mono text-[0.78125rem]" data-testid="rk-sheet-hash">{sheet.hash}</span></Fact>
+          {sheet.signer && <Fact k={t('rkSignerHash')}><span className="break-all font-mono text-[0.78125rem]" data-testid="rk-sheet-signer-hash">{sheet.signer.hash}</span></Fact>}
+          {sheet.principalDescriptor && <Fact k={t('rkPrincipalDesc')}><span className="break-all font-mono text-[0.78125rem]">{sheet.principalDescriptor}</span></Fact>}
         </dl>
-        {live && <p className="text-[12.5px] leading-snug text-mute">{t('rkHashBody')}</p>}
-        <h3 className="text-[14px] font-semibold">{t('rkFields')}</h3>
+        {live && <p className="text-[0.78125rem] leading-snug text-mute">{t('rkHashBody')}</p>}
+        <h3 className="text-[0.875rem] font-semibold">{t('rkFields')}</h3>
         <MandateFields mandate={sheet.mandate} testid="rk-sheet-fields" />
-        {sheet.derived.length > 0 && <><h3 className="text-[14px] font-semibold">{t('rkDerived')}</h3>
-          <dl>{sheet.derived.map((x) => <Fact key={x.field} k={<span className="font-mono text-[12.5px]">{x.field}</span>}><span className="break-all">{x.value}</span><span className="mt-0.5 block text-[12.5px] text-mute">{x.from}</span></Fact>)}</dl></>}
-        <h3 className="text-[14px] font-semibold">{t('rkEnforcement')}</h3>
-        <p className="text-[12.5px] leading-snug text-mute">{t('rkEnforcementBody')}</p>
+        {sheet.derived.length > 0 && <><h3 className="text-[0.875rem] font-semibold">{t('rkDerived')}</h3>
+          <dl>{sheet.derived.map((x) => <Fact key={x.field} k={<span className="font-mono text-[0.78125rem]">{x.field}</span>}><span className="break-all">{x.value}</span><span className="mt-0.5 block text-[0.78125rem] text-mute">{x.from}</span></Fact>)}</dl></>}
+        <h3 className="text-[0.875rem] font-semibold">{t('rkEnforcement')}</h3>
+        <p className="text-[0.78125rem] leading-snug text-mute">{t('rkEnforcementBody')}</p>
         <EnforcementTable rows={sheet.enforcement} />
-        {sheet.signer && <><h3 className="text-[14px] font-semibold">{sheet.signer.acknowledgement.title ?? t('rkAck')}</h3>
-          <p className="whitespace-pre-wrap rounded-2xl bg-elev p-3 text-[13px] leading-relaxed">{sheet.signer.acknowledgement.text}</p>
+        {sheet.signer && <><h3 className="text-[0.875rem] font-semibold">{sheet.signer.acknowledgement.title ?? t('rkAck')}</h3>
+          <p className="whitespace-pre-wrap rounded-2xl bg-elev p-3 text-[0.8125rem] leading-relaxed">{sheet.signer.acknowledgement.text}</p>
           {sheet.signer.warning && <Notice tone="warn">{sheet.signer.warning}</Notice>}
-          <label className="flex min-h-11 cursor-pointer items-start gap-3 py-1.5"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-1 h-[18px] w-[18px] shrink-0 accent-blue" data-testid="rk-sheet-ack" /><span className="text-[14px]">{t('rkAckCheck')}</span></label></>}
+          <label className="flex min-h-11 cursor-pointer items-start gap-3 py-1.5"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-1 h-[18px] w-[18px] shrink-0 accent-blue" data-testid="rk-sheet-ack" /><span className="text-[0.875rem]">{t('rkAckCheck')}</span></label></>}
         {fail && !ap.locked && <Notice tone="danger">{fail}</Notice>}
         <ApprovalOutcomePanel ap={ap} />
       </div></Sheet>);
@@ -155,7 +155,7 @@ export function MandateForm({ onClose, onCreated, onError }: { onClose: () => vo
   const money = (k: keyof typeof n, testid: string) => <Field label={t(`rkM_${k}` as Key)} hint={t(`rkMH_${k}` as Key)}>
     <input className={inputCls} inputMode="decimal" autoComplete="off" value={n[k]} onChange={(e) => setN({ ...n, [k]: sanitizeAmountText(e.target.value) })} data-testid={testid} /><AmountProblem text={n[k]} /></Field>;
   const whole = (value: string, on: (s: string) => void, testid: string) => <input className={inputCls} inputMode="numeric" autoComplete="off" value={value} onChange={(e) => on(e.target.value.replace(/\D/g, ''))} data-testid={testid} />;
-  const check = (id: string, on: boolean, flip: () => void, text: string, testid: string) => <label key={id} className="flex min-h-11 cursor-pointer items-center gap-3"><input type="checkbox" checked={on} onChange={flip} className="h-[18px] w-[18px] shrink-0 accent-blue" data-testid={testid} /><span className="break-all text-[14px]">{text}</span></label>;
+  const check = (id: string, on: boolean, flip: () => void, text: string, testid: string) => <label key={id} className="flex min-h-11 cursor-pointer items-center gap-3"><input type="checkbox" checked={on} onChange={flip} className="h-[18px] w-[18px] shrink-0 accent-blue" data-testid={testid} /><span className="break-all text-[0.875rem]">{text}</span></label>;
 
   return (
     <Sheet title={t('rkNewTitle')} onClose={onClose} busy={busy} wide testid="rk-new"
@@ -165,7 +165,7 @@ export function MandateForm({ onClose, onCreated, onError }: { onClose: () => vo
         <Seg label={t('rkM_principal')} value={kind} options={[['api_key', t('rkM_key')], ['agent', t('rkM_agent')]]} onChange={setKind} />
         <Field label={t('rkM_principal')} hint={principals.length === 0 ? t(kind === 'api_key' ? 'rkM_noKeys' : 'rkM_noAgents') : undefined}>
           <select className={inputCls} value={pid} onChange={(e) => setPid(e.target.value)} data-testid="rk-new-principal"><option value="">—</option>{principals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
-        {kind === 'agent' && <Field label={t('rkM_strategy')} hint={t('rkMH_strategy')}><input className={`${inputCls} font-mono text-[12.5px]`} autoCapitalize="none" spellCheck={false} value={sha} onChange={(e) => setSha(e.target.value.trim().toLowerCase())} data-testid="rk-new-sha" /></Field>}
+        {kind === 'agent' && <Field label={t('rkM_strategy')} hint={t('rkMH_strategy')}><input className={`${inputCls} font-mono text-[0.78125rem]`} autoCapitalize="none" spellCheck={false} value={sha} onChange={(e) => setSha(e.target.value.trim().toLowerCase())} data-testid="rk-new-sha" /></Field>}
         <Seg label={t('rkM_mode')} value={mode} options={[['paper', t('rkModePaper')], ['live', t('rkModeLive')]]} onChange={setMode} />
         {mode === 'live' && <Notice tone="warn">{t('rkM_liveNote')}</Notice>}
         <Field label={t('rkM_account')} hint={accounts.length === 0 ? t(mode === 'live' ? 'rkM_noLive' : 'rkM_noPaper') : undefined}>
@@ -176,21 +176,21 @@ export function MandateForm({ onClose, onCreated, onError }: { onClose: () => vo
               <div className="grid grid-cols-[1fr_auto] gap-2"><input className={inputCls} list="rk-inst-list" autoCapitalize="none" spellCheck={false} value={instText} placeholder={`${acc.venue}:BTC`} onChange={(e) => setInstText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addInst(); } }} data-testid="rk-new-inst-text" />
                 <Btn kind="soft" onClick={addInst} data-testid="rk-new-inst-add"><Icon n="plus" className="h-4 w-4" />{t('rkAdd')}</Btn></div>
               <datalist id="rk-inst-list">{pinned.slice(0, 400).map((i) => <option key={i} value={i} />)}</datalist>
-              <div className="flex flex-wrap gap-1.5">{inst.map((i) => <button key={i} type="button" className="rounded-full bg-elev px-3 py-1.5 font-mono text-[12.5px]" onClick={() => setInst(inst.filter((x) => x !== i))} aria-label={`${t('rkRemove')} ${i}`}>{i} ×</button>)}</div></div>}
+              <div className="flex flex-wrap gap-1.5">{inst.map((i) => <button key={i} type="button" className="rounded-full bg-elev px-3 py-1.5 font-mono text-[0.78125rem]" onClick={() => setInst(inst.filter((x) => x !== i))} aria-label={`${t('rkRemove')} ${i}`}>{i} ×</button>)}</div></div>}
         </Field>}
         <Field label={t('rkM_orderTypes')}><div className="grid grid-cols-2">{ORDER_TYPES.map((o) => check(o, types.includes(o), () => toggle(types, setTypes, o), t(`rkOT_${o}` as Key), `rk-new-type-${o}`))}</div></Field>
         {money('maxCapitalUsd', 'rk-new-capital')}{money('maxOrderNotionalUsd', 'rk-new-order')}{money('maxPositionNotionalUsd', 'rk-new-position')}{money('maxLeverage', 'rk-new-leverage')}{money('maxDailyLossUsd', 'rk-new-dailyloss')}{money('floorEquityUsd', 'rk-new-floor')}
-        <Field label={t('rkM_days')} hint={t('rkMH_days', { n: dMax })}>{whole(days, setDays, 'rk-new-days')}{INT.test(days) && Number(days) > dMax && <span role="alert" className="mt-1.5 block text-[12.5px] text-danger">{t('rkMH_days', { n: dMax })}</span>}</Field>
+        <Field label={t('rkM_days')} hint={t('rkMH_days', { n: dMax })}>{whole(days, setDays, 'rk-new-days')}{INT.test(days) && Number(days) > dMax && <span role="alert" className="mt-1.5 block text-[0.78125rem] text-danger">{t('rkMH_days', { n: dMax })}</span>}</Field>
         <Field label={t('rkM_frequency')} hint={t('rkMH_frequency')}><div className="grid grid-cols-3 gap-2">
           {whole(freq.perMinute, (s) => setFreq({ ...freq, perMinute: s }), 'rk-new-permin')}{whole(freq.perHour, (s) => setFreq({ ...freq, perHour: s }), 'rk-new-perhour')}{whole(freq.perDay, (s) => setFreq({ ...freq, perDay: s }), 'rk-new-perday')}</div></Field>
         <Field label={t('rkM_slippage')} hint={t('rkMH_slippage')}>{whole(slip, setSlip, 'rk-new-slippage')}</Field>
         {money('maxFeeUsd', 'rk-new-fee')}
-        <fieldset className="space-y-3"><legend className="text-[13px] font-semibold uppercase tracking-wide text-mute">{t('rkM_stops')}</legend>
-          <p className="text-[12.5px] leading-snug text-mute">{t('rkMH_stops')}</p>
+        <fieldset className="space-y-3"><legend className="text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('rkM_stops')}</legend>
+          <p className="text-[0.78125rem] leading-snug text-mute">{t('rkMH_stops')}</p>
           {STOPS.map((s) => <Field key={s.kind} label={t(`rkStop_${s.kind}` as Key)}><input className={inputCls} inputMode={s.dec ? 'decimal' : 'numeric'} value={stops[s.kind] ?? ''} placeholder={t('rkStopNone')} onChange={(e) => setStops({ ...stops, [s.kind]: s.dec ? sanitizeAmountText(e.target.value) : e.target.value.replace(/\D/g, '') })} data-testid={`rk-new-stop-${s.kind}`} /></Field>)}
         </fieldset>
         <Field label={t('rkM_label')}><input className={inputCls} maxLength={60} value={label} onChange={(e) => setLabel(e.target.value)} data-testid="rk-new-label" /></Field>
-        {problems.length > 0 && <p className="text-[12.5px] leading-snug text-mute" data-testid="rk-new-problems">{t('rkM_todo')} <span className="font-mono">{problems.join(', ')}</span></p>}
+        {problems.length > 0 && <p className="text-[0.78125rem] leading-snug text-mute" data-testid="rk-new-problems">{t('rkM_todo')} <span className="font-mono">{problems.join(', ')}</span></p>}
         {fail && <Notice tone="danger">{fail}</Notice>}
       </div></Sheet>);
 }

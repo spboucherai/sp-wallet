@@ -121,7 +121,7 @@ describe('i18n: the dv block', () => {
     const app = read('../src/App.tsx');
     expect(app).toMatch(/developer: \(\) => import\('\.\/screens\/Developer'\)/);
     expect(app).not.toMatch(/^import .*screens\/Developer/m);
-    expect(settings).toContain("['developer', 'key', t('dvTitle'), '']");
+    expect(settings).toContain("['developer', 'key', t('dvTitle')]");
     expect(screen).not.toMatch(/https?:\/\/(?!example\.com)[a-z0-9.-]+\.[a-z]{2,}/i);   // nothing is loaded from another origin (the CSP forbids it)
   });
 });

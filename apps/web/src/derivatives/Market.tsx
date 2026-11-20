@@ -47,7 +47,7 @@ function Funding({ ticker, inst }: { ticker: Ticker; inst: Instrument }) {
   return <span title={t('fxFundingTitle')}>
     <span className="font-semibold">{pct(perHour, 5, locale, true)} / h</span>
     <span className="font-normal text-mute"> · {sign > 0 ? t('fxLongsPay') : sign < 0 ? t('fxShortsPay') : t('fxNobodyPays')}</span>
-    <span className="block text-[11.5px] font-normal leading-snug text-mute">{continuous ? t('fxFundingContinuous')
+    <span className="block text-[0.71875rem] font-normal leading-snug text-mute">{continuous ? t('fxFundingContinuous')
       : <>{inst.fundingIntervalSec !== 3600 ? `${pct(ticker.funding, 5, locale, true)} / ${intervalText(inst.fundingIntervalSec)} · ` : ''}{t('fxFundingEvery', { interval: intervalText(inst.fundingIntervalSec) })} · {t('fxFundingNext', { time: hms(ms - (now % ms)) })}</>}</span>
   </span>;
 }
@@ -66,14 +66,14 @@ export function MarketHeader({ store, instrument, onPick, compact }: { store: Ma
   const oi = dec(ticker?.openInterest), mark = dec(ticker?.mark);
   const picker = <button type="button" onClick={onPick} aria-haspopup="dialog" aria-label={t('fxPickMarket')} data-testid="market-picker" className="press row-press -ml-1.5 flex min-h-12 min-w-0 items-center gap-2.5 rounded-2xl py-1 pl-1.5 pr-2 text-left">
     <MarketLogo instrument={instrument} size={compact ? 38 : 44} />
-    <span className="min-w-0"><span className={`flex items-center gap-1 font-semibold leading-tight tracking-[-0.015em] ${compact ? 'text-[16.5px]' : 'text-[19px]'}`}><span className="truncate">{instrument ? `${instrument.base}-${instrument.quote}` : '…'}</span><Icon n="chev" className="h-4 w-4 shrink-0 rotate-90 text-mute" /></span>
-      <span className="mt-0.5 block truncate text-[12px] leading-tight text-mute">{instrument ? `${VENUE_NAME[instrument.venue]}${instrument.symbol !== instrument.base ? ` · ${instrument.symbol}` : ''} · ` : ''}{t('fxPerp')}</span></span></button>;
+    <span className="min-w-0"><span className={`flex items-center gap-1 font-semibold leading-tight tracking-[-0.015em] ${compact ? 'text-[1.03125rem]' : 'text-[1.1875rem]'}`}><span className="truncate">{instrument ? `${instrument.base}-${instrument.quote}` : '…'}</span><Icon n="chev" className="h-4 w-4 shrink-0 rotate-90 text-mute" /></span>
+      <span className="mt-0.5 block truncate text-[0.75rem] leading-tight text-mute">{instrument ? `${VENUE_NAME[instrument.venue]}${instrument.symbol !== instrument.base ? ` · ${instrument.symbol}` : ''} · ` : ''}{t('fxPerp')}</span></span></button>;
   const price = <div className={`min-w-0 ${compact ? 'text-right' : ''} ${stale ? 'opacity-50 grayscale' : ''}`}>
-    <div className={`t-num truncate ${compact ? 'text-[26px]' : 'text-[34px]'}`} data-testid="mark-price" aria-label={t('fxMarkPrice')}>{ticker ? fmt(ticker.mark, { dp: pdp, locale }) : '—'}</div>
-    <div className={`mt-1 flex items-center gap-2 ${compact ? 'justify-end' : ''}`}>{change ? <Change pct={D.toNumber(D.mul(change, D.from(100n)))} suffix=" 24 h" /> : <span className="text-[13px] text-mute">—</span>}</div></div>;
+    <div className={`t-num truncate ${compact ? 'text-[1.625rem]' : 'text-[2.125rem]'}`} data-testid="mark-price" aria-label={t('fxMarkPrice')}>{ticker ? fmt(ticker.mark, { dp: pdp, locale }) : '—'}</div>
+    <div className={`mt-1 flex items-center gap-2 ${compact ? 'justify-end' : ''}`}>{change ? <Change pct={D.toNumber(D.mul(change, D.from(100n)))} suffix=" 24 h" /> : <span className="text-[0.8125rem] text-mute">—</span>}</div></div>;
   if (compact) return <div data-testid="market-header">
     <div className="flex items-center justify-between gap-3">{picker}{price}</div>
-    <div className="mt-1.5 flex items-center justify-between gap-2"><FreshPill store={store} />{instrument && <span className="truncate text-[11.5px] text-mute">{t('fxMarkLabel')}</span>}</div>
+    <div className="mt-1.5 flex items-center justify-between gap-2"><FreshPill store={store} />{instrument && <span className="truncate text-[0.71875rem] text-mute">{t('fxMarkLabel')}</span>}</div>
   </div>;
   const stats = ticker && instrument ? <>
     <Stat wrap label={t('fxIndex')}>{ticker.index ? fmt(ticker.index, { dp: pdp, locale }) : '—'}</Stat>
@@ -97,7 +97,7 @@ export function MarketStats({ store, instrument }: { store: MarketStore; instrum
     <Stat label={t('fxIndex')}>{ticker.index ? fmt(ticker.index, { dp: pdp, locale }) : '—'}</Stat>
     <Stat label={t('fxVolume24h')}>{ticker.volume24h ? compactUsd(ticker.volume24h, locale) : '—'}</Stat>
     <Stat label={t('fxOpenInterest')}>{oi && mark ? compactUsd(D.mul(oi, mark), locale) : '—'}</Stat>
-    <div className="col-span-3 min-w-0 border-t border-line pt-3"><div className="text-[11.5px] leading-tight text-mute">{t('fxFundingLabel')}</div><div className="mt-0.5 text-[13.5px]"><Funding ticker={ticker} inst={instrument} /></div></div>
+    <div className="col-span-3 min-w-0 border-t border-line pt-3"><div className="text-[0.71875rem] leading-tight text-mute">{t('fxFundingLabel')}</div><div className="mt-0.5 text-[0.84375rem]"><Funding ticker={ticker} inst={instrument} /></div></div>
   </div>;
 }
 
@@ -123,9 +123,9 @@ export function MarketPicker({ instruments, current, onPick, onClose, hub, hubDo
     <div className="min-h-[56dvh] space-y-3 lg:min-h-[420px]">
       <div className="relative"><Icon n="search" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-mute" />
         <input type="search" role="searchbox" aria-label={t('fxSearchMarket')} placeholder={t('fxSearchMarket')} className={`${inputCls} pl-10`} value={q} onChange={(e) => setQ(e.target.value)} autoCapitalize="off" autoCorrect="off" /></div>
-      {hubDown && <p className="text-[12.5px] leading-snug text-mute" data-testid="market-hub-down">{t('v11TrPickHubDown')}</p>}
+      {hubDown && <p className="text-[0.78125rem] leading-snug text-mute" data-testid="market-hub-down">{t('v11TrPickHubDown')}</p>}
       <Seg size="sm" label={t('fxVenueFilter')} value={venue} onChange={setVenue} options={[{ id: 'all', label: t('fxAll') }, { id: 'fav', label: `★ ${t('fxFavs')}` }, ...(one ? [] : venues).map((v) => ({ id: v, label: <span className="inline-flex items-center gap-1.5"><VenueIcon venue={v} size={16} />{VENUE_NAME[v] ?? v}</span>, aria: VENUE_NAME[v] ?? v }))]} />
-      {instruments.length > 0 && <p className="px-0.5 text-[12px] leading-snug text-mute" data-testid="market-count">{t('hl1PickCount', { n: rows.length })}</p>}
+      {instruments.length > 0 && <p className="px-0.5 text-[0.75rem] leading-snug text-mute" data-testid="market-count">{t('hl1PickCount', { n: rows.length })}</p>}
       {instruments.length === 0 ? <div className="space-y-1" aria-hidden="true">{[0, 1, 2, 3, 4, 5].map((k) => <div key={k} className="flex items-center gap-3 px-1 py-2.5"><div className="skel h-9 w-9 !rounded-full" /><div className="flex-1 space-y-2"><div className="skel h-3.5 w-24 !rounded-md" /><div className="skel h-3 w-16 !rounded-md" /></div><div className="skel h-3.5 w-16 !rounded-md" /></div>)}</div>
         : rows.length === 0 ? <Empty icon={venue === 'fav' && !q ? 'star' : 'search'} title={venue === 'fav' && !q ? t('fxNoFavs') : t('fxNoMarket')} /> :
         <ul className="-mx-2 divide-y divide-line/70" data-testid="market-list">{rows.map((i) => { const x = byId.get(i.id), fav = favs.includes(i.id), ch = dec(x?.change24h); return <li key={i.id} className={`flex items-center gap-0.5 rounded-2xl px-1 ${i.id === current ? 'bg-elev' : ''}`}>
@@ -133,11 +133,11 @@ export function MarketPicker({ instruments, current, onPick, onClose, hub, hubDo
             className={`press grid h-11 w-11 shrink-0 place-items-center rounded-full ${fav ? 'text-warn' : 'text-mute/70'}`}><svg viewBox="0 0 24 24" className="h-5 w-5" fill={fav ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.2-4.1 5.8-.8z" /></svg></button>
           <button type="button" onClick={() => { const h = hub?.get(i.id); if (h && !h.tradable && !h.paper && onInfo) onInfo(i.id); else onPick(i.id); }} aria-current={i.id === current ? 'true' : undefined} data-testid="market-row" data-id={i.id} data-tradable={hub?.has(i.id) ? String(hub.get(i.id)!.tradable) : ''} className="row-press flex min-h-[60px] min-w-0 flex-1 items-center gap-3 rounded-2xl px-1.5 py-2 text-left">
             <MarketLogo instrument={i} size={38} />
-            <span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-semibold leading-tight">{i.base}-{i.quote}{i.symbol !== i.base && i.venue === 'gmx' ? <span className="font-normal text-mute"> {i.symbol.replace(/^[^[]*/, '')}</span> : null}</span>
-              <span className="mt-1 flex items-center gap-2 text-[12.5px] leading-tight text-mute"><span className="truncate">{one ? (x?.volume24h ? t('hl1PickVolume', { v: compactUsd(x.volume24h, locale) }) : t('fxPerp')) : VENUE_NAME[i.venue]}</span>{authorized && !authorized.has(i.id) && <span className="shrink-0" data-testid="market-unauthorized">· {t('hl1PickNotAllowed')}</span>}{i.status !== 'active' && <span className="shrink-0 font-medium text-warn">{t(i.status === 'halted' ? 'fxHaltedShort' : 'fxReduceOnly')}</span>}</span>
-              {(() => { const h = hub?.get(i.id); return h && !h.tradable ? <span className="mt-1 block text-[11.5px] leading-snug text-warn" data-testid="market-not-tradable" data-reason={h.reason ?? ''}><b className="font-semibold">{t('v11TrPickLiveOff')} · {t(h.paper ? 'v11TrPickPaperOnly' : 'v11TrPickReadOnly')}.</b> {t(reasonKey(h.reason) as Key)}</span> : null; })()}</span>
-            <span className="shrink-0 text-right"><span className="block text-[14.5px] font-semibold">{x ? fmt(x.mark, { dp: priceDp(i.tickSize, x.mark), locale }) : '—'}</span>
-              {ch ? <Change pct={D.toNumber(D.mul(ch, D.from(100n)))} /> : <span className="text-[12.5px] text-mute">—</span>}</span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-[0.9375rem] font-semibold leading-tight">{i.base}-{i.quote}{i.symbol !== i.base && i.venue === 'gmx' ? <span className="font-normal text-mute"> {i.symbol.replace(/^[^[]*/, '')}</span> : null}</span>
+              <span className="mt-1 flex items-center gap-2 text-[0.78125rem] leading-tight text-mute"><span className="truncate">{one ? (x?.volume24h ? t('hl1PickVolume', { v: compactUsd(x.volume24h, locale) }) : t('fxPerp')) : VENUE_NAME[i.venue]}</span>{authorized && !authorized.has(i.id) && <span className="shrink-0" data-testid="market-unauthorized">· {t('hl1PickNotAllowed')}</span>}{i.status !== 'active' && <span className="shrink-0 font-medium text-warn">{t(i.status === 'halted' ? 'fxHaltedShort' : 'fxReduceOnly')}</span>}</span>
+              {(() => { const h = hub?.get(i.id); return h && !h.tradable ? <span className="mt-1 block text-[0.71875rem] leading-snug text-warn" data-testid="market-not-tradable" data-reason={h.reason ?? ''}><b className="font-semibold">{t('v11TrPickLiveOff')} · {t(h.paper ? 'v11TrPickPaperOnly' : 'v11TrPickReadOnly')}.</b> {t(reasonKey(h.reason) as Key)}</span> : null; })()}</span>
+            <span className="shrink-0 text-right"><span className="block text-[0.90625rem] font-semibold">{x ? fmt(x.mark, { dp: priceDp(i.tickSize, x.mark), locale }) : '—'}</span>
+              {ch ? <Change pct={D.toNumber(D.mul(ch, D.from(100n)))} /> : <span className="text-[0.78125rem] text-mute">—</span>}</span>
           </button>
           {onInfo && hub?.get(i.id)?.tradable === false && <button type="button" onClick={() => onInfo(i.id)} aria-label={t('v11TrPickInfo', { symbol: `${i.symbol} ${VENUE_NAME[i.venue]}` })} data-testid="market-info" className="press grid h-11 w-11 shrink-0 place-items-center rounded-full text-mute"><Icon n="eye" className="h-[18px] w-[18px]" /></button>}</li>; })}</ul>}
     </div>

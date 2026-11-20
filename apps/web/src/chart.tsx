@@ -3,39 +3,31 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 // v11: the multi-series comparison chart (same approach: hand-written SVG, no library) is `MultiSeriesChart` in chart-multi.tsx — a
 // module of its own so that it stays out of the first chunk (this file is loaded with Home and the asset page).
 export interface Pt { t: number; p: number }
-/** Tiny trend line for list rows. Decorative: the adjacent text carries the value. */
-export function Spark({ data, w = 64, h = 26 }: { data: number[]; w?: number; h?: number }) {
-  if (data.length < 2) return <span style={{ width: w, height: h }} className="inline-block" />;
-  const min = Math.min(...data), max = Math.max(...data), span = max - min || 1;
-  const d = data.map((v, k) => `${k ? 'L' : 'M'}${((k / (data.length - 1)) * (w - 2) + 1).toFixed(1)} ${(h - 2 - ((v - min) / span) * (h - 4)).toFixed(1)}`).join('');
-  const ly = h - 2 - ((data[data.length - 1]! - min) / span) * (h - 4);
-  return <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" className="shrink-0 overflow-visible text-mute"><path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" /><circle cx={w - 1} cy={ly} r="2" fill="currentColor" /></svg>;
-}
+export { Spark } from './spark';
 
-export interface Part { id: string; label: string; value: number }
+export interface Part { id: string; label: string; /** 0…1, the server's own figure */ share: number; /** the part's value, already written as money (optional) */ value?: string }
 /**
- * How one whole splits, above a list that already gives each part's name and amount: a THIN segmented bar (8 px, rounded
- * ends, 2 px surface gaps, no text on it) and a legend that carries name and share in text colour — the hue only keys the
- * swatch. At most five parts and "other", hues in a fixed order (validated on both surfaces, docs/v9/DESIGN.md): the text
- * says everything, so nothing depends on telling two hues apart. Hover or focus on a part emphasises it in bar and legend.
+ * Allocation (design system §4): ONE horizontal bar in the series colours and a legend LIST that carries each part's name, value
+ * and share in text colour — the hue only keys the swatch, so nothing depends on telling two hues apart. Six parts at most,
+ * then « other ». Not a donut. Hover or focus on a part emphasises it in the bar and in the list.
  */
-export function AllocationBar({ parts, otherLabel, label, pct }: { parts: Part[]; otherLabel: string; label: string; pct: (share: number) => string }) {
+export function Allocation({ parts, otherLabel, label, pct, hidden }: { parts: Part[]; otherLabel: string; label: string; pct: (share: number) => string; /** hide-balances mode: values are masked, shares stay */ hidden?: boolean }) {
   const [on, setOn] = useState<string | null>(null);
-  const total = parts.reduce((s, p) => s + p.value, 0);
-  if (!(total > 0)) return null;
-  const sorted = [...parts].filter((p) => p.value > 0).sort((a, b) => b.value - a.value);
-  const head = sorted.slice(0, 5), rest = sorted.slice(5).reduce((s, p) => s + p.value, 0);
-  const segs = [...head.map((p, k) => ({ ...p, color: `var(--s${k + 1})` })), ...(rest > 0 ? [{ id: '__other', label: otherLabel, value: rest, color: 'var(--s-other)' }] : [])];
+  const sorted = parts.filter((p) => p.share > 0).sort((a, b) => b.share - a.share);
+  if (sorted.length === 0) return null;
+  const head = sorted.slice(0, 6), rest = sorted.slice(6), restShare = rest.reduce((s, p) => s + p.share, 0);
+  const segs = [...head.map((p, k) => ({ ...p, color: `var(--series-s${k + 1})` })), ...(rest.length > 0 ? [{ id: '__other', label: `${otherLabel} (${rest.length})`, share: restShare, value: undefined, color: 'var(--series-other)' }] : [])];
   return (
     <div data-testid="allocation">
-      <div className="flex h-2 gap-[2px]" role="img" aria-label={`${label} : ${segs.map((s) => `${s.label} ${pct(s.value / total)}`).join(', ')}`}>
+      <div className="flex h-2.5 gap-[2px]" role="img" aria-label={`${label} : ${segs.map((s) => `${s.label} ${pct(s.share)}`).join(', ')}`}>
         {segs.map((s) => <span key={s.id} onPointerEnter={() => setOn(s.id)} onPointerLeave={() => setOn(null)} className="h-full min-w-[3px] rounded-full transition-opacity"
-          style={{ flexGrow: s.value, flexBasis: 0, background: s.color, opacity: on && on !== s.id ? 0.35 : 1 }} />)}
+          style={{ flexGrow: s.share, flexBasis: 0, background: s.color, opacity: on && on !== s.id ? 0.35 : 1 }} />)}
       </div>
-      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px]">{segs.map((s) =>
-        <li key={s.id} tabIndex={0} onFocus={() => setOn(s.id)} onBlur={() => setOn(null)} onPointerEnter={() => setOn(s.id)} onPointerLeave={() => setOn(null)}
-          className={`inline-flex items-center gap-1.5 rounded-md transition-opacity ${on && on !== s.id ? 'opacity-50' : ''}`}>
-          <span className="h-2 w-2 rounded-full" style={{ background: s.color }} aria-hidden="true" /><span className="text-mute">{s.label}</span><span className="font-semibold">{pct(s.value / total)}</span></li>)}</ul>
+      <ul className="mt-3 grid gap-x-6 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">{segs.map((s) =>
+        <li key={s.id} tabIndex={0} data-part={s.id} onFocus={() => setOn(s.id)} onBlur={() => setOn(null)} onPointerEnter={() => setOn(s.id)} onPointerLeave={() => setOn(null)}
+          className={`t-callout flex min-h-9 flex-wrap items-center gap-x-2.5 rounded-md transition-opacity ${on && on !== s.id ? 'opacity-55' : ''}`}>
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} aria-hidden="true" /><span className="min-w-[3rem] flex-1 truncate">{s.label}</span>
+          {s.value && <span className={`shrink-0 text-mute ${hidden ? 'mask' : ''}`} aria-hidden={hidden || undefined}>{s.value}</span>}<span className="min-w-[3.25rem] shrink-0 text-right font-semibold">{pct(s.share)}</span></li>)}</ul>
     </div>
   );
 }
@@ -67,29 +59,29 @@ export function PriceChart({ points, format, formatTime, onHover }: { points: Pt
     setAt(k); onHover?.(points[k]!);
   };
   const leave = () => { setAt(null); onHover?.(null); };
-  if (!g) return <div ref={box} className="grid h-[210px] place-items-center text-[13px] text-mute">—</div>;
+  if (!g) return <div ref={box} className="grid h-[210px] place-items-center text-[0.8125rem] text-mute">—</div>;
   const first = points[0]!, last = points[points.length - 1]!;
   const cur = at === null ? null : points[at]!;
   return (
-    <div ref={box} className="relative touch-pan-y select-none" role="img"
+    <div ref={box} className="chart-box relative touch-pan-y select-none" role="img"
       aria-label={`${formatTime(first.t)} → ${formatTime(last.t)} : ${format(first.p)} → ${format(last.p)} (min ${format(g.min)}, max ${format(g.max)})`}
       onPointerDown={(e) => move(e.clientX)} onPointerMove={(e) => { if (e.pointerType === 'mouse' || e.buttons || e.pressure > 0) move(e.clientX); }}
       onPointerUp={(e) => { if (e.pointerType !== 'mouse') leave(); }} onPointerLeave={leave} onPointerCancel={leave}>
       <svg width={w} height={H} viewBox={`0 0 ${w} ${H}`} className="block overflow-visible">
-        <defs><linearGradient id="spw-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--blue)" stopOpacity="0.16" /><stop offset="1" stopColor="var(--blue)" stopOpacity="0" /></linearGradient></defs>
+        <defs><linearGradient id="spw-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--accent)" stopOpacity="0.16" /><stop offset="1" stopColor="var(--accent)" stopOpacity="0" /></linearGradient></defs>
         <line x1="0" x2={w} y1={g.open} y2={g.open} stroke="var(--line)" strokeWidth="1" />
         <path d={g.area} fill="url(#spw-area)" />
-        <path d={g.line} fill="none" stroke="var(--blue)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={g.line} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
         {cur && at !== null && <>
           <line x1={g.x(at)} x2={g.x(at)} y1={padT - 6} y2={H - padB} stroke="var(--mute)" strokeWidth="1" />
-          <circle cx={g.x(at)} cy={g.y(cur.p)} r="5" fill="var(--blue)" stroke="var(--surface)" strokeWidth="2" />
+          <circle cx={g.x(at)} cy={g.y(cur.p)} r="5" fill="var(--accent)" stroke="var(--surface)" strokeWidth="2" />
         </>}
-        {at === null && <circle cx={w - 1} cy={g.y(last.p)} r="4" fill="var(--blue)" stroke="var(--surface)" strokeWidth="2" />}
+        {at === null && <circle cx={w - 1} cy={g.y(last.p)} r="4" fill="var(--accent)" stroke="var(--surface)" strokeWidth="2" />}
       </svg>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between text-[11px] text-mute"><span>{formatTime(first.t)}</span><span>{formatTime(last.t)}</span></div>
-      <div className="pointer-events-none absolute right-0 top-0 text-right text-[11px] leading-tight text-mute"><div>max {format(g.max)}</div></div>
-      <div className="pointer-events-none absolute bottom-6 right-0 text-right text-[11px] leading-tight text-mute"><div>min {format(g.min)}</div></div>
-      {cur && at !== null && <div className="pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap rounded-lg bg-primary px-2 py-1 text-[11.5px] font-medium text-onprimary"
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between text-[0.6875rem] text-mute"><span>{formatTime(first.t)}</span><span>{formatTime(last.t)}</span></div>
+      <div className="pointer-events-none absolute right-0 top-0 text-right text-[0.6875rem] leading-tight text-mute"><div>max {format(g.max)}</div></div>
+      <div className="pointer-events-none absolute bottom-6 right-0 text-right text-[0.6875rem] leading-tight text-mute"><div>min {format(g.min)}</div></div>
+      {cur && at !== null && <div className="vchart-tip"
         style={{ left: Math.max(46, Math.min(w - 46, g.x(at))) }}>{formatTime(cur.t)}</div>}
     </div>
   );

@@ -112,14 +112,14 @@ export function LimitsEditor({ view, onDone, onCancel, onError }: { view: Limits
     <div className="space-y-4" data-testid="rk-limits-form">
       <Notice tone="info">{t('rkLimitsHint')}</Notice>
       {LIMIT_GROUPS.map((g) => <fieldset key={g.id} className="space-y-3">
-        <legend className="text-[13px] font-semibold uppercase tracking-wide text-mute">{t(`rkLG_${g.id}` as Key)}</legend>
+        <legend className="text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t(`rkLG_${g.id}` as Key)}</legend>
         {g.fields.map((f) => {
           const v = d[f.key], missing = view.missing.includes(f.key), hint = <span>{t(`rkLH_${f.key}` as Key)}{f.unit ? ` (${UNIT[f.unit]})` : ''}{seeded.has(f.key) && !(f.key in view.stored) ? <> · <b>{t('rkSeeded')}</b> {seeded.get(f.key)}</> : null}</span>;
           const label = `${t(`rkL_${f.key}` as Key)}${missing ? ` — ${t('rkRequired')}` : ''}`;
           if (typeof v === 'string') return <Field key={f.key} label={label} hint={hint}>
             {f.kind === 'list' ? <input className={inputCls} autoComplete="off" autoCapitalize="none" spellCheck={false} value={v} placeholder={ph(f.key)} onChange={(e) => set(f.key, e.target.value)} data-testid={`rk-lim-${f.key}`} />
               : num(f.key, v, (s) => set(f.key, s))}
-            {f.kind === 'dec' && <AmountProblem text={v} />}{f.kind === 'int' && v.trim() !== '' && !INT.test(v.trim()) && <span role="alert" className="mt-1.5 block text-[12.5px] text-danger">{t('rkWhole')}</span>}
+            {f.kind === 'dec' && <AmountProblem text={v} />}{f.kind === 'int' && v.trim() !== '' && !INT.test(v.trim()) && <span role="alert" className="mt-1.5 block text-[0.78125rem] text-danger">{t('rkWhole')}</span>}
           </Field>;
           if (v && 'per' in v) return <Field key={f.key} label={label} hint={hint}>
             <div className="space-y-2">
@@ -136,12 +136,12 @@ export function LimitsEditor({ view, onDone, onCancel, onError }: { view: Limits
           return null;
         })}
       </fieldset>)}
-      {built.bad.length > 0 && <Notice tone="danger">{t('rkBadFields')} <span className="font-mono text-[12.5px]">{built.bad.join(', ')}</span></Notice>}
-      {loosened && <Notice tone="warn"><b>{t('rkLoosens')}</b> <span className="font-mono text-[12.5px]" data-testid="rk-loosened">{loosened.join(', ')}</span> — {t('rkLoosensBody')}</Notice>}
+      {built.bad.length > 0 && <Notice tone="danger">{t('rkBadFields')} <span className="font-mono text-[0.78125rem]">{built.bad.join(', ')}</span></Notice>}
+      {loosened && <Notice tone="warn"><b>{t('rkLoosens')}</b> <span className="font-mono text-[0.78125rem]" data-testid="rk-loosened">{loosened.join(', ')}</span> — {t('rkLoosensBody')}</Notice>}
       {fail && <Notice tone="danger">{fail}</Notice>}
       <ApprovalOutcomePanel ap={ap} />
       <div className="grid grid-cols-2 gap-2.5"><Btn kind="ghost" onClick={onCancel}>{t('cancel')}</Btn>
         <Btn busy={busy} disabled={built.bad.length > 0 || ap.locked} onClick={() => void save(loosened !== null)} data-testid="rk-limits-save">{loosened ? <><Icon n="key" className="h-4 w-4" />{t('approve')}</> : t('rkSave')}</Btn></div>
-      {loosened === null && <p className="text-[12.5px] leading-snug text-mute"><Tag tone="info">{t('rkTightenFree')}</Tag></p>}
+      {loosened === null && <p className="text-[0.78125rem] leading-snug text-mute"><Tag tone="info">{t('rkTightenFree')}</Tag></p>}
     </div>);
 }

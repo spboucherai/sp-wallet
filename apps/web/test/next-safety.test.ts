@@ -85,7 +85,7 @@ describe('Activity — only the first page is re-read on the interval', () => {
     const pages = [page(['c', 'fresh'])];
     expect(withHead(pages, { page: page(['c', 'stale']), at: 50 }, 100)).toEqual(pages); expect(withHead([], { page: page(['x', 'y']), at: 500 }, 0)).toEqual([]); expect(withHead(pages, null, 0)).toEqual(pages);
   });
-  it('the infinite query itself has no interval', () => { const s = src('../src/screens/Activity.tsx'); expect(s).not.toMatch(/refetchInterval: 20_000 \}\);\n  const pages/); expect(s).toMatch(/setInterval\(tick, HEAD_REFRESH_MS\)/); });
+  it('the infinite query itself has no interval', () => { const s = src('../src/screens/Activity.tsx'); expect(s).not.toMatch(/refetchInterval: 20_000 \}\);\n  const pages/); expect(s).toMatch(/setInterval\(tick, headMs\)/); expect(s).toMatch(/useFallbackInterval\(HEAD_REFRESH_MS, /); });
 });
 
 describe('query cache — kept a few minutes, never beyond the session', () => {
@@ -158,7 +158,7 @@ describe('W1 — every flow that submits a passkey approval uses the shared help
   });
   it('Send: no Approve and no Cancel while the outcome is unread; the key is not regenerated on a lost answer', () => {
     const s = src('../src/screens/Send.tsx');
-    expect(s).toMatch(/\{!ap\.locked && <Btn full busy=\{!!busy\} disabled=\{needCheck && !checked\} onClick=\{approve\}/); expect(s).toMatch(/\{!ap\.locked && busy !== 'submit' && <Btn full kind="ghost"/);
+    expect(s).toMatch(/\{!ap\.locked && <Btn full busy=\{!!busy\} disabled=\{!acked\} onClick=\{approve\}/); expect(s).toMatch(/\{!ap\.locked && busy !== 'submit' && <Btn full kind="ghost"/);
     expect(s).toMatch(/catch \(e\) \{ fail\(e\); draft\.current\.failed\(e\); \}/); expect(s).not.toMatch(/setIdem\(crypto\.randomUUID\(\)\)/);
   });
 });

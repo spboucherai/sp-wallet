@@ -5,7 +5,7 @@ import { localizeAlertParams } from '../reasonTexts';
 import { api, get, post } from '../api';
 import { defaultLabel, disablePush, enablePush, isIos, pushState, thisDevice, type AlertItem, type Device, type PushState, type Unread } from '../alerts';
 import { errText, I18n, useT, type Key } from '../i18n';
-import { Btn, Card, Chips, EmptyState, ErrorState, Field, Icon, inputCls, NetworkIcon, Notice, PageTitle, Section, Seg, SkeletonCard, Tag, when, type Tone } from '../ui';
+import { Btn, Card, Chips, EmptyState, ErrorState, Field, Icon, inputCls, NetworkIcon, Notice, PageTitle, Section, Seg, SkeletonCard, Tag, when, type Tone, Toggle } from '../ui';
 
 interface SettingsT {
   rules: Record<string, boolean>; quiet: { enabled: boolean; start: string; end: string; tz: string }; showDetails: boolean; capPerHour: number;
@@ -19,12 +19,7 @@ const SEV: Record<string, { icon: string; plate: string; tone: Tone; key: Key }>
 const GROUPS: AlertGroup[] = ['transfers', 'agents', 'derivatives', 'security', 'system'];
 const groupKey = (g: string) => `alGroup_${g}` as Key;
 
-/** A switch: a 51 × 31 track inside a 44 px touch target; the thumb's side says the state, the colour only repeats it. */
-function Toggle({ on, onChange, label, disabled }: { on: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
-  return <button role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={() => onChange(!on)} className="group relative inline-flex h-11 w-[51px] shrink-0 items-center disabled:opacity-45">
-    <span className={`h-[31px] w-[51px] rounded-full transition-colors ${on ? 'bg-emerald' : 'bg-[color-mix(in_srgb,var(--mute)_34%,var(--elev))]'}`} />
-    <span className={`absolute left-0.5 top-1/2 -mt-[13.5px] h-[27px] w-[27px] rounded-full bg-white shadow-[0_2px_5px_rgba(13,18,32,0.28)] transition-transform duration-200 ease-spring ${on ? 'translate-x-5' : ''}`} /></button>;
-}
+// NEXT: the switch is the shared one (ui.tsx `Toggle`)
 /** the severity's icon on its tinted round plate (the word is written next to it by the caller) */
 function SevPlate({ s, size = 'h-10 w-10' }: { s: string; size?: string }) {
   const x = SEV[s] ?? SEV.info!;
@@ -75,7 +70,7 @@ function AlertList({ open }: { open: (path: string) => void }) {
   return <>
     <Seg label={t('alFilterSeverity')} value={sev} onChange={setSev} options={[['all', t('alAll')], ['critical', t('alSevCritical')], ['warning', t('alSevWarning')], ['info', t('alSevInfo')]] as const} />
     <Chips label={t('alFilterKind')} value={group} onChange={setGroup} options={[{ id: 'all' as const, label: t('alAllKinds') }, ...GROUPS.map((g) => ({ id: g, label: t(groupKey(g)) }))]} />
-    <div className="flex min-h-11 items-center justify-between gap-3 px-1 text-[13.5px] text-mute">
+    <div className="flex min-h-11 items-center justify-between gap-3 px-1 text-[0.84375rem] text-mute">
       <span data-testid="alerts-unread">{t('alUnreadCount', { n: q.data?.unread ?? 0 })}</span>
       <button className="press -mr-1 inline-flex min-h-11 items-center gap-1.5 rounded-full px-2 font-medium text-blue disabled:text-mute disabled:opacity-60" disabled={!q.data?.unread} onClick={() => void mark({ all: true })}><Icon n="check" className="h-4 w-4" />{t('alMarkAll')}</button></div>
     {q.isLoading ? <InboxSkeleton /> : q.isError && !q.data ? <ErrorState title={t('dzAlLoadFailed')} onRetry={() => void q.refetch()} offline={typeof navigator !== 'undefined' && navigator.onLine === false}>{t('dzAlLoadFailedBody')}</ErrorState>
@@ -86,9 +81,9 @@ function AlertList({ open }: { open: (path: string) => void }) {
             <button onClick={() => { if (unread) void mark({ ids: [a.id] }); open(alertPath(a.kind, a.subject as never)); }} data-kind={a.kind} data-unread={unread} className="row-press flex w-full items-start gap-3.5 px-4 py-3.5 text-left">
               <SevPlate s={a.severity} />
               <span className="min-w-0 flex-1">
-                <span className="flex items-baseline gap-2"><span className={`min-w-0 flex-1 text-[15px] leading-snug ${unread ? 'font-semibold' : 'font-medium'}`}>{text.title}</span>
+                <span className="flex items-baseline gap-2"><span className={`min-w-0 flex-1 text-[0.9375rem] leading-snug ${unread ? 'font-semibold' : 'font-medium'}`}>{text.title}</span>
                   <time dateTime={new Date(a.ts).toISOString()} title={when(new Date(a.ts), locale)} className="shrink-0 text-xs text-mute">{rel(a.ts)}</time></span>
-                {text.body && <span className={`mt-0.5 block break-words text-[13.5px] leading-snug ${unread ? 'text-ink/85' : 'text-mute'}`}>{text.body}</span>}
+                {text.body && <span className={`mt-0.5 block break-words text-[0.84375rem] leading-snug ${unread ? 'text-ink/85' : 'text-mute'}`}>{text.body}</span>}
                 <span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-mute"><SevWord s={a.severity} />
                   {a.count > 1 && <Tag>×{a.count}</Tag>}
                   <span className="inline-flex min-w-0 items-center gap-1 font-medium text-blue">{a.subject?.network && <NetworkIcon net={a.subject.network} size={15} />}<span className="min-w-0 break-words">{subject(a)}</span><Icon n="chev" className="h-3 w-3 shrink-0" /></span>
@@ -102,7 +97,7 @@ function AlertList({ open }: { open: (path: string) => void }) {
 
 /** one setting: label (and hint) on the left, its control on the right; rows of a card are separated by hairlines */
 function Row({ label, hint, children, lead }: { label: ReactNode; hint?: ReactNode; children: ReactNode; lead?: ReactNode }) {
-  return <div className="flex min-h-[52px] items-center gap-3 py-2">{lead}<span className="min-w-0 flex-1"><span className="block text-[15px] leading-snug">{label}</span>{hint && <span className="mt-0.5 block text-[12.5px] leading-snug text-mute">{hint}</span>}</span>{children}</div>;
+  return <div className="flex min-h-[52px] items-center gap-3 py-2">{lead}<span className="min-w-0 flex-1"><span className="block text-[0.9375rem] leading-snug">{label}</span>{hint && <span className="mt-0.5 block text-[0.78125rem] leading-snug text-mute">{hint}</span>}</span>{children}</div>;
 }
 
 function AlertSettings() {
@@ -120,7 +115,7 @@ function AlertSettings() {
       <Row label={t('alShowDetails')} hint={t('alShowDetailsHint')}><Toggle label={t('alShowDetails')} on={s.showDetails} onChange={(v) => void save({ showDetails: v })} /></Row>
       <div className="mb-2 mt-2"><div className="mb-1.5 text-xs text-mute">{t('alPreview')}</div>
         <div className="flex items-start gap-3 rounded-2xl bg-elev p-3" data-testid="push-preview"><img src="/icon.svg" alt="" width={36} height={36} className="h-9 w-9 shrink-0 rounded-[10px]" />
-          <div className="min-w-0 text-[13.5px] leading-snug"><div className="font-semibold">{preview.title}</div><div className="break-words">{preview.body}</div></div></div></div>
+          <div className="min-w-0 text-[0.84375rem] leading-snug"><div className="font-semibold">{preview.title}</div><div className="break-words">{preview.body}</div></div></div></div>
     </Card></Section>
     <Section title={t('alQuiet')}><Card className="!py-3">
       <Row label={t('alQuietOn')} hint={t('alQuietHint')}><Toggle label={t('alQuietOn')} on={s.quiet.enabled} onChange={(v) => void save({ quiet: { enabled: v } })} /></Row>
@@ -132,15 +127,15 @@ function AlertSettings() {
       <div className="border-t border-line"><NumberSetting label={t('alCap')} hint={t('alCapHint')} value={s.capPerHour} min={1} max={500} onSave={(v) => save({ capPerHour: v })} /></div>
     </Card></Section>
     <Section title={t('alRules')}><Card className="!py-2">
-      <p className="pb-2 pt-2 text-[13px] leading-snug text-mute">{t('alRulesHint')}</p>
+      <p className="pb-2 pt-2 text-[0.8125rem] leading-snug text-mute">{t('alRulesHint')}</p>
       <ul className="divide-y divide-line border-t border-line">{GROUPS.map((g) => { const all = q.data.kinds.filter((k) => k.group === g), kinds = all.filter((k) => !k.fixed), on = kinds.filter((k) => s.rules[k.kind] !== false).length, isOpen = openGroup === g;
         return <li key={g}>
           <button className="flex min-h-[52px] w-full items-center justify-between gap-3 text-left" aria-expanded={isOpen} onClick={() => setOpenGroup(isOpen ? null : g)}>
-            <span className="text-[15px] font-semibold">{t(groupKey(g))}</span><span className="flex items-center gap-2 text-[13px] text-mute">{on}/{kinds.length}<Icon n="chev" className={`h-4 w-4 transition ${isOpen ? 'rotate-90' : ''}`} /></span></button>
+            <span className="text-[0.9375rem] font-semibold">{t(groupKey(g))}</span><span className="flex items-center gap-2 text-[0.8125rem] text-mute">{on}/{kinds.length}<Icon n="chev" className={`h-4 w-4 transition ${isOpen ? 'rotate-90' : ''}`} /></span></button>
           {isOpen && <ul className="pb-2">{all.map((k) => { const d = def.get(k.kind), title = d ? d.title[locale === 'fr' ? 0 : 1] : k.kind;
             return <li key={k.kind} className="flex min-h-[52px] items-center gap-3 py-1.5" data-kind={k.kind} data-fixed={k.fixed || undefined}>
               <SevPlate s={k.severity} size="h-8 w-8" />
-              <span className="min-w-0 flex-1"><span className="block text-[14.5px] leading-snug">{title}</span><span className="mt-0.5 block text-xs text-mute">{t((SEV[k.severity] ?? SEV.info!).key)}</span></span>
+              <span className="min-w-0 flex-1"><span className="block text-[0.90625rem] leading-snug">{title}</span><span className="mt-0.5 block text-xs text-mute">{t((SEV[k.severity] ?? SEV.info!).key)}</span></span>
               {k.fixed ? <Tag tone="ok" icon="lock">{t('dzAlFixed')}</Tag> : <Toggle label={title} on={s.rules[k.kind] !== false} onChange={(v) => void save({ rules: { [k.kind]: v } })} />}</li>; })}</ul>}
         </li>; })}</ul>
     </Card></Section>
@@ -169,7 +164,7 @@ function TextSetting({ label, value, onSave }: { label: string; value: string; o
 function PushStatus({ tone, icon, title, children }: { tone: 'ok' | 'warn' | 'info' | 'mute'; icon: string; title: string; children?: ReactNode }) {
   const c = { ok: 'bg-emerald/12 text-emerald', warn: 'bg-warn/12 text-warn', info: 'bg-blue/10 text-blue', mute: 'bg-elev text-mute' }[tone];
   return <div className="flex items-start gap-3.5"><span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${c}`} aria-hidden="true"><Icon n={icon} /></span>
-    <div className="min-w-0 flex-1 pt-0.5"><div className={`text-[15.5px] font-semibold leading-snug ${tone === 'ok' ? 'text-emerald' : ''}`}>{title}</div>{children && <div className="mt-1 text-[13.5px] leading-snug text-mute">{children}</div>}</div></div>;
+    <div className="min-w-0 flex-1 pt-0.5"><div className={`text-[0.96875rem] font-semibold leading-snug ${tone === 'ok' ? 'text-emerald' : ''}`}>{title}</div>{children && <div className="mt-1 text-[0.84375rem] leading-snug text-mute">{children}</div>}</div></div>;
 }
 
 /** Web Push on this device: says plainly what is possible here (an iPhone must have the app on its Home Screen), then the devices. */
@@ -191,7 +186,7 @@ function PushCard() {
     <div data-testid="push-state" data-state={state ?? 'loading'}>
       {state === null && <div className="flex items-center gap-3.5" aria-hidden="true"><div className="skel h-11 w-11 !rounded-full" /><div className="flex-1 space-y-2"><div className="skel h-3.5 w-40 !rounded-md" /><div className="skel h-3 w-56 max-w-full !rounded-md" /></div></div>}
       {state === 'ios-install' && <PushStatus tone="info" icon="share" title={t('alIosTitle')}>
-        <ol className="mt-2 space-y-2">{(['alIos1', 'alIos2', 'alIos3', 'alIos4'] as const).map((k, i) => <li key={k} className="flex gap-2.5 text-ink"><span className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-elev text-[11.5px] font-semibold text-mute" aria-hidden="true">{i + 1}</span><span className="min-w-0">{t(k)}</span></li>)}</ol>
+        <ol className="mt-2 space-y-2">{(['alIos1', 'alIos2', 'alIos3', 'alIos4'] as const).map((k, i) => <li key={k} className="flex gap-2.5 text-ink"><span className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-elev text-[0.71875rem] font-semibold text-mute" aria-hidden="true">{i + 1}</span><span className="min-w-0">{t(k)}</span></li>)}</ol>
         <p className="mt-2.5">{t('alIosNote')}</p></PushStatus>}
       {state === 'unsupported' && <PushStatus tone="mute" icon="cloudOff" title={t('dzAlPushStUnsupported')}>{t('alPushUnsupported')}{isIos() ? ` ${t('alIosNote')}` : ''}</PushStatus>}
       {state === 'denied' && <div className="space-y-4"><PushStatus tone="warn" icon="warn" title={t('dzAlPushStDenied')}>{t('alPushDenied')}</PushStatus>
@@ -203,12 +198,12 @@ function PushCard() {
     </div>
     {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
     {(devices.data?.length ?? 0) > 0 && <div><div className="t-eyebrow mb-1">{t('dzAlDevices')}</div><ul className="divide-y divide-line" data-testid="push-devices">{devices.data!.map((d) => <li key={d.id} className="space-y-2.5 py-3">
-      <div className="min-w-0"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="min-w-0 break-words text-[15px] font-semibold">{d.label || d.service}</span>{d.id === mine && <Tag tone="ok" icon="check">{t('alThisDevice')}</Tag>}</div>
-        <div className="mt-0.5 break-words text-[12.5px] text-mute">{d.service} · {d.lastOkAt ? `${t('alLastOk')} ${when(new Date(d.lastOkAt), locale)}` : t('alNeverSent')}{d.failures > 0 ? ` · ${t('alFailures', { n: d.failures })}` : ''}</div></div>
-      <div className="grid grid-cols-2 gap-2"><Btn kind="soft" className="!min-h-11 !text-[14px]" busy={busy === `test${d.id}`} onClick={() => void test(d.id)}>{t('alTest')}</Btn>
-        <Btn kind="ghost" className="!min-h-11 !text-[14px]" busy={busy === `rm${d.id}`} onClick={() => void run(`rm${d.id}`, async () => { if (d.id === mine) await disablePush(devices.data!); else await api('DELETE', `/push/subscriptions/${d.id}`); })}>{t('alRemove')}</Btn></div>
+      <div className="min-w-0"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="min-w-0 break-words text-[0.9375rem] font-semibold">{d.label || d.service}</span>{d.id === mine && <Tag tone="ok" icon="check">{t('alThisDevice')}</Tag>}</div>
+        <div className="mt-0.5 break-words text-[0.78125rem] text-mute">{d.service} · {d.lastOkAt ? `${t('alLastOk')} ${when(new Date(d.lastOkAt), locale)}` : t('alNeverSent')}{d.failures > 0 ? ` · ${t('alFailures', { n: d.failures })}` : ''}</div></div>
+      <div className="grid grid-cols-2 gap-2"><Btn kind="soft" className="!min-h-11 !text-[0.875rem]" busy={busy === `test${d.id}`} onClick={() => void test(d.id)}>{t('alTest')}</Btn>
+        <Btn kind="ghost" className="!min-h-11 !text-[0.875rem]" busy={busy === `rm${d.id}`} onClick={() => void run(`rm${d.id}`, async () => { if (d.id === mine) await disablePush(devices.data!); else await api('DELETE', `/push/subscriptions/${d.id}`); })}>{t('alRemove')}</Btn></div>
     </li>)}</ul></div>}
-    <p className="flex gap-2 border-t border-line pt-3.5 text-[12.5px] leading-snug text-mute"><Icon n="lock" className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{t('alPushNote')}</span></p>
+    <p className="flex gap-2 border-t border-line pt-3.5 text-[0.78125rem] leading-snug text-mute"><Icon n="lock" className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{t('alPushNote')}</span></p>
   </Card></Section>;
 }
 
@@ -216,14 +211,14 @@ function WebhookCard({ view, save }: { view: SettingsView; save: (p: Record<stri
   const t = useT(); const qc = useQueryClient(); const w = view.settings.webhook;
   const [secret, setSecret] = useState(''), [busy, setBusy] = useState(''), [res, setRes] = useState<{ ok: boolean; text: string } | null>(null);
   return <Section title={t('alWebhook')} right={<Tag tone={w.enabled ? 'ok' : 'mute'} icon={w.enabled ? 'check' : 'minus'}>{t(w.enabled ? 'hdCapOn' : 'hdCapOff')}</Tag>}><Card className="space-y-3.5">
-    <p className="text-[13px] leading-snug text-mute">{t('alWebhookHint')}</p>
+    <p className="text-[0.8125rem] leading-snug text-mute">{t('alWebhookHint')}</p>
     <TextSetting label={t('alWebhookUrl')} value={w.url} onSave={(v) => save({ webhook: { url: v } })} />
     <div className="divide-y divide-line border-y border-line">
       <Row label={t('alWebhookSecret')} hint={view.webhook.secretSet ? t('alWebhookSecretSet') : t('alWebhookSecretNone')}>
-        <Btn kind="soft" className="!min-h-11 shrink-0 !px-4 !text-[14px]" busy={busy === 'secret'} onClick={() => { setBusy('secret'); void post<{ secret: string }>('/alerts/webhook/secret').then((r) => { setSecret(r.secret); void qc.invalidateQueries({ queryKey: ['alert-settings'] }); }).finally(() => setBusy('')); }}>{view.webhook.secretSet ? t('alWebhookRotate') : t('alWebhookGenerate')}</Btn></Row>
-      {secret && <div className="py-3"><Notice tone="warn"><div>{t('alWebhookSecretOnce')}</div><code className="mt-1 block break-all font-mono text-[12.5px]">{secret}</code></Notice></div>}
+        <Btn kind="soft" className="!min-h-11 shrink-0 !px-4 !text-[0.875rem]" busy={busy === 'secret'} onClick={() => { setBusy('secret'); void post<{ secret: string }>('/alerts/webhook/secret').then((r) => { setSecret(r.secret); void qc.invalidateQueries({ queryKey: ['alert-settings'] }); }).finally(() => setBusy('')); }}>{view.webhook.secretSet ? t('alWebhookRotate') : t('alWebhookGenerate')}</Btn></Row>
+      {secret && <div className="py-3"><Notice tone="warn"><div>{t('alWebhookSecretOnce')}</div><code className="mt-1 block break-all font-mono text-[0.78125rem]">{secret}</code></Notice></div>}
       <Row label={t('alWebhookDetails')} hint={t('alWebhookDetailsHint')}><Toggle label={t('alWebhookDetails')} on={w.details} onChange={(v) => void save({ webhook: { details: v } })} /></Row></div>
-    <div><div className="mb-1.5 text-xs text-mute">{t('alWebhookSample')}</div><pre className="max-h-48 overflow-auto rounded-2xl bg-elev p-3 font-mono text-[11.5px] leading-snug" data-testid="webhook-sample">{JSON.stringify(view.webhookSample, null, 1)}</pre></div>
+    <div><div className="mb-1.5 text-xs text-mute">{t('alWebhookSample')}</div><pre className="max-h-48 overflow-auto rounded-2xl bg-elev p-3 font-mono text-[0.71875rem] leading-snug" data-testid="webhook-sample">{JSON.stringify(view.webhookSample, null, 1)}</pre></div>
     <div className="border-t border-line pt-1"><Row label={t('alWebhookOn')} hint={t('alWebhookOnHint')}><Toggle label={t('alWebhookOn')} on={w.enabled} disabled={!w.enabled && (!w.url || !view.webhook.secretSet)} onChange={(v) => void save({ webhook: { enabled: v } })} /></Row></div>
     <Btn kind="soft" full disabled={!w.url || !view.webhook.secretSet} busy={busy === 'test'} onClick={() => { setBusy('test'); setRes(null); void post<{ ok: boolean; status: number; error: string | null }>('/alerts/webhook/test').then((r) => setRes({ ok: r.ok, text: r.ok ? t('alWebhookTestOk') : `${t('alWebhookTestKo')} ${r.error ?? r.status}` }), (e) => setRes({ ok: false, text: errText(t, e) })).finally(() => setBusy('')); }}>{t('alWebhookTest')}</Btn>
     {res && <Notice tone={res.ok ? 'ok' : 'danger'}>{res.text}</Notice>}

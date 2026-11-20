@@ -11,5 +11,5 @@ export function AmountProblem({ text, maxDecimals, ambiguousOnly }: { text: stri
   const t = useT(); const { locale } = useContext(I18n);
   const p = amountProblem(text, locale, maxDecimals === undefined ? {} : { maxDecimals });
   if (!p || (ambiguousOnly && p !== 'ambiguous')) return null;
-  return <span role="alert" data-testid="amount-problem" data-problem={p} className="mt-1.5 block text-[12.5px] leading-snug text-danger">{t(KEY[p], { text: text.trim(), n: maxDecimals ?? 0 })}</span>;
+  return <span role="alert" data-testid="amount-problem" data-problem={p} className="mt-1.5 block text-[0.78125rem] leading-snug text-danger">{t(KEY[p], { text: text.trim(), n: maxDecimals ?? 0 })}</span>;
 }

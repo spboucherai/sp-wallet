@@ -52,7 +52,7 @@ export function gmxIntegrity(r: GmxRequest, p: GmxPrepared, account: string | nu
 function Fields({ rows, testid }: { rows: { label: string; value: string }[]; testid: string }) {
   const t = useT();
   return <dl className="receipt" data-testid={testid}>{rows.map((f) => { const k = `gxF_${f.label}`, name = t(k as Key); const long = f.value.length > 22;
-    return <Fact key={f.label} k={<span data-label={f.label}>{name.startsWith('gxF') ? f.label : name}</span>}><span className={long ? 'break-all font-mono text-[11.5px] font-normal' : ''}>{f.value}</span></Fact>; })}</dl>;
+    return <Fact key={f.label} k={<span data-label={f.label}>{name.startsWith('gxF') ? f.label : name}</span>}><span className={long ? 'break-all font-mono text-[0.71875rem] font-normal' : ''}>{f.value}</span></Fact>; })}</dl>;
 }
 
 export function GmxConfirm({ status, request, onClose }: { status: GmxStatus; request: GmxRequest; onClose: () => void }) {
@@ -120,10 +120,10 @@ export function GmxConfirm({ status, request, onClose }: { status: GmxStatus; re
       {phase === 'proposing' && <Waiting className="py-6">{t('gxProposing')}</Waiting>}
 
       {p && o && phase !== 'proposing' && phase !== 'progress' && <div className={`space-y-4 ${phase === 'void' ? 'opacity-50' : ''}`}>
-        <p className="text-[13.5px] leading-snug">{t(request.kind === 'cancel' ? 'gxConfirmIntroCancel' : request.kind === 'close' ? 'gxConfirmIntroClose' : 'gxConfirmIntro')}</p>
+        <p className="text-[0.84375rem] leading-snug">{t(request.kind === 'cancel' ? 'gxConfirmIntroCancel' : request.kind === 'close' ? 'gxConfirmIntroClose' : 'gxConfirmIntro')}</p>
         <Group title={t('gxSignedExactly')}><div className={TICKET}><Fields rows={p.fields} testid="gmx-fields" /></div></Group>
         <Group title={t('gxFixedBySigner')}>
-          <div className="rounded-[18px] border border-line px-4 py-1.5"><Fields rows={p.fixed} testid="gmx-fixed" /></div><p className="mt-1.5 text-[12px] leading-snug text-mute">{t('gxFixedNote')}</p></Group>
+          <div className="rounded-[18px] border border-line px-4 py-1.5"><Fields rows={p.fixed} testid="gmx-fixed" /></div><p className="mt-1.5 text-[0.75rem] leading-snug text-mute">{t('gxFixedNote')}</p></Group>
         {p.estimate && request.kind !== 'cancel' && <Group title={t('gxEstSummary')}><div className="rounded-[18px] border border-line px-4 py-3"><EstimateRows e={p.estimate} action={action} /></div></Group>}
         {o.needsApproval && <Notice tone="info"><div data-testid="gmx-needs-approval">{t('gxNeedsApproval')}</div></Notice>}
         <dl className="rounded-[18px] border border-line px-4 py-1"><Fact k={t('gxMaxFee')}><span className="font-semibold">{`${o.maxFeeEth} ETH`}</span></Fact></dl>
@@ -139,14 +139,14 @@ export function GmxConfirm({ status, request, onClose }: { status: GmxStatus; re
       {phase === 'progress' && <div className="space-y-3" data-testid="gmx-progress">
         {op.data ? <GmxOpCard op={op.data} timeline /> : op.isError ? <Notice tone="warn">{t('gxOpUnread')}</Notice> : <SkeletonCard lines={4} />}
         {op.data && !op.data.final && request.kind !== 'cancel' && <TwoStep expirationSec={status.facts.requestExpirationSec} />}
-        <p className="text-[12.5px] leading-snug text-mute">{t('gxCloseSafe')}</p></div>}
+        <p className="text-[0.78125rem] leading-snug text-mute">{t('gxCloseSafe')}</p></div>}
 
       <div className="space-y-2.5">
-        {phase === 'ready' && <Btn full className="!min-h-[56px] !text-[16px]" kind="danger" onClick={() => void approve()} data-testid="gmx-approve"><Icon n="key" className="h-[18px] w-[18px]" />{t('flApproveReal')}</Btn>}
+        {phase === 'ready' && <Btn full className="!min-h-[56px] !text-[1rem]" kind="danger" onClick={() => void approve()} data-testid="gmx-approve"><Icon n="key" className="h-[18px] w-[18px]" />{t('flApproveReal')}</Btn>}
         {phase === 'ready' && <Btn full kind="soft" onClick={close} data-testid="gmx-withdraw">{t('gxWithdraw')}</Btn>}
         {phase === 'void' && <Btn full kind="soft" onClick={() => setKey(newKey(`gmx-${request.kind}`))} data-testid="gmx-prepare-again"><Icon n="refresh" className="h-4 w-4" />{t('gxPrepareAgain')}</Btn>}
         {phase !== 'ready' && <Btn full kind="ghost" disabled={phase === 'sending' || phase === 'passkey'} onClick={close} data-testid="gmx-confirm-close">{t(phase === 'progress' ? 'fxClose' : 'cancel')}</Btn>}
-        {phase === 'ready' && <p className="text-center text-[12px] leading-snug text-mute">{t('gxWithdrawNote')}</p>}
+        {phase === 'ready' && <p className="text-center text-[0.75rem] leading-snug text-mute">{t('gxWithdrawNote')}</p>}
       </div>
     </div>
   </LiveSheet>;

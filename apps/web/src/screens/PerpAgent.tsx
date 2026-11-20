@@ -27,8 +27,8 @@ const sym = (instrument: string) => instrument.slice(instrument.indexOf(':') + 1
 export function SimulationBanner() {
   const t = useT();
   return <div role="note" data-testid="simulation-banner" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-2 border-blue/50 bg-blue/10 px-4 py-3" style={{ backgroundImage: 'repeating-linear-gradient(135deg, transparent 0 12px, color-mix(in srgb, var(--blue) 7%, transparent) 12px 24px)' }}>
-    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue px-2.5 py-1 text-surface"><Icon n="eye" className="h-4 w-4" /><span className="text-[13.5px] font-extrabold uppercase tracking-[0.12em]">{t('paSim')}</span></span>
-    <span className="min-w-[12rem] flex-1 text-[13.5px] font-medium leading-snug">{t('paSimText')}</span></div>;
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue px-2.5 py-1 text-surface"><Icon n="eye" className="h-4 w-4" /><span className="text-[0.84375rem] font-extrabold uppercase tracking-[0.12em]">{t('paSim')}</span></span>
+    <span className="min-w-[12rem] flex-1 text-[0.84375rem] font-medium leading-snug">{t('paSimText')}</span></div>;
 }
 
 // ------------------------------------------------------------------ creation
@@ -66,20 +66,20 @@ export function PerpAgentForm({ nav, onCreated }: { nav: Nav; onCreated: () => P
           <input className={`${inputCls} !pl-11`} value={f.search} onChange={(e) => setF({ ...f, search: e.target.value })} placeholder={t('paSearch')} aria-label={t('paSearch')} /></span>
         {q.isLoading ? <div className="flex flex-wrap gap-2" aria-hidden="true">{[92, 88, 96, 84, 100, 90].map((w, k) => <div key={k} className="skel h-11 !rounded-full" style={{ width: w }} />)}</div> : q.isError ? <Notice tone="danger">{errText(t, q.error)}</Notice> : <div className="flex flex-wrap gap-2">{shown.map((x) => { const on = f.instruments.includes(x.symbol), full = !on && f.instruments.length >= max; return (
           <button key={x.symbol} type="button" role="checkbox" aria-checked={on} disabled={full} title={`max ${x.maxLeverage}x · lot ${x.lotSize}`} onClick={() => setF({ ...f, instruments: on ? f.instruments.filter((s) => s !== x.symbol) : [...f.instruments, x.symbol] })}
-            className={`press inline-flex min-h-11 items-center gap-2 rounded-full border py-1 pl-2 pr-3.5 text-[14px] font-medium ${on ? 'border-primary bg-primary text-onprimary' : 'border-line bg-surface'} ${full ? 'opacity-40' : ''}`}><AssetIcon sym={x.symbol} size={26} />{x.symbol}<span className="text-[11.5px] font-normal opacity-75">{x.maxLeverage}x</span>{on && <Icon n="check" className="h-4 w-4" />}</button>); })}</div>}
-        {f.instruments.length > 0 && <p className="flex flex-wrap items-center gap-2 text-[13.5px]"><LogoStack syms={f.instruments} size={22} max={8} /><span>{t('paChosen')} <span className="font-semibold">{f.instruments.join(' · ')}</span></span></p>}
-        <p className="text-[12.5px] leading-snug text-mute">{t('paInstrumentsNote')}</p>
+            className={`press inline-flex min-h-11 items-center gap-2 rounded-full border py-1 pl-2 pr-3.5 text-[0.875rem] font-medium ${on ? 'border-primary bg-primary text-onprimary' : 'border-line bg-surface'} ${full ? 'opacity-40' : ''}`}><AssetIcon sym={x.symbol} size={26} />{x.symbol}<span className="text-[0.71875rem] font-normal opacity-75">{x.maxLeverage}x</span>{on && <Icon n="check" className="h-4 w-4" />}</button>); })}</div>}
+        {f.instruments.length > 0 && <p className="flex flex-wrap items-center gap-2 text-[0.84375rem]"><LogoStack syms={f.instruments} size={22} max={8} /><span>{t('paChosen')} <span className="font-semibold">{f.instruments.join(' · ')}</span></span></p>}
+        <p className="text-[0.78125rem] leading-snug text-mute">{t('paInstrumentsNote')}</p>
       </FormGroup>
 
       <FormGroup title={t('dzAgSecCapital')}>
-        <Field label={t('paCapital')} hint={t('paCapitalHint', { min: q.data?.minCapital ?? '50' })}><span className="relative block"><input className={`${inputCls} t-num !py-3 pr-20 text-[22px]`} inputMode="decimal" value={f.capital} onChange={(e) => setF({ ...f, capital: sanitizeAmountText(e.target.value) })} /><span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[13px] font-medium text-mute">USDC</span></span><AmountProblem text={f.capital} /></Field>
-        <div><div className="mb-1.5 text-[13px] font-medium text-mute">{t('agInterval')}</div>
+        <Field label={t('paCapital')} hint={t('paCapitalHint', { min: q.data?.minCapital ?? '50' })}><span className="relative block"><input className={`${inputCls} t-num !py-3 pr-20 text-[1.375rem]`} inputMode="decimal" value={f.capital} onChange={(e) => setF({ ...f, capital: sanitizeAmountText(e.target.value) })} /><span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[0.8125rem] font-medium text-mute">USDC</span></span><AmountProblem text={f.capital} /></Field>
+        <div><div className="mb-1.5 text-[0.8125rem] font-medium text-mute">{t('agInterval')}</div>
           <Seg<string> value={f.interval} onChange={(v) => setF({ ...f, interval: v })} label={t('agInterval')} options={(q.data?.intervals ?? ['1h', '4h']).map((i) => ({ id: i, label: i.replace('h', ' h') }))} />
           <p className="mt-1.5 text-xs text-mute">{t('paIntervalHint')}</p></div>
       </FormGroup>
 
       <FormGroup title={t('paLimits')}>
-        <p className="text-[12.5px] leading-snug text-mute">{t('paLimitsNote')}</p>
+        <p className="text-[0.78125rem] leading-snug text-mute">{t('paLimitsNote')}</p>
         <div className="grid grid-cols-1 gap-x-3 gap-y-4 sm:grid-cols-2">
           {num('maxLeverage', t('paMaxLev'), t('paMaxLevHint', { usd: money(cap * r.maxLeverage) }), '×', 1, 5, true)}
           {num('maxGrossExposureX', t('paMaxGross'), t('paMaxGrossHint', { usd: money(cap * r.maxGrossExposureX) }), '× cap.', 0.1, 5)}
@@ -118,7 +118,7 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
   const ordCols: Col<Order>[] = [
     { id: 't', label: t('paColTime'), cell: (o) => timeOf(o.createdAt, locale, true) },
     { id: 'i', label: t('paColInst'), head: true, cell: (o) => <span className="font-semibold">{sym(o.instrument)}</span> },
-    { id: 's', label: t('paColSide'), head: true, cell: (o) => <span className="inline-flex items-center gap-2"><SideTag side={o.side} />{o.reduceOnly && <span className="rounded bg-elev px-1.5 text-[11px] font-semibold text-mute">{t('paReduceOnly')}</span>}</span> },
+    { id: 's', label: t('paColSide'), head: true, cell: (o) => <span className="inline-flex items-center gap-2"><SideTag side={o.side} />{o.reduceOnly && <span className="rounded bg-elev px-1.5 text-[0.6875rem] font-semibold text-mute">{t('paReduceOnly')}</span>}</span> },
     { id: 'z', label: t('paColSize'), num: true, cell: (o) => `${px(o.filled)} / ${px(o.size)}` },
     { id: 'p', label: t('paColAvg'), num: true, cell: (o) => px(o.avgFillPrice) },
     { id: 'w', label: t('paColWorst'), num: true, cell: (o) => px(o.price) },
@@ -155,10 +155,10 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
     <div className="space-y-4">
       {/* 1 — the state: the agent, the money it moves (SIMULATION, or the band of the real mode) */}
       <div><PageTitle onBack={() => nav({ tab: 'agents' })} backLabel={t('back')}>{a.name}</PageTitle>
-        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[13.5px] text-mute"><LogoStack syms={a.universe as string[]} size={24} max={5} /><span>{(a.universe as string[]).join(' · ')} · {a.interval} · {t('paPerps')}</span><VenueBadge venue="hyperliquid" />
+        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[0.84375rem] text-mute"><LogoStack syms={a.universe as string[]} size={24} max={5} /><span>{(a.universe as string[]).join(' · ')} · {a.interval} · {t('paPerps')}</span><VenueBadge venue="hyperliquid" />
           {/* v7 perp live: the state and the money it moves (the title keeps its width on a phone) */}
           {isLive ? <PerpLiveState a={a} /> : <AgentState state={a.state} />}</div>
-        {a.mission && <p className="mt-2.5 text-[14.5px] leading-snug text-mute">{a.mission}</p>}</div>
+        {a.mission && <p className="mt-2.5 text-[0.90625rem] leading-snug text-mute">{a.mission}</p>}</div>
       {isLive ? <AgentModeBand a={a} /> : <SimulationBanner />}
       {a.stopReason && !(isLive && a.live?.exit) && <Notice tone="warn">{srvText(t, locale, a.stopReason)}</Notice>}{/* v7: a live agent's stop is said in the screen's language by LivePanel; the server's sentence is its detail */}
       {a.flattening && a.state !== 'STOPPED' && <Notice tone="danger">{t('paFlattening')} {srvText(t, locale, a.flattening.reason)}</Notice>}
@@ -170,18 +170,18 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
       {isLive && <LivePanel a={a} id={id} nav={nav} />}
       {!isLive && <div className="space-y-4">
         <Card><CardHead right={<PaperTag />}>{t('paAccount')}</CardHead>
-          {!acct ? <div className="flex items-center gap-3.5 rounded-2xl bg-elev/60 px-4 py-4"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-surface text-mute"><Icon n="eye" /></span><p className="text-[14px] leading-snug text-mute">{t('paNoAccount')}</p></div> : <>
-            <div className="t-display text-[clamp(34px,10.5vw,44px)]">{usd(acct.state.equity, locale)}</div>
-            <div className="mt-2 space-y-0.5 text-[13.5px] text-mute"><div>{t('hdPaAllocated', { capital: usdCapital(a.capitalUsdc, locale) })}</div><div>{t('paResult')} <span className="font-semibold"><PnlArrow value={result ? D.str(result) : null} locale={locale} /></span></div></div>
+          {!acct ? <div className="flex items-center gap-3.5 rounded-2xl bg-elev/60 px-4 py-4"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-surface text-mute"><Icon n="eye" /></span><p className="text-[0.875rem] leading-snug text-mute">{t('paNoAccount')}</p></div> : <>
+            <div className="t-display text-[clamp(2.125rem,10.5vw,2.75rem)]">{usd(acct.state.equity, locale)}</div>
+            <div className="mt-2 space-y-0.5 text-[0.84375rem] text-mute"><div>{t('hdPaAllocated', { capital: usdCapital(a.capitalUsdc, locale) })}</div><div>{t('paResult')} <span className="font-semibold"><PnlArrow value={result ? D.str(result) : null} locale={locale} /></span></div></div>
             <StatGrid cols={4} className="mt-4">
               <Stat label={t('paCollateral')} value={usd(acct.state.collateral, locale)} /><Stat label={t('paMarginUsed')} value={usd(acct.state.marginUsed, locale)} />
               <Stat label={t('paFree')} value={usd(acct.state.freeCollateral, locale)} /><Stat label={t('paRealised')} value={<PnlArrow value={acct.totals?.realizedPnl} locale={locale} />} />
               <Stat label={t('paFees')} value={usd(acct.totals?.feesPaid, locale)} /><Stat label={t('paFundingNet')} value={<PnlArrow value={acct.totals?.fundingNet} locale={locale} dp={4} />} />
-              <Stat label={t('paLiquidations')} value={acct.totals?.liquidations ?? 0} /><Stat label={t('paLastBar')} value={<span className="text-[15px]">{a.lastBar ? when(a.lastBar, locale) : '—'}</span>} />
+              <Stat label={t('paLiquidations')} value={acct.totals?.liquidations ?? 0} /><Stat label={t('paLastBar')} value={<span className="text-[0.9375rem]">{a.lastBar ? when(a.lastBar, locale) : '—'}</span>} />
             </StatGrid>
             <div className="mt-5"><div className="t-eyebrow mb-2">{t('paPositions')}</div>
               <PositionRows positions={acct.positions} venue="hyperliquid" locale={locale} px={px} empty={t('paNoPositions')} approxLiq liqTitle={t('paLiqTitle')} label={t('paPositions')} /></div>
-            <p className="mt-3 text-[12.5px] leading-snug text-mute">{t('paSimplifications')}</p>
+            <p className="mt-3 text-[0.78125rem] leading-snug text-mute">{t('paSimplifications')}</p>
             {acct.positions.length > 0 && <Btn kind="ghost" full className="mt-3" busy={busy === 'flat'} onClick={() => act('flat', async () => { const r = await post<{ orders: unknown[]; positionsLeft: number }>(`/agents/${id}/perp/flatten`); setNote(t('paFlattened', { n: r.orders.length, left: r.positionsLeft })); })}>{t('paFlatten')}</Btn>}
           </>}
         </Card>
@@ -201,13 +201,13 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
           <Fact k={t('paSlip')}>{risk.slippageBps} bps</Fact>
         </dl>
         {pol?.halt && <div className="mt-2"><Notice tone="danger">{t('paHalt')} {pol.halt}</Notice></div>}
-        <p className="mt-2 text-[12.5px] leading-snug text-mute">{t('paLimitsNote')}</p>
+        <p className="mt-2 text-[0.78125rem] leading-snug text-mute">{t('paLimitsNote')}</p>
       </Card>
 
       <div id="pl-strategy" className="scroll-mt-24" /><Card><H>{t('agStrategy')}</H>
-        {(a.versions as any[]).length === 0 ? <p className="text-[14px] leading-snug text-mute">{t('paNoStrategy')}</p> : <ul className="space-y-3">{(a.versions as any[]).map((v) => { const s = v.summary; return <li key={v.id} className={`rounded-2xl border p-4 ${v.id === a.strategyVersionId ? 'border-emerald/35' : 'border-line'}`}>
-          <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[15.5px] font-semibold">{v.name} <span className="font-normal text-mute">v{v.version}</span></span><VersionTag status={v.status} /></div>
-          <div className="mt-1 break-all font-mono text-[11px] text-mute">sha256 {v.code_sha256}</div>
+        {(a.versions as any[]).length === 0 ? <p className="text-[0.875rem] leading-snug text-mute">{t('paNoStrategy')}</p> : <ul className="space-y-3">{(a.versions as any[]).map((v) => { const s = v.summary; return <li key={v.id} className={`rounded-2xl border p-4 ${v.id === a.strategyVersionId ? 'border-emerald/35' : 'border-line'}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[0.96875rem] font-semibold">{v.name} <span className="font-normal text-mute">v{v.version}</span></span><VersionTag status={v.status} /></div>
+          <div className="mt-1 break-all font-mono text-[0.6875rem] text-mute">sha256 {v.code_sha256}</div>
           {s ? <>
             <dl className="mt-3 rounded-2xl bg-elev/60 px-3.5 py-1">
               <Metric label={t('agRet')} value={pctOf(s.metrics.test?.total_return)} sub={<>{t('paVsPerp')} {pctOf(s.benchmarks.perp_long_1x?.total_return)}</>} />
@@ -216,7 +216,7 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
             {/* v11: a split the engine's own loss limit ended reads as a flat curve — it is said next to the figures, not left to be guessed */}
             {SPLITS.map((k) => { const st = stopOfSplit(s, k); return st ? <div key={k} className="mt-2"><StoppedTag split={k} stop={st} /></div> : null; })}
             <ReportV3 summary={s} />
-            <div className="mt-3 rounded-2xl border border-warn/30 bg-warn/[0.09] p-3.5 text-[13px] leading-snug"><div className="mb-1.5 flex items-center gap-2 font-semibold"><Icon n="warn" className="h-4 w-4 shrink-0 text-warn" />{t('paCaveats')}</div><ul className="list-disc space-y-1.5 pl-5">
+            <div className="mt-3 rounded-2xl border border-warn/30 bg-warn/[0.09] p-3.5 text-[0.8125rem] leading-snug"><div className="mb-1.5 flex items-center gap-2 font-semibold"><Icon n="warn" className="h-4 w-4 shrink-0 text-warn" />{t('paCaveats')}</div><ul className="list-disc space-y-1.5 pl-5">
               <li>{t('paCavHistory', { days: s.historyDays ?? '?', bars: s.config?.bars ?? '?', interval: s.config?.interval ?? a.interval })}</li>
               <li>{t('paCavEstimates', { fee: s.config?.fee_bps ?? '?', slip: s.config?.slippage_bps ?? '?', pen: s.config?.liquidation_penalty_bps ?? '?' })}</li>
               <li className={s.liquidations.train + s.liquidations.validation + s.liquidations.test > 0 || s.metrics.test?.wiped_out ? 'font-semibold text-danger' : ''}>{t('paCavLiq', { train: s.liquidations.train, val: s.liquidations.validation, test: s.liquidations.test })}{s.metrics.test?.wiped_out ? ` ${t('paCavWiped')}` : ''}</li>
@@ -225,14 +225,14 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
               {!s.buyAndHoldIsSpot && <li>{t('paCavNoSpot')}</li>}
               <li>{t('paCavNever')}</li></ul></div>
             {s.problem && <div className="mt-2"><Notice tone="danger">{t('paNotApprovable')} {s.problem}</Notice></div>}
-          </> : <p className="mt-2 flex items-start gap-2 text-[13px] leading-snug text-mute">{v.status === 'backtesting' && <Icon n="spin" className="mt-0.5 h-4 w-4 shrink-0" />}<span>{v.status === 'backtesting' ? t('paBacktesting') : v.notes ? v.notes : t('agNoReport')}</span></p>}
+          </> : <p className="mt-2 flex items-start gap-2 text-[0.8125rem] leading-snug text-mute">{v.status === 'backtesting' && <Icon n="spin" className="mt-0.5 h-4 w-4 shrink-0" />}<span>{v.status === 'backtesting' ? t('paBacktesting') : v.notes ? v.notes : t('agNoReport')}</span></p>}
           {v.status !== 'approved' && s && !s.problem && !liveActive && <Btn kind="soft" full className="mt-3" busy={busy === `a${v.id}`} onClick={() => act(`a${v.id}`, () => post(`/agents/${id}/strategies/${v.id}/approve`))}>{t('agApproveVersion')}</Btn>}
         </li>; })}</ul>}
         <div className="mt-5 border-t border-line pt-4"><div className="t-eyebrow mb-2.5">{t('paLibrary')}</div>
-          {lib.isLoading ? <div className="space-y-2" aria-hidden="true"><div className="skel h-[68px] !rounded-2xl" /></div> : fit.length === 0 ? <p className="text-[13.5px] leading-snug text-mute">{t('paLibNone', { assets: (a.universe as string[]).join(', '), interval: a.interval })}</p> :
+          {lib.isLoading ? <div className="space-y-2" aria-hidden="true"><div className="skel h-[68px] !rounded-2xl" /></div> : fit.length === 0 ? <p className="text-[0.84375rem] leading-snug text-mute">{t('paLibNone', { assets: (a.universe as string[]).join(', '), interval: a.interval })}</p> :
             <ul className="divide-y divide-line">{fit.map((x) => <li key={x.sha256} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-              <span className="min-w-0 flex-1"><span className="block text-[15px] font-semibold">{x.meta.name} <span className="font-normal text-mute">v{x.meta.version}</span></span>
-                <span className="mt-0.5 block text-[12.5px] leading-snug text-mute [overflow-wrap:anywhere]">{x.generic ? (a.universe as string[]).join(' · ') : x.meta.universe.join(' · ')} · {x.meta.interval} · {t('paBounds', { lev: x.meta.max_leverage, gross: x.meta.max_gross_exposure })}</span></span>
+              <span className="min-w-0 flex-1"><span className="block text-[0.9375rem] font-semibold">{x.meta.name} <span className="font-normal text-mute">v{x.meta.version}</span></span>
+                <span className="mt-0.5 block text-[0.78125rem] leading-snug text-mute [overflow-wrap:anywhere]">{x.generic ? (a.universe as string[]).join(' · ') : x.meta.universe.join(' · ')} · {x.meta.interval} · {t('paBounds', { lev: x.meta.max_leverage, gross: x.meta.max_gross_exposure })}</span></span>
               <Btn kind="soft" className="shrink-0" busy={busy === `r${x.sha256}`} onClick={() => act(`r${x.sha256}`, () => post(`/agents/${id}/strategies`, { path: x.path.replace(/^strategies\//, '') }))}>{t('agLibTest')}</Btn></li>)}</ul>}</div>
       </Card>
       </div>
@@ -252,12 +252,12 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
 
       <div className="space-y-4">
       <Card><H>{t('paSignals')}</H>
-        {(a.signals as any[]).length === 0 ? <p className="text-[14px] leading-snug text-mute">{t('paNoSignals')}</p> : <ul className="divide-y divide-line text-[13px]">{(a.signals as any[]).slice(0, 24).map((s) => { const [tone, icon] = SIG_TONE[s.status] ?? (['mute', 'minus'] as [Tone, string]); return <li key={s.bar} className="py-3 first:pt-0 last:pb-0">
-          <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[14px] font-semibold">{when(s.bar, locale)}</span><Tag tone={tone} icon={icon}>{s.status === 'decided' ? t('plSig_decided') : t(`paSig_${s.status}` as Key)}</Tag></div>
+        {(a.signals as any[]).length === 0 ? <p className="text-[0.875rem] leading-snug text-mute">{t('paNoSignals')}</p> : <ul className="divide-y divide-line text-[0.8125rem]">{(a.signals as any[]).slice(0, 24).map((s) => { const [tone, icon] = SIG_TONE[s.status] ?? (['mute', 'minus'] as [Tone, string]); return <li key={s.bar} className="py-3 first:pt-0 last:pb-0">
+          <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[0.875rem] font-semibold">{when(s.bar, locale)}</span><Tag tone={tone} icon={icon}>{s.status === 'decided' ? t('plSig_decided') : t(`paSig_${s.status}` as Key)}</Tag></div>
           {s.reason && <div className="mt-1 leading-snug text-mute">{srvText(t, locale, s.reason)}</div>}
-          {s.weights && <div className="mt-1 font-mono text-[11.5px] text-mute [overflow-wrap:anywhere]">{t('paWeights')} {Object.entries(s.weights as Record<string, number>).map(([k, w]) => `${k} ${w >= 0 ? '+' : ''}${w.toFixed(3)}`).join('  ')}{s.scale && s.scale !== '1' ? `  × ${Number(s.scale).toFixed(3)} (${s.orders?.binding})` : ''}</div>}
-          {s.targets && <div className="font-mono text-[11.5px] text-mute [overflow-wrap:anywhere]">{t('paTargets')} {Object.entries(s.targets as Record<string, string>).map(([k, z]) => `${k} ${z}`).join('  ')}</div>}
-          {(s.orders?.list ?? []).length > 0 && <ul className="mt-1.5 space-y-1">{(s.orders.list as any[]).map((o, k) => <li key={k} className="text-[12.5px]"><SideTag side={o.side} /> {o.symbol} {o.size}{o.reduceOnly ? ` · ${t('paReduceOnly')}` : ''} → <span className="font-medium">{o.status === 'deferred' ? t('plSig_deferred') : o.status}</span>{o.code && isLive ? <span className="mt-0.5 block text-mute"><Refusal code={String(o.code)} reason={o.why ? String(o.why).slice(0, 200) : undefined} /></span> : o.why ? <span className="text-mute"> — {String(o.why).slice(0, 160)}</span> : null}</li>)}</ul>}
+          {s.weights && <div className="mt-1 font-mono text-[0.71875rem] text-mute [overflow-wrap:anywhere]">{t('paWeights')} {Object.entries(s.weights as Record<string, number>).map(([k, w]) => `${k} ${w >= 0 ? '+' : ''}${w.toFixed(3)}`).join('  ')}{s.scale && s.scale !== '1' ? `  × ${Number(s.scale).toFixed(3)} (${s.orders?.binding})` : ''}</div>}
+          {s.targets && <div className="font-mono text-[0.71875rem] text-mute [overflow-wrap:anywhere]">{t('paTargets')} {Object.entries(s.targets as Record<string, string>).map(([k, z]) => `${k} ${z}`).join('  ')}</div>}
+          {(s.orders?.list ?? []).length > 0 && <ul className="mt-1.5 space-y-1">{(s.orders.list as any[]).map((o, k) => <li key={k} className="text-[0.78125rem]"><SideTag side={o.side} /> {o.symbol} {o.size}{o.reduceOnly ? ` · ${t('paReduceOnly')}` : ''} → <span className="font-medium">{o.status === 'deferred' ? t('plSig_deferred') : o.status}</span>{o.code && isLive ? <span className="mt-0.5 block text-mute"><Refusal code={String(o.code)} reason={o.why ? String(o.why).slice(0, 200) : undefined} /></span> : o.why ? <span className="text-mute"> — {String(o.why).slice(0, 160)}</span> : null}</li>)}</ul>}
         </li>; })}</ul>}
       </Card>
 
@@ -268,13 +268,13 @@ export function PerpAgentDetail({ a, id, nav }: { a: any; id: string; nav: Nav }
       {/* 5 — the controls, last */}
       {isLive && <LiveControls a={a} id={id} />}
       {/* >>> v7 perp live: while a mandate is in force the controls are LiveControls above; the go-live checklist comes back when it ends */}
-      {liveActive ? <p className="px-1 text-[13.5px] leading-snug text-mute">{t('plBandLive')}</p> : <Card><H>{t('agControl')}</H>
+      {liveActive ? <p className="px-1 text-[0.84375rem] leading-snug text-mute">{t('plBandLive')}</p> : <Card><H>{t('agControl')}</H>
         <div className="grid gap-2.5 empty:hidden">
           {approved && ['AWAITING_APPROVAL', 'PAUSED', 'STOPPED', 'CREATED'].includes(a.state) && <Btn kind="soft" full busy={busy === 'paper'} onClick={() => act('paper', () => post(`/agents/${id}/mode`, { mode: 'PAPER' }))} data-testid="pa-start-paper">{t(isLive ? 'plBackPaper' : 'paStart')}</Btn>}
           {a.state === 'PAPER_TRADING' && <Btn kind="ghost" full busy={busy === 'pause'} onClick={() => act('pause', () => post(`/agents/${id}/mode`, { mode: 'PAUSED' }))}><Icon n="clock" className="h-4 w-4 shrink-0" />{t('agPause')}</Btn>}
           {['PAPER_TRADING', 'PAUSED'].includes(a.state) && <Btn kind="ghost" full className="!border-danger/40 !text-danger" busy={busy === 'stop'} onClick={() => act('stop', () => post(`/agents/${id}/mode`, { mode: 'STOPPED' }))}><Icon n="stop" className="h-4 w-4 shrink-0" />{t('paStop')}</Btn>}
         </div>
-        {!approved && <p className="text-[13.5px] leading-snug text-mute">{t('agNeedsStrategy')}</p>}
+        {!approved && <p className="text-[0.84375rem] leading-snug text-mute">{t('agNeedsStrategy')}</p>}
         <div className="mt-4"><GoLiveCard a={a} id={id} nav={nav} /></div>
       </Card>}
       {/* <<< v7 perp live */}

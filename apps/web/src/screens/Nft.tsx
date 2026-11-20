@@ -35,7 +35,7 @@ const errCode = (e: unknown): string => ((e as ApiError)?.code ?? 'error').repla
 export function CopyId({ value, label }: { value: string; label: string }) {
   const t = useT(); const [ok, setOk] = useState(false);
   useEffect(() => { if (!ok) return; const h = setTimeout(() => setOk(false), 1500); return () => clearTimeout(h); }, [ok]);
-  return <span className="inline-flex max-w-full items-start gap-1.5"><span className="min-w-0 select-all break-all font-mono text-[12.5px] leading-relaxed" data-testid="nft-id">{value}</span>
+  return <span className="inline-flex max-w-full items-start gap-1.5"><span className="min-w-0 select-all break-all font-mono text-[0.78125rem] leading-relaxed" data-testid="nft-id">{value}</span>
     <button type="button" onClick={() => { void navigator.clipboard?.writeText(value).then(() => setOk(true)); }} aria-label={`${t('copy')} — ${label}`} className="press -my-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-mute hover:text-ink"><Icon n={ok ? 'check' : 'copy'} className="h-4 w-4" /></button></span>;
 }
 function KnownText<V>({ k, render, t }: { k: Known<V>; render: (v: V) => ReactNode; t: T }) {
@@ -58,7 +58,7 @@ export function NftMediaView({ m, alt, fit }: { m: NftMedia | { id: string; kind
   const info = useQuery({ queryKey: ['nft', 'media', m?.id], queryFn: () => get<{ status: string; kind?: string; mime?: string; code?: string }>(`/nfts/media/${m!.id}?info=1`), enabled: !!m && fit === 'full' && m.status !== 'blocked', staleTime: 60_000, retry: false });
   const box = fit === 'tile' ? 'aspect-square w-full' : 'aspect-square w-full max-h-[70vh]';
   const placeholder = (icon: string, text: string, code?: string | null, testid = 'nft-media-none') => <div className={`${box} grid place-items-center rounded-2xl bg-elev p-4 text-center text-mute`} data-testid={testid} role="img" aria-label={`${alt} — ${text}`}>
-    <span><Icon n={icon} className="mx-auto h-7 w-7" />{fit === 'full' && <><span className="mt-2 block text-[13.5px] font-medium text-ink">{text}</span>{code && <span className="mt-1 block font-mono text-[11.5px]">{code}</span>}</>}</span></div>;
+    <span><Icon n={icon} className="mx-auto h-7 w-7" />{fit === 'full' && <><span className="mt-2 block text-[0.84375rem] font-medium text-ink">{text}</span>{code && <span className="mt-1 block font-mono text-[0.71875rem]">{code}</span>}</>}</span></div>;
   if (!m) return placeholder('eyeOff', t('nfMediaNone'));
   const blockedCode = m.status === 'blocked' ? ('errorCode' in m ? m.errorCode : null) : info.data && info.data.status === 'media_blocked' ? info.data.code ?? null : null;
   if (m.status === 'blocked' || info.data?.status === 'media_blocked') return placeholder('shield', t('nfMediaBlocked'), tk(t, 'nfBlock_', blockedCode, 'nfBlockOther'), 'nft-media-blocked');
@@ -70,11 +70,11 @@ export function NftMediaView({ m, alt, fit }: { m: NftMedia | { id: string; kind
   if (kind === 'html') {
     if (fit === 'tile') return placeholder('lock', t('nfMediaActive'));
     if (mode === 'locked') return <div className={`${box} grid place-items-center rounded-2xl bg-elev p-5 text-center`} data-testid="nft-media-active">
-      <div className="space-y-3"><Icon n="lock" className="mx-auto h-7 w-7 text-mute" /><p className="text-[14px] font-semibold">{t('nfMediaActive')}</p><p className="mx-auto max-w-[34ch] text-[12.5px] text-mute">{t('nfMediaActiveBody')}</p>
+      <div className="space-y-3"><Icon n="lock" className="mx-auto h-7 w-7 text-mute" /><p className="text-[0.875rem] font-semibold">{t('nfMediaActive')}</p><p className="mx-auto max-w-[34ch] text-[0.78125rem] text-mute">{t('nfMediaActiveBody')}</p>
         <div className="flex flex-wrap justify-center gap-2"><Btn kind="soft" onClick={() => setMode('static')} data-testid="nft-media-show">{t('nfMediaShowStatic')}</Btn><Btn kind="ghost" onClick={() => setMode('run')} data-testid="nft-media-run">{t('nfMediaRun')}</Btn></div></div></div>;
     // sandbox: no allow-same-origin, no top navigation, no forms, no popups; scripts only in `run` mode; the document also carries its own sandboxing CSP
     return <div><iframe key={mode} title={alt} src={mediaUrl(m.id, mode === 'run')} sandbox={mode === 'run' ? 'allow-scripts' : ''} allow="" referrerPolicy="no-referrer" loading="lazy" className={`${box} rounded-2xl border border-line bg-white`} data-testid="nft-media-frame" data-mode={mode} />
-      <p className="mt-1.5 text-[12px] text-mute">{t(mode === 'run' ? 'nfMediaRunning' : 'nfMediaStaticNote')} <button className="underline" onClick={() => setMode('locked')}>{t('nfMediaClose')}</button></p></div>;
+      <p className="mt-1.5 text-[0.75rem] text-mute">{t(mode === 'run' ? 'nfMediaRunning' : 'nfMediaStaticNote')} <button className="underline" onClick={() => setMode('locked')}>{t('nfMediaClose')}</button></p></div>;
   }
   if (kind === 'model') return placeholder('eyeOff', t('nfMediaModel'));
   if (failed) return placeholder('eyeOff', t('nfMediaFailed'), null, 'nft-media-failed');
@@ -90,10 +90,10 @@ export function ChainStates({ chains }: { chains: NftChainCap[] }) {
   const t = useT();
   const tone = (c: NftChainCap) => (c.inventory === 'supported' ? 'ok' : c.inventory === 'unsupported' ? 'mute' : 'warn') as 'ok' | 'mute' | 'warn';
   return <ul className="divide-y divide-line" data-testid="nft-chains">{chains.map((c) => <li key={c.network} className="flex items-start gap-3 py-2.5" data-chain={c.network} data-inventory={c.inventory}>
-    <NetworkIcon net={c.network} size={24} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="text-[14px] font-semibold">{c.name}</span>
+    <NetworkIcon net={c.network} size={24} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="text-[0.875rem] font-semibold">{c.name}</span>
       <Tag tone={tone(c)} icon={c.inventory === 'supported' ? 'check' : c.inventory === 'unsupported' ? 'minus' : 'lock'}>{t(`nfInv_${c.inventory}` as Key)}</Tag></div>
-      <p className="mt-0.5 text-[12.5px] leading-snug text-mute">{tk(t, 'nfInvWhy_', c.reason.split(':')[0], 'nfInvWhyOther')}{c.unlockedBy ? <> — {t('nfUnlockedBy')} <code className="font-mono text-[11.5px] text-ink">{c.unlockedBy}</code></> : null}</p>
-      {c.sections.filter((s) => s.status !== 'ok').map((s) => <p key={s.section} className="mt-0.5 text-[12px] text-mute" data-section={s.section} data-status={s.status}>· {tk(t, 'nfSec_', s.section, 'nfSecOther')} : {t(`nfSecStatus_${s.status}` as Key)}{s.unlockedBy ? <> (<code className="font-mono text-[11px]">{s.unlockedBy}</code>)</> : null}</p>)}
+      <p className="mt-0.5 text-[0.78125rem] leading-snug text-mute">{tk(t, 'nfInvWhy_', c.reason.split(':')[0], 'nfInvWhyOther')}{c.unlockedBy ? <> — {t('nfUnlockedBy')} <code className="font-mono text-[0.71875rem] text-ink">{c.unlockedBy}</code></> : null}</p>
+      {c.sections.filter((s) => s.status !== 'ok').map((s) => <p key={s.section} className="mt-0.5 text-[0.75rem] text-mute" data-section={s.section} data-status={s.status}>· {tk(t, 'nfSec_', s.section, 'nfSecOther')} : {t(`nfSecStatus_${s.status}` as Key)}{s.unlockedBy ? <> (<code className="font-mono text-[0.6875rem]">{s.unlockedBy}</code>)</> : null}</p>)}
     </div></li>)}</ul>;
 }
 
@@ -102,13 +102,13 @@ function Tile({ a, nav, list }: { a: NftSummary; nav: Nav; list: boolean }) {
   const label = name ?? shortId(a.assetId);
   if (list) return <li><button onClick={() => nav({ tab: 'nft', asset: a.key })} className="row-press flex w-full items-center gap-3.5 px-5 py-3 text-left" data-testid="nft-row" data-key={a.key}>
     <span className="h-12 w-12 shrink-0 overflow-hidden rounded-xl"><NftMediaView m={a.image} alt={label} fit="tile" /></span>
-    <span className="min-w-0 flex-1"><span className={`block truncate text-[15px] font-semibold ${name ? '' : 'font-mono text-[13px]'}`}>{label}</span><span className="block truncate text-[12.5px] text-mute">{a.collection?.name ?? t('nfNoCollection')} · {t(STANDARD_KEY[a.standard] ?? 'nfStd_unknown')}</span></span>
-    <span className="flex shrink-0 flex-col items-end gap-1"><NetworkIcon net={a.chain} size={18} />{a.quantity !== '1' && a.quantity !== '0' && <span className="text-[12px] font-semibold">×{a.quantity}</span>}</span></button></li>;
+    <span className="min-w-0 flex-1"><span className={`block truncate text-[0.9375rem] font-semibold ${name ? '' : 'font-mono text-[0.8125rem]'}`}>{label}</span><span className="block truncate text-[0.78125rem] text-mute">{a.collection?.name ?? t('nfNoCollection')} · {t(STANDARD_KEY[a.standard] ?? 'nfStd_unknown')}</span></span>
+    <span className="flex shrink-0 flex-col items-end gap-1"><NetworkIcon net={a.chain} size={18} />{a.quantity !== '1' && a.quantity !== '0' && <span className="text-[0.75rem] font-semibold">×{a.quantity}</span>}</span></button></li>;
   return <li><button onClick={() => nav({ tab: 'nft', asset: a.key })} className="press block w-full text-left" data-testid="nft-tile" data-key={a.key}>
     <span className="relative block"><NftMediaView m={a.image} alt={label} fit="tile" /><span className="absolute left-2 top-2 rounded-full bg-surface/90 p-0.5 shadow-e1"><NetworkIcon net={a.chain} size={18} /></span>
-      {a.quantity !== '1' && a.quantity !== '0' && <span className="absolute right-2 top-2 rounded-full bg-surface/90 px-2 py-0.5 text-[11.5px] font-bold shadow-e1">×{a.quantity}</span>}</span>
-    <span className={`mt-2 block truncate text-[14px] font-semibold ${name ? '' : 'font-mono text-[12.5px]'}`}>{label}</span>
-    <span className="block truncate text-[12px] text-mute">{a.collection?.name ?? t('nfNoCollection')}</span>
+      {a.quantity !== '1' && a.quantity !== '0' && <span className="absolute right-2 top-2 rounded-full bg-surface/90 px-2 py-0.5 text-[0.71875rem] font-bold shadow-e1">×{a.quantity}</span>}</span>
+    <span className={`mt-2 block truncate text-[0.875rem] font-semibold ${name ? '' : 'font-mono text-[0.78125rem]'}`}>{label}</span>
+    <span className="block truncate text-[0.75rem] text-mute">{a.collection?.name ?? t('nfNoCollection')}</span>
     {!a.inWallet && <span className="mt-1 block"><StateTag state={a.state} /></span>}
     {a.spam && <span className="mt-1 block"><Tag tone="warn" icon="warn" testid="nft-spam-tag">{t('nfSpamBy', { source: a.spam.by })}</Tag></span>}</button></li>;
 }
@@ -122,11 +122,11 @@ export function NftLookup({ chains, nav }: { chains: NftChainCap[]; nav: Nav }) 
   const code = m.error ? errCode(m.error) : null, detail = ((m.error as ApiError | null)?.body as { data?: { detail?: string | null } } | undefined)?.data?.detail ?? null;
   return <form className="space-y-3" data-testid="nft-lookup" onSubmit={(e) => { e.preventDefault(); if (address.trim()) m.mutate(); }}>
     <Chips label={t('network')} value={chain} onChange={(v) => { setChain(v); m.reset(); }} options={able.map((c) => ({ id: c.network, label: c.name, net: c.network }))} />
-    <Field label={t(evm ? 'nfLookupContract' : 'nfLookupAddress')}><input className={`${inputCls} font-mono text-[13.5px]`} value={address} onChange={(e) => setAddress(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} data-testid="nft-lookup-address" /></Field>
-    {evm && <Field label={t('nfLookupTokenId')}><input className={`${inputCls} font-mono text-[13.5px]`} value={tokenId} onChange={(e) => setTokenId(e.target.value)} inputMode="numeric" autoCapitalize="off" spellCheck={false} data-testid="nft-lookup-token" /></Field>}
+    <Field label={t(evm ? 'nfLookupContract' : 'nfLookupAddress')}><input className={`${inputCls} font-mono text-[0.84375rem]`} value={address} onChange={(e) => setAddress(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} data-testid="nft-lookup-address" /></Field>
+    {evm && <Field label={t('nfLookupTokenId')}><input className={`${inputCls} font-mono text-[0.84375rem]`} value={tokenId} onChange={(e) => setTokenId(e.target.value)} inputMode="numeric" autoCapitalize="off" spellCheck={false} data-testid="nft-lookup-token" /></Field>}
     <Btn type="submit" full busy={m.isPending} disabled={!address.trim() || (evm && !tokenId.trim())} data-testid="nft-lookup-go"><Icon n="search" className="h-4 w-4" />{t('nfLookupGo')}</Btn>
     {code && <Notice tone="warn"><span data-testid="nft-lookup-error" data-code={code}>{tk(t, 'nfErr_', code, 'nfErrOther')}{detail ? <> — {tk(t, 'nfErrDetail_', detail, 'nfErrDetailOther')}</> : null}</span></Notice>}
-    <p className="text-[12.5px] text-mute">{t('nfLookupNote')}</p></form>;
+    <p className="text-[0.78125rem] text-mute">{t('nfLookupNote')}</p></form>;
 }
 
 export function NftReceive({ initial }: { initial?: string }) {
@@ -140,8 +140,8 @@ export function NftReceive({ initial }: { initial?: string }) {
   return <div className="space-y-4" data-testid="nft-receive">
     <Card><Chips label={t('network')} value={a.network} onChange={setNet} options={q.data!.items.map((x) => ({ id: x.network, label: x.name, net: x.network }))} />
       <div className="mt-5 grid place-items-center"><div className="w-full max-w-[240px] rounded-[28px] bg-white p-3.5 shadow-e2 ring-1 ring-line">{qr?.for === a.address ? <img src={qr.url} alt={`QR ${a.address}`} width={720} height={720} className="block h-auto w-full rounded-xl" /> : <div className="skel aspect-square w-full !rounded-xl" />}</div></div>
-      <div className="mt-4 flex items-center justify-center gap-2 text-[15px] font-semibold"><NetworkIcon net={a.network} size={22} />{a.name}</div>
-      <p className="mt-1 text-center text-[12.5px] text-mute">{a.standards.map((s) => t(STANDARD_KEY[s] ?? 'nfStd_unknown')).join(' · ')}</p>
+      <div className="mt-4 flex items-center justify-center gap-2 text-[0.9375rem] font-semibold"><NetworkIcon net={a.network} size={22} />{a.name}</div>
+      <p className="mt-1 text-center text-[0.78125rem] text-mute">{a.standards.map((s) => t(STANDARD_KEY[s] ?? 'nfStd_unknown')).join(' · ')}</p>
       <div className="mt-4 rounded-2xl bg-elev/70 p-4 text-center"><div className="mb-1 text-xs text-mute">{t('yourAddress')} · {a.name}</div><span data-testid="nft-receive-address"><Addr value={a.address} /></span></div>
       <div className="mt-3"><CopyBtn text={a.address} full /></div></Card>
     {a.warnings.map((w) => <Notice key={w} tone={w === 'ordinals_heuristic_only' ? 'danger' : w === 'arrival_after_confirmation' ? 'info' : 'warn'}><span data-testid={`nft-receive-warn-${w}`}>{t(`nfRecvWarn_${w}` as Key)}</span></Notice>)}
@@ -183,10 +183,10 @@ export function Nfts({ nav, view, collection }: { nav: Nav; view?: string; colle
     <div className="flex flex-wrap items-center gap-2"><div className="min-w-[240px] flex-1"><Seg value={status} label={t('nfFilterStatus')} onChange={setStatus} options={[['in_wallet', t('nfStatus_in_wallet')], ['tracked', t('nfStatus_tracked')], ['left', t('nfStatus_left')]] as const} /></div>
       <Seg value={sort} label={t('nfSort')} onChange={setSort} options={[['recent', t('nfSort_recent')], ['name', t('nfSort_name')]] as const} />
       <Seg value={mode} label={t('nfView')} onChange={(v) => { setMode(v); try { localStorage.setItem('spw-nft-view', v); } catch { /* private mode */ } }} options={[['grid', t('nfView_grid')], ['list', t('nfView_list')]] as const} /></div>
-    <p className="px-1 text-[12px] text-mute">{t('nfSortPriceNote')}</p>
+    <p className="px-1 text-[0.75rem] text-mute">{t('nfSortPriceNote')}</p>
     {/* delivery 3: items a discovery indexer flags as spam are hidden by default — never deleted; the indexer is named */}
-    {(spam || (first?.hiddenSpam ?? 0) > 0) && <p className="px-1 text-[12.5px] text-mute" data-testid="nft-spam-note">{spam ? t('nfSpamShown') : t('nfSpamHidden', { n: first!.hiddenSpam ?? 0 })} <button className="font-medium text-blue underline" onClick={() => setSpam(!spam)} aria-pressed={spam} data-testid="nft-spam-toggle">{t(spam ? 'nfSpamHide' : 'nfSpamShow')}</button></p>}
-    <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[13px] text-mute"><span data-testid="nft-count" aria-live="polite">{first ? t('nfCount', { n: first.total }) : t('loading')}{collection ? ` · ${t('nfInCollection')}` : ''}</span>
+    {(spam || (first?.hiddenSpam ?? 0) > 0) && <p className="px-1 text-[0.78125rem] text-mute" data-testid="nft-spam-note">{spam ? t('nfSpamShown') : t('nfSpamHidden', { n: first!.hiddenSpam ?? 0 })} <button className="font-medium text-blue underline" onClick={() => setSpam(!spam)} aria-pressed={spam} data-testid="nft-spam-toggle">{t(spam ? 'nfSpamHide' : 'nfSpamShow')}</button></p>}
+    <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[0.8125rem] text-mute"><span data-testid="nft-count" aria-live="polite">{first ? t('nfCount', { n: first.total }) : t('loading')}{collection ? ` · ${t('nfInCollection')}` : ''}</span>
       <span className="flex items-center gap-2">{running ? <Tag tone="info" icon="spin" testid="nft-syncing">{t('nfSyncing')}</Tag> : lastSync ? <span data-testid="nft-synced">{t('nfSyncedAt', { time: when(lastSync, locale) })}</span> : <span>{t('nfNeverSynced')}</span>}
         <button onClick={() => sync.mutate()} disabled={sync.isPending || running} aria-label={t('nfSyncNow')} className="press grid h-9 w-9 place-items-center rounded-full bg-elev text-ink disabled:opacity-40" data-testid="nft-sync"><Icon n="refresh" className="h-4 w-4" /></button></span></div>
     {list.isError ? <ErrorState title={t('nfErrLoad')} onRetry={() => void list.refetch()} offline={(list.error as ApiError)?.code === 'offline'}>{t('nfErrLoadBody')}</ErrorState>
@@ -197,10 +197,10 @@ export function Nfts({ nav, view, collection }: { nav: Nav; view?: string; colle
       : <Card className="!px-0 !py-1"><ul className="divide-y divide-line">{items.map((a) => <Tile key={a.key} a={a} nav={nav} list />)}</ul></Card>}
     {list.hasNextPage && <Btn kind="soft" full busy={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>{t('nfMore')}</Btn>}
     {!embedded && blocked.length > 0 && <Notice tone="warn"><span data-testid="nft-blocked-note">{t('nfBlockedNote', { n: blocked.length })}</span></Notice>}
-    {!embedded && <Card><Fold summary={<span className="text-[15px] font-semibold">{t('nfChainsTitle')}</span>} open={items.length === 0 && !!first} testid="nft-chains-fold">
-      <p className="mb-1 text-[12.5px] text-mute">{t('nfChainsBody')}</p>{caps.data ? <ChainStates chains={chains} /> : caps.isError ? <p className="text-[13px] text-mute">{t('nfErrLoad')}</p> : <Skeleton h="h-24" />}</Fold></Card>}
-    {!embedded && <Card><Fold summary={<span className="text-[15px] font-semibold">{t('nfMkSourcesTitle')}</span>} testid="nft-market-sources-fold"><p className="mb-1 text-[12.5px] text-mute">{t('nfMkSourcesBody')}</p><Suspense fallback={<Skeleton h="h-24" />}><MarketProviders /></Suspense></Fold></Card>}
-    {!embedded && <Card><Fold summary={<span className="text-[15px] font-semibold">{t('nfMkEstTitle')}</span>} testid="nft-estimate-fold"><Suspense fallback={<Skeleton h="h-20" />}><FloorEstimateView /></Suspense></Fold></Card>}
+    {!embedded && <Card><Fold summary={<span className="text-[0.9375rem] font-semibold">{t('nfChainsTitle')}</span>} open={items.length === 0 && !!first} testid="nft-chains-fold">
+      <p className="mb-1 text-[0.78125rem] text-mute">{t('nfChainsBody')}</p>{caps.data ? <ChainStates chains={chains} /> : caps.isError ? <p className="text-[0.8125rem] text-mute">{t('nfErrLoad')}</p> : <Skeleton h="h-24" />}</Fold></Card>}
+    {!embedded && <Card><Fold summary={<span className="text-[0.9375rem] font-semibold">{t('nfMkSourcesTitle')}</span>} testid="nft-market-sources-fold"><p className="mb-1 text-[0.78125rem] text-mute">{t('nfMkSourcesBody')}</p><Suspense fallback={<Skeleton h="h-24" />}><MarketProviders /></Suspense></Fold></Card>}
+    {!embedded && <Card><Fold summary={<span className="text-[0.9375rem] font-semibold">{t('nfMkEstTitle')}</span>} testid="nft-estimate-fold"><Suspense fallback={<Skeleton h="h-20" />}><FloorEstimateView /></Suspense></Fold></Card>}
   </div>;
 }
 
@@ -216,15 +216,15 @@ export function NftCollection({ id, nav }: { id: string; nav: Nav }) {
     {back}
     {!i && <Notice tone="warn">{tk(t, 'nfErr_', c.error, 'nfErrOther')}</Notice>}
     {i && <Card><div className="flex gap-4"><span className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl">{c.metadata?.imageId ? <NftMediaView m={{ id: c.metadata.imageId, kind: 'image', status: 'not_fetched' }} alt={i.onchainName ?? i.id} fit="tile" /> : <span className="grid h-full w-full place-items-center bg-elev text-mute"><Icon n="book" /></span>}</span>
-      <div className="min-w-0"><p className="flex items-center gap-2 text-[13px] text-mute"><NetworkIcon net={i.chain} size={18} />{t(STANDARD_KEY[i.standard] ?? 'nfStd_unknown')}</p>
-        {i.onchainName && <p className="mt-1 text-[16px] font-semibold" data-testid="nft-collection-name">{i.onchainName}</p>}<div className="mt-1"><Provenance s={i.source} /></div></div></div>
-      {c.metadata?.description && <p className="mt-4 whitespace-pre-line text-[14px] leading-relaxed" data-testid="nft-collection-desc">{c.metadata.description}</p>}
-      {c.metadata?.description && <p className="mt-1 text-[12px] text-mute">{t('nfProvCreator')}</p>}
+      <div className="min-w-0"><p className="flex items-center gap-2 text-[0.8125rem] text-mute"><NetworkIcon net={i.chain} size={18} />{t(STANDARD_KEY[i.standard] ?? 'nfStd_unknown')}</p>
+        {i.onchainName && <p className="mt-1 text-[1rem] font-semibold" data-testid="nft-collection-name">{i.onchainName}</p>}<div className="mt-1"><Provenance s={i.source} /></div></div></div>
+      {c.metadata?.description && <p className="mt-4 whitespace-pre-line text-[0.875rem] leading-relaxed" data-testid="nft-collection-desc">{c.metadata.description}</p>}
+      {c.metadata?.description && <p className="mt-1 text-[0.75rem] text-mute">{t('nfProvCreator')}</p>}
       <dl className="mt-4"><Fact k={t('nfCollectionId')}><CopyId value={i.id} label={t('nfCollectionId')} /></Fact>
         <Fact k={t('nfHeldHere')}>{c.held}</Fact>
         <Fact k={t('nfCollectionSize')}><KnownText k={i.size} t={t} render={(v) => <>{v}</>} /></Fact>
         <Fact k={t('nfUpdateAuthority')}><KnownText k={i.updateAuthority} t={t} render={(v) => <CopyId value={v} label={t('nfUpdateAuthority')} />} /></Fact>
-        {i.features.length > 0 && <Fact k={t('nfFeatures')}><span className="break-words font-mono text-[12px]">{i.features.join(', ')}</span></Fact>}
+        {i.features.length > 0 && <Fact k={t('nfFeatures')}><span className="break-words font-mono text-[0.75rem]">{i.features.join(', ')}</span></Fact>}
         {c.fetchedAt && <Fact k={t('nfUpdated')}>{when(c.fetchedAt, locale)}</Fact>}</dl></Card>}
     {/* delivery 3: what the market sources say about the collection — verification with its source, floor and volume apart, traits */}
     <Section title={t('nfMkCollTitle')}><Suspense fallback={<Skeleton h="h-40" />}><CollectionMarket id={id} onchainKnown={!!i} /></Suspense></Section>
@@ -240,16 +240,16 @@ function Activity({ id }: { id: string }) {
   if (!q.data) return <Skeleton h="h-24" />;
   const d = q.data;
   return <div data-testid="nft-activity" data-completeness={d.completeness}>
-    <p className="mb-2 text-[12.5px] text-mute">{tk(t, 'nfActComp_', d.completeness, 'nfActComp_unavailable')}{d.note ? ` ${tk(t, 'nfActNote_', d.note.replace(/[0-9]+/g, 'N'), 'nfActNoteOther')}` : ''}{d.error ? ` — ${t('nfActError', { code: d.error })}` : ''}</p>
-    {d.events.length === 0 ? <p className="text-[13.5px] text-mute" data-testid="nft-activity-empty">{t('nfActEmpty')}</p> : <ol className="divide-y divide-line">{d.events.map((e) => <li key={e.id} className="py-2.5" data-type={e.type}>
+    <p className="mb-2 text-[0.78125rem] text-mute">{tk(t, 'nfActComp_', d.completeness, 'nfActComp_unavailable')}{d.note ? ` ${tk(t, 'nfActNote_', d.note.replace(/[0-9]+/g, 'N'), 'nfActNoteOther')}` : ''}{d.error ? ` — ${t('nfActError', { code: d.error })}` : ''}</p>
+    {d.events.length === 0 ? <p className="text-[0.84375rem] text-mute" data-testid="nft-activity-empty">{t('nfActEmpty')}</p> : <ol className="divide-y divide-line">{d.events.map((e) => <li key={e.id} className="py-2.5" data-type={e.type}>
       <div className="flex flex-wrap items-center gap-2"><Tag tone={e.type.startsWith('transfer-in') || e.type === 'mint' ? 'ok' : e.type === 'burn' ? 'danger' : 'mute'} icon={e.type === 'unknown' ? 'warn' : 'swap'}>{tk(t, 'nfEv_', e.type.replace(/-/g, '_'), 'nfEv_unknown')}</Tag>
-        <span className="text-[12.5px] text-mute">{e.at ? when(e.at, locale) : t('nfActNoTime')} · {t(`nfFinal_${e.finality}` as Key)}</span>{e.quantity !== '1' && e.quantity !== '0' && <span className="text-[12.5px] font-semibold">×{e.quantity}</span>}</div>
-      {(e.from || e.to) && <p className="mt-1 break-all font-mono text-[11.5px] text-mute">{e.from ? shortId(e.from) : '?'} → {e.to ? shortId(e.to) : '?'}</p>}
-      <p className="mt-0.5 break-all font-mono text-[11px] text-mute">{shortId(e.tx)}</p>
-      {e.price && <p className="text-[12.5px] font-semibold" data-testid="nft-activity-price">{unitsToText(e.price.amount, e.price.currency.decimals)} {e.price.currency.symbol} <span className="font-mono text-[10.5px] font-normal text-mute">{e.price.currency.asset === 'native' ? e.price.currency.network : shortId(e.price.currency.asset)}</span></p>}
-      {e.type === 'sale' && e.interpretation.by.startsWith('spw:') && <p className="text-[12px] text-mute" data-testid="nft-activity-interpreted">{t('nfActInterpreted')}{e.market?.venue ? ` · ${e.market.venue}` : ''}</p>}
-      {e.marketProgram && <p className="text-[12px] text-mute" data-testid="nft-activity-program">{t('nfActProgram', { name: e.marketProgram.name })}</p>}</li>)}</ol>}
-    <p className="mt-2 text-[12px] text-mute" data-testid="nft-activity-rule">{t('nfActNoSales')}</p>
+        <span className="text-[0.78125rem] text-mute">{e.at ? when(e.at, locale) : t('nfActNoTime')} · {t(`nfFinal_${e.finality}` as Key)}</span>{e.quantity !== '1' && e.quantity !== '0' && <span className="text-[0.78125rem] font-semibold">×{e.quantity}</span>}</div>
+      {(e.from || e.to) && <p className="mt-1 break-all font-mono text-[0.71875rem] text-mute">{e.from ? shortId(e.from) : '?'} → {e.to ? shortId(e.to) : '?'}</p>}
+      <p className="mt-0.5 break-all font-mono text-[0.6875rem] text-mute">{shortId(e.tx)}</p>
+      {e.price && <p className="text-[0.78125rem] font-semibold" data-testid="nft-activity-price">{unitsToText(e.price.amount, e.price.currency.decimals)} {e.price.currency.symbol} <span className="font-mono text-[0.65625rem] font-normal text-mute">{e.price.currency.asset === 'native' ? e.price.currency.network : shortId(e.price.currency.asset)}</span></p>}
+      {e.type === 'sale' && e.interpretation.by.startsWith('spw:') && <p className="text-[0.75rem] text-mute" data-testid="nft-activity-interpreted">{t('nfActInterpreted')}{e.market?.venue ? ` · ${e.market.venue}` : ''}</p>}
+      {e.marketProgram && <p className="text-[0.75rem] text-mute" data-testid="nft-activity-program">{t('nfActProgram', { name: e.marketProgram.name })}</p>}</li>)}</ol>}
+    <p className="mt-2 text-[0.75rem] text-mute" data-testid="nft-activity-rule">{t('nfActNoSales')}</p>
     {d.canLoadOlder && <Btn kind="soft" className="mt-2" busy={older.isPending} onClick={() => older.mutate()}>{t('nfActOlder')}</Btn>}
   </div>;
 }
@@ -272,62 +272,62 @@ export function NftDetail({ id, nav }: { id: string; nav: Nav }) {
   if (sending) return <Suspense fallback={<Skeleton h="h-[420px]" />}><NftSend item={a} onClose={() => { setSending(false); void q.refetch(); }} /></Suspense>;
   if (market) return <Suspense fallback={<Skeleton h="h-[420px]" />}><NftMarketScreen item={a} onClose={() => setMarket(false)} /></Suspense>;
   return <div className="space-y-5" data-testid="nft-detail" data-key={a.key}>
-    {back(name ?? <span className="font-mono text-[18px]">{shortId(a.assetId)}</span>)}
+    {back(name ?? <span className="font-mono text-[1.125rem]">{shortId(a.assetId)}</span>)}
     {!o.heldByWallet && <Notice tone={o.state === 'burned' ? 'danger' : 'info'}><span data-testid="nft-not-in-wallet">{t(o.state === 'burned' ? 'nfBurnedNote' : a.origin === 'lookup' ? 'nfNotInWallet' : 'nfNotInWalletTracked')}</span></Notice>}
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-6"><div className="space-y-2">
       <NftMediaView m={main} alt={name ?? a.assetId} fit="full" />
-      {md.status !== 'ok' && <Notice tone="warn"><span data-testid="nft-metadata-status" data-status={md.status}>{tk(t, 'nfMeta_', md.status, 'nfMeta_unreachable')}{md.errorCode ? <> (<code className="font-mono text-[11.5px]">{md.errorCode}</code>)</> : null}</span></Notice>}
+      {md.status !== 'ok' && <Notice tone="warn"><span data-testid="nft-metadata-status" data-status={md.status}>{tk(t, 'nfMeta_', md.status, 'nfMeta_unreachable')}{md.errorCode ? <> (<code className="font-mono text-[0.71875rem]">{md.errorCode}</code>)</> : null}</span></Notice>}
       {a.media.length > 1 && <ul className="flex gap-2 overflow-x-auto">{a.media.filter((m) => m !== main).map((m) => <li key={m.id} className="h-16 w-16 shrink-0 overflow-hidden rounded-xl"><NftMediaView m={m} alt={`${name ?? a.assetId} — ${m.role}`} fit="tile" /></li>)}</ul>}
     </div>
     <div className="mt-4 space-y-4 lg:mt-0">
       <Card>
-        <div className="flex flex-wrap items-center gap-2"><NetworkIcon net={a.chainId} size={20} /><span className="text-[13.5px] font-medium">{t(STANDARD_KEY[a.standard] ?? 'nfStd_unknown')}</span><StateTag state={o.state} />{a.quantity !== '1' && <Tag testid="nft-quantity">{t('nfQuantity', { n: a.quantity })}</Tag>}</div>
-        {name ? <h2 className="mt-3 break-words text-[20px] font-semibold leading-tight" data-testid="nft-name">{name}</h2> : <p className="mt-3 text-[14px] text-mute" data-testid="nft-name-missing">{t('nfNameUnavailable')}</p>}
-        <p className="mt-1 text-[12px] text-mute">{md.name ? t('nfProvCreator') : md.onchainName ? t('nfProvOnchain') : ''}</p>
-        {a.collection ? <button className="mt-2 block text-left text-[14px] font-medium text-blue" onClick={() => nav({ tab: 'nftc', asset: a.collection!.key })} data-testid="nft-collection-link">{a.collection.name ?? shortId(a.collection.id)}</button> : <p className="mt-2 text-[13.5px] text-mute">{t('nfNoCollection')}</p>}
+        <div className="flex flex-wrap items-center gap-2"><NetworkIcon net={a.chainId} size={20} /><span className="text-[0.84375rem] font-medium">{t(STANDARD_KEY[a.standard] ?? 'nfStd_unknown')}</span><StateTag state={o.state} />{a.quantity !== '1' && <Tag testid="nft-quantity">{t('nfQuantity', { n: a.quantity })}</Tag>}</div>
+        {name ? <h2 className="mt-3 break-words text-[1.25rem] font-semibold leading-tight" data-testid="nft-name">{name}</h2> : <p className="mt-3 text-[0.875rem] text-mute" data-testid="nft-name-missing">{t('nfNameUnavailable')}</p>}
+        <p className="mt-1 text-[0.75rem] text-mute">{md.name ? t('nfProvCreator') : md.onchainName ? t('nfProvOnchain') : ''}</p>
+        {a.collection ? <button className="mt-2 block text-left text-[0.875rem] font-medium text-blue" onClick={() => nav({ tab: 'nftc', asset: a.collection!.key })} data-testid="nft-collection-link">{a.collection.name ?? shortId(a.collection.id)}</button> : <p className="mt-2 text-[0.84375rem] text-mute">{t('nfNoCollection')}</p>}
         {a.collection && <p className="mt-1" data-testid="nft-collection-verified" data-state={a.collection.verifiedOnChain.state === 'known' ? String(a.collection.verifiedOnChain.value) : a.collection.verifiedOnChain.state}>
           {a.collection.verifiedOnChain.state === 'known' ? <Tag tone={a.collection.verifiedOnChain.value ? 'ok' : 'warn'} icon={a.collection.verifiedOnChain.value ? 'check' : 'warn'}>{t(a.collection.verifiedOnChain.value ? 'nfCollVerifiedOnchain' : 'nfCollUnverifiedOnchain')}</Tag>
             : <Tag tone="mute" icon="minus">{t(a.collection.verifiedOnChain.state === 'unsupported' ? 'nfCollNoOnchainNotion' : 'nfCollNotVerified')}</Tag>}</p>}
         <dl className="mt-3"><Fact k={idLabel}><CopyId value={a.contractAddress ?? a.assetId} label={idLabel} /></Fact>
           {a.tokenId !== null && <Fact k={t('nfTokenId')}><CopyId value={a.tokenId} label={t('nfTokenId')} /></Fact>}</dl>
       </Card>
-      <Card><h3 className="mb-2 text-[15px] font-semibold">{t('nfActions')}</h3>
+      <Card><h3 className="mb-2 text-[0.9375rem] font-semibold">{t('nfActions')}</h3>
         <div className="grid grid-cols-2 gap-2.5">
           <CopyBtn text={a.tokenId !== null ? `${a.contractAddress}/${a.tokenId}` : a.assetId} />
-          {a.explorerUrl && safeLink(a.explorerUrl) ? <a href={a.explorerUrl} target="_blank" rel="noreferrer noopener" className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl border border-line px-4 text-[15px] font-medium" data-testid="nft-explorer"><Icon n="ext" className="h-4 w-4" />{t('explorer')}</a> : <span />}
+          {a.explorerUrl && safeLink(a.explorerUrl) ? <a href={a.explorerUrl} target="_blank" rel="noreferrer noopener" className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl border border-line px-4 text-[0.9375rem] font-medium" data-testid="nft-explorer"><Icon n="ext" className="h-4 w-4" />{t('explorer')}</a> : <span />}
           <Btn kind="soft" onClick={() => nav({ tab: 'nfts', view: 'receive' })}><Icon n="down" className="h-4 w-4" />{t('receive')}</Btn>
           <Btn kind="soft" busy={refresh.isPending} onClick={() => refresh.mutate()} data-testid="nft-refresh"><Icon n="refresh" className="h-4 w-4" />{t('nfRefresh')}</Btn>
         </div>
-        {refresh.isError && <p className="mt-2 text-[12.5px] text-warn" data-testid="nft-refresh-error">{tk(t, 'nfErr_', errCode(refresh.error), 'nfErrOther')}</p>}
-        <p className="mt-2 text-[12px] text-mute">{t('nfRefreshNote')}</p>
+        {refresh.isError && <p className="mt-2 text-[0.78125rem] text-warn" data-testid="nft-refresh-error">{tk(t, 'nfErr_', errCode(refresh.error), 'nfErrOther')}</p>}
+        <p className="mt-2 text-[0.75rem] text-mute">{t('nfRefreshNote')}</p>
         {(a.origin !== 'discovered') && <Btn kind="ghost" full className="mt-2" busy={track.isPending} onClick={() => track.mutate(a.origin !== 'manual')} data-testid="nft-track">{t(a.origin === 'manual' ? 'nfUntrack' : 'nfTrack')}</Btn>}
         <div className="mt-4 space-y-2 border-t border-line pt-4">
           {/* delivery 2: a transferable asset opens the Send flow; a blocked one shows its exact reasons instead of a dead button */}
           {verdict.transferable
             ? <><Btn full onClick={() => setSending(true)} data-testid="nft-send" data-transferable="true"><Icon n="up" className="h-4 w-4" />{t('nfSend')}</Btn>
-              <p className="text-[12.5px] text-mute" data-testid="nft-send-route">{t('nfTRoute')} <span className="font-mono text-[11.5px]">{verdict.route}</span></p></>
+              <p className="text-[0.78125rem] text-mute" data-testid="nft-send-route">{t('nfTRoute')} <span className="font-mono text-[0.71875rem]">{verdict.route}</span></p></>
             : <><Btn full disabled aria-describedby="nft-send-why" data-testid="nft-send" data-transferable="false"><Icon n="up" className="h-4 w-4" />{t('nfSend')}</Btn>
-              <ul id="nft-send-why" className="space-y-1 text-[12.5px] text-warn" data-testid="nft-send-why">{verdict.blockedBy.map((r) => <li key={r} data-reason={r}>· {tk(t, 'nfWhy_', r, 'nfWhyOther')}</li>)}</ul></>}
+              <ul id="nft-send-why" className="space-y-1 text-[0.78125rem] text-warn" data-testid="nft-send-why">{verdict.blockedBy.map((r) => <li key={r} data-reason={r}>· {tk(t, 'nfWhy_', r, 'nfWhyOther')}</li>)}</ul></>}
           <Btn full disabled kind="soft" aria-describedby="nft-market-why" data-testid="nft-market-actions">{t('nfMarketActions')}</Btn>
-          <p id="nft-market-why" className="text-[12.5px] text-mute" data-testid="nft-market-why">{t('nfMarketWhy')}</p>
+          <p id="nft-market-why" className="text-[0.78125rem] text-mute" data-testid="nft-market-why">{t('nfMarketWhy')}</p>
           <Btn full kind="ghost" onClick={() => setMarket(true)} data-testid="nft-open-market"><Icon n="chart" className="h-4 w-4" />{t('nfMkOpenScreen')}</Btn>
         </div>
       </Card>
     </div></div>
 
-    {md.description && <Section title={t('nfDescription')} right={mdStamp ? <Provenance s={mdStamp} /> : undefined}><Card><p className="whitespace-pre-line break-words text-[14px] leading-relaxed" data-testid="nft-description">{md.description}</p>
-      {link && <p className="mt-3 text-[13.5px]"><a href={link.href} target="_blank" rel="noreferrer noopener nofollow" className="inline-flex items-center gap-1.5 font-medium text-blue" data-testid="nft-external-link"><Icon n="ext" className="h-3.5 w-3.5" />{link.host}</a> <span className="text-mute">— {t('nfExternalWarn')}</span></p>}</Card></Section>}
-    {!md.description && link && <Card><a href={link.href} target="_blank" rel="noreferrer noopener nofollow" className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-blue" data-testid="nft-external-link"><Icon n="ext" className="h-3.5 w-3.5" />{link.host}</a> <span className="text-[13px] text-mute">— {t('nfExternalWarn')}</span></Card>}
+    {md.description && <Section title={t('nfDescription')} right={mdStamp ? <Provenance s={mdStamp} /> : undefined}><Card><p className="whitespace-pre-line break-words text-[0.875rem] leading-relaxed" data-testid="nft-description">{md.description}</p>
+      {link && <p className="mt-3 text-[0.84375rem]"><a href={link.href} target="_blank" rel="noreferrer noopener nofollow" className="inline-flex items-center gap-1.5 font-medium text-blue" data-testid="nft-external-link"><Icon n="ext" className="h-3.5 w-3.5" />{link.host}</a> <span className="text-mute">— {t('nfExternalWarn')}</span></p>}</Card></Section>}
+    {!md.description && link && <Card><a href={link.href} target="_blank" rel="noreferrer noopener nofollow" className="inline-flex items-center gap-1.5 text-[0.84375rem] font-medium text-blue" data-testid="nft-external-link"><Icon n="ext" className="h-3.5 w-3.5" />{link.host}</a> <span className="text-[0.8125rem] text-mute">— {t('nfExternalWarn')}</span></Card>}
 
     <Section title={`${t('nfTraits')} · ${md.attributes.length}`} right={mdStamp && md.attributes.length > 0 ? <Provenance s={mdStamp} /> : undefined}><Card>
-      {md.attributes.length === 0 ? <p className="text-[13.5px] text-mute" data-testid="nft-traits-none">{t(md.status === 'ok' ? 'nfTraitsNone' : 'nfTraitsUnavailable')}</p>
+      {md.attributes.length === 0 ? <p className="text-[0.84375rem] text-mute" data-testid="nft-traits-none">{t(md.status === 'ok' ? 'nfTraitsNone' : 'nfTraitsUnavailable')}</p>
         : <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2" data-testid="nft-traits">{md.attributes.map((x, k) => <li key={k} className="rounded-xl bg-elev/70 px-3.5 py-2.5" data-malformed={x.malformed}>
-          <span className="block break-words text-[11.5px] font-medium uppercase tracking-wide text-mute">{x.traitType ?? t('nfTraitNoType')}{x.displayType ? ` · ${x.displayType}` : ''}</span>
-          <span className="block break-words text-[14px] font-semibold">{x.valueText || <span className="font-normal text-mute">{t('nfTraitNoValue')}</span>}{x.maxValue ? <span className="font-normal text-mute"> / {x.maxValue}</span> : null}</span>
-          {x.malformed && <span className="mt-0.5 block text-[11.5px] text-warn">{t('nfTraitMalformed')}</span>}</li>)}</ul>}
+          <span className="block break-words text-[0.71875rem] font-medium uppercase tracking-wide text-mute">{x.traitType ?? t('nfTraitNoType')}{x.displayType ? ` · ${x.displayType}` : ''}</span>
+          <span className="block break-words text-[0.875rem] font-semibold">{x.valueText || <span className="font-normal text-mute">{t('nfTraitNoValue')}</span>}{x.maxValue ? <span className="font-normal text-mute"> / {x.maxValue}</span> : null}</span>
+          {x.malformed && <span className="mt-0.5 block text-[0.71875rem] text-warn">{t('nfTraitMalformed')}</span>}</li>)}</ul>}
       {/* delivery 3: a frequency exists only when a market source gives collection counts with a stated total; otherwise "not computed" and why */}
-      {md.attributes.length > 0 && a.marketSources?.some((s) => s.state === 'on') ? <Suspense fallback={<p className="mt-3 text-[12.5px] text-mute">…</p>}><TraitFrequencies id={id} /></Suspense>
-        : <p className="mt-3 text-[12.5px] text-mute" data-testid="nft-rarity" data-computed="false">{t('nfRarityNotComputed')} {tk(t, 'nfRarityWhy_', md.traitStatistics.reason, 'nfRarityWhy_no_collection_index')}</p>}</Card></Section>
+      {md.attributes.length > 0 && a.marketSources?.some((s) => s.state === 'on') ? <Suspense fallback={<p className="mt-3 text-[0.78125rem] text-mute">…</p>}><TraitFrequencies id={id} /></Suspense>
+        : <p className="mt-3 text-[0.78125rem] text-mute" data-testid="nft-rarity" data-computed="false">{t('nfRarityNotComputed')} {tk(t, 'nfRarityWhy_', md.traitStatistics.reason, 'nfRarityWhy_no_collection_index')}</p>}</Card></Section>
 
     <Section title={t('nfOwnership')} right={<Provenance s={o.source} />}><Card><dl>
       <Fact k={t('nfOwner')}><KnownText k={o.owner} t={t} render={(v) => <CopyId value={v} label={t('nfOwner')} />} /></Fact>
@@ -342,8 +342,8 @@ export function NftDetail({ id, nav }: { id: string; nav: Nav }) {
 
     {/* delivery 3: one block per market source — or, for each source that is absent, why and what turns it on. Nothing is shown in place of a missing figure. */}
     <Section title={t('nfMarket')}><Card><Suspense fallback={<Skeleton h="h-40" />}><MarketPanel id={id} onOpenMarket={() => setMarket(true)} /></Suspense>
-      {a.externalMarkets.length > 0 && <div className="mt-4 border-t border-line pt-3" role="group" aria-label={t('nfMkActionsExternal')}><p className="mb-2 text-[12.5px] text-mute" data-testid="nft-outside-warning">{t('nfOutsideWarn')} {t('nfMkExternalTruth')}</p>
-        <div className="flex flex-wrap gap-2">{a.externalMarkets.map((m) => { const l = safeLink(m.url); return l ? <a key={m.name} href={l.href} target="_blank" rel="noreferrer noopener" className="press inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-line px-3.5 text-[13.5px] font-medium" data-testid="nft-market-link"><Icon n="ext" className="h-3.5 w-3.5" />{t('nfMkOpenOn', { market: m.name })} <span className="font-normal text-mute">({l.host})</span></a> : null; })}</div></div>}</Card></Section>
+      {a.externalMarkets.length > 0 && <div className="mt-4 border-t border-line pt-3" role="group" aria-label={t('nfMkActionsExternal')}><p className="mb-2 text-[0.78125rem] text-mute" data-testid="nft-outside-warning">{t('nfOutsideWarn')} {t('nfMkExternalTruth')}</p>
+        <div className="flex flex-wrap gap-2">{a.externalMarkets.map((m) => { const l = safeLink(m.url); return l ? <a key={m.name} href={l.href} target="_blank" rel="noreferrer noopener" className="press inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-line px-3.5 text-[0.84375rem] font-medium" data-testid="nft-market-link"><Icon n="ext" className="h-3.5 w-3.5" />{t('nfMkOpenOn', { market: m.name })} <span className="font-normal text-mute">({l.host})</span></a> : null; })}</div></div>}</Card></Section>
 
     <Section title={t('nfChainDetails')}><Card><dl>
       <Fact k={t('network')}>{a.chainId}</Fact><Fact k={t('nfStandard')}>{t(STANDARD_KEY[a.standard] ?? 'nfStd_unknown')}</Fact>
@@ -351,19 +351,19 @@ export function NftDetail({ id, nav }: { id: string; nav: Nav }) {
       {a.tokenProgram && <Fact k={t('nfProgram')}><CopyId value={a.tokenProgram} label={t('nfProgram')} /></Fact>}
       {a.updateAuthority.state !== 'unsupported' && <Fact k={t('nfUpdateAuthority')}><KnownText k={a.updateAuthority} t={t} render={(v) => <CopyId value={v} label={t('nfUpdateAuthority')} />} /></Fact>}
       <Fact k={t('nfMutable')}><KnownText k={md.mutable} t={t} render={(v) => <>{t(v ? 'nfMutableYes' : 'nfMutableNo')}</>} /></Fact>
-      {a.creators.state === 'known' && <Fact k={t('nfCreators')}><ul className="space-y-1">{a.creators.value.map((c) => <li key={c.address} className="text-right"><span className="break-all font-mono text-[12px]">{shortId(c.address)}</span> · {c.share} % · <span className={c.verified ? 'text-emerald' : 'text-mute'}>{t(c.verified ? 'nfCreatorVerified' : 'nfCreatorUnverified')}</span></li>)}</ul></Fact>}
+      {a.creators.state === 'known' && <Fact k={t('nfCreators')}><ul className="space-y-1">{a.creators.value.map((c) => <li key={c.address} className="text-right"><span className="break-all font-mono text-[0.75rem]">{shortId(c.address)}</span> · {c.share} % · <span className={c.verified ? 'text-emerald' : 'text-mute'}>{t(c.verified ? 'nfCreatorVerified' : 'nfCreatorUnverified')}</span></li>)}</ul></Fact>}
       {a.royaltyBps.state === 'known' && <Fact k={t('nfRoyalty')}>{(a.royaltyBps.value / 100).toFixed(2)} %</Fact>}
       {a.ruleSet.state !== 'unsupported' && <Fact k={t('nfRuleSet')}><KnownText k={a.ruleSet} t={t} render={(v) => <CopyId value={v} label={t('nfRuleSet')} />} /></Fact>}
-      {a.extensions.length > 0 && <Fact k={t('nfFeatures')}><span className="break-words font-mono text-[12px]" data-testid="nft-features">{a.extensions.join(', ')}</span></Fact>}
+      {a.extensions.length > 0 && <Fact k={t('nfFeatures')}><span className="break-words font-mono text-[0.75rem]" data-testid="nft-features">{a.extensions.join(', ')}</span></Fact>}
       <Fact k={t('nfMetadataUri')}>{md.sourceUri ? <CopyId value={md.sourceUri.length > 300 ? `${md.sourceUri.slice(0, 120)}…` : md.sourceUri} label={t('nfMetadataUri')} /> : <span className="text-mute">{t('nfNone')}</span>}</Fact>
-      {md.resolvedUri && md.resolvedUri !== md.sourceUri && <Fact k={t('nfResolvedUri')}><span className="break-all font-mono text-[12px]">{md.resolvedUri}</span></Fact>}
-      {md.contentHash && <Fact k={t('nfContentHash')}><span className="break-all font-mono text-[11.5px]">{md.contentHash}</span></Fact>}</dl></Card></Section>
+      {md.resolvedUri && md.resolvedUri !== md.sourceUri && <Fact k={t('nfResolvedUri')}><span className="break-all font-mono text-[0.75rem]">{md.resolvedUri}</span></Fact>}
+      {md.contentHash && <Fact k={t('nfContentHash')}><span className="break-all font-mono text-[0.71875rem]">{md.contentHash}</span></Fact>}</dl></Card></Section>
 
     <Section title={t('nfActivity')}><Card><Activity id={id} /></Card></Section>
     {a.marketSources?.some((x) => x.state === 'on') && <Section title={t('nfMkEvents')}><Card><Suspense fallback={<Skeleton h="h-24" />}><MarketActivity id={id} /></Suspense></Card></Section>}
 
-    <Section title={t('nfSources')}><Card><ul className="space-y-2.5" data-testid="nft-sources">{a.sources.map((s, k) => <li key={k} className="text-[13px]"><Provenance s={s} />
+    <Section title={t('nfSources')}><Card><ul className="space-y-2.5" data-testid="nft-sources">{a.sources.map((s, k) => <li key={k} className="text-[0.8125rem]"><Provenance s={s} />
       <span className="mt-1 block text-mute">{SOURCE_NAME[s.source] ?? s.source} · {s.detail} · {when(s.fetchedAt, locale)}{s.blockRef?.slot ? ` · slot ${s.blockRef.slot}` : s.blockRef?.number ? ` · ${t('block')} ${s.blockRef.number}` : ''} · {tk(t, 'nfConf_', s.confidence, 'nfConfOther')}</span></li>)}</ul>
-      <p className="mt-3 text-[12px] text-mute">{t('nfSourcesNote')}</p></Card></Section>
+      <p className="mt-3 text-[0.75rem] text-mute">{t('nfSourcesNote')}</p></Card></Section>
   </div>;
 }

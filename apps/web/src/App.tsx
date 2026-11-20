@@ -4,8 +4,6 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { useSettings } from './hooks';
 import { get, post, setUnauthHandler } from './api';
 import { I18n, useT, type Key, type Locale } from './i18n';
-import { Asset } from './screens/Asset';
-import { Assets } from './screens/Assets';
 import type { FuturesView } from './screens/Futures';
 import { Gate } from './screens/Gate';
 import { Home } from './screens/Home';
@@ -16,6 +14,7 @@ import { useAlertsRuntime, useUnread } from './alerts'; // v6-alerts
 import { setAmountLocale } from './amount'; // v8 hardening: amounts follow the screen's language
 import { AREAS, IN_APP, type Area } from './nav';
 import { MULTI_VENUE } from './venues';   // one venue shown: no Compare sub-view
+import { applyTheme, cacheTheme, currentTheme, isThemePref } from './theme';
 
 // v10 performance pass — what the first screen needs (the shell, Home, the asset list and page, the lock screen) is the
 // first chunk; every other screen is a chunk of its own, fetched when it is opened or — so that a tap never waits — by
@@ -23,6 +22,8 @@ import { MULTI_VENUE } from './venues';   // one venue shown: no Compare sub-vie
 const screens = {
   futures: () => import('./screens/Futures'),      // the Futures terminal: by far the largest; never preloaded
   alerts: () => import('./screens/Alerts'), monitor: () => import('./screens/Monitor'),
+  // NEXT: the asset list and the asset page are chunks of their own (the first screen is the dashboard) — fetched first when idle
+  assets: () => import('./screens/Assets'), asset: () => import('./screens/Asset'), contacts: () => import('./screens/Contacts'),
   swap: () => import('./screens/Swap'), send: () => import('./screens/Send'), receive: () => import('./screens/Receive'), activity: () => import('./screens/Activity'),
   agents: () => import('./screens/Agents'), research: () => import('./screens/Research'), plan: () => import('./plan'),
   security: () => import('./screens/Security'), settings: () => import('./screens/Settings'),
@@ -35,6 +36,9 @@ const screens = {
 const Futures = lazy(() => screens.futures().then((m) => ({ default: m.Futures })));
 const Alerts = lazy(() => screens.alerts().then((m) => ({ default: m.Alerts })));
 const Monitor = lazy(() => screens.monitor().then((m) => ({ default: m.Monitor })));
+const Assets = lazy(() => screens.assets().then((m) => ({ default: m.Assets })));
+const Asset = lazy(() => screens.asset().then((m) => ({ default: m.Asset })));
+const Contacts = lazy(() => screens.contacts().then((m) => ({ default: m.Contacts })));
 const Swap = lazy(() => screens.swap().then((m) => ({ default: m.Swap })));
 const Send = lazy(() => screens.send().then((m) => ({ default: m.Send })));
 const Receive = lazy(() => screens.receive().then((m) => ({ default: m.Receive })));
@@ -57,7 +61,7 @@ let preloaded = false;
 function preloadScreens(): void {
   if (preloaded) return; preloaded = true;
   const idle = (f: () => void) => { if (typeof requestIdleCallback === 'function') requestIdleCallback(f, { timeout: 4000 }); else setTimeout(f, 1500); };
-  const queue = [async () => { prefetchIcons(); }, screens.swap, screens.send, screens.activity, screens.settings, screens.receive, screens.security, screens.agents, screens.alerts];
+  const queue = [async () => { prefetchIcons(); }, screens.assets, screens.asset, screens.swap, screens.send, screens.activity, screens.settings, screens.receive, screens.security, screens.agents, screens.alerts];
   const next = () => { const f = queue.shift(); if (f) idle(() => { void f().catch(() => {}).then(next); }); };
   setTimeout(next, 1200);
 }
@@ -68,16 +72,18 @@ const shellMore = () => import('./shell-more');
 const RiskIndicator = lazy(() => shellMore().then((m) => ({ default: m.RiskIndicator })));
 const Sidebar = lazy(() => shellMore().then((m) => ({ default: m.Sidebar })));
 const ShellMenu = lazy(() => shellMore().then((m) => ({ default: m.ShellMenu })));
+// NEXT: universal search (⌘K / Ctrl-K, the header's search control) — fetched the first time it is opened
+const SearchPalette = lazy(() => import('./search').then((m) => ({ default: m.SearchPalette })));
 const ScreenSkeleton = () => <div className="space-y-4" aria-busy="true"><Skeleton h="h-9" className="!mt-2 !w-44 !rounded-xl" /><SkeletonRows n={5} /></div>;
 
 // Every screen that has a plain path. The order no longer says anything about the navigation (v11: see AREAS below).
 const TABS = [['home', '/', 'home'], ['swap', '/swap', 'swap'], ['agents', '/agents', 'key'], ['receive', '/receive', 'down'], ['send', '/send', 'up'], ['activity', '/activity', 'list'], ['security', '/security', 'shield'], ['settings', '/settings', 'gear']] as const;
-export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'agent' | 'futures' | 'alerts' | 'monitor' | 'research' | 'plan' | 'developer' | 'private' | 'markets' | 'risk' | 'nfts' | 'nft' | 'nftc';
+export type Tab = (typeof TABS)[number][0] | 'asset' | 'assets' | 'contacts' | 'agent' | 'futures' | 'alerts' | 'monitor' | 'research' | 'plan' | 'developer' | 'private' | 'markets' | 'risk' | 'nfts' | 'nft' | 'nftc';
 // v11 interface (docs/v11/UI-ARCHITECTURE.md) — FIVE areas, the same on the phone's tab bar and in the desktop sidebar. An area
 // is not a screen: it is where a screen lives (the tab that stays lit), and its sub-views are listed under the page header.
 export { AREAS, type Area };
 /** the area a screen belongs to; null for what the header menu opens (settings, security, developer, system status, risk, alerts) */
-export const areaOf = (tab: Tab): Area | null => (tab === 'home' || tab === 'assets' || tab === 'asset' || tab === 'receive' || tab === 'send' || tab === 'nfts' || tab === 'nft' || tab === 'nftc' ? 'home' : tab === 'markets' || tab === 'private' ? 'markets'
+export const areaOf = (tab: Tab): Area | null => (tab === 'home' || tab === 'assets' || tab === 'asset' || tab === 'contacts' || tab === 'receive' || tab === 'send' || tab === 'nfts' || tab === 'nft' || tab === 'nftc' ? 'home' : tab === 'markets' || tab === 'private' ? 'markets'
   : tab === 'swap' || tab === 'futures' || tab === 'plan' ? 'trade' : tab === 'agents' || tab === 'agent' || tab === 'research' ? 'agents' : tab === 'activity' ? 'activity' : null);
 /** Trade opens on the sub-view used last (spot by default: the terminal is the largest chunk and is fetched only when asked for) */
 const TRADE_KEY = 'spw-trade-view';
@@ -86,7 +92,7 @@ const areaHome = (a: Area): Tab => (a === 'trade' ? lastTrade() : a);
 /** Where to go, with optional pre-selection (asset page, or send/receive pre-filled). */
 export interface Route { tab: Tab; network?: string; asset?: string; /** sub-view of a screen (Futures: compare, accounts) */ view?: string }
 export type Nav = (r: Route) => void;
-export const pathOf = (r: Route): string => r.tab === 'nfts' ? `/nfts${r.view ? `?v=${r.view}` : ''}` : r.tab === 'nft' ? `/nft/${encodeURIComponent(r.asset ?? '')}` : r.tab === 'nftc' ? `/nfts/c/${encodeURIComponent(r.asset ?? '')}` : r.tab === 'risk' ? `/risk${r.asset ? `?mandate=${encodeURIComponent(r.asset)}` : ''}` : r.tab === 'markets' ? `/markets${r.view === 'compare' ? `?v=compare${r.asset ? `&u=${encodeURIComponent(r.asset)}` : ''}` : ''}` : r.tab === 'private' ? `/private-markets${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'developer' ? `/developer${r.view ? `?v=${r.view}` : ''}` : r.tab === 'plan' ? `/plan/${r.asset}` : r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}` : '');
+export const pathOf = (r: Route): string => r.tab === 'nfts' ? `/nfts${r.view ? `?v=${r.view}` : ''}` : r.tab === 'nft' ? `/nft/${encodeURIComponent(r.asset ?? '')}` : r.tab === 'nftc' ? `/nfts/c/${encodeURIComponent(r.asset ?? '')}` : r.tab === 'risk' ? `/risk${r.asset ? `?mandate=${encodeURIComponent(r.asset)}` : ''}` : r.tab === 'markets' ? `/markets${r.view === 'compare' ? `?v=compare${r.asset ? `&u=${encodeURIComponent(r.asset)}` : ''}` : ''}` : r.tab === 'private' ? `/private-markets${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'developer' ? `/developer${r.view ? `?v=${r.view}` : ''}` : r.tab === 'plan' ? `/plan/${r.asset}` : r.tab === 'research' ? `/research${r.asset ? `?job=${r.asset}` : ''}` : r.tab === 'alerts' ? `/alerts${r.view === 'settings' ? '?v=settings' : ''}` : r.tab === 'monitor' ? '/monitor' : r.tab === 'futures' ? `/futures${r.asset ? `/${encodeURIComponent(r.asset)}` : ''}${r.view ? `?v=${r.view}` : ''}` : r.tab === 'agent' ? `/agents/${r.asset}` : r.tab === 'contacts' ? '/contacts' : r.tab === 'activity' && r.asset && !r.network ? `/activity?tx=${encodeURIComponent(r.asset)}` : (r.tab === 'asset' ? `/asset/${r.network}/${encodeURIComponent(r.asset ?? 'native')}` : r.tab === 'assets' ? '/assets' : TABS.find((x) => x[0] === r.tab)![1]) + (r.tab !== 'asset' && r.network ? `?n=${r.network}${r.asset ? `&a=${encodeURIComponent(r.asset)}` : ''}${r.tab === 'send' && r.view ? `&to=${encodeURIComponent(r.view)}` : ''}` : '');
 /** v11: paths that name an AREA or an older place — each is answered by the screen that holds it today (the address bar is corrected in place) */
 const ALIASES: Record<string, () => Route> = { '/trade': () => ({ tab: lastTrade() }), '/dashboard': () => ({ tab: 'home' }), '/compare': () => ({ tab: 'markets', view: 'compare' }), '/spot': () => ({ tab: 'swap' }), '/perps': () => ({ tab: 'futures' }), '/api': () => ({ tab: 'developer' }), '/system': () => ({ tab: 'monitor' }) };
 export function routeOf(): Route {
@@ -95,6 +101,8 @@ export function routeOf(): Route {
   const m = /^\/asset\/([a-z0-9-]+)\/(.+)$/.exec(location.pathname);
   if (m) return { tab: 'asset', network: m[1], asset: decodeURIComponent(m[2]!) };
   if (location.pathname === '/assets') return { tab: 'assets' };
+  if (location.pathname === '/contacts') return { tab: 'contacts' };   // NEXT: the address book
+  if (location.pathname === '/activity' && new URLSearchParams(location.search).get('tx')) return { tab: 'activity', asset: new URLSearchParams(location.search).get('tx')! };   // NEXT: one movement, opened
   const ag = /^\/agents\/([0-9a-f-]{36})$/.exec(location.pathname);
   if (ag) return { tab: 'agent', asset: ag[1] };
   const pl = /^\/plan\/([0-9a-f-]{36})$/.exec(location.pathname);   // v7: a plan's progress view
@@ -113,7 +121,7 @@ export function routeOf(): Route {
   if (pm) return { tab: 'private', asset: pm[1] ? decodeURIComponent(pm[1]) : undefined, view: q.get('v') ?? undefined };
   const fu = /^\/futures(?:\/(.+))?$/.exec(location.pathname);   // /futures, /futures/<venue:symbol>
   if (fu) return { tab: 'futures', asset: fu[1] ? decodeURIComponent(fu[1]) : undefined, view: q.get('v') ?? undefined };
-  return { tab: TABS.find((t) => t[1] === location.pathname)?.[0] ?? 'home', network: q.get('n') ?? undefined, asset: q.get('a') ?? undefined };
+  return { tab: TABS.find((t) => t[1] === location.pathname)?.[0] ?? 'home', network: q.get('n') ?? undefined, asset: q.get('a') ?? undefined, view: q.get('to') ?? undefined };
 }
 
 export function App() {
@@ -155,10 +163,12 @@ function Offline({ retry }: { retry: () => void }) {
 function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; route: Route; nav: Nav; go: (t: Tab) => void; lock: () => void; openPath: (path: string) => void; locale: Locale }) {
   const t = useT(); const qc = useQueryClient();
   const unread = useUnread(); useAlertsRuntime(locale, openPath); // v6-alerts
-  // NEXT W5: a device that never chose a language takes the account's (`settings.locale`); a choice made on this device stays
+  // NEXT: language and appearance belong to the ACCOUNT — once the settings are read they apply on this device, whatever it had
+  // cached (localStorage is only what the lock screen and the first paint use before the session is known). A server older
+  // than `theme` sends none: the device's cache stays.
   const { settings, loaded } = useSettings(); const { setLocale } = useContext(I18n);
-  useEffect(() => { let local: string | null = 'x'; try { local = localStorage.getItem('spw-locale'); } catch { /* private mode: keep the screen's language */ }
-    if (loaded && local === null && (settings.locale === 'fr' || settings.locale === 'en') && settings.locale !== locale) setLocale(settings.locale); }, [loaded, settings.locale, locale, setLocale]);
+  useEffect(() => { if (loaded && (settings.locale === 'fr' || settings.locale === 'en') && settings.locale !== locale) setLocale(settings.locale); }, [loaded, settings.locale, locale, setLocale]);
+  useEffect(() => { if (loaded && isThemePref(settings.theme)) { cacheTheme(settings.theme); if (settings.theme !== currentTheme()) applyTheme(settings.theme); } }, [loaded, settings.theme]);
   // v9: the phone header condenses once the page scrolls (an attribute, not a re-render); pull down on Home/Activity refreshes
   const header = useRef<HTMLElement>(null);
   // v10: large-title collapse — once the page's large title (PageTitle's <h1>) has scrolled under the header, the header carries it
@@ -169,14 +179,21 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
     if (gone && mini.current && mini.current.textContent !== h1!.textContent) mini.current.textContent = h1!.textContent;
     h.toggleAttribute('data-titled', gone); }); }; f(); addEventListener('scroll', f, { passive: true }); return () => { removeEventListener('scroll', f); cancelAnimationFrame(raf); }; }, [tab]);
   useEffect(() => { preloadScreens(); }, []);   // v10: the other screens' chunks, once this one is drawn and the browser is idle
+  // NEXT live sync: one event feed for the open session (walletEvents.ts) — it stops with the shell (lock, logout, session end)
+  useEffect(() => { let stop: (() => void) | null = null, gone = false;
+    void import('./walletEvents').then((m) => { if (!gone) stop = m.startWalletEvents(qc); }, () => { /* without the feed the screens keep their own polling */ });
+    return () => { gone = true; stop?.(); }; }, [qc]);
   const ptr = usePullToRefresh(tab === 'home' || tab === 'activity', () => qc.invalidateQueries());
   const area = areaOf(tab);
   useEffect(() => { if (tab === 'swap' || tab === 'futures') { try { localStorage.setItem(TRADE_KEY, tab); } catch { /* private mode */ } } }, [tab]);   // Trade reopens where it was left
-  const [menu, setMenu] = useState(false);
+  const [menu, setMenu] = useState(false), [search, setSearch] = useState(false);
+  useEffect(() => { const f = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearch((x) => !x); } };
+    addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, []);
+  const searchBtn = (cls: string, wide = false) => <button type="button" onClick={() => setSearch(true)} data-testid="search-open" aria-label={t('nwSrOpen')} aria-haspopup="dialog" aria-keyshortcuts="Meta+K Control+K" className={cls}><Icon n="search" className="h-5 w-5 shrink-0" />{wide && <><span className="flex-1 text-left">{t('nwSrTitle')}</span><kbd className="kbd" aria-hidden="true">⌘K</kbd></>}</button>;
   const toArea = (a: Area) => { const to = areaHome(a); if (tab !== to || route.asset || route.view || route.network) go(to); else window.scrollTo({ top: 0 }); };
   const bell = (cls: string) => <button onClick={() => go('alerts')} data-testid="alerts-bell" aria-label={`${t('alBell')}${unread.unread ? ` (${unread.unread})` : ''}`} aria-current={tab === 'alerts' ? 'page' : undefined} className={cls}>
-    <span className="relative"><Icon n="bell" />{unread.unread > 0 && <span data-testid="alerts-badge" className={`absolute -right-2 -top-2 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[10.5px] font-bold leading-none text-white ${unread.critical ? 'bg-danger' : 'bg-blue'}`}>{unread.unread > 99 ? '99+' : unread.unread}</span>}</span>{cls.includes('w-full') && t('alTitle')}</button>;
-  const sideCls = 'press flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-[15px] font-medium';
+    <span className="relative"><Icon n="bell" />{unread.unread > 0 && <span data-testid="alerts-badge" className={`absolute -right-2 -top-2 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[0.65625rem] font-bold leading-none text-white ${unread.critical ? 'bg-danger' : 'bg-blue'}`}>{unread.unread > 99 ? '99+' : unread.unread}</span>}</span>{cls.includes('w-full') && t('alTitle')}</button>;
+  const sideCls = 'press flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-[0.9375rem] font-medium';
   // the sub-views of an area, under the header: one row, never wrapping (it scrolls sideways if a translation is long)
   const SUB: Partial<Record<Area, readonly (readonly [string, Key, Route, boolean])[]>> = {
     markets: [['explorer', 'mkViewExplorer', { tab: 'markets' }, tab === 'markets' && (!MULTI_VENUE || route.view !== 'compare')], ...(!MULTI_VENUE ? [] : [['compare', 'mkViewCompare', { tab: 'markets', view: 'compare', asset: tab === 'markets' ? route.asset : undefined }, tab === 'markets' && route.view === 'compare']] as const), ['private', 'pmTab', { tab: 'private' }, tab === 'private']],
@@ -185,41 +202,44 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
   const sub = area && tab !== 'plan' ? SUB[area] : undefined;
   const wide = tab === 'futures' || tab === 'markets';
   // the width of the page: forms stay a narrow column; lists, dashboards and operations pages use the desktop's width
-  const width = wide ? `max-w-none ${tab === 'futures' ? 'lg:pt-6' : 'lg:pt-8'}` : `lg:pt-10 max-w-xl ${tab === 'home' ? 'lg:max-w-5xl' : tab === 'activity' || tab === 'agents' || tab === 'agent' || tab === 'research' || tab === 'monitor' || tab === 'private' || tab === 'risk' || tab === 'developer' || tab === 'alerts' || tab === 'nfts' || tab === 'nft' || tab === 'nftc' ? 'lg:max-w-4xl' : 'lg:max-w-2xl'}`;
+  const width = wide ? `max-w-none ${tab === 'futures' ? 'lg:pt-6' : 'lg:pt-8'}` : `lg:pt-10 max-w-xl ${tab === 'home' || tab === 'assets' || tab === 'asset' || tab === 'send' || tab === 'security' || tab === 'settings' || tab === 'contacts' ? 'lg:max-w-[var(--content-max)]' : tab === 'activity' || tab === 'agents' || tab === 'agent' || tab === 'research' || tab === 'monitor' || tab === 'private' || tab === 'risk' || tab === 'developer' || tab === 'alerts' || tab === 'nfts' || tab === 'nft' || tab === 'nftc' ? 'lg:max-w-4xl' : 'lg:max-w-2xl'}`;
   return (
     <div className={`safe-x mx-auto flex min-h-full ${tab === 'futures' ? 'max-w-[1680px]' : 'max-w-7xl'}`}>{ptr}
       <a href="#main" className="absolute left-0 top-0 h-0 w-0 overflow-hidden focus:fixed focus:left-3 focus:top-3 focus:z-40 focus:h-auto focus:min-h-11 focus:w-auto focus:rounded-xl focus:bg-surface focus:px-4 focus:py-3 focus:shadow-e2">{t('v11NavSkip')}</a>
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto p-5 lg:flex">
-        <div className="mb-7 flex items-center gap-3 px-2 pt-2"><img src="/icon.svg" alt="" width={36} height={36} className="h-9 w-9 rounded-xl shadow-e1" /><span className="text-[19px] font-semibold tracking-[-0.02em]">SP Wallet</span></div>
+        <div className="mb-7 flex items-center gap-3 px-2 pt-2"><img src="/icon.svg" alt="" width={36} height={36} className="h-9 w-9 rounded-xl shadow-e1" /><span className="text-[1.1875rem] font-semibold tracking-[-0.02em]">SP Wallet</span></div>
+        {searchBtn('press mb-4 flex min-h-11 w-full items-center gap-3 rounded-[var(--radius-md)] border border-line bg-surface px-3.5 text-[0.875rem] text-mute', true)}
         <Suspense fallback={null}><Sidebar tab={tab} area={area} go={go} toArea={toArea} lock={lock} bell={bell(`${sideCls} ${tab === 'alerts' ? 'bg-primary text-onprimary shadow-e1' : 'text-mute hover:bg-elev hover:text-ink'}`)} /></Suspense>
       </aside>
       <div className="min-w-0 flex-1">
         <header ref={header} className="app-header safe-t nav-glass sticky top-0 z-10 lg:hidden">
           <div className="app-header-row flex items-center justify-between gap-1 px-5 py-2.5">
-            <div className="app-brand flex min-w-0 items-center gap-2.5"><img src="/icon.svg" alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-[10px]" /><span className="app-brand-name truncate text-[17px] font-semibold tracking-[-0.02em] max-[359px]:hidden">SP Wallet</span></div>
+            <div className="app-brand flex min-w-0 items-center gap-2.5"><img src="/icon.svg" alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-[10px]" /><span className="app-brand-name truncate text-[1.0625rem] font-semibold tracking-[-0.02em] max-[359px]:hidden">SP Wallet</span></div>
             <span ref={mini} className="app-mini-title" aria-hidden="true" data-testid="mini-title" />
-            <div className="flex shrink-0 items-center gap-0.5">
+            <div className="flex min-w-0 shrink-0 items-center gap-0.5 [&_svg]:max-h-[22px] [&_svg]:max-w-[22px]">
               <Suspense fallback={<span className="mx-0.5 h-8 w-[68px] rounded-full bg-elev" aria-hidden="true" />}><RiskIndicator go={go} current={tab === 'risk'} /></Suspense>
-              {bell(`grid h-11 w-11 place-items-center rounded-full ${tab === 'alerts' ? 'bg-elev text-ink' : 'text-mute'}`)}
-              <button onClick={() => setMenu(true)} data-testid="nav-menu" aria-label={t('v11NavMenu')} aria-haspopup="dialog" aria-expanded={menu} className={`grid h-11 w-11 place-items-center rounded-full ${area === null && tab !== 'alerts' && tab !== 'risk' ? 'bg-elev text-ink' : 'text-mute'}`}><Icon n="list" /></button>
+              {searchBtn('grid h-[44px] w-[44px] place-items-center rounded-full text-mute')}
+              {bell(`grid h-[44px] w-[44px] place-items-center rounded-full ${tab === 'alerts' ? 'bg-elev text-ink' : 'text-mute'}`)}
+              <button onClick={() => setMenu(true)} data-testid="nav-menu" aria-label={t('v11NavMenu')} aria-haspopup="dialog" aria-expanded={menu} className={`grid h-[44px] w-[44px] place-items-center rounded-full ${area === null && tab !== 'alerts' && tab !== 'risk' ? 'bg-elev text-ink' : 'text-mute'}`}><Icon n="list" className="h-[20px] w-[20px]" /></button>
             </div>
           </div>
         </header>
         <main id="main" tabIndex={-1} key={tab === 'futures' || tab === 'markets' ? tab : tab + (route.network ?? '') + (route.asset ?? '')} className={`rise mx-auto w-full px-5 pb-[calc(env(safe-area-inset-bottom)+7rem)] pt-2 outline-none lg:pb-12 ${width}`}>
           {sub && <div role="tablist" aria-label={t(area === 'trade' ? 'fxTradeArea' : 'mkTab')} data-testid="nav-sub" className={`no-scrollbar mb-3 mt-1 flex gap-1 overflow-x-auto rounded-2xl bg-elev p-1 ${wide || tab === 'private' ? 'max-w-xl' : ''}`}>{sub.map(([id, k, to, on]) =>
-            <button key={id} role="tab" aria-selected={on} data-sub={id} onClick={() => { if (!on) nav(to); }} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 text-[13px] font-semibold transition min-[380px]:px-3 min-[380px]:text-[14px] ${on ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-mute hover:text-ink'}`}>{t(k)}</button>)}</div>}
+            <button key={id} role="tab" aria-selected={on} data-sub={id} onClick={() => { if (!on) nav(to); }} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 text-[0.8125rem] font-semibold transition min-[380px]:px-3 min-[380px]:text-[0.875rem] ${on ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-mute hover:text-ink'}`}>{t(k)}</button>)}</div>}
           <ErrorBoundary scope="screen" resetKey={pathOf(route)}>
           {tab === 'home' && <Home go={go} nav={nav} />}
+          <Suspense fallback={<ScreenSkeleton />}>
           {tab === 'assets' && <Assets nav={nav} />}
           {tab === 'asset' && <Asset network={route.network ?? ''} asset={route.asset ?? 'native'} nav={nav} />}
-          <Suspense fallback={<ScreenSkeleton />}>
+          {tab === 'contacts' && <Contacts nav={nav} />}
           {tab === 'receive' && <Receive initial={route.network} nav={nav} />}
           {tab === 'send' && <Send go={go} initial={route} />}
           {tab === 'swap' && <Swap />}
           {tab === 'futures' && <Suspense fallback={<Skeleton h="h-72" />}><Futures instrument={route.asset} view={(['compare', 'accounts', 'router'].includes(route.view ?? '') ? route.view : 'terminal') as FuturesView} nav={nav} /></Suspense>}
           {tab === 'agents' && <Agents nav={nav} />}
           {tab === 'agent' && <Agent id={route.asset ?? ''} nav={nav} />}
-          {tab === 'activity' && <Activity />}
+          {tab === 'activity' && <Activity open={route.network ? undefined : route.asset} />}
           {tab === 'plan' && <PlanScreen id={route.asset ?? ''} />}
           {tab === 'security' && <Security />}
           {tab === 'settings' && <Settings lock={lock} go={go} />}
@@ -236,10 +256,11 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
         </main>
         <nav aria-label={t('v11NavMain')} data-testid="nav-tabbar" className="tabbar safe-b nav-glass fixed inset-x-0 bottom-0 z-10 lg:hidden">
           <div className="mx-auto flex max-w-xl items-end px-1 pt-1.5">{AREAS.map(([id, icon, label]) => { const on = area === id; return (
-            <button key={id} onClick={() => { haptic(); toArea(id); }} data-area={id} aria-current={on ? 'page' : undefined} className={`press relative flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[11px] ${on ? 'font-semibold text-ink' : 'font-medium text-mute'}`}>
-              <span className={`grid h-7 w-12 place-items-center rounded-full transition-colors ${on ? 'bg-elev' : ''}`}><Icon n={icon} className="h-[22px] w-[22px]" /></span><span className="max-w-full truncate px-0.5">{t(label)}</span></button>); })}</div>
+            <button key={id} onClick={() => { haptic(); toArea(id); }} data-area={id} aria-current={on ? 'page' : undefined} className={`press relative flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[0.6875rem] ${on ? 'font-semibold text-ink' : 'font-medium text-mute'}`}>
+              <span className={`grid h-[28px] w-[48px] max-w-full place-items-center rounded-full transition-colors ${on ? 'bg-elev' : ''}`}><Icon n={icon} className="h-[22px] w-[22px]" /></span><span className="max-w-full truncate px-0.5">{t(label)}</span></button>); })}</div>
         </nav>
         {menu && <Suspense fallback={null}><ShellMenu tab={tab} go={go} lock={lock} onClose={() => setMenu(false)} /></Suspense>}
+        {search && <Suspense fallback={null}><SearchPalette onClose={() => setSearch(false)} /></Suspense>}
       </div>
     </div>
   );

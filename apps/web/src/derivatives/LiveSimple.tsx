@@ -32,7 +32,7 @@ import type { Instrument, Position, RiskResult } from './types';
 
 const sym = (id: string) => id.slice(id.indexOf(':') + 1);
 const arrow = (up: boolean) => <svg viewBox="0 0 12 12" className="h-3 w-3" aria-hidden="true"><path d={up ? 'M6 2l4.5 7h-9z' : 'M6 10L1.5 3h9z'} fill="currentColor" /></svg>;
-const CHIP = 'press min-h-11 shrink-0 rounded-full border border-line bg-surface px-4 text-[14.5px] font-semibold text-ink disabled:opacity-45';
+const CHIP = 'press min-h-11 shrink-0 rounded-full border border-line bg-surface px-4 text-[0.90625rem] font-semibold text-ink disabled:opacity-45';
 
 /** the estimated liquidation price as a line of text, or why there is none */
 export function liqText(e: LiqEstimate, t: ReturnType<typeof useT>, px: (v: Dec) => string): string {
@@ -93,22 +93,22 @@ export function SimpleOrderForm({ instrument, account, detail, store, f, set, bu
 
   const side = (s: 'buy' | 'sell') => { const on = f.side === s, up = s === 'buy'; return <button key={s} type="button" role="radio" aria-checked={on} onClick={() => set({ side: s })} data-testid={`simple-side-${s}`}
     className={`press flex min-h-[64px] flex-col items-center justify-center rounded-2xl border px-2 ${on ? (up ? 'border-emerald bg-emerald text-onprimary' : 'border-danger bg-danger text-[var(--ondanger)]') : 'border-line text-ink'}`}>
-    <span className="inline-flex items-center gap-1.5 text-[16.5px] font-semibold">{arrow(up)}{t(up ? 'hl1Long' : 'hl1Short')}</span>
-    <span className={`mt-0.5 text-[12px] leading-tight ${on ? 'opacity-85' : 'text-mute'}`}>{t(up ? 'hl1LongSub' : 'hl1ShortSub')}</span></button>; };
+    <span className="inline-flex items-center gap-1.5 text-[1.03125rem] font-semibold">{arrow(up)}{t(up ? 'hl1Long' : 'hl1Short')}</span>
+    <span className={`mt-0.5 text-[0.75rem] leading-tight ${on ? 'opacity-85' : 'text-mute'}`}>{t(up ? 'hl1LongSub' : 'hl1ShortSub')}</span></button>; };
 
   return <div className="space-y-3.5" data-testid="simple-form" data-unit={unit}>
     <div role="radiogroup" aria-label={t('fxDirection')} className="grid grid-cols-2 gap-2">{side('buy')}{side('sell')}</div>
 
     <div>
-      <div className="mb-1.5 flex items-center justify-between gap-2"><label htmlFor="hl1-amount" className="text-[13px] font-medium text-mute">{t(unit === 'usd' ? 'hl1Amount' : 'hl1AmountCoin', { base })}</label>
-        {real && <button type="button" onClick={flip} className="-my-2 inline-flex min-h-11 items-center gap-1 text-[13px] font-medium text-blue" data-testid="simple-unit"><Icon n="swap" className="h-3.5 w-3.5" />{t(unit === 'usd' ? 'hl1InCoin' : 'hl1InUsd', { base })}</button>}</div>
+      <div className="mb-1.5 flex items-center justify-between gap-2"><label htmlFor="hl1-amount" className="text-[0.8125rem] font-medium text-mute">{t(unit === 'usd' ? 'hl1Amount' : 'hl1AmountCoin', { base })}</label>
+        {real && <button type="button" onClick={flip} className="-my-2 inline-flex min-h-11 items-center gap-1 text-[0.8125rem] font-medium text-blue" data-testid="simple-unit"><Icon n="swap" className="h-3.5 w-3.5" />{t(unit === 'usd' ? 'hl1InCoin' : 'hl1InUsd', { base })}</button>}</div>
       <div className="relative"><span className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center">{unit === 'usd' ? <AssetIcon sym="USDC" size={28} /> : <AssetIcon sym={base} size={28} />}</span>
-        <input id="hl1-amount" className="w-full rounded-2xl border border-line bg-elev/60 py-3.5 pl-[54px] pr-[68px] text-[24px] font-semibold tracking-[-0.02em] outline-none transition placeholder:text-mute/70 focus:border-blue focus:bg-surface focus:shadow-[0_0_0_4px_color-mix(in_srgb,var(--blue)_16%,transparent)]"
+        <input id="hl1-amount" className="w-full rounded-2xl border border-line bg-elev/60 py-3.5 pl-[54px] pr-[68px] text-[1.5rem] font-semibold tracking-[-0.02em] outline-none transition placeholder:text-mute/70 focus:border-blue focus:bg-surface focus:shadow-[0_0_0_4px_color-mix(in_srgb,var(--blue)_16%,transparent)]"
           inputMode="decimal" autoComplete="off" placeholder="0" value={text} onChange={(e) => type(e.target.value)} data-testid="simple-amount" />
-        <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[14px] font-medium text-mute">{unit === 'usd' ? 'USD' : base}</span></div>
+        <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[0.875rem] font-medium text-mute">{unit === 'usd' ? 'USD' : base}</span></div>
       <AmountProblem ambiguousOnly text={text} />
       {chips.length > 0 && <div className="no-scrollbar -mx-1 mt-2 flex gap-2 overflow-x-auto px-1" role="group" aria-label={t('hl1Quick')}>{chips.map((c) => <button key={c.usd} type="button" className={CHIP} data-testid={c.max ? 'simple-chip-max' : 'simple-chip'} onClick={() => type(amountInputText(c.usd, locale))}>{c.max ? t('max') : usd(c.usd, locale).replace(/[.,]00(?=\D*$)/, '')}</button>)}</div>}
-      <p className="mt-2 text-[12.5px] leading-snug text-mute" data-testid="simple-derived">
+      <p className="mt-2 text-[0.78125rem] leading-snug text-mute" data-testid="simple-derived">
         {belowMin ? <span className="text-danger" data-testid="simple-min">{t('hl1Min', { min: usd(instrument.minNotional, locale) })}</span>
           : unit === 'usd' ? (sizeText && snap.current ? t('hl1Derived', { size: sizeText, price: px(snap.current.mark) }) : mark ? t('hl1DerivedHint', { base, price: px(mark) }) : t('hl1WhyPrice'))
           : t(real ? 'hl1CoinHint' : 'hl1CoinHintTestnet', { lot: fmt(instrument.lotSize, { locale, trim: true }), base })}
@@ -116,24 +116,24 @@ export function SimpleOrderForm({ instrument, account, detail, store, f, set, bu
     </div>
 
     <div className="flex items-center justify-between gap-3 rounded-2xl border border-line py-2 pl-3.5 pr-2" data-testid="venue-leverage">
-      <div className="min-w-0 text-[13px]"><div className="text-mute">{t('hl1Leverage')}</div>
-        <div className="text-[15.5px] font-semibold">{venueLev ? `${fmt(venueLev.leverage, { locale, trim: true })}× · ${t(venueLev.marginMode === 'cross' ? 'fxCross' : 'fxIsolated')}` : t('hl1LevUnknown')}</div>
-        {venueLev && Number(venueLev.leverage) > maxLev ? <div className="mt-0.5 text-[12px] font-medium leading-snug text-warn" data-testid="simple-lev-above">{t('hl1LevAbove', { lev: fmt(venueLev.leverage, { locale, trim: true }), max: maxLev })}</div>
-          : <div className="mt-0.5 text-[12px] leading-snug text-mute" data-testid="simple-lev-max">{t('hl1LevMax', { max: maxLev })}</div>}</div>
-      <button type="button" disabled={!!account.halted} onClick={onLeverage} className="press min-h-11 shrink-0 rounded-xl border border-line px-3.5 text-[13.5px] font-semibold text-ink disabled:opacity-45">{t('flLevChange')}</button></div>
+      <div className="min-w-0 text-[0.8125rem]"><div className="text-mute">{t('hl1Leverage')}</div>
+        <div className="text-[0.96875rem] font-semibold">{venueLev ? `${fmt(venueLev.leverage, { locale, trim: true })}× · ${t(venueLev.marginMode === 'cross' ? 'fxCross' : 'fxIsolated')}` : t('hl1LevUnknown')}</div>
+        {venueLev && Number(venueLev.leverage) > maxLev ? <div className="mt-0.5 text-[0.75rem] font-medium leading-snug text-warn" data-testid="simple-lev-above">{t('hl1LevAbove', { lev: fmt(venueLev.leverage, { locale, trim: true }), max: maxLev })}</div>
+          : <div className="mt-0.5 text-[0.75rem] leading-snug text-mute" data-testid="simple-lev-max">{t('hl1LevMax', { max: maxLev })}</div>}</div>
+      <button type="button" disabled={!!account.halted} onClick={onLeverage} className="press min-h-11 shrink-0 rounded-xl border border-line px-3.5 text-[0.84375rem] font-semibold text-ink disabled:opacity-45">{t('flLevChange')}</button></div>
 
     {built.body && !belowMin && <div className="rounded-[18px] border border-line px-3.5 py-3" aria-live="polite" data-testid="preview">
       <div className="mb-1.5 flex items-center justify-between gap-2"><span className="t-eyebrow">{t('hl1Summary')}</span><SourceTag source="estimate" /></div>
       {est ? <>
-        <p className="pb-1.5 text-[14.5px] font-semibold leading-snug" data-testid="simple-sentence">{t(long ? 'hl1SayLong' : 'hl1SayShort', { size: sizeText ?? '', usd: usd(est.notional, locale), base })}</p>
-        {positions?.some((p) => p.instrument === instrument.id && (p.side === 'long') !== long) && <p className="pb-1.5 text-[13px] leading-snug text-warn" data-testid="simple-against">{t('hl1SayAgainst', { base })}</p>}
+        <p className="pb-1.5 text-[0.90625rem] font-semibold leading-snug" data-testid="simple-sentence">{t(long ? 'hl1SayLong' : 'hl1SayShort', { size: sizeText ?? '', usd: usd(est.notional, locale), base })}</p>
+        {positions?.some((p) => p.instrument === instrument.id && (p.side === 'long') !== long) && <p className="pb-1.5 text-[0.8125rem] leading-snug text-warn" data-testid="simple-against">{t('hl1SayAgainst', { base })}</p>}
         <Row label={t('hl1Margin', { lev: fmt(est.leverage, { locale, trim: true }) })}>{usd(est.initialMargin, locale)}</Row>
         <Row label={t('hl1Fee')}>{usd(est.fee, locale)}</Row>
         <Row label={t('hl1Liq')}><span data-testid="simple-liq" data-ok={liq?.ok ? '1' : '0'}>{liqLine}</span></Row>
         <Row label={t('fxWorstPrice')}>{fmt(preview?.request.price ?? null, { dp: pdp, locale })}</Row>
         <Row label={t('fxFreeAfter')}>{usd(est.freeCollateralAfter, locale)}</Row>
-        <p className="mt-1.5 text-[12px] leading-snug text-mute">{t(liq?.ok ? (liq.basis === 'cross' ? 'hl1LiqRuleCross' : 'hl1LiqRuleIsolated') : 'hl1LiqRuleNone')} {t('hl1MarketRule', { pct: fmt(String(LIVE_SLIPPAGE_BPS / 100), { locale, trim: true }) })}</p></>
-        : pvErr ? <p className="py-2 text-[13px] text-mute">{t('fxPreviewError')}</p> : <Waiting className="py-2">{t('hl1WhyChecking')}</Waiting>}
+        <p className="mt-1.5 text-[0.75rem] leading-snug text-mute">{t(liq?.ok ? (liq.basis === 'cross' ? 'hl1LiqRuleCross' : 'hl1LiqRuleIsolated') : 'hl1LiqRuleNone')} {t('hl1MarketRule', { pct: fmt(String(LIVE_SLIPPAGE_BPS / 100), { locale, trim: true }) })}</p></>
+        : pvErr ? <p className="py-2 text-[0.8125rem] text-mute">{t('fxPreviewError')}</p> : <Waiting className="py-2">{t('hl1WhyChecking')}</Waiting>}
     </div>}
     {pvErr && <LiveErrNotice err={pvErr} />}
     {refused && <Notice tone="danger"><div data-testid="risk-refusal"><b className="font-semibold">{t('fxRefused')}</b> {RISK_CODES.has(refused.code) && !['halted', 'mode_read_only'].includes(refused.code) ? t(`rk_${refused.code}` as Key) : t(`flE_${refused.code}` as Key)}
@@ -142,10 +142,10 @@ export function SimpleOrderForm({ instrument, account, detail, store, f, set, bu
     {lastOrder && <OrderOutcome order={lastOrder} instrument={instrument} />}
 
     <button type="button" data-testid="live-review" disabled={!ready} onClick={() => onReview(liqLine)}
-      className={`press inline-flex min-h-[58px] w-full items-center justify-center gap-2 rounded-2xl px-5 text-[16.5px] font-semibold disabled:opacity-45 ${long ? 'bg-emerald text-onprimary' : 'bg-danger text-[var(--ondanger)]'}`}>
+      className={`press inline-flex min-h-[58px] w-full items-center justify-center gap-2 rounded-2xl px-5 text-[1.03125rem] font-semibold disabled:opacity-45 ${long ? 'bg-emerald text-onprimary' : 'bg-danger text-[var(--ondanger)]'}`}>
       {arrow(long)}<span>{t(long ? 'hl1GoLong' : 'hl1GoShort', { base })}</span></button>
-    {why && !ready && <p className="text-center text-[12.5px] leading-snug text-mute" data-testid="simple-why">{t(why)}</p>}
-    <p className="text-center text-[12px] font-medium leading-snug" data-testid="live-foot"><span className={real ? 'text-danger' : 'text-mute'}>{t(real ? 'hl1FootReal' : 'hl1FootTestnet')}</span></p>
+    {why && !ready && <p className="text-center text-[0.78125rem] leading-snug text-mute" data-testid="simple-why">{t(why)}</p>}
+    <p className="text-center text-[0.75rem] font-medium leading-snug" data-testid="live-foot"><span className={real ? 'text-danger' : 'text-mute'}>{t(real ? 'hl1FootReal' : 'hl1FootTestnet')}</span></p>
   </div>;
 }
 
@@ -159,26 +159,26 @@ export function PositionCards({ account, detail, instruments, ttlMs, onSelect }:
   const px = (id: string, v: string | null | undefined) => (v ? fmt(v, { dp: priceDp(instruments.get(id)?.tickSize, v), locale }) : '—');
   return <div data-testid="position-cards">
     <h3 className="t-eyebrow mb-2.5 flex items-center justify-between gap-2"><span>{t('hl1Positions', { n: st.positions.length })}</span><SourceTag /></h3>
-    {st.positions.length === 0 ? <p className="text-[13.5px] leading-snug text-mute" data-testid="position-none">{t('hl1NoPosition')}</p> : <ul className="space-y-3">{st.positions.map((p) => {
+    {st.positions.length === 0 ? <p className="text-[0.84375rem] leading-snug text-mute" data-testid="position-none">{t('hl1NoPosition')}</p> : <ul className="space-y-3">{st.positions.map((p) => {
       const inst = instruments.get(p.instrument), s = sym(p.instrument), value = D.mul(dec(p.size) ?? D.zero, dec(p.markPrice) ?? D.zero), pnl = dec(p.unrealizedPnl), margin = dec(p.margin);
       const onMargin = pnl && margin && D.isPos(margin) ? D.div(pnl, margin, 6, 'half_even') : null, gain = pnl ? D.sign(D.div(pnl, D.one, 2, 'half_even')) : 0;   // the sign of the amount as it is shown, to the cent
       return <li key={p.instrument} className="rounded-[18px] border border-line p-3.5" data-testid="position-card" data-id={p.instrument}>
         <div className="flex items-center gap-3">
           <button type="button" onClick={() => onSelect(p.instrument)} aria-label={t('fxOpenMarket', { symbol: s })} className="press flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"><AssetIcon sym={inst?.base ?? s} size={38} />
-            <span className="min-w-0"><span className="flex items-center gap-2 text-[16px] font-semibold leading-tight"><span className="truncate">{s}</span><SideTag side={p.side} /></span>
-              <span className="mt-0.5 block truncate text-[12.5px] text-mute">{fmt(p.size, { dp: Math.min(8, dpOf(inst?.lotSize ?? '0.0001')), locale, trim: true })} {inst?.base ?? s} ≈ {usd(value, locale)} · {fmt(p.leverage, { dp: 1, locale, trim: true })}×</span></span></button>
-          <div className="shrink-0 text-right" data-testid="position-pnl" data-sign={gain}><div className="inline-flex items-center gap-1 text-[17px] font-semibold">{gain !== 0 && <span className={gain > 0 ? 'text-emerald' : 'text-danger'}>{arrow(gain > 0)}</span>}<Pnl value={p.unrealizedPnl} locale={locale} /></div>
-            <div className="text-[12px] text-mute">{t(gain > 0 ? 'hl1Gain' : gain < 0 ? 'hl1Loss' : 'hl1Flat')}{onMargin ? ` · ${pct(onMargin, 1, locale, true)}` : ''}</div></div>
+            <span className="min-w-0"><span className="flex items-center gap-2 text-[1rem] font-semibold leading-tight"><span className="truncate">{s}</span><SideTag side={p.side} /></span>
+              <span className="mt-0.5 block truncate text-[0.78125rem] text-mute">{fmt(p.size, { dp: Math.min(8, dpOf(inst?.lotSize ?? '0.0001')), locale, trim: true })} {inst?.base ?? s} ≈ {usd(value, locale)} · {fmt(p.leverage, { dp: 1, locale, trim: true })}×</span></span></button>
+          <div className="shrink-0 text-right" data-testid="position-pnl" data-sign={gain}><div className="inline-flex items-center gap-1 text-[1.0625rem] font-semibold">{gain !== 0 && <span className={gain > 0 ? 'text-emerald' : 'text-danger'}>{arrow(gain > 0)}</span>}<Pnl value={p.unrealizedPnl} locale={locale} /></div>
+            <div className="text-[0.75rem] text-mute">{t(gain > 0 ? 'hl1Gain' : gain < 0 ? 'hl1Loss' : 'hl1Flat')}{onMargin ? ` · ${pct(onMargin, 1, locale, true)}` : ''}</div></div>
         </div>
-        <dl className="mt-2.5 grid grid-cols-3 gap-2 text-[12.5px]"><div><dt className="text-mute">{t('fxEntry')}</dt><dd className="font-medium">{px(p.instrument, p.entryPrice)}</dd></div><div><dt className="text-mute">{t('hl1Now')}</dt><dd className="font-medium">{px(p.instrument, p.markPrice)}</dd></div>
+        <dl className="mt-2.5 grid grid-cols-3 gap-2 text-[0.78125rem]"><div><dt className="text-mute">{t('fxEntry')}</dt><dd className="font-medium">{px(p.instrument, p.entryPrice)}</dd></div><div><dt className="text-mute">{t('hl1Now')}</dt><dd className="font-medium">{px(p.instrument, p.markPrice)}</dd></div>
           <div><dt className="text-mute">{t('hl1LiqVenue')}</dt><dd className="font-medium">{px(p.instrument, p.liquidationPrice)}</dd></div></dl>
         <div className="mt-3 flex items-center gap-2" role="group" aria-label={t('fxCloseAria', { symbol: s })}>
           <Btn kind="soft" full disabled={!canAct || !!closing} onClick={() => setClosing({ position: p, fraction: '1' })} data-testid="position-close" aria-label={t('fxCloseFrac', { pct: 100, symbol: s })}>{t('hl1Close')}</Btn>
-          {(['0.5', '0.25'] as const).map((fr) => <button key={fr} type="button" disabled={!canAct || !!closing} onClick={() => setClosing({ position: p, fraction: fr })} className="press min-h-11 shrink-0 rounded-2xl border border-line px-3.5 text-[13.5px] font-semibold text-ink disabled:opacity-45"
+          {(['0.5', '0.25'] as const).map((fr) => <button key={fr} type="button" disabled={!canAct || !!closing} onClick={() => setClosing({ position: p, fraction: fr })} className="press min-h-11 shrink-0 rounded-2xl border border-line px-3.5 text-[0.84375rem] font-semibold text-ink disabled:opacity-45"
             aria-label={t('fxCloseFrac', { pct: fr === '0.5' ? 50 : 25, symbol: s })}>{fr === '0.5' ? '50' : '25'} %</button>)}</div>
-        {onMargin && <p className="mt-2 text-[11.5px] leading-snug text-mute">{t('hl1PnlRule')}</p>}
+        {onMargin && <p className="mt-2 text-[0.71875rem] leading-snug text-mute">{t('hl1PnlRule')}</p>}
       </li>; })}</ul>}
-    {!canAct && st.positions.length > 0 && <p className="mt-2.5 text-[12.5px] leading-snug text-warn" data-testid="position-locked">{t('hl1CloseLocked')}</p>}
+    {!canAct && st.positions.length > 0 && <p className="mt-2.5 text-[0.78125rem] leading-snug text-warn" data-testid="position-locked">{t('hl1CloseLocked')}</p>}
     {closing && <ApprovalSheet account={a} instrument={instruments.get(closing.position.instrument)} request={{ kind: 'close', position: closing.position, fraction: closing.fraction }} orders={detail?.orders ?? []} ttlMs={ttlMs} onClose={() => { setClosing(null); void refreshLive(qc, account.id); }} />}
   </div>;
 }

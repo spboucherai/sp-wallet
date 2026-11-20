@@ -37,6 +37,13 @@ export async function openWallet(page: Page, context: BrowserContext, baseURL: s
   const w = watch(page);
   const pk = await virtualPasskey(context, page, passkeyFor(baseURL));
   await enter(page, pk, readFileSync(`${DEV_DIR}/setup-token`, 'utf8').trim());
+  // NEXT: language and appearance belong to the ACCOUNT (localStorage is only what the lock screen uses) — the choice of this
+  // session is written to the account's settings when it differs, and the page is read again with it.
+  const origin = baseURL ?? 'http://localhost:8650', cur = await (await page.request.get('/api/v1/settings')).json() as { locale?: string; theme?: string };
+  if (cur.locale !== lang || (cur.theme !== undefined && cur.theme !== theme)) {
+    await page.request.put('/api/v1/settings', { headers: { origin, 'x-spw-csrf': '1' }, data: { locale: lang, ...(cur.theme !== undefined ? { theme } : {}) } });
+    await page.reload(); await page.getByText(/Valeur totale estimée|Estimated total value/).waitFor({ timeout: 30_000 });
+  }
   return { errors: () => unexpectedErrors(w), headers: () => ({ origin: baseURL ?? 'http://localhost:8650', 'x-spw-csrf': '1', 'idempotency-key': `v11-e2e-${randomUUID()}` }), save: pk.save };
 }
 /** no horizontal scroll of the page, nothing of the screen leaving the viewport */
