@@ -2,11 +2,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { ErrorBoundary, watchChunkErrors } from './ErrorBoundary';
 import { loadLocale } from './i18n-load';
 import { applyTheme } from './theme';
 import './styles.css';
 
-const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, staleTime: 5000, gcTime: 0 } } });
+// NEXT: a short in-memory retention (5 min) instead of `gcTime: 0` — coming back to a screen shows what was read (and refreshes
+// it) instead of starting from a skeleton. Nothing is persisted, and nothing outlives the session: the cache is emptied on
+// lock, on logout, on a 401 and whenever the server says the session is gone (App.tsx).
+const CACHE_MS = 5 * 60_000;
+const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, staleTime: 5000, gcTime: CACHE_MS } } });
+watchChunkErrors();
 // Development only: `?mock=1` simulates the derivatives API in the browser (recorded fixtures, no backend). `import.meta.env.DEV`
 // is the constant `false` in a production build, so this block and the mock module are removed from the bundle.
 if (import.meta.env.DEV) {
@@ -23,4 +29,4 @@ if (import.meta.env.DEV && location.pathname === '/__icons') {
   const { IconWall } = await import('./IconWall');
   createRoot(document.getElementById('root')!).render(<IconWall />);
 } else
-createRoot(document.getElementById('root')!).render(<StrictMode><QueryClientProvider client={qc}><App /></QueryClientProvider></StrictMode>);
+createRoot(document.getElementById('root')!).render(<StrictMode><ErrorBoundary scope="app"><QueryClientProvider client={qc}><App /></QueryClientProvider></ErrorBoundary></StrictMode>);

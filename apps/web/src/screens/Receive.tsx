@@ -1,21 +1,28 @@
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
+import type { Nav } from '../App';
 import { useAccounts, useNetworks } from '../hooks';
 import { useT } from '../i18n';
-import { Addr, Btn, Card, Chips, CopyBtn, H, haptic, Icon, NetworkIcon, Notice, PageTitle, Skeleton, trimAmt } from '../ui';
+import { Addr, Btn, Card, Chips, CopyBtn, EmptyState, ErrorState, H, haptic, Icon, NetworkIcon, Notice, PageTitle, Skeleton, trimAmt } from '../ui';
 
-export function Receive({ initial }: { initial?: string }) {
+export function Receive({ initial, nav }: { initial?: string; nav?: Nav }) {
   const t = useT(); const acc = useAccounts(), nets = useNetworks();
-  const [net, setNet] = useState(initial ?? 'base'); const [qr, setQr] = useState<{ for: string; url: string } | null>(null);
+  const [net, setNet] = useState(initial ?? 'base'); const [qr, setQr] = useState<{ for: string; url: string | null } | null>(null);   // url null: the code could not be generated
   const a = acc.data?.accounts.find((x) => x.network === net), n = nets.data?.find((x) => x.id === net);
   // Error correction Q (25 % of the code can be lost): the network's logo sits on a plate over ~4 % of the surface. Q, not H:
   // H makes the code denser for no need, and a denser code is the harder one to scan from a distance.
   // Scan reliability of this exact rendering is tested for every network (tests/e2e/v9-qr-scan.py, OpenCV decoder).
-  useEffect(() => { if (a) void QRCode.toDataURL(a.address, { margin: 1, width: 720, errorCorrectionLevel: 'Q', color: { dark: '#080B12', light: '#FFFFFF' } }).then((url) => setQr({ for: a.address, url })); }, [a?.address]);
+  useEffect(() => { if (a) void QRCode.toDataURL(a.address, { margin: 1, width: 720, errorCorrectionLevel: 'Q', color: { dark: '#080B12', light: '#FFFFFF' } }).then((url) => setQr({ for: a.address, url }), () => setQr({ for: a.address, url: null })); }, [a?.address]);   // NEXT W5: a failure is said, the address stays
+  // NEXT W3: a failed load is an error state with a retry; a network that does not exist (a mistyped or old link) is said as such
+  const failed = (!acc.data && acc.isError) || (!nets.data && nets.isError);
+  if (failed) return <div className="space-y-4" data-testid="receive-error"><PageTitle>{t('receiveTitle')}</PageTitle><ErrorState title={t('nxErrLoad')} offline={((acc.error ?? nets.error) as { code?: string } | null)?.code === 'offline'} onRetry={() => { void acc.refetch(); void nets.refetch(); }}>{t('nxErrLoadBody')}</ErrorState></div>;
+  if (acc.data && nets.data && (!a || !n)) return <div className="space-y-4" data-testid="receive-not-found"><PageTitle>{t('receiveTitle')}</PageTitle>
+    <EmptyState icon="search" title={t('nxNetNotFoundTitle')}>{t('nxNetNotFoundBody', { net })}</EmptyState>
+    <Card><H>{t('nxChooseNetwork')}</H><Chips label={t('network')} value={net} onChange={(v) => { setNet(v); nav?.({ tab: 'receive', network: v }); }} options={nets.data.filter((x) => acc.data!.accounts.some((y) => y.network === x.id)).map((x) => ({ id: x.id, label: x.name, net: x.id }))} /></Card></div>;
   if (!a || !n) return <div className="space-y-4" aria-busy="true"><Skeleton h="h-11" className="!w-40 !rounded-xl" /><Skeleton h="h-[520px]" /></div>;
   const assets = [n.native.symbol, ...n.tokens.map((x) => x.symbol)];
   const canShare = typeof navigator.share === 'function';
-  const ready = qr?.for === a.address;
+  const ready = qr?.for === a.address && qr.url !== null, qrFailed = qr?.for === a.address && qr.url === null;
   return (
     <div className="space-y-4">
       <PageTitle>{t('receiveTitle')}</PageTitle>
@@ -23,7 +30,7 @@ export function Receive({ initial }: { initial?: string }) {
         <Chips label={t('network')} value={net} onChange={setNet} options={nets.data!.map((x) => ({ id: x.id, label: x.name, net: x.id }))} />
         <div className="mt-5 grid place-items-center">
           <div className="relative w-full max-w-[264px] rounded-[28px] bg-white p-3.5 shadow-e2 ring-1 ring-line" data-testid="qr-card">
-            {ready ? <img src={qr!.url} alt={`QR ${a.address}`} width={720} height={720} className="block h-auto w-full rounded-xl" /> : <div className="skel aspect-square w-full !rounded-xl" />}
+            {ready ? <img src={qr!.url!} alt={`QR ${a.address}`} width={720} height={720} className="block h-auto w-full rounded-xl" /> : qrFailed ? <div className="grid aspect-square w-full place-items-center rounded-xl bg-[#f1f3f7] p-4 text-center text-[13px] leading-snug text-[#3b4252]" role="alert" data-testid="qr-failed">{t('nxQrFailed')}</div> : <div className="skel aspect-square w-full !rounded-xl" />}
             {ready && <span className="pointer-events-none absolute left-1/2 top-1/2 grid h-[21%] w-[21%] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white p-[3px]" aria-hidden="true" data-testid="qr-logo"><NetworkIcon net={n.id} size={44} className="!h-full !w-full" /></span>}
           </div>
         </div>

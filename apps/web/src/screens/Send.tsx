@@ -5,7 +5,7 @@ import { get, post } from '../api';
 import { cancelDraft, DraftKey, proposalApplied, proposalGone } from '../approval';
 import { ApprovalOutcomePanel, useApprovalOutcome, type KnownOutcome } from '../approvalUi';
 import type { Tab } from '../App';
-import { useNetworks, usePortfolio, type Proposal } from '../hooks';
+import { sendBlock, sendBlockKey, useNetworks, usePortfolio, type Proposal } from '../hooks';
 import { amountInputText, amountOf, sanitizeAmountText } from '../amount';
 import { AmountProblem } from '../amountUi';
 import { errText, I18n, useT, type Key } from '../i18n';
@@ -34,7 +34,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
   useEffect(() => { if (assets.length && !assets.some((a) => a.id === asset)) setAsset(assets[0]!.id); }, [assets, asset]);
   const bal = pf.data?.balances.find((b) => b.network === net && b.asset === asset);
   const a = assets.find((x) => x.id === asset);
-  const fail = (e: unknown) => setErr(errText(t, e));
+  const fail = (e: unknown) => setErr(errText(t, e)); const block = sendBlock(pf.data);
   useEffect(() => { window.scrollTo(0, 0); }, [step]);   // each step starts at its top: the review is read from the amount down
 
   // live status while tracking
@@ -97,7 +97,10 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
     <div className="space-y-4">
       <PageTitle>{t('sendTitle')}</PageTitle>
       {steps}
-      {pf.data?.halted && <Notice tone="danger">{t('haltedBanner')}</Notice>}
+      {/* NEXT W5: the same rule as on Home and on an asset's page — no transfer while halted or while the signer cannot be reached, and why */}
+      {block === 'halted' && <Notice tone="danger">{t('haltedBanner')}</Notice>}
+      {block === 'signer' && <Notice tone="warn"><span data-testid="send-blocked">{t(sendBlockKey(block))}</span></Notice>}
+      {nets.data && !n && <Notice tone="warn"><span data-testid="send-net-not-found">{t('nxNetNotFoundBody', { net })}</span></Notice>}
       <Card className="space-y-4">
         <div><div className="mb-2 text-[13px] text-mute">{t('network')}</div>
           <Chips label={t('network')} value={net} onChange={(v) => { setNet(v); setTo(''); setMemo(''); }} options={(nets.data ?? []).map((x) => ({ id: x.id, label: x.name, net: x.id }))} /></div>
@@ -124,7 +127,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
         {n?.family === 'cardano' && <Notice tone="info">{t('cdSendHint')}</Notice>}
         {n?.family === 'polkadot' && <Notice tone="info">{t('dtSendHint', { amount: trimAmt(n.activation ?? '0.01', 12) })}</Notice>}
         {err && <Notice tone="danger">{err}</Notice>}
-        <Btn full busy={busy === 'review'} disabled={!to || !amountOf(amount, locale) || !!pf.data?.halted} onClick={review}>{busy === 'review' ? t('preparing') : t('review')}</Btn>
+        <Btn full busy={busy === 'review'} disabled={!to || !amountOf(amount, locale) || block !== null || !n} onClick={review} data-testid="send-review">{busy === 'review' ? t('preparing') : t('review')}</Btn>
       </Card>
     </div>
   );

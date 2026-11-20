@@ -65,11 +65,37 @@ export function Addr({ value }: { value: string }) {
 }
 export const short = (a: string) => (a.length > 16 ? `${a.slice(0, 8)}…${a.slice(-6)}` : a);
 
-export function CopyBtn({ text, full }: { text: string; full?: boolean }) {
-  const t = useT(); const [ok, setOk] = useState(false);
-  useEffect(() => { if (!ok) return; const h = setTimeout(() => setOk(false), 1600); return () => clearTimeout(h); }, [ok]);
-  return <Btn kind="soft" full={full} onClick={() => { void navigator.clipboard.writeText(text).then(() => { setOk(true); haptic(); }); }}><Icon n={ok ? 'check' : 'copy'} className={`h-4 w-4 ${ok ? 'pop text-emerald' : ''}`} />{ok ? t('copied') : t('copy')}</Btn>;
+/**
+ * Copy a text. NEXT W5: the clipboard API can be missing (insecure context, old WebView) or refuse (permission, document not
+ * focused) — the older selection-based copy is tried, and a failure is SAID (the button never claims a copy that did not happen).
+ */
+export async function copyText(text: string): Promise<boolean> {
+  try { if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true; } } catch { /* refused: try the older way */ }
+  try {
+    const el = document.createElement('textarea'); el.value = text; el.setAttribute('readonly', ''); el.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(el); el.select(); const ok = document.execCommand('copy'); el.remove(); return ok;
+  } catch { return false; }
 }
+export function CopyBtn({ text, full, label, small }: { text: string; full?: boolean; /** the button's words when idle (default: « Copier ») */ label?: string; /** a compact button, for a line of a detail list */ small?: boolean }) {
+  const t = useT(); const [st, setSt] = useState<'' | 'ok' | 'fail'>('');
+  useEffect(() => { if (!st) return; const h = setTimeout(() => setSt(''), st === 'ok' ? 1600 : 4000); return () => clearTimeout(h); }, [st]);
+  return <Btn kind="soft" full={full} className={small ? '!min-h-11 !px-3.5 !text-[13.5px]' : ''} data-copy={st || 'idle'} onClick={() => { void copyText(text).then((ok) => { setSt(ok ? 'ok' : 'fail'); if (ok) haptic(); }); }}>
+    <Icon n={st === 'ok' ? 'check' : st === 'fail' ? 'warn' : 'copy'} className={`h-4 w-4 ${st === 'ok' ? 'pop text-emerald' : st === 'fail' ? 'text-warn' : ''}`} /><span aria-live="polite">{st === 'ok' ? t('copied') : st === 'fail' ? t('nxCopyFailed') : label ?? t('copy')}</span></Btn>;
+}
+/**
+ * NEXT (accessibility): arrow keys inside a radio group or a tab list — Left / Up and Right / Down move to the neighbour (and wrap),
+ * Home / End go to the ends; the option reached is selected, as a native radio group does. One tab stop per group (`tabIndex`).
+ */
+export function roveKeys(e: React.KeyboardEvent<HTMLElement>): void {
+  const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+  if (!dir && e.key !== 'Home' && e.key !== 'End') return;
+  const all = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('[role=radio]:not(:disabled),[role=tab]:not(:disabled)')]; if (!all.length) return;
+  const at = all.indexOf(document.activeElement as HTMLButtonElement);
+  const to = e.key === 'Home' ? 0 : e.key === 'End' ? all.length - 1 : roveIndex(at, dir, all.length);
+  e.preventDefault(); const el = all[to]!; el.focus(); if (to !== at) el.click(); el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+}
+/** the index reached from `at` (−1: nothing focused) by one step in `dir`, wrapping around `n` options */
+export const roveIndex = (at: number, dir: number, n: number): number => (at < 0 ? (dir > 0 ? 0 : n - 1) : (at + dir + n) % n);
 
 /** Token logo with its network badge — the real logos (src/icons.tsx). Kept under its historical name: every screen uses it. */
 export function Coin({ sym, net, size = 44 }: { sym: string; net?: string; size?: number }) { return <AssetIcon sym={sym} net={net} size={size} />; }
@@ -77,8 +103,9 @@ export function Coin({ sym, net, size = 44 }: { sym: string; net?: string; size?
 export function NetDot({ net, size = 16 }: { net: string; size?: number }) { return <NetworkIcon net={net} size={size} />; }
 /** Horizontal chip selector (scrolls on small screens). */
 export function Chips<T extends string>({ value, options, onChange, label }: { value: T; options: { id: T; label: string; net?: string; sym?: string }[]; onChange: (v: T) => void; label: string }) {
-  return <div role="radiogroup" aria-label={label} className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-0.5">{options.map((o) =>
-    <button key={o.id} role="radio" aria-checked={value === o.id} onClick={() => onChange(o.id)}
+  const has = options.some((o) => o.id === value);   // one tab stop: the checked chip, or the first when none is
+  return <div role="radiogroup" aria-label={label} onKeyDown={roveKeys} className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-0.5">{options.map((o, k) =>
+    <button key={o.id} role="radio" aria-checked={value === o.id} tabIndex={value === o.id || (!has && k === 0) ? 0 : -1} onClick={() => onChange(o.id)}
       className={`press inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border text-[14px] font-medium ${o.net || o.sym ? 'pl-2 pr-4' : 'px-4'} ${value === o.id ? 'border-primary bg-primary text-onprimary' : 'border-line bg-surface text-ink'}`}>
       {o.sym ? <AssetIcon sym={o.sym} size={26} /> : o.net && <NetworkIcon net={o.net} size={26} />}{o.label}</button>)}</div>;
 }
@@ -93,7 +120,12 @@ export function Money({ children, hidden }: { children: ReactNode; hidden?: bool
   return <span className={hidden ? 'mask' : ''} aria-hidden={hidden || undefined}>{children}</span>;
 }
 /** A crypto amount for DISPLAY: truncated to `max` decimals (never rounded up), trailing zeros dropped, written in the screen's language (rule: amount.ts). */
-export const trimAmt = (s: string, max = 6, locale: AmountLocale = amountLocale()) => formatAmount(s, locale, { maxDecimals: max });
+export const trimAmt = (s: string, max = 6, locale: AmountLocale = amountLocale()) => {
+  const out = formatAmount(s, locale, { maxDecimals: max });
+  // NEXT W5: an amount that is not zero never reads "0" — below the last decimal shown it is "< 0.000001" (the truncation rule is unchanged)
+  if (max > 0 && !/[1-9]/.test(out) && /^-?\d+\.\d*[1-9]/.test(s)) return `${s.startsWith('-') ? '> −' : '<\u00a0'}${formatAmount(`0.${'0'.repeat(max - 1)}1`, locale)}`;
+  return out;
+};
 /** The EXACT amount of a review screen (what is signed): every digit the server gave, in the screen's language. */
 export const exactAmt = (s: string, locale: AmountLocale = amountLocale()) => formatAmount(s, locale, { trim: false });
 /** A plain number in the owner's locale (decimal comma in French): percentages, ratios, small USD figures inside sentences. */
@@ -130,9 +162,9 @@ export function EmptyState({ icon = 'list', title, children, action }: { icon?: 
 }
 /** Segmented control: ranges, filters, language, theme. */
 export function Seg<T extends string>({ value, options, onChange, label, role = 'radiogroup' }: { value: T; options: readonly (readonly [T, string])[]; onChange: (v: T) => void; label?: string; role?: 'radiogroup' | 'tablist' }) {
-  const tab = role === 'tablist';
-  return <div className="flex rounded-2xl bg-elev p-1" role={role} aria-label={label}>{options.map(([v, l]) =>
-    <button key={v} role={tab ? 'tab' : 'radio'} {...(tab ? { 'aria-selected': value === v } : { 'aria-checked': value === v })} onClick={() => { if (value !== v) { haptic(); onChange(v); } }}
+  const tab = role === 'tablist', has = options.some(([v]) => v === value);
+  return <div className="flex rounded-2xl bg-elev p-1" role={role} aria-label={label} onKeyDown={roveKeys}>{options.map(([v, l], k) =>
+    <button key={v} role={tab ? 'tab' : 'radio'} {...(tab ? { 'aria-selected': value === v } : { 'aria-checked': value === v })} tabIndex={value === v || (!has && k === 0) ? 0 : -1} onClick={() => { if (value !== v) { haptic(); onChange(v); } }}
       className={`min-h-11 flex-1 rounded-xl px-2 text-[13.5px] transition ${value === v ? 'bg-surface font-semibold text-ink shadow-[0_1px_2px_rgba(13,18,32,0.14)]' : 'text-mute'}`}>{l}</button>)}</div>;
 }
 /**
@@ -152,6 +184,28 @@ export function AnimatedNumber({ value, format }: { value: number; format: (v: n
   }, [value]);
   return <><span className="sr-only">{format(value)}</span><span aria-hidden="true">{format(shown)}</span></>;
 }
+const FOCUSABLE = 'a[href],button:not(:disabled),input:not(:disabled):not([type=hidden]),select:not(:disabled),textarea:not(:disabled),summary,[tabindex]:not([tabindex="-1"])';
+/** what Tab can reach inside `el`, in order (hidden elements and those of a closed <details> left out) */
+export const focusables = (el: HTMLElement): HTMLElement[] => [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((x) => x.getClientRects().length > 0);
+/**
+ * Focus trap: where Tab must go instead of leaving the dialog — the first element after the last one, the last before the first,
+ * and back inside when the focus is outside. `null`: the browser's own move stays inside, nothing to do. Pure (tested).
+ */
+export function trapTarget<T>(list: readonly T[], active: unknown, back: boolean, panel: T): T | null {
+  if (list.length === 0) return active === panel ? null : panel;
+  const at = list.indexOf(active as T), first = list[0]!, last = list[list.length - 1]!;
+  if (at < 0) return back ? last : first;   // on the panel itself, or outside: back inside
+  if (back && at === 0) return last;
+  if (!back && at === list.length - 1) return first;
+  return null;
+}
+/** Make everything that is not on the path from <body> to `el` inert; returns the elements changed (to be restored). */
+export function inertOutside(el: HTMLElement | null): HTMLElement[] {
+  const changed: HTMLElement[] = [];
+  for (let node: HTMLElement | null = el; node && node !== document.body && node.parentElement; node = node.parentElement)
+    for (const sib of node.parentElement.children) if (sib !== node && sib instanceof HTMLElement && !sib.inert && sib.tagName !== 'SCRIPT' && sib.tagName !== 'STYLE') { sib.inert = true; changed.push(sib); }
+  return changed;
+}
 /**
  * Bottom sheet: scrim, spring, grabber, drag down to dismiss (touch), Escape, keyboard-safe height.
  * `dismissable={false}` for approval sheets: they close only through their own buttons.
@@ -163,7 +217,21 @@ export function AnimatedNumber({ value, format }: { value: number; format: (v: n
 export function Sheet({ title, onClose, children, dismissable = true, wide, sub, footer, testid, busy }: { title: string; onClose: () => void; children: ReactNode; dismissable?: boolean; wide?: boolean; sub?: ReactNode; footer?: ReactNode; testid?: string; busy?: boolean }) {
   const t = useT(); const root = useRef<HTMLDivElement>(null), panel = useRef<HTMLDivElement>(null); const drag = useRef<{ y: number; dy: number } | null>(null);
   const can = dismissable && !busy, close = useRef(onClose); close.current = onClose; const canRef = useRef(can); canRef.current = can;
-  useEffect(() => { panel.current?.focus(); const key = (e: KeyboardEvent) => { if (e.key === 'Escape' && canRef.current) close.current(); }; addEventListener('keydown', key); return () => removeEventListener('keydown', key); }, []);
+  // NEXT (accessibility): a modal for real — focus goes into the sheet and comes BACK to what opened it; Tab stays inside (focus
+  // trap); everything behind is `inert` (not focusable, not read, not clickable); Escape closes when the sheet may be dismissed.
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panel.current?.focus();
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && canRef.current) { close.current(); return; }
+      if (e.key !== 'Tab' || !panel.current || !root.current || root.current.querySelector('[role=dialog]')) return;   // a sheet opened from this one has the keyboard
+      const next = trapTarget(focusables(panel.current), document.activeElement, e.shiftKey, panel.current);
+      if (next) { e.preventDefault(); next.focus(); }
+    };
+    addEventListener('keydown', key);
+    const hidden = inertOutside(root.current);
+    return () => { removeEventListener('keydown', key); for (const el of hidden) el.inert = false; if (opener?.isConnected) opener.focus({ preventScroll: true }); };
+  }, []);
   useEffect(() => {
     const vv = window.visualViewport; if (!vv) return;
     const f = () => { const kb = Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop)); if (root.current) root.current.style.paddingBottom = kb > 40 ? `${kb}px` : ''; };

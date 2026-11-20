@@ -1,5 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { ErrorBoundary } from './ErrorBoundary';
+import { useSettings } from './hooks';
 import { get, post, setUnauthHandler } from './api';
 import { I18n, useT, type Key, type Locale } from './i18n';
 import { Asset } from './screens/Asset';
@@ -12,7 +14,7 @@ import { prefetchIcons } from './icons';
 import { loadLocale } from './i18n-load';
 import { useAlertsRuntime, useUnread } from './alerts'; // v6-alerts
 import { setAmountLocale } from './amount'; // v8 hardening: amounts follow the screen's language
-import { AREAS, type Area } from './nav';
+import { AREAS, IN_APP, type Area } from './nav';
 import { MULTI_VENUE } from './venues';   // one venue shown: no Compare sub-view
 
 // v10 performance pass — what the first screen needs (the shell, Home, the asset list and page, the lock screen) is the
@@ -123,13 +125,17 @@ export function App() {
   const state = useQuery({ queryKey: ['auth'], queryFn: () => get<{ setupRequired: boolean; authenticated: boolean }>('/auth/state'), staleTime: 0 });
   // v10: the other language's texts are a chunk of their own — the change takes effect once they are there (if they cannot be fetched, the screen stays in the current language)
   const setLocale = useCallback((l: Locale) => { void loadLocale(l).then(() => { localStorage.setItem('spw-locale', l); document.documentElement.lang = l; setLocaleState(l); }, () => {}); }, []);
-  const nav = useCallback<Nav>((r) => { history.pushState(null, '', pathOf(r)); setRoute(r); window.scrollTo(0, 0); }, []);
+  const nav = useCallback<Nav>((r) => { history.pushState(IN_APP, '', pathOf(r)); setRoute(r); window.scrollTo(0, 0); }, []);
   const go = useCallback((t: Tab) => nav({ tab: t }), [nav]);
   // v6-alerts: open an in-app path (a tapped alert or notification)
-  const openPath = useCallback((path: string) => { history.pushState(null, '', path); setRoute(routeOf()); window.scrollTo(0, 0); }, []);
+  const openPath = useCallback((path: string) => { history.pushState(IN_APP, '', path); setRoute(routeOf()); window.scrollTo(0, 0); }, []);
   useEffect(() => { const f = () => setRoute(routeOf()); addEventListener('popstate', f); return () => removeEventListener('popstate', f); }, []);
   useEffect(() => { setUnauthHandler(() => { dispatchEvent(new Event('spw-session-end')); qc.clear(); void qc.invalidateQueries({ queryKey: ['auth'] }); }); }, [qc]);   // v11: the live-quote socket stops knocking once the session is gone (quotes.ts)
   useEffect(() => { document.documentElement.lang = locale; }, [locale]);
+  // NEXT: the cache is kept a few minutes in memory (main.tsx) — so it is emptied as soon as the server says there is no session
+  // (idle time-out seen by /auth/state, another device's logout), not only on a 401: nothing read under a session outlives it.
+  const signedOut = state.data ? !state.data.authenticated : false;
+  useEffect(() => { if (signedOut) qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'auth' }); }, [signedOut, qc]);
   // lock when the app has been in the background for a while (server also enforces a 30-minute idle timeout)
   useEffect(() => { const f = () => { if (document.visibilityState === 'visible') void qc.invalidateQueries({ queryKey: ['auth'] }); }; document.addEventListener('visibilitychange', f); return () => document.removeEventListener('visibilitychange', f); }, [qc]);
 
@@ -138,7 +144,7 @@ export function App() {
   else if (state.isError || !state.data) body = <Offline retry={() => void state.refetch()} />;
   else if (!state.data.authenticated) body = <Gate setup={state.data.setupRequired} onDone={() => void state.refetch()} />;
   else body = <Shell tab={tab} route={route} nav={nav} go={go} openPath={openPath} locale={locale} lock={async () => { dispatchEvent(new Event('spw-session-end')); await post('/auth/logout').catch(() => {}); qc.clear(); void state.refetch(); }} />;
-  return <I18n.Provider value={{ locale, setLocale }}>{body}</I18n.Provider>;
+  return <I18n.Provider value={{ locale, setLocale }}><ErrorBoundary scope="app" resetKey={state.data?.authenticated ? 'in' : 'out'}>{body}</ErrorBoundary></I18n.Provider>;
 }
 
 function Offline({ retry }: { retry: () => void }) {
@@ -149,6 +155,10 @@ function Offline({ retry }: { retry: () => void }) {
 function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; route: Route; nav: Nav; go: (t: Tab) => void; lock: () => void; openPath: (path: string) => void; locale: Locale }) {
   const t = useT(); const qc = useQueryClient();
   const unread = useUnread(); useAlertsRuntime(locale, openPath); // v6-alerts
+  // NEXT W5: a device that never chose a language takes the account's (`settings.locale`); a choice made on this device stays
+  const { settings, loaded } = useSettings(); const { setLocale } = useContext(I18n);
+  useEffect(() => { let local: string | null = 'x'; try { local = localStorage.getItem('spw-locale'); } catch { /* private mode: keep the screen's language */ }
+    if (loaded && local === null && (settings.locale === 'fr' || settings.locale === 'en') && settings.locale !== locale) setLocale(settings.locale); }, [loaded, settings.locale, locale, setLocale]);
   // v9: the phone header condenses once the page scrolls (an attribute, not a re-render); pull down on Home/Activity refreshes
   const header = useRef<HTMLElement>(null);
   // v10: large-title collapse — once the page's large title (PageTitle's <h1>) has scrolled under the header, the header carries it
@@ -198,11 +208,12 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
         <main id="main" tabIndex={-1} key={tab === 'futures' || tab === 'markets' ? tab : tab + (route.network ?? '') + (route.asset ?? '')} className={`rise mx-auto w-full px-5 pb-[calc(env(safe-area-inset-bottom)+7rem)] pt-2 outline-none lg:pb-12 ${width}`}>
           {sub && <div role="tablist" aria-label={t(area === 'trade' ? 'fxTradeArea' : 'mkTab')} data-testid="nav-sub" className={`no-scrollbar mb-3 mt-1 flex gap-1 overflow-x-auto rounded-2xl bg-elev p-1 ${wide || tab === 'private' ? 'max-w-xl' : ''}`}>{sub.map(([id, k, to, on]) =>
             <button key={id} role="tab" aria-selected={on} data-sub={id} onClick={() => { if (!on) nav(to); }} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 text-[13px] font-semibold transition min-[380px]:px-3 min-[380px]:text-[14px] ${on ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-mute hover:text-ink'}`}>{t(k)}</button>)}</div>}
+          <ErrorBoundary scope="screen" resetKey={pathOf(route)}>
           {tab === 'home' && <Home go={go} nav={nav} />}
           {tab === 'assets' && <Assets nav={nav} />}
           {tab === 'asset' && <Asset network={route.network ?? ''} asset={route.asset ?? 'native'} nav={nav} />}
           <Suspense fallback={<ScreenSkeleton />}>
-          {tab === 'receive' && <Receive initial={route.network} />}
+          {tab === 'receive' && <Receive initial={route.network} nav={nav} />}
           {tab === 'send' && <Send go={go} initial={route} />}
           {tab === 'swap' && <Swap />}
           {tab === 'futures' && <Suspense fallback={<Skeleton h="h-72" />}><Futures instrument={route.asset} view={(['compare', 'accounts', 'router'].includes(route.view ?? '') ? route.view : 'terminal') as FuturesView} nav={nav} /></Suspense>}
@@ -221,6 +232,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
           </Suspense>
           {tab === 'alerts' && <Suspense fallback={<Skeleton h="h-72" />}><Alerts view={route.view === 'settings' ? 'settings' : 'list'} open={openPath} setView={(v) => nav({ tab: 'alerts', view: v === 'settings' ? 'settings' : undefined })} /></Suspense>}
           {tab === 'monitor' && <Suspense fallback={<Skeleton h="h-72" />}><Monitor open={openPath} /></Suspense>}
+          </ErrorBoundary>
         </main>
         <nav aria-label={t('v11NavMain')} data-testid="nav-tabbar" className="tabbar safe-b nav-glass fixed inset-x-0 bottom-0 z-10 lg:hidden">
           <div className="mx-auto flex max-w-xl items-end px-1 pt-1.5">{AREAS.map(([id, icon, label]) => { const on = area === id; return (

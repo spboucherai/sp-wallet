@@ -3,13 +3,16 @@ import { useContext, useState } from 'react';
 import { get } from '../api';
 import type { Nav } from '../App';
 import { PriceChart, type Pt } from '../chart';
-import { useNetworks, usePortfolio, useSettings } from '../hooks';
+import { sendBlock, sendBlockKey, useNetworks, usePortfolio, useSettings } from '../hooks';
+import { backOr } from '../nav';
 import { I18n, useT } from '../i18n';
-import { Addr, Card, Change, Coin, CopyBtn, fiat, H, Icon, Money, NetDot, Notice, numFmt, Seg, Skeleton, SkeletonRows, StatePill, trimAmt, when } from '../ui';
+import { Addr, Btn, Card, Change, Coin, CopyBtn, EmptyState, ErrorState, fiat, H, Icon, Money, NetDot, Notice, numFmt, Seg, Skeleton, SkeletonRows, StatePill, trimAmt, when } from '../ui';
 import { issuerOf } from '../issuer';
-import { PriceFreshness } from '../freshness'; // v11
+import { PriceFreshness, StaleBanner } from '../freshness'; // v11; NEXT W4
 import { LiveSpotTag, useLiveSpot } from '../quotes-spot'; // v11 live quotes (the quote client itself is fetched on demand)
 
+/** NEXT W5: GET /activity has no asset filter — the widest window it allows is read, and an empty result inside a FULL window is not « no activity » */
+export const ACTIVITY_WINDOW = 500;
 const RANGES = [['1', '1J', '1D'], ['7', '1S', '1W'], ['30', '1M', '1M'], ['365', '1A', '1Y']] as const;
 const compact = (n: number | null, cur: string, locale: string) => (n === null ? '—' : new Intl.NumberFormat(locale === 'fr' ? 'fr-CA' : 'en-CA', { style: 'currency', currency: cur, notation: 'compact', maximumFractionDigits: 2 }).format(n));
 
@@ -22,7 +25,14 @@ export function Asset({ network, asset, nav }: { network: string; asset: string;
   const live = useLiveSpot(b ? [b.symbol] : [])[b?.symbol ?? ''];   // v11 live quotes: the streamed USD price of this symbol, when there is one
   const mk = useQuery({ queryKey: ['market', b?.symbol, days, ck], enabled: !!b, staleTime: 120_000,
     queryFn: () => get<{ points: Pt[]; market: any }>(`/market/${encodeURIComponent(b!.symbol)}?days=${days}&currency=${ck}`) });
-  const act = useQuery({ queryKey: ['activity'], queryFn: () => get<{ items: any[] }>('/activity?limit=200'), staleTime: 15_000 });
+  const act = useQuery({ queryKey: ['activity', 'window', ACTIVITY_WINDOW], queryFn: () => get<{ items: any[] }>(`/activity?limit=${ACTIVITY_WINDOW}`), staleTime: 15_000 });
+  // NEXT W5: « back » returns where the owner came from (the asset list, Home, another asset); on a page opened directly, Home
+  const back = () => backOr(() => nav({ tab: 'home' }));
+  const backBtn = <button onClick={back} aria-label={t('back')} data-testid="asset-back" className="press -ml-2.5 grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink"><Icon n="chev" className="h-6 w-6 rotate-180" /></button>;
+  // NEXT W3: a failed load is an error state with a retry; a network or an asset that does not exist is « not found », not a skeleton for ever
+  if (!pf.data && pf.isError) return <div className="space-y-5" data-testid="asset-error"><div className="pt-2">{backBtn}</div><ErrorState title={t('nxErrLoad')} offline={(pf.error as { code?: string } | null)?.code === 'offline'} onRetry={() => void pf.refetch()}>{t('nxErrLoadBody')}</ErrorState></div>;
+  if (pf.data && !b) return <div className="space-y-5" data-testid="asset-not-found"><div className="pt-2">{backBtn}</div>
+    <EmptyState icon="search" title={t('nxNotFoundTitle')} action={<Btn kind="soft" onClick={() => nav({ tab: 'assets' })}>{t('allAssets')}</Btn>}>{t('nxNotFoundBody')}</EmptyState></div>;
   if (!b || !pf.data) return <div className="space-y-5" aria-busy="true"><Skeleton h="h-12" className="!w-56 !rounded-xl" /><Skeleton h="h-[420px]" /><Skeleton h="h-40" /><SkeletonRows n={3} /></div>;
   const n = nets.data?.find((x) => x.id === network);
   const m = pf.data.prices?.[b.symbol] ?? mk.data?.market ?? null;
@@ -39,19 +49,20 @@ export function Asset({ network, asset, nav }: { network: string; asset: string;
   const hidden = settings.hideBalances;
   const value = b.display !== null && price !== null ? Number(b.display) * price : null;
   const others = pf.data.balances.filter((x) => x.symbol === b.symbol && !(x.network === network && x.asset === asset));
-  const mine = (act.data?.items ?? []).filter((i) => i.network === network && i.asset === asset).slice(0, 6);
+  const mine = (act.data?.items ?? []).filter((i) => i.network === network && i.asset === asset).slice(0, 6), windowFull = (act.data?.items.length ?? 0) >= ACTIVITY_WINDOW, block = sendBlock(pf.data);
   const iss = asset === 'native' ? null : issuerOf(t, b.symbol, b.name);
   const sgn = (v: number) => `${v > -0.005 ? '+' : '−'}${numFmt(Math.abs(v), locale, 2, 2)} %`;
   const stat = (k: string, v: string) => <div className="rounded-2xl bg-elev/60 p-3.5"><div className="text-[12px] text-mute">{k}</div><div className="mt-0.5 text-[15px] font-semibold">{v}</div></div>;
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2.5 pt-2">
-        <button onClick={() => nav({ tab: 'home' })} aria-label={t('back')} className="press -ml-2.5 grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink"><Icon n="chev" className="h-6 w-6 rotate-180" /></button>
+        {backBtn}
         <Coin sym={b.symbol} net={b.network} size={48} />
         <div className="min-w-0"><h1 className="truncate text-[21px] font-semibold leading-tight tracking-[-0.02em]">{b.name}</h1><div className="mt-0.5 flex items-center gap-1.5 text-[13px] text-mute"><span>{b.symbol}</span><span aria-hidden="true">·</span><NetDot net={b.network} size={15} /><span className="truncate">{b.networkName}</span></div></div>
         {livePrice !== null ? <span className="ml-auto shrink-0"><LiveSpotTag converted={ck !== 'usd'} /></span> : m?.priceAt && <span className="ml-auto shrink-0"><PriceFreshness at={m.priceAt} stale={!!m.stale} /></span>}
       </div>
 
+      <StaleBanner q={pf} />
       {iss && <div data-testid="asset-issuer"><Notice tone="warn">{t('qaPegNote', { name: b.name, sym: b.symbol, issuer: iss.text })}</Notice></div>}
       <Card className="!pb-4">
         <div className="text-[13px] text-mute">{hover ? timeFmt(hover.t) : t('price')}</div>
@@ -70,8 +81,9 @@ export function Asset({ network, asset, nav }: { network: string; asset: string;
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <button onClick={() => nav({ tab: 'receive', network })} className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-[15.5px] font-semibold text-onprimary"><Icon n="down" className="h-[18px] w-[18px]" />{t('receive')}</button>
-          <button onClick={() => nav({ tab: 'send', network, asset })} disabled={!!pf.data.halted} className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl bg-elev px-4 text-[15.5px] font-semibold disabled:opacity-40"><Icon n="up" className="h-[18px] w-[18px]" />{t('send')}</button>
+          <button onClick={() => nav({ tab: 'send', network, asset })} disabled={block !== null} data-testid="asset-send" className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl bg-elev px-4 text-[15.5px] font-semibold disabled:opacity-40"><Icon n="up" className="h-[18px] w-[18px]" />{t('send')}</button>
         </div>
+        {block && <p className="mt-3 text-[12.5px] leading-snug text-warn" data-testid="send-blocked">{t(sendBlockKey(block))}</p>}
       </Card>
 
       {others.length > 0 && <Card className="!px-0 !pb-1"><div className="px-5"><H>{t('otherNetworks', { sym: b.symbol })}</H></div>
@@ -100,7 +112,8 @@ export function Asset({ network, asset, nav }: { network: string; asset: string;
         {asset !== 'native' && <p className="mt-3 text-[12px] text-mute">{t('verifiedToken')}</p>}</Card>
 
       <Card className="!px-0 !pb-1"><div className="px-5"><H right={<button className="-my-2 min-h-11 min-w-11 text-[13.5px] font-medium text-blue" onClick={() => nav({ tab: 'activity' })}>{t('all')}</button>}>{t('activity')}</H></div>
-        {mine.length === 0 ? <p className="px-5 pb-4 text-[14px] text-mute">{t('noActivity')}</p> :
+        {!act.data ? (act.isError ? <div className="flex items-center justify-between gap-3 px-5 pb-4 text-[14px] text-mute" data-testid="asset-activity-error"><span>{t('nxActivityErr')}</span><Btn kind="soft" className="!min-h-11 shrink-0 !px-3.5 !text-[13.5px]" onClick={() => void act.refetch()}>{t('retry')}</Btn></div> : <div className="px-5 pb-4" aria-busy="true"><Skeleton h="h-12" /></div>)
+          : mine.length === 0 ? <p className="px-5 pb-4 text-[14px] text-mute" data-testid="asset-activity-empty" data-window-full={windowFull}>{windowFull ? t('nxActivityWindow', { n: ACTIVITY_WINDOW }) : t('noActivity')}</p> :
           <ul>{mine.map((i, k) => <li key={i.id} className={`flex items-center gap-3 px-5 py-3 ${k ? 'border-t border-line' : ''}`}>
             <span className={`grid h-9 w-9 place-items-center rounded-full ${i.kind === 'receive' ? 'bg-emerald/10 text-emerald' : 'bg-blue/10 text-blue'}`}><Icon n={i.kind === 'receive' ? 'down' : 'up'} className="h-4 w-4" /></span>
             <span className="min-w-0 flex-1"><span className="block text-[14.5px] font-medium">{/* v11 interface: a swap, a cross-chain transfer and a GMX order are not « sent » */ i.kind === 'receive' ? t('received') : i.kind === 'gmx' ? t('svKind_gmx') : i.kind === 'bridge' ? t('brActivity') : i.kind === 'swap' ? t('swap') : t('sent')}</span><span className="block text-[12px] text-mute">{when(i.at, locale)}</span></span>

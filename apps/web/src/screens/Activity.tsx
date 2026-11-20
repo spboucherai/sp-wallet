@@ -5,7 +5,8 @@
 // an order opens its state transitions. Paper items are LABELLED and filterable; this screen shows no total at all, so
 // nothing can mix real money with simulated money. READ-ONLY.
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useContext, useMemo, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { HEAD_REFRESH_MS, withHead } from '../activity';
 import { activityApi, ACTIVITY_KINDS, checkKey, dayKey, defaultActivityFilters, eventKey, failedChecks, filtersActive, groupByDay, mergePages, orderStateView, PRINCIPALS, RANGES, switchKey, transitionStep,
   type ActivityFilters, type ActivityItem, type ActivityKind, type ActivityPage } from '../activity';
 import { BridgeFacts, BridgePill, BridgeProgress, type BridgeV } from '../bridge';
@@ -14,7 +15,7 @@ import { useNetworks, useSettings } from '../hooks';
 import { I18n, useT, type Key, hasText } from '../i18n';
 import { PlanList } from '../plan'; // v7 any-to-any plans
 import { propError } from '../sv';  // v11
-import { Addr, Btn, Card, Chips, Coin, EmptyState, ErrorState, exactAmt, Fact, Fold, Icon, inputCls, Money, Notice, PageTitle, Seg, short, SkeletonRows, StatePill, Tag, testNotSent, Timeline, trimAmt, when } from '../ui';
+import { Addr, Btn, Card, Chips, Coin, CopyBtn, EmptyState, ErrorState, exactAmt, Fact, Fold, Icon, inputCls, Money, Notice, PageTitle, Seg, short, SkeletonRows, StatePill, Tag, testNotSent, Timeline, trimAmt, when } from '../ui';
 import { XswapFacts, XswapPill, XswapProgress, type XswapV } from '../xswap';
 
 /** a row of GET /activity, as the wallet rows of the timeline carry it */
@@ -33,8 +34,14 @@ export function Activity() {
   const [f, setF] = useState<ActivityFilters>(defaultActivityFilters), [open, setOpen] = useState('');
   const set = (patch: Partial<ActivityFilters>) => { setOpen(''); setF((x) => ({ ...x, ...patch })); };
   const q = useInfiniteQuery({ queryKey: ['activity', 'timeline', f], queryFn: ({ pageParam }) => activityApi.page(f, pageParam), initialPageParam: null as string | null,
-    getNextPageParam: (last: ActivityPage) => last.nextCursor, refetchInterval: 20_000 });
-  const pages = q.data?.pages ?? [], items = useMemo(() => mergePages(pages), [q.data]);   // eslint-disable-line react-hooks/exhaustive-deps
+    getNextPageParam: (last: ActivityPage) => last.nextCursor, refetchOnWindowFocus: false });
+  // NEXT: the periodic refresh reads the FIRST page only (an infinite query re-reads every page it holds, one after the other:
+  // after « load more » ×10 that was ten requests every 20 s). The fresh head is laid over the pages read so far (an item is shown
+  // once, in its freshest version); a pull-to-refresh or the retry button still re-reads everything.
+  const [head, setHead] = useState<{ f: ActivityFilters; page: ActivityPage; at: number } | null>(null);
+  useEffect(() => { const tick = () => { if (document.visibilityState !== 'visible') return; void activityApi.page(f, null).then((page) => setHead({ f, page, at: Date.now() }), () => { /* the next tick tries again; a failed load is said by the list itself */ }); };
+    const h = setInterval(tick, HEAD_REFRESH_MS); document.addEventListener('visibilitychange', tick); return () => { clearInterval(h); document.removeEventListener('visibilitychange', tick); }; }, [f]);
+  const pages = useMemo(() => withHead<ActivityPage>(q.data?.pages ?? [], head && head.f === f ? head : null, q.dataUpdatedAt), [q.data, head, f, q.dataUpdatedAt]), items = useMemo(() => mergePages(pages), [pages]);
   const first = pages[0], audit = first?.audit ?? null, errors = first?.errors ?? [], active = filtersActive(f);
   const refresh = () => void qc.invalidateQueries({ queryKey: ['activity'] });
   // grouped by calendar day (the device's own): "Aujourd'hui", "Hier", then the date in full
@@ -195,7 +202,9 @@ function WalletRow({ i, isOpen, toggle, time, hidden, refresh }: { i: Item; isOp
       {testNotSent(i) ? <D k={t('status')}><span className="text-warn">{t('qaTestNotSent')}</span></D> : i.error && <D k={t('error')}><span className="text-danger" data-testid="activity-error">{propError(t, i)}</span></D>}
       {/* v11: the same steps as on the review sheet — a CCTP transfer and a THORChain swap keep their own, richer progress above */}
       {i.execution && i.kind !== 'receive' && i.kind !== 'bridge' && !i.xswap && !testNotSent(i) && i.state !== 'pending_approval' && <ExecutionTimeline exec={i.execution} />}
-      {i.txid && <D k={t('txid')}><span className="break-all font-mono text-[11.5px]">{i.txid}</span></D>}
+      {/* NEXT W5: the confirmations the server counted, and the hash with a copy button */}
+      {typeof i.confirmations === 'number' && i.kind !== 'receive' && ['broadcast', 'confirming', 'finalized', 'reorged'].includes(i.state) && !testNotSent(i) && <D k={t('nxConfirmations')}><span data-testid="ac-confirmations">{i.confirmations}</span></D>}
+      {i.txid && <D k={t('txid')}><span className="break-all font-mono text-[11.5px]" data-testid="ac-txid">{i.txid}</span><div className="mt-1.5"><CopyBtn small text={i.txid} label={t('nxCopyHash')} /></div></D>}
       {i.explorer && !testNotSent(i) && <a className="inline-flex min-h-11 items-center gap-1.5 text-blue" href={i.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
     </div>}
   </>;

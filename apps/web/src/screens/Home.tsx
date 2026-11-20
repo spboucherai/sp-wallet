@@ -1,10 +1,10 @@
 import { lazy, Suspense, useContext, useMemo } from 'react';
 import type { Nav, Tab } from '../App';
 import { AllocationBar, Spark } from '../chart';
-import { useNetworks, usePortfolio, useSettings, type Bal } from '../hooks';
+import { portfolioGaps, sendBlock, sendBlockKey, useNetworks, usePortfolio, useSettings, type Bal } from '../hooks';
 import { I18n, useT } from '../i18n';
-import { AnimatedNumber, Card, Change, Coin, fiat, H, haptic, Icon, Money, NetDot, Notice, numFmt, short, Skeleton, SkeletonRows, StatePill, testNotSent, trimAmt, when } from '../ui';
-import { PriceFreshness } from '../freshness'; // v11
+import { AnimatedNumber, Card, Change, Coin, ErrorState, fiat, H, haptic, Icon, Money, NetDot, Notice, numFmt, short, Skeleton, SkeletonRows, StatePill, testNotSent, trimAmt, when } from '../ui';
+import { clockText, PriceFreshness, StaleBanner } from '../freshness'; // v11; NEXT W4: balance read time, « not up to date since »
 import { LiveSpotTag, overlaySpot, useLiveSpot } from '../quotes-spot'; // v11 live quotes (the quote client itself is fetched on demand)
 
 // v11 interface: Home is the Dashboard. The wallet (total, assets) is the first chunk as before; the consolidated panels —
@@ -40,7 +40,8 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
   const liveSyms = useMemo(() => [...new Set([...(pf.data?.balances ?? [])].sort((a, b) => Number(b.amount !== null && b.amount !== '0') - Number(a.amount !== null && a.amount !== '0')).map((b) => b.symbol))].slice(0, 40), [pf.data?.balances]);
   const live = useLiveSpot(pf.data?.prices ? liveSyms : []);
   if (pf.isLoading) return <div className="space-y-5" aria-busy="true"><Skeleton h="h-[272px]" className="!rounded-[30px]" /><SkeletonRows n={3} /><SkeletonRows n={4} /></div>;
-  if (!pf.data) return <Notice tone="warn">{t('offline')}</Notice>;
+  // NEXT W3: nothing could be read — an error state with a retry, not a bare line
+  if (!pf.data) return <div data-testid="home" data-state="error"><ErrorState title={t('nxErrLoad')} offline={(pf.error as { code?: string } | null)?.code === 'offline'} onRetry={() => void pf.refetch()}>{t('nxErrLoadBody')}</ErrorState></div>;
   const d = { ...pf.data, prices: overlaySpot(pf.data.prices, live) };
   const nLive = d.prices ? Object.values(d.prices).filter((m) => m.live).length : 0;
   const value = (b: Bal) => (d.prices?.[b.symbol] && b.display !== null ? Number(b.display) * d.prices[b.symbol]![ck] : 0);
@@ -48,6 +49,8 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
   // 24 h change of the whole portfolio, from each holding's own 24 h change
   const prev = d.balances.reduce((s, b) => { const c = d.prices?.[b.symbol]?.change24h; return s + (c === null || c === undefined ? value(b) : value(b) / (1 + c / 100)); }, 0);
   const dayPct = total > 0 && prev > 0 ? ((total - prev) / prev) * 100 : null;
+  // NEXT W4: a network whose balance could not be read is not zero — the total is then labelled partial; W5: one rule for « send »
+  const gaps = portfolioGaps(d), block = sendBlock(d);
   const held = d.balances.filter((b) => b.amount !== null && b.amount !== '0').sort((a, b) => value(b) - value(a));
   // nothing held yet: show a short list of well-known assets (one per symbol) with live prices instead of a wall of zeros
   const featured = FEATURED.flatMap((s) => { const c = d.balances.filter((b) => b.symbol === s); // the native coin; else the original issue rather than a bridged or pegged copy (USDT on Base is "Bridged USDT"); USDC stays on Base, where this wallet lives
@@ -65,6 +68,7 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
   const rowProps = { nav, cur, ck: ck as 'usd' | 'cad', hidden, prices: d.prices, locale };
   return (
     <div className="space-y-5" data-testid="home">
+      <StaleBanner q={pf} />
       {d.halted && <Notice tone="danger">{t('haltedBanner')}</Notice>}
       {/* v11: the signer node is unreachable — the page still renders from the server's own balance reads, and says what that means */}
       {d.signer && !d.signer.reachable && <Notice tone="warn"><span data-testid="signer-down">{t('svSignerDown', { date: when(d.signer.addressesAsOf, locale) })}</span></Notice>}
@@ -72,7 +76,7 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
       <section className="hero px-6 pb-6 pt-5" data-mood={mood}>
         <span className="hero-edge" aria-hidden="true" />
         <div className="flex items-center justify-between">
-          <span className="text-[13px] font-medium text-white/70">{t('totalEstimate')}</span>
+          <span className="text-[13px] font-medium text-white/70">{t('totalEstimate')}{gaps.partial && d.prices && <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#f4b65b]/20 px-2 py-0.5 text-[11.5px] font-semibold text-[#f4b65b]" data-testid="total-partial"><Icon n="warn" className="h-3 w-3" />{t('nxPartialTotal')}</span>}</span>
           <button onClick={() => void update({ hideBalances: !hidden })} aria-label={hidden ? t('show') : t('hide')} aria-pressed={hidden} className="press -mr-2.5 grid h-11 w-11 place-items-center rounded-full text-white/75"><Icon n={hidden ? 'eyeOff' : 'eye'} /></button>
         </div>
         <div className="t-display mt-1 text-[clamp(40px,12.6vw,54px)]">
@@ -83,11 +87,14 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
             <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden="true"><path d={dayPct >= 0 ? 'M6 2l4.5 7h-9z' : 'M6 10L1.5 3h9z'} fill="currentColor" /></svg>{dayPct >= 0 ? '+' : '−'}{numFmt(Math.abs(dayPct), locale, 2, 2)} % {t('today')}</span>}
           <span className="inline-flex items-center gap-2"><span className={`inline-block h-2 w-2 rounded-full ${netState === 'ok' ? 'bg-[#35e7ac]' : netState === 'checking' ? 'pulse-dot bg-white/60' : 'bg-[#f4b65b]'}`} />
             {netState === 'checking' ? t('checking') : t('netsUp', { up, n: list.length })}</span>
+          <span className={`inline-flex items-center gap-1.5 ${pf.isError ? 'font-semibold text-[#f4b65b]' : ''}`} data-testid="balances-at"><Icon n={pf.isError ? 'warn' : 'clock'} className="h-3.5 w-3.5" />{t('nxBalancesAt', { time: clockText(d.asOf, locale) })}</span>
           {d.prices && <PriceFreshness hero at={d.pricesAsOf} stale={d.pricesStale} />}
           {nLive > 0 && <LiveSpotTag hero n={nLive} converted={ck !== 'usd'} />}
         </div>
-        <div className="mt-6 flex gap-2">{action('receive', 'down', t('receive'), true)}{action('send', 'up', t('send'), false, !!d.halted || d.signer?.reachable === false)}{action('swap', 'swap', t('swap'))}{action('agents', 'robot', t('agents'))}</div>
+        <div className="mt-6 flex gap-2">{action('receive', 'down', t('receive'), true)}{action('send', 'up', t('send'), false, block !== null)}{action('swap', 'swap', t('swap'))}{action('agents', 'robot', t('agents'))}</div>
+        {block && <p className="mt-3 text-[12.5px] leading-snug text-white/75" data-testid="send-blocked">{t(sendBlockKey(block))}</p>}
       </section>
+      {gaps.partial && <Notice tone="warn"><span data-testid="partial-note">{t('nxPartialBody', { nets: gaps.missing.join(', ') || '—' })}</span></Notice>}
 
       {d.pending.length > 0 && <Card><H>{t('pending')}</H>
         <ul className="space-y-3.5">{d.pending.map((p) => <li key={p.id} className="flex items-center gap-3">

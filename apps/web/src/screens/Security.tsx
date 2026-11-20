@@ -6,7 +6,7 @@ import { useContext, useState } from 'react';
 import { get, post } from '../api';
 import { useNetworks } from '../hooks';
 import { errText, I18n, useT } from '../i18n';
-import { Btn, Card, Coin, H, Icon, inputCls, Notice, PageTitle, Skeleton, SkeletonRows, when } from '../ui';
+import { Btn, Card, Coin, ErrorState, H, Icon, inputCls, Notice, PageTitle, Skeleton, SkeletonRows, when } from '../ui';
 
 const fmt = (v: string, d: number) => { const s = v.padStart(d + 1, '0'); const i = s.slice(0, s.length - d), f = s.slice(s.length - d).replace(/0+$/, ''); return f ? `${i}.${f}` : i; };
 
@@ -17,6 +17,8 @@ export function Security() {
   const au = useQuery({ queryKey: ['audit'], queryFn: () => get<any>('/security/audit?limit=60'), refetchInterval: 30_000 });
   const [showAudit, setShowAudit] = useState(false), [allLimits, setAllLimits] = useState(false), [lq, setLq] = useState('');
   const [halt, setHalt] = useState(''), [haltOpen, setHaltOpen] = useState(false), [busy, setBusy] = useState(''), [err, setErr] = useState(''); const ap = useApprovalOutcome<any>();
+  // NEXT W3: a failed load is an error state with a retry, not a skeleton that never ends
+  if (!ov.data && ov.isError) return <div className="space-y-4" data-testid="security-error"><PageTitle>{t('security')}</PageTitle><ErrorState title={t('nxErrLoad')} offline={(ov.error as { code?: string } | null)?.code === 'offline'} onRetry={() => void ov.refetch()}>{t('nxErrLoadBody')}</ErrorState></div>;
   if (ov.isLoading || !ov.data) return <div className="space-y-4" aria-busy="true"><Skeleton h="h-11" className="!w-40 !rounded-xl" /><Skeleton h="h-44" /><SkeletonRows n={4} /></div>;
   const s = ov.data.signer;
   const act = async (name: string, fn: () => Promise<unknown>) => { setBusy(name); setErr(''); try { await fn(); await qc.invalidateQueries(); } catch (e) { if (!inDoubt(e)) setErr(errText(t, e)); } finally { setBusy(''); } };

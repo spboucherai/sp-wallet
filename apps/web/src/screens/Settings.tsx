@@ -4,6 +4,7 @@ import { useNetworks, useSettings } from '../hooks';
 import { applyTheme } from '../theme';
 import { I18n, useT } from '../i18n';
 import { Btn, Card, H, Icon, NetworkIcon, PageTitle, Seg } from '../ui';
+import { APP_VERSION } from '../version';
 
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return <button role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} className="grid h-11 w-16 shrink-0 place-items-center"><span className={`relative block h-[31px] w-[52px] rounded-full transition-colors duration-200 ${on ? 'bg-emerald' : 'bg-mute/35'}`}><span className={`absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-[0_2px_5px_rgba(0,0,0,0.28)] transition-transform duration-200 ease-[var(--ease-spring)] ${on ? 'translate-x-[21px]' : ''}`} /></span></button>;
@@ -35,7 +36,7 @@ export function Settings({ lock, go }: { lock: () => void; go: (t: Tab) => void 
       <Card className="space-y-3">
         <a href="/api/v1/export/activity.csv" className="press inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl bg-elev px-4 text-[15.5px] font-medium"><Icon n="down" className="h-4 w-4" />{t('exportCsv')}</a>
         <Btn kind="ghost" full onClick={lock}><Icon n="lock" />{t('logout')}</Btn>
-        <p className="text-center text-xs text-mute">SP Wallet · {t('version')} 1.0.0 · {t('mainnet')}</p>
+        <p className="text-center text-xs text-mute">SP Wallet · {t('version')} <span data-testid="app-version">{APP_VERSION}</span> · {t('mainnet')}</p>
       </Card>
     </div>
   );
