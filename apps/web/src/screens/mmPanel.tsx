@@ -13,6 +13,8 @@
 //   - "pull" and "flatten" stay enabled under every lock and halt.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { startAuthentication } from '@simplewebauthn/browser';
+import { ApprovalOutcomePanel, inDoubt, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 import { useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { get, post } from '../api';
 import { I18n, useT, type Key } from '../i18n';
@@ -314,22 +316,24 @@ export function ApprovalBody({ sheet }: { sheet: QuotingApproval }) {
 }
 export function QuotingApprovalSheet({ sheet, onClose, onDone }: { sheet: QuotingApproval; onClose: () => void; onDone: () => void }) {
   const t = useT(); const [ack, setAck] = useState(false), [busy, setBusy] = useState(false), [step, setStep] = useState(0), [refusal, setRefusal] = useState<Refusal | null>(null), [recovered, setRecovered] = useState('');
+  const ap = useApprovalOutcome<{ id: string; state: string }>(); const pending = (s: string) => s === 'created' || s === 'pending_signer', readMandate = async () => { const m = (await get<{ mandates: { id: string; state: string }[] }>('/mandates')).mandates.find((x) => x.id === sheet.mandateId); if (!m) throw new Error('mandate not listed'); return m; };
   // a refusal ends this sheet's approval: the button is gone, and a new approval starts from a new preparation
   const approve = async () => { setBusy(true); setRefusal(null);
     try {
       setStep(1); const assertion = await startAuthentication({ optionsJSON: sheet.signer.options as never });            // 1 — the isolated signer: the quoting mandate
       setStep(2); const bindingAssertion = await startAuthentication({ optionsJSON: sheet.binding.options as never });   // 2 — the API: the full hash, the section hash, the signer mandate hash
-      await post(`/mandates/${sheet.mandateId}/approve`, { assertion, bindingAssertion, acknowledged: true }); onDone();
-    } catch (e) { setRefusal(refusalOf(e)); } finally { setBusy(false); setStep(0); } };
+      // NEXT W1: a lost answer is settled by the mandate read from the server (is it still awaiting its approval?)
+      await ap.send<unknown>({ submit: () => post(`/mandates/${sheet.mandateId}/approve`, { assertion, bindingAssertion, acknowledged: true }), read: readMandate, applied: (m) => !pending(m.state), late: onDone }); onDone();
+    } catch (e) { if (!inDoubt(e)) setRefusal(refusalOf(e)); } finally { setBusy(false); setStep(0); } };
   const recover = async () => { setBusy(true);
     try { const r = await post<{ adopted: string[]; revoked: string[]; pending: string[] }>('/mm/recover', {}); setRecovered(t('mmRecovered', { adopted: r.adopted.length, revoked: r.revoked.length, pending: r.pending.length })); if (r.adopted.includes(sheet.mandateId)) onDone(); }
     catch (e) { setRefusal(refusalOf(e)); } finally { setBusy(false); } };
-  return <Sheet title={t('mmApTitle')} sub={String(sheet.mandate.label ?? '')} onClose={onClose} busy={busy} wide testid="mm-approval"
+  return <Sheet title={t('mmApTitle')} sub={String(sheet.mandate.label ?? '')} onClose={onClose} busy={busy || ap.locked} wide testid="mm-approval"
     footer={refusal ? (refusal.code === 'quoting_approval_unknown' ? <Btn full busy={busy} onClick={() => void recover()} data-testid="mm-approval-recover">{t('mmRecover')}</Btn> : <Btn kind="ghost" full onClick={onClose}>{t('mmApClose')}</Btn>)
-      : <Btn full busy={busy} disabled={!ack} onClick={() => void approve()} data-testid="mm-approval-approve"><Icon n="key" className="h-4 w-4" />{step ? t('mmApStep', { n: step }) : t('mmApApprove')}</Btn>}>
+      : <Btn full busy={busy} disabled={!ack || ap.locked} onClick={() => void approve()} data-testid="mm-approval-approve"><Icon n="key" className="h-4 w-4" />{step ? t('mmApStep', { n: step }) : t('mmApApprove')}</Btn>}>
     <div className="space-y-3"><ApprovalBody sheet={sheet} />
       <Check checked={ack} onChange={setAck} testid="mm-approval-ack" disabled={!!refusal}>{t('mmApAckCheck')}</Check>
-      <RefusalNotice r={refusal} />{recovered && <Notice tone="info"><span data-testid="mm-recovered">{recovered}</span></Notice>}</div></Sheet>;
+      <ApprovalOutcomePanel ap={ap} /><RefusalNotice r={refusal} />{recovered && <Notice tone="info"><span data-testid="mm-recovered">{recovered}</span></Notice>}</div></Sheet>;
 }
 
 // ------------------------------------------------------------------------------------------------------------------ the section of the agent page

@@ -195,7 +195,7 @@ export function PlanBody({ id, onGone }: { id: string; onGone?: () => void }) {
     setBusy('submit'); const pid = mine.proposal.id;
     await ap.run({ submit: () => post<{ state: string }>(`/transfers/proposals/${pid}/approve`, { assertion }), read: () => get<{ state: string }>(`/transfers/proposals/${pid}`), applied: proposalApplied }, (o) => {
       if (o.kind === 'refused') { const m = errText(t, o.error); if (m) setErr(m); }
-      else if (o.kind === 'read' && !o.applied) { setErr(t('nxNotReceived')); return; }   // the server still awaits the approval: the challenge held here stays
+      else if (o.kind === 'read' && !o.applied) return;   // the server still awaits the approval: the challenge held here stays
       else setPrep(null);
       void q.refetch();
     }); });

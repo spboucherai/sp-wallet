@@ -52,7 +52,7 @@ export function Send({ go, initial }: { go: (t: Tab) => void; initial?: { networ
   const settle = (o: KnownOutcome<Proposal, Proposal>) => {
     if (o.kind === 'refused') { fail(o.error); const id = p?.id; if (id) void read(id).then((fresh) => { setP(fresh); if (proposalApplied(fresh)) setStep('track'); }, () => {}); return; }
     const s = o.kind === 'answered' ? o.value : o.state; setP(s);
-    if (o.kind === 'read' && !o.applied) { setErr(t('nxNotReceived')); return; }
+    if (o.kind === 'read' && !o.applied) { setErr(''); return; }   // the panel says it: the server still awaits the approval
     setErr(''); setStep('track'); void qc.invalidateQueries({ queryKey: ['portfolio'] });
   };
   const approve = async () => {

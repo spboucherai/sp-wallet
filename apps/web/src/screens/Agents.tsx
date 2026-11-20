@@ -1,4 +1,6 @@
 import { startAuthentication } from '@simplewebauthn/browser';
+import { ApprovalOutcomePanel, inDoubt, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useState } from 'react';
 import { get, post } from '../api';
@@ -183,7 +185,7 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
   const netsQ = useQuery({ queryKey: ['agent-networks'], queryFn: () => get<{ networks: AgentNet[]; feeWarnShare?: number }>('/agents/networks'), staleTime: 60_000, enabled: spot });
   const [sheet, setSheet] = useState<'' | 'fund' | 'withdraw'>('');
   const lib = useQuery({ queryKey: ['strategies'], queryFn: () => get<{ strategies: any[] }>('/strategies'), staleTime: 300_000, enabled: spot });
-  const [busy, setBusy] = useState(''), [err, setErr] = useState(''), [mandate, setMandate] = useState<any>(null), [note, setNote] = useState('');
+  const [busy, setBusy] = useState(''), [err, setErr] = useState(''), [mandate, setMandate] = useState<any>(null), [note, setNote] = useState(''); const ap = useApprovalOutcome<any>();
   const [panel, setPanel] = useState(false); // v11: the agent panel, for any kind of agent
   if (q.isLoading || !q.data) return <div className="space-y-4" aria-hidden="true"><div className="pt-2"><div className="skel h-9 w-56 !rounded-xl" /><div className="skel mt-3 h-4 w-40 !rounded-md" /></div><SkeletonCard lines={2} /><SkeletonCard lines={4} /><SkeletonRows n={3} /></div>;
   const a = q.data;
@@ -192,14 +194,20 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
   if (panel) return <AgentPanel id={id} nav={nav} onLegacy={() => setPanel(false)} />;
   const panelEntry = <button data-testid="ag2-open-panel" onClick={() => setPanel(true)} className="card row-press flex w-full items-center gap-3.5 px-4 py-3.5 text-left"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-elev"><Icon n="chart" /></span><span className="min-w-0 flex-1"><span className="block text-[15.5px] font-semibold">{t('ag2OpenPanel')}</span><span className="block text-[13px] leading-snug text-mute">{t('ag2OpenPanelSub')}</span></span><Icon n="chev" className="h-4 w-4 shrink-0 text-mute" /></button>;
   if (a.kind === 'perp') return <div className="space-y-4"><PerpAgentDetail a={a} id={id} nav={nav} />{panelEntry}</div>; // v6: simulation-only detail page
-  const act = async (name: string, fn: () => Promise<unknown>) => { setBusy(name); setErr(''); setNote(''); try { await fn(); await qc.invalidateQueries({ queryKey: ['agent', id] }); await qc.invalidateQueries({ queryKey: ['agents'] }); } catch (e) { const m = errText(t, e); if (m) setErr(m); } finally { setBusy(''); } };
+  const act = async (name: string, fn: () => Promise<unknown>) => { setBusy(name); setErr(''); setNote(''); try { await fn(); await qc.invalidateQueries({ queryKey: ['agent', id] }); await qc.invalidateQueries({ queryKey: ['agents'] }); } catch (e) { if (inDoubt(e)) return; const m = errText(t, e); if (m) setErr(m); } finally { setBusy(''); } };
   const prepare = async () => { setBusy('prepare'); setErr(''); setNote('');
     try { setMandate(await post(`/agents/${id}/mandate/prepare`)); }
     catch (e) { // the two documented refusals, in the owner's language: no gas reserve (with the figures), no signer price
       const m = /holds ([\d.]+) (\w+); live trading on (.+?) needs a gas reserve of ([\d.]+)/.exec((e as { message?: string }).message ?? '');
       setErr((e as { code?: string }).code === 'insufficient_gas' && m ? t('qaAgNoGas', { held: trimAmt(m[1]!, 6), sym: m[2]!, net: m[3]!, need: trimAmt(m[4]!, 6) }) : errText(t, e)); }
     finally { setBusy(''); } };
-  const approveMandate = () => act('mandate', async () => { const assertion = await startAuthentication({ optionsJSON: mandate.options }); await post(`/agents/${id}/mandate/approve`, { assertion }); setMandate(null); });
+  // NEXT W1: a lost answer is settled by the agent read from the server — only when that can tell (no mandate was active before);
+  // otherwise the status stays "unknown" and the sheet stays, nothing is prepared again
+  const approveMandate = () => act('mandate', async () => { const assertion = await startAuthentication({ optionsJSON: mandate.options });
+    const had = !!a.mandateStatus && !a.mandateStatus.revoked && !a.mandateStatus.expired, done = () => { setMandate(null); void qc.invalidateQueries({ queryKey: ['agent', id] }); };
+    await ap.send<unknown>({ submit: () => post(`/agents/${id}/mandate/approve`, { assertion }), read: async () => { if (had) throw new Error('an active mandate existed: the read cannot tell'); return get<any>(`/agents/${id}`); },
+      applied: (x) => !!x.mandateStatus && !x.mandateStatus.revoked && !x.mandateStatus.expired, late: done });
+    setMandate(null); });
   const vaultUsd = (a.vault ?? []).reduce((s: number, x: any) => s + (x.usd ?? 0), 0);
   const eq = (a.equity as any[]).filter((e) => e.mode === (a.state === 'LIVE' ? 'LIVE' : 'PAPER')).map((e) => ({ t: new Date(e.ts).getTime(), p: e.equity_usd }));
   const approved = (a.versions as any[]).find((v) => v.id === a.strategyVersionId);
@@ -345,9 +353,9 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
       {/* the go-live mandate: an APPROVAL sheet — it closes only through its own buttons, every field in full */}
       {/* v11: signals, orders, performance per mode, backtests, pause / resume / stop — for this agent as for any other */}
       {panelEntry}
-      {mandate && <Sheet title={t('agMandateTitle')} onClose={() => setMandate(null)} dismissable={false} busy={busy === 'mandate'} testid="agent-mandate"
-        footer={<div className="space-y-2.5 pb-1"><Btn full busy={busy === 'mandate'} onClick={() => void approveMandate()}><Icon n="key" />{t('agApproveMandate')}</Btn>
-          <Btn full kind="ghost" disabled={busy === 'mandate'} onClick={() => setMandate(null)}>{t('cancel')}</Btn></div>}>
+      {mandate && <Sheet title={t('agMandateTitle')} onClose={() => setMandate(null)} dismissable={false} busy={busy === 'mandate' || ap.locked} testid="agent-mandate"
+        footer={<div className="space-y-2.5 pb-1"><Btn full busy={busy === 'mandate'} disabled={ap.locked} onClick={() => void approveMandate()}><Icon n="key" />{t('agApproveMandate')}</Btn>
+          <Btn full kind="ghost" disabled={busy === 'mandate' || ap.locked} onClick={() => setMandate(null)}>{t('cancel')}</Btn></div>}>
         <div className="space-y-3.5">
           <Notice tone="warn">{t('agMandateWarn')}</Notice>
           <ul className="divide-y divide-line rounded-2xl border border-line px-4">{(mandate.limits as any[]).map((l) => <li key={l.symbol} className="flex items-center gap-3 py-3"><Coin sym={String(l.symbol).split(' ')[0]!} net={a.network} size={30} /><span className="text-[15px] font-semibold">{l.symbol}</span><span className="min-w-0 flex-1 text-right text-[13.5px] leading-snug text-mute [overflow-wrap:anywhere]">{trimAmt(l.maxOrder, 6)} {t('agPerOrder')} · {trimAmt(l.maxDaily, 6)} {t('agPerDay')}</span></li>)}</ul>
@@ -358,7 +366,8 @@ export function Agent({ id, nav }: { id: string; nav: Nav }) {
             <Fact k={t('agExpires')}>{when(new Date(mandate.mandate.expiresAt * 1000), locale)}</Fact>
             <Fact k={t('agStrategyHash')} mono><span className="break-all text-[11.5px]">{mandate.mandate.strategySha256}</span></Fact>
             <Fact k={t('fingerprint')} mono><span className="break-all text-[11.5px]">{mandate.hash}</span></Fact></dl>
-          {err && <Notice tone="danger">{err}</Notice>}
+          {err && !ap.locked && <Notice tone="danger">{err}</Notice>}
+          <ApprovalOutcomePanel ap={ap} />
         </div>
       </Sheet>}
     </div>

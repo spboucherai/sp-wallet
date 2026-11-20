@@ -7,6 +7,8 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { startAuthentication } from '@simplewebauthn/browser';
+import { ApprovalOutcomePanel, inDoubt, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 import { amountOf, sanitizeAmountText } from '../amount';
 import { AmountProblem } from '../amountUi';
 import { get, post } from '../api';
@@ -45,7 +47,8 @@ export function MandateFields({ mandate, testid }: { mandate: Record<string, unk
 export function MandateApprovalSheet({ sheet, onClose, onDone, onError }: { sheet: ApprovalSheet; onClose: () => void; onDone: () => void; onError: (e: unknown) => string }) {
   const t = useT();
   const [ack, setAck] = useState(false); const [busy, setBusy] = useState(false); const [fail, setFail] = useState(''); const [step, setStep] = useState(0);
-  const live = sheet.passkey && !!sheet.signer;
+  const live = sheet.passkey && !!sheet.signer; const ap = useApprovalOutcome<{ id: string; state: string }>();
+  const pending = (s: string) => s === 'created' || s === 'pending_signer', readMandate = async () => { const m = (await get<{ mandates: { id: string; state: string }[] }>('/mandates')).mandates.find((x) => x.id === sheet.mandateId); if (!m) throw new Error('mandate not listed'); return m; };
   const approve = async () => {
     setBusy(true); setFail('');
     try {
@@ -54,13 +57,14 @@ export function MandateApprovalSheet({ sheet, onClose, onDone, onError }: { shee
       const assertion = await startAuthentication({ optionsJSON: sheet.signer!.options as never });
       setStep(2);                                                                           // 2 — the API: the FULL trading mandate hash
       const bindingAssertion = sheet.binding ? await startAuthentication({ optionsJSON: sheet.binding.options as never }) : undefined;
-      await post(`/mandates/${sheet.mandateId}/approve`, { assertion, ...(bindingAssertion ? { bindingAssertion } : {}), acknowledged: true });
+      // NEXT W1: a lost answer is settled by the mandate read from the server (is it still awaiting its approval?)
+      await ap.send<unknown>({ submit: () => post(`/mandates/${sheet.mandateId}/approve`, { assertion, ...(bindingAssertion ? { bindingAssertion } : {}), acknowledged: true }), read: readMandate, applied: (m) => !pending(m.state), late: onDone });
       onDone();
-    } catch (e) { setFail(onError(e)); } finally { setBusy(false); setStep(0); }
+    } catch (e) { if (!inDoubt(e)) setFail(onError(e)); } finally { setBusy(false); setStep(0); }
   };
   return (
-    <Sheet title={t('rkSheetTitle')} sub={String(sheet.mandate.label ?? '')} onClose={onClose} busy={busy} wide testid="rk-sheet"
-      footer={<Btn full busy={busy} disabled={live && !ack} onClick={() => void approve()} data-testid="rk-sheet-approve">{live ? <><Icon n="key" className="h-4 w-4" />{step ? t('rkSheetStep', { n: step }) : t('rkSheetPasskey2')}</> : t('rkSheetApprove')}</Btn>}>
+    <Sheet title={t('rkSheetTitle')} sub={String(sheet.mandate.label ?? '')} onClose={onClose} busy={busy || ap.locked} wide testid="rk-sheet"
+      footer={<Btn full busy={busy} disabled={(live && !ack) || ap.locked} onClick={() => void approve()} data-testid="rk-sheet-approve">{live ? <><Icon n="key" className="h-4 w-4" />{step ? t('rkSheetStep', { n: step }) : t('rkSheetPasskey2')}</> : t('rkSheetApprove')}</Btn>}>
       <div className="space-y-3">
         <Notice tone={live ? 'warn' : 'info'}>{live ? t('rkSheetTwo') : t('rkSheetPaper')}</Notice>
         <dl>
@@ -80,7 +84,8 @@ export function MandateApprovalSheet({ sheet, onClose, onDone, onError }: { shee
           <p className="whitespace-pre-wrap rounded-2xl bg-elev p-3 text-[13px] leading-relaxed">{sheet.signer.acknowledgement.text}</p>
           {sheet.signer.warning && <Notice tone="warn">{sheet.signer.warning}</Notice>}
           <label className="flex min-h-11 cursor-pointer items-start gap-3 py-1.5"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-1 h-[18px] w-[18px] shrink-0 accent-blue" data-testid="rk-sheet-ack" /><span className="text-[14px]">{t('rkAckCheck')}</span></label></>}
-        {fail && <Notice tone="danger">{fail}</Notice>}
+        {fail && !ap.locked && <Notice tone="danger">{fail}</Notice>}
+        <ApprovalOutcomePanel ap={ap} />
       </div></Sheet>);
 }
 

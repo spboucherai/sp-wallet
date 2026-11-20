@@ -192,7 +192,7 @@ export function Swap() {
     setBusy('submit');
     await execAp.run({ submit: () => post<any>(`/transfers/proposals/${id}/approve`, { assertion }), read, applied: proposalApplied }, (o: KnownOutcome<any, any>) => {
       if (o.kind === 'refused') { const m = errText(t, o.error); if (m) setExecErr(m); void read().then((fresh) => setExec({ ...exec, proposal: fresh }), () => {}); return; }
-      setExec({ ...exec, proposal: o.kind === 'answered' ? o.value : o.state }); setExecErr(o.kind === 'read' && !o.applied ? t('nxNotReceived') : '');
+      setExec({ ...exec, proposal: o.kind === 'answered' ? o.value : o.state }); setExecErr('');   // a state that still awaits the approval is said by the panel
     });
     setBusy('');
   };
@@ -369,7 +369,7 @@ export function Swap() {
           {brSol?.role === 'destination' && ataMissing && <Notice tone="warn"><span data-testid="sc-ata-missing"><b>{t('scAtaMissingTitle')}</b> {t('scAtaMissing', { rent: trimAmt(brSol.tokenAccountRentDisplay, 9) })}</span>
             <span className="mt-1 block break-all font-mono text-[11px] text-mute">{brSol.tokenAccount}</span>
             {ataMsg && <span className="mt-1 block">{ataMsg}</span>}{ataErr && <span className="mt-1 block text-danger">{ataErr}</span>}
-            <ApprovalOutcomePanel ap={ataAp} className="mt-2" />
+            <ApprovalOutcomePanel ap={ataAp} quiet className="mt-2" />
             <div className="mt-2"><Btn full kind="soft" busy={ataBusy} disabled={ataAp.locked} onClick={() => void createAta()}><Icon n="key" className="h-4 w-4" />{t('scAtaCreate')}</Btn></div></Notice>}
           {execErr && !exec && <Notice tone="danger">{execErr}</Notice>}
           <Btn full busy={busy === 'prepare'} disabled={!brQ.data.destinationGas.enough || ataMissing} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('brExecute', { net: brQ.data.toName })}</Btn>

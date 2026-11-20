@@ -8,6 +8,8 @@
  * nothing is signed by this screen: the passkey assertion is passed on untouched.
  */
 import { startAuthentication } from '@simplewebauthn/browser';
+import { ApprovalOutcomePanel, inDoubt, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { get, post } from '../api';
@@ -177,7 +179,7 @@ function MandateSheet({ id, r, account, onClose }: { id: string; r: Readiness; a
   const [days, setDays] = useState(String(p0.days));
   const [phase, setPhase] = useState<MPhase>('form'), [prep, setPrep] = useState<(MandatePrepared & { proposal: Proposal }) | null>(null), [read, setRead] = useState(false);
   const [err, setErr] = useState<LiveErr | null>(null), [integrity, setIntegrity] = useState<string | null>(null);
-  const lock = useRef(false), busy = phase === 'preparing' || phase === 'passkey' || phase === 'sending';
+  const lock = useRef(false), busy = phase === 'preparing' || phase === 'passkey' || phase === 'sending'; const ap = useApprovalOutcome<{ mandate?: { agentId: string; active: boolean; strategySha256: string } | null }>();
   const nDays = /^\d{1,2}$/.test(days.trim()) ? Number(days.trim()) : 0, daysOk = nDays >= 1 && nDays <= p0.maxDays;
   const once = async (f: () => Promise<void>) => { if (lock.current) return; lock.current = true; try { await f(); } finally { lock.current = false; } };
   const prepare = () => once(async () => {
@@ -198,8 +200,12 @@ function MandateSheet({ id, r, account, onClose }: { id: string; r: Readiness; a
     try { assertion = await startAuthentication({ optionsJSON: prep.options }); const b = (prep as unknown as { binding?: { options: Parameters<typeof startAuthentication>[0]['optionsJSON'] } }).binding; if (b) bindingAssertion = await startAuthentication({ optionsJSON: b.options }); }
     catch (e) { setErr(liveError(e, 'approve')); setPhase('void'); return; }
     setPhase('sending');
-    try { await post(`/agents/${id}/perp/live/approve`, { accountId: account.id, assertion, ...(bindingAssertion ? { bindingAssertion } : {}), acknowledged: true }); setPhase('done'); }
-    catch (e) { setErr(liveError(e, 'approve')); setPhase('void'); }      // a refused approval consumes the preparation
+    // NEXT W1: a lost answer is settled by the account read from the server (does it carry THIS agent's active mandate?); while it
+    // cannot be read the sheet stays on "status unknown" and nothing is prepared again
+    try { await ap.send<unknown>({ submit: () => post(`/agents/${id}/perp/live/approve`, { accountId: account.id, assertion, ...(bindingAssertion ? { bindingAssertion } : {}), acknowledged: true }),
+        read: () => get<{ mandate?: { agentId: string; active: boolean; strategySha256: string } | null }>(`/derivatives/live/accounts/${encodeURIComponent(account.id)}`),
+        applied: (d) => !!d.mandate?.active && d.mandate.agentId === id && d.mandate.strategySha256 === prep.mandate.strategySha256, late: () => setPhase('done') }); setPhase('done'); }
+    catch (e) { if (inDoubt(e)) { if (e.why === 'not_received') setPhase('void'); return; } setErr(liveError(e, 'approve')); setPhase('void'); }      // a refused approval consumes the preparation
   });
   const m = prep?.mandate, lockCode = err && (err.code === 'mandate_mainnet_disabled' || err.code === 'mainnet_disabled') ? err.code : null;
   const list = (title: string, items: string[], icon: string, cls: string, testid: string) => <section><h3 className="t-eyebrow mb-2">{title}</h3>
@@ -247,7 +253,8 @@ function MandateSheet({ id, r, account, onClose }: { id: string; r: Readiness; a
       </div>}
       {integrity && phase !== 'form' && <Notice tone="danger"><div data-testid="mandate-integrity">{t(`plShInt_${integrity}` as Key)}</div></Notice>}
       {phase === 'passkey' && <Notice tone="info">{t('flPasskeyWaiting')}</Notice>}
-      {phase === 'sending' && <p className="flex items-center gap-2 text-[13.5px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('plShSending')}</p>}
+      {phase === 'sending' && !ap.locked && <p className="flex items-center gap-2 text-[13.5px] text-mute"><Icon n="spin" className="h-4 w-4" />{t('plShSending')}</p>}
+      <ApprovalOutcomePanel ap={ap} />
       {phase !== 'form' && phase !== 'preparing' && (lockCode ? <ServerLock title={t('plLockTitle')} reason={r.config.reasons?.[lockCode]?.[locale] ?? err!.detail} /> : err && <LiveErrNotice err={err} tone={err.key === 'passkey_cancelled' ? 'warn' : 'danger'}>
         {phase === 'void' && <span className="mt-1 block">{t('plShConsumed')}</span>}</LiveErrNotice>)}
       {phase === 'done' && <Notice tone="ok"><div data-testid="mandate-done">{t('plShDone')}</div></Notice>}

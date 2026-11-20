@@ -75,7 +75,7 @@ export function BridgeProgress({ id, b, onUpdate, fromNetwork }: { id: string; b
     // NEXT W1: the approval leaves the browser — a lost answer is settled by the transfer read from the server, never by the error
     await ap.run({ submit: () => post<any>(`/bridge/proposals/${id}/retry-mint`, { assertion }), read: () => get<any>(`/transfers/proposals/${id}`), applied: (p) => !p.bridge?.needsPasskey || p.bridge.stage !== b.stage }, (o) => {
       if (o.kind === 'refused') { const m = errText(t, o.error); if (m) setErr(m); return; }
-      onUpdate(o.kind === 'answered' ? o.value : o.state); if (o.kind === 'read' && !o.applied) setErr(t('nxNotReceived'));
+      onUpdate(o.kind === 'answered' ? o.value : o.state);
     });
     setBusy(false);
   };
@@ -112,7 +112,7 @@ export function SolDeposit({ id, b, onUpdate }: { id: string; b: BridgeV; onUpda
     // NEXT W1: a lost answer is settled by the transfer read from the server (its reclaim state), never by the error
     await ap.run({ submit: () => post<any>(`/bridge/proposals/${id}/reclaim`, { assertion }), read: () => get<any>(`/transfers/proposals/${id}`), applied: (p) => (p.bridge?.sol?.reclaimState ?? st) !== st }, (o) => {
       if (o.kind === 'refused') { const m = scErrText(t, o.error); if (m) setErr(m); return; }
-      onUpdate(o.kind === 'answered' ? o.value : o.state); if (o.kind === 'read' && !o.applied) setErr(t('nxNotReceived'));
+      onUpdate(o.kind === 'answered' ? o.value : o.state);
     });
     setBusy(false);
   };

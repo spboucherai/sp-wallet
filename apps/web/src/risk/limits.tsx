@@ -3,6 +3,8 @@
 // field is an ABSENT limit: in live mode the engine then denies new risk — it is never read as "unlimited".
 import { useContext, useMemo, useState } from 'react';
 import { startAuthentication } from '@simplewebauthn/browser';
+import { ApprovalOutcomePanel, inDoubt, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 import { amountInputText, amountOf, sanitizeAmountText } from '../amount';
 import { AmountProblem } from '../amountUi';
 import { post } from '../api';
@@ -89,16 +91,19 @@ export function LimitsEditor({ view, onDone, onCancel, onError }: { view: Limits
   const built = useMemo(() => fromDraft(d, locale), [d, locale]);
   const set = (k: string, v: Draft[string]) => { setD((x) => ({ ...x, [k]: v })); setLoosened(null); };
   const seeded = new Map((view.seed?.sources ?? []).map((s) => [s.field, s.from]));
+  const ap = useApprovalOutcome<never>();
   const save = async (confirmed: boolean) => {
-    if (built.bad.length) return;
+    if (built.bad.length || ap.locked) return;
     setBusy(true); setFail('');
     try {
       const p = await post(`/risk/limits/${view.mode}/prepare`, { limits: built.limits });
       if (!p.needed) { await post(`/risk/limits/${view.mode}`, { limits: built.limits }); onDone(); return; }
       if (!confirmed) { setLoosened(p.loosened as string[]); return; }                    // shown first: which limits become looser
-      await post(`/risk/limits/${view.mode}/approve`, { assertion: await startAuthentication({ optionsJSON: p.options }) });
+      const assertion = await startAuthentication({ optionsJSON: p.options });
+      // NEXT W1: a lost answer leaves the outcome unknown (no read tells one set of limits from another): the panel says so, nothing is sent again
+      await ap.send<unknown>({ submit: () => post(`/risk/limits/${view.mode}/approve`, { assertion }) });
       onDone();
-    } catch (e) { setFail(onError(e)); } finally { setBusy(false); }
+    } catch (e) { if (!inDoubt(e)) setFail(onError(e)); } finally { setBusy(false); }
   };
   const ph = (key: string): string => { const v = (view.effectiveOwner ?? view.effective)[key]; return v === undefined ? t('rkUnset') : limitText(v); };
   const num = (key: string, value: string, on: (s: string) => void, testid?: string) => (
@@ -134,8 +139,9 @@ export function LimitsEditor({ view, onDone, onCancel, onError }: { view: Limits
       {built.bad.length > 0 && <Notice tone="danger">{t('rkBadFields')} <span className="font-mono text-[12.5px]">{built.bad.join(', ')}</span></Notice>}
       {loosened && <Notice tone="warn"><b>{t('rkLoosens')}</b> <span className="font-mono text-[12.5px]" data-testid="rk-loosened">{loosened.join(', ')}</span> — {t('rkLoosensBody')}</Notice>}
       {fail && <Notice tone="danger">{fail}</Notice>}
+      <ApprovalOutcomePanel ap={ap} />
       <div className="grid grid-cols-2 gap-2.5"><Btn kind="ghost" onClick={onCancel}>{t('cancel')}</Btn>
-        <Btn busy={busy} disabled={built.bad.length > 0} onClick={() => void save(loosened !== null)} data-testid="rk-limits-save">{loosened ? <><Icon n="key" className="h-4 w-4" />{t('approve')}</> : t('rkSave')}</Btn></div>
+        <Btn busy={busy} disabled={built.bad.length > 0 || ap.locked} onClick={() => void save(loosened !== null)} data-testid="rk-limits-save">{loosened ? <><Icon n="key" className="h-4 w-4" />{t('approve')}</> : t('rkSave')}</Btn></div>
       {loosened === null && <p className="text-[12.5px] leading-snug text-mute"><Tag tone="info">{t('rkTightenFree')}</Tag></p>}
     </div>);
 }

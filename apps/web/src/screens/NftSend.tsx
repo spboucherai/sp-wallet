@@ -15,7 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { get, post, type ApiError } from '../api';
 import { cancelDraft, DraftKey, proposalApplied, proposalGone } from '../approval';
-import { ApprovalOutcomePanel, useApprovalOutcome } from '../approvalUi';
+import { ApprovalOutcomePanel, inDoubt, useApprovalOutcome } from '../approvalUi';
 import { hasText, useT, type Key } from '../i18n';
 import { displayName, mediaUrl, STANDARD_KEY, unitsToText, type NftItem, type NftReview, type NftTransferView, type UtxoLocksView } from '../nft';
 import { propError } from '../sv';
@@ -81,7 +81,7 @@ export function NftSend({ item, onClose }: { item: NftItem; onClose: () => void 
     await ap.run({ submit: () => post<NftTransferView>(`/nfts/transfer/${id}/approve`, { assertion }), read, applied: proposalApplied }, (o) => {
       if (o.kind === 'refused') { setErr(refusalText(t, o.error)); void read().then((fresh) => { setCur(fresh); if (proposalApplied(fresh)) setStep('track'); }, () => {}); return; }
       setCur(o.kind === 'answered' ? o.value : o.state);
-      if (o.kind === 'read' && !o.applied) setErr(t('nxNotReceived')); else { setErr(''); setStep('track'); }
+      setErr(''); if (!(o.kind === 'read' && !o.applied)) setStep('track');   // still awaiting the approval: the panel says so, the review stays
     });
     setBusy('');
   };
@@ -179,13 +179,14 @@ export function NftSend({ item, onClose }: { item: NftItem; onClose: () => void 
 export function UtxoLocks({ network = 'bitcoin' }: { network?: string }) {
   const t = useT(); const qc = useQueryClient();
   const q = useQuery({ queryKey: ['utxo-locks', network], queryFn: () => get<UtxoLocksView>(`/utxo-locks?network=${network}`), staleTime: 15_000, retry: false });
-  const [err, setErr] = useState(''), [busy, setBusy] = useState('');
+  const [err, setErr] = useState(''), [busy, setBusy] = useState(''); const lockAp = useApprovalOutcome<UtxoLocksView>();
   const change = useMutation({ mutationFn: async (v: { action: 'lock' | 'unlock'; reason: 'owner' | 'ord' | 'heuristic'; outpoints: string[] }) => {
     setErr(''); setBusy(v.outpoints.join(','));
     const p = await post<{ intent: unknown; options: unknown }>('/utxo-locks/prepare', { network, ...v });
     const assertion = await startAuthentication({ optionsJSON: p.options as never }); // challenge = fingerprint of this exact list change
-    return post('/utxo-locks/approve', { intent: p.intent, assertion });
-  }, onSuccess: () => void qc.invalidateQueries({ queryKey: ['utxo-locks', network] }), onError: (e) => setErr(`${(e as ApiError).message ?? ''} (${(e as ApiError).code ?? 'error'})`), onSettled: () => setBusy('') });
+    // NEXT W1: a lost answer is settled by the list read from the server (it IS the state: whatever it says is shown)
+    return lockAp.send<unknown>({ submit: () => post('/utxo-locks/approve', { intent: p.intent, assertion }), read: () => get<UtxoLocksView>(`/utxo-locks?network=${network}`), late: () => void qc.invalidateQueries({ queryKey: ['utxo-locks', network] }) });
+  }, onSuccess: () => void qc.invalidateQueries({ queryKey: ['utxo-locks', network] }), onError: (e) => { if (!inDoubt(e)) setErr(`${(e as ApiError).message ?? ''} (${(e as ApiError).code ?? 'error'})`); }, onSettled: () => setBusy('') });
   const review = useMutation({ mutationFn: (v: { outpoint: string; ordinary: boolean }) => post('/utxo-locks/review', { network, ...v }), onSuccess: () => void qc.invalidateQueries({ queryKey: ['utxo-locks', network] }) });
   if (q.isError) return <Notice tone="warn"><span data-testid="utxo-error">{t('nfUError')} ({(q.error as ApiError)?.code ?? 'error'})</span></Notice>;
   if (!q.data) return <Skeleton h="h-40" />;
@@ -197,6 +198,7 @@ export function UtxoLocks({ network = 'bitcoin' }: { network?: string }) {
     {!d.signerSupportsLocks && <Notice tone="warn">{t('nfUSignerOld')}</Notice>}
     {unprotected.length > 0 && d.signerSupportsLocks && <Btn full busy={change.isPending} onClick={() => change.mutate({ action: 'lock', reason: 'ord', outpoints: unprotected.map((u) => u.outpoint) })} data-testid="utxo-lock-all"><Icon n="key" />{t('nfULockAll', { n: unprotected.length })}</Btn>}
     {err && <Notice tone="danger"><span role="alert" data-testid="utxo-change-error">{err}</span></Notice>}
+    <ApprovalOutcomePanel ap={lockAp} />
     <Card className="!p-0">{d.utxos.length === 0 ? <p className="p-5 text-[13.5px] text-mute" data-testid="utxo-empty">{t('nfUEmpty')}</p> : <ul className="divide-y divide-line" data-testid="utxo-list">{d.utxos.map((u) => <li key={u.outpoint} className="space-y-2 px-5 py-3.5" data-outpoint={u.outpoint} data-spendable={u.spendable} data-locked={!!u.signerLock}>
       <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-[15px] font-semibold">{sats(u.value)}</div><div className="break-all font-mono text-[11.5px] text-mute">{u.outpoint}</div></div>
         <Tag tone={u.signerLock ? 'ok' : u.spendable ? 'mute' : 'warn'} icon={u.signerLock ? 'key' : u.spendable ? 'check' : 'warn'} testid="utxo-state">{t(u.signerLock ? 'nfULocked' : u.spendable ? 'nfUSpendable' : 'nfUHeld')}</Tag></div>

@@ -15,13 +15,15 @@
  * with the passkey exactly like a first one. Between the two the account is read-only: the sheet says so before and after.
  */
 import { startAuthentication } from '@simplewebauthn/browser';
+import { ApprovalOutcomePanel, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useRef, useState } from 'react';
 import { I18n, useT, type Key } from '../i18n';
 import { Addr, AssetIcon, Btn, Fact, Field, Fold, Icon, inputCls, Notice, when } from '../ui';
 import { fmt, usd } from './dec';
 import { Bullet, Fingerprint, Group, LiveErrNotice, LiveSheet, ModeBand, TICKET, WORDS } from './LiveBits';
-import { assetsAtLeverage, defaultPolicyForm, isUnfunded, lapi, liveError, policyFormOf, policyFromForm, samePolicy, sha256Hex, toneOf, venueWords, type Collateral, type LiveConfig, type LiveErr, type LiveNetwork, type LiveSummary, type PolicyForm, type Prepared, type Revoked, type VenuePolicy } from './live';
+import { assetsAtLeverage, defaultPolicyForm, isUnfunded, lapi, liveError, policyFormOf, policyFromForm, samePolicy, sha256Hex, toneOf, venueWords, type Collateral, type LiveConfig, type LiveDetail, type LiveErr, type LiveNetwork, type LiveSummary, type PolicyForm, type Prepared, type Revoked, type VenuePolicy } from './live';
 import { liveKey, refreshLive } from './liveStore';
 
 const sym = (id: string) => id.slice(id.indexOf(':') + 1);
@@ -90,6 +92,7 @@ export function AuthorizeSheet({ account, config, collateral, replace = false, e
   const d = useQuery({ queryKey: liveKey(account.id), queryFn: () => lapi.account(account.id), retry: 0, enabled: replace });
   const openOrders = d.data && !d.data.venueState.error ? d.data.venueState.openOrders.length : null;
   const lock = useRef(false);
+  const ap = useApprovalOutcome<LiveDetail>();
   const once = async (fn: () => Promise<void>) => { if (lock.current) return; lock.current = true; try { await fn(); } finally { lock.current = false; } };
   const parsed = policyFromForm(f, b, pinned);
   const busy = step === 'revoking' || step === 'preparing' || step === 'passkey' || step === 'sending';
@@ -136,8 +139,15 @@ export function AuthorizeSheet({ account, config, collateral, replace = false, e
     try { assertion = await startAuthentication({ optionsJSON: prep.options }); }
     catch (e) { setErr(liveError(e)); setStep('review'); return; }               // nothing was sent: the prepared authorization is still the one on screen
     setStep('sending');
-    try { await lapi.approveAuthorization(account.id, assertion); await refreshLive(qc, account.id); onClose(); }
-    catch (e) { const le = liveError(e); setErr(le); setStep(le.status === 0 ? 'review' : 'refused'); void refreshLive(qc, account.id); }   // an answered refusal consumed the prepared authorization
+    // NEXT W1: a lost answer is settled by the account read from the server (is the prepared authorization the active one?)
+    const wanted = prep.authorization.authorizationId, was = account.authorization?.id;
+    await ap.run({ submit: () => lapi.approveAuthorization(account.id, assertion), read: () => lapi.account(account.id),
+      applied: (d) => !!d.authorization?.active && (d.authorization.id === wanted || d.authorization.id !== was) }, (o) => {
+      void refreshLive(qc, account.id);
+      if (o.kind === 'refused') { setErr(liveError(o.error)); setStep('refused'); return; }   // an answered refusal consumed the prepared authorization
+      if (o.kind === 'read' && !o.applied) { setStep('review'); return; }
+      onClose();
+    });
   });
   const unfunded = err?.code === 'venue_rejected' && isUnfunded(err.detail);
   /** said from the moment the old authorization is gone until the new one is approved */
@@ -148,6 +158,7 @@ export function AuthorizeSheet({ account, config, collateral, replace = false, e
   return <LiveSheet wide title={replace ? t('hl1ChgTitle') : t('flAuthTitle', { network: account.network })} tone={tone} label={account.label} busy={busy} onClose={onClose}>
     <div className="min-w-0 space-y-4" data-testid="authorize-sheet" data-step={step} data-replace={replace || undefined}>
       <ModeBand tone={tone} label={account.label} />
+      <ApprovalOutcomePanel ap={ap} />
       {(step === 'form' || step === 'revoking' || step === 'preparing') && <>
         {gap}
         {pending ? <Notice tone="info"><div data-testid="auth-change-intro">{t('hl1ChgIntro')}</div></Notice> : !replace && <p className="text-[13.5px] leading-snug text-mute">{t('flAuthIntro')}</p>}

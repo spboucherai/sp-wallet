@@ -12,6 +12,8 @@
  * (`opWords`, `opDone`): the last step is « fait » only when the venue (deposit) or the wallet's chain scan (withdrawal) says so.
  */
 import { startAuthentication } from '@simplewebauthn/browser';
+import { ApprovalOutcomePanel, useApprovalOutcome } from '../approvalUi';   // NEXT W1: the outcome of an approval is what the server says
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { I18n, useT, type Key } from '../i18n';
@@ -85,6 +87,7 @@ function DepositSheet({ account, status, onClose }: { account: LiveSummary; stat
   const r = status.route!, wl = status.wallet!, tone = toneOf(account);
   const [raw, setRaw] = useState(''), [step, setStep] = useState<Step>('form'), [prep, setPrep] = useState<DepositPrepared | null>(null), [err, setErr] = useState<LiveErr | null>(null), [bad, setBad] = useState<string | null>(null), [opId, setOpId] = useState<string | null>(null);
   const lock = useRef(false);
+  const ap = useApprovalOutcome<CollateralOp>();
   const once = async (fn: () => Promise<void>) => { if (lock.current) return; lock.current = true; try { await fn(); } finally { lock.current = false; } };
   const v = depositProblem(raw, status), busy = step === 'preparing' || step === 'passkey' || step === 'sending';
   const op = useOp(account.id, opId), left = useCountdown(step === 'review' || step === 'passkey' ? prep?.operation.expiresAt : null);
@@ -104,14 +107,22 @@ function DepositSheet({ account, status, onClose }: { account: LiveSummary; stat
     try { assertion = await startAuthentication({ optionsJSON: prep.options }); }
     catch (e) { setErr(liveError(e)); setStep('review'); return; }               // nothing was sent
     setStep('sending');
-    try { await capi.approveDeposit(account.id, prep.operation.id, assertion); setOpId(prep.operation.id); setStep('progress'); refresh(); }
-    catch (e) { setErr(liveError(e, 'approve')); setOpId(prep.operation.id); setStep('progress'); refresh(); }   // the operation itself says what happened (refused: nothing left the wallet)
+    // NEXT W1: the operation itself says what happened — after an answered refusal (nothing left the wallet) as after a lost answer,
+    // where it is READ first ("checking"); while it cannot be read the sheet stays on "status unknown"
+    const id = prep.operation.id, was = prep.operation.state;
+    await ap.run({ submit: () => capi.approveDeposit(account.id, id, assertion), read: () => capi.operation(account.id, id), applied: (o) => o.state !== was }, (o) => {
+      if (o.kind === 'read' && !o.applied) { setStep('review'); return; }
+      if (o.kind === 'refused') setErr(liveError(o.error, 'approve'));
+      setOpId(id); setStep('progress'); refresh();
+    });
   });
-  const back = () => { if (prep) void capi.cancel(account.id, prep.operation.id).catch(() => {}); setPrep(null); setStep('form'); setErr(null); };
+  // going back withdraws the prepared operation: a withdrawal that fails says so and the review stays (never while an approval's outcome is unread)
+  const back = () => once(async () => { if (ap.locked) return; if (prep) { try { await capi.cancel(account.id, prep.operation.id); } catch (e) { setErr(liveError(e)); return; } } setPrep(null); setStep('form'); setErr(null); });
 
   return <LiveSheet title={t('hlcDepositTitle', { network: account.network })} tone={tone} label={account.label} busy={busy} onClose={() => { if (prep && step === 'review') void capi.cancel(account.id, prep.operation.id).catch(() => {}); onClose(); }}>
     <div className="min-w-0 space-y-4" data-testid="deposit-sheet" data-step={step}>
       <ModeBand tone={tone} label={account.label} />
+      <ApprovalOutcomePanel ap={ap} />
       {(step === 'form' || step === 'preparing') && <>
         <Field label={t('hlcAmount')} hint={t('hlcDepositHint', { min: r.minimum, venueMin: r.venueMinimum, max: fmt(wl.limits.maxNow, { locale, trim: true }) })}>
           <div className="amount-box"><AssetIcon sym="USDC" net={r.network} size={40} /><input inputMode="decimal" autoComplete="off" placeholder="0" aria-label={t('hlcAmount')} value={raw} onChange={(e) => { setRaw(e.target.value.replace(/[^0-9.,]/g, '')); setErr(null); }} data-testid="deposit-amount" /><span className="shrink-0 text-[15px] font-semibold text-mute">USDC</span></div><AmountProblem ambiguousOnly text={raw} /></Field>
@@ -168,6 +179,7 @@ function WithdrawSheet({ account, status, onClose }: { account: LiveSummary; sta
   const wd = status.withdrawal, tone = toneOf(account);
   const [raw, setRaw] = useState(''), [step, setStep] = useState<Step>('form'), [prep, setPrep] = useState<WithdrawPrepared | null>(null), [err, setErr] = useState<LiveErr | null>(null), [bad, setBad] = useState<string | null>(null), [opId, setOpId] = useState<string | null>(null);
   const lock = useRef(false);
+  const ap = useApprovalOutcome<CollateralOp>();
   const once = async (fn: () => Promise<void>) => { if (lock.current) return; lock.current = true; try { await fn(); } finally { lock.current = false; } };
   const v = withdrawProblem(raw, status), busy = step === 'preparing' || step === 'passkey' || step === 'sending';
   const op = useOp(account.id, opId), left = useCountdown(step === 'review' || step === 'passkey' ? prep?.operation.expiresAt : null);
@@ -187,14 +199,21 @@ function WithdrawSheet({ account, status, onClose }: { account: LiveSummary; sta
     try { assertion = await startAuthentication({ optionsJSON: prep.options }); }
     catch (e) { setErr(liveError(e)); setStep('review'); return; }
     setStep('sending');
-    try { await capi.approveWithdraw(account.id, prep.operation.id, assertion); } catch (e) { setErr(liveError(e, 'approve')); }
-    setOpId(prep.operation.id); setStep('progress'); refresh();
+    // NEXT W1: as for a deposit — the operation read from the server says what happened; unreadable = "status unknown", the sheet stays
+    const id = prep.operation.id, was = prep.operation.state;
+    await ap.run({ submit: () => capi.approveWithdraw(account.id, id, assertion), read: () => capi.operation(account.id, id), applied: (o) => o.state !== was }, (o) => {
+      if (o.kind === 'read' && !o.applied) { setStep('review'); return; }
+      if (o.kind === 'refused') setErr(liveError(o.error, 'approve'));
+      setOpId(id); setStep('progress'); refresh();
+    });
   });
-  const back = () => { if (prep) void capi.cancel(account.id, prep.operation.id).catch(() => {}); setPrep(null); setStep('form'); setErr(null); };
+  // going back withdraws the prepared operation: a withdrawal that fails says so and the review stays (never while an approval's outcome is unread)
+  const back = () => once(async () => { if (ap.locked) return; if (prep) { try { await capi.cancel(account.id, prep.operation.id); } catch (e) { setErr(liveError(e)); return; } } setPrep(null); setStep('form'); setErr(null); });
 
   return <LiveSheet title={t('hlcWithdrawTitle', { network: account.network })} tone={tone} label={account.label} busy={busy} onClose={() => { if (prep && step === 'review') void capi.cancel(account.id, prep.operation.id).catch(() => {}); onClose(); }}>
     <div className="min-w-0 space-y-4" data-testid="withdraw-sheet" data-step={step}>
       <ModeBand tone={tone} label={account.label} />
+      <ApprovalOutcomePanel ap={ap} />
       {(step === 'form' || step === 'preparing') && <>
         <Field label={t('hlcAmount')} hint={t('hlcWithdrawHint', { fee: wd.fee })}>
           <div className="amount-box"><AssetIcon sym="USDC" size={40} /><input inputMode="decimal" autoComplete="off" placeholder="0" aria-label={t('hlcAmount')} value={raw} onChange={(e) => { setRaw(e.target.value.replace(/[^0-9.,]/g, '')); setErr(null); }} data-testid="withdraw-amount" /><span className="shrink-0 text-[15px] font-semibold text-mute">USDC</span></div><AmountProblem ambiguousOnly text={raw} /></Field>

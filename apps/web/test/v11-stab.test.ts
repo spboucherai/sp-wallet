@@ -152,7 +152,7 @@ describe('B1 / B6 — what is shown is what is executed', () => {
     expect(swap).not.toMatch(/chosen\.amountOutDisplay/); expect(swap).not.toMatch(/chosen\.minAmountOutDisplay/);
     expect(swap).not.toMatch(/exec\?\.via === 'thorchain' && !routes\.some/);
     expect(swap.match(/crypto\.randomUUID\(\)/g)!.length).toBe(1);                                    // one key, kept while the same request is unanswered
-    expect(swap).toMatch(/x\.code !== 'offline'\) attempt\.current = null/);
+    expect(swap).toMatch(/if \(!answerLost\(e\)\) attempt\.current = null/);                            // NEXT W1: kept after ANY lost answer (time-out, network, 5xx), not only `offline`
     expect(swap).toMatch(/data-testid="route-facts"/); expect(swap).toMatch(/svCardNotReported/);    // the normalized card, with "not reported" instead of a zero
   });
 });

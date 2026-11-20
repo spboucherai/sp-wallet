@@ -158,7 +158,7 @@ export function FundSheet({ a, gas, nav, onClose }: { a: FundAgent; gas: GasInfo
     const pid = d.proposal.id; patch({ proposalId: pid, state: d.proposal.state });
     await ap.run({ submit: () => post<Proposal>(`/transfers/proposals/${pid}/approve`, { assertion: d.assertion }), read: () => get<Proposal>(`/transfers/proposals/${pid}`), applied: proposalApplied }, (o) => {
       if (o.kind === 'refused') { void refused(o.error); return; }
-      if (o.kind === 'read' && !o.applied) { patch({ error: t('nxNotReceived'), proposalId: undefined, state: undefined }); return; }   // same key: the retry resumes this very proposal
+      if (o.kind === 'read' && !o.applied) { patch({ error: undefined, proposalId: undefined, state: undefined }); return; }   // same key: the retry resumes this very proposal
       took(o.kind === 'answered' ? o.value : o.state);
     });
     setBusy(false);
@@ -333,7 +333,7 @@ export function ElsewhereFunds({ a }: { a: FundAgent }) {
         const pid = d.proposal.id;
         await topAp.run({ submit: () => post<Proposal>(`/transfers/proposals/${pid}/approve`, { assertion: d.assertion }), read: () => get<Proposal>(`/transfers/proposals/${pid}`), applied: proposalApplied }, (o) => {
           if (o.kind === 'refused') { dk.renew(); say(fundErr(t, o.error, ctx)); return; }
-          if (o.kind === 'read' && !o.applied) { say(t('nxNotReceived')); return; }
+          if (o.kind === 'read' && !o.applied) return;   // said by the panel; the same key resumes this very transfer
           dk.renew(); took(o.kind === 'answered' ? o.value : o.state);
         });
         setBusy(''); };
