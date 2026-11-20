@@ -27,11 +27,16 @@ const bucket = (ts: Date, minutes: number): number => Math.floor(ts.getTime() / 
 const day = (ts: Date): string => ts.toISOString().slice(0, 10);
 export const INTERVAL_MS: Record<string, number> = { '1m': 60_000, '5m': 300_000, '15m': 900_000, '1h': 3_600_000, '4h': 14_400_000, '1d': 86_400_000 };
 
-interface Proposal { id: string; kind: string; network: string; symbol: string; decimals: number; amount: string; error: string | null; swap: { toSymbol?: string } | null; bridge: { toNetwork?: string; phase?: string } | null; out_amount: string | null }
+interface Proposal { id: string; kind: string; network: string; symbol: string; decimals: number; amount: string; error: string | null; error_code: string | null; swap: { toSymbol?: string } | null; bridge: { toNetwork?: string; phase?: string } | null; out_amount: string | null }
 const proposal = async (q: Q, id: unknown): Promise<Proposal | null> => {
   if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/.test(id)) return null;
-  const [p] = await q<Proposal[]>`select id, kind, network, symbol, decimals, amount::text as amount, error, swap, bridge, out_amount::text as out_amount from proposals where id = ${id}`;
+  const [p] = await q<Proposal[]>`select id, kind, network, symbol, decimals, amount::text as amount, error, error_code, swap, bridge, out_amount::text as out_amount from proposals where id = ${id}`;
   return p ?? null;
+};
+/** the state a proposal was in before the audit event `seq` (the previous `transfer.<state>` event about it); null when there is none */
+const previousTransferState = async (q: Q, id: string, seq: number): Promise<string | null> => {
+  const [r] = await q<{ type: string }[]>`select type from audit_events where seq < ${seq} and type like 'transfer.%' and data->>'id' = ${id} order by seq desc limit 1`;
+  return r ? r.type.slice('transfer.'.length) : null;
 };
 export const agentName = async (q: Q, id: unknown): Promise<string> => {
   if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/.test(id)) return '';
@@ -92,18 +97,33 @@ async function fromAudit(e: AlertEvent, c: RuleCtx): Promise<Draft[]> {
   // V11 risk engine: the global kill switch was engaged or released (risk/service.ts writes the audit event)
   if (t === 'risk.kill_switch') return [{ kind: d.engaged === true ? 'security.kill_switch_on' : 'security.kill_switch_off', params: { what: str(d.by, 80), state: str(d.reason, 120) }, subject: { type: 'none' }, dedupe: `kill_switch:${e.id}` }];
   if (t.startsWith('transfer.')) {
+    // `transfer.<state>` is written by `move` (transfers.ts) at every state change of a proposal
     const state = t.slice('transfer.'.length);
-    if (state !== 'finalized' && state !== 'failed') return [];
+    if (!['finalized', 'failed', 'dropped', 'replaced', 'confirming'].includes(state)) return [];
     const p = await proposal(c.q, d.id);
     if (!p) return [];
     const subject: AlertSubject = { type: 'proposal', id: p.id, network: p.network };
     const base = { network: netName(p.network), symbol: p.symbol, amount: units(p.amount, p.decimals) };
+    // NEXT (life cycle v2) — the outcomes that are neither confirmed nor failed. One alert per transition (the key carries the
+    // event id): a transfer that is dropped, recovered, undone by a reorganisation and dropped again is announced each time.
+    const what = p.kind === 'swap' || p.kind === 'xswap' ? '@swap' : p.kind === 'bridge' ? '@bridge' : '@transfer';
+    if (state === 'dropped') return [{ kind: 'transfer.dropped', params: { ...base, what }, subject, dedupe: `transfer.dropped:${p.id}:${e.id}` }];
+    if (state === 'replaced') return [{ kind: 'transfer.replaced', params: { ...base, what }, subject, dedupe: `transfer.replaced:${p.id}:${e.id}` }];
+    if (state === 'confirming' || state === 'finalized') {
+      // a watched row (dropped, or replaced) that turns out to be in a block: the owner was told it was not included
+      const was = await previousTransferState(c.q, p.id, e.id);
+      if (was === 'dropped' || was === 'replaced')
+        return [{ kind: 'transfer.recovered', params: { ...base, what, was: `@${was}`, state: state === 'finalized' ? '@confirmed' : '@confirming' }, subject, dedupe: `transfer.recovered:${p.id}:${e.id}` }];
+      if (state === 'confirming') return [];                           // the ordinary path: announced once, when final
+    }
     if (state === 'finalized') {
       if (p.kind === 'bridge') return [];                              // the bridge is complete when the destination minted: bridge.done
       return p.kind === 'swap' ? [{ kind: 'swap.confirmed', params: { ...base, toSymbol: str(p.swap?.toSymbol, 20) }, subject }] : [{ kind: 'transfer.confirmed', params: base, subject }];
     }
     const reason = str(d.error ?? p.error, 200);
     if (p.kind === 'bridge') return [{ kind: 'bridge.failed', params: { ...base, to: netName(p.bridge?.toNetwork), reason }, subject }];
+    // the validity window of the signed transaction closed on-chain: nothing moved, and it is said in those words (a swap keeps `swap.failed`, whose reason says the same)
+    if (p.kind !== 'swap' && p.error_code === 'expired_onchain') return [{ kind: 'transfer.expired', params: { ...base, what }, subject, dedupe: `transfer.expired:${p.id}` }];
     return [{ kind: p.kind === 'swap' ? 'swap.failed' : 'transfer.failed', params: { ...base, reason }, subject }];
   }
   switch (t) {

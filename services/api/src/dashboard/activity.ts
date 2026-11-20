@@ -22,6 +22,7 @@ import { UserError } from '../config.ts';
 import { sql } from '../db.ts';
 import { auditChainStatus } from '../monitor/health.ts';
 import { OWNER_CALLER } from '../orders/index.ts';
+import { csvCell, NO_CONTROL } from '../wallet-api/labels.ts';
 import type { DashboardOpts } from './index.ts';
 
 export const ACTIVITY_KINDS = ['transfer', 'receive', 'swap', 'bridge', 'plan', 'order', 'agent', 'mandate', 'risk', 'key', 'security'] as const;
@@ -85,6 +86,10 @@ const When = z.string().max(40).refine((s) => Number.isFinite(Date.parse(s)), { 
 const Filters = z.object({
   kind: z.enum(ACTIVITY_KINDS).optional(), mode: z.enum(['live', 'paper', 'research']).optional(), venue: z.string().min(1).max(40).optional().describe('a venue id or a network id'),
   principal: z.enum(['owner', 'agent', 'api_key', 'system']).optional(), from: When.optional(), to: When.optional(),
+  // NEXT (additive): one network, one asset. They are handed to the wallet source, which applies them in SQL before its bound,
+  // so an asset's history is not limited to the newest SOURCE_BOUND rows of the whole wallet.
+  network: z.string().min(1).max(20).regex(NO_CONTROL).optional().describe('a network id: items on that network'),
+  asset: z.string().min(1).max(130).regex(NO_CONTROL).optional().describe('an asset id (`native` or a contract / mint address): wallet items of that asset — the other sources have no asset and are left out'),
 });
 export type ActivityFilters = z.infer<typeof Filters>;
 export function matches(i: ActivityItem, f: ActivityFilters): boolean {
@@ -92,6 +97,8 @@ export function matches(i: ActivityItem, f: ActivityFilters): boolean {
   if (f.mode && i.mode !== f.mode) return false;
   if (f.venue && i.venue !== f.venue && i.network !== f.venue) return false;
   if (f.principal && i.principal?.kind !== f.principal) return false;
+  if (f.network && i.network !== f.network) return false;
+  if (f.asset && !(i.source === 'wallet' && typeof i.wallet?.asset === 'string' && i.wallet.asset.toLowerCase() === f.asset.toLowerCase())) return false;
   const at = Date.parse(i.at);
   return !(f.from && at < Date.parse(f.from)) && !(f.to && at > Date.parse(f.to));
 }
@@ -132,10 +139,19 @@ export function auditItem(e: { seq: number; ts: string; type: string; actor: str
     status: null, instrument: str(d.instrument), side: null, amount: null, received: null, ref: { type: 'audit', id: String(e.seq) }, txid: null, explorer: null };
 }
 
-const esc = (v: unknown): string => `"${String(v ?? '').replace(/"/g, '""').replace(/^([=+\-@])/, "'$1")}"`;
-export const CSV_HEADER = 'time_utc,kind,mode,venue,network,principal,code,instrument_or_asset,side,amount,amount_symbol,received,received_symbol,status,reference_type,reference_id,txid,explorer';
+const esc = csvCell;
+/** Only ever appended to. NEXT appended the last six: they are filled for wallet items (the row of GET /api/v1/activity) and empty for the others. */
+export const CSV_HEADER = 'time_utc,kind,mode,venue,network,principal,code,instrument_or_asset,side,amount,amount_symbol,received,received_symbol,status,reference_type,reference_id,txid,explorer'
+  + ',lifecycle,fee_paid,fee_symbol,deposit_kind,deposit_origin,contact_label';
+const text = (v: unknown): string => (typeof v === 'string' ? v : '');
+/** the NEXT columns of a wallet item: its life cycle (a receipt is confirming or confirmed), the fee really charged, what a receipt is, the contact */
+function walletCells(w: Record<string, unknown> | undefined): string[] {
+  if (!w) return ['', '', '', '', '', ''];
+  const receive = w.kind === 'receive', paid = text(w.feePaidDisplay);
+  return [receive ? (w.state === 'finalized' ? 'confirmed' : 'confirming') : text(w.lifecycle), paid, paid ? text(w.feeSymbol) : '', receive ? text(w.depositKind) : '', receive ? text(w.origin) : '', text(w.contactLabel)];
+}
 export const csvRow = (i: ActivityItem): string => [i.at, i.kind, i.mode ?? '', i.venue ?? '', i.network ?? '', i.principal ? (i.principal.kind === 'owner' ? 'owner' : `${i.principal.kind}:${i.principal.id}`) : '', i.code, i.instrument ?? '', i.side ?? '',
-  i.amount?.value ?? '', i.amount?.symbol ?? '', i.received?.value ?? '', i.received?.symbol ?? '', i.status ?? '', i.ref.type, i.ref.id, i.txid ?? '', i.explorer ?? ''].map(esc).join(',');
+  i.amount?.value ?? '', i.amount?.symbol ?? '', i.received?.value ?? '', i.received?.symbol ?? '', i.status ?? '', i.ref.type, i.ref.id, i.txid ?? '', i.explorer ?? '', ...walletCells(i.wallet)].map(esc).join(',');
 
 export function registerDashboardActivity(app: FastifyInstance, { execution }: DashboardOpts): void {
   const ownerOnly = (req: FastifyRequest): void => { if (req.principal?.kind !== 'owner') throw new UserError('owner_only', 'this route is for the owner\'s session', 403); };
@@ -145,14 +161,15 @@ export function registerDashboardActivity(app: FastifyInstance, { execution }: D
     if (r.statusCode !== 200) { const j = (() => { try { return r.json() as W; } catch { return {}; } })(); throw new UserError(typeof j.error === 'string' ? j.error : 'source_failed', String(j.message ?? `status ${r.statusCode}`), 502); }
     return r.json() as W;
   };
-  async function collect(req: FastifyRequest): Promise<{ items: ActivityItem[]; errors: ActivityError[] }> {
+  async function collect(req: FastifyRequest, f: ActivityFilters = {}): Promise<{ items: ActivityItem[]; errors: ActivityError[] }> {
+    const only = `${f.network ? `&network=${encodeURIComponent(f.network)}` : ''}${f.asset ? `&asset=${encodeURIComponent(f.asset)}` : ''}`;
     const errors: ActivityError[] = [];
     const src = async (source: ActivitySource, fn: () => Promise<ActivityItem[]>): Promise<ActivityItem[]> => {
       try { return await fn(); } catch (e) { const x = e as { code?: unknown; message?: unknown };
         errors.push({ source, code: typeof x?.code === 'string' && /^[a-z0-9_]{1,60}$/.test(x.code) ? x.code : 'source_failed', message: String(x?.message ?? e).slice(0, 200) }); return []; }
     };
     const parts = await Promise.all([
-      src('wallet', async () => ((await ask(req, `/api/v1/activity?limit=${SOURCE_BOUND}`)).items as W[]).map(walletItem)),
+      src('wallet', async () => ((await ask(req, `/api/v1/activity?limit=${SOURCE_BOUND}${only}`)).items as W[]).map(walletItem)),
       src('plans', async () => ((await ask(req, `/api/v1/plans?limit=${PLANS_BOUND}`)).plans as W[]).map(planItem)),
       src('orders', async () => (await execution.orders.list(OWNER_CALLER, { limit: SOURCE_BOUND })).map(orderItem)),
       src('decisions', async () => (await execution.risk.decisions(SOURCE_BOUND)).filter((d) => d.decision === 'deny' && !d.preview).map(decisionItem)),
@@ -167,7 +184,7 @@ export function registerDashboardActivity(app: FastifyInstance, { execution }: D
     ownerOnly(req);
     const q = Filters.extend({ limit: z.coerce.number().int().min(1).max(200).default(50), cursor: z.string().min(1).max(400).regex(/^[A-Za-z0-9_-]+$/).optional() }).parse(req.query ?? {});
     const cur = decodeCursor(q.cursor);
-    const [{ items, errors }, audit] = await Promise.all([collect(req), chain()]);
+    const [{ items, errors }, audit] = await Promise.all([collect(req, q), chain()]);
     const rest = items.filter((i) => matches(i, q) && (!cur || afterCursor(i, cur))), page = rest.slice(0, q.limit), last = page.at(-1);
     return { items: page, nextCursor: rest.length > q.limit && last ? encodeCursor({ at: Date.parse(last.at), id: last.id }) : null, errors, audit,
       bounds: { perSource: SOURCE_BOUND, plans: PLANS_BOUND }, kinds: ACTIVITY_KINDS, ts: Date.now() };
@@ -176,7 +193,7 @@ export function registerDashboardActivity(app: FastifyInstance, { execution }: D
   app.get('/api/v1/dashboard/activity.csv', async (req, reply) => {
     ownerOnly(req);
     const q = Filters.parse(req.query ?? {});
-    const { items } = await collect(req);
+    const { items } = await collect(req, q);
     const lines = [CSV_HEADER, ...items.filter((i) => matches(i, q)).slice(0, CSV_BOUND).map(csvRow)];
     return reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', 'attachment; filename="sp-wallet-activity.csv"').send(lines.join('\n') + '\n');
   });

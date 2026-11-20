@@ -336,7 +336,8 @@ describe('transfer lifecycle', () => {
     expect(items.find((i: any) => i.id === '00000000-0000-4000-8000-00000000a002')).toMatchObject({ kind: 'swap', rawKind: 'swap' });
     expect(items.filter((i: any) => i.kind === 'send').every((i: any) => i.rawKind === 'transfer')).toBe(true);
     const csv = (await app.inject({ method: 'GET', url: '/api/v1/export/activity.csv', headers: { cookie } })).body.split('\n');
-    expect(csv[0]).toBe('time_utc,direction,network,symbol,amount_base_units,amount,counterparty,state,txid,fee_estimate_base_units,to_network,to_symbol,received');
+    // NEXT appended seven columns at the END of the row: the thirteen earlier ones keep their positions (wallet-next-api.test.ts checks the new ones)
+    expect(csv[0]).toBe('time_utc,direction,network,symbol,amount_base_units,amount,counterparty,state,txid,fee_estimate_base_units,to_network,to_symbol,received' + ',lifecycle,fee_paid_base_units,fee_paid,fee_symbol,deposit_kind,deposit_origin,contact_label');
     const line = (needle: string) => csv.find((l: string) => l.includes(needle))!.split(',').map((c: string) => c.replace(/^"|"$/g, ''));
     expect(line('a001')[1]).toBe('gmx');
     expect(line('a002')).toMatchObject({ 1: 'swap', 10: 'arbitrum', 11: 'USDC', 12: '2.5' });

@@ -150,7 +150,8 @@ describe('GET /api/v1/dashboard/activity', () => {
     expect(r.status).toBe(200);
     expect(String(r.headers['content-type'])).toContain('text/csv');
     const lines = r.text.trim().split('\n');
-    expect(lines[0]).toBe('time_utc,kind,mode,venue,network,principal,code,instrument_or_asset,side,amount,amount_symbol,received,received_symbol,status,reference_type,reference_id,txid,explorer');
+    // NEXT appended six columns at the END of the row: the eighteen earlier ones keep their positions (wallet-next-api.test.ts checks the new ones)
+    expect(lines[0]).toBe('time_utc,kind,mode,venue,network,principal,code,instrument_or_asset,side,amount,amount_symbol,received,received_symbol,status,reference_type,reference_id,txid,explorer' + ',lifecycle,fee_paid,fee_symbol,deposit_kind,deposit_origin,contact_label');
     expect(lines.length - 1).toBe((await call('GET', `${A}?limit=200&kind=order`)).json.items.length);
     expect(lines.slice(1).every((l) => l.split(',')[1] === '"order"' && l.split(',')[2] === '"paper"')).toBe(true);
     expect(lines.some((l) => l.includes('"FILLED"') && l.includes(`"${BTC}"`) && l.includes('"buy"'))).toBe(true);

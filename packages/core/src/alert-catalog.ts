@@ -30,6 +30,26 @@ export const ALERT_DEFS: readonly AlertDef[] = [
     ['{amount} {symbol} envoyés sur {network}.', '{amount} {symbol} sent on {network}.'], ['Sur {network}.', 'On {network}.']),
   d('transfer.failed', 'transfers', 'warning', true, ['Transfert échoué', 'Transfer failed'],
     ['{amount} {symbol} sur {network} : {reason}', '{amount} {symbol} on {network}: {reason}'], ['Sur {network}. Rien de plus n’a été envoyé.', 'On {network}. Nothing more was sent.']),
+  // NEXT (life cycle v2): the outcomes that are neither "confirmed" nor "failed". `what` is @transfer | @swap | @bridge.
+  // dropped: not a failure — still watched, and a new send on the network replaces it. replaced: re-checked for a day.
+  // expired: the validity window of the SIGNED transaction closed on-chain; nothing moved. recovered: a dropped or replaced
+  // operation turned out to be in a block — critical, because the owner believed it dead and may be about to pay again.
+  d('transfer.dropped', 'transfers', 'warning', true, ['Transaction non incluse', 'Transaction not included'],
+    ['{what} de {amount} {symbol} sur {network} : le réseau ne connaît plus cette transaction et elle n’est pas confirmée. Elle reste surveillée et sera inscrite si elle apparaît ; un nouvel envoi sur ce réseau la remplace.',
+      '{what} of {amount} {symbol} on {network}: the network no longer knows this transaction and it is not confirmed. It stays watched and is recorded if it appears; a new send on this network replaces it.'],
+    ['{what} sur {network} : non incluse par le réseau, toujours surveillée. Un nouvel envoi sur ce réseau la remplace.', '{what} on {network}: not included by the network, still watched. A new send on this network replaces it.']),
+  d('transfer.replaced', 'transfers', 'warning', true, ['Transaction remplacée', 'Transaction replaced'],
+    ['{what} de {amount} {symbol} sur {network} : une autre transaction a utilisé le même numéro d’ordre ou les mêmes pièces ; celle-ci ne peut plus être incluse. Elle reste vérifiée pendant un jour.',
+      '{what} of {amount} {symbol} on {network}: another transaction used the same nonce or the same coins; this one can no longer be included. It stays re-checked for a day.'],
+    ['{what} sur {network} : remplacée par une autre transaction ; elle reste vérifiée pendant un jour.', '{what} on {network}: replaced by another transaction; it stays re-checked for a day.']),
+  d('transfer.expired', 'transfers', 'warning', true, ['Transaction expirée', 'Transaction expired'],
+    ['{what} de {amount} {symbol} sur {network} : sa fenêtre de validité s’est fermée avant que le réseau l’inclue. Rien n’a bougé ; vous pouvez la refaire.',
+      '{what} of {amount} {symbol} on {network}: its validity window closed before the network included it. Nothing moved; you can make it again.'],
+    ['{what} sur {network} : expirée avant d’être incluse. Rien n’a bougé.', '{what} on {network}: expired before it was included. Nothing moved.']),
+  d('transfer.recovered', 'transfers', 'critical', true, ['Transaction retrouvée sur le réseau', 'Transaction found on the network'],
+    ['{what} de {amount} {symbol} sur {network} : cette transaction, signalée « {was} », est finalement {state}. Elle a bien eu lieu : ne la refaites pas.',
+      '{what} of {amount} {symbol} on {network}: this transaction, reported “{was}”, is {state} after all. It did happen: do not make it again.'],
+    ['{what} sur {network} : une transaction que vous pensiez perdue est {state}. Elle a bien eu lieu : ne la refaites pas.', '{what} on {network}: a transaction you believed lost is {state}. It did happen: do not make it again.']),
   d('swap.confirmed', 'transfers', 'info', true, ['Échange confirmé', 'Swap confirmed'],
     ['{amount} {symbol} échangés contre {toSymbol} sur {network}.', '{amount} {symbol} swapped for {toSymbol} on {network}.'], ['Sur {network}.', 'On {network}.']),
   d('swap.failed', 'transfers', 'warning', true, ['Échange échoué', 'Swap failed'],
@@ -213,7 +233,7 @@ const VOCAB: Record<string, Pair> = {
   buy: ['achat', 'buy'], sell: ['vente', 'sell'], daily: ['quotidienne', 'daily'], total: ['totale', 'total'],
   router: ['Routeur d’échange', 'Swap router'], jupiter: ['Programme Jupiter', 'Jupiter program'], cctp: ['Contrats CCTP (Circle)', 'CCTP contracts (Circle)'],
   signer: ['Signataire', 'Signer'], derivatives: ['Compte de dérivés', 'Derivatives account'],
-  signed: ['signé', 'signed'], broadcast: ['diffusé', 'broadcast'], confirming: ['en confirmation', 'confirming'], attesting: ['en attente d’attestation', 'awaiting attestation'], minting: ['en cours de réception', 'minting'],
+  signed: ['signé', 'signed'], broadcast: ['diffusé', 'broadcast'], confirming: ['en confirmation', 'confirming'], confirmed: ['confirmée', 'confirmed'], dropped: ['non incluse', 'not included'], replaced: ['remplacée', 'replaced'], attesting: ['en attente d’attestation', 'awaiting attestation'], minting: ['en cours de réception', 'minting'],
   market: ['Données de marché', 'Market data'], rpc: ['RPC', 'RPC'], unknown: ['inconnu', 'unknown'],
   failed: ['échec', 'failed'], over_budget: ['budget dépassé', 'over budget'], // v7 research runtime
 };
