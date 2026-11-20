@@ -574,7 +574,7 @@ create table if not exists nft_market_slug (collection_key text not null, provid
 -- <<< NFT delivery 3
 `;
 
-export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }
+export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); await sql.unsafe((await import('./prefs.ts')).PREFS_SCHEMA); }
 
 /**
  * NEXT — append one event to the wallet's event log (the stream every client follows, events.ts). Never throws: an event that
