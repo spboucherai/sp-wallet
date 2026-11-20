@@ -549,9 +549,67 @@ create table if not exists utxo_reviews (network text not null, outpoint text no
 create table if not exists nft_market_cache (provider text not null, kind text not null, ref text not null, data jsonb not null, fetched_at timestamptz not null default now(), primary key (provider, kind, ref));
 create table if not exists nft_market_slug (collection_key text not null, provider text not null, slug text not null, learnt_at timestamptz not null default now(), primary key (collection_key, provider));
 -- <<< NFT delivery 3
+-- >>> NEXT balances / deposits / portfolio (docs/next/NEXT-BALANCES.md): additive.
+-- deposits.kind: 'external' (someone paid the wallet) | 'internal' (the result of one of the wallet's own operations);
+--   NULL only until the first classification (classifyDeposits below, run at boot and by the deposit worker).
+-- deposits.origin: which own operation (swap | bridge | xswap | transfer | gmx | nft | agent_withdrawal | venue_withdrawal); NULL when external.
+-- deposits.detection: how a native EVM deposit was found (tx | internal_call | aggregate); NULL = the chain's ordinary listing
+--   (token logs, indexer history, Solana transactions). For internal_call / aggregate rows txid may be a BLOCK hash (block_hash says which block).
+alter table deposits add column if not exists kind text;
+alter table deposits add column if not exists proposal_id uuid;
+alter table deposits add column if not exists origin text;
+alter table deposits add column if not exists detection text;
+alter table deposits add column if not exists block_hash text;
+create index if not exists deposits_unclassified on deposits (seen_at) where kind is null;
+-- the native-coin scan of an EVM network: balance and nonce of the wallet address at the last block resolved
+alter table scan_cursor add column if not exists native_cursor bigint;
+alter table scan_cursor add column if not exists native_balance numeric(78,0);
+alter table scan_cursor add column if not exists native_nonce bigint;
+alter table scan_cursor add column if not exists native_addr text;
+-- value of the wallet over time. One row per currency and per pass of the snapshot worker. complete = every network answered,
+-- every source agreed, every held asset had a fresh price: only complete rows are ever charted.
+create table if not exists portfolio_snapshots (
+  id bigserial primary key, at timestamptz not null default now(), currency text not null, total numeric(38,2) not null,
+  complete boolean not null, reasons jsonb not null default '[]', breakdown jsonb not null default '[]');
+create index if not exists portfolio_snapshots_at on portfolio_snapshots (currency, at);
+-- what entered and left the wallet (not performance): deposits and finalized plain transfers, with the price at the time the
+-- API saw them when that was close to the event (else price_* stay NULL and the flow is reported as not valued).
+-- scope: 'external' | 'own_account' (to / from the owner's agent vaults and venue accounts, which the wallet total does not include)
+create table if not exists portfolio_flows (
+  ref_type text not null, ref_id text not null, at timestamptz not null, direction text not null, scope text not null,
+  network text not null, asset text not null, symbol text not null, decimals int not null, amount numeric(78,0) not null,
+  price_usd numeric, price_cad numeric, priced_at timestamptz, recorded_at timestamptz not null default now(),
+  primary key (ref_type, ref_id));
+create index if not exists portfolio_flows_at on portfolio_flows (at);
+-- <<< NEXT balances / deposits / portfolio
 `;
 
-export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); }
+/**
+ * NEXT H5 — a deposit is `internal` when its transaction is one of the wallet's own operations: the transaction of a proposal
+ * on that network (a swap paying out, a self-transfer), the mint of a CCTP bridge on its destination, the outbound (or the
+ * refund) of a cross-chain swap, a withdrawal from an agent vault, a withdrawal from a venue account. Everything else is
+ * `external`. Idempotent. `recent` = also look again at the `external` rows of the last two days: the operation's own record
+ * of its transaction id (a mint made by a relayer, a THORChain outbound) can arrive after the deposit was seen.
+ */
+export async function classifyDeposits(recent = false): Promise<number> {
+  const scope = recent ? sql`(d.kind is null or (d.kind = 'external' and d.seen_at > now() - interval '2 days'))` : sql`d.kind is null`;
+  let changed = 0;
+  changed += (await sql`update deposits d set kind = 'internal', proposal_id = p.id, origin = p.kind from proposals p
+    where ${scope} and p.network = d.network and (lower(p.txid) = lower(d.txid) or lower(p.pre_txid) = lower(d.txid))`).count;
+  changed += (await sql`update deposits d set kind = 'internal', proposal_id = p.id, origin = 'bridge' from proposals p
+    where ${scope} and p.kind = 'bridge' and p.bridge->>'toNetwork' = d.network and lower(p.bridge->>'mintTxid') = lower(d.txid)`).count;
+  changed += (await sql`update deposits d set kind = 'internal', proposal_id = p.id, origin = 'xswap' from proposals p
+    where ${scope} and p.kind = 'xswap' and p.xswap->>'outTxid' is not null and d.network in (p.xswap->>'toNetwork', p.network)
+      and lower(p.xswap->>'outTxid') = regexp_replace(lower(d.txid), '^0x', '')`).count;
+  changed += (await sql`update deposits d set kind = 'internal', origin = 'agent_withdrawal' from agent_withdrawals w
+    where ${scope} and w.network = d.network and w.txid is not null and lower(w.txid) = lower(d.txid)`).count;
+  changed += (await sql`update deposits d set kind = 'internal', origin = 'venue_withdrawal' from deriv_collateral c
+    where ${scope} and c.kind = 'withdraw' and c.arrival->>'txid' is not null and lower(c.arrival->>'txid') = lower(d.txid)`).count;
+  await sql`update deposits set kind = 'external' where kind is null`;
+  return changed;
+}
+
+export async function migrate(): Promise<void> { await sql.unsafe(SCHEMA); await classifyDeposits(); }
 
 let auditLock: Promise<unknown> = Promise.resolve();
 /** Append to the tamper-evident hash chain. Never pass secrets or assertion payloads here. */

@@ -1,6 +1,6 @@
 import { dustOf, estimateBtcVsize, type NetworkDef } from '@spw/core';
 import { UserError } from '../config.ts';
-import { hostOf, http, type Adapter, type Deposit, type Health, type Prepared, type Tracked } from './rpc.ts';
+import { hostOf, http, settle, type Adapter, type BalancesDetailed, type Deposit, type Health, type Prepared, type Tracked } from './rpc.ts';
 
 export interface Utxo { txid: string; vout: number; value: number; confirmed: boolean }
 interface Status { found: boolean; confirmed: boolean; height?: number; hash?: string }
@@ -13,6 +13,14 @@ export interface Source {
   utxos(addr: string): Promise<Utxo[]>;
   /** confirmed balance minus what is already being spent in the mempool */
   balance(addr: string): Promise<bigint>;
+  /**
+   * NEXT B2 — the same two figures from every indexer: `confirmed` = coins in blocks not spent in a block; `net` = what the
+   * mempool adds minus what it spends (negative while one of the wallet's sends is unconfirmed: the amount sent plus the fee,
+   * the unconfirmed change already counted back). The displayed balance is `confirmed + min(net, 0)` on every indexer.
+   * Before NEXT each indexer had its own rule: Esplora subtracted the coins being spent WITHOUT counting the unconfirmed
+   * change back (a send of 1 from a coin of 5 showed 0 until confirmed, not 4), Blockbook used the net, Bitcore ignored the mempool.
+   */
+  detail?(addr: string): Promise<{ confirmed: bigint; net: bigint }>;
   /** fee rate in base units per virtual byte, ~3 block target */
   feeRate(): Promise<number>;
   broadcast(hex: string): Promise<void>;
@@ -30,6 +38,12 @@ const TXID = /^[0-9a-f]{64}$/;
 
 interface EsTx { txid: string; vin: { prevout: { scriptpubkey_address?: string; value: number } | null }[]; vout: { scriptpubkey_address?: string; value: number }[]; status: { confirmed: boolean; block_height?: number; block_time?: number } }
 
+async function esploraDetail(u: string, a: string): Promise<{ confirmed: bigint; net: bigint }> {
+  const s = await j<{ chain_stats: { funded_txo_sum: number; spent_txo_sum: number }; mempool_stats: { funded_txo_sum?: number; spent_txo_sum: number } }>(`${u}/address/${a}`);
+  const int = (v: unknown): bigint => { if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < 0) throw new Error('indexer returned an amount that is not an exact integer'); return BigInt(v); };
+  return { confirmed: int(s.chain_stats.funded_txo_sum) - int(s.chain_stats.spent_txo_sum), net: int(s.mempool_stats.funded_txo_sum ?? 0) - int(s.mempool_stats.spent_txo_sum) };
+}
+
 /** Esplora / mempool.space-style REST API. */
 export function esplora(u: string): Source {
   return {
@@ -37,7 +51,8 @@ export function esplora(u: string): Source {
     tip: async () => Number(await txt(u + '/blocks/tip/height')),
     blockHash: (h) => txt(`${u}/block-height/${h}`),
     utxos: async (a) => (await j<{ txid: string; vout: number; value: number; status: { confirmed: boolean } }[]>(`${u}/address/${a}/utxo`)).map((x) => ({ txid: x.txid, vout: x.vout, value: x.value, confirmed: x.status.confirmed })),
-    balance: async (a) => { const s = await j<{ chain_stats: { funded_txo_sum: number; spent_txo_sum: number }; mempool_stats: { spent_txo_sum: number } }>(`${u}/address/${a}`); return BigInt(s.chain_stats.funded_txo_sum - s.chain_stats.spent_txo_sum - s.mempool_stats.spent_txo_sum); },
+    balance: async (a) => { const d = await esploraDetail(u, a); return d.confirmed + (d.net < 0n ? d.net : 0n); },
+    detail: (a) => esploraDetail(u, a),
     feeRate: async () => { const f = await j<Record<string, number>>(u + '/fee-estimates'); return f['3'] ?? f['6'] ?? 5; },
     broadcast: async (hex) => { await txt(u + '/tx', { method: 'POST', body: hex }); },
     status: async (id) => { try { const s = await j<{ confirmed: boolean; block_height?: number; block_hash?: string }>(`${u}/tx/${id}/status`); return { found: true, confirmed: s.confirmed, height: s.block_height, hash: s.block_hash }; } catch (e) { if ((e as { status?: number }).status === 404) return { found: false, confirmed: false }; throw e; } },
@@ -64,6 +79,7 @@ export function blockbook(u: string): Source {
     blockHash: async (h) => (await j<{ blockHash: string }>(`${u}/block-index/${h}`)).blockHash,
     utxos: async (a) => (await j<{ txid: string; vout: number; value: string; confirmations: number }[]>(`${u}/utxo/${a}`)).map((x) => ({ txid: x.txid, vout: x.vout, value: exact(x.value), confirmed: x.confirmations > 0 })),
     balance: async (a) => { const s = await j<{ balance: string; unconfirmedBalance: string }>(`${u}/address/${a}?details=basic`); const un = BigInt(s.unconfirmedBalance); return BigInt(s.balance) + (un < 0n ? un : 0n); },
+    detail: async (a) => { const s = await j<{ balance: string; unconfirmedBalance: string }>(`${u}/address/${a}?details=basic`); return { confirmed: BigInt(s.balance), net: BigInt(s.unconfirmedBalance) }; },
     feeRate: async () => feePerKb((await j<{ result: string }>(u + '/estimatefee/3')).result),
     broadcast: async (hex) => { await txt(u + '/sendtx/', { method: 'POST', body: hex }); },
     status: async (id) => { try { const s = await j<{ blockHeight: number; blockHash?: string; confirmations: number }>(`${u}/tx/${id}`); return { found: true, confirmed: s.confirmations > 0, height: s.blockHeight, hash: s.blockHash }; } catch (e) { if ([400, 404].includes((e as { status?: number }).status ?? 0)) return { found: false, confirmed: false }; throw e; } },
@@ -106,6 +122,18 @@ export function bitcore(u: string): Source {
       });
     },
     balance: async (a) => BigInt(exact((await j<{ confirmed: number }>(`${u}/address/${bare(a)}/balance`)).confirmed)),
+    // from the coin list (heights as documented above): confirmed coins not spent in a block; mempool mints minus confirmed coins the mempool spends
+    detail: async (a) => {
+      const coins = await j<BcCoin[]>(`${u}/address/${bare(a)}/?unspent=true&limit=${BITCORE_PAGE}`);
+      if (!Array.isArray(coins) || coins.length >= BITCORE_PAGE) throw new Error('too many coins on this address to compare');
+      let confirmed = 0n, net = 0n;
+      for (const c of coins) {
+        const v = BigInt(exact(c.value));
+        if (c.mintHeight >= 0 && (c.spentHeight === -2 || c.spentHeight === -1)) { confirmed += v; if (c.spentHeight === -1) net -= v; }
+        else if (c.mintHeight === -1 && c.spentHeight === -2) net += v;
+      }
+      return { confirmed, net };
+    },
     feeRate: async () => feePerKb((await j<{ feerate: number }>(u + '/fee/3')).feerate),
     broadcast: async (hex) => {
       // Bitcore answers 500 with the node's message as plain text; keep it so "already known" is recognised
@@ -164,6 +192,23 @@ export function utxoAdapter(n: NetworkDef, shape: UtxoShape, sources: Source[] =
         endpoints: endpoints.map(({ h: _h, ...e }) => e), checkedAt: new Date().toISOString() };
     },
     async balances(addr) { return { native: await any((s) => s.balance(addr)) }; },
+    /**
+     * NEXT B2 — every indexer is asked for (confirmed, mempool net) and its tip. `confirmed` is compared between the indexers
+     * that answered (equal: agreed; else `agreed: false` and the figure of the higher tip). The mempool is each indexer's own
+     * view and is NOT compared: `pendingOut` / `pendingIn` are those of the indexer whose confirmed figure is shown.
+     * amount = confirmed - pendingOut, the same rule whatever the indexer. A source without `detail` gives its balance as confirmed.
+     */
+    async balancesDetailed(addr): Promise<BalancesDetailed> {
+      const rs = (await Promise.all(sources.map(async (s) => {
+        try { const [d, tip] = await Promise.all([s.detail ? s.detail(addr) : s.balance(addr).then((b) => ({ confirmed: b, net: 0n })), s.tip().catch(() => null)]); return d.confirmed < 0n ? null : { ...d, height: tip }; }
+        catch { return null; }
+      }))).filter((r): r is { confirmed: bigint; net: bigint; height: number | null } => r !== null);
+      if (!rs.length) throw new Error('no indexer answered');
+      const c = settle(rs.map((r) => ({ amount: r.confirmed, height: r.height })), sources.length);
+      const shown = rs.find((r) => r.confirmed === c.amount && r.height === c.height) ?? rs.find((r) => r.confirmed === c.amount)!;
+      const pendingOut = shown.net < 0n ? (-shown.net > c.amount ? c.amount : -shown.net) : 0n, pendingIn = shown.net > 0n ? shown.net : 0n;
+      return { assets: { native: { ...c, amount: c.amount - pendingOut, confirmed: c.amount, pendingOut, pendingIn } }, unavailable: {} };
+    },
     async prepare(d): Promise<Prepared> {
       if (!identity) throw new UserError('rpc_degraded', 'chain identity not verified yet; retry shortly', 503);
       // the spendable coin set must be identical on both independent indexers

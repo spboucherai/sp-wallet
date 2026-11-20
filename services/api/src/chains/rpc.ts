@@ -89,10 +89,44 @@ export interface Prepared {
   aux?: Record<string, unknown>;
 }
 export interface Tracked { state: 'broadcast' | 'confirming' | 'finalized' | 'failed' | 'replaced' | 'reorged'; confirmations: number; blockRef?: string; error?: string; rebroadcast?: boolean }
-export interface Deposit { txid: string; idx: number; asset: string; amount: bigint; from: string; block: number; time: number | null }
+export interface Deposit { txid: string; idx: number; asset: string; amount: bigint; from: string; block: number; time: number | null;
+  /** NEXT — how the row was found when it is not the chain's ordinary listing: `tx` a value transfer to the wallet located by the
+   *  balance scan, `internal_call` value that arrived inside a contract call (txid = the wallet's own transaction of that block when
+   *  there is exactly one, else the BLOCK hash), `aggregate` a balance increase that could not be located (txid = the block hash) */
+  via?: 'tx' | 'internal_call' | 'aggregate'; blockHash?: string }
+
+// ── NEXT: balances with provenance ──────────────────────────────────────────────────────────────────────────────────────
+/** One asset as read from the chain. `amount` is a fact only when `agreed`; otherwise it is the answer of the source at the higher height. */
+export interface BalanceRead {
+  amount: bigint;
+  /** block / slot / tip height of the read, when the chain gives one */ height: number | null;
+  /** sources whose answer is `amount` */ sources: number; /** sources asked */ asked: number;
+  /** false: the sources that answered did not give the same amount */ agreed: boolean;
+  /** the block of the read is older than the freshness window (the sources answer, but from an old state) */ stale: boolean;
+  /** Bitcoin-style: confirmed coins; what the mempool is spending net of unconfirmed change; net unconfirmed receipts. amount = confirmed - pendingOut */
+  confirmed?: bigint; pendingOut?: bigint; pendingIn?: bigint;
+}
+export interface BalancesDetailed { assets: Record<string, BalanceRead>; /** asset id -> why no balance is given (never a silent 0) */ unavailable: Record<string, string> }
+/** Compare the answers of several sources for one asset (rule of NEXT B2): all equal = a fact; otherwise the higher height wins
+ *  the display and the row is flagged; at the same height the LOWER amount is displayed. */
+export function settle(reads: { amount: bigint; height: number | null }[], asked: number, stale = false): BalanceRead {
+  if (!reads.length) throw new Error('settle: no read');
+  const top = (r: { height: number | null }) => r.height ?? -1;
+  const high = Math.max(...reads.map(top));
+  if (reads.every((r) => r.amount === reads[0]!.amount)) return { amount: reads[0]!.amount, height: high < 0 ? null : high, sources: reads.length, asked, agreed: true, stale };
+  const best = [...reads].sort((a, b) => top(b) - top(a) || (a.amount < b.amount ? -1 : a.amount > b.amount ? 1 : 0))[0]!;
+  return { amount: best.amount, height: best.height, sources: reads.filter((r) => r.amount === best.amount).length, asked, agreed: false, stale };
+}
+/** State of the native-coin scan of an account-based chain: the balance and the count of sent transactions at a block. */
+export interface NativeScanState { block: number; balance: bigint; nonce: number }
+export interface NativeScanNote { code: 'window_too_old' | 'state_unavailable' | 'unexplained_decrease' | 'budget_exhausted'; fromBlock: number; toBlock: number; amount: string; unknownOwnTxs?: number }
 export interface Adapter {
   health(): Promise<Health>;
   balances(addr: string): Promise<Record<string, bigint>>;
+  /** NEXT: the same read asked to every source and compared, with its height. Absent on families that have one read path only. */
+  balancesDetailed?(addr: string): Promise<BalancesDetailed>;
+  /** NEXT (EVM): incoming native coins, found by comparing the balance between blocks (no trace API). See chains/evm.ts. */
+  nativeDeposits?(addr: string, prev: NativeScanState | null, opts?: { own?: string[]; maxPoints?: number; maxWindow?: number; maxWindows?: number; maxLeaves?: number }): Promise<{ items: Deposit[]; state: NativeScanState; notes: NativeScanNote[]; calls: number }>;
   /** asset ids hidden because their on-chain identity check failed */
   disabledAssets?(): string[];
   prepare(d: { asset: string; from: string; to: string; amount: bigint; memo?: string;
@@ -100,7 +134,7 @@ export interface Adapter {
     thor?: { extraBytes: number; minRate: number } }): Promise<Prepared>;
   broadcast(raw: string): Promise<void>;
   track(p: { txid: string; intent: any; blockRef: string | null; broadcastAt: number }): Promise<Tracked>;
-  deposits(addr: string, cursor: number | null): Promise<{ items: Deposit[]; cursor: number; finalizedHeight: number }>;
+  deposits(addr: string, cursor: number | null): Promise<{ items: Deposit[]; cursor: number; finalizedHeight: number; /** NEXT: transactions listed by the chain that no source serves any more (reported, never silently skipped) */ gaps?: { txid: string; block: number }[] }>;
   /** Bitcoin-style networks (NFT delivery 2): the confirmed coins of an address, agreed by every indexer; a raw transaction */
   utxos?(addr: string): Promise<{ txid: string; vout: number; value: number; confirmed: boolean }[]>;
   rawTx?(txid: string): Promise<string>;

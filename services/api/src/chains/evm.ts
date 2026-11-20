@@ -1,10 +1,17 @@
 import { decodeAbiParameters, decodeFunctionResult, encodeFunctionData, erc20Abi, hexToBigInt, hexToNumber, hexToString, multicall3Abi, numberToHex, pad } from 'viem';
 import { getAsset, type NetworkDef } from '@spw/core';
 import { UserError } from '../config.ts';
-import { hostOf, rpcAny, rpcOne, rpcQuorum, type Adapter, type Deposit, type Health, type Prepared, type Tracked } from './rpc.ts';
+import { hostOf, rpcAny, rpcOne, rpcQuorum, settle, type Adapter, type BalancesDetailed, type Deposit, type Health, type NativeScanNote, type NativeScanState, type Prepared, type Tracked } from './rpc.ts';
 
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const hx = (n: bigint | number) => numberToHex(n);
+/** NEXT: a balance whose block is older than this is flagged `stale` (the sources answer, but from an old state) */
+export const EVM_STALE_SEC = 180;
+/** an endpoint saying it does not keep the state of that block (a pruned, non-archive node) — not a failure of the endpoint */
+const NO_HISTORY = /missing trie node|state .*(not available|unavailable|pruned|is not)|historical state|header not found|unknown block|block not found|archive|pruned|old data not available|state at block|no state available|required historical/i;
+/** `idx` of the rows of the native scan: above any log index, so that (txid, idx) never collides with a token transfer of the same transaction */
+export const NATIVE_IDX = 1_000_000;
+class ScanRetry extends Error {} // the pass stops here and is tried again later; nothing is recorded past the resolved frontier
 
 export function evmAdapter(n: NetworkDef): Adapter {
   const call = <T>(m: string, p: unknown[]) => rpcAny<T>(n.rpc, m, p);
@@ -14,12 +21,12 @@ export function evmAdapter(n: NetworkDef): Adapter {
   let tokensChecked = false;
   const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
   /** One eth_call for many read-only calls (Multicall3.aggregate3, failures allowed per call). */
-  async function multi(calls: { target: string; data: `0x${string}` }[]): Promise<({ ok: boolean; data: `0x${string}` })[]> {
+  async function multi(calls: { target: string; data: `0x${string}` }[], exec: <T>(m: string, p: unknown[]) => Promise<T> = call, tag = 'latest'): Promise<({ ok: boolean; data: `0x${string}` })[]> {
     const out: { ok: boolean; data: `0x${string}` }[] = [];
     for (let k = 0; k < calls.length; k += 40) {
       const chunk = calls.slice(k, k + 40);
       const data = encodeFunctionData({ abi: multicall3Abi, functionName: 'aggregate3', args: [chunk.map((c) => ({ target: c.target as `0x${string}`, allowFailure: true, callData: c.data }))] });
-      const ret = await call<`0x${string}`>('eth_call', [{ to: MULTICALL3, data }, 'latest']);
+      const ret = await exec<`0x${string}`>('eth_call', [{ to: MULTICALL3, data }, tag]);
       for (const r of decodeFunctionResult({ abi: multicall3Abi, functionName: 'aggregate3', data: ret })) out.push({ ok: r.success, data: r.returnData });
     }
     return out;
@@ -71,6 +78,44 @@ export function evmAdapter(n: NetworkDef): Adapter {
       const rs = await multi(toks.map((t) => ({ target: t.id, data: encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [addr as `0x${string}`] }) })));
       toks.forEach((t, k) => { const r = rs[k]!; if (r.ok && r.data.length === 66) out[t.id] = hexToBigInt(r.data); });
       return out;
+    },
+    /**
+     * NEXT B2 — every endpoint is asked and the answers are compared AT THE SAME BLOCK: the heads are read first, then the native
+     * balance and the token balances are read at `min(heads) - 1` on each endpoint (one block behind the slowest head, so that
+     * a load-balanced endpoint whose backends are not all at its head still has the block). An endpoint that cannot serve the
+     * pinned block is read at `latest` and its answer carries its own head. Per asset: all answers equal = agreed; otherwise
+     * the row is not a fact (`agreed: false`, amount of the higher block). A token no endpoint could read is `unavailable`.
+     * Cost: 3 calls per endpoint (2 on a network without tokens) + 1 block header for the age of the state.
+     */
+    async balancesDetailed(addr): Promise<BalancesDetailed> {
+      const toks = live();
+      const heads = await Promise.all(n.rpc.map(async (url) => { try { return hexToNumber(await rpcOne<`0x${string}`>(url, 'eth_blockNumber', [])); } catch { return null; } }));
+      const up = heads.filter((h): h is number => h !== null);
+      if (!up.length) throw new Error('no endpoint answered');
+      const pin = Math.max(0, Math.min(...up) - 1);
+      const readOn = async (url: string, tag: string): Promise<Record<string, bigint>> => {
+        const one = <T>(m: string, p: unknown[]) => rpcOne<T>(url, m, p);
+        const out: Record<string, bigint> = { native: hexToBigInt(await one<`0x${string}`>('eth_getBalance', [addr, tag])) };
+        if (toks.length) {
+          const rs = await multi(toks.map((t) => ({ target: t.id, data: encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [addr as `0x${string}`] }) })), one, tag);
+          toks.forEach((t, k) => { const r = rs[k]!; if (r.ok && r.data.length === 66) out[t.id] = hexToBigInt(r.data); });
+        }
+        return out;
+      };
+      const reads = (await Promise.all(n.rpc.map(async (url, k) => {
+        if (heads[k] === null) return null;
+        try { return { height: pin, v: await readOn(url, hx(pin)) }; }
+        catch { try { return { height: heads[k]!, v: await readOn(url, 'latest') }; } catch { return null; } }
+      }))).filter((r): r is { height: number; v: Record<string, bigint> } => r !== null);
+      if (!reads.length) throw new Error('no endpoint answered');
+      let stale = false; // unknown age (header not served) is not called stale
+      try { const b = await call<{ timestamp: `0x${string}` } | null>('eth_getBlockByNumber', [hx(pin), false]); if (b) stale = Date.now() / 1000 - hexToNumber(b.timestamp) > EVM_STALE_SEC; } catch { /* age unknown */ }
+      const assets: BalancesDetailed['assets'] = {}, unavailable: Record<string, string> = {};
+      for (const id of ['native', ...toks.map((t) => t.id)]) {
+        const got = reads.filter((r) => r.v[id] !== undefined).map((r) => ({ amount: r.v[id]!, height: r.height }));
+        if (got.length) assets[id] = settle(got, n.rpc.length, stale); else unavailable[id] = 'no_source_answered';
+      }
+      return { assets, unavailable };
     },
     disabledAssets: () => [...disabled],
     async prepare(d): Promise<Prepared> {
@@ -135,8 +180,9 @@ export function evmAdapter(n: NetworkDef): Adapter {
     async deposits(addr, cursor) {
       const head = hexToNumber(await call<`0x${string}`>('eth_blockNumber', []));
       const fin = await finalizedHeight();
-      let from = cursor === null ? head - 3000 : cursor + 1;
-      if (head - from > 20000) from = head - 20000; // bounded catch-up after long downtime
+      // NEXT H2: a backlog is never jumped over. Each pass reads at most 12 ranges of 2 000 blocks from the cursor and stops
+      // there; the cursor is the last block actually read, so the catch-up continues on the next passes until the head.
+      const from = cursor === null ? Math.max(0, head - 3000) : cursor + 1;
       const items: Deposit[] = [];
       const topicTo = pad(addr as `0x${string}`).toLowerCase();
       let done = from - 1;
@@ -157,6 +203,153 @@ export function evmAdapter(n: NetworkDef): Adapter {
         } catch { if (span <= 125) break; span = Math.floor(span / 2); }
       }
       return { items, cursor: Math.max(done, (cursor ?? done)), finalizedHeight: fin };
+    },
+    /**
+     * NEXT H1 — incoming NATIVE coins, with no trace API and no indexer.
+     *
+     * The scan keeps the wallet's balance and nonce (count of sent transactions) at the last block it resolved (`prev`). A
+     * pass reads both at a later block, at most `maxWindow` blocks further and never beyond `head - minConf`:
+     *   - same balance, same nonce: nothing happened in the window (a native balance cannot change otherwise);
+     *   - the nonce moved by exactly the wallet's own transactions known to the API (`own`, looked up by receipt) and the
+     *     balance moved by exactly their cost (value + gasUsed x effectiveGasPrice + the L1 fee of an OP-stack receipt): explained;
+     *   - anything else: the window is bisected on (balance, nonce) until single blocks remain; each such block is read with
+     *     its transactions. Value transfers `to == wallet` are deposits with their txid; the wallet's own transactions are
+     *     costed from their receipts; what is still unexplained and positive arrived inside a contract call: it is recorded as
+     *     `internal_call` under the wallet's own transaction of that block when there is exactly one (a swap paying out the
+     *     native coin), otherwise under the BLOCK hash — never under a transaction id that is not known.
+     * Every state read is asked to every endpoint; those that answer must agree, else the pass stops and is retried.
+     * When no endpoint keeps the state of a block (pruned nodes): the part that cannot be bisected is recorded as ONE
+     * `aggregate` deposit at the end block of that part, with a note — never dropped. A decrease that nothing explains is
+     * reported in `notes` (the caller writes it to the audit chain) and records nothing.
+     *
+     * RPC bound per pass: state points <= maxPoints (40) + maxWindows (4), each = 2 calls x endpoints; full blocks <= maxLeaves
+     * (6); receipts <= 2 x min(own, 25) + per full block (own transactions + at most 25 incoming); + 1 head + headers of
+     * aggregates. A quiet pass costs 1 + 2 x endpoints calls. When the bound is reached the pass returns the state at the
+     * last block fully resolved (the bisection is left-first), and the next pass continues from there.
+     */
+    async nativeDeposits(addr, prev, opts = {}) {
+      const maxPoints = opts.maxPoints ?? 40, maxWindow = opts.maxWindow ?? 2048, maxWindows = opts.maxWindows ?? 4, maxLeaves = opts.maxLeaves ?? 6;
+      const me = addr.toLowerCase(), items: Deposit[] = [], notes: NativeScanNote[] = [];
+      let calls = 0, points = 0, leaves = 0;
+      const count = <T>(p: Promise<T>): Promise<T> => { calls += 1; return p; };
+      /** balance and nonce at a block, from every endpoint; `null` = no endpoint keeps that state */
+      const stateAt = async (block: number): Promise<NativeScanState | null> => {
+        points += 1;
+        const rs = await Promise.allSettled(n.rpc.map(async (url) => {
+          const [b, c] = await Promise.all([count(rpcOne<`0x${string}`>(url, 'eth_getBalance', [addr, hx(block)])), count(rpcOne<`0x${string}`>(url, 'eth_getTransactionCount', [addr, hx(block)]))]);
+          return { balance: hexToBigInt(b), nonce: hexToNumber(c) };
+        }));
+        const ok = rs.filter((r): r is PromiseFulfilledResult<{ balance: bigint; nonce: number }> => r.status === 'fulfilled').map((r) => r.value);
+        if (!ok.length) {
+          const refused = rs.some((r) => r.status === 'rejected' && (r.reason as { rpcCode?: number }).rpcCode !== undefined && NO_HISTORY.test(String((r.reason as Error).message)));
+          if (refused) return null;
+          throw new ScanRetry(`state at block ${block} unavailable`);
+        }
+        if (ok.some((v) => v.balance !== ok[0]!.balance || v.nonce !== ok[0]!.nonce)) throw new ScanRetry(`endpoints disagree on the state at block ${block}`);
+        return { block, ...ok[0]! };
+      };
+      type Rc = { status: `0x${string}`; blockNumber: `0x${string}`; from: string; to: string | null; gasUsed: `0x${string}`; effectiveGasPrice?: `0x${string}`; l1Fee?: `0x${string}` };
+      type Tx = { hash: string; from: string; to: string | null; value: `0x${string}`; gasPrice?: `0x${string}` };
+      const receipt = (h: string) => count(call<Rc | null>('eth_getTransactionReceipt', [h]));
+      /** what one of the wallet's own transactions took from its native balance */
+      const costOf = (tx: Tx, rc: Rc): bigint => hexToBigInt(rc.gasUsed) * hexToBigInt(rc.effectiveGasPrice ?? tx.gasPrice ?? '0x0') + (rc.l1Fee ? hexToBigInt(rc.l1Fee) : 0n)
+        + (hexToNumber(rc.status) === 1 && (tx.to ?? '').toLowerCase() !== me ? hexToBigInt(tx.value) : 0n);
+      /** the wallet's own transactions the API knows, by block (loaded once, only when a nonce moved) */
+      let own: { hash: string; block: number; cost: bigint }[] | null = null;
+      const loadOwn = async (): Promise<{ hash: string; block: number; cost: bigint }[]> => {
+        if (own) return own;
+        const out: { hash: string; block: number; cost: bigint }[] = [];
+        for (const h of [...new Set((opts.own ?? []).map((x) => x.toLowerCase()))].slice(0, 25)) {
+          try {
+            const rc = await receipt(h);
+            if (!rc || rc.from.toLowerCase() !== me) continue;
+            const tx = await count(call<Tx | null>('eth_getTransactionByHash', [h]));
+            if (tx) out.push({ hash: h, block: hexToNumber(rc.blockNumber), cost: costOf(tx, rc) });
+          } catch (e) { throw new ScanRetry(`receipt of ${h.slice(0, 12)}: ${(e as Error).message.slice(0, 80)}`); }
+        }
+        return (own = out);
+      };
+      const ownIn = async (lo: number, hi: number) => (await loadOwn()).filter((t) => t.block > lo && t.block <= hi);
+      const headerHash = async (block: number): Promise<string> => { try { const b = await count(call<{ hash: string } | null>('eth_getBlockByNumber', [hx(block), false])); if (b?.hash) return b.hash; } catch { /* below */ } return `block:${block}`; };
+      /** a part that cannot be located: one deposit for its net unexplained increase, and a note in every case */
+      const aggregate = async (lo: NativeScanState, hi: NativeScanState, code: NativeScanNote['code']): Promise<void> => {
+        const known = hi.nonce !== lo.nonce ? await ownIn(lo.block, hi.block) : [];
+        const amount = hi.balance - lo.balance + known.reduce((s, t) => s + t.cost, 0n), unknownOwnTxs = hi.nonce - lo.nonce - known.length;
+        if (amount === 0n && unknownOwnTxs === 0) return;
+        notes.push({ code: amount < 0n ? 'unexplained_decrease' : code, fromBlock: lo.block + 1, toBlock: hi.block, amount: amount.toString(), unknownOwnTxs });
+        if (amount > 0n) items.push({ txid: await headerHash(hi.block), idx: NATIVE_IDX + 1, asset: 'native', amount, from: '', block: hi.block, time: null, via: 'aggregate' });
+      };
+      const leaf = async (lo: NativeScanState, hi: NativeScanState): Promise<void> => {
+        let b: { hash: string; timestamp: `0x${string}`; transactions: Tx[] } | null;
+        try { b = await count(call<{ hash: string; timestamp: `0x${string}`; transactions: Tx[] } | null>('eth_getBlockByNumber', [hx(hi.block), true])); } catch (e) { throw new ScanRetry(`block ${hi.block}: ${(e as Error).message.slice(0, 80)}`); }
+        if (!b) throw new ScanRetry(`block ${hi.block} not served`);
+        const time = hexToNumber(b.timestamp);
+        const mine = b.transactions.filter((t) => t.from.toLowerCase() === me);
+        const incoming = b.transactions.filter((t) => (t.to ?? '').toLowerCase() === me && t.from.toLowerCase() !== me && hexToBigInt(t.value) > 0n);
+        const found: Deposit[] = [];
+        let cost = 0n, direct = 0n;
+        try {
+          for (const t of mine) { const rc = await receipt(t.hash); if (!rc) throw new Error('no receipt'); cost += costOf(t, rc); }
+          for (const [k, t] of incoming.entries()) {
+            // a transfer to an account that runs code can revert: only a successful one moved value (the first 25 are checked)
+            if (k < 25) { const rc = await receipt(t.hash); if (!rc) throw new Error('no receipt'); if (hexToNumber(rc.status) !== 1) continue; }
+            direct += hexToBigInt(t.value);
+            found.push({ txid: t.hash, idx: NATIVE_IDX, asset: 'native', amount: hexToBigInt(t.value), from: t.from.toLowerCase(), block: hi.block, time, via: 'tx', blockHash: b.hash });
+          }
+        } catch (e) { throw new ScanRetry(`block ${hi.block}: ${(e as Error).message.slice(0, 80)}`); }
+        const residual = hi.balance - lo.balance + cost - direct;
+        if (residual > 0n) {
+          const sole = mine.length === 1 ? mine[0]! : null;
+          found.push({ txid: sole ? sole.hash : b.hash, idx: NATIVE_IDX, asset: 'native', amount: residual, from: sole ? (sole.to ?? '').toLowerCase() : '', block: hi.block, time, via: 'internal_call', blockHash: b.hash });
+        } else if (residual < 0n) notes.push({ code: 'unexplained_decrease', fromBlock: hi.block, toBlock: hi.block, amount: residual.toString() });
+        items.push(...found);
+      };
+      /** everything up to `frontier.block` is resolved; a left-first bisection keeps that true at every step */
+      let frontier: NativeScanState = prev ?? { block: 0, balance: 0n, nonce: 0 };
+      const resolve = async (lo: NativeScanState, hi: NativeScanState): Promise<boolean> => {
+        frontier = lo;
+        if (hi.nonce === lo.nonce && hi.balance === lo.balance) { frontier = hi; return true; }
+        if (hi.nonce !== lo.nonce) {
+          const known = await ownIn(lo.block, hi.block);
+          if (hi.nonce - lo.nonce === known.length && hi.balance - lo.balance + known.reduce((s, t) => s + t.cost, 0n) === 0n) { frontier = hi; return true; }
+        }
+        if (hi.block - lo.block === 1) {
+          if (leaves >= maxLeaves) return false;
+          leaves += 1; await leaf(lo, hi); frontier = hi; return true;
+        }
+        if (points >= maxPoints) return false;
+        const mid = await stateAt(lo.block + Math.floor((hi.block - lo.block) / 2));
+        if (!mid) { await aggregate(lo, hi, 'state_unavailable'); frontier = hi; return true; }
+        if (!(await resolve(lo, mid))) return false;
+        return resolve(mid, hi);
+      };
+      const head = hexToNumber(await count(call<`0x${string}`>('eth_blockNumber', [])));
+      const safe = head - n.minConf;
+      if (safe < 0) return { items, state: frontier, notes, calls };
+      if (!prev) { // first pass: a baseline, nothing to compare with
+        const s = await stateAt(safe);
+        if (!s) throw new Error('recent state not served by any endpoint');
+        return { items, state: s, notes, calls };
+      }
+      try {
+        for (let w = 0; w < maxWindows && frontier.block < safe; w++) {
+          const lo: NativeScanState = frontier, end = Math.min(safe, lo.block + maxWindow);
+          const hi = await stateAt(end);
+          if (!hi) {
+            // no endpoint keeps the state of that (old) block: everything up to the recent safe block becomes one aggregate
+            const now = end === safe ? null : await stateAt(safe);
+            if (!now) throw new ScanRetry('recent state not served by any endpoint');
+            await aggregate(lo, now, 'window_too_old'); frontier = now; break;
+          }
+          if (!(await resolve(lo, hi))) { notes.push({ code: 'budget_exhausted', fromBlock: frontier.block + 1, toBlock: hi.block, amount: '0' }); break; }
+        }
+      } catch (e) {
+        if (!(e instanceof ScanRetry)) throw e;
+        // stop at the frontier: what is before it is resolved and its deposits are kept; the rest is tried again
+        const at = frontier.block;
+        return { items: items.filter((d) => d.block <= at), state: frontier, notes: notes.filter((x) => x.toBlock <= at), calls };
+      }
+      return { items, state: frontier, notes, calls };
     },
   };
 }
