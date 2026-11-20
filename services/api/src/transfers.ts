@@ -207,7 +207,7 @@ export function transferRoutes(app: FastifyInstance): void {
   });
 
   app.get('/api/v1/transfers/proposals/:id', async (req) => view(await load((req.params as { id: string }).id)));
-  app.get('/api/v1/transfers/:id/status', async (req) => { const v = view(await load((req.params as { id: string }).id)); return { id: v.id, state: v.state, txid: v.txid, confirmations: v.confirmations, error: v.error, errorCode: v.errorCode, errorParams: v.errorParams, explorer: v.explorer, kind: v.kind, execution: v.execution }; });
+  app.get('/api/v1/transfers/:id/status', async (req) => { const v = view(await load((req.params as { id: string }).id)); return { id: v.id, state: v.state, /* NEXT (additive): the same life-cycle members as the full view */ lifecycle: v.lifecycle, finalized: v.finalized, watched: v.watched, feePaid: v.feePaid, feePaidDisplay: v.feePaidDisplay, txid: v.txid, confirmations: v.confirmations, error: v.error, errorCode: v.errorCode, errorParams: v.errorParams, explorer: v.explorer, kind: v.kind, execution: v.execution }; });
 
   // freeze the exact chain parameters, re-simulate, and issue the approval challenge = intent hash
   app.post('/api/v1/transfers/proposals/:id/request-approval', async (req) => {

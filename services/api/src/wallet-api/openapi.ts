@@ -63,7 +63,7 @@ function operationObject(o: WalletOp, schema: (s: z.ZodType, io: 'input' | 'outp
   return {
     operationId: o.id, tags: [o.tag], summary: o.summary, ...(o.description ? { description: o.description } : {}),
     security: o.auth === 'public' ? [] : [{ session: [] }], 'x-spw-auth': o.auth, 'x-spw-csrf': o.method !== 'GET',
-    ...(o.next ? { 'x-spw-since': 'next' } : {}), ...(o.changing ? { 'x-spw-changing': o.changing } : {}), ...(o.idempotencyKey ? { 'x-spw-idempotency-key': true } : {}),
+    ...(o.next ? { 'x-spw-since': 'next' } : {}), ...(o.idempotencyKey ? { 'x-spw-idempotency-key': true } : {}),
     'x-spw-errors': errors, ...(o.errorsOpen ? { 'x-spw-errors-open': true } : {}),
     parameters: parameters(o, schema),
     ...(o.body ? { requestBody: { required: true, content: { 'application/json': { schema: schema(o.body, 'input') } } } } : {}),
@@ -107,7 +107,9 @@ export function buildWalletOpenApi(): Json {
       'ENUMERATIONS are components. `x-spw-open: true` means new values may appear in a later release: decode with an "unknown" fallback (the known values are in `x-spw-values`). `x-spw-open: false` is frozen for good.',
       'ERRORS are `{ "error": "<code>", "message": "<English sentence>", "data"?: … }`. Every operation lists its codes with their status in `x-spw-errors`; `x-spw-errors-open` means a chain adapter or the signer can add one of its own (`signer_<code>`). What each code means and what to do: `x-spw-error-catalog`. A 400 `bad_request` from input validation carries `data.fields` (path, code, message — never the submitted value).',
       'A transfer\'s state is read in `lifecycle` (`x-spw-lifecycle`). `state` keeps the vocabulary shipped clients know and never grows. Once an approval left the device its outcome is unknown until the server answers: re-read the proposal, never assume failure.',
-      'Other route families of the same server are documented elsewhere: `x-spw-other-families`. Operations marked `x-spw-changing` are being redesigned and are described as the code is today.',
+      'IDLE RULE. A session ends after 30 minutes without activity (12 hours at most). A client marks the requests made on a real interaction of the user with the header `X-SPW-Interaction: 1` (`x-spw-interaction-header`); from the first such request on, only those keep the session alive — background polling no longer does. A session that never sent the header keeps the earlier behaviour (any authenticated request refreshes it).',
+      'CONTROL CHARACTERS. A NUL anywhere in a request (query, path, JSON body), or any control character in the query string or a path parameter, is refused with 400 `bad_request` before the route runs.',
+      'Other route families of the same server are documented elsewhere: `x-spw-other-families`.',
     ].join('\n\n') },
     servers: [{ url: '/', description: 'the wallet\'s own origin' }],
     tags: TAGS.map((name) => ({ name, description: TAG_TEXT[name] })),
@@ -121,6 +123,8 @@ export function buildWalletOpenApi(): Json {
     'x-spw-transfer-warnings': Object.entries(TRANSFER_WARNINGS).map(([code, w]) => ({ code, ...w })),
     'x-spw-event-types': Object.entries(EVENT_TYPES).map(([type, description]) => ({ type, description })),
     'x-spw-other-families': OTHER_FAMILIES,
+    'x-spw-interaction-header': { name: 'X-SPW-Interaction', value: '1', in: 'header', required: false, idleMinutes: 30, absoluteHours: 12,
+      description: 'Send it on requests caused by the user (a tap, a navigation), never on timers. Once a session has sent it, requests without it no longer refresh the idle timer.' },
   };
 }
 /** the exact bytes written to docs/openapi/wallet-v1.json */
@@ -132,8 +136,8 @@ const cell = (s: string): string => s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
 export function walletDocSections(): Record<string, string> {
   const cat = errorCatalog(), L = (rows: string[]) => rows.join('\n');
   const routes = ['| Method | Path | Tag | Session | Since | Summary |', '|---|---|---|---|---|---|',
-    ...OPERATIONS.map((o) => `| ${o.method} | \`${oaPath(o.path)}\` | ${o.tag} | ${o.auth === 'public' ? 'public' : 'owner'} | ${o.next ? 'NEXT' : 'v1'} | ${cell(o.summary)}${o.produces ? ` (${o.produces})` : ''}${o.changing ? ' †' : ''} |`),
-    '', `${OPERATIONS.length} operations. † = being redesigned, described as the code is today (see the TODO list).`];
+    ...OPERATIONS.map((o) => `| ${o.method} | \`${oaPath(o.path)}\` | ${o.tag} | ${o.auth === 'public' ? 'public' : 'owner'} | ${o.next ? 'NEXT' : 'v1'} | ${cell(o.summary)}${o.produces ? ` (${o.produces})` : ''} |`),
+    '', `${OPERATIONS.length} operations.`];
   const errors = ['| Code | Status | Meaning | What the client does |', '|---|---|---|---|', ...Object.entries(cat).map(([code, d]) => `| \`${code}\` | ${d.statuses.join(', ')} | ${cell(d.meaning)} | ${cell(d.action)} |`)];
   const perRoute = ['| Operation | Codes beyond the common ones |', '|---|---|',
     ...OPERATIONS.filter((o) => (o.errors ?? []).length || o.errorsOpen).map((o) => `| ${o.method} \`${oaPath(o.path)}\` | ${(o.errors ?? []).map((e) => `\`${e.code}\` (${e.status})`).filter((x, i, a) => a.indexOf(x) === i).join(', ')}${o.errorsOpen ? `${(o.errors ?? []).length ? ', ' : ''}*open*` : ''} |`)];
@@ -142,9 +146,8 @@ export function walletDocSections(): Record<string, string> {
   const warnings = ['| Warning | Meaning | Acknowledge before approving | Emitted |', '|---|---|---|---|', ...Object.entries(TRANSFER_WARNINGS).map(([code, w]) => `| \`${code}\` | ${cell(w.meaning)} | ${w.ack ? 'yes' : 'no'} | ${w.emitted ? 'yes' : 'reserved'} |`)];
   const enums = ['| Enumeration | New values may appear | Known values |', '|---|---|---|', ...Object.entries(ENUMS as Record<string, EnumDoc>).map(([name, e]) => `| \`${name}\` | ${e.open ? '**yes** — decode with a fallback' : 'no (frozen)'} | ${e.values.map((v) => `\`${v}\``).join(', ')} |`)];
   const events = ['| `type` | What happened |', '|---|---|', ...Object.entries(EVENT_TYPES).map(([t, d]) => `| \`${t}\` | ${cell(d)} |`)];
-  const todo = ['| Operation | What is changing |', '|---|---|', ...OPERATIONS.filter((o) => o.changing).map((o) => `| ${o.method} \`${oaPath(o.path)}\` (\`${o.id}\`) | ${cell(o.changing!)} |`)];
   const families = ['| Prefix | Documented in |', '|---|---|', ...Object.entries(OTHER_FAMILIES).map(([p, d]) => `| \`${p}\` | ${cell(d)} |`)];
-  return { routes: L(routes), errors: L(errors), 'errors-per-route': L(perRoute), lifecycle: L(lifecycle), outcomes: L(outcomes), warnings: L(warnings), enums: L(enums), events: L(events), todo: L(todo), families: L(families) };
+  return { routes: L(routes), errors: L(errors), 'errors-per-route': L(perRoute), lifecycle: L(lifecycle), outcomes: L(outcomes), warnings: L(warnings), enums: L(enums), events: L(events), families: L(families) };
 }
 /** `doc` with every generated section replaced by what the table gives now; throws when a marker is missing */
 export function applyDocSections(doc: string): string {

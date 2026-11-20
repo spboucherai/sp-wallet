@@ -56,7 +56,7 @@ const After = z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 export function eventRoutes(app: FastifyInstance): void {
   app.get('/api/v1/events', async (req) => {
     const q = z.object({ after: After.default(0), limit: z.coerce.number().int().min(1).max(PAGE).default(PAGE) }).parse(req.query);
-    if (!(await resumable(q.after))) return { reset: true, events: [], latest: await latestEventId() };
+    if (!(await resumable(q.after))) return { reset: true, events: [], latest: await latestEventId(), more: false };
     const events = await eventsAfter(q.after, q.limit);
     return { reset: false, events, latest: await latestEventId(), more: events.length === q.limit };
   });

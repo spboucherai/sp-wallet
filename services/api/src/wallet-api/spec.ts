@@ -19,7 +19,7 @@
 //   estimates    a figure that is an estimate, partial or stale carries the member that says so;
 //   enums        every enumeration is named in `ENUMS` with `open`: true = new values may appear, decode with a fallback.
 import { z } from 'zod';
-import { LIFECYCLES, STATES } from '@spw/core'; // the two vocabularies of a transfer (pure tables)
+import { ALERT_KINDS, CRED_MAX_TTL_SEC, LIFECYCLES, STATES } from '@spw/core'; // pure tables: the two vocabularies of a transfer, the alert catalogue
 import { SV } from '../sv-texts.ts'; // pure: the catalogue of server-authored outcome sentences
 
 export const WALLET_PREFIX = '/api/v1';
@@ -64,8 +64,13 @@ export const EVENT_TYPES: Record<string, string> = {
   'deposit.native_window': 'EVM native-coin scan: a balance difference was located to a block window, not to a transaction',
   'deposit.scan_gap': 'a transaction of the deposit scan is no longer served by any source',
   'device.added': 'a passkey was added — `data`: `{ credential, label }`',
+  'device.revoked': 'a passkey was revoked — `data`: `{ credential, label, signer, sessions, ip }` (`signer`: it was on the signer\'s list; `sessions`: sessions it had opened, ended with it)',
+  'session.revoked': 'one session was revoked by its public id — `data`: `{ session, current, ip }`',
+  'credentials.mismatch': 'the signer\'s passkey list and the API\'s differ, and still did 30 s later — `data`: `{ count, signerOnly, apiOnly }` (12-character id prefixes)',
+  'credentials.reconciled': 'the two passkey lists agree again',
+  'settings.saved': 'account settings changed — `data`: `{ changed: { locale?, currency?, hideBalances?, prices?, theme? } }`: re-read GET /settings',
   'sessions.revoked': 'every session was revoked',
-  'login.ok': 'a sign-in succeeded — `data`: `{ credential, ip }`',
+  'login.ok': 'a sign-in succeeded — `data`: `{ credential, ip, label, device, newDevice, session }`',
   'owner.setup': 'the first passkey was enrolled (one-time setup)',
   'addressbook.saved': 'a contact was created or changed — `data`: `{ network, address, label }`',
   'addressbook.removed': 'a contact was deleted',
@@ -105,6 +110,7 @@ export const ENUMS = {
   DepositDetection: { values: ['tx', 'internal_call', 'aggregate'], open: true, description: 'How a native-coin deposit was located: its transaction, a contract call inside a block, or a balance difference over a block window (`txidIsBlock`).' },
   FlowScope: { values: ['external', 'internal', 'ownAccounts'], open: false, description: 'Classification of a movement: external (in from / out to someone else), internal (the wallet\'s own swaps, bridges, self-transfers: nothing entered or left), ownAccounts (to / from the owner\'s agent vaults and venue accounts).' },
   EventType: { values: Object.keys(EVENT_TYPES), open: true, docs: EVENT_TYPES, description: 'Types of the wallet event log. Every audit type matching deposit.*, device.*, session(s).*, addressbook.*, settings.*, halt.*, security.* is mirrored: new types appear without notice.' },
+  AlertKind: { values: ALERT_KINDS, open: true, description: 'Kind of an alert (packages/core/src/alert-catalog.ts, which also holds its FR / EN wording). A release adds kinds: show an unknown one with its `kind` and severity.' },
   AlertSeverity: { values: ['info', 'warning', 'critical'], open: false, description: 'Severity of an alert.' },
   AlertGroup: { values: ['transfers', 'agents', 'derivatives', 'security', 'system'], open: true, description: 'Group of an alert kind.' },
   Currency: { values: ['USD', 'CAD'], open: false, description: 'Display currency.' },
@@ -191,17 +197,23 @@ const ActivityIn = component('ActivityReceipt', obj({
   contactLabel: z.string().nullable().describe('NEXT: address-book label of `from`, when the address is a contact'),
 }));
 const Contact = component('Contact', obj({ id: z.uuid(), network: z.string(), address: z.string(), label: z.string(), note: z.string(), favorite: z.boolean(), created_at: Iso, updatedAt: Iso.nullable() }));
-const AlertView = component('Alert', obj({ id: z.number().int(), ts: Ms, kind: z.string().describe('alert kind (packages/core/src/alert-catalog.ts); new kinds appear with releases'), severity: En('AlertSeverity'), group: En('AlertGroup'),
+const AlertView = component('Alert', obj({ id: z.number().int(), ts: Ms, kind: En('AlertKind'), severity: En('AlertSeverity'), group: En('AlertGroup'),
   params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])), subject: obj({ type: z.string(), id: z.string().optional(), network: z.string().optional() }).nullable(), count: z.number().int(), readAt: Ms.nullable(),
   delivery: z.string().describe('pending, inapp, sent, quiet, capped, off…'), channels: Open }));
 const Unread = obj({ unread: z.number().int(), critical: z.number().int(), lastId: z.number().int() });
 const AlertSettings = obj({ rules: z.record(z.string(), z.boolean()), quiet: obj({ enabled: z.boolean(), start: z.string(), end: z.string(), tz: z.string() }), showDetails: z.boolean().describe('amounts, prices and reasons in push notifications (lock screen). Off by default'),
   capPerHour: z.number().int(), thresholds: z.record(z.string(), z.number()), webhook: obj({ enabled: z.boolean(), url: z.string(), details: z.boolean() }) });
-const AlertSettingsView = obj({ settings: AlertSettings, kinds: z.array(obj({ kind: z.string(), group: En('AlertGroup'), severity: En('AlertSeverity'), default: z.boolean(), fixed: z.boolean() })), webhook: obj({ secretSet: z.boolean() }), webhookSample: Open });
+const AlertSettingsView = obj({ settings: AlertSettings, kinds: z.array(obj({ kind: En('AlertKind'), group: En('AlertGroup'), severity: En('AlertSeverity'), default: z.boolean(), fixed: z.boolean() })), webhook: obj({ secretSet: z.boolean() }), webhookSample: Open });
 const PushSub = obj({ id: z.uuid(), label: z.string(), locale: z.string(), service: z.string(), endpointTail: z.string(), ua: z.string(), createdAt: Ms, lastOkAt: Ms.nullable(), lastError: z.string().nullable(), failures: z.number().int() });
 const WalletEvent = component('WalletEvent', obj({ id: z.number().int().describe('increasing; the position a client remembers'), at: Iso, type: En('EventType'), ref: z.string().nullable().describe('the object to re-read (a proposal id…)'), data: Open }));
 const Settings = obj({ locale: z.enum(['fr', 'en']), currency: En('Currency'), hideBalances: z.boolean(), prices: z.boolean(), theme: z.enum(['system', 'light', 'dark']) });
 const Ok = obj({ ok: z.literal(true) });
+/** SPW-CRED-v2 (packages/core/src/credential.ts): what an ENROLLED passkey approves to add another passkey or to revoke one */
+const CredentialRequest = component('CredentialRequest', obj({
+  v: z.literal(2), action: z.enum(['add', 'revoke']), requestId: z.uuid().describe('single use: the signer records it and refuses it a second time'), keyId: z.string().describe('the signer this request is for'),
+  credentialId: z.string().describe('WebAuthn credential id, base64url: the passkey to add, or the one to revoke'), publicKey: z.string().optional().describe('`add` only: COSE public key of the new passkey, base64url'),
+  createdAt: z.number().int().describe('Unix seconds'), expiresAt: z.number().int().describe(`Unix seconds; at most ${CRED_MAX_TTL_SEC} s after createdAt`),
+}).describe('The canonical credential request. The WebAuthn challenge of `options` is the SHA-256 of its domain-separated, length-prefixed serialisation (domain `SPW-CRED-v2`; fields v, action, requestId, keyId, credentialId, publicKey — empty for a revocation —, createdAt, expiresAt, in that order). A client that shows or re-derives what is being approved reads it here; the signer verifies the approval itself.'));
 const WebAuthnOptions = Open.describe('WebAuthn options (PublicKeyCredentialRequestOptions / CreationOptions as JSON), to hand to the platform API');
 const Section = (data: z.ZodType) => z.union([obj({ ok: z.literal(true), data, asOf: Ms }), obj({ ok: z.literal(false), error: obj({ code: z.string(), message: z.string() }) })]).describe('one source, isolated: its answer, or why it could not be read');
 const DashboardItem = obj({ id: z.string(), kind: z.string().describe('transfer, receive, swap, bridge, plan, order, agent, mandate, risk, key, security'), source: z.string(), at: Iso, mode: z.string().nullable(), venue: z.string().nullable(), network: z.string().nullable(),
@@ -280,6 +292,10 @@ export const WALLET_ERRORS: Record<string, [meaning: string, action: string]> = 
   registration_failed: ['the passkey registration could not be verified', 'try again'],
   login_failed: ['authentication failed (unknown passkey or bad assertion)', 'try again; repeated failures raise an alert'],
   expired: ['the approval window, or the pending passkey, expired', 'start again'],
+  last_credential: ['the last passkey on the signer cannot be revoked', 'add another passkey first'],
+  no_approver: ['no other passkey can approve this revocation (none enrolled on the signer and out of its cool-down)', 'wait for the cool-down of the other passkey, or add one'],
+  self_approval: ['a passkey cannot approve its own revocation', 'approve with another passkey'],
+  bad_approval: ['the approval could not be verified against the signer\'s list', 'approve again with a passkey the signer lists'],
   // transfers
   idempotency: ['the `Idempotency-Key` header is missing or malformed (16–64 letters, digits, dashes)', 'send one key per intended transfer'],
   idempotency_mismatch: ['this Idempotency-Key was already used for a different request', 'use a new key'],
@@ -349,26 +365,24 @@ export interface WalletOp {
   errorsOpen?: boolean;
   /** added by SP Wallet NEXT */
   next?: boolean;
-  /** the route is being redesigned (credential and session life cycle): described as the code is today */
-  changing?: string;
 }
 const op = (id: string, method: WalletOp['method'], path: string, tag: WalletTag, summary: string, o: Partial<WalletOp> = {}): WalletOp => ({ id, method, path: WALLET_PREFIX + path, tag, summary, auth: 'session', ...o });
-const CRED_WIP = 'credential life cycle v2 (signed, expiring, single-use add / revoke objects verified by the signer)';
-const SESSION_WIP = 'sessions get public ids and per-session revoke; login history';
 
 export const OPERATIONS: WalletOp[] = [
   // ---- meta
   op('healthLive', 'GET', '/health/live', 'Meta', 'Liveness', { auth: 'public', response: obj({ ok: z.literal(true) }) }),
   op('healthReady', 'GET', '/health/ready', 'Meta', 'Readiness: database, signer, networks, data sources', { response: obj({ db: z.boolean(), signer: obj({ ok: z.boolean(), halted: z.boolean().nullable() }), networks: z.array(Health), rpcEndpoints: z.array(Open) }) }),
+  op('getOpenApi', 'GET', '/openapi.json', 'Meta', 'This document', { next: true, response: Open.describe('an OpenAPI 3.1 document: openapi, info, servers, tags, paths, components, and the `x-spw-*` catalogues'),
+    description: 'The OpenAPI 3.1 document as built into this server (the content of docs/openapi/wallet-v1.json). Owner session, like every route.' }),
   // ---- authentication
   op('authState', 'GET', '/auth/state', 'Auth', 'Is the wallet set up, and is this client signed in', { auth: 'public', response: obj({ setupRequired: z.boolean(), authenticated: z.boolean() }) }),
   op('setupOptions', 'POST', '/auth/setup/options', 'Auth', 'One-time setup: passkey creation options', { auth: 'public', response: obj({ challengeId: z.uuid(), options: WebAuthnOptions }), errors: E(403, 'setup_closed'), description: 'Closed for ever once a passkey exists.' }),
   op('setupVerify', 'POST', '/auth/setup/verify', 'Auth', 'One-time setup: enrol the first passkey with the signer\'s setup token', { auth: 'public', body: RegBody, response: Ok, errors: [...E(401, 'challenge_expired', 'registration_failed'), ...E(403, 'setup_closed', 'setup_token'), ...C.signer], errorsOpen: true,
     description: 'The signer validates the one-time token and pins the passkey as the only approver. Sets the session cookie. A wrong token is refused by the signer (`signer_<code>`, 422).' }),
-  op('loginOptions', 'POST', '/auth/login/options', 'Auth', 'Sign-in: assertion options', { auth: 'public', response: obj({ challengeId: z.uuid(), options: WebAuthnOptions }), changing: SESSION_WIP }),
-  op('loginVerify', 'POST', '/auth/login/verify', 'Auth', 'Sign-in: verify the assertion, open a session', { auth: 'public', body: AuthBody, response: Ok, errors: E(401, 'challenge_expired', 'login_failed'), changing: SESSION_WIP,
-    description: 'Sets the `__Host-spw` cookie (HttpOnly, Secure, SameSite=Strict). A challenge is single-use.' }),
-  op('logout', 'POST', '/auth/logout', 'Auth', 'End this session', { auth: 'public', response: Ok, changing: SESSION_WIP }),
+  op('loginOptions', 'POST', '/auth/login/options', 'Auth', 'Sign-in: assertion options', { auth: 'public', response: obj({ challengeId: z.uuid(), options: WebAuthnOptions }), }),
+  op('loginVerify', 'POST', '/auth/login/verify', 'Auth', 'Sign-in: verify the assertion, open a session', { auth: 'public', body: AuthBody, response: Ok, errors: E(401, 'challenge_expired', 'login_failed'), 
+    description: 'Sets the `__Host-spw` cookie (HttpOnly, Secure, SameSite=Strict). A challenge is single-use. A passkey the signer no longer lists opens no session (`login_failed`); when the signer does not answer, or holds no passkey at all, the API\'s own table decides — the wallet can then be viewed, and nothing can be approved.' }),
+  op('logout', 'POST', '/auth/logout', 'Auth', 'End this session', { auth: 'public', response: Ok, }),
   // ---- wallet reads
   op('listNetworks', 'GET', '/networks', 'Wallet', 'The networks of the wallet, with their verified assets and their health', { response: z.array(obj({ id: z.string(), name: z.string(), family: z.string().describe('evm, btc, sol, or a plugin family; new families appear'), chainRef: z.string(), native: Asset, tokens: z.array(Asset),
     memo: z.string().nullable().describe('`text` or `uint32` when transfers carry a memo / tag'), activation: z.string().nullable(), explorerAddr: z.string(), minConf: z.number().int(), health: Health.nullable().describe('null until the first health pass') })) }),
@@ -401,8 +415,8 @@ export const OPERATIONS: WalletOp[] = [
     description: 'Creates a `draft`. The same Idempotency-Key with the same body answers the same draft; with another body, 409. Nothing is signed.' }),
   op('getTransfer', 'GET', '/transfers/proposals/:id', 'Transfers', 'One proposal', { params: UuidParam, response: Proposal, errors: C.proposal }),
   op('getTransferStatus', 'GET', '/transfers/:id/status', 'Transfers', 'The short status of one proposal', { params: UuidParam, errors: C.proposal,
-    response: obj({ id: z.uuid(), state: En('ProposalState'), txid: z.string().nullable(), confirmations: z.number().int(), error: z.string().nullable(), errorCode: En('ProposalErrorCode').nullable(), errorParams: proposalFields.errorParams, explorer: z.string().nullable(), kind: En('ProposalKind'), execution: proposalFields.execution }),
-    description: 'Legacy short form (no `lifecycle`): new clients read GET /transfers/proposals/:id.' }),
+    response: obj({ id: z.uuid(), state: En('ProposalState'), lifecycle: En('Lifecycle'), finalized: z.boolean(), watched: z.boolean(), feePaid: proposalFields.feePaid, feePaidDisplay: proposalFields.feePaidDisplay, txid: z.string().nullable(), confirmations: z.number().int(), error: z.string().nullable(), errorCode: En('ProposalErrorCode').nullable(), errorParams: proposalFields.errorParams, explorer: z.string().nullable(), kind: En('ProposalKind'), execution: proposalFields.execution }),
+    description: 'The short form for polling. NEXT added `lifecycle`, `finalized`, `watched`, `feePaid`, `feePaidDisplay`.' }),
   op('requestApproval', 'POST', '/transfers/proposals/:id/request-approval', 'Transfers', 'Freeze the exact transaction and get the passkey challenge', { params: UuidParam, errorsOpen: true,
     response: obj({ proposal: Proposal, intent: Open.describe('the canonical intent: every field the signer will check; its SHA-256 is the challenge'), options: WebAuthnOptions }),
     errors: [...C.proposal, ...E(409, 'bad_state', 'pending_tx', 'conflict'), ...E(422, 'policy'), ...E(423, 'halted'), ...C.signer, ...C.chain],
@@ -426,19 +440,44 @@ export const OPERATIONS: WalletOp[] = [
   op('listContacts', 'GET', '/contacts', 'AddressBook', 'Contacts with note and favourite, favourites first', { next: true, response: obj({ contacts: z.array(Contact) }) }),
   // ---- settings
   op('getSettings', 'GET', '/settings', 'Settings', 'Account settings shared by every device', { response: Settings }),
-  op('putSettings', 'PUT', '/settings', 'Settings', 'Change settings (any subset)', { body: z.strictObject({ locale: z.enum(['fr', 'en']), currency: z.enum(['USD', 'CAD']), hideBalances: z.boolean(), prices: z.boolean(), theme: z.enum(['system', 'light', 'dark']) }).partial(), response: Settings }),
+  op('putSettings', 'PUT', '/settings', 'Settings', 'Change settings (any subset)', { description: 'Writes the audit event `settings.saved` (the keys changed and their new values), mirrored into the wallet event log so that other devices follow.', body: z.strictObject({ locale: z.enum(['fr', 'en']), currency: z.enum(['USD', 'CAD']), hideBalances: z.boolean(), prices: z.boolean(), theme: z.enum(['system', 'light', 'dark']) }).partial(), response: Settings }),
   // ---- security
-  op('securityOverview', 'GET', '/security/overview', 'Security', 'Signer state, passkeys, sessions', { changing: `${CRED_WIP}; ${SESSION_WIP}`, response: obj({
-    signer: obj({ reachable: z.boolean(), keyId: z.string().optional(), halted: z.boolean().optional(), journalLength: z.number().optional(), journalHead: z.string().nullable().optional(), policy: Open.optional(), spentToday: z.record(z.string(), z.string()).optional() }).describe('only `reachable: false` when the signer cannot be reached'),
-    devices: z.array(obj({ id: z.string().describe('first 12 characters of the credential id'), label: z.string(), deviceType: z.string(), backedUp: z.boolean(), createdAt: Iso, lastUsedAt: Iso.nullable(), enrolledOnSigner: z.boolean() })),
-    sessions: z.array(obj({ created_at: Iso, last_seen: Iso, ua: z.string(), ip: z.string() })), origin: z.string(), broadcast: z.boolean() }) }),
+  op('securityOverview', 'GET', '/security/overview', 'Security', 'Signer state, passkeys (both lists), sessions', { response: obj({
+    signer: obj({ reachable: z.boolean(), keyId: z.string().optional(), halted: z.boolean().optional(), journalLength: z.number().optional(), journalHead: z.string().nullable().optional(), policy: Open.optional(), spentToday: z.record(z.string(), z.string()).optional(),
+      recoveryExportedAt: Iso.nullable().optional().describe('when the recovery phrase was last displayed on the signer; null: never recorded'), recoveryVerifiedAt: Iso.nullable().optional().describe('when the recovery phrase was last proved; null: never'),
+      credentialCooldownSec: z.number().optional().describe('how long a newly added passkey cannot approve anything (0 = off)') }).describe('only `reachable: false` when the signer cannot be reached'),
+    devices: z.array(obj({ id: z.string().describe('first 12 characters of the credential id'), label: z.string(), deviceType: z.string(), backedUp: z.boolean(), createdAt: Iso, lastUsedAt: Iso.nullable(), enrolledOnSigner: z.boolean(),
+      credentialId: z.string().describe('the full credential id: what the revoke routes take'), inCooldown: z.boolean(), revocable: z.boolean().describe('false for the last passkey on the signer, and while the signer is unreachable') })).describe('the API\'s own table: a copy'),
+    sessions: z.array(obj({ created_at: Iso, last_seen: Iso, ua: z.string(), ip: z.string(), id: z.uuid().describe('PUBLIC id of the session (never derived from its token): what POST /security/sessions/{id}/revoke takes'), current: z.boolean(),
+      device: z.string().describe('coarse label: browser · system'), credential: z.string().nullable().describe('12-character prefix of the passkey that opened it; null for a session older than NEXT') })),
+    origin: z.string(), broadcast: z.boolean(),
+    signerCredentials: z.array(obj({ id: z.string(), createdAt: Iso, lastUsedAt: Iso.nullable(), inCooldown: z.boolean(), cooldownUntil: z.number().nullable().describe('Unix seconds'), known: z.boolean().describe('false: pinned on the signer with no row in the API — it can approve and is listed nowhere else'),
+      label: z.string().nullable(), revocable: z.boolean() })).nullable().describe('the SIGNER\'s list — the source of truth for who can approve; null when it cannot be reached'),
+    mismatch: z.array(obj({ id: z.string(), side: z.enum(['signer', 'api']) })).nullable().describe('credential ids known to one side only; null when the signer cannot be reached'),
+    currentSessionId: z.uuid().nullable() }),
+    description: 'Every member that existed before NEXT keeps its name and type. A divergence between the two passkey lists that lasts 30 s is written once to the audit chain (`credentials.mismatch`) and raises the alert `security.credential_mismatch`.' }),
+  op('listLogins', 'GET', '/security/logins', 'Security', 'The last sign-ins', { next: true, query: z.object({ limit: Limit(20, 200) }),
+    response: obj({ logins: z.array(obj({ seq: z.number().int(), at: Iso, credential: z.string().nullable(), label: z.string().nullable(), ip: z.string().nullable(), device: z.string().nullable(), newDevice: z.boolean().nullable().describe('no session had ever been opened with this user agent'), session: z.string().nullable() })) }),
+    description: 'From the audit chain (`login.ok`), newest first. Members a record written before NEXT does not carry are null.' }),
   op('securityAudit', 'GET', '/security/audit', 'Security', 'The audit hash chain, newest first', { query: z.object({ limit: Limit(100, 500) }),
     response: obj({ events: z.array(obj({ seq: z.number().int(), ts: Iso, type: z.string(), actor: z.string(), data: Open, prev: z.string(), hash: z.string() })), intact: z.boolean(), brokenAt: z.number().nullable(), total: z.number().int() }) }),
-  op('listDevices', 'GET', '/security/devices', 'Security', 'Passkeys known to the API', { changing: CRED_WIP, response: z.array(obj({ id: z.string(), label: z.string(), createdAt: Iso, lastUsedAt: Iso.nullable() })) }),
-  op('deviceOptions', 'POST', '/security/devices/options', 'Security', 'Add a passkey, step 1: creation options', { changing: CRED_WIP, response: obj({ challengeId: z.uuid(), options: WebAuthnOptions }) }),
-  op('deviceVerify', 'POST', '/security/devices/verify', 'Security', 'Add a passkey, step 2: verify the new passkey, get the challenge an EXISTING passkey must sign', { changing: CRED_WIP, body: RegBody, response: obj({ pendingId: z.string(), options: WebAuthnOptions }), errors: E(401, 'challenge_expired', 'registration_failed') }),
-  op('deviceConfirm', 'POST', '/security/devices/confirm', 'Security', 'Add a passkey, step 3: the existing passkey\'s assertion; the signer enrols', { changing: CRED_WIP, body: z.object({ pendingId: z.string().max(1024), assertion: z.any() }), response: Ok, errors: [...E(400, 'expired'), ...C.signer], errorsOpen: true }),
-  op('revokeAllSessions', 'POST', '/security/sessions/revoke-all', 'Security', 'Revoke every session, this one included', { changing: SESSION_WIP, response: Ok }),
+  op('listDevices', 'GET', '/security/devices', 'Security', 'Passkeys known to the API', { response: z.array(obj({ id: z.string(), label: z.string(), createdAt: Iso, lastUsedAt: Iso.nullable() })) }),
+  op('deviceOptions', 'POST', '/security/devices/options', 'Security', 'Add a passkey, step 1: creation options', { response: obj({ challengeId: z.uuid(), options: WebAuthnOptions }) }),
+  op('deviceVerify', 'POST', '/security/devices/verify', 'Security', 'Add a passkey, step 2: verify the new passkey, get the request an ENROLLED passkey must approve', { body: RegBody, errorsOpen: true,
+    response: obj({ pendingId: z.string(), options: WebAuthnOptions.describe('assertion options: challenge = SHA-256 of `request`; allowCredentials = the passkeys that may approve (on the signer, out of cool-down, not the new one)'), request: CredentialRequest }),
+    errors: [...E(401, 'challenge_expired', 'registration_failed'), ...C.signer],
+    description: 'The server builds an `add` credential request (valid 5 minutes, single use). A client that signs `options` as returned works unchanged; one that recomputed the pre-NEXT `SPW-ENROLL-v1` challenge must be updated.' }),
+  op('deviceConfirm', 'POST', '/security/devices/confirm', 'Security', 'Add a passkey, step 3: the enrolled passkey\'s assertion; the signer verifies it and pins the new passkey', { body: z.object({ pendingId: z.string().max(1024), assertion: z.any() }), response: Ok, errors: [...E(400, 'expired'), ...C.signer], errorsOpen: true,
+    description: 'Refusals are the signer\'s own: `signer_bad_approval`, `signer_expired`, `signer_cooldown` (the approving passkey was added too recently), `signer_self_approval`… A lost answer is safe to repeat: when the signer says the request was already applied and lists the passkey, the call succeeds.' }),
+  op('revokeDeviceOptions', 'POST', '/security/devices/revoke/options', 'Security', 'Revoke a passkey, step 1: the request ANOTHER enrolled passkey must approve', { next: true, body: z.strictObject({ credentialId: z.string().min(16).max(1024).describe('`devices[].credentialId` or `signerCredentials[].id` of the overview') }), errorsOpen: true,
+    response: obj({ challengeId: z.uuid(), request: CredentialRequest, options: WebAuthnOptions.describe('assertion options: challenge = SHA-256 of `request`; allowCredentials never contains the passkey being revoked') }),
+    errors: [...E(404, 'not_found'), ...E(409, 'last_credential', 'no_approver'), ...C.signer] }),
+  op('revokeDeviceConfirm', 'POST', '/security/devices/revoke/confirm', 'Security', 'Revoke a passkey, step 2: the approval; the signer removes it, its sessions end', { next: true, body: z.object({ challengeId: z.uuid(), assertion: z.any() }), errorsOpen: true,
+    response: obj({ ok: z.literal(true), signer: z.boolean().describe('true: the passkey was on the signer\'s list and the signer removed it; false: only the API\'s row existed'), sessionsRevoked: z.number().int() }),
+    errors: [...E(400, 'self_approval'), ...E(401, 'challenge_expired'), ...E(422, 'bad_approval'), ...C.signer],
+    description: 'The challenge is single use. The signer judges the approval (`signer_bad_approval`, `signer_cooldown`, `signer_last_credential`…). A row the signer does not list is removed on the API\'s own verification of the same request by a passkey the signer does list (`bad_approval` otherwise).' }),
+  op('revokeAllSessions', 'POST', '/security/sessions/revoke-all', 'Security', 'Revoke every session, this one included', { response: Ok }),
+  op('revokeSession', 'POST', '/security/sessions/:id/revoke', 'Security', 'Revoke one session by its public id', { next: true, params: UuidParam, response: obj({ ok: z.literal(true), current: z.boolean().describe('true: it was this session; its cookie is cleared') }), errors: E(404, 'not_found') }),
   op('emergencyHalt', 'POST', '/security/emergency-halt', 'Security', 'Trigger the emergency halt of the signer', { response: obj({ ok: z.literal(true), halted: z.literal(true) }), errors: C.signer, errorsOpen: true, description: 'One-way from the app: lifting the halt requires the command line on the signer machine.' }),
   // ---- alerts
   op('listAlerts', 'GET', '/alerts', 'Alerts', 'In-app alerts, newest first', { query: z.object({ limit: Limit(50, 200), before: z.coerce.number().int().positive().optional().describe('ids strictly below'), severity: z.enum(['info', 'warning', 'critical']).optional(), group: z.enum(['transfers', 'agents', 'derivatives', 'security', 'system']).optional(), unread: z.enum(['1']).optional() }),
@@ -460,7 +499,7 @@ export const OPERATIONS: WalletOp[] = [
   op('testPush', 'POST', '/push/test', 'Alerts', 'Send a test notification', { body: z.strictObject({ id: z.uuid().optional() }), response: obj({ results: z.array(obj({ id: z.uuid(), ok: z.boolean(), status: z.number().nullable(), removed: z.boolean(), error: z.string().nullable() })) }), errors: E(404, 'not_found') }),
   // ---- events
   op('listEvents', 'GET', '/events', 'Events', 'Catch-up read of the wallet event log', { next: true, query: z.object({ after: z.coerce.number().int().min(0).default(0).describe('the last event id processed'), limit: Limit(500, 500) }),
-    response: obj({ reset: z.boolean().describe('true: the position cannot be resumed — forget it, reload everything, continue from `latest`'), events: z.array(WalletEvent), latest: z.number().int(), more: z.boolean().optional().describe('absent when `reset`') }),
+    response: obj({ reset: z.boolean().describe('true: the position cannot be resumed — forget it, reload everything, continue from `latest`'), events: z.array(WalletEvent), latest: z.number().int(), more: z.boolean().describe('true: the page is full, ask again from the last id. Always present (false on `reset`)') }),
     description: 'Events are facts that say "look": re-read the object named by `ref`. Delivered at least once; processing an id twice must be harmless.' }),
   op('streamEvents', 'GET', '/events/stream', 'Events', 'The wallet event log as Server-Sent Events', { next: true, produces: 'text/event-stream', query: z.object({ after: z.coerce.number().int().min(0).optional() }), errors: E(429, 'too_many_streams'),
     description: 'Resumed with the standard `Last-Event-ID` header (or `?after=`). First event: `hello` `{ from }` (no id), or `reset` `{ latest }` when the position cannot be resumed. Then one event per row: `id:` = event id, `event:` = type, `data:` = the event. Ends after ten minutes; polling GET /events stays valid.' }),

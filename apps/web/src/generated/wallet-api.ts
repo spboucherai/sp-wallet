@@ -13,6 +13,9 @@ export type ActivityRowKind = (typeof ACTIVITY_ROW_KIND_VALUES)[number] | (strin
 /** Group of an alert kind. OPEN: new values may appear. */
 export const ALERT_GROUP_VALUES = ["transfers", "agents", "derivatives", "security", "system"] as const;
 export type AlertGroup = (typeof ALERT_GROUP_VALUES)[number] | (string & {});
+/** Kind of an alert (packages/core/src/alert-catalog.ts, which also holds its FR / EN wording). A release adds kinds: show an unknown one with its `kind` and severity. OPEN: new values may appear. */
+export const ALERT_KIND_VALUES = ["transfer.confirmed", "transfer.failed", "transfer.dropped", "transfer.replaced", "transfer.expired", "transfer.recovered", "swap.confirmed", "swap.failed", "bridge.confirmed", "bridge.failed", "transfer.stuck", "deposit.received", "plan.step_ready", "plan.paused", "plan.done", "agent.order_filled", "agent.stopped_loss", "agent.stopped_mandate", "agent.stopped", "agent.mm_breaker", "agent.mm_halted", "agent.mm_dead_man_switch", "agent.mm_signer_refusals", "agent.mm_rate_budget", "agent.mm_session_ended", "agent.mandate_revoked", "agent.data_stale", "agent.signal_failures", "agent.research_submitted", "agent.research_failed", "mandate.expiring", "deriv.paper.filled", "deriv.live.filled", "deriv.order_rejected", "deriv.order_unknown", "deriv.position_opened", "deriv.position_closed", "deriv.margin_warning", "deriv.paper.liquidation", "deriv.live.liquidation", "deriv.funding", "deriv.loss_limit", "deriv.halt", "deriv.divergence", "deriv.divergence_cleared", "deriv.asset_table_mismatch", "security.passkey_added", "security.passkey_revoked", "security.credential_mismatch", "security.new_device", "security.login_failed", "security.signer_unreachable", "security.signer_back", "security.signer_halted", "security.signer_unhalted", "security.kill_switch_on", "security.kill_switch_off", "security.signer_refused", "security.pin_mismatch", "security.audit_broken", "security.policy_changed", "system.api_restarted", "system.worker_failing", "system.backup_missing", "system.disk_low", "system.lab_sandbox_unavailable", "system.lab_sandbox_back", "system.lab_sandbox_off", "conn.down", "conn.up", "system.alerts_capped", "system.test"] as const;
+export type AlertKind = (typeof ALERT_KIND_VALUES)[number] | (string & {});
 /** Severity of an alert. CLOSED: frozen. */
 export const ALERT_SEVERITY_VALUES = ["info", "warning", "critical"] as const;
 export type AlertSeverity = (typeof ALERT_SEVERITY_VALUES)[number];
@@ -29,7 +32,7 @@ export type DepositKind = (typeof DEPOSIT_KIND_VALUES)[number] | (string & {});
 export const DEPOSIT_ORIGIN_VALUES = ["transfer", "swap", "bridge", "xswap", "gmx", "nft", "agent_withdrawal", "venue_withdrawal"] as const;
 export type DepositOrigin = (typeof DEPOSIT_ORIGIN_VALUES)[number] | (string & {});
 /** Types of the wallet event log. Every audit type matching deposit.*, device.*, session(s).*, addressbook.*, settings.*, halt.*, security.* is mirrored: new types appear without notice. OPEN: new values may appear. */
-export const EVENT_TYPE_VALUES = ["transfer.state", "transfer.relay", "transfer.confirmations", "deposit.seen", "deposit.native_window", "deposit.scan_gap", "device.added", "sessions.revoked", "login.ok", "owner.setup", "addressbook.saved", "addressbook.removed", "settings.asset_pref", "halt.on", "security.contact_address_changed"] as const;
+export const EVENT_TYPE_VALUES = ["transfer.state", "transfer.relay", "transfer.confirmations", "deposit.seen", "deposit.native_window", "deposit.scan_gap", "device.added", "device.revoked", "session.revoked", "credentials.mismatch", "credentials.reconciled", "settings.saved", "sessions.revoked", "login.ok", "owner.setup", "addressbook.saved", "addressbook.removed", "settings.asset_pref", "halt.on", "security.contact_address_changed"] as const;
 export type EventType = (typeof EVENT_TYPE_VALUES)[number] | (string & {});
 /** Classification of a movement: external (in from / out to someone else), internal (the wallet's own swaps, bridges, self-transfers: nothing entered or left), ownAccounts (to / from the owner's agent vaults and venue accounts). CLOSED: frozen. */
 export const FLOW_SCOPE_VALUES = ["external", "internal", "ownAccounts"] as const;
@@ -180,8 +183,7 @@ export type Alert = {
   id: number;
   /** milliseconds since the Unix epoch */
   ts: number;
-  /** alert kind (packages/core/src/alert-catalog.ts); new kinds appear with releases */
-  kind: string;
+  kind: AlertKind;
   severity: AlertSeverity;
   group: AlertGroup;
   params: Record<string, string | number | boolean | null>;
@@ -477,6 +479,24 @@ export type Contact = {
   updatedAt: string | null;
   [extra: string]: unknown;
 };
+/** The canonical credential request. The WebAuthn challenge of `options` is the SHA-256 of its domain-separated, length-prefixed serialisation (domain `SPW-CRED-v2`; fields v, action, requestId, keyId, credentialId, publicKey — empty for a revocation —, createdAt, expiresAt, in that order). A client that shows or re-derives what is being approved reads it here; the signer verifies the approval itself. */
+export type CredentialRequest = {
+  v: 2;
+  action: "add" | "revoke";
+  /** single use: the signer records it and refuses it a second time — pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  requestId: string;
+  /** the signer this request is for */
+  keyId: string;
+  /** WebAuthn credential id, base64url: the passkey to add, or the one to revoke */
+  credentialId: string;
+  /** `add` only: COSE public key of the new passkey, base64url */
+  publicKey?: string;
+  /** Unix seconds */
+  createdAt: number;
+  /** Unix seconds; at most 300 s after createdAt */
+  expiresAt: number;
+  [extra: string]: unknown;
+};
 export type ApiErrorBody = {
   /** stable machine code: one of the operation's `x-spw-errors` (catalogue: `x-spw-error-catalog`) */
   error: string;
@@ -698,6 +718,9 @@ export type HealthReadyResponse = {
   rpcEndpoints: Record<string, unknown>[];
   [extra: string]: unknown;
 };
+
+// ---------------------------------------------------------------------------------------------------- getOpenApi: GET /api/v1/openapi.json
+export type GetOpenApiResponse = Record<string, unknown>;
 
 // ---------------------------------------------------------------------------------------------------- authState: GET /api/v1/auth/state
 export type AuthStateResponse = {
@@ -1196,6 +1219,12 @@ export type GetTransferStatusResponse = {
   /** pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
   id: string;
   state: ProposalState;
+  lifecycle: Lifecycle;
+  finalized: boolean;
+  watched: boolean;
+  /** the fee the network actually charged; null until known (rows older than NEXT have none) */
+  feePaid: string | null;
+  feePaidDisplay: string | null;
   txid: string | null;
   confirmations: number;
   error: string | null;
@@ -1352,8 +1381,15 @@ export type SecurityOverviewResponse = {
     journalHead?: string | null;
     policy?: Record<string, unknown>;
     spentToday?: Record<string, string>;
+    /** when the recovery phrase was last displayed on the signer; null: never recorded */
+    recoveryExportedAt?: string | null;
+    /** when the recovery phrase was last proved; null: never */
+    recoveryVerifiedAt?: string | null;
+    /** how long a newly added passkey cannot approve anything (0 = off) */
+    credentialCooldownSec?: number;
     [extra: string]: unknown;
   };
+  /** the API's own table: a copy */
   devices: {
     /** first 12 characters of the credential id */
     id: string;
@@ -1364,6 +1400,11 @@ export type SecurityOverviewResponse = {
     createdAt: string;
     lastUsedAt: string | null;
     enrolledOnSigner: boolean;
+    /** the full credential id: what the revoke routes take */
+    credentialId: string;
+    inCooldown: boolean;
+    /** false for the last passkey on the signer, and while the signer is unreachable */
+    revocable: boolean;
     [extra: string]: unknown;
   }[];
   sessions: {
@@ -1373,10 +1414,61 @@ export type SecurityOverviewResponse = {
     last_seen: string;
     ua: string;
     ip: string;
+    /** PUBLIC id of the session (never derived from its token): what POST /security/sessions/{id}/revoke takes — pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+    id: string;
+    current: boolean;
+    /** coarse label: browser · system */
+    device: string;
+    /** 12-character prefix of the passkey that opened it; null for a session older than NEXT */
+    credential: string | null;
     [extra: string]: unknown;
   }[];
   origin: string;
   broadcast: boolean;
+  /** the SIGNER's list — the source of truth for who can approve; null when it cannot be reached */
+  signerCredentials: {
+    id: string;
+    /** date-time, ISO 8601, UTC */
+    createdAt: string;
+    lastUsedAt: string | null;
+    inCooldown: boolean;
+    /** Unix seconds */
+    cooldownUntil: number | null;
+    /** false: pinned on the signer with no row in the API — it can approve and is listed nowhere else */
+    known: boolean;
+    label: string | null;
+    revocable: boolean;
+    [extra: string]: unknown;
+  }[] | null;
+  /** credential ids known to one side only; null when the signer cannot be reached */
+  mismatch: {
+    id: string;
+    side: "signer" | "api";
+    [extra: string]: unknown;
+  }[] | null;
+  currentSessionId: string | null;
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- listLogins: GET /api/v1/security/logins
+export interface ListLoginsQuery {
+  /** rows returned at most */
+  limit?: number;
+}
+export type ListLoginsResponse = {
+  logins: {
+    seq: number;
+    /** date-time, ISO 8601, UTC */
+    at: string;
+    credential: string | null;
+    label: string | null;
+    ip: string | null;
+    device: string | null;
+    /** no session had ever been opened with this user agent */
+    newDevice: boolean | null;
+    session: string | null;
+    [extra: string]: unknown;
+  }[];
   [extra: string]: unknown;
 };
 
@@ -1434,8 +1526,9 @@ export type DeviceVerifyBody = {
 };
 export type DeviceVerifyResponse = {
   pendingId: string;
-  /** WebAuthn options (PublicKeyCredentialRequestOptions / CreationOptions as JSON), to hand to the platform API */
+  /** assertion options: challenge = SHA-256 of `request`; allowCredentials = the passkeys that may approve (on the signer, out of cool-down, not the new one) */
   options: Record<string, unknown>;
+  request: CredentialRequest;
   [extra: string]: unknown;
 };
 
@@ -1450,9 +1543,46 @@ export type DeviceConfirmResponse = {
   [extra: string]: unknown;
 };
 
+// ---------------------------------------------------------------------------------------------------- revokeDeviceOptions: POST /api/v1/security/devices/revoke/options
+export type RevokeDeviceOptionsBody = {
+  /** `devices[].credentialId` or `signerCredentials[].id` of the overview */
+  credentialId: string;
+};
+export type RevokeDeviceOptionsResponse = {
+  /** pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  challengeId: string;
+  request: CredentialRequest;
+  /** assertion options: challenge = SHA-256 of `request`; allowCredentials never contains the passkey being revoked */
+  options: Record<string, unknown>;
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- revokeDeviceConfirm: POST /api/v1/security/devices/revoke/confirm
+export type RevokeDeviceConfirmBody = {
+  /** pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+  challengeId: string;
+  assertion: unknown;
+  [extra: string]: unknown;
+};
+export type RevokeDeviceConfirmResponse = {
+  ok: true;
+  /** true: the passkey was on the signer's list and the signer removed it; false: only the API's row existed */
+  signer: boolean;
+  sessionsRevoked: number;
+  [extra: string]: unknown;
+};
+
 // ---------------------------------------------------------------------------------------------------- revokeAllSessions: POST /api/v1/security/sessions/revoke-all
 export type RevokeAllSessionsResponse = {
   ok: true;
+  [extra: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------------------------------- revokeSession: POST /api/v1/security/sessions/{id}/revoke
+export type RevokeSessionResponse = {
+  ok: true;
+  /** true: it was this session; its cookie is cleared */
+  current: boolean;
   [extra: string]: unknown;
 };
 
@@ -1528,7 +1658,7 @@ export type GetAlertSettingsResponse = {
     [extra: string]: unknown;
   };
   kinds: {
-    kind: string;
+    kind: AlertKind;
     group: AlertGroup;
     severity: AlertSeverity;
     default: boolean;
@@ -1575,7 +1705,7 @@ export type PutAlertSettingsResponse = {
     [extra: string]: unknown;
   };
   kinds: {
-    kind: string;
+    kind: AlertKind;
     group: AlertGroup;
     severity: AlertSeverity;
     default: boolean;
@@ -1712,8 +1842,8 @@ export type ListEventsResponse = {
   reset: boolean;
   events: WalletEvent[];
   latest: number;
-  /** absent when `reset` */
-  more?: boolean;
+  /** true: the page is full, ask again from the last id. Always present (false on `reset`) */
+  more: boolean;
   [extra: string]: unknown;
 };
 
@@ -2015,67 +2145,72 @@ export type SearchResponse = SearchResults;
 
 /** every operation of the document: method, path template, whether it needs the owner session and the CSRF headers, and its answer type */
 export const WALLET_OPERATIONS = {
-  healthLive: { method: "GET", path: "/api/v1/health/live", auth: "public", csrf: false, produces: "application/json", since: "v1", changing: false },
-  healthReady: { method: "GET", path: "/api/v1/health/ready", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  authState: { method: "GET", path: "/api/v1/auth/state", auth: "public", csrf: false, produces: "application/json", since: "v1", changing: false },
-  setupOptions: { method: "POST", path: "/api/v1/auth/setup/options", auth: "public", csrf: true, produces: "application/json", since: "v1", changing: false },
-  setupVerify: { method: "POST", path: "/api/v1/auth/setup/verify", auth: "public", csrf: true, produces: "application/json", since: "v1", changing: false },
-  loginOptions: { method: "POST", path: "/api/v1/auth/login/options", auth: "public", csrf: true, produces: "application/json", since: "v1", changing: true },
-  loginVerify: { method: "POST", path: "/api/v1/auth/login/verify", auth: "public", csrf: true, produces: "application/json", since: "v1", changing: true },
-  logout: { method: "POST", path: "/api/v1/auth/logout", auth: "public", csrf: true, produces: "application/json", since: "v1", changing: true },
-  listNetworks: { method: "GET", path: "/api/v1/networks", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  listAssets: { method: "GET", path: "/api/v1/assets", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  listAccounts: { method: "GET", path: "/api/v1/accounts", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  getAssetPrefs: { method: "GET", path: "/api/v1/assets/prefs", auth: "session", csrf: false, produces: "application/json", since: "next", changing: false },
-  setAssetPref: { method: "PUT", path: "/api/v1/assets/prefs/{network}/{asset}", auth: "session", csrf: true, produces: "application/json", since: "next", changing: false },
-  getMarket: { method: "GET", path: "/api/v1/market/{symbol}", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  getPortfolio: { method: "GET", path: "/api/v1/portfolio", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  getPortfolioHistory: { method: "GET", path: "/api/v1/portfolio/history", auth: "session", csrf: false, produces: "application/json", since: "next", changing: false },
-  createTransfer: { method: "POST", path: "/api/v1/transfers/proposals", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  getTransfer: { method: "GET", path: "/api/v1/transfers/proposals/{id}", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  getTransferStatus: { method: "GET", path: "/api/v1/transfers/{id}/status", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  requestApproval: { method: "POST", path: "/api/v1/transfers/proposals/{id}/request-approval", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  approveTransfer: { method: "POST", path: "/api/v1/transfers/proposals/{id}/approve", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  rejectTransfer: { method: "POST", path: "/api/v1/transfers/proposals/{id}/reject", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  listActivity: { method: "GET", path: "/api/v1/activity", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  exportActivityCsv: { method: "GET", path: "/api/v1/export/activity.csv", auth: "session", csrf: false, produces: "text/csv", since: "v1", changing: false },
-  listAddressBook: { method: "GET", path: "/api/v1/addressbook", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  saveContact: { method: "POST", path: "/api/v1/addressbook", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  updateContact: { method: "PATCH", path: "/api/v1/addressbook/{id}", auth: "session", csrf: true, produces: "application/json", since: "next", changing: false },
-  deleteContact: { method: "DELETE", path: "/api/v1/addressbook/{id}", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  listContacts: { method: "GET", path: "/api/v1/contacts", auth: "session", csrf: false, produces: "application/json", since: "next", changing: false },
-  getSettings: { method: "GET", path: "/api/v1/settings", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  putSettings: { method: "PUT", path: "/api/v1/settings", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  securityOverview: { method: "GET", path: "/api/v1/security/overview", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: true },
-  securityAudit: { method: "GET", path: "/api/v1/security/audit", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  listDevices: { method: "GET", path: "/api/v1/security/devices", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: true },
-  deviceOptions: { method: "POST", path: "/api/v1/security/devices/options", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: true },
-  deviceVerify: { method: "POST", path: "/api/v1/security/devices/verify", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: true },
-  deviceConfirm: { method: "POST", path: "/api/v1/security/devices/confirm", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: true },
-  revokeAllSessions: { method: "POST", path: "/api/v1/security/sessions/revoke-all", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: true },
-  emergencyHalt: { method: "POST", path: "/api/v1/security/emergency-halt", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  listAlerts: { method: "GET", path: "/api/v1/alerts", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  unreadAlerts: { method: "GET", path: "/api/v1/alerts/unread", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  readAlerts: { method: "POST", path: "/api/v1/alerts/read", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  streamAlerts: { method: "GET", path: "/api/v1/alerts/stream", auth: "session", csrf: false, produces: "text/event-stream", since: "v1", changing: false },
-  getAlertSettings: { method: "GET", path: "/api/v1/alerts/settings", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  putAlertSettings: { method: "PUT", path: "/api/v1/alerts/settings", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  rotateWebhookSecret: { method: "POST", path: "/api/v1/alerts/webhook/secret", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  testWebhook: { method: "POST", path: "/api/v1/alerts/webhook/test", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  pushKey: { method: "GET", path: "/api/v1/push/key", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  listPushSubscriptions: { method: "GET", path: "/api/v1/push/subscriptions", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  subscribePush: { method: "POST", path: "/api/v1/push/subscriptions", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  updatePushSubscription: { method: "PATCH", path: "/api/v1/push/subscriptions/{id}", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  deletePushSubscription: { method: "DELETE", path: "/api/v1/push/subscriptions/{id}", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  testPush: { method: "POST", path: "/api/v1/push/test", auth: "session", csrf: true, produces: "application/json", since: "v1", changing: false },
-  listEvents: { method: "GET", path: "/api/v1/events", auth: "session", csrf: false, produces: "application/json", since: "next", changing: false },
-  streamEvents: { method: "GET", path: "/api/v1/events/stream", auth: "session", csrf: false, produces: "text/event-stream", since: "next", changing: false },
-  dashboardStatus: { method: "GET", path: "/api/v1/dashboard/status", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  dashboardSummary: { method: "GET", path: "/api/v1/dashboard/summary", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  dashboardActivity: { method: "GET", path: "/api/v1/dashboard/activity", auth: "session", csrf: false, produces: "application/json", since: "v1", changing: false },
-  dashboardActivityCsv: { method: "GET", path: "/api/v1/dashboard/activity.csv", auth: "session", csrf: false, produces: "text/csv", since: "v1", changing: false },
-  getAnalytics: { method: "GET", path: "/api/v1/analytics", auth: "session", csrf: false, produces: "application/json", since: "next", changing: false },
-  search: { method: "GET", path: "/api/v1/search", auth: "session", csrf: false, produces: "application/json", since: "next", changing: false },
+  healthLive: { method: "GET", path: "/api/v1/health/live", auth: "public", csrf: false, produces: "application/json", since: "v1" },
+  healthReady: { method: "GET", path: "/api/v1/health/ready", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  getOpenApi: { method: "GET", path: "/api/v1/openapi.json", auth: "session", csrf: false, produces: "application/json", since: "next" },
+  authState: { method: "GET", path: "/api/v1/auth/state", auth: "public", csrf: false, produces: "application/json", since: "v1" },
+  setupOptions: { method: "POST", path: "/api/v1/auth/setup/options", auth: "public", csrf: true, produces: "application/json", since: "v1" },
+  setupVerify: { method: "POST", path: "/api/v1/auth/setup/verify", auth: "public", csrf: true, produces: "application/json", since: "v1" },
+  loginOptions: { method: "POST", path: "/api/v1/auth/login/options", auth: "public", csrf: true, produces: "application/json", since: "v1" },
+  loginVerify: { method: "POST", path: "/api/v1/auth/login/verify", auth: "public", csrf: true, produces: "application/json", since: "v1" },
+  logout: { method: "POST", path: "/api/v1/auth/logout", auth: "public", csrf: true, produces: "application/json", since: "v1" },
+  listNetworks: { method: "GET", path: "/api/v1/networks", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  listAssets: { method: "GET", path: "/api/v1/assets", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  listAccounts: { method: "GET", path: "/api/v1/accounts", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  getAssetPrefs: { method: "GET", path: "/api/v1/assets/prefs", auth: "session", csrf: false, produces: "application/json", since: "next" },
+  setAssetPref: { method: "PUT", path: "/api/v1/assets/prefs/{network}/{asset}", auth: "session", csrf: true, produces: "application/json", since: "next" },
+  getMarket: { method: "GET", path: "/api/v1/market/{symbol}", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  getPortfolio: { method: "GET", path: "/api/v1/portfolio", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  getPortfolioHistory: { method: "GET", path: "/api/v1/portfolio/history", auth: "session", csrf: false, produces: "application/json", since: "next" },
+  createTransfer: { method: "POST", path: "/api/v1/transfers/proposals", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  getTransfer: { method: "GET", path: "/api/v1/transfers/proposals/{id}", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  getTransferStatus: { method: "GET", path: "/api/v1/transfers/{id}/status", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  requestApproval: { method: "POST", path: "/api/v1/transfers/proposals/{id}/request-approval", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  approveTransfer: { method: "POST", path: "/api/v1/transfers/proposals/{id}/approve", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  rejectTransfer: { method: "POST", path: "/api/v1/transfers/proposals/{id}/reject", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  listActivity: { method: "GET", path: "/api/v1/activity", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  exportActivityCsv: { method: "GET", path: "/api/v1/export/activity.csv", auth: "session", csrf: false, produces: "text/csv", since: "v1" },
+  listAddressBook: { method: "GET", path: "/api/v1/addressbook", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  saveContact: { method: "POST", path: "/api/v1/addressbook", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  updateContact: { method: "PATCH", path: "/api/v1/addressbook/{id}", auth: "session", csrf: true, produces: "application/json", since: "next" },
+  deleteContact: { method: "DELETE", path: "/api/v1/addressbook/{id}", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  listContacts: { method: "GET", path: "/api/v1/contacts", auth: "session", csrf: false, produces: "application/json", since: "next" },
+  getSettings: { method: "GET", path: "/api/v1/settings", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  putSettings: { method: "PUT", path: "/api/v1/settings", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  securityOverview: { method: "GET", path: "/api/v1/security/overview", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  listLogins: { method: "GET", path: "/api/v1/security/logins", auth: "session", csrf: false, produces: "application/json", since: "next" },
+  securityAudit: { method: "GET", path: "/api/v1/security/audit", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  listDevices: { method: "GET", path: "/api/v1/security/devices", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  deviceOptions: { method: "POST", path: "/api/v1/security/devices/options", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  deviceVerify: { method: "POST", path: "/api/v1/security/devices/verify", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  deviceConfirm: { method: "POST", path: "/api/v1/security/devices/confirm", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  revokeDeviceOptions: { method: "POST", path: "/api/v1/security/devices/revoke/options", auth: "session", csrf: true, produces: "application/json", since: "next" },
+  revokeDeviceConfirm: { method: "POST", path: "/api/v1/security/devices/revoke/confirm", auth: "session", csrf: true, produces: "application/json", since: "next" },
+  revokeAllSessions: { method: "POST", path: "/api/v1/security/sessions/revoke-all", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  revokeSession: { method: "POST", path: "/api/v1/security/sessions/{id}/revoke", auth: "session", csrf: true, produces: "application/json", since: "next" },
+  emergencyHalt: { method: "POST", path: "/api/v1/security/emergency-halt", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  listAlerts: { method: "GET", path: "/api/v1/alerts", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  unreadAlerts: { method: "GET", path: "/api/v1/alerts/unread", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  readAlerts: { method: "POST", path: "/api/v1/alerts/read", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  streamAlerts: { method: "GET", path: "/api/v1/alerts/stream", auth: "session", csrf: false, produces: "text/event-stream", since: "v1" },
+  getAlertSettings: { method: "GET", path: "/api/v1/alerts/settings", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  putAlertSettings: { method: "PUT", path: "/api/v1/alerts/settings", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  rotateWebhookSecret: { method: "POST", path: "/api/v1/alerts/webhook/secret", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  testWebhook: { method: "POST", path: "/api/v1/alerts/webhook/test", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  pushKey: { method: "GET", path: "/api/v1/push/key", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  listPushSubscriptions: { method: "GET", path: "/api/v1/push/subscriptions", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  subscribePush: { method: "POST", path: "/api/v1/push/subscriptions", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  updatePushSubscription: { method: "PATCH", path: "/api/v1/push/subscriptions/{id}", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  deletePushSubscription: { method: "DELETE", path: "/api/v1/push/subscriptions/{id}", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  testPush: { method: "POST", path: "/api/v1/push/test", auth: "session", csrf: true, produces: "application/json", since: "v1" },
+  listEvents: { method: "GET", path: "/api/v1/events", auth: "session", csrf: false, produces: "application/json", since: "next" },
+  streamEvents: { method: "GET", path: "/api/v1/events/stream", auth: "session", csrf: false, produces: "text/event-stream", since: "next" },
+  dashboardStatus: { method: "GET", path: "/api/v1/dashboard/status", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  dashboardSummary: { method: "GET", path: "/api/v1/dashboard/summary", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  dashboardActivity: { method: "GET", path: "/api/v1/dashboard/activity", auth: "session", csrf: false, produces: "application/json", since: "v1" },
+  dashboardActivityCsv: { method: "GET", path: "/api/v1/dashboard/activity.csv", auth: "session", csrf: false, produces: "text/csv", since: "v1" },
+  getAnalytics: { method: "GET", path: "/api/v1/analytics", auth: "session", csrf: false, produces: "application/json", since: "next" },
+  search: { method: "GET", path: "/api/v1/search", auth: "session", csrf: false, produces: "application/json", since: "next" },
 } as const;
 export type WalletOperationId = keyof typeof WALLET_OPERATIONS;
 
@@ -2083,6 +2218,7 @@ export type WalletOperationId = keyof typeof WALLET_OPERATIONS;
 export const WALLET_OPERATION_ERRORS: Record<WalletOperationId, { open: boolean; errors: readonly (readonly [number, string])[] }> = {
   healthLive: { open: false, errors: [[429, "rate_limited"], [500, "internal"]] },
   healthReady: { open: false, errors: [[401, "unauthenticated"], [429, "rate_limited"], [500, "internal"]] },
+  getOpenApi: { open: false, errors: [[401, "unauthenticated"], [429, "rate_limited"], [500, "internal"]] },
   authState: { open: false, errors: [[429, "rate_limited"], [500, "internal"]] },
   setupOptions: { open: false, errors: [[400, "bad_request"], [403, "csrf"], [403, "setup_closed"], [429, "rate_limited"], [500, "internal"]] },
   setupVerify: { open: true, errors: [[400, "bad_request"], [401, "challenge_expired"], [401, "registration_failed"], [403, "csrf"], [403, "setup_closed"], [403, "setup_token"], [429, "rate_limited"], [500, "internal"], [503, "signer_unreachable"]] },
@@ -2113,12 +2249,16 @@ export const WALLET_OPERATION_ERRORS: Record<WalletOperationId, { open: boolean;
   getSettings: { open: false, errors: [[401, "unauthenticated"], [429, "rate_limited"], [500, "internal"]] },
   putSettings: { open: false, errors: [[400, "bad_request"], [401, "unauthenticated"], [403, "csrf"], [429, "rate_limited"], [500, "internal"]] },
   securityOverview: { open: false, errors: [[401, "unauthenticated"], [429, "rate_limited"], [500, "internal"]] },
+  listLogins: { open: false, errors: [[400, "bad_request"], [401, "unauthenticated"], [429, "rate_limited"], [500, "internal"]] },
   securityAudit: { open: false, errors: [[400, "bad_request"], [401, "unauthenticated"], [429, "rate_limited"], [500, "internal"]] },
   listDevices: { open: false, errors: [[401, "unauthenticated"], [429, "rate_limited"], [500, "internal"]] },
   deviceOptions: { open: false, errors: [[400, "bad_request"], [401, "unauthenticated"], [403, "csrf"], [429, "rate_limited"], [500, "internal"]] },
-  deviceVerify: { open: false, errors: [[400, "bad_request"], [401, "challenge_expired"], [401, "registration_failed"], [401, "unauthenticated"], [403, "csrf"], [429, "rate_limited"], [500, "internal"]] },
+  deviceVerify: { open: true, errors: [[400, "bad_request"], [401, "challenge_expired"], [401, "registration_failed"], [401, "unauthenticated"], [403, "csrf"], [429, "rate_limited"], [500, "internal"], [503, "signer_unreachable"]] },
   deviceConfirm: { open: true, errors: [[400, "bad_request"], [400, "expired"], [401, "unauthenticated"], [403, "csrf"], [429, "rate_limited"], [500, "internal"], [503, "signer_unreachable"]] },
+  revokeDeviceOptions: { open: true, errors: [[400, "bad_request"], [401, "unauthenticated"], [403, "csrf"], [404, "not_found"], [409, "last_credential"], [409, "no_approver"], [429, "rate_limited"], [500, "internal"], [503, "signer_unreachable"]] },
+  revokeDeviceConfirm: { open: true, errors: [[400, "bad_request"], [400, "self_approval"], [401, "challenge_expired"], [401, "unauthenticated"], [403, "csrf"], [422, "bad_approval"], [429, "rate_limited"], [500, "internal"], [503, "signer_unreachable"]] },
   revokeAllSessions: { open: false, errors: [[400, "bad_request"], [401, "unauthenticated"], [403, "csrf"], [429, "rate_limited"], [500, "internal"]] },
+  revokeSession: { open: false, errors: [[400, "bad_request"], [401, "unauthenticated"], [403, "csrf"], [404, "not_found"], [429, "rate_limited"], [500, "internal"]] },
   emergencyHalt: { open: true, errors: [[400, "bad_request"], [401, "unauthenticated"], [403, "csrf"], [429, "rate_limited"], [500, "internal"], [503, "signer_unreachable"]] },
   listAlerts: { open: false, errors: [[400, "bad_request"], [401, "unauthenticated"], [429, "rate_limited"], [500, "internal"]] },
   unreadAlerts: { open: false, errors: [[401, "unauthenticated"], [429, "rate_limited"], [500, "internal"]] },
@@ -2145,5 +2285,5 @@ export const WALLET_OPERATION_ERRORS: Record<WalletOperationId, { open: boolean;
 };
 
 /** the catalogued error codes (an operation marked `open` can answer others: keep a fallback) */
-export const WALLET_ERROR_CODES = ["bad_address", "bad_amount", "bad_destination", "bad_memo", "bad_request", "bad_source", "bad_state", "below_rent", "below_reserve", "challenge_expired", "conflict", "contract_destination", "csrf", "duplicate_contact", "expired", "fee_ceiling", "fee_too_high", "halted", "hash_mismatch", "idempotency", "idempotency_mismatch", "insufficient_funds", "insufficient_gas", "insufficient_unlocked_funds", "internal", "invalid_cursor", "login_failed", "memo_required", "not_found", "owner_only", "pending_tx", "policy", "protocol_changed", "rate_limited", "registration_failed", "rpc_degraded", "rpc_disagreement", "runtime_changed", "setup_closed", "setup_token", "signer_unreachable", "simulation_failed", "stale_contact", "too_many_coins", "too_many_streams", "too_many_subscriptions", "unauthenticated", "unsupported_account", "unsupported_asset", "unsupported_funds", "unsupported_network"] as const;
+export const WALLET_ERROR_CODES = ["bad_address", "bad_amount", "bad_approval", "bad_destination", "bad_memo", "bad_request", "bad_source", "bad_state", "below_rent", "below_reserve", "challenge_expired", "conflict", "contract_destination", "csrf", "duplicate_contact", "expired", "fee_ceiling", "fee_too_high", "halted", "hash_mismatch", "idempotency", "idempotency_mismatch", "insufficient_funds", "insufficient_gas", "insufficient_unlocked_funds", "internal", "invalid_cursor", "last_credential", "login_failed", "memo_required", "no_approver", "not_found", "owner_only", "pending_tx", "policy", "protocol_changed", "rate_limited", "registration_failed", "rpc_degraded", "rpc_disagreement", "runtime_changed", "self_approval", "setup_closed", "setup_token", "signer_unreachable", "simulation_failed", "stale_contact", "too_many_coins", "too_many_streams", "too_many_subscriptions", "unauthenticated", "unsupported_account", "unsupported_asset", "unsupported_funds", "unsupported_network"] as const;
 export type WalletErrorCode = (typeof WALLET_ERROR_CODES)[number] | (string & {});

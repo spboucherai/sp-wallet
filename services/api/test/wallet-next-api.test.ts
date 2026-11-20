@@ -62,6 +62,39 @@ describe('validation errors say which members were refused', () => {
   });
 });
 
+describe('control characters are refused before any route runs — a NUL is never a 500', () => {
+  const NUL = String.fromCharCode(0);
+  it('older routes: body strings, query strings and path parameters', async () => {
+    const before = Number((await w.sql`select count(*)::int as n from address_book`)[0].n);
+    // POST /addressbook stored its label as text: a NUL used to reach PostgreSQL
+    const body = await w.api('POST', '/api/v1/addressbook', { network: 'base', address: DEST, label: `Ali${NUL}ce` });
+    expect([body.status, body.json]).toEqual([400, { error: 'bad_request', message: 'invalid request', data: { fields: [{ path: 'label', code: 'invalid_format', message: 'control characters are not accepted' }] } }]);
+    // PUT /assets/prefs/:network/:asset — a path parameter; GET /assets — a query string; nested body values and keys
+    expect((await w.api('PUT', '/api/v1/assets/prefs/base/native%00', { hidden: true })).json).toMatchObject({ error: 'bad_request', data: { fields: [{ path: 'asset' }] } });
+    expect((await get('/api/v1/assets?network=ba%00se')).json).toMatchObject({ error: 'bad_request', data: { fields: [{ path: 'network' }] } });
+    expect((await get('/api/v1/assets?network=ba%0Ase')).status).toBe(400); expect((await get('/api/v1/security/audit?limit=5%7F')).status).toBe(400);
+    expect((await w.api('PUT', '/api/v1/alerts/settings', { quiet: { tz: `UTC${NUL}` } })).json.data.fields).toEqual([{ path: 'quiet.tz', code: 'invalid_format', message: 'control characters are not accepted' }]);
+    expect((await w.api('PUT', '/api/v1/alerts/settings', { rules: { [`deposit${NUL}`]: true } })).status).toBe(400);
+    expect((await w.api('POST', '/api/v1/transfers/proposals', { network: 'base', asset: USDC.id, to: DEST, amount: '1', note: `x${NUL}` }, { idem: crypto.randomUUID() })).status).toBe(400);
+    for (const r of [body]) expect(JSON.stringify(r.json)).not.toContain(NUL);
+    expect(Number((await w.sql`select count(*)::int as n from address_book`)[0].n)).toBe(before);
+  });
+  it('what is legitimate still passes: tabs and new lines in a body string, percent-encoded text in a query', async () => {
+    const ok = await w.api('POST', '/api/v1/addressbook', { network: 'base', address: '0x90F79bf6EB2c4f870365E785982E1f101E93b906', label: 'Line\tone' });
+    expect(ok.status).toBe(200); await w.api('DELETE', `/api/v1/addressbook/${ok.json.id}`);
+    expect((await get('/api/v1/search?q=caf%C3%A9%20%26%20co')).status).toBe(200);
+  });
+  it('behind the hook: PostgreSQL refusing the bytes of a text value is a 400, not a 500', async () => {
+    // what PostgreSQL raises for a NUL in a text parameter, handed to the server's error handler from inside a route
+    const pgError = await w.sql`select ${'a' + NUL + 'b'}::text as t`.then(() => null, (e: any) => e);
+    expect(pgError?.code).toBe('22021');
+    const sc = await import('../src/signer-client.ts'), status = sc.signer.status;
+    sc.signer.status = async () => { throw pgError; };
+    try { const r = await get('/api/v1/accounts'); expect([r.status, r.json]).toEqual([400, { error: 'bad_request', message: 'invalid request' }]); }
+    finally { sc.signer.status = status; }
+  });
+});
+
 describe('activity: filter by network and asset, contact labels', () => {
   let oldUsdc = '', oldDeposit = '';
   beforeAll(async () => {
@@ -360,8 +393,7 @@ describe('search', () => {
 });
 
 describe('the file itself', () => {
-  it('stays inside the rate limit of one address (240 a minute): a 429 would be a false failure', async () => {
-    const left = Number((await w.api('GET', '/api/v1/health/live', undefined, { cookie: null })).headers['x-ratelimit-remaining']);
-    expect(left).toBeGreaterThan(20);
+  it('no call of this file was refused by the rate limit (a 429 would be a false failure)', () => {
+    expect(w.rateLimited()).toBe(0);
   });
 });

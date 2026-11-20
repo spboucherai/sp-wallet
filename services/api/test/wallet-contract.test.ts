@@ -110,6 +110,10 @@ describe('wallet reads', () => {
     expect(ok('getMarket', await get('/api/v1/market/NOPE'))).toEqual({ symbol: 'NOPE', points: [], market: null });
     err('getMarket', await get('/api/v1/market/ETH?days=3'), 400, 'bad_request');
     ok('healthReady', await get('/api/v1/health/ready'));
+    // the document, as built into the server: the same content as the committed file
+    const served = ok('getOpenApi', await get('/api/v1/openapi.json'));
+    expect(served).toEqual(JSON.parse(JSON.stringify(doc)));
+    expect((await w.api('GET', '/api/v1/openapi.json', undefined, { cookie: null })).status).toBe(401);
   });
 
   it('portfolio (provenance, prices, summary) and its history', async () => {
@@ -140,7 +144,13 @@ describe('address book and settings', () => {
   });
   it('settings', async () => {
     expect(ok('getSettings', await get('/api/v1/settings'))).toMatchObject({ locale: 'fr', currency: 'CAD', theme: 'system' });
+    const before = (await get('/api/v1/events?after=0')).json.latest;
     expect(ok('putSettings', await w.api('PUT', '/api/v1/settings', { theme: 'dark' }))).toMatchObject({ theme: 'dark', currency: 'CAD' });
+    // the change is an event: the owner's other devices hear about it and re-read the settings
+    const after = ok('listEvents', await get(`/api/v1/events?after=${before}`));
+    expect(after.events.map((e: any) => [e.type, e.data])).toEqual([['settings.saved', { changed: { theme: 'dark' } }]]);
+    await w.api('PUT', '/api/v1/settings', {});                      // nothing changed: nothing is written
+    expect((await get(`/api/v1/events?after=${after.latest}`)).json.events).toEqual([]);
     err('putSettings', await w.api('PUT', '/api/v1/settings', { theme: 'sepia' }), 400, 'bad_request');
   });
 });
@@ -167,7 +177,7 @@ describe('transfers', () => {
     const signed = ok('approveTransfer', await w.api('POST', `/api/v1/transfers/proposals/${d.id}/approve`, { assertion: w.owner.assert(Buffer.from(ra.options.challenge, 'base64url')) }));
     expect(signed).toMatchObject({ state: 'not_broadcast', lifecycle: 'not_sent', errorCode: 'broadcast_disabled', explorer: null });   // this server does not broadcast
     err('approveTransfer', await w.api('POST', `/api/v1/transfers/proposals/${d.id}/approve`, { assertion: {} }), 409, 'bad_state');
-    expect(ok('getTransferStatus', await get(`/api/v1/transfers/${d.id}/status`))).toMatchObject({ state: 'not_broadcast', kind: 'transfer' });
+    expect(ok('getTransferStatus', await get(`/api/v1/transfers/${d.id}/status`))).toMatchObject({ state: 'not_broadcast', lifecycle: 'not_sent', finalized: false, watched: false, feePaid: null, feePaidDisplay: null, kind: 'transfer' });
     // a signer refusal is the signer's own code (the operation's error list is open for it)
     const d2 = (await draft('2')).json, ra2 = (await w.api('POST', `/api/v1/transfers/proposals/${d2.id}/request-approval`, {})).json;
     const refused = await w.api('POST', `/api/v1/transfers/proposals/${d2.id}/approve`, { assertion: new TestPasskey(RP, ORIGIN).assert(Buffer.from(ra2.options.challenge, 'base64url')) });
@@ -189,6 +199,8 @@ describe('transfers', () => {
       const id = await w.proposal({ state, ...(elsewhere[state] ? { network: elsewhere[state], asset: 'native', symbol: 'ETH', decimals: 18 } : {}), txid: `0x${(STATES.indexOf(state) + 10).toString(16).padStart(64, 'a')}`, idempotency_key: `state-${state}`, ...(state === 'signed' ? { relay_attempted_at: new Date() } : {}), ...(state === 'finalized' ? { fee_paid: '21000000000000', finalized_at: new Date() } : {}) });
       const v = ok('getTransfer', await get(`/api/v1/transfers/proposals/${id}`));
       expect(frozen, state).toContain(v.state); lifecycles.add(v.lifecycle);
+      const st = ok('getTransferStatus', await get(`/api/v1/transfers/${id}/status`));
+      expect([st.state, st.lifecycle, st.finalized, st.watched, st.feePaid, st.feePaidDisplay]).toEqual([v.state, v.lifecycle, v.finalized, v.watched, v.feePaid, v.feePaidDisplay]);
       if (state === 'dropped') expect(v).toMatchObject({ state: 'failed', lifecycle: 'dropped', watched: true, finalized: false });
       if (state === 'finalized') expect(v).toMatchObject({ lifecycle: 'confirmed', finalized: true, feePaid: '21000000000000', feePaidDisplay: '0.000021' });
       if (state === 'signed') expect(v.lifecycle).toBe('broadcasting');
@@ -227,7 +239,7 @@ describe('activity, exports, events', () => {
     const e = ok('listEvents', await get('/api/v1/events?after=0'));
     expect(e.events.length).toBeGreaterThan(5); expect(e.reset).toBe(false);
     for (const t of new Set<string>(e.events.map((x: any) => x.type))) expect(Object.keys(spec.EVENT_TYPES), t).toContain(t);
-    expect(ok('listEvents', await get('/api/v1/events?after=999999'))).toMatchObject({ reset: true, events: [] });
+    expect(ok('listEvents', await get('/api/v1/events?after=999999'))).toMatchObject({ reset: true, events: [], more: false });
     err('listEvents', await get('/api/v1/events?after=-1'), 400, 'bad_request');
     const s = await sseHead(`/api/v1/events/stream?after=${e.latest}`);
     expect(s.contentType).toMatch(/text\/event-stream/); expect(s.first).toMatch(/event: hello\ndata: \{"from":\d+\}/);
@@ -294,18 +306,67 @@ describe('dashboard, analytics, search', () => {
   });
 });
 
-describe('security (described as the code is today), then the end of the session', () => {
-  it('overview, audit, passkeys, adding a passkey, the halt, logout and revoke-all', async () => {
+describe('security: passkeys and sessions with their life cycle, then the end of the session', () => {
+  it('overview, audit, passkeys added and revoked through the signer, sessions revoked one by one, sign-ins, the halt, logout and revoke-all', async () => {
     const o = ok('securityOverview', await get('/api/v1/security/overview'));
-    expect(o.signer).toMatchObject({ reachable: true, halted: false }); expect(o.devices).toHaveLength(1); expect(o.sessions.length).toBeGreaterThan(0);
+    expect(o.signer).toMatchObject({ reachable: true, halted: false, recoveryExportedAt: null, recoveryVerifiedAt: null }); expect(o.devices).toHaveLength(1); expect(o.sessions.length).toBeGreaterThan(0);
     expect(ok('securityAudit', await get('/api/v1/security/audit?limit=500')).intact).toBe(true);
     expect(ok('listDevices', await get('/api/v1/security/devices'))).toHaveLength(1);
     const phone = new TestPasskey(RP, ORIGIN);
     const d1 = ok('deviceOptions', await w.api('POST', '/api/v1/security/devices/options', {}));
     const d2 = ok('deviceVerify', await w.api('POST', '/api/v1/security/devices/verify', { challengeId: d1.challengeId, response: phone.register(d1.options.challenge), label: 'Phone' }));
     err('deviceConfirm', await w.api('POST', '/api/v1/security/devices/confirm', { pendingId: 'nope', assertion: {} }), 400, 'expired');
+    // the request the enrolled passkey approves: SPW-CRED-v2, and the challenge is its hash
+    const { credentialHash } = await import('@spw/core');
+    expect(d2.request).toMatchObject({ v: 2, action: 'add', credentialId: phone.id, publicKey: phone.publicKey });
+    expect(d2.options.challenge).toBe(Buffer.from(credentialHash(d2.request)).toString('base64url'));
+    const self = await w.api('POST', '/api/v1/security/devices/confirm', { pendingId: d2.pendingId, assertion: phone.assert(Buffer.from(d2.options.challenge, 'base64url')) });
+    expect(self.status).toBe(422); err('deviceConfirm', self, 422, self.json.error); expect(self.json.error).toMatch(/^signer_/);
     ok('deviceConfirm', await w.api('POST', '/api/v1/security/devices/confirm', { pendingId: d2.pendingId, assertion: w.owner.assert(Buffer.from(d2.options.challenge, 'base64url')) }));
-    expect(ok('securityOverview', await get('/api/v1/security/overview')).devices.every((x: any) => x.enrolledOnSigner)).toBe(true);
+    const two = ok('securityOverview', await get('/api/v1/security/overview'));
+    expect(two.devices.map((x: any) => [x.enrolledOnSigner, x.revocable, x.inCooldown])).toEqual([[true, true, false], [true, true, false]]);
+    expect(two.signerCredentials.map((x: any) => x.known)).toEqual([true, true]); expect(two.mismatch).toEqual([]); expect(two.signer.credentialCooldownSec).toBe(0);
+    // sessions: a second one, listed with its public id, revoked by it; the last sign-ins
+    const first = w.cookie(); await w.login();
+    const ov = ok('securityOverview', await get('/api/v1/security/overview'));
+    expect(ov.sessions.filter((x: any) => x.current).map((x: any) => x.id)).toEqual([ov.currentSessionId]);
+    const other = ov.sessions.find((x: any) => !x.current);
+    expect(ok('revokeSession', await w.api('POST', `/api/v1/security/sessions/${other.id}/revoke`, {}))).toEqual({ ok: true, current: false });
+    err('revokeSession', await w.api('POST', `/api/v1/security/sessions/${other.id}/revoke`, {}), 404, 'not_found');
+    err('revokeSession', await w.api('POST', '/api/v1/security/sessions/not-an-id/revoke', {}), 400, 'bad_request');
+    expect((await w.api('GET', '/api/v1/settings', undefined, { cookie: first })).status).toBe(401);
+    const logins = ok('listLogins', await get('/api/v1/security/logins?limit=5')).logins;
+    expect(logins.length).toBeGreaterThanOrEqual(2); expect(logins[0]).toMatchObject({ label: 'Mac', session: ov.currentSessionId }); expect(typeof logins[0].newDevice).toBe('boolean');
+    err('listLogins', await get('/api/v1/security/logins?limit=0'), 400, 'bad_request');
+    // revoking a passkey: another enrolled passkey approves the SPW-CRED-v2 request, the signer removes it
+    err('revokeDeviceOptions', await w.api('POST', '/api/v1/security/devices/revoke/options', { credentialId: 'A'.repeat(27) }), 404, 'not_found');
+    const r1 = ok('revokeDeviceOptions', await w.api('POST', '/api/v1/security/devices/revoke/options', { credentialId: phone.id }));
+    expect(r1.request).toMatchObject({ v: 2, action: 'revoke', credentialId: phone.id }); expect(r1.request.publicKey).toBeUndefined();
+    expect(r1.options.challenge).toBe(Buffer.from(credentialHash(r1.request)).toString('base64url'));
+    expect(r1.options.allowCredentials.map((c: any) => c.id)).toEqual([w.owner.id]);
+    err('revokeDeviceConfirm', await w.api('POST', '/api/v1/security/devices/revoke/confirm', { challengeId: r1.challengeId, assertion: phone.assert(Buffer.from(r1.options.challenge, 'base64url')) }), 400, 'self_approval');
+    err('revokeDeviceConfirm', await w.api('POST', '/api/v1/security/devices/revoke/confirm', { challengeId: r1.challengeId, assertion: w.owner.assert(Buffer.from(r1.options.challenge, 'base64url')) }), 401, 'challenge_expired'); // single use
+    const r2 = (await w.api('POST', '/api/v1/security/devices/revoke/options', { credentialId: phone.id })).json;
+    expect(ok('revokeDeviceConfirm', await w.api('POST', '/api/v1/security/devices/revoke/confirm', { challengeId: r2.challengeId, assertion: w.owner.assert(Buffer.from(r2.options.challenge, 'base64url')) }))).toEqual({ ok: true, signer: true, sessionsRevoked: 0 });
+    err('revokeDeviceOptions', await w.api('POST', '/api/v1/security/devices/revoke/options', { credentialId: w.owner.id }), 409, 'last_credential');
+    const one = ok('securityOverview', await get('/api/v1/security/overview'));
+    expect(one.devices.map((x: any) => [x.credentialId, x.revocable])).toEqual([[w.owner.id, false]]);
+    // the new alert and event kinds are in the contract (strict validation of the lists)
+    const d = await (await import('../src/alerts/dispatcher.ts')).alerts();
+    await d.raise({ kind: 'security.passkey_revoked', params: { label: 'Phone', count: 0 }, subject: { type: 'none' } }); await d.raise({ kind: 'security.credential_mismatch', params: { count: 1 }, subject: { type: 'none' } });
+    expect(ok('listAlerts', await get('/api/v1/alerts?group=security&limit=50')).items.map((a: any) => a.kind)).toEqual(expect.arrayContaining(['security.passkey_revoked', 'security.credential_mismatch']));
+    expect(doc.components.schemas.AlertKind['x-spw-values']).toEqual(expect.arrayContaining(['security.passkey_revoked', 'security.credential_mismatch', 'transfer.recovered']));
+    const types = new Set(ok('listEvents', await get('/api/v1/events?after=0')).events.map((e: any) => e.type));
+    for (const t of ['device.added', 'device.revoked', 'session.revoked', 'login.ok']) expect(types, t).toContain(t);
+    // the idle rule: once a session sent `X-SPW-Interaction: 1`, only such requests refresh its timer
+    const seen = async () => (await w.sql`select last_seen, interactive from sessions where sid = ${one.currentSessionId}`)[0];
+    await w.api('GET', '/api/v1/settings', undefined, { headers: { 'x-spw-interaction': '1' } });
+    const marked = await seen(); expect(marked.interactive).toBe(true);
+    await new Promise((r) => setTimeout(r, 20)); await get('/api/v1/settings');
+    expect((await seen()).last_seen.getTime()).toBe(marked.last_seen.getTime());                              // a background request: not refreshed
+    await w.api('GET', '/api/v1/settings', undefined, { headers: { 'x-spw-interaction': '1' } });
+    expect((await seen()).last_seen.getTime()).toBeGreaterThan(marked.last_seen.getTime());
+    expect(doc['x-spw-interaction-header']).toMatchObject({ name: 'X-SPW-Interaction', value: '1', idleMinutes: 30 });
     // the halt: one-way; afterwards the signer's policy refuses every transfer
     expect(ok('emergencyHalt', await w.api('POST', '/api/v1/security/emergency-halt', {}))).toEqual({ ok: true, halted: true });
     expect(ok('getPortfolio', await get('/api/v1/portfolio')).halted).toBe(true);
@@ -314,7 +375,7 @@ describe('security (described as the code is today), then the end of the session
     const sc = await import('../src/signer-client.ts'), { UserError } = await import('../src/config.ts'), status = sc.signer.status;
     sc.signer.status = async () => { throw new UserError('signer_unreachable', 'the signer is unreachable; nothing was signed', 503); };
     try {
-      expect(ok('securityOverview', await get('/api/v1/security/overview')).signer).toEqual({ reachable: false });
+      expect(ok('securityOverview', await get('/api/v1/security/overview'))).toMatchObject({ signer: { reachable: false }, signerCredentials: null, mismatch: null });
       expect(ok('listAccounts', await get('/api/v1/accounts')).signerReachable).toBe(false);
       expect(ok('getPortfolio', await get('/api/v1/portfolio'))).toMatchObject({ halted: null, signer: { reachable: false } });
       err('createTransfer', await draft('0.01'), 503, 'signer_unreachable');
@@ -334,8 +395,7 @@ describe('coverage', () => {
     expect(covered.size).toBe(all.length);
     expect(findings).toEqual([]);
   });
-  it('the whole file stays well inside the rate limit of one address (240 a minute): a 429 would be a false failure', async () => {
-    const left = Number((await w.api('GET', '/api/v1/health/live', undefined, { cookie: null })).headers['x-ratelimit-remaining']);
-    expect(left).toBeGreaterThan(40);
+  it('no call of this file was refused by the rate limit (a 429 would be a false failure)', () => {
+    expect(w.rateLimited()).toBe(0);
   });
 });

@@ -51,7 +51,7 @@ import { installQuotes, type QuotesDeps } from './quotes/index.ts'; // v11 quote
 import { history as portfolioHistory, portfolioDeps, RANGES, readRows, summarize, type Currency, type Range } from './portfolio.ts'; // NEXT: provenance, summary, value history
 import { nativeClientRoutes } from './native-clients.ts'; // native apps: the passkey association file (/.well-known), nothing under /api
 import { registerNft, type NftOptions } from './nft/index.ts'; // NFT delivery 1: read-only inventory, item pages, media proxy (owner session only)
-import { contactLabeler, csvCell, NO_CONTROL, validationFields, walletApiRoutes } from './wallet-api/index.ts'; // NEXT: analytics, search, contact labels, validation detail (contract: wallet-api/spec.ts)
+import { contactLabeler, controlIssue, csvCell, NO_CONTROL, validationFields, walletApiRoutes } from './wallet-api/index.ts'; // NEXT: analytics, search, contact labels, validation detail (contract: wallet-api/spec.ts)
 
 const PUBLIC = new Set(['/api/v1/health/live', '/api/v1/auth/state', '/api/v1/auth/setup/options', '/api/v1/auth/setup/verify', '/api/v1/auth/login/options', '/api/v1/auth/login/verify', '/api/v1/auth/logout']);
 // v11 quote engine: the browser opens ONE websocket to its own origin. CSP3 lets 'self' match the ws/wss scheme of the page's origin,
@@ -181,6 +181,14 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     req.principal = OWNER; // v11: the owner session is a principal like the others (scope guard, audit actor)
   });
 
+  // NEXT: text that cannot be stored or compared is refused before any handler runs (wallet-api/validation.ts `controlIssue`):
+  // a NUL anywhere (PostgreSQL has no NUL in text: it used to surface as a 500), any control character in the query string
+  // or a path parameter. One place, every route of every family.
+  app.addHook('preValidation', async (req) => {
+    const where = controlIssue(req.query, req.params, req.body);
+    if (where) throw Object.assign(new UserError('bad_request', 'invalid request', 400), { data: { fields: [where] } });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const e = err as Error & { statusCode?: number };
     // `data` (v11): machine-readable detail of a refusal — e.g. the fresh quote of `quote_moved` (prepare-common.ts)
@@ -189,6 +197,9 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
     if (e instanceof ZodError) return reply.status(400).send({ error: 'bad_request', message: 'invalid request', data: { fields: validationFields(e) } });
     if (e.statusCode === 429) return reply.status(429).send({ error: 'rate_limited', message: 'too many requests' });
     if (e.statusCode && e.statusCode < 500) return reply.status(e.statusCode).send({ error: 'bad_request', message: 'invalid request' });
+    // second net behind the preValidation hook (a header value, text assembled by a handler): PostgreSQL refusing the BYTES of
+    // a text value is the request's fault — 22021 invalid byte sequence, 22P05 untranslatable character (a \u0000 inside jsonb)
+    if (['22021', '22P05'].includes(String((e as { code?: unknown }).code))) return reply.status(400).send({ error: 'bad_request', message: 'invalid request' });
     req.log.error({ msg: e.message, path: req.url.split('?')[0] });
     return reply.status(500).send({ error: 'internal', message: 'internal error' });
   });
@@ -360,6 +371,9 @@ export async function buildServer(opts: { swapProviders?: import('@spw/swap').Sw
   app.put('/api/v1/settings', async (req) => {
     const b = Settings.partial().parse(req.body);
     for (const [k, v] of Object.entries(b)) await setSetting(k, v);
+    // NEXT: the change is an audit event, mirrored into the wallet event log (`settings.*`), so that the owner's other devices
+    // follow — language, currency, appearance. `changed` = the keys sent and their new values (five display settings, no secret).
+    if (Object.keys(b).length) await audit('settings.saved', 'owner', { changed: b });
     return readSettings();
   });
 
