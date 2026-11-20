@@ -40,7 +40,7 @@ function useErr() {
   const t = useT();
   return (e: unknown): string => { const x = e as ApiError & { name?: string }; if (x?.name === 'NotAllowedError') return ''; return t('rkErr', { code: x?.code ?? 'error', message: x?.message ?? '' }); };
 }
-const Names = ({ fields }: { fields: string[] }) => { const t = useT(); return <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px]">{fields.map((f) => <li key={f} data-field={f}>{t(`rkL_${f}` as Key)} <span className="font-mono text-[11.5px] text-mute">{f}</span></li>)}</ul>; };
+const Names = ({ fields }: { fields: string[] }) => { const t = useT(); return <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[0.8125rem]">{fields.map((f) => <li key={f} data-field={f}>{t(`rkL_${f}` as Key)} <span className="font-mono text-[0.71875rem] text-mute">{f}</span></li>)}</ul>; };
 
 export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 interface: `/risk?mandate=<id>` — the mandate to scroll to and open */ mandate?: string }) {
   const t = useT(); const { locale } = useContext(I18n); const qc = useQueryClient(); const err = useErr();
@@ -70,7 +70,7 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
   if (q.isLoading) return <div className="space-y-4"><PageTitle onBack={onBack} backLabel={t('settings')}>{t('rkTitle')}</PageTitle><SkeletonCard lines={4} /><SkeletonCard lines={3} /></div>;
   if (q.isError || !q.data) return <div className="space-y-4"><PageTitle onBack={onBack} backLabel={t('settings')}>{t('rkTitle')}</PageTitle><ErrorState title={t('rkLoadError')} onRetry={() => void q.refetch()} /></div>;
   const d = q.data, ks = d.switches.killSwitch, ro = d.switches.readOnly, x = d.exposure[book], lim = d.limits[mode], live = d.limits.live;
-  const who = (s: Switch): ReactNode => s.on ? <span className="text-[12.5px] text-mute">{s.by ? `${s.by.kind}:${s.by.id}` : ''}{s.at ? ` · ${when(new Date(s.at), locale)}` : ''}{s.reason ? ` · ${s.reason}` : ''}</span> : null;
+  const who = (s: Switch): ReactNode => s.on ? <span className="text-[0.78125rem] text-mute">{s.by ? `${s.by.kind}:${s.by.id}` : ''}{s.at ? ` · ${when(new Date(s.at), locale)}` : ''}{s.reason ? ` · ${s.reason}` : ''}</span> : null;
   const mandates = mq.data?.mandates ?? [];
   const riskAlerts = (aq.data?.items ?? []).filter((a) => a.kind.includes('kill_switch')).slice(0, 8);
   const broken = mandates.filter((m) => m.integrity && !m.integrity.ok), stopped = mandates.filter((m) => m.stop);
@@ -79,7 +79,7 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
   return (
     <div className="space-y-4" data-testid="risk">
       <PageTitle onBack={onBack} backLabel={t('settings')}>{t('rkTitle')}</PageTitle>
-      <p className="px-1 text-[14px] leading-snug text-mute">{t('rkLead')}</p>
+      <p className="px-1 text-[0.875rem] leading-snug text-mute">{t('rkLead')}</p>
       {fail && <Notice tone="danger">{fail}</Notice>}
       <ApprovalOutcomePanel ap={ap} />
 
@@ -93,15 +93,15 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
         </Notice></div>}
 
       <Card className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-[16.5px] font-semibold">{t('rkKill')}</h2><Tag tone={ks.on ? 'danger' : 'ok'} icon={ks.on ? 'stop' : 'check'} testid="rk-kill-state">{t(ks.on ? 'rkOn' : 'rkOff')}</Tag></div>
-        <p className="text-[13.5px] leading-snug text-mute">{t('rkKillBody')}</p>{who(ks)}
+        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-[1.03125rem] font-semibold">{t('rkKill')}</h2><Tag tone={ks.on ? 'danger' : 'ok'} icon={ks.on ? 'stop' : 'check'} testid="rk-kill-state">{t(ks.on ? 'rkOn' : 'rkOff')}</Tag></div>
+        <p className="text-[0.84375rem] leading-snug text-mute">{t('rkKillBody')}</p>{who(ks)}
         {ks.on ? <Btn full kind="soft" busy={busy === 'kill-switch'} disabled={ap.locked} onClick={() => void release('kill-switch')} data-testid="rk-kill-release"><Icon n="key" className="h-4 w-4" />{t('rkRelease')}</Btn>
           : <><Field label={t('rkReason')}><input className={inputCls} value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} data-testid="rk-kill-reason" /></Field>
             <Btn full kind="danger" busy={busy === 'kill'} onClick={() => void run('kill', () => post('/risk/kill-switch', { reason }))} data-testid="rk-kill-engage"><Icon n="stop" className="h-4 w-4" />{t('rkEngage')}</Btn></>}
       </Card>
       <Card className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-[16.5px] font-semibold">{t('rkReadOnly')}</h2><Tag tone={ro.on ? 'warn' : 'ok'} icon={ro.on ? 'lock' : 'check'}>{t(ro.on ? 'rkOn' : 'rkOff')}</Tag></div>
-        <p className="text-[13.5px] leading-snug text-mute">{t('rkReadOnlyBody')}</p>{who(ro)}
+        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-[1.03125rem] font-semibold">{t('rkReadOnly')}</h2><Tag tone={ro.on ? 'warn' : 'ok'} icon={ro.on ? 'lock' : 'check'}>{t(ro.on ? 'rkOn' : 'rkOff')}</Tag></div>
+        <p className="text-[0.84375rem] leading-snug text-mute">{t('rkReadOnlyBody')}</p>{who(ro)}
         {ro.on ? <Btn full kind="soft" busy={busy === 'read-only'} disabled={ap.locked} onClick={() => void release('read-only')}><Icon n="key" className="h-4 w-4" />{t('rkRelease')}</Btn>
           : <Btn full kind="soft" busy={busy === 'ro'} onClick={() => void run('ro', () => post('/risk/read-only', { reason }))}><Icon n="lock" className="h-4 w-4" />{t('rkReadOnlyEngage')}</Btn>}
       </Card>
@@ -113,17 +113,17 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
           <StatGrid cols={3}><Stat label={t('rkEquity')} value={num(x.equity)} testid="rk-equity" /><Stat label={t('rkGross')} value={num(x.grossExposure)} /><Stat label={t('rkLeverage')} value={x.leverage ? `${num(x.leverage)}×` : '—'} testid="rk-leverage" /></StatGrid>
           {(x.errors ?? []).map((e) => <Notice key={e} tone="warn">{e}</Notice>)}
           {(x.positions ?? []).length === 0 ? <EmptyState icon="list" title={t('rkNoPositions')} /> : <>
-            <div data-testid="rk-by-asset"><h3 className="text-[13px] font-semibold uppercase tracking-wide text-mute">{t('rkByAsset')}</h3>
-              <dl>{(x.byAsset ?? []).map((a) => <Fact key={a.asset} k={a.asset}>{t('rkNet')} {num(a.net)} USD<span className="mt-0.5 block text-[12.5px] text-mute">{t('rkLong')} {num(a.long)} · {t('rkShort')} {num(a.short)}</span></Fact>)}</dl></div>
-            <div data-testid="rk-by-venue"><h3 className="text-[13px] font-semibold uppercase tracking-wide text-mute">{t('rkByVenue')}</h3>
+            <div data-testid="rk-by-asset"><h3 className="text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('rkByAsset')}</h3>
+              <dl>{(x.byAsset ?? []).map((a) => <Fact key={a.asset} k={a.asset}>{t('rkNet')} {num(a.net)} USD<span className="mt-0.5 block text-[0.78125rem] text-mute">{t('rkLong')} {num(a.long)} · {t('rkShort')} {num(a.short)}</span></Fact>)}</dl></div>
+            <div data-testid="rk-by-venue"><h3 className="text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('rkByVenue')}</h3>
               <dl>{(x.byVenue ?? []).map((v) => <Fact key={v.venue} k={v.venue}>{num(v.gross)} USD</Fact>)}</dl></div>
-            <div data-testid="rk-liquidation"><h3 className="text-[13px] font-semibold uppercase tracking-wide text-mute">{t('rkLiqTitle')}</h3>
+            <div data-testid="rk-liquidation"><h3 className="text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('rkLiqTitle')}</h3>
               <dl>{(x.positions ?? []).map((p) => { const near = p.liquidationDistanceBps !== null && Number(p.liquidationDistanceBps) < 1000; return (
-                <Fact key={`${p.venue}${p.accountId}${p.instrument}${p.side}`} k={<span>{p.instrument}<span className="block text-[12.5px] text-mute">{p.side} {p.size} · {num(p.leverage)}×</span></span>}>
-                  {num(p.notional)} USD<span className={`mt-0.5 block text-[12.5px] ${near ? 'font-semibold text-danger' : 'text-mute'}`}>{t('rkLiq')} {p.liquidationPrice ? `${num(p.liquidationPrice)} · ${t('rkLiqAway', { pct: pct(p.liquidationDistanceBps) })}` : '—'}</span></Fact>); })}</dl></div>
+                <Fact key={`${p.venue}${p.accountId}${p.instrument}${p.side}`} k={<span>{p.instrument}<span className="block text-[0.78125rem] text-mute">{p.side} {p.size} · {num(p.leverage)}×</span></span>}>
+                  {num(p.notional)} USD<span className={`mt-0.5 block text-[0.78125rem] ${near ? 'font-semibold text-danger' : 'text-mute'}`}>{t('rkLiq')} {p.liquidationPrice ? `${num(p.liquidationPrice)} · ${t('rkLiqAway', { pct: pct(p.liquidationDistanceBps) })}` : '—'}</span></Fact>); })}</dl></div>
           </>}
-          {(x.collateral ?? []).length > 0 && <div data-testid="rk-collateral"><h3 className="text-[13px] font-semibold uppercase tracking-wide text-mute">{t('rkCollateralTitle')}</h3>
-            <dl>{(x.collateral ?? []).map((c) => <Fact key={c.accountId} k={c.venue}>{num(c.equity)} USD{c.shareBps ? ` · ${pct(c.shareBps)}` : ''}<span className="mt-0.5 block text-[12.5px] text-mute">{t('rkFree')} {num(c.freeCollateral)} · {t('rkMargin')} {num(c.marginUsed)}</span></Fact>)}</dl></div>}
+          {(x.collateral ?? []).length > 0 && <div data-testid="rk-collateral"><h3 className="text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('rkCollateralTitle')}</h3>
+            <dl>{(x.collateral ?? []).map((c) => <Fact key={c.accountId} k={c.venue}>{num(c.equity)} USD{c.shareBps ? ` · ${pct(c.shareBps)}` : ''}<span className="mt-0.5 block text-[0.78125rem] text-mute">{t('rkFree')} {num(c.freeCollateral)} · {t('rkMargin')} {num(c.marginUsed)}</span></Fact>)}</dl></div>}
         </Card>}
       </Section>
 
@@ -138,9 +138,9 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
           for (const b of BOOKS) for (const e of d.exposure[b].errors ?? []) rows.push({ key: `e${b}${e}`, tone: 'warn', title: t('rkAlertUnreadable', { book: t(`rkBook_${b}` as Key) }), body: e });
           if (rows.length === 0 && riskAlerts.length === 0) return <EmptyState icon="check" title={t('rkNoAlerts')} />;
           return <ul className="divide-y divide-line">
-            {rows.map((r) => <li key={r.key} className="py-2.5"><div className="flex flex-wrap items-center gap-2"><Tag tone={r.tone}>{t('rkAlertNow')}</Tag><span className="text-[13.5px] font-medium">{r.title}</span></div>{r.body && <p className="mt-1 break-words text-[12.5px] leading-snug text-mute">{r.body}</p>}</li>)}
+            {rows.map((r) => <li key={r.key} className="py-2.5"><div className="flex flex-wrap items-center gap-2"><Tag tone={r.tone}>{t('rkAlertNow')}</Tag><span className="text-[0.84375rem] font-medium">{r.title}</span></div>{r.body && <p className="mt-1 break-words text-[0.78125rem] leading-snug text-mute">{r.body}</p>}</li>)}
             {riskAlerts.map((a) => { const text = renderAlert(a.kind, localizeAlertParams(a.params, locale), locale, true); return (
-              <li key={a.id} className="py-2.5"><span className="text-[13.5px] font-medium">{text.title}</span><p className="mt-1 break-words text-[12.5px] leading-snug text-mute">{when(new Date(a.ts), locale)}{text.body ? ` · ${text.body}` : ''}</p></li>); })}
+              <li key={a.id} className="py-2.5"><span className="text-[0.84375rem] font-medium">{text.title}</span><p className="mt-1 break-words text-[0.78125rem] leading-snug text-mute">{when(new Date(a.ts), locale)}{text.body ? ` · ${text.body}` : ''}</p></li>); })}
           </ul>;
         })()}
       </div></Card></Section>
@@ -150,17 +150,17 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
         <Card className="space-y-3">
           {editing ? <LimitsEditor key={mode} view={lim} onCancel={() => setEditing(false)} onDone={() => { setEditing(false); refresh(); }} onError={err} /> : <>
             {mode === 'live' && lim.seed && lim.seed.sources.length > 0 && <Fold summary={t('rkSeedTitle', { n: lim.seed.sources.length })} testid="rk-seed">
-              <p className="text-[12.5px] leading-snug text-mute">{t('rkSeedBody', { date: when(new Date(lim.seed.at), locale) })}</p>
-              <dl>{lim.seed.sources.map((s) => <Fact key={s.field} k={t(`rkL_${s.field}` as Key)}>{limitText(lim.seed!.limits[s.field])}<span className="mt-0.5 block text-[12.5px] text-mute">{s.from}</span></Fact>)}</dl></Fold>}
-            {LIMIT_GROUPS.map((g) => <div key={g.id}><h3 className="text-[13px] font-semibold uppercase tracking-wide text-mute">{t(`rkLG_${g.id}` as Key)}</h3>
+              <p className="text-[0.78125rem] leading-snug text-mute">{t('rkSeedBody', { date: when(new Date(lim.seed.at), locale) })}</p>
+              <dl>{lim.seed.sources.map((s) => <Fact key={s.field} k={t(`rkL_${s.field}` as Key)}>{limitText(lim.seed!.limits[s.field])}<span className="mt-0.5 block text-[0.78125rem] text-mute">{s.from}</span></Fact>)}</dl></Fold>}
+            {LIMIT_GROUPS.map((g) => <div key={g.id}><h3 className="text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t(`rkLG_${g.id}` as Key)}</h3>
               <dl>{g.fields.map((f) => { const v = shown[f.key], own = f.key in lim.stored, seeded = !own && lim.seed !== undefined && f.key in lim.seed.limits; return (
                 <Fact key={f.key} k={t(`rkL_${f.key}` as Key)} testid={`rk-limit-${f.key}`}>{v === undefined ? <Tag tone={mode === 'live' ? 'danger' : 'mute'}>{t('rkUnset')}</Tag> : <span className="break-words">{limitText(v)}</span>}
-                  {v !== undefined && <span className="mt-0.5 block text-[12.5px] text-mute">{own ? t('rkYours') : seeded ? t('rkSeededTag') : t('rkDefault')}</span>}</Fact>); })}</dl></div>)}
+                  {v !== undefined && <span className="mt-0.5 block text-[0.78125rem] text-mute">{own ? t('rkYours') : seeded ? t('rkSeededTag') : t('rkDefault')}</span>}</Fact>); })}</dl></div>)}
             <Btn full kind="soft" onClick={() => setEditing(true)} data-testid="rk-limits-edit">{t('rkEdit')}</Btn></>}
         </Card>
       </Section>
 
-      <Section title={t('rkLocks')}><Card><dl>{d.locks.map((l) => <Fact key={l.id} k={<span className="font-mono text-[12.5px]">{l.id}</span>}><Tag tone={l.on ? 'ok' : 'mute'}>{t(l.on ? 'rkOn' : 'rkOff')}</Tag><span className="mt-1 block text-[12.5px] text-mute">{l.why}</span></Fact>)}</dl></Card></Section>
+      <Section title={t('rkLocks')}><Card><dl>{d.locks.map((l) => <Fact key={l.id} k={<span className="font-mono text-[0.78125rem]">{l.id}</span>}><Tag tone={l.on ? 'ok' : 'mute'}>{t(l.on ? 'rkOn' : 'rkOff')}</Tag><span className="mt-1 block text-[0.78125rem] text-mute">{l.why}</span></Fact>)}</dl></Card></Section>
 
       {/* V11 market making — quoting mandates: listed, revoked and approved through their OWN sheet (the enforced-by table, four hashes); created from the agent's go-live flow */}
       <Suspense fallback={null}><QuotingMandatesBlock mandates={mandates} onChanged={refresh} /></Suspense>
@@ -169,13 +169,13 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
         {wanted && mq.data && !wantedFound && <Notice tone="warn"><span data-testid="rk-mandate-unknown">{t('v11LoMandateUnknown')}</span></Notice>}
         {mq.isError ? <ErrorState title={t('rkLoadError')} onRetry={() => void mq.refetch()} /> : mandates.length === 0 ? <Card><EmptyState icon="key" title={t('rkNoMandates')}>{t('rkNoMandatesBody')}</EmptyState></Card>
           : mandates.map((m) => <Card key={m.id} className={`space-y-3 ${m.id === wanted ? 'ring-2 ring-blue' : ''}`}>
-            <div className="flex scroll-mt-24 flex-wrap items-start justify-between gap-2 outline-none" data-testid={`rk-mandate-${m.id}`} data-mandate-card={m.id} data-wanted={String(m.id === wanted)} tabIndex={-1}><div className="min-w-0"><h3 className="break-words text-[15.5px] font-semibold">{m.label}</h3><p className="break-all font-mono text-[12px] text-mute">{m.principal.kind}:{m.principal.id}</p></div>
+            <div className="flex scroll-mt-24 flex-wrap items-start justify-between gap-2 outline-none" data-testid={`rk-mandate-${m.id}`} data-mandate-card={m.id} data-wanted={String(m.id === wanted)} tabIndex={-1}><div className="min-w-0"><h3 className="break-words text-[0.96875rem] font-semibold">{m.label}</h3><p className="break-all font-mono text-[0.75rem] text-mute">{m.principal.kind}:{m.principal.id}</p></div>
               <Tag tone={m.phase === 'active' ? 'ok' : m.phase === 'wind_down' ? 'warn' : m.state === 'created' || m.state === 'pending_signer' ? 'info' : 'mute'}>{m.mode} · {t(`rkPhase_${m.phase}` as Key)}</Tag></div>
             {m.integrity && !m.integrity.ok && <Notice tone="danger"><b>{t('rkIntegrityBad')}</b> {m.integrity.reason}</Notice>}
             <dl><Fact k={t('rkUsage')}>{t('rkUsageBody', { accepted: m.usage.ordersAccepted, rejected: m.usage.ordersRejected, today: m.usage.ordersToday, open: m.usage.openOrders })}</Fact>
               <Fact k={t('rkUntil')}>{when(new Date(m.notAfter), locale)}</Fact>{m.stop && <Fact k={t('rkStopped')}>{m.stop.detail}</Fact>}
-              <Fact k={t('rkHashFull')}><span className="break-all font-mono text-[12px]">{m.hash}</span></Fact>
-              {m.approval && <Fact k={t('rkApprovedHash')}><Tag tone={m.integrity?.ok ? 'ok' : 'danger'} icon={m.integrity?.ok ? 'check' : 'x'}>{t(m.integrity?.ok ? 'rkIntegrityOk' : 'rkIntegrityBad')}</Tag><span className="mt-0.5 block text-[12.5px] text-mute">{when(new Date(m.approval.approvedAt), locale)}</span></Fact>}</dl>
+              <Fact k={t('rkHashFull')}><span className="break-all font-mono text-[0.75rem]">{m.hash}</span></Fact>
+              {m.approval && <Fact k={t('rkApprovedHash')}><Tag tone={m.integrity?.ok ? 'ok' : 'danger'} icon={m.integrity?.ok ? 'check' : 'x'}>{t(m.integrity?.ok ? 'rkIntegrityOk' : 'rkIntegrityBad')}</Tag><span className="mt-0.5 block text-[0.78125rem] text-mute">{when(new Date(m.approval.approvedAt), locale)}</span></Fact>}</dl>
             <Fold summary={t('rkFields')} open={m.id === wanted}><MandateFields mandate={m.mandate} /></Fold>
             <Fold summary={t('rkEnforcement')} open={m.id === wanted}><EnforcementTable rows={m.enforcement} /></Fold>
             <div className="grid grid-cols-2 gap-2.5">
@@ -186,10 +186,10 @@ export function Risk({ onBack, mandate: wanted }: { onBack: () => void; /** v11 
 
       <Section title={t('rkDecisions')}><Card>
         {d.decisions.length === 0 ? <EmptyState icon="list" title={t('rkNoDecisions')} /> : <ul className="divide-y divide-line" data-testid="rk-decisions">{d.decisions.map((r) => <li key={r.id} className="py-2.5" data-testid="rk-decision" data-decision={r.decision} data-reducing={String(r.reducing)} data-failed={r.failing.map((f) => f.id).join(',')}>
-          <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[13.5px] font-medium">{r.instrument ?? r.kind} · {r.mode}{r.preview ? ` · ${t('rkPreview')}` : ''}</span>
+          <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[0.84375rem] font-medium">{r.instrument ?? r.kind} · {r.mode}{r.preview ? ` · ${t('rkPreview')}` : ''}</span>
             <Tag tone={r.decision === 'allow' ? 'ok' : 'danger'} icon={r.decision === 'allow' ? 'check' : 'x'}>{t(r.decision === 'allow' ? 'rkAllowed' : 'rkDenied')}{r.reducing ? ` · ${t('rkReducing')}` : ''}</Tag></div>
-          <p className="mt-1 text-[12.5px] leading-snug text-mute">{when(new Date(r.at), locale)} · {r.principal.kind}:{r.principal.id}</p>
-          {r.failing.length > 0 && <ul className="mt-1.5 space-y-1">{r.failing.map((f) => <li key={f.id} className="rounded-xl bg-elev px-3 py-2 text-[12.5px] leading-snug"><span className="font-mono font-semibold text-danger">{f.id}</span> — {f.detail}
+          <p className="mt-1 text-[0.78125rem] leading-snug text-mute">{when(new Date(r.at), locale)} · {r.principal.kind}:{r.principal.id}</p>
+          {r.failing.length > 0 && <ul className="mt-1.5 space-y-1">{r.failing.map((f) => <li key={f.id} className="rounded-xl bg-elev px-3 py-2 text-[0.78125rem] leading-snug"><span className="font-mono font-semibold text-danger">{f.id}</span> — {f.detail}
             {(f.observed !== null || f.limit !== null) && <span className="block text-mute">{t('rkObserved')} {f.observed ?? '—'} · {t('rkLimit')} {f.limit ?? '—'}</span>}</li>)}</ul>}</li>)}</ul>}
       </Card></Section>
 

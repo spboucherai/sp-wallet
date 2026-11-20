@@ -16,7 +16,7 @@ export interface Portfolio { asOf: string;
   prices: Record<string, { source?: string; fallback?: boolean; divergent?: boolean; divergenceBps?: number | null; priceAt?: string | null; stale?: boolean; usd: number; cad: number; change24h: number | null; change7d: number | null; marketCap: number | null; volume24h: number | null; high24h: number | null; low24h: number | null; ath: number | null; rank: number | null; spark: number[] }> | null; balances: Bal[]; pending: Proposal[]; /** null = unknown (signer unreachable) */ halted: boolean | null }
 export interface Net { id: string; name: string; family: string; native: { id: string; symbol: string; decimals: number }; tokens: { id: string; symbol: string; decimals: number }[]; minConf: number; explorerAddr: string; memo: 'text' | 'uint32' | null; activation: string | null;
   health: { ok: boolean; readable: boolean; identityVerified: boolean; height: number | null; endpoints: { url: string; ok: boolean; ms: number | null }[]; checkedAt: string } | null }
-export interface SettingsT { locale: 'fr' | 'en'; currency: 'USD' | 'CAD'; hideBalances: boolean; prices: boolean }
+export interface SettingsT { locale: 'fr' | 'en'; currency: 'USD' | 'CAD'; hideBalances: boolean; prices: boolean; /** NEXT: appearance, the same on every device (absent on an older server) */ theme?: 'system' | 'light' | 'dark' }
 
 /**
  * NEXT W4 — is the total partial? From the server's `summary` when present, and in any case from the rows it could not read
@@ -40,6 +40,14 @@ export const useAccounts = () => useQuery({ queryKey: ['accounts'], queryFn: () 
 export function useSettings() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['settings'], queryFn: () => get<SettingsT>('/settings'), staleTime: 60_000 });
-  const update = async (patch: Partial<SettingsT>) => { qc.setQueryData(['settings'], await api<SettingsT>('PUT', '/settings', patch)); void qc.invalidateQueries({ queryKey: ['portfolio'] }); };
+  // optimistic: the switch moves at once; the server's answer replaces it, a failure puts the previous value back (resolves false)
+  const update = async (patch: Partial<SettingsT>): Promise<boolean> => {
+    const prev = qc.getQueryData<SettingsT>(['settings']);
+    if (prev) qc.setQueryData(['settings'], { ...prev, ...patch });
+    try { qc.setQueryData(['settings'], await api<SettingsT>('PUT', '/settings', patch)); }
+    catch { if (prev) qc.setQueryData(['settings'], prev); return false; }
+    if ('currency' in patch || 'prices' in patch) void qc.invalidateQueries({ queryKey: ['portfolio'] });
+    return true;
+  };
   return { settings: q.data ?? { locale: 'fr', currency: 'CAD', hideBalances: false, prices: true } as SettingsT, update, /** the account's settings were read (not the defaults above) */ loaded: q.isSuccess };
 }

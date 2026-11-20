@@ -16,6 +16,7 @@ import { useAlertsRuntime, useUnread } from './alerts'; // v6-alerts
 import { setAmountLocale } from './amount'; // v8 hardening: amounts follow the screen's language
 import { AREAS, IN_APP, type Area } from './nav';
 import { MULTI_VENUE } from './venues';   // one venue shown: no Compare sub-view
+import { applyTheme, cacheTheme, currentTheme, isThemePref } from './theme';
 
 // v10 performance pass — what the first screen needs (the shell, Home, the asset list and page, the lock screen) is the
 // first chunk; every other screen is a chunk of its own, fetched when it is opened or — so that a tap never waits — by
@@ -155,10 +156,12 @@ function Offline({ retry }: { retry: () => void }) {
 function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; route: Route; nav: Nav; go: (t: Tab) => void; lock: () => void; openPath: (path: string) => void; locale: Locale }) {
   const t = useT(); const qc = useQueryClient();
   const unread = useUnread(); useAlertsRuntime(locale, openPath); // v6-alerts
-  // NEXT W5: a device that never chose a language takes the account's (`settings.locale`); a choice made on this device stays
+  // NEXT: language and appearance belong to the ACCOUNT — once the settings are read they apply on this device, whatever it had
+  // cached (localStorage is only what the lock screen and the first paint use before the session is known). A server older
+  // than `theme` sends none: the device's cache stays.
   const { settings, loaded } = useSettings(); const { setLocale } = useContext(I18n);
-  useEffect(() => { let local: string | null = 'x'; try { local = localStorage.getItem('spw-locale'); } catch { /* private mode: keep the screen's language */ }
-    if (loaded && local === null && (settings.locale === 'fr' || settings.locale === 'en') && settings.locale !== locale) setLocale(settings.locale); }, [loaded, settings.locale, locale, setLocale]);
+  useEffect(() => { if (loaded && (settings.locale === 'fr' || settings.locale === 'en') && settings.locale !== locale) setLocale(settings.locale); }, [loaded, settings.locale, locale, setLocale]);
+  useEffect(() => { if (loaded && isThemePref(settings.theme)) { cacheTheme(settings.theme); if (settings.theme !== currentTheme()) applyTheme(settings.theme); } }, [loaded, settings.theme]);
   // v9: the phone header condenses once the page scrolls (an attribute, not a re-render); pull down on Home/Activity refreshes
   const header = useRef<HTMLElement>(null);
   // v10: large-title collapse — once the page's large title (PageTitle's <h1>) has scrolled under the header, the header carries it
@@ -175,8 +178,8 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
   const [menu, setMenu] = useState(false);
   const toArea = (a: Area) => { const to = areaHome(a); if (tab !== to || route.asset || route.view || route.network) go(to); else window.scrollTo({ top: 0 }); };
   const bell = (cls: string) => <button onClick={() => go('alerts')} data-testid="alerts-bell" aria-label={`${t('alBell')}${unread.unread ? ` (${unread.unread})` : ''}`} aria-current={tab === 'alerts' ? 'page' : undefined} className={cls}>
-    <span className="relative"><Icon n="bell" />{unread.unread > 0 && <span data-testid="alerts-badge" className={`absolute -right-2 -top-2 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[10.5px] font-bold leading-none text-white ${unread.critical ? 'bg-danger' : 'bg-blue'}`}>{unread.unread > 99 ? '99+' : unread.unread}</span>}</span>{cls.includes('w-full') && t('alTitle')}</button>;
-  const sideCls = 'press flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-[15px] font-medium';
+    <span className="relative"><Icon n="bell" />{unread.unread > 0 && <span data-testid="alerts-badge" className={`absolute -right-2 -top-2 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[0.65625rem] font-bold leading-none text-white ${unread.critical ? 'bg-danger' : 'bg-blue'}`}>{unread.unread > 99 ? '99+' : unread.unread}</span>}</span>{cls.includes('w-full') && t('alTitle')}</button>;
+  const sideCls = 'press flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-[0.9375rem] font-medium';
   // the sub-views of an area, under the header: one row, never wrapping (it scrolls sideways if a translation is long)
   const SUB: Partial<Record<Area, readonly (readonly [string, Key, Route, boolean])[]>> = {
     markets: [['explorer', 'mkViewExplorer', { tab: 'markets' }, tab === 'markets' && (!MULTI_VENUE || route.view !== 'compare')], ...(!MULTI_VENUE ? [] : [['compare', 'mkViewCompare', { tab: 'markets', view: 'compare', asset: tab === 'markets' ? route.asset : undefined }, tab === 'markets' && route.view === 'compare']] as const), ['private', 'pmTab', { tab: 'private' }, tab === 'private']],
@@ -190,13 +193,13 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
     <div className={`safe-x mx-auto flex min-h-full ${tab === 'futures' ? 'max-w-[1680px]' : 'max-w-7xl'}`}>{ptr}
       <a href="#main" className="absolute left-0 top-0 h-0 w-0 overflow-hidden focus:fixed focus:left-3 focus:top-3 focus:z-40 focus:h-auto focus:min-h-11 focus:w-auto focus:rounded-xl focus:bg-surface focus:px-4 focus:py-3 focus:shadow-e2">{t('v11NavSkip')}</a>
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto p-5 lg:flex">
-        <div className="mb-7 flex items-center gap-3 px-2 pt-2"><img src="/icon.svg" alt="" width={36} height={36} className="h-9 w-9 rounded-xl shadow-e1" /><span className="text-[19px] font-semibold tracking-[-0.02em]">SP Wallet</span></div>
+        <div className="mb-7 flex items-center gap-3 px-2 pt-2"><img src="/icon.svg" alt="" width={36} height={36} className="h-9 w-9 rounded-xl shadow-e1" /><span className="text-[1.1875rem] font-semibold tracking-[-0.02em]">SP Wallet</span></div>
         <Suspense fallback={null}><Sidebar tab={tab} area={area} go={go} toArea={toArea} lock={lock} bell={bell(`${sideCls} ${tab === 'alerts' ? 'bg-primary text-onprimary shadow-e1' : 'text-mute hover:bg-elev hover:text-ink'}`)} /></Suspense>
       </aside>
       <div className="min-w-0 flex-1">
         <header ref={header} className="app-header safe-t nav-glass sticky top-0 z-10 lg:hidden">
           <div className="app-header-row flex items-center justify-between gap-1 px-5 py-2.5">
-            <div className="app-brand flex min-w-0 items-center gap-2.5"><img src="/icon.svg" alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-[10px]" /><span className="app-brand-name truncate text-[17px] font-semibold tracking-[-0.02em] max-[359px]:hidden">SP Wallet</span></div>
+            <div className="app-brand flex min-w-0 items-center gap-2.5"><img src="/icon.svg" alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-[10px]" /><span className="app-brand-name truncate text-[1.0625rem] font-semibold tracking-[-0.02em] max-[359px]:hidden">SP Wallet</span></div>
             <span ref={mini} className="app-mini-title" aria-hidden="true" data-testid="mini-title" />
             <div className="flex shrink-0 items-center gap-0.5">
               <Suspense fallback={<span className="mx-0.5 h-8 w-[68px] rounded-full bg-elev" aria-hidden="true" />}><RiskIndicator go={go} current={tab === 'risk'} /></Suspense>
@@ -207,7 +210,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
         </header>
         <main id="main" tabIndex={-1} key={tab === 'futures' || tab === 'markets' ? tab : tab + (route.network ?? '') + (route.asset ?? '')} className={`rise mx-auto w-full px-5 pb-[calc(env(safe-area-inset-bottom)+7rem)] pt-2 outline-none lg:pb-12 ${width}`}>
           {sub && <div role="tablist" aria-label={t(area === 'trade' ? 'fxTradeArea' : 'mkTab')} data-testid="nav-sub" className={`no-scrollbar mb-3 mt-1 flex gap-1 overflow-x-auto rounded-2xl bg-elev p-1 ${wide || tab === 'private' ? 'max-w-xl' : ''}`}>{sub.map(([id, k, to, on]) =>
-            <button key={id} role="tab" aria-selected={on} data-sub={id} onClick={() => { if (!on) nav(to); }} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 text-[13px] font-semibold transition min-[380px]:px-3 min-[380px]:text-[14px] ${on ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-mute hover:text-ink'}`}>{t(k)}</button>)}</div>}
+            <button key={id} role="tab" aria-selected={on} data-sub={id} onClick={() => { if (!on) nav(to); }} className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-2 text-[0.8125rem] font-semibold transition min-[380px]:px-3 min-[380px]:text-[0.875rem] ${on ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-mute hover:text-ink'}`}>{t(k)}</button>)}</div>}
           <ErrorBoundary scope="screen" resetKey={pathOf(route)}>
           {tab === 'home' && <Home go={go} nav={nav} />}
           {tab === 'assets' && <Assets nav={nav} />}
@@ -236,7 +239,7 @@ function Shell({ tab, route, nav, go, lock, openPath, locale }: { tab: Tab; rout
         </main>
         <nav aria-label={t('v11NavMain')} data-testid="nav-tabbar" className="tabbar safe-b nav-glass fixed inset-x-0 bottom-0 z-10 lg:hidden">
           <div className="mx-auto flex max-w-xl items-end px-1 pt-1.5">{AREAS.map(([id, icon, label]) => { const on = area === id; return (
-            <button key={id} onClick={() => { haptic(); toArea(id); }} data-area={id} aria-current={on ? 'page' : undefined} className={`press relative flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[11px] ${on ? 'font-semibold text-ink' : 'font-medium text-mute'}`}>
+            <button key={id} onClick={() => { haptic(); toArea(id); }} data-area={id} aria-current={on ? 'page' : undefined} className={`press relative flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[0.6875rem] ${on ? 'font-semibold text-ink' : 'font-medium text-mute'}`}>
               <span className={`grid h-7 w-12 place-items-center rounded-full transition-colors ${on ? 'bg-elev' : ''}`}><Icon n={icon} className="h-[22px] w-[22px]" /></span><span className="max-w-full truncate px-0.5">{t(label)}</span></button>); })}</div>
         </nav>
         {menu && <Suspense fallback={null}><ShellMenu tab={tab} go={go} lock={lock} onClose={() => setMenu(false)} /></Suspense>}

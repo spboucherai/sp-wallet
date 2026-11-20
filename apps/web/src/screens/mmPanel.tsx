@@ -30,13 +30,13 @@ const usd = (x: string | number | null | undefined, locale: string): string => (
 const bps = (x: string | null | undefined): string => (x === null || x === undefined ? '—' : `${x} bps`);
 /** a negative figure is red; a positive one is never green (nothing here suggests a profit) */
 const neg = (x: string | null | undefined): 'danger' | undefined => (isNegative(x) ? 'danger' : undefined);
-const Mono = ({ children, testid }: { children: ReactNode; testid?: string }) => <span className="break-all font-mono text-[12.5px]" data-testid={testid}>{children}</span>;
+const Mono = ({ children, testid }: { children: ReactNode; testid?: string }) => <span className="break-all font-mono text-[0.78125rem]" data-testid={testid}>{children}</span>;
 
 /** The server's refusal, as it came: the code, then its sentence. */
 export function RefusalNotice({ r }: { r: Refusal | null }) {
   if (!r) return null;
-  return <div data-testid="mm-refusal" data-code={r.code}><Notice tone="danger"><span className="block font-mono text-[13px] font-semibold" data-testid="mm-refusal-code">{r.code}</span><span className="mt-1 block [overflow-wrap:anywhere]" data-testid="mm-refusal-message">{r.message}</span>
-    {r.steps && <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[12.5px]">{r.steps.filter((s) => !s.done && s.missing).map((s) => <li key={s.id}><span className="font-mono">{s.id}</span> — {s.missing}</li>)}</ul>}</Notice></div>;
+  return <div data-testid="mm-refusal" data-code={r.code}><Notice tone="danger"><span className="block font-mono text-[0.8125rem] font-semibold" data-testid="mm-refusal-code">{r.code}</span><span className="mt-1 block [overflow-wrap:anywhere]" data-testid="mm-refusal-message">{r.message}</span>
+    {r.steps && <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[0.78125rem]">{r.steps.filter((s) => !s.done && s.missing).map((s) => <li key={s.id}><span className="font-mono">{s.id}</span> — {s.missing}</li>)}</ul>}</Notice></div>;
 }
 export function SimulatedTag() { const t = useT(); return <Tag tone="info" icon="eye" testid="mm-simulated">{t('mmSimulated')}</Tag>; }
 const ModeMark = ({ mode }: { mode: MmMode }) => { const t = useT(); return mode === 'paper' ? <SimulatedTag /> : <Tag tone="danger" icon="bolt" testid="mm-live-tag">{t('mmLiveTag')}</Tag>; };
@@ -47,7 +47,7 @@ export function SwitchLine({ sw }: { sw: MmSwitch | undefined | null }) {
   if (!f) return null;
   return <div data-testid="mm-switch" data-armed={String(f.armed)} className="space-y-1">
     <div className="flex flex-wrap items-center gap-2"><Tag tone={f.armed ? 'ok' : 'warn'} icon={f.armed ? 'check' : 'clock'}>{f.armed ? t('mmSwitchArmed', { time: f.until ?? '—' }) : t('mmSwitchNotArmed')}</Tag></div>
-    <p className={`text-[12.5px] leading-snug ${f.atStop ? 'font-semibold text-danger' : 'text-mute'}`} data-testid="mm-switch-triggers">{t('mmSwitchTriggers', { n: f.used, of: f.of, stop: f.stopsAt })}</p></div>;
+    <p className={`text-[0.78125rem] leading-snug ${f.atStop ? 'font-semibold text-danger' : 'text-mute'}`} data-testid="mm-switch-triggers">{t('mmSwitchTriggers', { n: f.used, of: f.of, stop: f.stopsAt })}</p></div>;
 }
 
 // ------------------------------------------------------------------------------------------------------------------ the session NOW
@@ -57,38 +57,38 @@ export function SessionNow({ s, tab }: { s: SessionView; tab: MmMode }) {
   return <div className="space-y-4" data-testid="mm-session" data-mode={s.mode} data-phase={phase} data-simulated={String(s.simulated)}>
     <div className="flex flex-wrap items-center gap-1.5"><Tag tone={PHASE_TONE[phase] ?? 'mute'} testid="mm-phase">{phase}</Tag><ModeMark mode={tab} />{st.halted ? <Tag tone="danger" icon="stop" testid="mm-halted">{t('mmHalted')}{typeof st.halted === 'string' ? ` · ${st.halted}` : ''}</Tag> : null}
       {st.manual && <Tag tone="warn">{t(st.manual === 'pull' ? 'mmManualPull' : 'mmManualFlatten')}</Tag>}{st.lock && <Tag tone="warn" icon="lock" testid="mm-session-lock">{st.lock}</Tag>}{s.stale && <Tag tone="danger" icon="clock" testid="mm-stale">{t('mmStale')}</Tag>}</div>
-    <p className="text-[12.5px] leading-snug text-mute" data-testid="mm-session-label">{s.label} · {s.instrument} · {s.policy} · {t('mmSince', { at: when(new Date(s.startedAt), locale) })}</p>
+    <p className="text-[0.78125rem] leading-snug text-mute" data-testid="mm-session-label">{s.label} · {s.instrument} · {s.policy} · {t('mmSince', { at: when(new Date(s.startedAt), locale) })}</p>
     {st.reason && <Notice tone="warn"><span data-testid="mm-reason">{t('mmReason')} {st.reason}</span></Notice>}
     {typeof st.ending === 'string' && st.ending && <Notice tone="info">{t('mmEnding')} {st.ending}</Notice>}
     <StatGrid><Stat label={t('mmInventory', { base })} value={st.position ?? '—'} testid="mm-position" /><Stat label={t('mmInventoryUsd')} value={usd(st.positionUsd, locale)} testid="mm-position-usd" />
       <Stat label={t('mmMid')} value={st.mid ?? '—'} /><Stat label={t('mmResting')} value={String(quotes.length)} sub={(st.blockedSides ?? []).length ? t('mmBlocked', { sides: (st.blockedSides ?? []).join(', ') }) : undefined} /></StatGrid>
 
-    <div><h3 className="mb-1.5 text-[13px] font-semibold uppercase tracking-wide text-mute">{t('mmQuotes')}</h3>
-      {quotes.length === 0 ? <p className="text-[13.5px] text-mute" data-testid="mm-no-quotes">{t('mmNoQuotes')}</p> : <ul className="divide-y divide-line" data-testid="mm-quotes">{quotes.map((q) => <li key={q.clientId} className="py-2" data-testid="mm-quote" data-side={q.side}>
-        <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[14.5px] font-semibold">{t(q.side === 'buy' ? 'mmBid' : 'mmAsk')} · <span className="font-mono">{q.price}</span></span><Tag tone={q.state === 'resting' ? 'ok' : 'info'}>{q.state}</Tag></div>
-        <div className="mt-0.5 text-[12.5px] text-mute">{t('mmQuoteLine', { size: q.size, base, age: ageText(q.ageMs), bps: q.distanceBps ?? '—' })}</div></li>)}</ul>}</div>
+    <div><h3 className="mb-1.5 text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('mmQuotes')}</h3>
+      {quotes.length === 0 ? <p className="text-[0.84375rem] text-mute" data-testid="mm-no-quotes">{t('mmNoQuotes')}</p> : <ul className="divide-y divide-line" data-testid="mm-quotes">{quotes.map((q) => <li key={q.clientId} className="py-2" data-testid="mm-quote" data-side={q.side}>
+        <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[0.90625rem] font-semibold">{t(q.side === 'buy' ? 'mmBid' : 'mmAsk')} · <span className="font-mono">{q.price}</span></span><Tag tone={q.state === 'resting' ? 'ok' : 'info'}>{q.state}</Tag></div>
+        <div className="mt-0.5 text-[0.78125rem] text-mute">{t('mmQuoteLine', { size: q.size, base, age: ageText(q.ageMs), bps: q.distanceBps ?? '—' })}</div></li>)}</ul>}</div>
 
-    <div data-testid="mm-breakers"><h3 className="mb-1.5 text-[13px] font-semibold uppercase tracking-wide text-mute">{t('mmBreakers')}</h3>
-      <div className="flex flex-wrap items-center gap-1.5">{active.length === 0 ? <span className="text-[13.5px] text-mute">{t('mmNoBreaker')}</span> : active.map((c) => <Tag key={c} tone="warn" icon="stop">{c}</Tag>)}</div>
-      {(s.breakers ?? []).length > 0 && <Fold summary={t('mmBreakerEvents', { n: s.breakers.length })} testid="mm-breaker-events"><ul className="divide-y divide-line">{s.breakers.slice(-30).reverse().map((e, k) => <li key={`${e.ts}-${e.code}-${k}`} className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-[12.5px]">
+    <div data-testid="mm-breakers"><h3 className="mb-1.5 text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('mmBreakers')}</h3>
+      <div className="flex flex-wrap items-center gap-1.5">{active.length === 0 ? <span className="text-[0.84375rem] text-mute">{t('mmNoBreaker')}</span> : active.map((c) => <Tag key={c} tone="warn" icon="stop">{c}</Tag>)}</div>
+      {(s.breakers ?? []).length > 0 && <Fold summary={t('mmBreakerEvents', { n: s.breakers.length })} testid="mm-breaker-events"><ul className="divide-y divide-line">{s.breakers.slice(-30).reverse().map((e, k) => <li key={`${e.ts}-${e.code}-${k}`} className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-[0.78125rem]">
         <span className="font-mono">{e.code}</span><span className="text-mute">{e.action} · {hmsUtc(e.ts)} UTC</span></li>)}</ul></Fold>}</div>
 
-    {(tab === 'live' || st.switch?.deadline != null) && <div><h3 className="mb-1.5 text-[13px] font-semibold uppercase tracking-wide text-mute">{t('mmSwitch')}</h3><SwitchLine sw={st.switch} /></div>}
+    {(tab === 'live' || st.switch?.deadline != null) && <div><h3 className="mb-1.5 text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('mmSwitch')}</h3><SwitchLine sw={st.switch} /></div>}
 
-    <div data-testid="mm-refusals"><h3 className="mb-1.5 text-[13px] font-semibold uppercase tracking-wide text-mute">{t('mmRefusals')}</h3>
-      {refusals.length === 0 ? <p className="text-[13.5px] text-mute">{t('mmNoRefusal')}</p> : <dl>{refusals.map(([code, n]) => <Fact key={code} k={<Mono>{code}</Mono>}>{String(n)}</Fact>)}</dl>}</div>
+    <div data-testid="mm-refusals"><h3 className="mb-1.5 text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('mmRefusals')}</h3>
+      {refusals.length === 0 ? <p className="text-[0.84375rem] text-mute">{t('mmNoRefusal')}</p> : <dl>{refusals.map(([code, n]) => <Fact key={code} k={<Mono>{code}</Mono>}>{String(n)}</Fact>)}</dl>}</div>
 
-    <div data-testid="mm-budget"><h3 className="mb-1.5 text-[13px] font-semibold uppercase tracking-wide text-mute">{t('mmBudget')}</h3>
+    <div data-testid="mm-budget"><h3 className="mb-1.5 text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('mmBudget')}</h3>
       <StatGrid cols={3}><Stat label={t('mmBudgetUsed')} value={`${b.usedLastMinute ?? '—'} / ${numFmt(b.limitPerMinute ?? 1200, locale)}`} /><Stat label={t('mmBudgetPeak')} value={String(b.peakPerMinute ?? '—')} />
         <Stat label={t('mmBudgetAddress')} value={b.address?.remaining === null || b.address?.remaining === undefined ? '—' : numFmt(b.address.remaining, locale)} sub={b.address ? t('mmBudgetSent', { orders: b.address.orders, cancels: b.address.cancels, heartbeats: b.address.heartbeats }) : undefined} /></StatGrid>
-      <p className="mt-1.5 text-[12.5px] text-mute">{t('mmBudgetSplit', { rest: b.restWeight ?? 0, exchange: b.exchangeWeight ?? 0, signer: b.signerWeightEstimate ?? 0 })}</p></div>
+      <p className="mt-1.5 text-[0.78125rem] text-mute">{t('mmBudgetSplit', { rest: b.restWeight ?? 0, exchange: b.exchangeWeight ?? 0, signer: b.signerWeightEstimate ?? 0 })}</p></div>
 
-    <div data-testid="mm-stream"><h3 className="mb-1.5 text-[13px] font-semibold uppercase tracking-wide text-mute">{t('mmStream')}</h3>
+    <div data-testid="mm-stream"><h3 className="mb-1.5 text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('mmStream')}</h3>
       {st.stream ? <dl><Fact k={t('mmStreamStatus')}>{typeof st.stream.status === 'string' ? st.stream.status : JSON.stringify(st.stream.status)} · {t(st.stream.synced ? 'mmStreamSynced' : 'mmStreamNotSynced')}</Fact>
         <Fact k={t('mmStreamCounts')}>{t('mmStreamLine', { orders: st.stream.streamOrders, fills: st.stream.streamFills, audits: st.stream.audits, div: st.stream.divergences, gaps: st.stream.gaps })}</Fact></dl>
-        : <p className="text-[13.5px] text-mute">{t(tab === 'paper' ? 'mmStreamPaper' : 'mmStreamNone')}</p>}</div>
+        : <p className="text-[0.84375rem] text-mute">{t(tab === 'paper' ? 'mmStreamPaper' : 'mmStreamNone')}</p>}</div>
 
-    <div data-testid="mm-session-pnl"><h3 className="mb-1.5 flex flex-wrap items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-mute">{t('mmSessionPnl')}{tab === 'paper' && <SimulatedTag />}</h3>
+    <div data-testid="mm-session-pnl"><h3 className="mb-1.5 flex flex-wrap items-center gap-2 text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('mmSessionPnl')}{tab === 'paper' && <SimulatedTag />}</h3>
       <StatGrid cols={3}><Stat label={t('mmPnlTotal')} value={usd(s.pnl?.totalUsd, locale)} tone={neg(s.pnl?.totalUsd)} /><Stat label={t('mmPnlFills')} value={String(s.pnl?.fills ?? 0)} /><Stat label={t('mmPnlVolume')} value={usd(s.pnl?.volumeUsd, locale)} /></StatGrid>
       {Object.keys(s.counters ?? {}).length > 0 && <Fold summary={t('mmCounters')}><dl>{Object.entries(s.counters).map(([k, v]) => <Fact key={k} k={<Mono>{k}</Mono>}>{String(v)}</Fact>)}</dl></Fold>}</div>
   </div>;
@@ -104,7 +104,7 @@ export function CommandBar({ view, tab, busy, confirming, note, refusal, on }: {
       <Btn kind="danger" busy={busy === 'flatten'} disabled={!cs.flatten} onClick={on.flatten} data-testid="mm-flatten">{t('mmFlatten')}</Btn></div>
     {confirming && <Notice tone="warn"><span className="block">{t('mmFlattenConfirm')}</span><span className="mt-2 flex flex-wrap gap-2"><Btn kind="danger" busy={busy === 'flatten'} onClick={on.confirm} data-testid="mm-flatten-confirm">{t('mmFlattenYes')}</Btn><Btn kind="ghost" onClick={on.cancel}>{t('cancel')}</Btn></span></Notice>}
     <Btn kind="ghost" full busy={busy === 'resume'} disabled={!cs.resume} onClick={on.resume} data-testid="mm-resume">{t('mmResume')}</Btn>
-    <p className="text-[12.5px] leading-snug text-mute" data-testid="mm-commands-note">{t('mmCommandsNote')}</p>
+    <p className="text-[0.78125rem] leading-snug text-mute" data-testid="mm-commands-note">{t('mmCommandsNote')}</p>
     {note && <Notice tone="info"><span data-testid="mm-command-result">{note}</span></Notice>}
     <RefusalNotice r={refusal} /></div>;
 }
@@ -119,8 +119,8 @@ function Commands({ id, view, tab, onDone }: { id: string; view: MmView; tab: Mm
 // ------------------------------------------------------------------------------------------------------------------ fills, attribution, past sessions
 export function FillsTable({ data }: { data: MmFills }) {
   const t = useT(); const { locale } = useContext(I18n);
-  if (data.fills.length === 0) return <p className="text-[13.5px] text-mute" data-testid="mm-no-fills">{t('mmNoFills')}</p>;
-  return <div className="overflow-x-auto" data-testid="mm-fills" data-mode={data.mode} data-simulated={String(data.simulated)}><table className="w-full min-w-[520px] text-left text-[12.5px]">
+  if (data.fills.length === 0) return <p className="text-[0.84375rem] text-mute" data-testid="mm-no-fills">{t('mmNoFills')}</p>;
+  return <div className="overflow-x-auto" data-testid="mm-fills" data-mode={data.mode} data-simulated={String(data.simulated)}><table className="w-full min-w-[520px] text-left text-[0.78125rem]">
     <thead><tr className="text-mute"><th className="py-1.5 pr-2 font-medium">{t('mmFillWhen')}</th><th className="py-1.5 pr-2 font-medium">{t('mmFillSide')}</th><th className="py-1.5 pr-2 font-medium">{t('mmFillPrice')}</th><th className="py-1.5 pr-2 font-medium">{t('mmFillSize')}</th><th className="py-1.5 pr-2 font-medium">{t('mmFillFee')}</th>
       {HORIZONS.map((h) => <th key={h} className="py-1.5 pr-2 font-medium">{t('mmMarkoutAt', { h })}</th>)}</tr></thead>
     <tbody className="divide-y divide-line">{data.fills.map((f) => <tr key={f.id} data-testid="mm-fill">
@@ -131,39 +131,39 @@ export function FillsTable({ data }: { data: MmFills }) {
 export function Attribution({ p }: { p: MmPerformance }) {
   const t = useT(); const { locale } = useContext(I18n), a = p.attribution;
   return <div className="space-y-3" data-testid="mm-attribution" data-mode={p.mode}>
-    <p className="text-[12.5px] leading-snug text-mute" data-testid="mm-attribution-label">{p.label}</p>
+    <p className="text-[0.78125rem] leading-snug text-mute" data-testid="mm-attribution-label">{p.label}</p>
     <StatGrid cols={3}><Stat label={t('mmPnlSpread')} value={usd(a.spreadCaptureUsd, locale)} tone={neg(a.spreadCaptureUsd)} /><Stat label={t('mmPnlInventory')} value={usd(a.inventoryPnlUsd, locale)} tone={neg(a.inventoryPnlUsd)} /><Stat label={t('mmPnlFees')} value={usd(a.feesUsd, locale)} tone={neg(a.feesUsd)} />
       <Stat label={t('mmPnlFunding')} value={usd(a.fundingUsd, locale)} tone={neg(a.fundingUsd)} /><Stat label={t('mmPnlTotal')} value={usd(a.totalUsd, locale)} tone={neg(a.totalUsd)} testid="mm-attribution-total" /><Stat label={t('mmPnlBps')} value={bps(a.bpsOfVolume)} tone={neg(a.bpsOfVolume)} /></StatGrid>
     <StatGrid cols={3}>{p.markouts.map((m) => <Stat key={m.horizon} label={t('mmMarkoutMean', { h: m.horizon })} value={bps(m.meanBps)} tone={neg(m.meanBps)} sub={t('mmMarkoutFills', { n: m.fills })} />)}</StatGrid>
-    <p className="text-[12.5px] leading-snug text-mute">{t('mmAttributionLine', { sessions: p.sessions, fills: p.fills, volume: usd(p.volumeUsd, locale) })} {p.note}</p></div>;
+    <p className="text-[0.78125rem] leading-snug text-mute">{t('mmAttributionLine', { sessions: p.sessions, fills: p.fills, volume: usd(p.volumeUsd, locale) })} {p.note}</p></div>;
 }
 export function PastSessions({ sessions, tab }: { sessions: SessionView[]; tab: MmMode }) {
   const t = useT(); const { locale } = useContext(I18n);
-  if (sessions.length === 0) return <p className="text-[13.5px] text-mute">{t('mmNoSessions')}</p>;
+  if (sessions.length === 0) return <p className="text-[0.84375rem] text-mute">{t('mmNoSessions')}</p>;
   return <ul className="divide-y divide-line" data-testid="mm-sessions" data-mode={tab}>{sessions.map((s) => <li key={s.id} className="py-2.5" data-testid="mm-past-session" data-state={s.state}>
-    <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[14px] font-semibold">{when(new Date(s.startedAt), locale)}</span><span className="flex flex-wrap items-center gap-1.5"><Tag tone={s.state === 'running' ? 'ok' : s.state === 'abandoned' ? 'warn' : 'mute'}>{t(`mmState_${s.state}` as Key)}</Tag>{s.simulated && <SimulatedTag />}</span></div>
-    <div className="mt-0.5 text-[12.5px] text-mute">{s.instrument} · {s.network} · {s.policy} · {t('mmPastLine', { total: usd(s.pnl?.totalUsd, locale), fills: s.pnl?.fills ?? 0, volume: usd(s.pnl?.volumeUsd, locale) })}</div>
-    {s.endReason && <div className="mt-0.5 text-[12.5px] text-mute [overflow-wrap:anywhere]">{s.endedAt ? `${when(new Date(s.endedAt), locale)} · ` : ''}{s.endReason}</div>}</li>)}</ul>;
+    <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[0.875rem] font-semibold">{when(new Date(s.startedAt), locale)}</span><span className="flex flex-wrap items-center gap-1.5"><Tag tone={s.state === 'running' ? 'ok' : s.state === 'abandoned' ? 'warn' : 'mute'}>{t(`mmState_${s.state}` as Key)}</Tag>{s.simulated && <SimulatedTag />}</span></div>
+    <div className="mt-0.5 text-[0.78125rem] text-mute">{s.instrument} · {s.network} · {s.policy} · {t('mmPastLine', { total: usd(s.pnl?.totalUsd, locale), fills: s.pnl?.fills ?? 0, volume: usd(s.pnl?.volumeUsd, locale) })}</div>
+    {s.endReason && <div className="mt-0.5 text-[0.78125rem] text-mute [overflow-wrap:anywhere]">{s.endedAt ? `${when(new Date(s.endedAt), locale)} · ` : ''}{s.endReason}</div>}</li>)}</ul>;
 }
 
 // ------------------------------------------------------------------------------------------------------------------ the evidence, as it is
 /** The laboratory study and the simulation with every figure the server sends, unrounded, negative ones marked. */
 export function EvidenceBlock({ ev }: { ev: MmEvidence }) {
   const t = useT(), e = ev.evidence;
-  const figures = (o: Record<string, unknown>) => <dl>{flatFigures(o).map((f) => <Fact key={f.path} k={<Mono>{f.path}</Mono>}><span className={`font-mono text-[13px] ${isNegative(f.value) || /^between -/.test(f.value) ? 'font-semibold text-danger' : ''}`} data-figure={f.path}>{f.value}</span></Fact>)}</dl>;
+  const figures = (o: Record<string, unknown>) => <dl>{flatFigures(o).map((f) => <Fact key={f.path} k={<Mono>{f.path}</Mono>}><span className={`font-mono text-[0.8125rem] ${isNegative(f.value) || /^between -/.test(f.value) ? 'font-semibold text-danger' : ''}`} data-figure={f.path}>{f.value}</span></Fact>)}</dl>;
   return <div className="space-y-3" data-testid="mm-evidence" data-version={e.version}>
-    <div className="rounded-2xl bg-elev/60 p-3.5" data-testid="mm-evidence-lab"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[14px] font-semibold text-ink">{t('mmEvLab')}</span><Tag tone="danger" icon="x">{t('mmEvNegative')}</Tag></div>
-      <p className="mt-1.5 font-semibold text-danger" data-testid="mm-evidence-lab-result">{e.lab.result}</p><p className="mt-1 text-[12.5px]">{e.lab.sample} · {e.lab.ranOn} · <span className="font-mono">{e.lab.source}</span></p>{figures(e.lab.figures)}</div>
-    <div className="rounded-2xl bg-elev/60 p-3.5" data-testid="mm-evidence-sim"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[14px] font-semibold text-ink">{t('mmEvSim')}</span><Tag tone="danger" icon="x">{t('mmEvNegative')}</Tag></div>
-      <p className="mt-1.5 font-semibold text-danger" data-testid="mm-evidence-sim-result">{e.simulation.result}</p><p className="mt-1 text-[12.5px] [overflow-wrap:anywhere]">{e.simulation.source}</p>{figures(e.simulation.figures)}</div>
-    <p className="text-[12.5px] leading-snug" data-testid="mm-evidence-fees">{t('mmEvFees')} {e.fees}</p></div>;
+    <div className="rounded-2xl bg-elev/60 p-3.5" data-testid="mm-evidence-lab"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[0.875rem] font-semibold text-ink">{t('mmEvLab')}</span><Tag tone="danger" icon="x">{t('mmEvNegative')}</Tag></div>
+      <p className="mt-1.5 font-semibold text-danger" data-testid="mm-evidence-lab-result">{e.lab.result}</p><p className="mt-1 text-[0.78125rem]">{e.lab.sample} · {e.lab.ranOn} · <span className="font-mono">{e.lab.source}</span></p>{figures(e.lab.figures)}</div>
+    <div className="rounded-2xl bg-elev/60 p-3.5" data-testid="mm-evidence-sim"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[0.875rem] font-semibold text-ink">{t('mmEvSim')}</span><Tag tone="danger" icon="x">{t('mmEvNegative')}</Tag></div>
+      <p className="mt-1.5 font-semibold text-danger" data-testid="mm-evidence-sim-result">{e.simulation.result}</p><p className="mt-1 text-[0.78125rem] [overflow-wrap:anywhere]">{e.simulation.source}</p>{figures(e.simulation.figures)}</div>
+    <p className="text-[0.78125rem] leading-snug" data-testid="mm-evidence-fees">{t('mmEvFees')} {e.fees}</p></div>;
 }
 
 // ------------------------------------------------------------------------------------------------------------------ the go-live checklist
 export interface GoLiveState { busy: string; refusal: Refusal | null; refusalAt: string; evidenceChecked: boolean; jurisdictionChecked: boolean; note: string }
 export interface GoLiveActions { check: (k: 'evidence' | 'jurisdiction', v: boolean) => void; note: (s: string) => void; ack: (step: 'evidence' | 'jurisdiction' | 'testnet') => void; form: (testnetOnly: boolean) => void; review: () => void; revoke: () => void; recover: () => void; start: () => void; stop: () => void }
 const Check = ({ checked, onChange, children, testid, disabled }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode; testid: string; disabled?: boolean }) =>
-  <label className="flex min-h-11 cursor-pointer items-start gap-3 py-1.5"><input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-[18px] w-[18px] shrink-0 accent-blue" data-testid={testid} /><span className="text-[14px] text-ink">{children}</span></label>;
+  <label className="flex min-h-11 cursor-pointer items-start gap-3 py-1.5"><input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-[18px] w-[18px] shrink-0 accent-blue" data-testid={testid} /><span className="text-[0.875rem] text-ink">{children}</span></label>;
 
 /** The six steps, in order. Presentation only: what is done is `view.goLive.steps`; the forms of a step appear only when it is the step to act on. */
 export function GoLiveList({ view, ev, bounds, st, on }: { view: MmView; ev: MmEvidence | null; bounds: MmBounds | null; st: GoLiveState; on: GoLiveActions }) {
@@ -171,7 +171,7 @@ export function GoLiveList({ view, ev, bounds, st, on }: { view: MmView; ev: MmE
   const steps = checklist(view.goLive), by = (id: StepGate['id']) => steps.find((s) => s.id === id)!, m = view.mandate, net = view.goLive.network;
   const at = (x: unknown) => (typeof x === 'number' ? when(new Date(x), locale) : '—');
   const refusal = (where: string) => (st.refusalAt === where ? <RefusalNotice r={st.refusal} /> : null);
-  const locked = (s: StepGate) => s.locked && <p className="text-[12.5px]" data-testid={`mm-step-locked-${s.id}`}>{t('mmStepLocked')}</p>;
+  const locked = (s: StepGate) => s.locked && <p className="text-[0.78125rem]" data-testid={`mm-step-locked-${s.id}`}>{t('mmStepLocked')}</p>;
   const missing = (s: StepGate) => !s.done && s.missing && <p className="[overflow-wrap:anywhere]" data-testid={`mm-step-missing-${s.id}`}>{t('mmMissing')} {s.missing}</p>;
   const body: Record<StepGate['id'], (s: StepGate) => ReactNode> = {
     paper: (s) => { const e = s.evidence as { requiredMinutes?: number; instrument?: string; session?: { id: string; minutes: number; fills: number; startedAt: number } | null }; return <>
@@ -182,10 +182,10 @@ export function GoLiveList({ view, ev, bounds, st, on }: { view: MmView; ev: MmE
       {ev ? <EvidenceBlock ev={ev} /> : <SkeletonRows n={3} />}
       {s.done ? <p className="text-ink" data-testid="mm-evidence-acked">{t('mmAckedAt', { at: at(e.acknowledgedAt) })} <Mono>{String(e.sha256 ?? '').slice(0, 16)}…</Mono></p>
         : s.actionable && ev ? <><Check checked={st.evidenceChecked} onChange={(v) => on.check('evidence', v)} testid="mm-evidence-check"><span data-testid="mm-evidence-statement">{ev.statement}</span></Check>
-          <Btn full busy={st.busy === 'ack-evidence'} disabled={!st.evidenceChecked} onClick={() => on.ack('evidence')} data-testid="mm-evidence-ack">{t('mmAckRecord')}</Btn></> : <>{ev && <p className="rounded-2xl bg-elev/60 p-3 text-[13px]" data-testid="mm-evidence-statement">{ev.statement}</p>}{locked(s)}</>}{refusal('evidence')}</>; },
+          <Btn full busy={st.busy === 'ack-evidence'} disabled={!st.evidenceChecked} onClick={() => on.ack('evidence')} data-testid="mm-evidence-ack">{t('mmAckRecord')}</Btn></> : <>{ev && <p className="rounded-2xl bg-elev/60 p-3 text-[0.8125rem]" data-testid="mm-evidence-statement">{ev.statement}</p>}{locked(s)}</>}{refusal('evidence')}</>; },
     jurisdiction: (s) => { const e = s.evidence as { acknowledgedAt?: number | null; sha256?: string | null }; return <>
-      {ev ? <p className="whitespace-pre-wrap rounded-2xl bg-elev p-3 text-[13px] leading-relaxed text-ink" data-testid="mm-jurisdiction-text">{ev.jurisdiction.text}</p> : <SkeletonRows n={2} />}
-      {ev && <p className="text-[12px]">{ev.jurisdiction.source} · {ev.jurisdiction.version} · <Mono>{ev.jurisdiction.sha256.slice(0, 16)}…</Mono></p>}
+      {ev ? <p className="whitespace-pre-wrap rounded-2xl bg-elev p-3 text-[0.8125rem] leading-relaxed text-ink" data-testid="mm-jurisdiction-text">{ev.jurisdiction.text}</p> : <SkeletonRows n={2} />}
+      {ev && <p className="text-[0.75rem]">{ev.jurisdiction.source} · {ev.jurisdiction.version} · <Mono>{ev.jurisdiction.sha256.slice(0, 16)}…</Mono></p>}
       {s.done ? <p className="text-ink" data-testid="mm-jurisdiction-acked">{t('mmAckedAt', { at: at(e.acknowledgedAt) })}</p>
         : s.actionable && ev ? <><Check checked={st.jurisdictionChecked} onChange={(v) => on.check('jurisdiction', v)} testid="mm-jurisdiction-check">{t('mmJurCheck')}</Check>
           <Btn full busy={st.busy === 'ack-jurisdiction'} disabled={!st.jurisdictionChecked} onClick={() => on.ack('jurisdiction')} data-testid="mm-jurisdiction-ack">{t('mmAckRecord')}</Btn></> : locked(s)}{refusal('jurisdiction')}</>; },
@@ -213,16 +213,16 @@ export function GoLiveList({ view, ev, bounds, st, on }: { view: MmView; ev: MmE
     locks: (s) => { const e = s.evidence as { network?: string | null; code?: string | null; setting?: string | null }, nets = bounds ? (net ? [bounds.locks[net]] : [bounds.locks.mainnet, bounds.locks.testnet]) : []; return <>
       <p>{t('mmLkLead')}</p>
       {nets.map((n) => <div key={n.network} className="rounded-2xl bg-elev/60 p-3" data-testid={`mm-locks-${n.network}`} data-open={String(n.lock === null)}>
-        <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[13.5px] font-semibold text-ink">{n.network}</span><Tag tone={n.lock ? 'warn' : 'ok'} icon={n.lock ? 'lock' : 'check'}>{t(n.lock ? 'mmLkClosed' : 'mmLkOpen')}</Tag></div>
-        <ul className="mt-1.5 space-y-0.5">{n.consulted.map((c) => <li key={c} className="font-mono text-[12.5px]" data-testid="mm-lock-setting" data-closed={String(n.lock?.setting === c)}>{c}{n.lock?.setting === c ? ` — ${t('mmLkOff')}` : ''}</li>)}</ul>
+        <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[0.84375rem] font-semibold text-ink">{n.network}</span><Tag tone={n.lock ? 'warn' : 'ok'} icon={n.lock ? 'lock' : 'check'}>{t(n.lock ? 'mmLkClosed' : 'mmLkOpen')}</Tag></div>
+        <ul className="mt-1.5 space-y-0.5">{n.consulted.map((c) => <li key={c} className="font-mono text-[0.78125rem]" data-testid="mm-lock-setting" data-closed={String(n.lock?.setting === c)}>{c}{n.lock?.setting === c ? ` — ${t('mmLkOff')}` : ''}</li>)}</ul>
         {n.lock && <p className="mt-1.5 [overflow-wrap:anywhere]"><span className="font-mono font-semibold text-danger" data-testid="mm-lock-code">{n.lock.code}</span> — <span data-testid="mm-lock-message">{n.lock.message}</span></p>}</div>)}
       {e.code && <p className="[overflow-wrap:anywhere]" data-testid="mm-step-lock"><span className="font-mono font-semibold text-danger">{e.code}</span>{e.setting ? ` · ${e.setting}` : ''}</p>}{missing(s)}
       {view.state === 'STOPPING' && <Notice tone="warn"><span data-testid="mm-stopping">{t('mmStopping')}</span></Notice>}
       <div className="grid grid-cols-2 gap-2.5"><Btn busy={st.busy === 'start'} disabled={!view.goLive.ready || view.state === 'LIVE' || view.state === 'STOPPING'} onClick={on.start} data-testid="mm-start-live">{t('mmStartLive')}</Btn>
         <Btn kind="danger" busy={st.busy === 'stop'} disabled={!(view.mode === 'LIVE' && view.state !== 'STOPPED')} onClick={on.stop} data-testid="mm-stop-live">{t('mmStopLive')}</Btn></div>
-      {!view.goLive.ready && <p className="text-[12.5px]" data-testid="mm-start-blocked">{t('mmStartBlocked')}</p>}{refusal('locks')}</>; },
+      {!view.goLive.ready && <p className="text-[0.78125rem]" data-testid="mm-start-blocked">{t('mmStartBlocked')}</p>}{refusal('locks')}</>; },
   };
-  return <div data-testid="mm-golive" data-ready={String(view.goLive.ready)}><Timeline label={t('mmGoLive')} items={steps.map((s) => ({ key: s.id, state: stepState(s), testid: `mm-step-${s.id}`, node: <span className="text-[13px] font-semibold">{s.n}</span>, title: t(stepKey(s.id)),
+  return <div data-testid="mm-golive" data-ready={String(view.goLive.ready)}><Timeline label={t('mmGoLive')} items={steps.map((s) => ({ key: s.id, state: stepState(s), testid: `mm-step-${s.id}`, node: <span className="text-[0.8125rem] font-semibold">{s.n}</span>, title: t(stepKey(s.id)),
     stateLabel: t(s.done ? 'mmStepDone' : s.skipped ? 'mmStepSkipped' : s.actionable ? 'mmStepNow' : 'mmStepWaiting'), children: <div data-step={s.id} data-done={String(s.done)} data-actionable={String(s.actionable)} className="space-y-2">{body[s.id](s)}</div> }))} /></div>;
 }
 
@@ -256,10 +256,10 @@ interface LiveAccount { id: string; venue: string; network: string; label?: stri
 export function QuotingFields({ d, bounds, agent, onChange }: { d: QuotingDraft; bounds: MmBounds; agent: QuotingAgent; onChange: (d: QuotingDraft) => void }) {
   const t = useT(), problems = new Map(draftProblems(d, bounds, agent).map((p) => [p.field, p.bound]));
   const set = (k: NumField, v: string) => onChange({ ...d, [k]: (MONEY_FIELDS as readonly string[]).includes(k) ? cleanDec(v) : cleanInt(v) });
-  return <>{GROUPS.map((g) => <fieldset key={g} className="space-y-3" data-testid={`mm-form-group-${g}`}><legend className="text-[13px] font-semibold uppercase tracking-wide text-mute">{t(groupKey(g))}</legend>
+  return <>{GROUPS.map((g) => <fieldset key={g} className="space-y-3" data-testid={`mm-form-group-${g}`}><legend className="text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t(groupKey(g))}</legend>
     {FIELDS.filter((f) => f.group === g).map((f) => { const bound = boundText(f, bounds, d, agent), bad = problems.has(f.key); return <Field key={f.key} label={`${t(fieldKey(f.key))}${f.unit ? ` (${f.unit})` : ''}`}>
       <input className={inputCls} inputMode={(MONEY_FIELDS as readonly string[]).includes(f.key) ? 'decimal' : 'numeric'} autoComplete="off" value={d[f.key]} aria-invalid={bad} onChange={(e) => set(f.key, e.target.value)} data-testid={`mm-f-${f.key}`} />
-      <span className={`mt-1.5 block text-[12.5px] ${bad ? 'font-semibold text-danger' : 'text-mute'}`} data-testid={`mm-max-${f.key}`} data-bad={String(bad)}>{t('mmBound')} <span className="font-mono">{bad ? problems.get(f.key) || bound : bound}</span></span></Field>; })}</fieldset>)}</>;
+      <span className={`mt-1.5 block text-[0.78125rem] ${bad ? 'font-semibold text-danger' : 'text-mute'}`} data-testid={`mm-max-${f.key}`} data-bad={String(bad)}>{t('mmBound')} <span className="font-mono">{bad ? problems.get(f.key) || bound : bound}</span></span></Field>; })}</fieldset>)}</>;
 }
 export function QuotingMandateForm({ agent, bounds, testnetOnly, onClose, onCreated }: { agent: QuotingAgent; bounds: MmBounds; testnetOnly: boolean; onClose: () => void; onCreated: (mandateId: string) => void }) {
   const t = useT(); const { locale } = useContext(I18n);
@@ -276,22 +276,22 @@ export function QuotingMandateForm({ agent, bounds, testnetOnly, onClose, onCrea
       <Notice tone="warn">{t('mmFormLead')}</Notice>
       <Field label={t('mmFormAccount')} hint={aq.isLoading ? undefined : accounts.length === 0 ? <span data-testid="mm-form-no-account">{t(testnetOnly ? 'mmFormNoTestnet' : 'mmFormNoAccount')}</span> : undefined}>
         <select className={inputCls} value={d.accountId} onChange={(e) => setD({ ...d, accountId: e.target.value })} data-testid="mm-form-account"><option value="">—</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.label || a.venue} · {a.venue} {a.network}</option>)}</select></Field>
-      {lock?.lock && <div data-testid="mm-form-lock" data-code={lock.lock.code}><Notice tone="warn"><span className="block font-mono text-[13px] font-semibold">{lock.lock.code}</span><span className="mt-1 block [overflow-wrap:anywhere]">{lock.lock.message}</span><span className="mt-1 block text-[12.5px]">{t('mmFormLockNote')}</span></Notice></div>}
+      {lock?.lock && <div data-testid="mm-form-lock" data-code={lock.lock.code}><Notice tone="warn"><span className="block font-mono text-[0.8125rem] font-semibold">{lock.lock.code}</span><span className="mt-1 block [overflow-wrap:anywhere]">{lock.lock.message}</span><span className="mt-1 block text-[0.78125rem]">{t('mmFormLockNote')}</span></Notice></div>}
       <dl data-testid="mm-form-fixed"><Fact k={t('mmFormInstrument')}><Mono>{agent.instrument}</Mono></Fact><Fact k={t('mmFormPolicy')}><Mono>{agent.policy}</Mono></Fact>
-        <Fact k={t('mmFormQuoteSize')}><Mono>{agent.quoteSizeUsd} USD</Mono><span className="mt-0.5 block text-[12.5px] text-mute" data-testid="mm-max-quoteSizeUsd">{t('mmBound')} <span className="font-mono">{bounds.section.minQuoteSizeUsd}…{bounds.signer.maxQuoteNotional}</span> · {t('mmFormFromConfig')}</span></Fact>
-        <Fact k={t('mmFormPosition')}><Mono testid="mm-form-position">{pos ?? '—'} USD</Mono><span className="mt-0.5 block text-[12.5px] text-mute" data-testid="mm-max-maxPositionNotionalUsd">{t('mmBound')} <span className="font-mono">≤ {bounds.signer.maxInventoryNotional}</span> · {t('mmFormPositionNote')}</span></Fact></dl>
+        <Fact k={t('mmFormQuoteSize')}><Mono>{agent.quoteSizeUsd} USD</Mono><span className="mt-0.5 block text-[0.78125rem] text-mute" data-testid="mm-max-quoteSizeUsd">{t('mmBound')} <span className="font-mono">{bounds.section.minQuoteSizeUsd}…{bounds.signer.maxQuoteNotional}</span> · {t('mmFormFromConfig')}</span></Fact>
+        <Fact k={t('mmFormPosition')}><Mono testid="mm-form-position">{pos ?? '—'} USD</Mono><span className="mt-0.5 block text-[0.78125rem] text-mute" data-testid="mm-max-maxPositionNotionalUsd">{t('mmBound')} <span className="font-mono">≤ {bounds.signer.maxInventoryNotional}</span> · {t('mmFormPositionNote')}</span></Fact></dl>
       <Field label={t('mmFormLabel')}><input className={inputCls} maxLength={60} value={d.label} onChange={(e) => setD({ ...d, label: e.target.value })} data-testid="mm-f-label" /></Field>
       <QuotingFields d={d} bounds={bounds} agent={agent} onChange={setD} />
-      <fieldset className="space-y-3"><legend className="text-[13px] font-semibold uppercase tracking-wide text-mute">{t('mmFormHours')}</legend>
-        <p className="text-[12.5px] leading-snug text-mute">{t('mmFormHoursNote')}</p>
+      <fieldset className="space-y-3"><legend className="text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('mmFormHours')}</legend>
+        <p className="text-[0.78125rem] leading-snug text-mute">{t('mmFormHoursNote')}</p>
         <div className="grid grid-cols-2 gap-2.5"><Field label={t('mmFormHoursStart')}><input className={inputCls} placeholder="HH:MM" inputMode="numeric" maxLength={5} value={d.hoursStart} onChange={(e) => setD({ ...d, hoursStart: e.target.value.replace(/[^0-9:]/g, '') })} data-testid="mm-f-hoursStart" /></Field>
           <Field label={t('mmFormHoursEnd')}><input className={inputCls} placeholder="HH:MM" inputMode="numeric" maxLength={5} value={d.hoursEnd} onChange={(e) => setD({ ...d, hoursEnd: e.target.value.replace(/[^0-9:]/g, '') })} data-testid="mm-f-hoursEnd" /></Field></div></fieldset>
-      <fieldset className="space-y-3" data-testid="mm-form-breakers"><legend className="text-[13px] font-semibold uppercase tracking-wide text-mute">{t('mmFormBreakers')}</legend>
-        <p className="text-[12.5px] leading-snug text-mute">{t('mmFormBreakersNote')}</p>
+      <fieldset className="space-y-3" data-testid="mm-form-breakers"><legend className="text-[0.8125rem] font-semibold uppercase tracking-wide text-mute">{t('mmFormBreakers')}</legend>
+        <p className="text-[0.78125rem] leading-snug text-mute">{t('mmFormBreakersNote')}</p>
         {bounds.breakers.map((x) => <Field key={x.code} label={x.code} hint={x.alwaysStops ? t('mmFormAlwaysStops') : undefined}>
           <select className={inputCls} value={d.breakers[x.code] ?? x.default} onChange={(e) => setD({ ...d, breakers: { ...d.breakers, [x.code]: e.target.value as BreakerAction } })} data-testid={`mm-f-breaker-${x.code}`}>{breakerChoices(x).map((a) => <option key={a} value={a}>{t(`mmAct_${a}` as Key)}</option>)}</select></Field>)}</fieldset>
       <Check checked={d.flattenOnStop} onChange={(v) => setD({ ...d, flattenOnStop: v })} testid="mm-f-flattenOnStop">{t('mmFormFlattenOnStop')}</Check>
-      {problems.length > 0 && <p className="text-[12.5px] leading-snug text-mute" data-testid="mm-form-problems">{t('mmFormTodo')} <span className="font-mono">{problems.map((p) => p.field).join(', ')}</span></p>}
+      {problems.length > 0 && <p className="text-[0.78125rem] leading-snug text-mute" data-testid="mm-form-problems">{t('mmFormTodo')} <span className="font-mono">{problems.map((p) => p.field).join(', ')}</span></p>}
       <RefusalNotice r={refusal} />
     </div></Sheet>;
 }
@@ -302,17 +302,17 @@ export function ApprovalBody({ sheet }: { sheet: QuotingApproval }) {
   const t = useT(), rows = tableRows(sheet.quoting.table), h = sheet.hashes;
   return <div className="space-y-3">
     <Notice tone="warn">{sheet.note}</Notice>
-    <h3 className="text-[14px] font-semibold">{t('mmApHashes')}</h3>
+    <h3 className="text-[0.875rem] font-semibold">{t('mmApHashes')}</h3>
     <dl data-testid="mm-approval-hashes"><Fact k={t('mmHashTrading')}><Mono testid="mm-hash-trading">{h.tradingMandate}</Mono></Fact><Fact k={t('mmHashSection')}><Mono testid="mm-hash-section">{h.quotingSection}</Mono></Fact>
       <Fact k={t('mmHashSigner')}><Mono testid="mm-hash-signer">{h.signerMandate}</Mono></Fact><Fact k={t('mmHashIntent')}><Mono testid="mm-hash-intent">{h.approvalIntent}</Mono></Fact></dl>
-    <h3 className="text-[14px] font-semibold">{t('mmApTable')}</h3>
-    <p className="text-[12.5px] leading-snug text-mute">{t('mmApTableNote')}</p>
-    <div className="overflow-x-auto"><table className="w-full text-left text-[12.5px]" data-testid="mm-approval-table"><tbody className="divide-y divide-line">{rows.map((r, k) => <tr key={k} data-testid="mm-approval-row" data-header={String(r.header)}>
+    <h3 className="text-[0.875rem] font-semibold">{t('mmApTable')}</h3>
+    <p className="text-[0.78125rem] leading-snug text-mute">{t('mmApTableNote')}</p>
+    <div className="overflow-x-auto"><table className="w-full text-left text-[0.78125rem]" data-testid="mm-approval-table"><tbody className="divide-y divide-line">{rows.map((r, k) => <tr key={k} data-testid="mm-approval-row" data-header={String(r.header)}>
       {r.cells.map((c, j) => (r.header ? <th key={j} className="py-1.5 pr-3 align-top font-semibold">{c}</th> : <td key={j} className={`py-1.5 pr-3 align-top [overflow-wrap:anywhere] ${j === 0 ? 'font-mono' : ''}`}>{c}</td>))}</tr>)}</tbody></table></div>
     <Fold summary={t('mmMdMaxima')}><dl>{Object.entries(sheet.quoting.maxima).map(([k, v]) => <Fact key={k} k={<Mono>{k}</Mono>}><Mono>{v}</Mono></Fact>)}</dl></Fold>
-    {sheet.signer.exclusivity && <p className="text-[12.5px] leading-snug text-mute">{sheet.signer.exclusivity}</p>}
-    <h3 className="text-[14px] font-semibold">{t('mmApAck')}</h3>
-    <p className="whitespace-pre-wrap rounded-2xl bg-elev p-3 text-[13px] leading-relaxed" data-testid="mm-approval-ack-text">{sheet.signer.acknowledgement.text}</p></div>;
+    {sheet.signer.exclusivity && <p className="text-[0.78125rem] leading-snug text-mute">{sheet.signer.exclusivity}</p>}
+    <h3 className="text-[0.875rem] font-semibold">{t('mmApAck')}</h3>
+    <p className="whitespace-pre-wrap rounded-2xl bg-elev p-3 text-[0.8125rem] leading-relaxed" data-testid="mm-approval-ack-text">{sheet.signer.acknowledgement.text}</p></div>;
 }
 export function QuotingApprovalSheet({ sheet, onClose, onDone }: { sheet: QuotingApproval; onClose: () => void; onDone: () => void }) {
   const t = useT(); const [ack, setAck] = useState(false), [busy, setBusy] = useState(false), [step, setStep] = useState(0), [refusal, setRefusal] = useState<Refusal | null>(null), [recovered, setRecovered] = useState('');
@@ -387,11 +387,11 @@ export function QuotingMandatesBlock({ mandates, onChanged }: { mandates: readon
   const [busy, setBusy] = useState(''), [refusal, setRefusal] = useState<Refusal | null>(null), [sheet, setSheet] = useState<QuotingApproval | null>(null), [note, setNote] = useState('');
   const run = async (key: string, fn: () => Promise<unknown>) => { setBusy(key); setRefusal(null); setNote(''); try { await fn(); onChanged(); } catch (e) { setRefusal(refusalOf(e)); } finally { setBusy(''); } };
   return <Section title={t('mmRkTitle')}><Card className="space-y-3"><div data-testid="mm-risk-block" className="space-y-3">
-    <p className="text-[13px] leading-snug text-mute">{t('mmRkLead')}</p>
-    {rows.length === 0 ? <p className="text-[13.5px] text-mute" data-testid="mm-risk-none">{t('mmRkNone')}</p> : <ul className="divide-y divide-line">{rows.map((m) => { const until = m.notAfter ?? (m.mandate?.notAfter ? m.mandate.notAfter * 1000 : null); return <li key={m.id} className="space-y-2 py-3" data-testid={`mm-risk-mandate-${m.id}`} data-focus={String(focus === m.id)} data-state={m.state}>
-      <div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><h3 className="break-words text-[15px] font-semibold">{m.label}</h3><p className="break-all font-mono text-[12px] text-mute">{m.principal.kind}:{m.principal.id}</p></div><Tag tone={m.phase === 'active' ? 'ok' : m.phase === 'wind_down' ? 'warn' : canApprove(m) ? 'info' : 'mute'}>{m.state} · {m.phase}</Tag></div>
+    <p className="text-[0.8125rem] leading-snug text-mute">{t('mmRkLead')}</p>
+    {rows.length === 0 ? <p className="text-[0.84375rem] text-mute" data-testid="mm-risk-none">{t('mmRkNone')}</p> : <ul className="divide-y divide-line">{rows.map((m) => { const until = m.notAfter ?? (m.mandate?.notAfter ? m.mandate.notAfter * 1000 : null); return <li key={m.id} className="space-y-2 py-3" data-testid={`mm-risk-mandate-${m.id}`} data-focus={String(focus === m.id)} data-state={m.state}>
+      <div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><h3 className="break-words text-[0.9375rem] font-semibold">{m.label}</h3><p className="break-all font-mono text-[0.75rem] text-mute">{m.principal.kind}:{m.principal.id}</p></div><Tag tone={m.phase === 'active' ? 'ok' : m.phase === 'wind_down' ? 'warn' : canApprove(m) ? 'info' : 'mute'}>{m.state} · {m.phase}</Tag></div>
       <dl><Fact k={t('mmMdExpires')}>{until ? when(new Date(until), locale) : '—'}</Fact><Fact k={t('mmMdIntegrity')}>{m.integrity ? (m.integrity.ok ? t('mmMdIntegrityOk') : <span className="font-semibold text-danger">{m.integrity.reason}</span>) : t('mmRkNotApproved')}</Fact></dl>
-      <div className="grid grid-cols-2 gap-2.5"><a className="press inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-line px-4 text-[14.5px] font-semibold" href={goLivePath(m.principal.id)} data-testid={`mm-risk-golive-${m.id}`}>{t('mmRkOpen')}</a>
+      <div className="grid grid-cols-2 gap-2.5"><a className="press inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-line px-4 text-[0.90625rem] font-semibold" href={goLivePath(m.principal.id)} data-testid={`mm-risk-golive-${m.id}`}>{t('mmRkOpen')}</a>
         {canRevoke(m) && <Btn kind="ghost" className="!text-danger" busy={busy === `rev-${m.id}`} onClick={() => void run(`rev-${m.id}`, () => post(`/mandates/${m.id}/revoke`, {}))} data-testid={`mm-risk-revoke-${m.id}`}><Icon n="stop" className="h-4 w-4" />{t('mmMdRevoke')}</Btn>}
         {canApprove(m) && <Btn busy={busy === `prep-${m.id}`} onClick={() => void run(`prep-${m.id}`, async () => { setSheet(await post<QuotingApproval>(`/mandates/${m.id}/approve/prepare`, { locale })); })} data-testid={`mm-risk-review-${m.id}`}>{t('mmMdReview')}</Btn>}
         {m.state === 'pending_signer' && <Btn kind="ghost" busy={busy === `rec-${m.id}`} onClick={() => void run(`rec-${m.id}`, async () => { const r = await post<{ adopted: string[]; revoked: string[]; pending: string[] }>('/mm/recover', {}); setNote(t('mmRecovered', { adopted: r.adopted.length, revoked: r.revoked.length, pending: r.pending.length })); })}>{t('mmRecover')}</Btn>}</div></li>; })}</ul>}

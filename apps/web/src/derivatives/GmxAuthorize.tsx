@@ -65,16 +65,16 @@ export function GmxAuthorize({ status, onClose }: { status: GmxStatus; onClose: 
   const name = (m: string) => status.markets.find((x) => x.market.toLowerCase() === m.toLowerCase())?.name ?? m;
   const num = (k: keyof GmxAuthForm, label: Key, hint: Key, unit: string, testid: string) => <Field label={t(label)} hint={t(hint)}>
     <div className="relative"><input className={`${inputCls} pr-16 font-semibold`} inputMode="numeric" autoComplete="off" aria-label={t(label)} value={f[k] as string} onChange={(e) => set(k, k === 'maxOrderSizeUsd' ? sanitizeAmountText(e.target.value) : digits(e.target.value))} data-testid={testid} />
-      <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[13px] font-medium text-mute">{unit}</span></div>{k === 'maxOrderSizeUsd' && <AmountProblem ambiguousOnly text={f.maxOrderSizeUsd} />}</Field>;
+      <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[0.8125rem] font-medium text-mute">{unit}</span></div>{k === 'maxOrderSizeUsd' && <AmountProblem ambiguousOnly text={f.maxOrderSizeUsd} />}</Field>;
   return <LiveSheet title={t('gxAuthTitle')} wide tone="mainnet" label={GMX_LABEL} busy={busy} onClose={onClose}>
     <div className="min-w-0 space-y-4" data-testid="gmx-authorize" data-step={step}>
       <ModeBand tone="mainnet" label={GMX_LABEL} compact />
       <ApprovalOutcomePanel ap={ap} />
       {(step === 'form' || step === 'preparing') && <>
-        <p className="text-[13.5px] leading-snug">{t('gxAuthIntro')}</p>
-        <fieldset className="min-w-0"><legend className="mb-2 text-[13px] font-medium text-mute">{t('gxAuthMarkets')}</legend>
-          <div className="space-y-2">{status.markets.map((m) => { const on = f.markets.includes(m.market); return <label key={m.market} className={`flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border px-3.5 py-2 text-[14.5px] ${on ? 'border-ink bg-elev/50' : 'border-line'}`}>
-            <AssetIcon sym={m.base} size={32} /><span className="min-w-0 flex-1"><span className="block font-semibold leading-tight [overflow-wrap:anywhere]">{m.name}</span><span className="block text-[12px] text-mute">{m.collateral.map((c) => c.symbol).join(', ')}</span></span>
+        <p className="text-[0.84375rem] leading-snug">{t('gxAuthIntro')}</p>
+        <fieldset className="min-w-0"><legend className="mb-2 text-[0.8125rem] font-medium text-mute">{t('gxAuthMarkets')}</legend>
+          <div className="space-y-2">{status.markets.map((m) => { const on = f.markets.includes(m.market); return <label key={m.market} className={`flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border px-3.5 py-2 text-[0.90625rem] ${on ? 'border-ink bg-elev/50' : 'border-line'}`}>
+            <AssetIcon sym={m.base} size={32} /><span className="min-w-0 flex-1"><span className="block font-semibold leading-tight [overflow-wrap:anywhere]">{m.name}</span><span className="block text-[0.75rem] text-mute">{m.collateral.map((c) => c.symbol).join(', ')}</span></span>
             <input type="checkbox" className="h-[22px] w-[22px] shrink-0 accent-[var(--blue)]" checked={on} onChange={() => toggle(m.market)} data-testid={`gmx-auth-market-${m.base}`} /></label>; })}</div></fieldset>
         <div className="grid grid-cols-1 gap-x-3 gap-y-4 sm:grid-cols-2">
           {num('maxLeverage', 'gxAuthLeverage', 'gxAuthLeverageHint', '×', 'gmx-auth-leverage')}
@@ -90,8 +90,8 @@ export function GmxAuthorize({ status, onClose }: { status: GmxStatus; onClose: 
 
       {p && pol && (step === 'review' || step === 'passkey' || step === 'sending') && <>
         <Group title={t('gxAckTitle')}>
-          <div className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-[18px] border border-line bg-elev/50 p-4 text-[13.5px] leading-relaxed" tabIndex={0} data-testid="gmx-ack-text">{p.ack.text}</div>
-          <p className="mt-1.5 break-all font-mono text-[10.5px] leading-snug text-mute">{t('gxAckVersion', { version: p.ack.version })} · SHA-256 {p.ack.sha256}</p></Group>
+          <div className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-[18px] border border-line bg-elev/50 p-4 text-[0.84375rem] leading-relaxed" tabIndex={0} data-testid="gmx-ack-text">{p.ack.text}</div>
+          <p className="mt-1.5 break-all font-mono text-[0.65625rem] leading-snug text-mute">{t('gxAckVersion', { version: p.ack.version })} · SHA-256 {p.ack.sha256}</p></Group>
         <Group title={t('gxAuthPolicyTitle')}>
           <div className={TICKET}><dl className="receipt" data-testid="gmx-auth-policy">
             <Fact k={t('gxAuthMarkets')}><span className="block font-semibold">{(pol.allowedMarkets ?? []).map((m) => <span key={m} className="block">{name(m)}</span>)}</span></Fact>
@@ -103,17 +103,17 @@ export function GmxAuthorize({ status, onClose }: { status: GmxStatus; onClose: 
             <Fact k={t('gxAuthExecFee')}>{eth(p.maxExecutionFeeEth, locale)}</Fact>
             <Fact k={t('gxAuthUntil')}>{p.authorization.expiresAt ? timeOf(p.authorization.expiresAt * 1000, locale, true) : t('gxAuthDaysValue', { days: v.ok ? v.body.days : '—' })}</Fact>
           </dl></div></Group>
-        <ul className="space-y-2 text-[13px] leading-snug text-mute">
+        <ul className="space-y-2 text-[0.8125rem] leading-snug text-mute">
           <Bullet icon="shield">{t('gxAuthSigner')}</Bullet>
           <Bullet icon="key">{t('gxAuthEach')}</Bullet>
           <Bullet icon="x">{t('gxAuthRevocable')}</Bullet></ul>
         <Fingerprint>{t('fingerprint')} SHA-256 {p.hash}</Fingerprint>
         <label className="ack-row !items-start !font-medium">
-          <input type="checkbox" className="mt-0.5" checked={read} disabled={busy} onChange={(e) => setRead(e.target.checked)} data-testid="gmx-ack-check" /><span className="min-w-0 text-[14px]">{t('gxAckCheck')}</span></label>
+          <input type="checkbox" className="mt-0.5" checked={read} disabled={busy} onChange={(e) => setRead(e.target.checked)} data-testid="gmx-ack-check" /><span className="min-w-0 text-[0.875rem]">{t('gxAckCheck')}</span></label>
         {step === 'passkey' && <Notice tone="info">{t('flPasskeyWaiting')}</Notice>}
         {err && <GmxErrNotice err={err.e} raw={err.raw} />}
         <div className="space-y-2.5">
-          <Btn full className="!min-h-[56px] !text-[16px]" kind="danger" busy={step !== 'review'} disabled={!read} onClick={() => void approve()} data-testid="gmx-auth-approve"><Icon n="key" className="h-[18px] w-[18px]" />{t('gxAuthApprove')}</Btn>
+          <Btn full className="!min-h-[56px] !text-[1rem]" kind="danger" busy={step !== 'review'} disabled={!read} onClick={() => void approve()} data-testid="gmx-auth-approve"><Icon n="key" className="h-[18px] w-[18px]" />{t('gxAuthApprove')}</Btn>
           <Btn full kind="ghost" disabled={busy} onClick={() => { setP(null); setStep('form'); setErr(null); }}>{t('back')}</Btn>
         </div>
       </>}

@@ -26,10 +26,10 @@ function useErr() {
   return (e: unknown): string => { const x = e as ApiError & { name?: string }; if (x?.name === 'NotAllowedError') return ''; const k = errKey(x?.code); return k === 'dvErrOther' ? t('dvErrOther', { code: x?.code ?? 'error' }) : t(k as Key); };
 }
 const Code = ({ children, label }: { children: string; label: string }) =>
-  <pre tabIndex={0} aria-label={label} className="max-h-80 overflow-auto rounded-2xl bg-elev p-3.5 font-mono text-[12px] leading-relaxed">{children}</pre>;
+  <pre tabIndex={0} aria-label={label} className="max-h-80 overflow-auto rounded-2xl bg-elev p-3.5 font-mono text-[0.75rem] leading-relaxed">{children}</pre>;
 const Check = ({ on, onChange, children, hint, disabled }: { on: boolean; onChange: (v: boolean) => void; children: ReactNode; hint?: ReactNode; disabled?: boolean }) =>
   <label className={`flex min-h-11 cursor-pointer items-start gap-3 py-1.5 ${disabled ? 'opacity-50' : ''}`}><input type="checkbox" checked={on} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-[18px] w-[18px] shrink-0 accent-[var(--blue)]" />
-    <span className="min-w-0"><span className="block text-[14.5px] font-medium">{children}</span>{hint && <span className="block text-xs text-mute">{hint}</span>}</span></label>;
+    <span className="min-w-0"><span className="block text-[0.90625rem] font-medium">{children}</span>{hint && <span className="block text-xs text-mute">{hint}</span>}</span></label>;
 
 export function Developer({ view, setView, onBack }: { view?: string; setView: (v: View) => void; onBack: () => void }) {
   const t = useT();
@@ -37,7 +37,7 @@ export function Developer({ view, setView, onBack }: { view?: string; setView: (
   return (
     <div className="space-y-4" data-testid="developer">
       <PageTitle onBack={onBack} backLabel={t('settings')}>{t('dvTitle')}</PageTitle>
-      <p className="px-1 text-[14px] leading-snug text-mute">{t('dvLead')}</p>
+      <p className="px-1 text-[0.875rem] leading-snug text-mute">{t('dvLead')}</p>
       <div className="overflow-x-auto"><Seg role="tablist" label={t('dvTitle')} value={v} options={VIEWS.map((x) => [x, t(`dvTab_${x}` as Key)] as const)} onChange={setView} /></div>
       {v === 'keys' && <Keys />}
       {v === 'usage' && <Usage />}
@@ -86,7 +86,7 @@ function Keys() {
       {d.keys.map((k) => (
         <Card key={k.id} className="space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-2" data-testid={`dev-key-${k.id}`}>
-            <div className="min-w-0"><h2 className="break-words text-[16.5px] font-semibold">{k.name}</h2><p className="font-mono text-[12.5px] text-mute">{k.id}</p></div>
+            <div className="min-w-0"><h2 className="break-words text-[1.03125rem] font-semibold">{k.name}</h2><p className="font-mono text-[0.78125rem] text-mute">{k.id}</p></div>
             <Tag tone={STATUS_TONE[k.status]} icon={STATUS_ICON[k.status]}>{t(`dvStatus_${k.status}` as Key)}</Tag>
           </div>
           <ul className="flex flex-wrap gap-1.5" aria-label={t('dvScopes')}>{k.scopes.map((s) => <li key={s}><Tag tone={k.inertScopes.includes(s) ? 'warn' : 'info'} icon={k.inertScopes.includes(s) ? 'lock' : undefined}>{s}{k.inertScopes.includes(s) ? ` · ${t('dvInert')}` : ''}</Tag></li>)}</ul>
@@ -108,11 +108,11 @@ function Keys() {
       {creating && <CreateKey data={d} onClose={() => setCreating(false)} onCreated={(s) => { setCreating(false); setSecret(s); refresh(); }} />}
       {confirm && <Sheet title={t(confirm.kind === 'revoke' ? 'dvRevokeTitle' : 'dvRotateTitle')} sub={confirm.key.name} onClose={() => setConfirm(null)} busy={busy || ap.locked} testid="dev-confirm"
         footer={<Btn full kind={confirm.kind === 'revoke' ? 'danger' : 'primary'} busy={busy} disabled={ap.locked} onClick={() => void act()}>{confirm.kind === 'revoke' ? t('dvRevokeConfirm') : t('approve')}</Btn>}>
-        <div className="space-y-3"><p className="text-[14.5px] leading-snug">{t(confirm.kind === 'revoke' ? 'dvRevokeBody' : 'dvRotateBody')}</p>{fail && <Notice tone="danger">{fail}</Notice>}<ApprovalOutcomePanel ap={ap} /></div></Sheet>}
+        <div className="space-y-3"><p className="text-[0.90625rem] leading-snug">{t(confirm.kind === 'revoke' ? 'dvRevokeBody' : 'dvRotateBody')}</p>{fail && <Notice tone="danger">{fail}</Notice>}<ApprovalOutcomePanel ap={ap} /></div></Sheet>}
       {secret && <Sheet title={secret.title} sub={secret.id} onClose={() => setSecret(null)} dismissable={false} testid="dev-secret"
         footer={<Btn full onClick={() => setSecret(null)}>{t('dvSecretSaved')}</Btn>}>
         <div className="space-y-3"><Notice tone="warn">{t('dvSecretOnce')}</Notice>
-          <p className="break-all rounded-2xl bg-elev p-3.5 font-mono text-[13px] leading-relaxed" data-testid="dev-secret-value" aria-label={t('dvSecretLabel')}>{secret.secret}</p>
+          <p className="break-all rounded-2xl bg-elev p-3.5 font-mono text-[0.8125rem] leading-relaxed" data-testid="dev-secret-value" aria-label={t('dvSecretLabel')}>{secret.secret}</p>
           <CopyBtn text={secret.secret} full /></div></Sheet>}
     </div>
   );
@@ -143,9 +143,9 @@ function CreateKey({ data, onClose, onCreated }: { data: KeysAnswer; onClose: ()
     <Sheet title={t('dvCreateTitle')} onClose={onClose} wide busy={busy || ap.locked} testid="dev-create" footer={<Btn full busy={busy} disabled={ap.locked} onClick={() => void submit()} data-testid="dev-create-submit"><Icon n="key" className="h-4 w-4" />{t('approve')}</Btn>}>
       <div className="space-y-5">
         <Field label={t('dvName')} hint={bad('name')}><input className={inputCls} value={d.name} maxLength={60} placeholder={t('dvNamePh')} onChange={(e) => set('name', e.target.value)} data-testid="dev-name" /></Field>
-        <div><span className="mb-1.5 block text-[13px] font-medium text-mute">{t('dvExpiry')}</span>
+        <div><span className="mb-1.5 block text-[0.8125rem] font-medium text-mute">{t('dvExpiry')}</span>
           <Seg label={t('dvExpiry')} value={String(d.days)} options={[7, 30, 90, 365].filter((n) => n <= data.bounds.maxDays).map((n) => [String(n), t('dvDays', { n })] as const)} onChange={(x) => set('days', Number(x))} /></div>
-        <fieldset><legend className="mb-1 text-[13px] font-medium text-mute">{t('dvScopes')}</legend>{bad('scopes')}
+        <fieldset><legend className="mb-1 text-[0.8125rem] font-medium text-mute">{t('dvScopes')}</legend>{bad('scopes')}
           {SCOPE_GROUPS.map((g) => <div key={g.id} className="mb-2"><p className="t-eyebrow mb-0.5 mt-2">{t(`dvGroup_${g.id}` as Key)}</p>
             {g.id === 'execute' && <p className="mb-1 text-xs leading-snug text-warn">{t('dvGroupExecuteNote')}</p>}
             {g.scopes.filter((s) => known.has(s)).map((s) => <Check key={s} on={d.scopes.includes(s)} onChange={(on) => set('scopes', on ? [...d.scopes, s] : d.scopes.filter((x) => x !== s))} hint={<span className="font-mono">{s}</span>}>{t(scopeKey(s) as Key)}</Check>)}</div>)}</fieldset>
@@ -161,7 +161,7 @@ function CreateKey({ data, onClose, onCreated }: { data: KeysAnswer; onClose: ()
             <Field label={t('dvAxis_networks')}><input className={inputCls} value={d.networks} placeholder="base, arbitrum" onChange={(e) => set('networks', e.target.value)} /></Field>
             <Field label={t('dvAxis_ipAllow')} hint={bad('ips')}><input className={inputCls} value={d.ips} placeholder="203.0.113.7, 10.0.0.0/8" onChange={(e) => set('ips', e.target.value)} /></Field></div></Fold>
         <Fold summary={t('dvMandateK')}>
-          <Field label={t('dvMandateId')} hint={bad('mandate') ?? t('dvMandateHint')}><input className={`${inputCls} font-mono text-[13px]`} value={d.mandateId} placeholder="00000000-0000-4000-8000-000000000000" onChange={(e) => set('mandateId', e.target.value)} /></Field></Fold>
+          <Field label={t('dvMandateId')} hint={bad('mandate') ?? t('dvMandateHint')}><input className={`${inputCls} font-mono text-[0.8125rem]`} value={d.mandateId} placeholder="00000000-0000-4000-8000-000000000000" onChange={(e) => set('mandateId', e.target.value)} /></Field></Fold>
         <Notice>{t('dvCreateNote')}</Notice>
         {fail && <Notice tone="danger">{fail}</Notice>}
       </div>
@@ -192,9 +192,9 @@ function Usage() {
             <Stat label={t('dvLastMinute')} value={limit ? `${r.callsLastMinute} / ${limit}` : r.callsLastMinute} sub={r.p95Ms !== null ? t('dvP95', { n: r.p95Ms }) : undefined} />
           </StatGrid></Section>); })}
       {q.data.items.length > 0 && <Card><H>{t('dvRecentCalls')}</H>
-        <ul className="divide-y divide-line text-[13px]">{q.data.items.map((u) => <li key={u.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+        <ul className="divide-y divide-line text-[0.8125rem]">{q.data.items.map((u) => <li key={u.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
           <Tag tone={u.status < 400 ? 'ok' : u.status === 429 ? 'warn' : 'danger'} icon={u.status < 400 ? 'check' : 'warn'}>{u.status}</Tag>
-          <span className="min-w-0 flex-1 break-all font-mono text-[12.5px]">{u.method} {u.route}</span>
+          <span className="min-w-0 flex-1 break-all font-mono text-[0.78125rem]">{u.method} {u.route}</span>
           <span className="text-xs text-mute">{u.latencyMs} ms · {when(new Date(u.ts), locale)}{key ? '' : ` · ${name(u.keyId)}`}</span></li>)}</ul></Card>}
       <p className="px-1 text-xs text-mute">{t('dvRetention', { n: q.data.retentionDays })}</p>
     </div>
@@ -218,7 +218,7 @@ function Webhooks() {
       {fail && !adding && <Notice tone="danger">{fail}</Notice>}
       {d.webhooks.length === 0 && <Card><EmptyState icon="bolt" title={t('dvHookNone')}>{t('dvHookNoneBody')}</EmptyState></Card>}
       {d.webhooks.map((w) => <Card key={w.id} className="space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><h2 className="break-all text-[15px] font-semibold">{w.label || new URL(w.url).host}</h2><p className="break-all font-mono text-[12px] text-mute">{w.url}</p></div>
+        <div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><h2 className="break-all text-[0.9375rem] font-semibold">{w.label || new URL(w.url).host}</h2><p className="break-all font-mono text-[0.75rem] text-mute">{w.url}</p></div>
           <Tag tone={!w.enabled ? 'mute' : w.failures ? 'warn' : 'ok'} icon={!w.enabled ? 'minus' : w.failures ? 'warn' : 'check'}>{t(w.enabled ? 'dvHookEnabled' : 'dvHookDisabled')}</Tag></div>
         <ul className="flex flex-wrap gap-1.5" aria-label={t('dvHookEvents')}>{w.events.map((e) => <li key={e}><Tag tone="info">{e}</Tag></li>)}</ul>
         <dl><Fact k={t('dvHookLastOk')}>{w.lastOkAt ? when(new Date(w.lastOkAt), locale) : t('dvNeverUsed')}</Fact>
@@ -229,15 +229,15 @@ function Webhooks() {
           <Btn kind="ghost" className="col-span-2 !text-danger" busy={busy} onClick={() => void run(() => api('DELETE', `${P}/webhooks/${w.id}`))}>{t('dvHookDelete')}</Btn></div>
       </Card>)}
       <Card><H>{t('dvHookEvents')}</H>
-        <ul className="space-y-3 text-[13.5px]">{d.events.map((e) => <li key={e.event}><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[13px] font-semibold">{e.event}</span>
+        <ul className="space-y-3 text-[0.84375rem]">{d.events.map((e) => <li key={e.event}><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[0.8125rem] font-semibold">{e.event}</span>
           <Tag tone={e.emitted ? 'ok' : 'mute'} icon={e.emitted ? 'check' : 'clock'}>{t(e.emitted ? 'dvEvEmitted' : 'dvEvPending')}</Tag></div>
-          <p className="mt-0.5 break-words font-mono text-[12px] text-mute">{e.payload}</p></li>)}</ul>
+          <p className="mt-0.5 break-words font-mono text-[0.75rem] text-mute">{e.payload}</p></li>)}</ul>
         <p className="mt-3 break-words text-xs leading-snug text-mute">{t('dvSignature')} <span className="font-mono">{d.signature}</span></p>
         <p className="mt-1 text-xs leading-snug text-mute">{t('dvRetryPolicy', { n: d.retry.attempts, steps: d.retry.backoffSec.map((s) => (s >= 3600 ? `${s / 3600} h` : s >= 60 ? `${s / 60} min` : `${s} s`)).join(', ') })}</p></Card>
       <Card><H>{t('dvDeliveries')}</H>
-        {d.deliveries.length === 0 ? <p className="text-[13.5px] text-mute">{t('dvDeliveriesNone')}</p>
+        {d.deliveries.length === 0 ? <p className="text-[0.84375rem] text-mute">{t('dvDeliveriesNone')}</p>
           : <Timeline label={t('dvDeliveries')} items={d.deliveries.slice(0, 30).map((x) => ({ key: String(x.id), state: x.state === 'delivered' ? 'done' as const : x.state === 'failed' ? 'failed' as const : 'current' as const,
-            title: <span className="font-mono text-[13.5px]">{x.event}</span>, stateLabel: t(`dvDel_${x.state}` as Key),
+            title: <span className="font-mono text-[0.84375rem]">{x.event}</span>, stateLabel: t(`dvDel_${x.state}` as Key),
             children: <><span>{when(new Date(x.createdAt), locale)} · {t('dvAttempts', { n: x.attempts })}{x.lastStatus ? ` · HTTP ${x.lastStatus}` : ''}</span>{x.lastError && <span className="block break-words">{x.lastError}</span>}
               {x.nextAttemptAt && <span className="block">{t('dvNextAttempt', { at: when(new Date(x.nextAttemptAt), locale) })}</span>}</> }))} />}</Card>
       {adding && <Sheet title={t('dvHookNew')} onClose={() => setAdding(false)} busy={busy} testid="dev-hook"
@@ -245,12 +245,12 @@ function Webhooks() {
         <div className="space-y-4">
           <Field label={t('dvHookUrl')} hint={t('dvHookUrlHint')}><input className={inputCls} type="url" inputMode="url" value={url} placeholder="https://example.com/spw-hook" onChange={(e) => setUrl(e.target.value)} /></Field>
           <Field label={t('label')}><input className={inputCls} value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} /></Field>
-          <fieldset><legend className="mb-1 text-[13px] font-medium text-mute">{t('dvHookEvents')}</legend>
-            {d.events.map((e) => <Check key={e.event} on={events.includes(e.event)} onChange={(on) => setEvents(on ? [...events, e.event] : events.filter((x) => x !== e.event))} hint={e.emitted ? undefined : t('dvEvPending')}><span className="font-mono text-[13.5px]">{e.event}</span></Check>)}</fieldset>
+          <fieldset><legend className="mb-1 text-[0.8125rem] font-medium text-mute">{t('dvHookEvents')}</legend>
+            {d.events.map((e) => <Check key={e.event} on={events.includes(e.event)} onChange={(on) => setEvents(on ? [...events, e.event] : events.filter((x) => x !== e.event))} hint={e.emitted ? undefined : t('dvEvPending')}><span className="font-mono text-[0.84375rem]">{e.event}</span></Check>)}</fieldset>
           {fail && <Notice tone="danger">{fail}</Notice>}
         </div></Sheet>}
       {secret && <Sheet title={t('dvHookSecretTitle')} sub={secret.id} onClose={() => setSecret(null)} dismissable={false} footer={<Btn full onClick={() => setSecret(null)}>{t('dvSecretSaved')}</Btn>}>
-        <div className="space-y-3"><Notice tone="warn">{t('dvHookSecretOnce')}</Notice><p className="break-all rounded-2xl bg-elev p-3.5 font-mono text-[13px]">{secret.secret}</p><CopyBtn text={secret.secret} full /></div></Sheet>}
+        <div className="space-y-3"><Notice tone="warn">{t('dvHookSecretOnce')}</Notice><p className="break-all rounded-2xl bg-elev p-3.5 font-mono text-[0.8125rem]">{secret.secret}</p><CopyBtn text={secret.secret} full /></div></Sheet>}
     </div>
   );
 }
@@ -260,17 +260,17 @@ const METHOD_TONE: Record<string, Tone> = { GET: 'info', POST: 'ok', DELETE: 'da
 function Operation({ op }: { op: DocOp }) {
   const t = useT();
   return (
-    <Fold testid={`dev-op-${op.id}`} summary={<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><Tag tone={METHOD_TONE[op.method] ?? 'mute'}>{op.method}</Tag><span className="min-w-0 break-all font-mono text-[12.5px]">{op.path}</span>
+    <Fold testid={`dev-op-${op.id}`} summary={<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><Tag tone={METHOD_TONE[op.method] ?? 'mute'}>{op.method}</Tag><span className="min-w-0 break-all font-mono text-[0.78125rem]">{op.path}</span>
       {!op.implemented && <Tag tone="warn" icon="clock">501</Tag>}</span>}>
-      <div className="space-y-3 text-[13.5px] leading-snug">
+      <div className="space-y-3 text-[0.84375rem] leading-snug">
         <p className="font-medium">{op.summary}</p>
         {op.description && <p className="text-mute">{op.description}</p>}
         <div className="flex flex-wrap gap-1.5"><Tag tone="info" icon="key">{t('dvOpScope')} : {op.scope}</Tag>
           <Tag tone={op.implemented ? 'ok' : 'warn'} icon={op.implemented ? 'check' : 'clock'}>{t(op.implemented ? 'dvOpImplemented' : 'dvOpNotWired')}</Tag>
           {op.idempotent && <Tag tone="mute">Idempotency-Key</Tag>}{op.needsMandate && <Tag tone="warn" icon="lock">{t('dvOpMandate')}</Tag>}</div>
         {op.params.length > 0 && <div><p className="t-eyebrow mb-1">{t('dvParams')}</p>
-          <dl>{op.params.map((p) => <Fact key={`${p.in}:${p.name}`} k={<span className="font-mono text-[12.5px]">{p.name}<span className="text-mute"> · {p.in}{p.required ? ` · ${t('dvRequired')}` : ''}</span></span>}>
-            <span className="font-mono text-[12.5px]">{p.type}</span>{p.description && <span className="block text-xs text-mute">{p.description}</span>}</Fact>)}</dl></div>}
+          <dl>{op.params.map((p) => <Fact key={`${p.in}:${p.name}`} k={<span className="font-mono text-[0.78125rem]">{p.name}<span className="text-mute"> · {p.in}{p.required ? ` · ${t('dvRequired')}` : ''}</span></span>}>
+            <span className="font-mono text-[0.78125rem]">{p.type}</span>{p.description && <span className="block text-xs text-mute">{p.description}</span>}</Fact>)}</dl></div>}
         {op.body && <div><p className="t-eyebrow mb-1">{t('dvBody')}</p><Code label={t('dvBody')}>{op.body}</Code></div>}
         <div><p className="t-eyebrow mb-1">{t('dvResponses')}</p>
           <dl>{op.responses.map((r) => <Fact key={r.code} k={<span className="font-mono">{r.code}</span>}>{r.description}</Fact>)}</dl></div>
@@ -289,17 +289,17 @@ function Docs() {
     <div className="space-y-4">
       {/* the full reference, served by the wallet itself under the session: getting started (EN + FR), concepts, a worked example per operation, every error code */}
       <Card className="space-y-3" data-testid="dev-reference"><H>{t('dvTab_docs')}</H>
-        <p className="text-[14px] leading-snug text-mute">{t('dvRefLead')}</p>
-        <a href={REFERENCE_URL} target="_blank" rel="noreferrer" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-4 text-[15px] font-semibold text-[var(--onprimary)]"><Icon n="list" className="h-4 w-4" />{t('dvRefTitle')}</a></Card>
+        <p className="text-[0.875rem] leading-snug text-mute">{t('dvRefLead')}</p>
+        <a href={REFERENCE_URL} target="_blank" rel="noreferrer" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-4 text-[0.9375rem] font-semibold text-[var(--onprimary)]"><Icon n="list" className="h-4 w-4" />{t('dvRefTitle')}</a></Card>
       <Card className="space-y-3"><H>{t('dvAuthTitle')}</H>
-        <p className="text-[14px] leading-snug">{t('dvAuthHow')}</p>
+        <p className="text-[0.875rem] leading-snug">{t('dvAuthHow')}</p>
         <Code label={t('dvAuthTitle')}>{'Authorization: Bearer spw_live_<key id>_<secret>'}</Code>
         <p className="text-xs leading-snug text-mute">{t('dvCustodyNote')}</p></Card>
       <Card><H>{t('dvExamples')}</H>
         <Seg label={t('dvExamples')} value={lang} options={examples.map((e) => [e.id, e.title] as const)} onChange={setLang} />
         <div className="mt-3 space-y-2">{examples.filter((e) => e.id === lang).map((e) => <div key={e.id} className="space-y-2"><Code label={e.title}>{e.code}</Code><CopyBtn text={e.code} full /></div>)}</div></Card>
       <Card><H right={info?.version ? <Tag>{`v${info.version}`}</Tag> : undefined}>{t('dvReference')}</H>
-        <p className="mb-3 text-[13.5px] leading-snug text-mute">{t('dvDocsLead')} <a className="font-medium text-blue underline" href="/api/v1/trading/openapi.json" target="_blank" rel="noreferrer">openapi.json</a></p>
+        <p className="mb-3 text-[0.84375rem] leading-snug text-mute">{t('dvDocsLead')} <a className="font-medium text-blue underline" href="/api/v1/trading/openapi.json" target="_blank" rel="noreferrer">openapi.json</a></p>
         {q.isLoading && <SkeletonCard lines={4} className="!p-0 !shadow-none" />}
         {q.isError && <ErrorState title={t('dvDocsError')} onRetry={() => void q.refetch()} />}
         {tags.map((g) => <Section key={g.tag} title={`${g.tag} · ${g.ops.length}`} className="mb-3"><div className="divide-y divide-line">{g.ops.map((op) => <Operation key={op.id} op={op} />)}</div></Section>)}
@@ -325,15 +325,15 @@ function Status() {
       </StatGrid>
       <Card><H>{t('dvServices')}</H>
         <ul className="divide-y divide-line">{d.services.map((s) => <li key={s.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2.5" data-testid={`dev-svc-${s.id}`}>
-          <span className="min-w-0"><span className="block text-[14.5px] font-medium">{svcName(s.id)}</span><span className="block break-words text-xs text-mute">{/* v11 interface (audit B3): the server's own sentence — translated when known, a marked English quotation otherwise */ srvText(t, locale, s.detail)}</span></span>
+          <span className="min-w-0"><span className="block text-[0.90625rem] font-medium">{svcName(s.id)}</span><span className="block break-words text-xs text-mute">{/* v11 interface (audit B3): the server's own sentence — translated when known, a marked English quotation otherwise */ srvText(t, locale, s.detail)}</span></span>
           <Tag tone={s.ok ? 'ok' : s.id === 'execution' ? 'warn' : 'danger'} icon={s.ok ? 'check' : 'warn'}>{t(s.ok ? 'dvSvcOk' : s.id === 'execution' ? 'dvOpNotWired' : 'dvSvcKo')}</Tag></li>)}</ul>
         <p className="mt-2 text-xs text-mute">{when(new Date(d.ts), locale)}</p></Card>
       <Card><H>{t('dvRateLimits')}</H>
         <dl><Fact k={t('dvRateDefault')}>{t('dvRate', { n: d.rateLimits.defaultPerMin })}</Fact><Fact k={t('dvRateMaxK')}>{t('dvRate', { n: d.rateLimits.maxPerMin })}</Fact>
           <Fact k={t('dvAuthThrottle')}>{t('dvAuthThrottleV', { n: d.rateLimits.failedAuthPerMinPerAddress })}</Fact><Fact k={t('dvRateHeaders')} mono>{d.rateLimits.headers.join(', ')}</Fact></dl></Card>
       <Card><H>{t('dvNotWiredList')}</H>
-        <p className="mb-2 text-[13.5px] leading-snug text-mute">{t('dvNotWiredBody')}</p>
-        <ul className="space-y-1 font-mono text-[12.5px]">{d.api.notImplemented.map((o) => <li key={o} className="break-all">{o}</li>)}</ul></Card>
+        <p className="mb-2 text-[0.84375rem] leading-snug text-mute">{t('dvNotWiredBody')}</p>
+        <ul className="space-y-1 font-mono text-[0.78125rem]">{d.api.notImplemented.map((o) => <li key={o} className="break-all">{o}</li>)}</ul></Card>
     </div>
   );
 }

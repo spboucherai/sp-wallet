@@ -29,7 +29,7 @@ import { refreshLive } from './liveStore';
 const statusKey = (id: string) => ['deriv', 'live', 'collateral', 'status', id] as const;
 const usdc = (x: string | null | undefined, locale: string) => (x === null || x === undefined ? '—' : `${fmt(x, { locale, trim: true })} USDC`);
 const dur = (s: number) => (s < 90 ? `${s} s` : `${Math.round(s / 60)} min`);
-const APPROVE = '!min-h-[56px] !text-[16px]';
+const APPROVE = '!min-h-[56px] !text-[1rem]';
 
 function ErrNotice({ err }: { err: LiveErr }) {
   const t = useT();
@@ -47,13 +47,13 @@ export function OpProgress({ op, compact }: { op: CollateralOp; /** in a list: t
   const items = steps.map((k, n) => { const state: StepState = n < w.step || done ? 'done' : n === w.step ? 'current' : 'next'; return { key: k, state, title: t(k), stateLabel: t(state === 'done' ? 'dzLvStepDone' : state === 'current' ? 'dzLvStepNow' : 'dzLvStepNext') }; });
   return <div className="min-w-0 rounded-[18px] border border-line p-4" data-testid="collateral-op" data-kind={op.kind} data-state={op.state} data-done={done ? '1' : '0'}>
     <div className="flex items-center gap-3"><AssetIcon sym="USDC" size={36} />
-      <div className="min-w-0 flex-1"><div className="text-[15.5px] font-semibold leading-tight">{t(op.kind === 'deposit' ? 'hlcDeposit' : 'hlcWithdraw')} · {usdc(op.amount, locale)}</div>
+      <div className="min-w-0 flex-1"><div className="text-[0.96875rem] font-semibold leading-tight">{t(op.kind === 'deposit' ? 'hlcDeposit' : 'hlcWithdraw')} · {usdc(op.amount, locale)}</div>
         <div className="mt-1.5"><Tag tone={w.tone === 'ok' ? 'ok' : w.tone === 'danger' ? 'danger' : w.tone === 'warn' ? 'warn' : 'info'} icon={w.tone === 'ok' ? 'check' : w.tone === 'danger' ? 'x' : 'clock'}>{t(`hlcState_${w.tone === 'ok' ? 'done' : dead ? 'stopped' : op.overdue ? 'late' : 'progress'}` as Key)}</Tag></div></div></div>
-    <p className="mt-3 text-[13.5px] leading-snug" data-testid="collateral-op-words" role="status">{t(w.key as Key, { seconds: dur(op.expectedSeconds), network: op.chainNetworkName ?? '' })}</p>
+    <p className="mt-3 text-[0.84375rem] leading-snug" data-testid="collateral-op-words" role="status">{t(w.key as Key, { seconds: dur(op.expectedSeconds), network: op.chainNetworkName ?? '' })}</p>
     {!dead && <div className="mt-3.5">{compact ? <StepBar label={t('hlcSteps')} items={items} /> : <Timeline label={t('hlcSteps')} items={items} />}</div>}
     {op.overdue && <div className="mt-3"><Notice tone="warn"><div data-testid="collateral-overdue"><b className="font-semibold">{t('hlcCheckTitle', { age: ageText(op.sentAt === null ? null : Date.now() - op.sentAt) })}</b>
       <ol className="mt-1.5 list-decimal space-y-1 pl-5 [overflow-wrap:anywhere]">{op.check.map((c) => <li key={c}>{t(`hlcCheck_${c}` as Key)}</li>)}</ol></div></Notice></div>}
-    {op.error && <p className="mt-3 break-words rounded-xl bg-elev/70 px-2.5 py-2 font-mono text-[11.5px] text-mute" data-testid="collateral-op-error">{op.error}</p>}
+    {op.error && <p className="mt-3 break-words rounded-xl bg-elev/70 px-2.5 py-2 font-mono text-[0.71875rem] text-mute" data-testid="collateral-op-error">{op.error}</p>}
     <dl className="mt-2.5">
       {op.balanceBefore && <Fact k={t('hlcBalBefore')}>{usdc(op.balanceBefore.total, locale)}</Fact>}
       <Fact k={t('hlcBalAfter')}><span className="font-semibold">{op.balanceAfter ? usdc(op.balanceAfter.total, locale) : t(done ? 'hlcBalUnread' : 'hlcBalNotYet')}</span></Fact>
@@ -61,8 +61,8 @@ export function OpProgress({ op, compact }: { op: CollateralOp; /** in a list: t
       {op.kind === 'withdraw' && <Fact k={t(op.arrival ? 'hlcReceived' : 'hlcReceiveExpected')}>{op.arrival ? usdc(String(Number(op.arrival.amount) / 1e6), locale) : usdc(op.expectedReceive, locale)}</Fact>}
       {op.venueAt && <Fact k={t('hlcVenueAt')}>{timeOf(op.venueAt, locale, true)}</Fact>}
     </dl>
-    {op.explorer && <a href={op.explorer} target="_blank" rel="noreferrer noopener" className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-[13px] font-medium text-blue underline-offset-2 hover:underline">{t('hlcSeeTx', { network: op.chainNetworkName ?? '' })}<Icon n="ext" className="h-3.5 w-3.5" /></a>}
-    <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11.5px] text-mute"><SourceTag />{t('hlcOpSource')}</p>
+    {op.explorer && <a href={op.explorer} target="_blank" rel="noreferrer noopener" className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-[0.8125rem] font-medium text-blue underline-offset-2 hover:underline">{t('hlcSeeTx', { network: op.chainNetworkName ?? '' })}<Icon n="ext" className="h-3.5 w-3.5" /></a>}
+    <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.71875rem] text-mute"><SourceTag />{t('hlcOpSource')}</p>
   </div>;
 }
 
@@ -79,7 +79,7 @@ const useCountdown = (expiresAt: number | null | undefined) => {
 /** the amount of a review, as the figure of the receipt: the label, then the whole value */
 function Amount({ label, children, net }: { label: string; children: string; net?: string }) {
   return <div className="flex items-center gap-3.5 border-b border-dashed border-line pb-3.5 pt-2"><AssetIcon sym="USDC" net={net} size={44} />
-    <div className="min-w-0"><div className="text-[13px] text-mute">{label}</div><div className="t-display text-[34px] [overflow-wrap:anywhere]">{children}</div></div></div>;
+    <div className="min-w-0"><div className="text-[0.8125rem] text-mute">{label}</div><div className="t-display text-[2.125rem] [overflow-wrap:anywhere]">{children}</div></div></div>;
 }
 
 function DepositSheet({ account, status, onClose }: { account: LiveSummary; status: CollateralStatus; onClose: () => void }) {
@@ -125,7 +125,7 @@ function DepositSheet({ account, status, onClose }: { account: LiveSummary; stat
       <ApprovalOutcomePanel ap={ap} />
       {(step === 'form' || step === 'preparing') && <>
         <Field label={t('hlcAmount')} hint={t('hlcDepositHint', { min: r.minimum, venueMin: r.venueMinimum, max: fmt(wl.limits.maxNow, { locale, trim: true }) })}>
-          <div className="amount-box"><AssetIcon sym="USDC" net={r.network} size={40} /><input inputMode="decimal" autoComplete="off" placeholder="0" aria-label={t('hlcAmount')} value={raw} onChange={(e) => { setRaw(e.target.value.replace(/[^0-9.,]/g, '')); setErr(null); }} data-testid="deposit-amount" /><span className="shrink-0 text-[15px] font-semibold text-mute">USDC</span></div><AmountProblem ambiguousOnly text={raw} /></Field>
+          <div className="amount-box"><AssetIcon sym="USDC" net={r.network} size={40} /><input inputMode="decimal" autoComplete="off" placeholder="0" aria-label={t('hlcAmount')} value={raw} onChange={(e) => { setRaw(e.target.value.replace(/[^0-9.,]/g, '')); setErr(null); }} data-testid="deposit-amount" /><span className="shrink-0 text-[0.9375rem] font-semibold text-mute">USDC</span></div><AmountProblem ambiguousOnly text={raw} /></Field>
         <div className={TICKET}><dl>
           <Fact k={<span className="inline-flex items-center gap-1.5"><NetworkIcon net={r.network} size={16} />{t('hlcWalletHas', { network: r.networkName })}</span>}><span className="font-semibold">{usdc(wl.usdc, locale)}</span></Fact><Fact k={t('hlcWalletGas')}>{fmt(wl.gas, { locale, dp: 6, trim: true })} {wl.gasSymbol}</Fact>
           <Fact k={t('hlcLimitTx')}>{usdc(wl.limits.perTransfer, locale)}</Fact><Fact k={t('hlcLimitDay')}>{usdc(wl.limits.perDay, locale)} · {t('hlcLimitSpent', { spent: fmt(wl.limits.spentToday, { locale, trim: true }) })}</Fact></dl></div>
@@ -133,7 +133,7 @@ function DepositSheet({ account, status, onClose }: { account: LiveSummary; stat
         {v.problem && <Notice tone="danger"><div data-testid="deposit-problem">{t(v.problem, { min: r.minimum, venueMin: r.venueMinimum, have: fmt(wl.usdc, { locale, trim: true }), limit: fmt(wl.limits.perTransfer, { locale, trim: true }), network: r.networkName })}</div></Notice>}
         {err && <ErrNotice err={err} />}
         <Btn full busy={step === 'preparing'} disabled={!v.amount} onClick={() => void prepare()} data-testid="deposit-review">{t('hlcReview')}</Btn>
-        {step === 'preparing' && <p className="text-center text-[12.5px] text-mute">{t('hlcPreparing')}</p>}
+        {step === 'preparing' && <p className="text-center text-[0.78125rem] text-mute">{t('hlcPreparing')}</p>}
       </>}
 
       {prep && (step === 'review' || step === 'passkey' || step === 'sending') && <>
@@ -147,7 +147,7 @@ function DepositSheet({ account, status, onClose }: { account: LiveSummary; stat
             <Fact k={t('hlcFeeVenue')}>0 USDC</Fact>
             <Fact k={t('hlcBalBefore')}>{usdc(prep.venueBalance.total, locale)}</Fact>
           </dl></div>
-        <ul className="space-y-2.5 text-[13.5px] leading-snug" data-testid="deposit-says">
+        <ul className="space-y-2.5 text-[0.84375rem] leading-snug" data-testid="deposit-says">
           <Bullet icon="key">{t('hlcCreditsSender')}<span className="mt-1 block"><Addr value={prep.intent.from} /></span></Bullet>
           <Bullet icon="shield">{t('hlcBridgePinned')}<span className="mt-1 block"><Addr value={prep.intent.to} /></span></Bullet>
           <Bullet icon="warn" tone="text-warn">{t('hlcLostBelow', { venueMin: prep.route.venueMinimum, min: prep.route.minimum })}</Bullet>
@@ -160,7 +160,7 @@ function DepositSheet({ account, status, onClose }: { account: LiveSummary; stat
         {err && <ErrNotice err={err} />}
         <div className="space-y-2.5">
           <Btn full className={APPROVE} kind={tone === 'mainnet' ? 'danger' : 'primary'} busy={step !== 'review'} disabled={!!bad || left === 0} onClick={() => void approve()} data-testid="deposit-approve"><Icon n="key" className="h-[18px] w-[18px]" />{t('hlcDepositApprove', { amount: fmt(prep.operation.amount, { locale, trim: true }) })}</Btn>
-          <p className="flex items-center justify-center gap-1.5 text-[12.5px] text-mute"><Icon n="clock" className="h-3.5 w-3.5" />{left > 0 ? `${t('expiresIn')} ${left} s` : t('hlcExpired')}</p>
+          <p className="flex items-center justify-center gap-1.5 text-[0.78125rem] text-mute"><Icon n="clock" className="h-3.5 w-3.5" />{left > 0 ? `${t('expiresIn')} ${left} s` : t('hlcExpired')}</p>
           <Btn full kind="ghost" disabled={busy} onClick={back}>{t('hlcBack')}</Btn>
         </div>
       </>}
@@ -168,7 +168,7 @@ function DepositSheet({ account, status, onClose }: { account: LiveSummary; stat
       {step === 'progress' && <div className="space-y-3" data-testid="deposit-progress">
         {op.data ? <OpProgress op={op.data} /> : <SkeletonCard lines={4} />}
         {err && !op.data?.final && <ErrNotice err={err} />}
-        <p className="text-[12.5px] leading-snug text-mute">{t('hlcCloseSafe')}</p>
+        <p className="text-[0.78125rem] leading-snug text-mute">{t('hlcCloseSafe')}</p>
         <Btn full kind="soft" onClick={onClose}>{t('fxClose')}</Btn></div>}
     </div>
   </LiveSheet>;
@@ -216,7 +216,7 @@ function WithdrawSheet({ account, status, onClose }: { account: LiveSummary; sta
       <ApprovalOutcomePanel ap={ap} />
       {(step === 'form' || step === 'preparing') && <>
         <Field label={t('hlcAmount')} hint={t('hlcWithdrawHint', { fee: wd.fee })}>
-          <div className="amount-box"><AssetIcon sym="USDC" size={40} /><input inputMode="decimal" autoComplete="off" placeholder="0" aria-label={t('hlcAmount')} value={raw} onChange={(e) => { setRaw(e.target.value.replace(/[^0-9.,]/g, '')); setErr(null); }} data-testid="withdraw-amount" /><span className="shrink-0 text-[15px] font-semibold text-mute">USDC</span></div><AmountProblem ambiguousOnly text={raw} /></Field>
+          <div className="amount-box"><AssetIcon sym="USDC" size={40} /><input inputMode="decimal" autoComplete="off" placeholder="0" aria-label={t('hlcAmount')} value={raw} onChange={(e) => { setRaw(e.target.value.replace(/[^0-9.,]/g, '')); setErr(null); }} data-testid="withdraw-amount" /><span className="shrink-0 text-[0.9375rem] font-semibold text-mute">USDC</span></div><AmountProblem ambiguousOnly text={raw} /></Field>
         <div className={TICKET}><dl>
           <Fact k={<span className="inline-flex items-center gap-1.5"><VenueIcon venue="hyperliquid" size={16} />{t('hlcVenueAvailable')}</span>}><span className="font-semibold">{usdc(wd.available, locale)}</span></Fact><Fact k={t('hlcFeeVenue')}>{usdc(wd.fee, locale)}</Fact>
           <Fact k={t('hlcReceiveExpected')}><span className="font-semibold">{v.receive ? usdc(v.receive, locale) : '—'}</span></Fact></dl></div>
@@ -235,7 +235,7 @@ function WithdrawSheet({ account, status, onClose }: { account: LiveSummary; sta
             <Fact k={t('hlcTime')}>{t('hlcTimeWithdraw', { seconds: dur(wd.expectedSeconds) })}</Fact>
             <Fact k={t('hlcBalBefore')}>{usdc(prep.venueBalance.total, locale)}</Fact>
           </dl></div>
-        <ul className="space-y-2.5 text-[13.5px] leading-snug" data-testid="withdraw-says">
+        <ul className="space-y-2.5 text-[0.84375rem] leading-snug" data-testid="withdraw-says">
           <Bullet icon="shield">{t('hlcOwnOnly')}<span className="mt-1 block"><Addr value={prep.withdrawal.destination} /></span></Bullet>
           <Bullet icon="key">{t('hlcSignedMain')}<span className={`mt-0.5 ${WORDS}`}>{prep.whatIsSigned.byMainKey}</span></Bullet>
           <Bullet icon="clock">{t(wd.arrivalTracked ? 'hlcNotBeforeArrival' : 'hlcUntracked', { network: wd.payoutNetworkName })}</Bullet>
@@ -246,7 +246,7 @@ function WithdrawSheet({ account, status, onClose }: { account: LiveSummary; sta
         {err && <ErrNotice err={err} />}
         <div className="space-y-2.5">
           <Btn full className={APPROVE} kind={tone === 'mainnet' ? 'danger' : 'primary'} busy={step !== 'review'} disabled={!!bad || left === 0} onClick={() => void approve()} data-testid="withdraw-approve"><Icon n="key" className="h-[18px] w-[18px]" />{t('hlcWithdrawApprove', { amount: fmt(prep.withdrawal.amount, { locale, trim: true }) })}</Btn>
-          <p className="flex items-center justify-center gap-1.5 text-[12.5px] text-mute"><Icon n="clock" className="h-3.5 w-3.5" />{left > 0 ? `${t('expiresIn')} ${left} s` : t('hlcExpired')}</p>
+          <p className="flex items-center justify-center gap-1.5 text-[0.78125rem] text-mute"><Icon n="clock" className="h-3.5 w-3.5" />{left > 0 ? `${t('expiresIn')} ${left} s` : t('hlcExpired')}</p>
           <Btn full kind="ghost" disabled={busy} onClick={back}>{t('hlcBack')}</Btn>
         </div>
       </>}
@@ -254,7 +254,7 @@ function WithdrawSheet({ account, status, onClose }: { account: LiveSummary; sta
       {step === 'progress' && <div className="space-y-3" data-testid="withdraw-progress">
         {op.data ? <OpProgress op={op.data} /> : <SkeletonCard lines={4} />}
         {err && !op.data?.final && <ErrNotice err={err} />}
-        <p className="text-[12.5px] leading-snug text-mute">{t('hlcCloseSafe')}</p>
+        <p className="text-[0.78125rem] leading-snug text-mute">{t('hlcCloseSafe')}</p>
         <Btn full kind="soft" onClick={onClose}>{t('fxClose')}</Btn></div>}
     </div>
   </LiveSheet>;
@@ -273,20 +273,20 @@ export function CollateralPanel({ account }: { account: LiveSummary }) {
   const dep = s.deposit, wd = s.withdraw;
   return <div className="min-w-0 rounded-[18px] border border-line p-4" data-testid="collateral-panel">
     <div className="flex items-center gap-3"><AssetIcon sym="USDC" size={36} />
-      <div className="min-w-0 flex-1"><div className="text-[14.5px] font-semibold leading-tight">{t('hlcTitle')}</div>
-        <div className="mt-0.5 text-[13px] text-mute">{t('hlcAtVenue')} <b className="t-num text-[17px] text-ink" data-testid="collateral-venue-balance">{s.venueBalance.error ? '—' : usd(s.venueBalance.total, locale)}</b></div></div></div>
+      <div className="min-w-0 flex-1"><div className="text-[0.90625rem] font-semibold leading-tight">{t('hlcTitle')}</div>
+        <div className="mt-0.5 text-[0.8125rem] text-mute">{t('hlcAtVenue')} <b className="t-num text-[1.0625rem] text-ink" data-testid="collateral-venue-balance">{s.venueBalance.error ? '—' : usd(s.venueBalance.total, locale)}</b></div></div></div>
     <div className="mt-3.5 grid grid-cols-2 gap-2.5">
       <Btn disabled={!dep.available} onClick={() => setSheet('deposit')} data-testid="collateral-deposit"><Icon n="down" className="h-4 w-4" />{t('hlcDeposit')}</Btn>
       <Btn kind="soft" disabled={!wd.available} onClick={() => setSheet('withdraw')} data-testid="collateral-withdraw"><Icon n="up" className="h-4 w-4" />{t('hlcWithdraw')}</Btn>
     </div>
-    {!dep.available && dep.reason && <p className="mt-3 text-[13px] leading-snug text-mute" data-testid="deposit-why" data-reason={dep.reason}>{t(`hlcWhy_${dep.reason}` as Key, { network: s.route?.networkName ?? '', min: s.route?.minimum ?? '' })}
-      {s.walletError && dep.reason === 'wallet_unreadable' ? <span className="mt-0.5 block break-words font-mono text-[11px]">{s.walletError}</span> : null}</p>}
+    {!dep.available && dep.reason && <p className="mt-3 text-[0.8125rem] leading-snug text-mute" data-testid="deposit-why" data-reason={dep.reason}>{t(`hlcWhy_${dep.reason}` as Key, { network: s.route?.networkName ?? '', min: s.route?.minimum ?? '' })}
+      {s.walletError && dep.reason === 'wallet_unreadable' ? <span className="mt-0.5 block break-words font-mono text-[0.6875rem]">{s.walletError}</span> : null}</p>}
     {dep.reason === 'usdc_elsewhere' && s.route && <ul className="mt-2 space-y-1.5" data-testid="collateral-bridge-links">{dep.bridgeFrom.map((b) => <li key={b.network}>
-      <a href={bridgeLink(b.network, s.route!.network)} className="press flex min-h-12 items-center gap-2.5 rounded-2xl border border-line px-3 py-2 text-[13.5px] font-medium leading-snug text-blue">
+      <a href={bridgeLink(b.network, s.route!.network)} className="press flex min-h-12 items-center gap-2.5 rounded-2xl border border-line px-3 py-2 text-[0.84375rem] font-medium leading-snug text-blue">
         <span className="flex shrink-0 items-center gap-1" aria-hidden="true"><NetworkIcon net={b.network} size={22} /><Icon n="chev" className="h-3 w-3 text-mute" /><NetworkIcon net={s.route!.network} size={22} /></span><span className="min-w-0">{t('hlcBridgeLink', { from: b.name, to: s.route!.networkName, amount: fmt(b.usdc, { locale, trim: true }) })}</span></a></li>)}</ul>}
-    {!wd.available && wd.reason && wd.reason !== dep.reason && <p className="mt-2.5 text-[13px] leading-snug text-mute" data-testid="withdraw-why">{t(`hlcWhy_${wd.reason}` as Key, { network: '', min: '' })}</p>}
-    {s.route && <p className="mt-3 text-[12px] leading-snug text-mute">{t('hlcPanelNote', { min: s.route.minimum, network: s.route.networkName, fee: s.withdrawal.fee })}</p>}
-    {s.venueBalance.abstraction && s.venueBalance.abstraction !== 'default' && <p className="mt-1 text-[12px] leading-snug text-mute">{t('hlcUnifiedNote')} <span className="font-mono text-[11px]">{s.venueBalance.abstraction}</span></p>}
+    {!wd.available && wd.reason && wd.reason !== dep.reason && <p className="mt-2.5 text-[0.8125rem] leading-snug text-mute" data-testid="withdraw-why">{t(`hlcWhy_${wd.reason}` as Key, { network: '', min: '' })}</p>}
+    {s.route && <p className="mt-3 text-[0.75rem] leading-snug text-mute">{t('hlcPanelNote', { min: s.route.minimum, network: s.route.networkName, fee: s.withdrawal.fee })}</p>}
+    {s.venueBalance.abstraction && s.venueBalance.abstraction !== 'default' && <p className="mt-1 text-[0.75rem] leading-snug text-mute">{t('hlcUnifiedNote')} <span className="font-mono text-[0.6875rem]">{s.venueBalance.abstraction}</span></p>}
     {shown.length > 0 && <ul className="mt-3.5 space-y-2.5" data-testid="collateral-ops">{shown.map((o) => <li key={o.id}><OpProgress op={o} compact /></li>)}</ul>}
     {sheet === 'deposit' && s.route && s.wallet && <DepositSheet account={account} status={s} onClose={() => { setSheet(null); void q.refetch(); }} />}
     {sheet === 'withdraw' && <WithdrawSheet account={account} status={s} onClose={() => { setSheet(null); void q.refetch(); }} />}

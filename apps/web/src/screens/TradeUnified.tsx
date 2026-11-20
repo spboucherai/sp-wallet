@@ -57,7 +57,7 @@ export function UnifiedBlotter({ instruments, toneOf, onSelect }: { instruments:
       <h4 className="t-eyebrow mb-1.5">{t(m === 'live' ? 'v11TrLive' : 'v11TrPaper')} · {g[m].length}</h4><ul className="divide-y divide-line">{g[m].map(render)}</ul></section>)}</div>;
   };
   return <div className="space-y-3" data-testid="unified-blotter">
-    <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2"><div className="min-w-0"><h3 className="text-[15.5px] font-semibold">{t('v11TrAll')}</h3><p className="text-[12.5px] leading-snug text-mute">{t('v11TrAllSub')}</p></div></div>
+    <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2"><div className="min-w-0"><h3 className="text-[0.96875rem] font-semibold">{t('v11TrAll')}</h3><p className="text-[0.78125rem] leading-snug text-mute">{t('v11TrAllSub')}</p></div></div>
     <Seg tabs size="sm" label={t('v11TrAll')} value={tab} onChange={setTab} className="max-w-md" options={[{ id: 'positions', label: `${t('fxPositions')}${positions.length ? ` (${positions.length})` : ''}` }, { id: 'open', label: `${t('fxOpenOrders')}${openOrders.length ? ` (${openOrders.length})` : ''}` }, { id: 'history', label: t('fxOrderHistory') }]} />
     {(pos.data?.errors ?? []).length > 0 && tab === 'positions' && <Notice tone="warn">{t('v11TrSourceErrors', { sources: [...new Set(pos.data!.errors.map((e) => e.source))].join(', ') })}</Notice>}
     <div role="tabpanel" aria-label={t('v11TrAll')}>
@@ -68,7 +68,7 @@ export function UnifiedBlotter({ instruments, toneOf, onSelect }: { instruments:
     </div>
   </div>;
 }
-const marketBtn = (id: string | null, onSelect: (i: string) => void, label: string) => <button type="button" disabled={!id || !id.includes(':')} onClick={() => id && onSelect(id)} aria-label={label} className="-my-1 inline-flex min-h-11 items-center text-[15px] font-semibold underline decoration-line underline-offset-4 disabled:no-underline">{symbolOf(id)}</button>;
+const marketBtn = (id: string | null, onSelect: (i: string) => void, label: string) => <button type="button" disabled={!id || !id.includes(':')} onClick={() => id && onSelect(id)} aria-label={label} className="-my-1 inline-flex min-h-11 items-center text-[0.9375rem] font-semibold underline decoration-line underline-offset-4 disabled:no-underline">{symbolOf(id)}</button>;
 
 function PositionRow({ p, orders, instrument, tone, locale, onSelect, onDone }: { p: UnifiedPosition; orders: UnifiedOrder[]; instrument: Instrument | undefined; tone: ModeTone; locale: string; onSelect: (i: string) => void; onDone: () => void }) {
   const t = useT();
@@ -82,18 +82,18 @@ function PositionRow({ p, orders, instrument, tone, locale, onSelect, onDone }: 
   };
   return <li className="space-y-2 py-3" data-testid="ub-position" data-mode={p.mode} data-instrument={p.instrument ?? ''} data-account={p.accountId}>
     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">{marketBtn(p.instrument, onSelect, t('fxOpenMarket', { symbol: symbolOf(p.instrument) }))}<SideTag side={p.side} /><Venue venue={p.venue} /><ModeTag tone={tone} /></div>
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[13px] sm:grid-cols-4">
-      <div><dt className="text-[11.5px] text-mute">{t('fxSize')}</dt><dd className="font-medium tabular-nums">{fmt(p.size, { locale, trim: true })}</dd></div>
-      <div><dt className="text-[11.5px] text-mute">{t('fxEntry')}</dt><dd className="font-medium tabular-nums">{fmt(p.entryPrice, { dp: pdp, locale })}</dd></div>
-      <div><dt className="text-[11.5px] text-mute">{t('fxMark')}</dt><dd className="font-medium tabular-nums"><LiveCell id={p.instrument} flash={(q) => q.mark} render={(q) => (q.mark ? fmt(q.mark, { dp: pdp, locale }) : null)}>{p.markPrice ? fmt(p.markPrice, { dp: pdp, locale }) : '—'}</LiveCell></dd></div>
-      <div><dt className="text-[11.5px] text-mute">{t('fxPnl')}</dt><dd className="font-medium"><Pnl value={p.unrealizedPnl} locale={locale} /></dd></div>
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[0.8125rem] sm:grid-cols-4">
+      <div><dt className="text-[0.71875rem] text-mute">{t('fxSize')}</dt><dd className="font-medium tabular-nums">{fmt(p.size, { locale, trim: true })}</dd></div>
+      <div><dt className="text-[0.71875rem] text-mute">{t('fxEntry')}</dt><dd className="font-medium tabular-nums">{fmt(p.entryPrice, { dp: pdp, locale })}</dd></div>
+      <div><dt className="text-[0.71875rem] text-mute">{t('fxMark')}</dt><dd className="font-medium tabular-nums"><LiveCell id={p.instrument} flash={(q) => q.mark} render={(q) => (q.mark ? fmt(q.mark, { dp: pdp, locale }) : null)}>{p.markPrice ? fmt(p.markPrice, { dp: pdp, locale }) : '—'}</LiveCell></dd></div>
+      <div><dt className="text-[0.71875rem] text-mute">{t('fxPnl')}</dt><dd className="font-medium"><Pnl value={p.unrealizedPnl} locale={locale} /></dd></div>
     </dl>
-    <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-mute" data-testid="ub-protections">{prot.length === 0 ? <span>{t('v11TrNoProtection')}</span>
+    <div className="flex flex-wrap items-center gap-1.5 text-[0.78125rem] text-mute" data-testid="ub-protections">{prot.length === 0 ? <span>{t('v11TrNoProtection')}</span>
       : prot.map((o) => <Tag key={o.id} tone="info" icon={attachedRole(o) === 'stop_loss' ? 'shield' : 'check'}>{t(`v11TrRole_${attachedRole(o)!}` as Key)} · {fmt(o.triggerPrice ?? o.price ?? null, { dp: pdp, locale })}</Tag>)}</div>
     {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
-    <div className="flex flex-wrap gap-2">{step === 'idle' ? <Btn kind="soft" className="!min-h-11 !px-4 !text-[14px]" onClick={() => { setMsg(null); setStep('confirm'); }} data-testid="ub-close">{t('v11TrClose')}</Btn>
-      : <><Btn kind={p.mode === 'live' ? 'danger' : 'primary'} className="!min-h-11 !px-4 !text-[14px]" busy={step === 'busy'} onClick={() => void close()} data-testid="ub-close-confirm">{t(p.mode === 'live' ? 'v11TrCloseConfirmLive' : 'v11TrCloseConfirm')}</Btn>
-        <Btn kind="ghost" className="!min-h-11 !px-4 !text-[14px]" disabled={step === 'busy'} onClick={() => setStep('idle')}>{t('cancel')}</Btn></>}</div>
+    <div className="flex flex-wrap gap-2">{step === 'idle' ? <Btn kind="soft" className="!min-h-11 !px-4 !text-[0.875rem]" onClick={() => { setMsg(null); setStep('confirm'); }} data-testid="ub-close">{t('v11TrClose')}</Btn>
+      : <><Btn kind={p.mode === 'live' ? 'danger' : 'primary'} className="!min-h-11 !px-4 !text-[0.875rem]" busy={step === 'busy'} onClick={() => void close()} data-testid="ub-close-confirm">{t(p.mode === 'live' ? 'v11TrCloseConfirmLive' : 'v11TrCloseConfirm')}</Btn>
+        <Btn kind="ghost" className="!min-h-11 !px-4 !text-[0.875rem]" disabled={step === 'busy'} onClick={() => setStep('idle')}>{t('cancel')}</Btn></>}</div>
   </li>;
 }
 
@@ -104,8 +104,8 @@ function OrderRow({ o, instrument, tone, locale, onSelect, onDone }: { o: Unifie
   const cancel = async () => { setBusy(true); setMsg(null); try { const r = await tapi.cancel(o.id); setMsg({ tone: 'ok', text: t('v11TrCancelDone', { state: t(stateKey(r.order.status)) }) }); onDone(); } catch (e) { setMsg({ tone: 'danger', text: t('v11TrActionError', { code: errCode(e) }) }); } finally { setBusy(false); } };
   return <li className="space-y-2 py-3" data-testid="ub-order" data-mode={o.mode} data-status={state} data-id={o.id} data-account={o.accountId ?? ''}>
     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">{marketBtn(o.instrument, onSelect, t('fxOpenMarket', { symbol: symbolOf(o.instrument) }))}{(o.side === 'buy' || o.side === 'sell') && <SideTag side={o.side} />}
-      <span className="text-[13px] text-mute">{TYPE_KEY[o.type] ? t(TYPE_KEY[o.type]!) : o.type}</span><span className="ml-auto"><StateTag status={o.status} /></span></div>
-    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px]">
+      <span className="text-[0.8125rem] text-mute">{TYPE_KEY[o.type] ? t(TYPE_KEY[o.type]!) : o.type}</span><span className="ml-auto"><StateTag status={o.status} /></span></div>
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.8125rem]">
       <span className="font-medium tabular-nums">{o.size ? fmt(o.size, { locale, trim: true }) : o.notionalUsd ? usd(o.notionalUsd, locale) : '—'}{o.price ? ` @ ${fmt(o.price, { dp: pdp, locale })}` : ''}</span>
       {o.triggerPrice && <span className="text-mute">{t('v11TrTrigger', { px: fmt(o.triggerPrice, { dp: pdp, locale }) })}</span>}
       {o.filled && Number(o.filled) > 0 && <span className="text-mute">{t('v11TrFilled', { n: fmt(o.filled, { locale, trim: true }) })}{o.avgFillPrice ? ` @ ${fmt(o.avgFillPrice, { dp: pdp, locale })}` : ''}</span>}
@@ -113,12 +113,12 @@ function OrderRow({ o, instrument, tone, locale, onSelect, onDone }: { o: Unifie
     </div>
     {/* UNKNOWN is explained, in the information tone: the venue has not answered yet — the order is neither done nor failed */}
     {state === 'UNKNOWN' && <Notice tone="info"><span data-testid="ub-unknown">{t('v11TrUnknownNote')}</span></Notice>}
-    {(state === 'REJECTED' || state === 'FAILED') && (o.rejectCode || o.reasonCode) && <p className="text-[12.5px] text-mute">{t('v11TrReason', { code: '' })}<span className="font-mono">{o.rejectCode ?? o.reasonCode}</span></p>}
-    <p className="text-[12px] text-mute">{timeOf(o.updatedAt, locale, true)}</p>
+    {(state === 'REJECTED' || state === 'FAILED') && (o.rejectCode || o.reasonCode) && <p className="text-[0.78125rem] text-mute">{t('v11TrReason', { code: '' })}<span className="font-mono">{o.rejectCode ?? o.reasonCode}</span></p>}
+    <p className="text-[0.75rem] text-mute">{timeOf(o.updatedAt, locale, true)}</p>
     {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
     <div className="flex flex-wrap gap-2">
-      {isOpen(o) && <Btn kind="soft" className="!min-h-11 !px-4 !text-[14px]" busy={busy} onClick={() => void cancel()} data-testid="ub-cancel">{t('v11TrCancel')}</Btn>}
-      <Btn kind="ghost" className="!min-h-11 !px-4 !text-[14px]" aria-expanded={openHist} onClick={() => setOpenHist(!openHist)} data-testid="ub-history">{t('v11TrHistory')}</Btn>
+      {isOpen(o) && <Btn kind="soft" className="!min-h-11 !px-4 !text-[0.875rem]" busy={busy} onClick={() => void cancel()} data-testid="ub-cancel">{t('v11TrCancel')}</Btn>}
+      <Btn kind="ghost" className="!min-h-11 !px-4 !text-[0.875rem]" aria-expanded={openHist} onClick={() => setOpenHist(!openHist)} data-testid="ub-history">{t('v11TrHistory')}</Btn>
     </div>
     {openHist && <OrderHistory id={o.id} locale={locale} />}
   </li>;
@@ -130,10 +130,10 @@ export function OrderHistory({ id, locale }: { id: string; locale: string }) {
   if (q.isLoading) return <div className="skel h-16 !rounded-xl" aria-hidden="true" />;
   if (q.isError) return <Notice tone="warn">{t('v11TrErrCode', { code: errCode(q.error) })}</Notice>;
   const h = q.data?.history ?? [];
-  if (h.length === 0) return <p className="text-[12.5px] text-mute">{t('v11TrHistoryEmpty')}</p>;
+  if (h.length === 0) return <p className="text-[0.78125rem] text-mute">{t('v11TrHistoryEmpty')}</p>;
   const step = (to: string, last: boolean): StepState => (to === 'REJECTED' || to === 'FAILED' ? 'failed' : last && !['FILLED', 'CANCELLED'].includes(to) ? 'current' : 'done');
   return <div data-testid="ub-transitions"><Timeline label={t('v11TrHistory')} items={h.map((e, k) => ({ key: String(e.seq), state: step(e.to, k === h.length - 1), title: t(stateKey(e.to)),
-    children: <span>{timeOf(e.at, locale, true)} · <span className="font-mono text-[12px]">{e.event}</span></span> }))} /></div>;
+    children: <span>{timeOf(e.at, locale, true)} · <span className="font-mono text-[0.75rem]">{e.event}</span></span> }))} /></div>;
 }
 
 // ---------------------------------------------------------------------------------------------------------------- checks before confirmation
@@ -148,24 +148,24 @@ export function UnifiedChecks({ mode, accountId, body }: OrderChecksProps) {
   const q = useQuery({ queryKey: ['trade', 'preview', JSON.stringify(req)], queryFn: () => tapi.preview(req), staleTime: Infinity, gcTime: 0, retry: 0, refetchOnWindowFocus: false });
   const box = 'rounded-2xl border border-line px-4 py-3';
   if (q.isLoading) return <div className={box} data-testid="unified-checks" data-state="loading" aria-busy="true"><div className="t-eyebrow mb-2">{t('v11TrChecks')}</div><div className="skel h-12 !rounded-xl" aria-hidden="true" /></div>;
-  if (q.isError || !q.data) return <div className={box} data-testid="unified-checks" data-state="unavailable"><div className="t-eyebrow mb-2">{t('v11TrChecks')}</div><p className="text-[13px] leading-snug text-mute">{t('v11TrChecksUnavailable', { code: errCode(q.error) })}</p></div>;
+  if (q.isError || !q.data) return <div className={box} data-testid="unified-checks" data-state="unavailable"><div className="t-eyebrow mb-2">{t('v11TrChecks')}</div><p className="text-[0.8125rem] leading-snug text-mute">{t('v11TrChecksUnavailable', { code: errCode(q.error) })}</p></div>;
   const p = q.data, n = checkCounts(p.risk.checks), checks = sortChecks(p.risk.checks);
   return <div className={box} data-testid="unified-checks" data-state="ready" data-decision={p.risk.decision} data-would-execute={String(p.wouldExecute)}>
     <div className="flex flex-wrap items-center justify-between gap-2"><span className="t-eyebrow">{t('v11TrChecks')}</span>
       {n.failed > 0 ? <Tag tone="danger" icon="x">{t('v11TrChecksFailed', { n: n.failed })}</Tag> : <Tag tone="ok" icon="check">{t('v11TrChecksPassed', { n: n.passed })}</Tag>}</div>
     <dl className="mt-1">
       <Fact k={t('v11TrRiskEngine')} testid="uc-risk">{t(p.risk.decision === 'allow' ? 'v11TrAllowed' : 'v11TrDenied')}{p.risk.reducing ? ` · ${t('v11TrReducing')}` : ''}</Fact>
-      <Fact k={t('v11TrMandate')} testid="uc-mandate">{p.mandate === null ? t('v11TrMandateOwner') : p.mandate.decision === 'allow' ? t('v11TrAllowed') : <>{t('v11TrDenied')} <span className="font-mono text-[12px]">{p.mandate.reasons.join(', ')}</span></>}</Fact>
+      <Fact k={t('v11TrMandate')} testid="uc-mandate">{p.mandate === null ? t('v11TrMandateOwner') : p.mandate.decision === 'allow' ? t('v11TrAllowed') : <>{t('v11TrDenied')} <span className="font-mono text-[0.75rem]">{p.mandate.reasons.join(', ')}</span></>}</Fact>
       <Fact k={t('v11TrApproval')} testid="uc-approval">{t(`v11TrApproval_${p.approval.by}` as Key)}</Fact>
     </dl>
-    {p.refusals.map((r) => <div key={`${r.stage}${r.code}`} className="mt-2"><Notice tone="danger"><span data-testid="uc-refusal" data-code={r.code}>{t('v11TrRefusal', { stage: t(`v11TrStage_${r.stage}` as Key) })} <span className="font-mono text-[12px]">{r.code}</span></span></Notice></div>)}
-    <Fold open={n.failed > 0} testid="uc-list" summary={<span className="text-[13.5px] font-medium text-ink">{t('v11TrChecksAll', { n: checks.length })}{n.exempt > 0 ? ` · ${t('v11TrChecksExempt', { n: n.exempt })}` : ''}</span>}>
+    {p.refusals.map((r) => <div key={`${r.stage}${r.code}`} className="mt-2"><Notice tone="danger"><span data-testid="uc-refusal" data-code={r.code}>{t('v11TrRefusal', { stage: t(`v11TrStage_${r.stage}` as Key) })} <span className="font-mono text-[0.75rem]">{r.code}</span></span></Notice></div>)}
+    <Fold open={n.failed > 0} testid="uc-list" summary={<span className="text-[0.84375rem] font-medium text-ink">{t('v11TrChecksAll', { n: checks.length })}{n.exempt > 0 ? ` · ${t('v11TrChecksExempt', { n: n.exempt })}` : ''}</span>}>
       <ul className="space-y-1.5">{checks.map((c) => { const k = checkKey(c.id), bad = !c.ok && !c.exempt; return (
-        <li key={c.id} className="flex items-start gap-2 text-[13px] leading-snug" data-testid="uc-check" data-id={c.id} data-ok={String(c.ok)} data-exempt={String(c.exempt)}>
+        <li key={c.id} className="flex items-start gap-2 text-[0.8125rem] leading-snug" data-testid="uc-check" data-id={c.id} data-ok={String(c.ok)} data-exempt={String(c.exempt)}>
           <Icon n={bad ? 'x' : c.exempt ? 'minus' : 'check'} className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${bad ? 'text-danger' : c.exempt ? 'text-mute' : 'text-emerald'}`} />
-          <span className="min-w-0"><span className={bad ? 'font-semibold' : ''}>{k ? t(k) : <span className="font-mono text-[12px]">{c.id}</span>}</span>
+          <span className="min-w-0"><span className={bad ? 'font-semibold' : ''}>{k ? t(k) : <span className="font-mono text-[0.75rem]">{c.id}</span>}</span>
             <span className="text-mute"> — {t(bad ? 'v11TrCheckFail' : c.exempt ? 'v11TrCheckExempt' : 'v11TrCheckOk')}{figure(c.observed) ? ` · ${t('v11TrObserved', { v: c.observed! })}` : ''}{figure(c.limit) ? ` · ${t('v11TrLimit', { v: c.limit! })}` : ''}</span>
-            {bad && c.detail && <span className="mt-0.5 block text-[12px] text-mute" lang="en"><span lang="">{t('v11TrDetailEn')} : </span>{c.detail}</span>}</span></li>); })}</ul>
+            {bad && c.detail && <span className="mt-0.5 block text-[0.75rem] text-mute" lang="en"><span lang="">{t('v11TrDetailEn')} : </span>{c.detail}</span>}</span></li>); })}</ul>
     </Fold>
   </div>;
 }
@@ -199,25 +199,25 @@ export function CommandLine({ mode, accountId, tone, onDone, onSelect }: { mode:
   const busy = st.phase === 'busy';
   const stale = st.phase === 'preview' && st.text !== text.trim().replace(/\s+/g, ' ');   // the line changed since its preview: preview again before anything runs
   return <section className="space-y-3" data-testid="cmdline" aria-label={t('v11TrCmd')}>
-    <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-[15.5px] font-semibold">{t('v11TrCmd')}</h3><ModeTag tone={tone} /></div>
-    <p className="text-[12.5px] leading-snug text-mute">{t('v11TrCmdSub')}</p>
+    <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-[0.96875rem] font-semibold">{t('v11TrCmd')}</h3><ModeTag tone={tone} /></div>
+    <p className="text-[0.78125rem] leading-snug text-mute">{t('v11TrCmdSub')}</p>
     <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); setNote(''); void send(text, false); }}>
       <input ref={input} value={text} onChange={(e) => { setText(e.target.value.slice(0, 300)); }} aria-label={t('v11TrCmdLabel')} placeholder={COMMAND_EXAMPLES[0]} data-testid="cmd-input" enterKeyHint="go" autoCapitalize="characters" autoCorrect="off" autoComplete="off" spellCheck={false}
-        className={`${inputCls} min-w-0 flex-1 !py-3 font-mono text-[16px]`} />
+        className={`${inputCls} min-w-0 flex-1 !py-3 font-mono text-[1rem]`} />
       <Btn type="submit" kind="soft" busy={busy && !st.run} disabled={busy || !text.trim()} className="!min-h-[50px] shrink-0 !px-4" data-testid="cmd-preview">{t('v11TrCmdPreview')}</Btn>
     </form>
-    <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1" role="group" aria-label={t('v11TrCmdExamples')}>{COMMAND_EXAMPLES.map((x) => <button key={x} type="button" onClick={() => { setText(x); setSt({ phase: 'idle' }); input.current?.focus(); }} className="press min-h-11 shrink-0 rounded-full border border-line px-3 font-mono text-[12.5px] text-mute">{x}</button>)}</div>
+    <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1" role="group" aria-label={t('v11TrCmdExamples')}>{COMMAND_EXAMPLES.map((x) => <button key={x} type="button" onClick={() => { setText(x); setSt({ phase: 'idle' }); input.current?.focus(); }} className="press min-h-11 shrink-0 rounded-full border border-line px-3 font-mono text-[0.78125rem] text-mute">{x}</button>)}</div>
     <div aria-live="polite" className="space-y-3" data-testid="cmd-result" data-phase={st.phase}>
-      {note && <p className="text-[12.5px] text-mute" data-testid="cmd-note">{note}</p>}
+      {note && <p className="text-[0.78125rem] text-mute" data-testid="cmd-note">{note}</p>}
       {st.phase === 'problem' && <Problem p={st.problem} onAnswer={(q, v) => void answer(q, v)} />}
       {st.phase === 'preview' && <div className="space-y-3 rounded-2xl border border-line px-4 py-3" data-testid="cmd-dry" data-kind={st.answer.kind}>
         <div className="flex flex-wrap items-center justify-between gap-2"><span className="t-eyebrow">{t('v11TrCmdDry')}</span><ModeTag tone={tone} /></div>
         {st.answer.kind === 'order' && !st.answer.executed && <><Canonical c={st.answer.order} locale={locale} /><AttachedList a={st.answer.attached} /></>}
-        {st.answer.kind === 'control' && <p className="text-[13.5px] leading-snug" data-testid="cmd-control">{t(`v11TrCtl_${st.answer.control.type}` as Key, { n: st.answer.orders?.length ?? 0 })}</p>}
+        {st.answer.kind === 'control' && <p className="text-[0.84375rem] leading-snug" data-testid="cmd-control">{t(`v11TrCtl_${st.answer.control.type}` as Key, { n: st.answer.orders?.length ?? 0 })}</p>}
         {stale ? <Notice tone="warn">{t('v11TrCmdStale')}</Notice>
-          : <div className="flex flex-wrap gap-2"><Btn kind={st.answer.kind === 'control' && st.answer.control.type !== 'cancel_order' && st.answer.control.type !== 'cancel_all' ? 'danger' : mode === 'live' && st.answer.kind === 'order' ? 'danger' : 'primary'} className="!min-h-11 !px-4 !text-[14.5px]" onClick={() => void send(st.text, true)} data-testid="cmd-run">
+          : <div className="flex flex-wrap gap-2"><Btn kind={st.answer.kind === 'control' && st.answer.control.type !== 'cancel_order' && st.answer.control.type !== 'cancel_all' ? 'danger' : mode === 'live' && st.answer.kind === 'order' ? 'danger' : 'primary'} className="!min-h-11 !px-4 !text-[0.90625rem]" onClick={() => void send(st.text, true)} data-testid="cmd-run">
               {t(st.answer.kind === 'control' ? 'v11TrCmdRunControl' : mode === 'live' ? 'v11TrCmdRunLive' : 'v11TrCmdRunPaper')}</Btn>
-            <Btn kind="ghost" className="!min-h-11 !px-4 !text-[14.5px]" onClick={() => setSt({ phase: 'idle' })}>{t('v11TrCmdClear')}</Btn></div>}
+            <Btn kind="ghost" className="!min-h-11 !px-4 !text-[0.90625rem]" onClick={() => setSt({ phase: 'idle' })}>{t('v11TrCmdClear')}</Btn></div>}
       </div>}
       {st.phase === 'busy' && st.run && <div className="skel h-14 !rounded-2xl" aria-hidden="true" />}
       {st.phase === 'done' && <Done a={st.answer} locale={locale} onSelect={onSelect} />}
@@ -246,13 +246,13 @@ function Done({ a, locale, onSelect }: { a: CommandAnswer; locale: string; onSel
   const t = useT();
   if (a.kind === 'query') { const rows = Object.values(a.data).find(Array.isArray) as unknown[] | undefined;
     return <div className="rounded-2xl border border-line px-4 py-3" data-testid="cmd-query" data-query={a.query}><div className="flex flex-wrap items-center justify-between gap-2"><span className="t-eyebrow">{a.command}</span>{rows && <Tag>{t('v11TrQueryRows', { n: rows.length })}</Tag>}</div>
-      <Fold summary={<span className="text-[13.5px] font-medium text-ink">{t('v11TrQueryRaw')}</span>} open={!rows || rows.length <= 3}><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-elev p-3 font-mono text-[11.5px] leading-snug">{JSON.stringify(a.data, null, 1).slice(0, 6000)}</pre></Fold></div>; }
+      <Fold summary={<span className="text-[0.84375rem] font-medium text-ink">{t('v11TrQueryRaw')}</span>} open={!rows || rows.length <= 3}><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-elev p-3 font-mono text-[0.71875rem] leading-snug">{JSON.stringify(a.data, null, 1).slice(0, 6000)}</pre></Fold></div>; }
   if (a.kind === 'control') return <Notice tone="ok"><span data-testid="cmd-done" data-kind="control">{t('v11TrCtlDone')}{a.results ? ` ${t('v11TrQueryRows', { n: a.results.length })}` : ''}</span></Notice>;
   if (!a.executed) return null;
   const o = a.order, awaiting = o.status === 'AWAITING_APPROVAL';
   return <div className="space-y-2 rounded-2xl border border-line px-4 py-3" data-testid="cmd-done" data-kind="order" data-status={stateOf(o.status)} data-id={o.id}>
     <div className="flex flex-wrap items-center justify-between gap-2"><span className="t-eyebrow">{t('v11TrCmdExecuted')}</span><StateTag status={o.status} /></div>
-    <div className="flex flex-wrap items-center gap-2 text-[13.5px]">{marketBtn(o.instrument, onSelect, t('fxOpenMarket', { symbol: symbolOf(o.instrument) }))}{(o.side === 'buy' || o.side === 'sell') && <SideTag side={o.side} />}<span className="tabular-nums">{o.size ? fmt(o.size, { locale, trim: true }) : ''}{o.avgFillPrice ? ` @ ${fmt(o.avgFillPrice, { locale, trim: true })}` : ''}</span></div>
+    <div className="flex flex-wrap items-center gap-2 text-[0.84375rem]">{marketBtn(o.instrument, onSelect, t('fxOpenMarket', { symbol: symbolOf(o.instrument) }))}{(o.side === 'buy' || o.side === 'sell') && <SideTag side={o.side} />}<span className="tabular-nums">{o.size ? fmt(o.size, { locale, trim: true }) : ''}{o.avgFillPrice ? ` @ ${fmt(o.avgFillPrice, { locale, trim: true })}` : ''}</span></div>
     <AttachedList a={a.attached} />
     {awaiting && <Notice tone="warn">{t('v11TrCloseAwaiting')}</Notice>}
     {stateOf(o.status) === 'UNKNOWN' && <Notice tone="info">{t('v11TrUnknownNote')}</Notice>}
@@ -262,10 +262,10 @@ function Problem({ p, onAnswer }: { p: CommandProblem; onAnswer: (q: Question, v
   const t = useT();
   if (p.kind === 'parse') return <Notice tone="warn"><span data-testid="cmd-problem" data-kind="parse" data-code={p.code}>{t(((PARSE_CODES as readonly string[]).includes(p.code) ? `v11TrParse_${p.code}` : 'v11TrParse_unknown_command') as Key)}{p.token !== null ? ` ${t('v11TrParseAt', { n: p.token + 1 })}` : ''}</span></Notice>;
   if (p.kind === 'unresolvable') return <Notice tone="warn"><span data-testid="cmd-problem" data-kind="unresolvable" data-code={p.code}>{t(((UNRESOLVABLE_CODES as readonly string[]).includes(p.code) ? `v11TrUnres_${p.code}` : 'v11TrUnres_invalid_order') as Key)}</span></Notice>;
-  if (p.kind === 'refused') return <Notice tone="danger"><span data-testid="cmd-problem" data-kind="refused" data-code={p.code}>{t('v11TrCmdRefused')} <span className="font-mono text-[12px]">{[p.code, ...p.failed, ...p.reasons].join(', ')}</span></span></Notice>;
+  if (p.kind === 'refused') return <Notice tone="danger"><span data-testid="cmd-problem" data-kind="refused" data-code={p.code}>{t('v11TrCmdRefused')} <span className="font-mono text-[0.75rem]">{[p.code, ...p.failed, ...p.reasons].join(', ')}</span></span></Notice>;
   if (p.kind === 'error') return <Notice tone="warn"><span data-testid="cmd-problem" data-kind="error" data-code={p.code}>{t('v11TrErrCode', { code: p.code })}</span></Notice>;
   return <div className="space-y-3 rounded-2xl border border-warn/30 bg-warn/[0.06] px-4 py-3" data-testid="cmd-questions">
-    <p className="text-[13.5px] font-medium leading-snug">{t('v11TrCmdQuestions')}</p>
+    <p className="text-[0.84375rem] font-medium leading-snug">{t('v11TrCmdQuestions')}</p>
     {p.questions.map((q) => <QuestionRow key={q.field} q={q} onAnswer={(v) => onAnswer(q, v)} />)}
   </div>;
 }
@@ -274,9 +274,9 @@ function QuestionRow({ q, onAnswer }: { q: Question; onAnswer: (value: string) =
   const known = (QUESTION_FIELDS as readonly string[]).includes(q.field), intoLine = q.field === 'venue' || q.field === 'instrument' || q.field === 'leverage';
   const label = known ? t(`v11TrQ_${q.field}` as Key) : t('v11TrQ_other', { field: q.field });
   return <div className="space-y-1.5" data-testid="cmd-question" data-field={q.field}>
-    <p className="text-[13.5px] leading-snug">{label}</p>
-    {q.options.length > 0 ? <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>{q.options.map((o) => <button key={o} type="button" onClick={() => onAnswer(o)} data-option={o} className="press min-h-11 rounded-full border border-line bg-surface px-3.5 text-[13.5px] font-medium">{q.field === 'marginMode' ? t(`v11TrOpt_${o}` as Key) : q.field === 'venue' ? VENUE_NAME[o as VenueId] ?? o : o}</button>)}</div>
-      : <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); onAnswer(v); }}><input value={v} onChange={(e) => setV(e.target.value.slice(0, 20))} inputMode="decimal" aria-label={label} className={`${inputCls} min-w-0 flex-1 !py-2.5 text-[16px]`} /><Btn type="submit" kind="soft" className="!min-h-11 shrink-0 !px-4 !text-[14px]" disabled={!v.trim()}>{t('v11TrQUse')}</Btn></form>}
-    {!intoLine && <p className="text-[12px] text-mute">{t('v11TrQDefaultHint')}</p>}
+    <p className="text-[0.84375rem] leading-snug">{label}</p>
+    {q.options.length > 0 ? <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>{q.options.map((o) => <button key={o} type="button" onClick={() => onAnswer(o)} data-option={o} className="press min-h-11 rounded-full border border-line bg-surface px-3.5 text-[0.84375rem] font-medium">{q.field === 'marginMode' ? t(`v11TrOpt_${o}` as Key) : q.field === 'venue' ? VENUE_NAME[o as VenueId] ?? o : o}</button>)}</div>
+      : <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); onAnswer(v); }}><input value={v} onChange={(e) => setV(e.target.value.slice(0, 20))} inputMode="decimal" aria-label={label} className={`${inputCls} min-w-0 flex-1 !py-2.5 text-[1rem]`} /><Btn type="submit" kind="soft" className="!min-h-11 shrink-0 !px-4 !text-[0.875rem]" disabled={!v.trim()}>{t('v11TrQUse')}</Btn></form>}
+    {!intoLine && <p className="text-[0.75rem] text-mute">{t('v11TrQDefaultHint')}</p>}
   </div>;
 }

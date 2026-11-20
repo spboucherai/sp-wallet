@@ -36,20 +36,20 @@ const TONE: Record<BridgeV['stage'], Tone> = { review: 'warn', burning: 'info', 
 // ── v10: small pieces shared by the review sheets of this area (Swap, bridge, THORChain, plans). Local to the area. ─────
 /** A long technical value of a receipt (fingerprint, transaction id, vault, memo): label above, the WHOLE value below, monospace. */
 export function LongFact({ k, children, sub, mute, testid }: { k: ReactNode; children: ReactNode; sub?: ReactNode; mute?: boolean; testid?: string }) {
-  return <div className="fact sw-longfact" data-testid={testid}><dt>{k}</dt><dd className={`break-all font-mono text-[12px] leading-relaxed ${mute ? 'text-mute' : ''}`}>{children}</dd>{sub && <dd className="sw-longfact-sub">{sub}</dd>}</div>;
+  return <div className="fact sw-longfact" data-testid={testid}><dt>{k}</dt><dd className={`break-all font-mono text-[0.75rem] leading-relaxed ${mute ? 'text-mute' : ''}`}>{children}</dd>{sub && <dd className="sw-longfact-sub">{sub}</dd>}</div>;
 }
 /** One amount of a review (what leaves, what is guaranteed) with its real logo: static text — never animated, never shortened. */
 export function ReviewAmount({ label, sym, net, children, sub }: { label: ReactNode; sym: string; net?: string; children: ReactNode; sub?: ReactNode }) {
   return <div className="flex items-start gap-3.5"><AssetIcon sym={sym} net={net} size={44} ring="var(--elev)" />
-    <div className="min-w-0 flex-1"><div className="text-[13px] text-mute">{label}</div>
-      <div className="t-display break-words text-[clamp(25px,7.6vw,32px)] !leading-[1.12]">{children}</div>
-      {sub && <div className="mt-1 text-[13px] text-mute">{sub}</div>}</div></div>;
+    <div className="min-w-0 flex-1"><div className="text-[0.8125rem] text-mute">{label}</div>
+      <div className="t-display break-words text-[clamp(1.5625rem,7.6vw,2rem)] !leading-[1.12]">{children}</div>
+      {sub && <div className="mt-1 text-[0.8125rem] text-mute">{sub}</div>}</div></div>;
 }
 /** The arrow between the two amounts of a review. */
 export function ReviewArrow() { return <div className="flex h-7 w-11 items-center justify-center text-mute" aria-hidden="true"><Icon n="down" className="h-4 w-4" /></div>; }
 /** A link to a block explorer, 44 px high. */
 export function ExplorerLink({ href, children }: { href: string; children: ReactNode }) {
-  return <a className="inline-flex min-h-11 items-center gap-1.5 text-[14px] font-medium text-blue" href={href} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{children}</a>;
+  return <a className="inline-flex min-h-11 items-center gap-1.5 text-[0.875rem] font-medium text-blue" href={href} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{children}</a>;
 }
 
 /** Status is always icon + text, never colour alone. */
@@ -86,10 +86,10 @@ export function BridgeProgress({ id, b, onUpdate, fromNetwork }: { id: string; b
       <div className="sw-tl"><Timeline label={t('brProgress')} items={ORDER.map((s, k) => { const done = b.stage === 'done' || k < at, cur = k === at && b.stage !== 'done', bad = cur && b.stage === 'mint_failed';
         const state: StepState = done ? 'done' : bad ? 'failed' : cur ? 'current' : 'next';
         return { key: s, state, node: node(s), title: t(`brStep_${s}` as Key, { net: b.toNetworkName }), stateLabel: bad ? t('brStage_mint_failed') : t(done ? 'dzBrStepDone' : cur ? 'dzBrStepNow' : 'dzBrStepNext') }; })} /></div>
-      {b.stage === 'attesting' && !b.hold && <p className="text-[13px] text-mute">{t('brWaitAttest', { time: bridgeDur(b.expectedSeconds) })}{b.delayReason ? ` (${b.delayReason})` : ''}</p>}
+      {b.stage === 'attesting' && !b.hold && <p className="text-[0.8125rem] text-mute">{t('brWaitAttest', { time: bridgeDur(b.expectedSeconds) })}{b.delayReason ? ` (${b.delayReason})` : ''}</p>}
       {b.hold && b.stage !== 'done' && <Notice tone={b.stage === 'mint_failed' || b.hold === 'message_mismatch' || b.hold === 'contract_changed' ? 'danger' : 'warn'}>{t(holdKey(b.hold))}{b.holdDetail ? <span className="block text-mute" data-testid="hold-detail">{holdDetail(t, b)}</span> : null}</Notice>}
-      {b.stage !== 'done' && <p className="text-[12.5px] text-mute">{t('brSafe')}</p>}
-      {b.stage === 'done' && b.mintedBy === 'other' && <p className="text-[13px] text-mute">{t('brMintedByOther')}</p>}
+      {b.stage !== 'done' && <p className="text-[0.78125rem] text-mute">{t('brSafe')}</p>}
+      {b.stage === 'done' && b.mintedBy === 'other' && <p className="text-[0.8125rem] text-mute">{t('brMintedByOther')}</p>}
       {err && !ap.locked && <Notice tone="danger">{err}</Notice>}
       <ApprovalOutcomePanel ap={ap} />
       {b.mintExplorer && <ExplorerLink href={b.mintExplorer}>{t('brViewMint', { net: b.toNetworkName })}</ExplorerLink>}
@@ -118,7 +118,7 @@ export function SolDeposit({ id, b, onUpdate }: { id: string; b: BridgeV; onUpda
   };
   const vars = { dep: trimAmt(s.depositDisplay ?? '0', 9), date: s.reclaimableAt ? day(s.reclaimableAt, locale) : '—', got: trimAmt(s.reclaimedDisplay ?? '0', 9) };
   return (
-    <div className="rounded-2xl bg-elev/60 p-4 text-[13.5px]" data-testid="sol-deposit" data-state={st}>
+    <div className="rounded-2xl bg-elev/60 p-4 text-[0.84375rem]" data-testid="sol-deposit" data-state={st}>
       <div className="mb-1.5 flex items-center gap-2"><NetworkIcon net="solana" size={18} /><span className="t-eyebrow">{t('scReclaimTitle')}</span></div>
       <p className={st === 'done' ? 'flex gap-1.5 text-emerald' : ''}>{st === 'done' && <Icon n="check" className="mt-0.5 h-4 w-4 shrink-0" />}<span>{t(`scReclaim_${st}` as Key, vars)}</span></p>
       {st === 'failed' && s.reclaimError && <p className="mt-1 text-mute">{s.reclaimError}</p>}

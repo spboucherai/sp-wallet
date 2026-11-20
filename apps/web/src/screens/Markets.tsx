@@ -37,14 +37,14 @@ export const annualisedOf = (rate: string, intervalSec: number): string => ((Num
 function Fresh({ r }: { r: HubRow }) {
   const t = useT(); const { locale } = useContext(I18n);
   const f = freshness(r);
-  if (f === 'none') return <span className="text-[12px] text-mute" data-testid="mk-fresh" data-fresh="none">{t('mkNoData')}</span>;
-  return <span className={`inline-flex items-center gap-1.5 text-[12px] ${f === 'stale' ? 'font-medium text-warn' : 'text-mute'}`} data-testid="mk-fresh" data-fresh={f} title={r.sourceTs ? timeOf(r.sourceTs, locale, true) : undefined}>
+  if (f === 'none') return <span className="text-[0.75rem] text-mute" data-testid="mk-fresh" data-fresh="none">{t('mkNoData')}</span>;
+  return <span className={`inline-flex items-center gap-1.5 text-[0.75rem] ${f === 'stale' ? 'font-medium text-warn' : 'text-mute'}`} data-testid="mk-fresh" data-fresh={f} title={r.sourceTs ? timeOf(r.sourceTs, locale, true) : undefined}>
     <span className={`h-1.5 w-1.5 rounded-full ${f === 'fresh' ? 'bg-emerald' : f === 'aging' ? 'bg-mute' : 'bg-warn'}`} aria-hidden="true" />{f === 'stale' ? t('mkStale', { age: ageLabel(r.ageMs, locale) }) : ageLabel(r.ageMs, locale)}</span>;
 }
 function NotTradable({ r, long }: { r: HubRow; long?: boolean }) {
   const t = useT();
   if (r.tradable) return null;
-  return <span className={`mt-1 block text-[11.5px] font-normal leading-snug text-warn ${long ? '' : 'max-w-[240px] whitespace-normal'}`} data-testid="mk-not-tradable" data-reason={r.tradableReason ?? ''}>
+  return <span className={`mt-1 block text-[0.71875rem] font-normal leading-snug text-warn ${long ? '' : 'max-w-[240px] whitespace-normal'}`} data-testid="mk-not-tradable" data-reason={r.tradableReason ?? ''}>
     <b className="font-semibold">{t(r.kind === 'spot' ? 'mkNotSwappable' : 'mkNotTradable')}</b> {t(reasonKey(r.tradableReason) as Key)}{r.paper ? ` ${t('mkPaperOk')}` : ''}</span>;
 }
 
@@ -70,8 +70,8 @@ export function Markets({ view: asked, underlying, nav }: { view: MarketsView; u
   const cols: Col<HubRow>[] = [
     { id: 'm', label: sortHead('symbol', t('fxMarket')), head: true, cell: (r) => <span className="inline-flex min-w-0 flex-col"><button type="button" onClick={() => open(r)} data-testid="mk-open" aria-label={t('mkOpen', { symbol: r.symbol })}
       className="-my-1 inline-flex min-h-11 min-w-11 items-center gap-2 text-left font-semibold"><Coin sym={r.underlying ?? r.base} size={22} /><span className="underline decoration-line underline-offset-4">{r.symbol}</span></button>
-      {r.kind === 'perp' && r.multiplier !== null && r.multiplier !== '1' && <span className="text-[11.5px] font-normal text-mute">{t('mkMultiplier', { n: r.multiplier, u: r.underlying ?? '' })}</span>}
-      {r.kind === 'perp' && r.underlying === null && <span className="max-w-[240px] whitespace-normal text-[11.5px] font-normal leading-snug text-mute" data-testid="mk-unmapped">{t(unmappedKey(r.mapping.unmapped) as Key)}</span>}
+      {r.kind === 'perp' && r.multiplier !== null && r.multiplier !== '1' && <span className="text-[0.71875rem] font-normal text-mute">{t('mkMultiplier', { n: r.multiplier, u: r.underlying ?? '' })}</span>}
+      {r.kind === 'perp' && r.underlying === null && <span className="max-w-[240px] whitespace-normal text-[0.71875rem] font-normal leading-snug text-mute" data-testid="mk-unmapped">{t(unmappedKey(r.mapping.unmapped) as Key)}</span>}
       <NotTradable r={r} /></span> },
     ...(perp && MULTI_VENUE ? [{ id: 'v', label: t('fxVenue'), head: true, cell: (r: HubRow) => <VenueBadge venue={r.venue as VenueId} /> } satisfies Col<HubRow>] : []),
     { id: 'px', label: t('mkPrice'), num: true, cell: (r) => <LiveCell id={liveIdOf(r)} flash={(q) => livePriceOf(r, q)} render={(q) => { const p = livePriceOf(r, q); return p ? <span className="font-semibold tabular-nums">{fmt(p, { dp: priceDp('0.01', p), locale })}</span> : null; }}>
@@ -81,7 +81,7 @@ export function Markets({ view: asked, underlying, nav }: { view: MarketsView; u
     { id: 'vol', label: sortHead('volume', t('mkVolume')), num: true, cell: (r) => compactUsd(r.volume24hUsd, locale) },
     ...(perp ? [
       { id: 'oi', label: sortHead('openInterest', t('mkOpenInterest')), num: true, cell: (r: HubRow) => compactUsd(r.openInterestUsd, locale) },
-      { id: 'fund', label: sortHead('funding', t('mkFunding')), num: true, cell: (r: HubRow) => (r.funding ? <LiveCell id={r.id} render={(q) => (q.funding === null ? null : <>{pctText(annualisedOf(q.funding, r.funding!.intervalSec), 2, locale, true)}<span className="block text-[11.5px] font-normal text-mute" data-testid="mk-funding-raw">{t('mkFundingRaw', { rate: pctText(q.funding, 4, locale, true), interval: r.funding!.intervalSec % 3600 === 0 ? `${r.funding!.intervalSec / 3600} h` : `${Math.round(r.funding!.intervalSec / 60)} min` })}</span></>)}><>{pctText(r.funding.annualised, 2, locale, true)}<span className="block text-[11.5px] font-normal text-mute" data-testid="mk-funding-raw">{t('mkFundingRaw', { rate: pctText(r.funding.rate, 4, locale, true), interval: r.funding.intervalSec % 3600 === 0 ? `${r.funding.intervalSec / 3600} h` : `${Math.round(r.funding.intervalSec / 60)} min` })}</span></></LiveCell> : <span className="text-mute">—</span>) },
+      { id: 'fund', label: sortHead('funding', t('mkFunding')), num: true, cell: (r: HubRow) => (r.funding ? <LiveCell id={r.id} render={(q) => (q.funding === null ? null : <>{pctText(annualisedOf(q.funding, r.funding!.intervalSec), 2, locale, true)}<span className="block text-[0.71875rem] font-normal text-mute" data-testid="mk-funding-raw">{t('mkFundingRaw', { rate: pctText(q.funding, 4, locale, true), interval: r.funding!.intervalSec % 3600 === 0 ? `${r.funding!.intervalSec / 3600} h` : `${Math.round(r.funding!.intervalSec / 60)} min` })}</span></>)}><>{pctText(r.funding.annualised, 2, locale, true)}<span className="block text-[0.71875rem] font-normal text-mute" data-testid="mk-funding-raw">{t('mkFundingRaw', { rate: pctText(r.funding.rate, 4, locale, true), interval: r.funding.intervalSec % 3600 === 0 ? `${r.funding.intervalSec / 3600} h` : `${Math.round(r.funding.intervalSec / 60)} min` })}</span></></LiveCell> : <span className="text-mute">—</span>) },
       { id: 'lev', label: t('fxMaxLeverage'), num: true, cell: (r: HubRow) => (r.maxLeverage ? `${fmt(r.maxLeverage, { dp: 1, locale, trim: true })}×` : '—') },
     ] satisfies Col<HubRow>[] : []),
     { id: 'age', label: t('mkFreshness'), num: true, cell: (r) => { const id = liveIdOf(r); return id ? <QuoteDot id={id}><Fresh r={r} /></QuoteDot> : <Fresh r={r} />; } },
@@ -97,7 +97,7 @@ export function Markets({ view: asked, underlying, nav }: { view: MarketsView; u
             <div className="flex flex-wrap items-center gap-3">
               <Seg tabs size="sm" label={t('mkKind')} value={f.kind} onChange={(kind) => setF({ ...defaultFilters(kind), limit: PAGE, q: f.q })} className="w-full sm:w-auto sm:min-w-[220px]" options={[{ id: 'perp', label: t('mkPerps') }, { id: 'spot', label: t('mkSpot') }]} />
               <label className="relative min-w-[180px] flex-1"><span className="sr-only">{t('mkSearch')}</span><Icon n="search" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-mute" />
-                <input type="search" value={f.q} onChange={(e) => set({ q: e.target.value.slice(0, 40) })} placeholder={t('mkSearch')} data-testid="mk-search" className={`${inputCls} !py-2.5 pl-10 text-[15px]`} /></label>
+                <input type="search" value={f.q} onChange={(e) => set({ q: e.target.value.slice(0, 40) })} placeholder={t('mkSearch')} data-testid="mk-search" className={`${inputCls} !py-2.5 pl-10 text-[0.9375rem]`} /></label>
             </div>
             {perp && <div className="mt-3 space-y-2">
               {MULTI_VENUE && <Chips label={t('fxVenue')} value={f.venue} onChange={(venue) => set({ venue })} options={[{ id: '', label: t('mkAllVenues') }, ...SHOWN_HUB_VENUES.map((v) => ({ id: v as string, label: VENUE_NAME[v] }))]} />}
@@ -107,7 +107,7 @@ export function Markets({ view: asked, underlying, nav }: { view: MarketsView; u
               options={[{ id: '', label: t('mkTradableAll') }, { id: 'yes', label: t(perp ? 'mkTradableYes' : 'mkSwappableYes') }, { id: 'no', label: t(perp ? 'mkTradableNo' : 'mkSwappableNo') }]} /></div>
           </Card>
           <div className="px-1"><LiveStatus venues={perp ? [...SHOWN_HUB_VENUES] : ['spot']} names={{ ...VENUE_NAME, spot: t('mkSpotSource') }} /></div>
-          {d && <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1 text-[12.5px] text-mute" data-testid="mk-venues" aria-label={t('mkSources')}>{d.venues.filter((v) => (perp ? v.id !== 'spot' && venueShown(v.id) : v.id === 'spot')).map((v) =>
+          {d && <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1 text-[0.78125rem] text-mute" data-testid="mk-venues" aria-label={t('mkSources')}>{d.venues.filter((v) => (perp ? v.id !== 'spot' && venueShown(v.id) : v.id === 'spot')).map((v) =>
             <span key={v.id} className="inline-flex items-center gap-1.5" title={v.error ?? undefined}>{v.id === 'spot' ? t('mkSpotSource') : VENUE_NAME[v.id as VenueId] ?? v.name}
               <Tag tone={v.status === 'ok' ? 'ok' : v.status === 'stale' ? 'warn' : 'danger'} testid={`mk-venue-${v.id}`}>{t(`mkVenue_${v.status}` as Key)}{v.ageMs !== null && v.status !== 'error' ? ` · ${ageLabel(v.ageMs, locale)}` : ''}</Tag></span>)}</div>}
           {d && d.errors.filter((e) => e.source === 'spot' || venueShown(e.source)).length > 0 && <Notice tone="warn">{t('mkSourceErrors', { sources: [...new Set(d.errors.filter((e) => e.source === 'spot' || venueShown(e.source)).map((e) => (e.source === 'spot' ? t('mkSpotSource') : VENUE_NAME[e.source as VenueId] ?? e.source)))].join(', ') })}</Notice>}
@@ -115,11 +115,11 @@ export function Markets({ view: asked, underlying, nav }: { view: MarketsView; u
             {q.isLoading ? <div className="space-y-3 py-1" aria-hidden="true">{[0, 1, 2, 3, 4, 5].map((k) => <div key={k} className="flex items-center gap-3"><div className="skel h-6 w-28 !rounded-full" /><div className="skel h-4 w-14 !rounded-md" /><div className="skel h-4 flex-1 !rounded-md" /></div>)}</div>
               : q.isError && !d ? <ErrorState title={t('mkLoadError')} onRetry={() => void q.refetch()}>{errText(t, q.error)}</ErrorState>
               : <DataTable label={t('mkTitle')} cols={cols} rows={d?.rows ?? []} rowKey={(r) => r.id} empty={t('mkEmpty')} emptyIcon="search" />}
-            {d && d.total > 0 && <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3 text-[13px] text-mute">
+            {d && d.total > 0 && <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3 text-[0.8125rem] text-mute">
               <span data-testid="mk-range" aria-live="polite">{t('mkRange', { from, to, total: numFmt(d.total, locale, 0) })}</span>
               <span className="flex gap-2"><Btn kind="soft" disabled={f.offset === 0} onClick={() => setF({ ...f, offset: Math.max(0, f.offset - PAGE) })} data-testid="mk-prev">{t('mkPrev')}</Btn>
                 <Btn kind="soft" disabled={to >= d.total} onClick={() => setF({ ...f, offset: f.offset + PAGE })} data-testid="mk-next">{t('mkNext')}</Btn></span></div>}
-            <p className="mt-3 text-[12px] leading-snug text-mute">{t(perp ? 'mkNotePerp' : 'mkNoteSpot')}</p>
+            <p className="mt-3 text-[0.75rem] leading-snug text-mute">{t(perp ? 'mkNotePerp' : 'mkNoteSpot')}</p>
           </Card>
         </>}
       {sheet && <MarketSheet row={sheet} onClose={() => setSheet(null)} onCompare={MULTI_VENUE && sheet.underlying ? () => { const u = sheet.underlying!; setSheet(null); nav({ tab: 'markets', view: 'compare', asset: u }); } : undefined} />}
@@ -137,7 +137,7 @@ export function MarketSheet({ row: r, onClose, onCompare }: { row: HubRow; onClo
     queryFn: async (): Promise<SeriesPoint[]> => (mode === 'funding' ? (async () => { const h = await dapi.funding(r.id, 72); return fundingSeries(h.history, h.intervalSec); })() : (async () => (await dapi.candles(r.id, '1h', 72)).map((c) => ({ t: c.ts, v: Number(c.close) })))()) });
   const series = useMemo(() => [{ id: r.id, label: r.symbol, color: 'var(--s1)', points: hist.data ?? [] }], [hist.data, r.id, r.symbol]);
   const book = market.data?.book ?? null, dp = priceDp('0.01', r.price);
-  const side = (levels: readonly (readonly [string, string])[], cls: string) => <ul className="space-y-0.5 text-[12.5px] tabular-nums">{levels.slice(0, 8).map(([p, s]) => <li key={p} className="flex justify-between gap-3"><span className={`font-semibold ${cls}`}>{fmt(p, { dp, locale })}</span><span className="text-mute">{fmt(s, { locale, trim: true })}</span></li>)}</ul>;
+  const side = (levels: readonly (readonly [string, string])[], cls: string) => <ul className="space-y-0.5 text-[0.78125rem] tabular-nums">{levels.slice(0, 8).map(([p, s]) => <li key={p} className="flex justify-between gap-3"><span className={`font-semibold ${cls}`}>{fmt(p, { dp, locale })}</span><span className="text-mute">{fmt(s, { locale, trim: true })}</span></li>)}</ul>;
   return (
     <Sheet title={r.symbol} sub={<span className="inline-flex flex-wrap items-center gap-2">{perp ? <VenueBadge venue={r.venue as VenueId} /> : null}<Tag tone="mute" icon="eye">{t('mkReadOnly')}</Tag></span>} onClose={onClose} wide testid="mk-sheet"
       footer={onCompare ? <Btn kind="soft" full onClick={onCompare} data-testid="mk-sheet-compare">{t('mkCompareUnderlying', { u: r.underlying ?? '' })}</Btn> : undefined}>
@@ -158,8 +158,8 @@ export function MarketSheet({ row: r, onClose, onCompare }: { row: HubRow; onClo
         </div>}
         {perp && <div data-testid="mk-sheet-book">
           <div className="t-eyebrow mb-1.5">{t('mkBook')}</div>
-          {market.isLoading ? <div className="skel h-24 !rounded-xl" aria-hidden="true" /> : book ? <div className="grid grid-cols-2 gap-6"><div><div className="mb-1 text-[11.5px] text-mute">{t('mkBids')}</div>{side(book.bids, 'text-emerald')}</div><div><div className="mb-1 text-[11.5px] text-mute">{t('mkAsks')}</div>{side(book.asks, 'text-danger')}</div></div>
-            : <p className="text-[13px] text-mute">{market.isError ? errText(t, market.error) || t('fxErrGeneric') : t('mkNoBook')}</p>}
+          {market.isLoading ? <div className="skel h-24 !rounded-xl" aria-hidden="true" /> : book ? <div className="grid grid-cols-2 gap-6"><div><div className="mb-1 text-[0.71875rem] text-mute">{t('mkBids')}</div>{side(book.bids, 'text-emerald')}</div><div><div className="mb-1 text-[0.71875rem] text-mute">{t('mkAsks')}</div>{side(book.asks, 'text-danger')}</div></div>
+            : <p className="text-[0.8125rem] text-mute">{market.isError ? errText(t, market.error) || t('fxErrGeneric') : t('mkNoBook')}</p>}
         </div>}
         <dl className="space-y-2">
           <Fact k={t('mkUnderlying')}>{r.underlying ? `${r.underlying}${r.multiplier && r.multiplier !== '1' ? ` — ${t('mkMultiplier', { n: r.multiplier, u: r.underlying })}` : ''}` : t(unmappedKey(r.mapping.unmapped) as Key)}</Fact>

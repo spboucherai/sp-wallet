@@ -30,16 +30,16 @@ export function Receive({ initial, nav }: { initial?: string; nav?: Nav }) {
         <Chips label={t('network')} value={net} onChange={setNet} options={nets.data!.map((x) => ({ id: x.id, label: x.name, net: x.id }))} />
         <div className="mt-5 grid place-items-center">
           <div className="relative w-full max-w-[264px] rounded-[28px] bg-white p-3.5 shadow-e2 ring-1 ring-line" data-testid="qr-card">
-            {ready ? <img src={qr!.url!} alt={`QR ${a.address}`} width={720} height={720} className="block h-auto w-full rounded-xl" /> : qrFailed ? <div className="grid aspect-square w-full place-items-center rounded-xl bg-[#f1f3f7] p-4 text-center text-[13px] leading-snug text-[#3b4252]" role="alert" data-testid="qr-failed">{t('nxQrFailed')}</div> : <div className="skel aspect-square w-full !rounded-xl" />}
+            {ready ? <img src={qr!.url!} alt={`QR ${a.address}`} width={720} height={720} className="block h-auto w-full rounded-xl" /> : qrFailed ? <div className="grid aspect-square w-full place-items-center rounded-xl bg-[#f1f3f7] p-4 text-center text-[0.8125rem] leading-snug text-[#3b4252]" role="alert" data-testid="qr-failed">{t('nxQrFailed')}</div> : <div className="skel aspect-square w-full !rounded-xl" />}
             {ready && <span className="pointer-events-none absolute left-1/2 top-1/2 grid h-[21%] w-[21%] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white p-[3px]" aria-hidden="true" data-testid="qr-logo"><NetworkIcon net={n.id} size={44} className="!h-full !w-full" /></span>}
           </div>
         </div>
-        <div className="mt-4 flex items-center justify-center gap-2 text-[15px] font-semibold"><NetworkIcon net={n.id} size={22} />{n.name}</div>
-        <p className="mt-1 text-center text-[13px] text-mute">{assets.slice(0, 6).join(' · ')}{assets.length > 6 ? ` · +${assets.length - 6}` : ''}</p>
+        <div className="mt-4 flex items-center justify-center gap-2 text-[0.9375rem] font-semibold"><NetworkIcon net={n.id} size={22} />{n.name}</div>
+        <p className="mt-1 text-center text-[0.8125rem] text-mute">{assets.slice(0, 6).join(' · ')}{assets.length > 6 ? ` · +${assets.length - 6}` : ''}</p>
         <div className="mt-4 rounded-2xl bg-elev/70 p-4 text-center"><div className="mb-1 text-xs text-mute">{t('yourAddress')} · {n.name}</div><Addr value={a.address} /></div>
         <div className={`mt-3 grid gap-3 ${canShare ? 'grid-cols-[1fr_auto_auto]' : 'grid-cols-2'}`}><CopyBtn text={a.address} full />
           {canShare && <Btn kind="soft" aria-label={t('dsShare')} onClick={() => { haptic(); void navigator.share({ text: a.address }).catch(() => {}); }}><Icon n="share" className="h-[18px] w-[18px]" /></Btn>}
-          <a href={a.explorer} target="_blank" rel="noreferrer noopener" className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl border border-line px-4 text-[15.5px] font-medium"><Icon n="ext" className="h-4 w-4" />{t('explorer')}</a></div>
+          <a href={a.explorer} target="_blank" rel="noreferrer noopener" className="press inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl border border-line px-4 text-[0.96875rem] font-medium"><Icon n="ext" className="h-4 w-4" />{t('explorer')}</a></div>
       </Card>
       {acc.data?.signerReachable === false && <Notice tone="warn"><span data-testid="addr-cached">{t('svAddrFromCache', { date: acc.data.addressesAsOf ? new Date(acc.data.addressesAsOf).toLocaleString() : '—' })}</span></Notice>}
       <Notice tone="warn">{t('onlySend', { assets: assets.length > 4 ? `${assets.slice(0, 3).join(' / ')}… (${assets.length})` : assets.join(' / '), network: n.name })}</Notice>
@@ -51,7 +51,7 @@ export function Receive({ initial, nav }: { initial?: string; nav?: Nav }) {
       {n.family === 'cardano' && <><Notice tone="info">{t('cdRecvMin')}</Notice><Notice tone="warn">{t('cdRecvTokens')}</Notice><Notice tone="info">{t('cdRecvRecover')}</Notice></>}
       {n.family === 'polkadot' && <><Notice tone="warn">{t('dtRecvHub')}</Notice><Notice tone="info">{t('dtRecvEd', { amount: trimAmt(n.activation ?? '0.01', 12) })}</Notice><Notice tone="warn">{t('dtRecvKey')}</Notice></>}
       {/* v8-cardano-polkadot ↑ */}
-      <Card><H>{t('addressFromSigner')}</H><ul className="space-y-2 text-[13.5px] text-mute">
+      <Card><H>{t('addressFromSigner')}</H><ul className="space-y-2 text-[0.84375rem] text-mute">
         <li>{n.minConf === 1 ? t('qaDepositShown1') : t('depositShown', { n: n.minConf })}</li>
         {n.tokens.length > 0 && <li>{t('gasNote', { sym: n.native.symbol })}</li>}
       </ul></Card>

@@ -19,14 +19,14 @@ export function AssetRow({ b, nav, cur, ck, hidden, prices, locale, border }: { 
   return (
     <li><button onClick={() => nav({ tab: 'asset', network: b.network, asset: b.asset })} className={`row-press flex min-h-[68px] w-full items-center gap-3.5 px-5 py-3 text-left ${border ? 'border-t border-line' : ''}`}>
       <Coin sym={b.symbol} net={b.network} />
-      <span className="min-w-0 flex-1"><span className="block truncate text-[15.5px] font-semibold leading-tight">{b.name}</span><span className="mt-0.5 block truncate text-[12.5px] text-mute">{b.symbol} · {b.networkName}</span></span>
+      <span className="min-w-0 flex-1"><span className="block truncate text-[0.96875rem] font-semibold leading-tight">{b.name}</span><span className="mt-0.5 block truncate text-[0.78125rem] text-mute">{b.symbol} · {b.networkName}</span></span>
       {m && zero && <span className="hidden min-[430px]:block"><Spark data={m.spark} /></span>}
       <span className="text-right">
-        {b.display === null ? <span className="text-[12.5px] text-warn">{t('unavailable')}</span> : zero && m ? <>
-          <span className="block text-[15px] font-semibold leading-tight">{fiat(m[ck], cur, locale)}</span>
+        {b.display === null ? <span className="text-[0.78125rem] text-warn">{t('unavailable')}</span> : zero && m ? <>
+          <span className="block text-[0.9375rem] font-semibold leading-tight">{fiat(m[ck], cur, locale)}</span>
           <span className="mt-0.5 block">{m.change24h !== null && <Change pct={m.change24h} />}</span></> : <>
-          <span className="block text-[15.5px] font-semibold leading-tight"><Money hidden={hidden}>{trimAmt(b.display)}</Money></span>
-          <span className="mt-0.5 block text-[12.5px] text-mute">{v !== null ? <Money hidden={hidden}>{fiat(v, cur, locale)}</Money> : ' '}</span></>}
+          <span className="block text-[0.96875rem] font-semibold leading-tight"><Money hidden={hidden}>{trimAmt(b.display)}</Money></span>
+          <span className="mt-0.5 block text-[0.78125rem] text-mute">{v !== null ? <Money hidden={hidden}>{fiat(v, cur, locale)}</Money> : ' '}</span></>}
       </span>
     </button></li>);
 }
@@ -63,7 +63,7 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
   const parts = [...bySym].map(([id, v]) => ({ id, label: id, value: v }));
   const mood = hidden || dayPct === null || Math.abs(dayPct) < 0.005 ? 'flat' : dayPct > 0 ? 'up' : 'down';
   const action = (id: Tab, icon: string, label: string, main = false, disabled = false) =>
-    <button onClick={() => { haptic(); go(id); }} disabled={disabled} className="press group flex min-w-0 flex-1 flex-col items-center gap-2 text-[12.5px] font-semibold disabled:opacity-40">
+    <button onClick={() => { haptic(); go(id); }} disabled={disabled} className="press group flex min-w-0 flex-1 flex-col items-center gap-2 text-[0.78125rem] font-semibold disabled:opacity-40">
       <span className={`grid h-[52px] w-[52px] place-items-center rounded-full ${main ? 'hero-btn-main' : 'hero-btn'}`}><Icon n={icon} className="h-[21px] w-[21px]" /></span><span className="max-w-full truncate">{label}</span></button>;
   const rowProps = { nav, cur, ck: ck as 'usd' | 'cad', hidden, prices: d.prices, locale };
   return (
@@ -76,13 +76,13 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
       <section className="hero px-6 pb-6 pt-5" data-mood={mood}>
         <span className="hero-edge" aria-hidden="true" />
         <div className="flex items-center justify-between">
-          <span className="text-[13px] font-medium text-white/70">{t('totalEstimate')}{gaps.partial && d.prices && <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#f4b65b]/20 px-2 py-0.5 text-[11.5px] font-semibold text-[#f4b65b]" data-testid="total-partial"><Icon n="warn" className="h-3 w-3" />{t('nxPartialTotal')}</span>}</span>
+          <span className="text-[0.8125rem] font-medium text-white/70">{t('totalEstimate')}{gaps.partial && d.prices && <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#f4b65b]/20 px-2 py-0.5 text-[0.71875rem] font-semibold text-[#f4b65b]" data-testid="total-partial"><Icon n="warn" className="h-3 w-3" />{t('nxPartialTotal')}</span>}</span>
           <button onClick={() => void update({ hideBalances: !hidden })} aria-label={hidden ? t('show') : t('hide')} aria-pressed={hidden} className="press -mr-2.5 grid h-11 w-11 place-items-center rounded-full text-white/75"><Icon n={hidden ? 'eyeOff' : 'eye'} /></button>
         </div>
-        <div className="t-display mt-1 text-[clamp(40px,12.6vw,54px)]">
+        <div className="t-display mt-1 text-[clamp(2.5rem,12.6vw,3.375rem)]">
           {d.prices ? <Money hidden={hidden}><AnimatedNumber value={total} format={(v) => fiat(v, cur, locale)} /></Money> : <span className="text-2xl tracking-normal text-white/60">{t(settings.prices ? 'dzPricesAway' : 'noPrices')}</span>}
         </div>
-        <div className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-white/70">
+        <div className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[0.78125rem] text-white/70">
           {dayPct !== null && !hidden && <span className="hero-chip inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold text-white">
             <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden="true"><path d={dayPct >= 0 ? 'M6 2l4.5 7h-9z' : 'M6 10L1.5 3h9z'} fill="currentColor" /></svg>{dayPct >= 0 ? '+' : '−'}{numFmt(Math.abs(dayPct), locale, 2, 2)} % {t('today')}</span>}
           <span className="inline-flex items-center gap-2"><span className={`inline-block h-2 w-2 rounded-full ${netState === 'ok' ? 'bg-[#35e7ac]' : netState === 'checking' ? 'pulse-dot bg-white/60' : 'bg-[#f4b65b]'}`} />
@@ -92,15 +92,15 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
           {nLive > 0 && <LiveSpotTag hero n={nLive} converted={ck !== 'usd'} />}
         </div>
         <div className="mt-6 flex gap-2">{action('receive', 'down', t('receive'), true)}{action('send', 'up', t('send'), false, block !== null)}{action('swap', 'swap', t('swap'))}{action('agents', 'robot', t('agents'))}</div>
-        {block && <p className="mt-3 text-[12.5px] leading-snug text-white/75" data-testid="send-blocked">{t(sendBlockKey(block))}</p>}
+        {block && <p className="mt-3 text-[0.78125rem] leading-snug text-white/75" data-testid="send-blocked">{t(sendBlockKey(block))}</p>}
       </section>
       {gaps.partial && <Notice tone="warn"><span data-testid="partial-note">{t('nxPartialBody', { nets: gaps.missing.join(', ') || '—' })}</span></Notice>}
 
       {d.pending.length > 0 && <Card><H>{t('pending')}</H>
         <ul className="space-y-3.5">{d.pending.map((p) => <li key={p.id} className="flex items-center gap-3">
           <Coin sym={p.symbol} net={p.network} size={40} />
-          <div className="min-w-0 flex-1"><div className="font-semibold"><Money hidden={hidden}>{trimAmt(p.amountDisplay)} {p.symbol}</Money></div><div className="truncate text-[12.5px] text-mute">{/* v11: a GMX order transaction is not a transfer to the router's address */ (p as { kind?: string }).kind === 'gmx' ? `${t('svKind_gmx')} · ${p.networkName}` : `${p.networkName} → ${short(p.to)}`}</div></div>
-          {testNotSent(p) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : <StatePill state={p.state} />}</li>)}</ul></Card>}
+          <div className="min-w-0 flex-1"><div className="font-semibold"><Money hidden={hidden}>{trimAmt(p.amountDisplay)} {p.symbol}</Money></div><div className="truncate text-[0.78125rem] text-mute">{/* v11: a GMX order transaction is not a transfer to the router's address */ (p as { kind?: string }).kind === 'gmx' ? `${t('svKind_gmx')} · ${p.networkName}` : `${p.networkName} → ${short(p.to)}`}</div></div>
+          {testNotSent(p) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[0.71875rem] font-semibold text-warn">{t('qaSignedNotSent')}</span> : <StatePill state={p.state} />}</li>)}</ul></Card>}
 
       </div><div className="space-y-5">
       {held.length > 0 && <Card className="!px-0 !pb-1"><div className="px-5"><H>{t('yourAssets')}</H>
@@ -111,16 +111,16 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
         {/* market cards: logo, name, a real sparkline of the last 7 days, price and 24 h change (text carries the values) */}
         <ul className="no-scrollbar flex snap-x gap-3 overflow-x-auto px-5 pb-4">{featured.filter((f) => !held.includes(f)).map((b) => { const m = d.prices?.[b.symbol];
           return <li key={b.network + b.asset} className="snap-start"><button onClick={() => nav({ tab: 'asset', network: b.network, asset: b.asset })} className="press flex h-full w-[148px] flex-col rounded-[18px] border border-line bg-elev/40 p-3.5 text-left">
-            <span className="flex items-center gap-2.5"><Coin sym={b.symbol} net={b.network} size={34} /><span className="min-w-0"><span className="block truncate text-[14px] font-semibold leading-tight">{b.name}</span><span className="block truncate text-[11.5px] text-mute">{b.symbol} · {b.networkName}</span></span></span>
+            <span className="flex items-center gap-2.5"><Coin sym={b.symbol} net={b.network} size={34} /><span className="min-w-0"><span className="block truncate text-[0.875rem] font-semibold leading-tight">{b.name}</span><span className="block truncate text-[0.71875rem] text-mute">{b.symbol} · {b.networkName}</span></span></span>
             {m && <><span className="mt-3 block h-9"><Spark data={m.spark} w={118} h={36} /></span>
-            <span className="mt-2 block text-[15px] font-semibold leading-tight">{fiat(m[ck], cur, locale)}</span>
+            <span className="mt-2 block text-[0.9375rem] font-semibold leading-tight">{fiat(m[ck], cur, locale)}</span>
             <span className="mt-0.5 block min-h-[20px]">{m.change24h !== null && <Change pct={m.change24h} />}</span></>}</button></li>; })}</ul>
-        <button onClick={() => nav({ tab: 'assets' })} className="row-press flex min-h-[56px] w-full items-center justify-between rounded-b-[22px] border-t border-line px-5 py-4 text-left text-[15px] font-semibold text-blue">
+        <button onClick={() => nav({ tab: 'assets' })} className="row-press flex min-h-[56px] w-full items-center justify-between rounded-b-[22px] border-t border-line px-5 py-4 text-left text-[0.9375rem] font-semibold text-blue">
           <span>{t('allAssets')} <span className="font-normal text-mute">· {t('tokensCount', { n: d.balances.length })}</span></span><Icon n="chev" className="h-5 w-5" /></button></Card>
 
       {/* NFT: reachable from the first screen (they were only linked from « all assets », where the owner did not find them) */}
       <button onClick={() => nav({ tab: 'nfts' })} className="card row-press flex min-h-[60px] w-full items-center justify-between gap-3 px-5 py-3.5 text-left" data-testid="home-nft-link">
-        <span className="min-w-0"><span className="block text-[15.5px] font-semibold">{t('nfTitle')}</span><span className="block text-[12.5px] text-mute">{t('nfAssetsLine')}</span></span><Icon n="chev" className="h-5 w-5 shrink-0 text-mute" /></button>
+        <span className="min-w-0"><span className="block text-[0.96875rem] font-semibold">{t('nfTitle')}</span><span className="block text-[0.78125rem] text-mute">{t('nfAssetsLine')}</span></span><Icon n="chev" className="h-5 w-5 shrink-0 text-mute" /></button>
 
       </div></div>
 
@@ -128,11 +128,11 @@ export function Home({ go, nav }: { go: (t: Tab) => void; nav: Nav }) {
       <Suspense fallback={<div className="grid gap-4 lg:grid-cols-2" aria-busy="true"><SkeletonRows n={3} /><SkeletonRows n={3} /></div>}><DashboardPanels nav={nav} /></Suspense>
 
       {netState === 'partial' && <Card><H>{t('networks')}</H>
-        <ul className="space-y-2.5">{list.filter((n) => n.health && !n.health.ok).map((n) => <li key={n.id} className="flex items-center justify-between text-[14px]">
+        <ul className="space-y-2.5">{list.filter((n) => n.health && !n.health.ok).map((n) => <li key={n.id} className="flex items-center justify-between text-[0.875rem]">
           <span className="flex items-center gap-2.5"><NetDot net={n.id} size={22} />{n.name}</span>
-          <span className="inline-flex items-center gap-1.5 text-[12.5px] text-warn"><Icon n="warn" className="h-3.5 w-3.5" />{n.health!.readable ? t('sendPaused') : t('unavailable')}</span></li>)}</ul>
-        <p className="mt-3 text-[12.5px] text-mute">{t('partialNote')}</p></Card>}
-      <p className="pb-2 text-center text-[12px] text-mute">{t('mainnet')}</p>
+          <span className="inline-flex items-center gap-1.5 text-[0.78125rem] text-warn"><Icon n="warn" className="h-3.5 w-3.5" />{n.health!.readable ? t('sendPaused') : t('unavailable')}</span></li>)}</ul>
+        <p className="mt-3 text-[0.78125rem] text-mute">{t('partialNote')}</p></Card>}
+      <p className="pb-2 text-center text-[0.75rem] text-mute">{t('mainnet')}</p>
     </div>
   );
 }

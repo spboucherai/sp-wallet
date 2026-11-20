@@ -79,12 +79,12 @@ export const openActivity = (): void => { history.pushState(IN_APP, '', '/activi
  */
 export function ApprovalOutcomePanel({ ap, className = '', quiet }: { ap: Pick<ApprovalHandle<any>, 'phase' | 'recheck' | 'canRecheck' | 'notReceived'>; className?: string; /** the flow says "not received" in its own words */ quiet?: boolean }) {
   const t = useT();
-  if (ap.phase === 'idle') return ap.notReceived && !quiet ? <div role="alert" data-testid="approval-not-received" className={`flex gap-3 rounded-2xl border border-warn/30 bg-warn/[0.09] p-3.5 text-[13.5px] leading-snug ${className}`}>
+  if (ap.phase === 'idle') return ap.notReceived && !quiet ? <div role="alert" data-testid="approval-not-received" className={`flex gap-3 rounded-2xl border border-warn/30 bg-warn/[0.09] p-3.5 text-[0.84375rem] leading-snug ${className}`}>
     <Icon n="warn" className="mt-0.5 h-4 w-4 shrink-0 text-warn" /><div className="min-w-0">{t('nxNotReceived')}</div></div> : null;
-  if (ap.phase === 'checking') return <div role="status" aria-live="polite" data-testid="approval-checking" className={`flex gap-3 rounded-2xl border border-blue/20 bg-blue/[0.07] p-3.5 text-[13.5px] leading-snug ${className}`}>
+  if (ap.phase === 'checking') return <div role="status" aria-live="polite" data-testid="approval-checking" className={`flex gap-3 rounded-2xl border border-blue/20 bg-blue/[0.07] p-3.5 text-[0.84375rem] leading-snug ${className}`}>
     <Icon n="spin" className="mt-0.5 h-4 w-4 shrink-0 text-blue" /><div className="min-w-0"><b className="block font-semibold">{t('nxChecking')}</b>{t('nxCheckingBody')}</div></div>;
-  return <div role="alert" data-testid="approval-unknown" className={`space-y-3 rounded-2xl border border-warn/40 bg-warn/[0.09] p-4 text-[13.5px] leading-snug ${className}`}>
-    <div className="flex gap-3"><Icon n="warn" className="mt-0.5 h-4 w-4 shrink-0 text-warn" /><div className="min-w-0"><b className="block text-[14.5px] font-semibold">{t('nxUnknownTitle')}</b>{t(ap.canRecheck ? 'nxUnknownBody' : 'nxUnknownBodyNoRead')}</div></div>
+  return <div role="alert" data-testid="approval-unknown" className={`space-y-3 rounded-2xl border border-warn/40 bg-warn/[0.09] p-4 text-[0.84375rem] leading-snug ${className}`}>
+    <div className="flex gap-3"><Icon n="warn" className="mt-0.5 h-4 w-4 shrink-0 text-warn" /><div className="min-w-0"><b className="block text-[0.90625rem] font-semibold">{t('nxUnknownTitle')}</b>{t(ap.canRecheck ? 'nxUnknownBody' : 'nxUnknownBodyNoRead')}</div></div>
     <div className="grid gap-2 sm:grid-cols-2">
       {ap.canRecheck && <Btn kind="soft" data-testid="approval-recheck" onClick={() => void ap.recheck()}><Icon n="refresh" className="h-4 w-4" />{t('nxRecheck')}</Btn>}
       <Btn kind="ghost" data-testid="approval-activity" onClick={openActivity}><Icon n="list" className="h-4 w-4" />{t('nxSeeActivity')}</Btn></div></div>;

@@ -27,8 +27,8 @@ export function Gate({ setup, onDone }: { setup: boolean; onDone: () => void }) 
       <div className="gate-aura" aria-hidden="true" />
       <div className="rise relative">
         <img src="/icon.svg" alt="" width={84} height={84} className="gate-icon mb-8 h-[84px] w-[84px] rounded-[26px]" />
-        <h1 className="t-display text-[44px]">SP Wallet</h1>
-        <p className="mt-3 text-[16.5px] text-mute">{t('tagline')}</p>
+        <h1 className="t-display text-[2.75rem]">SP Wallet</h1>
+        <p className="mt-3 text-[1.03125rem] text-mute">{t('tagline')}</p>
         <div className="mt-9 space-y-4">
           {!supported && <Notice tone="danger">{t('noWebauthn')}</Notice>}
           {setup ? (<>
@@ -37,7 +37,7 @@ export function Gate({ setup, onDone }: { setup: boolean; onDone: () => void }) 
             <Btn full busy={busy} disabled={!supported || token.trim().length < 8} onClick={doSetup}><Icon n="key" />{t('createPasskey')}</Btn>
           </>) : (<>
             <Btn full busy={busy} disabled={!supported} onClick={login}><Icon n="lock" />{t('unlock')}</Btn>
-            <p className="text-center text-[13px] text-mute">{t('unlockHint')}</p>
+            <p className="text-center text-[0.8125rem] text-mute">{t('unlockHint')}</p>
           </>)}
           {err && <Notice tone="danger">{err}</Notice>}
         </div>

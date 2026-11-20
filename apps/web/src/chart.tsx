@@ -32,7 +32,7 @@ export function AllocationBar({ parts, otherLabel, label, pct }: { parts: Part[]
         {segs.map((s) => <span key={s.id} onPointerEnter={() => setOn(s.id)} onPointerLeave={() => setOn(null)} className="h-full min-w-[3px] rounded-full transition-opacity"
           style={{ flexGrow: s.value, flexBasis: 0, background: s.color, opacity: on && on !== s.id ? 0.35 : 1 }} />)}
       </div>
-      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px]">{segs.map((s) =>
+      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[0.78125rem]">{segs.map((s) =>
         <li key={s.id} tabIndex={0} onFocus={() => setOn(s.id)} onBlur={() => setOn(null)} onPointerEnter={() => setOn(s.id)} onPointerLeave={() => setOn(null)}
           className={`inline-flex items-center gap-1.5 rounded-md transition-opacity ${on && on !== s.id ? 'opacity-50' : ''}`}>
           <span className="h-2 w-2 rounded-full" style={{ background: s.color }} aria-hidden="true" /><span className="text-mute">{s.label}</span><span className="font-semibold">{pct(s.value / total)}</span></li>)}</ul>
@@ -67,7 +67,7 @@ export function PriceChart({ points, format, formatTime, onHover }: { points: Pt
     setAt(k); onHover?.(points[k]!);
   };
   const leave = () => { setAt(null); onHover?.(null); };
-  if (!g) return <div ref={box} className="grid h-[210px] place-items-center text-[13px] text-mute">—</div>;
+  if (!g) return <div ref={box} className="grid h-[210px] place-items-center text-[0.8125rem] text-mute">—</div>;
   const first = points[0]!, last = points[points.length - 1]!;
   const cur = at === null ? null : points[at]!;
   return (
@@ -86,10 +86,10 @@ export function PriceChart({ points, format, formatTime, onHover }: { points: Pt
         </>}
         {at === null && <circle cx={w - 1} cy={g.y(last.p)} r="4" fill="var(--blue)" stroke="var(--surface)" strokeWidth="2" />}
       </svg>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between text-[11px] text-mute"><span>{formatTime(first.t)}</span><span>{formatTime(last.t)}</span></div>
-      <div className="pointer-events-none absolute right-0 top-0 text-right text-[11px] leading-tight text-mute"><div>max {format(g.max)}</div></div>
-      <div className="pointer-events-none absolute bottom-6 right-0 text-right text-[11px] leading-tight text-mute"><div>min {format(g.min)}</div></div>
-      {cur && at !== null && <div className="pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap rounded-lg bg-primary px-2 py-1 text-[11.5px] font-medium text-onprimary"
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between text-[0.6875rem] text-mute"><span>{formatTime(first.t)}</span><span>{formatTime(last.t)}</span></div>
+      <div className="pointer-events-none absolute right-0 top-0 text-right text-[0.6875rem] leading-tight text-mute"><div>max {format(g.max)}</div></div>
+      <div className="pointer-events-none absolute bottom-6 right-0 text-right text-[0.6875rem] leading-tight text-mute"><div>min {format(g.min)}</div></div>
+      {cur && at !== null && <div className="pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap rounded-lg bg-primary px-2 py-1 text-[0.71875rem] font-medium text-onprimary"
         style={{ left: Math.max(46, Math.min(w - 46, g.x(at))) }}>{formatTime(cur.t)}</div>}
     </div>
   );

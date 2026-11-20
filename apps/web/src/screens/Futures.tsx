@@ -108,7 +108,7 @@ export function Futures({ instrument: routeId, view: asked = 'terminal', nav }: 
         <div className="w-full min-w-0 sm:w-auto"><PageTitle right={<ModeTag tone={/* v8 GMX trading */ gxReal ? 'mainnet' : tone} className="ml-2 shrink-0" />}>{t('fxTitle')}</PageTitle></div>
         <Seg tabs size="sm" label={t('fxViews')} value={view} onChange={(v) => go(v)} className={`w-full sm:w-auto ${MULTI_VENUE ? 'sm:min-w-[330px]' : 'sm:min-w-[220px]'}`} options={[{ id: 'terminal', label: t('fxViewTerminal') }, ...(MULTI_VENUE ? [{ id: 'compare' as const, label: t('fxViewCompare') }, { id: 'router' as const, label: t('rxTab') }] : []), { id: 'accounts', label: t('fxViewAccounts') }]} />
       </div>
-      <p className="px-0.5 text-[12.5px] leading-snug text-mute" data-testid="paper-banner">{t(/* v8 GMX trading */ gxReal ? 'gxBannerReal' : tone === 'paper' ? (anyLive ? 'flBannerSimLive' : 'flBannerOff') : tone === 'testnet' ? 'flBannerTestnet' : 'flBannerReal')}</p>
+      <p className="px-0.5 text-[0.78125rem] leading-snug text-mute" data-testid="paper-banner">{t(/* v8 GMX trading */ gxReal ? 'gxBannerReal' : tone === 'paper' ? (anyLive ? 'flBannerSimLive' : 'flBannerOff') : tone === 'testnet' ? 'flBannerTestnet' : 'flBannerReal')}</p>
       {venues.isError ? <Notice tone="danger"><b className="block font-semibold">{t('dzFxVenueCut')}</b>{t('fxApiDown')} {errText(t, venues.error)}</Notice> : venues.data && !(phone && view === 'terminal') ? <VenueStrip venues={shownVenues} compact /> : null}
       {unread.length > 0 && <Notice tone="warn"><b className="block font-semibold">{t('dzFxVenueCut')}</b>{t('fxVenueErrors', { venues: unread.map((e) => VENUE_NAME[e.venue as keyof typeof VENUE_NAME] ?? e.venue).join(', ') })}</Notice>}
       {view === 'terminal' && <Terminal id={id} instruments={list} instrumentsLoading={instruments.isLoading} venues={shownVenues} accounts={paper} liveAccounts={live} accountId={accountId} onAccount={setAccountId}
@@ -260,19 +260,19 @@ function Terminal({ id, instruments, instrumentsLoading, venues, accounts, liveA
 function VenueFacts({ instrument: i }: { instrument: Instrument; store: MarketStore }) {
   const t = useT(); const { locale } = useContext(I18n);
   const nf = (s: string | null) => (s === null ? '—' : s.length > 12 ? Number(s).toExponential(0) : s.replace('.', locale === 'en' ? '.' : ','));
-  const dt = 'text-[11.5px] leading-tight text-mute', dd = 'mt-0.5 font-medium leading-snug';
+  const dt = 'text-[0.71875rem] leading-tight text-mute', dd = 'mt-0.5 font-medium leading-snug';
   return <Card className="!px-4 !py-1.5"><Fold testid="contract-facts" summary={<span className="flex min-w-0 items-center gap-2.5 text-ink"><VenueIcon venue={i.venue} size={24} /><span className="min-w-0">{t('fxContract', { venue: VENUE_NAME[i.venue], symbol: i.symbol })}</span></span>}>
-    <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-[13.5px] sm:grid-cols-2">
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-[0.84375rem] sm:grid-cols-2">
       <div><dt className={dt}>{t('fxCollateral')}</dt><dd className={dd}>{i.collateral}</dd></div>
       <div><dt className={dt}>{t('fxMaxLeverage')} · {t('fxMarginModes')}</dt><dd className={dd}>{nf(i.maxLeverage)}× · {i.marginModes.map((m) => t(m === 'cross' ? 'fxCross' : 'fxIsolated')).join(', ')}</dd></div>
       <div><dt className={dt}>{t('fxTickLot')}</dt><dd className={dd}>{nf(i.tickSize)} · {nf(i.lotSize)} {i.base}</dd></div>
       <div><dt className={dt}>{t('fxMinOrder')}</dt><dd className={dd}>{i.minNotional ? `${nf(i.minNotional)} USD` : i.minOrderSize ? `${nf(i.minOrderSize)} ${i.base}` : '—'}</dd></div>
-      {i.category && <div data-testid="contract-category"><dt className={dt}>{t('exCategory')}</dt><dd className={dd}>{t(`exCategory_${i.category}`)}{i.venue === 'edgex' && i.category === 'pre_ipo' ? <span className="mt-0.5 block text-[12px] font-normal text-mute">{t('exPreIpoNote')}</span> : null}</dd></div>}
+      {i.category && <div data-testid="contract-category"><dt className={dt}>{t('exCategory')}</dt><dd className={dd}>{t(`exCategory_${i.category}`)}{i.venue === 'edgex' && i.category === 'pre_ipo' ? <span className="mt-0.5 block text-[0.75rem] font-normal text-mute">{t('exPreIpoNote')}</span> : null}</dd></div>}
       {i.venue === 'edgex' && <div data-testid="edgex-unavailable"><dt className={dt}>{t('exTrading')}</dt><dd className={`${dd} text-warn`}>{t('exTradingUnavailable')}</dd></div>}
       <div className="sm:col-span-2"><dt className={dt}>{t('fxSettlement')}</dt><dd className={dd}>{i.settlement}</dd></div>
       <div className="sm:col-span-2"><dt className={dt}>{t('fxMarkMethod')}</dt><dd className={dd}>{i.markPriceMethod}</dd></div>
     </dl>
-    <p className="mb-2 mt-3 text-[12px] leading-snug text-mute">{t('fxVenueText')}</p>
+    <p className="mb-2 mt-3 text-[0.75rem] leading-snug text-mute">{t('fxVenueText')}</p>
   </Fold></Card>;
 }
 /** the book before the instrument is known: rows of the final height */

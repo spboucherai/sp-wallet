@@ -16,7 +16,7 @@ import type { AccountDetail, DerivAccount, Fill, FundingPayment, Instrument, Ord
 
 export type BlotterTab = 'positions' | 'orders' | 'history' | 'fills' | 'funding' | 'pnl' | 'risk';
 const sym = (id: string) => id.slice(id.indexOf(':') + 1);
-const mini = 'press inline-flex min-h-11 min-w-11 shrink-0 whitespace-nowrap items-center justify-center rounded-xl bg-elev px-3 text-[13px] font-semibold text-ink disabled:opacity-45';
+const mini = 'press inline-flex min-h-11 min-w-11 shrink-0 whitespace-nowrap items-center justify-center rounded-xl bg-elev px-3 text-[0.8125rem] font-semibold text-ink disabled:opacity-45';
 /** an order's state: a word and an icon, the colour only repeats them */
 const ORDER_TONE: Record<string, [Tone, string]> = { filled: ['ok', 'check'], open: ['info', 'clock'], pending: ['info', 'clock'], partially_filled: ['info', 'clock'], triggered: ['info', 'bolt'], cancelled: ['mute', 'x'], rejected: ['danger', 'x'] };
 
@@ -83,7 +83,7 @@ export function Blotter({ account, detail, instruments, onSelect, goAccounts }: 
   ];
   const evCols: Col<RiskEvent>[] = [
     { id: 'k', label: t('fxEvent'), head: true, cell: (e) => { const k = t(`fxEv_${e.kind}` as Key); return k.startsWith('fxEv ') ? e.kind : k; } },
-    { id: 'd', label: t('fxDetail'), full: true, cell: (e) => <span className="block max-w-[560px] whitespace-normal">{e.code && RISK_CODES.has(e.code) ? <span className="block">{t(`rk_${e.code}` as Key)}</span> : null}<span className="block break-words text-[12px] font-normal text-mute">{e.code ? `${e.code} — ` : ''}{e.detail}</span></span> },
+    { id: 'd', label: t('fxDetail'), full: true, cell: (e) => <span className="block max-w-[560px] whitespace-normal">{e.code && RISK_CODES.has(e.code) ? <span className="block">{t(`rk_${e.code}` as Key)}</span> : null}<span className="block break-words text-[0.75rem] font-normal text-mute">{e.code ? `${e.code} — ` : ''}{e.detail}</span></span> },
     { id: 'at', label: t('fxTime'), cell: (e) => <span className="font-normal text-mute">{timeOf(e.ts, locale, true)}</span> },
   ];
   const eq = detail?.equityHistory ?? [];
@@ -118,7 +118,7 @@ export function Blotter({ account, detail, instruments, onSelect, goAccounts }: 
           {account.totals && <StatGrid cols={4}>
             <Tile label={t('fxTotRealized')} value={<Pnl value={account.totals.realizedPnl} locale={locale} />} /><Tile label={t('fxTotFees')} value={usd(account.totals.feesPaid, locale)} />
             <Tile label={t('fxTotFunding')} value={<Pnl value={account.totals.fundingNet} locale={locale} />} /><Tile label={t('fxTotLiquidations')} value={account.totals.liquidations} /></StatGrid>}
-          <p className="text-[12px] leading-snug text-mute">{t('fxPnlNote')}</p>
+          <p className="text-[0.75rem] leading-snug text-mute">{t('fxPnlNote')}</p>
         </div>}
       </div>
     </div>

@@ -58,7 +58,7 @@ export function XswapProgress({ id, x, symbol, onUpdate }: { id: string; x: Xswa
       {x.stage === 'refunded' && <Notice tone="warn">{t('xsRefundedNote', { amount: trimAmt(x.refundedDisplay ?? '0', 10), sym: symbol })}</Notice>}
       {x.refundPlanned && !x.done && <Notice tone="warn">{t('xsRefundPlanned')}</Notice>}
       {x.hold && <Notice tone={['vault_churned', 'outbound_mismatch', 'below_minimum'].includes(x.hold) ? 'danger' : 'warn'}>{t(`xsHold_${x.hold}` as Key)}{x.holdDetail ? <span className="block text-mute" data-testid="hold-detail">{holdDetail(t, x)}</span> : null}</Notice>}
-      {!x.done && <p className="text-[12.5px] text-mute">{t('xsWait', { time: dur(x.estimatedSeconds) })}</p>}
+      {!x.done && <p className="text-[0.78125rem] text-mute">{t('xsWait', { time: dur(x.estimatedSeconds) })}</p>}
       {err && <Notice tone="danger">{err}</Notice>}
       {x.outExplorer && <ExplorerLink href={x.outExplorer}>{t(x.outKind === 'refund' ? 'xsViewRefund' : 'xsViewOut', { net: x.toNetworkName })}</ExplorerLink>}
       {!x.done && <Btn full kind="soft" busy={busy} onClick={() => void refresh()}><Icon n="check" className="h-4 w-4" />{t('xsRefresh')}</Btn>}

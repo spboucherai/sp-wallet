@@ -43,8 +43,8 @@ export function Security() {
       <Card>
         <H>{t('signer')}</H>
         {!s.reachable ? <Notice tone="danger">{t('signer')} : {t('unreachable')}</Notice> : <>
-          <div className={`flex items-center gap-3 rounded-2xl p-3 text-[15.5px] font-semibold ${s.halted ? 'bg-danger/[0.09] text-danger' : 'bg-emerald/[0.08] text-emerald'}`}><span className={`grid h-9 w-9 place-items-center rounded-full ${s.halted ? 'bg-danger/15' : 'bg-emerald/15'}`}><Icon n={s.halted ? 'stop' : 'check'} /></span>{s.halted ? t('signingOff') : t('signingOn')}</div>
-          <dl className="mt-3 space-y-1.5 text-[13px] text-mute"><div className="flex justify-between gap-3"><dt>{t('keyId')}</dt><dd className="font-mono text-ink">{s.keyId}</dd></div>
+          <div className={`flex items-center gap-3 rounded-2xl p-3 text-[0.96875rem] font-semibold ${s.halted ? 'bg-danger/[0.09] text-danger' : 'bg-emerald/[0.08] text-emerald'}`}><span className={`grid h-9 w-9 place-items-center rounded-full ${s.halted ? 'bg-danger/15' : 'bg-emerald/15'}`}><Icon n={s.halted ? 'stop' : 'check'} /></span>{s.halted ? t('signingOff') : t('signingOn')}</div>
+          <dl className="mt-3 space-y-1.5 text-[0.8125rem] text-mute"><div className="flex justify-between gap-3"><dt>{t('keyId')}</dt><dd className="font-mono text-ink">{s.keyId}</dd></div>
             <div className="flex justify-between gap-3"><dt>{t('signerJournal')}</dt><dd className="text-ink">{s.journalLength} {s.journalLength === 1 ? t('qaEntries1') : t('entries')}</dd></div></dl>
           {!s.halted && (haltOpen ? <div className="mt-4 space-y-3"><Notice tone="danger">{t('haltConfirm')}</Notice>
             <input className={inputCls} value={halt} onChange={(e) => setHalt(e.target.value)} placeholder="STOP" autoCapitalize="characters" aria-label="STOP" />
@@ -54,21 +54,21 @@ export function Security() {
         </>}
       </Card>
 
-      {s.reachable && <Card><H right={allLimits ? <span className="text-[12.5px] text-mute">{t('qaLimitsShown', { n: shown.length, total: keys.length })}</span> : undefined}>{t('limits')}</H>
+      {s.reachable && <Card><H right={allLimits ? <span className="text-[0.78125rem] text-mute">{t('qaLimitsShown', { n: shown.length, total: keys.length })}</span> : undefined}>{t('limits')}</H>
         {allLimits && <input className={`${inputCls} mb-4`} type="search" placeholder={t('qaLimitsSearch')} aria-label={t('qaLimitsSearch')} value={lq} onChange={(e) => setLq(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} />}
-        {allLimits && shown.length === 0 && <p className="py-4 text-center text-[14px] text-mute">{t('qaLimitsNone')}</p>}
+        {allLimits && shown.length === 0 && <p className="py-4 text-center text-[0.875rem] text-mute">{t('qaLimitsNone')}</p>}
         <ul className={`space-y-4 ${allLimits ? 'max-h-[60vh] overflow-y-auto pr-1' : ''}`}>{shown.sort((x, y) => Number(BigInt(s.spentToday[y] ?? '0') > 0n) - Number(BigInt(s.spentToday[x] ?? '0') > 0n) || Number(y.endsWith(':USDC')) - Number(x.endsWith(':USDC')) || x.localeCompare(y)).slice(0, allLimits ? 999 : 6).map((k) => { const [net, sym] = k.split(':') as [string, string];
           const dec = decOf(net, sym);
           const day = BigInt(s.policy.daily[k] ?? '0'), used = BigInt(s.spentToday[k] ?? '0'), pct = day > 0n ? Number((used * 100n) / day) : 0;
           return <li key={k}>
             <div className="flex items-center gap-3"><Coin sym={sym} net={net} size={36} />
-              <div className="min-w-0 flex-1"><div className="text-[14.5px] font-semibold leading-tight">{sym} <span className="font-normal text-mute">· {nameOf(net)}</span></div>
-                <div className="text-[12.5px] text-mute">{fmt(s.policy.perTx[k], dec)} {t('perTxShort')}</div></div>
-              <div className="text-right"><div className="text-[14.5px] font-semibold leading-tight">{fmt((day - used > 0n ? day - used : 0n).toString(), dec)}</div><div className="text-[12.5px] text-mute">{t('remaining')}</div></div></div>
+              <div className="min-w-0 flex-1"><div className="text-[0.90625rem] font-semibold leading-tight">{sym} <span className="font-normal text-mute">· {nameOf(net)}</span></div>
+                <div className="text-[0.78125rem] text-mute">{fmt(s.policy.perTx[k], dec)} {t('perTxShort')}</div></div>
+              <div className="text-right"><div className="text-[0.90625rem] font-semibold leading-tight">{fmt((day - used > 0n ? day - used : 0n).toString(), dec)}</div><div className="text-[0.78125rem] text-mute">{t('remaining')}</div></div></div>
             <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-elev" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${sym} ${nameOf(net)}`}><div className="h-full rounded-full bg-blue" style={{ width: `${Math.min(100, pct)}%` }} /></div>
           </li>; })}</ul>
-        {keys.length > 6 && <button className="mt-2 min-h-11 text-[14px] font-medium text-blue" aria-expanded={allLimits} onClick={() => { setAllLimits(!allLimits); setLq(''); }}>{allLimits ? t('showLess') : `${t('showAll')} (${keys.length})`}</button>}
-        <p className="mt-4 text-[12.5px] text-mute">{t('limitsNote')}</p></Card>}
+        {keys.length > 6 && <button className="mt-2 min-h-11 text-[0.875rem] font-medium text-blue" aria-expanded={allLimits} onClick={() => { setAllLimits(!allLimits); setLq(''); }}>{allLimits ? t('showLess') : `${t('showAll')} (${keys.length})`}</button>}
+        <p className="mt-4 text-[0.78125rem] text-mute">{t('limitsNote')}</p></Card>}
 
       <Card><H>{t('devices')}</H>
         <ul className="space-y-3">{ov.data.devices.map((d: any) => <li key={d.id} className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-full bg-elev"><Icon n="key" /></span>
@@ -78,19 +78,19 @@ export function Security() {
         <Btn kind="soft" full className="mt-4" busy={busy === 'device'} disabled={ap.locked} onClick={addDevice}><Icon n="key" />{t('addDevice')}</Btn>
         <p className="mt-2 text-xs text-mute">{t('addDeviceNote')}</p></Card>
 
-      <Card><H>{t('recovery')}</H><p className="text-[13.5px] text-mute">{t('recoveryBody')}</p>
-        <pre className="mt-2 overflow-x-auto rounded-2xl bg-elev/70 p-3 font-mono text-[12px]">node ~/apps/sp-wallet-signer/signer.mjs export-recovery</pre>
+      <Card><H>{t('recovery')}</H><p className="text-[0.84375rem] text-mute">{t('recoveryBody')}</p>
+        <pre className="mt-2 overflow-x-auto rounded-2xl bg-elev/70 p-3 font-mono text-[0.75rem]">node ~/apps/sp-wallet-signer/signer.mjs export-recovery</pre>
         <div className="mt-3"><Notice tone="warn">{t('recoveryWarn')}</Notice></div></Card>
 
       <Card><H>{t('sessions')}</H>
-        <ul className="space-y-2 text-[13px]">{ov.data.sessions.map((x: any, k: number) => <li key={k} className="flex justify-between gap-3"><span className="truncate text-mute">{x.ua.replace(/Mozilla\/5.0 \(([^)]+)\).*/, '$1').slice(0, 40)}</span><span className="shrink-0">{when(x.last_seen, locale)}</span></li>)}</ul>
+        <ul className="space-y-2 text-[0.8125rem]">{ov.data.sessions.map((x: any, k: number) => <li key={k} className="flex justify-between gap-3"><span className="truncate text-mute">{x.ua.replace(/Mozilla\/5.0 \(([^)]+)\).*/, '$1').slice(0, 40)}</span><span className="shrink-0">{when(x.last_seen, locale)}</span></li>)}</ul>
         <Btn kind="ghost" full className="mt-4" busy={busy === 'revoke'} onClick={() => act('revoke', () => post('/security/sessions/revoke-all'))}>{t('revokeAll')}</Btn></Card>
 
       <Card><H right={au.data && <span className={`inline-flex items-center gap-1 text-xs ${au.data.intact ? 'text-emerald' : 'text-danger'}`}><Icon n={au.data.intact ? 'check' : 'warn'} className="h-3.5 w-3.5" />{au.data.intact ? t('auditIntact') : `${t('auditBroken')} ${au.data.brokenAt}`}</span>}>{t('audit')}</H>
-        <button className="min-h-11 text-[14px] font-medium text-blue" aria-expanded={showAudit} onClick={() => setShowAudit(!showAudit)}>{showAudit ? t('hideAudit') : `${t('seeAudit')} (${au.data?.total ?? 0})`}</button>
-        {showAudit && <ul className="mt-3 max-h-96 space-y-2 overflow-y-auto text-[12.5px]">{(au.data?.events ?? []).map((e: any) => <li key={e.seq} className="rounded-xl bg-elev/70 px-3 py-2">
+        <button className="min-h-11 text-[0.875rem] font-medium text-blue" aria-expanded={showAudit} onClick={() => setShowAudit(!showAudit)}>{showAudit ? t('hideAudit') : `${t('seeAudit')} (${au.data?.total ?? 0})`}</button>
+        {showAudit && <ul className="mt-3 max-h-96 space-y-2 overflow-y-auto text-[0.78125rem]">{(au.data?.events ?? []).map((e: any) => <li key={e.seq} className="rounded-xl bg-elev/70 px-3 py-2">
           <div className="flex justify-between gap-2"><span className="font-mono font-medium">{e.type}</span><span className="shrink-0 text-mute">#{e.seq} · {when(e.ts, locale)}</span></div>
-          <div className="truncate font-mono text-[11px] text-mute">{Object.entries(e.data).filter(([, v]) => v !== null && v !== undefined).map(([k, v]) => `${k}=${String(v).slice(0, 24)}`).join(' ')}</div></li>)}</ul>}</Card>
+          <div className="truncate font-mono text-[0.6875rem] text-mute">{Object.entries(e.data).filter(([, v]) => v !== null && v !== undefined).map(([k, v]) => `${k}=${String(v).slice(0, 24)}`).join(' ')}</div></li>)}</ul>}</Card>
     </div>
   );
 }

@@ -25,9 +25,9 @@ export const toneWord = (tone: Tone): Key => (tone === 'paper' ? 'flToneSim' : t
 export function ModeBand({ tone, label, compact, className = '' }: { tone: Tone; label?: string; /** one line: the words and the account, without the sentence (the terminal's sticky band) */ compact?: boolean; className?: string }) {
   const t = useT();
   return <div role="status" data-testid="mode-band" data-tone={tone} className={`mode-band ${className}`}>
-    <div className="flex min-h-6 items-center gap-2.5"><span className="mode-band-icon" aria-hidden="true"><Icon n={BAND_ICON[tone]} className="h-4 w-4" /></span><span className="shrink-0 whitespace-nowrap text-[13.5px] font-extrabold uppercase tracking-[0.07em]">{t(toneWord(tone))}</span>
-      {label ? <span className="min-w-0 flex-1 truncate text-right text-[12.5px] font-semibold">{label}</span> : null}</div>
-    {!compact && <p className="mt-1 text-[12.5px] font-medium leading-snug">{t(tone === 'paper' ? 'flBandSim' : tone === 'testnet' ? 'flBandTestnet' : 'flBandReal')}</p>}</div>;
+    <div className="flex min-h-6 items-center gap-2.5"><span className="mode-band-icon" aria-hidden="true"><Icon n={BAND_ICON[tone]} className="h-4 w-4" /></span><span className="shrink-0 whitespace-nowrap text-[0.84375rem] font-extrabold uppercase tracking-[0.07em]">{t(toneWord(tone))}</span>
+      {label ? <span className="min-w-0 flex-1 truncate text-right text-[0.78125rem] font-semibold">{label}</span> : null}</div>
+    {!compact && <p className="mt-1 text-[0.78125rem] font-medium leading-snug">{t(tone === 'paper' ? 'flBandSim' : tone === 'testnet' ? 'flBandTestnet' : 'flBandReal')}</p>}</div>;
 }
 /** the same statement as a tag, beside a title or inside a sheet */
 export function ModeTag({ tone, className = '' }: { tone: Tone; className?: string }) {
@@ -63,14 +63,14 @@ export function Group({ title, right, children, className = '', label }: { title
 /** the plate of a receipt: quiet ground, dashed rows inside (`<dl className="receipt">` + `Fact`) */
 export const TICKET = 'rounded-[18px] bg-elev/60 px-4 py-1.5';
 /** the server's own words, a code, a hash: small, monospaced, wrapped — never cut */
-export const WORDS = 'block break-words font-mono text-[11.5px] leading-snug text-mute';
+export const WORDS = 'block break-words font-mono text-[0.71875rem] leading-snug text-mute';
 /** the fingerprint the passkey commits to */
 export function Fingerprint({ children, testid }: { children: ReactNode; testid?: string }) {
-  return <p className="flex items-start gap-1.5 break-all font-mono text-[10.5px] leading-snug text-mute" data-testid={testid}><Icon n="lock" className="mt-px h-3 w-3 shrink-0" /><span className="min-w-0">{children}</span></p>;
+  return <p className="flex items-start gap-1.5 break-all font-mono text-[0.65625rem] leading-snug text-mute" data-testid={testid}><Icon n="lock" className="mt-px h-3 w-3 shrink-0" /><span className="min-w-0">{children}</span></p>;
 }
 /** "waiting…" line with a spinner */
 export function Waiting({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <p className={`flex items-center gap-2.5 text-[13.5px] text-mute ${className}`}><Icon n="spin" className="h-4 w-4 shrink-0" />{children}</p>;
+  return <p className={`flex items-center gap-2.5 text-[0.84375rem] text-mute ${className}`}><Icon n="spin" className="h-4 w-4 shrink-0" />{children}</p>;
 }
 /** a compact horizontal stepper for lists: each step has its icon and its name; the rail only repeats the state */
 export function StepBar({ items, label }: { items: { key: string; state: StepState; title: ReactNode }[]; label: string }) {
@@ -115,15 +115,15 @@ export function CanonicalRows({ c, instrument }: { c: VenueOrder; instrument?: I
   return <dl className="receipt" data-testid="canonical">
     <Fact k={t('flCInstrument')}><span className="inline-flex items-center justify-end gap-1.5 font-semibold">{venue && <VenueIcon venue={venue} size={18} />}{c.instrument}</span></Fact>
     <Fact k={t('flCSide')}><span className={`inline-flex items-center gap-1.5 font-semibold ${buy ? 'text-emerald' : 'text-danger'}`}><svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden="true"><path d={buy ? 'M6 2l4.5 7h-9z' : 'M6 10L1.5 3h9z'} fill="currentColor" /></svg>{t(buy ? 'flCBuy' : 'flCSell')}</span></Fact>
-    <Fact k={t('flCType')}>{t(`fxType_${c.type}` as Key)}{market ? <span className="block text-[11.5px] font-normal leading-snug text-mute">{t('flCMarketNote')}</span> : null}</Fact>
+    <Fact k={t('flCType')}>{t(`fxType_${c.type}` as Key)}{market ? <span className="block text-[0.71875rem] font-normal leading-snug text-mute">{t('flCMarketNote')}</span> : null}</Fact>
     <Fact k={t('flCSize')}><span className="inline-flex items-center justify-end gap-1.5 font-semibold"><AssetIcon sym={base} size={18} />{fmt(c.size, { locale, trim: true })} {base}</span></Fact>
     <Fact k={t(market || c.type.endsWith('_market') ? 'flCWorstPrice' : 'flCPrice')}><span className="font-semibold">{px(c.price)}</span></Fact>
     <Fact k={t('flCTrigger')}>{c.triggerPrice ? px(c.triggerPrice) : t('flCNone')}</Fact>
     <Fact k={t('flCReduceOnly')}>{t(c.reduceOnly ? 'flYes' : 'flNo')}</Fact>
     <Fact k={t('flCTif')}>{t(`flTif_${c.tif}` as Key)}</Fact>
     <Fact k={t('flCNetwork')}>{c.network}</Fact>
-    <Fact k={t('flCClientId')}><span className="break-all font-mono text-[11px] font-normal">{c.clientId}</span></Fact>
-    <Fact k={t('flCNonce')}><span className="font-mono text-[11px] font-normal">{c.nonce}</span></Fact>
+    <Fact k={t('flCClientId')}><span className="break-all font-mono text-[0.6875rem] font-normal">{c.clientId}</span></Fact>
+    <Fact k={t('flCNonce')}><span className="font-mono text-[0.6875rem] font-normal">{c.nonce}</span></Fact>
   </dl>;
 }
 
@@ -138,7 +138,7 @@ export function Countdown({ expiresAt, skewMs, ttlMs = 90_000, onExpire }: { exp
   }, [expiresAt, skewMs]);   // eslint-disable-line react-hooks/exhaustive-deps
   const low = left < 15_000;
   return <div data-testid="countdown" role="timer" aria-label={t('flExpiresIn', { time: clock(left) })}>
-    <div className={`flex items-center justify-between text-[13px] font-semibold ${low ? 'text-danger' : 'text-ink'}`}><span className="inline-flex items-center gap-1.5"><Icon n="clock" className="h-4 w-4" />{t('flExpiresIn', { time: clock(left) })}</span></div>
+    <div className={`flex items-center justify-between text-[0.8125rem] font-semibold ${low ? 'text-danger' : 'text-ink'}`}><span className="inline-flex items-center gap-1.5"><Icon n="clock" className="h-4 w-4" />{t('flExpiresIn', { time: clock(left) })}</span></div>
     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-elev"><div className={`h-full rounded-full ${low ? 'bg-danger' : 'bg-blue'}`} style={{ width: `${Math.max(0, Math.min(100, (left / ttlMs) * 100))}%` }} /></div></div>;
 }
 
@@ -151,8 +151,8 @@ export function Bullet({ icon = 'check', tone = 'text-mute', children }: { icon?
 export function AccountSwitch({ value, choices, onChange }: { value: string; choices: { id: string; label: string; tone: Tone }[]; onChange: (id: string) => void }) {
   const t = useT();
   const cur = choices.find((c) => c.id === value);
-  if (choices.length <= 1) return <div className="flex min-h-9 items-center gap-2 text-[14px] font-semibold">{cur && <ModeTag tone={cur.tone} />}<span className="min-w-0 truncate">{cur?.label ?? '—'}</span></div>;
-  return <label className="block text-[12px] font-medium text-mute">{t('fxAccount')}
-    <select aria-label={t('fxAccount')} data-testid="account-switch" value={value} onChange={(e) => onChange(e.target.value)} className="mt-1.5 min-h-11 w-full rounded-2xl border border-line bg-surface px-3.5 text-[15px] font-medium text-ink outline-none focus:border-blue">
+  if (choices.length <= 1) return <div className="flex min-h-9 items-center gap-2 text-[0.875rem] font-semibold">{cur && <ModeTag tone={cur.tone} />}<span className="min-w-0 truncate">{cur?.label ?? '—'}</span></div>;
+  return <label className="block text-[0.75rem] font-medium text-mute">{t('fxAccount')}
+    <select aria-label={t('fxAccount')} data-testid="account-switch" value={value} onChange={(e) => onChange(e.target.value)} className="mt-1.5 min-h-11 w-full rounded-2xl border border-line bg-surface px-3.5 text-[0.9375rem] font-medium text-ink outline-none focus:border-blue">
       {choices.map((c) => <option key={c.id} value={c.id}>{t(toneWord(c.tone))} — {c.label}</option>)}</select></label>;
 }

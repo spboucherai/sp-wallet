@@ -3433,6 +3433,9 @@ const D = {
   nxChunkTitle: ['Une partie de l’application n’a pas pu être chargée', 'A part of the app could not be loaded'],
   nxChunkBody: ['Une nouvelle version a peut-être été installée, ou la connexion a été coupée. Rechargez l’application.', 'A new version may have been installed, or the connection dropped. Reload the app.'],
   nxReload: ['Recharger l’application', 'Reload the app'],
+  // ---- NEXT web (nw*): design system 2.0, dashboard, assets, activity, send, contacts, Security Center, search, settings
+  nwThemeSystem: ['Système', 'System'],
+  //@nw-more
 } as const;
 export type Key = keyof typeof D;
 // v10 performance pass — ONE language at a time in the browser. `D` above (both languages side by side, the form every

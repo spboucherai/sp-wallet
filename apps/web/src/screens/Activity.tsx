@@ -27,7 +27,7 @@ import { venueShown } from '../venues';
 /** the filter offers the venues the owner is offered (venues.ts) — a past operation on another venue stays in the unfiltered list */
 const VENUES = (['hyperliquid', 'gmx', 'dydx', 'edgex', 'spot'] as const).filter((v) => v === 'spot' || venueShown(v));
 const VENUE_NAME: Record<string, string> = { hyperliquid: 'Hyperliquid', gmx: 'GMX', dydx: 'dYdX', edgex: 'edgeX', spot: 'Spot' };
-const selectCls = `${inputCls} min-h-11 !py-2 text-[14px]`;
+const selectCls = `${inputCls} min-h-11 !py-2 text-[0.875rem]`;
 
 export function Activity() {
   const t = useT(); const { locale } = useContext(I18n); const { settings } = useSettings(); const nets = useNetworks(); const qc = useQueryClient();
@@ -73,7 +73,7 @@ export function Activity() {
       <div data-testid="ac-audit" data-intact={audit ? String(audit.intact) : 'unknown'}>
         {audit && !audit.intact ? <Notice tone="danger"><b className="block font-semibold">{t('v11AcAuditBroken', { seq: audit.brokenAt ?? '—' })}</b>{t('v11AcAuditBrokenBody')}</Notice>
           : <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-1"><Tag tone={audit ? 'ok' : 'mute'} icon={audit ? 'check' : 'clock'}>{t(audit ? 'v11AcAuditOk' : 'v11AcAuditUnknown')}</Tag>
-            {audit && <span className="text-[12.5px] text-mute">{t('v11AcAuditSub', { date: when(new Date(audit.checkedAt), locale) })}</span>}</div>}
+            {audit && <span className="text-[0.78125rem] text-mute">{t('v11AcAuditSub', { date: when(new Date(audit.checkedAt), locale) })}</span>}</div>}
       </div>
 
       <Chips label={t('v11AcKinds')} value={f.kind} onChange={(kind) => set({ kind })} options={[{ id: '' as const, label: t('all') }, ...ACTIVITY_KINDS.map((k) => ({ id: k, label: t(`v11AcKind_${k}` as Key) }))]} />
@@ -86,14 +86,14 @@ export function Activity() {
           {PRINCIPALS.map((p) => <option key={p} value={p}>{t(`v11AcPrincipal_${p}` as Key)}</option>)}</select>
         <select aria-label={t('v11AcRange')} data-testid="ac-range" className={`${selectCls} col-span-2 lg:col-span-1`} value={f.range} onChange={(e) => set({ range: e.target.value as ActivityFilters['range'] })}>
           {RANGES.map((r) => <option key={r} value={r}>{t(`v11AcRange_${r}` as Key)}</option>)}</select>
-        {f.range === 'custom' && <><label className="block min-w-0"><span className="mb-1 block text-[12px] text-mute">{t('v11AcFrom')}</span><input type="date" data-testid="ac-from" className={selectCls} value={f.from} max={f.to || undefined} onChange={(e) => set({ from: e.target.value })} /></label>
-          <label className="block min-w-0"><span className="mb-1 block text-[12px] text-mute">{t('v11AcTo')}</span><input type="date" data-testid="ac-to" className={selectCls} value={f.to} min={f.from || undefined} onChange={(e) => set({ to: e.target.value })} /></label></>}
+        {f.range === 'custom' && <><label className="block min-w-0"><span className="mb-1 block text-[0.75rem] text-mute">{t('v11AcFrom')}</span><input type="date" data-testid="ac-from" className={selectCls} value={f.from} max={f.to || undefined} onChange={(e) => set({ from: e.target.value })} /></label>
+          <label className="block min-w-0"><span className="mb-1 block text-[0.75rem] text-mute">{t('v11AcTo')}</span><input type="date" data-testid="ac-to" className={selectCls} value={f.to} min={f.from || undefined} onChange={(e) => set({ to: e.target.value })} /></label></>}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1">
-        <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-mute">{t('v11AcNoTotals')}</p>
+        <p className="min-w-0 flex-1 text-[0.78125rem] leading-snug text-mute">{t('v11AcNoTotals')}</p>
         <div className="flex items-center gap-1">
-          {active && <button type="button" onClick={() => { setOpen(''); setF(defaultActivityFilters()); }} data-testid="ac-reset" className="press inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[14px] font-medium text-blue"><Icon n="x" className="h-4 w-4" />{t('v11AcReset')}</button>}
-          <a href={activityApi.csvHref(f)} data-testid="ac-csv" className="press inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[14px] font-medium text-blue"><Icon n="down" className="h-4 w-4" />{t('v11AcCsv')}</a>
+          {active && <button type="button" onClick={() => { setOpen(''); setF(defaultActivityFilters()); }} data-testid="ac-reset" className="press inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[0.875rem] font-medium text-blue"><Icon n="x" className="h-4 w-4" />{t('v11AcReset')}</button>}
+          <a href={activityApi.csvHref(f)} data-testid="ac-csv" className="press inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[0.875rem] font-medium text-blue"><Icon n="down" className="h-4 w-4" />{t('v11AcCsv')}</a>
         </div>
       </div>
 
@@ -111,16 +111,16 @@ export function Activity() {
                 : <><button className="row-press flex min-h-[68px] w-full items-center gap-3 px-4 py-3 text-left" aria-expanded={isOpen} onClick={toggle}>
                   <span className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-full bg-elev text-mute" aria-hidden="true"><Icon n={KIND_ICON[it.kind]} className="h-5 w-5" /></span>
                   <span className="min-w-0 flex-1"><span className="block break-words font-medium leading-snug">{title(it)}</span>
-                    <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-mute"><span>{[place(it), time(it.at)].filter(Boolean).join(' · ')}</span>{bare(it) && <span className="break-all font-mono text-[11.5px]">{it.code}</span>}{modeTag(it)}</span></span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-mute"><span>{[place(it), time(it.at)].filter(Boolean).join(' · ')}</span>{bare(it) && <span className="break-all font-mono text-[0.71875rem]">{it.code}</span>}{modeTag(it)}</span></span>
                   <span className="flex shrink-0 flex-col items-end gap-1 text-right">
                     {it.kind === 'order' && it.amount && <span className="block font-semibold"><Money hidden={settings.hideBalances}>{trimAmt(it.amount.value, 6)} {it.amount.symbol ?? ''}</Money></span>}
                     {it.kind === 'plan' && it.amount && <span className="block font-semibold"><Money hidden={settings.hideBalances}>{trimAmt(it.amount.value)} {it.amount.symbol ?? ''}</Money></span>}
                     {it.kind === 'order' ? <OrderState state={it.status} /> : it.code === 'risk.denied' ? <Tag tone="danger" icon="x">{t('v11AcDenied')}</Tag> : it.kind === 'plan' && it.status ? <Tag tone={it.status === 'done' ? 'ok' : it.status === 'paused' ? 'warn' : it.status === 'stopped' ? 'mute' : 'info'}>{t(`v11AcPlan_${['active', 'paused', 'done', 'stopped'].includes(it.status) ? it.status : 'active'}` as Key)}</Tag> : null}
                   </span></button>
-                  {isOpen && <div className="space-y-2.5 border-t border-line bg-bg/60 px-4 py-3 text-[13px]" data-testid="ac-detail"><Detail i={it} who={who} place={place} /></div>}</>}
+                  {isOpen && <div className="space-y-2.5 border-t border-line bg-bg/60 px-4 py-3 text-[0.8125rem]" data-testid="ac-detail"><Detail i={it} who={who} place={place} /></div>}</>}
             </li>; })}</ul></Card></section>; })}
       {q.hasNextPage && <Btn kind="soft" full busy={q.isFetchingNextPage} onClick={() => void q.fetchNextPage()} data-testid="ac-more">{t('v11AcMore')}</Btn>}
-      {!q.hasNextPage && items.length > 0 && first && <p className="px-1 pb-1 text-center text-[12px] leading-snug text-mute" data-testid="ac-end">{t('v11AcBound', { n: first.bounds.perSource })}</p>}
+      {!q.hasNextPage && items.length > 0 && first && <p className="px-1 pb-1 text-center text-[0.75rem] leading-snug text-mute" data-testid="ac-end">{t('v11AcBound', { n: first.bounds.perSource })}</p>}
     </div>
   );
 }
@@ -155,11 +155,11 @@ function Detail({ i, who, place }: { i: ActivityItem; who: (p: ActivityItem['pri
   if (i.kind === 'plan') return <><dl>{i.amount && <Fact k={t('amount')}>{exactAmt(i.amount.value)} {i.amount.symbol ?? ''}</Fact>}{typeof p.steps === 'number' && <Fact k={t('v11AcSteps')}>{Math.min(Number(p.current ?? 0) + (i.status === 'done' ? 0 : 1), p.steps)} / {p.steps}</Fact>}{common}</dl>
     <a className="inline-flex min-h-11 items-center gap-1.5 text-blue" href={`/plan/${i.ref.id}`} data-testid="ac-open-plan"><Icon n="chev" className="h-4 w-4" />{t('v11AcOpenPlan')}</a></>;
   if (i.code === 'risk.denied') { const failed = failedChecks(i); return <><dl>{common}{p.reducing === true && <Fact k={t('v11AcOrderType')}>{t('v11AcReduceOnly')}</Fact>}</dl>
-    <div data-testid="ac-failed"><div className="text-[11.5px] uppercase tracking-wide text-mute">{t('v11AcFailed')}</div>
-      <ul className="mt-1.5 space-y-1">{failed.map((id) => { const k = checkKey(id); return <li key={id} className="rounded-xl bg-elev px-3 py-2 leading-snug">{k ? t(k as Key) : ''} <span className="font-mono text-[11.5px] text-mute">{id}</span></li>; })}</ul></div></>; }
+    <div data-testid="ac-failed"><div className="text-[0.71875rem] uppercase tracking-wide text-mute">{t('v11AcFailed')}</div>
+      <ul className="mt-1.5 space-y-1">{failed.map((id) => { const k = checkKey(id); return <li key={id} className="rounded-xl bg-elev px-3 py-2 leading-snug">{k ? t(k as Key) : ''} <span className="font-mono text-[0.71875rem] text-mute">{id}</span></li>; })}</ul></div></>; }
   const entries = Object.entries(p).filter(([, v]) => v !== null && v !== '');
   return <><dl>{common}<Fact k={t('v11AcEvent')} mono>{i.code}</Fact><Fact k={t('v11AcAuditSeq')} mono>{i.ref.id}</Fact></dl>
-    {entries.length > 0 && <Fold summary={t('v11AcTechnical')} testid="ac-params"><dl>{entries.map(([k, v]) => <Fact key={k} k={<span className="font-mono text-[12px]">{k}</span>} mono><span className="break-all">{typeof v === 'number' && k.toLowerCase().endsWith('at') && v > 1e12 ? when(new Date(v), locale) : String(v)}</span></Fact>)}</dl></Fold>}</>;
+    {entries.length > 0 && <Fold summary={t('v11AcTechnical')} testid="ac-params"><dl>{entries.map(([k, v]) => <Fact key={k} k={<span className="font-mono text-[0.75rem]">{k}</span>} mono><span className="break-all">{typeof v === 'number' && k.toLowerCase().endsWith('at') && v > 1e12 ? when(new Date(v), locale) : String(v)}</span></Fact>)}</dl></Fold>}</>;
 }
 
 /** the state transitions of one order, oldest first (GET /trading/orders/:id → history), read when the row opens */
@@ -167,12 +167,12 @@ function OrderHistory({ id }: { id: string }) {
   const t = useT(); const { locale } = useContext(I18n);
   const q = useQuery({ queryKey: ['activity', 'order', id], queryFn: () => activityApi.order(id), staleTime: 5000 });
   const h = q.data?.history ?? [];
-  return <div data-testid="ac-history"><div className="mb-1.5 text-[11.5px] uppercase tracking-wide text-mute">{t('v11AcHistory')}</div>
+  return <div data-testid="ac-history"><div className="mb-1.5 text-[0.71875rem] uppercase tracking-wide text-mute">{t('v11AcHistory')}</div>
     {q.isLoading ? <div className="space-y-2" aria-busy="true"><div className="skel h-4 w-48 !rounded-md" /><div className="skel h-4 w-40 !rounded-md" /></div>
       : q.isError ? <p className="text-warn">{t('v11AcHistoryError')} <button type="button" className="font-medium text-blue underline" onClick={() => void q.refetch()}>{t('retry')}</button></p>
       : h.length === 0 ? <p className="text-mute">{t('v11AcHistoryEmpty')}</p>
       : <Timeline label={t('v11AcHistory')} items={h.map((e, k) => { const v = orderStateView(e.to); return { key: String(e.seq), state: transitionStep(e.to, k === h.length - 1), testid: 'ac-transition',
-          title: v.key ? t(v.key as Key) : e.to, children: <span>{when(new Date(e.at), locale)}{e.reason ? <span className="font-mono text-[11.5px]"> · {e.reason}</span> : null}</span> }; })} />}
+          title: v.key ? t(v.key as Key) : e.to, children: <span>{when(new Date(e.at), locale)}{e.reason ? <span className="font-mono text-[0.71875rem]"> · {e.reason}</span> : null}</span> }; })} />}
   </div>;
 }
 
@@ -184,9 +184,9 @@ function WalletRow({ i, isOpen, toggle, time, hidden, refresh }: { i: Item; isOp
       <Coin sym={i.symbol} net={i.network} size={42} />
       <span className="min-w-0 flex-1"><span className="block font-medium">{i.kind === 'bridge' ? `${t('brActivity')} · ${i.symbol} → ${i.bridge?.toNetworkName ?? ''}` : i.kind === 'swap' ? `${t('swap')} · ${i.symbol} → ${i.swap?.toSymbol ?? ''}` : i.kind === 'gmx' ? `${t('svKind_gmx')} · ${i.symbol}` : `${i.kind === 'receive' ? t('received') : t('sent')} · ${i.symbol}`}</span>
         <span className="block truncate text-xs text-mute">{i.networkName} · {time(i.at)}</span></span>
-      <span className="text-right"><span className={`block font-semibold ${i.kind === 'receive' ? 'text-emerald' : ''}`}><Money hidden={hidden}>{i.kind === 'receive' ? '+' : '−'}{trimAmt(i.amountDisplay)}</Money></span>{testNotSent(i) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[11.5px] font-semibold text-warn">{t('qaSignedNotSent')}</span> : i.kind === 'bridge' && i.bridge ? <BridgePill b={i.bridge} /> : i.xswap ? <XswapPill x={i.xswap} /> : <StatePill state={i.state} />}</span>
+      <span className="text-right"><span className={`block font-semibold ${i.kind === 'receive' ? 'text-emerald' : ''}`}><Money hidden={hidden}>{i.kind === 'receive' ? '+' : '−'}{trimAmt(i.amountDisplay)}</Money></span>{testNotSent(i) ? <span className="rounded-full bg-warn/12 px-2 py-0.5 text-[0.71875rem] font-semibold text-warn">{t('qaSignedNotSent')}</span> : i.kind === 'bridge' && i.bridge ? <BridgePill b={i.bridge} /> : i.xswap ? <XswapPill x={i.xswap} /> : <StatePill state={i.state} />}</span>
     </button>
-    {isOpen && <div className="space-y-2.5 border-t border-line bg-bg/60 px-4 py-3 text-[13px]" data-testid="ac-detail">
+    {isOpen && <div className="space-y-2.5 border-t border-line bg-bg/60 px-4 py-3 text-[0.8125rem]" data-testid="ac-detail">
       <D k={t('amount')}>{exactAmt(i.amountDisplay)} {i.symbol} <span className="text-mute">({i.amount} {t('baseUnits')})</span></D>
       {i.xswap && <dl className="space-y-1.5"><XswapFacts x={i.xswap} symbol={i.symbol} fromName={i.networkName} /></dl>}
       {i.xswap && <XswapProgress id={i.id} x={i.xswap} symbol={i.symbol} onUpdate={refresh} />}
@@ -204,9 +204,9 @@ function WalletRow({ i, isOpen, toggle, time, hidden, refresh }: { i: Item; isOp
       {i.execution && i.kind !== 'receive' && i.kind !== 'bridge' && !i.xswap && !testNotSent(i) && i.state !== 'pending_approval' && <ExecutionTimeline exec={i.execution} />}
       {/* NEXT W5: the confirmations the server counted, and the hash with a copy button */}
       {typeof i.confirmations === 'number' && i.kind !== 'receive' && ['broadcast', 'confirming', 'finalized', 'reorged'].includes(i.state) && !testNotSent(i) && <D k={t('nxConfirmations')}><span data-testid="ac-confirmations">{i.confirmations}</span></D>}
-      {i.txid && <D k={t('txid')}><span className="break-all font-mono text-[11.5px]" data-testid="ac-txid">{i.txid}</span><div className="mt-1.5"><CopyBtn small text={i.txid} label={t('nxCopyHash')} /></div></D>}
+      {i.txid && <D k={t('txid')}><span className="break-all font-mono text-[0.71875rem]" data-testid="ac-txid">{i.txid}</span><div className="mt-1.5"><CopyBtn small text={i.txid} label={t('nxCopyHash')} /></div></D>}
       {i.explorer && !testNotSent(i) && <a className="inline-flex min-h-11 items-center gap-1.5 text-blue" href={i.explorer} target="_blank" rel="noreferrer noopener"><Icon n="ext" className="h-4 w-4" />{t('viewExplorer')}</a>}
     </div>}
   </>;
 }
-function D({ k, children }: { k: string; children: ReactNode }) { return <div><div className="text-[11.5px] uppercase tracking-wide text-mute">{k}</div><div>{children}</div></div>; }
+function D({ k, children }: { k: string; children: ReactNode }) { return <div><div className="text-[0.71875rem] uppercase tracking-wide text-mute">{k}</div><div>{children}</div></div>; }

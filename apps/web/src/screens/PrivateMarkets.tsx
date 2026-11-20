@@ -30,12 +30,12 @@ function Src({ url, children }: { url: string; children?: ReactNode }) {
 function En({ children }: { children: ReactNode }) {
   const t = useT(), fr = useLocale() === 'fr';
   if (!fr) return <>{children}</>;
-  return <span data-testid="pm-en"><span className="mr-1.5 inline-block rounded bg-elev px-1.5 py-px align-[1px] text-[10.5px] font-semibold uppercase not-italic tracking-wide text-mute">{t('v11LoEnTag')}</span><span lang="en">{children}</span></span>;
+  return <span data-testid="pm-en"><span className="mr-1.5 inline-block rounded bg-elev px-1.5 py-px align-[1px] text-[0.65625rem] font-semibold uppercase not-italic tracking-wide text-mute">{t('v11LoEnTag')}</span><span lang="en">{children}</span></span>;
 }
 /** where a figure comes from and when it was read */
 function Provenance({ d, now }: { d: Pick<Datum, 'source' | 'ts' | 'stale'>; now: number }) {
   const t = useT(), locale = useLocale(), age = ageText(d.ts, now, locale);
-  return <span className="block text-[12px] leading-snug text-mute" data-testid="pm-provenance">{t('pmSource')} : {d.source}{age ? ` · ${age}` : ''}{d.stale ? ` · ${t('pmStale')}` : ''}</span>;
+  return <span className="block text-[0.75rem] leading-snug text-mute" data-testid="pm-provenance">{t('pmSource')} : {d.source}{age ? ` · ${age}` : ''}{d.stale ? ` · ${t('pmStale')}` : ''}</span>;
 }
 
 /** The standing notice: information only, trading disabled, and why. */
@@ -61,16 +61,16 @@ export function ContractRow({ m, now, onOpen }: { m: PmMarket; now: number; onOp
   return <button type="button" onClick={() => onOpen(m.id)} data-testid={`pm-row-${m.id}`} aria-label={`${m.platform} ${m.symbol} — ${t('pmOpenDetail')}`}
     className="row-press block w-full px-5 py-4 text-left">
     <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0"><p className="text-[15px] font-semibold leading-snug">{m.platform}</p><p className="break-all font-mono text-[12.5px] text-mute">{m.symbol}</p></div>
-      <div className="shrink-0 text-right"><p className="t-num text-[20px]"><LiveCell id={liveIdOf(m)} flash={(q) => q.mark} render={(q) => (q.mark ? priceText(q.mark, locale) : null)}>{priceText(m.market.price.value, locale)}</LiveCell></p><p className="text-[11.5px] text-mute">{m.contract.quoteCurrency}</p></div>
+      <div className="min-w-0"><p className="text-[0.9375rem] font-semibold leading-snug">{m.platform}</p><p className="break-all font-mono text-[0.78125rem] text-mute">{m.symbol}</p></div>
+      <div className="shrink-0 text-right"><p className="t-num text-[1.25rem]"><LiveCell id={liveIdOf(m)} flash={(q) => q.mark} render={(q) => (q.mark ? priceText(q.mark, locale) : null)}>{priceText(m.market.price.value, locale)}</LiveCell></p><p className="text-[0.71875rem] text-mute">{m.contract.quoteCurrency}</p></div>
     </div>
     <div className="mt-2 flex flex-wrap items-center gap-1.5"><UnitTag m={m} /><FreshTag m={m} now={now} />{m.status === 'delisted' && <Tag tone="mute" icon="stop" testid="pm-delisted">{t('pmDelisted')}</Tag>}
       {m.valuation.caveats.some((c) => c.code === 'thin_market') && <Tag tone="warn" icon="warn">{t('pmThin')}</Tag>}</div>
-    {m.error ? <p className="mt-2 text-[13px] text-danger" role="status">{t('pmVenueError')} — {m.error}</p> : <dl className="mt-2 grid grid-cols-3 gap-2 text-[12.5px]">
+    {m.error ? <p className="mt-2 text-[0.8125rem] text-danger" role="status">{t('pmVenueError')} — {m.error}</p> : <dl className="mt-2 grid grid-cols-3 gap-2 text-[0.78125rem]">
       <div><dt className="text-mute">{t('pmFunding')}</dt><dd className="font-medium">{fundingText(m.market.funding, locale)}</dd></div>
       <div><dt className="text-mute">{t('pmOpenInterest')}</dt><dd className="font-medium">{compactUsd(m.market.openInterestUsd.value, locale)}</dd></div>
       <div><dt className="text-mute">{t('pmVolume')}</dt><dd className="font-medium">{compactUsd(m.market.volume24h.value, locale)}</dd></div></dl>}
-    <p className="mt-2 text-[13px] leading-snug" data-testid="pm-row-valuation">{v.value !== null
+    <p className="mt-2 text-[0.8125rem] leading-snug" data-testid="pm-row-valuation">{v.value !== null
       ? <><span className="text-mute">{t('pmImpliedShort')} : </span><span className="font-semibold">{compactUsd(v.value, locale)}</span><span className="text-mute"> — {t('pmEstimate')}</span></>
       : <><span className="font-semibold">{t('pmNotDeducible')}</span><span className="text-mute"> — {t(noValuationKey(v.reasonCode))}</span></>}</p>
   </button>;
@@ -79,21 +79,21 @@ export function ContractRow({ m, now, onOpen }: { m: PmMarket; now: number; onOp
 function CompanyHead({ c }: { c: PmCompany | null }) {
   const t = useT(), locale = useLocale(), ref = c?.lastPrivateValuation ?? null;
   return <div className="px-5 pb-3 pt-4">
-    <h2 className="text-[18px] font-semibold tracking-[-0.015em]">{c ? c.name : t('pmUnidentified')}</h2>
-    {c && <p className="mt-0.5 text-[13px] text-mute" data-testid="pm-company-ref">{ref
+    <h2 className="text-[1.125rem] font-semibold tracking-[-0.015em]">{c ? c.name : t('pmUnidentified')}</h2>
+    {c && <p className="mt-0.5 text-[0.8125rem] text-mute" data-testid="pm-company-ref">{ref
       ? <>{t('pmQ5')} : <span className="font-semibold text-ink">{compactUsd(ref.value, locale)}</span> · {t(referenceKindKey(ref.kind))} · {ref.date} · <Src url={ref.sourceUrl} /></>
       : t('pmNoReference')}</p>}
-    {c?.note && <p className="mt-1 text-[12.5px] leading-snug text-warn"><En>{c.note}</En></p>}
-    {c && c.contracts.length > 1 && <p className="mt-1 text-[12.5px] leading-snug text-mute">{t('pmNeverAveraged')}</p>}
+    {c?.note && <p className="mt-1 text-[0.78125rem] leading-snug text-warn"><En>{c.note}</En></p>}
+    {c && c.contracts.length > 1 && <p className="mt-1 text-[0.78125rem] leading-snug text-mute">{t('pmNeverAveraged')}</p>}
   </div>;
 }
 
 function VenueLine({ v, now }: { v: PmVenue; now: number }) {
   const t = useT(), locale = useLocale();
   const [tone, icon, key] = v.status === 'ok' ? ['ok', 'check', 'pmVenueOk'] as const : v.status === 'stale' ? ['warn', 'clock', 'pmStale'] as const : ['danger', 'warn', 'pmVenueDown'] as const;
-  return <div className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-[13.5px]" data-testid={`pm-venue-${v.venue}`}><span className="min-w-0 font-medium">{v.name}</span>
-    <span className="flex items-center gap-2"><Tag tone={tone} icon={icon}>{t(key)}</Tag><span className="text-[12px] text-mute">{ageText(v.ts, now, locale) ?? ''}</span></span>
-    {v.error && <p className="w-full text-[12.5px] text-danger">{v.error}</p>}</div>;
+  return <div className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-[0.84375rem]" data-testid={`pm-venue-${v.venue}`}><span className="min-w-0 font-medium">{v.name}</span>
+    <span className="flex items-center gap-2"><Tag tone={tone} icon={icon}>{t(key)}</Tag><span className="text-[0.75rem] text-mute">{ageText(v.ts, now, locale) ?? ''}</span></span>
+    {v.error && <p className="w-full text-[0.78125rem] text-danger">{v.error}</p>}</div>;
 }
 
 /** The list: companies, then each venue's contract for the company — side by side, never merged. */
@@ -104,69 +104,69 @@ export function PmListView({ data, onOpen }: { data: PmList; onOpen: (id: string
     {groups.map((g) => <section key={g.company?.slug ?? '_'} className="card overflow-hidden" data-testid={`pm-company-${g.company?.slug ?? 'none'}`}>
       <CompanyHead c={g.company} /><div className="divide-y divide-line border-t border-line">{g.markets.map((m) => <ContractRow key={m.id} m={m} now={data.ts} onOpen={onOpen} />)}</div></section>)}
     <Section title={t('pmVenues')}><Card className="!py-3">{data.venues.map((v) => <VenueLine key={v.venue} v={v} now={data.ts} />)}
-      <Fold summary={t('pmNoAdapter')} testid="pm-no-adapter"><ul className="space-y-1.5 text-[13px] text-mute">{data.venuesWithoutAdapter.map((v) => <li key={v.venue}><span className="font-semibold text-ink">{v.venue}</span> — <En>{v.note}</En></li>)}</ul>
-        <p className="mt-2 text-[12.5px] text-mute">{t('pmNoAdapterBody')}</p></Fold></Card></Section>
-    {data.excluded.length > 0 && <Fold summary={`${t('pmExcluded')} (${data.excluded.length})`} testid="pm-excluded"><ul className="space-y-2 text-[13px]">{data.excluded.map((e) =>
-      <li key={e.id}><span className="font-semibold">{e.company}</span> <span className="break-all font-mono text-[12px] text-mute">{e.id}</span><p className="text-mute"><En>{e.reason}</En></p></li>)}</ul></Fold>}
+      <Fold summary={t('pmNoAdapter')} testid="pm-no-adapter"><ul className="space-y-1.5 text-[0.8125rem] text-mute">{data.venuesWithoutAdapter.map((v) => <li key={v.venue}><span className="font-semibold text-ink">{v.venue}</span> — <En>{v.note}</En></li>)}</ul>
+        <p className="mt-2 text-[0.78125rem] text-mute">{t('pmNoAdapterBody')}</p></Fold></Card></Section>
+    {data.excluded.length > 0 && <Fold summary={`${t('pmExcluded')} (${data.excluded.length})`} testid="pm-excluded"><ul className="space-y-2 text-[0.8125rem]">{data.excluded.map((e) =>
+      <li key={e.id}><span className="font-semibold">{e.company}</span> <span className="break-all font-mono text-[0.75rem] text-mute">{e.id}</span><p className="text-mute"><En>{e.reason}</En></p></li>)}</ul></Fold>}
   </div>;
 }
 
 /** a long term of the contract (a sentence of the venue's documentation): label above, text below, full width */
 function Long({ k, children }: { k: string; children: ReactNode }) {
-  return <div className="border-t border-line py-2.5 first:border-t-0"><dt className="text-[12.5px] text-mute">{k}</dt><dd className="m-0 mt-0.5 text-[13.5px] leading-snug [overflow-wrap:anywhere]">{children}</dd></div>;
+  return <div className="border-t border-line py-2.5 first:border-t-0"><dt className="text-[0.78125rem] text-mute">{k}</dt><dd className="m-0 mt-0.5 text-[0.84375rem] leading-snug [overflow-wrap:anywhere]">{children}</dd></div>;
 }
 function Row({ n, label, children, testid }: { n: number; label: string; children: ReactNode; testid: string }) {
-  return <li className="flex gap-3 py-3.5" data-testid={testid}><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-elev text-[13px] font-semibold" aria-hidden="true">{n}</span>
-    <div className="min-w-0 flex-1"><h3 className="text-[13px] font-medium text-mute">{label}</h3>{children}</div></li>;
+  return <li className="flex gap-3 py-3.5" data-testid={testid}><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-elev text-[0.8125rem] font-semibold" aria-hidden="true">{n}</span>
+    <div className="min-w-0 flex-1"><h3 className="text-[0.8125rem] font-medium text-mute">{label}</h3>{children}</div></li>;
 }
-const Null = ({ t, reason, why }: { t: T; reason: string | null; why?: Key }) => <><p className="text-[16px] font-semibold" data-testid="pm-null">{t('pmNotDeducible')}</p>
-  {why && <p className="text-[13.5px] leading-snug">{t(why)}</p>}{reason && <p className="mt-0.5 text-[12.5px] leading-snug text-mute"><span className="sr-only">{t('pmSourceText')} : </span><En>{reason}</En></p>}</>;
+const Null = ({ t, reason, why }: { t: T; reason: string | null; why?: Key }) => <><p className="text-[1rem] font-semibold" data-testid="pm-null">{t('pmNotDeducible')}</p>
+  {why && <p className="text-[0.84375rem] leading-snug">{t(why)}</p>}{reason && <p className="mt-0.5 text-[0.78125rem] leading-snug text-mute"><span className="sr-only">{t('pmSourceText')} : </span><En>{reason}</En></p>}</>;
 
 /** The valuation panel: five distinct quantities, each with its value or the reason it cannot be derived, its formula and its sources. */
 export function ValuationPanel({ v, now, quote }: { v: PmValuation; now: number; quote: string }) {
   const t = useT(), locale = useLocale(), q = quantities(v), has = (id: string) => q.find((x) => x.id === id)!.has;
   const pos = v.notionalExposure.position, iv = v.impliedValuation, ref = v.lastPrivateValuation, prem = v.premiumDiscount;
-  return <Card className="!pb-2" ><h2 className="text-[17px] font-semibold tracking-[-0.015em]">{t('pmPanelTitle')}</h2><p className="mt-0.5 text-[13px] text-mute">{t('pmPanelLead')}</p>
+  return <Card className="!pb-2" ><h2 className="text-[1.0625rem] font-semibold tracking-[-0.015em]">{t('pmPanelTitle')}</h2><p className="mt-0.5 text-[0.8125rem] text-mute">{t('pmPanelLead')}</p>
     <ol className="mt-1 divide-y divide-line" data-testid="pm-valuation">
-      <Row n={1} label={t('pmQ1')} testid="pm-q-price"><p className="t-num text-[22px]">{priceText(v.syntheticPrice.value, locale, 6)} <span className="text-[13px] font-medium text-mute">{quote}</span></p>
-        <p className="text-[13px] leading-snug">{v.syntheticPrice.unitLabel}{v.syntheticPrice.priceKind === 'frozen mark' ? ` — ${t('pmFrozenPrice')}` : ''}</p><Provenance d={v.syntheticPrice} now={now} /></Row>
+      <Row n={1} label={t('pmQ1')} testid="pm-q-price"><p className="t-num text-[1.375rem]">{priceText(v.syntheticPrice.value, locale, 6)} <span className="text-[0.8125rem] font-medium text-mute">{quote}</span></p>
+        <p className="text-[0.8125rem] leading-snug">{v.syntheticPrice.unitLabel}{v.syntheticPrice.priceKind === 'frozen mark' ? ` — ${t('pmFrozenPrice')}` : ''}</p><Provenance d={v.syntheticPrice} now={now} /></Row>
       <Row n={2} label={t('pmQ2')} testid="pm-q-contract">{has('contract')
-        ? <><p className="text-[16px] font-semibold">{compactUsd(v.contractMarketValue.value, locale)} <span className="text-[13px] font-medium text-mute">{t('pmPerContract')}</span></p><p className="text-[12.5px] leading-snug text-mute" lang="en">{v.contractMarketValue.formula}</p></>
+        ? <><p className="text-[1rem] font-semibold">{compactUsd(v.contractMarketValue.value, locale)} <span className="text-[0.8125rem] font-medium text-mute">{t('pmPerContract')}</span></p><p className="text-[0.78125rem] leading-snug text-mute" lang="en">{v.contractMarketValue.formula}</p></>
         : <Null t={t} reason={v.contractMarketValue.reason} />}</Row>
       <Row n={3} label={t('pmQ3')} testid="pm-q-exposure">{has('exposure')
-        ? <><p className="text-[16px] font-semibold">{compactUsd(v.notionalExposure.value, locale)}</p><p className="text-[12.5px] leading-snug text-mute">{t('pmHypothetical', { side: t(pos.side === 'long' ? 'pmLong' : 'pmShort'), size: priceText(pos.size, locale, 8) })} — {v.notionalExposure.formula}</p></>
+        ? <><p className="text-[1rem] font-semibold">{compactUsd(v.notionalExposure.value, locale)}</p><p className="text-[0.78125rem] leading-snug text-mute">{t('pmHypothetical', { side: t(pos.side === 'long' ? 'pmLong' : 'pmShort'), size: priceText(pos.size, locale, 8) })} — {v.notionalExposure.formula}</p></>
         : <Null t={t} reason={v.notionalExposure.reason} />}</Row>
       <Row n={4} label={t('pmQ4')} testid="pm-q-implied">{iv.value !== null
-        ? <><p className="t-num text-[22px]">{compactUsd(iv.value, locale)}</p><p className="text-[13px] leading-snug"><Tag tone="info">{t('pmEstimate')}</Tag> <span className="text-mute">{t('pmImpliedLabel')}</span></p>
+        ? <><p className="t-num text-[1.375rem]">{compactUsd(iv.value, locale)}</p><p className="text-[0.8125rem] leading-snug"><Tag tone="info">{t('pmEstimate')}</Tag> <span className="text-mute">{t('pmImpliedLabel')}</span></p>
             <dl className="mt-1.5"><Fact k={t('pmFormula')}>{iv.formula}</Fact>
               {iv.formulaSource && <Fact k={t('pmFormulaSource')}><Src url={iv.formulaSource.url} /> · {t('pmReadOn', { date: iv.formulaSource.readAt })}</Fact>}
               <Fact k={t('pmAsOf')}>{iv.asOf ? when(new Date(iv.asOf), locale) : '—'}</Fact></dl>
-            {iv.formulaSource && <blockquote className="mt-1 border-l-2 border-line pl-3 text-[12.5px] italic leading-snug text-mute">« {iv.formulaSource.quote} »</blockquote>}</>
+            {iv.formulaSource && <blockquote className="mt-1 border-l-2 border-line pl-3 text-[0.78125rem] italic leading-snug text-mute">« {iv.formulaSource.quote} »</blockquote>}</>
         : <Null t={t} reason={iv.reason} why={noValuationKey(iv.reasonCode)} />}</Row>
       <Row n={5} label={t('pmQ5')} testid="pm-q-private">{ref
-        ? <><p className="text-[16px] font-semibold">{compactUsd(ref.value, locale)}</p><p className="text-[13px] leading-snug">{t(referenceKindKey(ref.kind))} · {ref.date} · {t('pmConfidence')} : {t(`pmConf_${ref.confidence}` as Key)}</p>
-            <p className="text-[12.5px] leading-snug text-mute">{ref.detail}</p><p className="text-[12.5px]"><Src url={ref.sourceUrl} /></p></>
-        : <><p className="text-[16px] font-semibold">{t('pmNoReference')}</p><p className="text-[12.5px] leading-snug text-mute">{v.lastPrivateValuationReason}</p></>}</Row>
+        ? <><p className="text-[1rem] font-semibold">{compactUsd(ref.value, locale)}</p><p className="text-[0.8125rem] leading-snug">{t(referenceKindKey(ref.kind))} · {ref.date} · {t('pmConfidence')} : {t(`pmConf_${ref.confidence}` as Key)}</p>
+            <p className="text-[0.78125rem] leading-snug text-mute">{ref.detail}</p><p className="text-[0.78125rem]"><Src url={ref.sourceUrl} /></p></>
+        : <><p className="text-[1rem] font-semibold">{t('pmNoReference')}</p><p className="text-[0.78125rem] leading-snug text-mute">{v.lastPrivateValuationReason}</p></>}</Row>
     </ol>
-    <div className="border-t border-line py-3.5" data-testid="pm-premium"><h3 className="text-[13px] font-medium text-mute">{t('pmPremium')}</h3>{prem.premiumBps !== null
-      ? <><p className="text-[18px] font-semibold">{premiumText(prem.premiumBps, locale)} <span className="text-[13px] font-medium text-mute">{t(Number(prem.premiumBps) >= 0 ? 'pmPremiumOver' : 'pmDiscountUnder')}</span></p><p className="text-[12.5px] leading-snug text-mute">{t('pmPremiumCaveat')}</p></>
-      : <><p className="text-[15px] font-semibold">—</p><p className="text-[12.5px] leading-snug text-mute">{t('pmPremiumNone')}</p></>}</div>
+    <div className="border-t border-line py-3.5" data-testid="pm-premium"><h3 className="text-[0.8125rem] font-medium text-mute">{t('pmPremium')}</h3>{prem.premiumBps !== null
+      ? <><p className="text-[1.125rem] font-semibold">{premiumText(prem.premiumBps, locale)} <span className="text-[0.8125rem] font-medium text-mute">{t(Number(prem.premiumBps) >= 0 ? 'pmPremiumOver' : 'pmDiscountUnder')}</span></p><p className="text-[0.78125rem] leading-snug text-mute">{t('pmPremiumCaveat')}</p></>
+      : <><p className="text-[0.9375rem] font-semibold">—</p><p className="text-[0.78125rem] leading-snug text-mute">{t('pmPremiumNone')}</p></>}</div>
   </Card>;
 }
 
 export function Caveats({ v }: { v: PmValuation }) {
   const t = useT();
   return <Section title={t('pmCaveats')}><ul className="space-y-2" data-testid="pm-caveats">{orderCaveats(v.caveats).map((c, k) => <li key={`${c.code}${k}`}>
-    <Notice tone={['frozen', 'stale', 'thin_market', 'unit_mismatch', 'unconfirmed_convention', 'company_note'].includes(c.code) ? 'warn' : 'info'}><p className="font-semibold">{t(caveatKey(c.code))}</p><p className="mt-0.5 text-[12.5px] text-mute"><En>{c.text}</En></p>
-      {typeof c.data?.url === 'string' && <p className="mt-0.5 text-[12.5px]"><Src url={c.data.url} /></p>}</Notice></li>)}</ul></Section>;
+    <Notice tone={['frozen', 'stale', 'thin_market', 'unit_mismatch', 'unconfirmed_convention', 'company_note'].includes(c.code) ? 'warn' : 'info'}><p className="font-semibold">{t(caveatKey(c.code))}</p><p className="mt-0.5 text-[0.78125rem] text-mute"><En>{c.text}</En></p>
+      {typeof c.data?.url === 'string' && <p className="mt-0.5 text-[0.78125rem]"><Src url={c.data.url} /></p>}</Notice></li>)}</ul></Section>;
 }
 
 function References({ list }: { list: PmReference[] }) {
   const t = useT(), locale = useLocale();
   if (!list.length) return null;
-  return <Section title={t('pmReferences')}><Card className="!py-2"><ul className="divide-y divide-line">{list.map((r, k) => <li key={k} className="py-3 text-[13.5px]">
+  return <Section title={t('pmReferences')}><Card className="!py-2"><ul className="divide-y divide-line">{list.map((r, k) => <li key={k} className="py-3 text-[0.84375rem]">
     <p className="font-semibold">{r.valueUsd ? compactUsd(r.valueUsd, locale) : t('pmRange')} <span className="font-medium text-mute">· {t(referenceKindKey(r.kind))} · {r.date}</span></p>
-    <p className="text-[12.5px] leading-snug text-mute">{r.detail}</p><p className="text-[12.5px]"><Src url={r.sourceUrl} /> · {t('pmConfidence')} : {t(`pmConf_${r.confidence}` as Key)}</p></li>)}</ul></Card></Section>;
+    <p className="text-[0.78125rem] leading-snug text-mute">{r.detail}</p><p className="text-[0.78125rem]"><Src url={r.sourceUrl} /> · {t('pmConfidence')} : {t(`pmConf_${r.confidence}` as Key)}</p></li>)}</ul></Card></Section>;
 }
 
 function Detail({ id, nav, delisted }: { id: string; nav: Nav; delisted: boolean }) {
@@ -185,14 +185,14 @@ function Detail({ id, nav, delisted }: { id: string; nav: Nav; delisted: boolean
   return <div className="space-y-5" data-testid="pm-detail">
     <PageTitle onBack={back} backLabel={t('pmBack')}>{m.company?.name ?? m.symbol}</PageTitle>
     <PmNotice compact />
-    <Card><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[15px] font-semibold">{m.platform}</p><p className="break-all font-mono text-[12.5px] text-mute">{m.id}</p></div>
+    <Card><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[0.9375rem] font-semibold">{m.platform}</p><p className="break-all font-mono text-[0.78125rem] text-mute">{m.id}</p></div>
       {closes.length > 1 && <Spark data={closes} w={96} h={34} />}</div>
-      <p className="t-num mt-3 text-[34px]"><LiveCell id={lid} flash={(x) => x.mark} render={(x) => (x.mark ? priceText(x.mark, locale, 6) : null)}>{priceText(m.market.price.value, locale, 6)}</LiveCell> <span className="text-[14px] font-medium text-mute">{c.quoteCurrency}</span></p>
+      <p className="t-num mt-3 text-[2.125rem]"><LiveCell id={lid} flash={(x) => x.mark} render={(x) => (x.mark ? priceText(x.mark, locale, 6) : null)}>{priceText(m.market.price.value, locale, 6)}</LiveCell> <span className="text-[0.875rem] font-medium text-mute">{c.quoteCurrency}</span></p>
       <div className="mt-2 flex flex-wrap gap-1.5"><UnitTag m={m} /><FreshTag m={m} now={now} />{m.status === 'delisted' && <Tag tone="mute" icon="stop">{t('pmDelisted')}</Tag>}
         <Tag tone={m.review.state === 'reviewed' ? 'ok' : 'warn'} icon={m.review.state === 'reviewed' ? 'check' : 'warn'} testid="pm-review">{t(`pmReview_${m.review.state}` as Key)}</Tag></div>
-      {m.review.reasons.length > 0 && <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[12.5px] leading-snug text-mute">{m.review.reasons.map((r) => <li key={r}><En>{r}</En></li>)}</ul>}
-      {m.error && <p className="mt-2 text-[13px] text-danger" role="status">{t('pmVenueError')} — {m.error}</p>}
-      {d.candles.candles && <p className="mt-2 text-[12px] text-mute">{t('pmCandles', { n: d.candles.candles.length, interval: d.candles.interval ?? '' })} · {d.candles.source}</p>}</Card>
+      {m.review.reasons.length > 0 && <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[0.78125rem] leading-snug text-mute">{m.review.reasons.map((r) => <li key={r}><En>{r}</En></li>)}</ul>}
+      {m.error && <p className="mt-2 text-[0.8125rem] text-danger" role="status">{t('pmVenueError')} — {m.error}</p>}
+      {d.candles.candles && <p className="mt-2 text-[0.75rem] text-mute">{t('pmCandles', { n: d.candles.candles.length, interval: d.candles.interval ?? '' })} · {d.candles.source}</p>}</Card>
 
     <Card><Field label={t('pmSizeLabel')} hint={bad ? t('pmSizeBad') : t('pmSizeHint')}><input className={inputCls} inputMode="decimal" value={typed} aria-invalid={bad} data-testid="pm-size"
       onChange={(e) => { setTyped(e.target.value); const s = sizeParam(e.target.value); if (s) setPos((p) => ({ ...p, size: s })); }} /></Field>
@@ -209,7 +209,7 @@ function Detail({ id, nav, delisted }: { id: string; nav: Nav; delisted: boolean
       <Stat label={t('pmAsk')} value={<LiveCell id={lid} render={(x) => (x.ask ? priceText(x.ask, locale, 6) : null)}>{d.book.asks?.[0] ? priceText(d.book.asks[0][0], locale, 6) : '—'}</LiveCell>} sub={d.book.asks?.[0] ? `× ${priceText(d.book.asks[0][1], locale, 4)}` : d.book.error ?? t('pmEmptyBook')} />
     </StatGrid><div className="mt-1.5 px-1"><Provenance d={m.market.price} now={now} /></div></Section>
 
-    <Section title={t('pmContract')}><Card className="!py-2"><p className="pb-1 pt-2 text-[12px] text-mute">{t('pmSourceTextNote')}</p><dl lang="en" data-testid="pm-contract-terms">
+    <Section title={t('pmContract')}><Card className="!py-2"><p className="pb-1 pt-2 text-[0.75rem] text-mute">{t('pmSourceTextNote')}</p><dl lang="en" data-testid="pm-contract-terms">
       <Long k={t('pmNature')}>{c.nature}</Long><Fact k={t('pmUnderlying')}>{c.underlying ?? t('pmUnidentified')}</Fact><Fact k={t('pmUnit')}>{c.unit.label}</Fact>
       <Fact k={t('pmQuote')}>{c.quoteCurrency}{c.collateral ? ` · ${t('pmCollateral')} ${c.collateral}` : ''}</Fact><Long k={t('pmContractSize')}>{c.contractSize}</Long>
       <Long k={t('pmMultiplier')}>{c.multiplier ? `${c.multiplier.value} — ${c.multiplier.source}` : t('pmNotPublished')}</Long>
@@ -218,17 +218,17 @@ function Detail({ id, nav, delisted }: { id: string; nav: Nav; delisted: boolean
       {c.assetId !== null && <Fact k={t('pmAssetId')} mono>{c.assetId} ({t('pmInformational')})</Fact>}
       {c.onChainDescription !== null && <Long k={t('pmOnChain')}>{c.onChainDescription || t('pmOnChainEmpty')}</Long>}
       <Fact k={t('pmReviewed')}>{m.review.reviewedAt ?? t('pmReview_not_reviewed')}{m.review.validUntil ? ` · ${t('pmValidUntil', { date: m.review.validUntil.slice(0, 10) })}` : ''}</Fact></dl>
-      {c.sources.length > 0 && <p className="flex flex-wrap gap-x-3 gap-y-1 border-t border-line py-3 text-[12.5px]">{c.sources.map((s) => <Src key={s} url={s} />)}</p>}</Card></Section>
+      {c.sources.length > 0 && <p className="flex flex-wrap gap-x-3 gap-y-1 border-t border-line py-3 text-[0.78125rem]">{c.sources.map((s) => <Src key={s} url={s} />)}</p>}</Card></Section>
 
-    {d.sameCompany.length > 0 && <Section title={t('pmOtherVenues')}><Card className="!py-2"><p className="pb-1 pt-2 text-[12.5px] leading-snug text-mute">{t('pmNeverAveraged')}</p><ul className="divide-y divide-line">{d.sameCompany.map((o) =>
+    {d.sameCompany.length > 0 && <Section title={t('pmOtherVenues')}><Card className="!py-2"><p className="pb-1 pt-2 text-[0.78125rem] leading-snug text-mute">{t('pmNeverAveraged')}</p><ul className="divide-y divide-line">{d.sameCompany.map((o) =>
       <li key={o.id}><button type="button" className="row-press flex w-full items-center justify-between gap-3 py-3 text-left" onClick={() => nav({ tab: 'private', asset: o.id })}>
-        <span className="min-w-0"><span className="block text-[14px] font-semibold">{o.platform}</span><span className="block text-[12px] text-mute">{o.unit.label}</span></span>
-        <span className="t-num shrink-0 text-[16px]">{priceText(o.price.value, locale)}</span></button></li>)}</ul></Card></Section>}
+        <span className="min-w-0"><span className="block text-[0.875rem] font-semibold">{o.platform}</span><span className="block text-[0.75rem] text-mute">{o.unit.label}</span></span>
+        <span className="t-num shrink-0 text-[1rem]">{priceText(o.price.value, locale)}</span></button></li>)}</ul></Card></Section>}
     <References list={d.references} />
 
     <Section title={t('pmTrading')}><Card><Btn full disabled aria-disabled="true" data-testid="pm-trade-disabled"><Icon n="lock" className="h-4 w-4" />{t('pmTradingDisabled')}</Btn>
-      <p className="mt-3 text-[13.5px] leading-snug" data-testid="pm-not-tradable-why" data-code={m.notTradable.code}>{t(notTradableKey(m.notTradable.code))}</p>
-      <ul className="mt-2 list-disc space-y-1 pl-4 text-[12.5px] leading-snug text-mute" data-testid="pm-not-tradable">{m.notTradable.reasons.map((r) => <li key={r}><En>{r}</En></li>)}</ul></Card></Section>
+      <p className="mt-3 text-[0.84375rem] leading-snug" data-testid="pm-not-tradable-why" data-code={m.notTradable.code}>{t(notTradableKey(m.notTradable.code))}</p>
+      <ul className="mt-2 list-disc space-y-1 pl-4 text-[0.78125rem] leading-snug text-mute" data-testid="pm-not-tradable">{m.notTradable.reasons.map((r) => <li key={r}><En>{r}</En></li>)}</ul></Card></Section>
   </div>;
 }
 
@@ -240,7 +240,7 @@ export function PrivateMarkets({ instrument, view, nav }: { instrument?: string;
   if (instrument) return <Detail id={instrument} nav={nav} delisted={delisted} />;
   return <div className="space-y-4" data-testid="pm-screen">
     <PageTitle>{t('pmTitle')}</PageTitle>
-    <p className="text-[14px] leading-snug text-mute">{t('pmLead')}</p>
+    <p className="text-[0.875rem] leading-snug text-mute">{t('pmLead')}</p>
     <PmNotice />
     <Seg value={delisted ? 'delisted' : 'live'} options={[['live', t('pmFilterLive')], ['delisted', t('pmFilterDelisted')]] as const} onChange={(v) => nav({ tab: 'private', view: v === 'delisted' ? 'delisted' : undefined })} label={t('pmFilter')} />
     {delisted && <Notice tone="info">{t('pmDelistedNote')}</Notice>}

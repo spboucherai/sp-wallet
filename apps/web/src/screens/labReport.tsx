@@ -78,7 +78,7 @@ const money = (x: number | null, locale: string): string => (x === null ? '—' 
 /** "stopped by the engine's loss limit (<reason>)" — the same words wherever a split was ended by the engine's own rules */
 export function StoppedTag({ split, stop }: { split: Split | string; stop: LabStop }) {
   const t = useT();
-  return <span className="block text-[12.5px] font-semibold leading-snug text-danger" data-testid="ag2-lab-stopped" data-split={split}>{t('ag2LabStopped', { split: t(splitKey(split)), reason: stop.reason })}</span>;
+  return <span className="block text-[0.78125rem] font-semibold leading-snug text-danger" data-testid="ag2-lab-stopped" data-split={split}>{t('ag2LabStopped', { split: t(splitKey(split)), reason: stop.reason })}</span>;
 }
 
 /** the gross-to-net table of every split that has one, each column a split, each row a line; a stop is written under its split */
@@ -86,7 +86,7 @@ export function GrossToNetTable({ bySplit, stops }: { bySplit: Partial<Record<Sp
   const t = useT(); const { locale } = useContext(I18n);
   const splits = SPLITS.filter((s) => bySplit[s]), lines = GTN_ORDER.filter((l) => splits.some((s) => bySplit[s]!.some((r) => r.line === l)));
   if (!splits.length) return null;
-  return <div data-testid="ag2-v3-gtn"><div className="overflow-x-auto"><table className="w-full min-w-[300px] text-[12.5px]"><caption className="sr-only">{t('ag2V3GrossToNet')}</caption>
+  return <div data-testid="ag2-v3-gtn"><div className="overflow-x-auto"><table className="w-full min-w-[300px] text-[0.78125rem]"><caption className="sr-only">{t('ag2V3GrossToNet')}</caption>
     <thead><tr className="text-mute"><th scope="col" className="py-1 pr-2 text-left font-medium">{t('ag2V3GrossToNet')}</th>{splits.map((s) => <th key={s} scope="col" className="py-1 pl-2 text-right font-medium">{t(splitKey(s))}</th>)}</tr></thead>
     <tbody>{lines.map((l) => <tr key={l} className={l === 'net' ? 'border-t border-line font-semibold' : ''}><th scope="row" className="py-1 pr-2 text-left font-normal">{t(gtnKey(l))}</th>
       {splits.map((s) => { const v = bySplit[s]!.find((r) => r.line === l)?.value ?? null; return <td key={s} className={`t-num py-1 pl-2 text-right ${l === 'net' && v !== null ? (v < 0 ? 'text-danger' : 'text-emerald') : ''}`}>{money(v, locale)}</td>; })}</tr>)}</tbody></table></div>
@@ -98,20 +98,20 @@ function StrategyVerdict({ v, detail }: { v: LabStrategyVerdict; detail: boolean
   const t = useT(); const { locale } = useContext(I18n);
   const test = v.splits.test, live = v.scope === 'agent' && v.liveCapable;
   return <div className="rounded-xl bg-elev/60 p-3" data-testid="ag2-lab-verdict" data-strategy={v.strategy}>
-    <div className="flex flex-wrap items-center justify-between gap-1.5"><span className="font-mono text-[12.5px] font-semibold">{v.strategy}</span><Tag tone={live ? 'ok' : 'mute'} icon={live ? 'bolt' : 'eye'}>{t(scopeKey(v))}</Tag></div>
-    <div className="mt-1 text-[12.5px] leading-snug text-mute [overflow-wrap:anywhere]">{v.symbols.join(' · ')}</div>
-    <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[12.5px]">
+    <div className="flex flex-wrap items-center justify-between gap-1.5"><span className="font-mono text-[0.78125rem] font-semibold">{v.strategy}</span><Tag tone={live ? 'ok' : 'mute'} icon={live ? 'bolt' : 'eye'}>{t(scopeKey(v))}</Tag></div>
+    <div className="mt-1 text-[0.78125rem] leading-snug text-mute [overflow-wrap:anywhere]">{v.symbols.join(' · ')}</div>
+    <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[0.78125rem]">
       <div><dt className="text-mute">{t('ag2LabDsr')}</dt><dd className="t-num font-semibold" data-testid="ag2-lab-dsr">{n2(v.deflatedSharpe, locale, 3)}</dd></div>
       <div><dt className="text-mute">{t('ag2LabNetReturn')}</dt><dd className="t-num font-semibold">{pct(test?.netReturn, locale)}</dd></div>
       {detail && <><div><dt className="text-mute">{t('ag2LabSharpe')}</dt><dd className="t-num">{n2(test?.netSharpe, locale)} / {n2(test?.grossSharpe, locale)}</dd></div>
         <div><dt className="text-mute">{t('ag2LabMaxDd')}</dt><dd className="t-num">{typeof test?.maxDrawdown === 'number' ? pct(-test.maxDrawdown, locale) : '—'}</dd></div></>}</dl>
-    <p className="mt-1.5 text-[12.5px] leading-snug">{t(edgeKey(v), { dsr: n2(v.deflatedSharpe, locale, 3), min: n2(v.deflatedSharpeThreshold, locale), trials: v.trialsTested ?? '?' })}</p>
+    <p className="mt-1.5 text-[0.78125rem] leading-snug">{t(edgeKey(v), { dsr: n2(v.deflatedSharpe, locale, 3), min: n2(v.deflatedSharpeThreshold, locale), trials: v.trialsTested ?? '?' })}</p>
     {v.stoppedSplits.map((s) => (v.splits[s]?.stop ? <StoppedTag key={s} split={s} stop={v.splits[s]!.stop!} /> : null))}
     {detail && <>
       <div className="mt-2"><GrossToNetTable bySplit={Object.fromEntries(SPLITS.map((s) => [s, grossToNetRows(v.splits[s]?.grossToNet)]))} /></div>
-      <p className="mt-1.5 text-[11.5px] leading-snug text-mute [overflow-wrap:anywhere]">{t('ag2LabWindow', { start: day(v.window?.start), end: day(v.window?.end), from: day(v.splitDates?.test?.[0]), to: day(v.splitDates?.test?.[1]) })} · {t('ag2LabSource', { file: `${v.results.dir}/${v.results.file ?? 'summary.json'}`, sha: shortHash(v.results.fileSha256) })}</p>
-      {v.results.matchesManifest === false && <p className="mt-1 text-[12px] font-semibold text-warn">{t('ag2LabManifestMismatch')}</p>}
-      {v.installedHashMatches === false && <p className="mt-1 text-[12px] font-semibold text-warn">{t('ag2LabHashMismatch')}</p>}</>}
+      <p className="mt-1.5 text-[0.71875rem] leading-snug text-mute [overflow-wrap:anywhere]">{t('ag2LabWindow', { start: day(v.window?.start), end: day(v.window?.end), from: day(v.splitDates?.test?.[0]), to: day(v.splitDates?.test?.[1]) })} · {t('ag2LabSource', { file: `${v.results.dir}/${v.results.file ?? 'summary.json'}`, sha: shortHash(v.results.fileSha256) })}</p>
+      {v.results.matchesManifest === false && <p className="mt-1 text-[0.75rem] font-semibold text-warn">{t('ag2LabManifestMismatch')}</p>}
+      {v.installedHashMatches === false && <p className="mt-1 text-[0.75rem] font-semibold text-warn">{t('ag2LabHashMismatch')}</p>}</>}
   </div>;
 }
 
@@ -120,15 +120,15 @@ export function LabVerdicts({ verdicts, detail = false }: { verdicts: LabVerdict
   const t = useT();
   const list = verdicts ?? [], strategies = list.filter(isStrategyVerdict), studies = list.filter(isStudyVerdict);
   if (!list.length) return null;
-  if (!strategies.length && !studies.length) return detail ? <p className="text-[12.5px] leading-snug text-mute" data-testid="ag2-lab-unavailable">{t('ag2LabUnavailable')}</p> : null;
+  if (!strategies.length && !studies.length) return detail ? <p className="text-[0.78125rem] leading-snug text-mute" data-testid="ag2-lab-unavailable">{t('ag2LabUnavailable')}</p> : null;
   return <div className="mt-2.5 space-y-2 border-t border-line pt-2.5 text-left" data-testid="ag2-lab" data-label="backtest">
     <div className="flex flex-wrap items-center justify-between gap-1.5"><span className="t-eyebrow">{t('ag2LabTitle')}</span><Tag tone="warn" icon="chart" testid="ag2-lab-tag">{t('ag2LabTag')}</Tag></div>
     {strategies.map((v) => <StrategyVerdict key={v.strategy} v={v} detail={detail} />)}
-    {studies.map((s) => <div key={s.name} className="rounded-xl bg-elev/60 p-3" data-testid="ag2-lab-study"><div className="flex flex-wrap items-center justify-between gap-1.5"><span className="font-mono text-[12.5px] font-semibold">{s.name}</span><Tag tone="mute" icon="search">{t('ag2LabStudy')}</Tag></div>
+    {studies.map((s) => <div key={s.name} className="rounded-xl bg-elev/60 p-3" data-testid="ag2-lab-study"><div className="flex flex-wrap items-center justify-between gap-1.5"><span className="font-mono text-[0.78125rem] font-semibold">{s.name}</span><Tag tone="mute" icon="search">{t('ag2LabStudy')}</Tag></div>
       {/* the study's own statement, verbatim from its result file */}
-      {s.statement && <p className="mt-1.5 text-[12.5px] leading-snug text-mute">{detail || s.statement.length <= 260 ? s.statement : `${s.statement.slice(0, 260)}…`}</p>}
-      {s.fillsAreModelled && <p className="mt-1 text-[12.5px] font-semibold text-warn">{t('ag2LabModelled')}</p>}</div>)}
-    <p className="text-[11.5px] leading-snug text-mute">{t('ag2LabNote')}</p>
+      {s.statement && <p className="mt-1.5 text-[0.78125rem] leading-snug text-mute">{detail || s.statement.length <= 260 ? s.statement : `${s.statement.slice(0, 260)}…`}</p>}
+      {s.fillsAreModelled && <p className="mt-1 text-[0.78125rem] font-semibold text-warn">{t('ag2LabModelled')}</p>}</div>)}
+    <p className="text-[0.71875rem] leading-snug text-mute">{t('ag2LabNote')}</p>
   </div>;
 }
 
@@ -140,17 +140,17 @@ export function ReportV3({ summary }: { summary: ReportSummary | null | undefine
   const t = useT(); const { locale } = useContext(I18n);
   if (!summary) return null;
   const has = v3Sections(summary);
-  if (!has.v3 && !has.grossToNet) return <p className="mt-2 text-[12.5px] leading-snug text-mute" data-testid="ag2-v3-old">{t('ag2V3Old')}</p>;
+  if (!has.v3 && !has.grossToNet) return <p className="mt-2 text-[0.78125rem] leading-snug text-mute" data-testid="ag2-v3-old">{t('ag2V3Old')}</p>;
   const ex = summary.executionModel ?? {}, par = summary.engineParity ?? {}, bias = summary.dataBias ?? {}, j = summary.journal ?? {};
   const stops = Object.fromEntries(SPLITS.map((s) => [s, stopOfSplit(summary, s)])) as Record<Split, LabStop | null>;
   const params = Object.entries((par.parameters ?? {}) as Record<string, { value?: unknown; source?: unknown }>), perSym = Object.entries((bias.per_symbol ?? {}) as Record<string, Record<string, unknown>>);
   const ratio = (x: unknown) => (typeof x === 'number' ? `${numFmt(x * 100, locale, 2)} %` : '—');
   return <div className="mt-3 space-y-2.5 rounded-2xl border border-line p-3.5" data-testid="ag2-v3" data-label="backtest">
-    <div className="flex flex-wrap items-center justify-between gap-1.5"><span className="text-[13.5px] font-semibold">{t('ag2V3Title')}</span><Tag tone="warn" icon="chart" testid="ag2-v3-tag">{t('ag2LabTag')}</Tag></div>
+    <div className="flex flex-wrap items-center justify-between gap-1.5"><span className="text-[0.84375rem] font-semibold">{t('ag2V3Title')}</span><Tag tone="warn" icon="chart" testid="ag2-v3-tag">{t('ag2LabTag')}</Tag></div>
     <GrossToNetTable bySplit={Object.fromEntries(SPLITS.map((s) => [s, grossToNetRows(summary.metrics?.[s]?.gross_to_net)]))} stops={stops} />
-    {has.engineParity && <div data-testid="ag2-v3-parity"><div className="flex flex-wrap items-center gap-2"><span className="text-[13px] font-semibold">{t('ag2V3Parity')}</span><Tag tone={has.parityApplied ? 'ok' : 'danger'} icon={has.parityApplied ? 'check' : 'x'}>{t(has.parityApplied ? 'ag2V3ParityOn' : 'ag2V3ParityOff')}</Tag></div>
-      <p className="mt-1 text-[12.5px] leading-snug text-mute">{t('ag2V3ParityNote')}</p>
-      {SPLITS.every((s) => !stops[s]) && <p className="mt-1 text-[12.5px] text-mute">{t('ag2V3NoStop')}</p>}
+    {has.engineParity && <div data-testid="ag2-v3-parity"><div className="flex flex-wrap items-center gap-2"><span className="text-[0.8125rem] font-semibold">{t('ag2V3Parity')}</span><Tag tone={has.parityApplied ? 'ok' : 'danger'} icon={has.parityApplied ? 'check' : 'x'}>{t(has.parityApplied ? 'ag2V3ParityOn' : 'ag2V3ParityOff')}</Tag></div>
+      <p className="mt-1 text-[0.78125rem] leading-snug text-mute">{t('ag2V3ParityNote')}</p>
+      {SPLITS.every((s) => !stops[s]) && <p className="mt-1 text-[0.78125rem] text-mute">{t('ag2V3NoStop')}</p>}
       {params.length > 0 && <Fold summary={t('ag2V3ParityParams', { n: params.length })}><dl>{params.map(([k, p]) => <Fact key={k} k={k} mono>{flat(p?.value)} <span className="font-normal text-mute">· {flat(p?.source)}</span></Fact>)}</dl></Fold>}</div>}
     {has.v3 && !has.engineParity && <Notice tone="danger">{t('ag2V3ParityOff')}</Notice>}
     {has.executionModel && <Fold summary={t('ag2V3Exec')} testid="ag2-v3-exec"><dl>
@@ -160,9 +160,9 @@ export function ReportV3({ summary }: { summary: ReportSummary | null | undefine
       <Fact k={t('ag2V3ExFunding')}>{Object.entries((ex.funding ?? {}) as Record<string, { interval_s?: unknown }>).map(([v, f]) => `${v} ${typeof f?.interval_s === 'number' ? f.interval_s / 3600 : '?'} h`).join(' · ') || '—'}</Fact>
       <Fact k={t('ag2V3ExAccounts')}>{flat(ex.accounts?.model)}</Fact></dl>
       {/* the lab's own statements of its model, verbatim */}
-      {[ex.latency?.statement, ex.slippage?.statement, ex.accounts?.statement, typeof ex.liquidation === 'string' ? ex.liquidation : null].filter((x): x is string => typeof x === 'string').map((x) => <p key={x} className="mt-1.5 text-[12px] leading-snug text-mute">{x}</p>)}</Fold>}
+      {[ex.latency?.statement, ex.slippage?.statement, ex.accounts?.statement, typeof ex.liquidation === 'string' ? ex.liquidation : null].filter((x): x is string => typeof x === 'string').map((x) => <p key={x} className="mt-1.5 text-[0.75rem] leading-snug text-mute">{x}</p>)}</Fold>}
     {has.dataBias && <Fold summary={t('ag2V3Bias')} testid="ag2-v3-bias">
-      {[bias.survivorship?.statement, bias.listing_date_truncation?.statement, bias.common_clock?.statement].filter((x): x is string => typeof x === 'string').map((x) => <p key={x} className="mb-1.5 text-[12px] leading-snug text-mute">{x}</p>)}
+      {[bias.survivorship?.statement, bias.listing_date_truncation?.statement, bias.common_clock?.statement].filter((x): x is string => typeof x === 'string').map((x) => <p key={x} className="mb-1.5 text-[0.75rem] leading-snug text-mute">{x}</p>)}
       <dl><Fact k={t('ag2V3BiasDropped')}>{ratio(bias.common_clock?.dropped_fraction)}</Fact>
         {perSym.map(([s, p]) => <Fact key={s} k={s}>{t('ag2V3BiasSym', { missing: ratio(p.missing_bar_ratio), stale: ratio(p.stale_price_ratio), first: day(typeof p.first_bar === 'string' ? p.first_bar : null) })}</Fact>)}</dl></Fold>}
     {has.journal && <Fold summary={t('ag2V3Journal')} testid="ag2-v3-journal"><dl>
@@ -170,6 +170,6 @@ export function ReportV3({ summary }: { summary: ReportSummary | null | undefine
       <Fact k={t('ag2V3JCode')} mono>{shortHash(j.code?.code_sha256)}</Fact>
       <Fact k={t('ag2V3JData')} mono>{shortHash(j.data?.sha256)}{Array.isArray(j.data?.range) ? ` · ${day(j.data.range[0])} → ${day(j.data.range[1])}` : ''}</Fact>
       <Fact k={t('ag2V3JSeed')} mono>{flat(j.seed)}</Fact></dl>
-      {typeof j.reproducibility === 'string' && <p className="mt-1.5 text-[12px] leading-snug text-mute">{j.reproducibility}</p>}</Fold>}
+      {typeof j.reproducibility === 'string' && <p className="mt-1.5 text-[0.75rem] leading-snug text-mute">{j.reproducibility}</p>}</Fold>}
   </div>;
 }

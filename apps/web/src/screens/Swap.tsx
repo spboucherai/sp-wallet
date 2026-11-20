@@ -40,7 +40,7 @@ type Mode = 'best_price' | 'fastest' | 'balanced';
 const dur = (s: number | null, t: (k: Key, v?: Record<string, string | number>) => string) => (s === null ? t('swUnknownTime') : s < 90 ? `${Math.max(1, Math.round(s))} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`);
 
 /** the hero numeral keeps its size as long as it fits; a long amount steps down rather than being cut */
-const heroSize = (len: number) => (len <= 9 ? 'text-[40px]' : len <= 12 ? 'text-[33px]' : len <= 16 ? 'text-[26px]' : 'text-[21px]');
+const heroSize = (len: number) => (len <= 9 ? 'text-[2.5rem]' : len <= 12 ? 'text-[2.0625rem]' : len <= 16 ? 'text-[1.625rem]' : 'text-[1.3125rem]');
 
 /** Asset picker: a sheet above the tab bar — search, then the assets (held first), each with its real logo, its network and, for a pegged or bridged token, its issuer. */
 function Picker({ open, onClose, onPick, assets, balances, exclude }: { open: boolean; onClose: () => void; onPick: (a: SAsset) => void; assets: SAsset[]; balances: Map<string, string>; exclude?: string }) {
@@ -57,9 +57,9 @@ function Picker({ open, onClose, onPick, assets, balances, exclude }: { open: bo
       <ul className="-mx-2 min-h-[52dvh] lg:min-h-[340px]">{rows.map((a) => { const b = balances.get(a.key), iss = issuerOf(t, a.symbol, a.name); return (
         <li key={a.key}><button onClick={() => { onPick(a); onClose(); }} className="row-press flex min-h-[64px] w-full items-center gap-3.5 rounded-2xl px-2 py-2.5 text-left">
           <Coin sym={a.symbol} net={a.network} size={42} />
-          <span className="min-w-0 flex-1"><span className="block truncate text-[15.5px] font-semibold">{a.symbol} <span className="font-normal text-mute">{a.name}</span></span><span className="mt-0.5 block text-[13px] leading-snug text-mute">{a.networkName}{iss ? <> · <span className="text-warn">{t(`qaTag_${iss.kind}` as Key)}</span> — {iss.text}</> : null}</span></span>
-          {b && b !== '0' && b !== '?' && <span className="shrink-0 text-[14.5px] font-semibold">{trimAmt(b)}</span>}</button></li>); })}
-        {rows.length === 0 && <li className="flex flex-col items-center px-6 py-12 text-center"><span className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-elev text-mute"><Icon n="search" className="h-5 w-5" /></span><span className="text-[14.5px] text-mute">{t('noMatch')}</span></li>}</ul>
+          <span className="min-w-0 flex-1"><span className="block truncate text-[0.96875rem] font-semibold">{a.symbol} <span className="font-normal text-mute">{a.name}</span></span><span className="mt-0.5 block text-[0.8125rem] leading-snug text-mute">{a.networkName}{iss ? <> · <span className="text-warn">{t(`qaTag_${iss.kind}` as Key)}</span> — {iss.text}</> : null}</span></span>
+          {b && b !== '0' && b !== '?' && <span className="shrink-0 text-[0.90625rem] font-semibold">{trimAmt(b)}</span>}</button></li>); })}
+        {rows.length === 0 && <li className="flex flex-col items-center px-6 py-12 text-center"><span className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-elev text-mute"><Icon n="search" className="h-5 w-5" /></span><span className="text-[0.90625rem] text-mute">{t('noMatch')}</span></li>}</ul>
     </Sheet>);
 }
 /** Skeleton of a route card: provider logo and name, the figure, the minimum line, the three facts. */
@@ -255,7 +255,7 @@ export function Swap() {
       <button onClick={() => setPick(which)} className="press -ml-1 flex min-h-[52px] max-w-full items-center gap-3 rounded-2xl py-1 pl-1 pr-2 text-left" aria-label={`${label}: ${a ? `${a.symbol} ${a.networkName}` : t('swChoose')}`}>
         {a ? <Coin sym={a.symbol} net={a.network} size={44} /> : <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-surface text-mute"><Icon n="plus" className="h-5 w-5" /></span>}
         <span className="min-w-0"><span className="t-eyebrow block">{label}</span>
-          <span className="mt-0.5 flex items-center gap-1 text-[17px] font-semibold leading-tight tracking-[-0.015em]"><span className="min-w-0">{a ? <>{a.symbol} <span className="font-normal text-mute">· {a.networkName}</span></> : t('swChoose')}</span><Icon n="chev" className="h-4 w-4 shrink-0 rotate-90 text-mute" /></span></span>
+          <span className="mt-0.5 flex items-center gap-1 text-[1.0625rem] font-semibold leading-tight tracking-[-0.015em]"><span className="min-w-0">{a ? <>{a.symbol} <span className="font-normal text-mute">· {a.networkName}</span></> : t('swChoose')}</span><Icon n="chev" className="h-4 w-4 shrink-0 rotate-90 text-mute" /></span></span>
       </button>
       {body}
     </div>);
@@ -271,7 +271,7 @@ export function Swap() {
         <button className="row-press w-full p-4 text-left" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '' : r.id)}>
           <div className="flex items-center gap-3">
             <span className="flex shrink-0 items-center">{r.providers.map((x, k) => <ProviderIcon key={x + k} provider={x} size={here ? 36 : 30} className={k ? '-ml-2.5 ring-2 ring-surface' : ''} />)}</span>
-            <div className="min-w-0 flex-1"><div className="text-[16px] font-semibold leading-tight tracking-[-0.01em]">{r.providers.map(pname).join(' → ')}</div>
+            <div className="min-w-0 flex-1"><div className="text-[1rem] font-semibold leading-tight tracking-[-0.01em]">{r.providers.map(pname).join(' → ')}</div>
               <div className="mt-1 flex">{here ? <Tag tone="ok" icon="check">{t('qaSwExecHere')}</Tag> : foreign ? <Tag tone="mute" icon="lock" testid="compare-only">{t('pnCompareOnly')}</Tag> : <Tag tone="mute" icon="lock">{t('qaSwCompareOnly')}</Tag>}</div></div>
             <Icon n="chev" className={`h-4 w-4 shrink-0 text-mute transition-transform ${isOpen ? '-rotate-90' : 'rotate-90'}`} />
           </div>
@@ -279,20 +279,20 @@ export function Swap() {
             {r.tags.map((tag) => <span key={tag} className="tag bg-primary text-onprimary"><Icon n="star" className="h-3 w-3" />{t(`sw_${tag}` as Key)}</span>)}
             <Tag tone={r.risk.level === 'low' ? 'ok' : r.risk.level === 'medium' ? 'warn' : 'danger'} icon={r.risk.level === 'low' ? 'check' : 'warn'}>{t(`swRisk_${r.risk.level}` as Key)}</Tag>
           </div>
-          <div className={`t-num mt-3.5 break-words ${here ? 'text-[28px]' : 'text-[22px]'}`}>{trimAmt(r.amountOutDisplay, 8)} <span className="text-mute">{last.symbol}</span></div>
-          <div className="mt-1 text-[13px] leading-snug text-mute">{t('swMin')} <span className="font-semibold text-ink">{trimAmt(r.minAmountOutDisplay, 8)}</span>{r.valuation.netUsd != null ? ` · ${t('swNet')} ${money(r.valuation.netUsd)}` : ''}</div>
+          <div className={`t-num mt-3.5 break-words ${here ? 'text-[1.75rem]' : 'text-[1.375rem]'}`}>{trimAmt(r.amountOutDisplay, 8)} <span className="text-mute">{last.symbol}</span></div>
+          <div className="mt-1 text-[0.8125rem] leading-snug text-mute">{t('swMin')} <span className="font-semibold text-ink">{trimAmt(r.minAmountOutDisplay, 8)}</span>{r.valuation.netUsd != null ? ` · ${t('swNet')} ${money(r.valuation.netUsd)}` : ''}</div>
           <dl className="sw-stats mt-3.5">
             <div><dt>{t('dzSwTime')}</dt><dd>{r.estimatedSeconds === null ? <span title={t('swUnknownTime')} aria-label={t('swUnknownTime')}>—</span> : dur(r.estimatedSeconds, t)}</dd></div>
             <div><dt>{t('swFees')}</dt><dd>{r.valuation.extraFeesUsd > 0 ? money(r.valuation.extraFeesUsd) : '—'}</dd></div>
             {r.priceImpactBps !== null && <div><dt>{t('swImpact')}</dt><dd>{numFmt(r.priceImpactBps / 100, locale, 2, 2)} %</dd></div>}
           </dl>
-          <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px]">{r.path.map((p, i) => <span key={i} className="inline-flex items-center gap-1.5">{i > 0 && <Icon n="chev" className="h-3 w-3 text-mute" />}<span className="inline-flex items-center gap-1.5 rounded-full bg-elev py-0.5 pl-0.5 pr-2.5 font-medium"><Coin sym={p.symbol} net={p.network} size={22} />{p.symbol}</span></span>)}</div>
+          <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[0.78125rem]">{r.path.map((p, i) => <span key={i} className="inline-flex items-center gap-1.5">{i > 0 && <Icon n="chev" className="h-3 w-3 text-mute" />}<span className="inline-flex items-center gap-1.5 rounded-full bg-elev py-0.5 pl-0.5 pr-2.5 font-medium"><Coin sym={p.symbol} net={p.network} size={22} />{p.symbol}</span></span>)}</div>
         </button>
         {/* the route the wallet executes keeps its fees and its risks in view; a comparison quote shows them when opened */}
-        {here && <div className="space-y-3.5 border-t border-line px-4 py-3.5 text-[13.5px]">{cardFacts(r)}{fees}{risks}</div>}
-        {isOpen && <div className="space-y-3.5 border-t border-line px-4 py-3.5 text-[13.5px]">
+        {here && <div className="space-y-3.5 border-t border-line px-4 py-3.5 text-[0.84375rem]">{cardFacts(r)}{fees}{risks}</div>}
+        {isOpen && <div className="space-y-3.5 border-t border-line px-4 py-3.5 text-[0.84375rem]">
           <div><div className="t-eyebrow mb-2">{t('swSteps')}</div>
-            <ol className="space-y-2.5">{r.steps.map((s, i) => <li key={i} className="flex gap-3"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-elev text-[12px] font-semibold">{i + 1}</span>
+            <ol className="space-y-2.5">{r.steps.map((s, i) => <li key={i} className="flex gap-3"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-elev text-[0.75rem] font-semibold">{i + 1}</span>
               <span className="min-w-0"><span className="font-semibold">{t(`swKind_${s.kind}` as Key)}</span> {s.from.symbol} ({s.from.networkName}) → {s.to.symbol} ({s.to.networkName})
                 <span className="mt-0.5 flex items-center gap-1.5 text-mute"><ProviderIcon provider={s.provider} size={16} /><span className="min-w-0">{pname(s.provider)}{s.via.length ? ` · ${s.via.slice(0, 4).join(', ')}` : ''}</span></span></span></li>)}</ol></div>
           {!here && cardFacts(r)}{!here && fees}{!here && risks}
@@ -302,11 +302,11 @@ export function Swap() {
 
   // the ONE primary action of the screen, under the pair. A CCTP transfer and a plan carry their own (they depend on a choice made in their card).
   const locked = <><Btn full disabled><Icon n="lock" className="h-4 w-4" />{t('swExecuteDisabled')}</Btn>
-    <p className="px-1 text-[13px] leading-snug text-mute">{t('swExecWhere')} {t('swSolIntro')}</p></>;
+    <p className="px-1 text-[0.8125rem] leading-snug text-mute">{t('swExecWhere')} {t('swSolIntro')}</p></>;
   const action = isBridge ? null
     : phase === 'idle' ? <Btn full disabled>{t('dzSwEnterAmount')}</Btn>
     : ex ? <><Btn full busy={busy === 'prepare'} onClick={() => void prepare()}><Icon n="swap" className="h-4 w-4" />{t('swExecute', { via: pname(ex.providers[0]!) })}</Btn>
-        {ex.id !== sorted[0]!.id && <p className="flex gap-2 px-1 text-[13px] leading-snug text-mute"><Icon n="warn" className="mt-0.5 h-4 w-4 shrink-0 text-warn" /><span className="min-w-0">{t('swExecNotBest')}</span></p>}</>
+        {ex.id !== sorted[0]!.id && <p className="flex gap-2 px-1 text-[0.8125rem] leading-snug text-mute"><Icon n="warn" className="mt-0.5 h-4 w-4 shrink-0 text-warn" /><span className="min-w-0">{t('swExecNotBest')}</span></p>}</>
     // v11: the server says this pair IS executed here (pinned tables) but the executor gave no quote in this search — say that, not "comparison only"
     : phase === 'done' && pairExec.length > 0 ? <Notice tone="warn"><span data-testid="exec-no-quote">{t('svExecNoQuote', { via: pairExec.map(pname).join(', ') })}</span></Notice>
     : crossNet ? (planCount > 0 || sorted.length === 0 ? null /* a startable plan is offered below */ : locked)
@@ -330,14 +330,14 @@ export function Swap() {
         {side(t('swYouPay'), from, 'from', <>
           <input className={`t-display mt-1 block min-h-12 w-full bg-transparent py-0.5 outline-none placeholder:text-mute/45 ${heroSize(amountText.length)}`} inputMode="decimal" placeholder="0" aria-label={t('amount')} value={amountText} onChange={(e) => setAmount(sanitizeAmountText(e.target.value))} autoComplete="off" />
           <AmountProblem text={amountText} />
-          <div className="mt-0.5 flex min-h-6 items-center justify-between gap-3 text-[13px] text-mute"><span className="min-w-0">{chosen?.valuation.inUsd != null ? `≈ ${money(chosen.valuation.inUsd)}` : ' '}</span>
+          <div className="mt-0.5 flex min-h-6 items-center justify-between gap-3 text-[0.8125rem] text-mute"><span className="min-w-0">{chosen?.valuation.inUsd != null ? `≈ ${money(chosen.valuation.inUsd)}` : ' '}</span>
             {bal !== undefined && (bal === '?' ? <span className="shrink-0 text-warn">{t('qaBalUnknown')}</span> : <button className="-my-2.5 min-h-11 shrink-0 font-medium text-blue" onClick={() => setAmount(amountInputText(bal, locale))}>{t('available')}{sep}{trimAmt(bal, 6)}</button>)}</div></>)}
         <div className="relative z-[1] -my-[19px] flex justify-center"><button onClick={flip} aria-label={t('swFlip')} className="press grid h-11 w-11 place-items-center rounded-full border border-line bg-surface text-ink shadow-e2"><Icon n="swap" className="h-[18px] w-[18px] rotate-90" /></button></div>
         {side(t('swYouReceive'), to, 'to', <>
-          <div className={`t-display mt-1 flex min-h-12 items-center break-all py-0.5 ${hero ? heroSize(trimAmt(hero.out, 8).length) : 'text-[40px] text-mute/45'}`} aria-live="polite" data-testid="you-receive" data-source={hero ? hero.source : 'none'}>{hero ? trimAmt(hero.out, 8) : heroWait ? <span className="skel block h-9 w-40 !rounded-xl" style={{ background: 'color-mix(in srgb, var(--mute) 14%, transparent)' }} role="img" aria-label={t('swSearching')} /> : '0'}</div>
-          <div className="mt-0.5 min-h-6 text-[13px] leading-6 text-mute">{hero ? <>{t('swMin')} <span className="font-semibold text-ink">{trimAmt(hero.min, 8)}</span>{hero.usd != null ? ` · ≈ ${money(hero.usd)}` : ''} · <span data-testid="you-receive-via">{hero.via}</span></> : ' '}</div>
-          {bestOther && <div className="text-[13px] leading-snug text-mute" data-testid="best-comparison">{t('svHeroBestOther', { amount: trimAmt(bestOther.amountOutDisplay, 8), sym: bestOther.path[bestOther.path.length - 1]!.symbol, via: bestOther.providers.map(pname).join(' → ') })}</div>}</>)}
-        <div className="flex items-center justify-between gap-3 px-3 pb-1 pt-2.5 text-[13px]">
+          <div className={`t-display mt-1 flex min-h-12 items-center break-all py-0.5 ${hero ? heroSize(trimAmt(hero.out, 8).length) : 'text-[2.5rem] text-mute/45'}`} aria-live="polite" data-testid="you-receive" data-source={hero ? hero.source : 'none'}>{hero ? trimAmt(hero.out, 8) : heroWait ? <span className="skel block h-9 w-40 !rounded-xl" style={{ background: 'color-mix(in srgb, var(--mute) 14%, transparent)' }} role="img" aria-label={t('swSearching')} /> : '0'}</div>
+          <div className="mt-0.5 min-h-6 text-[0.8125rem] leading-6 text-mute">{hero ? <>{t('swMin')} <span className="font-semibold text-ink">{trimAmt(hero.min, 8)}</span>{hero.usd != null ? ` · ≈ ${money(hero.usd)}` : ''} · <span data-testid="you-receive-via">{hero.via}</span></> : ' '}</div>
+          {bestOther && <div className="text-[0.8125rem] leading-snug text-mute" data-testid="best-comparison">{t('svHeroBestOther', { amount: trimAmt(bestOther.amountOutDisplay, 8), sym: bestOther.path[bestOther.path.length - 1]!.symbol, via: bestOther.providers.map(pname).join(' → ') })}</div>}</>)}
+        <div className="flex items-center justify-between gap-3 px-3 pb-1 pt-2.5 text-[0.8125rem]">
           <span className="min-w-0 leading-snug text-mute">{t('swSlippage')}</span>
           <div className="sw-slip w-[186px] shrink-0"><Seg label={t('swSlippage')} value={String(slip)} onChange={(v) => setSlip(Number(v))} options={[30, 50, 100].map((b) => [String(b), `${numFmt(b / 100, locale, 1)} %`] as const)} /></div>
         </div>
@@ -349,25 +349,25 @@ export function Swap() {
 
       {isBridge && amountOk && <Card>
         <div className="mb-3 flex items-center gap-3"><ProviderIcon provider="cctp" size={40} />
-          <div className="min-w-0"><h2 className="text-[17px] font-semibold leading-snug tracking-[-0.015em]">{t('brTitle')}</h2>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[13px] text-mute"><NetDot net={from!.network} size={18} />{from!.networkName}<Icon n="chev" className="h-3 w-3" /><NetDot net={to!.network} size={18} />{to!.networkName}</div></div></div>
+          <div className="min-w-0"><h2 className="text-[1.0625rem] font-semibold leading-snug tracking-[-0.015em]">{t('brTitle')}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.8125rem] text-mute"><NetDot net={from!.network} size={18} />{from!.networkName}<Icon n="chev" className="h-3 w-3" /><NetDot net={to!.network} size={18} />{to!.networkName}</div></div></div>
         {brQ.isLoading && <div className="space-y-2" role="status" aria-label={t('swSearching')}><div className="skel h-3.5 w-4/5 !rounded-md" /><div className="skel h-[66px] !rounded-2xl" /><div className="skel h-[66px] !rounded-2xl" /><div className="skel h-[50px] !rounded-2xl" /></div>}
         {brQ.error ? <Notice tone="danger">{errText(t, brQ.error)}</Notice> : null}
-        {brQ.data && <div className="space-y-3 text-[13.5px]">
+        {brQ.data && <div className="space-y-3 text-[0.84375rem]">
           <p className="leading-snug text-mute">{t('brIntro', { from: brQ.data.fromName, to: brQ.data.toName, gas: brQ.data.destinationGas.symbol })}</p>
           <div className="space-y-2" role="radiogroup" aria-label={t('brSpeed')}>{brQ.data.options.map((o) => { const on = brSpeed === o.speed; return (
             <button key={o.speed} role="radio" aria-checked={on} disabled={!o.available} onClick={() => setSpeed(o.speed)} className={`press flex min-h-[66px] w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-left ${on ? 'sw-opt-on border-primary bg-elev/60' : 'border-line'} ${o.available ? '' : 'opacity-50'}`}>
               <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border ${on ? 'border-primary bg-primary text-onprimary' : 'border-line'}`} aria-hidden="true">{on && <Icon n="check" className="h-3.5 w-3.5" />}</span>
               <span className="min-w-0 flex-1"><span className="block font-semibold leading-snug">{o.speed === 'fast' ? t('brOptFast', { fee: trimAmt(o.feeDisplay, 6) }) : t('brOptStandard')}</span>
-                <span className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5"><span className="text-[13px] text-mute">{o.available ? t('brOptTime', { time: bridgeDur(o.seconds) }) : t('brFastUnavailable')}</span>
-                  <span className="t-num text-[17px]">{trimAmt(o.minReceiveDisplay, 6)} <span className="text-mute">USDC</span></span></span></span></button>); })}</div>
+                <span className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5"><span className="text-[0.8125rem] text-mute">{o.available ? t('brOptTime', { time: bridgeDur(o.seconds) }) : t('brFastUnavailable')}</span>
+                  <span className="t-num text-[1.0625rem]">{trimAmt(o.minReceiveDisplay, 6)} <span className="text-mute">USDC</span></span></span></span></button>); })}</div>
           {brQ.data.destinationGas.enough
             ? <p className="flex gap-2 leading-snug text-mute"><Icon n="check" className="mt-0.5 h-4 w-4 shrink-0 text-emerald" /><span className="min-w-0">{t('brDestGasLine', { net: brQ.data.toName, need: trimAmt(brQ.data.destinationGas.needDisplay, 8), have: trimAmt(brQ.data.destinationGas.balanceDisplay, 8), sym: brQ.data.destinationGas.symbol })}</span></p>
             : <Notice tone="warn">{t('brDestGasMissing', { sym: brQ.data.destinationGas.symbol, net: brQ.data.toName })} {t('brDestGasLine', { net: brQ.data.toName, need: trimAmt(brQ.data.destinationGas.needDisplay, 8), have: trimAmt(brQ.data.destinationGas.balanceDisplay, 8), sym: brQ.data.destinationGas.symbol })}</Notice>}
           {brSol?.role === 'source' && <p className="leading-snug text-mute" data-testid="sc-source">{t('scSrcIntro', { dep: trimAmt(brSol.depositDisplay, 9) })} {t('scSrcFee', { fee: trimAmt(brSol.networkFeeDisplay, 9) })}</p>}
           {brSol?.role === 'destination' && !ataMissing && <p className="leading-snug text-mute" data-testid="sc-destination">{t('scDstIntro', { acct: `${brSol.tokenAccount.slice(0, 6)}…${brSol.tokenAccount.slice(-6)}`, rent: trimAmt(brSol.nonceRentDisplay, 9) })}</p>}
           {brSol?.role === 'destination' && ataMissing && <Notice tone="warn"><span data-testid="sc-ata-missing"><b>{t('scAtaMissingTitle')}</b> {t('scAtaMissing', { rent: trimAmt(brSol.tokenAccountRentDisplay, 9) })}</span>
-            <span className="mt-1 block break-all font-mono text-[11px] text-mute">{brSol.tokenAccount}</span>
+            <span className="mt-1 block break-all font-mono text-[0.6875rem] text-mute">{brSol.tokenAccount}</span>
             {ataMsg && <span className="mt-1 block">{ataMsg}</span>}{ataErr && <span className="mt-1 block text-danger">{ataErr}</span>}
             <ApprovalOutcomePanel ap={ataAp} quiet className="mt-2" />
             <div className="mt-2"><Btn full kind="soft" busy={ataBusy} disabled={ataAp.locked} onClick={() => void createAta()}><Icon n="key" className="h-4 w-4" />{t('scAtaCreate')}</Btn></div></Notice>}
@@ -395,13 +395,13 @@ export function Swap() {
           </div>
         </Section>}
 
-      {(phase === 'done' || provs.length > 0) && <p className="px-1 text-[12.5px] leading-snug text-mute">
+      {(phase === 'done' || provs.length > 0) && <p className="px-1 text-[0.78125rem] leading-snug text-mute">
         {took !== null && <>{(() => { const n = provs.length + new Set(routes.flatMap((r) => r.providers)).size; return n === 1 ? t('qaSwProviders1', { ms: took }) : t('swTook', { n, ms: took }); })()}{first !== null ? ` · ${t('swFirst', { ms: first })}` : ''}. </>}
         {provs.filter((p) => p.status !== 'no_route').map((p) => `${pname(p.provider)}${sep}${p.status === 'skipped' ? t('swSkipped') : ['unavailable', 'timeout', 'error', 'unsupported'].includes(p.status) ? t(`qaSwSt_${p.status}` as Key) : p.code ?? p.status}`).join(' · ')}
         {(provQ.data?.needsKey?.length ?? 0) > 0 && <span data-testid="needs-key"> {t('svNeedsKey', { list: provQ.data!.needsKey!.map(pname).join(', ') })}</span>}</p>}
 
       {/* what this screen does and does not execute — the same text as before, after the pair instead of above it */}
-      <div className="flex gap-2.5 px-1 text-[12.5px] leading-snug text-mute" role="note"><Icon n="shield" className="mt-0.5 h-4 w-4 shrink-0" /><p className="min-w-0">{t('swIntro')}</p></div>
+      <div className="flex gap-2.5 px-1 text-[0.78125rem] leading-snug text-mute" role="note"><Icon n="shield" className="mt-0.5 h-4 w-4 shrink-0" /><p className="min-w-0">{t('swIntro')}</p></div>
 
       {/* ── review sheets: the receipt the passkey signs. Same fields and values as ever, in full; nothing animated; they close only through their own buttons ── */}
       {review && !prop.bridge && !prop.xswap && <Sheet title={prop.state === 'pending_approval' ? t('swReview') : t('swTracking')} onClose={() => void closeExec()} dismissable={false} busy={!!busy} wide
@@ -434,7 +434,7 @@ export function Swap() {
           <Notice tone="info">{t('irreversible')} {t('expiresIn')} {left} s.</Notice>
         </div>}
         {prop.error && ['failed', 'expired', 'rejected'].includes(prop.state) && <div className="mt-3"><Notice tone="danger">{propError(t, prop)}</Notice></div>}
-        {testNotSent(prop) ? <div className="mt-3"><Notice tone="warn">{t('qaTestNotSent')}</Notice></div> : ['signed', 'broadcast', 'confirming'].includes(prop.state) && <p className="mt-3 flex items-center gap-2 text-[13px] text-mute"><Icon n="spin" className="h-4 w-4 shrink-0" />{t('broadcastNote')}</p>}
+        {testNotSent(prop) ? <div className="mt-3"><Notice tone="warn">{t('qaTestNotSent')}</Notice></div> : ['signed', 'broadcast', 'confirming'].includes(prop.state) && <p className="mt-3 flex items-center gap-2 text-[0.8125rem] text-mute"><Icon n="spin" className="h-4 w-4 shrink-0" />{t('broadcastNote')}</p>}
         {/* v11: the steps of this swap (approval when there is one, then the swap), each with its state and its transaction */}
         {prop.state !== 'pending_approval' && !testNotSent(prop) && <div className="mt-4"><ExecutionTimeline exec={prop.execution} /></div>}
         {execErr && <div className="mt-3"><Notice tone="danger">{execErr}</Notice></div>}

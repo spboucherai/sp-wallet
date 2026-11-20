@@ -19,9 +19,9 @@ export function StaleBanner({ q }: { q: { isError: boolean; data: unknown; dataU
   const t = useT(); const { locale } = useContext(I18n);
   if (!q.isError || q.data === undefined) return null;
   const time = clockText(q.dataUpdatedAt, locale);
-  return <div role="alert" data-testid="stale-banner" className="flex items-center gap-3 rounded-2xl border border-warn/40 bg-warn/[0.09] p-3.5 text-[13.5px] leading-snug">
+  return <div role="alert" data-testid="stale-banner" className="flex items-center gap-3 rounded-2xl border border-warn/40 bg-warn/[0.09] p-3.5 text-[0.84375rem] leading-snug">
     <Icon n="warn" className="h-4 w-4 shrink-0 text-warn" /><div className="min-w-0 flex-1"><b className="block font-semibold">{t('nxStaleSince', { time })}</b>{t('nxStaleBody', { time })}</div>
-    <Btn kind="soft" className="!min-h-11 shrink-0 !px-3.5 !text-[13.5px]" busy={q.isFetching} onClick={() => void q.refetch()}>{t('retry')}</Btn></div>;
+    <Btn kind="soft" className="!min-h-11 shrink-0 !px-3.5 !text-[0.84375rem]" busy={q.isFetching} onClick={() => void q.refetch()}>{t('retry')}</Btn></div>;
 }
 
 export const freshnessText = (t: ReturnType<typeof useT>, at: string | null | undefined, stale: boolean, now = Date.now()): string => t(stale ? 'svPriceStale' : 'svPriceAt', { age: ago(t, at, now) });

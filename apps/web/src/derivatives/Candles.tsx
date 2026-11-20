@@ -139,7 +139,7 @@ export function Candles({ store, interval, onInterval, overlays, priceDp, locale
   const key = (e: React.KeyboardEvent) => { const gm = geom.current; if (!gm) return;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); const cur = hover.current ?? gm.n - 1; hover.current = Math.max(0, Math.min(gm.n - 1, cur + (e.key === 'ArrowLeft' ? -1 : 1))); redraw(); }
     else if (e.key === 'Escape') leave(); };
-  const tog = 'press inline-flex min-h-11 items-center rounded-xl px-2.5 text-[12.5px] font-semibold';
+  const tog = 'press inline-flex min-h-11 items-center rounded-xl px-2.5 text-[0.78125rem] font-semibold';
   const zoomBtn = 'press grid h-11 w-11 place-items-center rounded-xl text-mute hover:bg-elev disabled:opacity-40';
   return (
     <div>
@@ -154,7 +154,7 @@ export function Candles({ store, interval, onInterval, overlays, priceDp, locale
         </div>
       </div>
       {/* the read-out wraps on a narrow screen (two lines are reserved): no figure is ever cut */}
-      <div ref={readout} className="mt-2 min-h-[34px] whitespace-pre-wrap text-[11.5px] leading-[17px] text-mute sm:min-h-[17px]" data-testid="ohlc" />
+      <div ref={readout} className="mt-2 min-h-[34px] whitespace-pre-wrap text-[0.71875rem] leading-[17px] text-mute sm:min-h-[17px]" data-testid="ohlc" />
       <div ref={box} tabIndex={0} role="img" aria-label={summary || t('fxChart')} onKeyDown={key} onBlur={leave}
         className={`relative mt-1 touch-pan-y select-none rounded-xl outline-offset-2 ${stale ? 'opacity-50 grayscale' : ''}`} style={{ height }}
         onPointerDown={(e) => at(e.clientX)} onPointerMove={(e) => { if (e.pointerType === 'mouse' || e.buttons || e.pressure > 0) at(e.clientX); }}
