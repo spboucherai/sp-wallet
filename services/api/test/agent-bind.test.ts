@@ -54,7 +54,12 @@ const closeAt = (s: string, now: number): string => FX.symbols[s]!.candles.filte
 beforeAll(async () => {
   if (!READY) return;
   const dir = mkdtempSync(join(tmpdir(), 'spw-agents-bind-'));
-  signerSrv = createSignerServer(new Signer(deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'), new Store(join(dir, 'state.json'), join(dir, 'policy.json')), { rpId: RP, origin: ORIGIN }), SECRET).listen(0, '127.0.0.1');
+  // NEXT (P4): an API-side passkey check refuses a passkey the signer does not list — the test passkey is pinned on this signer too
+  const signerStore = new Store(join(dir, 'state.json'), join(dir, 'policy.json'));
+  const signerOfTest = new Signer(deriveKeys('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'), signerStore, { rpId: RP, origin: ORIGIN });
+  signerStore.state.setupTokenHash = createHash('sha256').update('tok').digest('hex');
+  await signerOfTest.enroll({ credential: owner.credential(), setupToken: 'tok' });
+  signerSrv = createSignerServer(signerOfTest, SECRET).listen(0, '127.0.0.1');
   await new Promise((r) => signerSrv.once('listening', r));
   await useDatabase('agent_bind');
   Object.assign(process.env, { SPW_SIGNER_SECRET: SECRET, SPW_SIGNER_URL: `http://127.0.0.1:${(signerSrv.address() as { port: number }).port}`, SPW_DATA_DIR: join(dir, 'data') });
