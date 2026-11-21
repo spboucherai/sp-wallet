@@ -1,3 +1,45 @@
+/**
+ * =============================================================================
+ *                  SP BOUCHER | SOFTWARE & RESEARCH
+ *             ARTIFICIAL INTELLIGENCE • FINANCE • ENGINEERING
+ * =============================================================================
+ *
+ * Project          : SP Wallet
+ * File             : services/isolated-signer/test/venue-mandate.test.ts
+ * Module           : services
+ * Repository       : https://git.spboucher.ai/sp-wallet
+ * Project Website  : https://wallet.spboucher.ai
+ * Created          : 2026-11-11
+ * Last Modified    : 2026-11-15
+ *
+ * Author           : Simon-Pierre Boucher
+ * Position         : Professor of Finance
+ * Institution      : Université du Québec en Outaouais (UQO)
+ * Organization     : SP Boucher
+ * Website          : https://spboucher.ai
+ * Git              : https://git.spboucher.ai
+ *
+ * Preferred Contact: support@spboucher.ai
+ * Development      : dev@spboucher.ai
+ * Support          : support@spboucher.ai
+ * Security/Admin   : admin@spboucher.ai
+ *
+ * Copyright (c) 2026
+ * Simon-Pierre Boucher
+ * All rights reserved where applicable. This file is governed by the
+ * applicable project license, copyright notices and relevant law.
+ * Existing third-party rights and notices remain unaffected.
+ *
+ * License          : None specified (no license file in this repository)
+ *
+ * Do not embed credentials, private keys, access tokens,
+ * certificates or confidential personal information.
+ *
+ * =============================================================================
+ * END OF SP BOUCHER SOURCE HEADER
+ * =============================================================================
+ */
+
 // Derivative mandates, signer side: approval (passkey), and every rule of /venue/mandate/sign — accepted just inside, refused
 // just outside. No network: prices are injected, and the venue's info endpoint is a scripted fake behind the REAL reader
 // (venue-read.ts), so its parsing is exercised too. Nothing is sent to any venue. The mnemonic is the public BIP-39 test vector.

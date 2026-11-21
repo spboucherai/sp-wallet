@@ -1,3 +1,45 @@
+/**
+ * =============================================================================
+ *                  SP BOUCHER | SOFTWARE & RESEARCH
+ *             ARTIFICIAL INTELLIGENCE • FINANCE • ENGINEERING
+ * =============================================================================
+ *
+ * Project          : SP Wallet
+ * File             : services/api/src/nft/market/magiceden.ts
+ * Module           : nft
+ * Repository       : https://git.spboucher.ai/sp-wallet
+ * Project Website  : https://wallet.spboucher.ai
+ * Created          : 2026-11-17
+ * Last Modified    : 2026-11-17
+ *
+ * Author           : Simon-Pierre Boucher
+ * Position         : Professor of Finance
+ * Institution      : Université du Québec en Outaouais (UQO)
+ * Organization     : SP Boucher
+ * Website          : https://spboucher.ai
+ * Git              : https://git.spboucher.ai
+ *
+ * Preferred Contact: support@spboucher.ai
+ * Development      : dev@spboucher.ai
+ * Support          : support@spboucher.ai
+ * Security/Admin   : admin@spboucher.ai
+ *
+ * Copyright (c) 2026
+ * Simon-Pierre Boucher
+ * All rights reserved where applicable. This file is governed by the
+ * applicable project license, copyright notices and relevant law.
+ * Existing third-party rights and notices remain unaffected.
+ *
+ * License          : None specified (no license file in this repository)
+ *
+ * Do not embed credentials, private keys, access tokens,
+ * certificates or confidential personal information.
+ *
+ * =============================================================================
+ * END OF SP BOUCHER SOURCE HEADER
+ * =============================================================================
+ */
+
 // Magic Eden public Solana API — market READ adapter (docs/nft/NFT-SOURCES.md §10.2). OPT-IN: exists only with
 // NFT_MARKET_MAGICEDEN=on. Keyless ("This public API is free to use, and the default limit is 120 QPM or 2 QPS",
 // docs.magiceden.io/reference/solana-api-keys). Its API terms page (magiceden.io/legal-policies/api-terms) still answers a

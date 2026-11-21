@@ -1,4 +1,46 @@
 /**
+ * =============================================================================
+ *                  SP BOUCHER | SOFTWARE & RESEARCH
+ *             ARTIFICIAL INTELLIGENCE • FINANCE • ENGINEERING
+ * =============================================================================
+ *
+ * Project          : SP Wallet
+ * File             : apps/web/src/derivatives/Router.tsx
+ * Module           : derivatives
+ * Repository       : https://git.spboucher.ai/sp-wallet
+ * Project Website  : https://wallet.spboucher.ai
+ * Created          : 2026-11-11
+ * Last Modified    : 2026-11-19
+ *
+ * Author           : Simon-Pierre Boucher
+ * Position         : Professor of Finance
+ * Institution      : Université du Québec en Outaouais (UQO)
+ * Organization     : SP Boucher
+ * Website          : https://spboucher.ai
+ * Git              : https://git.spboucher.ai
+ *
+ * Preferred Contact: support@spboucher.ai
+ * Development      : dev@spboucher.ai
+ * Support          : support@spboucher.ai
+ * Security/Admin   : admin@spboucher.ai
+ *
+ * Copyright (c) 2026
+ * Simon-Pierre Boucher
+ * All rights reserved where applicable. This file is governed by the
+ * applicable project license, copyright notices and relevant law.
+ * Existing third-party rights and notices remain unaffected.
+ *
+ * License          : None specified (no license file in this repository)
+ *
+ * Do not embed credentials, private keys, access tokens,
+ * certificates or confidential personal information.
+ *
+ * =============================================================================
+ * END OF SP BOUCHER SOURCE HEADER
+ * =============================================================================
+ */
+
+/**
  * « Routeur (simulation) » — for one order intent, what each venue's execution would look like, side by side: eligibility, the
  * simulated fill, every cost with its inputs, margin, the risk view and the contract terms. Nothing here places an order.
  * Every number carries where it comes from: `venue` (read from the venue), `constant` (a documented fact) or `estimate`

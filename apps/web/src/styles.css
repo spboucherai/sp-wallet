@@ -1,3 +1,18 @@
+/**
+ * =============================================================================
+ * SP BOUCHER | SOURCE FILE
+ * =============================================================================
+ * Project      : SP Wallet
+ * File         : apps/web/src/styles.css
+ * Author       : Simon-Pierre Boucher | https://spboucher.ai
+ * Contact      : support@spboucher.ai
+ * Copyright    : (c) 2026 Simon-Pierre Boucher
+ * License      : None specified (no license file in this repository)
+ * =============================================================================
+ * END OF SP BOUCHER SOURCE HEADER
+ * =============================================================================
+ */
+
 @import 'tailwindcss';
 /* NEXT design system 2.0 — every value comes from design/tokens.json through the generated tokens.css (never edited by hand).
    It is imported into the `components` layer: the type roles (.t-*) can then be overridden by a utility where a screen needs

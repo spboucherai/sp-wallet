@@ -1,3 +1,16 @@
+-- =============================================================================
+-- SP BOUCHER | SOURCE FILE
+-- =============================================================================
+-- Project      : SP Wallet
+-- File         : scripts/v11-rollback-triggers.sql
+-- Author       : Simon-Pierre Boucher | https://spboucher.ai
+-- Contact      : support@spboucher.ai
+-- Copyright    : (c) 2026 Simon-Pierre Boucher
+-- License      : None specified (no license file in this repository)
+-- =============================================================================
+-- END OF SP BOUCHER SOURCE HEADER
+-- =============================================================================
+
 -- V11 → V10 code rollback: the database triggers V11 leaves behind (docs/V11-DEPLOYMENT.md §9; rehearsed 2026-11-17 on a local
 -- database, docs/v11/work/final-validation.md). Run it ONLY when the API is going back to a build older than V11, AFTER that
 -- decision, on the API node:
